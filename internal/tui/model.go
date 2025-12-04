@@ -57,6 +57,7 @@ func New(service *hive.Service, cfg *config.Config) Model {
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false)
 	l.Styles.Title = titleStyle
+	l.Styles.TitleBar = lipgloss.NewStyle().PaddingLeft(1)
 
 	handler := NewKeybindingHandler(cfg.Keybindings, service)
 
@@ -105,7 +106,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
-		m.list.SetSize(msg.Width, msg.Height)
+		// Account for banner height (4 lines + margin)
+		listHeight := msg.Height - 5
+		if listHeight < 1 {
+			listHeight = 1
+		}
+		m.list.SetSize(msg.Width, listHeight)
 		return m, nil
 
 	case sessionsLoadedMsg:
@@ -220,8 +226,9 @@ func (m Model) View() string {
 		return ""
 	}
 
-	// Build main view
-	mainView := m.list.View()
+	// Build main view with banner
+	bannerView := bannerStyle.Render(banner)
+	mainView := lipgloss.JoinVertical(lipgloss.Left, bannerView, m.list.View())
 
 	// Overlay loading spinner if loading
 	if m.state == stateLoading {
