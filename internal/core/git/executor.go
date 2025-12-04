@@ -62,3 +62,79 @@ func (e *Executor) IsClean(ctx context.Context, dir string) (bool, error) {
 	}
 	return len(strings.TrimSpace(string(out))) == 0, nil
 }
+
+func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
+	// Try to get branch name first
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "branch", "--show-current")
+	if err != nil {
+		return "", fmt.Errorf("git branch: %w", err)
+	}
+
+	branch := strings.TrimSpace(string(out))
+	if branch != "" {
+		return branch, nil
+	}
+
+	// Empty branch name means detached HEAD - get short commit SHA
+	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "rev-parse", "--short", "HEAD")
+	if err != nil {
+		return "", fmt.Errorf("git rev-parse: %w", err)
+	}
+
+	return strings.TrimSpace(string(out)), nil
+}
+
+func (e *Executor) DiffStats(ctx context.Context, dir string) (additions, deletions int, err error) {
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "diff", "--shortstat", "HEAD")
+	if err != nil {
+		return 0, 0, fmt.Errorf("git diff: %w", err)
+	}
+
+	return parseDiffStats(string(out))
+}
+
+// parseDiffStats parses git diff --shortstat output.
+// Example: " 3 files changed, 10 insertions(+), 5 deletions(-)"
+func parseDiffStats(output string) (additions, deletions int, err error) {
+	output = strings.TrimSpace(output)
+	if output == "" {
+		return 0, 0, nil
+	}
+
+	// Parse insertions
+	if idx := strings.Index(output, "insertion"); idx != -1 {
+		// Find the number before "insertion"
+		start := strings.LastIndex(output[:idx], ",")
+		if start == -1 {
+			start = strings.LastIndex(output[:idx], "changed")
+		}
+		if start != -1 {
+			numStr := strings.TrimSpace(output[start+1 : idx])
+			numStr = strings.Fields(numStr)[0]
+			additions, _ = parseInt(numStr)
+		}
+	}
+
+	// Parse deletions
+	if idx := strings.Index(output, "deletion"); idx != -1 {
+		// Find the number before "deletion"
+		start := strings.LastIndex(output[:idx], ",")
+		if start != -1 {
+			numStr := strings.TrimSpace(output[start+1 : idx])
+			numStr = strings.Fields(numStr)[0]
+			deletions, _ = parseInt(numStr)
+		}
+	}
+
+	return additions, deletions, nil
+}
+
+func parseInt(s string) (int, error) {
+	var n int
+	for _, c := range s {
+		if c >= '0' && c <= '9' {
+			n = n*10 + int(c-'0')
+		}
+	}
+	return n, nil
+}
