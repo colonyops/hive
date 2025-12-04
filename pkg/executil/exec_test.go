@@ -58,7 +58,7 @@ func TestRecordingExecutor_Run(t *testing.T) {
 		require.Len(t, exec.Commands, 2)
 		assert.Equal(t, "git", exec.Commands[0].Cmd)
 		assert.Equal(t, []string{"clone", "url"}, exec.Commands[0].Args)
-		assert.Equal(t, "", exec.Commands[0].Dir)
+		assert.Empty(t, exec.Commands[0].Dir)
 	})
 
 	t.Run("records directory", func(t *testing.T) {
