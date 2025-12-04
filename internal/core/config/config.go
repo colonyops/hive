@@ -32,10 +32,16 @@ var defaultKeybindings = map[string]Keybinding{
 // Config holds the application configuration.
 type Config struct {
 	Commands    Commands              `yaml:"commands"`
+	Git         GitConfig             `yaml:"git"`
 	GitPath     string                `yaml:"git_path"`
 	Keybindings map[string]Keybinding `yaml:"keybindings"`
 	Hooks       []Hook                `yaml:"hooks"`
 	DataDir     string                `yaml:"-"` // set by caller, not from config file
+}
+
+// GitConfig holds git-related configuration.
+type GitConfig struct {
+	StatusWorkers int `yaml:"status_workers"`
 }
 
 // Hook defines setup commands for specific repositories.
@@ -67,6 +73,9 @@ func DefaultConfig() Config {
 			Spawn:   []string{},
 			Recycle: []string{"git reset --hard", "git checkout main", "git pull"},
 		},
+		Git: GitConfig{
+			StatusWorkers: 3,
+		},
 		GitPath:     "git",
 		Keybindings: map[string]Keybinding{},
 	}
@@ -97,11 +106,22 @@ func Load(configPath, dataDir string) (*Config, error) {
 	// Merge user keybindings into defaults (user config overrides defaults)
 	cfg.Keybindings = mergeKeybindings(defaultKeybindings, cfg.Keybindings)
 
+	// Apply defaults for zero values
+	cfg.applyDefaults()
+
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	return &cfg, nil
+}
+
+// applyDefaults sets default values for any unset configuration options.
+func (c *Config) applyDefaults() {
+	defaults := DefaultConfig()
+	if c.Git.StatusWorkers == 0 {
+		c.Git.StatusWorkers = defaults.Git.StatusWorkers
+	}
 }
 
 // mergeKeybindings merges user keybindings into defaults.
@@ -130,6 +150,10 @@ func (c *Config) Validate() error {
 
 	if c.DataDir == "" {
 		return fmt.Errorf("data directory cannot be empty")
+	}
+
+	if c.Git.StatusWorkers < 1 {
+		return fmt.Errorf("git.status_workers must be at least 1")
 	}
 
 	for key, kb := range c.Keybindings {
