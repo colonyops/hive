@@ -159,25 +159,22 @@ func TestExecutor_Branch(t *testing.T) {
 	}
 }
 
-func TestExecutor_DiffStats(t *testing.T) {
+func TestExecutor_DefaultBranch(t *testing.T) {
 	tests := []struct {
 		name    string
 		output  string
-		wantAdd int
-		wantDel int
+		want    string
 		wantErr bool
 	}{
 		{
-			name:    "with changes",
-			output:  " 2 files changed, 10 insertions(+), 5 deletions(-)\n",
-			wantAdd: 10,
-			wantDel: 5,
+			name:   "main branch",
+			output: "origin/main\n",
+			want:   "main",
 		},
 		{
-			name:    "no changes",
-			output:  "",
-			wantAdd: 0,
-			wantDel: 0,
+			name:   "master branch",
+			output: "origin/master\n",
+			want:   "master",
 		},
 	}
 
@@ -186,6 +183,59 @@ func TestExecutor_DiffStats(t *testing.T) {
 			mock := &mockExecutor{
 				runDirFunc: func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
 					return []byte(tt.output), nil
+				},
+			}
+
+			e := NewExecutor("git", mock)
+			got, err := e.DefaultBranch(context.Background(), "/test/dir")
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestExecutor_DiffStats(t *testing.T) {
+	tests := []struct {
+		name          string
+		defaultBranch string
+		diffOutput    string
+		wantAdd       int
+		wantDel       int
+		wantErr       bool
+	}{
+		{
+			name:          "with changes against main",
+			defaultBranch: "origin/main\n",
+			diffOutput:    " 2 files changed, 10 insertions(+), 5 deletions(-)\n",
+			wantAdd:       10,
+			wantDel:       5,
+		},
+		{
+			name:          "no changes",
+			defaultBranch: "origin/main\n",
+			diffOutput:    "",
+			wantAdd:       0,
+			wantDel:       0,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			mock := &mockExecutor{
+				runDirFunc: func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
+					callCount++
+					if callCount == 1 {
+						// First call is symbolic-ref for default branch
+						return []byte(tt.defaultBranch), nil
+					}
+					// Second call is diff --shortstat
+					return []byte(tt.diffOutput), nil
 				},
 			}
 

@@ -84,8 +84,37 @@ func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
 	return strings.TrimSpace(string(out)), nil
 }
 
+func (e *Executor) DefaultBranch(ctx context.Context, dir string) (string, error) {
+	// Get the default branch from origin's HEAD reference
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
+	if err != nil {
+		return "", fmt.Errorf("git symbolic-ref: %w", err)
+	}
+
+	// Output is "origin/main" or "origin/master", strip the "origin/" prefix
+	branch := strings.TrimSpace(string(out))
+	branch = strings.TrimPrefix(branch, "origin/")
+
+	return branch, nil
+}
+
 func (e *Executor) DiffStats(ctx context.Context, dir string) (additions, deletions int, err error) {
-	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "diff", "--shortstat", "HEAD")
+	// Get the default branch to compare against
+	defaultBranch, err := e.DefaultBranch(ctx, dir)
+	if err != nil {
+		// Fallback to comparing against HEAD if we can't determine default branch
+		defaultBranch = "HEAD"
+	}
+
+	var out []byte
+	if defaultBranch == "HEAD" {
+		// Compare working directory against HEAD
+		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "diff", "--shortstat", "HEAD")
+	} else {
+		// Compare current branch against default branch (e.g., main...HEAD)
+		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "diff", "--shortstat", defaultBranch+"...HEAD")
+	}
+
 	if err != nil {
 		return 0, 0, fmt.Errorf("git diff: %w", err)
 	}
