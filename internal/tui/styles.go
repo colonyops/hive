@@ -11,10 +11,8 @@ var (
 	colorGreen  = lipgloss.Color("#9ece6a") // green
 	colorYellow = lipgloss.Color("#e0af68") // yellow
 	colorBlue   = lipgloss.Color("#7aa2f7") // blue
-	/* colorPurple = lipgloss.Color("#bb9af7") // purple */
-	/* colorCyan   = lipgloss.Color("#7dcfff") // cyan */
-	colorGray  = lipgloss.Color("#565f89") // comment
-	colorWhite = lipgloss.Color("#c0caf5") // foreground
+	colorGray   = lipgloss.Color("#565f89") // comment
+	colorWhite  = lipgloss.Color("#c0caf5") // foreground
 )
 
 // Styles used for rendering the TUI (lipgloss v1 for bubbles compatibility).
@@ -32,14 +30,26 @@ var (
 	recycledStyle = lipgloss.NewStyle().
 			Foreground(colorYellow)
 
-	// Selected item style.
+	// Selected item style (matches border color).
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(colorWhite).
+			Foreground(colorBlue).
 			Bold(true)
 
-	// Normal item style.
-	normalStyle = lipgloss.NewStyle().
+	// Normal item style (no color, uses terminal default).
+	normalStyle = lipgloss.NewStyle()
+
+	// Path style for subtle directory text.
+	pathStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
+
+	// Prompt style for session prompt text.
+	promptStyle = lipgloss.NewStyle().
+			Foreground(colorGray).
+			Italic(true)
+
+	// Selected border style for left accent bar.
+	selectedBorderStyle = lipgloss.NewStyle().
+				Foreground(colorBlue)
 )
 
 // Banner ASCII art for the header.
