@@ -83,14 +83,14 @@ func main() {
 			&cli.StringFlag{
 				Name:        "log-level",
 				Usage:       "log level (debug, info, warn, error, fatal, panic)",
-				Sources:     cli.EnvVars("LOG_LEVEL"),
+				Sources:     cli.EnvVars("HIVE_LOG_LEVEL"),
 				Value:       "info",
 				Destination: &flags.LogLevel,
 			},
 			&cli.StringFlag{
 				Name:        "log-file",
 				Usage:       "path to log file (optional)",
-				Sources:     cli.EnvVars("LOG_FILE"),
+				Sources:     cli.EnvVars("HIVE_LOG_FILE"),
 				Destination: &flags.LogFile,
 			},
 			&cli.StringFlag{
