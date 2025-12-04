@@ -14,41 +14,114 @@ Hive creates isolated git environments for running multiple AI agents in paralle
 
 ## Usage
 
-### `hive` (default)
+```
+hive [global options] command [command options]
+```
 
-Launches the TUI for managing sessions. Features:
+### Global Flags
+
+| Flag           | Env Variable     | Default                      | Description                                        |
+| -------------- | ---------------- | ---------------------------- | -------------------------------------------------- |
+| `--log-level`  | `HIVE_LOG_LEVEL` | `info`                       | Log level (debug, info, warn, error, fatal, panic) |
+| `--log-file`   | `HIVE_LOG_FILE`  | -                            | Path to log file (optional)                        |
+| `--config, -c` | `HIVE_CONFIG`    | `~/.config/hive/config.yaml` | Path to config file                                |
+| `--data-dir`   | `HIVE_DATA_DIR`  | `~/.local/share/hive`        | Path to data directory                             |
+
+### Commands
+
+#### `hive` (default)
+
+Launches the interactive TUI for managing sessions.
+
+**Features:**
 
 - View all active and recycled sessions
-- Configurable keybindings for actions (shell commands, open remote, trigger AI, mark recycled)
+- Navigate with arrow keys or j/k
+- Configurable keybindings for actions
 - Confirmation dialogs for destructive actions
 
-### `hive new`
+**Default keybindings:**
 
-Creates a new agent session:
+- `r` - Mark session as recycled (with confirmation)
+- `d` - Delete session permanently (with confirmation)
+- `q` / `Ctrl+C` - Quit
 
-1. Prompts for session name and AI prompt
-2. Either recycles an existing environment (clean tree, checkout main, pull) or clones fresh
-3. Spawns a terminal with your configured command (supports Go templates)
+#### `hive new`
 
-### `hive ls`
+Creates a new agent session.
+
+**Flags:**
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--name` | `-n` | Session name (used in directory path) |
+| `--remote` | `-r` | Git remote URL (auto-detected from current directory if not specified) |
+| `--prompt` | `-p` | AI prompt to pass to spawn command |
+
+**Behavior:**
+
+1. If `--name` is not provided, shows an interactive form prompting for session name and AI prompt
+2. Checks for a recyclable session with the same remote
+3. If recyclable found: runs recycle commands (reset, checkout main, pull)
+4. If no recyclable: clones the repository fresh
+5. Runs any configured hooks matching the remote
+6. Saves session to the store
+7. Spawns a terminal with the configured spawn command
+
+**Examples:**
+
+```bash
+# Interactive mode - prompts for name and prompt
+hive new
+
+# Non-interactive with all options
+hive new --name feature-auth --prompt "Implement OAuth2 login flow"
+
+# Auto-detect remote from current directory
+hive new -n bugfix-123
+```
+
+#### `hive tui`
+
+Explicitly launches the interactive session manager (same as running `hive` with no command).
+
+#### `hive ls`
 
 Lists all sessions in a formatted table.
 
-### `hive prune`
+**Output columns:** ID, NAME, STATE, PATH
 
-Removes recycled environments that are no longer in use.
+**Example:**
+
+```
+ID      NAME           STATE     PATH
+abc123  feature-auth   active    ~/.local/share/hive/repos/myapp-feature-auth-abc123
+def456  old-feature    recycled  ~/.local/share/hive/repos/myapp-old-feature-def456
+```
+
+#### `hive prune`
+
+Removes all recycled sessions and their directories.
+
+**Behavior:**
+
+- Only removes sessions with state `recycled`
+- Deletes both the session record and the cloned repository directory
+- Reports how many sessions were pruned
 
 ## Configuration
 
 Config file: `$XDG_CONFIG_HOME/hive/config.yaml` (default: `~/.config/hive/config.yaml`)
 
 ```yaml
-# Command to spawn a new terminal session
-# Available template variables: .Path, .Name, .Prompt
+# Commands executed by hive
 commands:
-  spawn: # configurable spawn command
+  # Spawn command runs after session creation
+  # Available template variables: .Path, .Name, .Prompt
+  spawn:
     - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude --prompt "{{ .Prompt }}"'
-  recycle: # configurable recycle command
+
+  # Recycle commands run when reusing an existing session
+  recycle:
     - git reset --hard
     - git checkout main
     - git pull
@@ -56,28 +129,73 @@ commands:
 # Git executable (optional, defaults to "git")
 git_path: git
 
+# Repository-specific setup hooks
+# Pattern uses glob syntax (supports ** for path matching)
+hooks:
+  - pattern: "**/my-org/**"
+    commands:
+      - npm install
+      - npm run build
+  - pattern: "**github.com/hay-kot/**"
+    commands:
+      - go mod download
+
 # Keybindings for TUI actions
 keybindings:
-  # action: is a special property that allows the user to use more complex logic that we
-  # have in the application
+  # Built-in actions use the "action" property
   r:
     action: recycle # Mark session as recycled
+    help: recycle
+    confirm: Are you sure you want to recycle this session?
   d:
     action: delete # Delete session permanently
+    help: delete
+    confirm: Are you sure you want to delete this session?
+
+  # Custom shell commands use the "sh" property
+  # Available template variables: .Path, .Name, .Remote, .ID, .State
   o:
     help: open in finder
     sh: "open {{ .Path }}"
   O:
-    help: open in finder
+    help: open remote
     sh: "open {{ .Remote }}"
-  ctrl-o:
+  ctrl+o:
     help: open in zed
     sh: "zed {{ .Path }}"
-  ctrl-d:
-    help: trigger long running process
-    confirm: Are you sure you want to do this scary thing? # when confirm is provided trigger a confirmation dialog before executing
-    sh: "..." # Open git remote in browser
+  ctrl+d:
+    help: run custom script
+    confirm: Are you sure? # Optional confirmation dialog
+    sh: "my-script {{ .Path }}"
 ```
+
+### Configuration Options
+
+| Option             | Type                    | Default                                                 | Description                                                     |
+| ------------------ | ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| `commands.spawn`   | `[]string`              | `[]`                                                    | Commands to run after session creation (Go templates supported) |
+| `commands.recycle` | `[]string`              | `["git reset --hard", "git checkout main", "git pull"]` | Commands to run when recycling a session                        |
+| `git_path`         | `string`                | `git`                                                   | Path to git executable                                          |
+| `hooks`            | `[]Hook`                | `[]`                                                    | Repository-specific setup commands                              |
+| `keybindings`      | `map[string]Keybinding` | see below                                               | TUI keybinding configuration                                    |
+
+### Hooks
+
+Hooks run after cloning or recycling a session. Each hook has:
+
+- `pattern`: Glob pattern matched against the remote URL (supports `**` for path matching)
+- `commands`: Shell commands to execute in the session directory
+
+### Keybindings
+
+Each keybinding can have:
+
+- `action`: Built-in action (`recycle` or `delete`)
+- `sh`: Shell command template (mutually exclusive with `action`)
+- `help`: Help text shown in TUI status bar
+- `confirm`: Confirmation prompt (optional, shows dialog before executing)
+
+Default keybindings (`r` for recycle, `d` for delete) are provided and can be overridden.
 
 ## Data Storage
 

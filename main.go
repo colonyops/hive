@@ -80,8 +80,16 @@ func main() {
 	flags := &commands.Flags{}
 
 	app := &cli.Command{
-		Name:    "hive",
-		Usage:   `A cli/tui for managing and spinning up multiple AI agent sessions as an alternative to git worktrees`,
+		Name:      "hive",
+		Usage:     "Manage multiple AI agent sessions",
+		UsageText: "hive [global options] command [command options]",
+		Description: `Hive creates isolated git environments for running multiple AI agents in parallel.
+
+Instead of managing worktrees manually, hive handles cloning, recycling, and
+spawning terminal sessions with your preferred AI tool.
+
+Run 'hive' with no arguments to open the interactive session manager.
+Run 'hive new' to create a new session from the current repository.`,
 		Version: build(),
 		Flags: []cli.Flag{
 			&cli.StringFlag{

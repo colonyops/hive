@@ -11,7 +11,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// NewCmd implements the new command
 type NewCmd struct {
 	flags *Flags
 
@@ -29,25 +28,35 @@ func NewNewCmd(flags *Flags) *NewCmd {
 // Register adds the new command to the application
 func (cmd *NewCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "new",
-		Usage: "Create a new session",
+		Name:      "new",
+		Usage:     "Create a new agent session",
+		UsageText: "hive new [options]",
+		Description: `Creates a new isolated git environment for an AI agent session.
+
+If a recyclable session exists for the same remote, it will be reused
+(reset, checkout main, pull). Otherwise, a fresh clone is created.
+
+After setup, any matching hooks are executed and the configured spawn
+command launches a terminal with the AI tool.
+
+When --name is omitted, an interactive form prompts for input.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "name",
 				Aliases:     []string{"n"},
-				Usage:       "Session name (used in directory path)",
+				Usage:       "session name used in the directory path",
 				Destination: &cmd.name,
 			},
 			&cli.StringFlag{
 				Name:        "remote",
 				Aliases:     []string{"r"},
-				Usage:       "Git remote URL (auto-detected from current directory if not specified)",
+				Usage:       "git remote URL (defaults to current directory's origin)",
 				Destination: &cmd.remote,
 			},
 			&cli.StringFlag{
 				Name:        "prompt",
 				Aliases:     []string{"p"},
-				Usage:       "AI prompt to pass to spawn command",
+				Usage:       "AI prompt passed to the spawn command template",
 				Destination: &cmd.prompt,
 			},
 		},

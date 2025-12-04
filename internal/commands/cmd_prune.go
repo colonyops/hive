@@ -8,7 +8,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// PruneCmd implements the prune command
 type PruneCmd struct {
 	flags *Flags
 }
@@ -21,11 +20,13 @@ func NewPruneCmd(flags *Flags) *PruneCmd {
 // Register adds the prune command to the application
 func (cmd *PruneCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "prune",
-		Usage: "Remove all recycled sessions and their directories",
-		Flags: []cli.Flag{
-			// Add command-specific flags here
-		},
+		Name:      "prune",
+		Usage:     "Remove all recycled sessions",
+		UsageText: "hive prune",
+		Description: `Deletes all sessions marked as recycled and removes their directories.
+
+Active sessions are not affected. Use this to reclaim disk space from
+sessions that are no longer needed.`,
 		Action: cmd.run,
 	})
 

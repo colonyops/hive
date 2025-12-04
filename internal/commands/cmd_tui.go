@@ -10,7 +10,6 @@ import (
 	"github.com/hay-kot/hive/internal/tui"
 )
 
-// TuiCmd implements the tui command
 type TuiCmd struct {
 	flags *Flags
 }
@@ -23,11 +22,15 @@ func NewTuiCmd(flags *Flags) *TuiCmd {
 // Register adds the tui command to the application
 func (cmd *TuiCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "tui",
-		Usage: "Launch the interactive session manager",
-		Flags: []cli.Flag{
-			// Add command-specific flags here
-		},
+		Name:      "tui",
+		Usage:     "Launch the interactive session manager",
+		UsageText: "hive tui",
+		Description: `Opens a terminal UI for managing sessions.
+
+Navigate with arrow keys or j/k. Press r to recycle, d to delete.
+Custom keybindings can be configured in the config file.
+
+This is the default command when hive is run without arguments.`,
 		Action: cmd.run,
 	})
 

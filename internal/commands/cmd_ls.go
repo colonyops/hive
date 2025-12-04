@@ -9,7 +9,6 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// LsCmd implements the ls command
 type LsCmd struct {
 	flags *Flags
 }
@@ -22,12 +21,11 @@ func NewLsCmd(flags *Flags) *LsCmd {
 // Register adds the ls command to the application
 func (cmd *LsCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
-		Name:  "ls",
-		Usage: "List all sessions",
-		Flags: []cli.Flag{
-			// Add command-specific flags here
-		},
-		Action: cmd.run,
+		Name:        "ls",
+		Usage:       "List all sessions",
+		UsageText:   "hive ls",
+		Description: "Displays a table of all sessions with their ID, name, state, and path.",
+		Action:      cmd.run,
 	})
 
 	return app
