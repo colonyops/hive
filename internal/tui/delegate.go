@@ -8,6 +8,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/pkg/kv"
 )
 
 // SessionItem wraps a session for the list component.
@@ -22,7 +23,8 @@ func (i SessionItem) FilterValue() string {
 
 // SessionDelegate handles rendering of session items in the list.
 type SessionDelegate struct {
-	Styles SessionDelegateStyles
+	Styles      SessionDelegateStyles
+	GitStatuses *kv.Store[string, GitStatus]
 }
 
 // SessionDelegateStyles defines the styles for the delegate.
@@ -52,7 +54,7 @@ func NewSessionDelegate() SessionDelegate {
 
 // Height returns the height of each item.
 func (d SessionDelegate) Height() int {
-	return 3
+	return 4
 }
 
 // Spacing returns the spacing between items.
@@ -92,17 +94,8 @@ func (d SessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	state := stateStyle.Render(string(s.State))
 	desc := fmt.Sprintf("%s  %s", state, s.Path)
 
-	// Build prompt line if present
-	prompt := ""
-	if s.Prompt != "" {
-		// Truncate long prompts
-		maxPromptLen := 80
-		displayPrompt := s.Prompt
-		if len(displayPrompt) > maxPromptLen {
-			displayPrompt = displayPrompt[:maxPromptLen-3] + "..."
-		}
-		prompt = fmt.Sprintf("  %s", lipgloss.NewStyle().Foreground(colorGray).Render(displayPrompt))
-	}
+	// Build git status line
+	gitLine := d.renderGitStatus(s.Path)
 
 	// Apply selection styling
 	var titleStyle lipgloss.Style
@@ -117,7 +110,38 @@ func (d SessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	// Write to output
 	_, _ = fmt.Fprintf(w, "%s\n", titleStyle.Render(title))
 	_, _ = fmt.Fprintf(w, "  %s\n", desc)
-	if prompt != "" {
-		_, _ = fmt.Fprint(w, prompt)
+	_, _ = fmt.Fprintf(w, "  %s", gitLine)
+}
+
+// renderGitStatus returns the formatted git status line for a session path.
+func (d SessionDelegate) renderGitStatus(path string) string {
+	if d.GitStatuses == nil {
+		return gitLoadingStyle.Render("Loading git status...")
 	}
+
+	status, ok := d.GitStatuses.Get(path)
+	if !ok || status.IsLoading {
+		return gitLoadingStyle.Render("Loading git status...")
+	}
+
+	if status.Error != nil {
+		return gitLoadingStyle.Render("Git: unavailable")
+	}
+
+	// Format: branch +N -N • clean/uncommitted changes
+	branch := gitBranchStyle.Render(status.Branch)
+
+	// Diff stats with colored additions (green) and deletions (red)
+	additions := gitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))
+	deletions := gitDeletionsStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
+
+	// Clean/dirty indicator
+	var indicator string
+	if status.HasChanges {
+		indicator = gitDirtyStyle.Render(" • uncommitted changes")
+	} else {
+		indicator = gitCleanStyle.Render(" • clean")
+	}
+
+	return branch + additions + deletions + indicator
 }

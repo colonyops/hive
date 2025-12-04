@@ -233,6 +233,11 @@ func (s *Service) DetectRemote(ctx context.Context, dir string) (string, error) 
 	return s.git.RemoteURL(ctx, dir)
 }
 
+// Git returns the git client for use in background operations.
+func (s *Service) Git() git.Git {
+	return s.git
+}
+
 // generateID creates a 6-character random alphanumeric session ID.
 func generateID() string {
 	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"

@@ -74,3 +74,24 @@ var (
 	spinnerStyle = lipgloss.NewStyle().
 			Foreground(colorBlue)
 )
+
+// Git status styles (lipgloss v1 for bubbles compatibility).
+var (
+	gitBranchStyle = lipgloss.NewStyle().
+			Foreground(colorWhite)
+
+	gitAdditionsStyle = lipgloss.NewStyle().
+				Foreground(colorGreen)
+
+	gitDeletionsStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#f38ba8")) // red
+
+	gitCleanStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
+
+	gitDirtyStyle = lipgloss.NewStyle().
+			Foreground(colorYellow)
+
+	gitLoadingStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
+)

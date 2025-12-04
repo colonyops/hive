@@ -11,6 +11,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/pkg/kv"
 )
 
 // UIState represents the current state of the TUI.
@@ -36,6 +37,8 @@ type Model struct {
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
+	gitStatuses    *kv.Store[string, GitStatus]
+	gitWorkers     int
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -51,7 +54,11 @@ type actionCompleteMsg struct {
 
 // New creates a new TUI model.
 func New(service *hive.Service, cfg *config.Config) Model {
+	gitStatuses := kv.New[string, GitStatus]()
+
 	delegate := NewSessionDelegate()
+	delegate.GitStatuses = gitStatuses
+
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.Title = "Sessions"
 	l.SetShowStatusBar(false)
@@ -63,7 +70,13 @@ func New(service *hive.Service, cfg *config.Config) Model {
 
 	// Add custom keybindings to list help
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return handler.KeyBindings()
+		bindings := handler.KeyBindings()
+		// Add git refresh keybinding
+		bindings = append(bindings, key.NewBinding(
+			key.WithKeys("g"),
+			key.WithHelp("g", "refresh git"),
+		))
+		return bindings
 	}
 
 	s := spinner.New()
@@ -71,11 +84,13 @@ func New(service *hive.Service, cfg *config.Config) Model {
 	s.Style = spinnerStyle
 
 	return Model{
-		service: service,
-		list:    l,
-		handler: handler,
-		state:   stateNormal,
-		spinner: s,
+		service:     service,
+		list:        l,
+		handler:     handler,
+		state:       stateNormal,
+		spinner:     s,
+		gitStatuses: gitStatuses,
+		gitWorkers:  cfg.Git.StatusWorkers,
 	}
 }
 
@@ -121,11 +136,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		items := make([]list.Item, len(msg.sessions))
+		paths := make([]string, len(msg.sessions))
 		for i, s := range msg.sessions {
 			items[i] = SessionItem{Session: s}
+			paths[i] = s.Path
+			// Mark as loading
+			m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
 		}
 		m.list.SetItems(items)
 		m.state = stateNormal
+		// Fetch git status for all sessions
+		return m, fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
+
+	case gitStatusBatchCompleteMsg:
+		m.gitStatuses.SetBatch(msg.Results)
 		return m, nil
 
 	case actionCompleteMsg:
@@ -177,6 +201,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
+	case "g":
+		// Refresh git status for all sessions
+		return m, m.refreshGitStatuses()
 	}
 
 	// Check for configured keybindings
@@ -218,6 +245,29 @@ func (m Model) selectedSession() *session.Session {
 		return nil
 	}
 	return &sessionItem.Session
+}
+
+// refreshGitStatuses returns a command that refreshes git status for all sessions.
+func (m Model) refreshGitStatuses() tea.Cmd {
+	items := m.list.Items()
+	paths := make([]string, 0, len(items))
+
+	for _, item := range items {
+		sessionItem, ok := item.(SessionItem)
+		if !ok {
+			continue
+		}
+		path := sessionItem.Session.Path
+		paths = append(paths, path)
+		// Mark as loading
+		m.gitStatuses.Set(path, GitStatus{IsLoading: true})
+	}
+
+	if len(paths) == 0 {
+		return nil
+	}
+
+	return fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
 }
 
 // View renders the TUI.

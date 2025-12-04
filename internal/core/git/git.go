@@ -17,4 +17,10 @@ type Git interface {
 	RemoteURL(ctx context.Context, dir string) (string, error)
 	// IsClean returns true if there are no uncommitted changes in dir.
 	IsClean(ctx context.Context, dir string) (bool, error)
+	// Branch returns the current branch name, or short commit SHA if in detached HEAD state.
+	Branch(ctx context.Context, dir string) (string, error)
+	// DefaultBranch returns the default branch name (e.g., "main" or "master") for the repository.
+	DefaultBranch(ctx context.Context, dir string) (string, error)
+	// DiffStats returns the number of lines added and deleted compared to the default branch.
+	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
 }
