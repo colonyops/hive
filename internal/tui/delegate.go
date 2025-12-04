@@ -77,10 +77,7 @@ func (d SessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	s := sessionItem.Session
 	isSelected := index == m.Index()
 
-	// Build the title line: ID  Name
-	title := fmt.Sprintf("%-8s %s", s.ID, s.Name)
-
-	// Build the description line: State | Path
+	// Build the title line: Name #ID [state]
 	var stateStyle lipgloss.Style
 	switch s.State {
 	case session.StateActive:
@@ -91,26 +88,30 @@ func (d SessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 		stateStyle = d.Styles.Normal
 	}
 
-	state := stateStyle.Render(string(s.State))
-	desc := fmt.Sprintf("%s  %s", state, s.Path)
+	stateTag := stateStyle.Render(fmt.Sprintf("[%s]", s.State))
+	title := fmt.Sprintf("%s %s", s.Name, stateTag)
+
+	// Build the description line: Path
+	path := pathStyle.Render(s.Path)
 
 	// Build git status line
 	gitLine := d.renderGitStatus(s.Path)
 
-	// Apply selection styling
+	// Apply selection styling with left border
 	var titleStyle lipgloss.Style
+	var border string
 	if isSelected {
 		titleStyle = d.Styles.Selected
-		title = "> " + title
+		border = selectedBorderStyle.Render("┃") + " "
 	} else {
 		titleStyle = d.Styles.Normal
-		title = "  " + title
+		border = "  "
 	}
 
-	// Write to output
-	_, _ = fmt.Fprintf(w, "%s\n", titleStyle.Render(title))
-	_, _ = fmt.Fprintf(w, "  %s\n", desc)
-	_, _ = fmt.Fprintf(w, "  %s", gitLine)
+	// Write to output with left border
+	_, _ = fmt.Fprintf(w, "%s%s\n", border, titleStyle.Render(title))
+	_, _ = fmt.Fprintf(w, "%s%s\n", border, path)
+	_, _ = fmt.Fprintf(w, "%s%s", border, gitLine)
 }
 
 // renderGitStatus returns the formatted git status line for a session path.
@@ -128,8 +129,8 @@ func (d SessionDelegate) renderGitStatus(path string) string {
 		return gitLoadingStyle.Render("Git: unavailable")
 	}
 
-	// Format: branch +N -N • clean/uncommitted changes
-	branch := gitBranchStyle.Render(status.Branch)
+	// Format:  branch +N -N • clean/uncommitted changes
+	branch := gitBranchStyle.Render("\ue725 " + status.Branch)
 
 	// Diff stats with colored additions (green) and deletions (red)
 	additions := gitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))

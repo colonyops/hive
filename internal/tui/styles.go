@@ -32,14 +32,26 @@ var (
 	recycledStyle = lipgloss.NewStyle().
 			Foreground(colorYellow)
 
-	// Selected item style.
+	// Selected item style (matches border color).
 	selectedStyle = lipgloss.NewStyle().
-			Foreground(colorWhite).
+			Foreground(colorBlue).
 			Bold(true)
 
-	// Normal item style.
-	normalStyle = lipgloss.NewStyle().
+	// Normal item style (no color, uses terminal default).
+	normalStyle = lipgloss.NewStyle()
+
+	// Path style for subtle directory text.
+	pathStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
+
+	// ID style for subtle, italic session ID.
+	idStyle = lipgloss.NewStyle().
+			Foreground(colorGray).
+			Italic(true)
+
+	// Selected border style for left accent bar.
+	selectedBorderStyle = lipgloss.NewStyle().
+				Foreground(colorBlue)
 )
 
 // Banner ASCII art for the header.
