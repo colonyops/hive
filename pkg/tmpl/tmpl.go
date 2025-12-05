@@ -9,7 +9,7 @@ import (
 )
 
 // shellQuote returns a shell-safe quoted string. It wraps the string in single
-// quotes and escapes any existing single quotes using the '\'' technique.
+// quotes and escapes any existing single quotes using the '\” technique.
 func shellQuote(s string) string {
 	if s == "" {
 		return "''"
