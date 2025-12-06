@@ -80,6 +80,17 @@ var (
 			Foreground(lipglossv2.Color("#565f89")).
 			MarginTop(1)
 
+	modalButtonStyle = lipglossv2.NewStyle().
+				Padding(0, 1).
+				Background(lipglossv2.Color("#3b4261")).
+				Foreground(lipglossv2.Color("#a9b1d6"))
+
+	modalButtonSelectedStyle = lipglossv2.NewStyle().
+					Padding(0, 1).
+					Background(lipglossv2.Color("#7aa2f7")).
+					Foreground(lipglossv2.Color("#1a1b26")).
+					Bold(true)
+
 	// Spinner style.
 	spinnerStyle = lipgloss.NewStyle().
 			Foreground(colorBlue)

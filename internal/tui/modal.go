@@ -6,18 +6,30 @@ import (
 
 // Modal represents a confirmation dialog.
 type Modal struct {
-	title   string
-	message string
-	visible bool
+	title           string
+	message         string
+	visible         bool
+	confirmSelected bool // true = confirm button selected, false = cancel button selected
 }
 
 // NewModal creates a new modal with the given title and message.
 func NewModal(title, message string) Modal {
 	return Modal{
-		title:   title,
-		message: message,
-		visible: true,
+		title:           title,
+		message:         message,
+		visible:         true,
+		confirmSelected: true, // default to confirm button
 	}
+}
+
+// ToggleSelection switches the selected button.
+func (m *Modal) ToggleSelection() {
+	m.confirmSelected = !m.confirmSelected
+}
+
+// ConfirmSelected returns true if the confirm button is selected.
+func (m Modal) ConfirmSelected() bool {
+	return m.confirmSelected
 }
 
 // Visible returns whether the modal should be displayed.
@@ -31,13 +43,27 @@ func (m Modal) Overlay(background string, width, height int) string {
 		return background
 	}
 
+	// Render buttons with selection state
+	var confirmBtn, cancelBtn string
+	if m.confirmSelected {
+		confirmBtn = modalButtonSelectedStyle.Render("Confirm")
+		cancelBtn = modalButtonStyle.Render("Cancel")
+	} else {
+		confirmBtn = modalButtonStyle.Render("Confirm")
+		cancelBtn = modalButtonSelectedStyle.Render("Cancel")
+	}
+
+	buttons := lipgloss.JoinHorizontal(lipgloss.Center, confirmBtn, "  ", cancelBtn)
+	buttonRow := lipgloss.NewStyle().MarginTop(1).Render(buttons)
+
 	// Build the modal content
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
 		modalTitleStyle.Render(m.title),
 		"",
 		m.message,
-		modalHelpStyle.Render("[y] confirm  [n/esc] cancel"),
+		buttonRow,
+		modalHelpStyle.Render("←/→ select  enter confirm  esc cancel"),
 	)
 
 	modal := modalStyle.Render(content)
