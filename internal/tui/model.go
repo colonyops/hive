@@ -198,12 +198,19 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle modal state
 	if m.state == stateConfirming {
 		switch key {
-		case "y", "Y":
+		case "enter":
 			m.state = stateNormal
-			return m, m.executeAction(m.pending)
-		case "n", "N", "esc":
+			if m.modal.ConfirmSelected() {
+				return m, m.executeAction(m.pending)
+			}
+			m.pending = Action{}
+			return m, nil
+		case "esc":
 			m.state = stateNormal
 			m.pending = Action{}
+			return m, nil
+		case "left", "right", "h", "l", "tab":
+			m.modal.ToggleSelection()
 			return m, nil
 		}
 		return m, nil
