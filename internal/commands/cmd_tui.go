@@ -18,7 +18,10 @@ type TuiCmd struct {
 
 // NewTuiCmd creates a new tui command
 func NewTuiCmd(flags *Flags) *TuiCmd {
-	return &TuiCmd{flags: flags}
+	return &TuiCmd{
+		flags:        flags,
+		hideRecycled: true,
+	}
 }
 
 // Register adds the tui command to the application
