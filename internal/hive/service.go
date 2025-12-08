@@ -53,7 +53,7 @@ func New(
 		executor:   exec,
 		log:        log,
 		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, stdout, stderr),
-		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, stdout, stderr),
+		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
 	}
 }
@@ -153,18 +153,9 @@ func (s *Service) GetSession(ctx context.Context, id string) (session.Session, e
 	return s.sessions.Get(ctx, id)
 }
 
-// RecycleSession marks a session for recycling and runs recycle commands immediately.
-func (s *Service) RecycleSession(ctx context.Context, id string) error {
-	return s.recycleSession(ctx, id, false)
-}
-
-// RecycleSessionSilent marks a session for recycling without streaming output.
-// Use this from the TUI to avoid mangling the display.
-func (s *Service) RecycleSessionSilent(ctx context.Context, id string) error {
-	return s.recycleSession(ctx, id, true)
-}
-
-func (s *Service) recycleSession(ctx context.Context, id string, silent bool) error {
+// RecycleSession marks a session for recycling and runs recycle commands.
+// Output is written to w. If w is nil, output is discarded.
+func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) error {
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
@@ -174,13 +165,7 @@ func (s *Service) recycleSession(ctx context.Context, id string, silent bool) er
 		return fmt.Errorf("session %s cannot be recycled (state: %s)", id, sess.State)
 	}
 
-	// Run recycle commands immediately
-	if silent {
-		err = s.recycler.RecycleSilent(ctx, sess.Path, s.config.Commands.Recycle)
-	} else {
-		err = s.recycler.Recycle(ctx, sess.Path, s.config.Commands.Recycle)
-	}
-	if err != nil {
+	if err := s.recycler.Recycle(ctx, sess.Path, s.config.Commands.Recycle, w); err != nil {
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 
