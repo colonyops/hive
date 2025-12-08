@@ -18,6 +18,7 @@ import (
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/pkg/executil"
+	"github.com/hay-kot/hive/pkg/utils"
 )
 
 var (
@@ -86,7 +87,7 @@ func main() {
 	ctx := printer.NewContext(context.Background(), p)
 
 	flags := &commands.Flags{}
-	var deferredLogs *DeferredWriter
+	var deferredLogs *utils.DeferredWriter
 
 	app := &cli.Command{
 		Name:      "hive",
@@ -137,7 +138,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			// In TUI mode, buffer logs to display after exit
 			var deferred io.Writer
 			if isTUI {
-				deferredLogs = &DeferredWriter{}
+				deferredLogs = &utils.DeferredWriter{}
 				deferred = deferredLogs
 			}
 
@@ -181,7 +182,9 @@ Run 'hive new' to create a new session from the current repository.`,
 
 	// Flush deferred logs to console after TUI exits
 	if deferredLogs != nil {
-		_ = deferredLogs.Flush(zerolog.ConsoleWriter{Out: os.Stderr})
+		if err := deferredLogs.Flush(zerolog.ConsoleWriter{Out: os.Stderr}); err != nil {
+			fmt.Fprintf(os.Stderr, "failed to flush logs: %v\n", err)
+		}
 	}
 
 	os.Exit(exitCode)

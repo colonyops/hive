@@ -7,6 +7,17 @@ import (
 	lipgloss "github.com/charmbracelet/lipgloss/v2"
 )
 
+// Output modal layout constants.
+const (
+	outputModalMaxWidth   = 100 // maximum modal width in columns
+	outputModalMaxHeight  = 20  // maximum modal height in rows
+	outputModalMargin     = 4   // margin from screen edges
+	outputModalChrome     = 6   // rows for title, status, help, and spacing
+	outputModalPadding    = 4   // padding inside content area
+	outputModalTruncation = 7   // space for "..." when truncating lines
+	outputModalMaxLines   = 100 // max lines to buffer
+)
+
 // OutputModal displays streaming command output in a modal dialog.
 type OutputModal struct {
 	title    string
@@ -27,7 +38,7 @@ func NewOutputModal(title string) OutputModal {
 		lines:    make([]string, 0),
 		running:  true,
 		spinner:  s,
-		maxLines: 100,
+		maxLines: outputModalMaxLines,
 	}
 }
 
@@ -67,9 +78,9 @@ func (m *OutputModal) SetSpinner(s spinner.Model) {
 // Overlay renders the output modal centered over the background.
 func (m OutputModal) Overlay(background string, width, height int) string {
 	// Calculate modal dimensions - use most of the screen
-	modalWidth := min(width-4, 100)
-	modalHeight := min(height-4, 20)
-	contentHeight := modalHeight - 6 // account for title, status, help, padding
+	modalWidth := min(width-outputModalMargin, outputModalMaxWidth)
+	modalHeight := min(height-outputModalMargin, outputModalMaxHeight)
+	contentHeight := modalHeight - outputModalChrome
 
 	// Build content lines
 	var contentBuilder strings.Builder
@@ -83,8 +94,8 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	for i := startIdx; i < len(m.lines); i++ {
 		line := m.lines[i]
 		// Truncate long lines
-		if len(line) > modalWidth-4 {
-			line = line[:modalWidth-7] + "..."
+		if len(line) > modalWidth-outputModalPadding {
+			line = line[:modalWidth-outputModalTruncation] + "..."
 		}
 		contentBuilder.WriteString(line)
 		if i < len(m.lines)-1 {
@@ -102,11 +113,12 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 
 	// Build status line
 	var status string
-	if m.running {
+	switch {
+	case m.running:
 		status = m.spinner.View() + " Running..."
-	} else if m.err != nil {
+	case m.err != nil:
 		status = outputErrorStyle.Render("✗ Error: " + m.err.Error())
-	} else {
+	default:
 		status = outputSuccessStyle.Render("✓ Complete")
 	}
 
@@ -123,7 +135,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		lipgloss.Left,
 		modalTitleStyle.Render(m.title),
 		"",
-		outputContentStyle.Width(modalWidth-4).Render(content),
+		outputContentStyle.Width(modalWidth-outputModalPadding).Render(content),
 		"",
 		status,
 		modalHelpStyle.Render(help),

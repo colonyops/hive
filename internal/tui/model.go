@@ -260,6 +260,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle output modal state (recycle running or complete)
 	if m.state == stateRunningRecycle {
 		switch key {
+		case "ctrl+c":
+			// Cancel any running operation and quit
+			if m.recycleCancel != nil {
+				m.recycleCancel()
+			}
+			m.quitting = true
+			return m, tea.Quit
 		case "esc":
 			if m.outputModal.IsRunning() {
 				// Cancel the running operation
@@ -526,7 +533,7 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 			defer close(output)
 			defer close(done)
 
-			writer := &channelWriter{ch: output}
+			writer := &channelWriter{ch: output, ctx: ctx}
 			err := m.service.RecycleSession(ctx, sessionID, writer)
 			done <- err
 		}()
@@ -557,11 +564,17 @@ func listenForRecycleOutput(output <-chan string, done <-chan error) tea.Cmd {
 }
 
 // channelWriter is an io.Writer that sends writes to a channel.
+// It respects context cancellation to avoid blocking or panicking.
 type channelWriter struct {
-	ch chan<- string
+	ch  chan<- string
+	ctx context.Context
 }
 
 func (w *channelWriter) Write(p []byte) (int, error) {
-	w.ch <- string(p)
-	return len(p), nil
+	select {
+	case w.ch <- string(p):
+		return len(p), nil
+	case <-w.ctx.Done():
+		return 0, w.ctx.Err()
+	}
 }
