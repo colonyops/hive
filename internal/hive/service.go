@@ -86,9 +86,18 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		// Reuse existing recycled session (already cleaned up when marked for recycle)
 		s.log.Debug().Str("session_id", recyclable.ID).Msg("found recyclable session")
 
+		// Rename directory to new session name pattern
+		repoName := extractRepoName(remote)
+		newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s-%s", repoName, slug, recyclable.ID))
+
+		if err := os.Rename(recyclable.Path, newPath); err != nil {
+			return nil, fmt.Errorf("rename recycled directory: %w", err)
+		}
+
 		sess = recyclable
 		sess.Name = opts.Name
 		sess.Slug = slug
+		sess.Path = newPath
 		sess.Prompt = opts.Prompt
 		sess.State = session.StateActive
 		sess.UpdatedAt = time.Now()
@@ -159,6 +168,7 @@ func (s *Service) GetSession(ctx context.Context, id string) (session.Session, e
 }
 
 // RecycleSession marks a session for recycling and runs recycle commands.
+// The directory is renamed to a recycled name pattern immediately.
 // Output is written to w. If w is nil, output is discarded.
 func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) error {
 	sess, err := s.sessions.Get(ctx, id)
@@ -174,13 +184,22 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 
+	// Rename directory to recycled pattern immediately
+	repoName := extractRepoName(sess.Remote)
+	newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-recycle-%s", repoName, generateID()))
+
+	if err := os.Rename(sess.Path, newPath); err != nil {
+		return fmt.Errorf("rename session directory: %w", err)
+	}
+
+	sess.Path = newPath
 	sess.MarkRecycled(time.Now())
 
 	if err := s.sessions.Save(ctx, sess); err != nil {
 		return fmt.Errorf("save session: %w", err)
 	}
 
-	s.log.Info().Str("session_id", id).Msg("session recycled")
+	s.log.Info().Str("session_id", id).Str("path", newPath).Msg("session recycled")
 
 	return nil
 }
