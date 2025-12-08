@@ -36,7 +36,7 @@ func build() string {
 	return fmt.Sprintf("%s (%s) %s", version, short, date)
 }
 
-func setupLogger(level string, logFile string, fileOnly bool) error {
+func setupLogger(level string, logFile string, deferred io.Writer) error {
 	parsedLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
 		return fmt.Errorf("failed to parse log level: %w", err)
@@ -57,9 +57,9 @@ func setupLogger(level string, logFile string, fileOnly bool) error {
 			return fmt.Errorf("failed to open log file: %w", err)
 		}
 
-		if fileOnly {
-			// Write only to file (for TUI mode)
-			output = file
+		if deferred != nil {
+			// TUI mode with explicit log file - write to both file and deferred buffer
+			output = io.MultiWriter(file, deferred)
 		} else {
 			// Write to both console and file
 			output = io.MultiWriter(
@@ -67,9 +67,9 @@ func setupLogger(level string, logFile string, fileOnly bool) error {
 				file,
 			)
 		}
-	} else if fileOnly {
-		// TUI mode with no explicit log file - discard logs
-		output = io.Discard
+	} else if deferred != nil {
+		// TUI mode without log file - buffer for display after exit
+		output = deferred
 	}
 
 	log.Logger = log.Output(output).Level(parsedLevel)
@@ -78,7 +78,7 @@ func setupLogger(level string, logFile string, fileOnly bool) error {
 }
 
 func main() {
-	if err := setupLogger("info", "", false); err != nil {
+	if err := setupLogger("info", "", nil); err != nil {
 		panic(err)
 	}
 
@@ -86,6 +86,7 @@ func main() {
 	ctx := printer.NewContext(context.Background(), p)
 
 	flags := &commands.Flags{}
+	var deferredLogs *DeferredWriter
 
 	app := &cli.Command{
 		Name:      "hive",
@@ -133,13 +134,14 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Detect TUI mode: either "tui" subcommand or no subcommand (default action)
 			isTUI := len(c.Args().Slice()) == 0 || c.Args().First() == "tui"
 
-			// In TUI mode, use file logging to avoid mangling the display
-			logFile := flags.LogFile
-			if isTUI && logFile == "" {
-				logFile = commands.DefaultLogFile()
+			// In TUI mode, buffer logs to display after exit
+			var deferred io.Writer
+			if isTUI {
+				deferredLogs = &DeferredWriter{}
+				deferred = deferredLogs
 			}
 
-			if err := setupLogger(flags.LogLevel, logFile, isTUI); err != nil {
+			if err := setupLogger(flags.LogLevel, flags.LogFile, deferred); err != nil {
 				return ctx, err
 			}
 
@@ -175,6 +177,11 @@ Run 'hive new' to create a new session from the current repository.`,
 		fmt.Println()
 		printer.Ctx(ctx).FatalError(err)
 		exitCode = 1
+	}
+
+	// Flush deferred logs to console after TUI exits
+	if deferredLogs != nil {
+		_ = deferredLogs.Flush(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 
 	os.Exit(exitCode)
