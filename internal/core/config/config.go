@@ -71,7 +71,7 @@ func DefaultConfig() Config {
 	return Config{
 		Commands: Commands{
 			Spawn:   []string{},
-			Recycle: []string{"git reset --hard", "git checkout main", "git pull"},
+			Recycle: []string{"git reset --hard", "git checkout $(git rev-parse --abbrev-ref origin/HEAD | sed 's|origin/||')", "git pull"},
 		},
 		Git: GitConfig{
 			StatusWorkers: 3,
