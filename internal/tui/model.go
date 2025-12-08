@@ -22,6 +22,7 @@ const (
 	stateNormal UIState = iota
 	stateConfirming
 	stateLoading
+	stateRunningRecycle
 )
 
 // Options configures the TUI behavior.
@@ -53,6 +54,12 @@ type Model struct {
 	localRemote  string            // Remote URL of current directory
 	hideRecycled bool              // Toggle for hiding recycled sessions
 	allSessions  []session.Session // All sessions (unfiltered)
+
+	// Recycle streaming state
+	outputModal   OutputModal
+	recycleOutput <-chan string
+	recycleDone   <-chan error
+	recycleCancel context.CancelFunc
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -63,6 +70,23 @@ type sessionsLoadedMsg struct {
 
 // actionCompleteMsg is sent when an action completes.
 type actionCompleteMsg struct {
+	err error
+}
+
+// recycleStartedMsg is sent when recycle begins with streaming output.
+type recycleStartedMsg struct {
+	output <-chan string
+	done   <-chan error
+	cancel context.CancelFunc
+}
+
+// recycleOutputMsg is sent when new output is available.
+type recycleOutputMsg struct {
+	line string
+}
+
+// recycleCompleteMsg is sent when recycle finishes.
+type recycleCompleteMsg struct {
 	err error
 }
 
@@ -191,6 +215,30 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Reload sessions after action
 		return m, m.loadSessions()
 
+	case recycleStartedMsg:
+		m.state = stateRunningRecycle
+		m.outputModal = NewOutputModal("Recycling session...")
+		m.recycleOutput = msg.output
+		m.recycleDone = msg.done
+		m.recycleCancel = msg.cancel
+		return m, tea.Batch(
+			listenForRecycleOutput(msg.output, msg.done),
+			m.outputModal.Spinner().Tick,
+		)
+
+	case recycleOutputMsg:
+		m.outputModal.AddLine(msg.line)
+		// Keep listening for more output
+		return m, listenForRecycleOutput(m.recycleOutput, m.recycleDone)
+
+	case recycleCompleteMsg:
+		m.outputModal.SetComplete(msg.err)
+		m.recycleOutput = nil
+		m.recycleDone = nil
+		m.recycleCancel = nil
+		// Stay in stateRunningRecycle until user dismisses
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -209,13 +257,49 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	key := msg.String()
 
-	// Handle modal state
+	// Handle output modal state (recycle running or complete)
+	if m.state == stateRunningRecycle {
+		switch key {
+		case "ctrl+c":
+			// Cancel any running operation and quit
+			if m.recycleCancel != nil {
+				m.recycleCancel()
+			}
+			m.quitting = true
+			return m, tea.Quit
+		case "esc":
+			if m.outputModal.IsRunning() {
+				// Cancel the running operation
+				if m.recycleCancel != nil {
+					m.recycleCancel()
+				}
+			}
+			// Close modal and reload
+			m.state = stateNormal
+			m.pending = Action{}
+			return m, m.loadSessions()
+		case "enter":
+			if !m.outputModal.IsRunning() {
+				// Close modal and reload
+				m.state = stateNormal
+				m.pending = Action{}
+				return m, m.loadSessions()
+			}
+		}
+		return m, nil
+	}
+
+	// Handle confirmation modal state
 	if m.state == stateConfirming {
 		switch key {
 		case "enter":
 			m.state = stateNormal
 			if m.modal.ConfirmSelected() {
-				return m, m.executeAction(m.pending)
+				action := m.pending
+				if action.Type == ActionTypeRecycle {
+					return m, m.startRecycle(action.SessionID)
+				}
+				return m, m.executeAction(action)
 			}
 			m.pending = Action{}
 			return m, nil
@@ -278,7 +362,11 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.modal = NewModal("Confirm", action.Confirm)
 			return m, nil
 		}
-		// Show loading state for action
+		// Recycle uses streaming output modal
+		if action.Type == ActionTypeRecycle {
+			return m, m.startRecycle(action.SessionID)
+		}
+		// Other actions use loading state
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
 		return m, m.executeAction(action)
@@ -370,15 +458,22 @@ func (m Model) View() string {
 	bannerView := bannerStyle.Render(banner)
 	mainView := lipgloss.JoinVertical(lipgloss.Left, bannerView, m.list.View())
 
+	// Ensure we have dimensions for modals
+	w, h := m.width, m.height
+	if w == 0 {
+		w = 80
+	}
+	if h == 0 {
+		h = 24
+	}
+
+	// Overlay output modal if running recycle
+	if m.state == stateRunningRecycle {
+		return m.outputModal.Overlay(mainView, w, h)
+	}
+
 	// Overlay loading spinner if loading
 	if m.state == stateLoading {
-		w, h := m.width, m.height
-		if w == 0 {
-			w = 80
-		}
-		if h == 0 {
-			h = 24
-		}
 		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, m.spinner.View(), " "+m.loadingMessage)
 		modal := NewModal("", loadingView)
 		return modal.Overlay(mainView, w, h)
@@ -386,14 +481,6 @@ func (m Model) View() string {
 
 	// Overlay modal if confirming
 	if m.state == stateConfirming {
-		// Ensure we have dimensions
-		w, h := m.width, m.height
-		if w == 0 {
-			w = 80
-		}
-		if h == 0 {
-			h = 24
-		}
 		return m.modal.Overlay(mainView, w, h)
 	}
 
@@ -432,4 +519,62 @@ func extractRepoName(remote string) string {
 	}
 
 	return remote
+}
+
+// startRecycle returns a command that starts the recycle operation with streaming output.
+func (m Model) startRecycle(sessionID string) tea.Cmd {
+	return func() tea.Msg {
+		output := make(chan string, 100)
+		done := make(chan error, 1)
+
+		ctx, cancel := context.WithCancel(context.Background())
+
+		go func() {
+			defer close(output)
+			defer close(done)
+
+			writer := &channelWriter{ch: output, ctx: ctx}
+			err := m.service.RecycleSession(ctx, sessionID, writer)
+			done <- err
+		}()
+
+		return recycleStartedMsg{
+			output: output,
+			done:   done,
+			cancel: cancel,
+		}
+	}
+}
+
+// listenForRecycleOutput returns a command that waits for the next output or completion.
+func listenForRecycleOutput(output <-chan string, done <-chan error) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case line, ok := <-output:
+			if !ok {
+				// Output channel closed, wait for done
+				err := <-done
+				return recycleCompleteMsg{err: err}
+			}
+			return recycleOutputMsg{line: line}
+		case err := <-done:
+			return recycleCompleteMsg{err: err}
+		}
+	}
+}
+
+// channelWriter is an io.Writer that sends writes to a channel.
+// It respects context cancellation to avoid blocking or panicking.
+type channelWriter struct {
+	ch  chan<- string
+	ctx context.Context
+}
+
+func (w *channelWriter) Write(p []byte) (int, error) {
+	select {
+	case w.ch <- string(p):
+		return len(p), nil
+	case <-w.ctx.Done():
+		return 0, w.ctx.Err()
+	}
 }

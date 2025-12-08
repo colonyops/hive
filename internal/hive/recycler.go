@@ -13,28 +13,29 @@ import (
 type Recycler struct {
 	log      zerolog.Logger
 	executor executil.Executor
-	stdout   io.Writer
-	stderr   io.Writer
 }
 
 // NewRecycler creates a new Recycler.
-func NewRecycler(log zerolog.Logger, executor executil.Executor, stdout, stderr io.Writer) *Recycler {
+func NewRecycler(log zerolog.Logger, executor executil.Executor) *Recycler {
 	return &Recycler{
 		log:      log,
 		executor: executor,
-		stdout:   stdout,
-		stderr:   stderr,
 	}
 }
 
 // Recycle executes recycle commands sequentially in the session directory.
-func (r *Recycler) Recycle(ctx context.Context, path string, commands []string) error {
+// Output is written to the provided writer. If w is nil, output is discarded.
+func (r *Recycler) Recycle(ctx context.Context, path string, commands []string, w io.Writer) error {
 	r.log.Debug().Str("path", path).Msg("recycling environment")
+
+	if w == nil {
+		w = io.Discard
+	}
 
 	for _, cmd := range commands {
 		r.log.Debug().Str("command", cmd).Msg("executing recycle command")
 
-		if err := r.executor.RunDirStream(ctx, path, r.stdout, r.stderr, "sh", "-c", cmd); err != nil {
+		if err := r.executor.RunDirStream(ctx, path, w, w, "sh", "-c", cmd); err != nil {
 			return fmt.Errorf("execute recycle command %q: %w", cmd, err)
 		}
 	}

@@ -118,16 +118,16 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 }
 
 // Execute runs the given action.
+// Note: ActionTypeRecycle is not handled here - it uses streaming output
+// and is executed directly by the TUI model via Service.RecycleSession.
 func (h *KeybindingHandler) Execute(ctx context.Context, action Action) error {
 	switch action.Type {
-	case ActionTypeRecycle:
-		return h.service.RecycleSession(ctx, action.SessionID)
 	case ActionTypeDelete:
 		return h.service.DeleteSession(ctx, action.SessionID)
 	case ActionTypeShell:
 		return h.executeShell(ctx, action.ShellCmd)
 	default:
-		return fmt.Errorf("unknown action type: %d", action.Type)
+		return fmt.Errorf("action type %d not supported by Execute", action.Type)
 	}
 }
 
