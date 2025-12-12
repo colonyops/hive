@@ -10,6 +10,7 @@ import (
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/styles"
+	"github.com/hay-kot/hive/internal/templates"
 	"github.com/urfave/cli/v3"
 )
 
@@ -17,9 +18,11 @@ type NewCmd struct {
 	flags *Flags
 
 	// Command-specific flags
-	name   string
-	remote string
-	prompt string
+	name     string
+	remote   string
+	prompt   string
+	template string
+	setVals  []string
 }
 
 // NewNewCmd creates a new new command
@@ -61,6 +64,17 @@ When --name is omitted, an interactive form prompts for input.`,
 				Usage:       "AI prompt passed to the spawn command template",
 				Destination: &cmd.prompt,
 			},
+			&cli.StringFlag{
+				Name:        "template",
+				Aliases:     []string{"t"},
+				Usage:       "use a session template (run 'hive templates list' to see available)",
+				Destination: &cmd.template,
+			},
+			&cli.StringSliceFlag{
+				Name:        "set",
+				Usage:       "set template field value (name=value), use commas for multi-select",
+				Destination: &cmd.setVals,
+			},
 		},
 		Action: cmd.run,
 	})
@@ -71,7 +85,12 @@ When --name is omitted, an interactive form prompts for input.`,
 func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
 
-	// Show interactive form if name not provided via flag
+	// Template mode: use template to generate prompt and optionally name
+	if cmd.template != "" {
+		return cmd.runTemplate(ctx, p)
+	}
+
+	// Standard mode: show interactive form if name not provided via flag
 	if cmd.name == "" {
 		if err := cmd.runForm(); err != nil {
 			if errors.Is(err, huh.ErrUserAborted) {
@@ -95,6 +114,99 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 	p.Success("Session created", sess.Path)
 
 	return nil
+}
+
+func (cmd *NewCmd) runTemplate(ctx context.Context, p *printer.Printer) error {
+	// Look up template from config
+	tmpl, ok := cmd.flags.Config.Templates[cmd.template]
+	if !ok {
+		return fmt.Errorf("template %q not found (run 'hive templates list' to see available)", cmd.template)
+	}
+
+	var values map[string]any
+	var err error
+
+	// Use --set values if provided, otherwise run interactive form
+	switch {
+	case len(cmd.setVals) > 0:
+		values, err = templates.ParseSetValues(cmd.setVals)
+		if err != nil {
+			return fmt.Errorf("parse --set values: %w", err)
+		}
+
+		// Validate required fields when using --set
+		if err := templates.ValidateRequiredFields(tmpl, values); err != nil {
+			return err
+		}
+	case len(tmpl.Fields) > 0:
+		// Print banner header
+		fmt.Println(styles.BannerStyle.Render(styles.Banner))
+		fmt.Println()
+
+		result, err := templates.RunForm(tmpl)
+		if err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return nil
+			}
+			return fmt.Errorf("template form: %w", err)
+		}
+		values = result.Values
+	default:
+		values = make(map[string]any)
+	}
+
+	// Render prompt from template
+	renderedPrompt, err := templates.RenderPrompt(tmpl, values)
+	if err != nil {
+		return fmt.Errorf("render prompt: %w", err)
+	}
+
+	// Render session name from template if provided, otherwise use flag or prompt for name
+	sessionName := cmd.name
+	if sessionName == "" && tmpl.Name != "" {
+		sessionName, err = templates.RenderName(tmpl, values)
+		if err != nil {
+			return fmt.Errorf("render session name: %w", err)
+		}
+	}
+
+	// If still no name, require user to provide one via form
+	if sessionName == "" {
+		if err := cmd.runNameForm(); err != nil {
+			if errors.Is(err, huh.ErrUserAborted) {
+				return nil
+			}
+			return fmt.Errorf("name form: %w", err)
+		}
+		sessionName = cmd.name
+	}
+
+	opts := hive.CreateOptions{
+		Name:   sessionName,
+		Remote: cmd.remote,
+		Prompt: renderedPrompt,
+	}
+
+	sess, err := cmd.flags.Service.CreateSession(ctx, opts)
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+
+	p.Success("Session created", sess.Path)
+
+	return nil
+}
+
+func (cmd *NewCmd) runNameForm() error {
+	return huh.NewForm(
+		huh.NewGroup(
+			huh.NewInput().
+				Title("Session name").
+				Description("Used in the directory path").
+				Validate(validateName).
+				Value(&cmd.name),
+		),
+	).WithTheme(styles.FormTheme()).Run()
 }
 
 func (cmd *NewCmd) runForm() error {
