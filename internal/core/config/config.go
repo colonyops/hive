@@ -36,7 +36,44 @@ type Config struct {
 	GitPath     string                `yaml:"git_path"`
 	Keybindings map[string]Keybinding `yaml:"keybindings"`
 	Hooks       []Hook                `yaml:"hooks"`
+	Templates   map[string]Template   `yaml:"templates"`
 	DataDir     string                `yaml:"-"` // set by caller, not from config file
+}
+
+// FieldType represents the type of a template field.
+type FieldType string
+
+// Supported field types for template forms.
+const (
+	FieldTypeString      FieldType = "string"
+	FieldTypeText        FieldType = "text"
+	FieldTypeSelect      FieldType = "select"
+	FieldTypeMultiSelect FieldType = "multi-select"
+)
+
+// Template defines a session template with form fields and prompt rendering.
+type Template struct {
+	Description string          `yaml:"description"`
+	Fields      []TemplateField `yaml:"fields"`
+	Name        string          `yaml:"name"`   // optional session name template
+	Prompt      string          `yaml:"prompt"` // required prompt template
+}
+
+// TemplateField defines a single input field in a template form.
+type TemplateField struct {
+	Name        string        `yaml:"name"`        // variable name used in templates
+	Label       string        `yaml:"label"`       // display label for the form
+	Type        FieldType     `yaml:"type"`        // field type: string, text, select, multi-select
+	Required    bool          `yaml:"required"`    // whether the field is required
+	Default     string        `yaml:"default"`     // default value
+	Placeholder string        `yaml:"placeholder"` // placeholder text for input fields
+	Options     []FieldOption `yaml:"options"`     // options for select/multi-select fields
+}
+
+// FieldOption defines an option for select or multi-select fields.
+type FieldOption struct {
+	Value string `yaml:"value"` // the value stored when selected
+	Label string `yaml:"label"` // display label shown in the form
 }
 
 // GitConfig holds git-related configuration.
@@ -170,7 +207,63 @@ func (c *Config) Validate() error {
 		}
 	}
 
+	for name, tmpl := range c.Templates {
+		if err := tmpl.Validate(name); err != nil {
+			return err
+		}
+	}
+
 	return nil
+}
+
+// Validate checks that a template definition is valid.
+func (t *Template) Validate(name string) error {
+	if t.Prompt == "" {
+		return fmt.Errorf("template %q: prompt is required", name)
+	}
+
+	fieldNames := make(map[string]bool)
+	for i, field := range t.Fields {
+		if field.Name == "" {
+			return fmt.Errorf("template %q: field %d: name is required", name, i)
+		}
+
+		if fieldNames[field.Name] {
+			return fmt.Errorf("template %q: duplicate field name %q", name, field.Name)
+		}
+		fieldNames[field.Name] = true
+
+		if err := field.Validate(name); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// Validate checks that a template field definition is valid.
+func (f *TemplateField) Validate(templateName string) error {
+	if !f.Type.IsValid() {
+		return fmt.Errorf("template %q: field %q: invalid type %q", templateName, f.Name, f.Type)
+	}
+
+	if f.Type == FieldTypeSelect || f.Type == FieldTypeMultiSelect {
+		if len(f.Options) == 0 {
+			return fmt.Errorf("template %q: field %q: select fields require options", templateName, f.Name)
+		}
+	}
+
+	return nil
+}
+
+// IsValid checks if the field type is a supported type.
+func (ft FieldType) IsValid() bool {
+	switch ft {
+	case FieldTypeString, FieldTypeText, FieldTypeSelect, FieldTypeMultiSelect:
+		return true
+	default:
+		return false
+	}
 }
 
 // ReposDir returns the path where cloned repositories are stored.
