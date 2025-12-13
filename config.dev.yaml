@@ -21,3 +21,71 @@ keybindings:
   o:
     help: open in finder
     sh: "open {{ .Path }}"
+
+templates:
+  pr-review:
+    description: "Review a GitHub pull request"
+    name: "pr-{{ .pr_number }}"
+    fields:
+      - name: pr_number
+        label: "PR Number"
+        type: string
+        required: true
+        placeholder: "e.g., 123"
+      - name: review_depth
+        label: "Review Depth"
+        type: select
+        default: "standard"
+        options:
+          - value: quick
+            label: "Quick scan"
+          - value: standard
+            label: "Standard review"
+          - value: thorough
+            label: "Deep dive"
+      - name: focus_areas
+        label: "Focus Areas"
+        type: multi-select
+        options:
+          - value: security
+            label: "Security"
+          - value: performance
+            label: "Performance"
+          - value: tests
+            label: "Test coverage"
+          - value: style
+            label: "Code style"
+    prompt: |
+      Review PR #{{ .pr_number }} with a {{ .review_depth }} review.
+      {{ if .focus_areas }}
+      Focus especially on: {{ .focus_areas | join ", " }}
+      {{ end }}
+
+  bugfix:
+    description: "Fix a bug from an issue"
+    name: "bug-{{ .issue }}"
+    fields:
+      - name: issue
+        label: "Issue Number"
+        type: string
+        required: true
+        placeholder: "e.g., 456"
+      - name: description
+        label: "Bug Description"
+        type: text
+        required: true
+        placeholder: "Describe the bug..."
+    prompt: |
+      Fix the bug described in issue #{{ .issue }}.
+
+      Bug description:
+      {{ .description }}
+
+  quick:
+    description: "Quick task with just a prompt"
+    fields:
+      - name: task
+        label: "What do you need?"
+        type: text
+        required: true
+    prompt: "{{ .task }}"

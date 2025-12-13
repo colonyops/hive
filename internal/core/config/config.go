@@ -15,6 +15,36 @@ const (
 	ActionDelete  = "delete"
 )
 
+// DefaultTemplate returns the built-in default template that matches the standard
+// hive new behavior (name + prompt form).
+func DefaultTemplate() Template {
+	return Template{
+		Description: "Default session template",
+		Fields: []TemplateField{
+			{
+				Name:     "name",
+				Label:    "Session name",
+				Type:     FieldTypeString,
+				Required: true,
+			},
+			{
+				Name:        "prompt",
+				Label:       "Prompt",
+				Type:        FieldTypeText,
+				Required:    false,
+				Placeholder: "AI prompt to pass to spawn command",
+			},
+		},
+		Name:   "{{ .name }}",
+		Prompt: "{{ .prompt }}",
+	}
+}
+
+// defaultTemplates provides built-in templates that users can override.
+var defaultTemplates = map[string]Template{
+	"default": DefaultTemplate(),
+}
+
 // defaultKeybindings provides built-in keybindings that users can override.
 var defaultKeybindings = map[string]Keybinding{
 	"r": {
@@ -143,6 +173,9 @@ func Load(configPath, dataDir string) (*Config, error) {
 	// Merge user keybindings into defaults (user config overrides defaults)
 	cfg.Keybindings = mergeKeybindings(defaultKeybindings, cfg.Keybindings)
 
+	// Merge user templates into defaults (user config overrides defaults)
+	cfg.Templates = mergeTemplates(defaultTemplates, cfg.Templates)
+
 	// Apply defaults for zero values
 	cfg.applyDefaults()
 
@@ -165,6 +198,24 @@ func (c *Config) applyDefaults() {
 // User keybindings override defaults for the same key.
 func mergeKeybindings(defaults, user map[string]Keybinding) map[string]Keybinding {
 	result := make(map[string]Keybinding, len(defaults)+len(user))
+
+	// Copy defaults first
+	for k, v := range defaults {
+		result[k] = v
+	}
+
+	// Override with user config
+	for k, v := range user {
+		result[k] = v
+	}
+
+	return result
+}
+
+// mergeTemplates merges user templates into defaults.
+// User templates override defaults for the same name.
+func mergeTemplates(defaults, user map[string]Template) map[string]Template {
+	result := make(map[string]Template, len(defaults)+len(user))
 
 	// Copy defaults first
 	for k, v := range defaults {
