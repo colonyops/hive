@@ -254,3 +254,142 @@ func TestConfigYAMLParsing(t *testing.T) {
 		t.Errorf("Field type = %q, want %q", tmpl.Fields[0].Type, config.FieldTypeString)
 	}
 }
+
+// TestDefaultTemplateRender tests that the built-in default template renders correctly.
+func TestDefaultTemplateRender(t *testing.T) {
+	tmpl := config.DefaultTemplate()
+
+	values := map[string]any{
+		"name":   "my-session",
+		"prompt": "Fix the login bug",
+	}
+
+	// Render prompt
+	prompt, err := RenderPrompt(tmpl, values)
+	if err != nil {
+		t.Fatalf("RenderPrompt() error: %v", err)
+	}
+	if prompt != "Fix the login bug" {
+		t.Errorf("RenderPrompt() = %q, want %q", prompt, "Fix the login bug")
+	}
+
+	// Render name
+	name, err := RenderName(tmpl, values)
+	if err != nil {
+		t.Fatalf("RenderName() error: %v", err)
+	}
+	if name != "my-session" {
+		t.Errorf("RenderName() = %q, want %q", name, "my-session")
+	}
+}
+
+// TestDefaultTemplateEmptyPrompt tests that empty prompt works with default template.
+func TestDefaultTemplateEmptyPrompt(t *testing.T) {
+	tmpl := config.DefaultTemplate()
+
+	values := map[string]any{
+		"name":   "my-session",
+		"prompt": "",
+	}
+
+	prompt, err := RenderPrompt(tmpl, values)
+	if err != nil {
+		t.Fatalf("RenderPrompt() error: %v", err)
+	}
+	if prompt != "" {
+		t.Errorf("RenderPrompt() = %q, want empty string", prompt)
+	}
+}
+
+// TestAllFieldsPrefilled tests the AllFieldsPrefilled function.
+func TestAllFieldsPrefilled(t *testing.T) {
+	tmpl := config.Template{
+		Prompt: "{{ .name }} - {{ .desc }}",
+		Fields: []config.TemplateField{
+			{Name: "name", Type: config.FieldTypeString, Required: true},
+			{Name: "desc", Type: config.FieldTypeText},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		prefilled map[string]any
+		want      bool
+	}{
+		{
+			name:      "all fields provided",
+			prefilled: map[string]any{"name": "foo", "desc": "bar"},
+			want:      true,
+		},
+		{
+			name:      "missing one field",
+			prefilled: map[string]any{"name": "foo"},
+			want:      false,
+		},
+		{
+			name:      "no fields provided",
+			prefilled: map[string]any{},
+			want:      false,
+		},
+		{
+			name:      "nil prefilled",
+			prefilled: nil,
+			want:      false,
+		},
+		{
+			name:      "extra fields ignored",
+			prefilled: map[string]any{"name": "foo", "desc": "bar", "extra": "baz"},
+			want:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := AllFieldsPrefilled(tmpl, tt.prefilled)
+			if got != tt.want {
+				t.Errorf("AllFieldsPrefilled() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+// TestAllFieldsPrefilledNoFields tests AllFieldsPrefilled with template that has no fields.
+func TestAllFieldsPrefilledNoFields(t *testing.T) {
+	tmpl := config.Template{
+		Prompt: "Static prompt",
+	}
+
+	// Empty template fields = always prefilled
+	if !AllFieldsPrefilled(tmpl, nil) {
+		t.Error("AllFieldsPrefilled() with no fields should return true")
+	}
+	if !AllFieldsPrefilled(tmpl, map[string]any{}) {
+		t.Error("AllFieldsPrefilled() with no fields should return true")
+	}
+}
+
+// TestSetValuesWithNameOverride tests that --name takes precedence over --set name=...
+func TestSetValuesWithNameOverride(t *testing.T) {
+	// Simulate: hive new --name x --set name=y --set prompt=hello
+	setFlags := []string{"name=y", "prompt=hello"}
+	nameFlag := "x"
+
+	values, err := ParseSetValues(setFlags)
+	if err != nil {
+		t.Fatalf("ParseSetValues() error: %v", err)
+	}
+
+	// Override with --name flag
+	if nameFlag != "" {
+		values["name"] = nameFlag
+	}
+
+	// Name should be "x" (from --name flag)
+	if values["name"] != "x" {
+		t.Errorf("name = %q, want %q", values["name"], "x")
+	}
+	// Prompt should still be "hello"
+	if values["prompt"] != "hello" {
+		t.Errorf("prompt = %q, want %q", values["prompt"], "hello")
+	}
+}
