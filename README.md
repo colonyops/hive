@@ -46,16 +46,20 @@ Launches the interactive TUI for managing sessions.
 - `d` - Delete session permanently (with confirmation)
 - `q` / `Ctrl+C` - Quit
 
-#### `hive new`
+#### `hive new [template]`
 
 Creates a new agent session.
+
+**Arguments:**
+| Argument | Description |
+|----------|-------------|
+| `template` | Template name to use (defaults to "default") |
 
 **Flags:**
 | Flag | Alias | Description |
 |------|-------|-------------|
 | `--name` | `-n` | Session name (used in directory path) |
 | `--remote` | `-r` | Git remote URL (auto-detected from current directory if not specified) |
-| `--template` | `-t` | Use a session template (defaults to "default") |
 | `--set` | - | Set template field value (name=value), use commas for multi-select |
 
 **Behavior:**
@@ -73,7 +77,7 @@ Creates a new agent session.
 **Examples:**
 
 ```bash
-# Interactive mode - prompts for name and prompt
+# Interactive mode - prompts for name and prompt (uses "default" template)
 hive new
 
 # Non-interactive with all values provided
@@ -83,10 +87,10 @@ hive new --name feature-auth --set prompt="Implement OAuth2 login flow"
 hive new -n bugfix-123
 
 # Using a custom template (interactive form for fields)
-hive new --template pr-review
+hive new pr-review
 
 # Using a template with --set flags (non-interactive)
-hive new --template pr-review --set pr_number=123 --set focus_areas=security,performance
+hive new pr-review --set pr_number=123 --set focus_areas=security,performance
 ```
 
 #### `hive tui`
@@ -360,10 +364,10 @@ hive new
 hive new --name feature-auth --set prompt="Implement OAuth2 login"
 
 # Use a specific template
-hive new --template pr-review
+hive new pr-review
 
 # Non-interactive - set field values directly
-hive new --template pr-review --set pr_number=123 --set focus_areas=security,performance
+hive new pr-review --set pr_number=123 --set focus_areas=security,performance
 ```
 
 **Note:** The `--name` flag takes precedence over `--set name=...` if both are provided.

@@ -19,10 +19,9 @@ type NewCmd struct {
 	flags *Flags
 
 	// Command-specific flags
-	name     string
-	remote   string
-	template string
-	setVals  []string
+	name    string
+	remote  string
+	setVals []string
 }
 
 // NewNewCmd creates a new new command
@@ -35,16 +34,17 @@ func (cmd *NewCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:      "new",
 		Usage:     "Create a new agent session",
-		UsageText: "hive new [options]",
+		UsageText: "hive new [template] [options]",
 		Description: `Creates a new isolated git environment for an AI agent session.
+
+The optional template argument specifies which template to use (defaults to "default").
+Run 'hive templates list' to see available templates.
 
 If a recyclable session exists for the same remote, it will be reused
 (reset, checkout main, pull). Otherwise, a fresh clone is created.
 
 After setup, any matching hooks are executed and the configured spawn
-command launches a terminal with the AI tool.
-
-When --name is omitted, an interactive form prompts for input.`,
+command launches a terminal with the AI tool.`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "name",
@@ -57,12 +57,6 @@ When --name is omitted, an interactive form prompts for input.`,
 				Aliases:     []string{"r"},
 				Usage:       "git remote URL (defaults to current directory's origin)",
 				Destination: &cmd.remote,
-			},
-			&cli.StringFlag{
-				Name:        "template",
-				Aliases:     []string{"t"},
-				Usage:       "use a session template (run 'hive templates list' to see available)",
-				Destination: &cmd.template,
 			},
 			&cli.StringSliceFlag{
 				Name:        "set",
@@ -79,8 +73,8 @@ When --name is omitted, an interactive form prompts for input.`,
 func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
 
-	// Determine which template to use (default to "default")
-	templateName := cmd.template
+	// Determine which template to use (first arg, defaults to "default")
+	templateName := c.Args().First()
 	if templateName == "" {
 		templateName = "default"
 	}
