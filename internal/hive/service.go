@@ -185,6 +185,13 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 		return fmt.Errorf("session %s cannot be recycled (state: %s)", id, sess.State)
 	}
 
+	// Validate repository before recycling
+	if err := s.git.IsValidRepo(ctx, sess.Path); err != nil {
+		s.log.Warn().Err(err).Str("session_id", id).Msg("session has corrupted repository")
+		s.markCorrupted(ctx, &sess)
+		return fmt.Errorf("session %s has corrupted repository: %w", id, err)
+	}
+
 	// Get default branch for template
 	defaultBranch, err := s.git.DefaultBranch(ctx, sess.Path)
 	if err != nil {
