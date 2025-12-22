@@ -7,7 +7,6 @@ import (
 	"math/rand"
 	"os"
 	"path/filepath"
-	"strings"
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/config"
@@ -93,7 +92,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 
 	if recyclable != nil {
 		// Rename directory to new session name pattern
-		repoName := extractRepoName(remote)
+		repoName := git.ExtractRepoName(remote)
 		newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s-%s", repoName, slug, recyclable.ID))
 
 		if err := os.Rename(recyclable.Path, newPath); err != nil {
@@ -110,7 +109,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
 		id := generateID()
-		repoName := extractRepoName(remote)
+		repoName := git.ExtractRepoName(remote)
 		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s-%s", repoName, slug, id))
 
 		s.log.Info().Str("remote", remote).Str("dest", path).Msg("cloning repository")
@@ -202,7 +201,7 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 	}
 
 	// Rename directory to recycled pattern immediately
-	repoName := extractRepoName(sess.Remote)
+	repoName := git.ExtractRepoName(sess.Remote)
 	newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-recycle-%s", repoName, generateID()))
 
 	if err := os.Rename(sess.Path, newPath); err != nil {
@@ -289,29 +288,6 @@ func generateID() string {
 		b[i] = chars[rand.Intn(len(chars))]
 	}
 	return string(b)
-}
-
-// extractRepoName extracts the repository name from a git remote URL.
-// Handles both SSH (git@github.com:user/repo.git) and HTTPS (https://github.com/user/repo.git) formats.
-func extractRepoName(remote string) string {
-	// Remove .git suffix
-	remote = strings.TrimSuffix(remote, ".git")
-
-	// Handle SSH format: git@github.com:user/repo
-	if idx := strings.LastIndex(remote, "/"); idx != -1 {
-		return remote[idx+1:]
-	}
-
-	// Handle case where : is the separator (git@github.com:user/repo)
-	if idx := strings.LastIndex(remote, ":"); idx != -1 {
-		part := remote[idx+1:]
-		if slashIdx := strings.LastIndex(part, "/"); slashIdx != -1 {
-			return part[slashIdx+1:]
-		}
-		return part
-	}
-
-	return remote
 }
 
 // findValidRecyclable finds a recyclable session and validates it.
