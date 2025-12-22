@@ -71,8 +71,12 @@ type Keybinding struct {
 func DefaultConfig() Config {
 	return Config{
 		Commands: Commands{
-			Spawn:   []string{},
-			Recycle: []string{"git reset --hard", "git checkout $(git rev-parse --abbrev-ref origin/HEAD | sed 's|origin/||')", "git pull"},
+			Spawn: []string{},
+			Recycle: []string{
+				"git fetch origin",
+				"git checkout {{ .DefaultBranch }}",
+				"git reset --hard origin/{{ .DefaultBranch }}",
+			},
 		},
 		Git: GitConfig{
 			StatusWorkers: 3,

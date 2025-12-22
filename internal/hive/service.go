@@ -186,7 +186,18 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 		return fmt.Errorf("session %s cannot be recycled (state: %s)", id, sess.State)
 	}
 
-	if err := s.recycler.Recycle(ctx, sess.Path, s.config.Commands.Recycle, w); err != nil {
+	// Get default branch for template
+	defaultBranch, err := s.git.DefaultBranch(ctx, sess.Path)
+	if err != nil {
+		s.log.Warn().Err(err).Msg("failed to get default branch, using 'main'")
+		defaultBranch = "main"
+	}
+
+	data := RecycleData{
+		DefaultBranch: defaultBranch,
+	}
+
+	if err := s.recycler.Recycle(ctx, sess.Path, s.config.Commands.Recycle, data, w); err != nil {
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 
