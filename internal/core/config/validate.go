@@ -6,7 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"regexp"
-	"sort"
 	"text/template"
 
 	"github.com/hay-kot/criterio"
@@ -14,17 +13,22 @@ import (
 
 // SpawnTemplateData defines available fields for spawn command templates.
 type SpawnTemplateData struct {
-	Path   string
-	Name   string
-	Prompt string
+	Path   string // Absolute path to the session directory
+	Name   string // Session name (directory basename)
+	Prompt string // User-provided prompt from spawn command
+}
+
+// RecycleTemplateData defines available fields for recycle command templates.
+type RecycleTemplateData struct {
+	DefaultBranch string // Default branch name (e.g., "main" or "master")
 }
 
 // KeybindingTemplateData defines available fields for keybinding shell templates.
 type KeybindingTemplateData struct {
-	Path   string
-	Remote string
-	ID     string
-	Name   string
+	Path   string // Absolute path to the session directory
+	Remote string // Git remote URL (origin)
+	ID     string // Unique session identifier
+	Name   string // Session name (directory basename)
 }
 
 // ValidationWarning represents a non-fatal configuration issue.
@@ -34,14 +38,21 @@ type ValidationWarning struct {
 	Message  string `json:"message"`
 }
 
-// ValidateDeep performs comprehensive validation of the configuration.
-// Unlike Validate(), this checks template syntax, regex patterns, and file access.
+// ValidateDeep performs comprehensive validation of the configuration including
+// template syntax, regex patterns, and file accessibility. The configPath argument
+// specifies the config file location to validate (empty string skips config file check).
+// This calls Validate() first for basic structural validation, then adds I/O checks.
 func (c *Config) ValidateDeep(configPath string) error {
+	if err := c.Validate(); err != nil {
+		return err
+	}
+
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
 		c.validateSpawnCommands(),
+		c.validateRecycleCommands(),
 		c.validateHooks(),
-		c.validateKeybindings(),
+		c.validateKeybindingTemplates(),
 	)
 }
 
@@ -137,6 +148,17 @@ func (c *Config) validateSpawnCommands() error {
 	return errs.ToError()
 }
 
+// validateRecycleCommands checks template syntax for recycle commands.
+func (c *Config) validateRecycleCommands() error {
+	var errs criterio.FieldErrorsBuilder
+	for i, cmd := range c.Commands.Recycle {
+		if err := validateTemplate(cmd, RecycleTemplateData{}); err != nil {
+			errs = errs.Append(fmt.Sprintf("commands.recycle[%d]", i), fmt.Errorf("template error: %w", err))
+		}
+	}
+	return errs.ToError()
+}
+
 // validateHooks checks hook patterns are valid regex.
 func (c *Config) validateHooks() error {
 	var errs criterio.FieldErrorsBuilder
@@ -148,44 +170,17 @@ func (c *Config) validateHooks() error {
 	return errs.ToError()
 }
 
-// validateKeybindings checks keybinding configuration.
-func (c *Config) validateKeybindings() error {
-	if len(c.Keybindings) == 0 {
-		return nil
-	}
-
-	keys := make([]string, 0, len(c.Keybindings))
-	for k := range c.Keybindings {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
+// validateKeybindingTemplates checks template syntax for keybinding shell commands.
+// Basic keybinding structure validation is done by Validate().
+func (c *Config) validateKeybindingTemplates() error {
 	var errs criterio.FieldErrorsBuilder
-	for _, key := range keys {
-		kb := c.Keybindings[key]
-		field := fmt.Sprintf("keybindings[%q]", key)
-
-		if kb.Action == "" && kb.Sh == "" {
-			errs = errs.Append(field, fmt.Errorf("must have either action or sh"))
-			continue
-		}
-
-		if kb.Action != "" && kb.Sh != "" {
-			errs = errs.Append(field, fmt.Errorf("cannot have both action and sh"))
-			continue
-		}
-
-		if kb.Action != "" && !isValidAction(kb.Action) {
-			errs = errs.Append(field, fmt.Errorf("invalid action %q", kb.Action))
-		}
-
+	for key, kb := range c.Keybindings {
 		if kb.Sh != "" {
 			if err := validateTemplate(kb.Sh, KeybindingTemplateData{}); err != nil {
-				errs = errs.Append(field, fmt.Errorf("template error in sh: %w", err))
+				errs = errs.Append(fmt.Sprintf("keybindings[%q]", key), fmt.Errorf("template error in sh: %w", err))
 			}
 		}
 	}
-
 	return errs.ToError()
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 
 	"github.com/hay-kot/criterio"
 	"github.com/hay-kot/hive/internal/core/config"
@@ -50,6 +51,10 @@ func (cmd *ConfigValidateCmd) Register(app *cli.Command) *cli.Command {
 
 func (cmd *ConfigValidateCmd) run(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
+
+	if cmd.flags.Config == nil {
+		return fmt.Errorf("configuration not loaded")
+	}
 
 	err := cmd.flags.Config.ValidateDeep(cmd.flags.ConfigPath)
 	warnings := cmd.flags.Config.Warnings()

@@ -86,15 +86,15 @@ func (p *Printer) printValidationErrors(wrappedErr error, fieldErrs criterio.Fie
 	fieldErrStr := fieldErrs.Error()
 
 	// Find where the field errors start in the wrapped error
-	context := ""
+	errContext := ""
 	if idx := strings.Index(errStr, fieldErrStr); idx > 0 {
-		context = strings.TrimSuffix(errStr[:idx], ": ")
+		errContext = strings.TrimSuffix(errStr[:idx], ": ")
 	}
 
 	_, _ = p.writer.Write([]byte(p.colorize(ColorRed, "╭ Validation Error") + "\n"))
 
-	if context != "" {
-		_, _ = p.writer.Write([]byte(p.colorize(ColorRed, "│") + " " + p.colorize(ColorGray, context) + "\n"))
+	if errContext != "" {
+		_, _ = p.writer.Write([]byte(p.colorize(ColorRed, "│") + " " + p.colorize(ColorGray, errContext) + "\n"))
 		_, _ = p.writer.Write([]byte(p.colorize(ColorRed, "│") + "\n"))
 	}
 
