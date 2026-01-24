@@ -2,13 +2,12 @@ package config
 
 import (
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"regexp"
-	"text/template"
 
 	"github.com/hay-kot/criterio"
+	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
 // SpawnTemplateData defines available fields for spawn command templates.
@@ -175,11 +174,6 @@ func (c *Config) validateKeybindingTemplates() error {
 
 // validateTemplate checks if a template string is valid.
 func validateTemplate(tmplStr string, data any) error {
-	t, err := template.New("").Option("missingkey=error").Parse(tmplStr)
-	if err != nil {
-		return err
-	}
-
-	// Dry-run execute to catch missing key errors
-	return t.Execute(io.Discard, data)
+	_, err := tmpl.Render(tmplStr, data)
+	return err
 }

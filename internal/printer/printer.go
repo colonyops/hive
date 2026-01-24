@@ -13,11 +13,13 @@ import (
 
 // ANSI color codes (Tokyo Night palette)
 const (
-	ColorReset = "\033[0m"
-	ColorRed   = "\033[38;2;215;95;107m"  // #d75f6b
-	ColorGreen = "\033[38;2;158;206;106m" // #9ece6a (Tokyo Night green)
-	ColorGray  = "\033[38;2;86;95;137m"   // #565f89 (Tokyo Night comment)
-	ColorBold  = "\033[1m"
+	ColorReset     = "\033[0m"
+	ColorRed       = "\033[38;2;215;95;107m"  // #d75f6b
+	ColorGreen     = "\033[38;2;158;206;106m" // #9ece6a (Tokyo Night green)
+	ColorYellow    = "\033[38;2;224;175;104m" // #e0af68 (Tokyo Night yellow)
+	ColorGray      = "\033[38;2;86;95;137m"   // #565f89 (Tokyo Night comment)
+	ColorBold      = "\033[1m"
+	ColorUnderline = "\033[4m"
 )
 
 // Symbols
@@ -150,4 +152,32 @@ func (p *Printer) colorize(color, text string) string {
 // Bold makes text bold
 func (p *Printer) Bold(text string) string {
 	return ColorBold + text + ColorReset
+}
+
+// Section prints a section header (bold + underlined)
+func (p *Printer) Section(title string) {
+	_, _ = p.writer.Write([]byte(ColorBold + ColorUnderline + title + ColorReset + "\n"))
+}
+
+// CheckItem prints a success item with green checkmark
+func (p *Printer) CheckItem(label, detail string) {
+	p.printItem(ColorGreen, Check, label, detail)
+}
+
+// WarnItem prints a warning item with yellow dot
+func (p *Printer) WarnItem(label, detail string) {
+	p.printItem(ColorYellow, Dot, label, detail)
+}
+
+// FailItem prints a failure item with red cross
+func (p *Printer) FailItem(label, detail string) {
+	p.printItem(ColorRed, Cross, label, detail)
+}
+
+func (p *Printer) printItem(color, symbol, label, detail string) {
+	line := "  " + p.colorize(color, symbol) + " " + label
+	if detail != "" {
+		line += ": " + detail
+	}
+	_, _ = p.writer.Write([]byte(line + "\n"))
 }
