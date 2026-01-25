@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/rand"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -14,6 +16,7 @@ import (
 	"github.com/hay-kot/hive/internal/commands"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/core/history"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
@@ -115,13 +118,15 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Create service
 			var (
-				store   = jsonfile.New(cfg.SessionsFile())
-				exec    = &executil.RealExecutor{}
-				gitExec = git.NewExecutor(cfg.GitPath, exec)
-				logger  = log.With().Str("component", "hive").Logger()
+				store        = jsonfile.New(cfg.SessionsFile())
+				historyStore = jsonfile.NewHistoryStore(cfg.HistoryFile())
+				exec         = &executil.RealExecutor{}
+				gitExec      = git.NewExecutor(cfg.GitPath, exec)
+				logger       = log.With().Str("component", "hive").Logger()
 			)
 
 			flags.Service = hive.New(store, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
+			flags.HistoryStore = historyStore
 			return ctx, nil
 		},
 	}
@@ -132,6 +137,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewLsCmd(flags).Register(app)
 	app = commands.NewPruneCmd(flags).Register(app)
 	app = commands.NewDoctorCmd(flags).Register(app)
+	app = commands.NewRunCmd(flags).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
@@ -144,11 +150,36 @@ Run 'hive new' to create a new session from the current repository.`,
 		return tuiCmd.Run(ctx, c)
 	}
 
+	// Extract command info before running
+	cmdName, cmdArgs := extractCommandInfo(os.Args)
+
 	exitCode := 0
-	if err := app.Run(ctx, os.Args); err != nil {
+	runErr := app.Run(ctx, os.Args)
+	if runErr != nil {
 		fmt.Println()
-		printer.Ctx(ctx).FatalError(err)
+		printer.Ctx(ctx).FatalError(runErr)
 		exitCode = 1
+	}
+
+	// Record command to history (skip "run" command, TUI, and config commands)
+	if shouldRecordCommand(cmdName) && flags.HistoryStore != nil && flags.Config != nil {
+		errMsg := ""
+		if runErr != nil {
+			errMsg = runErr.Error()
+		}
+
+		entry := history.Entry{
+			ID:        generateHistoryID(),
+			Command:   cmdName,
+			Args:      cmdArgs,
+			ExitCode:  exitCode,
+			Error:     errMsg,
+			Timestamp: time.Now(),
+		}
+
+		if err := flags.HistoryStore.Save(ctx, entry, flags.Config.History.MaxEntries); err != nil {
+			log.Warn().Err(err).Msg("failed to save command to history")
+		}
 	}
 
 	// Flush deferred logs to console after TUI exits
@@ -200,4 +231,61 @@ func setupLogger(level string, logFile string, deferred io.Writer) error {
 	log.Logger = log.Output(output).Level(parsedLevel)
 
 	return nil
+}
+
+// extractCommandInfo extracts the subcommand name and its arguments from os.Args.
+// Returns empty string for TUI mode (no subcommand).
+func extractCommandInfo(args []string) (string, []string) {
+	if len(args) < 2 {
+		return "", nil
+	}
+
+	// Skip flags until we find a subcommand
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+
+		// Skip flags
+		if arg[0] == '-' {
+			// Skip flag value if it's a flag that takes a value
+			if i+1 < len(args) && !isKnownBoolFlag(arg) && args[i+1][0] != '-' {
+				i++
+			}
+			continue
+		}
+
+		// Found subcommand
+		cmdArgs := []string{}
+		if i+1 < len(args) {
+			cmdArgs = args[i+1:]
+		}
+		return arg, cmdArgs
+	}
+
+	return "", nil
+}
+
+// isKnownBoolFlag returns true if the flag is a known boolean flag.
+func isKnownBoolFlag(flag string) bool {
+	// These are the known boolean flags in hive
+	boolFlags := map[string]bool{
+		"-h": true, "--help": true,
+		"-v": true, "--version": true,
+	}
+	return boolFlags[flag]
+}
+
+// shouldRecordCommand returns true if the command should be recorded in history.
+func shouldRecordCommand(cmdName string) bool {
+	// Only record "new" commands
+	return cmdName == "new"
+}
+
+// generateHistoryID creates a 6-character random alphanumeric ID.
+func generateHistoryID() string {
+	const chars = "abcdefghijklmnopqrstuvwxyz0123456789"
+	b := make([]byte, 6)
+	for i := range b {
+		b[i] = chars[rand.Intn(len(chars))]
+	}
+	return string(b)
 }
