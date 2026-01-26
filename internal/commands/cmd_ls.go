@@ -78,13 +78,13 @@ func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
 	}
 
 	if len(corrupted) > 0 {
-		fmt.Fprintln(out)
+		_, _ = fmt.Fprintln(out)
 		p.Warnf("Found %d corrupted session(s) with invalid git repositories:", len(corrupted))
 		for _, s := range corrupted {
 			repo := git.ExtractRepoName(s.Remote)
 			p.Infof("%s (%s)", repo, s.Path)
 		}
-		fmt.Fprintln(out)
+		_, _ = fmt.Fprintln(out)
 		p.Printf("Run 'hive prune' to clean up")
 	}
 

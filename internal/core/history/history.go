@@ -17,8 +17,8 @@ type NewOptions struct {
 type Entry struct {
 	ID        string      `json:"id"`
 	Command   string      `json:"command"`
-	Args      []string    `json:"args"`               // Raw args for display
-	Options   *NewOptions `json:"options,omitempty"`  // Parsed options for replay
+	Args      []string    `json:"args"`
+	Options   *NewOptions `json:"options,omitempty"`
 	ExitCode  int         `json:"exit_code"`
 	Error     string      `json:"error,omitempty"`
 	Timestamp time.Time   `json:"timestamp"`
