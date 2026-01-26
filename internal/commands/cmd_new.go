@@ -184,4 +184,3 @@ func (cmd *NewCmd) runForm() error {
 		),
 	).WithTheme(styles.FormTheme()).Run()
 }
-
