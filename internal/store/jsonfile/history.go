@@ -88,8 +88,8 @@ func (s *HistoryStore) Clear(ctx context.Context) error {
 	return s.save(historyFile{Entries: []history.Entry{}})
 }
 
-// LastFailed returns the most recent failed entry. Returns ErrNotFound if none.
-func (s *HistoryStore) LastFailed(ctx context.Context) (history.Entry, error) {
+// Last returns the most recent entry. Returns ErrNotFound if none.
+func (s *HistoryStore) Last(ctx context.Context) (history.Entry, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -98,13 +98,11 @@ func (s *HistoryStore) LastFailed(ctx context.Context) (history.Entry, error) {
 		return history.Entry{}, err
 	}
 
-	for _, entry := range f.Entries {
-		if entry.Failed() {
-			return entry, nil
-		}
+	if len(f.Entries) == 0 {
+		return history.Entry{}, history.ErrNotFound
 	}
 
-	return history.Entry{}, history.ErrNotFound
+	return f.Entries[0], nil
 }
 
 // load reads the history file from disk.
@@ -124,7 +122,7 @@ func (s *HistoryStore) load() (historyFile, error) {
 
 	var f historyFile
 	if err := json.Unmarshal(data, &f); err != nil {
-		return historyFile{}, fmt.Errorf("history file corrupted (run 'hive run --clear-history' to reset): %w", err)
+		return historyFile{}, fmt.Errorf("history file corrupted (run 'hive history --clear' to reset): %w", err)
 	}
 
 	return f, nil

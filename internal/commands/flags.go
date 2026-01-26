@@ -23,6 +23,9 @@ type Flags struct {
 
 	// HistoryStore is the command history store
 	HistoryStore history.Store
+
+	// LastNewOptions captures parsed options from the most recent "new" command for history recording
+	LastNewOptions *history.NewOptions
 }
 
 // DefaultConfigPath returns the default config file path using XDG_CONFIG_HOME.

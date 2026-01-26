@@ -18,6 +18,6 @@ type Store interface {
 	Save(ctx context.Context, entry Entry) error
 	// Clear removes all history entries.
 	Clear(ctx context.Context) error
-	// LastFailed returns the most recent failed entry. Returns ErrNotFound if none.
-	LastFailed(ctx context.Context) (Entry, error)
+	// Last returns the most recent entry. Returns ErrNotFound if none.
+	Last(ctx context.Context) (Entry, error)
 }

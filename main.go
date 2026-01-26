@@ -137,7 +137,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewLsCmd(flags).Register(app)
 	app = commands.NewPruneCmd(flags).Register(app)
 	app = commands.NewDoctorCmd(flags).Register(app)
-	app = commands.NewRunCmd(flags).Register(app)
+	app = commands.NewHistoryCmd(flags).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
@@ -161,8 +161,8 @@ Run 'hive new' to create a new session from the current repository.`,
 		exitCode = 1
 	}
 
-	// Record command to history (only "new" commands are recorded)
-	if shouldRecordCommand(cmdName) && flags.HistoryStore != nil && flags.Config != nil {
+	// Record command to history (only "new" commands are recorded, excluding replay)
+	if shouldRecordCommand(cmdName, cmdArgs) && flags.HistoryStore != nil && flags.Config != nil && flags.LastNewOptions != nil {
 		errMsg := ""
 		if runErr != nil {
 			errMsg = runErr.Error()
@@ -172,6 +172,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			ID:        randid.Generate(6),
 			Command:   cmdName,
 			Args:      cmdArgs,
+			Options:   flags.LastNewOptions,
 			ExitCode:  exitCode,
 			Error:     errMsg,
 			Timestamp: time.Now(),
@@ -280,6 +281,17 @@ func isKnownValueFlag(flag string) bool {
 }
 
 // shouldRecordCommand returns true if the command should be recorded in history.
-func shouldRecordCommand(cmdName string) bool {
-	return cmdName == "new"
+func shouldRecordCommand(cmdName string, cmdArgs []string) bool {
+	if cmdName != "new" {
+		return false
+	}
+
+	// Don't record replay commands (would cause infinite recursion)
+	for _, arg := range cmdArgs {
+		if arg == "--replay" || arg == "-R" {
+			return false
+		}
+	}
+
+	return true
 }
