@@ -39,7 +39,13 @@ type Config struct {
 	Keybindings         map[string]Keybinding `yaml:"keybindings"`
 	Hooks               []Hook                `yaml:"hooks"`
 	AutoDeleteCorrupted bool                  `yaml:"auto_delete_corrupted"`
+	History             HistoryConfig         `yaml:"history"`
 	DataDir             string                `yaml:"-"` // set by caller, not from config file
+}
+
+// HistoryConfig holds command history configuration.
+type HistoryConfig struct {
+	MaxEntries int `yaml:"max_entries"`
 }
 
 // GitConfig holds git-related configuration.
@@ -86,6 +92,9 @@ func DefaultConfig() Config {
 		GitPath:             "git",
 		Keybindings:         map[string]Keybinding{},
 		AutoDeleteCorrupted: true,
+		History: HistoryConfig{
+			MaxEntries: 100,
+		},
 	}
 }
 
@@ -129,6 +138,9 @@ func (c *Config) applyDefaults() {
 	defaults := DefaultConfig()
 	if c.Git.StatusWorkers == 0 {
 		c.Git.StatusWorkers = defaults.Git.StatusWorkers
+	}
+	if c.History.MaxEntries == 0 {
+		c.History.MaxEntries = defaults.History.MaxEntries
 	}
 }
 
@@ -184,6 +196,11 @@ func (c *Config) ReposDir() string {
 // SessionsFile returns the path to the sessions JSON file.
 func (c *Config) SessionsFile() string {
 	return filepath.Join(c.DataDir, "sessions.json")
+}
+
+// HistoryFile returns the path to the command history JSON file.
+func (c *Config) HistoryFile() string {
+	return filepath.Join(c.DataDir, "history.json")
 }
 
 func isValidAction(action string) bool {

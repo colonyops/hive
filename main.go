@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -14,10 +15,12 @@ import (
 	"github.com/hay-kot/hive/internal/commands"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/core/history"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/pkg/executil"
+	"github.com/hay-kot/hive/pkg/randid"
 	"github.com/hay-kot/hive/pkg/utils"
 )
 
@@ -115,13 +118,15 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Create service
 			var (
-				store   = jsonfile.New(cfg.SessionsFile())
-				exec    = &executil.RealExecutor{}
-				gitExec = git.NewExecutor(cfg.GitPath, exec)
-				logger  = log.With().Str("component", "hive").Logger()
+				store        = jsonfile.New(cfg.SessionsFile())
+				historyStore = jsonfile.NewHistoryStore(cfg.HistoryFile(), cfg.History.MaxEntries)
+				exec         = &executil.RealExecutor{}
+				gitExec      = git.NewExecutor(cfg.GitPath, exec)
+				logger       = log.With().Str("component", "hive").Logger()
 			)
 
 			flags.Service = hive.New(store, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
+			flags.HistoryStore = historyStore
 			return ctx, nil
 		},
 	}
@@ -132,6 +137,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewLsCmd(flags).Register(app)
 	app = commands.NewPruneCmd(flags).Register(app)
 	app = commands.NewDoctorCmd(flags).Register(app)
+	app = commands.NewHistoryCmd(flags).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
@@ -144,12 +150,19 @@ Run 'hive new' to create a new session from the current repository.`,
 		return tuiCmd.Run(ctx, c)
 	}
 
+	// Extract command info before running
+	cmdName, cmdArgs := extractCommandInfo(os.Args)
+
 	exitCode := 0
-	if err := app.Run(ctx, os.Args); err != nil {
+	runErr := app.Run(ctx, os.Args)
+	if runErr != nil {
 		fmt.Println()
-		printer.Ctx(ctx).FatalError(err)
+		printer.Ctx(ctx).FatalError(runErr)
 		exitCode = 1
 	}
+
+	// Record command to history (only "new" commands, excluding replay)
+	recordCommandHistory(ctx, flags, cmdName, cmdArgs, exitCode, runErr)
 
 	// Flush deferred logs to console after TUI exits
 	if deferredLogs != nil {
@@ -200,4 +213,95 @@ func setupLogger(level string, logFile string, deferred io.Writer) error {
 	log.Logger = log.Output(output).Level(parsedLevel)
 
 	return nil
+}
+
+// extractCommandInfo extracts the subcommand name and its arguments from os.Args.
+// Returns empty string for TUI mode (no subcommand).
+func extractCommandInfo(args []string) (string, []string) {
+	if len(args) < 2 {
+		return "", nil
+	}
+
+	// Skip flags until we find a subcommand
+	for i := 1; i < len(args); i++ {
+		arg := args[i]
+		if len(arg) == 0 {
+			continue
+		}
+
+		// Skip flags
+		if arg[0] == '-' {
+			// Skip flag value if it's a flag that takes a value
+			if isKnownValueFlag(arg) && i+1 < len(args) {
+				i++
+			}
+			continue
+		}
+
+		// Found subcommand
+		cmdArgs := []string{}
+		if i+1 < len(args) {
+			cmdArgs = args[i+1:]
+		}
+		return arg, cmdArgs
+	}
+
+	return "", nil
+}
+
+// isKnownValueFlag returns true if the flag is a known root-level flag that takes a value.
+// Used by extractCommandInfo to correctly skip flag values when finding subcommands.
+func isKnownValueFlag(flag string) bool {
+	switch flag {
+	case "--log-level", "--log-file", "--config", "-c", "--data-dir":
+		return true
+	default:
+		return false
+	}
+}
+
+// shouldRecordCommand returns true if the command should be recorded in history.
+func shouldRecordCommand(cmdName string, cmdArgs []string) bool {
+	if cmdName != "new" {
+		return false
+	}
+
+	// Don't record replay commands (would cause infinite recursion)
+	for _, arg := range cmdArgs {
+		if arg == "--replay" || arg == "-R" {
+			return false
+		}
+	}
+
+	return true
+}
+
+// recordCommandHistory saves the command to history if applicable.
+func recordCommandHistory(ctx context.Context, flags *commands.Flags, cmdName string, cmdArgs []string, exitCode int, runErr error) {
+	if !shouldRecordCommand(cmdName, cmdArgs) {
+		return
+	}
+	if flags.HistoryStore == nil || flags.LastNewOptions == nil {
+		return
+	}
+
+	errMsg := ""
+	if runErr != nil {
+		errMsg = runErr.Error()
+	}
+
+	entry := history.Entry{
+		ID:        randid.Generate(6),
+		Command:   cmdName,
+		Args:      cmdArgs,
+		Options:   flags.LastNewOptions,
+		ExitCode:  exitCode,
+		Error:     errMsg,
+		Timestamp: time.Now(),
+	}
+
+	if err := flags.HistoryStore.Save(ctx, entry); err != nil {
+		log.Warn().Err(err).Msg("failed to save command to history")
+		printer.Ctx(ctx).Infof("Note: Failed to save command to history: %v", err)
+	}
 }
