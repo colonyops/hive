@@ -184,7 +184,7 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 
 		logger.Info().Str("name", sess.Name).Int("index", i).Msg("creating session")
 
-		result := cmd.createSession(ctx, sess, logger)
+		result := cmd.createSession(ctx, sess)
 		output.Results = append(output.Results, result)
 
 		if result.Status == StatusFailed {
@@ -247,7 +247,7 @@ func (cmd *BatchCmd) readInput() (BatchInput, error) {
 	return input, nil
 }
 
-func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession, logger zerolog.Logger) BatchResult {
+func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) BatchResult {
 	opts := hive.CreateOptions{
 		Name:   sess.Name,
 		Remote: sess.Remote,
