@@ -108,7 +108,11 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 
 	source := cmd.source
 	if source == "" {
-		source, _ = os.Getwd()
+		var err error
+		source, err = os.Getwd()
+		if err != nil {
+			return fmt.Errorf("determine source directory: %w", err)
+		}
 	}
 
 	opts := hive.CreateOptions{

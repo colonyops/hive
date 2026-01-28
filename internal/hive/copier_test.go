@@ -325,7 +325,7 @@ func TestFileCopier_CopiesSymlink(t *testing.T) {
 	dstPath := filepath.Join(destDir, "link.txt")
 	info, err := os.Lstat(dstPath)
 	require.NoError(t, err)
-	assert.True(t, info.Mode()&os.ModeSymlink != 0, "expected symlink")
+	assert.NotEqual(t, os.FileMode(0), info.Mode()&os.ModeSymlink, "expected symlink")
 
 	target, err := os.Readlink(dstPath)
 	require.NoError(t, err)
@@ -390,4 +390,33 @@ func TestFileCopier_OverwritesExistingSymlink(t *testing.T) {
 	target, err := os.Readlink(dstLink)
 	require.NoError(t, err)
 	assert.Equal(t, "new-target", target)
+}
+
+func TestIsPathTraversal(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		path     string
+		expected bool
+	}{
+		{"normal/path", false},
+		{"file.txt", false},
+		{"dir/subdir/file.txt", false},
+		{".hidden", false},
+		{".hidden/file", false},
+		{"...", false},
+		{"...file", false},
+		// Path traversal attempts
+		{"../escape", true},
+		{"../../escape", true},
+		{"dir/../../../escape", true},
+		{"/absolute/path", true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			t.Parallel()
+			assert.Equal(t, tt.expected, isPathTraversal(tt.path))
+		})
+	}
 }

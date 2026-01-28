@@ -129,6 +129,21 @@ func hasGlobChars(pattern string) bool {
 	return strings.ContainsAny(pattern, "*?[{")
 }
 
+// isPathTraversal returns true if the relative path attempts to escape its base directory.
+func isPathTraversal(relPath string) bool {
+	// Clean the path to normalize it
+	clean := filepath.Clean(relPath)
+	// Check for absolute path
+	if filepath.IsAbs(clean) {
+		return true
+	}
+	// Check if it starts with ".." followed by separator or is exactly ".."
+	if clean == ".." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) {
+		return true
+	}
+	return false
+}
+
 // copyPattern copies files matching a glob pattern from source to dest.
 func (c *FileCopier) copyPattern(ctx context.Context, ruleNum int, sourceDir, destDir, pattern string) error {
 	matches, err := c.globFiles(sourceDir, pattern)
@@ -151,6 +166,11 @@ func (c *FileCopier) copyPattern(ctx context.Context, ruleNum int, sourceDir, de
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+		}
+
+		// Validate path doesn't escape source directory
+		if isPathTraversal(match) {
+			return fmt.Errorf("path traversal detected: %q", match)
 		}
 
 		srcPath := filepath.Join(sourceDir, match)
@@ -178,8 +198,11 @@ func (c *FileCopier) copyFile(src, dst string) error {
 		return fmt.Errorf("lstat source: %w", err)
 	}
 
-	// Skip directories - doublestar.Glob can return directory entries
+	// Skip directories - doublestar.FilepathGlob can return directory entries
 	if srcInfo.IsDir() {
+		c.log.Debug().
+			Str("path", src).
+			Msg("skipping directory (only files are copied)")
 		return nil
 	}
 
@@ -211,6 +234,8 @@ func (c *FileCopier) copySymlink(src, dst string) error {
 		if err := os.Remove(dst); err != nil {
 			return fmt.Errorf("remove existing: %w", err)
 		}
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("check destination: %w", err)
 	}
 
 	if err := os.Symlink(target, dst); err != nil {
@@ -233,22 +258,28 @@ func (c *FileCopier) copyRegularFile(src, dst string, srcInfo fs.FileInfo) error
 		c.log.Warn().
 			Str("path", dst).
 			Msg("overwriting existing file")
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("check destination: %w", err)
 	}
 
 	srcFile, err := os.Open(src)
 	if err != nil {
 		return fmt.Errorf("open source: %w", err)
 	}
-	defer srcFile.Close()
+	defer func() { _ = srcFile.Close() }()
 
 	dstFile, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, srcInfo.Mode())
 	if err != nil {
 		return fmt.Errorf("create destination: %w", err)
 	}
-	defer dstFile.Close()
 
 	if _, err := io.Copy(dstFile, srcFile); err != nil {
+		_ = dstFile.Close()
 		return fmt.Errorf("copy contents: %w", err)
+	}
+
+	if err := dstFile.Close(); err != nil {
+		return fmt.Errorf("close destination: %w", err)
 	}
 
 	return nil
