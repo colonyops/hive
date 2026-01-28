@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
 	"github.com/bmatcuk/doublestar/v4"
@@ -47,7 +46,7 @@ func (c *FileCopier) CopyFiles(ctx context.Context, rules []config.CopyRule, rem
 		default:
 		}
 
-		matched, err := c.matchPattern(rule.Pattern, remote)
+		matched, err := matchRemotePattern(rule.Pattern, remote)
 		if err != nil {
 			return fmt.Errorf("match pattern %q: %w", rule.Pattern, err)
 		}
@@ -77,15 +76,6 @@ func (c *FileCopier) CopyFiles(ctx context.Context, rules []config.CopyRule, rem
 	}
 
 	return nil
-}
-
-// matchPattern checks if remote matches the regex pattern.
-// Empty pattern matches all remotes.
-func (c *FileCopier) matchPattern(pattern, remote string) (bool, error) {
-	if pattern == "" {
-		return true, nil
-	}
-	return regexp.MatchString(pattern, remote)
 }
 
 // globFiles finds files matching a pattern in sourceDir, including symlinks.
