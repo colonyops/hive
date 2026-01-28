@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/tabwriter"
@@ -69,8 +68,6 @@ The KV store provides typed key-value storage with timestamps for inter-agent co
 		},
 		Commands: []*cli.Command{
 			cmd.initCmd(),
-			cmd.openCmd(),
-			cmd.lsCmd(),
 			cmd.pruneCmd(),
 			cmd.kvCmd(),
 		},
@@ -88,24 +85,6 @@ func (cmd *CtxCmd) initCmd() *cli.Command {
 The symlink name is configured via context.symlink_name (default: .hive).
 The target is $XDG_DATA_HOME/hive/context/{owner}/{repo}/.`,
 		Action: cmd.runInit,
-	}
-}
-
-func (cmd *CtxCmd) openCmd() *cli.Command {
-	return &cli.Command{
-		Name:        "open",
-		Usage:       "Open context directory in $EDITOR",
-		Description: "Opens the context directory in your default editor.",
-		Action:      cmd.runOpen,
-	}
-}
-
-func (cmd *CtxCmd) lsCmd() *cli.Command {
-	return &cli.Command{
-		Name:        "ls",
-		Usage:       "List files in context directory",
-		Description: "Lists files in the context directory with size and modification time.",
-		Action:      cmd.runLs,
 	}
 }
 
@@ -227,63 +206,6 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 
 	p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
 	return nil
-}
-
-func (cmd *CtxCmd) runOpen(ctx context.Context, c *cli.Command) error {
-	ctxDir, err := cmd.resolveContextDir(ctx)
-	if err != nil {
-		return err
-	}
-
-	editor := os.Getenv("EDITOR")
-	if editor == "" {
-		editor = "vi"
-	}
-
-	execCmd := exec.CommandContext(ctx, editor, ctxDir)
-	execCmd.Stdin = os.Stdin
-	execCmd.Stdout = os.Stdout
-	execCmd.Stderr = os.Stderr
-
-	return execCmd.Run()
-}
-
-func (cmd *CtxCmd) runLs(ctx context.Context, c *cli.Command) error {
-	ctxDir, err := cmd.resolveContextDir(ctx)
-	if err != nil {
-		return err
-	}
-
-	entries, err := os.ReadDir(ctxDir)
-	if err != nil {
-		if os.IsNotExist(err) {
-			printer.Ctx(ctx).Infof("Context directory does not exist: %s", ctxDir)
-			return nil
-		}
-		return fmt.Errorf("read directory: %w", err)
-	}
-
-	if len(entries) == 0 {
-		printer.Ctx(ctx).Infof("Context directory is empty")
-		return nil
-	}
-
-	out := c.Root().Writer
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "NAME\tSIZE\tMODIFIED")
-
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		size := formatSize(info.Size())
-		modified := info.ModTime().Format("2006-01-02 15:04")
-		_, _ = fmt.Fprintf(w, "%s\t%s\t%s\n", entry.Name(), size, modified)
-	}
-
-	return w.Flush()
 }
 
 func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
@@ -521,19 +443,6 @@ func (cmd *CtxCmd) getKVStore(ctx context.Context) (*jsonfile.KVStore, error) {
 
 	kvPath := filepath.Join(ctxDir, "kv.json")
 	return jsonfile.NewKVStore(kvPath), nil
-}
-
-func formatSize(bytes int64) string {
-	const unit = 1024
-	if bytes < unit {
-		return fmt.Sprintf("%d B", bytes)
-	}
-	div, exp := int64(unit), 0
-	for n := bytes / unit; n >= unit; n /= unit {
-		div *= unit
-		exp++
-	}
-	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
 }
 
 func parseDuration(s string) (time.Duration, error) {
