@@ -66,6 +66,7 @@ type BatchSession struct {
 	Name   string `json:"name"`
 	Remote string `json:"remote,omitempty"`
 	Prompt string `json:"prompt,omitempty"`
+	Source string `json:"source,omitempty"`
 }
 
 // BatchResult is the output for a single session creation attempt.
@@ -119,9 +120,11 @@ Processing stops after 3 failures. Sessions not attempted are marked as skipped.
 Input JSON schema:
   {
     "sessions": [
-      {"name": "session-name", "remote": "optional-url", "prompt": "optional"}
+      {"name": "session-name", "remote": "optional-url", "prompt": "optional", "source": "optional-path"}
     ]
   }
+
+The "source" field specifies the directory to copy files from (per copy rules in config).
 
 Output is JSON with a batch ID, log file path, and results for each session.`,
 		Flags: []cli.Flag{
@@ -253,6 +256,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Name:   sess.Name,
 		Remote: sess.Remote,
 		Prompt: sess.Prompt,
+		Source: sess.Source,
 	}
 
 	created, err := cmd.flags.Service.CreateSession(ctx, opts)
