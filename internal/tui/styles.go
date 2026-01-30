@@ -52,7 +52,7 @@ const (
 // Use shared banner and style.
 var (
 	banner      = styles.Banner
-	bannerStyle = styles.BannerStyle.PaddingLeft(1).PaddingBottom(1)
+	bannerStyle = styles.BannerStyle.PaddingTop(1).PaddingLeft(1).PaddingBottom(1)
 )
 
 // Modal styles using lipgloss v2 for canvas/layer support.

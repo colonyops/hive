@@ -675,19 +675,22 @@ func (m Model) View() string {
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
-	// Build session tab with state indicators
-	sessionsLabel := m.buildSessionsTabLabel()
-
 	// Build tab bar
 	var sessionsTab, messagesTab string
 	if m.activeView == ViewSessions {
-		sessionsTab = viewSelectedStyle.Render(sessionsLabel)
+		sessionsTab = viewSelectedStyle.Render("Sessions")
 		messagesTab = viewNormalStyle.Render("Messages")
 	} else {
-		sessionsTab = viewNormalStyle.Render(sessionsLabel)
+		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Left, " ", sessionsTab, " | ", messagesTab)
+
+	// Build subheading for sessions view (filter state)
+	var subheading string
+	if m.activeView == ViewSessions {
+		subheading = m.buildSessionsSubheading()
+	}
 
 	// Build content
 	var content string
@@ -697,11 +700,14 @@ func (m Model) renderTabView() string {
 		content = m.msgView.View()
 	}
 
+	if subheading != "" {
+		return lipgloss.JoinVertical(lipgloss.Left, tabBar, subheading, content)
+	}
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
 }
 
-// buildSessionsTabLabel constructs the sessions tab label with state indicators.
-func (m Model) buildSessionsTabLabel() string {
+// buildSessionsSubheading constructs the sessions filter state subheading.
+func (m Model) buildSessionsSubheading() string {
 	var indicators []string
 
 	if !m.showAll && m.localRemote != "" {
@@ -712,9 +718,11 @@ func (m Model) buildSessionsTabLabel() string {
 	}
 
 	if len(indicators) == 0 {
-		return "Sessions"
+		return ""
 	}
-	return "Sessions (" + strings.Join(indicators, ", ") + ")"
+
+	subStyle := lipgloss.NewStyle().Foreground(colorGray)
+	return " " + subStyle.Render("showing "+strings.Join(indicators, ", "))
 }
 
 // startRecycle returns a command that starts the recycle operation with streaming output.
