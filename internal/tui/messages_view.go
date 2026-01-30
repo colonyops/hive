@@ -50,9 +50,9 @@ func (v *MessagesView) SetSize(width, height int) {
 	v.clampOffset()
 }
 
-// visibleLines returns the number of visible message lines (accounting for header).
+// visibleLines returns the number of visible message lines.
 func (v *MessagesView) visibleLines() int {
-	// Reserve 2 lines for title and help
+	// Reserve lines for: filter (1), column header (1), help (1)
 	visible := v.height - 3
 	if visible < 1 {
 		visible = 1
@@ -191,29 +191,47 @@ func (v *MessagesView) matchesFilter(msg *messaging.Message, filter string) bool
 func (v *MessagesView) View() string {
 	var b strings.Builder
 
-	// Title
-	title := titleStyle.Render("Message Bus")
-	b.WriteString("  ")
-	b.WriteString(title)
-	b.WriteString("\n")
+	// Column widths (defined early for header and content)
+	timeWidth := 8    // "14:32:01"
+	topicWidth := 10  // "[topic    ]"
+	senderWidth := 16 // right-aligned sender
+	padding := 4      // spaces between columns
+	contentWidth := v.width - timeWidth - topicWidth - senderWidth - padding - 4
+
+	if contentWidth < 20 {
+		contentWidth = 20
+	}
 
 	// Filter line
 	switch {
 	case v.filtering:
 		filterPrompt := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("Filter: ")
-		b.WriteString("  ")
+		b.WriteString(" ")
 		b.WriteString(filterPrompt)
 		b.WriteString(v.filter)
 		b.WriteString("▎") // cursor
 		b.WriteString("\n")
 	case v.filter != "":
 		filterShow := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("Filter: %s", v.filter))
-		b.WriteString("  ")
+		b.WriteString(" ")
 		b.WriteString(filterShow)
 		b.WriteString("\n")
 	default:
 		b.WriteString("\n")
 	}
+
+	// Column headers
+	headerStyle := lipgloss.NewStyle().Foreground(colorGray)
+	timeHeader := fmt.Sprintf("%-*s", timeWidth, "Time")
+	topicHeader := fmt.Sprintf("%-*s", topicWidth, "Topic")
+	msgHeader := fmt.Sprintf("%-*s", contentWidth, "Message")
+	senderHeader := fmt.Sprintf("%*s", senderWidth, "Sender")
+	b.WriteString("  ") // align with content (selection indicator space)
+	b.WriteString(headerStyle.Render(timeHeader + " " + topicHeader + " " + msgHeader + senderHeader))
+	b.WriteString("\n")
+
+	// Track lines rendered for padding calculation
+	linesRendered := 0
 
 	// No messages
 	if len(v.filteredAt) == 0 {
@@ -226,40 +244,35 @@ func (v *MessagesView) View() string {
 			b.WriteString(noMatch)
 			b.WriteString("\n")
 		}
-		return b.String()
+		linesRendered = 1
+	} else {
+		// Render visible messages
+		visible := v.visibleLines()
+		end := v.offset + visible
+		if end > len(v.filteredAt) {
+			end = len(v.filteredAt)
+		}
+
+		for i := v.offset; i < end; i++ {
+			msgIdx := v.filteredAt[i]
+			msg := &v.messages[msgIdx]
+			isSelected := i == v.cursor
+
+			line := v.renderMessageLine(msg, isSelected, timeWidth, topicWidth, contentWidth, senderWidth)
+			b.WriteString(line)
+			b.WriteString("\n")
+			linesRendered++
+		}
 	}
 
-	// Column widths
-	timeWidth := 8    // "14:32:01"
-	topicWidth := 10  // "[topic    ]"
-	senderWidth := 16 // right-aligned sender
-	padding := 4      // spaces between columns
-	contentWidth := v.width - timeWidth - topicWidth - senderWidth - padding - 4
-
-	if contentWidth < 20 {
-		contentWidth = 20
-	}
-
-	// Render visible messages
+	// Pad to push help to bottom
 	visible := v.visibleLines()
-	end := v.offset + visible
-	if end > len(v.filteredAt) {
-		end = len(v.filteredAt)
-	}
-
-	for i := v.offset; i < end; i++ {
-		msgIdx := v.filteredAt[i]
-		msg := &v.messages[msgIdx]
-		isSelected := i == v.cursor
-
-		line := v.renderMessageLine(msg, isSelected, timeWidth, topicWidth, contentWidth, senderWidth)
-		b.WriteString(line)
+	for i := linesRendered; i < visible; i++ {
 		b.WriteString("\n")
 	}
 
-	// Help line
-	help := lipgloss.NewStyle().Foreground(colorGray).Render("  ↑/↓ navigate • enter preview • / filter • tab switch view")
-	b.WriteString("\n")
+	// Help line (pinned to bottom)
+	help := lipgloss.NewStyle().Foreground(colorGray).Render(" ↑/↓ navigate • enter preview • / filter • tab switch view")
 	b.WriteString(help)
 
 	return b.String()

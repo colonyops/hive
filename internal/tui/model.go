@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/bubbles/key"
@@ -119,8 +120,8 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
-	l.Styles.Title = titleStyle
-	l.Styles.TitleBar = lipgloss.NewStyle().PaddingLeft(1).PaddingBottom(1)
+	l.SetShowTitle(false) // Title shown in tab bar instead
+	l.Styles.TitleBar = lipgloss.NewStyle()
 	l.FilterInput.PromptStyle = lipgloss.NewStyle().PaddingLeft(1).Foreground(colorBlue).Bold(true)
 	l.FilterInput.Prompt = "Filter: "
 	l.Styles.FilterCursor = lipgloss.NewStyle().Foreground(colorBlue)
@@ -129,9 +130,6 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 
 	// If no local remote detected, force show all
 	showAll := opts.ShowAll || opts.LocalRemote == ""
-
-	// Set initial title
-	l.Title = buildTitle(showAll, opts.HideRecycled)
 
 	// Add custom keybindings to list help
 	l.AdditionalShortHelpKeys = func() []key.Binding {
@@ -601,9 +599,6 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	m.list.SetItems(items)
 	m.state = stateNormal
 
-	// Update title to show filter state
-	m.list.Title = buildTitle(m.showAll, m.hideRecycled)
-
 	if len(paths) == 0 {
 		return m, nil
 	}
@@ -680,16 +675,19 @@ func (m Model) View() string {
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
-	// Build view indicator
+	// Build session tab with state indicators
+	sessionsLabel := m.buildSessionsTabLabel()
+
+	// Build tab bar
 	var sessionsTab, messagesTab string
 	if m.activeView == ViewSessions {
-		sessionsTab = viewSelectedStyle.Render("Sessions")
+		sessionsTab = viewSelectedStyle.Render(sessionsLabel)
 		messagesTab = viewNormalStyle.Render("Messages")
 	} else {
-		sessionsTab = viewNormalStyle.Render("Sessions")
+		sessionsTab = viewNormalStyle.Render(sessionsLabel)
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
-	tabBar := lipgloss.JoinHorizontal(lipgloss.Left, "  ", sessionsTab, " | ", messagesTab)
+	tabBar := lipgloss.JoinHorizontal(lipgloss.Left, " ", sessionsTab, " | ", messagesTab)
 
 	// Build content
 	var content string
@@ -702,19 +700,21 @@ func (m Model) renderTabView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
 }
 
-// buildTitle constructs the list title.
-func buildTitle(showAll, hideRecycled bool) string {
-	var scope string
-	if showAll {
-		scope = "all"
-	} else {
-		scope = "local"
+// buildSessionsTabLabel constructs the sessions tab label with state indicators.
+func (m Model) buildSessionsTabLabel() string {
+	var indicators []string
+
+	if !m.showAll && m.localRemote != "" {
+		indicators = append(indicators, "local")
+	}
+	if m.hideRecycled {
+		indicators = append(indicators, "active")
 	}
 
-	if hideRecycled {
-		return "Sessions (" + scope + ", active)"
+	if len(indicators) == 0 {
+		return "Sessions"
 	}
-	return "Sessions (" + scope + ")"
+	return "Sessions (" + strings.Join(indicators, ", ") + ")"
 }
 
 // startRecycle returns a command that starts the recycle operation with streaming output.

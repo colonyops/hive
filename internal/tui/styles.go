@@ -18,12 +18,6 @@ var (
 
 // Styles used for rendering the TUI (lipgloss v1 for bubbles compatibility).
 var (
-	// Title style for the list header.
-	titleStyle = lipgloss.NewStyle().
-			Bold(true).
-			Foreground(colorBlue).
-			PaddingLeft(1)
-
 	// Active session state style.
 	activeStyle = lipgloss.NewStyle().
 			Foreground(colorGreen)
