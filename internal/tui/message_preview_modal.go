@@ -127,7 +127,7 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	}
 
 	// Assemble modal content
-	divider := previewDividerStyle.Render("────────────────────")
+	divider := previewDividerStyle.Render("────────────────────────────────────────")
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		modalTitleStyle.Render("Message Preview"+scrollInfo),
