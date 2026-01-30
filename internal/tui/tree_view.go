@@ -21,7 +21,7 @@ const (
 // Status indicators for sessions.
 const (
 	statusActive   = "[●]"
-	statusRecycled = "[]"
+	statusRecycled = "[○]"
 )
 
 // Star indicator for current repository.
@@ -230,8 +230,9 @@ func PadRight(s string, width int) string {
 
 // TreeDelegate handles rendering of tree items in the list.
 type TreeDelegate struct {
-	Styles      TreeDelegateStyles
-	GitStatuses *kv.Store[string, GitStatus]
+	Styles       TreeDelegateStyles
+	GitStatuses  *kv.Store[string, GitStatus]
+	ColumnWidths *ColumnWidths
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -340,6 +341,15 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	nameOffset := len([]rune(item.RepoPrefix)) + 1
 	name := d.renderWithMatches(item.Session.Name, nameOffset, matchSet, nameStyle, matchStyle)
 
+	// Pad name to align columns (add spaces after styled name)
+	namePadding := ""
+	if d.ColumnWidths != nil && d.ColumnWidths.Name > 0 {
+		padLen := d.ColumnWidths.Name - len(item.Session.Name)
+		if padLen > 0 {
+			namePadding = strings.Repeat(" ", padLen)
+		}
+	}
+
 	// Short ID
 	shortID := item.Session.ID
 	if len(shortID) > 4 {
@@ -350,7 +360,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	// Git status: branch, diff stats, clean/dirty indicator
 	gitInfo := d.renderGitStatus(item.Session.Path)
 
-	return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, id, gitInfo)
+	return fmt.Sprintf("%s %s %s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo)
 }
 
 // renderGitStatus returns the formatted git status for a session path.

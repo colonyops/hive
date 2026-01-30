@@ -54,6 +54,7 @@ type Model struct {
 	quitting       bool
 	gitStatuses    *kv.Store[string, GitStatus]
 	gitWorkers     int
+	columnWidths   *ColumnWidths
 
 	// Filtering
 	localRemote string            // Remote URL of current directory (for highlighting)
@@ -113,9 +114,11 @@ type recycleCompleteMsg struct {
 // New creates a new TUI model.
 func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	gitStatuses := kv.New[string, GitStatus]()
+	columnWidths := &ColumnWidths{}
 
 	delegate := NewTreeDelegate()
 	delegate.GitStatuses = gitStatuses
+	delegate.ColumnWidths = columnWidths
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
@@ -152,19 +155,20 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	msgView := NewMessagesView()
 
 	return Model{
-		service:     service,
-		list:        l,
-		handler:     handler,
-		state:       stateNormal,
-		spinner:     s,
-		gitStatuses: gitStatuses,
-		gitWorkers:  cfg.Git.StatusWorkers,
-		localRemote: opts.LocalRemote,
-		msgStore:    opts.MsgStore,
-		msgView:     msgView,
-		topicFilter: "*",
-		activeView:  ViewSessions,
-		copyCommand: cfg.Commands.CopyCommand,
+		service:      service,
+		list:         l,
+		handler:      handler,
+		state:        stateNormal,
+		spinner:      s,
+		gitStatuses:  gitStatuses,
+		gitWorkers:   cfg.Git.StatusWorkers,
+		columnWidths: columnWidths,
+		localRemote:  opts.LocalRemote,
+		msgStore:     opts.MsgStore,
+		msgView:      msgView,
+		topicFilter:  "*",
+		activeView:   ViewSessions,
+		copyCommand:  cfg.Commands.CopyCommand,
 	}
 }
 
@@ -590,6 +594,9 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	groups := GroupSessionsByRepo(m.allSessions, m.localRemote)
 	items := BuildTreeItems(groups, m.localRemote)
 
+	// Calculate column widths across all sessions
+	*m.columnWidths = CalculateColumnWidths(m.allSessions, nil)
+
 	// Collect paths for git status fetching
 	paths := make([]string, 0, len(m.allSessions))
 	for _, s := range m.allSessions {
@@ -685,7 +692,8 @@ func (m Model) renderTabView() string {
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
-	tabBar := lipgloss.JoinHorizontal(lipgloss.Left, " ", sessionsTab, " | ", messagesTab)
+	tabBarContent := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+	tabBar := lipgloss.NewStyle().PaddingLeft(1).Render(tabBarContent)
 
 	// Calculate content height: total - banner (5) - tab bar (1)
 	contentHeight := m.height - 6
