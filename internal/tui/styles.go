@@ -31,7 +31,7 @@ const (
 // Use shared banner and style.
 var (
 	banner      = styles.Banner
-	bannerStyle = styles.BannerStyle.PaddingTop(1).PaddingLeft(1).PaddingBottom(1)
+	bannerStyle = styles.BannerStyle.PaddingLeft(1).PaddingBottom(1)
 )
 
 // Modal styles using lipgloss v2 for canvas/layer support.
@@ -95,4 +95,15 @@ var (
 
 	viewNormalStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
+)
+
+// Git status styles.
+var (
+	colorRed = lipgloss.Color("#f38ba8")
+
+	gitAdditionsStyle = lipgloss.NewStyle().Foreground(colorGreen)
+	gitDeletionsStyle = lipgloss.NewStyle().Foreground(colorRed)
+	gitCleanStyle     = lipgloss.NewStyle().Foreground(colorGray)
+	gitDirtyStyle     = lipgloss.NewStyle().Foreground(colorYellow)
+	gitLoadingStyle   = lipgloss.NewStyle().Foreground(colorGray)
 )

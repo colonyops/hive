@@ -48,7 +48,7 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 	// Convert to slice and sort sessions within each group
 	result := make([]RepoGroup, 0, len(groups))
 	for _, group := range groups {
-		sortSessionsByName(group.Sessions)
+		sortSessions(group.Sessions)
 		result = append(result, *group)
 	}
 
@@ -66,9 +66,16 @@ func extractGroupName(remote string) string {
 	return git.ExtractRepoName(remote)
 }
 
-// sortSessionsByName sorts sessions alphabetically by name.
-func sortSessionsByName(sessions []session.Session) {
+// sortSessions sorts sessions with active first, then by name.
+func sortSessions(sessions []session.Session) {
 	sort.Slice(sessions, func(i, j int) bool {
+		// Active sessions come before recycled
+		iActive := sessions[i].State == session.StateActive
+		jActive := sessions[j].State == session.StateActive
+		if iActive != jActive {
+			return iActive
+		}
+		// Then sort alphabetically by name
 		return sessions[i].Name < sessions[j].Name
 	})
 }

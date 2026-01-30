@@ -100,8 +100,6 @@ func TestBuildTreeItems_HeaderFields(t *testing.T) {
 	assert.True(t, header.IsHeader)
 	assert.Equal(t, "local", header.RepoName)
 	assert.True(t, header.IsCurrentRepo)
-	assert.Equal(t, 3, header.TotalCount)
-	assert.Equal(t, 1, header.RecycledCount)
 }
 
 func TestBuildTreeItems_SessionFields(t *testing.T) {

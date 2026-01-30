@@ -25,7 +25,7 @@ const (
 )
 
 // Star indicator for current repository.
-const starIndicator = "★"
+const currentRepoIndicator = "◆"
 
 // TreeItem represents an item in the tree view.
 // It can be either a repo header or a session entry.
@@ -36,8 +36,6 @@ type TreeItem struct {
 	// Header fields (only used when IsHeader is true)
 	RepoName      string
 	IsCurrentRepo bool
-	TotalCount    int
-	RecycledCount int
 
 	// Session fields (only used when IsHeader is false)
 	Session      session.Session
@@ -64,21 +62,11 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 	items := make([]list.Item, 0)
 
 	for _, group := range groups {
-		// Count recycled sessions
-		recycledCount := 0
-		for _, s := range group.Sessions {
-			if s.State == session.StateRecycled {
-				recycledCount++
-			}
-		}
-
 		// Add header
 		header := TreeItem{
 			IsHeader:      true,
 			RepoName:      group.Name,
 			IsCurrentRepo: group.Remote == localRemote,
-			TotalCount:    len(group.Sessions),
-			RecycledCount: recycledCount,
 		}
 		items = append(items, header)
 
@@ -103,7 +91,6 @@ type TreeDelegateStyles struct {
 	HeaderNormal   lipgloss.Style
 	HeaderSelected lipgloss.Style
 	HeaderStar     lipgloss.Style
-	HeaderCount    lipgloss.Style
 
 	// Session styles
 	TreeLine       lipgloss.Style
@@ -126,12 +113,11 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(colorWhite),
 		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(colorBlue),
 		HeaderStar:     lipgloss.NewStyle().Foreground(colorYellow),
-		HeaderCount:    lipgloss.NewStyle().Foreground(colorGray),
 
 		TreeLine:       lipgloss.NewStyle().Foreground(colorGray),
 		SessionName:    lipgloss.NewStyle().Foreground(colorWhite),
 		SessionBranch:  lipgloss.NewStyle().Foreground(colorGray),
-		SessionID:      lipgloss.NewStyle().Foreground(colorGray),
+		SessionID:      lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")), // purple
 		StatusActive:   lipgloss.NewStyle().Foreground(colorGreen),
 		StatusRecycled: lipgloss.NewStyle().Foreground(colorYellow),
 
@@ -144,30 +130,19 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 
 // RenderRepoHeader renders a repository header line.
 func RenderRepoHeader(item TreeItem, isSelected bool, styles TreeDelegateStyles) string {
-	var parts []string
-
-	// Star indicator for current repo
-	if item.IsCurrentRepo {
-		parts = append(parts, styles.HeaderStar.Render(starIndicator))
-	}
-
 	// Repo name
 	nameStyle := styles.HeaderNormal
 	if isSelected {
 		nameStyle = styles.HeaderSelected
 	}
-	parts = append(parts, nameStyle.Render(item.RepoName))
+	result := nameStyle.Render(item.RepoName)
 
-	// Count indicator: (N sessions, M recycled) or just (N sessions)
-	var countStr string
-	if item.RecycledCount > 0 {
-		countStr = fmt.Sprintf("(%d sessions, %d recycled)", item.TotalCount, item.RecycledCount)
-	} else {
-		countStr = fmt.Sprintf("(%d sessions)", item.TotalCount)
+	// Append indicator for current repo
+	if item.IsCurrentRepo {
+		result += " " + styles.HeaderStar.Render(currentRepoIndicator)
 	}
-	parts = append(parts, styles.HeaderCount.Render(countStr))
 
-	return strings.Join(parts, " ")
+	return result
 }
 
 // RenderSessionLine renders a session entry with tree prefix.
@@ -302,7 +277,7 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 	// Selection indicator
 	var prefix string
 	if isSelected {
-		prefix = d.Styles.SelectedBorder.Render("▸") + " "
+		prefix = d.Styles.SelectedBorder.Render("┃") + " "
 	} else {
 		prefix = "  "
 	}
@@ -311,33 +286,20 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 }
 
 // renderHeader renders a repository header.
-func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, m list.Model, _ int) string {
-	var parts []string
-
-	// Star indicator for current repo
-	if item.IsCurrentRepo {
-		parts = append(parts, d.Styles.HeaderStar.Render(starIndicator))
-	}
-
-	// Repo name with filter highlighting
+func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model, _ int) string {
+	// Repo name
 	nameStyle := d.Styles.HeaderNormal
 	if isSelected {
 		nameStyle = d.Styles.HeaderSelected
 	}
-	parts = append(parts, nameStyle.Render(item.RepoName))
+	result := nameStyle.Render(item.RepoName)
 
-	// Count indicator
-	var countStr string
-	if item.RecycledCount > 0 {
-		countStr = fmt.Sprintf("(%d sessions, %d recycled)", item.TotalCount, item.RecycledCount)
-	} else {
-		countStr = fmt.Sprintf("(%d sessions)", item.TotalCount)
+	// Append indicator for current repo
+	if item.IsCurrentRepo {
+		result += " " + d.Styles.HeaderStar.Render(currentRepoIndicator)
 	}
-	parts = append(parts, d.Styles.HeaderCount.Render(countStr))
 
-	_ = m // unused but kept for consistency with session rendering
-
-	return strings.Join(parts, " ")
+	return result
 }
 
 // renderSession renders a session entry.
@@ -378,14 +340,6 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	nameOffset := len([]rune(item.RepoPrefix)) + 1
 	name := d.renderWithMatches(item.Session.Name, nameOffset, matchSet, nameStyle, matchStyle)
 
-	// Git branch from status
-	branch := ""
-	if d.GitStatuses != nil {
-		if status, ok := d.GitStatuses.Get(item.Session.Path); ok && !status.IsLoading && status.Error == nil {
-			branch = d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
-		}
-	}
-
 	// Short ID
 	shortID := item.Session.ID
 	if len(shortID) > 4 {
@@ -393,7 +347,40 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	}
 	id := d.Styles.SessionID.Render(" #" + shortID)
 
-	return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, branch, id)
+	// Git status: branch, diff stats, clean/dirty indicator
+	gitInfo := d.renderGitStatus(item.Session.Path)
+
+	return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, id, gitInfo)
+}
+
+// renderGitStatus returns the formatted git status for a session path.
+func (d TreeDelegate) renderGitStatus(path string) string {
+	if d.GitStatuses == nil {
+		return gitLoadingStyle.Render(" ...")
+	}
+
+	status, ok := d.GitStatuses.Get(path)
+	if !ok || status.IsLoading {
+		return gitLoadingStyle.Render(" ...")
+	}
+
+	if status.Error != nil {
+		return ""
+	}
+
+	// Format: (branch) +N -N • clean/dirty
+	branch := d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
+	additions := gitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))
+	deletions := gitDeletionsStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
+
+	var indicator string
+	if status.HasChanges {
+		indicator = gitDirtyStyle.Render(" • uncommitted")
+	} else {
+		indicator = gitCleanStyle.Render(" • clean")
+	}
+
+	return branch + additions + deletions + indicator
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.
