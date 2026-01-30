@@ -28,6 +28,7 @@ type MsgCmd struct {
 	subTimeout string
 	subLast    int
 	subListen  bool
+	subWait    bool
 }
 
 // NewMsgCmd creates a new msg command.
@@ -106,7 +107,8 @@ func (cmd *MsgCmd) subCmd() *cli.Command {
 		UsageText: "hive msg sub [--topic <pattern>] [--last N] [--listen]",
 		Description: `Reads messages from topics, optionally filtering by topic pattern.
 
-By default, returns all messages as JSON and exits. Use --listen to poll for new messages.
+By default, returns all messages as JSON and exits. Use --listen to poll for new messages,
+or --wait to block until a single message arrives (useful for inter-agent handoff).
 
 Topic patterns:
 - No topic or "*": all messages
@@ -118,7 +120,8 @@ Examples:
   hive msg sub --topic agent.build      # specific topic
   hive msg sub --topic agent.*          # wildcard pattern
   hive msg sub --last 10                # last 10 messages
-  hive msg sub --listen                 # poll for new messages`,
+  hive msg sub --listen                 # poll for new messages
+  hive msg sub --wait --topic handoff   # wait for single message (24h default timeout)`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "topic",
@@ -138,9 +141,15 @@ Examples:
 				Usage:       "poll for new messages instead of returning immediately",
 				Destination: &cmd.subListen,
 			},
+			&cli.BoolFlag{
+				Name:        "wait",
+				Aliases:     []string{"w"},
+				Usage:       "wait for a single message and exit (for inter-agent handoff)",
+				Destination: &cmd.subWait,
+			},
 			&cli.StringFlag{
 				Name:        "timeout",
-				Usage:       "timeout for --listen mode (e.g., 30s, 5m)",
+				Usage:       "timeout for --listen/--wait mode (e.g., 30s, 5m, 24h)",
 				Value:       "30s",
 				Destination: &cmd.subTimeout,
 			},
@@ -207,6 +216,11 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		topic = "*"
 	}
 
+	// Wait mode: wait for a single message and exit
+	if cmd.subWait {
+		return cmd.waitForMessage(ctx, c, store, topic)
+	}
+
 	// Listen mode: poll for new messages
 	if cmd.subListen {
 		return cmd.listenForMessages(ctx, c, store, topic)
@@ -259,6 +273,44 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 					return err
 				}
 				since = messages[len(messages)-1].CreatedAt
+			}
+		}
+	}
+}
+
+func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, topic string) error {
+	// Use 24h default for --wait mode (essentially forever for handoff scenarios)
+	timeout := 24 * time.Hour
+	if cmd.subTimeout != "30s" { // User explicitly set a timeout
+		var err error
+		timeout, err = time.ParseDuration(cmd.subTimeout)
+		if err != nil {
+			return fmt.Errorf("invalid timeout: %w", err)
+		}
+	}
+
+	deadline := time.Now().Add(timeout)
+	since := time.Now()
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-ticker.C:
+			if time.Now().After(deadline) {
+				return fmt.Errorf("timeout waiting for message on topic %q", topic)
+			}
+
+			messages, err := store.Subscribe(ctx, topic, since)
+			if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
+				return fmt.Errorf("subscribe: %w", err)
+			}
+
+			if len(messages) > 0 {
+				// Return only the first message and exit
+				return cmd.printMessages(c.Root().Writer, messages[:1])
 			}
 		}
 	}
