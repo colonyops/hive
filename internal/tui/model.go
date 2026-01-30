@@ -27,6 +27,9 @@ const (
 	statePreviewingMessage
 )
 
+// Key constants for event handling.
+const keyEnter = "enter"
+
 // Options configures the TUI behavior.
 type Options struct {
 	ShowAll      bool            // Show all sessions vs only local repository
@@ -69,7 +72,7 @@ type Model struct {
 
 	// Messages
 	msgStore     messaging.Store
-	msgList      list.Model
+	msgView      *MessagesView
 	allMessages  []messaging.Message
 	lastPollTime time.Time
 	topicFilter  string
@@ -160,31 +163,8 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	s.Spinner = spinner.Dot
 	s.Style = spinnerStyle
 
-	// Create message list
-	msgDelegate := NewMessageDelegate()
-	ml := list.New([]list.Item{}, msgDelegate, 0, 0)
-	ml.SetShowStatusBar(false)
-	ml.SetFilteringEnabled(true)
-	ml.Title = "Message Bus"
-	ml.Styles.Title = titleStyle
-	ml.Styles.TitleBar = lipgloss.NewStyle().PaddingLeft(1).PaddingBottom(1)
-	ml.FilterInput.PromptStyle = lipgloss.NewStyle().PaddingLeft(1).Foreground(colorBlue).Bold(true)
-	ml.FilterInput.Prompt = "Filter: "
-	ml.Styles.FilterCursor = lipgloss.NewStyle().Foreground(colorBlue)
-
-	// Add message list keybindings to help
-	ml.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{
-			key.NewBinding(
-				key.WithKeys("enter"),
-				key.WithHelp("enter", "preview"),
-			),
-			key.NewBinding(
-				key.WithKeys("tab"),
-				key.WithHelp("tab", "switch view"),
-			),
-		}
-	}
+	// Create message view
+	msgView := NewMessagesView()
 
 	return Model{
 		service:      service,
@@ -198,7 +178,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		localRemote:  opts.LocalRemote,
 		hideRecycled: opts.HideRecycled,
 		msgStore:     opts.MsgStore,
-		msgList:      ml,
+		msgView:      msgView,
 		topicFilter:  "*",
 		activeView:   ViewSessions,
 	}
@@ -245,7 +225,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		m.list.SetSize(msg.Width, listHeight)
-		m.msgList.SetSize(msg.Width, listHeight)
+		m.msgView.SetSize(msg.Width, listHeight)
 		return m, nil
 
 	case messagesLoadedMsg:
@@ -256,13 +236,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Append new messages if any
 		if len(msg.messages) > 0 {
 			m.allMessages = append(m.allMessages, msg.messages...)
-			// Update message list items (newest first)
-			items := make([]list.Item, len(m.allMessages))
+			// Update message view with reversed order (newest first)
+			reversed := make([]messaging.Message, len(m.allMessages))
 			for i, message := range m.allMessages {
-				// Reverse order so newest is at top
-				items[len(m.allMessages)-1-i] = MessageItem{Message: message}
+				reversed[len(m.allMessages)-1-i] = message
 			}
-			m.msgList.SetItems(items)
+			m.msgView.SetMessages(reversed)
 		}
 		// Always update poll time so we don't re-fetch the same messages
 		m.lastPollTime = time.Now()
@@ -339,11 +318,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	// Update the focused list for any other messages
+	// Update the focused list for any other messages (only session list needs this)
 	var cmd tea.Cmd
-	if m.isMessagesFocused() {
-		m.msgList, cmd = m.msgList.Update(msg)
-	} else {
+	if !m.isMessagesFocused() {
 		m.list, cmd = m.list.Update(msg)
 	}
 	return m, cmd
@@ -365,7 +342,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// When filtering in either list, pass most keys except quit
-	if m.list.SettingFilter() || m.msgList.SettingFilter() {
+	if m.list.SettingFilter() || m.msgView.IsFiltering() {
 		return m.handleFilteringKey(msg, keyStr)
 	}
 
@@ -389,7 +366,7 @@ func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		m.pending = Action{}
 		return m, m.loadSessions()
-	case "enter":
+	case keyEnter:
 		if !m.outputModal.IsRunning() {
 			m.state = stateNormal
 			m.pending = Action{}
@@ -402,7 +379,7 @@ func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 // handleConfirmModalKey handles keys when confirmation modal is shown.
 func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
-	case "enter":
+	case keyEnter:
 		m.state = stateNormal
 		if m.modal.ConfirmSelected() {
 			action := m.pending
@@ -452,12 +429,30 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		m.quitting = true
 		return m, tea.Quit
 	}
-	var cmd tea.Cmd
-	if m.msgList.SettingFilter() {
-		m.msgList, cmd = m.msgList.Update(msg)
-	} else {
-		m.list, cmd = m.list.Update(msg)
+
+	// Handle message view filtering
+	if m.msgView.IsFiltering() {
+		switch keyStr {
+		case "esc":
+			m.msgView.CancelFilter()
+		case keyEnter:
+			m.msgView.ConfirmFilter()
+		case "backspace":
+			m.msgView.DeleteFilterRune()
+		default:
+			// Add character to filter if it's a printable rune
+			if len(msg.Runes) > 0 {
+				for _, r := range msg.Runes {
+					m.msgView.AddFilterRune(r)
+				}
+			}
+		}
+		return m, nil
 	}
+
+	// Handle session list filtering
+	var cmd tea.Cmd
+	m.list, cmd = m.list.Update(msg)
 	return m, cmd
 }
 
@@ -489,21 +484,23 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.handleSessionsKey(msg, keyStr)
 	}
 
-	// Messages focused
-	if keyStr == "enter" {
+	// Messages view focused - handle navigation
+	switch keyStr {
+	case keyEnter:
 		// Open message preview modal
 		selectedMsg := m.selectedMessage()
 		if selectedMsg != nil {
 			m.state = statePreviewingMessage
 			m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
-			return m, nil
 		}
+	case "up", "k":
+		m.msgView.MoveUp()
+	case "down", "j":
+		m.msgView.MoveDown()
+	case "/":
+		m.msgView.StartFilter()
 	}
-
-	// Pass other keys to msgList
-	var cmd tea.Cmd
-	m.msgList, cmd = m.msgList.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 // handleTabKey handles tab key for switching views.
@@ -561,15 +558,7 @@ func (m Model) selectedSession() *session.Session {
 
 // selectedMessage returns the currently selected message, or nil if none.
 func (m Model) selectedMessage() *messaging.Message {
-	item := m.msgList.SelectedItem()
-	if item == nil {
-		return nil
-	}
-	msgItem, ok := item.(MessageItem)
-	if !ok {
-		return nil
-	}
-	return &msgItem.Message
+	return m.msgView.SelectedMessage()
 }
 
 // isSessionsFocused returns true if the sessions view is active.
@@ -694,11 +683,11 @@ func (m Model) renderTabView() string {
 	// Build view indicator
 	var sessionsTab, messagesTab string
 	if m.activeView == ViewSessions {
-		sessionsTab = viewSelectedStyle.Render("[Sessions]")
-		messagesTab = viewNormalStyle.Render(" Messages ")
+		sessionsTab = viewSelectedStyle.Render("Sessions")
+		messagesTab = viewNormalStyle.Render("Messages")
 	} else {
-		sessionsTab = viewNormalStyle.Render(" Sessions ")
-		messagesTab = viewSelectedStyle.Render("[Messages]")
+		sessionsTab = viewNormalStyle.Render("Sessions")
+		messagesTab = viewSelectedStyle.Render("Messages")
 	}
 	tabBar := lipgloss.JoinHorizontal(lipgloss.Left, "  ", sessionsTab, " | ", messagesTab)
 
@@ -707,7 +696,7 @@ func (m Model) renderTabView() string {
 	if m.activeView == ViewSessions {
 		content = m.list.View()
 	} else {
-		content = m.msgList.View()
+		content = m.msgView.View()
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)

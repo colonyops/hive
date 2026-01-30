@@ -113,25 +113,27 @@ var (
 			Foreground(colorGray)
 )
 
-// Message styles (lipgloss v1 for bubbles compatibility).
-var (
-	msgTopicStyle = lipgloss.NewStyle().
-			Foreground(colorBlue).
-			Bold(true)
+// Color pool for deterministic color hashing of topics and senders.
+var colorPool = []lipgloss.Color{
+	lipgloss.Color("#9ece6a"), // green
+	lipgloss.Color("#7aa2f7"), // blue
+	lipgloss.Color("#e0af68"), // yellow
+	lipgloss.Color("#bb9af7"), // purple
+	lipgloss.Color("#7dcfff"), // cyan
+	lipgloss.Color("#f7768e"), // red/pink
+	lipgloss.Color("#ff9e64"), // orange
+	lipgloss.Color("#73daca"), // teal
+}
 
-	msgSenderStyle = lipgloss.NewStyle().
-			Foreground(colorGreen)
-
-	msgTimestampStyle = lipgloss.NewStyle().
-				Foreground(colorGray)
-
-	msgPayloadStyle = lipgloss.NewStyle().
-			Foreground(colorWhite)
-
-	msgSessionStyle = lipgloss.NewStyle().
-			Foreground(colorGray).
-			Italic(true)
-)
+// ColorForString returns a deterministic color for a given string.
+// The same string always produces the same color.
+func ColorForString(s string) lipgloss.Color {
+	var hash uint32
+	for _, c := range s {
+		hash = hash*31 + uint32(c)
+	}
+	return colorPool[hash%uint32(len(colorPool))]
+}
 
 // Layout styles for tab views.
 var (
