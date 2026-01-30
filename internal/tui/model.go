@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"os/exec"
 	"strings"
 	"time"
 
@@ -80,6 +81,9 @@ type Model struct {
 
 	// Message preview
 	previewModal MessagePreviewModal
+
+	// Clipboard
+	copyCommand string
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -179,6 +183,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		msgView:      msgView,
 		topicFilter:  "*",
 		activeView:   ViewSessions,
+		copyCommand:  cfg.Commands.CopyCommand,
 	}
 }
 
@@ -401,11 +406,14 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 
 // handlePreviewModalKey handles keys when message preview modal is shown.
 func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Clear copy status on any key press
+	m.previewModal.ClearCopyStatus()
+
 	switch keyStr {
 	case "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-	case "esc", "enter", "q":
+	case "esc", keyEnter, "q":
 		m.state = stateNormal
 		return m, nil
 	case "up", "k":
@@ -414,11 +422,36 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 	case "down", "j":
 		m.previewModal.ScrollDown()
 		return m, nil
+	case "c", "y":
+		// Copy payload to clipboard
+		if err := m.copyToClipboard(m.previewModal.Payload()); err != nil {
+			m.previewModal.SetCopyStatus("Copy failed: " + err.Error())
+		} else {
+			m.previewModal.SetCopyStatus("Copied!")
+		}
+		return m, nil
 	default:
 		// Pass other messages to viewport for mouse wheel etc
 		m.previewModal.UpdateViewport(msg)
 		return m, nil
 	}
+}
+
+// copyToClipboard copies the given text to the system clipboard.
+func (m Model) copyToClipboard(text string) error {
+	if m.copyCommand == "" {
+		return nil
+	}
+
+	// Split the command into program and args
+	parts := strings.Fields(m.copyCommand)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	cmd := exec.Command(parts[0], parts[1:]...)
+	cmd.Stdin = strings.NewReader(text)
+	return cmd.Run()
 }
 
 // handleFilteringKey handles keys when filter input is active.

@@ -24,9 +24,10 @@ const (
 
 // MessagePreviewModal displays a message with markdown rendering.
 type MessagePreviewModal struct {
-	message  messaging.Message
-	viewport viewport.Model
-	ready    bool
+	message    messaging.Message
+	viewport   viewport.Model
+	ready      bool
+	copyStatus string // feedback message after copy ("Copied!" or error)
 }
 
 // NewMessagePreviewModal creates a new preview modal for the given message.
@@ -99,6 +100,21 @@ func (m *MessagePreviewModal) ScrollDown() {
 	m.viewport.ScrollDown(1)
 }
 
+// Payload returns the raw message payload for copying.
+func (m *MessagePreviewModal) Payload() string {
+	return m.message.Payload
+}
+
+// SetCopyStatus sets the copy feedback message.
+func (m *MessagePreviewModal) SetCopyStatus(status string) {
+	m.copyStatus = status
+}
+
+// ClearCopyStatus clears the copy feedback message.
+func (m *MessagePreviewModal) ClearCopyStatus() {
+	m.copyStatus = ""
+}
+
 // Overlay renders the preview modal centered over the background.
 func (m MessagePreviewModal) Overlay(background string, width, height int) string {
 	modalWidth := min(width-previewModalMargin, previewModalMaxWidth)
@@ -126,6 +142,12 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 		scrollInfo = previewScrollStyle.Render(fmt.Sprintf(" (%.0f%%)", m.viewport.ScrollPercent()*100))
 	}
 
+	// Build help line with copy status
+	helpText := "[↑/↓/j/k] scroll  [c] copy  [enter/esc] close"
+	if m.copyStatus != "" {
+		helpText = previewCopiedStyle.Render(m.copyStatus)
+	}
+
 	// Assemble modal content
 	divider := previewDividerStyle.Render("────────────────────────────────────────")
 	modalContent := lipgloss.JoinVertical(
@@ -135,7 +157,7 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 		metadata,
 		divider,
 		m.viewport.View(),
-		modalHelpStyle.Render("[↑/↓/j/k] scroll  [enter/esc] close"),
+		modalHelpStyle.Render(helpText),
 	)
 
 	modal := modalStyle.
@@ -171,6 +193,9 @@ var (
 
 	previewScrollStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#565f89"))
+
+	previewCopiedStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#9ece6a")) // green for success
 )
 
 // ansiPattern matches ANSI escape sequences.
