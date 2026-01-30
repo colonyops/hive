@@ -127,12 +127,13 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	}
 
 	// Assemble modal content
+	divider := previewDividerStyle.Render("────────────────────")
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		modalTitleStyle.Render("Message Preview"+scrollInfo),
 		"",
 		metadata,
-		"",
+		divider,
 		m.viewport.View(),
 		modalHelpStyle.Render("[↑/↓/j/k] scroll  [enter/esc] close"),
 	)
@@ -164,6 +165,9 @@ var (
 	previewSessionStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#565f89")).
 				Italic(true)
+
+	previewDividerStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("#3b4261"))
 
 	previewScrollStyle = lipgloss.NewStyle().
 				Foreground(lipgloss.Color("#565f89"))
