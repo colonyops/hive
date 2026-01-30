@@ -8,11 +8,9 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"text/tabwriter"
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/urfave/cli/v3"
 )
@@ -29,9 +27,8 @@ type MsgCmd struct {
 	subTopic   string
 	subTimeout string
 	subLast    int
+	subListen  bool
 
-	// list flags
-	jsonOut bool
 }
 
 // NewMsgCmd creates a new msg command.
@@ -106,24 +103,23 @@ Examples:
 func (cmd *MsgCmd) subCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "sub",
-		Usage:     "Subscribe to messages",
-		UsageText: "hive msg sub [--topic <pattern>] [--last N] [--timeout duration]",
-		Description: `Subscribes to messages, optionally filtering by topic pattern.
+		Usage:     "Read messages from a topic",
+		UsageText: "hive msg sub [--topic <pattern>] [--last N] [--listen]",
+		Description: `Reads messages from topics, optionally filtering by topic pattern.
+
+By default, returns all messages as JSON and exits. Use --listen to poll for new messages.
 
 Topic patterns:
 - No topic or "*": all messages
 - "exact.topic": exact topic match
 - "prefix.*": wildcard match for topics starting with "prefix."
 
-Options:
-- --last N returns the last N messages immediately
-- Without --last, polls for new messages until timeout
-
 Examples:
-  hive msg sub                          # all messages
+  hive msg sub                          # all messages as JSON
   hive msg sub --topic agent.build      # specific topic
   hive msg sub --topic agent.*          # wildcard pattern
-  hive msg sub --last 10                # last 10 messages`,
+  hive msg sub --last 10                # last 10 messages
+  hive msg sub --listen                 # poll for new messages`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "topic",
@@ -134,12 +130,18 @@ Examples:
 			&cli.IntFlag{
 				Name:        "last",
 				Aliases:     []string{"n"},
-				Usage:       "return last N messages immediately",
+				Usage:       "return only last N messages",
 				Destination: &cmd.subLast,
+			},
+			&cli.BoolFlag{
+				Name:        "listen",
+				Aliases:     []string{"l"},
+				Usage:       "poll for new messages instead of returning immediately",
+				Destination: &cmd.subListen,
 			},
 			&cli.StringFlag{
 				Name:        "timeout",
-				Usage:       "timeout for waiting for new messages (e.g., 30s, 5m)",
+				Usage:       "timeout for --listen mode (e.g., 30s, 5m)",
 				Value:       "30s",
 				Destination: &cmd.subTimeout,
 			},
@@ -152,19 +154,11 @@ func (cmd *MsgCmd) listCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "list",
 		Usage:     "List all topics",
-		UsageText: "hive msg list [--json]",
-		Description: `Lists all topics with their message counts.
+		UsageText: "hive msg list",
+		Description: `Lists all topics with their message counts as JSON.
 
 Examples:
-  hive msg list
-  hive msg list --json`,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "json",
-				Usage:       "output as JSON",
-				Destination: &cmd.jsonOut,
-			},
-		},
+  hive msg list`,
 		Action: cmd.runList,
 	}
 }
@@ -192,16 +186,11 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 		payload = string(data)
 	}
 
-	// Determine sender
-	sender := cmd.pubSender
-	if sender == "" {
-		sender = cmd.detectSender(ctx)
-	}
-
 	msg := messaging.Message{
-		Topic:   cmd.pubTopic,
-		Payload: payload,
-		Sender:  sender,
+		Topic:     cmd.pubTopic,
+		Payload:   payload,
+		Sender:    cmd.pubSender,
+		SessionID: cmd.detectSessionID(ctx),
 	}
 
 	if err := store.Publish(ctx, msg); err != nil {
@@ -213,35 +202,35 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 
 func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 	store := cmd.getMsgStore()
-	p := printer.Ctx(ctx)
 
 	topic := cmd.subTopic
 	if topic == "" {
 		topic = "*"
 	}
 
-	// If --last is specified, return last N messages immediately
-	if cmd.subLast > 0 {
-		messages, err := store.Subscribe(ctx, topic, time.Time{})
-		if err != nil {
-			if errors.Is(err, messaging.ErrTopicNotFound) {
-				p.Infof("No messages found")
-				return nil
-			}
-			return fmt.Errorf("subscribe: %w", err)
-		}
-
-		// Get last N messages
-		start := 0
-		if len(messages) > cmd.subLast {
-			start = len(messages) - cmd.subLast
-		}
-		messages = messages[start:]
-
-		return cmd.printMessages(c.Root().Writer, messages)
+	// Listen mode: poll for new messages
+	if cmd.subListen {
+		return cmd.listenForMessages(ctx, c, store, topic)
 	}
 
-	// Poll for new messages
+	// Default: return messages immediately
+	messages, err := store.Subscribe(ctx, topic, time.Time{})
+	if err != nil {
+		if errors.Is(err, messaging.ErrTopicNotFound) {
+			return nil // No messages, no output
+		}
+		return fmt.Errorf("subscribe: %w", err)
+	}
+
+	// Apply --last N limit if specified
+	if cmd.subLast > 0 && len(messages) > cmd.subLast {
+		messages = messages[len(messages)-cmd.subLast:]
+	}
+
+	return cmd.printMessages(c.Root().Writer, messages)
+}
+
+func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, topic string) error {
 	timeout, err := time.ParseDuration(cmd.subTimeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout: %w", err)
@@ -278,7 +267,6 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 
 func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 	store := cmd.getMsgStore()
-	p := printer.Ctx(ctx)
 
 	topics, err := store.List(ctx)
 	if err != nil {
@@ -286,12 +274,7 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 	}
 
 	if len(topics) == 0 {
-		if !cmd.jsonOut {
-			p.Infof("No topics found")
-		} else {
-			_, _ = fmt.Fprintln(c.Root().Writer, "[]")
-		}
-		return nil
+		return nil // No topics, no output
 	}
 
 	// Get message counts for each topic
@@ -310,21 +293,13 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 		infos = append(infos, topicInfo{Name: t, MessageCount: count})
 	}
 
-	if cmd.jsonOut {
-		enc := json.NewEncoder(c.Root().Writer)
-		enc.SetIndent("", "  ")
-		return enc.Encode(infos)
-	}
-
-	out := c.Root().Writer
-	w := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
-	_, _ = fmt.Fprintln(w, "TOPIC\tMESSAGES")
-
+	enc := json.NewEncoder(c.Root().Writer)
 	for _, info := range infos {
-		_, _ = fmt.Fprintf(w, "%s\t%d\n", info.Name, info.MessageCount)
+		if err := enc.Encode(info); err != nil {
+			return err
+		}
 	}
-
-	return w.Flush()
+	return nil
 }
 
 func (cmd *MsgCmd) getMsgStore() *jsonfile.MsgStore {
@@ -332,28 +307,19 @@ func (cmd *MsgCmd) getMsgStore() *jsonfile.MsgStore {
 	return jsonfile.NewMsgStore(topicsDir)
 }
 
-func (cmd *MsgCmd) detectSender(ctx context.Context) string {
+func (cmd *MsgCmd) detectSessionID(ctx context.Context) string {
 	sessionsPath := filepath.Join(cmd.flags.DataDir, "sessions.json")
 	sessStore := jsonfile.New(sessionsPath)
 	detector := messaging.NewSessionDetector(sessStore)
 
-	sender, _ := detector.DetectSession(ctx)
-	return sender
+	sessionID, _ := detector.DetectSession(ctx)
+	return sessionID
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
+	enc := json.NewEncoder(w)
 	for _, msg := range messages {
-		var senderPart string
-		if msg.Sender != "" {
-			senderPart = fmt.Sprintf(" [%s]", msg.Sender)
-		}
-		_, err := fmt.Fprintf(w, "[%s] %s%s: %s\n",
-			msg.CreatedAt.Format("15:04:05"),
-			msg.Topic,
-			senderPart,
-			msg.Payload,
-		)
-		if err != nil {
+		if err := enc.Encode(msg); err != nil {
 			return err
 		}
 	}

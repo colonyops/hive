@@ -8,6 +8,7 @@ type Message struct {
 	Topic     string    `json:"topic"`
 	Payload   string    `json:"payload"`
 	Sender    string    `json:"sender,omitempty"`
+	SessionID string    `json:"session_id,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
