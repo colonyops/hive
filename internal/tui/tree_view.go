@@ -21,7 +21,7 @@ const (
 // Status indicators for sessions.
 const (
 	statusActive   = "[●]"
-	statusRecycled = "[○]"
+	statusRecycled = "[]"
 )
 
 // Star indicator for current repository.
@@ -119,7 +119,7 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 		SessionBranch:  lipgloss.NewStyle().Foreground(colorGray),
 		SessionID:      lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")), // purple
 		StatusActive:   lipgloss.NewStyle().Foreground(colorGreen),
-		StatusRecycled: lipgloss.NewStyle().Foreground(colorYellow),
+		StatusRecycled: lipgloss.NewStyle().Foreground(colorGray),
 
 		Selected:       lipgloss.NewStyle().Foreground(colorBlue).Bold(true),
 		SelectedBorder: lipgloss.NewStyle().Foreground(colorBlue),
