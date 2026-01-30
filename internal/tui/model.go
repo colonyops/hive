@@ -2,6 +2,8 @@ package tui
 
 import (
 	"context"
+	"strings"
+	"time"
 
 	"github.com/charmbracelet/bubbles/key"
 	"github.com/charmbracelet/bubbles/list"
@@ -9,6 +11,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/kv"
@@ -26,9 +29,10 @@ const (
 
 // Options configures the TUI behavior.
 type Options struct {
-	ShowAll      bool   // Show all sessions vs only local repository
-	LocalRemote  string // Remote URL of current directory (empty if not in git repo)
-	HideRecycled bool   // Hide recycled sessions by default
+	ShowAll      bool            // Show all sessions vs only local repository
+	LocalRemote  string          // Remote URL of current directory (empty if not in git repo)
+	HideRecycled bool            // Hide recycled sessions by default
+	MsgStore     messaging.Store // Message store for pub/sub events (optional)
 }
 
 // Model is the main Bubble Tea model for the TUI.
@@ -59,6 +63,18 @@ type Model struct {
 	recycleOutput <-chan string
 	recycleDone   <-chan error
 	recycleCancel context.CancelFunc
+
+	// Layout
+	isSplitMode bool        // true when width >= splitWidthThreshold
+	focusedPane FocusedPane // which pane has focus (split mode)
+	activeView  ViewType    // which view is shown (tab mode)
+
+	// Messages
+	msgStore     messaging.Store
+	msgList      list.Model
+	allMessages  []messaging.Message
+	lastPollTime time.Time
+	topicFilter  string
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -131,12 +147,29 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 			key.WithKeys("x"),
 			key.WithHelp("x", "toggle recycled"),
 		))
+		// Add tab keybinding for view switching
+		bindings = append(bindings, key.NewBinding(
+			key.WithKeys("tab"),
+			key.WithHelp("tab", "switch view"),
+		))
 		return bindings
 	}
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = spinnerStyle
+
+	// Create message list
+	msgDelegate := NewMessageDelegate()
+	ml := list.New([]list.Item{}, msgDelegate, 0, 0)
+	ml.SetShowStatusBar(false)
+	ml.SetFilteringEnabled(true)
+	ml.Title = "Message Bus"
+	ml.Styles.Title = titleStyle
+	ml.Styles.TitleBar = lipgloss.NewStyle().PaddingLeft(1).PaddingBottom(1)
+	ml.FilterInput.PromptStyle = lipgloss.NewStyle().PaddingLeft(1).Foreground(colorBlue).Bold(true)
+	ml.FilterInput.Prompt = "Filter: "
+	ml.Styles.FilterCursor = lipgloss.NewStyle().Foreground(colorBlue)
 
 	return Model{
 		service:      service,
@@ -149,12 +182,23 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		showAll:      showAll,
 		localRemote:  opts.LocalRemote,
 		hideRecycled: opts.HideRecycled,
+		msgStore:     opts.MsgStore,
+		msgList:      ml,
+		topicFilter:  "*",
+		focusedPane:  PaneSessions,
+		activeView:   ViewSessions,
 	}
 }
 
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
-	return tea.Batch(m.loadSessions(), m.spinner.Tick)
+	cmds := []tea.Cmd{m.loadSessions(), m.spinner.Tick}
+	// Start message polling if we have a store
+	if m.msgStore != nil {
+		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
+		cmds = append(cmds, schedulePollTick())
+	}
+	return tea.Batch(cmds...)
 }
 
 // loadSessions returns a command that loads sessions from the service.
@@ -179,13 +223,65 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		m.isSplitMode = msg.Width >= splitWidthThreshold
+
 		// Account for banner height (4 lines + margin)
 		listHeight := msg.Height - 5
 		if listHeight < 1 {
 			listHeight = 1
 		}
-		m.list.SetSize(msg.Width, listHeight)
+
+		if m.isSplitMode {
+			// In split mode, we use custom focus indicators, so hide list titles
+			// and account for the indicator row (-1)
+			splitHeight := listHeight - 1
+			if splitHeight < 1 {
+				splitHeight = 1
+			}
+			paneWidth := (msg.Width - 1) / 2
+			m.list.SetShowTitle(false)
+			m.msgList.SetShowTitle(false)
+			m.list.SetSize(paneWidth, splitHeight)
+			m.msgList.SetSize(paneWidth, splitHeight)
+		} else {
+			// Full width for active view, show titles
+			m.list.SetShowTitle(true)
+			m.msgList.SetShowTitle(true)
+			m.list.SetSize(msg.Width, listHeight)
+			m.msgList.SetSize(msg.Width, listHeight)
+		}
 		return m, nil
+
+	case messagesLoadedMsg:
+		if msg.err != nil {
+			// Silently ignore message loading errors
+			return m, nil
+		}
+		// Append new messages if any
+		if len(msg.messages) > 0 {
+			m.allMessages = append(m.allMessages, msg.messages...)
+			// Update message list items (newest first)
+			items := make([]list.Item, len(m.allMessages))
+			for i, message := range m.allMessages {
+				// Reverse order so newest is at top
+				items[len(m.allMessages)-1-i] = MessageItem{Message: message}
+			}
+			m.msgList.SetItems(items)
+		}
+		// Always update poll time so we don't re-fetch the same messages
+		m.lastPollTime = time.Now()
+		return m, nil
+
+	case pollTickMsg:
+		// Only poll if messages are visible
+		if m.shouldPollMessages() && m.msgStore != nil {
+			return m, tea.Batch(
+				loadMessages(m.msgStore, m.topicFilter, m.lastPollTime),
+				schedulePollTick(),
+			)
+		}
+		// Keep scheduling poll ticks even if not actively polling
+		return m, schedulePollTick()
 
 	case sessionsLoadedMsg:
 		if msg.err != nil {
@@ -247,105 +343,157 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// Update the focused list for any other messages
 	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
+	if m.isMessagesFocused() {
+		m.msgList, cmd = m.msgList.Update(msg)
+	} else {
+		m.list, cmd = m.list.Update(msg)
+	}
 	return m, cmd
 }
 
 // handleKey processes key presses.
 func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	key := msg.String()
+	keyStr := msg.String()
 
-	// Handle output modal state (recycle running or complete)
+	// Handle modal states first
 	if m.state == stateRunningRecycle {
-		switch key {
-		case "ctrl+c":
-			// Cancel any running operation and quit
-			if m.recycleCancel != nil {
-				m.recycleCancel()
-			}
-			m.quitting = true
-			return m, tea.Quit
-		case "esc":
-			if m.outputModal.IsRunning() {
-				// Cancel the running operation
-				if m.recycleCancel != nil {
-					m.recycleCancel()
-				}
-			}
-			// Close modal and reload
-			m.state = stateNormal
-			m.pending = Action{}
-			return m, m.loadSessions()
-		case "enter":
-			if !m.outputModal.IsRunning() {
-				// Close modal and reload
-				m.state = stateNormal
-				m.pending = Action{}
-				return m, m.loadSessions()
-			}
-		}
-		return m, nil
+		return m.handleRecycleModalKey(keyStr)
 	}
-
-	// Handle confirmation modal state
 	if m.state == stateConfirming {
-		switch key {
-		case "enter":
-			m.state = stateNormal
-			if m.modal.ConfirmSelected() {
-				action := m.pending
-				if action.Type == ActionTypeRecycle {
-					return m, m.startRecycle(action.SessionID)
-				}
-				return m, m.executeAction(action)
-			}
-			m.pending = Action{}
-			return m, nil
-		case "esc":
-			m.state = stateNormal
-			m.pending = Action{}
-			return m, nil
-		case "left", "right", "h", "l", "tab":
-			m.modal.ToggleSelection()
-			return m, nil
-		}
-		return m, nil
+		return m.handleConfirmModalKey(keyStr)
 	}
 
-	// When filtering, pass most keys to the list except quit
-	if m.list.SettingFilter() {
-		if key == "ctrl+c" {
-			m.quitting = true
-			return m, tea.Quit
-		}
-		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
-		return m, cmd
+	// When filtering in either list, pass most keys except quit
+	if m.list.SettingFilter() || m.msgList.SettingFilter() {
+		return m.handleFilteringKey(msg, keyStr)
 	}
 
 	// Handle normal state
-	switch key {
+	return m.handleNormalKey(msg, keyStr)
+}
+
+// handleRecycleModalKey handles keys when recycle modal is shown.
+func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case "ctrl+c":
+		if m.recycleCancel != nil {
+			m.recycleCancel()
+		}
+		m.quitting = true
+		return m, tea.Quit
+	case "esc":
+		if m.outputModal.IsRunning() && m.recycleCancel != nil {
+			m.recycleCancel()
+		}
+		m.state = stateNormal
+		m.pending = Action{}
+		return m, m.loadSessions()
+	case "enter":
+		if !m.outputModal.IsRunning() {
+			m.state = stateNormal
+			m.pending = Action{}
+			return m, m.loadSessions()
+		}
+	}
+	return m, nil
+}
+
+// handleConfirmModalKey handles keys when confirmation modal is shown.
+func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case "enter":
+		m.state = stateNormal
+		if m.modal.ConfirmSelected() {
+			action := m.pending
+			if action.Type == ActionTypeRecycle {
+				return m, m.startRecycle(action.SessionID)
+			}
+			return m, m.executeAction(action)
+		}
+		m.pending = Action{}
+		return m, nil
+	case "esc":
+		m.state = stateNormal
+		m.pending = Action{}
+		return m, nil
+	case "left", "right", "h", "l", "tab":
+		m.modal.ToggleSelection()
+		return m, nil
+	}
+	return m, nil
+}
+
+// handleFilteringKey handles keys when filter input is active.
+func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	if keyStr == "ctrl+c" {
+		m.quitting = true
+		return m, tea.Quit
+	}
+	var cmd tea.Cmd
+	if m.msgList.SettingFilter() {
+		m.msgList, cmd = m.msgList.Update(msg)
+	} else {
+		m.list, cmd = m.list.Update(msg)
+	}
+	return m, cmd
+}
+
+// handleNormalKey handles keys in normal state.
+func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Global keys that work regardless of focus
+	switch keyStr {
 	case "q", "ctrl+c":
 		m.quitting = true
 		return m, tea.Quit
-	case "g":
-		// Refresh git status for all sessions
-		return m, m.refreshGitStatuses()
-	case "a":
-		// Toggle between local and all sessions
-		if m.localRemote != "" {
-			m.showAll = !m.showAll
-			return m.applyFilter()
-		}
-		return m, nil
-	case "x":
-		// Toggle recycled sessions visibility
-		m.hideRecycled = !m.hideRecycled
-		return m.applyFilter()
+	case "tab":
+		return m.handleTabKey()
 	}
 
-	// Check for configured keybindings
+	// Session-specific keys only when sessions focused
+	if m.isSessionsFocused() {
+		switch keyStr {
+		case "g":
+			return m, m.refreshGitStatuses()
+		case "a":
+			if m.localRemote != "" {
+				m.showAll = !m.showAll
+				return m.applyFilter()
+			}
+		case "x":
+			m.hideRecycled = !m.hideRecycled
+			return m.applyFilter()
+		}
+		return m.handleSessionsKey(msg, keyStr)
+	}
+
+	// Messages focused - pass all other keys to msgList
+	var cmd tea.Cmd
+	m.msgList, cmd = m.msgList.Update(msg)
+	return m, cmd
+}
+
+// handleTabKey handles tab key for switching focus/view.
+func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
+	if m.isSplitMode {
+		if m.focusedPane == PaneSessions {
+			m.focusedPane = PaneMessages
+		} else {
+			m.focusedPane = PaneSessions
+		}
+	} else {
+		if m.activeView == ViewSessions {
+			m.activeView = ViewMessages
+		} else {
+			m.activeView = ViewSessions
+		}
+	}
+	return m, nil
+}
+
+// handleSessionsKey handles keys when sessions pane is focused.
+func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
@@ -353,7 +501,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
-	action, ok := m.handler.Resolve(key, *selected)
+	action, ok := m.handler.Resolve(keyStr, *selected)
 	if ok {
 		if action.NeedsConfirm() {
 			m.state = stateConfirming
@@ -361,17 +509,14 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			m.modal = NewModal("Confirm", action.Confirm)
 			return m, nil
 		}
-		// Recycle uses streaming output modal
 		if action.Type == ActionTypeRecycle {
 			return m, m.startRecycle(action.SessionID)
 		}
-		// Other actions use loading state
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
 		return m, m.executeAction(action)
 	}
 
-	// Default list navigation
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
@@ -388,6 +533,32 @@ func (m Model) selectedSession() *session.Session {
 		return nil
 	}
 	return &sessionItem.Session
+}
+
+// isSessionsFocused returns true if the sessions pane is focused.
+func (m Model) isSessionsFocused() bool {
+	if m.isSplitMode {
+		return m.focusedPane == PaneSessions
+	}
+	return m.activeView == ViewSessions
+}
+
+// isMessagesFocused returns true if the messages pane is focused.
+func (m Model) isMessagesFocused() bool {
+	if m.isSplitMode {
+		return m.focusedPane == PaneMessages
+	}
+	return m.activeView == ViewMessages
+}
+
+// shouldPollMessages returns true if messages should be polled.
+func (m Model) shouldPollMessages() bool {
+	// In split mode, always poll
+	if m.isSplitMode {
+		return true
+	}
+	// In tab mode, only poll when messages view is active
+	return m.activeView == ViewMessages
 }
 
 // applyFilter filters sessions based on showAll and hideRecycled flags.
@@ -453,9 +624,15 @@ func (m Model) View() string {
 		return ""
 	}
 
-	// Build main view with banner
+	// Build main view based on layout mode
 	bannerView := bannerStyle.Render(banner)
-	mainView := lipgloss.JoinVertical(lipgloss.Left, bannerView, m.list.View())
+	var contentView string
+	if m.isSplitMode {
+		contentView = m.renderSplitView()
+	} else {
+		contentView = m.renderTabView()
+	}
+	mainView := lipgloss.JoinVertical(lipgloss.Left, bannerView, contentView)
 
 	// Ensure we have dimensions for modals
 	w, h := m.width, m.height
@@ -484,6 +661,79 @@ func (m Model) View() string {
 	}
 
 	return mainView
+}
+
+// renderSplitView renders the two-column split layout.
+func (m Model) renderSplitView() string {
+	// Calculate pane widths (leave 1 char for divider)
+	paneWidth := (m.width - 1) / 2
+	listHeight := m.height - 6 // Account for focus indicator line
+	if listHeight < 1 {
+		listHeight = 1
+	}
+
+	// Build focus indicators
+	var leftIndicator, rightIndicator string
+	if m.focusedPane == PaneSessions {
+		leftIndicator = focusIndicatorStyle.Render("▸ ") + viewSelectedStyle.Render("Sessions")
+		rightIndicator = "  " + viewNormalStyle.Render("Message Bus")
+	} else {
+		leftIndicator = "  " + viewNormalStyle.Render("Sessions")
+		rightIndicator = focusIndicatorStyle.Render("▸ ") + viewSelectedStyle.Render("Message Bus")
+	}
+	leftIndicator = lipgloss.NewStyle().Width(paneWidth).Render(leftIndicator)
+	rightIndicator = lipgloss.NewStyle().Width(paneWidth).Render(rightIndicator)
+
+	// Build divider (vertical line)
+	divider := m.renderDivider(listHeight)
+
+	// Render left pane (sessions) and right pane (messages)
+	leftContent := m.list.View()
+	rightContent := m.msgList.View()
+
+	// Use fixed width styling
+	leftPane := lipgloss.NewStyle().Width(paneWidth).Render(leftContent)
+	rightPane := lipgloss.NewStyle().Width(paneWidth).Render(rightContent)
+
+	// Combine indicators and content
+	indicatorRow := lipgloss.JoinHorizontal(lipgloss.Top, leftIndicator, " ", rightIndicator)
+	contentRow := lipgloss.JoinHorizontal(lipgloss.Top, leftPane, divider, rightPane)
+
+	return lipgloss.JoinVertical(lipgloss.Left, indicatorRow, contentRow)
+}
+
+// renderTabView renders the single-view tab layout.
+func (m Model) renderTabView() string {
+	// Build view indicator
+	var sessionsTab, messagesTab string
+	if m.activeView == ViewSessions {
+		sessionsTab = viewSelectedStyle.Render("[Sessions]")
+		messagesTab = viewNormalStyle.Render(" Messages ")
+	} else {
+		sessionsTab = viewNormalStyle.Render(" Sessions ")
+		messagesTab = viewSelectedStyle.Render("[Messages]")
+	}
+	tabBar := lipgloss.JoinHorizontal(lipgloss.Left, "  ", sessionsTab, " | ", messagesTab)
+
+	// Build content
+	var content string
+	if m.activeView == ViewSessions {
+		content = m.list.View()
+	} else {
+		content = m.msgList.View()
+	}
+
+	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
+}
+
+// renderDivider renders a vertical divider.
+func (m Model) renderDivider(height int) string {
+	dividerChars := strings.Repeat("│\n", height)
+	// Remove trailing newline
+	if len(dividerChars) > 0 {
+		dividerChars = dividerChars[:len(dividerChars)-1]
+	}
+	return dividerStyle.Render(dividerChars)
 }
 
 // buildTitle constructs the list title.

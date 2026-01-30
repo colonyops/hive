@@ -112,3 +112,40 @@ var (
 	gitLoadingStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
 )
+
+// Message styles (lipgloss v1 for bubbles compatibility).
+var (
+	msgTopicStyle = lipgloss.NewStyle().
+			Foreground(colorBlue).
+			Bold(true)
+
+	msgSenderStyle = lipgloss.NewStyle().
+			Foreground(colorGreen)
+
+	msgTimestampStyle = lipgloss.NewStyle().
+				Foreground(colorGray)
+
+	msgPayloadStyle = lipgloss.NewStyle().
+			Foreground(colorWhite)
+
+	msgSessionStyle = lipgloss.NewStyle().
+			Foreground(colorGray).
+			Italic(true)
+)
+
+// Layout styles for split and tab views.
+var (
+	dividerStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
+
+	viewSelectedStyle = lipgloss.NewStyle().
+				Foreground(colorBlue).
+				Bold(true)
+
+	viewNormalStyle = lipgloss.NewStyle().
+			Foreground(colorGray)
+
+	focusIndicatorStyle = lipgloss.NewStyle().
+				Foreground(colorBlue).
+				Bold(true)
+)
