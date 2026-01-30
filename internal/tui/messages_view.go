@@ -52,8 +52,13 @@ func (v *MessagesView) SetSize(width, height int) {
 
 // visibleLines returns the number of visible message lines.
 func (v *MessagesView) visibleLines() int {
-	// Reserve lines for: filter (1), column header (1), help (1)
-	visible := v.height - 3
+	// Reserve lines for: column header (1), help (1)
+	reserved := 2
+	// Add filter line if active
+	if v.filtering || v.filter != "" {
+		reserved++
+	}
+	visible := v.height - reserved
 	if visible < 1 {
 		visible = 1
 	}
@@ -202,21 +207,18 @@ func (v *MessagesView) View() string {
 		contentWidth = 20
 	}
 
-	// Filter line
-	switch {
-	case v.filtering:
+	// Filter line (only shown when filtering or filter is active)
+	if v.filtering {
 		filterPrompt := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("Filter: ")
 		b.WriteString(" ")
 		b.WriteString(filterPrompt)
 		b.WriteString(v.filter)
 		b.WriteString("▎") // cursor
 		b.WriteString("\n")
-	case v.filter != "":
+	} else if v.filter != "" {
 		filterShow := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("Filter: %s", v.filter))
 		b.WriteString(" ")
 		b.WriteString(filterShow)
-		b.WriteString("\n")
-	default:
 		b.WriteString("\n")
 	}
 
