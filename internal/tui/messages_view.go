@@ -23,8 +23,7 @@ func (i MessageItem) FilterValue() string {
 
 // MessageDelegate handles rendering of message items in the list.
 type MessageDelegate struct {
-	Styles  MessageDelegateStyles
-	Focused bool // Whether this pane is focused (controls selection bar visibility)
+	Styles MessageDelegateStyles
 }
 
 // MessageDelegateStyles defines the styles for the message delegate.
@@ -118,9 +117,9 @@ func (d MessageDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	}
 	line2 := d.Styles.Payload.Render(payload)
 
-	// Apply selection styling with left border (only in focused pane)
+	// Apply selection styling with left border
 	var border string
-	if isSelected && d.Focused {
+	if isSelected {
 		border = selectedBorderStyle.Render("┃") + " "
 	} else {
 		border = "  "

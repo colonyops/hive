@@ -133,19 +133,12 @@ var (
 			Italic(true)
 )
 
-// Layout styles for split and tab views.
+// Layout styles for tab views.
 var (
-	dividerFocusedStyle = lipgloss.NewStyle().
-				Foreground(colorBlue)
-
 	viewSelectedStyle = lipgloss.NewStyle().
 				Foreground(colorBlue).
 				Bold(true)
 
 	viewNormalStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
-
-	focusIndicatorStyle = lipgloss.NewStyle().
-				Foreground(colorBlue).
-				Bold(true)
 )
