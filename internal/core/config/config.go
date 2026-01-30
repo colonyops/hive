@@ -31,8 +31,13 @@ var defaultKeybindings = map[string]Keybinding{
 	},
 }
 
+// CurrentConfigVersion is the latest config schema version.
+// Increment this when making breaking changes to config format.
+const CurrentConfigVersion = "0.2.0"
+
 // Config holds the application configuration.
 type Config struct {
+	Version             string                `yaml:"version"`
 	Commands            Commands              `yaml:"commands"`
 	Git                 GitConfig             `yaml:"git"`
 	GitPath             string                `yaml:"git_path"`
