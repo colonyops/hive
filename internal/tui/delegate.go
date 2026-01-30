@@ -28,6 +28,7 @@ func (i SessionItem) FilterValue() string {
 type SessionDelegate struct {
 	Styles      SessionDelegateStyles
 	GitStatuses *kv.Store[string, GitStatus]
+	Focused     bool // Whether this pane is focused (controls selection bar visibility)
 }
 
 // SessionDelegateStyles defines the styles for the delegate.
@@ -137,9 +138,9 @@ func (d SessionDelegate) Render(w io.Writer, m list.Model, index int, item list.
 	// Build git status line
 	gitLine := d.renderGitStatus(s.Path)
 
-	// Apply selection styling with left border
+	// Apply selection styling with left border (only in focused pane)
 	var border string
-	if isSelected {
+	if isSelected && d.Focused {
 		border = selectedBorderStyle.Render("┃") + " "
 	} else {
 		border = "  "

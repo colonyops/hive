@@ -135,8 +135,8 @@ var (
 
 // Layout styles for split and tab views.
 var (
-	dividerStyle = lipgloss.NewStyle().
-			Foreground(colorGray)
+	dividerFocusedStyle = lipgloss.NewStyle().
+				Foreground(colorBlue)
 
 	viewSelectedStyle = lipgloss.NewStyle().
 				Foreground(colorBlue).

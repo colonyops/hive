@@ -79,6 +79,10 @@ type Model struct {
 
 	// Message preview
 	previewModal MessagePreviewModal
+
+	// Delegates (stored for updating focus state)
+	sessionDelegate *SessionDelegate
+	msgDelegate     *MessageDelegate
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -115,6 +119,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 
 	delegate := NewSessionDelegate()
 	delegate.GitStatuses = gitStatuses
+	delegate.Focused = true // Sessions pane starts focused
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
@@ -165,6 +170,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 
 	// Create message list
 	msgDelegate := NewMessageDelegate()
+	msgDelegate.Focused = false // Messages pane starts unfocused
 	ml := list.New([]list.Item{}, msgDelegate, 0, 0)
 	ml.SetShowStatusBar(false)
 	ml.SetFilteringEnabled(true)
@@ -190,21 +196,23 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	}
 
 	return Model{
-		service:      service,
-		list:         l,
-		handler:      handler,
-		state:        stateNormal,
-		spinner:      s,
-		gitStatuses:  gitStatuses,
-		gitWorkers:   cfg.Git.StatusWorkers,
-		showAll:      showAll,
-		localRemote:  opts.LocalRemote,
-		hideRecycled: opts.HideRecycled,
-		msgStore:     opts.MsgStore,
-		msgList:      ml,
-		topicFilter:  "*",
-		focusedPane:  PaneSessions,
-		activeView:   ViewSessions,
+		service:         service,
+		list:            l,
+		handler:         handler,
+		state:           stateNormal,
+		spinner:         s,
+		gitStatuses:     gitStatuses,
+		gitWorkers:      cfg.Git.StatusWorkers,
+		showAll:         showAll,
+		localRemote:     opts.LocalRemote,
+		hideRecycled:    opts.HideRecycled,
+		msgStore:        opts.MsgStore,
+		msgList:         ml,
+		topicFilter:     "*",
+		focusedPane:     PaneSessions,
+		activeView:      ViewSessions,
+		sessionDelegate: &delegate,
+		msgDelegate:     &msgDelegate,
 	}
 }
 
@@ -261,12 +269,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.msgList.SetShowTitle(false)
 			m.list.SetSize(paneWidth, splitHeight)
 			m.msgList.SetSize(paneWidth, splitHeight)
+			// Update delegate focus states for split mode
+			m.sessionDelegate.Focused = m.focusedPane == PaneSessions
+			m.msgDelegate.Focused = m.focusedPane == PaneMessages
 		} else {
 			// Full width for active view, show titles
 			m.list.SetShowTitle(true)
 			m.msgList.SetShowTitle(true)
 			m.list.SetSize(msg.Width, listHeight)
 			m.msgList.SetSize(msg.Width, listHeight)
+			// Update delegate focus states for tab mode
+			m.sessionDelegate.Focused = m.activeView == ViewSessions
+			m.msgDelegate.Focused = m.activeView == ViewMessages
 		}
 		return m, nil
 
@@ -536,12 +550,18 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 		} else {
 			m.focusedPane = PaneSessions
 		}
+		// Update delegate focus states
+		m.sessionDelegate.Focused = m.focusedPane == PaneSessions
+		m.msgDelegate.Focused = m.focusedPane == PaneMessages
 	} else {
 		if m.activeView == ViewSessions {
 			m.activeView = ViewMessages
 		} else {
 			m.activeView = ViewSessions
 		}
+		// Update delegate focus states for tab mode
+		m.sessionDelegate.Focused = m.activeView == ViewSessions
+		m.msgDelegate.Focused = m.activeView == ViewMessages
 	}
 	return m, nil
 }
@@ -798,14 +818,15 @@ func (m Model) renderTabView() string {
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
 }
 
-// renderDivider renders a vertical divider.
+// renderDivider renders a vertical divider with color based on focus.
+// In split mode, the divider is blue to indicate the active split view.
 func (m Model) renderDivider(height int) string {
 	dividerChars := strings.Repeat("│\n", height)
 	// Remove trailing newline
 	if len(dividerChars) > 0 {
 		dividerChars = dividerChars[:len(dividerChars)-1]
 	}
-	return dividerStyle.Render(dividerChars)
+	return dividerFocusedStyle.Render(dividerChars)
 }
 
 // buildTitle constructs the list title.
