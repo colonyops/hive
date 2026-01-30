@@ -25,6 +25,7 @@ const (
 	stateConfirming
 	stateLoading
 	stateRunningRecycle
+	statePreviewingMessage
 )
 
 // Options configures the TUI behavior.
@@ -75,6 +76,9 @@ type Model struct {
 	allMessages  []messaging.Message
 	lastPollTime time.Time
 	topicFilter  string
+
+	// Message preview
+	previewModal MessagePreviewModal
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -170,6 +174,20 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	ml.FilterInput.PromptStyle = lipgloss.NewStyle().PaddingLeft(1).Foreground(colorBlue).Bold(true)
 	ml.FilterInput.Prompt = "Filter: "
 	ml.Styles.FilterCursor = lipgloss.NewStyle().Foreground(colorBlue)
+
+	// Add message list keybindings to help
+	ml.AdditionalShortHelpKeys = func() []key.Binding {
+		return []key.Binding{
+			key.NewBinding(
+				key.WithKeys("enter"),
+				key.WithHelp("enter", "preview"),
+			),
+			key.NewBinding(
+				key.WithKeys("tab"),
+				key.WithHelp("tab", "switch view"),
+			),
+		}
+	}
 
 	return Model{
 		service:      service,
@@ -358,6 +376,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Handle modal states first
+	if m.state == statePreviewingMessage {
+		return m.handlePreviewModalKey(msg, keyStr)
+	}
 	if m.state == stateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
 	}
@@ -425,6 +446,28 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handlePreviewModalKey handles keys when message preview modal is shown.
+func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "esc", "enter", "q":
+		m.state = stateNormal
+		return m, nil
+	case "up", "k":
+		m.previewModal.ScrollUp()
+		return m, nil
+	case "down", "j":
+		m.previewModal.ScrollDown()
+		return m, nil
+	default:
+		// Pass other messages to viewport for mouse wheel etc
+		m.previewModal.UpdateViewport(msg)
+		return m, nil
+	}
+}
+
 // handleFilteringKey handles keys when filter input is active.
 func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == "ctrl+c" {
@@ -468,7 +511,18 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.handleSessionsKey(msg, keyStr)
 	}
 
-	// Messages focused - pass all other keys to msgList
+	// Messages focused
+	if keyStr == "enter" {
+		// Open message preview modal
+		selectedMsg := m.selectedMessage()
+		if selectedMsg != nil {
+			m.state = statePreviewingMessage
+			m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
+			return m, nil
+		}
+	}
+
+	// Pass other keys to msgList
 	var cmd tea.Cmd
 	m.msgList, cmd = m.msgList.Update(msg)
 	return m, cmd
@@ -533,6 +587,19 @@ func (m Model) selectedSession() *session.Session {
 		return nil
 	}
 	return &sessionItem.Session
+}
+
+// selectedMessage returns the currently selected message, or nil if none.
+func (m Model) selectedMessage() *messaging.Message {
+	item := m.msgList.SelectedItem()
+	if item == nil {
+		return nil
+	}
+	msgItem, ok := item.(MessageItem)
+	if !ok {
+		return nil
+	}
+	return &msgItem.Message
 }
 
 // isSessionsFocused returns true if the sessions pane is focused.
@@ -646,6 +713,11 @@ func (m Model) View() string {
 	// Overlay output modal if running recycle
 	if m.state == stateRunningRecycle {
 		return m.outputModal.Overlay(mainView, w, h)
+	}
+
+	// Overlay message preview modal
+	if m.state == statePreviewingMessage {
+		return m.previewModal.Overlay(mainView, w, h)
 	}
 
 	// Overlay loading spinner if loading
