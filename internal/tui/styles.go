@@ -135,9 +135,6 @@ var (
 
 // Layout styles for split and tab views.
 var (
-	dividerStyle = lipgloss.NewStyle().
-			Foreground(colorGray)
-
 	viewSelectedStyle = lipgloss.NewStyle().
 				Foreground(colorBlue).
 				Bold(true)
@@ -145,7 +142,13 @@ var (
 	viewNormalStyle = lipgloss.NewStyle().
 			Foreground(colorGray)
 
-	focusIndicatorStyle = lipgloss.NewStyle().
-				Foreground(colorBlue).
-				Bold(true)
+	// Focused pane border style - prominent blue border.
+	focusedPaneStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(colorBlue)
+
+	// Unfocused pane border style - subtle gray border for visual balance.
+	unfocusedPaneStyle = lipgloss.NewStyle().
+				Border(lipgloss.RoundedBorder()).
+				BorderForeground(lipgloss.Color("#3b4261"))
 )
