@@ -7,6 +7,7 @@ import (
 
 	"github.com/charmbracelet/bubbles/viewport"
 	"github.com/charmbracelet/glamour"
+	"github.com/charmbracelet/glamour/styles"
 	lipglossv1 "github.com/charmbracelet/lipgloss"
 	lipgloss "github.com/charmbracelet/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/messaging"
@@ -19,7 +20,6 @@ const (
 	previewModalMargin    = 4   // margin from screen edges
 	previewModalChrome    = 8   // rows for title, metadata, help, and spacing
 	previewModalPadding   = 4   // padding inside content area
-	glamourGutter         = 2   // glamour adds gutter space
 )
 
 // MessagePreviewModal displays a message with markdown rendering.
@@ -45,15 +45,20 @@ func NewMessagePreviewModal(msg messaging.Message, width, height int) MessagePre
 	}
 
 	// Render markdown content
-	m.renderContent(modalWidth - previewModalPadding - glamourGutter)
+	m.renderContent(modalWidth - previewModalPadding)
 
 	return m
 }
 
 // renderContent renders the message payload as markdown.
 func (m *MessagePreviewModal) renderContent(width int) {
+	// Use tokyo-night style but with no document margin
+	style := styles.TokyoNightStyleConfig
+	noMargin := uint(0)
+	style.Document.Margin = &noMargin
+
 	renderer, err := glamour.NewTermRenderer(
-		glamour.WithStandardStyle("tokyo-night"),
+		glamour.WithStyles(style),
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
