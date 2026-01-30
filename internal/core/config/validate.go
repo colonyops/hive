@@ -10,11 +10,21 @@ import (
 	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
-// SpawnTemplateData defines available fields for spawn command templates.
+// SpawnTemplateData defines available fields for spawn command templates (hive new).
 type SpawnTemplateData struct {
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
-	Prompt     string // User-provided prompt from spawn command
+	Slug       string // Session slug (URL-safe version of name)
+	ContextDir string // Path to context directory
+	Owner      string // Repository owner
+	Repo       string // Repository name
+}
+
+// BatchSpawnTemplateData defines available fields for batch_spawn command templates (hive batch).
+type BatchSpawnTemplateData struct {
+	Path       string // Absolute path to the session directory
+	Name       string // Session name (directory basename)
+	Prompt     string // User-provided prompt (batch only)
 	Slug       string // Session slug (URL-safe version of name)
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
@@ -53,6 +63,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
 		validateTemplates("commands.spawn", c.Commands.Spawn, SpawnTemplateData{}),
+		validateTemplates("commands.batch_spawn", c.Commands.BatchSpawn, BatchSpawnTemplateData{}),
 		validateTemplates("commands.recycle", c.Commands.Recycle, RecycleTemplateData{}),
 		c.validateRules(),
 		c.validateKeybindingTemplates(),

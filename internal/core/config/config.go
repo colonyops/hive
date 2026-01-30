@@ -71,8 +71,9 @@ type Rule struct {
 
 // Commands defines the shell commands used by hive.
 type Commands struct {
-	Spawn   []string `yaml:"spawn"`
-	Recycle []string `yaml:"recycle"`
+	Spawn      []string `yaml:"spawn"`
+	BatchSpawn []string `yaml:"batch_spawn"`
+	Recycle    []string `yaml:"recycle"`
 }
 
 // Keybinding defines a TUI keybinding action.

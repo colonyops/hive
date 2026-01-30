@@ -15,6 +15,7 @@ import (
 type SpawnData struct {
 	Path       string // Absolute path to session directory
 	Name       string // Session name (display name)
+	Prompt     string // User-provided prompt (batch only)
 	Slug       string // Session slug (URL-safe version of name)
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner

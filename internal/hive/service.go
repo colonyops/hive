@@ -18,9 +18,11 @@ import (
 
 // CreateOptions configures session creation.
 type CreateOptions struct {
-	Name   string // Session name (used in path)
-	Remote string // Git remote URL to clone (auto-detected if empty)
-	Source string // Source directory for file copying
+	Name          string // Session name (used in path)
+	Prompt        string // Prompt to pass to spawned terminal (batch only)
+	Remote        string // Git remote URL to clone (auto-detected if empty)
+	Source        string // Source directory for file copying
+	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
 }
 
 // Service orchestrates hive operations.
@@ -145,17 +147,23 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	}
 
 	// Spawn terminal
-	if len(s.config.Commands.Spawn) > 0 {
+	spawnCommands := s.config.Commands.Spawn
+	if opts.UseBatchSpawn && len(s.config.Commands.BatchSpawn) > 0 {
+		spawnCommands = s.config.Commands.BatchSpawn
+	}
+
+	if len(spawnCommands) > 0 {
 		owner, repoName := git.ExtractOwnerRepo(remote)
 		data := SpawnData{
 			Path:       sess.Path,
 			Name:       sess.Name,
+			Prompt:     opts.Prompt,
 			Slug:       sess.Slug,
 			ContextDir: s.config.RepoContextDir(owner, repoName),
 			Owner:      owner,
 			Repo:       repoName,
 		}
-		if err := s.spawner.Spawn(ctx, s.config.Commands.Spawn, data); err != nil {
+		if err := s.spawner.Spawn(ctx, spawnCommands, data); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
 	}

@@ -64,6 +64,7 @@ func (b BatchInput) Validate() error {
 // BatchSession defines a single session to create.
 type BatchSession struct {
 	Name   string `json:"name"`
+	Prompt string `json:"prompt,omitempty"`
 	Remote string `json:"remote,omitempty"`
 	Source string `json:"source,omitempty"`
 }
@@ -112,18 +113,35 @@ Read from file:
 		Description: `Creates multiple agent sessions from a JSON specification.
 
 Each session in the input array is created sequentially. A terminal is
-spawned for each session using the configured spawn command.
+spawned for each session using the batch_spawn commands if configured,
+otherwise falls back to spawn commands.
 
 Processing stops after 3 failures. Sessions not attempted are marked as skipped.
 
 Input JSON schema:
   {
     "sessions": [
-      {"name": "session-name", "remote": "optional-url", "prompt": "optional", "source": "optional-path"}
+      {
+        "name": "session-name",
+        "prompt": "optional task prompt",
+        "remote": "optional-url",
+        "source": "optional-path"
+      }
     ]
   }
 
-The "source" field specifies the directory to copy files from (per copy rules in config).
+Fields:
+  name    - Required. Session name (used in path).
+  prompt  - Optional. Task prompt passed to batch_spawn via {{.Prompt}} template.
+  remote  - Optional. Git remote URL (auto-detected from current dir if empty).
+  source  - Optional. Directory to copy files from (per copy rules in config).
+
+Config example (in ~/.config/hive/config.yaml):
+  commands:
+    spawn:        # Used by hive new
+      - "wezterm cli spawn --cwd {{.Path}}"
+    batch_spawn:  # Used by hive batch (supports {{.Prompt}})
+      - "wezterm cli spawn --cwd {{.Path}} -- claude --prompt '{{.Prompt}}'"
 
 Output is JSON with a batch ID, log file path, and results for each session.`,
 		Flags: []cli.Flag{
@@ -265,9 +283,11 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 	}
 
 	opts := hive.CreateOptions{
-		Name:   sess.Name,
-		Remote: sess.Remote,
-		Source: source,
+		Name:          sess.Name,
+		Prompt:        sess.Prompt,
+		Remote:        sess.Remote,
+		Source:        source,
+		UseBatchSpawn: true,
 	}
 
 	created, err := cmd.flags.Service.CreateSession(ctx, opts)

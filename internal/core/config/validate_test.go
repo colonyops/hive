@@ -24,8 +24,9 @@ func validConfig(t *testing.T) *Config {
 func TestValidateDeep_ValidConfig(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Commands = Commands{
-		Spawn:   []string{"echo {{.Path}}", "echo {{.Name}} {{.Prompt}}"},
-		Recycle: []string{"git reset --hard", "git checkout main"},
+		Spawn:      []string{"echo {{.Path}}", "echo {{.Name}} {{.Slug}}"},
+		BatchSpawn: []string{"echo {{.Path}}", "echo {{.Name}} {{.Prompt}}"},
+		Recycle:    []string{"git reset --hard", "git checkout main"},
 	}
 	cfg.Rules = []Rule{
 		{Pattern: "^https://github.com/.*", Commands: []string{"echo hello"}},
