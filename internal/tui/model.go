@@ -683,8 +683,10 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		if action.Type == ActionTypeRecycle {
 			return m, m.startRecycle(action.SessionID)
 		}
-		m.state = stateLoading
-		m.loadingMessage = "Processing..."
+		if !action.Silent {
+			m.state = stateLoading
+			m.loadingMessage = "Processing..."
+		}
 		return m, m.executeAction(action)
 	}
 

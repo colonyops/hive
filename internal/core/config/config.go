@@ -90,6 +90,7 @@ type Keybinding struct {
 	Help    string `yaml:"help"`    // help text shown in TUI
 	Sh      string `yaml:"sh"`      // shell command template
 	Confirm string `yaml:"confirm"` // confirmation prompt (empty = no confirm)
+	Silent  bool   `yaml:"silent"`  // skip loading popup for fast commands
 }
 
 // DefaultConfig returns a Config with sensible defaults.

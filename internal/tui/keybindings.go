@@ -34,6 +34,7 @@ type Action struct {
 	ShellCmd    string // For shell actions, the rendered command
 	SessionID   string
 	SessionPath string
+	Silent      bool // Skip loading popup for fast commands
 }
 
 // NeedsConfirm returns true if the action requires user confirmation.
@@ -68,6 +69,7 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 		Confirm:     kb.Confirm,
 		SessionID:   sess.ID,
 		SessionPath: sess.Path,
+		Silent:      kb.Silent,
 	}
 
 	// Built-in actions
