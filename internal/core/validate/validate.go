@@ -23,7 +23,9 @@ func SessionID(id string) error {
 		return fmt.Errorf("session ID is required")
 	}
 	for _, r := range id {
-		if !((r >= 'a' && r <= 'z') || (r >= '0' && r <= '9')) {
+		isLower := r >= 'a' && r <= 'z'
+		isDigit := r >= '0' && r <= '9'
+		if !isLower && !isDigit {
 			return fmt.Errorf("session ID must be lowercase alphanumeric only, got %q", id)
 		}
 	}
