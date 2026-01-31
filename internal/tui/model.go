@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/messaging"
@@ -27,6 +28,7 @@ const (
 	stateLoading
 	stateRunningRecycle
 	statePreviewingMessage
+	stateCreatingSession
 )
 
 // Key constants for event handling.
@@ -81,6 +83,11 @@ type Model struct {
 
 	// Clipboard
 	copyCommand string
+
+	// New session form
+	repoDirs        []string
+	discoveredRepos []DiscoveredRepo
+	newSessionForm  *NewSessionForm
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -108,6 +115,16 @@ type recycleOutputMsg struct {
 
 // recycleCompleteMsg is sent when recycle finishes.
 type recycleCompleteMsg struct {
+	err error
+}
+
+// reposDiscoveredMsg is sent when repository scanning completes.
+type reposDiscoveredMsg struct {
+	repos []DiscoveredRepo
+}
+
+// sessionCreatedMsg is sent when a new session is created.
+type sessionCreatedMsg struct {
 	err error
 }
 
@@ -180,6 +197,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		topicFilter:  "*",
 		activeView:   ViewSessions,
 		copyCommand:  cfg.Commands.CopyCommand,
+		repoDirs:     cfg.RepoDirs,
 	}
 }
 
@@ -191,7 +209,19 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
 		cmds = append(cmds, schedulePollTick())
 	}
+	// Scan for repositories if configured
+	if len(m.repoDirs) > 0 {
+		cmds = append(cmds, m.scanRepoDirs())
+	}
 	return tea.Batch(cmds...)
+}
+
+// scanRepoDirs returns a command that scans configured directories for git repositories.
+func (m Model) scanRepoDirs() tea.Cmd {
+	return func() tea.Msg {
+		repos, _ := ScanRepoDirs(context.Background(), m.repoDirs, m.service.Git())
+		return reposDiscoveredMsg{repos: repos}
+	}
 }
 
 // loadSessions returns a command that loads sessions from the service.
@@ -310,6 +340,38 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Stay in stateRunningRecycle until user dismisses
 		return m, nil
 
+	case reposDiscoveredMsg:
+		m.discoveredRepos = msg.repos
+		// Update help to include 'n' keybinding if repos were discovered
+		if len(msg.repos) > 0 {
+			m.list.AdditionalShortHelpKeys = func() []key.Binding {
+				bindings := m.handler.KeyBindings()
+				bindings = append(bindings, key.NewBinding(
+					key.WithKeys("n"),
+					key.WithHelp("n", "new session"),
+				))
+				bindings = append(bindings, key.NewBinding(
+					key.WithKeys("g"),
+					key.WithHelp("g", "refresh git"),
+				))
+				bindings = append(bindings, key.NewBinding(
+					key.WithKeys("tab"),
+					key.WithHelp("tab", "switch view"),
+				))
+				return bindings
+			}
+		}
+		return m, nil
+
+	case sessionCreatedMsg:
+		m.state = stateNormal
+		m.newSessionForm = nil
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		return m, m.loadSessions()
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -332,6 +394,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Handle modal states first
+	if m.state == stateCreatingSession {
+		return m.handleNewSessionFormKey(msg, keyStr)
+	}
 	if m.state == statePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)
 	}
@@ -349,6 +414,45 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Handle normal state
 	return m.handleNormalKey(msg, keyStr)
+}
+
+// handleNewSessionFormKey handles keys when new session form is shown.
+func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case "ctrl+c":
+		m.quitting = true
+		return m, tea.Quit
+	case "esc":
+		m.newSessionForm.SetCancelled()
+		m.state = stateNormal
+		m.newSessionForm = nil
+		return m, nil
+	}
+
+	// Pass to form
+	form, cmd := m.newSessionForm.Form().Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.newSessionForm.form = f
+
+		// Check if form completed
+		if f.State == huh.StateCompleted {
+			m.newSessionForm.SetSubmitted()
+			result := m.newSessionForm.Result()
+			return m, m.createSession(result.Repo.Remote, result.SessionName)
+		}
+	}
+	return m, cmd
+}
+
+// createSession returns a command that creates a new session.
+func (m Model) createSession(remote, name string) tea.Cmd {
+	return func() tea.Msg {
+		_, err := m.service.CreateSession(context.Background(), hive.CreateOptions{
+			Name:   name,
+			Remote: remote,
+		})
+		return sessionCreatedMsg{err: err}
+	}
 }
 
 // handleRecycleModalKey handles keys when recycle modal is shown.
@@ -535,6 +639,18 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 
 // handleSessionsKey handles keys when sessions pane is focused.
 func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Handle 'n' for new session (only if repos are discovered)
+	if keyStr == "n" && len(m.discoveredRepos) > 0 {
+		// Determine preselected remote
+		preselectedRemote := m.localRemote
+		if selected := m.selectedSession(); selected != nil {
+			preselectedRemote = selected.Remote
+		}
+		m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote)
+		m.state = stateCreatingSession
+		return m, m.newSessionForm.Form().Init()
+	}
+
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
@@ -670,6 +786,12 @@ func (m Model) View() string {
 	// Overlay output modal if running recycle
 	if m.state == stateRunningRecycle {
 		return m.outputModal.Overlay(mainView, w, h)
+	}
+
+	// Overlay new session form
+	if m.state == stateCreatingSession && m.newSessionForm != nil {
+		formModal := NewModal("New Session", m.newSessionForm.View())
+		return formModal.Overlay(mainView, w, h)
 	}
 
 	// Overlay message preview modal
