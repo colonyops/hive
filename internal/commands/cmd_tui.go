@@ -10,6 +10,8 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/integration/terminal/tmux"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/internal/tui"
 )
@@ -43,10 +45,22 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
 	msgStore := jsonfile.NewMsgStore(topicsDir)
 
+	// Create terminal integration manager if configured
+	var termMgr *terminal.Manager
+	if len(cmd.flags.Config.Integrations.Terminal.Enabled) > 0 {
+		termMgr = terminal.NewManager(cmd.flags.Config.Integrations.Terminal.Enabled)
+		// Register tmux integration
+		tmuxIntegration := tmux.New()
+		if tmuxIntegration.Available() {
+			termMgr.Register(tmuxIntegration)
+		}
+	}
+
 	for {
 		opts := tui.Options{
-			LocalRemote: localRemote,
-			MsgStore:    msgStore,
+			LocalRemote:     localRemote,
+			MsgStore:        msgStore,
+			TerminalManager: termMgr,
 		}
 
 		m := tui.New(cmd.flags.Service, cmd.flags.Config, opts)

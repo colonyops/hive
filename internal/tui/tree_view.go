@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
@@ -20,12 +21,46 @@ const (
 
 // Status indicators for sessions.
 const (
-	statusActive   = "[●]"
-	statusRecycled = "[○]"
+	statusActive   = "[●]" // green - agent actively working
+	statusWaiting  = "[]" // yellow - needs user input
+	statusIdle     = "[○]" // gray - done/acknowledged
+	statusUnknown  = "[?]" // dim - no terminal found
+	statusRecycled = "[○]" // gray - session recycled
 )
 
 // Star indicator for current repository.
 const currentRepoIndicator = "◆"
+
+// renderStatusIndicator returns the styled status indicator for a session.
+// For active sessions with terminal integration, it uses terminal status.
+// For recycled sessions or when no terminal status is available, it falls back to session state.
+func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styles TreeDelegateStyles) string {
+	// Recycled sessions always show recycled indicator
+	if state == session.StateRecycled {
+		return styles.StatusRecycled.Render(statusRecycled)
+	}
+
+	// If we have terminal status for active sessions, use it
+	if state == session.StateActive && termStatus != nil {
+		switch termStatus.Status {
+		case terminal.StatusActive:
+			return styles.StatusActive.Render(statusActive)
+		case terminal.StatusWaiting:
+			return styles.StatusWaiting.Render(statusWaiting)
+		case terminal.StatusIdle:
+			return styles.StatusIdle.Render(statusIdle)
+		case terminal.StatusMissing:
+			return styles.StatusUnknown.Render(statusUnknown)
+		}
+	}
+
+	// Default: active session without terminal status
+	if state == session.StateActive {
+		return styles.StatusActive.Render(statusActive)
+	}
+
+	return styles.StatusRecycled.Render(statusRecycled)
+}
 
 // TreeItem represents an item in the tree view.
 // It can be either a repo header or a session entry.
@@ -98,6 +133,9 @@ type TreeDelegateStyles struct {
 	SessionBranch  lipgloss.Style
 	SessionID      lipgloss.Style
 	StatusActive   lipgloss.Style
+	StatusWaiting  lipgloss.Style
+	StatusIdle     lipgloss.Style
+	StatusUnknown  lipgloss.Style
 	StatusRecycled lipgloss.Style
 
 	// Selection styles
@@ -119,6 +157,9 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 		SessionBranch:  lipgloss.NewStyle().Foreground(colorGray),
 		SessionID:      lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")), // purple
 		StatusActive:   lipgloss.NewStyle().Foreground(colorGreen),
+		StatusWaiting:  lipgloss.NewStyle().Foreground(colorYellow),
+		StatusIdle:     lipgloss.NewStyle().Foreground(colorGray),
+		StatusUnknown:  lipgloss.NewStyle().Foreground(colorGray).Faint(true),
 		StatusRecycled: lipgloss.NewStyle().Foreground(colorGray),
 
 		Selected:       lipgloss.NewStyle().Foreground(colorBlue).Bold(true),
@@ -146,7 +187,7 @@ func RenderRepoHeader(item TreeItem, isSelected bool, styles TreeDelegateStyles)
 }
 
 // RenderSessionLine renders a session entry with tree prefix.
-func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, styles TreeDelegateStyles) string {
+func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, termStatus *TerminalStatus, styles TreeDelegateStyles) string {
 	// Tree prefix
 	var prefix string
 	if item.IsLastInRepo {
@@ -156,13 +197,8 @@ func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, styles 
 	}
 	prefixStyled := styles.TreeLine.Render(prefix)
 
-	// Status indicator
-	var statusStr string
-	if item.Session.State == session.StateActive {
-		statusStr = styles.StatusActive.Render(statusActive)
-	} else {
-		statusStr = styles.StatusRecycled.Render(statusRecycled)
-	}
+	// Status indicator - use terminal status for active sessions
+	statusStr := renderStatusIndicator(item.Session.State, termStatus, styles)
 
 	// Session name
 	nameStyle := styles.SessionName
@@ -230,9 +266,10 @@ func PadRight(s string, width int) string {
 
 // TreeDelegate handles rendering of tree items in the list.
 type TreeDelegate struct {
-	Styles       TreeDelegateStyles
-	GitStatuses  *kv.Store[string, GitStatus]
-	ColumnWidths *ColumnWidths
+	Styles           TreeDelegateStyles
+	GitStatuses      *kv.Store[string, GitStatus]
+	TerminalStatuses *kv.Store[string, TerminalStatus]
+	ColumnWidths     *ColumnWidths
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -314,13 +351,16 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
-	// Status indicator
-	var statusStr string
-	if item.Session.State == session.StateActive {
-		statusStr = d.Styles.StatusActive.Render(statusActive)
-	} else {
-		statusStr = d.Styles.StatusRecycled.Render(statusRecycled)
+	// Get terminal status if available
+	var termStatus *TerminalStatus
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.Session.ID); ok {
+			termStatus = &ts
+		}
 	}
+
+	// Status indicator - use terminal status for active sessions
+	statusStr := renderStatusIndicator(item.Session.State, termStatus, d.Styles)
 
 	// For recycled sessions, show simplified display
 	if item.Session.State == session.StateRecycled {
