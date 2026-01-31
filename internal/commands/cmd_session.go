@@ -44,6 +44,7 @@ get session metadata for inter-agent communication, or inspect session state.`,
 type SessionInfo struct {
 	ID     string `json:"id"`
 	Name   string `json:"name"`
+	Inbox  string `json:"inbox"`
 	Slug   string `json:"slug"`
 	Path   string `json:"path"`
 	Remote string `json:"remote"`
@@ -69,6 +70,7 @@ This command is useful for:
 Output fields:
   id      - Unique session identifier
   name    - Human-readable session name
+  inbox   - Session inbox topic (agent.{id}.inbox)
   slug    - URL-safe session slug
   path    - Filesystem path to the session
   remote  - Git remote URL
@@ -107,6 +109,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	info := SessionInfo{
 		ID:     sess.ID,
 		Name:   sess.Name,
+		Inbox:  fmt.Sprintf("agent.%s.inbox", sess.ID),
 		Slug:   sess.Slug,
 		Path:   sess.Path,
 		Remote: sess.Remote,

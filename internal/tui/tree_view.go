@@ -230,9 +230,10 @@ func PadRight(s string, width int) string {
 
 // TreeDelegate handles rendering of tree items in the list.
 type TreeDelegate struct {
-	Styles       TreeDelegateStyles
-	GitStatuses  *kv.Store[string, GitStatus]
-	ColumnWidths *ColumnWidths
+	Styles         TreeDelegateStyles
+	GitStatuses    *kv.Store[string, GitStatus]
+	ColumnWidths   *ColumnWidths
+	AnimationStore *AnimationStore
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -366,7 +367,61 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	// Git status: branch, diff stats, clean/dirty indicator
 	gitInfo := d.renderGitStatus(item.Session.Path)
 
-	return fmt.Sprintf("%s %s %s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo)
+	// Animation (if active)
+	animInfo := d.renderAnimation(item.Session.ID)
+
+	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, animInfo)
+}
+
+// isInboxTopic returns true if the topic matches the inbox pattern (agent.*.inbox).
+func isInboxTopic(topic string) bool {
+	return strings.HasPrefix(topic, "agent.") && strings.HasSuffix(topic, ".inbox")
+}
+
+// renderAnimation returns the formatted animation indicator for a session.
+func (d TreeDelegate) renderAnimation(sessionID string) string {
+	if d.AnimationStore == nil {
+		return ""
+	}
+
+	anim := d.AnimationStore.Get(sessionID)
+	if anim == nil {
+		return ""
+	}
+
+	// Check if this is an inbox topic
+	isInbox := isInboxTopic(anim.Topic)
+
+	// Truncate topic if too long
+	topic := anim.Topic
+	const maxTopicLen = 12
+	if len(topic) > maxTopicLen {
+		topic = topic[:maxTopicLen-1] + "…"
+	}
+
+	// Get color for topic - inbox gets gold/yellow, others get hash-based color
+	var topicColor lipgloss.Color
+	if isInbox {
+		topicColor = colorYellow
+	} else {
+		topicColor = ColorForString(anim.Topic)
+	}
+	topicStyle := lipgloss.NewStyle().Foreground(topicColor)
+	arrowStyle := lipgloss.NewStyle().Foreground(colorGray)
+
+	switch anim.Direction {
+	case AnimationSend:
+		// Publishing: {topic}------>
+		return " " + topicStyle.Render("{"+topic+"}") + arrowStyle.Render("──────>")
+	case AnimationRecv:
+		// Receiving: inbox uses ◀── for visual distinction, regular uses <──
+		if isInbox {
+			return " " + arrowStyle.Render("◀──────") + topicStyle.Render("{"+topic+"}")
+		}
+		return " " + arrowStyle.Render("<──────") + topicStyle.Render("{"+topic+"}")
+	default:
+		return ""
+	}
 }
 
 // renderGitStatus returns the formatted git status for a session path.

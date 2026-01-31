@@ -201,3 +201,149 @@ func TestCalculateColumnWidths(t *testing.T) {
 	assert.Equal(t, len("feature/very-long-branch-name"), widths.Branch)
 	assert.Equal(t, 4, widths.ID) // All IDs are truncated to 4 chars
 }
+
+func TestTreeDelegate_RenderAnimation(t *testing.T) {
+	tests := []struct {
+		name      string
+		sessionID string
+		setup     func(*AnimationStore)
+		wantEmpty bool
+		wantSend  bool
+		wantRecv  bool
+	}{
+		{
+			name:      "no animation store",
+			sessionID: "session-1",
+			setup:     nil,
+			wantEmpty: true,
+		},
+		{
+			name:      "no animation for session",
+			sessionID: "session-1",
+			setup: func(s *AnimationStore) {
+				// No animation recorded
+			},
+			wantEmpty: true,
+		},
+		{
+			name:      "send animation",
+			sessionID: "session-1",
+			setup: func(s *AnimationStore) {
+				s.animations["session-1"] = SessionAnimation{
+					Direction: AnimationSend,
+					Topic:     "test-topic",
+					TicksLeft: 3,
+				}
+			},
+			wantSend: true,
+		},
+		{
+			name:      "recv animation",
+			sessionID: "session-1",
+			setup: func(s *AnimationStore) {
+				s.animations["session-1"] = SessionAnimation{
+					Direction: AnimationRecv,
+					Topic:     "inbox",
+					TicksLeft: 3,
+				}
+			},
+			wantRecv: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := NewTreeDelegate()
+
+			if tt.setup != nil {
+				d.AnimationStore = NewAnimationStore(4)
+				tt.setup(d.AnimationStore)
+			}
+
+			result := d.renderAnimation(tt.sessionID)
+
+			if tt.wantEmpty {
+				assert.Empty(t, result)
+				return
+			}
+
+			if tt.wantSend {
+				assert.Contains(t, result, ">")
+				assert.Contains(t, result, "{")
+			}
+
+			if tt.wantRecv {
+				assert.Contains(t, result, "<")
+				assert.Contains(t, result, "{")
+			}
+		})
+	}
+}
+
+func TestTreeDelegate_RenderAnimation_TopicTruncation(t *testing.T) {
+	d := NewTreeDelegate()
+	d.AnimationStore = NewAnimationStore(4)
+
+	// Set a very long topic
+	d.AnimationStore.animations["session-1"] = SessionAnimation{
+		Direction: AnimationSend,
+		Topic:     "very-long-topic-name-that-exceeds-limit",
+		TicksLeft: 3,
+	}
+
+	result := d.renderAnimation("session-1")
+
+	// Should be truncated with ellipsis
+	assert.Contains(t, result, "…")
+	// Should not contain the full topic name
+	assert.NotContains(t, result, "very-long-topic-name-that-exceeds-limit")
+}
+
+func TestIsInboxTopic(t *testing.T) {
+	tests := []struct {
+		topic string
+		want  bool
+	}{
+		{"agent.abc123.inbox", true},
+		{"agent.session-id.inbox", true},
+		{"agent..inbox", true}, // edge case but matches pattern
+		{"inbox", false},
+		{"agent.abc123", false},
+		{"build.result", false},
+		{"agent.abc123.inbox.extra", false},
+		{"other.agent.abc123.inbox", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.topic, func(t *testing.T) {
+			got := isInboxTopic(tt.topic)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestTreeDelegate_RenderAnimation_InboxDistinction(t *testing.T) {
+	d := NewTreeDelegate()
+	d.AnimationStore = NewAnimationStore(4)
+
+	// Test inbox receive animation uses ◀ arrow
+	d.AnimationStore.animations["session-1"] = SessionAnimation{
+		Direction: AnimationRecv,
+		Topic:     "agent.abc123.inbox",
+		TicksLeft: 3,
+	}
+
+	result := d.renderAnimation("session-1")
+	assert.Contains(t, result, "◀") // Inbox uses filled arrow
+
+	// Test regular topic receive animation uses < arrow
+	d.AnimationStore.animations["session-2"] = SessionAnimation{
+		Direction: AnimationRecv,
+		Topic:     "build.result",
+		TicksLeft: 3,
+	}
+
+	result2 := d.renderAnimation("session-2")
+	assert.Contains(t, result2, "<")    // Regular uses standard arrow
+	assert.NotContains(t, result2, "◀") // Not the filled arrow
+}

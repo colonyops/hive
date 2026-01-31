@@ -99,6 +99,9 @@ type Model struct {
 	allActivities    []messaging.Activity
 	lastActivityPoll time.Time
 
+	// Animation tracking for tree view
+	animationStore *AnimationStore
+
 	// Clipboard
 	copyCommand string
 
@@ -154,9 +157,13 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	gitStatuses := kv.New[string, GitStatus]()
 	columnWidths := &ColumnWidths{}
 
+	// Animation store: 4 ticks at 500ms poll = ~2 second animations
+	animationStore := NewAnimationStore(4)
+
 	delegate := NewTreeDelegate()
 	delegate.GitStatuses = gitStatuses
 	delegate.ColumnWidths = columnWidths
+	delegate.AnimationStore = animationStore
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
@@ -207,24 +214,25 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	activityView := NewActivityView()
 
 	return Model{
-		cfg:           cfg,
-		service:       service,
-		list:          l,
-		handler:       handler,
-		state:         stateNormal,
-		spinner:       s,
-		gitStatuses:   gitStatuses,
-		gitWorkers:    cfg.Git.StatusWorkers,
-		columnWidths:  columnWidths,
-		localRemote:   opts.LocalRemote,
-		msgStore:      opts.MsgStore,
-		msgView:       msgView,
-		topicFilter:   "*",
-		activeView:    ViewSessions,
-		copyCommand:   cfg.Commands.CopyCommand,
-		repoDirs:      cfg.RepoDirs,
-		activityStore: opts.ActivityStore,
-		activityView:  activityView,
+		cfg:            cfg,
+		service:        service,
+		list:           l,
+		handler:        handler,
+		state:          stateNormal,
+		spinner:        s,
+		gitStatuses:    gitStatuses,
+		gitWorkers:     cfg.Git.StatusWorkers,
+		columnWidths:   columnWidths,
+		localRemote:    opts.LocalRemote,
+		msgStore:       opts.MsgStore,
+		msgView:        msgView,
+		topicFilter:    "*",
+		activeView:     ViewSessions,
+		copyCommand:    cfg.Commands.CopyCommand,
+		repoDirs:       cfg.RepoDirs,
+		activityStore:  opts.ActivityStore,
+		activityView:   activityView,
+		animationStore: animationStore,
 	}
 }
 
@@ -321,6 +329,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Activities from ListSince are newest first, prepend to existing
 		if len(msg.activities) > 0 {
+			// Record animations for new activities
+			for _, activity := range msg.activities {
+				m.animationStore.RecordActivity(activity)
+			}
 			// Prepend new activities (they're newer, so go at the front)
 			m.allActivities = append(msg.activities, m.allActivities...)
 			// Limit total to avoid unbounded growth
@@ -338,10 +350,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.shouldPollMessages() && m.msgStore != nil {
 			cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, m.lastPollTime))
 		}
-		// Poll activities if activity view is visible
-		if m.shouldPollActivities() && m.activityStore != nil {
+		// Poll activities - always poll to drive animations even when not viewing
+		if m.activityStore != nil {
 			cmds = append(cmds, loadActivities(m.activityStore, m.lastActivityPoll, 100))
 		}
+		// Tick animations (decay)
+		m.animationStore.Tick()
 		// Keep scheduling poll ticks
 		cmds = append(cmds, schedulePollTick())
 		return m, tea.Batch(cmds...)
@@ -806,11 +820,6 @@ func (m Model) isActivityFocused() bool {
 // shouldPollMessages returns true if messages should be polled.
 func (m Model) shouldPollMessages() bool {
 	return m.activeView == ViewMessages
-}
-
-// shouldPollActivities returns true if activities should be polled.
-func (m Model) shouldPollActivities() bool {
-	return m.activeView == ViewActivity
 }
 
 // isModalActive returns true if any modal is currently open.
