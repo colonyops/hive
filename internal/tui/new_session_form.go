@@ -48,7 +48,8 @@ func NewNewSessionForm(repos []DiscoveredRepo, preselectedRemote string) *NewSes
 				Title("Repository").
 				Options(options...).
 				Value(&f.selectedIdx).
-				Filtering(true),
+				Filtering(true).
+				Height(8),
 			huh.NewInput().
 				Title("Session Name").
 				Value(&f.sessionName).
