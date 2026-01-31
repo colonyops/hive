@@ -470,7 +470,10 @@ func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) erro
 }
 
 // updateInboxReadIfOwn updates the session's LastInboxRead timestamp if the
-// subscribed topic matches the current session's inbox pattern (agent.<id>.inbox).
+// subscribed topic matches the current session's inbox (agent.<id>.inbox format).
+// Errors are intentionally not surfaced - this is a best-effort optimization
+// that should not fail the main subscribe operation. If the timestamp fails to
+// update, the --new flag will show more messages than necessary (safe fallback).
 func (cmd *MsgCmd) updateInboxReadIfOwn(ctx context.Context, topic string) {
 	// Only process exact inbox topics, not wildcards
 	if !strings.HasSuffix(topic, ".inbox") {
@@ -496,15 +499,16 @@ func (cmd *MsgCmd) updateInboxReadIfOwn(ctx context.Context, topic string) {
 
 	sess, err := sessStore.Get(ctx, currentSessionID)
 	if err != nil {
-		return // Silently ignore errors
+		return // Session not found or I/O error - skip update (see function doc)
 	}
 
 	sess.UpdateLastInboxRead(time.Now())
-	_ = sessStore.Save(ctx, sess) // Silently ignore errors
+	_ = sessStore.Save(ctx, sess) // Best-effort save (see function doc)
 }
 
 // getLastInboxRead returns the LastInboxRead timestamp for the session that owns
 // the given inbox topic. Returns zero time if not found or not an inbox topic.
+// On error, returns zero time which causes --new to show all messages (safe fallback).
 func (cmd *MsgCmd) getLastInboxRead(ctx context.Context, topic string) time.Time {
 	// Only process exact inbox topics, not wildcards
 	if !strings.HasSuffix(topic, ".inbox") {

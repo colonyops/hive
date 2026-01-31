@@ -157,7 +157,9 @@ func (cmd *LsCmd) buildSessionInfo(ctx context.Context, s session.Session, msgSt
 		if err == nil {
 			info.Unread = len(messages)
 		}
-		// Silently ignore errors (e.g., topic not found means no inbox yet)
+		// ErrTopicNotFound is expected when inbox hasn't received messages yet.
+		// Other errors (I/O, permissions) are rare edge cases that degrade gracefully
+		// to showing 0 unread rather than failing the entire list operation.
 	}
 
 	return info
