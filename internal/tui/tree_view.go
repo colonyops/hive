@@ -22,7 +22,7 @@ const (
 // Status indicators for sessions.
 const (
 	statusActive   = "[●]" // green - agent actively working
-	statusWaiting  = "[]" // yellow - needs user input
+	statusWaiting  = "[!]" // yellow - needs user input
 	statusIdle     = "[ ]" // gray - done/acknowledged
 	statusUnknown  = "[?]" // dim - no terminal found
 	statusRecycled = "[○]" // gray - session recycled
