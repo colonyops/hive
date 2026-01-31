@@ -47,7 +47,8 @@ type Config struct {
 	AutoDeleteCorrupted bool                  `yaml:"auto_delete_corrupted"`
 	History             HistoryConfig         `yaml:"history"`
 	Context             ContextConfig         `yaml:"context"`
-	DataDir             string                `yaml:"-"` // set by caller, not from config file
+	RepoDirs            []string              `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
+	DataDir             string                `yaml:"-"`         // set by caller, not from config file
 }
 
 // HistoryConfig holds command history configuration.

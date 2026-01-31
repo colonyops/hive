@@ -3,11 +3,13 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/urfave/cli/v3"
 
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/internal/tui"
 )
@@ -41,16 +43,39 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
 	msgStore := jsonfile.NewMsgStore(topicsDir)
 
-	opts := tui.Options{
-		LocalRemote: localRemote,
-		MsgStore:    msgStore,
-	}
+	for {
+		opts := tui.Options{
+			LocalRemote: localRemote,
+			MsgStore:    msgStore,
+		}
 
-	m := tui.New(cmd.flags.Service, cmd.flags.Config, opts)
-	p := tea.NewProgram(m, tea.WithAltScreen())
+		m := tui.New(cmd.flags.Service, cmd.flags.Config, opts)
+		p := tea.NewProgram(m, tea.WithAltScreen())
 
-	if _, err := p.Run(); err != nil {
-		return fmt.Errorf("run tui: %w", err)
+		finalModel, err := p.Run()
+		if err != nil {
+			return fmt.Errorf("run tui: %w", err)
+		}
+
+		model := finalModel.(tui.Model)
+
+		// Handle pending session creation
+		if pending := model.PendingCreate(); pending != nil {
+			source, _ := os.Getwd()
+			_, err := cmd.flags.Service.CreateSession(ctx, hive.CreateOptions{
+				Name:   pending.Name,
+				Remote: pending.Remote,
+				Source: source,
+			})
+			if err != nil {
+				fmt.Printf("Error creating session: %v\n", err)
+				fmt.Println("Press Enter to continue...")
+				_, _ = fmt.Scanln()
+			}
+			continue // Restart TUI
+		}
+
+		break // Normal exit
 	}
 
 	return nil

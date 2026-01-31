@@ -10,6 +10,7 @@ import (
 	"github.com/charmbracelet/bubbles/list"
 	"github.com/charmbracelet/bubbles/spinner"
 	tea "github.com/charmbracelet/bubbletea"
+	"github.com/charmbracelet/huh"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/messaging"
@@ -27,15 +28,25 @@ const (
 	stateLoading
 	stateRunningRecycle
 	statePreviewingMessage
+	stateCreatingSession
 )
 
 // Key constants for event handling.
-const keyEnter = "enter"
+const (
+	keyEnter = "enter"
+	keyCtrlC = "ctrl+c"
+)
 
 // Options configures the TUI behavior.
 type Options struct {
 	LocalRemote string          // Remote URL of current directory (empty if not in git repo)
 	MsgStore    messaging.Store // Message store for pub/sub events (optional)
+}
+
+// PendingCreate holds data for a session to create after TUI exits.
+type PendingCreate struct {
+	Remote string
+	Name   string
 }
 
 // Model is the main Bubble Tea model for the TUI.
@@ -81,6 +92,19 @@ type Model struct {
 
 	// Clipboard
 	copyCommand string
+
+	// New session form
+	repoDirs        []string
+	discoveredRepos []DiscoveredRepo
+	newSessionForm  *NewSessionForm
+
+	// Pending action for after TUI exits
+	pendingCreate *PendingCreate
+}
+
+// PendingCreate returns any pending session creation data.
+func (m Model) PendingCreate() *PendingCreate {
+	return m.pendingCreate
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -109,6 +133,11 @@ type recycleOutputMsg struct {
 // recycleCompleteMsg is sent when recycle finishes.
 type recycleCompleteMsg struct {
 	err error
+}
+
+// reposDiscoveredMsg is sent when repository scanning completes.
+type reposDiscoveredMsg struct {
+	repos []DiscoveredRepo
 }
 
 // New creates a new TUI model.
@@ -180,6 +209,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		topicFilter:  "*",
 		activeView:   ViewSessions,
 		copyCommand:  cfg.Commands.CopyCommand,
+		repoDirs:     cfg.RepoDirs,
 	}
 }
 
@@ -191,7 +221,19 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
 		cmds = append(cmds, schedulePollTick())
 	}
+	// Scan for repositories if configured
+	if len(m.repoDirs) > 0 {
+		cmds = append(cmds, m.scanRepoDirs())
+	}
 	return tea.Batch(cmds...)
+}
+
+// scanRepoDirs returns a command that scans configured directories for git repositories.
+func (m Model) scanRepoDirs() tea.Cmd {
+	return func() tea.Msg {
+		repos, _ := ScanRepoDirs(context.Background(), m.repoDirs, m.service.Git())
+		return reposDiscoveredMsg{repos: repos}
+	}
 }
 
 // loadSessions returns a command that loads sessions from the service.
@@ -310,6 +352,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Stay in stateRunningRecycle until user dismisses
 		return m, nil
 
+	case reposDiscoveredMsg:
+		m.discoveredRepos = msg.repos
+		// Update help to include 'n' keybinding if repos were discovered
+		if len(msg.repos) > 0 {
+			m.list.AdditionalShortHelpKeys = func() []key.Binding {
+				bindings := m.handler.KeyBindings()
+				bindings = append(bindings, key.NewBinding(
+					key.WithKeys("n"),
+					key.WithHelp("n", "new session"),
+				))
+				bindings = append(bindings, key.NewBinding(
+					key.WithKeys("g"),
+					key.WithHelp("g", "refresh git"),
+				))
+				bindings = append(bindings, key.NewBinding(
+					key.WithKeys("tab"),
+					key.WithHelp("tab", "switch view"),
+				))
+				return bindings
+			}
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -317,6 +382,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		var cmd tea.Cmd
 		m.spinner, cmd = m.spinner.Update(msg)
 		return m, cmd
+	}
+
+	// Route all other messages to the form when creating session
+	if m.state == stateCreatingSession && m.newSessionForm != nil {
+		return m.updateNewSessionForm(msg)
 	}
 
 	// Update the focused list for any other messages (only session list needs this)
@@ -332,6 +402,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Handle modal states first
+	if m.state == stateCreatingSession {
+		return m.handleNewSessionFormKey(msg, keyStr)
+	}
 	if m.state == statePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)
 	}
@@ -351,10 +424,50 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	return m.handleNormalKey(msg, keyStr)
 }
 
+// handleNewSessionFormKey handles keys when new session form is shown.
+func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	if keyStr == keyCtrlC {
+		m.quitting = true
+		return m, tea.Quit
+	}
+
+	// Handle esc to close dialog
+	if keyStr == "esc" {
+		m.newSessionForm.SetCancelled()
+		m.state = stateNormal
+		m.newSessionForm = nil
+		return m, nil
+	}
+
+	// Pass to form
+	return m.updateNewSessionForm(msg)
+}
+
+// updateNewSessionForm routes any message to the form and handles state changes.
+func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
+	form, cmd := m.newSessionForm.Form().Update(msg)
+	if f, ok := form.(*huh.Form); ok {
+		m.newSessionForm.form = f
+
+		// Check if form completed - set pending create and exit TUI
+		if f.State == huh.StateCompleted {
+			result := m.newSessionForm.Result()
+			m.state = stateNormal
+			m.newSessionForm = nil
+			m.pendingCreate = &PendingCreate{
+				Remote: result.Repo.Remote,
+				Name:   result.SessionName,
+			}
+			return m, tea.Quit
+		}
+	}
+	return m, cmd
+}
+
 // handleRecycleModalKey handles keys when recycle modal is shown.
 func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
-	case "ctrl+c":
+	case keyCtrlC:
 		if m.recycleCancel != nil {
 			m.recycleCancel()
 		}
@@ -408,7 +521,7 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 	m.previewModal.ClearCopyStatus()
 
 	switch keyStr {
-	case "ctrl+c":
+	case keyCtrlC:
 		m.quitting = true
 		return m, tea.Quit
 	case "esc", keyEnter, "q":
@@ -454,7 +567,7 @@ func (m Model) copyToClipboard(text string) error {
 
 // handleFilteringKey handles keys when filter input is active.
 func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
-	if keyStr == "ctrl+c" {
+	if keyStr == keyCtrlC {
 		m.quitting = true
 		return m, tea.Quit
 	}
@@ -489,7 +602,7 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	// Global keys that work regardless of focus
 	switch keyStr {
-	case "q", "ctrl+c":
+	case "q", keyCtrlC:
 		m.quitting = true
 		return m, tea.Quit
 	case "tab":
@@ -535,6 +648,23 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 
 // handleSessionsKey handles keys when sessions pane is focused.
 func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Handle 'n' for new session (only if repos are discovered)
+	if keyStr == "n" && len(m.discoveredRepos) > 0 {
+		// Determine preselected remote
+		preselectedRemote := m.localRemote
+		if selected := m.selectedSession(); selected != nil {
+			preselectedRemote = selected.Remote
+		}
+		// Build map of existing session names for validation
+		existingNames := make(map[string]bool, len(m.allSessions))
+		for _, s := range m.allSessions {
+			existingNames[s.Name] = true
+		}
+		m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
+		m.state = stateCreatingSession
+		return m, m.newSessionForm.Form().Init()
+	}
+
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
@@ -670,6 +800,18 @@ func (m Model) View() string {
 	// Overlay output modal if running recycle
 	if m.state == stateRunningRecycle {
 		return m.outputModal.Overlay(mainView, w, h)
+	}
+
+	// Overlay new session form (render directly without Modal's Confirm/Cancel buttons)
+	if m.state == stateCreatingSession && m.newSessionForm != nil {
+		formContent := lipgloss.JoinVertical(
+			lipgloss.Left,
+			modalTitleStyle.Render("New Session"),
+			"",
+			m.newSessionForm.View(),
+		)
+		formOverlay := modalStyle.Render(formContent)
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, formOverlay)
 	}
 
 	// Overlay message preview modal
