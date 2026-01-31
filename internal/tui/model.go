@@ -319,10 +319,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			// Silently ignore activity loading errors
 			return m, nil
 		}
-		// Activities are already newest first from store
+		// Activities from ListSince are newest first, prepend to existing
 		if len(msg.activities) > 0 {
-			m.allActivities = msg.activities
-			m.activityView.SetActivities(msg.activities)
+			// Prepend new activities (they're newer, so go at the front)
+			m.allActivities = append(msg.activities, m.allActivities...)
+			// Limit total to avoid unbounded growth
+			if len(m.allActivities) > 500 {
+				m.allActivities = m.allActivities[:500]
+			}
+			m.activityView.SetActivities(m.allActivities)
 		}
 		m.lastActivityPoll = time.Now()
 		return m, nil
