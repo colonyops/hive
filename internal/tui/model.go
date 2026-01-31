@@ -870,15 +870,11 @@ func (m Model) View() string {
 func (m Model) renderTabView() string {
 	// Build tab bar
 	var sessionsTab, messagesTab string
-	sessionsLabel := "Sessions"
-	if m.refreshing {
-		sessionsLabel = "Sessions " + m.spinner.View()
-	}
 	if m.activeView == ViewSessions {
-		sessionsTab = viewSelectedStyle.Render(sessionsLabel)
+		sessionsTab = viewSelectedStyle.Render("Sessions")
 		messagesTab = viewNormalStyle.Render("Messages")
 	} else {
-		sessionsTab = viewNormalStyle.Render(sessionsLabel)
+		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
 	tabBarContent := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
