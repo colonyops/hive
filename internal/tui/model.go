@@ -449,8 +449,7 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Check if form completed - immediately clear state to prevent duplicate calls
 		if f.State == huh.StateCompleted {
 			result := m.newSessionForm.Result()
-			m.state = stateLoading
-			m.loadingMessage = "Creating session..."
+			m.state = stateNormal
 			m.newSessionForm = nil
 			return m, m.createSession(result.Repo.Remote, result.SessionName)
 		}
