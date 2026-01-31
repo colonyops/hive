@@ -381,6 +381,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	}
 
+	// Route all other messages to the form when creating session
+	if m.state == stateCreatingSession && m.newSessionForm != nil {
+		return m.updateNewSessionForm(msg)
+	}
+
 	// Update the focused list for any other messages (only session list needs this)
 	var cmd tea.Cmd
 	if !m.isMessagesFocused() {
@@ -423,16 +428,8 @@ func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		return m, tea.Quit
 	}
 
-	// Check if the focused field is a Select that's filtering
-	isFiltering := false
-	if field := m.newSessionForm.Form().GetFocusedField(); field != nil {
-		if sel, ok := field.(*huh.Select[int]); ok {
-			isFiltering = sel.GetFiltering()
-		}
-	}
-
-	// Handle esc: if filtering, let form handle it to cancel filter; otherwise close dialog
-	if keyStr == "esc" && !isFiltering {
+	// Handle esc to close dialog
+	if keyStr == "esc" {
 		m.newSessionForm.SetCancelled()
 		m.state = stateNormal
 		m.newSessionForm = nil
@@ -440,6 +437,11 @@ func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	}
 
 	// Pass to form
+	return m.updateNewSessionForm(msg)
+}
+
+// updateNewSessionForm routes any message to the form and handles state changes.
+func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	form, cmd := m.newSessionForm.Form().Update(msg)
 	if f, ok := form.(*huh.Form); ok {
 		m.newSessionForm.form = f
