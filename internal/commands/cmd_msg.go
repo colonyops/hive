@@ -12,6 +12,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
+	"github.com/hay-kot/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
 )
 
@@ -29,6 +30,9 @@ type MsgCmd struct {
 	subLast    int
 	subListen  bool
 	subWait    bool
+
+	// topic flags
+	topicNew bool
 }
 
 // NewMsgCmd creates a new msg command.
@@ -51,6 +55,7 @@ The sender is auto-detected from the current working directory's hive session.`,
 			cmd.pubCmd(),
 			cmd.subCmd(),
 			cmd.listCmd(),
+			cmd.topicCmd(),
 		},
 	})
 
@@ -169,6 +174,36 @@ Examples:
   hive msg list`,
 		Action: cmd.runList,
 	}
+}
+
+func (cmd *MsgCmd) topicCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "topic",
+		Usage:     "Generate a random topic ID",
+		UsageText: "hive msg topic --new",
+		Description: `Generates a random topic ID for inter-agent communication.
+
+The generated topic ID follows the format "agent.<4-char-alphanumeric>".
+
+Examples:
+  hive msg topic --new    # outputs: agent.x7k2`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "new",
+				Aliases:     []string{"n"},
+				Usage:       "generate a new random topic ID",
+				Required:    true,
+				Destination: &cmd.topicNew,
+			},
+		},
+		Action: cmd.runTopic,
+	}
+}
+
+func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
+	topicID := "agent." + randid.Generate(4)
+	_, err := fmt.Fprintln(c.Root().Writer, topicID)
+	return err
 }
 
 func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
