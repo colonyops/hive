@@ -51,6 +51,7 @@ type PendingCreate struct {
 
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
+	cfg            *config.Config
 	service        *hive.Service
 	list           list.Model
 	handler        *KeybindingHandler
@@ -195,6 +196,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	msgView := NewMessagesView()
 
 	return Model{
+		cfg:          cfg,
 		service:      service,
 		list:         l,
 		handler:      handler,
@@ -220,6 +222,10 @@ func (m Model) Init() tea.Cmd {
 	if m.msgStore != nil {
 		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
 		cmds = append(cmds, schedulePollTick())
+	}
+	// Start session refresh timer
+	if cmd := m.scheduleSessionRefresh(); cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 	// Scan for repositories if configured
 	if len(m.repoDirs) > 0 {
@@ -300,6 +306,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Keep scheduling poll ticks even if not actively polling
 		return m, schedulePollTick()
+
+	case sessionRefreshTickMsg:
+		// Refresh sessions when Sessions view is active and no modal open
+		if m.activeView == ViewSessions && !m.isModalActive() {
+			return m, tea.Batch(
+				m.loadSessions(),
+				m.scheduleSessionRefresh(),
+			)
+		}
+		// Keep scheduling refresh ticks even if not actively refreshing
+		return m, m.scheduleSessionRefresh()
 
 	case sessionsLoadedMsg:
 		if msg.err != nil {
@@ -729,6 +746,11 @@ func (m Model) isMessagesFocused() bool {
 // shouldPollMessages returns true if messages should be polled.
 func (m Model) shouldPollMessages() bool {
 	return m.activeView == ViewMessages
+}
+
+// isModalActive returns true if any modal is currently open.
+func (m Model) isModalActive() bool {
+	return m.state != stateNormal
 }
 
 // applyFilter rebuilds the tree view from all sessions.
