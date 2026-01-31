@@ -32,12 +32,21 @@ const (
 )
 
 // Key constants for event handling.
-const keyEnter = "enter"
+const (
+	keyEnter = "enter"
+	keyCtrlC = "ctrl+c"
+)
 
 // Options configures the TUI behavior.
 type Options struct {
 	LocalRemote string          // Remote URL of current directory (empty if not in git repo)
 	MsgStore    messaging.Store // Message store for pub/sub events (optional)
+}
+
+// PendingCreate holds data for a session to create after TUI exits.
+type PendingCreate struct {
+	Remote string
+	Name   string
 }
 
 // Model is the main Bubble Tea model for the TUI.
@@ -88,6 +97,14 @@ type Model struct {
 	repoDirs        []string
 	discoveredRepos []DiscoveredRepo
 	newSessionForm  *NewSessionForm
+
+	// Pending action for after TUI exits
+	pendingCreate *PendingCreate
+}
+
+// PendingCreate returns any pending session creation data.
+func (m Model) PendingCreate() *PendingCreate {
+	return m.pendingCreate
 }
 
 // sessionsLoadedMsg is sent when sessions are loaded.
@@ -121,11 +138,6 @@ type recycleCompleteMsg struct {
 // reposDiscoveredMsg is sent when repository scanning completes.
 type reposDiscoveredMsg struct {
 	repos []DiscoveredRepo
-}
-
-// sessionCreatedMsg is sent when a new session is created.
-type sessionCreatedMsg struct {
-	err error
 }
 
 // New creates a new TUI model.
@@ -363,15 +375,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case sessionCreatedMsg:
-		m.state = stateNormal
-		m.newSessionForm = nil
-		if msg.err != nil {
-			m.err = msg.err
-			return m, nil
-		}
-		return m, m.loadSessions()
-
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -423,7 +426,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 // handleNewSessionFormKey handles keys when new session form is shown.
 func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
-	if keyStr == "ctrl+c" {
+	if keyStr == keyCtrlC {
 		m.quitting = true
 		return m, tea.Quit
 	}
@@ -446,32 +449,25 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if f, ok := form.(*huh.Form); ok {
 		m.newSessionForm.form = f
 
-		// Check if form completed - immediately clear state to prevent duplicate calls
+		// Check if form completed - set pending create and exit TUI
 		if f.State == huh.StateCompleted {
 			result := m.newSessionForm.Result()
 			m.state = stateNormal
 			m.newSessionForm = nil
-			return m, m.createSession(result.Repo.Remote, result.SessionName)
+			m.pendingCreate = &PendingCreate{
+				Remote: result.Repo.Remote,
+				Name:   result.SessionName,
+			}
+			return m, tea.Quit
 		}
 	}
 	return m, cmd
 }
 
-// createSession returns a command that creates a new session.
-func (m Model) createSession(remote, name string) tea.Cmd {
-	return func() tea.Msg {
-		_, err := m.service.CreateSession(context.Background(), hive.CreateOptions{
-			Name:   name,
-			Remote: remote,
-		})
-		return sessionCreatedMsg{err: err}
-	}
-}
-
 // handleRecycleModalKey handles keys when recycle modal is shown.
 func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
-	case "ctrl+c":
+	case keyCtrlC:
 		if m.recycleCancel != nil {
 			m.recycleCancel()
 		}
@@ -525,7 +521,7 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 	m.previewModal.ClearCopyStatus()
 
 	switch keyStr {
-	case "ctrl+c":
+	case keyCtrlC:
 		m.quitting = true
 		return m, tea.Quit
 	case "esc", keyEnter, "q":
@@ -571,7 +567,7 @@ func (m Model) copyToClipboard(text string) error {
 
 // handleFilteringKey handles keys when filter input is active.
 func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
-	if keyStr == "ctrl+c" {
+	if keyStr == keyCtrlC {
 		m.quitting = true
 		return m, tea.Quit
 	}
@@ -606,7 +602,7 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	// Global keys that work regardless of focus
 	switch keyStr {
-	case "q", "ctrl+c":
+	case "q", keyCtrlC:
 		m.quitting = true
 		return m, tea.Quit
 	case "tab":
@@ -806,10 +802,16 @@ func (m Model) View() string {
 		return m.outputModal.Overlay(mainView, w, h)
 	}
 
-	// Overlay new session form
+	// Overlay new session form (render directly without Modal's Confirm/Cancel buttons)
 	if m.state == stateCreatingSession && m.newSessionForm != nil {
-		formModal := NewModal("New Session", m.newSessionForm.View())
-		return formModal.Overlay(mainView, w, h)
+		formContent := lipgloss.JoinVertical(
+			lipgloss.Left,
+			modalTitleStyle.Render("New Session"),
+			"",
+			m.newSessionForm.View(),
+		)
+		formOverlay := modalStyle.Render(formContent)
+		return lipgloss.Place(w, h, lipgloss.Center, lipgloss.Center, formOverlay)
 	}
 
 	// Overlay message preview modal
