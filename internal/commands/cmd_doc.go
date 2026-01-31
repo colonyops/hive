@@ -72,6 +72,15 @@ type Migration struct {
 
 var migrations = []Migration{
 	{
+		Version:     "0.2.1",
+		Title:       "New TUI auto-refresh feature",
+		Description: "The TUI sessions view now auto-refreshes every 15 seconds by default. This can be configured or disabled.",
+		Migration:   "No action required. To customize, add tui.refresh_interval to your config.",
+		After: `# config.yaml
+tui:
+  refresh_interval: 15s  # default, set to 0 to disable`,
+	},
+	{
 		Version:     "0.2.0",
 		Title:       "Removed `--prompt` flag from `hive new`",
 		Description: "The `--prompt` flag was removed from `hive new`. Prompts are now only supported in batch mode via `hive batch`.",

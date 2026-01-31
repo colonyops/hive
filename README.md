@@ -144,6 +144,10 @@ rules:
     commands:
       - go mod download
 
+# TUI settings
+tui:
+  refresh_interval: 15s  # Auto-refresh sessions view (0 to disable)
+
 # Keybindings for TUI actions
 keybindings:
   # Built-in actions use the "action" property
@@ -175,13 +179,14 @@ keybindings:
 
 ### Configuration Options
 
-| Option             | Type                    | Default                                                 | Description                                                     |
-| ------------------ | ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
-| `commands.spawn`   | `[]string`              | `[]`                                                    | Commands to run after session creation (Go templates supported) |
-| `commands.recycle` | `[]string`              | `["git reset --hard", "git checkout main", "git pull"]` | Commands to run when recycling a session                        |
-| `git_path`         | `string`                | `git`                                                   | Path to git executable                                          |
-| `rules`            | `[]Rule`                | `[]`                                                    | Repository-specific setup rules                                 |
-| `keybindings`      | `map[string]Keybinding` | see below                                               | TUI keybinding configuration                                    |
+| Option                 | Type                    | Default                                                 | Description                                                     |
+| ---------------------- | ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| `commands.spawn`       | `[]string`              | `[]`                                                    | Commands to run after session creation (Go templates supported) |
+| `commands.recycle`     | `[]string`              | `["git reset --hard", "git checkout main", "git pull"]` | Commands to run when recycling a session                        |
+| `git_path`             | `string`                | `git`                                                   | Path to git executable                                          |
+| `rules`                | `[]Rule`                | `[]`                                                    | Repository-specific setup rules                                 |
+| `keybindings`          | `map[string]Keybinding` | see below                                               | TUI keybinding configuration                                    |
+| `tui.refresh_interval` | `duration`              | `15s`                                                   | Auto-refresh interval for sessions view (0 to disable)          |
 
 ### Rules
 
