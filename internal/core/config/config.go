@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
@@ -34,7 +35,7 @@ var defaultKeybindings = map[string]Keybinding{
 
 // CurrentConfigVersion is the latest config schema version.
 // Increment this when making breaking changes to config format.
-const CurrentConfigVersion = "0.2.0"
+const CurrentConfigVersion = "0.2.1"
 
 // Config holds the application configuration.
 type Config struct {
@@ -47,6 +48,7 @@ type Config struct {
 	AutoDeleteCorrupted bool                  `yaml:"auto_delete_corrupted"`
 	History             HistoryConfig         `yaml:"history"`
 	Context             ContextConfig         `yaml:"context"`
+	TUI                 TUIConfig             `yaml:"tui"`
 	RepoDirs            []string              `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                `yaml:"-"`         // set by caller, not from config file
 }
@@ -59,6 +61,11 @@ type HistoryConfig struct {
 // ContextConfig configures context directory behavior.
 type ContextConfig struct {
 	SymlinkName string `yaml:"symlink_name"` // default: ".hive"
+}
+
+// TUIConfig holds TUI-related configuration.
+type TUIConfig struct {
+	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
 }
 
 // GitConfig holds git-related configuration.
@@ -116,6 +123,9 @@ func DefaultConfig() Config {
 		},
 		Context: ContextConfig{
 			SymlinkName: ".hive",
+		},
+		TUI: TUIConfig{
+			RefreshInterval: 15 * time.Second,
 		},
 	}
 }

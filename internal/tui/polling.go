@@ -20,6 +20,9 @@ type messagesLoadedMsg struct {
 // pollTickMsg is sent to trigger the next poll.
 type pollTickMsg struct{}
 
+// sessionRefreshTickMsg is sent to trigger session list refresh.
+type sessionRefreshTickMsg struct{}
+
 // loadMessages returns a command that loads messages from the store.
 func loadMessages(store messaging.Store, topic string, since time.Time) tea.Cmd {
 	return func() tea.Msg {
@@ -47,5 +50,16 @@ func loadMessages(store messaging.Store, topic string, since time.Time) tea.Cmd 
 func schedulePollTick() tea.Cmd {
 	return tea.Tick(messagesPollInterval, func(time.Time) tea.Msg {
 		return pollTickMsg{}
+	})
+}
+
+// scheduleSessionRefresh returns a command that schedules the next session refresh.
+func (m Model) scheduleSessionRefresh() tea.Cmd {
+	interval := m.cfg.TUI.RefreshInterval
+	if interval == 0 {
+		return nil // Disabled
+	}
+	return tea.Tick(interval, func(time.Time) tea.Msg {
+		return sessionRefreshTickMsg{}
 	})
 }

@@ -51,6 +51,7 @@ type PendingCreate struct {
 
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
+	cfg            *config.Config
 	service        *hive.Service
 	list           list.Model
 	handler        *KeybindingHandler
@@ -79,6 +80,7 @@ type Model struct {
 
 	// Layout
 	activeView ViewType // which view is shown
+	refreshing bool     // true during background session refresh
 
 	// Messages
 	msgStore     messaging.Store
@@ -195,6 +197,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	msgView := NewMessagesView()
 
 	return Model{
+		cfg:          cfg,
 		service:      service,
 		list:         l,
 		handler:      handler,
@@ -220,6 +223,10 @@ func (m Model) Init() tea.Cmd {
 	if m.msgStore != nil {
 		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
 		cmds = append(cmds, schedulePollTick())
+	}
+	// Start session refresh timer
+	if cmd := m.scheduleSessionRefresh(); cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 	// Scan for repositories if configured
 	if len(m.repoDirs) > 0 {
@@ -301,6 +308,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Keep scheduling poll ticks even if not actively polling
 		return m, schedulePollTick()
 
+	case sessionRefreshTickMsg:
+		// Refresh sessions when Sessions view is active and no modal open
+		if m.activeView == ViewSessions && !m.isModalActive() {
+			m.refreshing = true
+			return m, tea.Batch(
+				m.loadSessions(),
+				m.scheduleSessionRefresh(),
+			)
+		}
+		// Keep scheduling refresh ticks even if not actively refreshing
+		return m, m.scheduleSessionRefresh()
+
 	case sessionsLoadedMsg:
 		if msg.err != nil {
 			m.err = msg.err
@@ -314,6 +333,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gitStatusBatchCompleteMsg:
 		m.gitStatuses.SetBatch(msg.Results)
+		m.refreshing = false
 		return m, nil
 
 	case actionCompleteMsg:
@@ -731,6 +751,11 @@ func (m Model) shouldPollMessages() bool {
 	return m.activeView == ViewMessages
 }
 
+// isModalActive returns true if any modal is currently open.
+func (m Model) isModalActive() bool {
+	return m.state != stateNormal
+}
+
 // applyFilter rebuilds the tree view from all sessions.
 func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	// Group sessions by repository and build tree items
@@ -741,18 +766,23 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	*m.columnWidths = CalculateColumnWidths(m.allSessions, nil)
 
 	// Collect paths for git status fetching
+	// During background refresh, keep existing statuses to avoid flashing
 	paths := make([]string, 0, len(m.allSessions))
 	for _, s := range m.allSessions {
 		paths = append(paths, s.Path)
-		m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
+		if !m.refreshing {
+			m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
+		}
 	}
 
 	m.list.SetItems(items)
 	m.state = stateNormal
 
 	if len(paths) == 0 {
+		m.refreshing = false
 		return m, nil
 	}
+	// refreshing is cleared when gitStatusBatchCompleteMsg is received
 	return m, fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
 }
 
