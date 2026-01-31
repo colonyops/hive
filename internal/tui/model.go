@@ -333,6 +333,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case gitStatusBatchCompleteMsg:
 		m.gitStatuses.SetBatch(msg.Results)
+		m.refreshing = false
 		return m, nil
 
 	case actionCompleteMsg:
@@ -776,11 +777,12 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 
 	m.list.SetItems(items)
 	m.state = stateNormal
-	m.refreshing = false
 
 	if len(paths) == 0 {
+		m.refreshing = false
 		return m, nil
 	}
+	// refreshing is cleared when gitStatusBatchCompleteMsg is received
 	return m, fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
 }
 
