@@ -100,13 +100,29 @@ def456  old-feature    recycled  ~/.local/share/hive/repos/myapp-old-feature-def
 
 #### `hive prune`
 
-Removes all recycled sessions and their directories.
+Removes recycled sessions exceeding the `max_recycled` limit.
+
+**Flags:**
+| Flag | Alias | Description |
+|------|-------|-------------|
+| `--all` | `-a` | Delete all recycled sessions (ignore max_recycled limit) |
 
 **Behavior:**
 
-- Only removes sessions with state `recycled`
-- Deletes both the session record and the cloned repository directory
+- By default, keeps the newest N recycled sessions per repository (based on `max_recycled` config)
+- With `--all`: deletes all recycled sessions regardless of limit
+- Always deletes corrupted sessions
 - Reports how many sessions were pruned
+
+**Examples:**
+
+```bash
+# Clean up sessions exceeding max_recycled limit
+hive prune
+
+# Delete ALL recycled sessions
+hive prune --all
+```
 
 ## Configuration
 
@@ -129,8 +145,13 @@ commands:
 # Git executable (optional, defaults to "git")
 git_path: git
 
+# Maximum recycled sessions to keep per repository (default: 5)
+# Oldest sessions beyond this limit are automatically deleted when recycling
+# Set to 0 for unlimited
+max_recycled: 5
+
 # Rules for repository-specific setup
-# Each rule can have commands (hooks) and/or copy patterns
+# Each rule can have commands (hooks), copy patterns, and max_recycled override
 # Pattern uses regex syntax matched against the remote URL
 rules:
   - pattern: ".*/my-org/.*"
@@ -143,6 +164,12 @@ rules:
   - pattern: ".*/hay-kot/.*"
     commands:
       - go mod download
+  # Override max_recycled for large repos (keep fewer sessions)
+  - pattern: ".*/my-org/large-repo"
+    max_recycled: 2
+  # Unlimited recycled sessions for specific repos
+  - pattern: ".*/my-org/special-repo"
+    max_recycled: 0
 
 # TUI settings
 tui:
@@ -179,14 +206,15 @@ keybindings:
 
 ### Configuration Options
 
-| Option                 | Type                    | Default                                                 | Description                                                     |
-| ---------------------- | ----------------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
-| `commands.spawn`       | `[]string`              | `[]`                                                    | Commands to run after session creation (Go templates supported) |
-| `commands.recycle`     | `[]string`              | `["git reset --hard", "git checkout main", "git pull"]` | Commands to run when recycling a session                        |
-| `git_path`             | `string`                | `git`                                                   | Path to git executable                                          |
-| `rules`                | `[]Rule`                | `[]`                                                    | Repository-specific setup rules                                 |
-| `keybindings`          | `map[string]Keybinding` | see below                                               | TUI keybinding configuration                                    |
-| `tui.refresh_interval` | `duration`              | `15s`                                                   | Auto-refresh interval for sessions view (0 to disable)          |
+| Option                 | Type                    | Default                                                 | Description                                                        |
+| ---------------------- | ----------------------- | ------------------------------------------------------- | ------------------------------------------------------------------ |
+| `commands.spawn`       | `[]string`              | `[]`                                                    | Commands to run after session creation (Go templates supported)    |
+| `commands.recycle`     | `[]string`              | `["git reset --hard", "git checkout main", "git pull"]` | Commands to run when recycling a session                           |
+| `git_path`             | `string`                | `git`                                                   | Path to git executable                                             |
+| `max_recycled`         | `int`                   | `5`                                                     | Max recycled sessions per repo (0 = unlimited)                     |
+| `rules`                | `[]Rule`                | `[]`                                                    | Repository-specific setup rules                                    |
+| `keybindings`          | `map[string]Keybinding` | see below                                               | TUI keybinding configuration                                       |
+| `tui.refresh_interval` | `duration`              | `15s`                                                   | Auto-refresh interval for sessions view (0 to disable)             |
 
 ### Rules
 
@@ -195,6 +223,31 @@ Rules run after cloning or recycling a session. Each rule has:
 - `pattern`: Regex pattern matched against the remote URL (empty matches all)
 - `commands`: Shell commands to execute in the session directory
 - `copy`: Glob patterns for files to copy from the source directory
+- `max_recycled`: Override the global max_recycled limit for matching repos
+
+### Max Recycled Sessions
+
+The `max_recycled` setting controls how many recycled sessions to keep per repository. When a session is recycled and the limit is exceeded, the oldest recycled sessions are automatically deleted.
+
+**Precedence:**
+1. Last matching rule with `max_recycled` set wins
+2. Falls back to global `max_recycled` if no rule matches or sets it
+3. Unset value inherits from parent; at global level defaults to 5
+4. `0` means unlimited (no automatic deletion)
+
+**Example:**
+```yaml
+max_recycled: 5  # Global default: keep 5 recycled sessions per repo
+
+rules:
+  # Large repos: keep fewer sessions
+  - pattern: "github.com/my-org/large-repo"
+    max_recycled: 2
+
+  # Explicitly unlimited for specific repos
+  - pattern: "github.com/my-org/unlimited-repo"
+    max_recycled: 0
+```
 
 ### Keybindings
 
