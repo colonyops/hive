@@ -71,7 +71,7 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 		SessionID:   sess.ID,
 		SessionPath: sess.Path,
 		Silent:      kb.Silent,
-		Exit:        kb.Exit,
+		Exit:        kb.ShouldExit(),
 	}
 
 	// Built-in actions
