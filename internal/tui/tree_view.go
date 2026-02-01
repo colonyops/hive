@@ -34,20 +34,20 @@ const (
 	AnimationFrameCount = 12
 )
 
-// activeAnimationColors are the colors for the fade animation (bright → dim → bright).
-// Uses a smooth gradient for a breathing effect.
+// activeAnimationColors are the colors for a subtle pulse animation.
+// Uses a narrow range for a gentle breathing effect.
 var activeAnimationColors = []lipgloss.Color{
 	lipgloss.Color("#9ece6a"), // bright green (frame 0)
-	lipgloss.Color("#8fc05e"), // slightly dimmer
-	lipgloss.Color("#80b252"), // dimmer
-	lipgloss.Color("#71a446"), // even dimmer
-	lipgloss.Color("#62963a"), // dim
-	lipgloss.Color("#53882e"), // dimmest (frame 5)
-	lipgloss.Color("#53882e"), // dimmest (frame 6) - hold
-	lipgloss.Color("#62963a"), // brightening
-	lipgloss.Color("#71a446"), // brighter
-	lipgloss.Color("#80b252"), // even brighter
-	lipgloss.Color("#8fc05e"), // almost bright
+	lipgloss.Color("#93c761"), // slightly dimmer
+	lipgloss.Color("#8bc058"), // dimmer
+	lipgloss.Color("#84b94f"), // even dimmer
+	lipgloss.Color("#7db246"), // dim
+	lipgloss.Color("#76ab3d"), // dimmest (frame 5)
+	lipgloss.Color("#76ab3d"), // dimmest (frame 6) - hold
+	lipgloss.Color("#7db246"), // brightening
+	lipgloss.Color("#84b94f"), // brighter
+	lipgloss.Color("#8bc058"), // even brighter
+	lipgloss.Color("#93c761"), // almost bright
 	lipgloss.Color("#9ece6a"), // bright green (frame 11)
 }
 
