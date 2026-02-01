@@ -64,13 +64,13 @@ func SetupShellAlias(shell ShellInfo) error {
 	if err != nil {
 		return fmt.Errorf("open %s: %w", shell.RCFile, err)
 	}
-	defer f.Close()
 
 	if _, err := f.WriteString(content); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("write alias: %w", err)
 	}
 
-	return nil
+	return f.Close()
 }
 
 // TmuxConfigPath returns the path to the user's tmux config file.
@@ -113,11 +113,11 @@ bind-key H run-shell "hive"
 	if err != nil {
 		return fmt.Errorf("open %s: %w", path, err)
 	}
-	defer f.Close()
 
 	if _, err := f.WriteString(bindings); err != nil {
+		_ = f.Close()
 		return fmt.Errorf("write bindings: %w", err)
 	}
 
-	return nil
+	return f.Close()
 }

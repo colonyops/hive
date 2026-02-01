@@ -201,7 +201,7 @@ func (w *Wizard) promptUser(hasTmux bool, presetRepoDirs []string) (repoDirs []s
 
 	form := huh.NewForm(huh.NewGroup(fields...))
 	if err = form.Run(); err != nil {
-		return
+		return nil, false, false, false, err
 	}
 
 	// Parse repo dirs
