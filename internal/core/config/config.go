@@ -9,11 +9,28 @@ import (
 	"regexp"
 	"runtime"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
 )
+
+// ParseExitCondition evaluates an exit condition string.
+// If the string starts with $, it checks the env var value.
+// Otherwise it parses the string directly as a boolean.
+// Returns false if parsing fails or env var is unset.
+func ParseExitCondition(s string) bool {
+	if s == "" {
+		return false
+	}
+	if envVar, ok := strings.CutPrefix(s, "$"); ok {
+		s = os.Getenv(envVar)
+	}
+	result, _ := strconv.ParseBool(s)
+	return result
+}
 
 // Built-in action names for keybindings.
 const (
@@ -126,7 +143,12 @@ type Keybinding struct {
 	Sh      string `yaml:"sh"`      // shell command template
 	Confirm string `yaml:"confirm"` // confirmation prompt (empty = no confirm)
 	Silent  bool   `yaml:"silent"`  // skip loading popup for fast commands
-	Exit    bool   `yaml:"exit"`    // exit hive after command completes (useful for tmux popup)
+	Exit    string `yaml:"exit"`    // exit hive after command (bool or $ENV_VAR)
+}
+
+// ShouldExit evaluates the Exit condition.
+func (k Keybinding) ShouldExit() bool {
+	return ParseExitCondition(k.Exit)
 }
 
 // DefaultConfig returns a Config with sensible defaults.

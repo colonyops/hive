@@ -261,8 +261,40 @@ Each keybinding can have:
 - `sh`: Shell command template (mutually exclusive with `action`)
 - `help`: Help text shown in TUI status bar
 - `confirm`: Confirmation prompt (optional, shows dialog before executing)
+- `exit`: Exit hive after command completes (see below)
 
 Default keybindings (`r` for recycle, `d` for delete) are provided and can be overridden.
+
+#### Conditional Exit
+
+The `exit` field controls whether hive exits after executing a keybinding. This is useful for popup/ephemeral terminal scenarios (e.g., tmux popup).
+
+```yaml
+keybindings:
+  # Static exit - always exit after this command
+  enter:
+    sh: "wezterm cli spawn --cwd {{ .Path }}"
+    exit: true
+
+  # Conditional exit - exit only when HIVE_POPUP=true
+  enter:
+    sh: "wezterm cli spawn --cwd {{ .Path }}"
+    exit: $HIVE_POPUP
+```
+
+The `exit` field accepts:
+- Boolean values: `true`, `false`, `1`, `0`
+- Environment variable reference: `$VAR_NAME` - exits if the var is set to a truthy value
+
+This allows the same config to work in both persistent and popup modes:
+
+```bash
+# Persistent session - select project, stay in hive
+hive
+
+# Popup mode - select project, exit so popup closes
+HIVE_POPUP=true hive
+```
 
 ## Data Storage
 
