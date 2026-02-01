@@ -78,10 +78,10 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styl
 		}
 	}
 
-	// Default: active session without terminal status shows as ready
+	// Default: active session without terminal status shows as unknown
 	// We only show active (green) when we have positive confirmation of activity
 	if state == session.StateActive {
-		return styles.StatusReady.Render(statusReady)
+		return styles.StatusUnknown.Render(statusUnknown)
 	}
 
 	return styles.StatusRecycled.Render(statusRecycled)
