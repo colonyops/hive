@@ -1098,8 +1098,9 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
 			// Take the last N lines to show most recent output
 			content := tailLines(status.PaneContent, contentHeight)
-			// Truncate lines to fit preview width (account for border + padding)
-			maxLineWidth := previewWidth - 4
+			// Truncate lines to fit preview width
+			// Width calculation: previewWidth - 2 (for style) - 1 (border left) - 2 (padding) = previewWidth - 5
+			maxLineWidth := previewWidth - 5
 			previewContent = truncateLines(content, maxLineWidth)
 		} else {
 			previewContent = "No pane content available"
@@ -1137,19 +1138,38 @@ func tailLines(s string, n int) string {
 	return strings.Join(lines[len(lines)-n:], "\n")
 }
 
-// truncateLines truncates each line to fit within maxWidth characters.
+// truncateLines truncates each line to fit within maxWidth visual characters.
+// Uses lipgloss.Width to properly measure visual width (accounts for ANSI codes).
 func truncateLines(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return s
 	}
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
-		if len(line) > maxWidth {
-			// Truncate and add ellipsis if there's room
+		visualWidth := lipgloss.Width(line)
+		if visualWidth > maxWidth {
+			// Truncate to fit maxWidth, accounting for ellipsis
+			targetWidth := maxWidth
 			if maxWidth > 3 {
-				lines[i] = line[:maxWidth-3] + "..."
+				targetWidth = maxWidth - 3 // Leave room for "..."
+			}
+
+			// Iteratively truncate until we fit
+			truncated := line
+			for lipgloss.Width(truncated) > targetWidth && len(truncated) > 0 {
+				// Remove last rune
+				runes := []rune(truncated)
+				if len(runes) > 0 {
+					truncated = string(runes[:len(runes)-1])
+				} else {
+					break
+				}
+			}
+
+			if maxWidth > 3 {
+				lines[i] = truncated + "..."
 			} else {
-				lines[i] = line[:maxWidth]
+				lines[i] = truncated
 			}
 		}
 	}
