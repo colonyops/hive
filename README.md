@@ -36,6 +36,7 @@ Hive creates isolated git environments for running multiple AI agents in paralle
 - **Inter-agent Messaging** — Pub/sub communication between sessions
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
 - **Custom Keybindings** — Configure actions with shell commands
+- **Command Palette** — Vim-style command palette for custom commands (`:` key)
 
 ## Quick Start
 
@@ -155,6 +156,22 @@ keybindings:
     help: open in finder
     sh: "open {{ .Path }}"
     silent: true
+
+# User commands (accessible via : in TUI)
+usercommands:
+  review:
+    sh: "send-claude {{ .Name }} /review"
+    help: "Send /review to Claude session"
+    silent: true
+  tidy:
+    sh: "send-claude {{ .Name }} /tidy"
+    help: "Send /tidy to Claude session"
+    confirm: "Commit and push changes?"
+  open:
+    sh: "open {{ .Path }}"
+    help: "Open session in Finder"
+    silent: true
+    exit: "true"
 ```
 
 ### Template Variables
@@ -167,6 +184,56 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `commands.batch_spawn` | Same as spawn, plus `.Prompt`                               |
 | `commands.recycle`     | `.DefaultBranch`                                            |
 | `keybindings.*.sh`     | `.Path`, `.Name`, `.Remote`, `.ID`                          |
+| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Args`                 |
+
+### User Commands & Command Palette
+
+User commands provide a vim-style command palette accessible by pressing `:` in the TUI. This allows you to define custom commands that can be executed on selected sessions with arguments.
+
+**Command Palette Features:**
+
+- **Vim-style interface** — Press `:` to open the palette
+- **Fuzzy filtering** — Type to filter commands (prefix and substring matching)
+- **Arguments support** — Pass arguments to commands (e.g., `:review pr-123`)
+- **Tab completion** — Auto-fill selected command name
+- **Keyboard navigation** — `↑/k/ctrl+k`, `↓/j/ctrl+j`, `tab`, `enter`, `esc`
+
+**Command Options:**
+
+| Field     | Type   | Description                                      |
+| --------- | ------ | ------------------------------------------------ |
+| `sh`      | string | Shell command template (required)                |
+| `help`    | string | Description shown in palette                     |
+| `confirm` | string | Confirmation prompt (empty = no confirmation)    |
+| `silent`  | bool   | Skip loading popup for fast commands             |
+| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)      |
+
+**Using Arguments:**
+
+Arguments passed in the command palette are available via the `.Args` template variable:
+
+```yaml
+usercommands:
+  msg:
+    sh: |
+      hive msg pub -t agent.{{ .ID }}.inbox "{{ range .Args }}{{ . }} {{ end }}"
+    help: "Send message to session inbox"
+```
+
+Usage: `:msg hello world` → sends "hello world" to the session inbox
+
+**Exit Conditions:**
+
+The `exit` field supports environment variables for conditional behavior:
+
+```yaml
+usercommands:
+  attach:
+    sh: "tmux attach -t {{ .Name }}"
+    exit: "$HIVE_POPUP"  # Only exit if HIVE_POPUP=true
+```
+
+This is useful when running hive in a tmux popup vs a dedicated session.
 
 ### Configuration Options
 
@@ -178,6 +245,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `commands.recycle`                    | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling                  |
 | `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
 | `keybindings`                         | `map[string]Keybinding` | `r`=recycle, `d`=delete        | TUI keybindings                          |
+| `usercommands`                        | `map[string]UserCommand`| `{}`                           | Command palette commands (`:` key)       |
 | `tui.refresh_interval`                | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
 | `integrations.terminal.enabled`       | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
 | `integrations.terminal.poll_interval` | `duration`              | `500ms`                        | Status check frequency                   |
@@ -363,6 +431,7 @@ Launches the interactive TUI for managing sessions.
 
 **Default keybindings:**
 
+- `:` - Open command palette (when user commands configured)
 - `r` - Recycle session
 - `d` - Delete session
 - `n` - New session (when repos discovered)

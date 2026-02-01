@@ -44,6 +44,15 @@ type KeybindingTemplateData struct {
 	Name   string // Session name (directory basename)
 }
 
+// UserCommandTemplateData defines available fields for user command shell templates.
+type UserCommandTemplateData struct {
+	Path   string   // Absolute path to the session directory
+	Remote string   // Git remote URL (origin)
+	ID     string   // Unique session identifier
+	Name   string   // Session name (directory basename)
+	Args   []string // Command arguments passed from the command palette
+}
+
 // ValidationWarning represents a non-fatal configuration issue.
 type ValidationWarning struct {
 	Category string `json:"category"`
@@ -197,7 +206,11 @@ func (c *Config) validateUserCommandTemplates() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		if cmd.Sh != "" {
-			if err := validateTemplate(cmd.Sh, KeybindingTemplateData{}); err != nil {
+			// Provide dummy args for validation to support templates that access Args
+			testData := UserCommandTemplateData{
+				Args: []string{"arg1", "arg2", "arg3"},
+			}
+			if err := validateTemplate(cmd.Sh, testData); err != nil {
 				errs = errs.Append(fmt.Sprintf("usercommands[%q]", name), fmt.Errorf("template error in sh: %w", err))
 			}
 		}

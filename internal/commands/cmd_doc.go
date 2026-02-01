@@ -178,6 +178,29 @@ type Migration struct {
 var migrations = []Migration{
 	{
 		Version:     "0.2.3",
+		Title:       "User commands and command palette",
+		Description: "The TUI now supports user-defined commands accessible via a vim-style command palette (press `:` key). Commands can accept arguments and include confirmation prompts, exit conditions, and more.",
+		Migration:   "No action required. Add usercommands to your config to enable the command palette.",
+		After: `# config.yaml
+usercommands:
+  review:
+    sh: "send-claude {{ .Name }} /review"
+    help: "Send /review to Claude session"
+    silent: true
+  tidy:
+    sh: "send-claude {{ .Name }} /tidy"
+    help: "Send /tidy to Claude session"
+    confirm: "Commit and push changes?"
+  msg:
+    sh: 'hive msg pub -t agent.{{ .ID }}.inbox "{{ range .Args }}{{ . }} {{ end }}"'
+    help: "Send message to session inbox"
+
+# Press : in TUI to open command palette
+# Available template variables: .Path, .Name, .Remote, .ID, .Args
+# Command options: sh (required), help, confirm, silent, exit`,
+	},
+	{
+		Version:     "0.2.3",
 		Title:       "Configurable topic prefix for msg topic command",
 		Description: "The `hive msg topic` command now supports a configurable prefix via config or --prefix flag. The default prefix is \"agent\".",
 		Migration:   "No action required. To customize the default prefix, add messaging.topic_prefix to your config.",

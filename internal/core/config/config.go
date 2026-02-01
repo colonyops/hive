@@ -319,6 +319,16 @@ func (c *Config) validateUserCommandsBasic() error {
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
 
+		// Validate command name format
+		if name == "" {
+			errs = errs.Append(field, fmt.Errorf("command name cannot be empty"))
+			continue
+		}
+		if !isValidCommandName(name) {
+			errs = errs.Append(field, fmt.Errorf("invalid command name: must contain only alphanumeric characters, dashes, and underscores (no spaces)"))
+			continue
+		}
+
 		if cmd.Sh == "" {
 			errs = errs.Append(field, fmt.Errorf("sh is required"))
 		}
@@ -404,6 +414,20 @@ func isValidAction(action string) bool {
 	default:
 		return false
 	}
+}
+
+// isValidCommandName checks if a command name is valid.
+// Valid names contain only alphanumeric characters, dashes, and underscores.
+func isValidCommandName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		if !((r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 // DefaultMaxRecycled is the default limit for recycled sessions per repository.
