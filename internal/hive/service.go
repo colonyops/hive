@@ -55,10 +55,10 @@ func New(
 		config:     cfg,
 		executor:   exec,
 		log:        log,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, stdout, stderr),
-		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec),
-		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
-		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), stdout),
+		spawner:    NewSpawner(log.With().Str("cmp", "spawner").Logger(), exec, stdout, stderr),
+		recycler:   NewRecycler(log.With().Str("cmp", "recycler").Logger(), exec),
+		hookRunner: NewHookRunner(log.With().Str("cmp", "hooks").Logger(), exec, stdout, stderr),
+		fileCopier: NewFileCopier(log.With().Str("cmp", "copier").Logger(), stdout),
 	}
 }
 

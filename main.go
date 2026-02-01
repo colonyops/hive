@@ -134,7 +134,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				store   = jsonfile.New(cfg.SessionsFile())
 				exec    = &executil.RealExecutor{}
 				gitExec = git.NewExecutor(cfg.GitPath, exec)
-				logger  = log.With().Str("component", "hive").Logger()
+				logger  = logging.Component("hive")
 			)
 
 			flags.Service = hive.New(store, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
