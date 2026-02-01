@@ -2,9 +2,23 @@
 
 Practical examples and workflows for using hive with AI agents.
 
-## Available Recipes
+## Messaging
+
+Recipes for inter-agent communication and coordination.
 
 - [**Inter-Agent Code Review**](./inter-agent-code-review.md) - Orchestrate code reviews by spinning up a dedicated reviewer agent that communicates via inbox messaging.
+
+## User Commands
+
+Recipes for creating custom TUI commands.
+
+<!-- Add user command recipes here -->
+
+## Automation
+
+Recipes for automating workflows and session management.
+
+<!-- Add automation recipes here -->
 
 ## Contributing Recipes
 
