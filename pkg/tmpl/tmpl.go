@@ -20,7 +20,8 @@ func shellQuote(s string) string {
 }
 
 var funcs = template.FuncMap{
-	"shq": shellQuote,
+	"shq":  shellQuote,
+	"join": strings.Join,
 }
 
 // Render executes a Go template string with the given data.
@@ -28,6 +29,7 @@ var funcs = template.FuncMap{
 //
 // Available template functions:
 //   - shq: Shell-quote a string for safe use in shell commands
+//   - join: Join string slice with separator (e.g., join .Args " ")
 func Render(tmpl string, data any) (string, error) {
 	t, err := template.New("").Funcs(funcs).Option("missingkey=error").Parse(tmpl)
 	if err != nil {

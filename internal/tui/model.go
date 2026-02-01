@@ -634,7 +634,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	m.commandPalette, cmd = m.commandPalette.Update(msg)
 
 	// Check if user selected a command
-	if entry, ok := m.commandPalette.SelectedCommand(); ok {
+	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 		if selected == nil {
 			m.state = stateNormal
@@ -642,7 +642,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		}
 
 		// Resolve the user command to an Action
-		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected)
+		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
 
 		// Reset to normal state
 		m.state = stateNormal

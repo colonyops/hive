@@ -107,12 +107,14 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 	}
 
 	tests := []struct {
-		name     string
-		cmdName  string
-		cmd      config.UserCommand
-		wantKey  string
-		wantHelp string
-		wantExit bool
+		name        string
+		cmdName     string
+		cmd         config.UserCommand
+		args        []string
+		wantKey     string
+		wantHelp    string
+		wantExit    bool
+		wantCmdPart string
 	}{
 		{
 			name:    "basic command",
@@ -135,11 +137,24 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 			wantKey:  ":open",
 			wantExit: true,
 		},
+		{
+			name:    "command with args",
+			cmdName: "deploy",
+			cmd: config.UserCommand{
+				Sh:   "deploy {{ index .Args 0 }} {{ index .Args 1 }}",
+				Help: "Deploy to environment",
+			},
+			args:        []string{"staging", "--force"},
+			wantKey:     ":deploy",
+			wantHelp:    "Deploy to environment",
+			wantExit:    false,
+			wantCmdPart: "deploy staging --force",
+		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			action := handler.ResolveUserCommand(tt.cmdName, tt.cmd, sess)
+			action := handler.ResolveUserCommand(tt.cmdName, tt.cmd, sess, tt.args)
 
 			if action.Key != tt.wantKey {
 				t.Errorf("ResolveUserCommand() Key = %v, want %v", action.Key, tt.wantKey)
@@ -152,6 +167,9 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 			}
 			if action.Type != ActionTypeShell {
 				t.Errorf("ResolveUserCommand() Type = %v, want %v", action.Type, ActionTypeShell)
+			}
+			if tt.wantCmdPart != "" && action.ShellCmd != tt.wantCmdPart {
+				t.Errorf("ResolveUserCommand() ShellCmd = %v, want %v", action.ShellCmd, tt.wantCmdPart)
 			}
 		})
 	}
