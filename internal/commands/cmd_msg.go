@@ -32,6 +32,7 @@ type MsgCmd struct {
 	subListen  bool
 	subWait    bool
 	subNew     bool
+	subPeek    bool
 
 	// topic flags
 	topicNew    bool
@@ -119,6 +120,7 @@ By default, returns all messages as JSON and exits. Use --listen to poll for new
 or --wait to block until a single message arrives (useful for inter-agent handoff).
 
 Use --new to filter messages since your last inbox read (only works for inbox topics).
+Use --peek with --new to check for new messages without marking them as read.
 
 Topic patterns:
 - No topic or "*": all messages
@@ -126,13 +128,14 @@ Topic patterns:
 - "prefix.*": wildcard match for topics starting with "prefix."
 
 Examples:
-  hive msg sub                          # all messages as JSON
-  hive msg sub --topic agent.build      # specific topic
-  hive msg sub --topic agent.*          # wildcard pattern
-  hive msg sub --last 10                # last 10 messages
-  hive msg sub --listen                 # poll for new messages
-  hive msg sub --wait --topic handoff   # wait for single message (24h default timeout)
-  hive msg sub -t agent.abc.inbox --new # only unread inbox messages`,
+  hive msg sub                                # all messages as JSON
+  hive msg sub --topic agent.build            # specific topic
+  hive msg sub --topic agent.*                # wildcard pattern
+  hive msg sub --last 10                      # last 10 messages
+  hive msg sub --listen                       # poll for new messages
+  hive msg sub --wait --topic handoff         # wait for single message (24h default timeout)
+  hive msg sub -t agent.abc.inbox --new       # only unread inbox messages
+  hive msg sub -t agent.abc.inbox --new --peek # check without marking as read`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "topic",
@@ -162,6 +165,11 @@ Examples:
 				Name:        "new",
 				Usage:       "only return messages since last inbox read (for inbox topics)",
 				Destination: &cmd.subNew,
+			},
+			&cli.BoolFlag{
+				Name:        "peek",
+				Usage:       "check for new messages without marking as read (use with --new)",
+				Destination: &cmd.subPeek,
 			},
 			&cli.StringFlag{
 				Name:        "timeout",
@@ -310,8 +318,10 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("subscribe: %w", err)
 	}
 
-	// Update inbox read timestamp if subscribing to own inbox
-	cmd.updateInboxReadIfOwn(ctx, topic)
+	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
+	if !cmd.subPeek {
+		cmd.updateInboxReadIfOwn(ctx, topic)
+	}
 
 	// Apply --last N limit if specified
 	if cmd.subLast > 0 && len(messages) > cmd.subLast {
@@ -327,8 +337,10 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 		return fmt.Errorf("invalid timeout: %w", err)
 	}
 
-	// Update inbox read timestamp if subscribing to own inbox
-	cmd.updateInboxReadIfOwn(ctx, topic)
+	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
+	if !cmd.subPeek {
+		cmd.updateInboxReadIfOwn(ctx, topic)
+	}
 
 	deadline := time.Now().Add(timeout)
 	// Use initialSince if set (from --new flag), otherwise start from now
@@ -374,8 +386,10 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store *js
 		}
 	}
 
-	// Update inbox read timestamp if subscribing to own inbox
-	cmd.updateInboxReadIfOwn(ctx, topic)
+	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
+	if !cmd.subPeek {
+		cmd.updateInboxReadIfOwn(ctx, topic)
+	}
 
 	deadline := time.Now().Add(timeout)
 	// Use initialSince if set (from --new flag), otherwise start from now
