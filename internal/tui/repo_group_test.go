@@ -149,6 +149,29 @@ func TestGroupSessionsByRepo(t *testing.T) {
 	}
 }
 
+func TestGroupSessionsByRepo_RecycledCount(t *testing.T) {
+	sessions := []session.Session{
+		{Name: "active1", Remote: "git@github.com:user/repo.git", State: session.StateActive},
+		{Name: "active2", Remote: "git@github.com:user/repo.git", State: session.StateActive},
+		{Name: "recycled1", Remote: "git@github.com:user/repo.git", State: session.StateRecycled},
+		{Name: "recycled2", Remote: "git@github.com:user/repo.git", State: session.StateRecycled},
+		{Name: "recycled3", Remote: "git@github.com:user/repo.git", State: session.StateRecycled},
+	}
+
+	groups := GroupSessionsByRepo(sessions, "")
+	require.Len(t, groups, 1)
+
+	group := groups[0]
+	assert.Equal(t, "repo", group.Name)
+	assert.Len(t, group.Sessions, 2, "should only contain active sessions")
+	assert.Equal(t, 3, group.RecycledCount, "should count recycled sessions")
+
+	// Verify only active sessions are in the slice
+	for _, s := range group.Sessions {
+		assert.Equal(t, session.StateActive, s.State)
+	}
+}
+
 func TestExtractGroupName(t *testing.T) {
 	tests := []struct {
 		remote string
