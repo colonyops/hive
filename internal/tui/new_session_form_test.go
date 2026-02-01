@@ -101,4 +101,18 @@ func TestNewNewSessionForm(t *testing.T) {
 		updated, _ = updated.Update(keyPress(tea.KeyTab))
 		assert.Equal(t, 0, updated.focusedField)
 	})
+
+	t.Run("Result returns zero value for empty repos", func(t *testing.T) {
+		form := NewNewSessionForm([]DiscoveredRepo{}, "", nil)
+		result := form.Result()
+		assert.Empty(t, result.Repo.Name)
+		assert.Empty(t, result.Repo.Remote)
+	})
+
+	t.Run("enter on repo select moves to name input", func(t *testing.T) {
+		form := NewNewSessionForm(repos, "", nil)
+		assert.Equal(t, 0, form.focusedField)
+		updated, _ := form.Update(keyPress(tea.KeyEnter))
+		assert.Equal(t, 1, updated.focusedField)
+	})
 }

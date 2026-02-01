@@ -174,7 +174,11 @@ func (f *NewSessionForm) Cancelled() bool {
 }
 
 // Result returns the form result. Only valid if Submitted() is true.
+// Returns zero value if repos slice is empty (should not happen in normal use).
 func (f *NewSessionForm) Result() NewSessionFormResult {
+	if len(f.repos) == 0 {
+		return NewSessionFormResult{}
+	}
 	idx := f.repoSelect.SelectedIndex()
 	if idx < 0 || idx >= len(f.repos) {
 		idx = 0
