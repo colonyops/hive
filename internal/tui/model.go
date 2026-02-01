@@ -30,6 +30,7 @@ const (
 	stateRunningRecycle
 	statePreviewingMessage
 	stateCreatingSession
+	stateCommandPalette
 )
 
 // Key constants for event handling.
@@ -109,6 +110,9 @@ type Model struct {
 	repoDirs        []string
 	discoveredRepos []DiscoveredRepo
 	newSessionForm  *NewSessionForm
+
+	// Command palette
+	commandPalette *CommandPalette
 
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
@@ -476,6 +480,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateCreatingSession {
 		return m.handleNewSessionFormKey(msg, keyStr)
 	}
+	if m.state == stateCommandPalette {
+		return m.handleCommandPaletteKey(msg, keyStr)
+	}
 	if m.state == statePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)
 	}
@@ -615,6 +622,64 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 	}
 }
 
+// handleCommandPaletteKey handles keys when command palette is shown.
+func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	if keyStr == keyCtrlC {
+		m.quitting = true
+		return m, tea.Quit
+	}
+
+	// Update the palette
+	var cmd tea.Cmd
+	m.commandPalette, cmd = m.commandPalette.Update(msg)
+
+	// Check if user selected a command
+	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
+		selected := m.selectedSession()
+		if selected == nil {
+			m.state = stateNormal
+			return m, nil
+		}
+
+		// Resolve the user command to an Action
+		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
+
+		// Reset to normal state
+		m.state = stateNormal
+
+		// Handle confirmation if needed
+		if action.NeedsConfirm() {
+			m.state = stateConfirming
+			m.pending = action
+			m.modal = NewModal("Confirm", action.Confirm)
+			return m, nil
+		}
+
+		// Execute immediately if exit requested (synchronous to avoid race conditions)
+		if action.Exit {
+			_ = m.handler.Execute(context.Background(), action)
+			m.quitting = true
+			return m, tea.Quit
+		}
+
+		// Store pending action for exit check after completion
+		m.pending = action
+		if !action.Silent {
+			m.state = stateLoading
+			m.loadingMessage = "Processing..."
+		}
+		return m, m.executeAction(action)
+	}
+
+	// Check if user cancelled
+	if m.commandPalette.Cancelled() {
+		m.state = stateNormal
+		return m, nil
+	}
+
+	return m, cmd
+}
+
 // copyToClipboard copies the given text to the system clipboard.
 func (m Model) copyToClipboard(text string) error {
 	if m.copyCommand == "" {
@@ -738,6 +803,13 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
+	}
+
+	// Handle ':' for command palette (only if user commands are configured)
+	if keyStr == ":" && len(m.cfg.UserCommands) > 0 {
+		m.commandPalette = NewCommandPalette(m.cfg.UserCommands, selected, m.width, m.height)
+		m.state = stateCommandPalette
+		return m, nil
 	}
 
 	action, ok := m.handler.Resolve(keyStr, *selected)
@@ -936,6 +1008,11 @@ func (m Model) View() tea.View {
 	// Overlay modal if confirming
 	if m.state == stateConfirming {
 		return newView(m.modal.Overlay(mainView, w, h))
+	}
+
+	// Overlay command palette
+	if m.state == stateCommandPalette && m.commandPalette != nil {
+		return newView(m.commandPalette.Overlay(mainView, w, h))
 	}
 
 	return newView(mainView)

@@ -36,6 +36,7 @@ Hive creates isolated git environments for running multiple AI agents in paralle
 - **Inter-agent Messaging** — Pub/sub communication between sessions
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
 - **Custom Keybindings** — Configure actions with shell commands
+- **Command Palette** — Vim-style command palette for custom commands (`:` key)
 
 ## Quick Start
 
@@ -155,6 +156,22 @@ keybindings:
     help: open in finder
     sh: "open {{ .Path }}"
     silent: true
+
+# User commands (accessible via : in TUI)
+usercommands:
+  review:
+    sh: "send-claude {{ .Name }} /review"
+    help: "Send /review to Claude session"
+    silent: true
+  tidy:
+    sh: "send-claude {{ .Name }} /tidy"
+    help: "Send /tidy to Claude session"
+    confirm: "Commit and push changes?"
+  open:
+    sh: "open {{ .Path }}"
+    help: "Open session in Finder"
+    silent: true
+    exit: "true"
 ```
 
 ### Template Variables
@@ -167,6 +184,56 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `commands.batch_spawn` | Same as spawn, plus `.Prompt`                               |
 | `commands.recycle`     | `.DefaultBranch`                                            |
 | `keybindings.*.sh`     | `.Path`, `.Name`, `.Remote`, `.ID`                          |
+| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Args`                 |
+
+### User Commands & Command Palette
+
+User commands provide a vim-style command palette accessible by pressing `:` in the TUI. This allows you to define custom commands that can be executed on selected sessions with arguments.
+
+**Command Palette Features:**
+
+- **Vim-style interface** — Press `:` to open the palette
+- **Fuzzy filtering** — Type to filter commands (prefix and substring matching)
+- **Arguments support** — Pass arguments to commands (e.g., `:review pr-123`)
+- **Tab completion** — Auto-fill selected command name
+- **Keyboard navigation** — `↑/k/ctrl+k`, `↓/j/ctrl+j`, `tab`, `enter`, `esc`
+
+**Command Options:**
+
+| Field     | Type   | Description                                      |
+| --------- | ------ | ------------------------------------------------ |
+| `sh`      | string | Shell command template (required)                |
+| `help`    | string | Description shown in palette                     |
+| `confirm` | string | Confirmation prompt (empty = no confirmation)    |
+| `silent`  | bool   | Skip loading popup for fast commands             |
+| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)      |
+
+**Using Arguments:**
+
+Arguments passed in the command palette are available via the `.Args` template variable:
+
+```yaml
+usercommands:
+  msg:
+    sh: |
+      hive msg pub -t agent.{{ .ID }}.inbox "{{ range .Args }}{{ . }} {{ end }}"
+    help: "Send message to session inbox"
+```
+
+Usage: `:msg hello world` → sends "hello world" to the session inbox
+
+**Exit Conditions:**
+
+The `exit` field supports environment variables for conditional behavior:
+
+```yaml
+usercommands:
+  attach:
+    sh: "tmux attach -t {{ .Name }}"
+    exit: "$HIVE_POPUP"  # Only exit if HIVE_POPUP=true
+```
+
+This is useful when running hive in a tmux popup vs a dedicated session.
 
 ### Configuration Options
 
@@ -178,6 +245,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `commands.recycle`                    | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling                  |
 | `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
 | `keybindings`                         | `map[string]Keybinding` | `r`=recycle, `d`=delete        | TUI keybindings                          |
+| `usercommands`                        | `map[string]UserCommand`| `{}`                           | Command palette commands (`:` key)       |
 | `tui.refresh_interval`                | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
 | `integrations.terminal.enabled`       | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
 | `integrations.terminal.poll_interval` | `duration`              | `500ms`                        | Status check frequency                   |
@@ -202,128 +270,7 @@ All data is stored at `~/.local/share/hive/`:
 
 ## Tmux Integration
 
-Hive works well with tmux for managing AI agent sessions.
-
-### Example Configuration
-
-```yaml
-version: 0.2.3
-repo_dirs:
-  - ~/code/repos
-
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
-
-commands:
-  spawn:
-    - ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
-  batch_spawn:
-    - ~/.config/tmux/layouts/hive.sh -b "{{ .Name }}" "{{ .Path }}" "{{ .Prompt }}"
-
-rules:
-  - pattern: ""
-    max_recycled: 3
-    commands:
-      - hive ctx init
-
-keybindings:
-  enter:
-    help: open/create tmux
-    sh: ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
-    exit: $HIVE_POPUP
-    silent: true
-  p:
-    help: popup
-    sh: tmux display-popup -E -w 80% -h 80% "tmux new-session -s hive-popup -t '{{ .Name }}'"
-    silent: true
-  ctrl+d:
-    help: kill session
-    sh: tmux kill-session -t "{{ .Name }}" 2>/dev/null || true
-  t:
-    help: send /tidy
-    sh: claude-send "{{ .Name }}:claude" "/tidy"
-    silent: true
-```
-
-### Helper Script: hive.sh
-
-Creates a tmux session with two windows: `claude` (running the AI) and `shell`.
-
-```bash
-#!/bin/bash
-# Usage: hive.sh [-b] [session-name] [working-dir] [prompt]
-#   -b: background mode (create session without attaching)
-
-BACKGROUND=false
-if [ "$1" = "-b" ]; then
-    BACKGROUND=true
-    shift
-fi
-
-SESSION="${1:-hive}"
-WORKDIR="${2:-$PWD}"
-PROMPT="${3:-}"
-
-if [ -n "$PROMPT" ]; then
-    CLAUDE_CMD="claude '$PROMPT'"
-else
-    CLAUDE_CMD="claude"
-fi
-
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-    [ "$BACKGROUND" = true ] && exit 0
-    if [ -n "$TMUX" ]; then
-        tmux switch-client -t "$SESSION"
-    else
-        tmux attach-session -t "$SESSION"
-    fi
-else
-    tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" "$CLAUDE_CMD"
-    tmux new-window -t "$SESSION" -n shell -c "$WORKDIR"
-    tmux select-window -t "$SESSION:claude"
-
-    [ "$BACKGROUND" = true ] && exit 0
-    if [ -n "$TMUX" ]; then
-        tmux switch-client -t "$SESSION"
-    else
-        tmux attach-session -t "$SESSION"
-    fi
-fi
-```
-
-### Helper Script: claude-send
-
-Sends text to a Claude session in tmux (useful for remote commands like `/tidy`).
-
-```bash
-#!/bin/bash
-# Usage: claude-send <target> <text>
-TARGET="${1:?Usage: claude-send <target> <text>}"
-TEXT="${2:?Usage: claude-send <target> <text>}"
-
-tmux send-keys -t "$TARGET" "$TEXT"
-sleep 0.5
-tmux send-keys -t "$TARGET" C-m
-```
-
-### Tmux Config Additions
-
-```bash
-# Quick access to hive TUI as popup (prefix + Space)
-bind Space display-popup -E -w 85% -h 85% "HIVE_POPUP=true hive"
-
-# Quick switch to hive session
-bind l switch-client -t hive
-```
-
-### Quick Alias
-
-```bash
-# Start or attach to a persistent hive session
-alias hv="tmux new-session -As hive hive"
-```
+Hive integrates with tmux for real-time status monitoring and session management. See the [Tmux Integration recipe](docs/recipes/tmux-integration.md) for complete setup with helper scripts, keybindings, and configuration examples.
 
 ## Acknowledgments
 
@@ -363,6 +310,7 @@ Launches the interactive TUI for managing sessions.
 
 **Default keybindings:**
 
+- `:` - Open command palette (when user commands configured)
 - `r` - Recycle session
 - `d` - Delete session
 - `n` - New session (when repos discovered)

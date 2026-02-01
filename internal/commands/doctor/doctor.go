@@ -74,7 +74,8 @@ func Summary(results []Result) (passed, warned, failed int) {
 			}
 		}
 	}
-	return
+
+	return passed, warned, failed
 }
 
 // CountFixable returns the number of fixable issues across all results.

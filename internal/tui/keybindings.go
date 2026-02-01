@@ -197,3 +197,38 @@ func (h *KeybindingHandler) KeyBindings() []key.Binding {
 
 	return bindings
 }
+
+// ResolveUserCommand converts a user command to an Action ready for execution.
+// The name is used to display the command source (e.g., ":review").
+func (h *KeybindingHandler) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
+	data := struct {
+		Path   string
+		Remote string
+		ID     string
+		Name   string
+		Args   []string
+	}{
+		Path:   sess.Path,
+		Remote: sess.Remote,
+		ID:     sess.ID,
+		Name:   sess.Name,
+		Args:   args,
+	}
+
+	rendered, err := tmpl.Render(cmd.Sh, data)
+	if err != nil {
+		rendered = fmt.Sprintf("echo 'template error: %v'", err)
+	}
+
+	return Action{
+		Type:        ActionTypeShell,
+		Key:         ":" + name,
+		Help:        cmd.Help,
+		Confirm:     cmd.Confirm,
+		ShellCmd:    rendered,
+		SessionID:   sess.ID,
+		SessionPath: sess.Path,
+		Silent:      cmd.Silent,
+		Exit:        cmd.ShouldExit(),
+	}
+}

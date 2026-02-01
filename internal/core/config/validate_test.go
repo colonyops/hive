@@ -422,3 +422,104 @@ func TestValidate_MaxRecycledNegative(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestValidate_UserCommandMissingSh(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"test": {Help: "no sh command"},
+	}
+
+	err := cfg.Validate()
+
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Len(t, fieldErrs, 1)
+	assert.Contains(t, fieldErrs[0].Err.Error(), "sh is required")
+}
+
+func TestValidateDeep_UserCommandInvalidShTemplate(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"bad": {Sh: "open {{.Invalid}}"},
+	}
+
+	err := cfg.ValidateDeep("")
+
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Len(t, fieldErrs, 1)
+	assert.Contains(t, fieldErrs[0].Err.Error(), "template error")
+}
+
+func TestValidateDeep_UserCommandValidShTemplate(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"open":       {Sh: "open {{.Path}}"},
+		"review":     {Sh: "send-claude {{.Name}} /review"},
+		"with-args":  {Sh: `echo {{.Name}} {{ range .Args }}{{ . }} {{ end }}`},
+		"all-vars":   {Sh: "cmd {{.Path}} {{.Remote}} {{.ID}} {{.Name}}"},
+		"index-args": {Sh: `go test {{ index .Args 0 }}`},
+		"multi-args": {Sh: `cmd {{ index .Args 0 }} {{ index .Args 1 }}`},
+	}
+
+	err := cfg.ValidateDeep("")
+	assert.NoError(t, err)
+}
+
+func TestValidate_UserCommandInvalidName(t *testing.T) {
+	tests := []struct {
+		name        string
+		commandName string
+		wantErr     string
+	}{
+		{
+			name:        "name with spaces",
+			commandName: "my command",
+			wantErr:     "invalid command name",
+		},
+		{
+			name:        "name with special chars",
+			commandName: "test@command",
+			wantErr:     "invalid command name",
+		},
+		{
+			name:        "empty name",
+			commandName: "",
+			wantErr:     "cannot be empty",
+		},
+		{
+			name:        "name with slash",
+			commandName: "test/command",
+			wantErr:     "invalid command name",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.UserCommands = map[string]UserCommand{
+				tt.commandName: {Sh: "echo test"},
+			}
+
+			err := cfg.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
+func TestValidate_UserCommandValidNames(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"simple":      {Sh: "echo test"},
+		"with-dash":   {Sh: "echo test"},
+		"with_under":  {Sh: "echo test"},
+		"MixedCase":   {Sh: "echo test"},
+		"with123":     {Sh: "echo test"},
+		"a":           {Sh: "echo test"},
+		"long-name_2": {Sh: "echo test"},
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
