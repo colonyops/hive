@@ -425,11 +425,11 @@ func TestCommandPalette_ViewWithScrolling(t *testing.T) {
 
 func TestWrapText(t *testing.T) {
 	tests := []struct {
-		name      string
-		text      string
-		maxWidth  int
-		maxLines  int
-		expected  []string
+		name     string
+		text     string
+		maxWidth int
+		maxLines int
+		expected []string
 	}{
 		{
 			name:     "short text single line",
