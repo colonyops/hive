@@ -1,16 +1,36 @@
-# hive
+<div align="center">
 
-A CLI/TUI for managing multiple AI agent sessions as an alternative to git worktrees.
+# 🐝 hive
+
+**Mission control for your AI coding agents**
+
+Manage multiple AI agent sessions in isolated git environments with real-time status monitoring.
+
+[![Go Version](https://img.shields.io/github/go-mod/go-version/colonyops/hive)](https://go.dev/)
+[![License](https://img.shields.io/github/license/colonyops/hive)](LICENSE)
+[![Release](https://img.shields.io/github/v/release/colonyops/hive)](https://github.com/colonyops/hive/releases)
+[![Go Report Card](https://goreportcard.com/badge/github.com/colonyops/hive)](https://goreportcard.com/report/github.com/colonyops/hive)
+
+</div>
+
+---
 
 ## Installation
 
 ```bash
-go install github.com/hay-kot/hive@latest
+go install github.com/colonyops/hive@latest
 ```
 
 ## Overview
 
 Hive creates isolated git environments for running multiple AI agents in parallel. Instead of managing worktrees manually, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool.
+
+**Key Features:**
+- 📂 **Session Management** — Create, recycle, and prune isolated git clones
+- 🔄 **Terminal Integration** — Real-time status monitoring of AI agents in tmux
+- 💬 **Inter-agent Messaging** — Pub/sub communication between sessions
+- 📁 **Context Sharing** — Shared storage per repository via `.hive` symlinks
+- ⌨️ **Custom Keybindings** — Configure actions with shell commands
 
 ## Usage
 
