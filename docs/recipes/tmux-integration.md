@@ -4,7 +4,7 @@ Manage AI agent sessions in tmux with automated session creation, status monitor
 
 ## Config
 
-Add to your `~/.config/hive/config.yaml`:
+Add these tmux-specific settings to your `~/.config/hive/config.yaml` (not a complete config, just the tmux-related parts):
 
 ```yaml
 # Enable tmux status monitoring
