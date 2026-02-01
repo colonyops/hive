@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🐝 hive
+# hive
 
 **Mission control for your AI coding agents**
 
@@ -26,11 +26,11 @@ go install github.com/colonyops/hive@latest
 Hive creates isolated git environments for running multiple AI agents in parallel. Instead of managing worktrees manually, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool.
 
 **Key Features:**
-- 📂 **Session Management** — Create, recycle, and prune isolated git clones
-- 🔄 **Terminal Integration** — Real-time status monitoring of AI agents in tmux
-- 💬 **Inter-agent Messaging** — Pub/sub communication between sessions
-- 📁 **Context Sharing** — Shared storage per repository via `.hive` symlinks
-- ⌨️ **Custom Keybindings** — Configure actions with shell commands
+- **Session Management** — Create, recycle, and prune isolated git clones
+- **Terminal Integration** — Real-time status monitoring of AI agents in tmux
+- **Inter-agent Messaging** — Pub/sub communication between sessions
+- **Context Sharing** — Shared storage per repository via `.hive` symlinks
+- **Custom Keybindings** — Configure actions with shell commands
 
 ## Usage
 
