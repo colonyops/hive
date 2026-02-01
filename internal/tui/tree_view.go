@@ -329,7 +329,8 @@ type TreeDelegate struct {
 	GitStatuses      *kv.Store[string, GitStatus]
 	TerminalStatuses *kv.Store[string, TerminalStatus]
 	ColumnWidths     *ColumnWidths
-	AnimationFrame   int // Current frame for status animations
+	AnimationFrame   int  // Current frame for status animations
+	PreviewMode      bool // When true, show minimal info (session names only)
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -477,13 +478,19 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		}
 	}
 
-	// Short ID
+	// Short ID (always show)
 	shortID := item.Session.ID
 	if len(shortID) > 4 {
 		shortID = shortID[len(shortID)-4:]
 	}
 	id := d.Styles.SessionID.Render(" #" + shortID)
 
+	// In preview mode, show minimal info (status + name + ID only)
+	if d.PreviewMode {
+		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
+	}
+
+	// Full mode: show ID and git status
 	// Git status: branch, diff stats, clean/dirty indicator
 	gitInfo := d.renderGitStatus(item.Session.Path)
 

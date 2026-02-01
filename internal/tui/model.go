@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 	"time"
@@ -312,8 +313,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// Set list size based on preview mode
 		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
-			// In dual-column mode, list takes 35% of width
-			listWidth := int(float64(m.width) * 0.35)
+			// In dual-column mode, list takes 25% of width
+			listWidth := int(float64(m.width) * 0.25)
 			m.list.SetSize(listWidth, contentHeight)
 		} else {
 			// In single-column mode, list takes full width
@@ -1074,6 +1075,9 @@ func (m Model) renderTabView() string {
 		if m.previewEnabled && m.width >= 80 {
 			content = m.renderDualColumnLayout(contentHeight)
 		} else {
+			// Reset delegate to show full info when not in preview mode
+			m.treeDelegate.PreviewMode = false
+			m.list.SetDelegate(m.treeDelegate)
 			content = m.list.View()
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
@@ -1088,43 +1092,130 @@ func (m Model) renderTabView() string {
 
 // renderDualColumnLayout renders sessions list and preview side by side.
 func (m Model) renderDualColumnLayout(contentHeight int) string {
-	// Calculate column widths (35% list, 65% preview)
-	listWidth := int(float64(m.width) * 0.35)
+	// Update delegate to show minimal info in preview mode
+	m.treeDelegate.PreviewMode = true
+	m.list.SetDelegate(m.treeDelegate)
+
+	// Calculate widths (25/75 split)
+	listWidth := int(float64(m.width) * 0.25)
+	if listWidth < 20 {
+		listWidth = 20
+	}
+
+	// Preview gets remaining space
 	previewWidth := m.width - listWidth
 
 	// Get selected session and its terminal status
 	selected := m.selectedSession()
 	var previewContent string
+
 	if selected != nil {
 		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
-			// Take the last N lines to show most recent output
-			content := tailLines(status.PaneContent, contentHeight)
-			// Truncate lines to fit preview width
-			// Width calculation: previewWidth - 2 (for style) - 1 (border left) - 2 (padding) = previewWidth - 5
-			maxLineWidth := previewWidth - 5
-			previewContent = truncateLines(content, maxLineWidth)
+			// Account for padding: 2 chars on each side = 4 total
+			usableWidth := previewWidth - 4
+
+			// Build header
+			header := m.renderPreviewHeader(selected, usableWidth)
+			headerHeight := strings.Count(header, "\n") + 1
+
+			// Calculate available lines for content
+			outputHeight := contentHeight - headerHeight
+			if outputHeight < 1 {
+				outputHeight = 1
+			}
+
+			// Get content and truncate to width
+			content := tailLines(status.PaneContent, outputHeight)
+			content = truncateLines(content, usableWidth)
+
+			previewContent = header + "\n" + content
 		} else {
-			previewContent = "No pane content available"
+			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\nNo pane content available"
 		}
 	} else {
 		previewContent = "No session selected"
 	}
 
-	// Render list with adjusted width
-	m.list.SetSize(listWidth, contentHeight)
+	// Render list
 	listView := m.list.View()
 
-	// Render preview with border
-	previewStyle := lipgloss.NewStyle().
-		Width(previewWidth - 2). // Account for border
-		Height(contentHeight).
-		BorderStyle(lipgloss.NormalBorder()).
-		BorderLeft(true).
-		Padding(0, 1)
-	previewView := previewStyle.Render(previewContent)
+	// Apply exact height to both panels
+	listView = ensureExactHeight(listView, contentHeight)
+	previewContent = ensureExactHeight(previewContent, contentHeight)
 
-	// Join horizontally
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, previewView)
+	// Apply exact width to list view to prevent bleeding into preview
+	// The bubble tea list should already render at listWidth from SetSize,
+	// but we enforce it here to ensure clean horizontal joining
+	listView = ensureExactWidth(listView, listWidth)
+
+	// Apply padding and exact width to preview content
+	previewLines := strings.Split(previewContent, "\n")
+	for i, line := range previewLines {
+		previewLines[i] = "  " + line + "  "
+	}
+	previewContent = strings.Join(previewLines, "\n")
+	previewContent = ensureExactWidth(previewContent, previewWidth)
+
+	// Join horizontally - both panels now have exact matching dimensions
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, previewContent)
+}
+
+// renderPreviewHeader renders the preview header section with session metadata.
+func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
+	// Session name
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
+	name := nameStyle.Render(sess.Name)
+
+	// Divider line
+	divider := strings.Repeat("─", maxWidth)
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
+	// Get git status if available
+	var gitLine string
+	if m.gitStatuses != nil {
+		if status, ok := m.gitStatuses.Get(sess.Path); ok && !status.IsLoading && status.Error == nil {
+			// Format: git: branch +N -N • clean/dirty
+			gitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
+			branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
+			addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9ece6a"))
+			delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#f7768e"))
+
+			changes := ""
+			if status.HasChanges {
+				changes = " • uncommitted"
+			}
+
+			gitLine = fmt.Sprintf("%s %s %s %s%s",
+				gitStyle.Render("git:"),
+				branchStyle.Render(status.Branch),
+				addStyle.Render(fmt.Sprintf("+%d", status.Additions)),
+				delStyle.Render(fmt.Sprintf("-%d", status.Deletions)),
+				changes,
+			)
+		}
+	}
+
+	// Session ID line
+	shortID := sess.ID
+	if len(shortID) > 4 {
+		shortID = shortID[len(shortID)-4:]
+	}
+	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
+	idLine := fmt.Sprintf("%s %s", idStyle.Render("id:"), shortID)
+
+	// Build header
+	var parts []string
+	parts = append(parts, name)
+	parts = append(parts, dividerStyle.Render(divider))
+	parts = append(parts, idLine)
+	if gitLine != "" {
+		parts = append(parts, gitLine)
+	}
+	parts = append(parts, "")
+	parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce")).Render("Output"))
+	parts = append(parts, dividerStyle.Render(divider))
+
+	return strings.Join(parts, "\n")
 }
 
 // tailLines returns the last n lines from the input string.
@@ -1152,6 +1243,70 @@ func truncateLines(s string, maxWidth int) string {
 			lines[i] = ansi.TruncateWc(line, maxWidth, "...")
 		}
 	}
+	return strings.Join(lines, "\n")
+}
+
+// ensureExactWidth ensures all lines in content have exactly the specified width
+// by padding short lines with spaces or truncating long lines with ellipsis.
+// This is critical for lipgloss.JoinHorizontal to work correctly.
+func ensureExactWidth(content string, width int) string {
+	if width <= 0 {
+		return content
+	}
+
+	lines := strings.Split(content, "\n")
+	result := make([]string, len(lines))
+
+	for i, line := range lines {
+		displayWidth := ansi.StringWidth(line)
+
+		switch {
+		case displayWidth == width:
+			result[i] = line
+		case displayWidth < width:
+			// Pad with spaces to reach target width
+			padding := width - displayWidth
+			result[i] = line + strings.Repeat(" ", padding)
+		default:
+			// Line too wide - check if we're only truncating whitespace
+			trimmed := strings.TrimRight(line, " \t")
+			trimmedWidth := ansi.StringWidth(trimmed)
+
+			if trimmedWidth <= width {
+				// Only trailing whitespace would be truncated - just trim and pad
+				padding := width - trimmedWidth
+				result[i] = trimmed + strings.Repeat(" ", padding)
+			} else {
+				// Actual content needs truncation - use ellipsis
+				result[i] = ansi.TruncateWc(line, width, "...")
+				// Pad if truncation made it shorter than width
+				truncWidth := ansi.StringWidth(result[i])
+				if truncWidth < width {
+					result[i] += strings.Repeat(" ", width-truncWidth)
+				}
+			}
+		}
+	}
+
+	return strings.Join(result, "\n")
+}
+
+// ensureExactHeight ensures content has exactly n lines by truncating or padding.
+func ensureExactHeight(content string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+
+	lines := strings.Split(content, "\n")
+
+	if len(lines) > n {
+		lines = lines[:n]
+	} else {
+		for len(lines) < n {
+			lines = append(lines, "")
+		}
+	}
+
 	return strings.Join(lines, "\n")
 }
 
