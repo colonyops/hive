@@ -234,7 +234,11 @@ func TestPeekFlag_DoesNotUpdateLastInboxRead(t *testing.T) {
 	if err != nil {
 		t.Fatalf("failed to get working directory: %v", err)
 	}
-	defer os.Chdir(originalWd)
+	t.Cleanup(func() {
+		if err := os.Chdir(originalWd); err != nil {
+			t.Errorf("failed to restore working directory: %v", err)
+		}
+	})
 	if err := os.Chdir(sessionDir); err != nil {
 		t.Fatalf("failed to change to session directory: %v", err)
 	}
