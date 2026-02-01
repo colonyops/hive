@@ -166,7 +166,7 @@ func TestOrphanCheck_FixPreservesTracked(t *testing.T) {
 
 	// Tracked directory should still exist
 	_, err := os.Stat(trackedDir)
-	assert.NoError(t, err, "tracked directory should still exist")
+	require.NoError(t, err, "tracked directory should still exist")
 
 	// Orphan should be deleted
 	_, err = os.Stat(orphanDir)
