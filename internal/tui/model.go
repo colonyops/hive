@@ -1239,15 +1239,15 @@ func truncateLines(s string, maxWidth int) string {
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
 		if ansi.StringWidth(line) > maxWidth {
-			// Use TruncateWc which properly handles wcwidth and ANSI codes
-			lines[i] = ansi.TruncateWc(line, maxWidth, "...")
+			// Truncate at width boundary without ellipsis
+			lines[i] = ansi.TruncateWc(line, maxWidth, "")
 		}
 	}
 	return strings.Join(lines, "\n")
 }
 
 // ensureExactWidth ensures all lines in content have exactly the specified width
-// by padding short lines with spaces or truncating long lines with ellipsis.
+// by padding short lines with spaces or truncating long lines at the boundary.
 // This is critical for lipgloss.JoinHorizontal to work correctly.
 func ensureExactWidth(content string, width int) string {
 	if width <= 0 {
@@ -1268,22 +1268,12 @@ func ensureExactWidth(content string, width int) string {
 			padding := width - displayWidth
 			result[i] = line + strings.Repeat(" ", padding)
 		default:
-			// Line too wide - check if we're only truncating whitespace
-			trimmed := strings.TrimRight(line, " \t")
-			trimmedWidth := ansi.StringWidth(trimmed)
-
-			if trimmedWidth <= width {
-				// Only trailing whitespace would be truncated - just trim and pad
-				padding := width - trimmedWidth
-				result[i] = trimmed + strings.Repeat(" ", padding)
-			} else {
-				// Actual content needs truncation - use ellipsis
-				result[i] = ansi.TruncateWc(line, width, "...")
-				// Pad if truncation made it shorter than width
-				truncWidth := ansi.StringWidth(result[i])
-				if truncWidth < width {
-					result[i] += strings.Repeat(" ", width-truncWidth)
-				}
+			// Line too wide - truncate at width boundary
+			result[i] = ansi.TruncateWc(line, width, "")
+			// Pad if truncation made it shorter than width
+			truncWidth := ansi.StringWidth(result[i])
+			if truncWidth < width {
+				result[i] += strings.Repeat(" ", width-truncWidth)
 			}
 		}
 	}
