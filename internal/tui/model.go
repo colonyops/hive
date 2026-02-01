@@ -1097,7 +1097,10 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	if selected != nil {
 		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
 			// Take the last N lines to show most recent output
-			previewContent = tailLines(status.PaneContent, contentHeight)
+			content := tailLines(status.PaneContent, contentHeight)
+			// Truncate lines to fit preview width (account for border + padding)
+			maxLineWidth := previewWidth - 4
+			previewContent = truncateLines(content, maxLineWidth)
 		} else {
 			previewContent = "No pane content available"
 		}
@@ -1132,6 +1135,25 @@ func tailLines(s string, n int) string {
 		return s
 	}
 	return strings.Join(lines[len(lines)-n:], "\n")
+}
+
+// truncateLines truncates each line to fit within maxWidth characters.
+func truncateLines(s string, maxWidth int) string {
+	if maxWidth <= 0 {
+		return s
+	}
+	lines := strings.Split(s, "\n")
+	for i, line := range lines {
+		if len(line) > maxWidth {
+			// Truncate and add ellipsis if there's room
+			if maxWidth > 3 {
+				lines[i] = line[:maxWidth-3] + "..."
+			} else {
+				lines[i] = line[:maxWidth]
+			}
+		}
+	}
+	return strings.Join(lines, "\n")
 }
 
 // startRecycle returns a command that starts the recycle operation with streaming output.
