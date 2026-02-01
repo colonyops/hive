@@ -161,6 +161,7 @@ func (d *Detector) NeedsApproval(content string) bool {
 		// Generic approval prompts
 		"Allow this action",
 		"Do you want to proceed?",
+		"Do you want to create",
 		"Do you want to make this edit",
 	}
 	for _, prompt := range permissionPrompts {
