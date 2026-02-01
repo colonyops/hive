@@ -28,6 +28,7 @@ go install github.com/colonyops/hive@latest
 Hive creates isolated git environments for running multiple AI agents in parallel. Instead of managing worktrees manually, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool.
 
 **Key Features:**
+
 - **Session Management** — Create, recycle, and prune isolated git clones
 - **Terminal Integration** — Real-time status monitoring of AI agents in tmux
 - **Inter-agent Messaging** — Pub/sub communication between sessions
@@ -108,13 +109,13 @@ Each agent also has an inbox topic (`agent.{session-id}.inbox`) for direct messa
 
 When terminal integration is enabled, the TUI shows real-time agent status:
 
-| Indicator | Color | Meaning |
-|-----------|-------|---------|
-| `[●]` | Green (animated) | Agent actively working |
-| `[!]` | Yellow | Agent needs approval/permission |
-| `[>]` | Cyan | Agent ready for input |
-| `[?]` | Dim | Terminal session not found |
-| `[○]` | Gray | Session recycled |
+| Indicator | Color            | Meaning                         |
+| --------- | ---------------- | ------------------------------- |
+| `[●]`     | Green (animated) | Agent actively working          |
+| `[!]`     | Yellow           | Agent needs approval/permission |
+| `[>]`     | Cyan             | Agent ready for input           |
+| `[?]`     | Dim              | Terminal session not found      |
+| `[○]`     | Gray             | Session recycled                |
 
 ## Configuration
 
@@ -174,28 +175,28 @@ keybindings:
 
 Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | shq }}` for shell-safe quoting.
 
-| Context | Variables |
-|---------|-----------|
-| `commands.spawn` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
-| `commands.batch_spawn` | Same as spawn, plus `.Prompt` |
-| `commands.recycle` | `.DefaultBranch` |
-| `keybindings.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID` |
+| Context                | Variables                                                   |
+| ---------------------- | ----------------------------------------------------------- |
+| `commands.spawn`       | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
+| `commands.batch_spawn` | Same as spawn, plus `.Prompt`                               |
+| `commands.recycle`     | `.DefaultBranch`                                            |
+| `keybindings.*.sh`     | `.Path`, `.Name`, `.Remote`, `.ID`                          |
 
 ### Configuration Options
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `repo_dirs` | `[]string` | `[]` | Directories to scan for repositories |
-| `commands.spawn` | `[]string` | `[]` | Commands after session creation |
-| `commands.batch_spawn` | `[]string` | `[]` | Commands after batch session creation |
-| `commands.recycle` | `[]string` | git fetch/checkout/reset/clean | Commands when recycling |
-| `rules` | `[]Rule` | `[]` | Repository-specific setup rules |
-| `keybindings` | `map[string]Keybinding` | `r`=recycle, `d`=delete | TUI keybindings |
-| `tui.refresh_interval` | `duration` | `15s` | Auto-refresh interval (0 to disable) |
-| `integrations.terminal.enabled` | `[]string` | `[]` | Terminal integrations (e.g., `["tmux"]`) |
-| `integrations.terminal.poll_interval` | `duration` | `500ms` | Status check frequency |
-| `messaging.topic_prefix` | `string` | `agent` | Default prefix for topic IDs |
-| `context.symlink_name` | `string` | `.hive` | Symlink name for context directories |
+| Option                                | Type                    | Default                        | Description                              |
+| ------------------------------------- | ----------------------- | ------------------------------ | ---------------------------------------- |
+| `repo_dirs`                           | `[]string`              | `[]`                           | Directories to scan for repositories     |
+| `commands.spawn`                      | `[]string`              | `[]`                           | Commands after session creation          |
+| `commands.batch_spawn`                | `[]string`              | `[]`                           | Commands after batch session creation    |
+| `commands.recycle`                    | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling                  |
+| `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
+| `keybindings`                         | `map[string]Keybinding` | `r`=recycle, `d`=delete        | TUI keybindings                          |
+| `tui.refresh_interval`                | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
+| `integrations.terminal.enabled`       | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
+| `integrations.terminal.poll_interval` | `duration`              | `500ms`                        | Status check frequency                   |
+| `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
+| `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
 
 ## Data Storage
 
@@ -353,18 +354,19 @@ This project was heavily inspired by [agent-deck](https://github.com/asheshgopla
 
 ### Global Flags
 
-| Flag | Env Variable | Default | Description |
-|------|--------------|---------|-------------|
-| `--log-level` | `HIVE_LOG_LEVEL` | `info` | Log level (debug, info, warn, error) |
-| `--log-file` | `HIVE_LOG_FILE` | - | Path to log file |
-| `--config, -c` | `HIVE_CONFIG` | `~/.config/hive/config.yaml` | Config file path |
-| `--data-dir` | `HIVE_DATA_DIR` | `~/.local/share/hive` | Data directory path |
+| Flag           | Env Variable     | Default                      | Description                          |
+| -------------- | ---------------- | ---------------------------- | ------------------------------------ |
+| `--log-level`  | `HIVE_LOG_LEVEL` | `info`                       | Log level (debug, info, warn, error) |
+| `--log-file`   | `HIVE_LOG_FILE`  | -                            | Path to log file                     |
+| `--config, -c` | `HIVE_CONFIG`    | `~/.config/hive/config.yaml` | Config file path                     |
+| `--data-dir`   | `HIVE_DATA_DIR`  | `~/.local/share/hive`        | Data directory path                  |
 
 ### `hive` (default)
 
 Launches the interactive TUI for managing sessions.
 
 **Features:**
+
 - Tree view of sessions grouped by repository
 - Real-time terminal status monitoring (with tmux integration)
 - Git status display (branch, additions, deletions)
@@ -372,6 +374,7 @@ Launches the interactive TUI for managing sessions.
 - Switch between Sessions and Messages views with `tab`
 
 **Default keybindings:**
+
 - `r` - Recycle session
 - `d` - Delete session
 - `n` - New session (when repos discovered)
@@ -383,11 +386,11 @@ Launches the interactive TUI for managing sessions.
 
 Creates a new agent session.
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--name` | `-n` | Session name |
-| `--remote` | `-r` | Git remote URL (auto-detected if not specified) |
-| `--prompt` | `-p` | AI prompt to pass to spawn command |
+| Flag       | Alias | Description                                     |
+| ---------- | ----- | ----------------------------------------------- |
+| `--name`   | `-n`  | Session name                                    |
+| `--remote` | `-r`  | Git remote URL (auto-detected if not specified) |
+| `--prompt` | `-p`  | AI prompt to pass to spawn command              |
 
 ```bash
 hive new                                    # Interactive mode
@@ -398,25 +401,25 @@ hive new -n feature-auth -p "Add OAuth2"   # Non-interactive
 
 Lists all sessions in a table format.
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 ### `hive prune`
 
 Removes recycled sessions exceeding the `max_recycled` limit.
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--all` | `-a` | Delete all recycled sessions |
+| Flag    | Alias | Description                  |
+| ------- | ----- | ---------------------------- |
+| `--all` | `-a`  | Delete all recycled sessions |
 
 ### `hive batch`
 
 Creates multiple sessions from a JSON specification.
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--file` | `-f` | Path to JSON file (reads from stdin if not provided) |
+| Flag     | Alias | Description                                          |
+| -------- | ----- | ---------------------------------------------------- |
+| `--file` | `-f`  | Path to JSON file (reads from stdin if not provided) |
 
 ```bash
 echo '{"sessions":[{"name":"task1","prompt":"Fix auth bug"}]}' | hive batch
@@ -426,8 +429,8 @@ echo '{"sessions":[{"name":"task1","prompt":"Fix auth bug"}]}' | hive batch
 
 Runs diagnostic checks on configuration and environment.
 
-| Flag | Description |
-|------|-------------|
+| Flag       | Description                      |
+| ---------- | -------------------------------- |
 | `--format` | Output format (`text` or `json`) |
 
 ### `hive ctx`
@@ -446,8 +449,8 @@ hive ctx init  # Creates .hive -> ~/.local/share/hive/context/{owner}/{repo}/
 
 Deletes files older than the specified duration.
 
-| Flag | Description |
-|------|-------------|
+| Flag           | Description                  |
+| -------------- | ---------------------------- |
 | `--older-than` | Duration (e.g., `7d`, `24h`) |
 
 ### `hive msg`
@@ -456,11 +459,11 @@ Publish and subscribe to messages for inter-agent communication.
 
 #### `hive msg pub`
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--topic` | `-t` | Topic to publish to (required) |
-| `--file` | `-f` | Read message from file |
-| `--sender` | `-s` | Override sender ID |
+| Flag       | Alias | Description                    |
+| ---------- | ----- | ------------------------------ |
+| `--topic`  | `-t`  | Topic to publish to (required) |
+| `--file`   | `-f`  | Read message from file         |
+| `--sender` | `-s`  | Override sender ID             |
 
 ```bash
 hive msg pub -t build.status "Build completed"
@@ -468,14 +471,14 @@ hive msg pub -t build.status "Build completed"
 
 #### `hive msg sub`
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--topic` | `-t` | Topic pattern (supports wildcards) |
-| `--last` | `-n` | Return only last N messages |
-| `--listen` | `-l` | Poll for new messages continuously |
-| `--wait` | `-w` | Wait for a single message and exit |
-| `--new` | - | Only unread messages |
-| `--timeout` | - | Timeout for listen/wait mode |
+| Flag        | Alias | Description                        |
+| ----------- | ----- | ---------------------------------- |
+| `--topic`   | `-t`  | Topic pattern (supports wildcards) |
+| `--last`    | `-n`  | Return only last N messages        |
+| `--listen`  | `-l`  | Poll for new messages continuously |
+| `--wait`    | `-w`  | Wait for a single message and exit |
+| `--new`     | -     | Only unread messages               |
+| `--timeout` | -     | Timeout for listen/wait mode       |
 
 ```bash
 hive msg sub -t "agent.*" --last 10
@@ -490,16 +493,16 @@ Lists all topics with message counts.
 
 Generates a unique topic ID.
 
-| Flag | Alias | Description |
-|------|-------|-------------|
-| `--prefix` | `-p` | Topic prefix |
+| Flag       | Alias | Description  |
+| ---------- | ----- | ------------ |
+| `--prefix` | `-p`  | Topic prefix |
 
 ### `hive session info`
 
 Displays information about the current session.
 
-| Flag | Description |
-|------|-------------|
+| Flag     | Description    |
+| -------- | -------------- |
 | `--json` | Output as JSON |
 
 ### `hive doc`
@@ -510,8 +513,8 @@ Access documentation and guides.
 
 Shows configuration migration information.
 
-| Flag | Description |
-|------|-------------|
+| Flag    | Description         |
+| ------- | ------------------- |
 | `--all` | Show all migrations |
 
 #### `hive doc messaging`

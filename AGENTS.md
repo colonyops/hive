@@ -5,6 +5,7 @@
 **Hive** is a CLI/TUI for managing multiple AI agent sessions in isolated git environments. Instead of manually managing worktrees, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool.
 
 Key capabilities:
+
 - **Session Management** - Create, recycle, and prune isolated git clones
 - **Terminal Integration** - Real-time status monitoring of AI agents in tmux
 - **Inter-agent Messaging** - Pub/sub communication between sessions
@@ -32,15 +33,15 @@ internal/
 
 ### Key Files
 
-| File | Purpose |
-|------|---------|
-| `main.go` | CLI entry point, global flags, command registration |
-| `internal/hive/service.go` | Service layer - coordinates sessions, git, rules |
-| `internal/core/config/config.go` | Config structs, loading, defaults |
-| `internal/core/config/validate.go` | Template data structs, validation |
-| `internal/tui/model.go` | TUI model, update loop, view rendering |
-| `internal/tui/tree_view.go` | Session tree with status indicators |
-| `internal/integration/terminal/detector.go` | AI agent status detection patterns |
+| File                                        | Purpose                                             |
+| ------------------------------------------- | --------------------------------------------------- |
+| `main.go`                                   | CLI entry point, global flags, command registration |
+| `internal/hive/service.go`                  | Service layer - coordinates sessions, git, rules    |
+| `internal/core/config/config.go`            | Config structs, loading, defaults                   |
+| `internal/core/config/validate.go`          | Template data structs, validation                   |
+| `internal/tui/model.go`                     | TUI model, update loop, view rendering              |
+| `internal/tui/tree_view.go`                 | Session tree with status indicators                 |
+| `internal/integration/terminal/detector.go` | AI agent status detection patterns                  |
 
 ## Development
 
@@ -73,6 +74,7 @@ HIVE_DATA_DIR=./.data
 ### Bubble Tea (TUI)
 
 Standard Model/Update/View pattern. Key messages:
+
 - `sessionsLoadedMsg` - Sessions fetched from store
 - `gitStatusBatchCompleteMsg` - Git status for all sessions
 - `terminalPollTickMsg` - Terminal status polling tick
@@ -81,6 +83,7 @@ Standard Model/Update/View pattern. Key messages:
 ### Configuration
 
 Two validation phases:
+
 1. **Basic** (`Validate()`) - Struct validation, required fields
 2. **Deep** (`ValidateDeep()`) - File access, template syntax, regex patterns
 
@@ -138,8 +141,8 @@ bd sync               # Sync with git
 7. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
+
 - Work is NOT complete until `git push` succeeds
 - NEVER stop before pushing - that leaves work stranded locally
 - NEVER say "ready to push when you are" - YOU must push
 - If push fails, resolve and retry until it succeeds
-
