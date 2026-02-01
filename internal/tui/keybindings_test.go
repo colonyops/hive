@@ -95,3 +95,64 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 		})
 	}
 }
+
+func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
+	handler := NewKeybindingHandler(nil, nil)
+
+	sess := session.Session{
+		ID:     "test-id",
+		Path:   "/test/path",
+		Name:   "test-name",
+		Remote: "https://github.com/test/repo",
+	}
+
+	tests := []struct {
+		name     string
+		cmdName  string
+		cmd      config.UserCommand
+		wantKey  string
+		wantHelp string
+		wantExit bool
+	}{
+		{
+			name:    "basic command",
+			cmdName: "review",
+			cmd: config.UserCommand{
+				Sh:   "send-claude {{ .Name }} /review",
+				Help: "Send to Claude for review",
+			},
+			wantKey:  ":review",
+			wantHelp: "Send to Claude for review",
+			wantExit: false,
+		},
+		{
+			name:    "command with exit",
+			cmdName: "open",
+			cmd: config.UserCommand{
+				Sh:   "open {{ .Path }}",
+				Exit: "true",
+			},
+			wantKey:  ":open",
+			wantExit: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			action := handler.ResolveUserCommand(tt.cmdName, tt.cmd, sess)
+
+			if action.Key != tt.wantKey {
+				t.Errorf("ResolveUserCommand() Key = %v, want %v", action.Key, tt.wantKey)
+			}
+			if action.Help != tt.wantHelp {
+				t.Errorf("ResolveUserCommand() Help = %v, want %v", action.Help, tt.wantHelp)
+			}
+			if action.Exit != tt.wantExit {
+				t.Errorf("ResolveUserCommand() Exit = %v, want %v", action.Exit, tt.wantExit)
+			}
+			if action.Type != ActionTypeShell {
+				t.Errorf("ResolveUserCommand() Type = %v, want %v", action.Type, ActionTypeShell)
+			}
+		})
+	}
+}

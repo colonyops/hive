@@ -58,20 +58,21 @@ const CurrentConfigVersion = "0.2.3"
 
 // Config holds the application configuration.
 type Config struct {
-	Version             string                `yaml:"version"`
-	Commands            Commands              `yaml:"commands"`
-	Git                 GitConfig             `yaml:"git"`
-	GitPath             string                `yaml:"git_path"`
-	Keybindings         map[string]Keybinding `yaml:"keybindings"`
-	Rules               []Rule                `yaml:"rules"`
-	AutoDeleteCorrupted bool                  `yaml:"auto_delete_corrupted"`
-	History             HistoryConfig         `yaml:"history"`
-	Context             ContextConfig         `yaml:"context"`
-	TUI                 TUIConfig             `yaml:"tui"`
-	Messaging           MessagingConfig       `yaml:"messaging"`
-	Integrations        IntegrationsConfig    `yaml:"integrations"`
-	RepoDirs            []string              `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
-	DataDir             string                `yaml:"-"`         // set by caller, not from config file
+	Version             string                 `yaml:"version"`
+	Commands            Commands               `yaml:"commands"`
+	Git                 GitConfig              `yaml:"git"`
+	GitPath             string                 `yaml:"git_path"`
+	Keybindings         map[string]Keybinding  `yaml:"keybindings"`
+	UserCommands        map[string]UserCommand `yaml:"usercommands"`
+	Rules               []Rule                 `yaml:"rules"`
+	AutoDeleteCorrupted bool                   `yaml:"auto_delete_corrupted"`
+	History             HistoryConfig          `yaml:"history"`
+	Context             ContextConfig          `yaml:"context"`
+	TUI                 TUIConfig              `yaml:"tui"`
+	Messaging           MessagingConfig        `yaml:"messaging"`
+	Integrations        IntegrationsConfig     `yaml:"integrations"`
+	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
+	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
 
 // HistoryConfig holds command history configuration.
@@ -149,6 +150,42 @@ type Keybinding struct {
 // ShouldExit evaluates the Exit condition.
 func (k Keybinding) ShouldExit() bool {
 	return ParseExitCondition(k.Exit)
+}
+
+// UserCommand defines a named command accessible via command palette.
+type UserCommand struct {
+	Sh      string `yaml:"sh"`      // shell command template (required)
+	Help    string `yaml:"help"`    // description shown in palette
+	Confirm string `yaml:"confirm"` // confirmation prompt (empty = no confirm)
+	Silent  bool   `yaml:"silent"`  // skip loading popup for fast commands
+	Exit    string `yaml:"exit"`    // exit hive after command (bool or $ENV_VAR)
+}
+
+// ShouldExit evaluates the Exit condition.
+func (u UserCommand) ShouldExit() bool {
+	return ParseExitCondition(u.Exit)
+}
+
+// UnmarshalYAML supports string shorthand: "cmd" → {sh: "cmd"}
+func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
+	// Try string shorthand first
+	if node.Kind == yaml.ScalarNode {
+		var sh string
+		if err := node.Decode(&sh); err != nil {
+			return err
+		}
+		u.Sh = sh
+		return nil
+	}
+
+	// Decode as struct (use alias to avoid recursion)
+	type userCommandAlias UserCommand
+	var alias userCommandAlias
+	if err := node.Decode(&alias); err != nil {
+		return err
+	}
+	*u = UserCommand(alias)
+	return nil
 }
 
 // DefaultConfig returns a Config with sensible defaults.
@@ -271,8 +308,23 @@ func (c *Config) Validate() error {
 		criterio.Run("data_dir", c.DataDir, criterio.Required[string]),
 		criterio.Run("git.status_workers", c.Git.StatusWorkers, criterio.Min(1)),
 		c.validateKeybindingsBasic(),
+		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
 	)
+}
+
+// validateUserCommandsBasic performs basic usercommand validation for the Validate() method.
+func (c *Config) validateUserCommandsBasic() error {
+	var errs criterio.FieldErrorsBuilder
+	for name, cmd := range c.UserCommands {
+		field := fmt.Sprintf("usercommands[%q]", name)
+
+		if cmd.Sh == "" {
+			errs = errs.Append(field, fmt.Errorf("sh is required"))
+		}
+	}
+
+	return errs.ToError()
 }
 
 // validateMaxRecycled checks that max_recycled values are non-negative.

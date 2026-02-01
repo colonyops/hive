@@ -30,6 +30,7 @@ const (
 	stateRunningRecycle
 	statePreviewingMessage
 	stateCreatingSession
+	stateCommandPalette
 )
 
 // Key constants for event handling.
@@ -109,6 +110,9 @@ type Model struct {
 	repoDirs        []string
 	discoveredRepos []DiscoveredRepo
 	newSessionForm  *NewSessionForm
+
+	// Command palette
+	commandPalette *CommandPalette
 
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
@@ -475,6 +479,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle modal states first
 	if m.state == stateCreatingSession {
 		return m.handleNewSessionFormKey(msg, keyStr)
+	}
+	if m.state == stateCommandPalette {
+		return m.handleCommandPaletteKey(msg, keyStr)
 	}
 	if m.state == statePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)

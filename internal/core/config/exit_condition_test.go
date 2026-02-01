@@ -146,3 +146,42 @@ func TestKeybinding_ShouldExit(t *testing.T) {
 		})
 	}
 }
+
+func TestUserCommand_ShouldExit(t *testing.T) {
+	tests := []struct {
+		name     string
+		exit     string
+		envName  string
+		envValue string
+		expected bool
+	}{
+		{
+			name:     "static true",
+			exit:     "true",
+			expected: true,
+		},
+		{
+			name:     "static false",
+			exit:     "false",
+			expected: false,
+		},
+		{
+			name:     "env var true",
+			exit:     "$HIVE_EXIT",
+			envName:  "HIVE_EXIT",
+			envValue: "true",
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.envName != "" {
+				t.Setenv(tt.envName, tt.envValue)
+			}
+
+			uc := UserCommand{Exit: tt.exit}
+			assert.Equal(t, tt.expected, uc.ShouldExit())
+		})
+	}
+}

@@ -67,6 +67,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 		validateTemplates("commands.recycle", c.Commands.Recycle, RecycleTemplateData{}),
 		c.validateRules(),
 		c.validateKeybindingTemplates(),
+		c.validateUserCommandTemplates(),
 	)
 }
 
@@ -184,6 +185,20 @@ func (c *Config) validateKeybindingTemplates() error {
 		if kb.Sh != "" {
 			if err := validateTemplate(kb.Sh, KeybindingTemplateData{}); err != nil {
 				errs = errs.Append(fmt.Sprintf("keybindings[%q]", key), fmt.Errorf("template error in sh: %w", err))
+			}
+		}
+	}
+	return errs.ToError()
+}
+
+// validateUserCommandTemplates checks template syntax for usercommand shell commands.
+// Basic usercommand structure validation is done by Validate().
+func (c *Config) validateUserCommandTemplates() error {
+	var errs criterio.FieldErrorsBuilder
+	for name, cmd := range c.UserCommands {
+		if cmd.Sh != "" {
+			if err := validateTemplate(cmd.Sh, KeybindingTemplateData{}); err != nil {
+				errs = errs.Append(fmt.Sprintf("usercommands[%q]", name), fmt.Errorf("template error in sh: %w", err))
 			}
 		}
 	}
