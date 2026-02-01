@@ -2,14 +2,14 @@
 
 # hive
 
-**Mission control for your AI coding agents**
+**The command center for your AI colony**
 
 Manage multiple AI agent sessions in isolated git environments with real-time status monitoring.
 
-[![Go Version](https://img.shields.io/github/go-mod/go-version/colonyops/hive)](https://go.dev/)
-[![License](https://img.shields.io/github/license/colonyops/hive)](LICENSE)
-[![Release](https://img.shields.io/github/v/release/colonyops/hive)](https://github.com/colonyops/hive/releases)
-[![Go Report Card](https://goreportcard.com/badge/github.com/colonyops/hive)](https://goreportcard.com/report/github.com/colonyops/hive)
+[![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=for-the-badge&logo=go&labelColor=1a1b26)](https://go.dev)
+[![License](https://img.shields.io/badge/License-MIT-9ece6a?style=for-the-badge&labelColor=1a1b26)](LICENSE)
+[![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/colonyops/hive)
+[![Release](https://img.shields.io/github/v/release/colonyops/hive?style=for-the-badge&color=e0af68&labelColor=1a1b26)](https://github.com/colonyops/hive/releases)
 
 </div>
 
