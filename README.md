@@ -304,6 +304,7 @@ Launches the interactive TUI for managing sessions.
 
 - Tree view of sessions grouped by repository
 - Real-time terminal status monitoring (with tmux integration)
+- Preview sidebar showing live tmux pane output (`v` to toggle)
 - Git status display (branch, additions, deletions)
 - Filter sessions with `/`
 - Switch between Sessions and Messages views with `tab`
@@ -311,6 +312,7 @@ Launches the interactive TUI for managing sessions.
 **Default keybindings:**
 
 - `:` - Open command palette (when user commands configured)
+- `v` - Toggle preview sidebar (shows tmux pane output)
 - `r` - Recycle session
 - `d` - Delete session
 - `n` - New session (when repos discovered)
