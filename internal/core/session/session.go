@@ -27,17 +27,24 @@ const (
 	StateCorrupted State = "corrupted"
 )
 
+// Metadata keys for terminal integration.
+const (
+	MetaTmuxSession = "tmux_session" // tmux session name
+	MetaTmuxPane    = "tmux_pane"    // tmux pane identifier
+)
+
 // Session represents an isolated git environment for an AI agent.
 type Session struct {
-	ID            string     `json:"id"`
-	Name          string     `json:"name"`
-	Slug          string     `json:"slug"`
-	Path          string     `json:"path"`
-	Remote        string     `json:"remote"`
-	State         State      `json:"state"`
-	CreatedAt     time.Time  `json:"created_at"`
-	UpdatedAt     time.Time  `json:"updated_at"`
-	LastInboxRead *time.Time `json:"last_inbox_read,omitempty"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Slug          string            `json:"slug"`
+	Path          string            `json:"path"`
+	Remote        string            `json:"remote"`
+	State         State             `json:"state"`
+	Metadata      map[string]string `json:"metadata,omitempty"` // integration data (e.g., tmux session name)
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
+	LastInboxRead *time.Time        `json:"last_inbox_read,omitempty"`
 }
 
 // InboxTopic returns the conventional inbox topic name for this session.
@@ -67,4 +74,20 @@ func (s *Session) MarkRecycled(now time.Time) {
 func (s *Session) MarkCorrupted(now time.Time) {
 	s.State = StateCorrupted
 	s.UpdatedAt = now
+}
+
+// GetMeta returns the value for the given metadata key, or empty string if not set.
+func (s *Session) GetMeta(key string) string {
+	if s.Metadata == nil {
+		return ""
+	}
+	return s.Metadata[key]
+}
+
+// SetMeta sets a metadata key-value pair, initializing the map if needed.
+func (s *Session) SetMeta(key, value string) {
+	if s.Metadata == nil {
+		s.Metadata = make(map[string]string)
+	}
+	s.Metadata[key] = value
 }

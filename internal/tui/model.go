@@ -16,6 +16,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
@@ -39,8 +40,9 @@ const (
 
 // Options configures the TUI behavior.
 type Options struct {
-	LocalRemote string          // Remote URL of current directory (empty if not in git repo)
-	MsgStore    messaging.Store // Message store for pub/sub events (optional)
+	LocalRemote     string            // Remote URL of current directory (empty if not in git repo)
+	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
+	TerminalManager *terminal.Manager // Terminal integration manager (optional)
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -67,6 +69,14 @@ type Model struct {
 	gitStatuses    *kv.Store[string, GitStatus]
 	gitWorkers     int
 	columnWidths   *ColumnWidths
+
+	// Terminal integration
+	terminalManager  *terminal.Manager
+	terminalStatuses *kv.Store[string, TerminalStatus]
+
+	// Status animation
+	animationFrame int
+	treeDelegate   TreeDelegate // Keep reference to update animation frame
 
 	// Filtering
 	localRemote string            // Remote URL of current directory (for highlighting)
@@ -145,10 +155,12 @@ type reposDiscoveredMsg struct {
 // New creates a new TUI model.
 func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	gitStatuses := kv.New[string, GitStatus]()
+	terminalStatuses := kv.New[string, TerminalStatus]()
 	columnWidths := &ColumnWidths{}
 
 	delegate := NewTreeDelegate()
 	delegate.GitStatuses = gitStatuses
+	delegate.TerminalStatuses = terminalStatuses
 	delegate.ColumnWidths = columnWidths
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -197,22 +209,25 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	msgView := NewMessagesView()
 
 	return Model{
-		cfg:          cfg,
-		service:      service,
-		list:         l,
-		handler:      handler,
-		state:        stateNormal,
-		spinner:      s,
-		gitStatuses:  gitStatuses,
-		gitWorkers:   cfg.Git.StatusWorkers,
-		columnWidths: columnWidths,
-		localRemote:  opts.LocalRemote,
-		msgStore:     opts.MsgStore,
-		msgView:      msgView,
-		topicFilter:  "*",
-		activeView:   ViewSessions,
-		copyCommand:  cfg.Commands.CopyCommand,
-		repoDirs:     cfg.RepoDirs,
+		cfg:              cfg,
+		service:          service,
+		list:             l,
+		handler:          handler,
+		state:            stateNormal,
+		spinner:          s,
+		gitStatuses:      gitStatuses,
+		gitWorkers:       cfg.Git.StatusWorkers,
+		columnWidths:     columnWidths,
+		terminalManager:  opts.TerminalManager,
+		terminalStatuses: terminalStatuses,
+		treeDelegate:     delegate,
+		localRemote:      opts.LocalRemote,
+		msgStore:         opts.MsgStore,
+		msgView:          msgView,
+		topicFilter:      "*",
+		activeView:       ViewSessions,
+		copyCommand:      cfg.Commands.CopyCommand,
+		repoDirs:         cfg.RepoDirs,
 	}
 }
 
@@ -231,6 +246,11 @@ func (m Model) Init() tea.Cmd {
 	// Scan for repositories if configured
 	if len(m.repoDirs) > 0 {
 		cmds = append(cmds, m.scanRepoDirs())
+	}
+	// Start terminal status polling and animation if integration is enabled
+	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+		cmds = append(cmds, startTerminalPollTicker(m.cfg.Integrations.Terminal.PollInterval))
+		cmds = append(cmds, scheduleAnimationTick())
 	}
 	return tea.Batch(cmds...)
 }
@@ -335,6 +355,34 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.gitStatuses.SetBatch(msg.Results)
 		m.refreshing = false
 		return m, nil
+
+	case terminalPollTickMsg:
+		// Start next poll cycle
+		var cmds []tea.Cmd
+		sessions := make([]*session.Session, len(m.allSessions))
+		for i := range m.allSessions {
+			sessions[i] = &m.allSessions[i]
+		}
+		cmds = append(cmds, fetchTerminalStatusBatch(m.terminalManager, sessions, m.gitWorkers))
+		if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+			cmds = append(cmds, startTerminalPollTicker(m.cfg.Integrations.Terminal.PollInterval))
+		}
+		return m, tea.Batch(cmds...)
+
+	case terminalStatusBatchCompleteMsg:
+		if m.terminalStatuses != nil {
+			m.terminalStatuses.SetBatch(msg.Results)
+		}
+		return m, nil
+
+	case animationTickMsg:
+		// Advance animation frame
+		m.animationFrame = (m.animationFrame + 1) % AnimationFrameCount
+		// Update the delegate with new frame
+		m.treeDelegate.AnimationFrame = m.animationFrame
+		m.list.SetDelegate(m.treeDelegate)
+		// Schedule next tick
+		return m, scheduleAnimationTick()
 
 	case actionCompleteMsg:
 		if msg.err != nil {

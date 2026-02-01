@@ -9,6 +9,7 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
@@ -20,12 +21,81 @@ const (
 
 // Status indicators for sessions.
 const (
-	statusActive   = "[●]"
-	statusRecycled = "[○]"
+	statusActive   = "[●]" // green - agent actively working
+	statusApproval = "[!]" // yellow - needs approval/permission
+	statusReady    = "[>]" // cyan - ready for next input
+	statusUnknown  = "[?]" // dim - no terminal found
+	statusRecycled = "[○]" // gray - session recycled
 )
+
+// Animation constants.
+const (
+	// AnimationFrameCount is the total number of frames in the fade animation.
+	AnimationFrameCount = 12
+)
+
+// activeAnimationColors are the colors for a subtle pulse animation.
+// Uses a narrow range for a gentle breathing effect.
+var activeAnimationColors = []lipgloss.Color{
+	lipgloss.Color("#9ece6a"), // bright green (frame 0)
+	lipgloss.Color("#93c761"), // slightly dimmer
+	lipgloss.Color("#8bc058"), // dimmer
+	lipgloss.Color("#84b94f"), // even dimmer
+	lipgloss.Color("#7db246"), // dim
+	lipgloss.Color("#76ab3d"), // dimmest (frame 5)
+	lipgloss.Color("#76ab3d"), // dimmest (frame 6) - hold
+	lipgloss.Color("#7db246"), // brightening
+	lipgloss.Color("#84b94f"), // brighter
+	lipgloss.Color("#8bc058"), // even brighter
+	lipgloss.Color("#93c761"), // almost bright
+	lipgloss.Color("#9ece6a"), // bright green (frame 11)
+}
 
 // Star indicator for current repository.
 const currentRepoIndicator = "◆"
+
+// renderStatusIndicator returns the styled status indicator for a session.
+// For active sessions with terminal integration, it uses terminal status.
+// For recycled sessions or when no terminal status is available, it falls back to session state.
+// The animFrame parameter controls the fade animation for active status (0 to AnimationFrameCount-1).
+func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styles TreeDelegateStyles, animFrame int) string {
+	// Recycled sessions always show recycled indicator
+	if state == session.StateRecycled {
+		return styles.StatusRecycled.Render(statusRecycled)
+	}
+
+	// If we have terminal status for active sessions, use it
+	if state == session.StateActive && termStatus != nil {
+		switch termStatus.Status {
+		case terminal.StatusActive:
+			return renderActiveIndicator(animFrame)
+		case terminal.StatusApproval:
+			return styles.StatusApproval.Render(statusApproval)
+		case terminal.StatusReady:
+			return styles.StatusReady.Render(statusReady)
+		case terminal.StatusMissing:
+			return styles.StatusUnknown.Render(statusUnknown)
+		}
+	}
+
+	// Default: active session without terminal status shows as unknown
+	// We only show active (green) when we have positive confirmation of activity
+	if state == session.StateActive {
+		return styles.StatusUnknown.Render(statusUnknown)
+	}
+
+	return styles.StatusRecycled.Render(statusRecycled)
+}
+
+// renderActiveIndicator renders the active status with fade animation.
+func renderActiveIndicator(frame int) string {
+	// Ensure frame is in bounds
+	if frame < 0 || frame >= len(activeAnimationColors) {
+		frame = 0
+	}
+	style := lipgloss.NewStyle().Foreground(activeAnimationColors[frame])
+	return style.Render(statusActive)
+}
 
 // TreeItem represents an item in the tree view.
 // It can be either a repo header or a session entry.
@@ -98,6 +168,9 @@ type TreeDelegateStyles struct {
 	SessionBranch  lipgloss.Style
 	SessionID      lipgloss.Style
 	StatusActive   lipgloss.Style
+	StatusApproval lipgloss.Style
+	StatusReady    lipgloss.Style
+	StatusUnknown  lipgloss.Style
 	StatusRecycled lipgloss.Style
 
 	// Selection styles
@@ -119,6 +192,9 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 		SessionBranch:  lipgloss.NewStyle().Foreground(colorGray),
 		SessionID:      lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")), // purple
 		StatusActive:   lipgloss.NewStyle().Foreground(colorGreen),
+		StatusApproval: lipgloss.NewStyle().Foreground(colorYellow),
+		StatusReady:    lipgloss.NewStyle().Foreground(colorCyan),
+		StatusUnknown:  lipgloss.NewStyle().Foreground(colorGray).Faint(true),
 		StatusRecycled: lipgloss.NewStyle().Foreground(colorGray),
 
 		Selected:       lipgloss.NewStyle().Foreground(colorBlue).Bold(true),
@@ -146,7 +222,7 @@ func RenderRepoHeader(item TreeItem, isSelected bool, styles TreeDelegateStyles)
 }
 
 // RenderSessionLine renders a session entry with tree prefix.
-func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, styles TreeDelegateStyles) string {
+func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, termStatus *TerminalStatus, styles TreeDelegateStyles, animFrame int) string {
 	// Tree prefix
 	var prefix string
 	if item.IsLastInRepo {
@@ -156,13 +232,8 @@ func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, styles 
 	}
 	prefixStyled := styles.TreeLine.Render(prefix)
 
-	// Status indicator
-	var statusStr string
-	if item.Session.State == session.StateActive {
-		statusStr = styles.StatusActive.Render(statusActive)
-	} else {
-		statusStr = styles.StatusRecycled.Render(statusRecycled)
-	}
+	// Status indicator - use terminal status for active sessions
+	statusStr := renderStatusIndicator(item.Session.State, termStatus, styles, animFrame)
 
 	// Session name
 	nameStyle := styles.SessionName
@@ -230,9 +301,11 @@ func PadRight(s string, width int) string {
 
 // TreeDelegate handles rendering of tree items in the list.
 type TreeDelegate struct {
-	Styles       TreeDelegateStyles
-	GitStatuses  *kv.Store[string, GitStatus]
-	ColumnWidths *ColumnWidths
+	Styles           TreeDelegateStyles
+	GitStatuses      *kv.Store[string, GitStatus]
+	TerminalStatuses *kv.Store[string, TerminalStatus]
+	ColumnWidths     *ColumnWidths
+	AnimationFrame   int // Current frame for status animations
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -314,13 +387,16 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
-	// Status indicator
-	var statusStr string
-	if item.Session.State == session.StateActive {
-		statusStr = d.Styles.StatusActive.Render(statusActive)
-	} else {
-		statusStr = d.Styles.StatusRecycled.Render(statusRecycled)
+	// Get terminal status if available
+	var termStatus *TerminalStatus
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.Session.ID); ok {
+			termStatus = &ts
+		}
 	}
+
+	// Status indicator - use terminal status for active sessions
+	statusStr := renderStatusIndicator(item.Session.State, termStatus, d.Styles, d.AnimationFrame)
 
 	// For recycled sessions, show simplified display
 	if item.Session.State == session.StateRecycled {

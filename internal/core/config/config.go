@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"time"
 
 	"github.com/hay-kot/criterio"
@@ -51,6 +52,7 @@ type Config struct {
 	Context             ContextConfig         `yaml:"context"`
 	TUI                 TUIConfig             `yaml:"tui"`
 	Messaging           MessagingConfig       `yaml:"messaging"`
+	Integrations        IntegrationsConfig    `yaml:"integrations"`
 	RepoDirs            []string              `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                `yaml:"-"`         // set by caller, not from config file
 }
@@ -73,6 +75,22 @@ type TUIConfig struct {
 // MessagingConfig holds messaging-related configuration.
 type MessagingConfig struct {
 	TopicPrefix string `yaml:"topic_prefix"` // default: "agent"
+}
+
+// IntegrationsConfig holds configuration for external integrations.
+type IntegrationsConfig struct {
+	Terminal TerminalConfig `yaml:"terminal"`
+}
+
+// TerminalConfig holds terminal multiplexer integration configuration.
+type TerminalConfig struct {
+	Enabled      []string      `yaml:"enabled"`       // list of enabled integrations, e.g. ["tmux"]
+	PollInterval time.Duration `yaml:"poll_interval"` // status check frequency, default 500ms
+}
+
+// IsEnabled returns true if the given integration name is in the enabled list.
+func (t TerminalConfig) IsEnabled(name string) bool {
+	return slices.Contains(t.Enabled, name)
 }
 
 // GitConfig holds git-related configuration.
@@ -193,6 +211,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Commands.CopyCommand == "" {
 		c.Commands.CopyCommand = defaultCopyCommand()
+	}
+	if c.Integrations.Terminal.PollInterval == 0 {
+		c.Integrations.Terminal.PollInterval = 500 * time.Millisecond
 	}
 }
 
