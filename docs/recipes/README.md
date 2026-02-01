@@ -18,7 +18,7 @@ Recipes for creating custom TUI commands.
 
 Recipes for automating workflows and session management.
 
-<!-- Add automation recipes here -->
+- [**Tmux Integration**](./tmux-integration.md) - Manage AI agent sessions in tmux with automated session creation, status monitoring, and convenient keybindings.
 
 ## Contributing Recipes
 
