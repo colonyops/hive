@@ -10,6 +10,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -93,15 +94,22 @@ Example: hive ctx prune --older-than 7d`,
 }
 
 func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	p := printer.Ctx(ctx)
+
+	log.Info().Str("repo", cmd.repo).Bool("shared", cmd.shared).Msg("ctx init invoked")
 
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to resolve context directory")
 		return err
 	}
 
+	log.Debug().Str("ctx_dir", ctxDir).Msg("resolved context directory")
+
 	// Create the context directory if it doesn't exist
 	if err := os.MkdirAll(ctxDir, 0o755); err != nil {
+		log.Error().Err(err).Str("ctx_dir", ctxDir).Msg("failed to create context directory")
 		return fmt.Errorf("create context directory: %w", err)
 	}
 
@@ -113,63 +121,81 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, _ := os.Readlink(symlinkPath)
 			if target == ctxDir {
+				log.Debug().Str("symlink", symlinkName).Str("target", ctxDir).Msg("symlink already exists")
 				p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
 				return nil
 			}
+			log.Warn().Str("symlink", symlinkName).Str("current_target", target).Str("expected_target", ctxDir).Msg("symlink points to wrong target")
 			return fmt.Errorf("symlink %s exists but points to %s, not %s", symlinkName, target, ctxDir)
 		}
+		log.Error().Str("path", symlinkName).Msg("path exists but is not a symlink")
 		return fmt.Errorf("%s already exists and is not a symlink", symlinkName)
 	}
 
 	if err := os.Symlink(ctxDir, symlinkPath); err != nil {
+		log.Error().Err(err).Str("symlink", symlinkName).Str("target", ctxDir).Msg("failed to create symlink")
 		return fmt.Errorf("create symlink: %w", err)
 	}
 
+	log.Info().Str("symlink", symlinkName).Str("target", ctxDir).Msg("symlink created successfully")
 	p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
 	return nil
 }
 
 func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	p := printer.Ctx(ctx)
+
+	log.Info().Str("older_than", cmd.olderThan).Msg("ctx prune invoked")
 
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to resolve context directory")
 		return err
 	}
 
 	duration, err := parseDuration(cmd.olderThan)
 	if err != nil {
+		log.Warn().Err(err).Str("duration", cmd.olderThan).Msg("invalid duration format")
 		return fmt.Errorf("invalid duration: %w", err)
 	}
 
 	cutoff := time.Now().Add(-duration)
 	count := 0
 
+	log.Debug().Str("ctx_dir", ctxDir).Time("cutoff", cutoff).Msg("pruning files")
+
 	entries, err := os.ReadDir(ctxDir)
 	if err != nil {
 		if os.IsNotExist(err) {
+			log.Debug().Str("ctx_dir", ctxDir).Msg("context directory does not exist")
 			p.Infof("Context directory does not exist")
 			return nil
 		}
+		log.Error().Err(err).Str("ctx_dir", ctxDir).Msg("failed to read directory")
 		return fmt.Errorf("read directory: %w", err)
 	}
 
 	for _, entry := range entries {
 		info, err := entry.Info()
 		if err != nil {
+			log.Warn().Err(err).Str("entry", entry.Name()).Msg("failed to get file info")
 			continue
 		}
 
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(ctxDir, entry.Name())
 			if err := os.RemoveAll(path); err != nil {
+				log.Warn().Err(err).Str("path", path).Msg("failed to remove file")
 				p.Warnf("Failed to remove %s: %v", entry.Name(), err)
 				continue
 			}
+			log.Debug().Str("path", path).Msg("removed old file")
 			count++
 		}
 	}
 
+	log.Info().Int("count", count).Str("older_than", cmd.olderThan).Msg("prune completed")
 	p.Successf("Removed %d file(s) older than %s", count, cmd.olderThan)
 	return nil
 }

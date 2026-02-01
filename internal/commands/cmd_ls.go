@@ -14,6 +14,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -52,14 +53,21 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 }
 
 func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	p := printer.Ctx(ctx)
+
+	log.Info().Bool("json", cmd.jsonOutput).Msg("ls command invoked")
 
 	sessions, err := cmd.flags.Service.ListSessions(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to list sessions")
 		return fmt.Errorf("list sessions: %w", err)
 	}
 
+	log.Debug().Int("count", len(sessions)).Msg("sessions retrieved")
+
 	if len(sessions) == 0 {
+		log.Debug().Msg("no sessions found")
 		if !cmd.jsonOutput {
 			p.Infof("No sessions found")
 		}

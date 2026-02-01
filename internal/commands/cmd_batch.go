@@ -176,10 +176,14 @@ Output is JSON with a batch ID, log file path, and results for each session.`,
 }
 
 func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	batchID := randid.Generate(6)
+
+	log.Info().Str("batch_id", batchID).Str("file", cmd.file).Msg("batch command invoked")
 
 	logger, logFile, err := cmd.setupLogger(batchID)
 	if err != nil {
+		log.Error().Err(err).Str("batch_id", batchID).Msg("failed to setup batch logger")
 		fmt.Fprintf(os.Stderr, "batch %s: failed to setup logger: %v\n", batchID, err)
 		return cmd.writeError(fmt.Errorf("setup logger: %w", err))
 	}

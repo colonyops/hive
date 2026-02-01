@@ -6,6 +6,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/commands/doctor"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -44,12 +45,19 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 }
 
 func (cmd *DoctorCmd) run(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
+	log.Info().Str("format", cmd.format).Bool("autofix", cmd.autofix).Msg("doctor command invoked")
+
 	checks := []doctor.Check{
 		doctor.NewConfigCheck(cmd.flags.Config, cmd.flags.ConfigPath),
 		doctor.NewOrphanCheck(cmd.flags.Store, cmd.flags.Config.ReposDir(), cmd.autofix),
 	}
 
+	log.Debug().Int("check_count", len(checks)).Msg("running health checks")
 	results := doctor.RunAll(ctx, checks)
+
+	passed, warned, failed := doctor.Summary(results)
+	log.Info().Int("passed", passed).Int("warned", warned).Int("failed", failed).Msg("health checks completed")
 
 	if cmd.format == "json" {
 		return cmd.outputJSON(c, results)

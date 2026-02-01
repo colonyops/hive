@@ -8,6 +8,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -60,21 +61,27 @@ Example:
 }
 
 func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	p := printer.Ctx(ctx)
 
 	args := c.Args().Slice()
 	if len(args) == 0 {
+		log.Warn().Msg("session name missing")
 		return fmt.Errorf("session name required\n\nUsage: hive new <name...>\n\nExample: hive new Fix Auth Bug")
 	}
 	name := strings.Join(args, " ")
+
+	log.Info().Str("name", name).Str("remote", cmd.remote).Str("source", cmd.source).Msg("new command invoked")
 
 	source := cmd.source
 	if source == "" {
 		var err error
 		source, err = os.Getwd()
 		if err != nil {
+			log.Error().Err(err).Msg("failed to determine source directory")
 			return fmt.Errorf("determine source directory: %w", err)
 		}
+		log.Debug().Str("source", source).Msg("using current directory as source")
 	}
 
 	opts := hive.CreateOptions{
@@ -85,9 +92,11 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 
 	sess, err := cmd.flags.Service.CreateSession(ctx, opts)
 	if err != nil {
+		log.Error().Err(err).Str("name", name).Msg("session creation failed")
 		return fmt.Errorf("create session: %w", err)
 	}
 
+	log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created successfully")
 	p.Success("Session created", sess.Path)
 	return nil
 }

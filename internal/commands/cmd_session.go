@@ -10,6 +10,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -73,7 +74,10 @@ type sessionInfoOutput struct {
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	p := printer.Ctx(ctx)
+
+	log.Info().Bool("json", cmd.jsonOutput).Msg("session info invoked")
 
 	// Detect session from current working directory
 	sessionsPath := filepath.Join(cmd.flags.DataDir, "sessions.json")
@@ -81,10 +85,12 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	detector := messaging.NewSessionDetector(sessStore)
 	sessionID, err := detector.DetectSession(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to detect session")
 		return fmt.Errorf("detect session: %w", err)
 	}
 
 	if sessionID == "" {
+		log.Debug().Msg("not in a hive session directory")
 		if cmd.jsonOutput {
 			_, _ = fmt.Fprintln(c.Root().Writer, "{\"error\":\"not in a hive session\"}")
 			return nil
@@ -94,11 +100,16 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 
+	log.Debug().Str("session_id", sessionID).Msg("detected session")
+
 	// Get full session details
 	sess, err := cmd.flags.Service.GetSession(ctx, sessionID)
 	if err != nil {
+		log.Error().Err(err).Str("session_id", sessionID).Msg("failed to get session details")
 		return fmt.Errorf("get session: %w", err)
 	}
+
+	log.Info().Str("session_id", sessionID).Str("name", sess.Name).Msg("session info retrieved")
 
 	out := c.Root().Writer
 

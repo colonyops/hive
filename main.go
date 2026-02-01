@@ -123,6 +123,9 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, err
 			}
 
+			// Attach global logger to context for command layer logging
+			ctx = log.Logger.WithContext(ctx)
+
 			cfg, err := config.Load(flags.ConfigPath, flags.DataDir)
 			if err != nil {
 				return ctx, fmt.Errorf("load config: %w", err)

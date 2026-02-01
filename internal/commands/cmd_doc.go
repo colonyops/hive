@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -55,7 +56,10 @@ Use --all to show all migrations.`,
 	}
 }
 
-func (cmd *DocCmd) runMigrate(_ context.Context, c *cli.Command) error {
+func (cmd *DocCmd) runMigrate(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
+	log.Info().Bool("all", cmd.all).Str("config_version", cmd.flags.Config.Version).Msg("doc migrate invoked")
+
 	w := c.Root().Writer
 	configVersion := cmd.flags.Config.Version
 	printMigrationGuide(w, configVersion, cmd.all)
@@ -74,7 +78,10 @@ using hive's messaging system.`,
 	}
 }
 
-func (cmd *DocCmd) runMessaging(_ context.Context, c *cli.Command) error {
+func (cmd *DocCmd) runMessaging(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
+	log.Info().Msg("doc messaging invoked")
+
 	w := c.Root().Writer
 	printMessagingGuide(w)
 	return nil

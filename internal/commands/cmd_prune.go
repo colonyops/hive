@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -45,15 +46,20 @@ Active sessions are not affected.`,
 }
 
 func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	p := printer.Ctx(ctx)
 
 	all := c.Bool("all")
+	log.Info().Bool("all", all).Msg("prune command invoked")
+
 	count, err := cmd.flags.Service.Prune(ctx, all)
 	if err != nil {
+		log.Error().Err(err).Bool("all", all).Msg("prune operation failed")
 		return fmt.Errorf("prune sessions: %w", err)
 	}
 
 	if count == 0 {
+		log.Debug().Bool("all", all).Msg("no sessions to prune")
 		if all {
 			p.Infof("No recycled sessions to prune")
 		} else {
@@ -62,6 +68,7 @@ func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 
+	log.Info().Int("count", count).Bool("all", all).Msg("sessions pruned successfully")
 	p.Successf("Pruned %d session(s)", count)
 
 	return nil

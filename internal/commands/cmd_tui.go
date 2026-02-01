@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 
 	"github.com/hay-kot/hive/internal/hive"
@@ -38,8 +39,14 @@ func (cmd *TuiCmd) Run(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
+	log := zerolog.Ctx(ctx)
+	log.Info().Msg("TUI command invoked")
+
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.flags.Service.DetectRemote(ctx, ".")
+	if localRemote != "" {
+		log.Debug().Str("local_remote", localRemote).Msg("detected local repository")
+	}
 
 	// Create message store for pub/sub events
 	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
@@ -48,10 +55,12 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Create terminal integration manager if configured
 	var termMgr *terminal.Manager
 	if len(cmd.flags.Config.Integrations.Terminal.Enabled) > 0 {
+		log.Debug().Strs("enabled_integrations", cmd.flags.Config.Integrations.Terminal.Enabled).Msg("initializing terminal integrations")
 		termMgr = terminal.NewManager(cmd.flags.Config.Integrations.Terminal.Enabled)
 		// Register tmux integration
 		tmuxIntegration := tmux.New()
 		if tmuxIntegration.Available() {
+			log.Debug().Msg("tmux integration available")
 			termMgr.Register(tmuxIntegration)
 		}
 	}
@@ -75,6 +84,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 		// Handle pending session creation
 		if pending := model.PendingCreate(); pending != nil {
+			log.Info().Str("name", pending.Name).Str("remote", pending.Remote).Msg("creating session from TUI")
 			source, _ := os.Getwd()
 			_, err := cmd.flags.Service.CreateSession(ctx, hive.CreateOptions{
 				Name:   pending.Name,
@@ -82,6 +92,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 				Source: source,
 			})
 			if err != nil {
+				log.Error().Err(err).Str("name", pending.Name).Msg("session creation from TUI failed")
 				fmt.Printf("Error creating session: %v\n", err)
 				fmt.Println("Press Enter to continue...")
 				_, _ = fmt.Scanln()
@@ -89,6 +100,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			continue // Restart TUI
 		}
 
+		log.Debug().Msg("TUI exited normally")
 		break // Normal exit
 	}
 

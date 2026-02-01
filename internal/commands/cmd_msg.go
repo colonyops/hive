@@ -14,6 +14,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/pkg/randid"
+	"github.com/rs/zerolog"
 	"github.com/urfave/cli/v3"
 )
 
@@ -228,7 +229,10 @@ Examples:
 	}
 }
 
-func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
+func (cmd *MsgCmd) runTopic(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
+	log.Debug().Str("prefix", cmd.topicPrefix).Msg("topic generation invoked")
+
 	// Determine prefix: flag override > config > default "agent"
 	prefix := cmd.flags.Config.Messaging.TopicPrefix
 	if c.IsSet("prefix") {
@@ -244,32 +248,44 @@ func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
 		topicID = id
 	}
 
+	log.Debug().Str("topic_id", topicID).Msg("generated topic ID")
 	_, err := fmt.Fprintln(c.Root().Writer, topicID)
 	return err
 }
 
 func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	store := cmd.getMsgStore()
+
+	log.Info().Str("topic", cmd.pubTopic).Str("sender", cmd.pubSender).Msg("msg pub invoked")
 
 	// Determine message content
 	var payload string
+	var source string
 	switch {
 	case c.NArg() >= 1:
 		payload = c.Args().Get(0)
+		source = "arg"
 	case cmd.pubFile != "":
 		data, err := os.ReadFile(cmd.pubFile)
 		if err != nil {
+			log.Error().Err(err).Str("file", cmd.pubFile).Msg("failed to read message file")
 			return fmt.Errorf("read file: %w", err)
 		}
 		payload = string(data)
+		source = "file"
 	default:
 		// Read from stdin
 		data, err := io.ReadAll(os.Stdin)
 		if err != nil {
+			log.Error().Err(err).Msg("failed to read message from stdin")
 			return fmt.Errorf("read stdin: %w", err)
 		}
 		payload = string(data)
+		source = "stdin"
 	}
+
+	log.Debug().Str("source", source).Int("payload_size", len(payload)).Msg("message content loaded")
 
 	msg := messaging.Message{
 		Topic:     cmd.pubTopic,
@@ -279,13 +295,16 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 	}
 
 	if err := store.Publish(ctx, msg); err != nil {
+		log.Error().Err(err).Str("topic", cmd.pubTopic).Msg("failed to publish message")
 		return fmt.Errorf("publish message: %w", err)
 	}
 
+	log.Info().Str("topic", cmd.pubTopic).Str("session_id", msg.SessionID).Msg("message published successfully")
 	return nil
 }
 
 func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
 	store := cmd.getMsgStore()
 
 	topic := cmd.subTopic
@@ -293,19 +312,30 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		topic = "*"
 	}
 
+	log.Info().
+		Str("topic", topic).
+		Bool("listen", cmd.subListen).
+		Bool("wait", cmd.subWait).
+		Bool("new", cmd.subNew).
+		Int("last", cmd.subLast).
+		Msg("msg sub invoked")
+
 	// Determine since timestamp for --new flag
 	since := time.Time{}
 	if cmd.subNew {
 		since = cmd.getLastInboxRead(ctx, topic)
+		log.Debug().Time("since", since).Msg("filtering for new messages only")
 	}
 
 	// Wait mode: wait for a single message and exit
 	if cmd.subWait {
+		log.Debug().Msg("entering wait mode")
 		return cmd.waitForMessage(ctx, c, store, topic, since)
 	}
 
 	// Listen mode: poll for new messages
 	if cmd.subListen {
+		log.Debug().Msg("entering listen mode")
 		return cmd.listenForMessages(ctx, c, store, topic, since)
 	}
 
@@ -313,10 +343,14 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 	messages, err := store.Subscribe(ctx, topic, since)
 	if err != nil {
 		if errors.Is(err, messaging.ErrTopicNotFound) {
+			log.Debug().Str("topic", topic).Msg("no messages found for topic")
 			return nil // No messages, no output
 		}
+		log.Error().Err(err).Str("topic", topic).Msg("failed to subscribe to topic")
 		return fmt.Errorf("subscribe: %w", err)
 	}
+
+	log.Debug().Int("count", len(messages)).Str("topic", topic).Msg("messages retrieved")
 
 	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
 	if !cmd.subPeek {
@@ -326,6 +360,7 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 	// Apply --last N limit if specified
 	if cmd.subLast > 0 && len(messages) > cmd.subLast {
 		messages = messages[len(messages)-cmd.subLast:]
+		log.Debug().Int("limited_count", len(messages)).Msg("applied last N limit")
 	}
 
 	return cmd.printMessages(c.Root().Writer, messages)
@@ -423,14 +458,21 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store *js
 }
 
 func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
+	log := zerolog.Ctx(ctx)
+	log.Info().Msg("msg list invoked")
+
 	store := cmd.getMsgStore()
 
 	topics, err := store.List(ctx)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to list topics")
 		return fmt.Errorf("list topics: %w", err)
 	}
 
+	log.Debug().Int("count", len(topics)).Msg("topics retrieved")
+
 	if len(topics) == 0 {
+		log.Debug().Msg("no topics found")
 		return nil // No topics, no output
 	}
 
