@@ -84,11 +84,13 @@ func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session
 		listItems[i] = entries[i]
 	}
 
-	// Calculate list height (max 10 items or available height)
-	listHeight := min(len(entries), 10)
+	// Use a fixed tall height for the list to show many items
+	// This is the viewport height in lines (each item is 1 line tall)
+	listHeight := 15
 
 	delegate := commandItemDelegate{}
 	l := list.New(listItems, delegate, width-6, listHeight)
+	l.SetSize(width-6, listHeight)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
@@ -169,12 +171,11 @@ func (p *CommandPalette) Overlay(background string, width, height int) string {
 	bgLayer := lipgloss.NewLayer(background)
 	modalLayer := lipgloss.NewLayer(modal)
 
-	// Center the modal
+	// Position modal: horizontally centered, anchored near top
 	modalW := lipgloss.Width(modal)
-	modalH := lipgloss.Height(modal)
 	centerX := (width - modalW) / 2
-	centerY := (height - modalH) / 2
-	modalLayer.X(centerX).Y(centerY).Z(1)
+	topY := 3 // Anchor near top, below banner
+	modalLayer.X(centerX).Y(topY).Z(1)
 
 	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
 	return compositor.Render()
