@@ -336,6 +336,55 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 	if since.IsZero() {
 		since = time.Now()
 	}
+
+	// Try to use watcher for event-driven updates
+	watcher, err := jsonfile.NewTopicWatcher(store.TopicsDir())
+	if err == nil {
+		defer watcher.Close() //nolint:errcheck
+		return cmd.listenWithWatcher(ctx, c, store, watcher, topic, since, deadline)
+	}
+	// Fall back to polling
+	return cmd.listenWithPolling(ctx, c, store, topic, since, deadline)
+}
+
+func (cmd *MsgCmd) listenWithWatcher(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, watcher *jsonfile.TopicWatcher, topic string, since time.Time, deadline time.Time) error {
+	watchCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+
+	events, err := watcher.Watch(watchCtx, topic)
+	if err != nil {
+		// Fall back to polling on watch error
+		return cmd.listenWithPolling(ctx, c, store, topic, since, deadline)
+	}
+
+	for {
+		select {
+		case <-watchCtx.Done():
+			if errors.Is(watchCtx.Err(), context.DeadlineExceeded) {
+				return nil // Timeout reached, exit silently
+			}
+			return watchCtx.Err()
+		case _, ok := <-events:
+			if !ok {
+				return nil // Channel closed
+			}
+
+			messages, err := store.Subscribe(ctx, topic, since)
+			if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
+				return fmt.Errorf("subscribe: %w", err)
+			}
+
+			if len(messages) > 0 {
+				if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
+					return err
+				}
+				since = messages[len(messages)-1].CreatedAt
+			}
+		}
+	}
+}
+
+func (cmd *MsgCmd) listenWithPolling(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, topic string, since time.Time, deadline time.Time) error {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 
@@ -383,6 +432,53 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store *js
 	if since.IsZero() {
 		since = time.Now()
 	}
+
+	// Try to use watcher for event-driven updates
+	watcher, err := jsonfile.NewTopicWatcher(store.TopicsDir())
+	if err == nil {
+		defer watcher.Close() //nolint:errcheck
+		return cmd.waitWithWatcher(ctx, c, store, watcher, topic, since, deadline)
+	}
+	// Fall back to polling
+	return cmd.waitWithPolling(ctx, c, store, topic, since, deadline)
+}
+
+func (cmd *MsgCmd) waitWithWatcher(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, watcher *jsonfile.TopicWatcher, topic string, since time.Time, deadline time.Time) error {
+	watchCtx, cancel := context.WithDeadline(ctx, deadline)
+	defer cancel()
+
+	events, err := watcher.Watch(watchCtx, topic)
+	if err != nil {
+		// Fall back to polling on watch error
+		return cmd.waitWithPolling(ctx, c, store, topic, since, deadline)
+	}
+
+	for {
+		select {
+		case <-watchCtx.Done():
+			if errors.Is(watchCtx.Err(), context.DeadlineExceeded) {
+				return fmt.Errorf("timeout waiting for message on topic %q", topic)
+			}
+			return watchCtx.Err()
+		case _, ok := <-events:
+			if !ok {
+				return fmt.Errorf("watch channel closed while waiting for message on topic %q", topic)
+			}
+
+			messages, err := store.Subscribe(ctx, topic, since)
+			if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
+				return fmt.Errorf("subscribe: %w", err)
+			}
+
+			if len(messages) > 0 {
+				// Return only the first message and exit
+				return cmd.printMessages(c.Root().Writer, messages[:1])
+			}
+		}
+	}
+}
+
+func (cmd *MsgCmd) waitWithPolling(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, topic string, since time.Time, deadline time.Time) error {
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
 

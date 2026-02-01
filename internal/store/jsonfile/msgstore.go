@@ -349,3 +349,33 @@ func (s *MsgStore) saveTopic(topic messaging.Topic) error {
 
 	return nil
 }
+
+// TopicsDir returns the topics directory path.
+func (s *MsgStore) TopicsDir() string {
+	return s.topicsDir
+}
+
+// WatchableMsgStore combines MsgStore with TopicWatcher for event-driven subscriptions.
+type WatchableMsgStore struct {
+	*MsgStore
+	*TopicWatcher
+}
+
+// NewWatchableMsgStore creates a new message store with file watching support.
+func NewWatchableMsgStore(topicsDir string) (*WatchableMsgStore, error) {
+	store := NewMsgStore(topicsDir)
+	watcher, err := NewTopicWatcher(topicsDir)
+	if err != nil {
+		return nil, err
+	}
+
+	return &WatchableMsgStore{
+		MsgStore:     store,
+		TopicWatcher: watcher,
+	}, nil
+}
+
+// Close closes the watcher. The underlying MsgStore doesn't need closing.
+func (w *WatchableMsgStore) Close() error {
+	return w.TopicWatcher.Close()
+}

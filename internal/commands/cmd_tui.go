@@ -41,10 +41,20 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.flags.Service.DetectRemote(ctx, ".")
 
-	// Create message store for pub/sub events
+	// Create watchable message store for pub/sub events with fsnotify support
 	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
-	msgStore := jsonfile.NewMsgStore(topicsDir)
+	watchableStore, err := jsonfile.NewWatchableMsgStore(topicsDir)
+	if err != nil {
+		// Fall back to regular store without watching
+		msgStore := jsonfile.NewMsgStore(topicsDir)
+		return cmd.runTUI(ctx, localRemote, msgStore, nil)
+	}
+	defer watchableStore.Close() //nolint:errcheck
 
+	return cmd.runTUI(ctx, localRemote, watchableStore.MsgStore, watchableStore.TopicWatcher)
+}
+
+func (cmd *TuiCmd) runTUI(ctx context.Context, localRemote string, msgStore *jsonfile.MsgStore, watcher *jsonfile.TopicWatcher) error {
 	// Create terminal integration manager if configured
 	var termMgr *terminal.Manager
 	if len(cmd.flags.Config.Integrations.Terminal.Enabled) > 0 {
@@ -60,6 +70,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		opts := tui.Options{
 			LocalRemote:     localRemote,
 			MsgStore:        msgStore,
+			MsgWatcher:      watcher,
 			TerminalManager: termMgr,
 		}
 

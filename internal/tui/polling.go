@@ -17,6 +17,16 @@ type messagesLoadedMsg struct {
 	err      error
 }
 
+// topicChangedMsg is sent when a topic file changes (via fsnotify).
+type topicChangedMsg struct {
+	topic string
+}
+
+// watchStartedMsg is sent when watching begins successfully.
+type watchStartedMsg struct {
+	events <-chan messaging.TopicEvent
+}
+
 // pollTickMsg is sent to trigger the next poll.
 type pollTickMsg struct{}
 
@@ -51,6 +61,32 @@ func schedulePollTick() tea.Cmd {
 	return tea.Tick(messagesPollInterval, func(time.Time) tea.Msg {
 		return pollTickMsg{}
 	})
+}
+
+// startWatching returns a command that starts watching for topic changes.
+// If the store supports watching, it returns the events channel.
+func startWatching(watcher messaging.Watcher, pattern string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		events, err := watcher.Watch(ctx, pattern)
+		if err != nil {
+			// Fall back to polling if watching fails
+			return pollTickMsg{}
+		}
+		return watchStartedMsg{events: events}
+	}
+}
+
+// listenForTopicChanges returns a command that listens for the next topic change event.
+func listenForTopicChanges(events <-chan messaging.TopicEvent) tea.Cmd {
+	return func() tea.Msg {
+		event, ok := <-events
+		if !ok {
+			// Channel closed, fall back to polling
+			return pollTickMsg{}
+		}
+		return topicChangedMsg{topic: event.Topic}
+	}
 }
 
 // scheduleSessionRefresh returns a command that schedules the next session refresh.

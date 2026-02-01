@@ -42,6 +42,7 @@ const (
 type Options struct {
 	LocalRemote     string            // Remote URL of current directory (empty if not in git repo)
 	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
+	MsgWatcher      messaging.Watcher // Watcher for event-driven message updates (optional)
 	TerminalManager *terminal.Manager // Terminal integration manager (optional)
 }
 
@@ -94,10 +95,12 @@ type Model struct {
 
 	// Messages
 	msgStore     messaging.Store
+	msgWatcher   messaging.Watcher // optional, for event-driven updates
 	msgView      *MessagesView
 	allMessages  []messaging.Message
 	lastPollTime time.Time
 	topicFilter  string
+	watchEvents  <-chan messaging.TopicEvent // active watch channel
 
 	// Message preview
 	previewModal MessagePreviewModal
@@ -226,6 +229,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		treeDelegate:     delegate,
 		localRemote:      opts.LocalRemote,
 		msgStore:         opts.MsgStore,
+		msgWatcher:       opts.MsgWatcher,
 		msgView:          msgView,
 		topicFilter:      "*",
 		activeView:       ViewSessions,
@@ -237,10 +241,15 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSessions(), m.spinner.Tick}
-	// Start message polling if we have a store
+	// Start message watching/polling if we have a store
 	if m.msgStore != nil {
 		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
-		cmds = append(cmds, schedulePollTick())
+		// Prefer watching over polling if watcher is available
+		if m.msgWatcher != nil {
+			cmds = append(cmds, startWatching(m.msgWatcher, m.topicFilter))
+		} else {
+			cmds = append(cmds, schedulePollTick())
+		}
 	}
 	// Start session refresh timer
 	if cmd := m.scheduleSessionRefresh(); cmd != nil {
@@ -320,8 +329,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastPollTime = time.Now()
 		return m, nil
 
+	case watchStartedMsg:
+		// Store the events channel and start listening
+		m.watchEvents = msg.events
+		return m, listenForTopicChanges(msg.events)
+
+	case topicChangedMsg:
+		// Topic changed, reload messages and continue listening
+		var cmds []tea.Cmd
+		if m.msgStore != nil {
+			cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, m.lastPollTime))
+		}
+		if m.watchEvents != nil {
+			cmds = append(cmds, listenForTopicChanges(m.watchEvents))
+		}
+		return m, tea.Batch(cmds...)
+
 	case pollTickMsg:
-		// Only poll if messages are visible
+		// Only poll if watching is not active and messages are visible
+		if m.watchEvents != nil {
+			// Watching is active, no need to poll
+			return m, nil
+		}
 		if m.shouldPollMessages() && m.msgStore != nil {
 			return m, tea.Batch(
 				loadMessages(m.msgStore, m.topicFilter, m.lastPollTime),
