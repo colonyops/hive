@@ -2,7 +2,6 @@ package terminal
 
 import (
 	"strings"
-	"time"
 )
 
 // Detector detects AI tool status from terminal content.
@@ -48,21 +47,23 @@ var whimsicalWords = []string{
 
 // IsBusy returns true if the terminal content indicates the agent is actively working.
 func (d *Detector) IsBusy(content string) bool {
-	lower := strings.ToLower(content)
+	// Only check the last few lines where status indicators appear
+	lines := getLastNonEmptyLines(content, 5)
+	recentContent := strings.Join(lines, "\n")
+	recentLower := strings.ToLower(recentContent)
 
-	// Check for explicit busy indicators
+	// Check for explicit busy indicators (most reliable)
 	busyIndicators := []string{
 		"ctrl+c to interrupt",
 		"esc to interrupt",
 	}
 	for _, indicator := range busyIndicators {
-		if strings.Contains(lower, indicator) {
+		if strings.Contains(recentLower, indicator) {
 			return true
 		}
 	}
 
-	// Check for spinner characters in last few lines
-	lines := getLastNonEmptyLines(content, 5)
+	// Check for spinner characters in recent lines
 	for _, line := range lines {
 		// Skip lines starting with box-drawing characters (UI borders)
 		trimmedLine := strings.TrimSpace(line)
@@ -79,19 +80,31 @@ func (d *Detector) IsBusy(content string) bool {
 		}
 	}
 
-	// Check for whimsical thinking words with ellipsis (e.g., "pondering…" or "clauding...")
-	for _, word := range whimsicalWords {
-		// Check for word followed by ellipsis (unicode or ascii)
-		if strings.Contains(lower, word+"…") || strings.Contains(lower, word+"...") {
-			return true
+	// Check for whimsical thinking words with ellipsis in recent content only
+	// These must appear at the start of a line or after a spinner (status line format)
+	for _, line := range lines {
+		lineLower := strings.ToLower(strings.TrimSpace(line))
+		for _, word := range whimsicalWords {
+			// Check for word followed by ellipsis at reasonable position
+			pattern := word + "…"
+			patternAscii := word + "..."
+			if strings.HasPrefix(lineLower, pattern) || strings.HasPrefix(lineLower, patternAscii) {
+				return true
+			}
+			// Also check after spinner chars (e.g., "⠙ pondering…")
+			for _, spinner := range spinnerChars {
+				if strings.Contains(line, spinner+" "+word) {
+					return true
+				}
+			}
 		}
 	}
 
-	// Check for thinking indicator with timing info
-	if strings.Contains(lower, "thinking") && strings.Contains(lower, "tokens") {
+	// Check for thinking indicator with timing info (e.g., "Thinking... (45s · 1234 tokens)")
+	if strings.Contains(recentLower, "thinking") && strings.Contains(recentLower, "tokens") {
 		return true
 	}
-	if strings.Contains(lower, "connecting") && strings.Contains(lower, "tokens") {
+	if strings.Contains(recentLower, "connecting") && strings.Contains(recentLower, "tokens") {
 		return true
 	}
 
@@ -225,34 +238,20 @@ func (d *Detector) IsWaiting(content string) bool {
 	return false
 }
 
-// activityThreshold is how recently activity must have occurred to consider
-// the terminal as potentially active (even without explicit busy indicators).
-const activityThreshold = 2 * time.Second
-
-// DetectStatus returns the detected status based on terminal content and activity.
-// lastActivity is the unix timestamp of the last terminal activity.
-// hasActivity indicates if activity changed since the last check.
+// DetectStatus returns the detected status based on terminal content.
+// Activity parameters are kept for API compatibility but not used -
+// content-based detection is more reliable than activity timestamps
+// which can trigger on cursor blinks, scrolling, etc.
 func (d *Detector) DetectStatus(content string, lastActivity int64, hasActivity bool) Status {
+	// Unused parameters kept for API compatibility
+	_ = lastActivity
+	_ = hasActivity
+
 	if d.IsBusy(content) {
 		return StatusActive
 	}
 	if d.IsWaiting(content) {
 		return StatusWaiting
-	}
-
-	// Check for recent activity: if the terminal was active recently and we haven't
-	// detected a waiting prompt, assume the agent is still working.
-	// This handles cases where text is being output without spinners/interrupt indicators.
-	if lastActivity > 0 {
-		activityTime := time.Unix(lastActivity, 0)
-		if time.Since(activityTime) < activityThreshold {
-			return StatusActive
-		}
-	}
-
-	// Also consider hasActivity - if activity changed between polls, likely still working
-	if hasActivity {
-		return StatusActive
 	}
 
 	return StatusIdle

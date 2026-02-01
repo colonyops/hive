@@ -2,7 +2,6 @@ package terminal
 
 import (
 	"testing"
-	"time"
 )
 
 func TestDetector_IsBusy(t *testing.T) {
@@ -227,40 +226,16 @@ func TestDetector_DetectStatus(t *testing.T) {
 			want:    StatusWaiting,
 		},
 		{
-			name:    "idle - regular output, no recent activity",
+			name:    "idle - regular output",
 			tool:    "claude",
 			content: "Here is the result:\nfunction foo() {}",
 			want:    StatusIdle,
 		},
 		{
-			name:         "active - recent activity timestamp",
-			tool:         "claude",
-			content:      "Here is the result:\nfunction foo() {}",
-			lastActivity: time.Now().Unix(),
-			want:         StatusActive,
-		},
-		{
-			name:        "active - activity changed",
-			tool:        "claude",
-			content:     "Here is the result:\nfunction foo() {}",
-			hasActivity: true,
-			want:        StatusActive,
-		},
-		{
-			name:         "idle - old activity timestamp",
-			tool:         "claude",
-			content:      "Here is the result:\nfunction foo() {}",
-			lastActivity: time.Now().Add(-5 * time.Second).Unix(),
-			hasActivity:  false,
-			want:         StatusIdle,
-		},
-		{
-			name:         "waiting overrides activity",
-			tool:         "claude",
-			content:      "Done.\n❯",
-			lastActivity: time.Now().Unix(),
-			hasActivity:  true,
-			want:         StatusWaiting,
+			name:    "waiting - prompt character",
+			tool:    "claude",
+			content: "Done.\n❯",
+			want:    StatusWaiting,
 		},
 	}
 
