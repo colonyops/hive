@@ -187,8 +187,8 @@ func (tw *TopicWatcher) notifySubscribers(topic string) {
 		Timestamp: time.Now(),
 	}
 
-	tw.mu.RLock()
-	defer tw.mu.RUnlock()
+	tw.mu.Lock()
+	defer tw.mu.Unlock()
 
 	for pattern, subs := range tw.subscribers {
 		if matchesPattern(pattern, topic) {
