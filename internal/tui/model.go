@@ -1096,7 +1096,8 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	var previewContent string
 	if selected != nil {
 		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
-			previewContent = status.PaneContent
+			// Take the last N lines to show most recent output
+			previewContent = tailLines(status.PaneContent, contentHeight)
 		} else {
 			previewContent = "No pane content available"
 		}
@@ -1119,6 +1120,18 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 
 	// Join horizontally
 	return lipgloss.JoinHorizontal(lipgloss.Top, listView, previewView)
+}
+
+// tailLines returns the last n lines from the input string.
+func tailLines(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	lines := strings.Split(s, "\n")
+	if len(lines) <= n {
+		return s
+	}
+	return strings.Join(lines[len(lines)-n:], "\n")
 }
 
 // startRecycle returns a command that starts the recycle operation with streaming output.
