@@ -14,11 +14,11 @@ import (
 	"github.com/hay-kot/hive/internal/commands"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/core/logging"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/pkg/executil"
-	"github.com/hay-kot/hive/pkg/utils"
 )
 
 var (
@@ -37,8 +37,33 @@ func build() string {
 	return fmt.Sprintf("%s (%s) %s", version, short, date)
 }
 
+// getLogFilePath returns the path to the log file based on environment.
+// Dev builds (version="dev") log to hive-dev.log, production to hive.log.
+func getLogFilePath() (string, error) {
+	dataHome := os.Getenv("XDG_DATA_HOME")
+	if dataHome == "" {
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return "", fmt.Errorf("get user home: %w", err)
+		}
+		dataHome = filepath.Join(home, ".local", "share")
+	}
+
+	logDir := filepath.Join(dataHome, "hive", "logs")
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
+		return "", fmt.Errorf("create log directory: %w", err)
+	}
+
+	filename := "hive.log"
+	if version == "dev" {
+		filename = "hive-dev.log"
+	}
+
+	return filepath.Join(logDir, filename), nil
+}
+
 func main() {
-	if err := setupLogger("info", "", nil); err != nil {
+	if err := setupLogger("info", "", false); err != nil {
 		panic(err)
 	}
 
@@ -47,8 +72,6 @@ func main() {
 		ctx   = printer.NewContext(context.Background(), p)
 		flags = &commands.Flags{}
 	)
-
-	var deferredLogs *utils.DeferredWriter
 
 	app := &cli.Command{
 		Name:      "hive",
@@ -96,14 +119,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Detect TUI mode: no subcommand means TUI (default action)
 			isTUI := len(c.Args().Slice()) == 0
 
-			// In TUI mode, buffer logs to display after exit
-			var deferred io.Writer
-			if isTUI {
-				deferredLogs = &utils.DeferredWriter{}
-				deferred = deferredLogs
-			}
-
-			if err := setupLogger(flags.LogLevel, flags.LogFile, deferred); err != nil {
+			if err := setupLogger(flags.LogLevel, flags.LogFile, isTUI); err != nil {
 				return ctx, err
 			}
 
@@ -158,53 +174,49 @@ Run 'hive new' to create a new session from the current repository.`,
 		exitCode = 1
 	}
 
-	// Flush deferred logs to console after TUI exits
-	if deferredLogs != nil {
-		if err := deferredLogs.Flush(zerolog.ConsoleWriter{Out: os.Stderr}); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to flush logs: %v\n", err)
-		}
-	}
-
 	os.Exit(exitCode)
 }
 
-func setupLogger(level string, logFile string, deferred io.Writer) error {
+func setupLogger(level string, logFile string, isTUI bool) error {
 	parsedLevel, err := zerolog.ParseLevel(level)
 	if err != nil {
 		return fmt.Errorf("failed to parse log level: %w", err)
 	}
 
-	var output io.Writer = zerolog.ConsoleWriter{Out: os.Stderr}
-
+	// Determine log file path
+	var filePath string
 	if logFile != "" {
-		// Create log directory if it doesn't exist
-		logDir := filepath.Dir(logFile)
-		if err := os.MkdirAll(logDir, 0o755); err != nil {
-			return fmt.Errorf("failed to create log directory: %w", err)
-		}
-
-		// Open log file
-		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+		// User-specified log file
+		filePath = logFile
+	} else {
+		// Default log file path (dev vs prod)
+		defaultPath, err := getLogFilePath()
 		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
+			return fmt.Errorf("get log file path: %w", err)
 		}
-
-		if deferred != nil {
-			// TUI mode with explicit log file - write to both file and deferred buffer
-			output = io.MultiWriter(file, deferred)
-		} else {
-			// Write to both console and file
-			output = io.MultiWriter(
-				zerolog.ConsoleWriter{Out: os.Stderr},
-				file,
-			)
-		}
-	} else if deferred != nil {
-		// TUI mode without log file - buffer for display after exit
-		output = deferred
+		filePath = defaultPath
 	}
 
-	log.Logger = log.Output(output).Level(parsedLevel)
+	// Open log file
+	file, err := os.OpenFile(filePath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
+	if err != nil {
+		return fmt.Errorf("failed to open log file: %w", err)
+	}
+
+	var output io.Writer
+	if isTUI {
+		// TUI mode: log to file only (no console output)
+		output = file
+	} else {
+		// CLI mode: log to both console and file
+		output = io.MultiWriter(
+			zerolog.ConsoleWriter{Out: os.Stderr},
+			file,
+		)
+	}
+
+	// Install context hook for automatic session_id/agent_id extraction
+	log.Logger = log.Output(output).Level(parsedLevel).Hook(logging.ContextHook{})
 
 	return nil
 }
