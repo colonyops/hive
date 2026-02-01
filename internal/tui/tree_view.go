@@ -78,9 +78,10 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styl
 		}
 	}
 
-	// Default: active session without terminal status
+	// Default: active session without terminal status shows as idle
+	// We only show active (green) when we have positive confirmation of activity
 	if state == session.StateActive {
-		return renderActiveIndicator(animFrame)
+		return styles.StatusIdle.Render(statusIdle)
 	}
 
 	return styles.StatusRecycled.Render(statusRecycled)

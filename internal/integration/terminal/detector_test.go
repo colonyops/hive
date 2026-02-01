@@ -48,6 +48,36 @@ func TestDetector_IsBusy(t *testing.T) {
 			content: "",
 			want:    false,
 		},
+		{
+			name:    "asterisk spinner",
+			tool:    "claude",
+			content: "Some output\n✳ Processing...",
+			want:    true,
+		},
+		{
+			name:    "whimsical word with ellipsis",
+			tool:    "claude",
+			content: "Some output\n⠙ pondering…",
+			want:    true,
+		},
+		{
+			name:    "whimsical word clauding",
+			tool:    "claude",
+			content: "Some output\nclauding...",
+			want:    true,
+		},
+		{
+			name:    "connecting with tokens",
+			tool:    "claude",
+			content: "Connecting to API (42 tokens used)",
+			want:    true,
+		},
+		{
+			name:    "box drawing line - not busy",
+			tool:    "claude",
+			content: "│ Some permission dialog\n│ ⠙ not a spinner",
+			want:    false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -114,6 +144,42 @@ func TestDetector_IsWaiting(t *testing.T) {
 			tool:    "claude",
 			content: "Here is the code:\nfunction hello() { }",
 			want:    false,
+		},
+		{
+			name:    "box drawing permission dialog",
+			tool:    "claude",
+			content: "╭─ Permission ─╮\n│ Do you want to run this?\n│ Yes / No",
+			want:    true,
+		},
+		{
+			name:    "selection indicator",
+			tool:    "claude",
+			content: "Choose an option:\n❯ Yes\n  No",
+			want:    true,
+		},
+		{
+			name:    "plan approval prompt",
+			tool:    "claude",
+			content: "Here is the plan:\n1. Step one\nApprove this plan?",
+			want:    true,
+		},
+		{
+			name:    "prompt with suggestion",
+			tool:    "claude",
+			content: "Done!\n❯ Try asking about tests",
+			want:    true,
+		},
+		{
+			name:    "completion with prompt",
+			tool:    "claude",
+			content: "Task completed successfully.\nWhat would you like to do next?\n❯",
+			want:    true,
+		},
+		{
+			name:    "non-breaking space in prompt",
+			tool:    "claude",
+			content: "Done.\n❯\u00A0",
+			want:    true,
 		},
 	}
 
