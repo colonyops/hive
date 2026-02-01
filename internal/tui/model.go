@@ -1096,14 +1096,15 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	m.treeDelegate.PreviewMode = true
 	m.list.SetDelegate(m.treeDelegate)
 
-	// Calculate widths (25/75 split)
+	// Calculate widths (25% list, 1 char divider, remaining for preview)
 	listWidth := int(float64(m.width) * 0.25)
 	if listWidth < 20 {
 		listWidth = 20
 	}
 
-	// Preview gets remaining space
-	previewWidth := m.width - listWidth
+	// Account for divider (1 char) between list and preview
+	dividerWidth := 1
+	previewWidth := m.width - listWidth - dividerWidth
 
 	// Get selected session and its terminal status
 	selected := m.selectedSession()
@@ -1156,8 +1157,16 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	previewContent = strings.Join(previewLines, "\n")
 	previewContent = ensureExactWidth(previewContent, previewWidth)
 
-	// Join horizontally - both panels now have exact matching dimensions
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, previewContent)
+	// Create vertical divider between list and preview
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	dividerLines := make([]string, contentHeight)
+	for i := range dividerLines {
+		dividerLines[i] = dividerStyle.Render("│")
+	}
+	divider := strings.Join(dividerLines, "\n")
+
+	// Join horizontally - all three panels have exact matching heights
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewContent)
 }
 
 // renderPreviewHeader renders the preview header section with session metadata.
