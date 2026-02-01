@@ -12,6 +12,13 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 )
 
+const (
+	// MaxVisibleCommands is the maximum number of commands shown in the palette.
+	MaxVisibleCommands = 12
+	// CommandPaletteWidth is the content width of the command palette modal.
+	CommandPaletteWidth = 90
+)
+
 // CommandEntry represents an item in the command palette.
 type CommandEntry struct {
 	Name    string
@@ -178,7 +185,7 @@ func (p *CommandPalette) updateFilter() {
 
 // adjustScroll updates the scroll offset to keep the selected item visible.
 func (p *CommandPalette) adjustScroll() {
-	maxVisible := 12
+	maxVisible := MaxVisibleCommands
 
 	// If selected item is above the visible window, scroll up
 	if p.selectedIdx < p.scrollOffset {
@@ -262,12 +269,12 @@ func (p *CommandPalette) View() string {
 	// Render input
 	inputView := p.input.View()
 
-	// Render suggestions (max 12 visible)
-	maxVisible := 12
+	// Render suggestions (max visible based on constant)
+	maxVisible := MaxVisibleCommands
 	suggestions := make([]string, 0, min(len(p.filteredList), maxVisible))
 
 	// Set reasonable width for suggestions content (modal will add padding/border)
-	contentWidth := 90
+	contentWidth := CommandPaletteWidth
 
 	// Calculate visible window based on scroll offset
 	endIdx := min(p.scrollOffset+maxVisible, len(p.filteredList))
@@ -295,7 +302,7 @@ func (p *CommandPalette) View() string {
 			// Truncate help text to single line
 			helpIndent := "  " // 2 spaces to align with command name
 			// Account for modal padding, indent, and extra safety margin
-			// contentWidth - indent - padding - safety = 90 - 2 - 4 - 1 = 83
+			// contentWidth - indent - padding - safety
 			maxHelpWidth := contentWidth - len(helpIndent) - 7
 			helpText := entry.Command.Help
 
