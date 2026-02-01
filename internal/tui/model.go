@@ -74,6 +74,7 @@ type Model struct {
 	// Terminal integration
 	terminalManager  *terminal.Manager
 	terminalStatuses *kv.Store[string, TerminalStatus]
+	previewEnabled   bool // toggle tmux pane preview sidebar
 
 	// Status animation
 	animationFrame int
@@ -205,6 +206,13 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 			key.WithKeys("tab"),
 			key.WithHelp("tab", "switch view"),
 		))
+		// Add preview toggle keybinding if terminal integration is enabled
+		if opts.TerminalManager != nil && opts.TerminalManager.HasEnabledIntegrations() {
+			bindings = append(bindings, key.NewBinding(
+				key.WithKeys("v"),
+				key.WithHelp("v", "toggle preview"),
+			))
+		}
 		return bindings
 	}
 
@@ -227,6 +235,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		columnWidths:     columnWidths,
 		terminalManager:  opts.TerminalManager,
 		terminalStatuses: terminalStatuses,
+		previewEnabled:   cfg.TUI.PreviewEnabled,
 		treeDelegate:     delegate,
 		localRemote:      opts.LocalRemote,
 		msgStore:         opts.MsgStore,
@@ -300,7 +309,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			contentHeight = 1
 		}
 
-		m.list.SetSize(msg.Width, contentHeight)
+		// Set list size based on preview mode
+		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
+			// In dual-column mode, list takes 35% of width
+			listWidth := int(float64(m.width) * 0.35)
+			m.list.SetSize(listWidth, contentHeight)
+		} else {
+			// In single-column mode, list takes full width
+			m.list.SetSize(msg.Width, contentHeight)
+		}
+
 		// msgView gets -1 because we prepend a blank line for consistent spacing
 		m.msgView.SetSize(msg.Width, contentHeight-1)
 		return m, nil
@@ -445,6 +463,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					key.WithKeys("tab"),
 					key.WithHelp("tab", "switch view"),
 				))
+				if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+					bindings = append(bindings, key.NewBinding(
+						key.WithKeys("v"),
+						key.WithHelp("v", "toggle preview"),
+					))
+				}
 				return bindings
 			}
 		}
@@ -747,6 +771,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		if keyStr == "g" {
 			return m, m.refreshGitStatuses()
 		}
+		if keyStr == "v" && m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+			m.previewEnabled = !m.previewEnabled
+			return m, nil
+		}
 		return m.handleSessionsKey(msg, keyStr)
 	}
 
@@ -1041,16 +1069,56 @@ func (m Model) renderTabView() string {
 	// Build content with fixed height to prevent layout shift
 	var content string
 	if m.activeView == ViewSessions {
-		content = m.list.View()
+		// Check if preview should be shown
+		if m.previewEnabled && m.width >= 80 {
+			content = m.renderDualColumnLayout(contentHeight)
+		} else {
+			content = m.list.View()
+			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+		}
 	} else {
 		// Add blank line to match list's internal titleView padding
 		content = "\n" + m.msgView.View()
+		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	}
 
-	// Ensure consistent height
-	content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-
 	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
+}
+
+// renderDualColumnLayout renders sessions list and preview side by side.
+func (m Model) renderDualColumnLayout(contentHeight int) string {
+	// Calculate column widths (35% list, 65% preview)
+	listWidth := int(float64(m.width) * 0.35)
+	previewWidth := m.width - listWidth
+
+	// Get selected session and its terminal status
+	selected := m.selectedSession()
+	var previewContent string
+	if selected != nil {
+		if status, ok := m.terminalStatuses.Get(selected.Path); ok && status.PaneContent != "" {
+			previewContent = status.PaneContent
+		} else {
+			previewContent = "No pane content available"
+		}
+	} else {
+		previewContent = "No session selected"
+	}
+
+	// Render list with adjusted width
+	m.list.SetSize(listWidth, contentHeight)
+	listView := m.list.View()
+
+	// Render preview with border
+	previewStyle := lipgloss.NewStyle().
+		Width(previewWidth - 2). // Account for border
+		Height(contentHeight).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderLeft(true).
+		Padding(0, 1)
+	previewView := previewStyle.Render(previewContent)
+
+	// Join horizontally
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, previewView)
 }
 
 // startRecycle returns a command that starts the recycle operation with streaming output.
