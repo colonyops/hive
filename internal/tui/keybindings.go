@@ -9,7 +9,10 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"github.com/rs/zerolog"
+
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/logging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/tmpl"
@@ -133,8 +136,11 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 func (h *KeybindingHandler) Execute(ctx context.Context, action Action) error {
 	switch action.Type {
 	case ActionTypeDelete:
+		ctx = logging.WithSessionID(ctx, action.SessionID)
+		zerolog.Ctx(ctx).Info().Msg("deleting session")
 		return h.service.DeleteSession(ctx, action.SessionID)
 	case ActionTypeShell:
+		zerolog.Ctx(ctx).Info().Str("cmd", action.ShellCmd).Msg("executing shell command")
 		return h.executeShell(ctx, action.ShellCmd)
 	default:
 		return fmt.Errorf("action type %d not supported by Execute", action.Type)

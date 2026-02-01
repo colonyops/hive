@@ -12,7 +12,10 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/rs/zerolog"
+
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/logging"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
@@ -349,6 +352,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsLoadedMsg:
 		if msg.err != nil {
+			zerolog.Ctx(context.Background()).Error().Err(msg.err).Msg("failed to load sessions")
 			m.err = msg.err
 			m.state = stateNormal
 			return m, nil
@@ -393,6 +397,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionCompleteMsg:
 		if msg.err != nil {
+			zerolog.Ctx(context.Background()).Error().Err(msg.err).Msg("action failed")
 			m.err = msg.err
 			m.state = stateNormal
 			m.pending = Action{}
@@ -1060,6 +1065,9 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 		done := make(chan error, 1)
 
 		ctx, cancel := context.WithCancel(context.Background())
+		ctx = logging.WithSessionID(ctx, sessionID)
+
+		zerolog.Ctx(ctx).Info().Msg("starting recycle operation")
 
 		go func() {
 			defer close(output)
@@ -1067,6 +1075,11 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 
 			writer := &channelWriter{ch: output, ctx: ctx}
 			err := m.service.RecycleSession(ctx, sessionID, writer)
+			if err != nil {
+				zerolog.Ctx(ctx).Error().Err(err).Msg("recycle failed")
+			} else {
+				zerolog.Ctx(ctx).Info().Msg("recycle completed successfully")
+			}
 			done <- err
 		}()
 
