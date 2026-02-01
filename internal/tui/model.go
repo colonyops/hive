@@ -1095,7 +1095,7 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	selected := m.selectedSession()
 	var previewContent string
 	if selected != nil {
-		if status, ok := m.terminalStatuses.Get(selected.Path); ok && status.PaneContent != "" {
+		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
 			previewContent = status.PaneContent
 		} else {
 			previewContent = "No pane content available"
