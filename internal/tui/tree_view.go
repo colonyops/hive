@@ -98,7 +98,7 @@ func renderActiveIndicator(frame int) string {
 }
 
 // TreeItem represents an item in the tree view.
-// It can be either a repo header or a session entry.
+// It can be either a repo header, a session entry, or a recycled placeholder.
 type TreeItem struct {
 	// IsHeader indicates this is a repo header, not a session.
 	IsHeader bool
@@ -107,18 +107,26 @@ type TreeItem struct {
 	RepoName      string
 	IsCurrentRepo bool
 
-	// Session fields (only used when IsHeader is false)
+	// Session fields (only used when IsHeader is false and IsRecycledPlaceholder is false)
 	Session      session.Session
 	IsLastInRepo bool   // Used to render └─ vs ├─
 	RepoPrefix   string // The repo name for filtering purposes
+
+	// Recycled placeholder fields (only used when IsRecycledPlaceholder is true)
+	IsRecycledPlaceholder bool
+	RecycledCount         int
 }
 
 // FilterValue returns the value used for filtering.
 // Headers are not filterable (return empty).
 // Sessions return "repoName sessionName" to allow searching by either.
+// Recycled placeholders return "repoName recycled" to allow filtering.
 func (i TreeItem) FilterValue() string {
 	if i.IsHeader {
 		return ""
+	}
+	if i.IsRecycledPlaceholder {
+		return i.RepoPrefix + " recycled"
 	}
 	return i.RepoPrefix + " " + i.Session.Name
 }
@@ -140,15 +148,30 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 		}
 		items = append(items, header)
 
-		// Add sessions
+		// Determine if recycled placeholder will be the last item
+		hasRecycled := group.RecycledCount > 0
+
+		// Add active sessions
 		for idx, s := range group.Sessions {
+			isLast := idx == len(group.Sessions)-1 && !hasRecycled
 			item := TreeItem{
 				IsHeader:     false,
 				Session:      s,
-				IsLastInRepo: idx == len(group.Sessions)-1,
+				IsLastInRepo: isLast,
 				RepoPrefix:   group.Name,
 			}
 			items = append(items, item)
+		}
+
+		// Add recycled placeholder if there are recycled sessions
+		if hasRecycled {
+			placeholder := TreeItem{
+				IsRecycledPlaceholder: true,
+				RecycledCount:         group.RecycledCount,
+				IsLastInRepo:          true,
+				RepoPrefix:            group.Name,
+			}
+			items = append(items, placeholder)
 		}
 	}
 
@@ -342,9 +365,12 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 
 	// Build the line content
 	var line string
-	if treeItem.IsHeader {
+	switch {
+	case treeItem.IsHeader:
 		line = d.renderHeader(treeItem, isSelected, m, index)
-	} else {
+	case treeItem.IsRecycledPlaceholder:
+		line = d.renderRecycledPlaceholder(treeItem, isSelected)
+	default:
 		line = d.renderSession(treeItem, isSelected, m, index)
 	}
 
@@ -376,6 +402,30 @@ func (d TreeDelegate) renderHeader(item TreeItem, isSelected bool, _ list.Model,
 	return result
 }
 
+// renderRecycledPlaceholder renders the collapsed recycled sessions placeholder.
+func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) string {
+	// Tree prefix
+	var prefix string
+	if item.IsLastInRepo {
+		prefix = treeLast
+	} else {
+		prefix = treeBranch
+	}
+	prefixStyled := d.Styles.TreeLine.Render(prefix)
+
+	// Status indicator (recycled)
+	statusStr := d.Styles.StatusRecycled.Render(statusRecycled)
+
+	// Label with count
+	labelStyle := d.Styles.StatusRecycled
+	if isSelected {
+		labelStyle = d.Styles.Selected
+	}
+	label := labelStyle.Render(fmt.Sprintf("Recycled (%d)", item.RecycledCount))
+
+	return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, label)
+}
+
 // renderSession renders a session entry.
 func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model, index int) string {
 	// Tree prefix
@@ -397,12 +447,6 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Status indicator - use terminal status for active sessions
 	statusStr := renderStatusIndicator(item.Session.State, termStatus, d.Styles, d.AnimationFrame)
-
-	// For recycled sessions, show simplified display
-	if item.Session.State == session.StateRecycled {
-		label := d.Styles.StatusRecycled.Render("recycled")
-		return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, label)
-	}
 
 	// Session name with filter matching
 	nameStyle := d.Styles.SessionName

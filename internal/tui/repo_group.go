@@ -9,9 +9,10 @@ import (
 
 // RepoGroup represents a repository with its associated sessions.
 type RepoGroup struct {
-	Remote   string            // Git remote URL (used for matching/comparison)
-	Name     string            // Display name extracted from remote
-	Sessions []session.Session // Sessions belonging to this repository
+	Remote        string            // Git remote URL (used for matching/comparison)
+	Name          string            // Display name extracted from remote
+	Sessions      []session.Session // Active sessions belonging to this repository
+	RecycledCount int               // Number of recycled sessions (displayed as collapsed)
 }
 
 // GroupSessionsByRepo groups sessions by their repository remote URL.
@@ -45,9 +46,21 @@ func GroupSessionsByRepo(sessions []session.Session, localRemote string) []RepoG
 		group.Sessions = append(group.Sessions, s)
 	}
 
-	// Convert to slice and sort sessions within each group
+	// Convert to slice, separate recycled sessions, and sort active sessions
 	result := make([]RepoGroup, 0, len(groups))
 	for _, group := range groups {
+		// Separate active and recycled sessions
+		activeSessions := make([]session.Session, 0, len(group.Sessions))
+		recycledCount := 0
+		for _, s := range group.Sessions {
+			if s.State == session.StateRecycled {
+				recycledCount++
+			} else {
+				activeSessions = append(activeSessions, s)
+			}
+		}
+		group.Sessions = activeSessions
+		group.RecycledCount = recycledCount
 		sortSessions(group.Sessions)
 		result = append(result, *group)
 	}
@@ -66,16 +79,10 @@ func extractGroupName(remote string) string {
 	return git.ExtractRepoName(remote)
 }
 
-// sortSessions sorts sessions with active first, then by name.
+// sortSessions sorts sessions alphabetically by name.
+// Note: Recycled sessions are now separated and counted, not included in this slice.
 func sortSessions(sessions []session.Session) {
 	sort.Slice(sessions, func(i, j int) bool {
-		// Active sessions come before recycled
-		iActive := sessions[i].State == session.StateActive
-		jActive := sessions[j].State == session.StateActive
-		if iActive != jActive {
-			return iActive
-		}
-		// Then sort alphabetically by name
 		return sessions[i].Name < sessions[j].Name
 	})
 }
