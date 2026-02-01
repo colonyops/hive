@@ -111,9 +111,10 @@ func (c *OrphanCheck) Run(ctx context.Context) Result {
 			}
 		} else {
 			result.Items = append(result.Items, CheckItem{
-				Label:  name,
-				Status: StatusWarn,
-				Detail: "orphaned worktree (no session record)",
+				Label:   name,
+				Status:  StatusWarn,
+				Detail:  "orphaned worktree (no session record)",
+				Fixable: true,
 			})
 		}
 	}

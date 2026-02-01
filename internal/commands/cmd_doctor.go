@@ -10,9 +10,9 @@ import (
 )
 
 type DoctorCmd struct {
-	flags  *Flags
-	format string
-	fix    bool
+	flags   *Flags
+	format  string
+	autofix bool
 }
 
 func NewDoctorCmd(flags *Flags) *DoctorCmd {
@@ -33,9 +33,9 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 				Destination: &cmd.format,
 			},
 			&cli.BoolFlag{
-				Name:        "fix",
-				Usage:       "attempt to fix issues (e.g., delete orphaned worktrees)",
-				Destination: &cmd.fix,
+				Name:        "autofix",
+				Usage:       "automatically fix issues (e.g., delete orphaned worktrees)",
+				Destination: &cmd.autofix,
 			},
 		},
 		Action: cmd.run,
@@ -46,7 +46,7 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 func (cmd *DoctorCmd) run(ctx context.Context, c *cli.Command) error {
 	checks := []doctor.Check{
 		doctor.NewConfigCheck(cmd.flags.Config, cmd.flags.ConfigPath),
-		doctor.NewOrphanCheck(cmd.flags.Store, cmd.flags.Config.ReposDir(), cmd.fix),
+		doctor.NewOrphanCheck(cmd.flags.Store, cmd.flags.Config.ReposDir(), cmd.autofix),
 	}
 
 	results := doctor.RunAll(ctx, checks)
@@ -104,6 +104,15 @@ func (cmd *DoctorCmd) outputText(ctx context.Context, results []doctor.Result) e
 
 	passed, warned, failed := doctor.Summary(results)
 	p.Printf("Summary: %d passed, %d warnings, %d failed", passed, warned, failed)
+
+	// Show hint if there are fixable issues and autofix wasn't used
+	if !cmd.autofix {
+		fixable := doctor.CountFixable(results)
+		if fixable > 0 {
+			p.Printf("")
+			p.Printf("Run 'hive doctor --autofix' to fix %d issue(s)", fixable)
+		}
+	}
 
 	if failed > 0 {
 		return cli.Exit("", 1)
