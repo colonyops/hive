@@ -267,7 +267,7 @@ func (p *CommandPalette) View() string {
 	suggestions := make([]string, 0, min(len(p.filteredList), maxVisible))
 
 	// Set reasonable width for suggestions content (modal will add padding/border)
-	contentWidth := 70
+	contentWidth := 90
 
 	// Calculate visible window based on scroll offset
 	endIdx := min(p.scrollOffset+maxVisible, len(p.filteredList))
@@ -295,7 +295,7 @@ func (p *CommandPalette) View() string {
 			// Truncate help text to single line
 			helpIndent := "  " // 2 spaces to align with command name
 			// Account for modal padding, indent, and extra safety margin
-			// contentWidth - indent - padding - safety = 70 - 2 - 4 - 1 = 63
+			// contentWidth - indent - padding - safety = 90 - 2 - 4 - 1 = 83
 			maxHelpWidth := contentWidth - len(helpIndent) - 7
 			helpText := entry.Command.Help
 
