@@ -7,27 +7,20 @@ Manage AI agent sessions in tmux with automated session creation, status monitor
 Add to your `~/.config/hive/config.yaml`:
 
 ```yaml
-version: 0.2.3
-repo_dirs:
-  - ~/code/repos
-
+# Enable tmux status monitoring
 integrations:
   terminal:
     enabled: [tmux]
     poll_interval: 500ms
 
+# Use hive.sh script for session creation
 commands:
   spawn:
     - ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
   batch_spawn:
     - ~/.config/tmux/layouts/hive.sh -b "{{ .Name }}" "{{ .Path }}" "{{ .Prompt }}"
 
-rules:
-  - pattern: ""
-    max_recycled: 3
-    commands:
-      - hive ctx init
-
+# Tmux-related keybindings
 keybindings:
   enter:
     help: open/create tmux
