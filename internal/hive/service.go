@@ -11,6 +11,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/core/logging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/hay-kot/hive/pkg/randid"
@@ -64,7 +65,7 @@ func New(
 
 // CreateSession creates a new session or recycles an existing one.
 func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*session.Session, error) {
-	s.log.Info().Str("name", opts.Name).Str("remote", opts.Remote).Msg("creating session")
+	zerolog.Ctx(ctx).Info().Str("name", opts.Name).Str("remote", opts.Remote).Msg("creating session")
 
 	remote := opts.Remote
 	if remote == "" {
@@ -73,7 +74,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		if err != nil {
 			return nil, fmt.Errorf("detect remote: %w", err)
 		}
-		s.log.Debug().Str("remote", remote).Msg("detected remote")
+		zerolog.Ctx(ctx).Debug().Str("remote", remote).Msg("detected remote")
 	}
 
 	var sess session.Session
@@ -83,14 +84,17 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	recyclable := s.findValidRecyclable(ctx, remote)
 
 	if recyclable != nil {
+		// Add session_id to context for recycled sessions
+		ctx = logging.WithSessionID(ctx, recyclable.ID)
+
 		// Reuse existing recycled session (already cleaned up when marked for recycle)
-		s.log.Debug().Str("session_id", recyclable.ID).Msg("found valid recyclable session")
+		zerolog.Ctx(ctx).Debug().Msg("found valid recyclable session")
 
 		// Pull latest changes before running hooks
-		s.log.Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
+		zerolog.Ctx(ctx).Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
 		if err := s.git.Pull(ctx, recyclable.Path); err != nil {
 			// Pull failed - mark as corrupted and fall through to clone
-			s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("pull failed, marking corrupted")
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("pull failed, marking corrupted")
 			s.markCorrupted(ctx, recyclable)
 			recyclable = nil
 		}
@@ -117,16 +121,20 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		if id == "" {
 			id = generateID()
 		}
+
+		// Add session_id to context for new sessions
+		ctx = logging.WithSessionID(ctx, id)
+
 		repoName := git.ExtractRepoName(remote)
 		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s-%s", repoName, slug, id))
 
-		s.log.Info().Str("remote", remote).Str("dest", path).Msg("cloning repository")
+		zerolog.Ctx(ctx).Info().Str("remote", remote).Str("dest", path).Msg("cloning repository")
 
 		if err := s.git.Clone(ctx, remote, path); err != nil {
 			return nil, fmt.Errorf("clone repository: %w", err)
 		}
 
-		s.log.Debug().Msg("clone complete")
+		zerolog.Ctx(ctx).Debug().Msg("clone complete")
 
 		now := time.Now()
 		sess = session.Session{
@@ -173,7 +181,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 		}
 	}
 
-	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
+	zerolog.Ctx(ctx).Info().Str("path", sess.Path).Msg("session created")
 
 	return &sess, nil
 }
@@ -197,13 +205,16 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 		return fmt.Errorf("get session: %w", err)
 	}
 
+	// Add session_id to context
+	ctx = logging.WithSessionID(ctx, id)
+
 	if !sess.CanRecycle() {
 		return fmt.Errorf("session %s cannot be recycled (state: %s)", id, sess.State)
 	}
 
 	// Validate repository before recycling
 	if err := s.git.IsValidRepo(ctx, sess.Path); err != nil {
-		s.log.Warn().Err(err).Str("session_id", id).Msg("session has corrupted repository")
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("session has corrupted repository")
 		s.markCorrupted(ctx, &sess)
 		return fmt.Errorf("session %s has corrupted repository: %w", id, err)
 	}
@@ -211,7 +222,7 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 	// Get default branch for template
 	defaultBranch, err := s.git.DefaultBranch(ctx, sess.Path)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("failed to get default branch, using 'main'")
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("failed to get default branch, using 'main'")
 		defaultBranch = "main"
 	}
 
@@ -240,10 +251,10 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 
 	// Enforce max recycled limit
 	if err := s.enforceMaxRecycled(ctx, sess.Remote); err != nil {
-		s.log.Warn().Err(err).Str("remote", sess.Remote).Msg("failed to enforce max recycled limit")
+		zerolog.Ctx(ctx).Warn().Err(err).Str("remote", sess.Remote).Msg("failed to enforce max recycled limit")
 	}
 
-	s.log.Info().Str("session_id", id).Str("path", newPath).Msg("session recycled")
+	zerolog.Ctx(ctx).Info().Str("path", newPath).Msg("session recycled")
 
 	return nil
 }
@@ -255,7 +266,10 @@ func (s *Service) DeleteSession(ctx context.Context, id string) error {
 		return fmt.Errorf("get session: %w", err)
 	}
 
-	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("deleting session")
+	// Add session_id to context
+	ctx = logging.WithSessionID(ctx, id)
+
+	zerolog.Ctx(ctx).Info().Str("path", sess.Path).Msg("deleting session")
 
 	// Remove directory
 	if err := os.RemoveAll(sess.Path); err != nil {
@@ -274,7 +288,7 @@ func (s *Service) DeleteSession(ctx context.Context, id string) error {
 // If all is true, deletes ALL recycled sessions.
 // If all is false, respects max_recycled limit per repository (keeps newest N).
 func (s *Service) Prune(ctx context.Context, all bool) (int, error) {
-	s.log.Info().Bool("all", all).Msg("pruning sessions")
+	zerolog.Ctx(ctx).Info().Bool("all", all).Msg("pruning sessions")
 
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
@@ -287,7 +301,7 @@ func (s *Service) Prune(ctx context.Context, all bool) (int, error) {
 	for _, sess := range sessions {
 		if sess.State == session.StateCorrupted {
 			if err := s.DeleteSession(ctx, sess.ID); err != nil {
-				s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete corrupted session")
+				zerolog.Ctx(ctx).Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete corrupted session")
 				continue
 			}
 			count++
@@ -299,7 +313,7 @@ func (s *Service) Prune(ctx context.Context, all bool) (int, error) {
 		for _, sess := range sessions {
 			if sess.State == session.StateRecycled {
 				if err := s.DeleteSession(ctx, sess.ID); err != nil {
-					s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to prune session")
+					zerolog.Ctx(ctx).Warn().Err(err).Str("session_id", sess.ID).Msg("failed to prune session")
 					continue
 				}
 				count++
@@ -314,7 +328,7 @@ func (s *Service) Prune(ctx context.Context, all bool) (int, error) {
 		count += deleted
 	}
 
-	s.log.Info().Int("count", count).Msg("prune complete")
+	zerolog.Ctx(ctx).Info().Int("count", count).Msg("prune complete")
 
 	return count, nil
 }
@@ -344,7 +358,7 @@ func (s *Service) pruneExcessRecycled(ctx context.Context, sessions []session.Se
 		// Delete oldest sessions beyond the limit
 		for _, sess := range recycled[limit:] {
 			if err := s.DeleteSession(ctx, sess.ID); err != nil {
-				s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete excess session")
+				zerolog.Ctx(ctx).Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete excess session")
 				continue
 			}
 			count++
@@ -374,7 +388,7 @@ func generateID() string {
 func (s *Service) findValidRecyclable(ctx context.Context, remote string) *session.Session {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
-		s.log.Warn().Err(err).Msg("failed to list sessions")
+		zerolog.Ctx(ctx).Warn().Err(err).Msg("failed to list sessions")
 		return nil
 	}
 
@@ -388,8 +402,10 @@ func (s *Service) findValidRecyclable(ctx context.Context, remote string) *sessi
 
 		// Validate the repository
 		if err := s.git.IsValidRepo(ctx, sess.Path); err != nil {
-			s.log.Warn().Err(err).Str("session_id", sess.ID).Str("path", sess.Path).Msg("corrupted session found")
-			s.markCorrupted(ctx, sess)
+			// Add session_id to context for this specific session
+			sessCtx := logging.WithSessionID(ctx, sess.ID)
+			zerolog.Ctx(sessCtx).Warn().Err(err).Str("path", sess.Path).Msg("corrupted session found")
+			s.markCorrupted(sessCtx, sess)
 			continue
 		}
 
@@ -404,17 +420,17 @@ func (s *Service) markCorrupted(ctx context.Context, sess *session.Session) {
 	sess.MarkCorrupted(time.Now())
 
 	if s.config.AutoDeleteCorrupted {
-		s.log.Info().Str("session_id", sess.ID).Msg("auto-deleting corrupted session")
+		zerolog.Ctx(ctx).Info().Msg("auto-deleting corrupted session")
 		if err := s.DeleteSession(ctx, sess.ID); err != nil {
-			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete corrupted session, marking instead")
+			zerolog.Ctx(ctx).Warn().Err(err).Msg("failed to delete corrupted session, marking instead")
 			// Fall through to save as corrupted
 			if err := s.sessions.Save(ctx, *sess); err != nil {
-				s.log.Error().Err(err).Str("session_id", sess.ID).Msg("failed to save corrupted session")
+				zerolog.Ctx(ctx).Error().Err(err).Msg("failed to save corrupted session")
 			}
 		}
 	} else {
 		if err := s.sessions.Save(ctx, *sess); err != nil {
-			s.log.Error().Err(err).Str("session_id", sess.ID).Msg("failed to save corrupted session")
+			zerolog.Ctx(ctx).Error().Err(err).Msg("failed to save corrupted session")
 		}
 	}
 }
@@ -430,7 +446,7 @@ func (s *Service) executeRules(ctx context.Context, remote, source, dest string)
 			continue
 		}
 
-		s.log.Debug().
+		zerolog.Ctx(ctx).Debug().
 			Str("pattern", rule.Pattern).
 			Strs("commands", rule.Commands).
 			Strs("copy", rule.Copy).
@@ -486,14 +502,14 @@ func (s *Service) enforceMaxRecycled(ctx context.Context, remote string) error {
 
 	// Delete oldest sessions beyond the limit
 	for _, sess := range recycled[limit:] {
-		s.log.Info().
+		zerolog.Ctx(ctx).Info().
 			Str("session_id", sess.ID).
 			Str("remote", remote).
 			Int("limit", limit).
 			Msg("deleting excess recycled session")
 
 		if err := s.DeleteSession(ctx, sess.ID); err != nil {
-			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete excess recycled session")
+			zerolog.Ctx(ctx).Warn().Err(err).Str("session_id", sess.ID).Msg("failed to delete excess recycled session")
 		}
 	}
 
