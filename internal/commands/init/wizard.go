@@ -110,13 +110,13 @@ func (w *Wizard) Run(ctx context.Context) error {
 	}
 
 	// Generate and write config
-	cfg := GenerateConfig(ConfigOptions{
-		RepoDirs:    repoDirs,
-		InstallTmux: hasTmux && installScript,
-		ScriptPath:  scriptPath,
-	})
+	configOpts := ConfigOptions{
+		RepoDirs:   repoDirs,
+		Tmux:       hasTmux && installScript,
+		ScriptPath: scriptPath,
+	}
 
-	if err := WriteConfig(cfg, w.opts.ConfigPath); err != nil {
+	if err := WriteConfig(configOpts, w.opts.ConfigPath); err != nil {
 		return fmt.Errorf("write config: %w", err)
 	}
 	p.Successf("Created config: %s", w.opts.ConfigPath)
