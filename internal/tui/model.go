@@ -12,6 +12,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
@@ -1139,38 +1140,16 @@ func tailLines(s string, n int) string {
 }
 
 // truncateLines truncates each line to fit within maxWidth visual characters.
-// Uses lipgloss.Width to properly measure visual width (accounts for ANSI codes).
+// Uses wcwidth-based truncation to properly handle ANSI codes and multi-byte characters.
 func truncateLines(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return s
 	}
 	lines := strings.Split(s, "\n")
 	for i, line := range lines {
-		visualWidth := lipgloss.Width(line)
-		if visualWidth > maxWidth {
-			// Truncate to fit maxWidth, accounting for ellipsis
-			targetWidth := maxWidth
-			if maxWidth > 3 {
-				targetWidth = maxWidth - 3 // Leave room for "..."
-			}
-
-			// Iteratively truncate until we fit
-			truncated := line
-			for lipgloss.Width(truncated) > targetWidth && len(truncated) > 0 {
-				// Remove last rune
-				runes := []rune(truncated)
-				if len(runes) > 0 {
-					truncated = string(runes[:len(runes)-1])
-				} else {
-					break
-				}
-			}
-
-			if maxWidth > 3 {
-				lines[i] = truncated + "..."
-			} else {
-				lines[i] = truncated
-			}
+		if ansi.StringWidth(line) > maxWidth {
+			// Use TruncateWc which properly handles wcwidth and ANSI codes
+			lines[i] = ansi.TruncateWc(line, maxWidth, "...")
 		}
 	}
 	return strings.Join(lines, "\n")
