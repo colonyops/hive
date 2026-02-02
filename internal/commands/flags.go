@@ -7,8 +7,8 @@ import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/store/sqlite"
 )
 
 type Flags struct {
@@ -28,7 +28,7 @@ type Flags struct {
 	Store session.Store
 
 	// DB is the SQLite database connection
-	DB *sqlite.DB
+	DB *db.DB
 
 	// MsgStore is the message store for direct access
 	MsgStore messaging.Store

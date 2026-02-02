@@ -1,4 +1,4 @@
-package sqlite
+package stores
 
 import (
 	"context"
@@ -7,19 +7,20 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/data/db"
 )
 
 func TestStore(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("save and get", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		sess := session.Session{
 			ID:        "test-id",
@@ -46,13 +47,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("get not found", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		_, err = store.Get(ctx, "nonexistent")
 		if !errors.Is(err, session.ErrNotFound) {
@@ -61,13 +62,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		sessions, err := store.List(ctx)
 		if err != nil {
@@ -97,13 +98,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("save updates existing", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		sess := session.Session{
 			ID:    "update-test",
@@ -134,13 +135,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		if err := store.Save(ctx, session.Session{
 			ID:    "delete-me",
@@ -160,13 +161,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("delete not found", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		err = store.Delete(ctx, "nonexistent")
 		if !errors.Is(err, session.ErrNotFound) {
@@ -175,13 +176,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("find recyclable", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 		remote := "https://github.com/test/repo"
 
 		// No recyclable sessions
@@ -237,13 +238,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("metadata serialization", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		sess := session.Session{
 			ID:    "metadata-test",
@@ -272,13 +273,13 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("last inbox read", func(t *testing.T) {
-		db, err := Open(t.TempDir())
+		database, err := db.Open(t.TempDir())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
-		defer func() { _ = db.Close() }()
+		defer func() { _ = database.Close() }()
 
-		store := NewSessionStore(db)
+		store := NewSessionStore(database)
 
 		// Session without LastInboxRead
 		sess := session.Session{

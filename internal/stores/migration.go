@@ -1,4 +1,4 @@
-package sqlite
+package stores
 
 import (
 	"context"
@@ -10,6 +10,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/data/db"
 )
 
 // SessionFile is the root JSON structure for sessions.json
@@ -27,7 +28,7 @@ type TopicFile struct {
 // - sessions.json exists
 // - Database has no sessions
 // Skips migration if DB already populated to avoid duplicates.
-func MigrateFromJSON(ctx context.Context, db *DB, dataDir string) error {
+func MigrateFromJSON(ctx context.Context, database *db.DB, dataDir string) error {
 	sessionsPath := filepath.Join(dataDir, "sessions.json")
 	topicsDir := filepath.Join(dataDir, "messages", "topics")
 
@@ -38,7 +39,7 @@ func MigrateFromJSON(ctx context.Context, db *DB, dataDir string) error {
 	}
 
 	// Check if database already has sessions
-	sessions, err := db.queries.ListSessions(ctx)
+	sessions, err := database.Queries().ListSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to check existing sessions: %w", err)
 	}
@@ -48,12 +49,12 @@ func MigrateFromJSON(ctx context.Context, db *DB, dataDir string) error {
 	}
 
 	// Load and migrate sessions
-	if err := migrateSessions(ctx, db, sessionsPath); err != nil {
+	if err := migrateSessions(ctx, database, sessionsPath); err != nil {
 		return fmt.Errorf("failed to migrate sessions: %w", err)
 	}
 
 	// Load and migrate messages
-	if err := migrateMessages(ctx, db, topicsDir); err != nil {
+	if err := migrateMessages(ctx, database, topicsDir); err != nil {
 		return fmt.Errorf("failed to migrate messages: %w", err)
 	}
 
@@ -61,7 +62,7 @@ func MigrateFromJSON(ctx context.Context, db *DB, dataDir string) error {
 }
 
 // migrateSessions loads sessions from JSON and inserts into SQLite.
-func migrateSessions(ctx context.Context, db *DB, path string) error {
+func migrateSessions(ctx context.Context, database *db.DB, path string) error {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return fmt.Errorf("failed to read sessions file: %w", err)
@@ -73,7 +74,7 @@ func migrateSessions(ctx context.Context, db *DB, path string) error {
 	}
 
 	// Create session store and save each session
-	store := NewSessionStore(db)
+	store := NewSessionStore(database)
 	for _, sess := range file.Sessions {
 		if err := store.Save(ctx, sess); err != nil {
 			return fmt.Errorf("failed to save session %s: %w", sess.ID, err)
@@ -84,7 +85,7 @@ func migrateSessions(ctx context.Context, db *DB, path string) error {
 }
 
 // migrateMessages loads messages from per-topic JSON files and inserts into SQLite.
-func migrateMessages(ctx context.Context, db *DB, topicsDir string) error {
+func migrateMessages(ctx context.Context, database *db.DB, topicsDir string) error {
 	// Check if topics directory exists
 	if _, err := os.Stat(topicsDir); os.IsNotExist(err) {
 		// No messages to migrate
@@ -98,7 +99,7 @@ func migrateMessages(ctx context.Context, db *DB, topicsDir string) error {
 	}
 
 	// Create message store (no retention during migration)
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 
 	for _, entry := range entries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".json") {

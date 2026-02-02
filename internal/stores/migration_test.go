@@ -1,4 +1,4 @@
-package sqlite
+package stores
 
 import (
 	"context"
@@ -10,26 +10,27 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/data/db"
 )
 
 func TestMigrateFromJSON_NoFiles(t *testing.T) {
 	tempDir := t.TempDir()
-	db, err := Open(tempDir)
+	database, err := db.Open(tempDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
 	ctx := context.Background()
 
 	// Migrate with no JSON files - should succeed silently
-	err = MigrateFromJSON(ctx, db, tempDir)
+	err = MigrateFromJSON(ctx, database, tempDir)
 	if err != nil {
 		t.Errorf("MigrateFromJSON failed: %v", err)
 	}
 
 	// Verify no sessions were created
-	store := NewSessionStore(db)
+	store := NewSessionStore(database)
 	sessions, _ := store.List(ctx)
 	if len(sessions) != 0 {
 		t.Errorf("Expected 0 sessions, got %d", len(sessions))
@@ -76,19 +77,19 @@ func TestMigrateFromJSON_Sessions(t *testing.T) {
 	}
 
 	// Open database and migrate
-	db, err := Open(tempDir)
+	database, err := db.Open(tempDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	err = MigrateFromJSON(ctx, db, tempDir)
+	err = MigrateFromJSON(ctx, database, tempDir)
 	if err != nil {
 		t.Fatalf("MigrateFromJSON: %v", err)
 	}
 
 	// Verify sessions were migrated
-	store := NewSessionStore(db)
+	store := NewSessionStore(database)
 	sessions, err := store.List(ctx)
 	if err != nil {
 		t.Fatalf("List sessions: %v", err)
@@ -175,19 +176,19 @@ func TestMigrateFromJSON_Messages(t *testing.T) {
 	}
 
 	// Open database and migrate
-	db, err := Open(tempDir)
+	database, err := db.Open(tempDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	err = MigrateFromJSON(ctx, db, tempDir)
+	err = MigrateFromJSON(ctx, database, tempDir)
 	if err != nil {
 		t.Fatalf("MigrateFromJSON: %v", err)
 	}
 
 	// Verify messages were migrated
-	msgStore := NewMessageStore(db, 0)
+	msgStore := NewMessageStore(database, 0)
 
 	// Check first topic
 	messages1, err := msgStore.Subscribe(ctx, "agent.build", time.Time{})
@@ -237,13 +238,13 @@ func TestMigrateFromJSON_SkipIfPopulated(t *testing.T) {
 	}
 
 	// Open database and add a session directly
-	db, err := Open(tempDir)
+	database, err := db.Open(tempDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewSessionStore(db)
+	store := NewSessionStore(database)
 	existingSession := session.Session{
 		ID:        "existing",
 		Name:      "Existing Session",
@@ -256,7 +257,7 @@ func TestMigrateFromJSON_SkipIfPopulated(t *testing.T) {
 	}
 
 	// Attempt migration - should skip
-	err = MigrateFromJSON(ctx, db, tempDir)
+	err = MigrateFromJSON(ctx, database, tempDir)
 	if err != nil {
 		t.Fatalf("MigrateFromJSON: %v", err)
 	}
@@ -316,25 +317,25 @@ func TestMigrateFromJSON_Combined(t *testing.T) {
 	}
 
 	// Migrate
-	db, err := Open(tempDir)
+	database, err := db.Open(tempDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	err = MigrateFromJSON(ctx, db, tempDir)
+	err = MigrateFromJSON(ctx, database, tempDir)
 	if err != nil {
 		t.Fatalf("MigrateFromJSON: %v", err)
 	}
 
 	// Verify both sessions and messages were migrated
-	sessionStore := NewSessionStore(db)
+	sessionStore := NewSessionStore(database)
 	sessions, _ := sessionStore.List(ctx)
 	if len(sessions) != 1 {
 		t.Errorf("Expected 1 session, got %d", len(sessions))
 	}
 
-	msgStore := NewMessageStore(db, 0)
+	msgStore := NewMessageStore(database, 0)
 	messages, _ := msgStore.Subscribe(ctx, "test.topic", time.Time{})
 	if len(messages) != 1 {
 		t.Errorf("Expected 1 message, got %d", len(messages))
@@ -351,14 +352,14 @@ func TestMigrateFromJSON_InvalidJSON(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	db, err := Open(tempDir)
+	database, err := db.Open(tempDir)
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
 	// Migration should fail
-	err = MigrateFromJSON(ctx, db, tempDir)
+	err = MigrateFromJSON(ctx, database, tempDir)
 	if err == nil {
 		t.Error("Expected migration to fail with invalid JSON")
 	}

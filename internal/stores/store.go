@@ -1,4 +1,4 @@
-package sqlite
+package stores
 
 import (
 	"context"
@@ -8,24 +8,24 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/store/sqlite/sqlc"
+	"github.com/hay-kot/hive/internal/data/db"
 )
 
 // SessionStore implements session.Store using SQLite.
 type SessionStore struct {
-	db *DB
+	db *db.DB
 }
 
 var _ session.Store = (*SessionStore)(nil)
 
 // NewSessionStore creates a new SQLite-backed session store.
-func NewSessionStore(db *DB) *SessionStore {
+func NewSessionStore(db *db.DB) *SessionStore {
 	return &SessionStore{db: db}
 }
 
 // List returns all sessions.
 func (s *SessionStore) List(ctx context.Context) ([]session.Session, error) {
-	rows, err := s.db.queries.ListSessions(ctx)
+	rows, err := s.db.Queries().ListSessions(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list sessions: %w", err)
 	}
@@ -44,7 +44,7 @@ func (s *SessionStore) List(ctx context.Context) ([]session.Session, error) {
 
 // Get returns a session by ID. Returns ErrNotFound if not found.
 func (s *SessionStore) Get(ctx context.Context, id string) (session.Session, error) {
-	row, err := s.db.queries.GetSession(ctx, id)
+	row, err := s.db.Queries().GetSession(ctx, id)
 	if IsNotFoundError(err) {
 		return session.Session{}, session.ErrNotFound
 	}
@@ -81,7 +81,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		}
 	}
 
-	err := s.db.queries.SaveSession(ctx, sqlc.SaveSessionParams{
+	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
 		ID:            sess.ID,
 		Name:          sess.Name,
 		Slug:          sess.Slug,
@@ -103,7 +103,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 // Delete removes a session by ID. Returns ErrNotFound if not found.
 func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	// Check if session exists first
-	_, err := s.db.queries.GetSession(ctx, id)
+	_, err := s.db.Queries().GetSession(ctx, id)
 	if IsNotFoundError(err) {
 		return session.ErrNotFound
 	}
@@ -111,7 +111,7 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 		return fmt.Errorf("failed to check session existence: %w", err)
 	}
 
-	err = s.db.queries.DeleteSession(ctx, id)
+	err = s.db.Queries().DeleteSession(ctx, id)
 	if err != nil {
 		return fmt.Errorf("failed to delete session: %w", err)
 	}
@@ -122,7 +122,7 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 // FindRecyclable returns a recyclable session for the given remote.
 // Returns ErrNoRecyclable if none available.
 func (s *SessionStore) FindRecyclable(ctx context.Context, remote string) (session.Session, error) {
-	row, err := s.db.queries.FindRecyclableSession(ctx, remote)
+	row, err := s.db.Queries().FindRecyclableSession(ctx, remote)
 	if IsNotFoundError(err) {
 		return session.Session{}, session.ErrNoRecyclable
 	}
@@ -138,8 +138,8 @@ func (s *SessionStore) FindRecyclable(ctx context.Context, remote string) (sessi
 	return sess, nil
 }
 
-// rowToSession converts a sqlc.Session to a session.Session.
-func rowToSession(row sqlc.Session) (session.Session, error) {
+// rowToSession converts a db.Session to a session.Session.
+func rowToSession(row db.Session) (session.Session, error) {
 	// Unmarshal metadata from JSON
 	var metadata map[string]string
 	if row.Metadata.Valid {

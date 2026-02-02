@@ -1,4 +1,4 @@
-package sqlite
+package db
 
 import (
 	"context"
@@ -8,11 +8,10 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/hay-kot/hive/internal/store/sqlite/sqlc"
 	_ "modernc.org/sqlite"
 )
 
-//go:embed schema.sql
+//go:embed schema/schema.sql
 var schemaSQL string
 
 const (
@@ -26,7 +25,7 @@ const (
 // DB wraps a SQL database connection with retry logic and sqlc queries.
 type DB struct {
 	conn    *sql.DB
-	queries *sqlc.Queries
+	queries *Queries
 }
 
 // Open creates a new database connection with connection pooling and retry logic.
@@ -48,7 +47,7 @@ func Open(dataDir string) (*DB, error) {
 
 	db := &DB{
 		conn:    conn,
-		queries: sqlc.New(conn),
+		queries: New(conn),
 	}
 
 	// Verify connectivity with retry
@@ -72,13 +71,13 @@ func (db *DB) Close() error {
 }
 
 // Queries returns the sqlc queries interface.
-func (db *DB) Queries() *sqlc.Queries {
+func (db *DB) Queries() *Queries {
 	return db.queries
 }
 
 // WithTx executes a function within a transaction.
 // If the function returns an error, the transaction is rolled back.
-func (db *DB) WithTx(ctx context.Context, fn func(*sqlc.Queries) error) error {
+func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)

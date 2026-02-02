@@ -1,4 +1,4 @@
-package sqlite
+package stores
 
 import (
 	"context"
@@ -8,13 +8,13 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/store/sqlite/sqlc"
+	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/pkg/randid"
 )
 
 // MessageStore implements messaging.Store using SQLite.
 type MessageStore struct {
-	db          *DB
+	db          *db.DB
 	maxMessages int
 }
 
@@ -22,7 +22,7 @@ var _ messaging.Store = (*MessageStore)(nil)
 
 // NewMessageStore creates a new SQLite-backed message store.
 // maxMessages controls retention per topic (0 = unlimited).
-func NewMessageStore(db *DB, maxMessages int) *MessageStore {
+func NewMessageStore(db *db.DB, maxMessages int) *MessageStore {
 	return &MessageStore{
 		db:          db,
 		maxMessages: maxMessages,
@@ -41,9 +41,9 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message) error
 	}
 
 	// Start transaction for atomic publish + retention
-	return m.db.WithTx(ctx, func(q *sqlc.Queries) error {
+	return m.db.WithTx(ctx, func(q *db.Queries) error {
 		// Insert message
-		err := q.PublishMessage(ctx, sqlc.PublishMessageParams{
+		err := q.PublishMessage(ctx, db.PublishMessageParams{
 			ID:        msg.ID,
 			Topic:     msg.Topic,
 			Payload:   msg.Payload,
@@ -65,7 +65,7 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message) error
 			// Delete oldest messages if over limit
 			if count > int64(m.maxMessages) {
 				toDelete := count - int64(m.maxMessages)
-				err = q.DeleteOldestMessagesInTopic(ctx, sqlc.DeleteOldestMessagesInTopicParams{
+				err = q.DeleteOldestMessagesInTopic(ctx, db.DeleteOldestMessagesInTopicParams{
 					Topic: msg.Topic,
 					Limit: toDelete,
 				})
@@ -87,7 +87,7 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message) error
 // Returns ErrTopicNotFound if no matching topics exist.
 func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.Time) ([]messaging.Message, error) {
 	// Get all topics
-	allTopics, err := m.db.queries.ListTopics(ctx)
+	allTopics, err := m.db.Queries().ListTopics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
@@ -122,7 +122,7 @@ func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.T
 	// Collect messages from all matched topics
 	var messages []messaging.Message
 	for _, t := range matchedTopics {
-		rows, err := m.db.queries.SubscribeToTopic(ctx, sqlc.SubscribeToTopicParams{
+		rows, err := m.db.Queries().SubscribeToTopic(ctx, db.SubscribeToTopicParams{
 			Topic:     t,
 			CreatedAt: since.UnixNano(),
 		})
@@ -150,7 +150,7 @@ func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.T
 
 // List returns all topic names.
 func (m *MessageStore) List(ctx context.Context) ([]string, error) {
-	topics, err := m.db.queries.ListTopics(ctx)
+	topics, err := m.db.Queries().ListTopics(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
@@ -163,13 +163,13 @@ func (m *MessageStore) Prune(ctx context.Context, olderThan time.Duration) (int,
 	cutoff := time.Now().Add(-olderThan).UnixNano()
 
 	// Count messages to be pruned
-	count, err := m.db.queries.CountPrunableMessages(ctx, cutoff)
+	count, err := m.db.Queries().CountPrunableMessages(ctx, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("failed to count prunable messages: %w", err)
 	}
 
 	// Delete messages
-	err = m.db.queries.PruneMessages(ctx, cutoff)
+	err = m.db.Queries().PruneMessages(ctx, cutoff)
 	if err != nil {
 		return 0, fmt.Errorf("failed to prune messages: %w", err)
 	}
@@ -177,8 +177,8 @@ func (m *MessageStore) Prune(ctx context.Context, olderThan time.Duration) (int,
 	return int(count), nil
 }
 
-// rowToMessage converts a sqlc.Message to a messaging.Message.
-func rowToMessage(row sqlc.Message) messaging.Message {
+// rowToMessage converts a db.Message to a messaging.Message.
+func rowToMessage(row db.Message) messaging.Message {
 	return messaging.Message{
 		ID:        row.ID,
 		Topic:     row.Topic,

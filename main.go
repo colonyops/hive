@@ -14,9 +14,10 @@ import (
 	"github.com/hay-kot/hive/internal/commands"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
-	"github.com/hay-kot/hive/internal/store/sqlite"
+	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/hay-kot/hive/pkg/utils"
 )
@@ -114,15 +115,15 @@ Run 'hive new' to create a new session from the current repository.`,
 			flags.Config = cfg
 
 			// Open database connection
-			db, err := sqlite.Open(cfg.DataDir)
+			database, err := db.Open(cfg.DataDir)
 			if err != nil {
 				return ctx, fmt.Errorf("open database: %w", err)
 			}
-			flags.DB = db
+			flags.DB = database
 
 			// Create stores
-			sessionStore := sqlite.NewSessionStore(db)
-			msgStore := sqlite.NewMessageStore(db, 0) // 0 = unlimited retention
+			sessionStore := stores.NewSessionStore(database)
+			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
 
 			flags.Store = sessionStore
 			flags.MsgStore = msgStore

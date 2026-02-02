@@ -1,4 +1,4 @@
-package sqlite
+package stores
 
 import (
 	"context"
@@ -9,16 +9,17 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/data/db"
 )
 
 func TestMsgStore_PublishAndSubscribe(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	msg := messaging.Message{
@@ -56,13 +57,13 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeNotFound(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	_, err = store.Subscribe(ctx, "nonexistent", time.Time{})
@@ -72,13 +73,13 @@ func TestMsgStore_SubscribeNotFound(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeSince(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish first message
@@ -107,13 +108,13 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeWildcard(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish to multiple topics
@@ -141,13 +142,13 @@ func TestMsgStore_SubscribeWildcard(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeAll(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish to multiple topics
@@ -176,13 +177,13 @@ func TestMsgStore_SubscribeAll(t *testing.T) {
 }
 
 func TestMsgStore_List(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	_ = store.Publish(ctx, messaging.Message{Topic: "topic.a", Payload: "a"})
@@ -204,13 +205,13 @@ func TestMsgStore_List(t *testing.T) {
 }
 
 func TestMsgStore_ListEmpty(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	topics, err := store.List(ctx)
@@ -224,13 +225,13 @@ func TestMsgStore_ListEmpty(t *testing.T) {
 }
 
 func TestMsgStore_Retention(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 3)
+	store := NewMessageStore(database, 3)
 	ctx := context.Background()
 
 	// Publish 5 messages
@@ -264,13 +265,13 @@ func TestMsgStore_Retention(t *testing.T) {
 }
 
 func TestMsgStore_Prune(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish messages
@@ -298,13 +299,13 @@ func TestMsgStore_Prune(t *testing.T) {
 }
 
 func TestMsgStore_ConcurrentAccess(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	const goroutines = 10
@@ -367,13 +368,13 @@ func TestMsgStore_ConcurrentAccess(t *testing.T) {
 }
 
 func TestMsgStore_MessageOrdering(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish messages with slight delays to ensure different timestamps
@@ -396,13 +397,13 @@ func TestMsgStore_MessageOrdering(t *testing.T) {
 }
 
 func TestMsgStore_WildcardOrdering(t *testing.T) {
-	db, err := Open(t.TempDir())
+	database, err := db.Open(t.TempDir())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
-	defer func() { _ = db.Close() }()
+	defer func() { _ = database.Close() }()
 
-	store := NewMessageStore(db, 0)
+	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
 	// Publish messages across topics with explicit ordering via delays
