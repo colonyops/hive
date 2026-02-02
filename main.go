@@ -115,7 +115,12 @@ Run 'hive new' to create a new session from the current repository.`,
 			flags.Config = cfg
 
 			// Open database connection
-			database, err := db.Open(cfg.DataDir)
+			dbOpts := db.OpenOptions{
+				MaxOpenConns: cfg.Database.MaxOpenConns,
+				MaxIdleConns: cfg.Database.MaxIdleConns,
+				BusyTimeout:  cfg.Database.BusyTimeout,
+			}
+			database, err := db.Open(cfg.DataDir, dbOpts)
 			if err != nil {
 				return ctx, fmt.Errorf("open database: %w", err)
 			}

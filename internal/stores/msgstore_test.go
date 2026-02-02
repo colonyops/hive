@@ -13,7 +13,7 @@ import (
 )
 
 func TestMsgStore_PublishAndSubscribe(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -57,7 +57,7 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeNotFound(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -73,7 +73,7 @@ func TestMsgStore_SubscribeNotFound(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeSince(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeWildcard(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -142,7 +142,7 @@ func TestMsgStore_SubscribeWildcard(t *testing.T) {
 }
 
 func TestMsgStore_SubscribeAll(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -177,7 +177,7 @@ func TestMsgStore_SubscribeAll(t *testing.T) {
 }
 
 func TestMsgStore_List(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -205,7 +205,7 @@ func TestMsgStore_List(t *testing.T) {
 }
 
 func TestMsgStore_ListEmpty(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -225,7 +225,7 @@ func TestMsgStore_ListEmpty(t *testing.T) {
 }
 
 func TestMsgStore_Retention(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -268,7 +268,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("exact limit", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -298,7 +298,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 	})
 
 	t.Run("single message limit", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -332,7 +332,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 	})
 
 	t.Run("unlimited retention", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -364,7 +364,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 }
 
 func TestMsgStore_Prune(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -398,7 +398,7 @@ func TestMsgStore_Prune(t *testing.T) {
 }
 
 func TestMsgStore_ConcurrentAccess(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -467,7 +467,7 @@ func TestMsgStore_ConcurrentAccess(t *testing.T) {
 }
 
 func TestMsgStore_MessageOrdering(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -496,7 +496,7 @@ func TestMsgStore_MessageOrdering(t *testing.T) {
 }
 
 func TestMsgStore_WildcardOrdering(t *testing.T) {
-	database, err := db.Open(t.TempDir())
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

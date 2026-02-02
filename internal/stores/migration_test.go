@@ -15,7 +15,7 @@ import (
 
 func TestMigrateFromJSON_NoFiles(t *testing.T) {
 	tempDir := t.TempDir()
-	database, err := db.Open(tempDir)
+	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -77,7 +77,7 @@ func TestMigrateFromJSON_Sessions(t *testing.T) {
 	}
 
 	// Open database and migrate
-	database, err := db.Open(tempDir)
+	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -176,7 +176,7 @@ func TestMigrateFromJSON_Messages(t *testing.T) {
 	}
 
 	// Open database and migrate
-	database, err := db.Open(tempDir)
+	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -238,7 +238,7 @@ func TestMigrateFromJSON_SkipIfPopulated(t *testing.T) {
 	}
 
 	// Open database and add a session directly
-	database, err := db.Open(tempDir)
+	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -317,7 +317,7 @@ func TestMigrateFromJSON_Combined(t *testing.T) {
 	}
 
 	// Migrate
-	database, err := db.Open(tempDir)
+	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}
@@ -352,7 +352,7 @@ func TestMigrateFromJSON_InvalidJSON(t *testing.T) {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
-	database, err := db.Open(tempDir)
+	database, err := db.Open(tempDir, db.DefaultOpenOptions())
 	if err != nil {
 		t.Fatalf("Open: %v", err)
 	}

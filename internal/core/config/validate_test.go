@@ -18,6 +18,11 @@ func validConfig(t *testing.T) *Config {
 		GitPath: "git",
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
+		Database: DatabaseConfig{
+			MaxOpenConns: 2,
+			MaxIdleConns: 2,
+			BusyTimeout:  5000,
+		},
 	}
 }
 

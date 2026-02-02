@@ -6,7 +6,6 @@ import (
 	_ "embed"
 	"fmt"
 	"path/filepath"
-	"time"
 
 	_ "modernc.org/sqlite"
 )
@@ -14,35 +13,57 @@ import (
 //go:embed schema/schema.sql
 var schemaSQL string
 
-const (
-	maxRetries   = 5
-	initialWait  = 100 * time.Millisecond
-	maxOpenConns = 10
-	maxIdleConns = 5
-	busyTimeout  = 5000 // milliseconds
-)
+// OpenOptions configures database connection settings.
+type OpenOptions struct {
+	MaxOpenConns int // max open connections (default: 2)
+	MaxIdleConns int // max idle connections (default: 2)
+	BusyTimeout  int // busy timeout in milliseconds (default: 5000)
+}
 
-// DB wraps a SQL database connection with retry logic and sqlc queries.
+// DefaultOpenOptions returns the recommended defaults for SQLite.
+func DefaultOpenOptions() OpenOptions {
+	return OpenOptions{
+		MaxOpenConns: 2,
+		MaxIdleConns: 2,
+		BusyTimeout:  5000,
+	}
+}
+
+// DB wraps a SQL database connection with sqlc queries.
 type DB struct {
 	conn    *sql.DB
 	queries *Queries
 }
 
-// Open creates a new database connection with connection pooling and retry logic.
+// Open creates a new database connection with the given options.
 // The database file is created in the specified data directory.
-func Open(dataDir string) (*DB, error) {
+// Uses minimal connection pool (default 2) to prevent transaction deadlocks while
+// avoiding unnecessary connection overhead. WAL mode and busy_timeout
+// handle concurrent access at the SQLite level.
+func Open(dataDir string, opts OpenOptions) (*DB, error) {
+	// Apply defaults for zero values
+	if opts.MaxOpenConns == 0 {
+		opts.MaxOpenConns = DefaultOpenOptions().MaxOpenConns
+	}
+	if opts.MaxIdleConns == 0 {
+		opts.MaxIdleConns = DefaultOpenOptions().MaxIdleConns
+	}
+	if opts.BusyTimeout == 0 {
+		opts.BusyTimeout = DefaultOpenOptions().BusyTimeout
+	}
+
 	dbPath := filepath.Join(dataDir, "hive.db")
 
 	// Open with pragmas for WAL mode and busy timeout
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)", dbPath, busyTimeout)
+	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)", dbPath, opts.BusyTimeout)
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
 
-	// Configure connection pool
-	conn.SetMaxOpenConns(maxOpenConns)
-	conn.SetMaxIdleConns(maxIdleConns)
+	// Configure connection pool - minimal connections for SQLite
+	conn.SetMaxOpenConns(opts.MaxOpenConns)
+	conn.SetMaxIdleConns(opts.MaxIdleConns)
 	conn.SetConnMaxLifetime(0) // Connections live forever
 
 	db := &DB{
@@ -50,8 +71,8 @@ func Open(dataDir string) (*DB, error) {
 		queries: New(conn),
 	}
 
-	// Verify connectivity with retry
-	if err := db.pingWithRetry(context.Background()); err != nil {
+	// Verify connectivity - fail fast for SQLite
+	if err := conn.PingContext(context.Background()); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
 			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %v)", err, closeErr)
 		}
@@ -102,26 +123,6 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 	return nil
 }
 
-// pingWithRetry attempts to ping the database with exponential backoff.
-func (db *DB) pingWithRetry(ctx context.Context) error {
-	wait := initialWait
-	var lastErr error
-
-	for i := 0; i < maxRetries; i++ {
-		if err := db.conn.PingContext(ctx); err == nil {
-			return nil
-		} else {
-			lastErr = err
-		}
-
-		if i < maxRetries-1 {
-			time.Sleep(wait)
-			wait *= 2
-		}
-	}
-
-	return fmt.Errorf("failed to ping database after %d retries: %w", maxRetries, lastErr)
-}
 
 // initSchema creates the database schema if it doesn't exist.
 func (db *DB) initSchema(ctx context.Context) error {

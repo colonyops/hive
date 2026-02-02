@@ -14,7 +14,7 @@ func TestStore(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("save and get", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -47,7 +47,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("get not found", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -62,7 +62,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("list", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -98,7 +98,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("save updates existing", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -135,7 +135,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("delete", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -161,7 +161,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("delete not found", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -176,7 +176,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("find recyclable", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -238,7 +238,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("metadata serialization", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -273,7 +273,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("nil vs empty metadata", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
@@ -337,7 +337,7 @@ func TestStore(t *testing.T) {
 	})
 
 	t.Run("last inbox read", func(t *testing.T) {
-		database, err := db.Open(t.TempDir())
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		if err != nil {
 			t.Fatalf("Open: %v", err)
 		}
