@@ -31,9 +31,13 @@ func TestValidateDeep_ValidConfig(t *testing.T) {
 	cfg.Rules = []Rule{
 		{Pattern: "^https://github.com/.*", Commands: []string{"echo hello"}},
 	}
+	// With the new model, keybindings reference commands
+	cfg.UserCommands = map[string]UserCommand{
+		"open": {Sh: "open {{.Path}}", Help: "open"},
+	}
 	cfg.Keybindings = map[string]Keybinding{
-		"r": {Action: ActionRecycle, Help: "recycle"},
-		"o": {Sh: "open {{.Path}}", Help: "open"},
+		"r": {Cmd: "Recycle"}, // System default
+		"o": {Cmd: "open"},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -99,21 +103,7 @@ func TestValidateDeep_InvalidRulePattern(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "invalid regex")
 }
 
-func TestValidateDeep_KeybindingBothActionAndSh(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Keybindings = map[string]Keybinding{
-		"x": {Action: ActionRecycle, Sh: "echo test"},
-	}
-
-	err := cfg.ValidateDeep("")
-
-	var fieldErrs criterio.FieldErrors
-	require.ErrorAs(t, err, &fieldErrs)
-	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "cannot have both")
-}
-
-func TestValidateDeep_KeybindingNeitherActionNorSh(t *testing.T) {
+func TestValidateDeep_KeybindingMissingCmd(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Keybindings = map[string]Keybinding{
 		"x": {Help: "does nothing"},
@@ -124,13 +114,56 @@ func TestValidateDeep_KeybindingNeitherActionNorSh(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "must have either")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "cmd is required")
 }
 
-func TestValidateDeep_KeybindingInvalidAction(t *testing.T) {
+func TestValidateDeep_KeybindingInvalidCmdReference(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Keybindings = map[string]Keybinding{
-		"x": {Action: "invalid"},
+		"x": {Cmd: "NonExistentCommand"},
+	}
+
+	err := cfg.ValidateDeep("")
+
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Len(t, fieldErrs, 1)
+	assert.Contains(t, fieldErrs[0].Err.Error(), "does not reference a valid user command")
+}
+
+func TestValidateDeep_KeybindingValidCmdReference(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"open": {Sh: "open {{.Path}} {{.Remote}} {{.ID}} {{.Name}}"},
+	}
+	cfg.Keybindings = map[string]Keybinding{
+		"o": {Cmd: "open"},
+		"r": {Cmd: "Recycle"}, // System default
+		"d": {Cmd: "Delete"},  // System default
+	}
+
+	err := cfg.ValidateDeep("")
+	assert.NoError(t, err)
+}
+
+func TestValidateDeep_UserCommandBothActionAndSh(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"bad": {Action: ActionRecycle, Sh: "echo test"},
+	}
+
+	err := cfg.ValidateDeep("")
+
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Len(t, fieldErrs, 1)
+	assert.Contains(t, fieldErrs[0].Err.Error(), "cannot have both")
+}
+
+func TestValidateDeep_UserCommandInvalidAction(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"bad": {Action: "invalid"},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -141,24 +174,11 @@ func TestValidateDeep_KeybindingInvalidAction(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "invalid action")
 }
 
-func TestValidateDeep_KeybindingInvalidShTemplate(t *testing.T) {
+func TestValidateDeep_UserCommandValidAction(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.Keybindings = map[string]Keybinding{
-		"o": {Sh: "open {{.Invalid}}"},
-	}
-
-	err := cfg.ValidateDeep("")
-
-	var fieldErrs criterio.FieldErrors
-	require.ErrorAs(t, err, &fieldErrs)
-	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "template error")
-}
-
-func TestValidateDeep_KeybindingValidShTemplate(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Keybindings = map[string]Keybinding{
-		"o": {Sh: "open {{.Path}} {{.Remote}} {{.ID}} {{.Name}}"},
+	cfg.UserCommands = map[string]UserCommand{
+		"my-recycle": {Action: ActionRecycle, Help: "custom recycle"},
+		"my-delete":  {Action: ActionDelete, Help: "custom delete"},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -423,10 +443,10 @@ func TestValidate_MaxRecycledNegative(t *testing.T) {
 	})
 }
 
-func TestValidate_UserCommandMissingSh(t *testing.T) {
+func TestValidate_UserCommandNeitherActionNorSh(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
-		"test": {Help: "no sh command"},
+		"test": {Help: "no action or sh command"},
 	}
 
 	err := cfg.Validate()
@@ -434,7 +454,7 @@ func TestValidate_UserCommandMissingSh(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "sh is required")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "must have either action or sh")
 }
 
 func TestValidateDeep_UserCommandInvalidShTemplate(t *testing.T) {

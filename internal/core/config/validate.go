@@ -186,18 +186,14 @@ func (c *Config) validateRules() error {
 	return errs.ToError()
 }
 
-// validateKeybindingTemplates checks template syntax for keybinding shell commands.
-// Basic keybinding structure validation is done by Validate().
+// validateKeybindingTemplates validates keybindings by checking referenced commands exist.
+// Template validation for shell commands is handled by validateUserCommandTemplates
+// since keybindings now reference UserCommands instead of containing sh directly.
 func (c *Config) validateKeybindingTemplates() error {
-	var errs criterio.FieldErrorsBuilder
-	for key, kb := range c.Keybindings {
-		if kb.Sh != "" {
-			if err := validateTemplate(kb.Sh, KeybindingTemplateData{}); err != nil {
-				errs = errs.Append(fmt.Sprintf("keybindings[%q]", key), fmt.Errorf("template error in sh: %w", err))
-			}
-		}
-	}
-	return errs.ToError()
+	// Keybinding validation is now done in validateKeybindingsBasic
+	// which ensures keybindings reference valid UserCommands.
+	// Template validation happens in validateUserCommandTemplates.
+	return nil
 }
 
 // validateUserCommandTemplates checks template syntax for usercommand shell commands.

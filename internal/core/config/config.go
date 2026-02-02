@@ -32,29 +32,35 @@ func ParseExitCondition(s string) bool {
 	return result
 }
 
-// Built-in action names for keybindings.
+// Built-in action names for UserCommands.
 const (
 	ActionRecycle = "recycle"
 	ActionDelete  = "delete"
 )
 
-// defaultKeybindings provides built-in keybindings that users can override.
-var defaultKeybindings = map[string]Keybinding{
-	"r": {
+// defaultUserCommands provides built-in commands that users can override.
+var defaultUserCommands = map[string]UserCommand{
+	"Recycle": {
 		Action:  ActionRecycle,
 		Help:    "recycle",
 		Confirm: "Are you sure you want to recycle this session?",
 	},
-	"d": {
+	"Delete": {
 		Action:  ActionDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
 	},
 }
 
+// defaultKeybindings provides built-in keybindings that users can override.
+var defaultKeybindings = map[string]Keybinding{
+	"r": {Cmd: "Recycle"},
+	"d": {Cmd: "Delete"},
+}
+
 // CurrentConfigVersion is the latest config schema version.
 // Increment this when making breaking changes to config format.
-const CurrentConfigVersion = "0.2.3"
+const CurrentConfigVersion = "0.2.4"
 
 // Config holds the application configuration.
 type Config struct {
@@ -138,25 +144,18 @@ type Commands struct {
 	CopyCommand string   `yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
 }
 
-// Keybinding defines a TUI keybinding action.
+// Keybinding defines a TUI keybinding that references a UserCommand.
 type Keybinding struct {
-	Action  string `yaml:"action"`  // built-in action name (recycle, delete)
-	Help    string `yaml:"help"`    // help text shown in TUI
-	Sh      string `yaml:"sh"`      // shell command template
-	Confirm string `yaml:"confirm"` // confirmation prompt (empty = no confirm)
-	Silent  bool   `yaml:"silent"`  // skip loading popup for fast commands
-	Exit    string `yaml:"exit"`    // exit hive after command (bool or $ENV_VAR)
+	Cmd     string `yaml:"cmd"`     // command name (required, references UserCommand)
+	Help    string `yaml:"help"`    // optional override for help text
+	Confirm string `yaml:"confirm"` // optional override for confirmation prompt
 }
 
-// ShouldExit evaluates the Exit condition.
-func (k Keybinding) ShouldExit() bool {
-	return ParseExitCondition(k.Exit)
-}
-
-// UserCommand defines a named command accessible via command palette.
+// UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Sh      string `yaml:"sh"`      // shell command template (required)
-	Help    string `yaml:"help"`    // description shown in palette
+	Action  string `yaml:"action"`  // built-in action (recycle, delete) - mutually exclusive with sh
+	Sh      string `yaml:"sh"`      // shell command template - mutually exclusive with action
+	Help    string `yaml:"help"`    // description shown in palette/help
 	Confirm string `yaml:"confirm"` // confirmation prompt (empty = no confirm)
 	Silent  bool   `yaml:"silent"`  // skip loading popup for fast commands
 	Exit    string `yaml:"exit"`    // exit hive after command (bool or $ENV_VAR)
@@ -303,6 +302,24 @@ func mergeKeybindings(defaults, user map[string]Keybinding) map[string]Keybindin
 	return result
 }
 
+// mergeUserCommands merges user commands into defaults.
+// User commands override defaults for the same name.
+func mergeUserCommands(defaults, user map[string]UserCommand) map[string]UserCommand {
+	result := make(map[string]UserCommand, len(defaults)+len(user))
+
+	// Copy defaults first
+	maps.Copy(result, defaults)
+	maps.Copy(result, user)
+
+	return result
+}
+
+// MergedUserCommands returns user commands merged with system defaults.
+// System defaults (Recycle, Delete) can be overridden by user config.
+func (c *Config) MergedUserCommands() map[string]UserCommand {
+	return mergeUserCommands(defaultUserCommands, c.UserCommands)
+}
+
 // Validate checks that the configuration is valid.
 func (c *Config) Validate() error {
 	return criterio.ValidateStruct(
@@ -331,8 +348,17 @@ func (c *Config) validateUserCommandsBasic() error {
 			continue
 		}
 
-		if cmd.Sh == "" {
-			errs = errs.Append(field, fmt.Errorf("sh is required"))
+		// Must have exactly one of action or sh
+		if cmd.Action == "" && cmd.Sh == "" {
+			errs = errs.Append(field, fmt.Errorf("must have either action or sh"))
+			continue
+		}
+		if cmd.Action != "" && cmd.Sh != "" {
+			errs = errs.Append(field, fmt.Errorf("cannot have both action and sh"))
+			continue
+		}
+		if cmd.Action != "" && !isValidAction(cmd.Action) {
+			errs = errs.Append(field, fmt.Errorf("invalid action %q", cmd.Action))
 		}
 	}
 
@@ -353,21 +379,24 @@ func (c *Config) validateMaxRecycled() error {
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.
+// Keybindings must reference existing UserCommands (including system defaults).
 func (c *Config) validateKeybindingsBasic() error {
 	var errs criterio.FieldErrorsBuilder
+
+	// Build merged commands map (user commands + system defaults)
+	allCommands := c.MergedUserCommands()
+
 	for key, kb := range c.Keybindings {
 		field := fmt.Sprintf("keybindings[%q]", key)
 
-		if kb.Action == "" && kb.Sh == "" {
-			errs = errs.Append(field, fmt.Errorf("must have either action or sh"))
+		if kb.Cmd == "" {
+			errs = errs.Append(field, fmt.Errorf("cmd is required"))
 			continue
 		}
-		if kb.Action != "" && kb.Sh != "" {
-			errs = errs.Append(field, fmt.Errorf("cannot have both action and sh"))
-			continue
-		}
-		if kb.Action != "" && !isValidAction(kb.Action) {
-			errs = errs.Append(field, fmt.Errorf("invalid action %q", kb.Action))
+
+		// Validate that cmd references an existing command
+		if _, exists := allCommands[kb.Cmd]; !exists {
+			errs = errs.Append(field, fmt.Errorf("cmd %q does not reference a valid user command", kb.Cmd))
 		}
 	}
 

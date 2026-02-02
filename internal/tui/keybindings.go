@@ -43,16 +43,19 @@ func (a Action) NeedsConfirm() bool {
 	return a.Confirm != ""
 }
 
-// KeybindingHandler resolves keybindings to actions.
+// KeybindingHandler resolves keybindings to actions via UserCommands.
 type KeybindingHandler struct {
 	keybindings map[string]config.Keybinding
+	commands    map[string]config.UserCommand
 	service     *hive.Service
 }
 
 // NewKeybindingHandler creates a new handler with the given config.
-func NewKeybindingHandler(keybindings map[string]config.Keybinding, service *hive.Service) *KeybindingHandler {
+// Commands should be the merged user commands (user config + system defaults).
+func NewKeybindingHandler(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand, service *hive.Service) *KeybindingHandler {
 	return &KeybindingHandler{
 		keybindings: keybindings,
+		commands:    commands,
 		service:     service,
 	}
 }
@@ -65,24 +68,41 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 		return Action{}, false
 	}
 
-	// Recycled sessions only allow delete - prevent accidental operations
-	if sess.State == session.StateRecycled && kb.Action != config.ActionDelete {
+	// Look up the referenced command
+	cmd, cmdExists := h.commands[kb.Cmd]
+	if !cmdExists {
+		// Command reference is invalid - validation should catch this,
+		// but return gracefully
 		return Action{}, false
 	}
 
+	// Recycled sessions only allow delete - prevent accidental operations
+	if sess.State == session.StateRecycled && cmd.Action != config.ActionDelete {
+		return Action{}, false
+	}
+
+	// Build action from command, with keybinding overrides
 	action := Action{
 		Key:         key,
 		Help:        kb.Help,
 		Confirm:     kb.Confirm,
 		SessionID:   sess.ID,
 		SessionPath: sess.Path,
-		Silent:      kb.Silent,
-		Exit:        kb.ShouldExit(),
+		Silent:      cmd.Silent,
+		Exit:        cmd.ShouldExit(),
 	}
 
-	// Built-in actions
-	if kb.Action != "" {
-		switch kb.Action {
+	// Use command values if keybinding doesn't override
+	if action.Help == "" {
+		action.Help = cmd.Help
+	}
+	if action.Confirm == "" {
+		action.Confirm = cmd.Confirm
+	}
+
+	// Resolve action type from command
+	if cmd.Action != "" {
+		switch cmd.Action {
 		case config.ActionRecycle:
 			action.Type = ActionTypeRecycle
 			if action.Help == "" {
@@ -98,7 +118,7 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 	}
 
 	// Shell command
-	if kb.Sh != "" {
+	if cmd.Sh != "" {
 		data := struct {
 			Path   string
 			Remote string
@@ -111,9 +131,8 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 			Name:   sess.Name,
 		}
 
-		rendered, err := tmpl.Render(kb.Sh, data)
+		rendered, err := tmpl.Render(cmd.Sh, data)
 		if err != nil {
-			// Template error - return action with empty command
 			action.Type = ActionTypeShell
 			action.ShellCmd = fmt.Sprintf("echo 'template error: %v'", err)
 			return action, true
@@ -157,11 +176,18 @@ func (h *KeybindingHandler) HelpEntries() []string {
 	for _, key := range keys {
 		kb := h.keybindings[key]
 		help := kb.Help
-		if help == "" && kb.Action != "" {
-			help = kb.Action
+
+		// If keybinding doesn't override help, get from command
+		if help == "" {
+			if cmd, ok := h.commands[kb.Cmd]; ok {
+				help = cmd.Help
+				if help == "" && cmd.Action != "" {
+					help = cmd.Action
+				}
+			}
 		}
 		if help == "" {
-			help = "shell"
+			help = "unknown"
 		}
 		entries = append(entries, fmt.Sprintf("[%s] %s", key, help))
 	}
@@ -182,11 +208,18 @@ func (h *KeybindingHandler) KeyBindings() []key.Binding {
 	for _, k := range keys {
 		kb := h.keybindings[k]
 		help := kb.Help
-		if help == "" && kb.Action != "" {
-			help = kb.Action
+
+		// If keybinding doesn't override help, get from command
+		if help == "" {
+			if cmd, ok := h.commands[kb.Cmd]; ok {
+				help = cmd.Help
+				if help == "" && cmd.Action != "" {
+					help = cmd.Action
+				}
+			}
 		}
 		if help == "" {
-			help = "shell"
+			help = "unknown"
 		}
 
 		bindings = append(bindings, key.NewBinding(
@@ -200,7 +233,36 @@ func (h *KeybindingHandler) KeyBindings() []key.Binding {
 
 // ResolveUserCommand converts a user command to an Action ready for execution.
 // The name is used to display the command source (e.g., ":review").
+// Supports both action-based commands (recycle, delete) and shell commands.
 func (h *KeybindingHandler) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
+	action := Action{
+		Key:         ":" + name,
+		Help:        cmd.Help,
+		Confirm:     cmd.Confirm,
+		SessionID:   sess.ID,
+		SessionPath: sess.Path,
+		Silent:      cmd.Silent,
+		Exit:        cmd.ShouldExit(),
+	}
+
+	// Handle built-in actions
+	if cmd.Action != "" {
+		switch cmd.Action {
+		case config.ActionRecycle:
+			action.Type = ActionTypeRecycle
+			if action.Help == "" {
+				action.Help = "recycle"
+			}
+		case config.ActionDelete:
+			action.Type = ActionTypeDelete
+			if action.Help == "" {
+				action.Help = "delete"
+			}
+		}
+		return action
+	}
+
+	// Shell command
 	data := struct {
 		Path   string
 		Remote string
@@ -220,15 +282,7 @@ func (h *KeybindingHandler) ResolveUserCommand(name string, cmd config.UserComma
 		rendered = fmt.Sprintf("echo 'template error: %v'", err)
 	}
 
-	return Action{
-		Type:        ActionTypeShell,
-		Key:         ":" + name,
-		Help:        cmd.Help,
-		Confirm:     cmd.Confirm,
-		ShellCmd:    rendered,
-		SessionID:   sess.ID,
-		SessionPath: sess.Path,
-		Silent:      cmd.Silent,
-		Exit:        cmd.ShouldExit(),
-	}
+	action.Type = ActionTypeShell
+	action.ShellCmd = rendered
+	return action
 }

@@ -177,6 +177,39 @@ type Migration struct {
 
 var migrations = []Migration{
 	{
+		Version:     "0.2.4",
+		Title:       "Keybindings now reference commands",
+		Description: "Keybindings have been simplified to only reference UserCommands. Built-in actions (recycle, delete) are now provided as default UserCommands named 'Recycle' and 'Delete'. All keybindings must have a 'cmd' field referencing a UserCommand.",
+		Migration: `1. Move any 'sh:' commands from keybindings to usercommands
+2. Replace 'action: recycle' with 'cmd: Recycle'
+3. Replace 'action: delete' with 'cmd: Delete'
+4. For shell keybindings, create a usercommand and reference it`,
+		Before: `# config.yaml (old - 0.2.3)
+keybindings:
+  r:
+    action: recycle
+    confirm: "Recycle?"
+  d:
+    action: delete
+  o:
+    sh: "code {{ .Path }}"
+    help: "open in vscode"`,
+		After: `# config.yaml (new - 0.2.4)
+usercommands:
+  vscode:
+    sh: "code {{ .Path }}"
+    help: "open in vscode"
+
+keybindings:
+  r:
+    cmd: Recycle        # System default command
+    confirm: "Recycle?" # Override default confirm
+  d:
+    cmd: Delete         # System default command
+  o:
+    cmd: vscode         # User-defined command`,
+	},
+	{
 		Version:     "0.2.3",
 		Title:       "User commands and command palette",
 		Description: "The TUI now supports user-defined commands accessible via a vim-style command palette (press `:` key). Commands can accept arguments and include confirmation prompts, exit conditions, and more.",

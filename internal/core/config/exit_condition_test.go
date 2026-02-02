@@ -96,57 +96,6 @@ func TestParseExitCondition(t *testing.T) {
 	}
 }
 
-func TestKeybinding_ShouldExit(t *testing.T) {
-	tests := []struct {
-		name     string
-		exit     string
-		envName  string
-		envValue string
-		expected bool
-	}{
-		{
-			name:     "static true",
-			exit:     "true",
-			expected: true,
-		},
-		{
-			name:     "static false",
-			exit:     "false",
-			expected: false,
-		},
-		{
-			name:     "env var true",
-			exit:     "$HIVE_POPUP",
-			envName:  "HIVE_POPUP",
-			envValue: "true",
-			expected: true,
-		},
-		{
-			name:     "env var false",
-			exit:     "$HIVE_POPUP",
-			envName:  "HIVE_POPUP",
-			envValue: "false",
-			expected: false,
-		},
-		{
-			name:     "env var unset",
-			exit:     "$HIVE_POPUP_UNSET",
-			expected: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if tt.envName != "" {
-				t.Setenv(tt.envName, tt.envValue)
-			}
-
-			kb := Keybinding{Exit: tt.exit}
-			assert.Equal(t, tt.expected, kb.ShouldExit())
-		})
-	}
-}
-
 func TestUserCommand_ShouldExit(t *testing.T) {
 	tests := []struct {
 		name     string

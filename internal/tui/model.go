@@ -249,7 +249,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
 
-	handler := NewKeybindingHandler(cfg.Keybindings, service)
+	handler := NewKeybindingHandler(cfg.Keybindings, cfg.MergedUserCommands(), service)
 
 	// Add custom keybindings to list help
 	l.AdditionalShortHelpKeys = func() []key.Binding {
