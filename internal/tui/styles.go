@@ -29,7 +29,6 @@ const (
 	iconDot = "•" // Unicode bullet separator
 )
 
-
 // Modal styles using lipgloss v2 for canvas/layer support.
 var (
 	modalStyle = lipgloss.NewStyle().
