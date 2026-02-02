@@ -1167,11 +1167,11 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	previewContent = strings.Join(previewLines, "\n")
 	previewContent = ensureExactWidth(previewContent, previewWidth)
 
-	// Create vertical divider between list and preview
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	// Create vertical divider between list and preview (subtle dotted line)
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#3b4261")).Faint(true)
 	dividerLines := make([]string, contentHeight)
 	for i := range dividerLines {
-		dividerLines[i] = dividerStyle.Render("│")
+		dividerLines[i] = dividerStyle.Render("┆")
 	}
 	divider := strings.Join(dividerLines, "\n")
 
