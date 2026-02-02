@@ -10,10 +10,11 @@ import (
 )
 
 type Flags struct {
-	LogLevel   string
-	LogFile    string
-	ConfigPath string
-	DataDir    string
+	LogLevel     string
+	LogFile      string
+	ConfigPath   string
+	DataDir      string
+	ProfilerPort int
 
 	// Config is loaded in the Before hook and available to all commands
 	Config *config.Config

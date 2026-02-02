@@ -15,15 +15,21 @@ import (
 
 // Integration implements terminal.Integration for tmux.
 type Integration struct {
-	mu        sync.RWMutex
-	cache     map[string]sessionCache // session_name -> cache entry
-	cacheTime time.Time
-	trackers  map[string]*terminal.StateTracker // session_name -> state tracker
+	mu            sync.RWMutex
+	cache         map[string]sessionCache
+	cacheTime     time.Time
+	trackers      map[string]*terminal.StateTracker
+	limiters      map[string]*terminal.RateLimiter
+	available     bool
+	availableOnce sync.Once
 }
 
 type sessionCache struct {
-	workDir  string
-	activity int64
+	workDir           string
+	activity          int64
+	paneContent       string
+	lastCaptureActive int64
+	cachedStatus      terminal.Status
 }
 
 // New creates a new tmux integration.
@@ -31,6 +37,7 @@ func New() *Integration {
 	return &Integration{
 		cache:    make(map[string]sessionCache),
 		trackers: make(map[string]*terminal.StateTracker),
+		limiters: make(map[string]*terminal.RateLimiter),
 	}
 }
 
@@ -41,8 +48,11 @@ func (t *Integration) Name() string {
 
 // Available returns true if tmux is installed and accessible.
 func (t *Integration) Available() bool {
-	cmd := exec.Command("tmux", "-V")
-	return cmd.Run() == nil
+	t.availableOnce.Do(func() {
+		_, err := exec.LookPath("tmux")
+		t.available = err == nil
+	})
+	return t.available
 }
 
 // RefreshCache updates the cached session list. Call once per poll cycle.
@@ -58,6 +68,10 @@ func (t *Integration) RefreshCache() {
 		return
 	}
 
+	t.mu.Lock()
+	oldCache := t.cache
+	t.mu.Unlock()
+
 	newCache := make(map[string]sessionCache)
 	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 		if line == "" {
@@ -70,6 +84,13 @@ func (t *Integration) RefreshCache() {
 
 		name := parts[0]
 		entry := sessionCache{}
+
+		// Preserve cached content from previous cache
+		if old, exists := oldCache[name]; exists {
+			entry.paneContent = old.paneContent
+			entry.lastCaptureActive = old.lastCaptureActive
+			entry.cachedStatus = old.cachedStatus
+		}
 
 		if len(parts) >= 2 {
 			entry.workDir = parts[1]
@@ -144,14 +165,50 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return terminal.StatusMissing, nil
 	}
 
-	// Capture pane content
-	content, err := t.capturePane(ctx, info.Name, info.Pane)
-	if err != nil {
-		return terminal.StatusMissing, err
+	// Get or create rate limiter for this session
+	t.mu.Lock()
+	limiter, ok := t.limiters[info.Name]
+	if !ok {
+		limiter = terminal.NewRateLimiter(2) // Max 2 calls per second
+		t.limiters[info.Name] = limiter
+	}
+	t.mu.Unlock()
+
+	// Capture pane content only if activity changed and rate limit allows
+	var content string
+	switch {
+	case cached.paneContent != "" && cached.activity == cached.lastCaptureActive:
+		// Activity hasn't changed, use cached content
+		content = cached.paneContent
+	case !limiter.Allow():
+		// Activity changed but rate limited, use cached content
+		content = cached.paneContent
+	default:
+		// Activity changed and rate limit allows, capture fresh
+		var err error
+		content, err = t.capturePane(ctx, info.Name, info.Pane)
+		if err != nil {
+			return terminal.StatusMissing, err
+		}
+
+		// Update cache with new content and activity timestamp
+		t.mu.Lock()
+		if entry, ok := t.cache[info.Name]; ok {
+			entry.paneContent = content
+			entry.lastCaptureActive = cached.activity
+			t.cache[info.Name] = entry
+		}
+		t.mu.Unlock()
 	}
 
 	// Store pane content in SessionInfo for preview
 	info.PaneContent = content
+
+	// If content hasn't changed and we have a cached status, return it
+	// This avoids expensive detector string operations on unchanged content
+	if content == cached.paneContent && cached.cachedStatus != "" {
+		return cached.cachedStatus, nil
+	}
 
 	// Detect tool if not already set
 	tool := info.DetectedTool
@@ -171,7 +228,17 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 
 	// Use state tracker to determine status with spike detection
 	detector := terminal.NewDetector(tool)
-	return tracker.Update(content, cached.activity, detector), nil
+	status := tracker.Update(content, cached.activity, detector)
+
+	// Cache the status result for future polls
+	t.mu.Lock()
+	if entry, ok := t.cache[info.Name]; ok {
+		entry.cachedStatus = status
+		t.cache[info.Name] = entry
+	}
+	t.mu.Unlock()
+
+	return status, nil
 }
 
 // capturePane captures the content of a tmux pane.
