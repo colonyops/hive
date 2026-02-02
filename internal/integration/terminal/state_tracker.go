@@ -30,10 +30,17 @@ type StateTracker struct {
 
 	// Last stable status (returned during spike detection window)
 	lastStableStatus Status
+
+	// Hysteresis: minimum time to hold a status before allowing change
+	lastStatusTime time.Time // When current status was set
 }
 
 // SpikeWindow is how long we wait to confirm sustained activity.
 const SpikeWindow = 1 * time.Second
+
+// HysteresisWindow is the minimum time to hold a status before changing.
+// This prevents rapid flickering between states from status bar updates.
+const HysteresisWindow = 500 * time.Millisecond
 
 // NewStateTracker creates a new state tracker.
 func NewStateTracker() *StateTracker {
@@ -54,86 +61,59 @@ func (st *StateTracker) Update(content string, activityTS int64, detector *Detec
 	needsApproval := detector.NeedsApproval(content)
 	isReady := detector.IsReady(content)
 
-	// Approval takes highest priority (Claude is blocked)
-	if needsApproval {
-		st.lastStableStatus = StatusApproval
-		st.resetSpikeDetection()
-		return StatusApproval
+	// Determine what status we would like to transition to
+	var desiredStatus Status
+	switch {
+	case needsApproval:
+		// Approval takes highest priority (Claude is blocked)
+		desiredStatus = StatusApproval
+	case isBusy:
+		// Busy indicator = definitely active
+		desiredStatus = StatusActive
+	case isReady:
+		// Ready (prompt visible)
+		desiredStatus = StatusReady
+	default:
+		// No explicit indicators - stay at current status or default to ready
+		desiredStatus = st.lastStableStatus
+		if desiredStatus == "" {
+			desiredStatus = StatusReady
+		}
 	}
 
-	// Busy indicator = definitely active
-	if isBusy {
-		st.lastChangeTime = now
-		st.lastStableStatus = StatusActive
-		st.resetSpikeDetection()
-		return StatusActive
-	}
-
-	// Ready (prompt visible)
-	if isReady {
-		st.lastStableStatus = StatusReady
-		st.resetSpikeDetection()
-		return StatusReady
-	}
-
-	// No explicit indicators - use spike detection on activity timestamp
-	if st.lastActivityTimestamp == 0 {
-		// First poll - initialize
-		st.lastActivityTimestamp = activityTS
-		st.lastStableStatus = StatusReady
-		return StatusReady
-	}
-
-	// Activity timestamp changed
-	if st.lastActivityTimestamp != activityTS {
-		st.lastActivityTimestamp = activityTS
-
-		// Check if we're in a detection window
-		if st.activityCheckStart.IsZero() || now.Sub(st.activityCheckStart) > SpikeWindow {
-			// Start new detection window
-			st.activityCheckStart = now
-			st.activityChangeCount = 1
-		} else {
-			// Within detection window - count this change
-			st.activityChangeCount++
-
-			// 2+ changes within 1 second = potential sustained activity
-			// BUT we must confirm with content check
-			if st.activityChangeCount >= 2 {
-				// Confirmed sustained activity - but still need busy indicator
-				// Content hash changes alone are NOT reliable (cursor blinks, status bar updates)
-				// Only go green if we also detect busy indicator
-				if isBusy {
-					st.lastChangeTime = now
-					st.lastStableStatus = StatusActive
-					st.resetSpikeDetection()
-					return StatusActive
-				}
-				// No busy indicator - spike was false positive
-				st.resetSpikeDetection()
+	// Apply hysteresis: don't change status too quickly
+	// Exception: approval status always gets through immediately (user is waiting)
+	if desiredStatus != st.lastStableStatus {
+		if desiredStatus != StatusApproval && !st.lastStatusTime.IsZero() {
+			if now.Sub(st.lastStatusTime) < HysteresisWindow {
+				// Within hysteresis window, keep current status
+				return st.lastStableStatus
 			}
 		}
 
-		// Not enough changes yet or no busy indicator - keep previous status
-		return st.lastStableStatus
-	}
+		// Transition to new status
+		st.lastStableStatus = desiredStatus
+		st.lastStatusTime = now
+		st.resetSpikeDetection()
 
-	// No timestamp change
-	// Check if spike window expired with only 1 change (filter single spike)
-	if st.activityChangeCount == 1 && !st.activityCheckStart.IsZero() {
-		if now.Sub(st.activityCheckStart) > SpikeWindow {
-			st.resetSpikeDetection()
+		if desiredStatus == StatusActive {
+			st.lastChangeTime = now
 		}
+
+		return desiredStatus
 	}
 
-	// During spike detection window, keep previous stable status
-	if !st.activityCheckStart.IsZero() && now.Sub(st.activityCheckStart) < SpikeWindow {
-		return st.lastStableStatus
+	// Same status - update timestamp tracking for activity monitoring
+	if st.lastActivityTimestamp == 0 {
+		st.lastActivityTimestamp = activityTS
+	} else if st.lastActivityTimestamp != activityTS {
+		st.lastActivityTimestamp = activityTS
+		// Activity changed but status didn't - this is normal (status bar updates)
+		// Reset spike detection to avoid accumulating false positives
+		st.resetSpikeDetection()
 	}
 
-	// Default to ready
-	st.lastStableStatus = StatusReady
-	return StatusReady
+	return st.lastStableStatus
 }
 
 // resetSpikeDetection clears the spike detection window.
@@ -181,6 +161,16 @@ var (
 
 	// Thinking pattern with spinner + ellipsis + status: "✳ Gusting… (35s · ↑ 673 tokens)"
 	thinkingPatternEllipsis = regexp.MustCompile(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏·✳✽✶✻✢]\s*.+…\s*\([^)]*\)`)
+
+	// Status line patterns (Claude Code status bar)
+	// Example: "📂 hive-fsnotify-co4xf6 • 🌿 feat/fsnotify-watcher • 🗃 50/57"
+	statusLinePattern = regexp.MustCompile(`📂[^•]+•[^•]+•[^•\n]+`)
+
+	// Git branch in status: "🌿 branch-name" or "🌿 main"
+	gitBranchStatusPattern = regexp.MustCompile(`🌿\s*[a-zA-Z0-9/_-]+`)
+
+	// Beads count: "🗃 50/57" or similar
+	beadsCountPattern = regexp.MustCompile(`🗃\s*\d+/\d+`)
 )
 
 // NormalizeContent prepares content for hashing by removing dynamic elements.
@@ -209,6 +199,11 @@ func NormalizeContent(content string) string {
 
 	// Normalize time patterns that change every second
 	result = timePattern.ReplaceAllString(result, "HH:MM:SS")
+
+	// Normalize status line patterns (Claude Code status bar that updates frequently)
+	result = statusLinePattern.ReplaceAllString(result, "[STATUSLINE]")
+	result = gitBranchStatusPattern.ReplaceAllString(result, "[BRANCH]")
+	result = beadsCountPattern.ReplaceAllString(result, "[BEADS]")
 
 	// Trim trailing whitespace per line (fixes resize false positives)
 	lines := strings.Split(result, "\n")
