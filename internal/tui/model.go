@@ -304,8 +304,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Account for: banner (3 lines) + tab bar (1) = 4 lines
-		contentHeight := msg.Height - 4
+		// Account for: header (1 line)
+		contentHeight := msg.Height - 1
 		if contentHeight < 1 {
 			contentHeight = 1
 		}
@@ -973,10 +973,8 @@ func (m Model) View() tea.View {
 		return tea.NewView("")
 	}
 
-	// Build main view
-	bannerView := bannerStyle.Render(banner)
-	contentView := m.renderTabView()
-	mainView := lipgloss.JoinVertical(lipgloss.Left, bannerView, contentView)
+	// Build main view (header + content)
+	mainView := m.renderTabView()
 
 	// Ensure we have dimensions for modals
 	w, h := m.width, m.height
@@ -1049,7 +1047,7 @@ func (m Model) View() tea.View {
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
-	// Build tab bar
+	// Build tab bar with tabs on left and branding on right
 	var sessionsTab, messagesTab string
 	if m.activeView == ViewSessions {
 		sessionsTab = viewSelectedStyle.Render("Sessions")
@@ -1058,11 +1056,29 @@ func (m Model) renderTabView() string {
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
-	tabBarContent := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
-	tabBar := lipgloss.NewStyle().PaddingLeft(1).Render(tabBarContent)
+	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
 
-	// Calculate content height: total - banner (3) - tab bar (1)
-	contentHeight := m.height - 4
+	// Branding on right with background
+	brandingStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#3b4261")).
+		Foreground(lipgloss.Color("#c0caf5")).
+		Padding(0, 1)
+	branding := brandingStyle.Render("Hive")
+
+	// Calculate spacing to push branding to right edge
+	tabsWidth := lipgloss.Width(tabsLeft)
+	brandingWidth := lipgloss.Width(branding)
+	spacerWidth := m.width - tabsWidth - brandingWidth - 2 // -2 for left padding
+	if spacerWidth < 1 {
+		spacerWidth = 1
+	}
+	spacer := strings.Repeat(" ", spacerWidth)
+
+	headerContent := lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, spacer, branding)
+	header := lipgloss.NewStyle().PaddingLeft(1).Render(headerContent)
+
+	// Calculate content height: total - header (1)
+	contentHeight := m.height - 1
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -1077,22 +1093,15 @@ func (m Model) renderTabView() string {
 			// Reset delegate to show full info when not in preview mode
 			m.treeDelegate.PreviewMode = false
 			m.list.SetDelegate(m.treeDelegate)
-
-			// Add Sessions heading
-			headingStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-			heading := lipgloss.NewStyle().PaddingLeft(1).Render(headingStyle.Render("Sessions"))
-			listContent := m.list.View()
-
-			content = lipgloss.JoinVertical(lipgloss.Left, heading, listContent)
+			content = m.list.View()
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	} else {
-		// Add blank line to match list's internal titleView padding
-		content = "\n" + m.msgView.View()
+		content = m.msgView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
+	return lipgloss.JoinVertical(lipgloss.Left, header, content)
 }
 
 // renderDualColumnLayout renders sessions list and preview side by side.
@@ -1114,10 +1123,6 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	// Get selected session and its terminal status
 	selected := m.selectedSession()
 	var previewContent string
-
-	// Add Sessions heading to list panel (aligned with preview header)
-	headingStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-	sessionsHeading := lipgloss.NewStyle().PaddingLeft(1).Render(headingStyle.Render("Sessions"))
 
 	if selected != nil {
 		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
@@ -1146,9 +1151,8 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 		previewContent = "No session selected"
 	}
 
-	// Render list with heading
-	listContent := m.list.View()
-	listView := lipgloss.JoinVertical(lipgloss.Left, sessionsHeading, listContent)
+	// Render list
+	listView := m.list.View()
 
 	// Apply exact height to both panels
 	listView = ensureExactHeight(listView, contentHeight)
@@ -1167,11 +1171,11 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	previewContent = strings.Join(previewLines, "\n")
 	previewContent = ensureExactWidth(previewContent, previewWidth)
 
-	// Create vertical divider between list and preview (subtle dotted line)
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#3b4261")).Faint(true)
+	// Create vertical divider between list and preview
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 	dividerLines := make([]string, contentHeight)
 	for i := range dividerLines {
-		dividerLines[i] = dividerStyle.Render("┆")
+		dividerLines[i] = dividerStyle.Render("│")
 	}
 	divider := strings.Join(dividerLines, "\n")
 
