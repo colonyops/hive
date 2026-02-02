@@ -104,7 +104,7 @@ type IntegrationsConfig struct {
 // TerminalConfig holds terminal multiplexer integration configuration.
 type TerminalConfig struct {
 	Enabled      []string      `yaml:"enabled"`       // list of enabled integrations, e.g. ["tmux"]
-	PollInterval time.Duration `yaml:"poll_interval"` // status check frequency, default 500ms
+	PollInterval time.Duration `yaml:"poll_interval"` // status check frequency, default 1.5s
 }
 
 // IsEnabled returns true if the given integration name is in the enabled list.
@@ -274,7 +274,7 @@ func (c *Config) applyDefaults() {
 		c.Commands.CopyCommand = defaultCopyCommand()
 	}
 	if c.Integrations.Terminal.PollInterval == 0 {
-		c.Integrations.Terminal.PollInterval = 500 * time.Millisecond
+		c.Integrations.Terminal.PollInterval = 1500 * time.Millisecond
 	}
 }
 
