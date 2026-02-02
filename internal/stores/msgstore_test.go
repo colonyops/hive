@@ -264,6 +264,105 @@ func TestMsgStore_Retention(t *testing.T) {
 	}
 }
 
+func TestMsgStore_RetentionBoundaries(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("exact limit", func(t *testing.T) {
+		database, err := db.Open(t.TempDir())
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		defer func() { _ = database.Close() }()
+
+		store := NewMessageStore(database, 3)
+
+		// Publish exactly 3 messages
+		for i := range 3 {
+			err := store.Publish(ctx, messaging.Message{
+				Topic:   "test",
+				Payload: fmt.Sprintf("msg%d", i),
+			})
+			if err != nil {
+				t.Fatalf("Publish %d failed: %v", i, err)
+			}
+		}
+
+		messages, err := store.Subscribe(ctx, "test", time.Time{})
+		if err != nil {
+			t.Fatalf("Subscribe failed: %v", err)
+		}
+
+		if len(messages) != 3 {
+			t.Errorf("Expected 3 messages at exact limit, got %d", len(messages))
+		}
+	})
+
+	t.Run("single message limit", func(t *testing.T) {
+		database, err := db.Open(t.TempDir())
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		defer func() { _ = database.Close() }()
+
+		store := NewMessageStore(database, 1)
+
+		// Publish 3 messages
+		for i := range 3 {
+			err := store.Publish(ctx, messaging.Message{
+				Topic:   "test",
+				Payload: fmt.Sprintf("msg%d", i),
+			})
+			if err != nil {
+				t.Fatalf("Publish %d failed: %v", i, err)
+			}
+		}
+
+		messages, err := store.Subscribe(ctx, "test", time.Time{})
+		if err != nil {
+			t.Fatalf("Subscribe failed: %v", err)
+		}
+
+		// Should only keep last message
+		if len(messages) != 1 {
+			t.Errorf("Expected 1 message with maxMessages=1, got %d", len(messages))
+		}
+		if messages[0].Payload != "msg2" {
+			t.Errorf("Expected last message, got payload %q", messages[0].Payload)
+		}
+	})
+
+	t.Run("unlimited retention", func(t *testing.T) {
+		database, err := db.Open(t.TempDir())
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		defer func() { _ = database.Close() }()
+
+		store := NewMessageStore(database, 0)
+
+		// Publish 100 messages
+		for i := range 100 {
+			err := store.Publish(ctx, messaging.Message{
+				Topic:   "test",
+				Payload: fmt.Sprintf("msg%d", i),
+			})
+			if err != nil {
+				t.Fatalf("Publish %d failed: %v", i, err)
+			}
+		}
+
+		messages, err := store.Subscribe(ctx, "test", time.Time{})
+		if err != nil {
+			t.Fatalf("Subscribe failed: %v", err)
+		}
+
+		// Should keep all messages with maxMessages=0
+		if len(messages) != 100 {
+			t.Errorf("Expected 100 messages with unlimited retention, got %d", len(messages))
+		}
+	})
+}
+
 func TestMsgStore_Prune(t *testing.T) {
 	database, err := db.Open(t.TempDir())
 	if err != nil {

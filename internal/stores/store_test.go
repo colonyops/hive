@@ -272,6 +272,70 @@ func TestStore(t *testing.T) {
 		}
 	})
 
+	t.Run("nil vs empty metadata", func(t *testing.T) {
+		database, err := db.Open(t.TempDir())
+		if err != nil {
+			t.Fatalf("Open: %v", err)
+		}
+		defer func() { _ = database.Close() }()
+
+		store := NewSessionStore(database)
+
+		// Test nil metadata
+		sessNil := session.Session{
+			ID:       "nil-metadata",
+			State:    session.StateActive,
+			Metadata: nil,
+		}
+
+		if err := store.Save(ctx, sessNil); err != nil {
+			t.Fatalf("Save nil metadata: %v", err)
+		}
+
+		gotNil, err := store.Get(ctx, "nil-metadata")
+		if err != nil {
+			t.Fatalf("Get nil metadata: %v", err)
+		}
+
+		// Both nil and empty metadata should be stored as NULL in DB
+		// and returned as empty map (not nil)
+		if gotNil.Metadata == nil {
+			gotNil.Metadata = make(map[string]string)
+		}
+		if len(gotNil.Metadata) != 0 {
+			t.Errorf("nil metadata should have 0 entries, got %d", len(gotNil.Metadata))
+		}
+
+		// Test empty metadata
+		sessEmpty := session.Session{
+			ID:       "empty-metadata",
+			State:    session.StateActive,
+			Metadata: map[string]string{},
+		}
+
+		if err := store.Save(ctx, sessEmpty); err != nil {
+			t.Fatalf("Save empty metadata: %v", err)
+		}
+
+		gotEmpty, err := store.Get(ctx, "empty-metadata")
+		if err != nil {
+			t.Fatalf("Get empty metadata: %v", err)
+		}
+
+		// Empty metadata also stored as NULL
+		if gotEmpty.Metadata == nil {
+			gotEmpty.Metadata = make(map[string]string)
+		}
+		if len(gotEmpty.Metadata) != 0 {
+			t.Errorf("empty metadata should have 0 entries, got %d", len(gotEmpty.Metadata))
+		}
+
+		// Verify both nil and empty behave the same way
+		if (gotNil.Metadata == nil) != (gotEmpty.Metadata == nil) {
+			t.Error("nil and empty metadata should both round-trip the same way")
+		}
+	})
+
 	t.Run("last inbox read", func(t *testing.T) {
 		database, err := db.Open(t.TempDir())
 		if err != nil {
