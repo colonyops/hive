@@ -1079,13 +1079,14 @@ func (m Model) renderTabView() string {
 
 	// Horizontal divider below header
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-	headerDivider := dividerStyle.Render(strings.Repeat("─", m.width))
+	dividerWidth := m.width
+	if dividerWidth < 1 {
+		dividerWidth = 80 // default width before WindowSizeMsg
+	}
+	headerDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
 
 	// Calculate content height: total - header (1) - divider (1)
-	contentHeight := m.height - 2
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
+	contentHeight := max(m.height-2, 1)
 
 	// Build content with fixed height to prevent layout shift
 	var content string
@@ -1097,14 +1098,7 @@ func (m Model) renderTabView() string {
 			// Reset delegate to show full info when not in preview mode
 			m.treeDelegate.PreviewMode = false
 			m.list.SetDelegate(m.treeDelegate)
-
-			// Add "Projects" title with divider
-			titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-			title := lipgloss.NewStyle().PaddingLeft(1).Render(titleStyle.Render("Projects"))
-			titleDivider := lipgloss.NewStyle().PaddingLeft(1).Render(dividerStyle.Render(strings.Repeat("─", m.width-2)))
-
-			listContent := m.list.View()
-			content = lipgloss.JoinVertical(lipgloss.Left, title, titleDivider, listContent)
+			content = m.list.View()
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	} else {
@@ -1130,15 +1124,6 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	// Account for divider (1 char) between list and preview
 	dividerWidth := 1
 	previewWidth := m.width - listWidth - dividerWidth
-
-	// Styles for panel headers
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-	panelDividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-
-	// Build "Projects" header for tree panel
-	projectsTitle := titleStyle.Render("Projects")
-	projectsDivider := panelDividerStyle.Render(strings.Repeat("─", listWidth-1))
-	listHeader := projectsTitle + "\n" + projectsDivider
 
 	// Get selected session and its terminal status
 	selected := m.selectedSession()
@@ -1171,9 +1156,8 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 		previewContent = "No session selected"
 	}
 
-	// Render list with "Projects" header
-	listContent := m.list.View()
-	listView := listHeader + "\n" + listContent
+	// Render list
+	listView := m.list.View()
 
 	// Apply exact height to both panels
 	listView = ensureExactHeight(listView, contentHeight)
