@@ -304,8 +304,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Account for: header (1 line)
-		contentHeight := msg.Height - 1
+		// Account for: header (1 line) + divider (1 line)
+		contentHeight := msg.Height - 2
 		if contentHeight < 1 {
 			contentHeight = 1
 		}
@@ -1077,8 +1077,12 @@ func (m Model) renderTabView() string {
 	headerContent := lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, spacer, branding)
 	header := lipgloss.NewStyle().PaddingLeft(1).Render(headerContent)
 
-	// Calculate content height: total - header (1)
-	contentHeight := m.height - 1
+	// Horizontal divider below header
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	headerDivider := dividerStyle.Render(strings.Repeat("─", m.width))
+
+	// Calculate content height: total - header (1) - divider (1)
+	contentHeight := m.height - 2
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -1093,7 +1097,14 @@ func (m Model) renderTabView() string {
 			// Reset delegate to show full info when not in preview mode
 			m.treeDelegate.PreviewMode = false
 			m.list.SetDelegate(m.treeDelegate)
-			content = m.list.View()
+
+			// Add "Projects" title with divider
+			titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
+			title := lipgloss.NewStyle().PaddingLeft(1).Render(titleStyle.Render("Projects"))
+			titleDivider := lipgloss.NewStyle().PaddingLeft(1).Render(dividerStyle.Render(strings.Repeat("─", m.width-2)))
+
+			listContent := m.list.View()
+			content = lipgloss.JoinVertical(lipgloss.Left, title, titleDivider, listContent)
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	} else {
@@ -1101,7 +1112,7 @@ func (m Model) renderTabView() string {
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, content)
+	return lipgloss.JoinVertical(lipgloss.Left, header, headerDivider, content)
 }
 
 // renderDualColumnLayout renders sessions list and preview side by side.
@@ -1120,6 +1131,15 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	dividerWidth := 1
 	previewWidth := m.width - listWidth - dividerWidth
 
+	// Styles for panel headers
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
+	panelDividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
+	// Build "Projects" header for tree panel
+	projectsTitle := titleStyle.Render("Projects")
+	projectsDivider := panelDividerStyle.Render(strings.Repeat("─", listWidth-1))
+	listHeader := projectsTitle + "\n" + projectsDivider
+
 	// Get selected session and its terminal status
 	selected := m.selectedSession()
 	var previewContent string
@@ -1133,7 +1153,7 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 			header := m.renderPreviewHeader(selected, usableWidth)
 			headerHeight := strings.Count(header, "\n") + 1
 
-			// Calculate available lines for content
+			// Calculate available lines for content (subtract 2 for Projects header)
 			outputHeight := contentHeight - headerHeight
 			if outputHeight < 1 {
 				outputHeight = 1
@@ -1151,8 +1171,9 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 		previewContent = "No session selected"
 	}
 
-	// Render list
-	listView := m.list.View()
+	// Render list with "Projects" header
+	listContent := m.list.View()
+	listView := listHeader + "\n" + listContent
 
 	// Apply exact height to both panels
 	listView = ensureExactHeight(listView, contentHeight)
