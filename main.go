@@ -121,6 +121,11 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 			flags.DB = database
 
+			// Migrate from JSON files if they exist
+			if err := stores.MigrateFromJSON(ctx, database, cfg.DataDir); err != nil {
+				return ctx, fmt.Errorf("migrate from JSON: %w", err)
+			}
+
 			// Create stores
 			sessionStore := stores.NewSessionStore(database)
 			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
