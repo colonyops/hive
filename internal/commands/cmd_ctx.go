@@ -105,6 +105,19 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("create context directory: %w", err)
 	}
 
+	// Create standard subdirectories
+	subdirs := []string{"research", "plans", "references"}
+	var createdSubdirs []string
+	for _, subdir := range subdirs {
+		subdirPath := filepath.Join(ctxDir, subdir)
+		if _, err := os.Stat(subdirPath); os.IsNotExist(err) {
+			if err := os.MkdirAll(subdirPath, 0o755); err != nil {
+				return fmt.Errorf("create subdirectory %s: %w", subdir, err)
+			}
+			createdSubdirs = append(createdSubdirs, subdir)
+		}
+	}
+
 	symlinkName := cmd.flags.Config.Context.SymlinkName
 	symlinkPath := filepath.Join(".", symlinkName)
 
@@ -114,6 +127,9 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 			target, _ := os.Readlink(symlinkPath)
 			if target == ctxDir {
 				p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
+				if len(createdSubdirs) > 0 {
+					p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
+				}
 				return nil
 			}
 			return fmt.Errorf("symlink %s exists but points to %s, not %s", symlinkName, target, ctxDir)
@@ -126,6 +142,9 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 	}
 
 	p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
+	if len(createdSubdirs) > 0 {
+		p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
+	}
 	return nil
 }
 

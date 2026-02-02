@@ -14,9 +14,8 @@ var (
 	ColorWhite  = lipgloss.Color("#c0caf5")
 )
 
-// Banner ASCII art for the header.
-const Banner = `
- ╦ ╦╦╦  ╦╔═╗
+// Banner ASCII art for the header (3 lines).
+const Banner = ` ╦ ╦╦╦  ╦╔═╗
  ╠═╣║╚╗╔╝║╣
  ╩ ╩╩ ╚╝ ╚═╝`
 

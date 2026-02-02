@@ -215,6 +215,7 @@ func DefaultConfig() Config {
 		},
 		TUI: TUIConfig{
 			RefreshInterval: 15 * time.Second,
+			PreviewEnabled:  true,
 		},
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
