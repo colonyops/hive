@@ -100,6 +100,7 @@ type TUIConfig struct {
 // MessagingConfig holds messaging-related configuration.
 type MessagingConfig struct {
 	TopicPrefix string `yaml:"topic_prefix"` // default: "agent"
+	MaxMessages int    `yaml:"max_messages"` // max messages per topic (default: 100, 0 = unlimited)
 }
 
 // IntegrationsConfig holds configuration for external integrations.
@@ -218,6 +219,7 @@ func DefaultConfig() Config {
 		},
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
+			MaxMessages: 100,
 		},
 	}
 }
@@ -436,6 +438,11 @@ func (c *Config) RepoContextDir(owner, repo string) string {
 // SharedContextDir returns the shared context directory.
 func (c *Config) SharedContextDir() string {
 	return filepath.Join(c.ContextDir(), "shared")
+}
+
+// DatabaseFile returns the path to the SQLite database file.
+func (c *Config) DatabaseFile() string {
+	return filepath.Join(c.DataDir, "hive.db")
 }
 
 func isValidAction(action string) bool {
