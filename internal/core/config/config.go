@@ -88,6 +88,7 @@ type ContextConfig struct {
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
 	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
+	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
 }
 
 // MessagingConfig holds messaging-related configuration.

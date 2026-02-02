@@ -19,6 +19,7 @@ type SessionInfo struct {
 	Pane         string // pane identifier if applicable
 	Status       Status // current detected status
 	DetectedTool string // detected AI tool (claude, gemini, etc.)
+	PaneContent  string // captured pane content for preview
 }
 
 // Integration defines the interface for terminal multiplexer integrations.

@@ -14,10 +14,11 @@ const terminalStatusTimeout = 2 * time.Second
 
 // TerminalStatus holds the terminal integration status for a session.
 type TerminalStatus struct {
-	Status    terminal.Status
-	Tool      string
-	IsLoading bool
-	Error     error
+	Status      terminal.Status
+	Tool        string
+	PaneContent string
+	IsLoading   bool
+	Error       error
 }
 
 // terminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
@@ -99,6 +100,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 
 	status.Status = termStatus
 	status.Tool = info.DetectedTool
+	status.PaneContent = info.PaneContent
 	return status
 }
 

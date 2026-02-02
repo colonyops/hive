@@ -150,6 +150,9 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return terminal.StatusMissing, err
 	}
 
+	// Store pane content in SessionInfo for preview
+	info.PaneContent = content
+
 	// Detect tool if not already set
 	tool := info.DetectedTool
 	if tool == "" {
