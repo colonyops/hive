@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -137,13 +138,9 @@ func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.T
 
 	// Sort messages by timestamp (chronological order)
 	// Messages are already sorted per-topic, but need sorting across topics
-	for i := 0; i < len(messages)-1; i++ {
-		for j := i + 1; j < len(messages); j++ {
-			if messages[i].CreatedAt.After(messages[j].CreatedAt) {
-				messages[i], messages[j] = messages[j], messages[i]
-			}
-		}
-	}
+	sort.Slice(messages, func(i, j int) bool {
+		return messages[i].CreatedAt.Before(messages[j].CreatedAt)
+	})
 
 	return messages, nil
 }
