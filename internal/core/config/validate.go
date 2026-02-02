@@ -36,14 +36,6 @@ type RecycleTemplateData struct {
 	DefaultBranch string // Default branch name (e.g., "main" or "master")
 }
 
-// KeybindingTemplateData defines available fields for keybinding shell templates.
-type KeybindingTemplateData struct {
-	Path   string // Absolute path to the session directory
-	Remote string // Git remote URL (origin)
-	ID     string // Unique session identifier
-	Name   string // Session name (directory basename)
-}
-
 // UserCommandTemplateData defines available fields for user command shell templates.
 type UserCommandTemplateData struct {
 	Path   string   // Absolute path to the session directory
@@ -75,7 +67,6 @@ func (c *Config) ValidateDeep(configPath string) error {
 		validateTemplates("commands.batch_spawn", c.Commands.BatchSpawn, BatchSpawnTemplateData{}),
 		validateTemplates("commands.recycle", c.Commands.Recycle, RecycleTemplateData{}),
 		c.validateRules(),
-		c.validateKeybindingTemplates(),
 		c.validateUserCommandTemplates(),
 	)
 }
@@ -181,20 +172,6 @@ func (c *Config) validateRules() error {
 		}
 		if _, err := regexp.Compile(rule.Pattern); err != nil {
 			errs = errs.Append(fmt.Sprintf("rules[%d].pattern", i), fmt.Errorf("invalid regex %q: %w", rule.Pattern, err))
-		}
-	}
-	return errs.ToError()
-}
-
-// validateKeybindingTemplates checks template syntax for keybinding shell commands.
-// Basic keybinding structure validation is done by Validate().
-func (c *Config) validateKeybindingTemplates() error {
-	var errs criterio.FieldErrorsBuilder
-	for key, kb := range c.Keybindings {
-		if kb.Sh != "" {
-			if err := validateTemplate(kb.Sh, KeybindingTemplateData{}); err != nil {
-				errs = errs.Append(fmt.Sprintf("keybindings[%q]", key), fmt.Errorf("template error in sh: %w", err))
-			}
 		}
 	}
 	return errs.ToError()
