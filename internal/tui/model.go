@@ -441,6 +441,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionsLoadedMsg:
 		if msg.err != nil {
+			log.Error().Err(msg.err).Msg("failed to load sessions")
 			m.err = msg.err
 			m.state = stateNormal
 			return m, nil
@@ -485,6 +486,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case actionCompleteMsg:
 		if msg.err != nil {
+			log.Error().Err(msg.err).Msg("action failed")
 			m.err = msg.err
 			m.state = stateNormal
 			m.pending = Action{}
