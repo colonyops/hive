@@ -173,8 +173,10 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
-	l.SetShowTitle(false) // Title shown in tab bar instead
+	l.SetShowTitle(false)  // Title shown in tab bar instead
+	l.SetShowFilter(false) // Don't reserve space for filter bar until filtering
 	l.Styles.TitleBar = lipgloss.NewStyle()
+	l.Styles.Title = lipgloss.NewStyle()
 	// Configure filter input styles for bubbles v2
 	l.FilterInput.Prompt = "Filter: "
 	filterStyles := textinput.DefaultStyles(true) // dark mode
@@ -304,9 +306,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Account for: banner (5 lines) + tab bar (1) = 6 lines
-		// (spacing line is included in list's titleView and msgView's prefix)
-		contentHeight := msg.Height - 6
+		// Account for: top divider (1) + header (1) + bottom divider (1) = 3 lines
+		contentHeight := msg.Height - 3
 		if contentHeight < 1 {
 			contentHeight = 1
 		}
@@ -974,10 +975,8 @@ func (m Model) View() tea.View {
 		return tea.NewView("")
 	}
 
-	// Build main view
-	bannerView := bannerStyle.Render(banner)
-	contentView := m.renderTabView()
-	mainView := lipgloss.JoinVertical(lipgloss.Left, bannerView, contentView)
+	// Build main view (header + content)
+	mainView := m.renderTabView()
 
 	// Ensure we have dimensions for modals
 	w, h := m.width, m.height
@@ -1050,7 +1049,7 @@ func (m Model) View() tea.View {
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
-	// Build tab bar
+	// Build tab bar with tabs on left and branding on right
 	var sessionsTab, messagesTab string
 	if m.activeView == ViewSessions {
 		sessionsTab = viewSelectedStyle.Render("Sessions")
@@ -1059,14 +1058,41 @@ func (m Model) renderTabView() string {
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
-	tabBarContent := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
-	tabBar := lipgloss.NewStyle().PaddingLeft(1).Render(tabBarContent)
+	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
 
-	// Calculate content height: total - banner (5) - tab bar (1)
-	contentHeight := m.height - 6
-	if contentHeight < 1 {
-		contentHeight = 1
+	// Branding on right with background
+	brandingStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#3b4261")).
+		Foreground(lipgloss.Color("#c0caf5")).
+		Padding(0, 1)
+	branding := brandingStyle.Render("Hive")
+
+	// Calculate spacing to push branding to right edge with even margins
+	// Layout: [margin] tabs [spacer] branding [margin]
+	margin := 1
+	tabsWidth := lipgloss.Width(tabsLeft)
+	brandingWidth := lipgloss.Width(branding)
+	spacerWidth := m.width - tabsWidth - brandingWidth - (margin * 2)
+	if spacerWidth < 1 {
+		spacerWidth = 1
 	}
+	leftMargin := strings.Repeat(" ", margin)
+	spacer := strings.Repeat(" ", spacerWidth)
+	rightMargin := strings.Repeat(" ", margin)
+
+	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
+
+	// Horizontal dividers above and below header
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	dividerWidth := m.width
+	if dividerWidth < 1 {
+		dividerWidth = 80 // default width before WindowSizeMsg
+	}
+	topDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
+	headerDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
+
+	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
+	contentHeight := max(m.height-3, 1)
 
 	// Build content with fixed height to prevent layout shift
 	var content string
@@ -1082,12 +1108,11 @@ func (m Model) renderTabView() string {
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	} else {
-		// Add blank line to match list's internal titleView padding
-		content = "\n" + m.msgView.View()
+		content = m.msgView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, tabBar, content)
+	return lipgloss.JoinVertical(lipgloss.Left, topDivider, header, headerDivider, content)
 }
 
 // renderDualColumnLayout renders sessions list and preview side by side.
@@ -1119,7 +1144,7 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 			header := m.renderPreviewHeader(selected, usableWidth)
 			headerHeight := strings.Count(header, "\n") + 1
 
-			// Calculate available lines for content
+			// Calculate available lines for content (subtract 2 for Projects header)
 			outputHeight := contentHeight - headerHeight
 			if outputHeight < 1 {
 				outputHeight = 1
