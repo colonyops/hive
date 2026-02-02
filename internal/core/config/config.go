@@ -77,6 +77,7 @@ type Config struct {
 	TUI                 TUIConfig              `yaml:"tui"`
 	Messaging           MessagingConfig        `yaml:"messaging"`
 	Integrations        IntegrationsConfig     `yaml:"integrations"`
+	Database            DatabaseConfig         `yaml:"database"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
@@ -100,11 +101,19 @@ type TUIConfig struct {
 // MessagingConfig holds messaging-related configuration.
 type MessagingConfig struct {
 	TopicPrefix string `yaml:"topic_prefix"` // default: "agent"
+	MaxMessages int    `yaml:"max_messages"` // max messages per topic (default: 100, 0 = unlimited)
 }
 
 // IntegrationsConfig holds configuration for external integrations.
 type IntegrationsConfig struct {
 	Terminal TerminalConfig `yaml:"terminal"`
+}
+
+// DatabaseConfig holds SQLite database configuration.
+type DatabaseConfig struct {
+	MaxOpenConns int `yaml:"max_open_conns"` // max open connections (default: 2)
+	MaxIdleConns int `yaml:"max_idle_conns"` // max idle connections (default: 2)
+	BusyTimeout  int `yaml:"busy_timeout"`   // busy timeout in milliseconds (default: 5000)
 }
 
 // TerminalConfig holds terminal multiplexer integration configuration.
@@ -218,6 +227,7 @@ func DefaultConfig() Config {
 		},
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
+			MaxMessages: 100,
 		},
 	}
 }
@@ -275,6 +285,15 @@ func (c *Config) applyDefaults() {
 	if c.Integrations.Terminal.PollInterval == 0 {
 		c.Integrations.Terminal.PollInterval = 1500 * time.Millisecond
 	}
+	if c.Database.MaxOpenConns == 0 {
+		c.Database.MaxOpenConns = 2
+	}
+	if c.Database.MaxIdleConns == 0 {
+		c.Database.MaxIdleConns = 2
+	}
+	if c.Database.BusyTimeout == 0 {
+		c.Database.BusyTimeout = 5000
+	}
 }
 
 // defaultCopyCommand returns the default clipboard command for the current OS.
@@ -326,6 +345,9 @@ func (c *Config) Validate() error {
 		criterio.Run("git_path", c.GitPath, criterio.Required[string]),
 		criterio.Run("data_dir", c.DataDir, criterio.Required[string]),
 		criterio.Run("git.status_workers", c.Git.StatusWorkers, criterio.Min(1)),
+		criterio.Run("database.max_open_conns", c.Database.MaxOpenConns, criterio.Min(1)),
+		criterio.Run("database.max_idle_conns", c.Database.MaxIdleConns, criterio.Min(1)),
+		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
@@ -436,6 +458,11 @@ func (c *Config) RepoContextDir(owner, repo string) string {
 // SharedContextDir returns the shared context directory.
 func (c *Config) SharedContextDir() string {
 	return filepath.Join(c.ContextDir(), "shared")
+}
+
+// DatabaseFile returns the path to the SQLite database file.
+func (c *Config) DatabaseFile() string {
+	return filepath.Join(c.DataDir, "hive.db")
 }
 
 func isValidAction(action string) bool {
