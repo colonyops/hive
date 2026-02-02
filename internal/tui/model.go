@@ -355,9 +355,9 @@ func (m Model) loadSessions() tea.Cmd {
 func (m Model) executeAction(action Action) tea.Cmd {
 	return func() tea.Msg {
 		cmdAction := command.Action{
-			Type:        command.ActionType(action.Type),
-			SessionID:   action.SessionID,
-			ShellCmd:    action.ShellCmd,
+			Type:      command.ActionType(action.Type),
+			SessionID: action.SessionID,
+			ShellCmd:  action.ShellCmd,
 		}
 
 		exec, err := m.cmdService.CreateExecutor(cmdAction)

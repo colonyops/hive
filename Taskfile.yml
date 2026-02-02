@@ -46,7 +46,6 @@ tasks:
 
   fmt:
     desc: Runs golangci-lint fmt on the backend
-    dir: backend
     cmds:
       - golangci-lint fmt ./...
 

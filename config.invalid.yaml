@@ -13,6 +13,10 @@ rules:
   - pattern: "^https://github.com/.*"
     # No commands or copy - triggers warning
 
+usercommands:
+  bad-open:
+    sh: "open {{.BadField}}"   # Error: invalid template in sh
+
 keybindings:
   w:
-    sh: "open {{.BadField}}"   # Error: invalid template in sh
+    cmd: bad-open
