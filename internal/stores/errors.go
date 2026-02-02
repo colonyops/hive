@@ -62,16 +62,28 @@ func RecoverFromCorruption(dataDir string) error {
 	}
 
 	// Also backup WAL and SHM files if they exist
+	// These MUST be moved/deleted for recovery to work, otherwise SQLite
+	// will find orphaned WAL/SHM files that don't match the new database
 	walPath := dbPath + "-wal"
 	if _, err := os.Stat(walPath); err == nil {
 		walBackup := backupPath + "-wal"
-		_ = os.Rename(walPath, walBackup)
+		if err := os.Rename(walPath, walBackup); err != nil {
+			// If rename fails, try to delete the file instead
+			if delErr := os.Remove(walPath); delErr != nil {
+				return fmt.Errorf("failed to backup or remove WAL file: %w", err)
+			}
+		}
 	}
 
 	shmPath := dbPath + "-shm"
 	if _, err := os.Stat(shmPath); err == nil {
 		shmBackup := backupPath + "-shm"
-		_ = os.Rename(shmPath, shmBackup)
+		if err := os.Rename(shmPath, shmBackup); err != nil {
+			// If rename fails, try to delete the file instead
+			if delErr := os.Remove(shmPath); delErr != nil {
+				return fmt.Errorf("failed to backup or remove SHM file: %w", err)
+			}
+		}
 	}
 
 	return nil

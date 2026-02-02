@@ -48,17 +48,21 @@ func MigrateFromJSON(ctx context.Context, database *db.DB, dataDir string) error
 		return nil
 	}
 
-	// Load and migrate sessions
-	if err := migrateSessions(ctx, database, sessionsPath); err != nil {
-		return fmt.Errorf("failed to migrate sessions: %w", err)
-	}
+	// Wrap entire migration in a transaction for atomicity
+	// If either sessions or messages fail to migrate, everything is rolled back
+	return database.WithTx(ctx, func(q *db.Queries) error {
+		// Load and migrate sessions
+		if err := migrateSessions(ctx, database, sessionsPath); err != nil {
+			return fmt.Errorf("failed to migrate sessions: %w", err)
+		}
 
-	// Load and migrate messages
-	if err := migrateMessages(ctx, database, topicsDir); err != nil {
-		return fmt.Errorf("failed to migrate messages: %w", err)
-	}
+		// Load and migrate messages
+		if err := migrateMessages(ctx, database, topicsDir); err != nil {
+			return fmt.Errorf("failed to migrate messages: %w", err)
+		}
 
-	return nil
+		return nil
+	})
 }
 
 // migrateSessions loads sessions from JSON and inserts into SQLite.

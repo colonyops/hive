@@ -52,13 +52,17 @@ func Open(dataDir string) (*DB, error) {
 
 	// Verify connectivity with retry
 	if err := db.pingWithRetry(context.Background()); err != nil {
-		_ = conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Initialize schema
 	if err := db.initSchema(context.Background()); err != nil {
-		_ = conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to initialize schema: %w (close also failed: %v)", err, closeErr)
+		}
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
@@ -85,7 +89,9 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 
 	queries := db.queries.WithTx(tx)
 	if err := fn(queries); err != nil {
-		_ = tx.Rollback()
+		if rbErr := tx.Rollback(); rbErr != nil {
+			return fmt.Errorf("transaction failed: %w (rollback also failed: %v)", err, rbErr)
+		}
 		return err
 	}
 
@@ -99,9 +105,13 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 // pingWithRetry attempts to ping the database with exponential backoff.
 func (db *DB) pingWithRetry(ctx context.Context) error {
 	wait := initialWait
+	var lastErr error
+
 	for i := 0; i < maxRetries; i++ {
 		if err := db.conn.PingContext(ctx); err == nil {
 			return nil
+		} else {
+			lastErr = err
 		}
 
 		if i < maxRetries-1 {
@@ -110,7 +120,7 @@ func (db *DB) pingWithRetry(ctx context.Context) error {
 		}
 	}
 
-	return fmt.Errorf("failed to ping database after %d retries", maxRetries)
+	return fmt.Errorf("failed to ping database after %d retries: %w", maxRetries, lastErr)
 }
 
 // initSchema creates the database schema if it doesn't exist.
