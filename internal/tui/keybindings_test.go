@@ -288,6 +288,43 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 			t.Error("expected ok = false for invalid command reference")
 		}
 	})
+
+	t.Run("command with neither action nor sh returns false", func(t *testing.T) {
+		// This shouldn't happen with valid config, but test defensive behavior
+		emptyCommands := map[string]config.UserCommand{
+			"empty": {Help: "an empty command"},
+		}
+		keybindings := map[string]config.Keybinding{
+			"e": {Cmd: "empty"},
+		}
+		handler := NewKeybindingHandler(keybindings, emptyCommands, nil)
+
+		_, ok := handler.Resolve("e", sess)
+		if ok {
+			t.Error("expected ok = false for command with neither action nor sh")
+		}
+	})
+
+	t.Run("template error sets Err field", func(t *testing.T) {
+		badTemplateCommands := map[string]config.UserCommand{
+			"bad": {Sh: "echo {{ .InvalidField }}"},
+		}
+		keybindings := map[string]config.Keybinding{
+			"b": {Cmd: "bad"},
+		}
+		handler := NewKeybindingHandler(keybindings, badTemplateCommands, nil)
+
+		action, ok := handler.Resolve("b", sess)
+		if !ok {
+			t.Fatal("expected ok = true even with template error")
+		}
+		if action.Err == nil {
+			t.Error("expected action.Err to be non-nil for template error")
+		}
+		if action.ShellCmd != "" {
+			t.Errorf("expected empty ShellCmd, got %q", action.ShellCmd)
+		}
+	})
 }
 
 func TestKeybindingHandler_HelpEntries(t *testing.T) {
@@ -344,6 +381,21 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		}
 		if entries[0] != "[d] delete" {
 			t.Errorf("entries[0] = %q, want %q", entries[0], "[d] delete")
+		}
+	})
+
+	t.Run("unknown fallback for invalid command reference", func(t *testing.T) {
+		keybindings := map[string]config.Keybinding{
+			"x": {Cmd: "NonExistent"},
+		}
+		handler := NewKeybindingHandler(keybindings, commands, nil)
+
+		entries := handler.HelpEntries()
+		if len(entries) != 1 {
+			t.Fatalf("expected 1 entry, got %d", len(entries))
+		}
+		if entries[0] != "[x] unknown" {
+			t.Errorf("entries[0] = %q, want %q", entries[0], "[x] unknown")
 		}
 	})
 }

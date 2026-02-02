@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -725,6 +726,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Resolve the user command to an Action
 		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
 
+		// Check for resolution errors (e.g., template errors)
+		if action.Err != nil {
+			m.state = stateNormal
+			m.err = action.Err
+			return m, nil
+		}
+
 		// Reset to normal state
 		m.state = stateNormal
 
@@ -738,7 +746,11 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Execute immediately if exit requested (synchronous to avoid race conditions)
 		if action.Exit {
-			_ = m.handler.Execute(context.Background(), action)
+			if err := m.handler.Execute(context.Background(), action); err != nil {
+				slog.Error("command failed before exit",
+					"command", action.Key,
+					"error", err)
+			}
 			m.quitting = true
 			return m, tea.Quit
 		}
@@ -899,6 +911,11 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 	action, ok := m.handler.Resolve(keyStr, *selected)
 	if ok {
+		// Check for resolution errors (e.g., template errors)
+		if action.Err != nil {
+			m.err = action.Err
+			return m, nil
+		}
 		if action.NeedsConfirm() {
 			m.state = stateConfirming
 			m.pending = action
@@ -911,7 +928,11 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		// If exit is requested, execute synchronously and quit immediately
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
 		if action.Exit {
-			_ = m.handler.Execute(context.Background(), action)
+			if err := m.handler.Execute(context.Background(), action); err != nil {
+				slog.Error("command failed before exit",
+					"key", keyStr,
+					"error", err)
+			}
 			m.quitting = true
 			return m, tea.Quit
 		}

@@ -1,8 +1,10 @@
 package tui
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"log/slog"
 	"maps"
 	"os/exec"
 	"slices"
@@ -34,8 +36,9 @@ type Action struct {
 	ShellCmd    string // For shell actions, the rendered command
 	SessionID   string
 	SessionPath string
-	Silent      bool // Skip loading popup for fast commands
-	Exit        bool // Exit hive after command completes
+	Silent      bool  // Skip loading popup for fast commands
+	Exit        bool  // Exit hive after command completes
+	Err         error // Non-nil if action resolution failed (e.g., template error)
 }
 
 // NeedsConfirm returns true if the action requires user confirmation.
@@ -72,7 +75,10 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 	cmd, cmdExists := h.commands[kb.Cmd]
 	if !cmdExists {
 		// Command reference is invalid - validation should catch this,
-		// but return gracefully
+		// but log and return gracefully for debugging
+		slog.Warn("keybinding references unknown command",
+			"key", key,
+			"cmd", kb.Cmd)
 		return Action{}, false
 	}
 
@@ -133,8 +139,13 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 
 		rendered, err := tmpl.Render(cmd.Sh, data)
 		if err != nil {
+			// Surface template error instead of masking it
 			action.Type = ActionTypeShell
-			action.ShellCmd = fmt.Sprintf("echo 'template error: %v'", err)
+			action.Err = fmt.Errorf("template error in command %q: %w", kb.Cmd, err)
+			slog.Warn("template rendering failed",
+				"key", key,
+				"cmd", kb.Cmd,
+				"error", err)
 			return action, true
 		}
 
@@ -160,11 +171,20 @@ func (h *KeybindingHandler) Execute(ctx context.Context, action Action) error {
 	}
 }
 
-// executeShell runs a shell command.
+// executeShell runs a shell command and captures stderr for better error messages.
 func (h *KeybindingHandler) executeShell(_ context.Context, cmd string) error {
-	// Use sh -c to execute the command
 	c := exec.Command("sh", "-c", cmd)
-	return c.Run()
+	var stderr bytes.Buffer
+	c.Stderr = &stderr
+
+	if err := c.Run(); err != nil {
+		errMsg := strings.TrimSpace(stderr.String())
+		if errMsg != "" {
+			return fmt.Errorf("command failed: %s", errMsg)
+		}
+		return fmt.Errorf("command failed: %w", err)
+	}
+	return nil
 }
 
 // HelpEntries returns all configured keybindings for display, sorted by key.
@@ -279,7 +299,13 @@ func (h *KeybindingHandler) ResolveUserCommand(name string, cmd config.UserComma
 
 	rendered, err := tmpl.Render(cmd.Sh, data)
 	if err != nil {
-		rendered = fmt.Sprintf("echo 'template error: %v'", err)
+		// Surface template error instead of masking it
+		action.Type = ActionTypeShell
+		action.Err = fmt.Errorf("template error in command %q: %w", name, err)
+		slog.Warn("template rendering failed",
+			"command", name,
+			"error", err)
+		return action
 	}
 
 	action.Type = ActionTypeShell

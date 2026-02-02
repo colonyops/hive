@@ -36,14 +36,6 @@ type RecycleTemplateData struct {
 	DefaultBranch string // Default branch name (e.g., "main" or "master")
 }
 
-// KeybindingTemplateData defines available fields for keybinding shell templates.
-type KeybindingTemplateData struct {
-	Path   string // Absolute path to the session directory
-	Remote string // Git remote URL (origin)
-	ID     string // Unique session identifier
-	Name   string // Session name (directory basename)
-}
-
 // UserCommandTemplateData defines available fields for user command shell templates.
 type UserCommandTemplateData struct {
 	Path   string   // Absolute path to the session directory
@@ -75,7 +67,6 @@ func (c *Config) ValidateDeep(configPath string) error {
 		validateTemplates("commands.batch_spawn", c.Commands.BatchSpawn, BatchSpawnTemplateData{}),
 		validateTemplates("commands.recycle", c.Commands.Recycle, RecycleTemplateData{}),
 		c.validateRules(),
-		c.validateKeybindingTemplates(),
 		c.validateUserCommandTemplates(),
 	)
 }
@@ -184,16 +175,6 @@ func (c *Config) validateRules() error {
 		}
 	}
 	return errs.ToError()
-}
-
-// validateKeybindingTemplates validates keybindings by checking referenced commands exist.
-// Template validation for shell commands is handled by validateUserCommandTemplates
-// since keybindings now reference UserCommands instead of containing sh directly.
-func (c *Config) validateKeybindingTemplates() error {
-	// Keybinding validation is now done in validateKeybindingsBasic
-	// which ensures keybindings reference valid UserCommands.
-	// Template validation happens in validateUserCommandTemplates.
-	return nil
 }
 
 // validateUserCommandTemplates checks template syntax for usercommand shell commands.
