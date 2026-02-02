@@ -11,17 +11,17 @@ func TestRecoverFromCorruption_Success(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "hive.db")
 
 	// Create a corrupted database file
-	if err := os.WriteFile(dbPath, []byte("corrupted data"), 0644); err != nil {
+	if err := os.WriteFile(dbPath, []byte("corrupted data"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
 	// Create WAL and SHM files
 	walPath := dbPath + "-wal"
 	shmPath := dbPath + "-shm"
-	if err := os.WriteFile(walPath, []byte("wal data"), 0644); err != nil {
+	if err := os.WriteFile(walPath, []byte("wal data"), 0o644); err != nil {
 		t.Fatalf("WriteFile WAL: %v", err)
 	}
-	if err := os.WriteFile(shmPath, []byte("shm data"), 0644); err != nil {
+	if err := os.WriteFile(shmPath, []byte("shm data"), 0o644); err != nil {
 		t.Fatalf("WriteFile SHM: %v", err)
 	}
 
@@ -95,7 +95,7 @@ func TestRecoverFromCorruption_OnlyDatabase(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "hive.db")
 
 	// Create only the database file (no WAL/SHM)
-	if err := os.WriteFile(dbPath, []byte("corrupted data"), 0644); err != nil {
+	if err := os.WriteFile(dbPath, []byte("corrupted data"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -123,7 +123,7 @@ func TestRecoverFromCorruption_BackupNaming(t *testing.T) {
 	dbPath := filepath.Join(tempDir, "hive.db")
 
 	// Create corrupted database
-	if err := os.WriteFile(dbPath, []byte("corrupted"), 0644); err != nil {
+	if err := os.WriteFile(dbPath, []byte("corrupted"), 0o644); err != nil {
 		t.Fatalf("WriteFile: %v", err)
 	}
 
@@ -168,7 +168,7 @@ func TestRecoverFromCorruption_WALWithoutDatabase(t *testing.T) {
 
 	// Create only WAL file (unusual but possible)
 	walPath := dbPath + "-wal"
-	if err := os.WriteFile(walPath, []byte("wal data"), 0644); err != nil {
+	if err := os.WriteFile(walPath, []byte("wal data"), 0o644); err != nil {
 		t.Fatalf("WriteFile WAL: %v", err)
 	}
 

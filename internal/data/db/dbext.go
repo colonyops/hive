@@ -123,7 +123,6 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 	return nil
 }
 
-
 // initSchema creates the database schema if it doesn't exist.
 func (db *DB) initSchema(ctx context.Context) error {
 	_, err := db.conn.ExecContext(ctx, schemaSQL)
