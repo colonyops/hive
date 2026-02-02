@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image/color"
 	"io"
-	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -320,7 +319,7 @@ func PadRight(s string, width int) string {
 	if len(s) >= width {
 		return s
 	}
-	return s + strings.Repeat(" ", width-len(s))
+	return s + getPadding(width-len(s))
 }
 
 // TreeDelegate handles rendering of tree items in the list.
@@ -474,7 +473,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	if d.ColumnWidths != nil && d.ColumnWidths.Name > 0 {
 		padLen := d.ColumnWidths.Name - len(item.Session.Name)
 		if padLen > 0 {
-			namePadding = strings.Repeat(" ", padLen)
+			namePadding = getPadding(padLen)
 		}
 	}
 

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	"charm.land/bubbles/v2/key"
@@ -21,6 +22,59 @@ import (
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/pkg/kv"
 )
+
+// Buffer pools for reducing allocations in rendering
+var (
+	builderPool = sync.Pool{
+		New: func() any {
+			return &strings.Builder{}
+		},
+	}
+
+	// Cache for padding strings to avoid strings.Repeat allocations
+	// Supports padding widths from 0 to 200 characters
+	paddingCache = [201]string{
+		0:   "",
+		1:   " ",
+		2:   "  ",
+		3:   "   ",
+		4:   "    ",
+		5:   "     ",
+		6:   "      ",
+		7:   "       ",
+		8:   "        ",
+		9:   "         ",
+		10:  "          ",
+		20:  "                    ",
+		40:  "                                        ",
+		80:  "                                                                                ",
+		100: "                                                                                                    ",
+		200: "                                                                                                                                                                                        ",
+	}
+
+	paddingOnce sync.Once
+)
+
+// initPaddingCache initializes all padding entries from 0-200.
+func initPaddingCache() {
+	for i := 0; i <= 200; i++ {
+		if paddingCache[i] == "" && i > 0 {
+			paddingCache[i] = strings.Repeat(" ", i)
+		}
+	}
+}
+
+// getPadding returns a padding string of n spaces, using cache when possible.
+func getPadding(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if n <= 200 {
+		paddingOnce.Do(initPaddingCache)
+		return paddingCache[n]
+	}
+	return strings.Repeat(" ", n)
+}
 
 // UIState represents the current state of the TUI.
 type UIState int
@@ -1076,9 +1130,9 @@ func (m Model) renderTabView() string {
 	if spacerWidth < 1 {
 		spacerWidth = 1
 	}
-	leftMargin := strings.Repeat(" ", margin)
-	spacer := strings.Repeat(" ", spacerWidth)
-	rightMargin := strings.Repeat(" ", margin)
+	leftMargin := getPadding(margin)
+	spacer := getPadding(spacerWidth)
+	rightMargin := getPadding(margin)
 
 	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
 
@@ -1270,14 +1324,26 @@ func truncateLines(s string, maxWidth int) string {
 	if maxWidth <= 0 {
 		return s
 	}
+
 	lines := strings.Split(s, "\n")
+	sb := builderPool.Get().(*strings.Builder)
+	defer func() {
+		sb.Reset()
+		builderPool.Put(sb)
+	}()
+
 	for i, line := range lines {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
 		if ansi.StringWidth(line) > maxWidth {
-			// Truncate at width boundary without ellipsis
-			lines[i] = ansi.TruncateWc(line, maxWidth, "")
+			sb.WriteString(ansi.TruncateWc(line, maxWidth, ""))
+		} else {
+			sb.WriteString(line)
 		}
 	}
-	return strings.Join(lines, "\n")
+
+	return sb.String()
 }
 
 // ensureExactWidth ensures all lines in content have exactly the specified width
@@ -1289,30 +1355,39 @@ func ensureExactWidth(content string, width int) string {
 	}
 
 	lines := strings.Split(content, "\n")
-	result := make([]string, len(lines))
+	sb := builderPool.Get().(*strings.Builder)
+	defer func() {
+		sb.Reset()
+		builderPool.Put(sb)
+	}()
 
 	for i, line := range lines {
+		if i > 0 {
+			sb.WriteByte('\n')
+		}
+
 		displayWidth := ansi.StringWidth(line)
 
 		switch {
 		case displayWidth == width:
-			result[i] = line
+			sb.WriteString(line)
 		case displayWidth < width:
-			// Pad with spaces to reach target width
-			padding := width - displayWidth
-			result[i] = line + strings.Repeat(" ", padding)
+			// Pad with spaces to reach target width using cached padding
+			sb.WriteString(line)
+			sb.WriteString(getPadding(width - displayWidth))
 		default:
 			// Line too wide - truncate at width boundary
-			result[i] = ansi.TruncateWc(line, width, "")
+			truncated := ansi.TruncateWc(line, width, "")
+			sb.WriteString(truncated)
 			// Pad if truncation made it shorter than width
-			truncWidth := ansi.StringWidth(result[i])
+			truncWidth := ansi.StringWidth(truncated)
 			if truncWidth < width {
-				result[i] += strings.Repeat(" ", width-truncWidth)
+				sb.WriteString(getPadding(width - truncWidth))
 			}
 		}
 	}
 
-	return strings.Join(result, "\n")
+	return sb.String()
 }
 
 // ensureExactHeight ensures content has exactly n lines by truncating or padding.
