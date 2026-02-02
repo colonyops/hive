@@ -173,8 +173,10 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
-	l.SetShowTitle(false) // Title shown in tab bar instead
+	l.SetShowTitle(false)  // Title shown in tab bar instead
+	l.SetShowFilter(false) // Don't reserve space for filter bar until filtering
 	l.Styles.TitleBar = lipgloss.NewStyle()
+	l.Styles.Title = lipgloss.NewStyle()
 	// Configure filter input styles for bubbles v2
 	l.FilterInput.Prompt = "Filter: "
 	filterStyles := textinput.DefaultStyles(true) // dark mode
@@ -304,8 +306,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 
-		// Account for: header (1 line) + divider (1 line)
-		contentHeight := msg.Height - 2
+		// Account for: top divider (1) + header (1) + bottom divider (1) = 3 lines
+		contentHeight := msg.Height - 3
 		if contentHeight < 1 {
 			contentHeight = 1
 		}
@@ -1065,28 +1067,32 @@ func (m Model) renderTabView() string {
 		Padding(0, 1)
 	branding := brandingStyle.Render("Hive")
 
-	// Calculate spacing to push branding to right edge
+	// Calculate spacing to push branding to right edge with even margins
+	// Layout: [margin] tabs [spacer] branding [margin]
+	margin := 1
 	tabsWidth := lipgloss.Width(tabsLeft)
 	brandingWidth := lipgloss.Width(branding)
-	spacerWidth := m.width - tabsWidth - brandingWidth - 2 // -2 for left padding
+	spacerWidth := m.width - tabsWidth - brandingWidth - (margin * 2)
 	if spacerWidth < 1 {
 		spacerWidth = 1
 	}
+	leftMargin := strings.Repeat(" ", margin)
 	spacer := strings.Repeat(" ", spacerWidth)
+	rightMargin := strings.Repeat(" ", margin)
 
-	headerContent := lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, spacer, branding)
-	header := lipgloss.NewStyle().PaddingLeft(1).Render(headerContent)
+	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
 
-	// Horizontal divider below header
+	// Horizontal dividers above and below header
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 	dividerWidth := m.width
 	if dividerWidth < 1 {
 		dividerWidth = 80 // default width before WindowSizeMsg
 	}
+	topDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
 	headerDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
 
-	// Calculate content height: total - header (1) - divider (1)
-	contentHeight := max(m.height-2, 1)
+	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
+	contentHeight := max(m.height-3, 1)
 
 	// Build content with fixed height to prevent layout shift
 	var content string
@@ -1106,7 +1112,7 @@ func (m Model) renderTabView() string {
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	}
 
-	return lipgloss.JoinVertical(lipgloss.Left, header, headerDivider, content)
+	return lipgloss.JoinVertical(lipgloss.Left, topDivider, header, headerDivider, content)
 }
 
 // renderDualColumnLayout renders sessions list and preview side by side.
