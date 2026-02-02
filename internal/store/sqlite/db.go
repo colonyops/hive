@@ -53,13 +53,13 @@ func Open(dataDir string) (*DB, error) {
 
 	// Verify connectivity with retry
 	if err := db.pingWithRetry(context.Background()); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 
 	// Initialize schema
 	if err := db.initSchema(context.Background()); err != nil {
-		conn.Close()
+		_ = conn.Close()
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 

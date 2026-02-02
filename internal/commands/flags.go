@@ -5,8 +5,10 @@ import (
 	"path/filepath"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/internal/store/sqlite"
 )
 
 type Flags struct {
@@ -24,6 +26,12 @@ type Flags struct {
 
 	// Store is the session store for direct access (used by doctor checks)
 	Store session.Store
+
+	// DB is the SQLite database connection
+	DB *sqlite.DB
+
+	// MsgStore is the message store for direct access
+	MsgStore messaging.Store
 }
 
 // DefaultConfigPath returns the default config file path using XDG_CONFIG_HOME.

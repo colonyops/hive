@@ -16,7 +16,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
-	"github.com/hay-kot/hive/internal/store/jsonfile"
+	"github.com/hay-kot/hive/internal/store/sqlite"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/hay-kot/hive/pkg/utils"
 )
@@ -113,17 +113,39 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 			flags.Config = cfg
 
+			// Open database connection
+			db, err := sqlite.Open(cfg.DataDir)
+			if err != nil {
+				return ctx, fmt.Errorf("open database: %w", err)
+			}
+			flags.DB = db
+
+			// Create stores
+			sessionStore := sqlite.NewSessionStore(db)
+			msgStore := sqlite.NewMessageStore(db, 0) // 0 = unlimited retention
+
+			flags.Store = sessionStore
+			flags.MsgStore = msgStore
+
 			// Create service
 			var (
-				store   = jsonfile.New(cfg.SessionsFile())
 				exec    = &executil.RealExecutor{}
 				gitExec = git.NewExecutor(cfg.GitPath, exec)
 				logger  = log.With().Str("component", "hive").Logger()
 			)
 
-			flags.Service = hive.New(store, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
-			flags.Store = store
+			flags.Service = hive.New(sessionStore, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
 			return ctx, nil
+		},
+		After: func(ctx context.Context, c *cli.Command) error {
+			// Close database connection
+			if flags.DB != nil {
+				if err := flags.DB.Close(); err != nil {
+					log.Error().Err(err).Msg("failed to close database")
+					return err
+				}
+			}
+			return nil
 		},
 	}
 

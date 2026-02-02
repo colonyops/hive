@@ -7,12 +7,10 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
 )
@@ -331,7 +329,7 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 	return cmd.printMessages(c.Root().Writer, messages)
 }
 
-func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, topic string, initialSince time.Time) error {
+func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store messaging.Store, topic string, initialSince time.Time) error {
 	timeout, err := time.ParseDuration(cmd.subTimeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout: %w", err)
@@ -375,7 +373,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 	}
 }
 
-func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store *jsonfile.MsgStore, topic string, initialSince time.Time) error {
+func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store messaging.Store, topic string, initialSince time.Time) error {
 	// Use 24h default for --wait mode (essentially forever for handoff scenarios)
 	timeout := 24 * time.Hour
 	if cmd.subTimeout != "30s" { // User explicitly set a timeout
@@ -459,16 +457,12 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-func (cmd *MsgCmd) getMsgStore() *jsonfile.MsgStore {
-	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
-	return jsonfile.NewMsgStore(topicsDir)
+func (cmd *MsgCmd) getMsgStore() messaging.Store {
+	return cmd.flags.MsgStore
 }
 
 func (cmd *MsgCmd) detectSessionID(ctx context.Context) string {
-	sessionsPath := filepath.Join(cmd.flags.DataDir, "sessions.json")
-	sessStore := jsonfile.New(sessionsPath)
-	detector := messaging.NewSessionDetector(sessStore)
-
+	detector := messaging.NewSessionDetector(cmd.flags.Store)
 	sessionID, _ := detector.DetectSession(ctx)
 	return sessionID
 }
@@ -508,16 +502,13 @@ func (cmd *MsgCmd) updateInboxReadIfOwn(ctx context.Context, topic string) {
 	}
 
 	// Update the session's LastInboxRead
-	sessionsPath := filepath.Join(cmd.flags.DataDir, "sessions.json")
-	sessStore := jsonfile.New(sessionsPath)
-
-	sess, err := sessStore.Get(ctx, currentSessionID)
+	sess, err := cmd.flags.Store.Get(ctx, currentSessionID)
 	if err != nil {
 		return // Session not found or I/O error - skip update (see function doc)
 	}
 
 	sess.UpdateLastInboxRead(time.Now())
-	_ = sessStore.Save(ctx, sess) // Best-effort save (see function doc)
+	_ = cmd.flags.Store.Save(ctx, sess) // Best-effort save (see function doc)
 }
 
 // getLastInboxRead returns the LastInboxRead timestamp for the session that owns
@@ -537,10 +528,7 @@ func (cmd *MsgCmd) getLastInboxRead(ctx context.Context, topic string) time.Time
 	topicSessionID := parts[1]
 
 	// Get the session's LastInboxRead
-	sessionsPath := filepath.Join(cmd.flags.DataDir, "sessions.json")
-	sessStore := jsonfile.New(sessionsPath)
-
-	sess, err := sessStore.Get(ctx, topicSessionID)
+	sess, err := cmd.flags.Store.Get(ctx, topicSessionID)
 	if err != nil {
 		return time.Time{}
 	}

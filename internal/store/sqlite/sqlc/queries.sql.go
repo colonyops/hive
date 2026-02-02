@@ -152,6 +152,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 
 const listTopics = `-- name: ListTopics :many
 SELECT name FROM topics
+ORDER BY name ASC
 `
 
 func (q *Queries) ListTopics(ctx context.Context) ([]string, error) {

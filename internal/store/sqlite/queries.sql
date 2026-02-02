@@ -54,7 +54,8 @@ WHERE topic = ? AND created_at > ?
 ORDER BY created_at ASC;
 
 -- name: ListTopics :many
-SELECT name FROM topics;
+SELECT name FROM topics
+ORDER BY name ASC;
 
 -- name: PruneMessages :exec
 DELETE FROM messages

@@ -4,10 +4,12 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/store/sqlite/sqlc"
+	"github.com/hay-kot/hive/pkg/randid"
 )
 
 // MessageStore implements messaging.Store using SQLite.
@@ -30,6 +32,14 @@ func NewMessageStore(db *DB, maxMessages int) *MessageStore {
 // Publish adds a message to a topic, creating the topic if it doesn't exist.
 // Enforces retention limit by deleting oldest messages if needed.
 func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message) error {
+	// Auto-generate ID and timestamp if not set
+	if msg.ID == "" {
+		msg.ID = randid.Generate(8)
+	}
+	if msg.CreatedAt.IsZero() {
+		msg.CreatedAt = time.Now()
+	}
+
 	// Start transaction for atomic publish + retention
 	return m.db.WithTx(ctx, func(q *sqlc.Queries) error {
 		// Insert message
@@ -69,32 +79,70 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message) error
 	})
 }
 
-// Subscribe returns all messages for a topic, optionally filtered by since timestamp.
-// Returns ErrTopicNotFound if the topic doesn't exist.
+// Subscribe returns all messages for a topic pattern, optionally filtered by since timestamp.
+// The topic parameter supports wildcards:
+//   - "*" or "" returns messages from all topics
+//   - "prefix.*" matches topics starting with "prefix."
+//
+// Returns ErrTopicNotFound if no matching topics exist.
 func (m *MessageStore) Subscribe(ctx context.Context, topic string, since time.Time) ([]messaging.Message, error) {
-	rows, err := m.db.queries.SubscribeToTopic(ctx, sqlc.SubscribeToTopicParams{
-		Topic:     topic,
-		CreatedAt: since.UnixNano(),
-	})
+	// Get all topics
+	allTopics, err := m.db.queries.ListTopics(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to subscribe to topic: %w", err)
+		return nil, fmt.Errorf("failed to list topics: %w", err)
 	}
 
-	// If no messages found, check if topic exists
-	if len(rows) == 0 {
-		// Check if any messages exist for this topic
-		count, err := m.db.queries.CountMessagesInTopic(ctx, topic)
+	// Match topics based on pattern
+	var matchedTopics []string
+	switch {
+	case topic == "" || topic == "*":
+		matchedTopics = allTopics
+	case strings.HasSuffix(topic, ".*"):
+		// Wildcard match
+		prefix := strings.TrimSuffix(topic, ".*") + "."
+		for _, t := range allTopics {
+			if strings.HasPrefix(t, prefix) {
+				matchedTopics = append(matchedTopics, t)
+			}
+		}
+	default:
+		// Exact match
+		for _, t := range allTopics {
+			if t == topic {
+				matchedTopics = append(matchedTopics, topic)
+				break
+			}
+		}
+	}
+
+	if len(matchedTopics) == 0 {
+		return nil, messaging.ErrTopicNotFound
+	}
+
+	// Collect messages from all matched topics
+	var messages []messaging.Message
+	for _, t := range matchedTopics {
+		rows, err := m.db.queries.SubscribeToTopic(ctx, sqlc.SubscribeToTopicParams{
+			Topic:     t,
+			CreatedAt: since.UnixNano(),
+		})
 		if err != nil {
-			return nil, fmt.Errorf("failed to check topic existence: %w", err)
+			return nil, fmt.Errorf("failed to subscribe to topic %s: %w", t, err)
 		}
-		if count == 0 {
-			return nil, messaging.ErrTopicNotFound
+
+		for _, row := range rows {
+			messages = append(messages, rowToMessage(row))
 		}
 	}
 
-	messages := make([]messaging.Message, 0, len(rows))
-	for _, row := range rows {
-		messages = append(messages, rowToMessage(row))
+	// Sort messages by timestamp (chronological order)
+	// Messages are already sorted per-topic, but need sorting across topics
+	for i := 0; i < len(messages)-1; i++ {
+		for j := i + 1; j < len(messages); j++ {
+			if messages[i].CreatedAt.After(messages[j].CreatedAt) {
+				messages[i], messages[j] = messages[j], messages[i]
+			}
+		}
 	}
 
 	return messages, nil

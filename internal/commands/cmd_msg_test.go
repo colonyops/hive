@@ -274,8 +274,10 @@ func TestPeekFlag_DoesNotUpdateLastInboxRead(t *testing.T) {
 
 	// Create command flags
 	flags := &Flags{
-		Config:  &config.Config{},
-		DataDir: dataDir,
+		Config:   &config.Config{},
+		DataDir:  dataDir,
+		Store:    sessStore,
+		MsgStore: msgStore,
 	}
 
 	// Test 1: Subscribe with --new --peek (should NOT update LastInboxRead)
