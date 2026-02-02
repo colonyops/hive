@@ -21,6 +21,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
@@ -113,8 +114,9 @@ type PendingCreate struct {
 type Model struct {
 	cfg            *config.Config
 	service        *hive.Service
+	cmdService     *command.Service
 	list           list.Model
-	handler        *KeybindingHandler
+	handler        *KeybindingResolver
 	state          UIState
 	modal          Modal
 	pending        Action
@@ -250,7 +252,8 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
 
-	handler := NewKeybindingHandler(cfg.Keybindings, cfg.MergedUserCommands(), service)
+	handler := NewKeybindingResolver(cfg.Keybindings, cfg.MergedUserCommands())
+	cmdService := command.NewService(service, service)
 
 	// Add custom keybindings to list help
 	l.AdditionalShortHelpKeys = func() []key.Binding {
@@ -285,6 +288,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	return Model{
 		cfg:              cfg,
 		service:          service,
+		cmdService:       cmdService,
 		list:             l,
 		handler:          handler,
 		state:            stateNormal,
@@ -349,7 +353,18 @@ func (m Model) loadSessions() tea.Cmd {
 // executeAction returns a command that executes the given action.
 func (m Model) executeAction(action Action) tea.Cmd {
 	return func() tea.Msg {
-		err := m.handler.Execute(context.Background(), action)
+		cmdAction := command.Action{
+			Type:        command.ActionType(action.Type),
+			SessionID:   action.SessionID,
+			ShellCmd:    action.ShellCmd,
+		}
+
+		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		if err != nil {
+			return actionCompleteMsg{err: err}
+		}
+
+		err = command.ExecuteSync(context.Background(), exec)
 		return actionCompleteMsg{err: err}
 	}
 }
@@ -746,7 +761,17 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Execute immediately if exit requested (synchronous to avoid race conditions)
 		if action.Exit {
-			if err := m.handler.Execute(context.Background(), action); err != nil {
+			cmdAction := command.Action{
+				Type:      command.ActionType(action.Type),
+				SessionID: action.SessionID,
+				ShellCmd:  action.ShellCmd,
+			}
+			exec, err := m.cmdService.CreateExecutor(cmdAction)
+			if err != nil {
+				slog.Error("failed to create executor before exit",
+					"command", action.Key,
+					"error", err)
+			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
 				slog.Error("command failed before exit",
 					"command", action.Key,
 					"error", err)
@@ -928,7 +953,17 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		// If exit is requested, execute synchronously and quit immediately
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
 		if action.Exit {
-			if err := m.handler.Execute(context.Background(), action); err != nil {
+			cmdAction := command.Action{
+				Type:      command.ActionType(action.Type),
+				SessionID: action.SessionID,
+				ShellCmd:  action.ShellCmd,
+			}
+			exec, err := m.cmdService.CreateExecutor(cmdAction)
+			if err != nil {
+				slog.Error("failed to create executor before exit",
+					"key", keyStr,
+					"error", err)
+			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
 				slog.Error("command failed before exit",
 					"key", keyStr,
 					"error", err)
@@ -1433,20 +1468,17 @@ func ensureExactHeight(content string, n int) string {
 // startRecycle returns a command that starts the recycle operation with streaming output.
 func (m Model) startRecycle(sessionID string) tea.Cmd {
 	return func() tea.Msg {
-		output := make(chan string, 100)
-		done := make(chan error, 1)
+		cmdAction := command.Action{
+			Type:      command.ActionTypeRecycle,
+			SessionID: sessionID,
+		}
 
-		ctx, cancel := context.WithCancel(context.Background())
+		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		if err != nil {
+			return recycleCompleteMsg{err: err}
+		}
 
-		go func() {
-			defer close(output)
-			defer close(done)
-
-			writer := &channelWriter{ch: output, ctx: ctx}
-			err := m.service.RecycleSession(ctx, sessionID, writer)
-			done <- err
-		}()
-
+		output, done, cancel := exec.Execute(context.Background())
 		return recycleStartedMsg{
 			output: output,
 			done:   done,
@@ -1469,21 +1501,5 @@ func listenForRecycleOutput(output <-chan string, done <-chan error) tea.Cmd {
 		case err := <-done:
 			return recycleCompleteMsg{err: err}
 		}
-	}
-}
-
-// channelWriter is an io.Writer that sends writes to a channel.
-// It respects context cancellation to avoid blocking or panicking.
-type channelWriter struct {
-	ch  chan<- string
-	ctx context.Context
-}
-
-func (w *channelWriter) Write(p []byte) (int, error) {
-	select {
-	case w.ch <- string(p):
-		return len(p), nil
-	case <-w.ctx.Done():
-		return 0, w.ctx.Err()
 	}
 }

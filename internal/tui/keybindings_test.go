@@ -19,7 +19,7 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 		"o": {Cmd: "open"},
 	}
 
-	handler := NewKeybindingHandler(keybindings, commands, nil)
+	handler := NewKeybindingResolver(keybindings, commands)
 
 	activeSession := session.Session{
 		ID:    "test-id",
@@ -102,7 +102,7 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 }
 
 func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
-	handler := NewKeybindingHandler(nil, nil, nil)
+	handler := NewKeybindingResolver(nil, nil)
 
 	sess := session.Session{
 		ID:     "test-id",
@@ -230,7 +230,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"r": {Cmd: "Recycle", Help: "keybinding help"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		action, ok := handler.Resolve("r", sess)
 		if !ok {
@@ -245,7 +245,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"r": {Cmd: "Recycle", Confirm: "keybinding confirm"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		action, ok := handler.Resolve("r", sess)
 		if !ok {
@@ -260,7 +260,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"s": {Cmd: "shell-cmd"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		action, ok := handler.Resolve("s", sess)
 		if !ok {
@@ -281,7 +281,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"x": {Cmd: "NonExistent"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		_, ok := handler.Resolve("x", sess)
 		if ok {
@@ -297,7 +297,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"e": {Cmd: "empty"},
 		}
-		handler := NewKeybindingHandler(keybindings, emptyCommands, nil)
+		handler := NewKeybindingResolver(keybindings, emptyCommands)
 
 		_, ok := handler.Resolve("e", sess)
 		if ok {
@@ -312,7 +312,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"b": {Cmd: "bad"},
 		}
-		handler := NewKeybindingHandler(keybindings, badTemplateCommands, nil)
+		handler := NewKeybindingResolver(keybindings, badTemplateCommands)
 
 		action, ok := handler.Resolve("b", sess)
 		if !ok {
@@ -339,7 +339,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 			"o": {Cmd: "open"},
 			"r": {Cmd: "Recycle"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
 		// Entries are sorted by key
@@ -358,7 +358,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"r": {Cmd: "Recycle", Help: "custom help"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
 		if len(entries) != 1 {
@@ -373,7 +373,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"d": {Cmd: "Delete"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
 		if len(entries) != 1 {
@@ -388,7 +388,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"x": {Cmd: "NonExistent"},
 		}
-		handler := NewKeybindingHandler(keybindings, commands, nil)
+		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
 		if len(entries) != 1 {

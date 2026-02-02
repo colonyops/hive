@@ -1,19 +1,15 @@
 package tui
 
 import (
-	"bytes"
-	"context"
 	"fmt"
 	"log/slog"
 	"maps"
-	"os/exec"
 	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
@@ -46,26 +42,25 @@ func (a Action) NeedsConfirm() bool {
 	return a.Confirm != ""
 }
 
-// KeybindingHandler resolves keybindings to actions via UserCommands.
-type KeybindingHandler struct {
+// KeybindingResolver resolves keybindings to actions via UserCommands.
+// It handles resolution only - execution is handled by the command.Service.
+type KeybindingResolver struct {
 	keybindings map[string]config.Keybinding
 	commands    map[string]config.UserCommand
-	service     *hive.Service
 }
 
-// NewKeybindingHandler creates a new handler with the given config.
+// NewKeybindingResolver creates a new resolver with the given config.
 // Commands should be the merged user commands (user config + system defaults).
-func NewKeybindingHandler(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand, service *hive.Service) *KeybindingHandler {
-	return &KeybindingHandler{
+func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand) *KeybindingResolver {
+	return &KeybindingResolver{
 		keybindings: keybindings,
 		commands:    commands,
-		service:     service,
 	}
 }
 
 // Resolve attempts to resolve a key press to an action for the given session.
 // Recycled sessions only allow delete actions to prevent accidental operations.
-func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, bool) {
+func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, bool) {
 	kb, exists := h.keybindings[key]
 	if !exists {
 		return Action{}, false
@@ -157,38 +152,8 @@ func (h *KeybindingHandler) Resolve(key string, sess session.Session) (Action, b
 	return Action{}, false
 }
 
-// Execute runs the given action.
-// Note: ActionTypeRecycle is not handled here - it uses streaming output
-// and is executed directly by the TUI model via Service.RecycleSession.
-func (h *KeybindingHandler) Execute(ctx context.Context, action Action) error {
-	switch action.Type {
-	case ActionTypeDelete:
-		return h.service.DeleteSession(ctx, action.SessionID)
-	case ActionTypeShell:
-		return h.executeShell(ctx, action.ShellCmd)
-	default:
-		return fmt.Errorf("action type %d not supported by Execute", action.Type)
-	}
-}
-
-// executeShell runs a shell command and captures stderr for better error messages.
-func (h *KeybindingHandler) executeShell(_ context.Context, cmd string) error {
-	c := exec.Command("sh", "-c", cmd)
-	var stderr bytes.Buffer
-	c.Stderr = &stderr
-
-	if err := c.Run(); err != nil {
-		errMsg := strings.TrimSpace(stderr.String())
-		if errMsg != "" {
-			return fmt.Errorf("command failed: %s", errMsg)
-		}
-		return fmt.Errorf("command failed: %w", err)
-	}
-	return nil
-}
-
 // HelpEntries returns all configured keybindings for display, sorted by key.
-func (h *KeybindingHandler) HelpEntries() []string {
+func (h *KeybindingResolver) HelpEntries() []string {
 	// Get sorted keys for consistent ordering
 	keys := slices.Sorted(maps.Keys(h.keybindings))
 
@@ -215,13 +180,13 @@ func (h *KeybindingHandler) HelpEntries() []string {
 }
 
 // HelpString returns a formatted help string for all keybindings.
-func (h *KeybindingHandler) HelpString() string {
+func (h *KeybindingResolver) HelpString() string {
 	entries := h.HelpEntries()
 	return strings.Join(entries, "  ")
 }
 
 // KeyBindings returns key.Binding objects for integration with bubbles help system.
-func (h *KeybindingHandler) KeyBindings() []key.Binding {
+func (h *KeybindingResolver) KeyBindings() []key.Binding {
 	keys := slices.Sorted(maps.Keys(h.keybindings))
 	bindings := make([]key.Binding, 0, len(keys))
 
@@ -254,7 +219,7 @@ func (h *KeybindingHandler) KeyBindings() []key.Binding {
 // ResolveUserCommand converts a user command to an Action ready for execution.
 // The name is used to display the command source (e.g., ":review").
 // Supports both action-based commands (recycle, delete) and shell commands.
-func (h *KeybindingHandler) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
+func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
 	action := Action{
 		Key:         ":" + name,
 		Help:        cmd.Help,
