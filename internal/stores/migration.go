@@ -112,9 +112,7 @@ func migrateMessages(ctx context.Context, database *db.DB, topicsDir string) err
 
 		topicPath := filepath.Join(topicsDir, entry.Name())
 		if err := migrateTopicFile(ctx, store, topicPath); err != nil {
-			// Log error but continue with other topics
-			fmt.Fprintf(os.Stderr, "Warning: failed to migrate topic file %s: %v\n", entry.Name(), err)
-			continue
+			return fmt.Errorf("failed to migrate topic file %s: %w", entry.Name(), err)
 		}
 	}
 
