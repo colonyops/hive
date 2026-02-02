@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"log/slog"
 	"os/exec"
 	"strings"
 	"sync"
@@ -16,6 +15,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/rs/zerolog/log"
+
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
@@ -768,13 +769,9 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			}
 			exec, err := m.cmdService.CreateExecutor(cmdAction)
 			if err != nil {
-				slog.Error("failed to create executor before exit",
-					"command", action.Key,
-					"error", err)
+				log.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
 			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				slog.Error("command failed before exit",
-					"command", action.Key,
-					"error", err)
+				log.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
 			}
 			m.quitting = true
 			return m, tea.Quit
@@ -960,13 +957,9 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 			}
 			exec, err := m.cmdService.CreateExecutor(cmdAction)
 			if err != nil {
-				slog.Error("failed to create executor before exit",
-					"key", keyStr,
-					"error", err)
+				log.Error().Str("key", keyStr).Err(err).Msg("failed to create executor before exit")
 			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				slog.Error("command failed before exit",
-					"key", keyStr,
-					"error", err)
+				log.Error().Str("key", keyStr).Err(err).Msg("command failed before exit")
 			}
 			m.quitting = true
 			return m, tea.Quit

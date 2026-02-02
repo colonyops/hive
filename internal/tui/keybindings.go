@@ -2,12 +2,13 @@ package tui
 
 import (
 	"fmt"
-	"log/slog"
 	"maps"
 	"slices"
 	"strings"
 
 	"charm.land/bubbles/v2/key"
+	"github.com/rs/zerolog/log"
+
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/pkg/tmpl"
@@ -71,9 +72,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	if !cmdExists {
 		// Command reference is invalid - validation should catch this,
 		// but log and return gracefully for debugging
-		slog.Warn("keybinding references unknown command",
-			"key", key,
-			"cmd", kb.Cmd)
+		log.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
 		return Action{}, false
 	}
 
@@ -137,10 +136,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			// Surface template error instead of masking it
 			action.Type = ActionTypeShell
 			action.Err = fmt.Errorf("template error in command %q: %w", kb.Cmd, err)
-			slog.Warn("template rendering failed",
-				"key", key,
-				"cmd", kb.Cmd,
-				"error", err)
+			log.Warn().Str("key", key).Str("cmd", kb.Cmd).Err(err).Msg("template rendering failed")
 			return action, true
 		}
 
@@ -267,9 +263,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		// Surface template error instead of masking it
 		action.Type = ActionTypeShell
 		action.Err = fmt.Errorf("template error in command %q: %w", name, err)
-		slog.Warn("template rendering failed",
-			"command", name,
-			"error", err)
+		log.Warn().Str("command", name).Err(err).Msg("template rendering failed")
 		return action
 	}
 

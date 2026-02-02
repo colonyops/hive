@@ -81,8 +81,3 @@ func (s *Service) CreateExecutor(action Action) (Executor, error) {
 		return nil, fmt.Errorf("unsupported action type: %d", action.Type)
 	}
 }
-
-// IsStreaming returns true if the action type uses streaming output.
-func (s *Service) IsStreaming(action Action) bool {
-	return action.Type == ActionTypeRecycle
-}

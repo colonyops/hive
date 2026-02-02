@@ -332,28 +332,24 @@ func TestService_CreateExecutor(t *testing.T) {
 	svc := NewService(&mockDeleter{}, &mockRecycler{})
 
 	tests := []struct {
-		name     string
-		action   Action
-		wantErr  bool
-		isStream bool
+		name    string
+		action  Action
+		wantErr bool
 	}{
 		{
-			name:     "delete action",
-			action:   Action{Type: ActionTypeDelete, SessionID: "test-123"},
-			wantErr:  false,
-			isStream: false,
+			name:    "delete action",
+			action:  Action{Type: ActionTypeDelete, SessionID: "test-123"},
+			wantErr: false,
 		},
 		{
-			name:     "recycle action",
-			action:   Action{Type: ActionTypeRecycle, SessionID: "test-123"},
-			wantErr:  false,
-			isStream: true,
+			name:    "recycle action",
+			action:  Action{Type: ActionTypeRecycle, SessionID: "test-123"},
+			wantErr: false,
 		},
 		{
-			name:     "shell action",
-			action:   Action{Type: ActionTypeShell, ShellCmd: "echo test"},
-			wantErr:  false,
-			isStream: false,
+			name:    "shell action",
+			action:  Action{Type: ActionTypeShell, ShellCmd: "echo test"},
+			wantErr: false,
 		},
 		{
 			name:    "unsupported action",
@@ -372,10 +368,6 @@ func TestService_CreateExecutor(t *testing.T) {
 
 			if !tt.wantErr && exec == nil {
 				t.Error("Expected executor but got nil")
-			}
-
-			if svc.IsStreaming(tt.action) != tt.isStream {
-				t.Errorf("IsStreaming() = %v, want %v", svc.IsStreaming(tt.action), tt.isStream)
 			}
 		})
 	}
