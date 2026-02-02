@@ -20,24 +20,35 @@ commands:
   batch_spawn:
     - ~/.config/tmux/layouts/hive.sh -b "{{ .Name }}" "{{ .Path }}" "{{ .Prompt }}"
 
-# Tmux-related keybindings
-keybindings:
-  enter:
-    help: open/create tmux
+# User commands for tmux operations
+usercommands:
+  tmux-open:
     sh: ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
+    help: "open/create tmux"
     exit: $HIVE_POPUP
     silent: true
-  p:
-    help: popup
+  tmux-popup:
     sh: tmux display-popup -E -w 80% -h 80% "tmux new-session -s hive-popup -t '{{ .Name }}'"
+    help: "popup"
     silent: true
-  ctrl+d:
-    help: kill session
+  tmux-kill:
     sh: tmux kill-session -t "{{ .Name }}" 2>/dev/null || true
-  t:
-    help: send /tidy
+    help: "kill session"
+  send-tidy:
     sh: claude-send "{{ .Name }}:claude" "/tidy"
+    help: "send /tidy"
     silent: true
+
+# Keybindings reference the commands above
+keybindings:
+  enter:
+    cmd: tmux-open
+  p:
+    cmd: tmux-popup
+  ctrl+d:
+    cmd: tmux-kill
+  t:
+    cmd: send-tidy
 ```
 
 ## Scripts

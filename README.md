@@ -35,7 +35,7 @@ Hive creates isolated git environments for running multiple AI agents in paralle
 - **Terminal Integration** — Real-time status monitoring of AI agents in tmux
 - **Inter-agent Messaging** — Pub/sub communication between sessions
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
-- **Custom Keybindings** — Configure actions with shell commands
+- **Custom Keybindings** — Bind keys to user-defined or system commands
 - **Command Palette** — Vim-style command palette for custom commands (`:` key)
 
 ## Quick Start
@@ -144,20 +144,8 @@ rules:
     copy:
       - .envrc
 
-# TUI keybindings
-keybindings:
-  r:
-    action: recycle
-    confirm: Are you sure you want to recycle this session?
-  d:
-    action: delete
-    confirm: Are you sure you want to delete this session?
-  o:
-    help: open in finder
-    sh: "open {{ .Path }}"
-    silent: true
-
-# User commands (accessible via : in TUI)
+# User commands (accessible via : or keybindings)
+# System provides default Recycle and Delete commands
 usercommands:
   review:
     sh: "send-claude {{ .Name }} /review"
@@ -172,6 +160,16 @@ usercommands:
     help: "Open session in Finder"
     silent: true
     exit: "true"
+
+# TUI keybindings (all reference usercommands)
+keybindings:
+  r:
+    cmd: Recycle  # System default command
+    confirm: "Recycle this session?"  # Override default confirm
+  d:
+    cmd: Delete   # System default command
+  o:
+    cmd: open     # User-defined command above
 ```
 
 ### Template Variables
@@ -183,7 +181,6 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `commands.spawn`       | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
 | `commands.batch_spawn` | Same as spawn, plus `.Prompt`                               |
 | `commands.recycle`     | `.DefaultBranch`                                            |
-| `keybindings.*.sh`     | `.Path`, `.Name`, `.Remote`, `.ID`                          |
 | `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Args`                 |
 
 ### User Commands & Command Palette
@@ -200,13 +197,23 @@ User commands provide a vim-style command palette accessible by pressing `:` in 
 
 **Command Options:**
 
-| Field     | Type   | Description                                      |
-| --------- | ------ | ------------------------------------------------ |
-| `sh`      | string | Shell command template (required)                |
-| `help`    | string | Description shown in palette                     |
-| `confirm` | string | Confirmation prompt (empty = no confirmation)    |
-| `silent`  | bool   | Skip loading popup for fast commands             |
-| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)      |
+| Field     | Type   | Description                                              |
+| --------- | ------ | -------------------------------------------------------- |
+| `sh`      | string | Shell command template (mutually exclusive with action)  |
+| `action`  | string | Built-in action: `recycle` or `delete` (mutually exclusive with sh) |
+| `help`    | string | Description shown in palette                             |
+| `confirm` | string | Confirmation prompt (empty = no confirmation)            |
+| `silent`  | bool   | Skip loading popup for fast commands                     |
+| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)              |
+
+**System Default Commands:**
+
+Hive provides built-in commands that can be overridden in usercommands:
+
+| Name      | Action   | Description                    |
+| --------- | -------- | ------------------------------ |
+| `Recycle` | recycle  | Recycles the selected session  |
+| `Delete`  | delete   | Deletes the selected session   |
 
 **Using Arguments:**
 
@@ -235,6 +242,33 @@ usercommands:
 
 This is useful when running hive in a tmux popup vs a dedicated session.
 
+### Keybindings
+
+Keybindings map keys to user commands. All keybindings must reference a command via the `cmd` field.
+
+**Keybinding Options:**
+
+| Field     | Type   | Description                                         |
+| --------- | ------ | --------------------------------------------------- |
+| `cmd`     | string | Command name to execute (required)                  |
+| `help`    | string | Override help text from the command                 |
+| `confirm` | string | Override confirmation prompt from the command       |
+
+**Example:**
+
+```yaml
+keybindings:
+  r:
+    cmd: Recycle                         # System default
+  d:
+    cmd: Delete                          # System default
+  o:
+    cmd: open                            # User-defined command
+  t:
+    cmd: tidy
+    confirm: "Run tidy on this session?" # Override command's confirm
+```
+
 ### Configuration Options
 
 | Option                                | Type                    | Default                        | Description                              |
@@ -244,8 +278,8 @@ This is useful when running hive in a tmux popup vs a dedicated session.
 | `commands.batch_spawn`                | `[]string`              | `[]`                           | Commands after batch session creation    |
 | `commands.recycle`                    | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling                  |
 | `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
-| `keybindings`                         | `map[string]Keybinding` | `r`=recycle, `d`=delete        | TUI keybindings                          |
-| `usercommands`                        | `map[string]UserCommand`| `{}`                           | Command palette commands (`:` key)       |
+| `keybindings`                         | `map[string]Keybinding` | `r`=Recycle, `d`=Delete        | TUI keybindings (reference usercommands) |
+| `usercommands`                        | `map[string]UserCommand`| Recycle, Delete (system)       | Named commands for palette and keybindings |
 | `tui.refresh_interval`                | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
 | `integrations.terminal.enabled`       | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
 | `integrations.terminal.poll_interval` | `duration`              | `500ms`                        | Status check frequency                   |
