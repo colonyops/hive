@@ -74,7 +74,7 @@ func Open(dataDir string, opts OpenOptions) (*DB, error) {
 	// Verify connectivity - fail fast for SQLite
 	if err := conn.PingContext(context.Background()); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %v)", err, closeErr)
+			return nil, fmt.Errorf("failed to connect to database: %w (close also failed: %w)", err, closeErr)
 		}
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
@@ -82,7 +82,7 @@ func Open(dataDir string, opts OpenOptions) (*DB, error) {
 	// Initialize schema
 	if err := db.initSchema(context.Background()); err != nil {
 		if closeErr := conn.Close(); closeErr != nil {
-			return nil, fmt.Errorf("failed to initialize schema: %w (close also failed: %v)", err, closeErr)
+			return nil, fmt.Errorf("failed to initialize schema: %w (close also failed: %w)", err, closeErr)
 		}
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
@@ -111,7 +111,7 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 	queries := db.queries.WithTx(tx)
 	if err := fn(queries); err != nil {
 		if rbErr := tx.Rollback(); rbErr != nil {
-			return fmt.Errorf("transaction failed: %w (rollback also failed: %v)", err, rbErr)
+			return fmt.Errorf("transaction failed: %w (rollback also failed: %w)", err, rbErr)
 		}
 		return err
 	}

@@ -43,11 +43,12 @@ func TestRecoverFromCorruption_Success(t *testing.T) {
 	shmBackups := make([]string, 0)
 
 	for _, f := range allFiles {
-		if filepath.Ext(f) == ".db-wal" || len(f) > 4 && f[len(f)-4:] == "-wal" {
+		switch {
+		case filepath.Ext(f) == ".db-wal" || len(f) > 4 && f[len(f)-4:] == "-wal":
 			walBackups = append(walBackups, f)
-		} else if filepath.Ext(f) == ".db-shm" || len(f) > 4 && f[len(f)-4:] == "-shm" {
+		case filepath.Ext(f) == ".db-shm" || len(f) > 4 && f[len(f)-4:] == "-shm":
 			shmBackups = append(shmBackups, f)
-		} else {
+		default:
 			dbBackups = append(dbBackups, f)
 		}
 	}
