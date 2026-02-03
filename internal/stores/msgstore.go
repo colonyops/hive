@@ -35,10 +35,7 @@ func NewMessageStore(db *db.DB, maxMessages int) *MessageStore {
 // Wildcards are expanded before publishing.
 // Enforces retention limit by deleting oldest messages if needed.
 func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topics []string) error {
-	// Auto-generate ID and timestamp if not set
-	if msg.ID == "" {
-		msg.ID = randid.Generate(8)
-	}
+	// Set timestamp if not set (shared across all copies)
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
 	}
@@ -63,6 +60,8 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 	for topic := range expandedTopics {
 		msgCopy := msg
 		msgCopy.Topic = topic
+		// Each copy needs a unique ID
+		msgCopy.ID = randid.Generate(8)
 
 		// Start transaction for atomic publish + retention
 		err := m.db.WithTx(ctx, func(q *db.Queries) error {
