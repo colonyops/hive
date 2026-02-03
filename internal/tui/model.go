@@ -1703,8 +1703,8 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 				icon = status.Icon
 			}
 
-			// Use separator style (neutral gray) for all plugin text
-			pluginPart := separatorStyle.Render(icon + ":" + status.Label)
+			// Icon unstyled, only the label gets neutral color
+			pluginPart := icon + separatorStyle.Render(":"+status.Label)
 			statusParts = append(statusParts, pluginPart)
 		}
 	}
