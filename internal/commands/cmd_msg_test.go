@@ -201,4 +201,3 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 		t.Errorf("generated only %d unique topic IDs in 10 attempts, expected near 10", len(seen))
 	}
 }
-

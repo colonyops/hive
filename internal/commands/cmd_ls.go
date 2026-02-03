@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"text/tabwriter"
-	"time"
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/session"
@@ -123,24 +122,27 @@ func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
 
 // sessionInfo is the JSON output format for hive ls --json.
 type sessionInfo struct {
-	ID         string     `json:"id"`
-	Name       string     `json:"name"`
-	Repo       string     `json:"repo"`
-	Inbox      string     `json:"inbox"`
-	LastActive *time.Time `json:"last_active,omitempty"`
-	State      string     `json:"state"`
-	Unread     int        `json:"unread"`
+	ID     string `json:"id"`
+	Name   string `json:"name"`
+	Repo   string `json:"repo"`
+	Inbox  string `json:"inbox"`
+	State  string `json:"state"`
+	Unread int    `json:"unread"`
 }
 
 func (cmd *LsCmd) buildSessionInfo(ctx context.Context, s session.Session) sessionInfo {
 	info := sessionInfo{
-		ID:         s.ID,
-		Name:       s.Name,
-		Repo:       git.ExtractRepoName(s.Remote),
-		Inbox:      s.InboxTopic(),
-		LastActive: nil, // TODO: Use GetUnread with acknowledgment system
-		State:      string(s.State),
-		Unread:     0,    // TODO: Use GetUnread to count unread messages
+		ID:     s.ID,
+		Name:   s.Name,
+		Repo:   git.ExtractRepoName(s.Remote),
+		Inbox:  s.InboxTopic(),
+		State:  string(s.State),
+		Unread: 0,
+	}
+
+	// Count unread inbox messages
+	if msgs, err := cmd.flags.MsgStore.GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
+		info.Unread = len(msgs)
 	}
 
 	return info

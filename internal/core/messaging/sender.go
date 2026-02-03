@@ -2,6 +2,7 @@ package messaging
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -20,27 +21,27 @@ func NewSessionDetector(store session.Store) *SessionDetector {
 }
 
 // DetectSession returns the session ID for the current working directory.
-// Returns empty string if not in a hive session.
+// Returns empty string if not in a hive session, or an error if detection fails.
 func (d *SessionDetector) DetectSession(ctx context.Context) (string, error) {
 	cwd, err := os.Getwd()
 	if err != nil {
-		return "", nil // Not an error - just can't detect
+		return "", fmt.Errorf("get working directory: %w", err)
 	}
 	return d.DetectSessionFromPath(ctx, cwd)
 }
 
 // DetectSessionFromPath returns the session ID for the given path.
-// Returns empty string if the path is not within a hive session.
+// Returns empty string if the path is not within a hive session, or an error if detection fails.
 func (d *SessionDetector) DetectSessionFromPath(ctx context.Context, path string) (string, error) {
 	sessions, err := d.store.List(ctx)
 	if err != nil {
-		return "", nil // Not an error - just can't detect
+		return "", fmt.Errorf("list sessions: %w", err)
 	}
 
 	// Clean and normalize the path
 	path, err = filepath.Abs(path)
 	if err != nil {
-		return "", nil
+		return "", fmt.Errorf("get absolute path: %w", err)
 	}
 	path = filepath.Clean(path)
 

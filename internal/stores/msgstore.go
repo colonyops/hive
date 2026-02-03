@@ -34,6 +34,7 @@ func NewMessageStore(db *db.DB, maxMessages int) *MessageStore {
 // Publish adds a message to multiple topics.
 // Wildcards are expanded before publishing.
 // Enforces retention limit by deleting oldest messages if needed.
+// All topics are published atomically within a single transaction.
 func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topics []string) error {
 	// Set timestamp if not set (shared across all copies)
 	if msg.CreatedAt.IsZero() {
@@ -56,15 +57,14 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 		}
 	}
 
-	// Publish to each unique topic
-	for topic := range expandedTopics {
-		msgCopy := msg
-		msgCopy.Topic = topic
-		// Each copy needs a unique ID
-		msgCopy.ID = randid.Generate(8)
+	// Publish all topics atomically in a single transaction
+	return m.db.WithTx(ctx, func(q *db.Queries) error {
+		for topic := range expandedTopics {
+			msgCopy := msg
+			msgCopy.Topic = topic
+			// Each copy needs a unique ID
+			msgCopy.ID = randid.Generate(8)
 
-		// Start transaction for atomic publish + retention
-		err := m.db.WithTx(ctx, func(q *db.Queries) error {
 			// Insert message
 			err := q.PublishMessage(ctx, db.PublishMessageParams{
 				ID:        msgCopy.ID,
@@ -75,14 +75,14 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 				CreatedAt: msgCopy.CreatedAt.UnixNano(),
 			})
 			if err != nil {
-				return fmt.Errorf("failed to publish message: %w", err)
+				return fmt.Errorf("publish to topic %s: %w", topic, err)
 			}
 
 			// Enforce retention limit if configured
 			if m.maxMessages > 0 {
 				count, err := q.CountMessagesInTopic(ctx, msgCopy.Topic)
 				if err != nil {
-					return fmt.Errorf("failed to count messages: %w", err)
+					return fmt.Errorf("count messages in topic %s: %w", topic, err)
 				}
 
 				// Delete oldest messages if over limit
@@ -93,19 +93,13 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 						Limit: toDelete,
 					})
 					if err != nil {
-						return fmt.Errorf("failed to enforce retention: %w", err)
+						return fmt.Errorf("enforce retention for topic %s: %w", topic, err)
 					}
 				}
 			}
-
-			return nil
-		})
-		if err != nil {
-			return err
 		}
-	}
-
-	return nil
+		return nil
+	})
 }
 
 // Subscribe returns all messages for a topic pattern, optionally filtered by since timestamp.
@@ -272,7 +266,7 @@ func (m *MessageStore) Acknowledge(ctx context.Context, consumerID string, messa
 				ReadAt:     now,
 			})
 			if err != nil {
-				return err
+				return fmt.Errorf("acknowledge message %s: %w", msgID, err)
 			}
 		}
 		return nil
@@ -292,7 +286,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 		// Expand pattern and query each topic
 		topics, err := m.expandTopicPattern(ctx, topic)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("expand topic pattern %q: %w", topic, err)
 		}
 
 		for _, t := range topics {
@@ -301,7 +295,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 				ConsumerID: consumerID,
 			})
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("get unread messages for topic %s: %w", t, err)
 			}
 			allRows = append(allRows, rows...)
 		}
@@ -312,7 +306,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 			ConsumerID: consumerID,
 		})
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("get unread messages for topic %s: %w", topic, err)
 		}
 		allRows = rows
 	}

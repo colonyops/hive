@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"time"
 
@@ -277,7 +278,7 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Auto-detect session and set sender
-	sessionID := cmd.detectSessionID(ctx)
+	sessionID, _ := cmd.detectSessionID(ctx) // Best-effort detection for sender
 	sender := cmd.pubSender
 	if sessionID != "" && sender == "" {
 		sender = sessionID // Auto-set sender = session_id
@@ -448,11 +449,10 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 	var infos []topicInfo
 	for _, t := range topics {
 		messages, err := store.Subscribe(ctx, t, time.Time{})
-		count := 0
-		if err == nil {
-			count = len(messages)
+		if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
+			return fmt.Errorf("get messages for topic %s: %w", t, err)
 		}
-		infos = append(infos, topicInfo{Name: t, MessageCount: count})
+		infos = append(infos, topicInfo{Name: t, MessageCount: len(messages)})
 	}
 
 	enc := json.NewEncoder(c.Root().Writer)
@@ -468,10 +468,9 @@ func (cmd *MsgCmd) getMsgStore() messaging.Store {
 	return cmd.flags.MsgStore
 }
 
-func (cmd *MsgCmd) detectSessionID(ctx context.Context) string {
+func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
 	detector := messaging.NewSessionDetector(cmd.flags.Store)
-	sessionID, _ := detector.DetectSession(ctx)
-	return sessionID
+	return detector.DetectSession(ctx)
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
@@ -484,9 +483,14 @@ func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) erro
 	return nil
 }
 
-// acknowledgeMessages marks messages as read by the current session (best-effort).
+// acknowledgeMessages marks messages as read by the current session.
+// Logs errors but does not fail the operation.
 func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, store messaging.Store, messages []messaging.Message) {
-	sessionID := cmd.detectSessionID(ctx)
+	sessionID, err := cmd.detectSessionID(ctx)
+	if err != nil {
+		log.Printf("warning: failed to detect session for acknowledgment: %v", err)
+		return
+	}
 	if sessionID == "" {
 		return // Not in a session, skip acknowledgment
 	}
@@ -495,7 +499,9 @@ func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, store messaging.Stor
 	for i, msg := range messages {
 		messageIDs[i] = msg.ID
 	}
-	_ = store.Acknowledge(ctx, sessionID, messageIDs) // Best-effort, ignore errors
+	if err := store.Acknowledge(ctx, sessionID, messageIDs); err != nil {
+		log.Printf("warning: failed to acknowledge %d messages: %v", len(messageIDs), err)
+	}
 }
 
 func (cmd *MsgCmd) inboxCmd() *cli.Command {
@@ -528,7 +534,10 @@ Examples:
 func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 	store := cmd.getMsgStore()
 
-	sessionID := cmd.detectSessionID(ctx)
+	sessionID, err := cmd.detectSessionID(ctx)
+	if err != nil {
+		return fmt.Errorf("detect session: %w", err)
+	}
 	if sessionID == "" {
 		return fmt.Errorf("not in a hive session (run from session working directory)")
 	}
@@ -536,16 +545,16 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 	inboxTopic := "agent." + sessionID + ".inbox"
 
 	var messages []messaging.Message
-	var err error
+	var msgErr error
 
 	if cmd.inboxAll {
-		messages, err = store.Subscribe(ctx, inboxTopic, time.Time{})
+		messages, msgErr = store.Subscribe(ctx, inboxTopic, time.Time{})
 	} else {
-		messages, err = store.GetUnread(ctx, sessionID, inboxTopic)
+		messages, msgErr = store.GetUnread(ctx, sessionID, inboxTopic)
 	}
 
-	if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
-		return fmt.Errorf("get inbox: %w", err)
+	if msgErr != nil && !errors.Is(msgErr, messaging.ErrTopicNotFound) {
+		return fmt.Errorf("get inbox: %w", msgErr)
 	}
 
 	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
@@ -559,4 +568,3 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 
 	return nil
 }
-

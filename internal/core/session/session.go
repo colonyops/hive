@@ -35,15 +35,15 @@ const (
 
 // Session represents an isolated git environment for an AI agent.
 type Session struct {
-	ID            string            `json:"id"`
-	Name          string            `json:"name"`
-	Slug          string            `json:"slug"`
-	Path          string            `json:"path"`
-	Remote        string            `json:"remote"`
-	State         State             `json:"state"`
-	Metadata      map[string]string `json:"metadata,omitempty"` // integration data (e.g., tmux session name)
-	CreatedAt     time.Time         `json:"created_at"`
-	UpdatedAt     time.Time         `json:"updated_at"`
+	ID        string            `json:"id"`
+	Name      string            `json:"name"`
+	Slug      string            `json:"slug"`
+	Path      string            `json:"path"`
+	Remote    string            `json:"remote"`
+	State     State             `json:"state"`
+	Metadata  map[string]string `json:"metadata,omitempty"` // integration data (e.g., tmux session name)
+	CreatedAt time.Time         `json:"created_at"`
+	UpdatedAt time.Time         `json:"updated_at"`
 }
 
 // InboxTopic returns the conventional inbox topic name for this session.
