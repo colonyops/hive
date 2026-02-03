@@ -320,9 +320,19 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 func (v ReviewView) View() string {
 	var baseView string
 
-	// Full-screen mode: show only the viewport
+	// Full-screen mode: show viewport with status bar
 	if v.fullScreen {
-		baseView = v.viewport.View()
+		contentHeight := v.height - 1 // Reserve 1 line for status bar
+		content := v.viewport.View()
+		statusBar := v.renderStatusBar()
+
+		// Truncate content if needed to make room for status bar
+		contentLines := strings.Split(content, "\n")
+		if len(contentLines) > contentHeight {
+			contentLines = contentLines[:contentHeight]
+		}
+
+		baseView = strings.Join(contentLines, "\n") + "\n" + statusBar
 	} else if !v.previewMode || v.width < 80 {
 		// Single column mode
 		baseView = v.list.View()
@@ -501,12 +511,29 @@ func (v *ReviewView) renderSelection() {
 }
 
 // highlightSelection applies background color to cursor and selected lines.
+// Also adds gutter indicators for commented lines.
 func (v *ReviewView) highlightSelection(content string) string {
 	lines := strings.Split(content, "\n")
 
-	// Styles
-	selectionStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
-	cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#2a3158"))
+	// Get commented line numbers
+	commentedLines := v.getCommentedLines()
+
+	// Gutter styles
+	gutterIndicatorStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#e0af68")). // Gold/yellow
+		Bold(true)
+	gutterEmptyStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#565f89"))
+
+	// Styles with explicit width to fill viewport (accounting for gutter)
+	gutterWidth := 2 // "● " or "  "
+	contentWidth := v.viewport.Width() - gutterWidth
+	selectionStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#3b4261")).
+		Width(contentWidth)
+	cursorStyle := lipgloss.NewStyle().
+		Background(lipgloss.Color("#2a3158")).
+		Width(contentWidth)
 
 	// Calculate selection range if in visual mode
 	var start, end int
@@ -515,31 +542,86 @@ func (v *ReviewView) highlightSelection(content string) string {
 		end = max(v.selectionStart, v.cursorLine)
 	}
 
-	// Apply highlighting
+	// Apply gutter and highlighting
 	for i := range lines {
 		lineNum := i + 1
 
+		// Add gutter indicator
+		var gutter string
+		if commentedLines[lineNum] {
+			gutter = gutterIndicatorStyle.Render("● ")
+		} else {
+			gutter = gutterEmptyStyle.Render("  ")
+		}
+
 		// Apply cursor highlight (always visible in full-screen)
 		if lineNum == v.cursorLine {
-			lines[i] = cursorStyle.Render(lines[i])
+			lines[i] = gutter + cursorStyle.Render(lines[i])
+		} else if v.selectionMode && lineNum >= start && lineNum <= end {
+			// Apply selection highlight (overrides cursor style if overlapping)
+			lines[i] = gutter + selectionStyle.Render(lines[i])
+		} else {
+			lines[i] = gutter + lines[i]
 		}
-
-		// Apply selection highlight (overrides cursor style if overlapping)
-		if v.selectionMode && lineNum >= start && lineNum <= end {
-			lines[i] = selectionStyle.Render(lines[i])
-		}
-	}
-
-	// Add visual mode indicator
-	if v.selectionMode {
-		indicator := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7aa2f7")).
-			Bold(true).
-			Render("-- VISUAL --")
-		return indicator + "\n" + strings.Join(lines, "\n")
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// getCommentedLines returns a map of line numbers that have comments.
+func (v *ReviewView) getCommentedLines() map[int]bool {
+	commented := make(map[int]bool)
+	if v.activeSession == nil {
+		return commented
+	}
+
+	for _, comment := range v.activeSession.Comments {
+		for line := comment.StartLine; line <= comment.EndLine; line++ {
+			commented[line] = true
+		}
+	}
+
+	return commented
+}
+
+// renderStatusBar creates a status bar showing mode and position info.
+func (v ReviewView) renderStatusBar() string {
+	// Determine mode
+	mode := "NORMAL"
+	modeStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#c0caf5")).
+		Background(lipgloss.Color("#3b4261")).
+		Bold(true).
+		Padding(0, 1)
+
+	if v.selectionMode {
+		mode = "VISUAL"
+		modeStyle = modeStyle.Background(lipgloss.Color("#7aa2f7"))
+	}
+
+	// Calculate total lines
+	totalLines := 0
+	if v.selectedDoc != nil {
+		totalLines = len(v.selectedDoc.RenderedLines)
+	}
+
+	// Position info
+	posInfo := fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines)
+	posStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#565f89")).
+		Background(lipgloss.Color("#1f2335")).
+		Padding(0, 1)
+
+	// Build status bar
+	leftPart := modeStyle.Render(mode)
+	rightPart := posStyle.Render(posInfo)
+
+	// Calculate spacing to fill width
+	usedWidth := lipgloss.Width(leftPart) + lipgloss.Width(rightPart)
+	spacing := strings.Repeat(" ", max(0, v.width-usedWidth))
+
+	bgStyle := lipgloss.NewStyle().Background(lipgloss.Color("#1f2335"))
+	return leftPart + bgStyle.Render(spacing) + rightPart
 }
 
 // getSelectedText extracts the text from the selected line range.
