@@ -199,6 +199,12 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				return v, nil
 			}
 		case "esc":
+			// Exit visual mode first if active, otherwise exit full-screen
+			if v.selectionMode {
+				v.selectionMode = false
+				v.renderSelection()
+				return v, nil
+			}
 			// Exit full-screen mode
 			if v.fullScreen {
 				v.fullScreen = false
@@ -250,13 +256,6 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					v.renderSelection()
 					return v, nil
 				}
-			case "esc":
-				// Exit selection mode without action
-				if v.selectionMode {
-					v.selectionMode = false
-					v.renderSelection()
-					return v, nil
-				}
 			}
 		}
 
@@ -299,6 +298,11 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				return v, nil
 			}
 		}
+	}
+
+	// Don't forward keys to list when in full-screen mode
+	if v.fullScreen {
+		return v, nil
 	}
 
 	// Track previous selection
@@ -484,7 +488,7 @@ func (v *ReviewView) ensureCursorVisible() {
 	}
 }
 
-// renderSelection re-renders the document with selection and cursor highlighting.
+// renderSelection re-renders the document with comments, selection and cursor highlighting.
 func (v *ReviewView) renderSelection() {
 	if v.selectedDoc == nil {
 		return
@@ -504,6 +508,11 @@ func (v *ReviewView) renderSelection() {
 		return
 	}
 
+	// Insert comments inline if session exists
+	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+		rendered = v.insertCommentsInline(rendered)
+	}
+
 	// Apply cursor and selection highlighting
 	rendered = v.highlightSelection(rendered)
 
@@ -511,29 +520,22 @@ func (v *ReviewView) renderSelection() {
 }
 
 // highlightSelection applies background color to cursor and selected lines.
-// Also adds gutter indicators for commented lines.
+// Also highlights line numbers of commented lines.
 func (v *ReviewView) highlightSelection(content string) string {
 	lines := strings.Split(content, "\n")
 
 	// Get commented line numbers
 	commentedLines := v.getCommentedLines()
 
-	// Gutter styles
-	gutterIndicatorStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#e0af68")). // Gold/yellow
-		Bold(true)
-	gutterEmptyStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#565f89"))
+	// Styles for cursor and selection (no explicit width)
+	selectionStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
+	cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#2a3158"))
 
-	// Styles with explicit width to fill viewport (accounting for gutter)
-	gutterWidth := 2 // "● " or "  "
-	contentWidth := v.viewport.Width() - gutterWidth
-	selectionStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#3b4261")).
-		Width(contentWidth)
-	cursorStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#2a3158")).
-		Width(contentWidth)
+	// Style for commented line numbers
+	commentedLineNumStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#1a1b26")). // Dark text
+		Background(lipgloss.Color("#e0af68")). // Gold background
+		Bold(true)
 
 	// Calculate selection range if in visual mode
 	var start, end int
@@ -542,30 +544,46 @@ func (v *ReviewView) highlightSelection(content string) string {
 		end = max(v.selectionStart, v.cursorLine)
 	}
 
-	// Apply gutter and highlighting
+	// Apply highlighting
 	for i := range lines {
 		lineNum := i + 1
+		line := lines[i]
 
-		// Add gutter indicator
-		var gutter string
+		// Highlight line number if it has a comment
 		if commentedLines[lineNum] {
-			gutter = gutterIndicatorStyle.Render("● ")
-		} else {
-			gutter = gutterEmptyStyle.Render("  ")
+			line = v.highlightLineNumber(line, commentedLineNumStyle)
 		}
 
 		// Apply cursor highlight (always visible in full-screen)
 		if lineNum == v.cursorLine {
-			lines[i] = gutter + cursorStyle.Render(lines[i])
+			lines[i] = cursorStyle.Render(line)
 		} else if v.selectionMode && lineNum >= start && lineNum <= end {
-			// Apply selection highlight (overrides cursor style if overlapping)
-			lines[i] = gutter + selectionStyle.Render(lines[i])
+			// Apply selection highlight
+			lines[i] = selectionStyle.Render(line)
 		} else {
-			lines[i] = gutter + lines[i]
+			lines[i] = line
 		}
 	}
 
 	return strings.Join(lines, "\n")
+}
+
+// highlightLineNumber applies a style to the line number portion of a rendered line.
+// Assumes format: "<number> │ <content>"
+func (v *ReviewView) highlightLineNumber(line string, style lipgloss.Style) string {
+	// Find the separator " │ "
+	sepIdx := strings.Index(line, " │ ")
+	if sepIdx == -1 {
+		return line // No line number found
+	}
+
+	// Extract and style the line number
+	lineNum := line[:sepIdx]
+	separator := " │ "
+	content := line[sepIdx+len(separator):]
+
+	styledNum := style.Render(lineNum)
+	return styledNum + separator + content
 }
 
 // getCommentedLines returns a map of line numbers that have comments.
@@ -612,16 +630,33 @@ func (v ReviewView) renderStatusBar() string {
 		Background(lipgloss.Color("#1f2335")).
 		Padding(0, 1)
 
+	// Help text
+	var helpText string
+	if v.selectionMode {
+		helpText = "c:comment • v/esc:exit visual"
+	} else {
+		helpText = "V:visual • f:finalize • esc:exit"
+	}
+	helpStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#565f89")).
+		Background(lipgloss.Color("#1f2335")).
+		Padding(0, 1)
+
 	// Build status bar
 	leftPart := modeStyle.Render(mode)
+	middlePart := helpStyle.Render(helpText)
 	rightPart := posStyle.Render(posInfo)
 
-	// Calculate spacing to fill width
-	usedWidth := lipgloss.Width(leftPart) + lipgloss.Width(rightPart)
-	spacing := strings.Repeat(" ", max(0, v.width-usedWidth))
+	// Calculate spacing to distribute
+	usedWidth := lipgloss.Width(leftPart) + lipgloss.Width(middlePart) + lipgloss.Width(rightPart)
+	availableSpace := max(0, v.width-usedWidth)
+
+	// Split spacing: left spacing between mode and help, right spacing between help and position
+	leftSpacing := availableSpace / 2
+	rightSpacing := availableSpace - leftSpacing
 
 	bgStyle := lipgloss.NewStyle().Background(lipgloss.Color("#1f2335"))
-	return leftPart + bgStyle.Render(spacing) + rightPart
+	return leftPart + bgStyle.Render(strings.Repeat(" ", leftSpacing)) + middlePart + bgStyle.Render(strings.Repeat(" ", rightSpacing)) + rightPart
 }
 
 // getSelectedText extracts the text from the selected line range.
