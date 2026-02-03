@@ -13,15 +13,18 @@ import (
 
 // ReviewView manages the review interface.
 type ReviewView struct {
-	list         list.Model
-	viewport     viewport.Model
-	watcher      *DocumentWatcher
-	contextDir   string
-	width        int
-	height       int
-	previewMode  bool            // True when showing dual-column layout
-	fullScreen   bool            // True when showing document in full-screen
-	selectedDoc  *ReviewDocument // Currently selected document for preview
+	list           list.Model
+	viewport       viewport.Model
+	watcher        *DocumentWatcher
+	contextDir     string
+	width          int
+	height         int
+	previewMode    bool            // True when showing dual-column layout
+	fullScreen     bool            // True when showing document in full-screen
+	selectedDoc    *ReviewDocument // Currently selected document for preview
+	selectionMode  bool            // True when in visual selection mode
+	selectionStart int             // Line number where selection starts (1-indexed)
+	selectionEnd   int             // Line number where selection ends (1-indexed)
 }
 
 // NewReviewView creates a new review view.
@@ -141,13 +144,55 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			}
 		}
 
+		// Handle visual selection mode
+		if v.fullScreen && v.selectedDoc != nil {
+			switch msg.String() {
+			case "v":
+				// Enter or exit visual selection mode
+				if !v.selectionMode {
+					v.selectionMode = true
+					// Set selection start to current viewport line
+					v.selectionStart = v.viewport.YOffset() + 1 // 1-indexed
+					v.selectionEnd = v.selectionStart
+					v.renderSelection()
+					return v, nil
+				} else {
+					// Exit selection mode
+					v.selectionMode = false
+					v.renderSelection()
+					return v, nil
+				}
+			case "esc":
+				// Exit selection mode without action
+				if v.selectionMode {
+					v.selectionMode = false
+					v.renderSelection()
+					return v, nil
+				}
+			}
+		}
+
 		// Handle scrolling in full-screen mode
 		if v.fullScreen {
 			switch msg.String() {
 			case "j", "down":
+				if v.selectionMode {
+					// Extend selection downward
+					v.selectionEnd++
+					v.viewport.ScrollDown(1)
+					v.renderSelection()
+					return v, nil
+				}
 				v.viewport.ScrollDown(1)
 				return v, nil
 			case "k", "up":
+				if v.selectionMode {
+					// Extend selection upward
+					v.selectionEnd--
+					v.viewport.ScrollUp(1)
+					v.renderSelection()
+					return v, nil
+				}
 				v.viewport.ScrollUp(1)
 				return v, nil
 			case "ctrl+d":
@@ -247,6 +292,68 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 
 	v.viewport.SetContent(rendered)
 	v.viewport.GotoTop()
+}
+
+// renderSelection re-renders the document with selection highlighting.
+func (v *ReviewView) renderSelection() {
+	if v.selectedDoc == nil {
+		return
+	}
+
+	// Calculate preview width for rendering
+	previewWidth := v.width
+	if v.previewMode && v.width >= 80 {
+		listWidth := int(float64(v.width) * 0.25)
+		previewWidth = v.width - listWidth - 1
+	}
+
+	// Render document
+	rendered, err := v.selectedDoc.Render(previewWidth)
+	if err != nil {
+		v.viewport.SetContent("Error rendering document: " + err.Error())
+		return
+	}
+
+	// Apply selection highlighting if in selection mode
+	if v.selectionMode {
+		rendered = v.highlightSelection(rendered)
+	}
+
+	v.viewport.SetContent(rendered)
+}
+
+// highlightSelection applies background color to selected lines.
+func (v *ReviewView) highlightSelection(content string) string {
+	if !v.selectionMode {
+		return content
+	}
+
+	lines := strings.Split(content, "\n")
+
+	// Normalize selection range (handle reversed selection)
+	start := v.selectionStart
+	end := v.selectionEnd
+	if start > end {
+		start, end = end, start
+	}
+
+	// Apply highlighting to selected lines
+	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
+
+	for i := range lines {
+		lineNum := i + 1
+		if lineNum >= start && lineNum <= end {
+			lines[i] = highlightStyle.Render(lines[i])
+		}
+	}
+
+	// Add selection indicator
+	indicator := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7aa2f7")).
+		Bold(true).
+		Render("-- VISUAL --")
+
+	return indicator + "\n" + strings.Join(lines, "\n")
 }
 
 // ReviewTreeItem represents an item in the review tree.
