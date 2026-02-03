@@ -88,17 +88,19 @@ type Model struct {
 	columnWidths   *ColumnWidths
 
 	// Terminal integration
-	terminalManager  *terminal.Manager
-	terminalStatuses *kv.Store[string, TerminalStatus]
-	previewEnabled   bool // toggle tmux pane preview sidebar
+	terminalManager    *terminal.Manager
+	terminalStatuses   *kv.Store[string, TerminalStatus]
+	previewEnabled     bool   // toggle tmux pane preview sidebar
+	currentTmuxSession string // current tmux session name (to prevent recursive preview)
 
 	// Status animation
 	animationFrame int
 	treeDelegate   TreeDelegate // Keep reference to update animation frame
 
 	// Filtering
-	localRemote string            // Remote URL of current directory (for highlighting)
-	allSessions []session.Session // All sessions (unfiltered)
+	localRemote  string            // Remote URL of current directory (for highlighting)
+	allSessions  []session.Session // All sessions (unfiltered)
+	statusFilter terminal.Status   // Filter by terminal status (empty = show all)
 
 	// Recycle streaming state
 	outputModal   OutputModal
@@ -230,29 +232,71 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	// Create message view
 	msgView := NewMessagesView()
 
+	// Detect current tmux session to prevent recursive preview
+	currentTmux := detectCurrentTmuxSession()
+
 	return Model{
-		cfg:              cfg,
-		service:          service,
-		cmdService:       cmdService,
-		list:             l,
-		handler:          handler,
-		state:            stateNormal,
-		spinner:          s,
-		gitStatuses:      gitStatuses,
-		gitWorkers:       cfg.Git.StatusWorkers,
-		columnWidths:     columnWidths,
-		terminalManager:  opts.TerminalManager,
-		terminalStatuses: terminalStatuses,
-		previewEnabled:   cfg.TUI.PreviewEnabled,
-		treeDelegate:     delegate,
-		localRemote:      opts.LocalRemote,
-		msgStore:         opts.MsgStore,
-		msgView:          msgView,
-		topicFilter:      "*",
-		activeView:       ViewSessions,
-		copyCommand:      cfg.Commands.CopyCommand,
-		repoDirs:         cfg.RepoDirs,
+		cfg:                cfg,
+		service:            service,
+		cmdService:         cmdService,
+		list:               l,
+		handler:            handler,
+		state:              stateNormal,
+		spinner:            s,
+		gitStatuses:        gitStatuses,
+		gitWorkers:         cfg.Git.StatusWorkers,
+		columnWidths:       columnWidths,
+		terminalManager:    opts.TerminalManager,
+		terminalStatuses:   terminalStatuses,
+		previewEnabled:     cfg.TUI.PreviewEnabled,
+		currentTmuxSession: currentTmux,
+		treeDelegate:       delegate,
+		localRemote:        opts.LocalRemote,
+		msgStore:           opts.MsgStore,
+		msgView:            msgView,
+		topicFilter:        "*",
+		activeView:         ViewSessions,
+		copyCommand:        cfg.Commands.CopyCommand,
+		repoDirs:           cfg.RepoDirs,
 	}
+}
+
+// detectCurrentTmuxSession returns the current tmux session name, or empty if not in tmux.
+func detectCurrentTmuxSession() string {
+	cmd := exec.Command("tmux", "display-message", "-p", "#S")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+// isCurrentTmuxSession returns true if the given session matches the current tmux session.
+// This prevents recursive preview when hive is previewing its own pane.
+func (m Model) isCurrentTmuxSession(sess *session.Session) bool {
+	if m.currentTmuxSession == "" {
+		return false
+	}
+
+	// Check exact match with slug
+	if m.currentTmuxSession == sess.Slug {
+		return true
+	}
+
+	// Check prefix match (tmux session might be slug_suffix or slug-suffix)
+	if strings.HasPrefix(m.currentTmuxSession, sess.Slug+"_") ||
+		strings.HasPrefix(m.currentTmuxSession, sess.Slug+"-") {
+		return true
+	}
+
+	// Check metadata for explicit tmux session name
+	if tmuxSession := sess.Metadata[session.MetaTmuxSession]; tmuxSession != "" {
+		if m.currentTmuxSession == tmuxSession {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Init initializes the model.
@@ -733,6 +777,27 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	// Check if user selected a command
 	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
+
+		// Check if this is a filter action (doesn't require a session)
+		if isFilterAction(entry.Command.Action) {
+			m.state = stateNormal
+			// Resolve action type directly from command action
+			var actionType ActionType
+			switch entry.Command.Action {
+			case config.ActionFilterAll:
+				actionType = ActionTypeFilterAll
+			case config.ActionFilterActive:
+				actionType = ActionTypeFilterActive
+			case config.ActionFilterApproval:
+				actionType = ActionTypeFilterApproval
+			case config.ActionFilterReady:
+				actionType = ActionTypeFilterReady
+			}
+			m.handleFilterAction(actionType)
+			return m.applyFilter()
+		}
+
+		// Other commands require a selected session
 		if selected == nil {
 			m.state = stateNormal
 			return m, nil
@@ -928,18 +993,18 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, m.newSessionForm.Init()
 	}
 
+	// Handle ':' for command palette (allow even without selection for filter commands)
+	if keyStr == ":" {
+		m.commandPalette = NewCommandPalette(m.cfg.MergedUserCommands(), m.selectedSession(), m.width, m.height)
+		m.state = stateCommandPalette
+		return m, nil
+	}
+
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	}
-
-	// Handle ':' for command palette
-	if keyStr == ":" {
-		m.commandPalette = NewCommandPalette(m.cfg.MergedUserCommands(), selected, m.width, m.height)
-		m.state = stateCommandPalette
-		return m, nil
 	}
 
 	action, ok := m.handler.Resolve(keyStr, *selected)
@@ -957,6 +1022,10 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		}
 		if action.Type == ActionTypeRecycle {
 			return m, m.startRecycle(action.SessionID)
+		}
+		// Handle filter actions
+		if m.handleFilterAction(action.Type) {
+			return m.applyFilter()
 		}
 		// If exit is requested, execute synchronously and quit immediately
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
@@ -1054,6 +1123,52 @@ func (m *Model) selectFirstNonHeader() {
 	}
 }
 
+// selectSessionByID finds and selects a session by its ID.
+// Falls back to selectFirstNonHeader if not found.
+func (m *Model) selectSessionByID(id string) {
+	items := m.list.Items()
+	for i, item := range items {
+		if treeItem, ok := item.(TreeItem); ok {
+			if !treeItem.IsHeader && treeItem.Session.ID == id {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+	// Session no longer exists, select first non-header
+	m.selectFirstNonHeader()
+}
+
+// isFilterAction returns true if the action string is a filter action.
+func isFilterAction(action string) bool {
+	switch action {
+	case config.ActionFilterAll, config.ActionFilterActive,
+		config.ActionFilterApproval, config.ActionFilterReady:
+		return true
+	}
+	return false
+}
+
+// handleFilterAction checks if the action is a filter action and updates the status filter.
+// Returns true if the action was a filter action (caller should call applyFilter).
+func (m *Model) handleFilterAction(actionType ActionType) bool {
+	switch actionType {
+	case ActionTypeFilterAll:
+		m.statusFilter = ""
+		return true
+	case ActionTypeFilterActive:
+		m.statusFilter = terminal.StatusActive
+		return true
+	case ActionTypeFilterApproval:
+		m.statusFilter = terminal.StatusApproval
+		return true
+	case ActionTypeFilterReady:
+		m.statusFilter = terminal.StatusReady
+		return true
+	}
+	return false
+}
+
 // selectedMessage returns the currently selected message, or nil if none.
 func (m Model) selectedMessage() *messaging.Message {
 	return m.msgView.SelectedMessage()
@@ -1081,17 +1196,37 @@ func (m Model) isModalActive() bool {
 
 // applyFilter rebuilds the tree view from all sessions.
 func (m Model) applyFilter() (tea.Model, tea.Cmd) {
+	// Remember currently selected session to restore after refresh
+	var selectedID string
+	if selected := m.selectedSession(); selected != nil {
+		selectedID = selected.ID
+	}
+
+	// Filter sessions by terminal status if a filter is active
+	sessions := m.allSessions
+	if m.statusFilter != "" && m.terminalStatuses != nil {
+		filtered := make([]session.Session, 0, len(m.allSessions))
+		for _, s := range m.allSessions {
+			if status, ok := m.terminalStatuses.Get(s.ID); ok {
+				if status.Status == m.statusFilter {
+					filtered = append(filtered, s)
+				}
+			}
+		}
+		sessions = filtered
+	}
+
 	// Group sessions by repository and build tree items
-	groups := GroupSessionsByRepo(m.allSessions, m.localRemote)
+	groups := GroupSessionsByRepo(sessions, m.localRemote)
 	items := BuildTreeItems(groups, m.localRemote)
 
-	// Calculate column widths across all sessions
-	*m.columnWidths = CalculateColumnWidths(m.allSessions, nil)
+	// Calculate column widths across all sessions (use filtered set)
+	*m.columnWidths = CalculateColumnWidths(sessions, nil)
 
-	// Collect paths for git status fetching
+	// Collect paths for git status fetching (use filtered sessions)
 	// During background refresh, keep existing statuses to avoid flashing
-	paths := make([]string, 0, len(m.allSessions))
-	for _, s := range m.allSessions {
+	paths := make([]string, 0, len(sessions))
+	for _, s := range sessions {
 		paths = append(paths, s.Path)
 		if !m.refreshing {
 			m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
@@ -1099,7 +1234,13 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	}
 
 	m.list.SetItems(items)
-	m.selectFirstNonHeader() // Skip headers for initial selection
+
+	// Restore selection or select first non-header
+	if selectedID != "" {
+		m.selectSessionByID(selectedID)
+	} else {
+		m.selectFirstNonHeader()
+	}
 	m.state = stateNormal
 
 	if len(paths) == 0 {
@@ -1229,6 +1370,15 @@ func (m Model) renderTabView() string {
 	}
 	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
 
+	// Add filter indicator if active
+	if m.statusFilter != "" {
+		filterStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7aa2f7")).
+			Bold(true)
+		filterLabel := string(m.statusFilter)
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", filterStyle.Render("["+filterLabel+"]"))
+	}
+
 	// Branding on right with background
 	brandingStyle := lipgloss.NewStyle().
 		Background(lipgloss.Color("#3b4261")).
@@ -1305,7 +1455,13 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	var previewContent string
 
 	if selected != nil {
-		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
+		// Check if this is the current session (would cause recursive preview)
+		isSelf := m.isCurrentTmuxSession(selected)
+
+		if isSelf {
+			// Show placeholder instead of recursive preview
+			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\n(current session, preventing recursive view)"
+		} else if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
 			// Account for padding: 2 chars on each side = 4 total
 			usableWidth := previewWidth - 4
 
@@ -1314,10 +1470,7 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 			headerHeight := strings.Count(header, "\n") + 1
 
 			// Calculate available lines for content (subtract 2 for Projects header)
-			outputHeight := contentHeight - headerHeight
-			if outputHeight < 1 {
-				outputHeight = 1
-			}
+			outputHeight := max(contentHeight-headerHeight, 1)
 
 			// Get content and truncate to width
 			content := tailLines(status.PaneContent, outputHeight)

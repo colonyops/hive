@@ -22,6 +22,10 @@ const (
 	ActionTypeRecycle
 	ActionTypeDelete
 	ActionTypeShell
+	ActionTypeFilterAll
+	ActionTypeFilterActive
+	ActionTypeFilterApproval
+	ActionTypeFilterReady
 )
 
 // Action represents a resolved keybinding action ready for execution.
@@ -113,6 +117,14 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			if action.Help == "" {
 				action.Help = "delete"
 			}
+		case config.ActionFilterAll:
+			action.Type = ActionTypeFilterAll
+		case config.ActionFilterActive:
+			action.Type = ActionTypeFilterActive
+		case config.ActionFilterApproval:
+			action.Type = ActionTypeFilterApproval
+		case config.ActionFilterReady:
+			action.Type = ActionTypeFilterReady
 		}
 		return action, true
 	}
@@ -239,6 +251,14 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 			if action.Help == "" {
 				action.Help = "delete"
 			}
+		case config.ActionFilterAll:
+			action.Type = ActionTypeFilterAll
+		case config.ActionFilterActive:
+			action.Type = ActionTypeFilterActive
+		case config.ActionFilterApproval:
+			action.Type = ActionTypeFilterApproval
+		case config.ActionFilterReady:
+			action.Type = ActionTypeFilterReady
 		}
 		return action
 	}

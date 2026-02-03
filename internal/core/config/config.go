@@ -34,8 +34,12 @@ func ParseExitCondition(s string) bool {
 
 // Built-in action names for UserCommands.
 const (
-	ActionRecycle = "recycle"
-	ActionDelete  = "delete"
+	ActionRecycle        = "recycle"
+	ActionDelete         = "delete"
+	ActionFilterAll      = "filter-all"
+	ActionFilterActive   = "filter-active"
+	ActionFilterApproval = "filter-approval"
+	ActionFilterReady    = "filter-ready"
 )
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -49,6 +53,26 @@ var defaultUserCommands = map[string]UserCommand{
 		Action:  ActionDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
+	},
+	"FilterAll": {
+		Action: ActionFilterAll,
+		Help:   "show all sessions",
+		Silent: true,
+	},
+	"FilterActive": {
+		Action: ActionFilterActive,
+		Help:   "show sessions with active agents",
+		Silent: true,
+	},
+	"FilterApproval": {
+		Action: ActionFilterApproval,
+		Help:   "show sessions needing approval",
+		Silent: true,
+	},
+	"FilterReady": {
+		Action: ActionFilterReady,
+		Help:   "show sessions with idle agents",
+		Silent: true,
 	},
 }
 
@@ -118,8 +142,9 @@ type DatabaseConfig struct {
 
 // TerminalConfig holds terminal multiplexer integration configuration.
 type TerminalConfig struct {
-	Enabled      []string      `yaml:"enabled"`       // list of enabled integrations, e.g. ["tmux"]
-	PollInterval time.Duration `yaml:"poll_interval"` // status check frequency, default 1.5s
+	Enabled              []string      `yaml:"enabled"`                // list of enabled integrations, e.g. ["tmux"]
+	PollInterval         time.Duration `yaml:"poll_interval"`          // status check frequency, default 1.5s
+	PreviewWindowMatcher []string      `yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
 }
 
 // IsEnabled returns true if the given integration name is in the enabled list.
@@ -284,6 +309,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Integrations.Terminal.PollInterval == 0 {
 		c.Integrations.Terminal.PollInterval = 1500 * time.Millisecond
+	}
+	if len(c.Integrations.Terminal.PreviewWindowMatcher) == 0 {
+		c.Integrations.Terminal.PreviewWindowMatcher = []string{"claude", "aider", "codex"}
 	}
 	if c.Database.MaxOpenConns == 0 {
 		c.Database.MaxOpenConns = 2
