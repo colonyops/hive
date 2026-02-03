@@ -19,7 +19,8 @@ type ReviewView struct {
 	contextDir   string
 	width        int
 	height       int
-	previewMode  bool           // True when showing dual-column layout
+	previewMode  bool            // True when showing dual-column layout
+	fullScreen   bool            // True when showing document in full-screen
 	selectedDoc  *ReviewDocument // Currently selected document for preview
 }
 
@@ -114,6 +115,55 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		}
 		return v, nil
 
+	case tea.KeyMsg:
+		// Handle full-screen toggle
+		switch msg.String() {
+		case "enter":
+			// Toggle full-screen mode if a document is selected
+			if v.selectedDoc != nil && !v.list.SettingFilter() {
+				v.fullScreen = !v.fullScreen
+				// Adjust viewport size for full-screen
+				if v.fullScreen {
+					v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+					v.loadDocument(v.selectedDoc)
+				} else {
+					// Return to dual-column mode
+					v.SetSize(v.width, v.height)
+				}
+				return v, nil
+			}
+		case "esc":
+			// Exit full-screen mode
+			if v.fullScreen {
+				v.fullScreen = false
+				v.SetSize(v.width, v.height)
+				return v, nil
+			}
+		}
+
+		// Handle scrolling in full-screen mode
+		if v.fullScreen {
+			switch msg.String() {
+			case "j", "down":
+				v.viewport.ScrollDown(1)
+				return v, nil
+			case "k", "up":
+				v.viewport.ScrollUp(1)
+				return v, nil
+			case "ctrl+d":
+				v.viewport.HalfPageDown()
+				return v, nil
+			case "ctrl+u":
+				v.viewport.HalfPageUp()
+				return v, nil
+			case "g":
+				v.viewport.GotoTop()
+				return v, nil
+			case "G":
+				v.viewport.GotoBottom()
+				return v, nil
+			}
+		}
 	}
 
 	// Track previous selection
@@ -133,6 +183,11 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 
 // View renders the review view.
 func (v ReviewView) View() string {
+	// Full-screen mode: show only the viewport
+	if v.fullScreen {
+		return v.viewport.View()
+	}
+
 	if !v.previewMode || v.width < 80 {
 		// Single column mode
 		return v.list.View()
