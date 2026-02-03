@@ -12,6 +12,9 @@ integrations:
   terminal:
     enabled: [tmux]
     poll_interval: 500ms
+    # Regex patterns for preferred windows when capturing pane content
+    # Hive will prioritize windows matching these patterns over the active window
+    preview_window_matcher: [claude, aider, codex]
 
 # Use hive.sh script for session creation
 commands:
@@ -164,6 +167,8 @@ hv  # Opens hive in a persistent tmux session
 - **p** - Opens the session in a tmux popup
 - **Ctrl+d** - Kills the tmux session
 - **t** - Sends `/tidy` command to the session
+- **v** - Toggle preview sidebar
+- **:** - Open command palette (filter by status, etc.)
 
 ### Popup Mode
 
@@ -182,9 +187,21 @@ claude-send "session-name:claude" "explain this code"
 ## How It Works
 
 1. **Status Monitoring**: Hive polls tmux windows every 500ms to detect agent status (working, waiting, needs approval)
-2. **Session Management**: The hive.sh script creates/attaches tmux sessions with consistent layouts
-3. **Keybindings**: Custom keybindings provide quick access without leaving the TUI
-4. **Popup Integration**: Run hive as an overlay without dedicating a full window
+2. **Window Targeting**: The `preview_window_matcher` patterns let Hive capture the right window (e.g., "claude") even if another window is active
+3. **Session Management**: The hive.sh script creates/attaches tmux sessions with consistent layouts
+4. **Keybindings**: Custom keybindings provide quick access without leaving the TUI
+5. **Popup Integration**: Run hive as an overlay without dedicating a full window
+
+## Filtering by Status
+
+Use the command palette (`:`) to filter sessions by terminal status:
+
+- `:FilterActive` - Show only sessions where the agent is actively working
+- `:FilterApproval` - Show sessions waiting for user approval
+- `:FilterReady` - Show sessions where the agent is idle
+- `:FilterAll` - Clear filters and show all sessions
+
+The active filter is displayed in the tab bar (e.g., `[active]`).
 
 ## Status Indicators
 

@@ -23,60 +23,15 @@ import (
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/internal/tui/command"
+	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
-// Buffer pools for reducing allocations in rendering
-var (
-	builderPool = sync.Pool{
-		New: func() any {
-			return &strings.Builder{}
-		},
-	}
-
-	// Cache for padding strings to avoid strings.Repeat allocations
-	// Supports padding widths from 0 to 200 characters
-	paddingCache = [201]string{
-		0:   "",
-		1:   " ",
-		2:   "  ",
-		3:   "   ",
-		4:   "    ",
-		5:   "     ",
-		6:   "      ",
-		7:   "       ",
-		8:   "        ",
-		9:   "         ",
-		10:  "          ",
-		20:  "                    ",
-		40:  "                                        ",
-		80:  "                                                                                ",
-		100: "                                                                                                    ",
-		200: "                                                                                                                                                                                        ",
-	}
-
-	paddingOnce sync.Once
-)
-
-// initPaddingCache initializes all padding entries from 0-200.
-func initPaddingCache() {
-	for i := 0; i <= 200; i++ {
-		if paddingCache[i] == "" && i > 0 {
-			paddingCache[i] = strings.Repeat(" ", i)
-		}
-	}
-}
-
-// getPadding returns a padding string of n spaces, using cache when possible.
-func getPadding(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	if n <= 200 {
-		paddingOnce.Do(initPaddingCache)
-		return paddingCache[n]
-	}
-	return strings.Repeat(" ", n)
+// Buffer pools for reducing allocations in rendering.
+var builderPool = sync.Pool{
+	New: func() any {
+		return &strings.Builder{}
+	},
 }
 
 // UIState represents the current state of the TUI.
@@ -90,6 +45,7 @@ const (
 	statePreviewingMessage
 	stateCreatingSession
 	stateCommandPalette
+	stateShowingHelp
 )
 
 // Key constants for event handling.
@@ -132,17 +88,19 @@ type Model struct {
 	columnWidths   *ColumnWidths
 
 	// Terminal integration
-	terminalManager  *terminal.Manager
-	terminalStatuses *kv.Store[string, TerminalStatus]
-	previewEnabled   bool // toggle tmux pane preview sidebar
+	terminalManager    *terminal.Manager
+	terminalStatuses   *kv.Store[string, TerminalStatus]
+	previewEnabled     bool   // toggle tmux pane preview sidebar
+	currentTmuxSession string // current tmux session name (to prevent recursive preview)
 
 	// Status animation
 	animationFrame int
 	treeDelegate   TreeDelegate // Keep reference to update animation frame
 
 	// Filtering
-	localRemote string            // Remote URL of current directory (for highlighting)
-	allSessions []session.Session // All sessions (unfiltered)
+	localRemote  string            // Remote URL of current directory (for highlighting)
+	allSessions  []session.Session // All sessions (unfiltered)
+	statusFilter terminal.Status   // Filter by terminal status (empty = show all)
 
 	// Recycle streaming state
 	outputModal   OutputModal
@@ -174,6 +132,9 @@ type Model struct {
 
 	// Command palette
 	commandPalette *CommandPalette
+
+	// Help dialog
+	helpDialog *components.HelpDialog
 
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
@@ -256,27 +217,12 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	handler := NewKeybindingResolver(cfg.Keybindings, cfg.MergedUserCommands())
 	cmdService := command.NewService(service, service)
 
-	// Add custom keybindings to list help
+	// Add minimal keybindings to list help - just navigation and help trigger
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		bindings := handler.KeyBindings()
-		// Add git refresh keybinding
-		bindings = append(bindings, key.NewBinding(
-			key.WithKeys("g"),
-			key.WithHelp("g", "refresh git"),
-		))
-		// Add tab keybinding for view switching
-		bindings = append(bindings, key.NewBinding(
-			key.WithKeys("tab"),
-			key.WithHelp("tab", "switch view"),
-		))
-		// Add preview toggle keybinding if terminal integration is enabled
-		if opts.TerminalManager != nil && opts.TerminalManager.HasEnabledIntegrations() {
-			bindings = append(bindings, key.NewBinding(
-				key.WithKeys("v"),
-				key.WithHelp("v", "toggle preview"),
-			))
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "navigate")),
+			key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		}
-		return bindings
 	}
 
 	s := spinner.New()
@@ -286,29 +232,71 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	// Create message view
 	msgView := NewMessagesView()
 
+	// Detect current tmux session to prevent recursive preview
+	currentTmux := detectCurrentTmuxSession()
+
 	return Model{
-		cfg:              cfg,
-		service:          service,
-		cmdService:       cmdService,
-		list:             l,
-		handler:          handler,
-		state:            stateNormal,
-		spinner:          s,
-		gitStatuses:      gitStatuses,
-		gitWorkers:       cfg.Git.StatusWorkers,
-		columnWidths:     columnWidths,
-		terminalManager:  opts.TerminalManager,
-		terminalStatuses: terminalStatuses,
-		previewEnabled:   cfg.TUI.PreviewEnabled,
-		treeDelegate:     delegate,
-		localRemote:      opts.LocalRemote,
-		msgStore:         opts.MsgStore,
-		msgView:          msgView,
-		topicFilter:      "*",
-		activeView:       ViewSessions,
-		copyCommand:      cfg.Commands.CopyCommand,
-		repoDirs:         cfg.RepoDirs,
+		cfg:                cfg,
+		service:            service,
+		cmdService:         cmdService,
+		list:               l,
+		handler:            handler,
+		state:              stateNormal,
+		spinner:            s,
+		gitStatuses:        gitStatuses,
+		gitWorkers:         cfg.Git.StatusWorkers,
+		columnWidths:       columnWidths,
+		terminalManager:    opts.TerminalManager,
+		terminalStatuses:   terminalStatuses,
+		previewEnabled:     cfg.TUI.PreviewEnabled,
+		currentTmuxSession: currentTmux,
+		treeDelegate:       delegate,
+		localRemote:        opts.LocalRemote,
+		msgStore:           opts.MsgStore,
+		msgView:            msgView,
+		topicFilter:        "*",
+		activeView:         ViewSessions,
+		copyCommand:        cfg.Commands.CopyCommand,
+		repoDirs:           cfg.RepoDirs,
 	}
+}
+
+// detectCurrentTmuxSession returns the current tmux session name, or empty if not in tmux.
+func detectCurrentTmuxSession() string {
+	cmd := exec.Command("tmux", "display-message", "-p", "#S")
+	output, err := cmd.Output()
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(output))
+}
+
+// isCurrentTmuxSession returns true if the given session matches the current tmux session.
+// This prevents recursive preview when hive is previewing its own pane.
+func (m Model) isCurrentTmuxSession(sess *session.Session) bool {
+	if m.currentTmuxSession == "" {
+		return false
+	}
+
+	// Check exact match with slug
+	if m.currentTmuxSession == sess.Slug {
+		return true
+	}
+
+	// Check prefix match (tmux session might be slug_suffix or slug-suffix)
+	if strings.HasPrefix(m.currentTmuxSession, sess.Slug+"_") ||
+		strings.HasPrefix(m.currentTmuxSession, sess.Slug+"-") {
+		return true
+	}
+
+	// Check metadata for explicit tmux session name
+	if tmuxSession := sess.Metadata[session.MetaTmuxSession]; tmuxSession != "" {
+		if m.currentTmuxSession == tmuxSession {
+			return true
+		}
+	}
+
+	return false
 }
 
 // Init initializes the model.
@@ -523,31 +511,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reposDiscoveredMsg:
 		m.discoveredRepos = msg.repos
-		// Update help to include 'n' keybinding if repos were discovered
-		if len(msg.repos) > 0 {
-			m.list.AdditionalShortHelpKeys = func() []key.Binding {
-				bindings := m.handler.KeyBindings()
-				bindings = append(bindings, key.NewBinding(
-					key.WithKeys("n"),
-					key.WithHelp("n", "new session"),
-				))
-				bindings = append(bindings, key.NewBinding(
-					key.WithKeys("g"),
-					key.WithHelp("g", "refresh git"),
-				))
-				bindings = append(bindings, key.NewBinding(
-					key.WithKeys("tab"),
-					key.WithHelp("tab", "switch view"),
-				))
-				if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-					bindings = append(bindings, key.NewBinding(
-						key.WithKeys("v"),
-						key.WithHelp("v", "toggle preview"),
-					))
-				}
-				return bindings
-			}
-		}
+		// Help keybindings remain minimal - full list shown via ? dialog
 		return m, nil
 
 	case tea.KeyMsg:
@@ -585,6 +549,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == statePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)
+	}
+	if m.state == stateShowingHelp {
+		return m.handleHelpDialogKey(keyStr)
 	}
 	if m.state == stateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
@@ -689,6 +656,80 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// handleHelpDialogKey handles keys when help dialog is shown.
+func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+	case "esc", "?", "q":
+		m.state = stateNormal
+		m.helpDialog = nil
+		return m, nil
+	}
+	return m, nil
+}
+
+// showHelpDialog creates and displays the help dialog.
+func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
+	var sections []components.HelpDialogSection
+
+	// Add user-configured keybindings section
+	userEntries := m.handler.HelpEntries()
+	if len(userEntries) > 0 {
+		entries := make([]components.HelpEntry, 0, len(userEntries))
+		for _, e := range userEntries {
+			// Parse "[key] description" format
+			if len(e) > 2 && e[0] == '[' {
+				endBracket := strings.Index(e, "]")
+				if endBracket > 0 {
+					key := e[1:endBracket]
+					desc := strings.TrimSpace(e[endBracket+1:])
+					entries = append(entries, components.HelpEntry{Key: key, Desc: desc})
+				}
+			}
+		}
+		if len(entries) > 0 {
+			sections = append(sections, components.HelpDialogSection{
+				Title:   "User Commands",
+				Entries: entries,
+			})
+		}
+	}
+
+	// Add navigation section
+	navEntries := []components.HelpEntry{
+		{Key: "↑/k", Desc: "move up"},
+		{Key: "↓/j", Desc: "move down"},
+		{Key: "enter", Desc: "select session"},
+		{Key: "/", Desc: "filter"},
+		{Key: "tab", Desc: "switch view"},
+		{Key: ":", Desc: "command palette"},
+		{Key: "g", Desc: "refresh git status"},
+	}
+
+	// Add new session if repos discovered
+	if len(m.discoveredRepos) > 0 {
+		navEntries = append(navEntries, components.HelpEntry{Key: "n", Desc: "new session"})
+	}
+
+	// Add preview toggle if terminal integration enabled
+	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
+	}
+
+	navEntries = append(navEntries, components.HelpEntry{Key: "q", Desc: "quit"})
+
+	sections = append(sections, components.HelpDialogSection{
+		Title:   "Navigation",
+		Entries: navEntries,
+	})
+
+	m.helpDialog = components.NewHelpDialog("Keyboard Shortcuts", sections, m.width, m.height)
+	m.state = stateShowingHelp
+	return m, nil
+}
+
 // handlePreviewModalKey handles keys when message preview modal is shown.
 func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	// Clear copy status on any key press
@@ -736,6 +777,27 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	// Check if user selected a command
 	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
+
+		// Check if this is a filter action (doesn't require a session)
+		if isFilterAction(entry.Command.Action) {
+			m.state = stateNormal
+			// Resolve action type directly from command action
+			var actionType ActionType
+			switch entry.Command.Action {
+			case config.ActionFilterAll:
+				actionType = ActionTypeFilterAll
+			case config.ActionFilterActive:
+				actionType = ActionTypeFilterActive
+			case config.ActionFilterApproval:
+				actionType = ActionTypeFilterApproval
+			case config.ActionFilterReady:
+				actionType = ActionTypeFilterReady
+			}
+			m.handleFilterAction(actionType)
+			return m.applyFilter()
+		}
+
+		// Other commands require a selected session
 		if selected == nil {
 			m.state = stateNormal
 			return m, nil
@@ -857,6 +919,8 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m, tea.Quit
 	case "tab":
 		return m.handleTabKey()
+	case "?":
+		return m.showHelpDialog()
 	}
 
 	// Session-specific keys only when sessions focused
@@ -902,6 +966,16 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 
 // handleSessionsKey handles keys when sessions pane is focused.
 func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Handle navigation keys - skip over headers
+	switch keyStr {
+	case "up", "k":
+		m.navigateSkippingHeaders(-1)
+		return m, nil
+	case "down", "j":
+		m.navigateSkippingHeaders(1)
+		return m, nil
+	}
+
 	// Handle 'n' for new session (only if repos are discovered)
 	if keyStr == "n" && len(m.discoveredRepos) > 0 {
 		// Determine preselected remote
@@ -919,18 +993,18 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, m.newSessionForm.Init()
 	}
 
+	// Handle ':' for command palette (allow even without selection for filter commands)
+	if keyStr == ":" {
+		m.commandPalette = NewCommandPalette(m.cfg.MergedUserCommands(), m.selectedSession(), m.width, m.height)
+		m.state = stateCommandPalette
+		return m, nil
+	}
+
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
 		return m, cmd
-	}
-
-	// Handle ':' for command palette (only if user commands are configured)
-	if keyStr == ":" && len(m.cfg.UserCommands) > 0 {
-		m.commandPalette = NewCommandPalette(m.cfg.UserCommands, selected, m.width, m.height)
-		m.state = stateCommandPalette
-		return m, nil
 	}
 
 	action, ok := m.handler.Resolve(keyStr, *selected)
@@ -948,6 +1022,10 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		}
 		if action.Type == ActionTypeRecycle {
 			return m, m.startRecycle(action.SessionID)
+		}
+		// Handle filter actions
+		if m.handleFilterAction(action.Type) {
+			return m.applyFilter()
 		}
 		// If exit is requested, execute synchronously and quit immediately
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
@@ -996,6 +1074,103 @@ func (m Model) selectedSession() *session.Session {
 	return nil
 }
 
+// navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down),
+// skipping over header items which are not actionable.
+func (m *Model) navigateSkippingHeaders(direction int) {
+	items := m.list.Items()
+	if len(items) == 0 {
+		return
+	}
+
+	current := m.list.Index()
+	target := current
+
+	// Move in the given direction until we find a non-header or hit bounds
+	for {
+		target += direction
+
+		// Check bounds
+		if target < 0 || target >= len(items) {
+			return // Can't move further, stay at current position
+		}
+
+		// Check if target is a header
+		if treeItem, ok := items[target].(TreeItem); ok {
+			if !treeItem.IsHeader {
+				// Found a non-header, select it
+				m.list.Select(target)
+				return
+			}
+			// It's a header, keep looking
+		} else {
+			// Not a TreeItem, select it
+			m.list.Select(target)
+			return
+		}
+	}
+}
+
+// selectFirstNonHeader selects the first non-header item in the list.
+func (m *Model) selectFirstNonHeader() {
+	items := m.list.Items()
+	for i, item := range items {
+		if treeItem, ok := item.(TreeItem); ok {
+			if !treeItem.IsHeader {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+}
+
+// selectSessionByID finds and selects a session by its ID.
+// Falls back to selectFirstNonHeader if not found.
+func (m *Model) selectSessionByID(id string) {
+	items := m.list.Items()
+	for i, item := range items {
+		if treeItem, ok := item.(TreeItem); ok {
+			if !treeItem.IsHeader && treeItem.Session.ID == id {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+	// Session no longer exists, select first non-header
+	m.selectFirstNonHeader()
+}
+
+// isFilterAction returns true if the action string is a filter action.
+func isFilterAction(action string) bool {
+	switch action {
+	case config.ActionFilterAll, config.ActionFilterActive,
+		config.ActionFilterApproval, config.ActionFilterReady:
+		return true
+	}
+	return false
+}
+
+// handleFilterAction checks if the action is a filter action and updates the status filter.
+// Returns true if the action was a filter action (caller should call applyFilter).
+func (m *Model) handleFilterAction(actionType ActionType) bool {
+	switch actionType {
+	case ActionTypeFilterAll:
+		m.statusFilter = ""
+		return true
+	case ActionTypeFilterActive:
+		m.statusFilter = terminal.StatusActive
+		return true
+	case ActionTypeFilterApproval:
+		m.statusFilter = terminal.StatusApproval
+		return true
+	case ActionTypeFilterReady:
+		m.statusFilter = terminal.StatusReady
+		return true
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell:
+		return false
+	}
+	return false
+}
+
 // selectedMessage returns the currently selected message, or nil if none.
 func (m Model) selectedMessage() *messaging.Message {
 	return m.msgView.SelectedMessage()
@@ -1023,17 +1198,37 @@ func (m Model) isModalActive() bool {
 
 // applyFilter rebuilds the tree view from all sessions.
 func (m Model) applyFilter() (tea.Model, tea.Cmd) {
+	// Remember currently selected session to restore after refresh
+	var selectedID string
+	if selected := m.selectedSession(); selected != nil {
+		selectedID = selected.ID
+	}
+
+	// Filter sessions by terminal status if a filter is active
+	sessions := m.allSessions
+	if m.statusFilter != "" && m.terminalStatuses != nil {
+		filtered := make([]session.Session, 0, len(m.allSessions))
+		for _, s := range m.allSessions {
+			if status, ok := m.terminalStatuses.Get(s.ID); ok {
+				if status.Status == m.statusFilter {
+					filtered = append(filtered, s)
+				}
+			}
+		}
+		sessions = filtered
+	}
+
 	// Group sessions by repository and build tree items
-	groups := GroupSessionsByRepo(m.allSessions, m.localRemote)
+	groups := GroupSessionsByRepo(sessions, m.localRemote)
 	items := BuildTreeItems(groups, m.localRemote)
 
-	// Calculate column widths across all sessions
-	*m.columnWidths = CalculateColumnWidths(m.allSessions, nil)
+	// Calculate column widths across all sessions (use filtered set)
+	*m.columnWidths = CalculateColumnWidths(sessions, nil)
 
-	// Collect paths for git status fetching
+	// Collect paths for git status fetching (use filtered sessions)
 	// During background refresh, keep existing statuses to avoid flashing
-	paths := make([]string, 0, len(m.allSessions))
-	for _, s := range m.allSessions {
+	paths := make([]string, 0, len(sessions))
+	for _, s := range sessions {
 		paths = append(paths, s.Path)
 		if !m.refreshing {
 			m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
@@ -1041,6 +1236,13 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	}
 
 	m.list.SetItems(items)
+
+	// Restore selection or select first non-header
+	if selectedID != "" {
+		m.selectSessionByID(selectedID)
+	} else {
+		m.selectFirstNonHeader()
+	}
 	m.state = stateNormal
 
 	if len(paths) == 0 {
@@ -1149,6 +1351,11 @@ func (m Model) View() tea.View {
 		return newView(m.commandPalette.Overlay(mainView, w, h))
 	}
 
+	// Overlay help dialog
+	if m.state == stateShowingHelp && m.helpDialog != nil {
+		return newView(m.helpDialog.Overlay(mainView, w, h))
+	}
+
 	return newView(mainView)
 }
 
@@ -1164,6 +1371,15 @@ func (m Model) renderTabView() string {
 		messagesTab = viewSelectedStyle.Render("Messages")
 	}
 	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+
+	// Add filter indicator if active
+	if m.statusFilter != "" {
+		filterStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7aa2f7")).
+			Bold(true)
+		filterLabel := string(m.statusFilter)
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", filterStyle.Render("["+filterLabel+"]"))
+	}
 
 	// Branding on right with background
 	brandingStyle := lipgloss.NewStyle().
@@ -1181,9 +1397,9 @@ func (m Model) renderTabView() string {
 	if spacerWidth < 1 {
 		spacerWidth = 1
 	}
-	leftMargin := getPadding(margin)
-	spacer := getPadding(spacerWidth)
-	rightMargin := getPadding(margin)
+	leftMargin := components.Pad(margin)
+	spacer := components.Pad(spacerWidth)
+	rightMargin := components.Pad(margin)
 
 	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
 
@@ -1241,7 +1457,13 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	var previewContent string
 
 	if selected != nil {
-		if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
+		// Check if this is the current session (would cause recursive preview)
+		isSelf := m.isCurrentTmuxSession(selected)
+
+		if isSelf {
+			// Show placeholder instead of recursive preview
+			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\n(current session, preventing recursive view)"
+		} else if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
 			// Account for padding: 2 chars on each side = 4 total
 			usableWidth := previewWidth - 4
 
@@ -1250,10 +1472,7 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 			headerHeight := strings.Count(header, "\n") + 1
 
 			// Calculate available lines for content (subtract 2 for Projects header)
-			outputHeight := contentHeight - headerHeight
-			if outputHeight < 1 {
-				outputHeight = 1
-			}
+			outputHeight := max(contentHeight-headerHeight, 1)
 
 			// Get content and truncate to width
 			content := tailLines(status.PaneContent, outputHeight)
@@ -1425,7 +1644,7 @@ func ensureExactWidth(content string, width int) string {
 		case displayWidth < width:
 			// Pad with spaces to reach target width using cached padding
 			sb.WriteString(line)
-			sb.WriteString(getPadding(width - displayWidth))
+			sb.WriteString(components.Pad(width - displayWidth))
 		default:
 			// Line too wide - truncate at width boundary
 			truncated := ansi.TruncateWc(line, width, "")
@@ -1433,7 +1652,7 @@ func ensureExactWidth(content string, width int) string {
 			// Pad if truncation made it shorter than width
 			truncWidth := ansi.StringWidth(truncated)
 			if truncWidth < width {
-				sb.WriteString(getPadding(width - truncWidth))
+				sb.WriteString(components.Pad(width - truncWidth))
 			}
 		}
 	}

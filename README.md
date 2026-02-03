@@ -280,9 +280,11 @@ keybindings:
 | `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
 | `keybindings`                         | `map[string]Keybinding` | `r`=Recycle, `d`=Delete        | TUI keybindings (reference usercommands) |
 | `usercommands`                        | `map[string]UserCommand`| Recycle, Delete (system)       | Named commands for palette and keybindings |
-| `tui.refresh_interval`                | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
-| `integrations.terminal.enabled`       | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
-| `integrations.terminal.poll_interval` | `duration`              | `500ms`                        | Status check frequency                   |
+| `tui.refresh_interval`                         | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
+| `tui.preview_enabled`                          | `bool`                  | `false`                        | Enable tmux pane preview sidebar on startup |
+| `integrations.terminal.enabled`                | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
+| `integrations.terminal.poll_interval`          | `duration`              | `500ms`                        | Status check frequency                   |
+| `integrations.terminal.preview_window_matcher` | `[]string`              | `["claude", "aider", "codex"]` | Regex patterns for preferred window names |
 | `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
 | `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
 
@@ -340,12 +342,12 @@ Launches the interactive TUI for managing sessions.
 - Real-time terminal status monitoring (with tmux integration)
 - Preview sidebar showing live tmux pane output (`v` to toggle)
 - Git status display (branch, additions, deletions)
-- Filter sessions with `/`
+- Filter sessions with `/` or by status via command palette
 - Switch between Sessions and Messages views with `tab`
 
 **Default keybindings:**
 
-- `:` - Open command palette (when user commands configured)
+- `:` - Open command palette
 - `v` - Toggle preview sidebar (shows tmux pane output)
 - `r` - Recycle session
 - `d` - Delete session
@@ -353,6 +355,15 @@ Launches the interactive TUI for managing sessions.
 - `g` - Refresh git statuses
 - `tab` - Switch views
 - `q` / `Ctrl+C` - Quit
+
+**Built-in commands** (via `:` command palette):
+
+- `FilterAll` - Show all sessions
+- `FilterActive` - Show sessions with active agents
+- `FilterApproval` - Show sessions needing approval
+- `FilterReady` - Show sessions with idle agents
+- `Recycle` - Recycle selected session
+- `Delete` - Delete selected session
 
 ### `hive new`
 

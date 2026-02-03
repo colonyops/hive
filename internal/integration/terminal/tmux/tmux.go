@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -15,29 +16,41 @@ import (
 
 // Integration implements terminal.Integration for tmux.
 type Integration struct {
-	mu            sync.RWMutex
-	cache         map[string]sessionCache
-	cacheTime     time.Time
-	trackers      map[string]*terminal.StateTracker
-	limiters      map[string]*terminal.RateLimiter
-	available     bool
-	availableOnce sync.Once
+	mu               sync.RWMutex
+	cache            map[string]sessionCache
+	cacheTime        time.Time
+	trackers         map[string]*terminal.StateTracker
+	limiters         map[string]*terminal.RateLimiter
+	available        bool
+	availableOnce    sync.Once
+	preferredWindows []*regexp.Regexp // compiled patterns for preferred window names
 }
 
 type sessionCache struct {
 	workDir           string
+	windowIndex       string // window index for targeted capture (e.g., "0", "1")
+	windowName        string // window name for debugging
 	activity          int64
 	paneContent       string
 	lastCaptureActive int64
 	cachedStatus      terminal.Status
 }
 
-// New creates a new tmux integration.
-func New() *Integration {
+// New creates a new tmux integration with optional preferred window patterns.
+// Patterns are regex strings matched against window names (e.g., "claude", "aider").
+func New(preferredWindowPatterns []string) *Integration {
+	var patterns []*regexp.Regexp
+	for _, p := range preferredWindowPatterns {
+		if re, err := regexp.Compile("(?i)" + p); err == nil { // case-insensitive
+			patterns = append(patterns, re)
+		}
+	}
+
 	return &Integration{
-		cache:    make(map[string]sessionCache),
-		trackers: make(map[string]*terminal.StateTracker),
-		limiters: make(map[string]*terminal.RateLimiter),
+		cache:            make(map[string]sessionCache),
+		trackers:         make(map[string]*terminal.StateTracker),
+		limiters:         make(map[string]*terminal.RateLimiter),
+		preferredWindows: patterns,
 	}
 }
 
@@ -57,8 +70,9 @@ func (t *Integration) Available() bool {
 
 // RefreshCache updates the cached session list. Call once per poll cycle.
 func (t *Integration) RefreshCache() {
-	// Get session name, work dir, and activity in single call
-	cmd := exec.Command("tmux", "list-windows", "-a", "-F", "#{session_name}\t#{pane_current_path}\t#{window_activity}")
+	// Get session name, window index, window name, work dir, and activity
+	cmd := exec.Command("tmux", "list-windows", "-a", "-F",
+		"#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_activity}")
 	output, err := cmd.Output()
 	if err != nil {
 		t.mu.Lock()
@@ -73,35 +87,64 @@ func (t *Integration) RefreshCache() {
 	t.mu.Unlock()
 
 	newCache := make(map[string]sessionCache)
+	// Track which sessions have a preferred window match
+	preferredMatch := make(map[string]bool)
+
 	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 3)
-		if len(parts) < 1 {
+		parts := strings.SplitN(line, "\t", 5)
+		if len(parts) < 3 {
 			continue
 		}
 
-		name := parts[0]
-		entry := sessionCache{}
+		sessionName := parts[0]
+		windowIndex := parts[1]
+		windowName := parts[2]
 
-		// Preserve cached content from previous cache
-		if old, exists := oldCache[name]; exists {
+		entry := sessionCache{
+			windowIndex: windowIndex,
+			windowName:  windowName,
+		}
+
+		// Preserve cached content from previous cache for this session
+		if old, exists := oldCache[sessionName]; exists {
 			entry.paneContent = old.paneContent
 			entry.lastCaptureActive = old.lastCaptureActive
 			entry.cachedStatus = old.cachedStatus
 		}
 
-		if len(parts) >= 2 {
-			entry.workDir = parts[1]
+		if len(parts) >= 4 {
+			entry.workDir = parts[3]
 		}
-		if len(parts) >= 3 {
-			_, _ = fmt.Sscanf(parts[2], "%d", &entry.activity)
+		if len(parts) >= 5 {
+			_, _ = fmt.Sscanf(parts[4], "%d", &entry.activity)
 		}
 
-		// Keep maximum activity if session has multiple windows
-		if existing, ok := newCache[name]; !ok || entry.activity > existing.activity {
-			newCache[name] = entry
+		// Check if this window matches any preferred pattern
+		isPreferred := t.matchesPreferredWindow(windowName)
+
+		// Decide whether to use this window for the session
+		existing, hasExisting := newCache[sessionName]
+		existingIsPreferred := preferredMatch[sessionName]
+
+		shouldReplace := false
+		switch {
+		case !hasExisting:
+			// No existing entry, use this one
+			shouldReplace = true
+		case isPreferred && !existingIsPreferred:
+			// This is preferred, existing is not - prefer this one
+			shouldReplace = true
+		case isPreferred == existingIsPreferred && entry.activity > existing.activity:
+			// Same preference level, use more recent activity
+			shouldReplace = true
+		}
+
+		if shouldReplace {
+			newCache[sessionName] = entry
+			preferredMatch[sessionName] = isPreferred
 		}
 	}
 
@@ -109,6 +152,16 @@ func (t *Integration) RefreshCache() {
 	t.cache = newCache
 	t.cacheTime = time.Now()
 	t.mu.Unlock()
+}
+
+// matchesPreferredWindow returns true if windowName matches any preferred pattern.
+func (t *Integration) matchesPreferredWindow(windowName string) bool {
+	for _, re := range t.preferredWindows {
+		if re.MatchString(windowName) {
+			return true
+		}
+	}
+	return false
 }
 
 // DiscoverSession finds a tmux session for the given slug and metadata.
@@ -185,8 +238,9 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		content = cached.paneContent
 	default:
 		// Activity changed and rate limit allows, capture fresh
+		// Use cached window index to target the preferred window
 		var err error
-		content, err = t.capturePane(ctx, info.Name, info.Pane)
+		content, err = t.capturePane(ctx, info.Name, cached.windowIndex)
 		if err != nil {
 			return terminal.StatusMissing, err
 		}

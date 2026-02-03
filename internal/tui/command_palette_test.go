@@ -132,11 +132,11 @@ func TestCommandPalette_Filtering(t *testing.T) {
 	// Initially all commands visible
 	assert.Len(t, p.filteredList, 3)
 
-	// Type 'd' - should match deploy and delete
+	// Type 'd' - should match deploy and delete (order by fuzzy score)
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Text: "d"}))
 	assert.Len(t, p.filteredList, 2)
-	assert.Equal(t, "delete", p.filteredList[0].Name)
-	assert.Equal(t, "deploy", p.filteredList[1].Name)
+	names := []string{p.filteredList[0].Name, p.filteredList[1].Name}
+	assert.ElementsMatch(t, []string{"delete", "deploy"}, names)
 
 	// Type 'e' - should match delete and deploy
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'e', Text: "e"}))
@@ -146,6 +146,43 @@ func TestCommandPalette_Filtering(t *testing.T) {
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'p', Text: "p"}))
 	assert.Len(t, p.filteredList, 1)
 	assert.Equal(t, "deploy", p.filteredList[0].Name)
+}
+
+func TestCommandPalette_FuzzyMatching(t *testing.T) {
+	cmds := map[string]config.UserCommand{
+		"deploy-staging": {Sh: "deploy-staging"},
+		"deploy-prod":    {Sh: "deploy-prod"},
+		"delete-session": {Sh: "delete-session"},
+		"restart":        {Sh: "restart"},
+	}
+
+	p := NewCommandPalette(cmds, nil, 80, 24)
+
+	// Fuzzy match: 'dpl' should match 'deploy-staging' and 'deploy-prod'
+	for _, r := range "dpl" {
+		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
+	}
+	assert.Len(t, p.filteredList, 2)
+	names := []string{p.filteredList[0].Name, p.filteredList[1].Name}
+	assert.ElementsMatch(t, []string{"deploy-prod", "deploy-staging"}, names)
+
+	// Reset and try another fuzzy pattern
+	p = NewCommandPalette(cmds, nil, 80, 24)
+
+	// 'dpst' should match 'deploy-staging' (d-p-st)
+	for _, r := range "dpst" {
+		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
+	}
+	assert.Len(t, p.filteredList, 1)
+	assert.Equal(t, "deploy-staging", p.filteredList[0].Name)
+
+	// Reset and try 'rst' - should match 'restart'
+	p = NewCommandPalette(cmds, nil, 80, 24)
+	for _, r := range "rst" {
+		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
+	}
+	assert.Len(t, p.filteredList, 1)
+	assert.Equal(t, "restart", p.filteredList[0].Name)
 }
 
 func TestCommandPalette_Navigation(t *testing.T) {
@@ -239,27 +276,22 @@ func TestCommandPalette_TabAutoFill(t *testing.T) {
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Text: "d"}))
 	assert.Len(t, p.filteredList, 2)
 	assert.Equal(t, 0, p.selectedIdx)
-	assert.Equal(t, "delete", p.filteredList[0].Name)
 
-	// Press tab - should auto-fill with "delete"
+	// Remember which command is first in fuzzy results
+	firstCmd := p.filteredList[0].Name
+	secondCmd := p.filteredList[1].Name
+
+	// Press tab - should auto-fill with the first result
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
-	assert.Equal(t, "delete", p.input.Value())
+	assert.Equal(t, firstCmd, p.input.Value())
 
-	// Press down to select "deploy"
+	// Press down to select second command
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	assert.Equal(t, 1, p.selectedIdx)
 
-	// Clear input and type 'd' again
-	p.input.SetValue("")
-	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Text: "d"}))
-
-	// Press down to select deploy
-	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
-	assert.Equal(t, "deploy", p.filteredList[1].Name)
-
-	// Press tab - should auto-fill with "deploy"
+	// Press tab - should auto-fill with second command
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
-	assert.Equal(t, "deploy", p.input.Value())
+	assert.Equal(t, secondCmd, p.input.Value())
 }
 
 func TestCommandPalette_TabAutoFillPreservesArgs(t *testing.T) {
@@ -278,14 +310,18 @@ func TestCommandPalette_TabAutoFillPreservesArgs(t *testing.T) {
 	// Should filter to deploy and delete, with args "staging"
 	assert.Len(t, p.filteredList, 2)
 
+	// Remember the fuzzy ordering
+	firstCmd := p.filteredList[0].Name
+	secondCmd := p.filteredList[1].Name
+
 	// Press tab - should auto-fill command but preserve args
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
-	assert.Equal(t, "delete staging", p.input.Value())
+	assert.Equal(t, firstCmd+" staging", p.input.Value())
 
 	// Navigate down and tab again
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyTab}))
-	assert.Equal(t, "deploy staging", p.input.Value())
+	assert.Equal(t, secondCmd+" staging", p.input.Value())
 }
 
 func TestCommandPalette_Scrolling(t *testing.T) {

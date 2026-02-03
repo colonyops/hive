@@ -74,8 +74,9 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	var termMgr *terminal.Manager
 	if len(cmd.flags.Config.Integrations.Terminal.Enabled) > 0 {
 		termMgr = terminal.NewManager(cmd.flags.Config.Integrations.Terminal.Enabled)
-		// Register tmux integration
-		tmuxIntegration := tmux.New()
+		// Register tmux integration with preview window matcher patterns
+		preferredWindows := cmd.flags.Config.Integrations.Terminal.PreviewWindowMatcher
+		tmuxIntegration := tmux.New(preferredWindows)
 		if tmuxIntegration.Available() {
 			termMgr.Register(tmuxIntegration)
 		}

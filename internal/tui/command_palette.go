@@ -10,6 +10,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/sahilm/fuzzy"
 )
 
 const (
@@ -24,6 +25,12 @@ type CommandEntry struct {
 	Name    string
 	Command config.UserCommand
 }
+
+// commandEntries implements fuzzy.Source for fuzzy matching.
+type commandEntries []CommandEntry
+
+func (c commandEntries) String(i int) string { return c[i].Name }
+func (c commandEntries) Len() int            { return len(c) }
 
 // CommandPalette is a vim-style command palette for user commands.
 type CommandPalette struct {
@@ -159,21 +166,12 @@ func (p *CommandPalette) updateFilter() {
 		return
 	}
 
-	// Filter commands by prefix match
-	filtered := make([]CommandEntry, 0, len(p.commands))
-	for _, cmd := range p.commands {
-		if strings.HasPrefix(cmd.Name, parsed.Name) {
-			filtered = append(filtered, cmd)
-		}
-	}
+	// Use fuzzy matching - results are sorted by score (best matches first)
+	matches := fuzzy.FindFrom(parsed.Name, commandEntries(p.commands))
 
-	// If no prefix matches, try substring match
-	if len(filtered) == 0 {
-		for _, cmd := range p.commands {
-			if strings.Contains(cmd.Name, parsed.Name) {
-				filtered = append(filtered, cmd)
-			}
-		}
+	filtered := make([]CommandEntry, len(matches))
+	for i, match := range matches {
+		filtered[i] = p.commands[match.Index]
 	}
 
 	p.filteredList = filtered
