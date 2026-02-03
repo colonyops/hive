@@ -222,7 +222,6 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	delegate.GitStatuses = gitStatuses
 	delegate.TerminalStatuses = terminalStatuses
 	delegate.ColumnWidths = columnWidths
-	delegate.PluginStatuses = pluginStatuses
 	delegate.IconsEnabled = cfg.TUI.IconsEnabled()
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
@@ -1647,7 +1646,6 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9ece6a"))
 	delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#f7768e"))
 	dirtyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#e0af68"))
-	pluginLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 
 	divider := strings.Repeat("─", maxWidth)
@@ -1679,35 +1677,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 		}
 	}
 
-	// Plugin statuses
-	if m.pluginStatuses != nil {
-		pluginOrder := []string{"github", "beads"}
-		for _, name := range pluginOrder {
-			store, ok := m.pluginStatuses[name]
-			if !ok || store == nil {
-				continue
-			}
-			status, ok := store.Get(sess.ID)
-			if !ok || status.Label == "" {
-				continue
-			}
-
-			var icon string
-			if iconsEnabled {
-				switch name {
-				case "github":
-					icon = styles.IconGithub
-				case "beads":
-					icon = styles.IconCheckList
-				}
-			} else {
-				icon = status.Icon
-			}
-
-			pluginPart := pluginLabelStyle.Render(icon+":") + status.Style.Render(status.Label)
-			statusParts = append(statusParts, pluginPart)
-		}
-	}
+	// Plugin statuses removed - git info is sufficient
 
 	status := strings.Join(statusParts, separatorStyle.Render(" • "))
 

@@ -4,18 +4,15 @@ import (
 	"fmt"
 	"image/color"
 	"io"
-	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
-	"github.com/hay-kot/hive/internal/plugins"
 	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
-	"github.com/rs/zerolog/log"
 )
 
 // Tree characters for rendering the session tree.
@@ -332,7 +329,6 @@ type TreeDelegate struct {
 	Styles           TreeDelegateStyles
 	GitStatuses      *kv.Store[string, GitStatus]
 	TerminalStatuses *kv.Store[string, TerminalStatus]
-	PluginStatuses   map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
 	PreviewMode      bool // When true, show minimal info (session names only)
@@ -496,14 +492,10 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
 	}
 
-	// Full mode: show ID, git status, and plugin statuses
-	// Git status: branch, diff stats, clean/dirty indicator
+	// Full mode: show ID and git status
 	gitInfo := d.renderGitStatus(item.Session.Path)
 
-	// Plugin statuses (e.g., PR:open, BD:0/3)
-	pluginInfo := d.renderPluginStatuses(item.Session.ID)
-
-	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
+	return fmt.Sprintf("%s %s %s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo)
 }
 
 // renderGitStatus returns the formatted git status for a session path.
@@ -548,55 +540,6 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 	}
 
 	return branch + additions + deletions + indicator
-}
-
-// renderPluginStatuses returns formatted plugin status indicators for a session.
-func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
-	if len(d.PluginStatuses) == 0 {
-		log.Debug().Str("sessionID", sessionID).Msg("render: no plugin statuses map")
-		return ""
-	}
-
-	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-
-	var parts []string
-	// Render each plugin's status in consistent order
-	pluginOrder := []string{"github", "beads"}
-	for _, name := range pluginOrder {
-		store, ok := d.PluginStatuses[name]
-		if !ok || store == nil {
-			continue
-		}
-		status, ok := store.Get(sessionID)
-		if !ok || status.Label == "" {
-			continue
-		}
-
-		// Choose icon based on icons enabled setting
-		var icon string
-		if d.IconsEnabled {
-			switch name {
-			case "github":
-				icon = styles.IconGithub
-			case "beads":
-				icon = styles.IconCheckList
-			default:
-				icon = status.Icon
-			}
-		} else {
-			icon = status.Icon
-		}
-
-		// Format: [icon:label] with plugin's style
-		indicator := fmt.Sprintf("%s:%s", icon, status.Label)
-		parts = append(parts, status.Style.Render(indicator))
-		log.Debug().Str("sessionID", sessionID).Str("plugin", name).Str("label", status.Label).Msg("render: found status")
-	}
-
-	if len(parts) == 0 {
-		return ""
-	}
-	return " " + strings.Join(parts, separatorStyle.Render(" • "))
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.
