@@ -28,15 +28,13 @@ func validConfig(t *testing.T) *Config {
 
 func TestValidateDeep_ValidConfig(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.Commands = Commands{
-		Recycle: []string{"git reset --hard", "git checkout main"},
-	}
 	cfg.Rules = []Rule{
 		{
 			Pattern:    "^https://github.com/.*",
 			Commands:   []string{"echo hello"},
 			Spawn:      []string{"echo {{.Path}}", "echo {{.Name}} {{.Slug}}"},
 			BatchSpawn: []string{"echo {{.Path}}", "echo {{.Name}} {{.Prompt}}"},
+			Recycle:    []string{"git reset --hard", "git checkout main"},
 		},
 	}
 	// With the new model, keybindings reference commands
@@ -72,8 +70,11 @@ func TestValidateDeep_InvalidSpawnTemplate(t *testing.T) {
 
 func TestValidateDeep_InvalidRecycleTemplate(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.Commands = Commands{
-		Recycle: []string{"git checkout {{.Invalid}}"},
+	cfg.Rules = []Rule{
+		{
+			Pattern: "",
+			Recycle: []string{"git checkout {{.Invalid}}"},
+		},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -81,17 +82,20 @@ func TestValidateDeep_InvalidRecycleTemplate(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Field, "commands.recycle")
+	assert.Contains(t, fieldErrs[0].Field, "rules[0].recycle")
 	assert.Contains(t, fieldErrs[0].Err.Error(), "template error")
 }
 
 func TestValidateDeep_ValidRecycleTemplate(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.Commands = Commands{
-		Recycle: []string{
-			"git fetch origin",
-			"git checkout {{.DefaultBranch}}",
-			"git reset --hard origin/{{.DefaultBranch}}",
+	cfg.Rules = []Rule{
+		{
+			Pattern: "",
+			Recycle: []string{
+				"git fetch origin",
+				"git checkout {{.DefaultBranch}}",
+				"git reset --hard origin/{{.DefaultBranch}}",
+			},
 		},
 	}
 
@@ -274,26 +278,6 @@ func TestWarnings_EmptyRule(t *testing.T) {
 		}
 	}
 	assert.True(t, hasWarning, "expected warning about empty rule")
-}
-
-func TestWarnings_EmptyRecycleCommands(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Commands = Commands{
-		Recycle: []string{},
-	}
-
-	err := cfg.ValidateDeep("")
-	require.NoError(t, err)
-
-	warnings := cfg.Warnings()
-	hasWarning := false
-	for _, w := range warnings {
-		if w.Category == "Recycle Commands" {
-			hasWarning = true
-			break
-		}
-	}
-	assert.True(t, hasWarning, "expected warning about empty recycle commands")
 }
 
 func TestWarnings_NoSpawnCommands(t *testing.T) {
@@ -563,6 +547,66 @@ func TestGetSpawnCommands(t *testing.T) {
 			cfg.Rules = tt.rules
 
 			result := cfg.GetSpawnCommands(tt.remote, tt.batch)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetRecycleCommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    []Rule
+		remote   string
+		expected []string
+	}{
+		{
+			name:     "no rules returns defaults",
+			rules:    nil,
+			remote:   "https://github.com/foo/bar",
+			expected: DefaultRecycleCommands,
+		},
+		{
+			name: "catch-all rule overrides defaults",
+			rules: []Rule{
+				{Pattern: "", Recycle: []string{"echo recycle"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: []string{"echo recycle"},
+		},
+		{
+			name: "specific rule overrides catch-all",
+			rules: []Rule{
+				{Pattern: "", Recycle: []string{"echo default"}},
+				{Pattern: "github.com/foo/.*", Recycle: []string{"echo foo"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: []string{"echo foo"},
+		},
+		{
+			name: "non-matching rule uses catch-all",
+			rules: []Rule{
+				{Pattern: "", Recycle: []string{"echo default"}},
+				{Pattern: "github.com/other/.*", Recycle: []string{"echo other"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: []string{"echo default"},
+		},
+		{
+			name: "rule without recycle uses defaults",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}}, // no recycle
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: DefaultRecycleCommands,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Rules = tt.rules
+
+			result := cfg.GetRecycleCommands(tt.remote)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

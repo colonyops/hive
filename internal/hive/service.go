@@ -216,7 +216,7 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 		DefaultBranch: defaultBranch,
 	}
 
-	if err := s.recycler.Recycle(ctx, sess.Path, s.config.Commands.Recycle, data, w); err != nil {
+	if err := s.recycler.Recycle(ctx, sess.Path, s.config.GetRecycleCommands(sess.Remote), data, w); err != nil {
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 

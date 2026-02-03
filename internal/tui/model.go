@@ -256,7 +256,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		msgView:            msgView,
 		topicFilter:        "*",
 		activeView:         ViewSessions,
-		copyCommand:        cfg.Commands.CopyCommand,
+		copyCommand:        cfg.CopyCommand,
 		repoDirs:           cfg.RepoDirs,
 	}
 }

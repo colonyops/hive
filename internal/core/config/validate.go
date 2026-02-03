@@ -63,7 +63,6 @@ func (c *Config) ValidateDeep(configPath string) error {
 
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
-		validateTemplates("commands.recycle", c.Commands.Recycle, RecycleTemplateData{}),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
 	)
@@ -72,14 +71,6 @@ func (c *Config) ValidateDeep(configPath string) error {
 // Warnings returns non-fatal configuration issues.
 func (c *Config) Warnings() []ValidationWarning {
 	var warnings []ValidationWarning
-
-	if len(c.Commands.Recycle) == 0 {
-		warnings = append(warnings, ValidationWarning{
-			Category: "Recycle Commands",
-			Item:     "commands",
-			Message:  "No recycle commands defined; sessions will only be marked as recycled",
-		})
-	}
 
 	// Check if any rule has spawn commands defined
 	hasSpawn := false
@@ -166,18 +157,7 @@ func isDirectoryOrNotExist(path string) error {
 	return nil
 }
 
-// validateTemplates checks template syntax for a slice of command templates.
-func validateTemplates(fieldPrefix string, commands []string, data any) error {
-	var errs criterio.FieldErrorsBuilder
-	for i, cmd := range commands {
-		if err := validateTemplate(cmd, data); err != nil {
-			errs = errs.Append(fmt.Sprintf("%s[%d]", fieldPrefix, i), fmt.Errorf("template error: %w", err))
-		}
-	}
-	return errs.ToError()
-}
-
-// validateRules checks rule patterns are valid regex and spawn templates are valid.
+// validateRules checks rule patterns are valid regex and command templates are valid.
 func (c *Config) validateRules() error {
 	var errs criterio.FieldErrorsBuilder
 	for i, rule := range c.Rules {
@@ -196,6 +176,12 @@ func (c *Config) validateRules() error {
 		for j, cmd := range rule.BatchSpawn {
 			if err := validateTemplate(cmd, BatchSpawnTemplateData{}); err != nil {
 				errs = errs.Append(fmt.Sprintf("rules[%d].batch_spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
+			}
+		}
+		// Validate recycle templates
+		for j, cmd := range rule.Recycle {
+			if err := validateTemplate(cmd, RecycleTemplateData{}); err != nil {
+				errs = errs.Append(fmt.Sprintf("rules[%d].recycle[%d]", i, j), fmt.Errorf("template error: %w", err))
 			}
 		}
 	}

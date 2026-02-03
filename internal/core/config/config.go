@@ -89,7 +89,7 @@ const CurrentConfigVersion = "0.2.4"
 // Config holds the application configuration.
 type Config struct {
 	Version             string                 `yaml:"version"`
-	Commands            Commands               `yaml:"commands"`
+	CopyCommand         string                 `yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
 	Git                 GitConfig              `yaml:"git"`
 	GitPath             string                 `yaml:"git_path"`
 	Keybindings         map[string]Keybinding  `yaml:"keybindings"`
@@ -172,12 +172,8 @@ type Rule struct {
 	Spawn []string `yaml:"spawn,omitempty"`
 	// BatchSpawn commands to run when creating a batch session (hive batch).
 	BatchSpawn []string `yaml:"batch_spawn,omitempty"`
-}
-
-// Commands defines the shell commands used by hive.
-type Commands struct {
-	Recycle     []string `yaml:"recycle"`
-	CopyCommand string   `yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
+	// Recycle commands to run when recycling a session.
+	Recycle []string `yaml:"recycle,omitempty"`
 }
 
 // Keybinding defines a TUI keybinding that references a UserCommand.
@@ -224,17 +220,17 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// DefaultRecycleCommands are the default commands run when recycling a session.
+var DefaultRecycleCommands = []string{
+	"git fetch origin",
+	"git checkout -f {{ .DefaultBranch }}",
+	"git reset --hard origin/{{ .DefaultBranch }}",
+	"git clean -fd",
+}
+
 // DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		Commands: Commands{
-			Recycle: []string{
-				"git fetch origin",
-				"git checkout {{ .DefaultBranch }}",
-				"git reset --hard origin/{{ .DefaultBranch }}",
-				"git clean -fd",
-			},
-		},
 		Git: GitConfig{
 			StatusWorkers: 3,
 		},
@@ -305,8 +301,8 @@ func (c *Config) applyDefaults() {
 	if c.Context.SymlinkName == "" {
 		c.Context.SymlinkName = defaults.Context.SymlinkName
 	}
-	if c.Commands.CopyCommand == "" {
-		c.Commands.CopyCommand = defaultCopyCommand()
+	if c.CopyCommand == "" {
+		c.CopyCommand = defaultCopyCommand()
 	}
 	if c.Integrations.Terminal.PollInterval == 0 {
 		c.Integrations.Terminal.PollInterval = 1500 * time.Millisecond
@@ -554,6 +550,24 @@ func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
 				result = rule.Spawn
 			}
 		}
+	}
+	return result
+}
+
+// GetRecycleCommands returns the recycle commands for the given remote URL.
+// Rules are evaluated in order; the last matching rule with recycle commands wins.
+// If no rules define recycle commands, returns DefaultRecycleCommands.
+func (c *Config) GetRecycleCommands(remote string) []string {
+	var result []string
+	for _, rule := range c.Rules {
+		if rule.Pattern == "" || matchesPattern(rule.Pattern, remote) {
+			if len(rule.Recycle) > 0 {
+				result = rule.Recycle
+			}
+		}
+	}
+	if len(result) == 0 {
+		return DefaultRecycleCommands
 	}
 	return result
 }
