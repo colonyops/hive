@@ -901,6 +901,16 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 
 // handleSessionsKey handles keys when sessions pane is focused.
 func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Handle navigation keys - skip over headers
+	switch keyStr {
+	case "up", "k":
+		m.navigateSkippingHeaders(-1)
+		return m, nil
+	case "down", "j":
+		m.navigateSkippingHeaders(1)
+		return m, nil
+	}
+
 	// Handle 'n' for new session (only if repos are discovered)
 	if keyStr == "n" && len(m.discoveredRepos) > 0 {
 		// Determine preselected remote
@@ -995,6 +1005,55 @@ func (m Model) selectedSession() *session.Session {
 	return nil
 }
 
+// navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down),
+// skipping over header items which are not actionable.
+func (m *Model) navigateSkippingHeaders(direction int) {
+	items := m.list.Items()
+	if len(items) == 0 {
+		return
+	}
+
+	current := m.list.Index()
+	target := current
+
+	// Move in the given direction until we find a non-header or hit bounds
+	for {
+		target += direction
+
+		// Check bounds
+		if target < 0 || target >= len(items) {
+			return // Can't move further, stay at current position
+		}
+
+		// Check if target is a header
+		if treeItem, ok := items[target].(TreeItem); ok {
+			if !treeItem.IsHeader {
+				// Found a non-header, select it
+				m.list.Select(target)
+				return
+			}
+			// It's a header, keep looking
+		} else {
+			// Not a TreeItem, select it
+			m.list.Select(target)
+			return
+		}
+	}
+}
+
+// selectFirstNonHeader selects the first non-header item in the list.
+func (m *Model) selectFirstNonHeader() {
+	items := m.list.Items()
+	for i, item := range items {
+		if treeItem, ok := item.(TreeItem); ok {
+			if !treeItem.IsHeader {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+}
+
 // selectedMessage returns the currently selected message, or nil if none.
 func (m Model) selectedMessage() *messaging.Message {
 	return m.msgView.SelectedMessage()
@@ -1040,6 +1099,7 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	}
 
 	m.list.SetItems(items)
+	m.selectFirstNonHeader() // Skip headers for initial selection
 	m.state = stateNormal
 
 	if len(paths) == 0 {
