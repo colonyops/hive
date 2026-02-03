@@ -2,7 +2,6 @@ package tui
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -93,8 +92,9 @@ type Model struct {
 	// Terminal integration
 	terminalManager    *terminal.Manager
 	terminalStatuses   *kv.Store[string, TerminalStatus]
-	previewEnabled     bool   // toggle tmux pane preview sidebar
-	currentTmuxSession string // current tmux session name (to prevent recursive preview)
+	previewEnabled     bool              // toggle tmux pane preview sidebar
+	previewTemplates   *PreviewTemplates // parsed preview panel templates
+	currentTmuxSession string            // current tmux session name (to prevent recursive preview)
 
 	// Plugin integration
 	pluginManager      *plugins.Manager
@@ -223,6 +223,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	delegate.TerminalStatuses = terminalStatuses
 	delegate.ColumnWidths = columnWidths
 	delegate.PluginStatuses = pluginStatuses
+	delegate.IconsEnabled = cfg.TUI.IconsEnabled()
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
@@ -278,6 +279,12 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	// Detect current tmux session to prevent recursive preview
 	currentTmux := detectCurrentTmuxSession()
 
+	// Parse preview templates
+	previewTemplates := ParsePreviewTemplates(
+		cfg.TUI.Preview.TitleTemplate,
+		cfg.TUI.Preview.StatusTemplate,
+	)
+
 	return Model{
 		cfg:                cfg,
 		service:            service,
@@ -292,6 +299,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		terminalManager:    opts.TerminalManager,
 		terminalStatuses:   terminalStatuses,
 		previewEnabled:     cfg.TUI.PreviewEnabled,
+		previewTemplates:   previewTemplates,
 		currentTmuxSession: currentTmux,
 		pluginManager:      opts.PluginManager,
 		pluginStatuses:     pluginStatuses,
@@ -1629,75 +1637,24 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 
 // renderPreviewHeader renders the preview header section with session metadata.
 func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
-	// Session name
-	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-	name := nameStyle.Render(sess.Name)
+	// Build template data
+	data := BuildPreviewTemplateData(sess, m.gitStatuses, m.pluginStatuses, m.terminalStatuses, m.cfg.TUI.IconsEnabled())
 
-	// Divider line
-	divider := strings.Repeat("─", maxWidth)
+	// Styles
+	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
+	statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	divider := strings.Repeat("─", maxWidth)
 
-	// Get git status if available
-	var gitLine string
-	if m.gitStatuses != nil {
-		if status, ok := m.gitStatuses.Get(sess.Path); ok && !status.IsLoading && status.Error == nil {
-			// Format: git: branch +N -N • clean/dirty
-			gitStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
-			branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
-			addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9ece6a"))
-			delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#f7768e"))
-
-			changes := ""
-			if status.HasChanges {
-				changes = " • uncommitted"
-			}
-
-			gitLine = fmt.Sprintf("%s %s %s %s%s",
-				gitStyle.Render("git:"),
-				branchStyle.Render(status.Branch),
-				addStyle.Render(fmt.Sprintf("+%d", status.Additions)),
-				delStyle.Render(fmt.Sprintf("-%d", status.Deletions)),
-				changes,
-			)
-		}
-	}
-
-	// Session ID line
-	shortID := sess.ID
-	if len(shortID) > 4 {
-		shortID = shortID[len(shortID)-4:]
-	}
-	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
-	idLine := fmt.Sprintf("%s %s", idStyle.Render("id:"), shortID)
-
-	// Build plugin status lines
-	var pluginLines []string
-	if m.pluginStatuses != nil {
-		pluginLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
-		pluginOrder := []string{"github", "beads"}
-		for _, name := range pluginOrder {
-			store, ok := m.pluginStatuses[name]
-			if !ok || store == nil {
-				continue
-			}
-			status, ok := store.Get(sess.ID)
-			if !ok || status.Label == "" {
-				continue
-			}
-			pluginLines = append(pluginLines,
-				fmt.Sprintf("%s %s", pluginLabelStyle.Render(name+":"), status.Style.Render(status.Label)))
-		}
-	}
+	// Render templates
+	title := titleStyle.Render(m.previewTemplates.RenderTitle(data))
+	status := statusStyle.Render(m.previewTemplates.RenderStatus(data))
 
 	// Build header
 	var parts []string
-	parts = append(parts, name)
+	parts = append(parts, title)
 	parts = append(parts, dividerStyle.Render(divider))
-	parts = append(parts, idLine)
-	if gitLine != "" {
-		parts = append(parts, gitLine)
-	}
-	parts = append(parts, pluginLines...)
+	parts = append(parts, status)
 	parts = append(parts, "")
 	parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce")).Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))

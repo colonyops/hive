@@ -121,6 +121,19 @@ type ContextConfig struct {
 type TUIConfig struct {
 	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
 	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
+	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
+	Preview         PreviewConfig `yaml:"preview"`          // preview panel configuration
+}
+
+// IconsEnabled returns true if nerd font icons should be shown.
+func (t TUIConfig) IconsEnabled() bool {
+	return t.Icons == nil || *t.Icons
+}
+
+// PreviewConfig holds preview panel template configuration.
+type PreviewConfig struct {
+	TitleTemplate  string `yaml:"title_template"`  // Go template for panel title (e.g., "{{ .Name }} • #{{ .ShortID }}")
+	StatusTemplate string `yaml:"status_template"` // Go template for status line (e.g., "{{ .Icon.GitBranch }} {{ .Branch }}")
 }
 
 // MessagingConfig holds messaging-related configuration.
@@ -136,9 +149,10 @@ type IntegrationsConfig struct {
 
 // PluginsConfig holds configuration for the plugin system.
 type PluginsConfig struct {
-	ShellWorkers int                `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
-	GitHub       GitHubPluginConfig `yaml:"github"`
-	Beads        BeadsPluginConfig  `yaml:"beads"`
+	ShellWorkers int                 `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
+	GitHub       GitHubPluginConfig  `yaml:"github"`
+	Beads        BeadsPluginConfig   `yaml:"beads"`
+	LazyGit      LazyGitPluginConfig `yaml:"lazygit"`
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -151,6 +165,11 @@ type GitHubPluginConfig struct {
 type BeadsPluginConfig struct {
 	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
 	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 30s)
+}
+
+// LazyGitPluginConfig holds lazygit plugin configuration.
+type LazyGitPluginConfig struct {
+	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // DatabaseConfig holds SQLite database configuration.

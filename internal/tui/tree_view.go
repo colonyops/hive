@@ -11,6 +11,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
 	"github.com/rs/zerolog/log"
@@ -334,6 +335,7 @@ type TreeDelegate struct {
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
 	PreviewMode      bool // When true, show minimal info (session names only)
+	IconsEnabled     bool // When true, show nerd font icons
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -518,16 +520,30 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 		return ""
 	}
 
-	// Format: (branch) +N -N • clean/dirty
-	branch := d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
+	// Format with icons: ( branch) +N -N [dirty icon]
+	// Format without icons: (branch) +N -N • clean/dirty
+	var branch string
+	if d.IconsEnabled {
+		branch = d.Styles.SessionBranch.Render(" (" + styles.IconGitBranch + " " + status.Branch + ")")
+	} else {
+		branch = d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
+	}
 	additions := gitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))
 	deletions := gitDeletionsStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
 
 	var indicator string
-	if status.HasChanges {
-		indicator = gitDirtyStyle.Render(" • uncommitted")
+	if d.IconsEnabled {
+		// With icons: show yellow git icon for uncommitted, nothing for clean
+		if status.HasChanges {
+			indicator = gitDirtyStyle.Render(" " + styles.IconGit)
+		}
 	} else {
-		indicator = gitCleanStyle.Render(" • clean")
+		// Without icons: show text indicator
+		if status.HasChanges {
+			indicator = gitDirtyStyle.Render(" • uncommitted")
+		} else {
+			indicator = gitCleanStyle.Render(" • clean")
+		}
 	}
 
 	return branch + additions + deletions + indicator
@@ -552,8 +568,24 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		if !ok || status.Label == "" {
 			continue
 		}
+
+		// Choose icon based on icons enabled setting
+		var icon string
+		if d.IconsEnabled {
+			switch name {
+			case "github":
+				icon = styles.IconGithub
+			case "beads":
+				icon = styles.IconCheckList
+			default:
+				icon = status.Icon
+			}
+		} else {
+			icon = status.Icon
+		}
+
 		// Format: [icon:label] with plugin's style
-		indicator := fmt.Sprintf(" %s:%s", status.Icon, status.Label)
+		indicator := fmt.Sprintf(" %s:%s", icon, status.Label)
 		result += status.Style.Render(indicator)
 		log.Debug().Str("sessionID", sessionID).Str("plugin", name).Str("label", status.Label).Msg("render: found status")
 	}
