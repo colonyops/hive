@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/fsnotify/fsnotify"
 	tea "charm.land/bubbletea/v2"
+	"github.com/fsnotify/fsnotify"
 )
 
 // documentChangeMsg is sent when documents change on disk.

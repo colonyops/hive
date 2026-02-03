@@ -675,6 +675,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case reviewFinalizedMsg:
+		// Copy feedback to clipboard
+		if err := m.copyToClipboard(msg.feedback); err != nil {
+			m.err = fmt.Errorf("failed to copy feedback: %w", err)
+		} else {
+			m.err = nil // Clear any previous errors
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -694,6 +703,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch m.activeView {
 	case ViewSessions:
 		m.list, cmd = m.list.Update(msg)
+	case ViewMessages:
+		// Messages view handles its own updates
 	case ViewReview:
 		if m.reviewView != nil {
 			*m.reviewView, cmd = m.reviewView.Update(msg)

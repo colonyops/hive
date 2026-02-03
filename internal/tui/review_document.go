@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/charmbracelet/glamour"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/glamour"
 )
 
 // DocumentType categorizes documents.
@@ -49,12 +49,12 @@ type ReviewDocument struct {
 
 // ReviewComment represents inline feedback.
 type ReviewComment struct {
-	ID          string    // UUID
-	SessionID   string    // Associated session ID
-	StartLine   int       // 1-indexed line number
-	EndLine     int       // Inclusive
-	ContextText string    // Quoted text from document
-	CommentText string    // User's feedback
+	ID          string // UUID
+	SessionID   string // Associated session ID
+	StartLine   int    // 1-indexed line number
+	EndLine     int    // Inclusive
+	ContextText string // Quoted text from document
+	CommentText string // User's feedback
 	CreatedAt   time.Time
 }
 
@@ -118,7 +118,6 @@ func DiscoverDocuments(contextDir string) ([]ReviewDocument, error) {
 
 		return nil
 	})
-
 	if err != nil {
 		return nil, err
 	}

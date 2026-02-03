@@ -11,13 +11,13 @@ import (
 
 // ReviewCommentModal handles comment entry for selected text.
 type ReviewCommentModal struct {
-	textInput    textinput.Model
-	lineRange    string // e.g., "Lines 10-15"
+	textInput      textinput.Model
+	lineRange      string // e.g., "Lines 10-15"
 	contextPreview string // First 100 chars of selected text
-	width        int
-	height       int
-	submitted    bool
-	cancelled    bool
+	width          int
+	height         int
+	submitted      bool
+	cancelled      bool
 }
 
 // NewReviewCommentModal creates a new comment modal.
@@ -33,11 +33,8 @@ func NewReviewCommentModal(startLine, endLine int, contextText string, width, he
 		lineRange = fmt.Sprintf("Line %d", startLine)
 	}
 
-	// Truncate context preview
-	contextPreview := contextText
-	if len(contextPreview) > 100 {
-		contextPreview = contextPreview[:97] + "..."
-	}
+	// Format context preview - show first 20 lines + ... + last 3 lines
+	contextPreview := formatContextPreview(contextText)
 
 	return ReviewCommentModal{
 		textInput:      ti,
@@ -46,6 +43,23 @@ func NewReviewCommentModal(startLine, endLine int, contextText string, width, he
 		width:          width,
 		height:         height,
 	}
+}
+
+// formatContextPreview formats multi-line context: first 20 lines + ... + last 3 lines.
+func formatContextPreview(text string) string {
+	lines := strings.Split(text, "\n")
+
+	// If 23 lines or fewer, show all
+	if len(lines) <= 23 {
+		return text
+	}
+
+	// Show first 20 lines
+	first := strings.Join(lines[:20], "\n")
+	// Show last 3 lines
+	last := strings.Join(lines[len(lines)-3:], "\n")
+
+	return first + "\n...\n" + last
 }
 
 // Update handles messages.

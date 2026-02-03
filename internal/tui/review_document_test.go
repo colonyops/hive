@@ -125,7 +125,7 @@ func TestDiscoverDocuments(t *testing.T) {
 	contextPath := filepath.Join(tmpDir, "context")
 
 	for _, dir := range []string{plansPath, researchPath, contextPath} {
-		if err := os.MkdirAll(dir, 0755); err != nil {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -144,7 +144,7 @@ func TestDiscoverDocuments(t *testing.T) {
 	}
 
 	for _, tf := range testFiles {
-		if err := os.WriteFile(tf.path, []byte(tf.content), 0644); err != nil {
+		if err := os.WriteFile(tf.path, []byte(tf.content), 0o644); err != nil {
 			t.Fatal(err)
 		}
 	}

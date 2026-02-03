@@ -12,22 +12,29 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 )
 
+// reviewFinalizedMsg is sent when review is finalized.
+type reviewFinalizedMsg struct {
+	feedback string
+}
+
 // ReviewView manages the review interface.
 type ReviewView struct {
-	list           list.Model
-	viewport       viewport.Model
-	watcher        *DocumentWatcher
-	contextDir     string
-	width          int
-	height         int
-	previewMode    bool            // True when showing dual-column layout
-	fullScreen     bool            // True when showing document in full-screen
-	selectedDoc    *ReviewDocument // Currently selected document for preview
-	selectionMode  bool            // True when in visual selection mode
-	selectionStart int             // Line number where selection starts (1-indexed)
-	selectionEnd   int             // Line number where selection ends (1-indexed)
-	activeSession  *ReviewSession  // Current review session with comments
-	commentModal   *ReviewCommentModal // Active comment entry modal
+	list              list.Model
+	viewport          viewport.Model
+	watcher           *DocumentWatcher
+	contextDir        string
+	width             int
+	height            int
+	previewMode       bool                // True when showing dual-column layout
+	fullScreen        bool                // True when showing document in full-screen
+	selectedDoc       *ReviewDocument     // Currently selected document for preview
+	selectionMode     bool                // True when in visual selection mode
+	selectionStart    int                 // Line number where selection starts (1-indexed)
+	cursorLine        int                 // Line number where cursor is positioned (1-indexed)
+	activeSession     *ReviewSession      // Current review session with comments
+	commentModal      *ReviewCommentModal // Active comment entry modal
+	confirmModal      *ConfirmModal       // Active confirmation modal
+	feedbackGenerated string              // Generated feedback (for clipboard)
 }
 
 // NewReviewView creates a new review view.
@@ -72,6 +79,7 @@ func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
 		watcher:     watcher,
 		contextDir:  contextDir,
 		previewMode: true, // Enable preview by default
+		cursorLine:  1,    // Initialize cursor at line 1
 	}
 }
 
@@ -122,32 +130,35 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyMsg:
-		// Handle full-screen toggle
-		switch msg.String() {
-		case "enter":
-			// Toggle full-screen mode if a document is selected
-			if v.selectedDoc != nil && !v.list.SettingFilter() {
-				v.fullScreen = !v.fullScreen
-				// Adjust viewport size for full-screen
-				if v.fullScreen {
-					v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
-					v.loadDocument(v.selectedDoc)
-				} else {
-					// Return to dual-column mode
-					v.SetSize(v.width, v.height)
+		// Handle confirmation modal if active (MUST be first to prevent key conflicts)
+		if v.confirmModal != nil {
+			modal, cmd := v.confirmModal.Update(msg)
+			v.confirmModal = &modal
+
+			if v.confirmModal.Confirmed() {
+				// Generate feedback and finalize
+				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
+				v.feedbackGenerated = feedback
+				v.confirmModal = nil
+				// Clear active session
+				v.activeSession = nil
+				// Reload document without comments
+				v.loadDocument(v.selectedDoc)
+				// Return message to trigger clipboard copy
+				return v, func() tea.Msg {
+					return reviewFinalizedMsg{feedback: feedback}
 				}
-				return v, nil
 			}
-		case "esc":
-			// Exit full-screen mode
-			if v.fullScreen {
-				v.fullScreen = false
-				v.SetSize(v.width, v.height)
-				return v, nil
+
+			if v.confirmModal.Cancelled() {
+				v.confirmModal = nil
+				return v, cmd
 			}
+
+			return v, cmd
 		}
 
-		// Handle comment modal if active
+		// Handle comment modal if active (MUST be after confirm modal)
 		if v.commentModal != nil {
 			modal, cmd := v.commentModal.Update(msg)
 			v.commentModal = &modal
@@ -169,28 +180,72 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			return v, cmd
 		}
 
-		// Handle visual selection mode
+		// Handle full-screen toggle
+		switch msg.String() {
+		case "enter":
+			// Toggle full-screen mode if a document is selected
+			if v.selectedDoc != nil && !v.list.SettingFilter() {
+				v.fullScreen = !v.fullScreen
+				// Adjust viewport size for full-screen
+				if v.fullScreen {
+					v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+					v.loadDocument(v.selectedDoc)
+					// Initialize cursor to center of viewport
+					v.cursorLine = max(1, v.viewport.VisibleLineCount()/2)
+				} else {
+					// Return to dual-column mode
+					v.SetSize(v.width, v.height)
+				}
+				return v, nil
+			}
+		case "esc":
+			// Exit full-screen mode
+			if v.fullScreen {
+				v.fullScreen = false
+				v.SetSize(v.width, v.height)
+				return v, nil
+			}
+		}
+
+		// Handle visual selection mode and finalization
 		if v.fullScreen && v.selectedDoc != nil {
 			switch msg.String() {
+			case "f":
+				// Finalize review - show confirmation if there are comments
+				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+					confirmMsg := fmt.Sprintf("Finalize review with %d comment(s)?", len(v.activeSession.Comments))
+					modal := NewConfirmModal(confirmMsg)
+					v.confirmModal = &modal
+					return v, nil
+				}
 			case "c":
 				// Open comment modal if in selection mode
 				if v.selectionMode {
 					contextText := v.getSelectedText()
-					modal := NewReviewCommentModal(v.selectionStart, v.selectionEnd, contextText, v.width, v.height)
+					// Calculate selection range from anchor to cursor
+					start := min(v.selectionStart, v.cursorLine)
+					end := max(v.selectionStart, v.cursorLine)
+					modal := NewReviewCommentModal(start, end, contextText, v.width, v.height)
 					v.commentModal = &modal
 					return v, nil
 				}
-			case "v":
+			case "V", "shift+v":
 				// Enter or exit visual selection mode
 				if !v.selectionMode {
 					v.selectionMode = true
-					// Set selection start to current viewport line
-					v.selectionStart = v.viewport.YOffset() + 1 // 1-indexed
-					v.selectionEnd = v.selectionStart
+					// Set selection anchor to cursor position
+					v.selectionStart = v.cursorLine
 					v.renderSelection()
 					return v, nil
 				} else {
-					// Exit selection mode
+					// Exit selection mode (keep cursor position)
+					v.selectionMode = false
+					v.renderSelection()
+					return v, nil
+				}
+			case "v":
+				// Also allow lowercase v to toggle visual mode
+				if v.selectionMode {
 					v.selectionMode = false
 					v.renderSelection()
 					return v, nil
@@ -205,40 +260,42 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			}
 		}
 
-		// Handle scrolling in full-screen mode
+		// Handle navigation in full-screen mode
 		if v.fullScreen {
 			switch msg.String() {
 			case "j", "down":
-				if v.selectionMode {
-					// Extend selection downward
-					v.selectionEnd++
-					v.viewport.ScrollDown(1)
-					v.renderSelection()
-					return v, nil
-				}
-				v.viewport.ScrollDown(1)
+				// Move cursor down (selection extends automatically if in visual mode)
+				v.moveCursorDown(1)
+				v.renderSelection()
 				return v, nil
 			case "k", "up":
-				if v.selectionMode {
-					// Extend selection upward
-					v.selectionEnd--
-					v.viewport.ScrollUp(1)
-					v.renderSelection()
-					return v, nil
-				}
-				v.viewport.ScrollUp(1)
+				// Move cursor up (selection extends automatically if in visual mode)
+				v.moveCursorUp(1)
+				v.renderSelection()
 				return v, nil
 			case "ctrl+d":
 				v.viewport.HalfPageDown()
+				// Update cursor to center of viewport
+				v.cursorLine = v.viewport.YOffset() + v.viewport.VisibleLineCount()/2
+				v.renderSelection()
 				return v, nil
 			case "ctrl+u":
 				v.viewport.HalfPageUp()
+				// Update cursor to center of viewport
+				v.cursorLine = v.viewport.YOffset() + v.viewport.VisibleLineCount()/2
+				v.renderSelection()
 				return v, nil
 			case "g":
 				v.viewport.GotoTop()
+				v.cursorLine = 1
+				v.renderSelection()
 				return v, nil
 			case "G":
 				v.viewport.GotoBottom()
+				if v.selectedDoc != nil {
+					v.cursorLine = len(v.selectedDoc.RenderedLines)
+				}
+				v.renderSelection()
 				return v, nil
 			}
 		}
@@ -283,6 +340,32 @@ func (v ReviewView) View() string {
 		divider := strings.Join(dividerLines, "\n")
 
 		baseView = lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView)
+	}
+
+	// Overlay confirmation modal if active
+	if v.confirmModal != nil {
+		modalContent := v.confirmModal.View()
+		modalStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7aa2f7")).
+			Padding(1, 2).
+			Background(lipgloss.Color("#1a1b26"))
+
+		modal := modalStyle.Render(modalContent)
+
+		// Center the modal
+		modalW := lipgloss.Width(modal)
+		modalH := lipgloss.Height(modal)
+		x := (v.width - modalW) / 2
+		y := (v.height - modalH) / 2
+
+		// Use compositor to overlay modal
+		bgLayer := lipgloss.NewLayer(baseView)
+		modalLayer := lipgloss.NewLayer(modal)
+		modalLayer.X(x).Y(y).Z(1)
+
+		compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
+		return compositor.Render()
 	}
 
 	// Overlay comment modal if active
@@ -337,6 +420,9 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 		return
 	}
 
+	// Reset cursor to top when loading new document
+	v.cursorLine = 1
+
 	// Calculate preview width for rendering
 	previewWidth := v.width
 	if v.previewMode && v.width >= 80 {
@@ -355,7 +441,40 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 	v.viewport.GotoTop()
 }
 
-// renderSelection re-renders the document with selection highlighting.
+// moveCursorDown moves cursor down by n lines, scrolling if needed.
+func (v *ReviewView) moveCursorDown(n int) {
+	if v.selectedDoc == nil {
+		return
+	}
+
+	maxLine := len(v.selectedDoc.RenderedLines)
+	v.cursorLine = min(v.cursorLine+n, maxLine)
+	v.ensureCursorVisible()
+}
+
+// moveCursorUp moves cursor up by n lines, scrolling if needed.
+func (v *ReviewView) moveCursorUp(n int) {
+	v.cursorLine = max(v.cursorLine-n, 1)
+	v.ensureCursorVisible()
+}
+
+// ensureCursorVisible scrolls viewport to keep cursor visible.
+func (v *ReviewView) ensureCursorVisible() {
+	offset := v.viewport.YOffset()
+	visibleHeight := v.viewport.VisibleLineCount()
+
+	// Cursor above viewport - scroll up
+	if v.cursorLine < offset+1 {
+		v.viewport.SetYOffset(v.cursorLine - 1)
+	}
+
+	// Cursor below viewport - scroll down
+	if v.cursorLine > offset+visibleHeight {
+		v.viewport.SetYOffset(v.cursorLine - visibleHeight)
+	}
+}
+
+// renderSelection re-renders the document with selection and cursor highlighting.
 func (v *ReviewView) renderSelection() {
 	if v.selectedDoc == nil {
 		return
@@ -375,46 +494,52 @@ func (v *ReviewView) renderSelection() {
 		return
 	}
 
-	// Apply selection highlighting if in selection mode
-	if v.selectionMode {
-		rendered = v.highlightSelection(rendered)
-	}
+	// Apply cursor and selection highlighting
+	rendered = v.highlightSelection(rendered)
 
 	v.viewport.SetContent(rendered)
 }
 
-// highlightSelection applies background color to selected lines.
+// highlightSelection applies background color to cursor and selected lines.
 func (v *ReviewView) highlightSelection(content string) string {
-	if !v.selectionMode {
-		return content
-	}
-
 	lines := strings.Split(content, "\n")
 
-	// Normalize selection range (handle reversed selection)
-	start := v.selectionStart
-	end := v.selectionEnd
-	if start > end {
-		start, end = end, start
+	// Styles
+	selectionStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
+	cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#2a3158"))
+
+	// Calculate selection range if in visual mode
+	var start, end int
+	if v.selectionMode {
+		start = min(v.selectionStart, v.cursorLine)
+		end = max(v.selectionStart, v.cursorLine)
 	}
 
-	// Apply highlighting to selected lines
-	highlightStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
-
+	// Apply highlighting
 	for i := range lines {
 		lineNum := i + 1
-		if lineNum >= start && lineNum <= end {
-			lines[i] = highlightStyle.Render(lines[i])
+
+		// Apply cursor highlight (always visible in full-screen)
+		if lineNum == v.cursorLine {
+			lines[i] = cursorStyle.Render(lines[i])
+		}
+
+		// Apply selection highlight (overrides cursor style if overlapping)
+		if v.selectionMode && lineNum >= start && lineNum <= end {
+			lines[i] = selectionStyle.Render(lines[i])
 		}
 	}
 
-	// Add selection indicator
-	indicator := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7aa2f7")).
-		Bold(true).
-		Render("-- VISUAL --")
+	// Add visual mode indicator
+	if v.selectionMode {
+		indicator := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7aa2f7")).
+			Bold(true).
+			Render("-- VISUAL --")
+		return indicator + "\n" + strings.Join(lines, "\n")
+	}
 
-	return indicator + "\n" + strings.Join(lines, "\n")
+	return strings.Join(lines, "\n")
 }
 
 // getSelectedText extracts the text from the selected line range.
@@ -423,12 +548,9 @@ func (v *ReviewView) getSelectedText() string {
 		return ""
 	}
 
-	// Normalize selection range
-	start := v.selectionStart
-	end := v.selectionEnd
-	if start > end {
-		start, end = end, start
-	}
+	// Calculate selection range from anchor to cursor
+	start := min(v.selectionStart, v.cursorLine)
+	end := max(v.selectionStart, v.cursorLine)
 
 	// Extract selected lines (adjust for 1-indexed)
 	var selectedLines []string
@@ -436,7 +558,7 @@ func (v *ReviewView) getSelectedText() string {
 		selectedLines = append(selectedLines, v.selectedDoc.RenderedLines[i])
 	}
 
-	return strings.Join(selectedLines, " ")
+	return strings.Join(selectedLines, "\n")
 }
 
 // addComment creates a new comment and adds it to the active session.
@@ -456,12 +578,9 @@ func (v *ReviewView) addComment(commentText string) {
 		}
 	}
 
-	// Normalize selection range
-	start := v.selectionStart
-	end := v.selectionEnd
-	if start > end {
-		start, end = end, start
-	}
+	// Calculate selection range from anchor to cursor
+	start := min(v.selectionStart, v.cursorLine)
+	end := max(v.selectionStart, v.cursorLine)
 
 	// Create comment
 	comment := ReviewComment{
