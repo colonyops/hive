@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
@@ -289,9 +290,21 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	)
 
 	// Initialize review view with document discovery
-	// Use shared context directory for cross-repo documents
-	contextDir := cfg.SharedContextDir()
-	docs, _ := DiscoverDocuments(contextDir)
+	// Use repo-specific context directory if we have a local remote, otherwise shared
+	var contextDir string
+	var docs []ReviewDocument
+	if opts.LocalRemote != "" {
+		owner, repo := git.ExtractOwnerRepo(opts.LocalRemote)
+		if owner != "" && repo != "" {
+			contextDir = cfg.RepoContextDir(owner, repo)
+			docs, _ = DiscoverDocuments(contextDir)
+		}
+	}
+	// Fallback to shared if no repo context
+	if contextDir == "" {
+		contextDir = cfg.SharedContextDir()
+		docs, _ = DiscoverDocuments(contextDir)
+	}
 	reviewView := NewReviewView(docs, contextDir)
 
 	return Model{

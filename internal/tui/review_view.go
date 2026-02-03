@@ -114,30 +114,6 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		}
 		return v, nil
 
-	case tea.KeyMsg:
-		// Handle preview scrolling when in preview mode
-		if v.previewMode && v.selectedDoc != nil {
-			switch msg.String() {
-			case "j", "down":
-				v.viewport.ScrollDown(1)
-				return v, nil
-			case "k", "up":
-				v.viewport.ScrollUp(1)
-				return v, nil
-			case "ctrl+d":
-				v.viewport.HalfPageDown()
-				return v, nil
-			case "ctrl+u":
-				v.viewport.HalfPageUp()
-				return v, nil
-			case "g":
-				v.viewport.GotoTop()
-				return v, nil
-			case "G":
-				v.viewport.GotoBottom()
-				return v, nil
-			}
-		}
 	}
 
 	// Track previous selection
