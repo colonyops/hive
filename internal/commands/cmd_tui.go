@@ -87,6 +87,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			LocalRemote:     localRemote,
 			MsgStore:        msgStore,
 			TerminalManager: termMgr,
+			PluginManager:   cmd.flags.PluginManager,
 		}
 
 		m := tui.New(cmd.flags.Service, cmd.flags.Config, opts)

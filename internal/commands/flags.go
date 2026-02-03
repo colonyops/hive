@@ -9,6 +9,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/internal/plugins"
 )
 
 type Flags struct {
@@ -32,6 +33,9 @@ type Flags struct {
 
 	// MsgStore is the message store for direct access
 	MsgStore messaging.Store
+
+	// PluginManager manages plugin lifecycle and status
+	PluginManager *plugins.Manager
 }
 
 // DefaultConfigPath returns the default config file path using XDG_CONFIG_HOME.

@@ -10,6 +10,8 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
 )
@@ -328,9 +330,11 @@ type TreeDelegate struct {
 	Styles           TreeDelegateStyles
 	GitStatuses      *kv.Store[string, GitStatus]
 	TerminalStatuses *kv.Store[string, TerminalStatus]
+	PluginStatuses   map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
 	PreviewMode      bool // When true, show minimal info (session names only)
+	IconsEnabled     bool // When true, show nerd font icons
 }
 
 // NewTreeDelegate creates a new tree delegate with default styles.
@@ -490,11 +494,11 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
 	}
 
-	// Full mode: show ID and git status
-	// Git status: branch, diff stats, clean/dirty indicator
+	// Full mode: show ID, git status, and plugin statuses
 	gitInfo := d.renderGitStatus(item.Session.Path)
+	pluginInfo := d.renderPluginStatuses(item.Session.ID)
 
-	return fmt.Sprintf("%s %s %s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo)
+	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
 }
 
 // renderGitStatus returns the formatted git status for a session path.
@@ -512,19 +516,84 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 		return ""
 	}
 
-	// Format: (branch) +N -N • clean/dirty
-	branch := d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
+	// Format with icons: ( branch) +N -N [dirty icon]
+	// Format without icons: (branch) +N -N • clean/dirty
+	var branch string
+	if d.IconsEnabled {
+		branch = d.Styles.SessionBranch.Render(" (" + styles.IconGitBranch + " " + status.Branch + ")")
+	} else {
+		branch = d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
+	}
 	additions := gitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))
 	deletions := gitDeletionsStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
 
 	var indicator string
-	if status.HasChanges {
-		indicator = gitDirtyStyle.Render(" • uncommitted")
+	if d.IconsEnabled {
+		// With icons: show yellow git icon for uncommitted, nothing for clean
+		if status.HasChanges {
+			indicator = gitDirtyStyle.Render(" " + styles.IconGit)
+		}
 	} else {
-		indicator = gitCleanStyle.Render(" • clean")
+		// Without icons: show text indicator
+		if status.HasChanges {
+			indicator = gitDirtyStyle.Render(" • uncommitted")
+		} else {
+			indicator = gitCleanStyle.Render(" • clean")
+		}
 	}
 
 	return branch + additions + deletions + indicator
+}
+
+// renderPluginStatuses returns formatted plugin status indicators for a session.
+// Uses neutral gray color for all plugin text.
+func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
+	if len(d.PluginStatuses) == 0 {
+		return ""
+	}
+
+	// Neutral gray style for all plugin text
+	neutralStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
+	var parts []string
+	pluginOrder := []string{"github", "beads"}
+	for _, name := range pluginOrder {
+		store, ok := d.PluginStatuses[name]
+		if !ok || store == nil {
+			continue
+		}
+		status, ok := store.Get(sessionID)
+		if !ok || status.Label == "" {
+			continue
+		}
+
+		var icon string
+		if d.IconsEnabled {
+			switch name {
+			case "github":
+				icon = styles.IconGithub
+			case "beads":
+				icon = styles.IconCheckList
+			default:
+				icon = status.Icon
+			}
+		} else {
+			icon = status.Icon
+		}
+
+		// Icon unstyled, only the label gets neutral color
+		parts = append(parts, icon+neutralStyle.Render(":"+status.Label))
+	}
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return " " + neutralStyle.Render("•") + " " + parts[0] + func() string {
+		if len(parts) > 1 {
+			return " " + neutralStyle.Render("•") + " " + parts[1]
+		}
+		return ""
+	}()
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.
