@@ -160,7 +160,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 
 	// Fuzzy match: 'dpl' should match 'deploy-staging' and 'deploy-prod'
 	for _, r := range "dpl" {
-		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: rune(r), Text: string(r)}))
+		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
 	}
 	assert.Len(t, p.filteredList, 2)
 	names := []string{p.filteredList[0].Name, p.filteredList[1].Name}
@@ -171,7 +171,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 
 	// 'dpst' should match 'deploy-staging' (d-p-st)
 	for _, r := range "dpst" {
-		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: rune(r), Text: string(r)}))
+		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
 	}
 	assert.Len(t, p.filteredList, 1)
 	assert.Equal(t, "deploy-staging", p.filteredList[0].Name)
@@ -179,7 +179,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 	// Reset and try 'rst' - should match 'restart'
 	p = NewCommandPalette(cmds, nil, 80, 24)
 	for _, r := range "rst" {
-		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: rune(r), Text: string(r)}))
+		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
 	}
 	assert.Len(t, p.filteredList, 1)
 	assert.Equal(t, "restart", p.filteredList[0].Name)

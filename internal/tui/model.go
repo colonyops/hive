@@ -1165,6 +1165,8 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell:
+		return false
 	}
 	return false
 }
