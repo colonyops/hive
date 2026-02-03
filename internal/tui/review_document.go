@@ -1,10 +1,14 @@
 package tui
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/charmbracelet/glamour"
+	lipgloss "charm.land/lipgloss/v2"
 )
 
 // DocumentType categorizes documents.
@@ -39,8 +43,8 @@ type ReviewDocument struct {
 	RelPath       string       // Relative to repo (e.g., ".hive/plans/...")
 	Type          DocumentType // Plan, Research, Context, Other
 	ModTime       time.Time
-	Content       string            // Raw content
-	RenderedLines []string          // Glamour-rendered lines with ANSI
+	Content       string   // Raw content
+	RenderedLines []string // Glamour-rendered lines with ANSI (cached)
 }
 
 // ReviewComment represents inline feedback.
@@ -164,4 +168,76 @@ func sortDocuments(docs []ReviewDocument) {
 			}
 		}
 	}
+}
+
+// LoadContent reads the document content from disk.
+func (d *ReviewDocument) LoadContent() error {
+	content, err := os.ReadFile(d.Path)
+	if err != nil {
+		return err
+	}
+	d.Content = string(content)
+	d.RenderedLines = nil // Clear cache
+	return nil
+}
+
+// Render renders the document content using Glamour with line numbers.
+// Returns a string with ANSI-styled markdown and line numbers.
+func (d *ReviewDocument) Render(width int) (string, error) {
+	// Use cached rendered lines if available
+	if d.RenderedLines != nil {
+		return d.formatWithLineNumbers(d.RenderedLines), nil
+	}
+
+	// Load content if not already loaded
+	if d.Content == "" {
+		if err := d.LoadContent(); err != nil {
+			return "", err
+		}
+	}
+
+	// Create glamour renderer with Tokyo Night theme
+	r, err := glamour.NewTermRenderer(
+		glamour.WithStylePath("dark"),
+		glamour.WithWordWrap(width-6), // Account for line numbers (4 chars) + separator (2 chars)
+	)
+	if err != nil {
+		return "", err
+	}
+
+	// Render markdown
+	rendered, err := r.Render(d.Content)
+	if err != nil {
+		return "", err
+	}
+
+	// Split into lines and cache
+	d.RenderedLines = strings.Split(strings.TrimRight(rendered, "\n"), "\n")
+
+	return d.formatWithLineNumbers(d.RenderedLines), nil
+}
+
+// formatWithLineNumbers adds line numbers to rendered content.
+func (d *ReviewDocument) formatWithLineNumbers(lines []string) string {
+	if len(lines) == 0 {
+		return ""
+	}
+
+	// Calculate max line number width
+	maxLineNum := len(lines)
+	lineNumWidth := len(fmt.Sprintf("%d", maxLineNum))
+
+	// Build output with line numbers
+	var result strings.Builder
+	lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
+	for i, line := range lines {
+		lineNum := fmt.Sprintf("%*d", lineNumWidth, i+1)
+		styledNum := lineNumStyle.Render(lineNum)
+		separator := separatorStyle.Render(" │ ")
+		result.WriteString(styledNum + separator + line + "\n")
+	}
+
+	return result.String()
 }

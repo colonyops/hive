@@ -3,17 +3,24 @@ package tui
 import (
 	"fmt"
 	"io"
+	"strings"
 
 	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 )
 
 // ReviewView manages the review interface.
 type ReviewView struct {
-	list       list.Model
-	watcher    *DocumentWatcher
-	contextDir string
+	list         list.Model
+	viewport     viewport.Model
+	watcher      *DocumentWatcher
+	contextDir   string
+	width        int
+	height       int
+	previewMode  bool           // True when showing dual-column layout
+	selectedDoc  *ReviewDocument // Currently selected document for preview
 }
 
 // NewReviewView creates a new review view.
@@ -49,16 +56,40 @@ func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
 		}
 	}
 
+	// Create viewport for document preview
+	vp := viewport.New()
+
 	return ReviewView{
-		list:       l,
-		watcher:    watcher,
-		contextDir: contextDir,
+		list:        l,
+		viewport:    vp,
+		watcher:     watcher,
+		contextDir:  contextDir,
+		previewMode: true, // Enable preview by default
 	}
 }
 
 // SetSize updates the view dimensions.
 func (v *ReviewView) SetSize(width, height int) {
-	v.list.SetSize(width, height)
+	v.width = width
+	v.height = height
+
+	if v.previewMode && width >= 80 {
+		// Dual-column mode: 25% list, 75% preview
+		listWidth := int(float64(width) * 0.25)
+		v.list.SetSize(listWidth, height)
+
+		// Preview gets remaining width minus divider
+		previewWidth := width - listWidth - 1
+		v.viewport = viewport.New(viewport.WithWidth(previewWidth), viewport.WithHeight(height))
+
+		// Reload document if one is selected
+		if v.selectedDoc != nil {
+			v.loadDocument(v.selectedDoc)
+		}
+	} else {
+		// Single column mode
+		v.list.SetSize(width, height)
+	}
 }
 
 // Init initializes the review view and starts the file watcher.
@@ -82,16 +113,68 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			return v, v.watcher.Start()
 		}
 		return v, nil
+
+	case tea.KeyMsg:
+		// Handle preview scrolling when in preview mode
+		if v.previewMode && v.selectedDoc != nil {
+			switch msg.String() {
+			case "j", "down":
+				v.viewport.ScrollDown(1)
+				return v, nil
+			case "k", "up":
+				v.viewport.ScrollUp(1)
+				return v, nil
+			case "ctrl+d":
+				v.viewport.HalfPageDown()
+				return v, nil
+			case "ctrl+u":
+				v.viewport.HalfPageUp()
+				return v, nil
+			case "g":
+				v.viewport.GotoTop()
+				return v, nil
+			case "G":
+				v.viewport.GotoBottom()
+				return v, nil
+			}
+		}
 	}
+
+	// Track previous selection
+	prevIndex := v.list.Index()
 
 	var cmd tea.Cmd
 	v.list, cmd = v.list.Update(msg)
+
+	// Detect selection change
+	if v.list.Index() != prevIndex {
+		selectedDoc := v.SelectedDocument()
+		v.loadDocument(selectedDoc)
+	}
+
 	return v, cmd
 }
 
 // View renders the review view.
 func (v ReviewView) View() string {
-	return v.list.View()
+	if !v.previewMode || v.width < 80 {
+		// Single column mode
+		return v.list.View()
+	}
+
+	// Dual-column mode: list | divider | preview
+	listView := v.list.View()
+	previewView := v.viewport.View()
+
+	// Create vertical divider
+	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	dividerLines := make([]string, v.height)
+	for i := range dividerLines {
+		dividerLines[i] = dividerStyle.Render("│")
+	}
+	divider := strings.Join(dividerLines, "\n")
+
+	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView)
 }
 
 // SelectedDocument returns the currently selected document, or nil if none.
@@ -107,6 +190,32 @@ func (v ReviewView) SelectedDocument() *ReviewDocument {
 		return &reviewItem.Document
 	}
 	return nil
+}
+
+// loadDocument loads and renders a document for preview.
+func (v *ReviewView) loadDocument(doc *ReviewDocument) {
+	v.selectedDoc = doc
+	if doc == nil {
+		v.viewport.SetContent("")
+		return
+	}
+
+	// Calculate preview width for rendering
+	previewWidth := v.width
+	if v.previewMode && v.width >= 80 {
+		listWidth := int(float64(v.width) * 0.25)
+		previewWidth = v.width - listWidth - 1
+	}
+
+	// Render document
+	rendered, err := doc.Render(previewWidth)
+	if err != nil {
+		v.viewport.SetContent("Error rendering document: " + err.Error())
+		return
+	}
+
+	v.viewport.SetContent(rendered)
+	v.viewport.GotoTop()
 }
 
 // ReviewTreeItem represents an item in the review tree.
