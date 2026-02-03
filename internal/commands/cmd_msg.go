@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"strings"
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
@@ -270,13 +269,12 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 	}
 
 	msg := messaging.Message{
-		Topic:     cmd.pubTopic,
 		Payload:   payload,
 		Sender:    cmd.pubSender,
 		SessionID: cmd.detectSessionID(ctx),
 	}
 
-	if err := store.Publish(ctx, msg); err != nil {
+	if err := store.Publish(ctx, msg, []string{cmd.pubTopic}); err != nil {
 		return fmt.Errorf("publish message: %w", err)
 	}
 
@@ -293,9 +291,7 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 
 	// Determine since timestamp for --new flag
 	since := time.Time{}
-	if cmd.subNew {
-		since = cmd.getLastInboxRead(ctx, topic)
-	}
+	// TODO: Implement using GetUnread for --new flag
 
 	// Wait mode: wait for a single message and exit
 	if cmd.subWait {
@@ -316,10 +312,7 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("subscribe: %w", err)
 	}
 
-	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
-	if !cmd.subPeek {
-		cmd.updateInboxReadIfOwn(ctx, topic)
-	}
+	// TODO: Implement auto-acknowledgment here
 
 	// Apply --last N limit if specified
 	if cmd.subLast > 0 && len(messages) > cmd.subLast {
@@ -335,10 +328,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 		return fmt.Errorf("invalid timeout: %w", err)
 	}
 
-	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
-	if !cmd.subPeek {
-		cmd.updateInboxReadIfOwn(ctx, topic)
-	}
+	// TODO: Implement auto-acknowledgment here
 
 	deadline := time.Now().Add(timeout)
 	// Use initialSince if set (from --new flag), otherwise start from now
@@ -384,10 +374,7 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store mes
 		}
 	}
 
-	// Update inbox read timestamp if subscribing to own inbox (unless peeking)
-	if !cmd.subPeek {
-		cmd.updateInboxReadIfOwn(ctx, topic)
-	}
+	// TODO: Implement auto-acknowledgment here
 
 	deadline := time.Now().Add(timeout)
 	// Use initialSince if set (from --new flag), otherwise start from now
@@ -477,64 +464,3 @@ func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) erro
 	return nil
 }
 
-// updateInboxReadIfOwn updates the session's LastInboxRead timestamp if the
-// subscribed topic matches the current session's inbox (agent.<id>.inbox format).
-// Errors are intentionally not surfaced - this is a best-effort optimization
-// that should not fail the main subscribe operation. If the timestamp fails to
-// update, the --new flag will show more messages than necessary (safe fallback).
-func (cmd *MsgCmd) updateInboxReadIfOwn(ctx context.Context, topic string) {
-	// Only process exact inbox topics, not wildcards
-	if !strings.HasSuffix(topic, ".inbox") {
-		return
-	}
-
-	// Extract session ID from topic (agent.<id>.inbox)
-	parts := strings.Split(topic, ".")
-	if len(parts) != 3 || parts[0] != "agent" || parts[2] != "inbox" {
-		return
-	}
-	topicSessionID := parts[1]
-
-	// Get current session ID
-	currentSessionID := cmd.detectSessionID(ctx)
-	if currentSessionID == "" || currentSessionID != topicSessionID {
-		return
-	}
-
-	// Update the session's LastInboxRead
-	sess, err := cmd.flags.Store.Get(ctx, currentSessionID)
-	if err != nil {
-		return // Session not found or I/O error - skip update (see function doc)
-	}
-
-	sess.UpdateLastInboxRead(time.Now())
-	_ = cmd.flags.Store.Save(ctx, sess) // Best-effort save (see function doc)
-}
-
-// getLastInboxRead returns the LastInboxRead timestamp for the session that owns
-// the given inbox topic. Returns zero time if not found or not an inbox topic.
-// On error, returns zero time which causes --new to show all messages (safe fallback).
-func (cmd *MsgCmd) getLastInboxRead(ctx context.Context, topic string) time.Time {
-	// Only process exact inbox topics, not wildcards
-	if !strings.HasSuffix(topic, ".inbox") {
-		return time.Time{}
-	}
-
-	// Extract session ID from topic (agent.<id>.inbox)
-	parts := strings.Split(topic, ".")
-	if len(parts) != 3 || parts[0] != "agent" || parts[2] != "inbox" {
-		return time.Time{}
-	}
-	topicSessionID := parts[1]
-
-	// Get the session's LastInboxRead
-	sess, err := cmd.flags.Store.Get(ctx, topicSessionID)
-	if err != nil {
-		return time.Time{}
-	}
-
-	if sess.LastInboxRead == nil {
-		return time.Time{}
-	}
-	return *sess.LastInboxRead
-}

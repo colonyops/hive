@@ -10,6 +10,24 @@ import (
 	"database/sql"
 )
 
+const acknowledgeMessages = `-- name: AcknowledgeMessages :exec
+INSERT INTO message_reads (message_id, consumer_id, read_at)
+VALUES (?, ?, ?)
+ON CONFLICT (message_id, consumer_id) DO UPDATE SET
+    read_at = excluded.read_at
+`
+
+type AcknowledgeMessagesParams struct {
+	MessageID  string `json:"message_id"`
+	ConsumerID string `json:"consumer_id"`
+	ReadAt     int64  `json:"read_at"`
+}
+
+func (q *Queries) AcknowledgeMessages(ctx context.Context, arg AcknowledgeMessagesParams) error {
+	_, err := q.db.ExecContext(ctx, acknowledgeMessages, arg.MessageID, arg.ConsumerID, arg.ReadAt)
+	return err
+}
+
 const countMessagesInTopic = `-- name: CountMessagesInTopic :one
 SELECT COUNT(*) FROM messages
 WHERE topic = ?
@@ -64,7 +82,7 @@ func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 }
 
 const findRecyclableSession = `-- name: FindRecyclableSession :one
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at, last_inbox_read FROM sessions
+SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at FROM sessions
 WHERE state = 'recycled' AND remote = ?
 ORDER BY updated_at ASC
 LIMIT 1
@@ -83,13 +101,12 @@ func (q *Queries) FindRecyclableSession(ctx context.Context, remote string) (Ses
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LastInboxRead,
 	)
 	return i, err
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at, last_inbox_read FROM sessions
+SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at FROM sessions
 WHERE id = ?
 `
 
@@ -106,13 +123,56 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
-		&i.LastInboxRead,
 	)
 	return i, err
 }
 
+const getUnreadMessages = `-- name: GetUnreadMessages :many
+SELECT m.id, m.topic, m.payload, m.sender, m.session_id, m.created_at
+FROM messages m
+LEFT JOIN message_reads mr ON mr.message_id = m.id AND mr.consumer_id = ?
+WHERE m.topic = ?
+  AND mr.message_id IS NULL
+ORDER BY m.created_at ASC
+`
+
+type GetUnreadMessagesParams struct {
+	ConsumerID string `json:"consumer_id"`
+	Topic      string `json:"topic"`
+}
+
+func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesParams) ([]Message, error) {
+	rows, err := q.db.QueryContext(ctx, getUnreadMessages, arg.ConsumerID, arg.Topic)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Message{}
+	for rows.Next() {
+		var i Message
+		if err := rows.Scan(
+			&i.ID,
+			&i.Topic,
+			&i.Payload,
+			&i.Sender,
+			&i.SessionID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listSessions = `-- name: ListSessions :many
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at, last_inbox_read FROM sessions
+SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at FROM sessions
 ORDER BY created_at DESC
 `
 
@@ -135,7 +195,6 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
-			&i.LastInboxRead,
 		); err != nil {
 			return nil, err
 		}
@@ -218,8 +277,8 @@ func (q *Queries) PublishMessage(ctx context.Context, arg PublishMessageParams) 
 const saveSession = `-- name: SaveSession :exec
 INSERT INTO sessions (
     id, name, slug, path, remote, state, metadata,
-    created_at, updated_at, last_inbox_read
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     slug = excluded.slug,
@@ -227,21 +286,19 @@ ON CONFLICT(id) DO UPDATE SET
     remote = excluded.remote,
     state = excluded.state,
     metadata = excluded.metadata,
-    updated_at = excluded.updated_at,
-    last_inbox_read = excluded.last_inbox_read
+    updated_at = excluded.updated_at
 `
 
 type SaveSessionParams struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Slug          string         `json:"slug"`
-	Path          string         `json:"path"`
-	Remote        string         `json:"remote"`
-	State         string         `json:"state"`
-	Metadata      sql.NullString `json:"metadata"`
-	CreatedAt     int64          `json:"created_at"`
-	UpdatedAt     int64          `json:"updated_at"`
-	LastInboxRead sql.NullInt64  `json:"last_inbox_read"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Path      string         `json:"path"`
+	Remote    string         `json:"remote"`
+	State     string         `json:"state"`
+	Metadata  sql.NullString `json:"metadata"`
+	CreatedAt int64          `json:"created_at"`
+	UpdatedAt int64          `json:"updated_at"`
 }
 
 func (q *Queries) SaveSession(ctx context.Context, arg SaveSessionParams) error {
@@ -255,7 +312,6 @@ func (q *Queries) SaveSession(ctx context.Context, arg SaveSessionParams) error 
 		arg.Metadata,
 		arg.CreatedAt,
 		arg.UpdatedAt,
-		arg.LastInboxRead,
 	)
 	return err
 }

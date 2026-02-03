@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 	"slices"
 	"strings"
 	"text/tabwriter"
@@ -13,7 +12,6 @@ import (
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/printer"
-	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/urfave/cli/v3"
 )
 
@@ -85,11 +83,10 @@ func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
 
 	// JSON output mode
 	if cmd.jsonOutput {
-		msgStore := cmd.getMsgStore()
 		enc := json.NewEncoder(out)
 
 		for _, s := range normal {
-			info := cmd.buildSessionInfo(ctx, s, msgStore)
+			info := cmd.buildSessionInfo(ctx, s)
 			if err := enc.Encode(info); err != nil {
 				return fmt.Errorf("encode session: %w", err)
 			}
@@ -135,31 +132,15 @@ type sessionInfo struct {
 	Unread     int        `json:"unread"`
 }
 
-func (cmd *LsCmd) getMsgStore() *jsonfile.MsgStore {
-	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
-	return jsonfile.NewMsgStore(topicsDir)
-}
-
-func (cmd *LsCmd) buildSessionInfo(ctx context.Context, s session.Session, msgStore *jsonfile.MsgStore) sessionInfo {
+func (cmd *LsCmd) buildSessionInfo(ctx context.Context, s session.Session) sessionInfo {
 	info := sessionInfo{
 		ID:         s.ID,
 		Name:       s.Name,
 		Repo:       git.ExtractRepoName(s.Remote),
 		Inbox:      s.InboxTopic(),
-		LastActive: s.LastInboxRead,
+		LastActive: nil, // TODO: Use GetUnread with acknowledgment system
 		State:      string(s.State),
-		Unread:     0,
-	}
-
-	// Count unread messages if we have a last read timestamp
-	if s.LastInboxRead != nil {
-		messages, err := msgStore.Subscribe(ctx, s.InboxTopic(), *s.LastInboxRead)
-		if err == nil {
-			info.Unread = len(messages)
-		}
-		// ErrTopicNotFound is expected when inbox hasn't received messages yet.
-		// Other errors (I/O, permissions) are rare edge cases that degrade gracefully
-		// to showing 0 unread rather than failing the entire list operation.
+		Unread:     0,    // TODO: Use GetUnread to count unread messages
 	}
 
 	return info

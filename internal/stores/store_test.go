@@ -335,49 +335,4 @@ func TestStore(t *testing.T) {
 			t.Error("nil and empty metadata should both round-trip the same way")
 		}
 	})
-
-	t.Run("last inbox read", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
-		defer func() { _ = database.Close() }()
-
-		store := NewSessionStore(database)
-
-		// Session without LastInboxRead
-		sess := session.Session{
-			ID:    "inbox-test",
-			State: session.StateActive,
-		}
-		if err := store.Save(ctx, sess); err != nil {
-			t.Fatalf("Save: %v", err)
-		}
-
-		got, err := store.Get(ctx, "inbox-test")
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if got.LastInboxRead != nil {
-			t.Errorf("expected nil LastInboxRead, got %v", got.LastInboxRead)
-		}
-
-		// Update with LastInboxRead
-		now := time.Now()
-		sess.LastInboxRead = &now
-		if err := store.Save(ctx, sess); err != nil {
-			t.Fatalf("Save with LastInboxRead: %v", err)
-		}
-
-		got, err = store.Get(ctx, "inbox-test")
-		if err != nil {
-			t.Fatalf("Get: %v", err)
-		}
-		if got.LastInboxRead == nil {
-			t.Fatal("expected LastInboxRead, got nil")
-		}
-		if got.LastInboxRead.Unix() != now.Unix() {
-			t.Errorf("got LastInboxRead %v, want %v", got.LastInboxRead, now)
-		}
-	})
 }

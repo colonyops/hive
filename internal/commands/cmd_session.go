@@ -4,12 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"path/filepath"
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/printer"
-	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/urfave/cli/v3"
 )
 
@@ -76,9 +74,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
 
 	// Detect session from current working directory
-	sessionsPath := filepath.Join(cmd.flags.DataDir, "sessions.json")
-	sessStore := jsonfile.New(sessionsPath)
-	detector := messaging.NewSessionDetector(sessStore)
+	detector := messaging.NewSessionDetector(cmd.flags.Store)
 	sessionID, err := detector.DetectSession(ctx)
 	if err != nil {
 		return fmt.Errorf("detect session: %w", err)
