@@ -1122,7 +1122,13 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m, nil
 	}
 
-	// Review view focused - handled by view update in Update()
+	// Review view focused - forward keys to review view
+	if m.isReviewFocused() && m.reviewView != nil {
+		var cmd tea.Cmd
+		*m.reviewView, cmd = m.reviewView.Update(msg)
+		return m, cmd
+	}
+
 	return m, nil
 }
 
