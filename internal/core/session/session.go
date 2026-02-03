@@ -2,9 +2,19 @@
 package session
 
 import (
+	"errors"
 	"regexp"
 	"strings"
 	"time"
+)
+
+// Validation errors for Session.
+var (
+	ErrEmptyID      = errors.New("id is required")
+	ErrEmptyName    = errors.New("name is required")
+	ErrEmptyPath    = errors.New("path is required")
+	ErrEmptyRemote  = errors.New("remote is required")
+	ErrInvalidState = errors.New("invalid state")
 )
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
@@ -27,6 +37,15 @@ const (
 	StateCorrupted State = "corrupted"
 )
 
+// IsValid returns true if s is a known state.
+func (s State) IsValid() bool {
+	switch s {
+	case StateActive, StateRecycled, StateCorrupted:
+		return true
+	}
+	return false
+}
+
 // Metadata keys for terminal integration.
 const (
 	MetaTmuxSession = "tmux_session" // tmux session name
@@ -45,6 +64,46 @@ type Session struct {
 	CreatedAt     time.Time         `json:"created_at"`
 	UpdatedAt     time.Time         `json:"updated_at"`
 	LastInboxRead *time.Time        `json:"last_inbox_read,omitempty"`
+}
+
+// NewSession creates a new Session with the given parameters.
+// Sets initial state to Active and timestamps to now.
+// Returns an error if validation fails.
+func NewSession(id, name, path, remote string, now time.Time) (Session, error) {
+	s := Session{
+		ID:        id,
+		Name:      name,
+		Slug:      Slugify(name),
+		Path:      path,
+		Remote:    remote,
+		State:     StateActive,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+	if err := s.Validate(); err != nil {
+		return Session{}, err
+	}
+	return s, nil
+}
+
+// Validate checks that the session meets all constraints.
+func (s *Session) Validate() error {
+	if s.ID == "" {
+		return ErrEmptyID
+	}
+	if s.Name == "" {
+		return ErrEmptyName
+	}
+	if s.Path == "" {
+		return ErrEmptyPath
+	}
+	if s.Remote == "" {
+		return ErrEmptyRemote
+	}
+	if !s.State.IsValid() {
+		return ErrInvalidState
+	}
+	return nil
 }
 
 // InboxTopic returns the conventional inbox topic name for this session.

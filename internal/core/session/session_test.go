@@ -89,3 +89,80 @@ func TestSlugify(t *testing.T) {
 		})
 	}
 }
+
+func TestNewSession(t *testing.T) {
+	now := time.Date(2024, 1, 15, 10, 30, 0, 0, time.UTC)
+
+	t.Run("valid session", func(t *testing.T) {
+		s, err := NewSession("test-id", "My Session", "/path/to/session", "https://github.com/test/repo", now)
+		assert.NoError(t, err)
+		assert.Equal(t, "test-id", s.ID)
+		assert.Equal(t, "My Session", s.Name)
+		assert.Equal(t, "my-session", s.Slug)
+		assert.Equal(t, "/path/to/session", s.Path)
+		assert.Equal(t, "https://github.com/test/repo", s.Remote)
+		assert.Equal(t, StateActive, s.State)
+		assert.Equal(t, now, s.CreatedAt)
+		assert.Equal(t, now, s.UpdatedAt)
+	})
+
+	t.Run("empty id", func(t *testing.T) {
+		_, err := NewSession("", "My Session", "/path", "https://example.com", now)
+		assert.ErrorIs(t, err, ErrEmptyID)
+	})
+
+	t.Run("empty name", func(t *testing.T) {
+		_, err := NewSession("id", "", "/path", "https://example.com", now)
+		assert.ErrorIs(t, err, ErrEmptyName)
+	})
+
+	t.Run("empty path", func(t *testing.T) {
+		_, err := NewSession("id", "name", "", "https://example.com", now)
+		assert.ErrorIs(t, err, ErrEmptyPath)
+	})
+
+	t.Run("empty remote", func(t *testing.T) {
+		_, err := NewSession("id", "name", "/path", "", now)
+		assert.ErrorIs(t, err, ErrEmptyRemote)
+	})
+}
+
+func TestSession_Validate(t *testing.T) {
+	validSession := Session{
+		ID:     "test-id",
+		Name:   "Test",
+		Path:   "/path",
+		Remote: "https://example.com",
+		State:  StateActive,
+	}
+
+	t.Run("valid session passes", func(t *testing.T) {
+		s := validSession
+		assert.NoError(t, s.Validate())
+	})
+
+	t.Run("invalid state fails", func(t *testing.T) {
+		s := validSession
+		s.State = "invalid"
+		assert.ErrorIs(t, s.Validate(), ErrInvalidState)
+	})
+}
+
+func TestState_IsValid(t *testing.T) {
+	tests := []struct {
+		state State
+		want  bool
+	}{
+		{StateActive, true},
+		{StateRecycled, true},
+		{StateCorrupted, true},
+		{"invalid", false},
+		{"", false},
+	}
+
+	for _, tt := range tests {
+		t.Run(string(tt.state), func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.state.IsValid())
+		})
+	}
+}
