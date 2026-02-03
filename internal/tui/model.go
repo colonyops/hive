@@ -23,60 +23,15 @@ import (
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/internal/tui/command"
+	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
-// Buffer pools for reducing allocations in rendering
-var (
-	builderPool = sync.Pool{
-		New: func() any {
-			return &strings.Builder{}
-		},
-	}
-
-	// Cache for padding strings to avoid strings.Repeat allocations
-	// Supports padding widths from 0 to 200 characters
-	paddingCache = [201]string{
-		0:   "",
-		1:   " ",
-		2:   "  ",
-		3:   "   ",
-		4:   "    ",
-		5:   "     ",
-		6:   "      ",
-		7:   "       ",
-		8:   "        ",
-		9:   "         ",
-		10:  "          ",
-		20:  "                    ",
-		40:  "                                        ",
-		80:  "                                                                                ",
-		100: "                                                                                                    ",
-		200: "                                                                                                                                                                                        ",
-	}
-
-	paddingOnce sync.Once
-)
-
-// initPaddingCache initializes all padding entries from 0-200.
-func initPaddingCache() {
-	for i := 0; i <= 200; i++ {
-		if paddingCache[i] == "" && i > 0 {
-			paddingCache[i] = strings.Repeat(" ", i)
-		}
-	}
-}
-
-// getPadding returns a padding string of n spaces, using cache when possible.
-func getPadding(n int) string {
-	if n <= 0 {
-		return ""
-	}
-	if n <= 200 {
-		paddingOnce.Do(initPaddingCache)
-		return paddingCache[n]
-	}
-	return strings.Repeat(" ", n)
+// Buffer pools for reducing allocations in rendering.
+var builderPool = sync.Pool{
+	New: func() any {
+		return &strings.Builder{}
+	},
 }
 
 // UIState represents the current state of the TUI.
@@ -90,6 +45,7 @@ const (
 	statePreviewingMessage
 	stateCreatingSession
 	stateCommandPalette
+	stateShowingHelp
 )
 
 // Key constants for event handling.
@@ -175,6 +131,9 @@ type Model struct {
 	// Command palette
 	commandPalette *CommandPalette
 
+	// Help dialog
+	helpDialog *components.HelpDialog
+
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
 }
@@ -256,27 +215,12 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	handler := NewKeybindingResolver(cfg.Keybindings, cfg.MergedUserCommands())
 	cmdService := command.NewService(service, service)
 
-	// Add custom keybindings to list help
+	// Add minimal keybindings to list help - just navigation and help trigger
 	l.AdditionalShortHelpKeys = func() []key.Binding {
-		bindings := handler.KeyBindings()
-		// Add git refresh keybinding
-		bindings = append(bindings, key.NewBinding(
-			key.WithKeys("g"),
-			key.WithHelp("g", "refresh git"),
-		))
-		// Add tab keybinding for view switching
-		bindings = append(bindings, key.NewBinding(
-			key.WithKeys("tab"),
-			key.WithHelp("tab", "switch view"),
-		))
-		// Add preview toggle keybinding if terminal integration is enabled
-		if opts.TerminalManager != nil && opts.TerminalManager.HasEnabledIntegrations() {
-			bindings = append(bindings, key.NewBinding(
-				key.WithKeys("v"),
-				key.WithHelp("v", "toggle preview"),
-			))
+		return []key.Binding{
+			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "navigate")),
+			key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
 		}
-		return bindings
 	}
 
 	s := spinner.New()
@@ -523,31 +467,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reposDiscoveredMsg:
 		m.discoveredRepos = msg.repos
-		// Update help to include 'n' keybinding if repos were discovered
-		if len(msg.repos) > 0 {
-			m.list.AdditionalShortHelpKeys = func() []key.Binding {
-				bindings := m.handler.KeyBindings()
-				bindings = append(bindings, key.NewBinding(
-					key.WithKeys("n"),
-					key.WithHelp("n", "new session"),
-				))
-				bindings = append(bindings, key.NewBinding(
-					key.WithKeys("g"),
-					key.WithHelp("g", "refresh git"),
-				))
-				bindings = append(bindings, key.NewBinding(
-					key.WithKeys("tab"),
-					key.WithHelp("tab", "switch view"),
-				))
-				if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-					bindings = append(bindings, key.NewBinding(
-						key.WithKeys("v"),
-						key.WithHelp("v", "toggle preview"),
-					))
-				}
-				return bindings
-			}
-		}
+		// Help keybindings remain minimal - full list shown via ? dialog
 		return m, nil
 
 	case tea.KeyMsg:
@@ -585,6 +505,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == statePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)
+	}
+	if m.state == stateShowingHelp {
+		return m.handleHelpDialogKey(keyStr)
 	}
 	if m.state == stateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
@@ -686,6 +609,80 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.modal.ToggleSelection()
 		return m, nil
 	}
+	return m, nil
+}
+
+// handleHelpDialogKey handles keys when help dialog is shown.
+func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+	case "esc", "?", "q":
+		m.state = stateNormal
+		m.helpDialog = nil
+		return m, nil
+	}
+	return m, nil
+}
+
+// showHelpDialog creates and displays the help dialog.
+func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
+	var sections []components.HelpDialogSection
+
+	// Add user-configured keybindings section
+	userEntries := m.handler.HelpEntries()
+	if len(userEntries) > 0 {
+		entries := make([]components.HelpEntry, 0, len(userEntries))
+		for _, e := range userEntries {
+			// Parse "[key] description" format
+			if len(e) > 2 && e[0] == '[' {
+				endBracket := strings.Index(e, "]")
+				if endBracket > 0 {
+					key := e[1:endBracket]
+					desc := strings.TrimSpace(e[endBracket+1:])
+					entries = append(entries, components.HelpEntry{Key: key, Desc: desc})
+				}
+			}
+		}
+		if len(entries) > 0 {
+			sections = append(sections, components.HelpDialogSection{
+				Title:   "User Commands",
+				Entries: entries,
+			})
+		}
+	}
+
+	// Add navigation section
+	navEntries := []components.HelpEntry{
+		{Key: "↑/k", Desc: "move up"},
+		{Key: "↓/j", Desc: "move down"},
+		{Key: "enter", Desc: "select session"},
+		{Key: "/", Desc: "filter"},
+		{Key: "tab", Desc: "switch view"},
+		{Key: ":", Desc: "command palette"},
+		{Key: "g", Desc: "refresh git status"},
+	}
+
+	// Add new session if repos discovered
+	if len(m.discoveredRepos) > 0 {
+		navEntries = append(navEntries, components.HelpEntry{Key: "n", Desc: "new session"})
+	}
+
+	// Add preview toggle if terminal integration enabled
+	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
+	}
+
+	navEntries = append(navEntries, components.HelpEntry{Key: "q", Desc: "quit"})
+
+	sections = append(sections, components.HelpDialogSection{
+		Title:   "Navigation",
+		Entries: navEntries,
+	})
+
+	m.helpDialog = components.NewHelpDialog("Keyboard Shortcuts", sections, m.width, m.height)
+	m.state = stateShowingHelp
 	return m, nil
 }
 
@@ -857,6 +854,8 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m, tea.Quit
 	case "tab":
 		return m.handleTabKey()
+	case "?":
+		return m.showHelpDialog()
 	}
 
 	// Session-specific keys only when sessions focused
@@ -1149,6 +1148,11 @@ func (m Model) View() tea.View {
 		return newView(m.commandPalette.Overlay(mainView, w, h))
 	}
 
+	// Overlay help dialog
+	if m.state == stateShowingHelp && m.helpDialog != nil {
+		return newView(m.helpDialog.Overlay(mainView, w, h))
+	}
+
 	return newView(mainView)
 }
 
@@ -1181,9 +1185,9 @@ func (m Model) renderTabView() string {
 	if spacerWidth < 1 {
 		spacerWidth = 1
 	}
-	leftMargin := getPadding(margin)
-	spacer := getPadding(spacerWidth)
-	rightMargin := getPadding(margin)
+	leftMargin := components.Pad(margin)
+	spacer := components.Pad(spacerWidth)
+	rightMargin := components.Pad(margin)
 
 	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
 
@@ -1425,7 +1429,7 @@ func ensureExactWidth(content string, width int) string {
 		case displayWidth < width:
 			// Pad with spaces to reach target width using cached padding
 			sb.WriteString(line)
-			sb.WriteString(getPadding(width - displayWidth))
+			sb.WriteString(components.Pad(width - displayWidth))
 		default:
 			// Line too wide - truncate at width boundary
 			truncated := ansi.TruncateWc(line, width, "")
@@ -1433,7 +1437,7 @@ func ensureExactWidth(content string, width int) string {
 			// Pad if truncation made it shorter than width
 			truncWidth := ansi.StringWidth(truncated)
 			if truncWidth < width {
-				sb.WriteString(getPadding(width - truncWidth))
+				sb.WriteString(components.Pad(width - truncWidth))
 			}
 		}
 	}
