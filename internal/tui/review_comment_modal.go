@@ -106,7 +106,7 @@ func (m ReviewCommentModal) View() string {
 	content := strings.Join([]string{
 		titleStyle.Render("Add Review Comment"),
 		labelStyle.Render(m.lineRange),
-		contextStyle.Render("\"" + m.contextPreview + "\""),
+		contextStyle.Render(m.contextPreview),
 		m.textInput.View(),
 		helpStyle.Render("enter: submit • esc: cancel"),
 	}, "\n")
