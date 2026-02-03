@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/viewport"
@@ -25,6 +26,8 @@ type ReviewView struct {
 	selectionMode  bool            // True when in visual selection mode
 	selectionStart int             // Line number where selection starts (1-indexed)
 	selectionEnd   int             // Line number where selection ends (1-indexed)
+	activeSession  *ReviewSession  // Current review session with comments
+	commentModal   *ReviewCommentModal // Active comment entry modal
 }
 
 // NewReviewView creates a new review view.
@@ -144,9 +147,39 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			}
 		}
 
+		// Handle comment modal if active
+		if v.commentModal != nil {
+			modal, cmd := v.commentModal.Update(msg)
+			v.commentModal = &modal
+
+			if v.commentModal.Submitted() {
+				// Create comment and add to session
+				v.addComment(v.commentModal.Value())
+				v.commentModal = nil
+				v.selectionMode = false
+				v.renderWithComments()
+				return v, cmd
+			}
+
+			if v.commentModal.Cancelled() {
+				v.commentModal = nil
+				return v, cmd
+			}
+
+			return v, cmd
+		}
+
 		// Handle visual selection mode
 		if v.fullScreen && v.selectedDoc != nil {
 			switch msg.String() {
+			case "c":
+				// Open comment modal if in selection mode
+				if v.selectionMode {
+					contextText := v.getSelectedText()
+					modal := NewReviewCommentModal(v.selectionStart, v.selectionEnd, contextText, v.width, v.height)
+					v.commentModal = &modal
+					return v, nil
+				}
 			case "v":
 				// Enter or exit visual selection mode
 				if !v.selectionMode {
@@ -228,29 +261,57 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 
 // View renders the review view.
 func (v ReviewView) View() string {
+	var baseView string
+
 	// Full-screen mode: show only the viewport
 	if v.fullScreen {
-		return v.viewport.View()
-	}
-
-	if !v.previewMode || v.width < 80 {
+		baseView = v.viewport.View()
+	} else if !v.previewMode || v.width < 80 {
 		// Single column mode
-		return v.list.View()
+		baseView = v.list.View()
+	} else {
+		// Dual-column mode: list | divider | preview
+		listView := v.list.View()
+		previewView := v.viewport.View()
+
+		// Create vertical divider
+		dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+		dividerLines := make([]string, v.height)
+		for i := range dividerLines {
+			dividerLines[i] = dividerStyle.Render("│")
+		}
+		divider := strings.Join(dividerLines, "\n")
+
+		baseView = lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView)
 	}
 
-	// Dual-column mode: list | divider | preview
-	listView := v.list.View()
-	previewView := v.viewport.View()
+	// Overlay comment modal if active
+	if v.commentModal != nil {
+		modalContent := v.commentModal.View()
+		modalStyle := lipgloss.NewStyle().
+			Border(lipgloss.RoundedBorder()).
+			BorderForeground(lipgloss.Color("#7aa2f7")).
+			Padding(1, 2).
+			Background(lipgloss.Color("#1a1b26"))
 
-	// Create vertical divider
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-	dividerLines := make([]string, v.height)
-	for i := range dividerLines {
-		dividerLines[i] = dividerStyle.Render("│")
+		modal := modalStyle.Render(modalContent)
+
+		// Center the modal
+		modalW := lipgloss.Width(modal)
+		modalH := lipgloss.Height(modal)
+		x := (v.width - modalW) / 2
+		y := (v.height - modalH) / 2
+
+		// Use compositor to overlay modal
+		bgLayer := lipgloss.NewLayer(baseView)
+		modalLayer := lipgloss.NewLayer(modal)
+		modalLayer.X(x).Y(y).Z(1)
+
+		compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
+		return compositor.Render()
 	}
-	divider := strings.Join(dividerLines, "\n")
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView)
+	return baseView
 }
 
 // SelectedDocument returns the currently selected document, or nil if none.
@@ -354,6 +415,126 @@ func (v *ReviewView) highlightSelection(content string) string {
 		Render("-- VISUAL --")
 
 	return indicator + "\n" + strings.Join(lines, "\n")
+}
+
+// getSelectedText extracts the text from the selected line range.
+func (v *ReviewView) getSelectedText() string {
+	if v.selectedDoc == nil || len(v.selectedDoc.RenderedLines) == 0 {
+		return ""
+	}
+
+	// Normalize selection range
+	start := v.selectionStart
+	end := v.selectionEnd
+	if start > end {
+		start, end = end, start
+	}
+
+	// Extract selected lines (adjust for 1-indexed)
+	var selectedLines []string
+	for i := start - 1; i < end && i < len(v.selectedDoc.RenderedLines); i++ {
+		selectedLines = append(selectedLines, v.selectedDoc.RenderedLines[i])
+	}
+
+	return strings.Join(selectedLines, " ")
+}
+
+// addComment creates a new comment and adds it to the active session.
+func (v *ReviewView) addComment(commentText string) {
+	if v.selectedDoc == nil {
+		return
+	}
+
+	// Initialize session if needed
+	if v.activeSession == nil {
+		v.activeSession = &ReviewSession{
+			ID:         fmt.Sprintf("session-%d", time.Now().Unix()),
+			DocPath:    v.selectedDoc.Path,
+			Comments:   []ReviewComment{},
+			CreatedAt:  time.Now(),
+			ModifiedAt: time.Now(),
+		}
+	}
+
+	// Normalize selection range
+	start := v.selectionStart
+	end := v.selectionEnd
+	if start > end {
+		start, end = end, start
+	}
+
+	// Create comment
+	comment := ReviewComment{
+		ID:          fmt.Sprintf("comment-%d", time.Now().UnixNano()),
+		SessionID:   v.activeSession.ID,
+		StartLine:   start,
+		EndLine:     end,
+		ContextText: v.getSelectedText(),
+		CommentText: commentText,
+		CreatedAt:   time.Now(),
+	}
+
+	v.activeSession.Comments = append(v.activeSession.Comments, comment)
+	v.activeSession.ModifiedAt = time.Now()
+}
+
+// renderWithComments renders the document with inline comments.
+func (v *ReviewView) renderWithComments() {
+	if v.selectedDoc == nil {
+		return
+	}
+
+	// Calculate preview width for rendering
+	previewWidth := v.width
+	if v.previewMode && v.width >= 80 {
+		listWidth := int(float64(v.width) * 0.25)
+		previewWidth = v.width - listWidth - 1
+	}
+
+	// Render document
+	rendered, err := v.selectedDoc.Render(previewWidth)
+	if err != nil {
+		v.viewport.SetContent("Error rendering document: " + err.Error())
+		return
+	}
+
+	// Insert comments inline if session exists
+	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+		rendered = v.insertCommentsInline(rendered)
+	}
+
+	v.viewport.SetContent(rendered)
+}
+
+// insertCommentsInline inserts comments after their referenced lines.
+func (v *ReviewView) insertCommentsInline(content string) string {
+	lines := strings.Split(content, "\n")
+
+	// Group comments by end line
+	commentsByLine := make(map[int][]ReviewComment)
+	for _, comment := range v.activeSession.Comments {
+		commentsByLine[comment.EndLine] = append(commentsByLine[comment.EndLine], comment)
+	}
+
+	// Insert comments after their lines
+	commentStyle := lipgloss.NewStyle().
+		Foreground(lipgloss.Color("#7aa2f7")).
+		Italic(true)
+
+	var result []string
+	for i, line := range lines {
+		result = append(result, line)
+
+		lineNum := i + 1
+		if comments, ok := commentsByLine[lineNum]; ok {
+			for _, comment := range comments {
+				commentLine := commentStyle.Render("  ▸ " + comment.CommentText)
+				result = append(result, commentLine)
+			}
+		}
+	}
+
+	return strings.Join(result, "\n")
 }
 
 // ReviewTreeItem represents an item in the review tree.
