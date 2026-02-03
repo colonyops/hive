@@ -10,8 +10,10 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/plugins"
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
+	"github.com/rs/zerolog/log"
 )
 
 // Tree characters for rendering the session tree.
@@ -328,6 +330,7 @@ type TreeDelegate struct {
 	Styles           TreeDelegateStyles
 	GitStatuses      *kv.Store[string, GitStatus]
 	TerminalStatuses *kv.Store[string, TerminalStatus]
+	PluginStatuses   map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
 	ColumnWidths     *ColumnWidths
 	AnimationFrame   int  // Current frame for status animations
 	PreviewMode      bool // When true, show minimal info (session names only)
@@ -490,11 +493,14 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
 	}
 
-	// Full mode: show ID and git status
+	// Full mode: show ID, git status, and plugin statuses
 	// Git status: branch, diff stats, clean/dirty indicator
 	gitInfo := d.renderGitStatus(item.Session.Path)
 
-	return fmt.Sprintf("%s %s %s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo)
+	// Plugin statuses (e.g., PR:open, BD:0/3)
+	pluginInfo := d.renderPluginStatuses(item.Session.ID)
+
+	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
 }
 
 // renderGitStatus returns the formatted git status for a session path.
@@ -525,6 +531,33 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 	}
 
 	return branch + additions + deletions + indicator
+}
+
+// renderPluginStatuses returns formatted plugin status indicators for a session.
+func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
+	if len(d.PluginStatuses) == 0 {
+		log.Debug().Str("sessionID", sessionID).Msg("render: no plugin statuses map")
+		return ""
+	}
+
+	var result string
+	// Render each plugin's status in consistent order
+	pluginOrder := []string{"github", "beads"}
+	for _, name := range pluginOrder {
+		store, ok := d.PluginStatuses[name]
+		if !ok || store == nil {
+			continue
+		}
+		status, ok := store.Get(sessionID)
+		if !ok || status.Label == "" {
+			continue
+		}
+		// Format: [icon:label] with plugin's style
+		indicator := fmt.Sprintf(" %s:%s", status.Icon, status.Label)
+		result += status.Style.Render(indicator)
+		log.Debug().Str("sessionID", sessionID).Str("plugin", name).Str("label", status.Label).Msg("render: found status")
+	}
+	return result
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.

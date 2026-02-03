@@ -22,6 +22,8 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/pkg/kv"
@@ -59,6 +61,7 @@ type Options struct {
 	LocalRemote     string            // Remote URL of current directory (empty if not in git repo)
 	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
 	TerminalManager *terminal.Manager // Terminal integration manager (optional)
+	PluginManager   *plugins.Manager  // Plugin manager (optional)
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -92,6 +95,12 @@ type Model struct {
 	terminalStatuses   *kv.Store[string, TerminalStatus]
 	previewEnabled     bool   // toggle tmux pane preview sidebar
 	currentTmuxSession string // current tmux session name (to prevent recursive preview)
+
+	// Plugin integration
+	pluginManager      *plugins.Manager
+	pluginStatuses     map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
+	pluginResultsChan  <-chan plugins.Result                        // from background worker
+	pluginPollInterval time.Duration                                // interval for background polling
 
 	// Status animation
 	animationFrame int
@@ -132,6 +141,7 @@ type Model struct {
 
 	// Command palette
 	commandPalette *CommandPalette
+	mergedCommands map[string]config.UserCommand // system + plugin + user commands
 
 	// Help dialog
 	helpDialog *components.HelpDialog
@@ -178,16 +188,41 @@ type reposDiscoveredMsg struct {
 	repos []DiscoveredRepo
 }
 
+// pluginStatusUpdateMsg is sent when a single plugin status result arrives.
+type pluginStatusUpdateMsg struct {
+	PluginName string
+	SessionID  string
+	Status     plugins.Status
+	Err        error
+}
+
+// pluginWorkerStartedMsg is sent when the background plugin worker starts.
+type pluginWorkerStartedMsg struct {
+	resultsChan <-chan plugins.Result
+}
+
 // New creates a new TUI model.
 func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	gitStatuses := kv.New[string, GitStatus]()
 	terminalStatuses := kv.New[string, TerminalStatus]()
 	columnWidths := &ColumnWidths{}
 
+	// Initialize plugin status stores for each enabled plugin
+	var pluginStatuses map[string]*kv.Store[string, plugins.Status]
+	if opts.PluginManager != nil {
+		pluginStatuses = make(map[string]*kv.Store[string, plugins.Status])
+		for _, p := range opts.PluginManager.EnabledPlugins() {
+			if p.StatusProvider() != nil {
+				pluginStatuses[p.Name()] = kv.New[string, plugins.Status]()
+			}
+		}
+	}
+
 	delegate := NewTreeDelegate()
 	delegate.GitStatuses = gitStatuses
 	delegate.TerminalStatuses = terminalStatuses
 	delegate.ColumnWidths = columnWidths
+	delegate.PluginStatuses = pluginStatuses
 
 	l := list.New([]list.Item{}, delegate, 0, 0)
 	l.SetShowStatusBar(false)
@@ -214,7 +249,15 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
 
-	handler := NewKeybindingResolver(cfg.Keybindings, cfg.MergedUserCommands())
+	// Compute merged commands: system → plugins → user
+	var mergedCommands map[string]config.UserCommand
+	if opts.PluginManager != nil {
+		mergedCommands = opts.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
+	} else {
+		mergedCommands = cfg.MergedUserCommands()
+	}
+
+	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands)
 	cmdService := command.NewService(service, service)
 
 	// Add minimal keybindings to list help - just navigation and help trigger
@@ -250,6 +293,9 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		terminalStatuses:   terminalStatuses,
 		previewEnabled:     cfg.TUI.PreviewEnabled,
 		currentTmuxSession: currentTmux,
+		pluginManager:      opts.PluginManager,
+		pluginStatuses:     pluginStatuses,
+		pluginPollInterval: cfg.Plugins.GitHub.ResultsCache, // use GitHub cache duration as poll interval
 		treeDelegate:       delegate,
 		localRemote:        opts.LocalRemote,
 		msgStore:           opts.MsgStore,
@@ -258,6 +304,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		activeView:         ViewSessions,
 		copyCommand:        cfg.Commands.CopyCommand,
 		repoDirs:           cfg.RepoDirs,
+		mergedCommands:     mergedCommands,
 	}
 }
 
@@ -320,7 +367,39 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, startTerminalPollTicker(m.cfg.Integrations.Terminal.PollInterval))
 		cmds = append(cmds, scheduleAnimationTick())
 	}
+	// Start plugin background worker if plugins are enabled
+	if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
+		cmds = append(cmds, m.startPluginWorker())
+	}
 	return tea.Batch(cmds...)
+}
+
+// startPluginWorker returns a command that starts the background plugin worker.
+func (m Model) startPluginWorker() tea.Cmd {
+	return func() tea.Msg {
+		resultsChan := m.pluginManager.StartBackgroundWorker(context.Background(), m.pluginPollInterval)
+		return pluginWorkerStartedMsg{resultsChan: resultsChan}
+	}
+}
+
+// listenForPluginResult returns a command that waits for the next plugin result.
+func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
+	if ch == nil {
+		return nil
+	}
+	return func() tea.Msg {
+		result, ok := <-ch
+		if !ok {
+			// Channel closed, stop listening
+			return nil
+		}
+		return pluginStatusUpdateMsg{
+			PluginName: result.PluginName,
+			SessionID:  result.SessionID,
+			Status:     result.Status,
+			Err:        result.Err,
+		}
+	}
 }
 
 // scanRepoDirs returns a command that scans configured directories for git repositories.
@@ -437,7 +516,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Store all sessions for filtering
 		m.allSessions = msg.sessions
 		// Apply filter and update list
-		return m.applyFilter()
+		filteredModel, cmd := m.applyFilter()
+		// Update plugin manager with new sessions (triggers background refresh)
+		if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
+			sessions := make([]*session.Session, len(m.allSessions))
+			for i := range m.allSessions {
+				sessions[i] = &m.allSessions[i]
+			}
+			m.pluginManager.UpdateSessions(sessions)
+			log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
+		}
+		return filteredModel, cmd
 
 	case gitStatusBatchCompleteMsg:
 		m.gitStatuses.SetBatch(msg.Results)
@@ -462,6 +551,29 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.terminalStatuses.SetBatch(msg.Results)
 		}
 		return m, nil
+
+	case pluginWorkerStartedMsg:
+		// Store the channel and start listening for results
+		m.pluginResultsChan = msg.resultsChan
+		log.Debug().Msg("plugin background worker started")
+		return m, listenForPluginResult(m.pluginResultsChan)
+
+	case pluginStatusUpdateMsg:
+		// Update the specific plugin's status store with the single result
+		if msg.Err == nil {
+			if store, ok := m.pluginStatuses[msg.PluginName]; ok {
+				store.Set(msg.SessionID, msg.Status)
+				log.Debug().
+					Str("plugin", msg.PluginName).
+					Str("session", msg.SessionID).
+					Str("label", msg.Status.Label).
+					Msg("plugin status updated")
+			}
+		}
+		// Force list to re-render with updated plugin status
+		m.list.SetDelegate(m.treeDelegate)
+		// Continue listening for more results
+		return m, listenForPluginResult(m.pluginResultsChan)
 
 	case animationTickMsg:
 		// Advance animation frame
@@ -995,7 +1107,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 	// Handle ':' for command palette (allow even without selection for filter commands)
 	if keyStr == ":" {
-		m.commandPalette = NewCommandPalette(m.cfg.MergedUserCommands(), m.selectedSession(), m.width, m.height)
+		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height)
 		m.state = stateCommandPalette
 		return m, nil
 	}
@@ -1386,17 +1498,14 @@ func (m Model) renderTabView() string {
 		Background(lipgloss.Color("#3b4261")).
 		Foreground(lipgloss.Color("#c0caf5")).
 		Padding(0, 1)
-	branding := brandingStyle.Render("Hive")
+	branding := brandingStyle.Render(styles.IconHive + " Hive")
 
 	// Calculate spacing to push branding to right edge with even margins
 	// Layout: [margin] tabs [spacer] branding [margin]
 	margin := 1
 	tabsWidth := lipgloss.Width(tabsLeft)
 	brandingWidth := lipgloss.Width(branding)
-	spacerWidth := m.width - tabsWidth - brandingWidth - (margin * 2)
-	if spacerWidth < 1 {
-		spacerWidth = 1
-	}
+	spacerWidth := max(m.width-tabsWidth-brandingWidth-(margin*2), 1)
 	leftMargin := components.Pad(margin)
 	spacer := components.Pad(spacerWidth)
 	rightMargin := components.Pad(margin)
@@ -1561,6 +1670,25 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
 	idLine := fmt.Sprintf("%s %s", idStyle.Render("id:"), shortID)
 
+	// Build plugin status lines
+	var pluginLines []string
+	if m.pluginStatuses != nil {
+		pluginLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
+		pluginOrder := []string{"github", "beads"}
+		for _, name := range pluginOrder {
+			store, ok := m.pluginStatuses[name]
+			if !ok || store == nil {
+				continue
+			}
+			status, ok := store.Get(sess.ID)
+			if !ok || status.Label == "" {
+				continue
+			}
+			pluginLines = append(pluginLines,
+				fmt.Sprintf("%s %s", pluginLabelStyle.Render(name+":"), status.Style.Render(status.Label)))
+		}
+	}
+
 	// Build header
 	var parts []string
 	parts = append(parts, name)
@@ -1569,6 +1697,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	if gitLine != "" {
 		parts = append(parts, gitLine)
 	}
+	parts = append(parts, pluginLines...)
 	parts = append(parts, "")
 	parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce")).Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))

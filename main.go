@@ -16,6 +16,9 @@ import (
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/plugins/beads"
+	"github.com/hay-kot/hive/internal/plugins/github"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/pkg/executil"
@@ -146,9 +149,26 @@ Run 'hive new' to create a new session from the current repository.`,
 			)
 
 			flags.Service = hive.New(sessionStore, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
+
+			// Create plugin manager and register plugins
+			pluginMgr := plugins.NewManager(cfg.Plugins)
+			pluginMgr.Register(github.New(cfg.Plugins.GitHub))
+			pluginMgr.Register(beads.New(cfg.Plugins.Beads))
+
+			// Initialize plugins (errors are logged but don't stop startup)
+			if err := pluginMgr.InitAll(ctx); err != nil {
+				log.Warn().Err(err).Msg("plugin initialization error")
+			}
+
+			flags.PluginManager = pluginMgr
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
+			// Close plugins
+			if flags.PluginManager != nil {
+				flags.PluginManager.CloseAll()
+			}
+
 			// Close database connection
 			if flags.DB != nil {
 				if err := flags.DB.Close(); err != nil {

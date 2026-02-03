@@ -102,6 +102,7 @@ type Config struct {
 	Messaging           MessagingConfig        `yaml:"messaging"`
 	Integrations        IntegrationsConfig     `yaml:"integrations"`
 	Database            DatabaseConfig         `yaml:"database"`
+	Plugins             PluginsConfig          `yaml:"plugins"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
@@ -131,6 +132,25 @@ type MessagingConfig struct {
 // IntegrationsConfig holds configuration for external integrations.
 type IntegrationsConfig struct {
 	Terminal TerminalConfig `yaml:"terminal"`
+}
+
+// PluginsConfig holds configuration for the plugin system.
+type PluginsConfig struct {
+	ShellWorkers int                `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
+	GitHub       GitHubPluginConfig `yaml:"github"`
+	Beads        BeadsPluginConfig  `yaml:"beads"`
+}
+
+// GitHubPluginConfig holds GitHub plugin configuration.
+type GitHubPluginConfig struct {
+	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
+	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 30s)
+}
+
+// BeadsPluginConfig holds Beads plugin configuration.
+type BeadsPluginConfig struct {
+	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
+	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 30s)
 }
 
 // DatabaseConfig holds SQLite database configuration.
@@ -322,6 +342,15 @@ func (c *Config) applyDefaults() {
 	if c.Database.BusyTimeout == 0 {
 		c.Database.BusyTimeout = 5000
 	}
+	if c.Plugins.ShellWorkers == 0 {
+		c.Plugins.ShellWorkers = 5
+	}
+	if c.Plugins.GitHub.ResultsCache == 0 {
+		c.Plugins.GitHub.ResultsCache = 30 * time.Second
+	}
+	if c.Plugins.Beads.ResultsCache == 0 {
+		c.Plugins.Beads.ResultsCache = 30 * time.Second
+	}
 }
 
 // defaultCopyCommand returns the default clipboard command for the current OS.
@@ -365,6 +394,12 @@ func mergeUserCommands(defaults, user map[string]UserCommand) map[string]UserCom
 // System defaults (Recycle, Delete) can be overridden by user config.
 func (c *Config) MergedUserCommands() map[string]UserCommand {
 	return mergeUserCommands(defaultUserCommands, c.UserCommands)
+}
+
+// DefaultUserCommands returns the built-in system commands.
+// Used by plugin manager to properly merge system → plugin → user commands.
+func DefaultUserCommands() map[string]UserCommand {
+	return defaultUserCommands
 }
 
 // Validate checks that the configuration is valid.
