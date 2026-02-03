@@ -133,7 +133,7 @@ func migrateTopicFile(ctx context.Context, store *MessageStore, path string) err
 
 	// Insert all messages
 	for _, msg := range file.Messages {
-		if err := store.Publish(ctx, msg); err != nil {
+		if err := store.Publish(ctx, msg, []string{msg.Topic}); err != nil {
 			return fmt.Errorf("failed to publish message %s: %w", msg.ID, err)
 		}
 	}

@@ -72,26 +72,16 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
-	// Convert last inbox read to nullable int64
-	var lastInboxRead sql.NullInt64
-	if sess.LastInboxRead != nil {
-		lastInboxRead = sql.NullInt64{
-			Int64: sess.LastInboxRead.UnixNano(),
-			Valid: true,
-		}
-	}
-
 	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
-		ID:            sess.ID,
-		Name:          sess.Name,
-		Slug:          sess.Slug,
-		Path:          sess.Path,
-		Remote:        sess.Remote,
-		State:         string(sess.State),
-		Metadata:      metadataJSON,
-		CreatedAt:     sess.CreatedAt.UnixNano(),
-		UpdatedAt:     sess.UpdatedAt.UnixNano(),
-		LastInboxRead: lastInboxRead,
+		ID:        sess.ID,
+		Name:      sess.Name,
+		Slug:      sess.Slug,
+		Path:      sess.Path,
+		Remote:    sess.Remote,
+		State:     string(sess.State),
+		Metadata:  metadataJSON,
+		CreatedAt: sess.CreatedAt.UnixNano(),
+		UpdatedAt: sess.UpdatedAt.UnixNano(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save session: %w", err)
@@ -148,23 +138,15 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
-	// Convert last inbox read from nullable int64
-	var lastInboxRead *time.Time
-	if row.LastInboxRead.Valid {
-		t := time.Unix(0, row.LastInboxRead.Int64)
-		lastInboxRead = &t
-	}
-
 	return session.Session{
-		ID:            row.ID,
-		Name:          row.Name,
-		Slug:          row.Slug,
-		Path:          row.Path,
-		Remote:        row.Remote,
-		State:         session.State(row.State),
-		Metadata:      metadata,
-		CreatedAt:     time.Unix(0, row.CreatedAt),
-		UpdatedAt:     time.Unix(0, row.UpdatedAt),
-		LastInboxRead: lastInboxRead,
+		ID:        row.ID,
+		Name:      row.Name,
+		Slug:      row.Slug,
+		Path:      row.Path,
+		Remote:    row.Remote,
+		State:     session.State(row.State),
+		Metadata:  metadata,
+		CreatedAt: time.Unix(0, row.CreatedAt),
+		UpdatedAt: time.Unix(0, row.UpdatedAt),
 	}, nil
 }

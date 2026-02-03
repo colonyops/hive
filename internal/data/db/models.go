@@ -17,21 +17,26 @@ type Message struct {
 	CreatedAt int64          `json:"created_at"`
 }
 
+type MessageRead struct {
+	MessageID  string `json:"message_id"`
+	ConsumerID string `json:"consumer_id"`
+	ReadAt     int64  `json:"read_at"`
+}
+
 type SchemaVersion struct {
 	Version int64 `json:"version"`
 }
 
 type Session struct {
-	ID            string         `json:"id"`
-	Name          string         `json:"name"`
-	Slug          string         `json:"slug"`
-	Path          string         `json:"path"`
-	Remote        string         `json:"remote"`
-	State         string         `json:"state"`
-	Metadata      sql.NullString `json:"metadata"`
-	CreatedAt     int64          `json:"created_at"`
-	UpdatedAt     int64          `json:"updated_at"`
-	LastInboxRead sql.NullInt64  `json:"last_inbox_read"`
+	ID        string         `json:"id"`
+	Name      string         `json:"name"`
+	Slug      string         `json:"slug"`
+	Path      string         `json:"path"`
+	Remote    string         `json:"remote"`
+	State     string         `json:"state"`
+	Metadata  sql.NullString `json:"metadata"`
+	CreatedAt int64          `json:"created_at"`
+	UpdatedAt int64          `json:"updated_at"`
 }
 
 type Topic struct {

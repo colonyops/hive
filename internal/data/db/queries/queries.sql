@@ -9,8 +9,8 @@ WHERE id = ?;
 -- name: SaveSession :exec
 INSERT INTO sessions (
     id, name, slug, path, remote, state, metadata,
-    created_at, updated_at, last_inbox_read
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     slug = excluded.slug,
@@ -18,8 +18,7 @@ ON CONFLICT(id) DO UPDATE SET
     remote = excluded.remote,
     state = excluded.state,
     metadata = excluded.metadata,
-    updated_at = excluded.updated_at,
-    last_inbox_read = excluded.last_inbox_read;
+    updated_at = excluded.updated_at;
 
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?;
@@ -64,3 +63,17 @@ WHERE created_at < ?;
 -- name: CountPrunableMessages :one
 SELECT COUNT(*) FROM messages
 WHERE created_at < ?;
+
+-- name: AcknowledgeMessages :exec
+INSERT INTO message_reads (message_id, consumer_id, read_at)
+VALUES (?, ?, ?)
+ON CONFLICT (message_id, consumer_id) DO UPDATE SET
+    read_at = excluded.read_at;
+
+-- name: GetUnreadMessages :many
+SELECT m.id, m.topic, m.payload, m.sender, m.session_id, m.created_at
+FROM messages m
+LEFT JOIN message_reads mr ON mr.message_id = m.id AND mr.consumer_id = ?
+WHERE m.topic = ?
+  AND mr.message_id IS NULL
+ORDER BY m.created_at ASC;

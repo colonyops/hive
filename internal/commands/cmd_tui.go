@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
@@ -15,7 +14,6 @@ import (
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/internal/integration/terminal/tmux"
 	"github.com/hay-kot/hive/internal/profiler"
-	"github.com/hay-kot/hive/internal/store/jsonfile"
 	"github.com/hay-kot/hive/internal/tui"
 )
 
@@ -69,9 +67,8 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.flags.Service.DetectRemote(ctx, ".")
 
-	// Create message store for pub/sub events
-	topicsDir := filepath.Join(cmd.flags.DataDir, "messages", "topics")
-	msgStore := jsonfile.NewMsgStore(topicsDir)
+	// Use SQLite message store
+	msgStore := cmd.flags.MsgStore
 
 	// Create terminal integration manager if configured
 	var termMgr *terminal.Manager

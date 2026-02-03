@@ -28,7 +28,7 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 		Sender:  "test-sender",
 	}
 
-	err = store.Publish(ctx, msg)
+	err = store.Publish(ctx, msg, []string{"test.topic"})
 	if err != nil {
 		t.Fatalf("Publish failed: %v", err)
 	}
@@ -83,7 +83,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish first message
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "first"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "first"}, []string{"events"})
 	time.Sleep(10 * time.Millisecond)
 
 	// Record time between messages
@@ -91,7 +91,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Publish second message
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "second"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "second"}, []string{"events"})
 
 	// Subscribe since midpoint
 	messages, err := store.Subscribe(ctx, "events", midpoint)
@@ -118,9 +118,9 @@ func TestMsgStore_SubscribeWildcard(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish to multiple topics
-	_ = store.Publish(ctx, messaging.Message{Topic: "agent.build", Payload: "build started"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "agent.test", Payload: "tests running"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "other.topic", Payload: "unrelated"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "agent.build", Payload: "build started"}, []string{"agent.build"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "agent.test", Payload: "tests running"}, []string{"agent.test"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "other.topic", Payload: "unrelated"}, []string{"other.topic"})
 
 	// Subscribe with wildcard
 	messages, err := store.Subscribe(ctx, "agent.*", time.Time{})
@@ -152,8 +152,8 @@ func TestMsgStore_SubscribeAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish to multiple topics
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic1", Payload: "msg1"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic2", Payload: "msg2"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "topic1", Payload: "msg1"}, []string{"topic1"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "topic2", Payload: "msg2"}, []string{"topic2"})
 
 	// Subscribe to all with empty pattern
 	messages, err := store.Subscribe(ctx, "", time.Time{})
@@ -186,8 +186,8 @@ func TestMsgStore_List(t *testing.T) {
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic.a", Payload: "a"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic.b", Payload: "b"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "topic.a", Payload: "a"}, []string{"topic.a"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "topic.b", Payload: "b"}, []string{"topic.b"})
 
 	topics, err := store.List(ctx)
 	if err != nil {
@@ -239,7 +239,7 @@ func TestMsgStore_Retention(t *testing.T) {
 		err := store.Publish(ctx, messaging.Message{
 			Topic:   "test",
 			Payload: fmt.Sprintf("msg%d", i),
-		})
+		}, []string{"test"})
 		if err != nil {
 			t.Fatalf("Publish %d failed: %v", i, err)
 		}
@@ -281,7 +281,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 			err := store.Publish(ctx, messaging.Message{
 				Topic:   "test",
 				Payload: fmt.Sprintf("msg%d", i),
-			})
+			}, []string{"test"})
 			if err != nil {
 				t.Fatalf("Publish %d failed: %v", i, err)
 			}
@@ -311,7 +311,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 			err := store.Publish(ctx, messaging.Message{
 				Topic:   "test",
 				Payload: fmt.Sprintf("msg%d", i),
-			})
+			}, []string{"test"})
 			if err != nil {
 				t.Fatalf("Publish %d failed: %v", i, err)
 			}
@@ -345,7 +345,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 			err := store.Publish(ctx, messaging.Message{
 				Topic:   "test",
 				Payload: fmt.Sprintf("msg%d", i),
-			})
+			}, []string{"test"})
 			if err != nil {
 				t.Fatalf("Publish %d failed: %v", i, err)
 			}
@@ -374,9 +374,9 @@ func TestMsgStore_Prune(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish messages
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "old"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "old"}, []string{"events"})
 	time.Sleep(50 * time.Millisecond)
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "new"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "new"}, []string{"events"})
 
 	// Prune messages older than 25ms
 	removed, err := store.Prune(ctx, 25*time.Millisecond)
@@ -421,7 +421,7 @@ func TestMsgStore_ConcurrentAccess(t *testing.T) {
 				err := store.Publish(ctx, messaging.Message{
 					Topic:   topic,
 					Payload: fmt.Sprintf("msg-%d-%d", id, j),
-				})
+				}, []string{topic})
 				if err != nil {
 					t.Errorf("Publish failed: %v", err)
 					return
@@ -481,7 +481,7 @@ func TestMsgStore_MessageOrdering(t *testing.T) {
 		_ = store.Publish(ctx, messaging.Message{
 			Topic:   "ordered",
 			Payload: fmt.Sprintf("msg%d", i),
-		})
+		}, []string{"ordered"})
 		time.Sleep(time.Millisecond)
 	}
 
@@ -506,11 +506,11 @@ func TestMsgStore_WildcardOrdering(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish messages across topics with explicit ordering via delays
-	_ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "first"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "first"}, []string{"ns.a"})
 	time.Sleep(5 * time.Millisecond)
-	_ = store.Publish(ctx, messaging.Message{Topic: "ns.b", Payload: "second"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "ns.b", Payload: "second"}, []string{"ns.b"})
 	time.Sleep(5 * time.Millisecond)
-	_ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "third"})
+	_ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "third"}, []string{"ns.a"})
 
 	messages, _ := store.Subscribe(ctx, "ns.*", time.Time{})
 
@@ -524,5 +524,257 @@ func TestMsgStore_WildcardOrdering(t *testing.T) {
 		if msg.Payload != expected[i] {
 			t.Errorf("Message %d payload = %q, want %q", i, msg.Payload, expected[i])
 		}
+	}
+}
+
+func TestMsgStore_Acknowledge(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	// Publish messages
+	msg1 := messaging.Message{Topic: "test.topic", Payload: "msg1"}
+	msg2 := messaging.Message{Topic: "test.topic", Payload: "msg2"}
+	_ = store.Publish(ctx, msg1, []string{"test.topic"})
+	_ = store.Publish(ctx, msg2, []string{"test.topic"})
+
+	// Get messages to retrieve their IDs
+	messages, _ := store.Subscribe(ctx, "test.topic", time.Time{})
+	if len(messages) != 2 {
+		t.Fatalf("Expected 2 messages, got %d", len(messages))
+	}
+
+	// Acknowledge first message
+	err = store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
+	if err != nil {
+		t.Fatalf("Acknowledge failed: %v", err)
+	}
+
+	// Consumer-1 should have 1 unread
+	unread, err := store.GetUnread(ctx, "consumer-1", "test.topic")
+	if err != nil {
+		t.Fatalf("GetUnread failed: %v", err)
+	}
+	if len(unread) != 1 {
+		t.Errorf("Expected 1 unread message for consumer-1, got %d", len(unread))
+	}
+	if len(unread) > 0 && unread[0].Payload != "msg2" {
+		t.Errorf("Expected unread message payload 'msg2', got %q", unread[0].Payload)
+	}
+
+	// Consumer-2 should have 2 unread (never acknowledged anything)
+	unread, err = store.GetUnread(ctx, "consumer-2", "test.topic")
+	if err != nil {
+		t.Fatalf("GetUnread for consumer-2 failed: %v", err)
+	}
+	if len(unread) != 2 {
+		t.Errorf("Expected 2 unread messages for consumer-2, got %d", len(unread))
+	}
+}
+
+func TestMsgStore_Acknowledge_EmptyConsumer(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	err = store.Acknowledge(ctx, "", []string{"msg-id"})
+	if err == nil {
+		t.Error("Expected error for empty consumer_id")
+	}
+}
+
+func TestMsgStore_GetUnread_EmptyConsumer(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	_, err = store.GetUnread(ctx, "", "test.topic")
+	if err == nil {
+		t.Error("Expected error for empty consumer_id")
+	}
+}
+
+func TestMsgStore_GetUnread_Wildcard(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	// Publish to multiple topics
+	_ = store.Publish(ctx, messaging.Message{Payload: "inbox1"}, []string{"agent.a.inbox"})
+	_ = store.Publish(ctx, messaging.Message{Payload: "inbox2"}, []string{"agent.b.inbox"})
+	_ = store.Publish(ctx, messaging.Message{Payload: "other"}, []string{"other.topic"})
+
+	// Get unread with wildcard pattern
+	unread, err := store.GetUnread(ctx, "consumer-1", "agent.*.inbox")
+	if err != nil {
+		t.Fatalf("GetUnread failed: %v", err)
+	}
+
+	if len(unread) != 2 {
+		t.Errorf("Expected 2 unread messages, got %d", len(unread))
+	}
+
+	payloads := make(map[string]bool)
+	for _, m := range unread {
+		payloads[m.Payload] = true
+	}
+	if !payloads["inbox1"] || !payloads["inbox2"] {
+		t.Errorf("Missing expected payloads in %v", unread)
+	}
+	if payloads["other"] {
+		t.Error("Should not include messages from other.topic")
+	}
+}
+
+func TestMsgStore_GetUnread_NoMessages(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	// No messages published
+	unread, err := store.GetUnread(ctx, "consumer-1", "nonexistent.topic")
+	if err != nil {
+		t.Fatalf("GetUnread failed: %v", err)
+	}
+
+	if len(unread) != 0 {
+		t.Errorf("Expected 0 unread messages, got %d", len(unread))
+	}
+}
+
+func TestMsgStore_PublishMultipleTopics(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	// Publish to multiple topics at once
+	msg := messaging.Message{Payload: "broadcast"}
+	err = store.Publish(ctx, msg, []string{"topic.a", "topic.b", "topic.c"})
+	if err != nil {
+		t.Fatalf("Publish failed: %v", err)
+	}
+
+	// Verify message exists in all topics
+	for _, topic := range []string{"topic.a", "topic.b", "topic.c"} {
+		messages, err := store.Subscribe(ctx, topic, time.Time{})
+		if err != nil {
+			t.Errorf("Subscribe to %s failed: %v", topic, err)
+			continue
+		}
+		if len(messages) != 1 {
+			t.Errorf("Expected 1 message in %s, got %d", topic, len(messages))
+			continue
+		}
+		if messages[0].Payload != "broadcast" {
+			t.Errorf("Message in %s has payload %q, want 'broadcast'", topic, messages[0].Payload)
+		}
+	}
+}
+
+func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	// First, create some inbox topics
+	_ = store.Publish(ctx, messaging.Message{Payload: "setup1"}, []string{"agent.a.inbox"})
+	_ = store.Publish(ctx, messaging.Message{Payload: "setup2"}, []string{"agent.b.inbox"})
+	_ = store.Publish(ctx, messaging.Message{Payload: "other"}, []string{"other.topic"})
+
+	// Publish with wildcard pattern
+	msg := messaging.Message{Payload: "broadcast to inboxes"}
+	err = store.Publish(ctx, msg, []string{"agent.*.inbox"})
+	if err != nil {
+		t.Fatalf("Publish with wildcard failed: %v", err)
+	}
+
+	// Verify broadcast reached both inboxes
+	for _, topic := range []string{"agent.a.inbox", "agent.b.inbox"} {
+		messages, _ := store.Subscribe(ctx, topic, time.Time{})
+		found := false
+		for _, m := range messages {
+			if m.Payload == "broadcast to inboxes" {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Broadcast message not found in %s", topic)
+		}
+	}
+
+	// Verify other.topic didn't get the broadcast
+	messages, _ := store.Subscribe(ctx, "other.topic", time.Time{})
+	for _, m := range messages {
+		if m.Payload == "broadcast to inboxes" {
+			t.Error("Broadcast should not have reached other.topic")
+		}
+	}
+}
+
+func TestMsgStore_AcknowledgeIdempotent(t *testing.T) {
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("Open: %v", err)
+	}
+	defer func() { _ = database.Close() }()
+
+	store := NewMessageStore(database, 0)
+	ctx := context.Background()
+
+	// Publish a message
+	_ = store.Publish(ctx, messaging.Message{Payload: "test"}, []string{"test.topic"})
+	messages, _ := store.Subscribe(ctx, "test.topic", time.Time{})
+
+	// Acknowledge same message twice
+	err = store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
+	if err != nil {
+		t.Fatalf("First Acknowledge failed: %v", err)
+	}
+
+	err = store.Acknowledge(ctx, "consumer-1", []string{messages[0].ID})
+	if err != nil {
+		t.Fatalf("Second Acknowledge failed: %v", err)
+	}
+
+	// Should still show 0 unread
+	unread, _ := store.GetUnread(ctx, "consumer-1", "test.topic")
+	if len(unread) != 0 {
+		t.Errorf("Expected 0 unread after double-acknowledge, got %d", len(unread))
 	}
 }
