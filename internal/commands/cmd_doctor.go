@@ -2,10 +2,11 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
+	"os"
 
 	"github.com/hay-kot/hive/internal/commands/doctor"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
@@ -71,9 +72,7 @@ func (cmd *DoctorCmd) outputJSON(c *cli.Command, results []doctor.Result) error 
 		Checks:  results,
 	}
 
-	enc := json.NewEncoder(c.Root().Writer)
-	enc.SetIndent("", "  ")
-	return enc.Encode(out)
+	return iojson.WriteWith(c.Root().Writer, os.Stderr, out)
 }
 
 type summaryJSON struct {
