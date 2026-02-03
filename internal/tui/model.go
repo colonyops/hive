@@ -148,6 +148,9 @@ type Model struct {
 
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
+
+	// Review view
+	reviewView *ReviewView
 }
 
 // PendingCreate returns any pending session creation data.
@@ -285,6 +288,9 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		cfg.TUI.Preview.StatusTemplate,
 	)
 
+	// Initialize review view with empty document list
+	reviewView := NewReviewView([]ReviewDocument{})
+
 	return Model{
 		cfg:                cfg,
 		service:            service,
@@ -313,6 +319,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		copyCommand:        cfg.CopyCommand,
 		repoDirs:           cfg.RepoDirs,
 		mergedCommands:     mergedCommands,
+		reviewView:         &reviewView,
 	}
 }
 
@@ -470,6 +477,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// msgView gets -1 because we prepend a blank line for consistent spacing
 		m.msgView.SetSize(msg.Width, contentHeight-1)
+
+		// Set review view size
+		if m.reviewView != nil {
+			m.reviewView.SetSize(msg.Width, contentHeight)
+		}
 		return m, nil
 
 	case messagesLoadedMsg:
@@ -648,10 +660,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNewSessionForm(msg)
 	}
 
-	// Update the focused list for any other messages (only session list needs this)
+	// Update the appropriate view based on active view
 	var cmd tea.Cmd
-	if !m.isMessagesFocused() {
+	switch m.activeView {
+	case ViewSessions:
 		m.list, cmd = m.list.Update(msg)
+	case ViewReview:
+		if m.reviewView != nil {
+			*m.reviewView, cmd = m.reviewView.Update(msg)
+		}
 	}
 	return m, cmd
 }
@@ -1055,30 +1072,39 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.handleSessionsKey(msg, keyStr)
 	}
 
-	// Messages view focused - handle navigation
-	switch keyStr {
-	case keyEnter:
-		// Open message preview modal
-		selectedMsg := m.selectedMessage()
-		if selectedMsg != nil {
-			m.state = statePreviewingMessage
-			m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
+	// Handle keys based on active view
+	if m.isMessagesFocused() {
+		// Messages view focused - handle navigation
+		switch keyStr {
+		case keyEnter:
+			// Open message preview modal
+			selectedMsg := m.selectedMessage()
+			if selectedMsg != nil {
+				m.state = statePreviewingMessage
+				m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
+			}
+		case "up", "k":
+			m.msgView.MoveUp()
+		case "down", "j":
+			m.msgView.MoveDown()
+		case "/":
+			m.msgView.StartFilter()
 		}
-	case "up", "k":
-		m.msgView.MoveUp()
-	case "down", "j":
-		m.msgView.MoveDown()
-	case "/":
-		m.msgView.StartFilter()
+		return m, nil
 	}
+
+	// Review view focused - handled by view update in Update()
 	return m, nil
 }
 
 // handleTabKey handles tab key for switching views.
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
-	if m.activeView == ViewSessions {
+	switch m.activeView {
+	case ViewSessions:
 		m.activeView = ViewMessages
-	} else {
+	case ViewMessages:
+		m.activeView = ViewReview
+	case ViewReview:
 		m.activeView = ViewSessions
 	}
 	return m, nil
@@ -1306,6 +1332,11 @@ func (m Model) isMessagesFocused() bool {
 	return m.activeView == ViewMessages
 }
 
+// isReviewFocused returns true if the review view is active.
+func (m Model) isReviewFocused() bool {
+	return m.activeView == ViewReview
+}
+
 // shouldPollMessages returns true if messages should be polled.
 func (m Model) shouldPollMessages() bool {
 	return m.activeView == ViewMessages
@@ -1482,15 +1513,22 @@ func (m Model) View() tea.View {
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
 	// Build tab bar with tabs on left and branding on right
-	var sessionsTab, messagesTab string
-	if m.activeView == ViewSessions {
+	var sessionsTab, messagesTab, reviewTab string
+	switch m.activeView {
+	case ViewSessions:
 		sessionsTab = viewSelectedStyle.Render("Sessions")
 		messagesTab = viewNormalStyle.Render("Messages")
-	} else {
+		reviewTab = viewNormalStyle.Render("Review")
+	case ViewMessages:
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
+		reviewTab = viewNormalStyle.Render("Review")
+	case ViewReview:
+		sessionsTab = viewNormalStyle.Render("Sessions")
+		messagesTab = viewNormalStyle.Render("Messages")
+		reviewTab = viewSelectedStyle.Render("Review")
 	}
-	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab, " | ", reviewTab)
 
 	// Add filter indicator if active
 	if m.statusFilter != "" {
@@ -1534,7 +1572,8 @@ func (m Model) renderTabView() string {
 
 	// Build content with fixed height to prevent layout shift
 	var content string
-	if m.activeView == ViewSessions {
+	switch m.activeView {
+	case ViewSessions:
 		// Check if preview should be shown
 		if m.previewEnabled && m.width >= 80 {
 			content = m.renderDualColumnLayout(contentHeight)
@@ -1545,9 +1584,14 @@ func (m Model) renderTabView() string {
 			content = m.list.View()
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
-	} else {
+	case ViewMessages:
 		content = m.msgView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+	case ViewReview:
+		if m.reviewView != nil {
+			content = m.reviewView.View()
+			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+		}
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, topDivider, header, headerDivider, content)
