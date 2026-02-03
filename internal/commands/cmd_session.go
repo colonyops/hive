@@ -2,12 +2,12 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
@@ -108,8 +108,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 			Inbox:  sess.InboxTopic(),
 			State:  string(sess.State),
 		}
-		enc := json.NewEncoder(out)
-		return enc.Encode(info)
+		return iojson.WriteLine(out, info)
 	}
 
 	// Human-readable output

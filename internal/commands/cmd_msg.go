@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -11,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/hay-kot/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
 )
@@ -455,9 +455,8 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 		infos = append(infos, topicInfo{Name: t, MessageCount: len(messages)})
 	}
 
-	enc := json.NewEncoder(c.Root().Writer)
 	for _, info := range infos {
-		if err := enc.Encode(info); err != nil {
+		if err := iojson.WriteLine(c.Root().Writer, info); err != nil {
 			return err
 		}
 	}
@@ -474,9 +473,8 @@ func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
-	enc := json.NewEncoder(w)
 	for _, msg := range messages {
-		if err := enc.Encode(msg); err != nil {
+		if err := iojson.WriteLine(w, msg); err != nil {
 			return err
 		}
 	}

@@ -9,6 +9,25 @@ import (
 	"os"
 )
 
+// Options configures JSON output behavior.
+type Options struct {
+	Indent bool
+}
+
+// Option is a functional option for configuring JSON output.
+type Option func(*Options)
+
+// WithIndent sets whether to indent JSON output (default: true).
+func WithIndent(indent bool) Option {
+	return func(o *Options) {
+		o.Indent = indent
+	}
+}
+
+func defaultOptions() Options {
+	return Options{Indent: true}
+}
+
 // Error is the standard error format type that is returned when errors
 // happen.
 type Error struct {
@@ -46,8 +65,20 @@ func WriteError(str string, data map[string]any) error {
 	return err
 }
 
-func WriteWith(w io.Writer, ew io.Writer, obj any) error {
-	bits, err := json.MarshalIndent(obj, "", "  ")
+// WriteWith writes obj as JSON to w, with errors written to ew.
+func WriteWith(w io.Writer, ew io.Writer, obj any, opts ...Option) error {
+	options := defaultOptions()
+	for _, opt := range opts {
+		opt(&options)
+	}
+
+	var bits []byte
+	var err error
+	if options.Indent {
+		bits, err = json.MarshalIndent(obj, "", "  ")
+	} else {
+		bits, err = json.Marshal(obj)
+	}
 	if err != nil {
 		errStr := jsonError("error marshaling in iojson.Write", err)
 		_, err = fmt.Fprintln(ew, errStr)
@@ -58,7 +89,13 @@ func WriteWith(w io.Writer, ew io.Writer, obj any) error {
 	return err
 }
 
-// Write calls WriteWith with [os.Stdout] and [os.Stderr]
-func Write(obj any) error {
-	return WriteWith(os.Stdout, os.Stderr, obj)
+// Write calls WriteWith with [os.Stdout] and [os.Stderr].
+func Write(obj any, opts ...Option) error {
+	return WriteWith(os.Stdout, os.Stderr, obj, opts...)
+}
+
+// WriteLine writes obj as compact JSON (no indent) to w.
+// Intended for JSON lines output where multiple objects are written sequentially.
+func WriteLine(w io.Writer, obj any) error {
+	return json.NewEncoder(w).Encode(obj)
 }

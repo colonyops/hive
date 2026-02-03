@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -11,6 +10,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
@@ -82,11 +82,9 @@ func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
 
 	// JSON output mode
 	if cmd.jsonOutput {
-		enc := json.NewEncoder(out)
-
 		for _, s := range normal {
 			info := cmd.buildSessionInfo(ctx, s)
-			if err := enc.Encode(info); err != nil {
+			if err := iojson.WriteLine(out, info); err != nil {
 				return fmt.Errorf("encode session: %w", err)
 			}
 		}
