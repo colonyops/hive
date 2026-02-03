@@ -925,9 +925,9 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, cmd
 	}
 
-	// Handle ':' for command palette (only if user commands are configured)
-	if keyStr == ":" && len(m.cfg.UserCommands) > 0 {
-		m.commandPalette = NewCommandPalette(m.cfg.UserCommands, selected, m.width, m.height)
+	// Handle ':' for command palette
+	if keyStr == ":" {
+		m.commandPalette = NewCommandPalette(m.cfg.MergedUserCommands(), selected, m.width, m.height)
 		m.state = stateCommandPalette
 		return m, nil
 	}
