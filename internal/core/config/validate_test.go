@@ -29,12 +29,15 @@ func validConfig(t *testing.T) *Config {
 func TestValidateDeep_ValidConfig(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Commands = Commands{
-		Spawn:      []string{"echo {{.Path}}", "echo {{.Name}} {{.Slug}}"},
-		BatchSpawn: []string{"echo {{.Path}}", "echo {{.Name}} {{.Prompt}}"},
-		Recycle:    []string{"git reset --hard", "git checkout main"},
+		Recycle: []string{"git reset --hard", "git checkout main"},
 	}
 	cfg.Rules = []Rule{
-		{Pattern: "^https://github.com/.*", Commands: []string{"echo hello"}},
+		{
+			Pattern:    "^https://github.com/.*",
+			Commands:   []string{"echo hello"},
+			Spawn:      []string{"echo {{.Path}}", "echo {{.Name}} {{.Slug}}"},
+			BatchSpawn: []string{"echo {{.Path}}", "echo {{.Name}} {{.Prompt}}"},
+		},
 	}
 	// With the new model, keybindings reference commands
 	cfg.UserCommands = map[string]UserCommand{
@@ -51,8 +54,11 @@ func TestValidateDeep_ValidConfig(t *testing.T) {
 
 func TestValidateDeep_InvalidSpawnTemplate(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.Commands = Commands{
-		Spawn: []string{"echo {{.Path}", "echo {{.Invalid}}"},
+	cfg.Rules = []Rule{
+		{
+			Pattern: "",
+			Spawn:   []string{"echo {{.Path}", "echo {{.Invalid}}"},
+		},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -60,7 +66,7 @@ func TestValidateDeep_InvalidSpawnTemplate(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 2)
-	assert.Contains(t, fieldErrs[0].Field, "commands.spawn")
+	assert.Contains(t, fieldErrs[0].Field, "rules[0].spawn")
 	assert.Contains(t, fieldErrs[0].Err.Error(), "template error")
 }
 
@@ -290,6 +296,46 @@ func TestWarnings_EmptyRecycleCommands(t *testing.T) {
 	assert.True(t, hasWarning, "expected warning about empty recycle commands")
 }
 
+func TestWarnings_NoSpawnCommands(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Rules = []Rule{
+		{Pattern: "", Commands: []string{"echo test"}},
+	}
+
+	err := cfg.ValidateDeep("")
+	require.NoError(t, err)
+
+	warnings := cfg.Warnings()
+	hasWarning := false
+	for _, w := range warnings {
+		if w.Category == "Spawn Commands" {
+			hasWarning = true
+			break
+		}
+	}
+	assert.True(t, hasWarning, "expected warning about no spawn commands")
+}
+
+func TestWarnings_HasSpawnCommands(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Rules = []Rule{
+		{Pattern: "", Spawn: []string{"echo spawn"}},
+	}
+
+	err := cfg.ValidateDeep("")
+	require.NoError(t, err)
+
+	warnings := cfg.Warnings()
+	hasWarning := false
+	for _, w := range warnings {
+		if w.Category == "Spawn Commands" {
+			hasWarning = true
+			break
+		}
+	}
+	assert.False(t, hasWarning, "should not warn when spawn commands are defined")
+}
+
 func TestValidateDeep_ValidRulesWithCopy(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Rules = []Rule{
@@ -417,6 +463,106 @@ func TestGetMaxRecycled(t *testing.T) {
 			cfg.Rules = tt.rules
 
 			result := cfg.GetMaxRecycled(tt.remote)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestGetSpawnCommands(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    []Rule
+		remote   string
+		batch    bool
+		expected []string
+	}{
+		{
+			name:     "no rules returns empty",
+			rules:    nil,
+			remote:   "https://github.com/foo/bar",
+			batch:    false,
+			expected: nil,
+		},
+		{
+			name: "catch-all rule provides spawn",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    false,
+			expected: []string{"echo spawn"},
+		},
+		{
+			name: "batch_spawn returns batch commands",
+			rules: []Rule{
+				{
+					Pattern:    "",
+					Spawn:      []string{"echo spawn"},
+					BatchSpawn: []string{"echo batch"},
+				},
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    true,
+			expected: []string{"echo batch"},
+		},
+		{
+			name: "batch falls back to spawn when no batch_spawn",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    true,
+			expected: nil, // batch_spawn is empty, so returns nil
+		},
+		{
+			name: "specific rule overrides catch-all",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo default"}},
+				{Pattern: "github.com/foo/.*", Spawn: []string{"echo foo"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    false,
+			expected: []string{"echo foo"},
+		},
+		{
+			name: "non-matching rule uses catch-all",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo default"}},
+				{Pattern: "github.com/other/.*", Spawn: []string{"echo other"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    false,
+			expected: []string{"echo default"},
+		},
+		{
+			name: "last matching rule wins",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo default"}},
+				{Pattern: "github.com/.*", Spawn: []string{"echo github"}},
+				{Pattern: "github.com/foo/.*", Spawn: []string{"echo foo"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    false,
+			expected: []string{"echo foo"},
+		},
+		{
+			name: "rule without spawn inherits from previous",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo default"}},
+				{Pattern: "github.com/foo/.*", Commands: []string{"setup"}}, // no spawn
+			},
+			remote:   "https://github.com/foo/bar",
+			batch:    false,
+			expected: []string{"echo default"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Rules = tt.rules
+
+			result := cfg.GetSpawnCommands(tt.remote, tt.batch)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

@@ -168,12 +168,14 @@ type Rule struct {
 	// MaxRecycled sets the max recycled sessions for matching repos.
 	// nil = inherit from previous rule or default (5), 0 = unlimited, >0 = limit
 	MaxRecycled *int `yaml:"max_recycled,omitempty"`
+	// Spawn commands to run when creating a new session (hive new).
+	Spawn []string `yaml:"spawn,omitempty"`
+	// BatchSpawn commands to run when creating a batch session (hive batch).
+	BatchSpawn []string `yaml:"batch_spawn,omitempty"`
 }
 
 // Commands defines the shell commands used by hive.
 type Commands struct {
-	Spawn       []string `yaml:"spawn"`
-	BatchSpawn  []string `yaml:"batch_spawn"`
 	Recycle     []string `yaml:"recycle"`
 	CopyCommand string   `yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
 }
@@ -226,7 +228,6 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 func DefaultConfig() Config {
 	return Config{
 		Commands: Commands{
-			Spawn: []string{},
 			Recycle: []string{
 				"git fetch origin",
 				"git checkout {{ .DefaultBranch }}",
@@ -538,6 +539,23 @@ func (c *Config) GetMaxRecycled(remote string) int {
 	}
 
 	return DefaultMaxRecycled
+}
+
+// GetSpawnCommands returns the spawn commands for the given remote URL.
+// If batch is true, returns BatchSpawn commands; otherwise returns Spawn commands.
+// Rules are evaluated in order; the last matching rule with spawn commands wins.
+func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
+	var result []string
+	for _, rule := range c.Rules {
+		if rule.Pattern == "" || matchesPattern(rule.Pattern, remote) {
+			if batch && len(rule.BatchSpawn) > 0 {
+				result = rule.BatchSpawn
+			} else if !batch && len(rule.Spawn) > 0 {
+				result = rule.Spawn
+			}
+		}
+	}
+	return result
 }
 
 // matchesPattern checks if remote matches the regex pattern.

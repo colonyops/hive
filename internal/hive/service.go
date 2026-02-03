@@ -152,10 +152,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	}
 
 	// Spawn terminal
-	spawnCommands := s.config.Commands.Spawn
-	if opts.UseBatchSpawn && len(s.config.Commands.BatchSpawn) > 0 {
-		spawnCommands = s.config.Commands.BatchSpawn
-	}
+	spawnCommands := s.config.GetSpawnCommands(remote, opts.UseBatchSpawn)
 
 	if len(spawnCommands) > 0 {
 		owner, repoName := git.ExtractOwnerRepo(remote)
