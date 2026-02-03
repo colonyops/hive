@@ -11,11 +11,14 @@ import (
 
 // ReviewView manages the review interface.
 type ReviewView struct {
-	list list.Model
+	list       list.Model
+	watcher    *DocumentWatcher
+	contextDir string
 }
 
 // NewReviewView creates a new review view.
-func NewReviewView(documents []ReviewDocument) ReviewView {
+// If contextDir is non-empty, it will watch for file changes.
+func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
 	items := BuildReviewTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -37,8 +40,19 @@ func NewReviewView(documents []ReviewDocument) ReviewView {
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
 
+	// Initialize watcher if context directory is provided
+	var watcher *DocumentWatcher
+	if contextDir != "" {
+		w, err := NewDocumentWatcher(contextDir)
+		if err == nil {
+			watcher = w
+		}
+	}
+
 	return ReviewView{
-		list: l,
+		list:       l,
+		watcher:    watcher,
+		contextDir: contextDir,
 	}
 }
 
@@ -47,9 +61,29 @@ func (v *ReviewView) SetSize(width, height int) {
 	v.list.SetSize(width, height)
 }
 
+// Init initializes the review view and starts the file watcher.
+func (v ReviewView) Init() tea.Cmd {
+	if v.watcher != nil {
+		return v.watcher.Start()
+	}
+	return nil
+}
+
 // Update handles messages.
 // The underlying list handles j/k navigation, Enter selection, and / filtering.
 func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
+	switch msg := msg.(type) {
+	case documentChangeMsg:
+		// Rebuild tree with new documents
+		items := BuildReviewTreeItems(msg.documents)
+		v.list.SetItems(items)
+		// Continue watching for more changes
+		if v.watcher != nil {
+			return v, v.watcher.Start()
+		}
+		return v, nil
+	}
+
 	var cmd tea.Cmd
 	v.list, cmd = v.list.Update(msg)
 	return v, cmd

@@ -110,7 +110,7 @@ func TestNewReviewView(t *testing.T) {
 		},
 	}
 
-	view := NewReviewView(docs)
+	view := NewReviewView(docs, "")
 
 	// Should not panic and should have a list
 	if view.list.Items() == nil {
@@ -119,4 +119,23 @@ func TestNewReviewView(t *testing.T) {
 
 	// Should be able to set size
 	view.SetSize(80, 24)
+}
+
+func TestDocumentWatcherIntegration(t *testing.T) {
+	// Create a temporary directory for testing
+	tmpDir := t.TempDir()
+
+	// Create review view with watcher
+	view := NewReviewView([]ReviewDocument{}, tmpDir)
+
+	// View should have a watcher
+	if view.watcher == nil {
+		t.Error("expected watcher to be initialized")
+	}
+
+	// Init should return a command
+	cmd := view.Init()
+	if cmd == nil {
+		t.Error("expected Init to return a watch command")
+	}
 }

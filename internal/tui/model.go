@@ -288,8 +288,11 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		cfg.TUI.Preview.StatusTemplate,
 	)
 
-	// Initialize review view with empty document list
-	reviewView := NewReviewView([]ReviewDocument{})
+	// Initialize review view with document discovery
+	// Use shared context directory for cross-repo documents
+	contextDir := cfg.SharedContextDir()
+	docs, _ := DiscoverDocuments(contextDir)
+	reviewView := NewReviewView(docs, contextDir)
 
 	return Model{
 		cfg:                cfg,
@@ -385,6 +388,12 @@ func (m Model) Init() tea.Cmd {
 	// Start plugin background worker if plugins are enabled
 	if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
 		cmds = append(cmds, m.startPluginWorker())
+	}
+	// Start review view file watcher
+	if m.reviewView != nil {
+		if cmd := m.reviewView.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
 	return tea.Batch(cmds...)
 }
@@ -644,6 +653,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case reposDiscoveredMsg:
 		m.discoveredRepos = msg.repos
 		// Help keybindings remain minimal - full list shown via ? dialog
+		return m, nil
+
+	case documentChangeMsg:
+		// Forward to review view if it's active
+		if m.reviewView != nil {
+			*m.reviewView, _ = m.reviewView.Update(msg)
+		}
 		return m, nil
 
 	case tea.KeyMsg:
