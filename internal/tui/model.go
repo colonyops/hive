@@ -1637,29 +1637,108 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 
 // renderPreviewHeader renders the preview header section with session metadata.
 func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
-	// Build template data
-	data := BuildPreviewTemplateData(sess, m.gitStatuses, m.pluginStatuses, m.terminalStatuses, m.cfg.TUI.IconsEnabled())
+	iconsEnabled := m.cfg.TUI.IconsEnabled()
 
 	// Styles
-	titleStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-	statusStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
+	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")) // purple, same as tree view
+	branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
+	addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9ece6a"))
+	delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#f7768e"))
+	dirtyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#e0af68"))
+	pluginLabelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce"))
 	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
 	divider := strings.Repeat("─", maxWidth)
 
-	// Render templates
-	title := titleStyle.Render(m.previewTemplates.RenderTitle(data))
-	status := statusStyle.Render(m.previewTemplates.RenderStatus(data))
+	// Build title line: "SessionName • #abcd"
+	shortID := sess.ID
+	if len(shortID) > 4 {
+		shortID = shortID[len(shortID)-4:]
+	}
+	title := nameStyle.Render(sess.Name) + separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
+
+	// Build status line with colors
+	var statusParts []string
+
+	// Git status
+	if m.gitStatuses != nil {
+		if status, ok := m.gitStatuses.Get(sess.Path); ok && !status.IsLoading && status.Error == nil {
+			gitPart := branchStyle.Render("(")
+			if iconsEnabled {
+				gitPart += branchStyle.Render(styles.IconGitBranch + " ")
+			}
+			gitPart += branchStyle.Render(status.Branch + ")")
+			gitPart += " " + addStyle.Render("+"+itoa(status.Additions))
+			gitPart += " " + delStyle.Render("-"+itoa(status.Deletions))
+			if status.HasChanges && iconsEnabled {
+				gitPart += " " + dirtyStyle.Render(styles.IconGit)
+			}
+			statusParts = append(statusParts, gitPart)
+		}
+	}
+
+	// Plugin statuses
+	if m.pluginStatuses != nil {
+		pluginOrder := []string{"github", "beads"}
+		for _, name := range pluginOrder {
+			store, ok := m.pluginStatuses[name]
+			if !ok || store == nil {
+				continue
+			}
+			status, ok := store.Get(sess.ID)
+			if !ok || status.Label == "" {
+				continue
+			}
+
+			var icon string
+			if iconsEnabled {
+				switch name {
+				case "github":
+					icon = styles.IconGithub
+				case "beads":
+					icon = styles.IconCheckList
+				}
+			} else {
+				icon = status.Icon
+			}
+
+			pluginPart := pluginLabelStyle.Render(icon+":") + status.Style.Render(status.Label)
+			statusParts = append(statusParts, pluginPart)
+		}
+	}
+
+	status := strings.Join(statusParts, separatorStyle.Render(" • "))
 
 	// Build header
 	var parts []string
 	parts = append(parts, title)
 	parts = append(parts, dividerStyle.Render(divider))
-	parts = append(parts, status)
+	if status != "" {
+		parts = append(parts, status)
+	}
 	parts = append(parts, "")
 	parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce")).Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))
 
 	return strings.Join(parts, "\n")
+}
+
+// itoa converts an int to a string without importing strconv.
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	if n < 0 {
+		return "-" + itoa(-n)
+	}
+	var digits []byte
+	for n > 0 {
+		digits = append([]byte{byte('0' + n%10)}, digits...)
+		n /= 10
+	}
+	return string(digits)
 }
 
 // tailLines returns the last n lines from the input string.

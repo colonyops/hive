@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -556,7 +557,9 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		return ""
 	}
 
-	var result string
+	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+
+	var parts []string
 	// Render each plugin's status in consistent order
 	pluginOrder := []string{"github", "beads"}
 	for _, name := range pluginOrder {
@@ -585,11 +588,15 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		}
 
 		// Format: [icon:label] with plugin's style
-		indicator := fmt.Sprintf(" %s:%s", icon, status.Label)
-		result += status.Style.Render(indicator)
+		indicator := fmt.Sprintf("%s:%s", icon, status.Label)
+		parts = append(parts, status.Style.Render(indicator))
 		log.Debug().Str("sessionID", sessionID).Str("plugin", name).Str("label", status.Label).Msg("render: found status")
 	}
-	return result
+
+	if len(parts) == 0 {
+		return ""
+	}
+	return " " + strings.Join(parts, separatorStyle.Render(" • "))
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.
