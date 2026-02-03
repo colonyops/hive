@@ -152,10 +152,7 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 	}
 
 	// Spawn terminal
-	spawnCommands := s.config.Commands.Spawn
-	if opts.UseBatchSpawn && len(s.config.Commands.BatchSpawn) > 0 {
-		spawnCommands = s.config.Commands.BatchSpawn
-	}
+	spawnCommands := s.config.GetSpawnCommands(remote, opts.UseBatchSpawn)
 
 	if len(spawnCommands) > 0 {
 		owner, repoName := git.ExtractOwnerRepo(remote)
@@ -219,7 +216,7 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 		DefaultBranch: defaultBranch,
 	}
 
-	if err := s.recycler.Recycle(ctx, sess.Path, s.config.Commands.Recycle, data, w); err != nil {
+	if err := s.recycler.Recycle(ctx, sess.Path, s.config.GetRecycleCommands(sess.Remote), data, w); err != nil {
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 

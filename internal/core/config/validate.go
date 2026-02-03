@@ -63,9 +63,6 @@ func (c *Config) ValidateDeep(configPath string) error {
 
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
-		validateTemplates("commands.spawn", c.Commands.Spawn, SpawnTemplateData{}),
-		validateTemplates("commands.batch_spawn", c.Commands.BatchSpawn, BatchSpawnTemplateData{}),
-		validateTemplates("commands.recycle", c.Commands.Recycle, RecycleTemplateData{}),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
 	)
@@ -75,11 +72,19 @@ func (c *Config) ValidateDeep(configPath string) error {
 func (c *Config) Warnings() []ValidationWarning {
 	var warnings []ValidationWarning
 
-	if len(c.Commands.Recycle) == 0 {
+	// Check if any rule has spawn commands defined
+	hasSpawn := false
+	for _, rule := range c.Rules {
+		if len(rule.Spawn) > 0 {
+			hasSpawn = true
+			break
+		}
+	}
+	if !hasSpawn {
 		warnings = append(warnings, ValidationWarning{
-			Category: "Recycle Commands",
-			Item:     "commands",
-			Message:  "No recycle commands defined; sessions will only be marked as recycled",
+			Category: "Spawn Commands",
+			Item:     "rules",
+			Message:  "No spawn commands defined in any rule; sessions will be created without spawning a terminal",
 		})
 	}
 
@@ -152,26 +157,32 @@ func isDirectoryOrNotExist(path string) error {
 	return nil
 }
 
-// validateTemplates checks template syntax for a slice of command templates.
-func validateTemplates(fieldPrefix string, commands []string, data any) error {
-	var errs criterio.FieldErrorsBuilder
-	for i, cmd := range commands {
-		if err := validateTemplate(cmd, data); err != nil {
-			errs = errs.Append(fmt.Sprintf("%s[%d]", fieldPrefix, i), fmt.Errorf("template error: %w", err))
-		}
-	}
-	return errs.ToError()
-}
-
-// validateRules checks rule patterns are valid regex.
+// validateRules checks rule patterns are valid regex and command templates are valid.
 func (c *Config) validateRules() error {
 	var errs criterio.FieldErrorsBuilder
 	for i, rule := range c.Rules {
-		if rule.Pattern == "" {
-			continue // empty pattern matches all, valid
+		if rule.Pattern != "" {
+			if _, err := regexp.Compile(rule.Pattern); err != nil {
+				errs = errs.Append(fmt.Sprintf("rules[%d].pattern", i), fmt.Errorf("invalid regex %q: %w", rule.Pattern, err))
+			}
 		}
-		if _, err := regexp.Compile(rule.Pattern); err != nil {
-			errs = errs.Append(fmt.Sprintf("rules[%d].pattern", i), fmt.Errorf("invalid regex %q: %w", rule.Pattern, err))
+
+		// Validate spawn templates
+		for j, cmd := range rule.Spawn {
+			if err := validateTemplate(cmd, SpawnTemplateData{}); err != nil {
+				errs = errs.Append(fmt.Sprintf("rules[%d].spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
+			}
+		}
+		for j, cmd := range rule.BatchSpawn {
+			if err := validateTemplate(cmd, BatchSpawnTemplateData{}); err != nil {
+				errs = errs.Append(fmt.Sprintf("rules[%d].batch_spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
+			}
+		}
+		// Validate recycle templates
+		for j, cmd := range rule.Recycle {
+			if err := validateTemplate(cmd, RecycleTemplateData{}); err != nil {
+				errs = errs.Append(fmt.Sprintf("rules[%d].recycle[%d]", i, j), fmt.Errorf("template error: %w", err))
+			}
 		}
 	}
 	return errs.ToError()

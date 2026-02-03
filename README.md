@@ -119,26 +119,28 @@ integrations:
     enabled: [tmux]
     poll_interval: 500ms
 
-# Commands executed by hive
-commands:
-  spawn:
-    - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
-  batch_spawn:
-    - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude "{{ .Prompt }}"'
-  recycle:
-    - git fetch origin
-    - git checkout {{ .DefaultBranch }}
-    - git reset --hard origin/{{ .DefaultBranch }}
-    - git clean -fd
-
 # Rules for repository-specific setup
 rules:
+  # Default rule (empty pattern matches all)
   - pattern: ""
     max_recycled: 5
+    spawn:
+      - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
+    batch_spawn:
+      - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude "{{ .Prompt }}"'
+    # recycle commands have sensible defaults; override if needed:
+    # recycle:
+    #   - git fetch origin
+    #   - git checkout -f {{ .DefaultBranch }}
+    #   - git reset --hard origin/{{ .DefaultBranch }}
+    #   - git clean -fd
     commands:
       - hive ctx init
 
+  # Override spawn for work repos
   - pattern: ".*/my-org/.*"
+    spawn:
+      - 'wezterm cli spawn --cwd "{{ .Path }}" -- aider'
     commands:
       - npm install
     copy:
@@ -178,9 +180,9 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 
 | Context                | Variables                                                   |
 | ---------------------- | ----------------------------------------------------------- |
-| `commands.spawn`       | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
-| `commands.batch_spawn` | Same as spawn, plus `.Prompt`                               |
-| `commands.recycle`     | `.DefaultBranch`                                            |
+| `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
+| `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                               |
+| `rules[].recycle`      | `.DefaultBranch`                                            |
 | `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Args`                 |
 
 ### User Commands & Command Palette
@@ -274,10 +276,15 @@ keybindings:
 | Option                                | Type                    | Default                        | Description                              |
 | ------------------------------------- | ----------------------- | ------------------------------ | ---------------------------------------- |
 | `repo_dirs`                           | `[]string`              | `[]`                           | Directories to scan for repositories     |
-| `commands.spawn`                      | `[]string`              | `[]`                           | Commands after session creation          |
-| `commands.batch_spawn`                | `[]string`              | `[]`                           | Commands after batch session creation    |
-| `commands.recycle`                    | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling                  |
+| `copy_command`                        | `string`                | `pbcopy` (macOS)               | Command to copy to clipboard             |
 | `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
+| `rules[].pattern`                     | `string`                | `""`                           | Regex pattern to match remote URL        |
+| `rules[].spawn`                       | `[]string`              | `[]`                           | Commands after session creation          |
+| `rules[].batch_spawn`                 | `[]string`              | `[]`                           | Commands after batch session creation    |
+| `rules[].recycle`                     | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling a session        |
+| `rules[].commands`                    | `[]string`              | `[]`                           | Setup commands to run after clone        |
+| `rules[].copy`                        | `[]string`              | `[]`                           | Glob patterns for files to copy          |
+| `rules[].max_recycled`                | `*int`                  | `5`                            | Max recycled sessions (0 = unlimited)    |
 | `keybindings`                         | `map[string]Keybinding` | `r`=Recycle, `d`=Delete        | TUI keybindings (reference usercommands) |
 | `usercommands`                        | `map[string]UserCommand`| Recycle, Delete (system)       | Named commands for palette and keybindings |
 | `tui.refresh_interval`                         | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
