@@ -547,9 +547,15 @@ func (v *ReviewView) moveCursorUp(n int) {
 }
 
 // ensureCursorVisible scrolls viewport to keep cursor visible.
+// Accounts for status bar in full-screen mode to prevent cursor from being hidden.
 func (v *ReviewView) ensureCursorVisible() {
 	offset := v.viewport.YOffset()
 	visibleHeight := v.viewport.VisibleLineCount()
+
+	// In full-screen mode, reserve 1 line for status bar
+	if v.fullScreen {
+		visibleHeight = visibleHeight - 1
+	}
 
 	// Cursor above viewport - scroll up
 	if v.cursorLine < offset+1 {
@@ -557,6 +563,7 @@ func (v *ReviewView) ensureCursorVisible() {
 	}
 
 	// Cursor below viewport - scroll down
+	// Keep cursor at least 1 line away from bottom to avoid status bar overlap
 	if v.cursorLine > offset+visibleHeight {
 		v.viewport.SetYOffset(v.cursorLine - visibleHeight)
 	}
