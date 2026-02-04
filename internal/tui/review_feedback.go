@@ -2,9 +2,13 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 	"sort"
 	"strings"
 )
+
+// ansiStripPattern matches ANSI escape sequences for stripping.
+var ansiStripPattern = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 
 // GenerateReviewFeedback creates a formatted review feedback string from a session.
 // Format:
@@ -51,9 +55,10 @@ func GenerateReviewFeedback(session *ReviewSession, docRelPath string) string {
 			b.WriteString(fmt.Sprintf("Lines %d-%d:\n", comment.StartLine, comment.EndLine))
 		}
 
-		// Context (quoted)
+		// Context (quoted) - strip ANSI codes for plain text
 		if comment.ContextText != "" {
-			for line := range strings.SplitSeq(comment.ContextText, "\n") {
+			cleanContext := ansiStripPattern.ReplaceAllString(comment.ContextText, "")
+			for line := range strings.SplitSeq(cleanContext, "\n") {
 				b.WriteString(fmt.Sprintf("> %s\n", line))
 			}
 		}

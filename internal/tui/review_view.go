@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"charm.land/bubbles/v2/list"
+	"charm.land/bubbles/v2/textinput"
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
@@ -35,6 +36,9 @@ type ReviewView struct {
 	commentModal      *ReviewCommentModal // Active comment entry modal
 	confirmModal      *ConfirmModal       // Active confirmation modal
 	feedbackGenerated string              // Generated feedback (for clipboard)
+	searchMode        bool                // True when in search/filter mode
+	searchInput       textinput.Model     // Search input field
+	searchQuery       string              // Current search query
 }
 
 // NewReviewView creates a new review view.
@@ -73,6 +77,11 @@ func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
 	// Create viewport for document preview
 	vp := viewport.New()
 
+	// Initialize search input
+	ti := textinput.New()
+	ti.Placeholder = "Search..."
+	ti.CharLimit = 100
+
 	return ReviewView{
 		list:        l,
 		viewport:    vp,
@@ -80,6 +89,7 @@ func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
 		contextDir:  contextDir,
 		previewMode: true, // Enable preview by default
 		cursorLine:  1,    // Initialize cursor at line 1
+		searchInput: ti,
 	}
 }
 
@@ -168,12 +178,13 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				v.addComment(v.commentModal.Value())
 				v.commentModal = nil
 				v.selectionMode = false
-				v.renderWithComments()
+				v.renderSelection()
 				return v, cmd
 			}
 
 			if v.commentModal.Cancelled() {
 				v.commentModal = nil
+				v.renderSelection()
 				return v, cmd
 			}
 
@@ -257,6 +268,42 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					return v, nil
 				}
 			}
+		}
+
+		// Handle search mode input
+		if v.searchMode && v.fullScreen {
+			switch msg.String() {
+			case "enter":
+				// Apply search and exit search mode
+				v.searchQuery = v.searchInput.Value()
+				v.searchMode = false
+				v.renderSelection()
+				return v, nil
+			case "esc":
+				// Cancel search
+				v.searchMode = false
+				v.searchQuery = ""
+				v.searchInput.SetValue("")
+				v.renderSelection()
+				return v, nil
+			default:
+				// Update search input
+				var cmd tea.Cmd
+				v.searchInput, cmd = v.searchInput.Update(msg)
+				// Live search - update as user types
+				v.searchQuery = v.searchInput.Value()
+				v.renderSelection()
+				return v, cmd
+			}
+		}
+
+		// Handle '/' to enter search mode in full-screen
+		if v.fullScreen && !v.selectionMode && msg.String() == "/" {
+			v.searchMode = true
+			v.searchInput.Focus()
+			v.searchInput.SetValue("")
+			v.searchQuery = ""
+			return v, nil
 		}
 
 		// Handle navigation in full-screen mode
@@ -513,10 +560,40 @@ func (v *ReviewView) renderSelection() {
 		rendered = v.insertCommentsInline(rendered)
 	}
 
+	// Filter lines if search query is active
+	if v.searchQuery != "" {
+		rendered = v.filterLines(rendered, v.searchQuery)
+	}
+
 	// Apply cursor and selection highlighting
 	rendered = v.highlightSelection(rendered)
 
 	v.viewport.SetContent(rendered)
+}
+
+// filterLines filters content to only show lines matching the search query.
+func (v *ReviewView) filterLines(content string, query string) string {
+	if query == "" {
+		return content
+	}
+
+	lines := strings.Split(content, "\n")
+	var filtered []string
+
+	// Case-insensitive search
+	queryLower := strings.ToLower(query)
+
+	for _, line := range lines {
+		if strings.Contains(strings.ToLower(line), queryLower) {
+			filtered = append(filtered, line)
+		}
+	}
+
+	if len(filtered) == 0 {
+		return "No matches found"
+	}
+
+	return strings.Join(filtered, "\n")
 }
 
 // highlightSelection applies background color to cursor and selected lines.
@@ -604,6 +681,21 @@ func (v *ReviewView) getCommentedLines() map[int]bool {
 
 // renderStatusBar creates a status bar showing mode and position info.
 func (v ReviewView) renderStatusBar() string {
+	// Show search input when in search mode
+	if v.searchMode {
+		searchStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7aa2f7")).
+			Background(lipgloss.Color("#1f2335")).
+			Bold(true)
+
+		bgStyle := lipgloss.NewStyle().Background(lipgloss.Color("#1f2335"))
+		prefix := searchStyle.Render("/")
+		input := v.searchInput.View()
+		remaining := max(0, v.width-lipgloss.Width(prefix)-lipgloss.Width(input))
+
+		return prefix + input + bgStyle.Render(strings.Repeat(" ", remaining))
+	}
+
 	// Determine mode
 	mode := "NORMAL"
 	modeStyle := lipgloss.NewStyle().
@@ -635,7 +727,7 @@ func (v ReviewView) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • f:finalize • esc:exit"
+		helpText = "V:visual • /:search • f:finalize • esc:exit"
 	}
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#565f89")).
