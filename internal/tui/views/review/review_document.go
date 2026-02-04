@@ -198,8 +198,8 @@ func (d *Document) Render(width int) (string, error) {
 
 	// Create glamour renderer with Tokyo Night theme
 	// Account for line numbers (4 chars) + separator (2 chars)
-	// Ensure minimum reasonable width of 20 characters
-	wrapWidth := max(width-6, 20)
+	// Ensure minimum reasonable width of 20 characters, maximum of 80 for readability
+	wrapWidth := max(min(width-6, 80), 20)
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStylePath("dark"),
 		glamour.WithWordWrap(wrapWidth),
