@@ -52,6 +52,31 @@ func (q *Queries) CountPrunableMessages(ctx context.Context, createdAt int64) (i
 	return count, err
 }
 
+const createReviewSession = `-- name: CreateReviewSession :exec
+INSERT INTO review_sessions (
+    id, document_path, content_hash, created_at, finalized_at
+) VALUES (?, ?, ?, ?, ?)
+`
+
+type CreateReviewSessionParams struct {
+	ID           string        `json:"id"`
+	DocumentPath string        `json:"document_path"`
+	ContentHash  string        `json:"content_hash"`
+	CreatedAt    int64         `json:"created_at"`
+	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
+}
+
+func (q *Queries) CreateReviewSession(ctx context.Context, arg CreateReviewSessionParams) error {
+	_, err := q.db.ExecContext(ctx, createReviewSession,
+		arg.ID,
+		arg.DocumentPath,
+		arg.ContentHash,
+		arg.CreatedAt,
+		arg.FinalizedAt,
+	)
+	return err
+}
+
 const deleteOldestMessagesInTopic = `-- name: DeleteOldestMessagesInTopic :exec
 DELETE FROM messages
 WHERE id IN (
@@ -72,12 +97,63 @@ func (q *Queries) DeleteOldestMessagesInTopic(ctx context.Context, arg DeleteOld
 	return err
 }
 
+const deleteReviewComment = `-- name: DeleteReviewComment :exec
+DELETE FROM review_comments
+WHERE id = ?
+`
+
+func (q *Queries) DeleteReviewComment(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteReviewComment, id)
+	return err
+}
+
+const deleteReviewSession = `-- name: DeleteReviewSession :exec
+DELETE FROM review_sessions
+WHERE id = ?
+`
+
+func (q *Queries) DeleteReviewSession(ctx context.Context, id string) error {
+	_, err := q.db.ExecContext(ctx, deleteReviewSession, id)
+	return err
+}
+
+const deleteReviewSessionsByDocPath = `-- name: DeleteReviewSessionsByDocPath :exec
+DELETE FROM review_sessions
+WHERE document_path = ? AND content_hash != ?
+`
+
+type DeleteReviewSessionsByDocPathParams struct {
+	DocumentPath string `json:"document_path"`
+	ContentHash  string `json:"content_hash"`
+}
+
+func (q *Queries) DeleteReviewSessionsByDocPath(ctx context.Context, arg DeleteReviewSessionsByDocPathParams) error {
+	_, err := q.db.ExecContext(ctx, deleteReviewSessionsByDocPath, arg.DocumentPath, arg.ContentHash)
+	return err
+}
+
 const deleteSession = `-- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?
 `
 
 func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteSession, id)
+	return err
+}
+
+const finalizeReviewSession = `-- name: FinalizeReviewSession :exec
+UPDATE review_sessions
+SET finalized_at = ?
+WHERE id = ?
+`
+
+type FinalizeReviewSessionParams struct {
+	FinalizedAt sql.NullInt64 `json:"finalized_at"`
+	ID          string        `json:"id"`
+}
+
+func (q *Queries) FinalizeReviewSession(ctx context.Context, arg FinalizeReviewSessionParams) error {
+	_, err := q.db.ExecContext(ctx, finalizeReviewSession, arg.FinalizedAt, arg.ID)
 	return err
 }
 
@@ -101,6 +177,49 @@ func (q *Queries) FindRecyclableSession(ctx context.Context, remote string) (Ses
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getReviewSessionByDocPath = `-- name: GetReviewSessionByDocPath :one
+SELECT id, document_path, content_hash, created_at, finalized_at FROM review_sessions
+WHERE document_path = ?
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+func (q *Queries) GetReviewSessionByDocPath(ctx context.Context, documentPath string) (ReviewSession, error) {
+	row := q.db.QueryRowContext(ctx, getReviewSessionByDocPath, documentPath)
+	var i ReviewSession
+	err := row.Scan(
+		&i.ID,
+		&i.DocumentPath,
+		&i.ContentHash,
+		&i.CreatedAt,
+		&i.FinalizedAt,
+	)
+	return i, err
+}
+
+const getReviewSessionByDocPathAndHash = `-- name: GetReviewSessionByDocPathAndHash :one
+SELECT id, document_path, content_hash, created_at, finalized_at FROM review_sessions
+WHERE document_path = ? AND content_hash = ?
+`
+
+type GetReviewSessionByDocPathAndHashParams struct {
+	DocumentPath string `json:"document_path"`
+	ContentHash  string `json:"content_hash"`
+}
+
+func (q *Queries) GetReviewSessionByDocPathAndHash(ctx context.Context, arg GetReviewSessionByDocPathAndHashParams) (ReviewSession, error) {
+	row := q.db.QueryRowContext(ctx, getReviewSessionByDocPathAndHash, arg.DocumentPath, arg.ContentHash)
+	var i ReviewSession
+	err := row.Scan(
+		&i.ID,
+		&i.DocumentPath,
+		&i.ContentHash,
+		&i.CreatedAt,
+		&i.FinalizedAt,
 	)
 	return i, err
 }
@@ -156,6 +275,43 @@ func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesPa
 			&i.Payload,
 			&i.Sender,
 			&i.SessionID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listReviewComments = `-- name: ListReviewComments :many
+SELECT id, session_id, start_line, end_line, context_text, comment_text, created_at FROM review_comments
+WHERE session_id = ?
+ORDER BY start_line ASC
+`
+
+func (q *Queries) ListReviewComments(ctx context.Context, sessionID string) ([]ReviewComment, error) {
+	rows, err := q.db.QueryContext(ctx, listReviewComments, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ReviewComment{}
+	for rows.Next() {
+		var i ReviewComment
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.StartLine,
+			&i.EndLine,
+			&i.ContextText,
+			&i.CommentText,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -269,6 +425,35 @@ func (q *Queries) PublishMessage(ctx context.Context, arg PublishMessageParams) 
 		arg.Payload,
 		arg.Sender,
 		arg.SessionID,
+		arg.CreatedAt,
+	)
+	return err
+}
+
+const saveReviewComment = `-- name: SaveReviewComment :exec
+INSERT INTO review_comments (
+    id, session_id, start_line, end_line, context_text, comment_text, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?)
+`
+
+type SaveReviewCommentParams struct {
+	ID          string `json:"id"`
+	SessionID   string `json:"session_id"`
+	StartLine   int64  `json:"start_line"`
+	EndLine     int64  `json:"end_line"`
+	ContextText string `json:"context_text"`
+	CommentText string `json:"comment_text"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+func (q *Queries) SaveReviewComment(ctx context.Context, arg SaveReviewCommentParams) error {
+	_, err := q.db.ExecContext(ctx, saveReviewComment,
+		arg.ID,
+		arg.SessionID,
+		arg.StartLine,
+		arg.EndLine,
+		arg.ContextText,
+		arg.CommentText,
 		arg.CreatedAt,
 	)
 	return err

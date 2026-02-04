@@ -110,7 +110,7 @@ func TestNewReviewView(t *testing.T) {
 		},
 	}
 
-	view := NewReviewView(docs, "")
+	view := NewReviewView(docs, "", nil)
 
 	// Should not panic and should have a list
 	if view.list.Items() == nil {
@@ -126,7 +126,7 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create review view with watcher
-	view := NewReviewView([]ReviewDocument{}, tmpDir)
+	view := NewReviewView([]ReviewDocument{}, tmpDir, nil)
 
 	// View should have a watcher
 	if view.watcher == nil {

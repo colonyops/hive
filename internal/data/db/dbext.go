@@ -54,8 +54,8 @@ func Open(dataDir string, opts OpenOptions) (*DB, error) {
 
 	dbPath := filepath.Join(dataDir, "hive.db")
 
-	// Open with pragmas for WAL mode and busy timeout
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)", dbPath, opts.BusyTimeout)
+	// Open with pragmas for WAL mode, busy timeout, and foreign keys
+	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)", dbPath, opts.BusyTimeout)
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
