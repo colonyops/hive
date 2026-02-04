@@ -269,3 +269,176 @@ func TestCommentDeletionCancellation(t *testing.T) {
 		t.Errorf("expected 1 comment, got %d", len(view.activeSession.Comments))
 	}
 }
+
+func TestReviewDiscardWithConfirmation(t *testing.T) {
+	doc := ReviewDocument{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+	}
+
+	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Create a session with multiple comments
+	view.activeSession = &ReviewSession{
+		ID:       "test-session",
+		DocPath:  doc.Path,
+		Comments: []ReviewComment{
+			{
+				ID:          "comment-1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     3,
+				ContextText: "Line 2\nLine 3",
+				CommentText: "First comment",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "comment-2",
+				SessionID:   "test-session",
+				StartLine:   4,
+				EndLine:     5,
+				ContextText: "Line 4\nLine 5",
+				CommentText: "Second comment",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Press 'D' should show confirmation modal
+	view, _ = view.Update(keyMsg("D"))
+
+	if view.confirmModal == nil {
+		t.Fatal("expected confirmation modal to be shown")
+	}
+
+	if !view.pendingDiscard {
+		t.Error("expected pendingDiscard to be true")
+	}
+
+	// Press 'y' to confirm discard
+	view, cmd := view.Update(keyMsg("y"))
+
+	if view.confirmModal != nil {
+		t.Error("expected confirmation modal to be closed")
+	}
+
+	if view.pendingDiscard {
+		t.Error("expected pendingDiscard to be cleared")
+	}
+
+	// Execute the discard command
+	if cmd != nil {
+		msg := cmd()
+		if _, ok := msg.(reviewDiscardedMsg); !ok {
+			t.Errorf("expected reviewDiscardedMsg, got %T", msg)
+		}
+
+		// Process the discard message
+		view, _ = view.Update(msg)
+	}
+
+	// Session should be cleared
+	if view.activeSession != nil {
+		t.Error("expected session to be cleared after discard")
+	}
+}
+
+func TestReviewDiscardCancellation(t *testing.T) {
+	doc := ReviewDocument{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+	}
+
+	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Create a session with comments
+	view.activeSession = &ReviewSession{
+		ID:       "test-session",
+		DocPath:  doc.Path,
+		Comments: []ReviewComment{
+			{
+				ID:          "comment-1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     3,
+				ContextText: "Line 2\nLine 3",
+				CommentText: "Test comment",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Press 'D' should show confirmation modal
+	view, _ = view.Update(keyMsg("D"))
+
+	// Press 'n' to cancel
+	view, _ = view.Update(keyMsg("n"))
+
+	if view.confirmModal != nil {
+		t.Error("expected confirmation modal to be closed")
+	}
+
+	if view.pendingDiscard {
+		t.Error("expected pendingDiscard to be cleared")
+	}
+
+	// Session should still exist
+	if view.activeSession == nil {
+		t.Error("expected session to still exist after cancellation")
+	}
+
+	if len(view.activeSession.Comments) != 1 {
+		t.Errorf("expected 1 comment, got %d", len(view.activeSession.Comments))
+	}
+}
+
+func TestReviewDiscardWithNoComments(t *testing.T) {
+	doc := ReviewDocument{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3",
+	}
+
+	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Create a session with no comments
+	view.activeSession = &ReviewSession{
+		ID:         "test-session",
+		DocPath:    doc.Path,
+		Comments:   []ReviewComment{},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Press 'D' should NOT show confirmation modal (no comments to discard)
+	view, _ = view.Update(keyMsg("D"))
+
+	if view.confirmModal != nil {
+		t.Error("expected no confirmation modal when there are no comments")
+	}
+
+	if view.pendingDiscard {
+		t.Error("expected pendingDiscard to remain false")
+	}
+}

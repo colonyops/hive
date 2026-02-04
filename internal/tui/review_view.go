@@ -31,6 +31,9 @@ type sendToAgentMsg struct {
 	feedback string
 }
 
+// reviewDiscardedMsg is sent when review is discarded.
+type reviewDiscardedMsg struct{}
+
 // ReviewView manages the review interface.
 type ReviewView struct {
 	list               list.Model
@@ -59,6 +62,7 @@ type ReviewView struct {
 	searchMatchIndex   int                     // Current match index in searchMatches
 	hasAgentCommand    bool                    // Whether send-claude command is available
 	pendingDeleteLine  int                     // Line number for pending comment deletion (0 if none)
+	pendingDiscard     bool                    // True when waiting for discard confirmation
 }
 
 // NewReviewView creates a new review view.
@@ -161,6 +165,15 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		}
 		return v, nil
 
+	case reviewDiscardedMsg:
+		// Clear active session and reload document
+		v.activeSession = nil
+		v.updateTreeItemCommentCount()
+		if v.selectedDoc != nil {
+			v.loadDocument(v.selectedDoc)
+		}
+		return v, nil
+
 	case tea.KeyMsg:
 		// Handle document picker modal if active (MUST be first to prevent key conflicts)
 		if v.pickerModal != nil {
@@ -233,6 +246,13 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			v.confirmModal = &modal
 
 			if v.confirmModal.Confirmed() {
+				// Check if this is a review discard confirmation
+				if v.pendingDiscard {
+					v.pendingDiscard = false
+					v.confirmModal = nil
+					return v, v.discardReview()
+				}
+
 				// Check if this is a comment deletion confirmation
 				if v.pendingDeleteLine > 0 {
 					// Execute deletion
@@ -269,6 +289,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			if v.confirmModal.Cancelled() {
 				v.confirmModal = nil
 				v.pendingDeleteLine = 0 // Clear pending delete
+				v.pendingDiscard = false // Clear pending discard
 				return v, cmd
 			}
 
@@ -405,6 +426,17 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 						v.confirmModal = &modal
 						return v, nil
 					}
+				}
+			case "D", "shift+d":
+				// Discard entire review
+				if !v.selectionMode && v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+					// Show confirmation modal with comment count
+					commentCount := len(v.activeSession.Comments)
+					message := fmt.Sprintf("Discard review? This will permanently delete %d comment(s). This cannot be undone.", commentCount)
+					modal := NewConfirmModal(message)
+					v.confirmModal = &modal
+					v.pendingDiscard = true
+					return v, nil
 				}
 			case "V", "shift+v":
 				// Enter or exit visual selection mode
@@ -1135,6 +1167,28 @@ func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
 	// Clear session if no comments remain
 	if len(v.activeSession.Comments) == 0 {
 		v.activeSession = nil
+	}
+}
+
+// discardReview discards the entire review session, deleting it from the database.
+func (v *ReviewView) discardReview() tea.Cmd {
+	if v.activeSession == nil {
+		return nil
+	}
+
+	sessionID := v.activeSession.ID
+
+	return func() tea.Msg {
+		// Delete from database (CASCADE deletes comments)
+		if v.store != nil {
+			ctx := context.Background()
+			if err := v.store.DeleteSession(ctx, sessionID); err != nil {
+				// Return error message but continue with in-memory cleanup
+				return fmt.Errorf("failed to delete session from database: %w", err)
+			}
+		}
+
+		return reviewDiscardedMsg{}
 	}
 }
 
