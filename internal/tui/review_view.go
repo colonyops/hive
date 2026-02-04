@@ -279,6 +279,13 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					v.commentModal = &modal
 					return v, nil
 				}
+			case "d":
+				// Delete comment(s) on current cursor line
+				if !v.selectionMode {
+					v.deleteCommentsAtLine(v.cursorLine)
+					v.renderSelection()
+					return v, nil
+				}
 			case "V", "shift+v":
 				// Enter or exit visual selection mode
 				if !v.selectionMode {
@@ -788,7 +795,7 @@ func (v ReviewView) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • /:search • f:finalize+copy • esc:exit"
+		helpText = "V:visual • d:delete • /:search • f:finalize+copy • esc:exit"
 	}
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#565f89")).
@@ -865,6 +872,30 @@ func (v *ReviewView) addComment(commentText string) {
 
 	v.activeSession.Comments = append(v.activeSession.Comments, comment)
 	v.activeSession.ModifiedAt = time.Now()
+}
+
+// deleteCommentsAtLine removes all comments that include the specified line number.
+func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
+	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
+		return
+	}
+
+	// Filter out comments that include this line
+	var remainingComments []ReviewComment
+	for _, comment := range v.activeSession.Comments {
+		// Keep comment if it doesn't include the cursor line
+		if lineNum < comment.StartLine || lineNum > comment.EndLine {
+			remainingComments = append(remainingComments, comment)
+		}
+	}
+
+	v.activeSession.Comments = remainingComments
+	v.activeSession.ModifiedAt = time.Now()
+
+	// Clear session if no comments remain
+	if len(v.activeSession.Comments) == 0 {
+		v.activeSession = nil
+	}
 }
 
 // renderWithComments renders the document with inline comments.
