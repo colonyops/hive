@@ -11,25 +11,16 @@ import (
 
 // DocumentPickerModal is a fuzzy search modal for selecting documents.
 type DocumentPickerModal struct {
-	documents     []ReviewDocument
-	filteredDocs  []ReviewDocument
-	list          list.Model
-	searchInput   textinput.Model
-	width         int
-	height        int
-	cancelled     bool
-	selectedDoc   *ReviewDocument
-	filterQuery   string
+	documents    []ReviewDocument
+	filteredDocs []ReviewDocument
+	list         list.Model
+	searchInput  textinput.Model
+	width        int
+	height       int
+	cancelled    bool
+	selectedDoc  *ReviewDocument
+	filterQuery  string
 }
-
-// documentPickerItem wraps a ReviewDocument for use in the list.
-type documentPickerItem struct {
-	doc ReviewDocument
-}
-
-func (i documentPickerItem) Title() string       { return i.doc.RelPath }
-func (i documentPickerItem) Description() string { return i.doc.Type.String() }
-func (i documentPickerItem) FilterValue() string { return i.doc.RelPath }
 
 // NewDocumentPickerModal creates a new document picker modal.
 func NewDocumentPickerModal(documents []ReviewDocument, width, height int) *DocumentPickerModal {
@@ -39,14 +30,11 @@ func NewDocumentPickerModal(documents []ReviewDocument, width, height int) *Docu
 	ti.CharLimit = 100
 	ti.Focus()
 
-	// Convert documents to list items
-	items := make([]list.Item, len(documents))
-	for i, doc := range documents {
-		items[i] = documentPickerItem{doc: doc}
-	}
+	// Build tree items (headers + documents grouped by type)
+	items := BuildReviewTreeItems(documents)
 
-	// Create list
-	delegate := list.NewDefaultDelegate()
+	// Create list with tree delegate
+	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false) // We handle filtering manually for fuzzy matching
@@ -72,10 +60,10 @@ func (m *DocumentPickerModal) Update(msg tea.Msg) (*DocumentPickerModal, tea.Cmd
 			m.cancelled = true
 			return m, nil
 		case "enter":
-			// Select current item
+			// Select current item (skip headers)
 			if item := m.list.SelectedItem(); item != nil {
-				if pickerItem, ok := item.(documentPickerItem); ok {
-					m.selectedDoc = &pickerItem.doc
+				if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+					m.selectedDoc = &treeItem.Document
 				}
 			}
 			return m, nil
@@ -115,16 +103,19 @@ func (m *DocumentPickerModal) updateFilter() {
 		m.filteredDocs = filtered
 	}
 
-	// Update list items
-	items := make([]list.Item, len(m.filteredDocs))
-	for i, doc := range m.filteredDocs {
-		items[i] = documentPickerItem{doc: doc}
-	}
+	// Rebuild tree items
+	items := BuildReviewTreeItems(m.filteredDocs)
 	m.list.SetItems(items)
 
-	// Reset selection to first item
+	// Reset selection to first non-header item
 	if len(items) > 0 {
-		m.list.Select(0)
+		// Find first non-header item
+		for i, item := range items {
+			if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+				m.list.Select(i)
+				break
+			}
+		}
 	}
 }
 
