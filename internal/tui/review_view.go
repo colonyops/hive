@@ -667,13 +667,19 @@ func (v *ReviewView) highlightSelection(content string) string {
 		currentSearchLine = v.searchMatches[v.searchMatchIndex]
 	}
 
-	// Apply highlighting (priority: current search > cursor > visual selection > other search > normal)
+	// Apply highlighting (priority: current search > cursor > visual selection > other search > comments > normal)
 	for i := range lines {
 		lineNum := i + 1
 		line := lines[i]
 
-		// Highlight line number if it has a comment
-		if commentedLines[lineNum] {
+		// Check if line will be highlighted with cursor/selection/search
+		willBeHighlighted := lineNum == currentSearchLine ||
+			lineNum == v.cursorLine ||
+			(v.selectionMode && lineNum >= start && lineNum <= end) ||
+			searchMatchLines[lineNum]
+
+		// Only highlight line number for comments if line won't be highlighted otherwise
+		if commentedLines[lineNum] && !willBeHighlighted {
 			line = v.highlightLineNumber(line, commentedLineNumStyle)
 		}
 
