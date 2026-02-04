@@ -58,6 +58,7 @@ type ReviewView struct {
 	searchMatches      []int                   // Line numbers of search matches (1-indexed)
 	searchMatchIndex   int                     // Current match index in searchMatches
 	hasAgentCommand    bool                    // Whether send-claude command is available
+	pendingDeleteLine  int                     // Line number for pending comment deletion (0 if none)
 }
 
 // NewReviewView creates a new review view.
@@ -232,6 +233,17 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			v.confirmModal = &modal
 
 			if v.confirmModal.Confirmed() {
+				// Check if this is a comment deletion confirmation
+				if v.pendingDeleteLine > 0 {
+					// Execute deletion
+					v.deleteCommentsAtLine(v.pendingDeleteLine)
+					v.pendingDeleteLine = 0
+					v.confirmModal = nil
+					v.renderSelection()
+					return v, cmd
+				}
+
+				// Otherwise, it's a finalization confirmation
 				// Generate feedback and finalize
 				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
 				v.feedbackGenerated = feedback
@@ -256,6 +268,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 
 			if v.confirmModal.Cancelled() {
 				v.confirmModal = nil
+				v.pendingDeleteLine = 0 // Clear pending delete
 				return v, cmd
 			}
 
@@ -375,10 +388,23 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				}
 			case "d":
 				// Delete comment(s) on current cursor line
-				if !v.selectionMode {
-					v.deleteCommentsAtLine(v.cursorLine)
-					v.renderSelection()
-					return v, nil
+				if !v.selectionMode && v.activeSession != nil {
+					// Check if there are comments at the cursor line
+					hasComment := false
+					for _, comment := range v.activeSession.Comments {
+						if v.cursorLine >= comment.StartLine && v.cursorLine <= comment.EndLine {
+							hasComment = true
+							break
+						}
+					}
+
+					if hasComment {
+						// Show confirmation modal
+						v.pendingDeleteLine = v.cursorLine
+						modal := NewConfirmModal("Delete comment(s) at this line?")
+						v.confirmModal = &modal
+						return v, nil
+					}
 				}
 			case "V", "shift+v":
 				// Enter or exit visual selection mode
@@ -1103,9 +1129,37 @@ func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
 	v.activeSession.Comments = remainingComments
 	v.activeSession.ModifiedAt = time.Now()
 
+	// Update comment count in tree
+	v.updateTreeItemCommentCount()
+
 	// Clear session if no comments remain
 	if len(v.activeSession.Comments) == 0 {
 		v.activeSession = nil
+	}
+}
+
+// updateTreeItemCommentCount updates the comment count badge in the tree for the current document.
+func (v *ReviewView) updateTreeItemCommentCount() {
+	if v.selectedDoc == nil {
+		return
+	}
+
+	items := v.list.Items()
+	commentCount := 0
+	if v.activeSession != nil {
+		commentCount = len(v.activeSession.Comments)
+	}
+
+	// Find and update the tree item for the current document
+	for i, item := range items {
+		if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+			if treeItem.Document.Path == v.selectedDoc.Path {
+				treeItem.CommentCount = commentCount
+				items[i] = treeItem
+				v.list.SetItems(items)
+				return
+			}
+		}
 	}
 }
 

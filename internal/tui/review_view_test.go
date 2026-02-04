@@ -3,7 +3,17 @@ package tui
 import (
 	"testing"
 	"time"
+
+	tea "charm.land/bubbletea/v2"
 )
+
+// keyMsg creates a KeyMsg for testing.
+func keyMsg(s string) tea.Msg {
+	if len(s) == 0 {
+		return tea.KeyPressMsg{}
+	}
+	return tea.KeyPressMsg{Text: s, Code: rune(s[0])}
+}
 
 func TestBuildReviewTreeItems(t *testing.T) {
 	now := time.Now()
@@ -137,5 +147,125 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	cmd := view.Init()
 	if cmd == nil {
 		t.Error("expected Init to return a watch command")
+	}
+}
+
+func TestCommentDeletionWithConfirmation(t *testing.T) {
+	doc := ReviewDocument{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+	}
+
+	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Create a session with comments
+	view.activeSession = &ReviewSession{
+		ID:       "test-session",
+		DocPath:  doc.Path,
+		Comments: []ReviewComment{
+			{
+				ID:          "comment-1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     3,
+				ContextText: "Line 2\nLine 3",
+				CommentText: "Test comment",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Set cursor on comment line
+	view.cursorLine = 2
+
+	// Press 'd' should show confirmation modal
+	view, _ = view.Update(keyMsg("d"))
+
+	if view.confirmModal == nil {
+		t.Fatal("expected confirmation modal to be shown")
+	}
+
+	if view.pendingDeleteLine != 2 {
+		t.Fatalf("expected pendingDeleteLine=2, got %d", view.pendingDeleteLine)
+	}
+
+	// Press 'y' to confirm deletion
+	view, _ = view.Update(keyMsg("y"))
+
+	if view.confirmModal != nil {
+		t.Error("expected confirmation modal to be closed")
+	}
+
+	if view.pendingDeleteLine != 0 {
+		t.Errorf("expected pendingDeleteLine to be cleared, got %d", view.pendingDeleteLine)
+	}
+
+	// Comment should be deleted (session cleared when all comments removed)
+	if view.activeSession != nil {
+		t.Errorf("expected session to be cleared, got %d comments", len(view.activeSession.Comments))
+	}
+}
+
+func TestCommentDeletionCancellation(t *testing.T) {
+	doc := ReviewDocument{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+	}
+
+	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Create a session with comments
+	view.activeSession = &ReviewSession{
+		ID:       "test-session",
+		DocPath:  doc.Path,
+		Comments: []ReviewComment{
+			{
+				ID:          "comment-1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     3,
+				ContextText: "Line 2\nLine 3",
+				CommentText: "Test comment",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Set cursor on comment line
+	view.cursorLine = 2
+
+	// Press 'd' should show confirmation modal
+	view, _ = view.Update(keyMsg("d"))
+
+	// Press 'n' to cancel
+	view, _ = view.Update(keyMsg("n"))
+
+	if view.confirmModal != nil {
+		t.Error("expected confirmation modal to be closed")
+	}
+
+	if view.pendingDeleteLine != 0 {
+		t.Error("expected pendingDeleteLine to be cleared")
+	}
+
+	// Comment should still exist
+	if len(view.activeSession.Comments) != 1 {
+		t.Errorf("expected 1 comment, got %d", len(view.activeSession.Comments))
 	}
 }
