@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/rs/zerolog/log"
 )
 
 // FinalizationAction represents the action to take on finalization.
@@ -67,15 +68,25 @@ func NewFinalizationModal(feedback string, hasAgentCmd bool, width, height int) 
 func (m FinalizationModal) Update(msg tea.Msg) (FinalizationModal, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
-		switch msg.String() {
+		keyStr := msg.String()
+		log.Debug().
+			Str("key", keyStr).
+			Int("current_idx", m.selectedIdx).
+			Msg("finalization modal received key")
+
+		switch keyStr {
 		case "j", "down", "tab":
 			m.selectedIdx = (m.selectedIdx + 1) % len(m.options)
+			log.Debug().Int("new_idx", m.selectedIdx).Msg("moved selection down")
 		case "k", "up", "shift+tab":
 			m.selectedIdx = (m.selectedIdx - 1 + len(m.options)) % len(m.options)
+			log.Debug().Int("new_idx", m.selectedIdx).Msg("moved selection up")
 		case "enter":
 			m.confirmed = true
+			log.Debug().Msg("confirmed")
 		case "esc":
 			m.cancelled = true
+			log.Debug().Msg("cancelled")
 		}
 	}
 	return m, nil

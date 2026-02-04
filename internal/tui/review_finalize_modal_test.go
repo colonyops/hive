@@ -2,6 +2,8 @@ package tui
 
 import (
 	"testing"
+
+	tea "charm.land/bubbletea/v2"
 )
 
 func TestFinalizationModal_Creation(t *testing.T) {
@@ -129,4 +131,39 @@ func stringContains(s, substr string) bool {
 		}
 	}
 	return false
+}
+
+func TestFinalizationModal_KeyHandling(t *testing.T) {
+	feedback := "Test feedback"
+	modal := NewFinalizationModal(feedback, true, 100, 40)
+
+	// Test 'j' key - should move selection down
+	keyMsg := tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'})
+	updatedModal, _ := modal.Update(keyMsg)
+	if updatedModal.selectedIdx != 1 {
+		t.Errorf("After pressing 'j', selectedIdx should be 1, got %d", updatedModal.selectedIdx)
+	}
+
+	// Test 'k' key - should move selection up
+	modal = updatedModal
+	keyMsg = tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'})
+	updatedModal, _ = modal.Update(keyMsg)
+	if updatedModal.selectedIdx != 0 {
+		t.Errorf("After pressing 'k', selectedIdx should be 0, got %d", updatedModal.selectedIdx)
+	}
+
+	// Test 'enter' key - should confirm
+	keyMsg = tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter})
+	updatedModal, _ = modal.Update(keyMsg)
+	if !updatedModal.Confirmed() {
+		t.Error("After pressing 'enter', modal should be confirmed")
+	}
+
+	// Test 'esc' key - should cancel
+	modal = NewFinalizationModal(feedback, true, 100, 40)
+	keyMsg = tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc})
+	updatedModal, _ = modal.Update(keyMsg)
+	if !updatedModal.Cancelled() {
+		t.Error("After pressing 'esc', modal should be cancelled")
+	}
 }
