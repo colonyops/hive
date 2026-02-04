@@ -1243,6 +1243,20 @@ func (v *ReviewView) insertCommentsInline(content string) string {
 		commentsByLine[comment.EndLine] = append(commentsByLine[comment.EndLine], comment)
 	}
 
+	// Get sorted line numbers to insert in reverse order (prevents offset issues)
+	lineNumbers := make([]int, 0, len(commentsByLine))
+	for lineNum := range commentsByLine {
+		lineNumbers = append(lineNumbers, lineNum)
+	}
+	// Sort in descending order to insert from bottom to top
+	for i := 0; i < len(lineNumbers); i++ {
+		for j := i + 1; j < len(lineNumbers); j++ {
+			if lineNumbers[i] < lineNumbers[j] {
+				lineNumbers[i], lineNumbers[j] = lineNumbers[j], lineNumbers[i]
+			}
+		}
+	}
+
 	// Insert comments after their lines with enhanced visual styling
 	commentStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#FF79C6")). // More vibrant pink
@@ -1250,24 +1264,30 @@ func (v *ReviewView) insertCommentsInline(content string) string {
 		Padding(0, 1).
 		Bold(true)
 
-	var result []string
-	for i, line := range lines {
-		result = append(result, line)
-
-		lineNum := i + 1
-		if comments, ok := commentsByLine[lineNum]; ok {
-			for _, comment := range comments {
-				// Use '<profile>' placeholder for future icon/avatar
-				icon := "<profile>"
-				// Add increased indentation (6 spaces) for visual separation
-				indent := "      "
-				commentLine := indent + commentStyle.Render(fmt.Sprintf("%s %s", icon, comment.CommentText))
-				result = append(result, commentLine)
-			}
+	// Insert comments in reverse order to avoid offset issues
+	for _, lineNum := range lineNumbers {
+		if lineNum < 1 || lineNum > len(lines) {
+			continue // Skip invalid line numbers
 		}
+
+		comments := commentsByLine[lineNum]
+		// Build comment lines to insert
+		commentLines := make([]string, 0, len(comments))
+		for _, comment := range comments {
+			// Use '<profile>' placeholder for future icon/avatar
+			icon := "<profile>"
+			// Add increased indentation (6 spaces) for visual separation
+			indent := "      "
+			commentLine := indent + commentStyle.Render(fmt.Sprintf("%s %s", icon, comment.CommentText))
+			commentLines = append(commentLines, commentLine)
+		}
+
+		// Insert comment lines after the target line
+		insertPos := lineNum
+		lines = append(lines[:insertPos], append(commentLines, lines[insertPos:]...)...)
 	}
 
-	return strings.Join(result, "\n")
+	return strings.Join(lines, "\n")
 }
 
 // ReviewTreeItem represents an item in the review tree.
