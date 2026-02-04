@@ -193,6 +193,28 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			return v, cmd
 		}
 
+		// Handle search mode input FIRST (before other Enter handlers)
+		if v.searchMode && v.fullScreen {
+			switch msg.String() {
+			case "enter":
+				// Find matches and jump to first
+				v.searchQuery = v.searchInput.Value()
+				v.searchMode = false
+				v.findSearchMatches()
+				if len(v.searchMatches) > 0 {
+					v.searchMatchIndex = 0
+					v.jumpToMatch(v.searchMatches[0])
+				}
+				v.renderSelection()
+				return v, nil
+			default:
+				// Update search input
+				var cmd tea.Cmd
+				v.searchInput, cmd = v.searchInput.Update(msg)
+				return v, cmd
+			}
+		}
+
 		// Handle full-screen toggle
 		switch msg.String() {
 		case "enter":
@@ -278,28 +300,6 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					v.renderSelection()
 					return v, nil
 				}
-			}
-		}
-
-		// Handle search mode input
-		if v.searchMode && v.fullScreen {
-			switch msg.String() {
-			case "enter":
-				// Find matches and jump to first
-				v.searchQuery = v.searchInput.Value()
-				v.searchMode = false
-				v.findSearchMatches()
-				if len(v.searchMatches) > 0 {
-					v.searchMatchIndex = 0
-					v.jumpToMatch(v.searchMatches[0])
-				}
-				v.renderSelection()
-				return v, nil
-			default:
-				// Update search input
-				var cmd tea.Cmd
-				v.searchInput, cmd = v.searchInput.Update(msg)
-				return v, cmd
 			}
 		}
 
