@@ -636,3 +636,307 @@ func TestView_HasPickerModalField(t *testing.T) {
 
 	// This test passes if it compiles
 }
+
+// TestScrollVisibilityWithComments verifies that ensureCursorVisible uses display coordinates
+// when comments are inserted inline, ensuring the cursor scrolls to the correct position.
+func TestScrollVisibilityWithComments(t *testing.T) {
+	// Create a document with many lines
+	lines := make([]string, 20)
+	for i := range lines {
+		lines[i] = strings.Repeat("x", 40) // 40 chars per line
+	}
+	content := strings.Join(lines, "\n")
+
+	doc := Document{
+		Path:          "/path/to/test.md",
+		RelPath:       "test.md",
+		Type:          DocTypePlan,
+		ModTime:       time.Now(),
+		Content:       content,
+		RenderedLines: lines,
+	}
+
+	view := New([]Document{doc}, "", nil)
+	view.SetSize(80, 10) // Small height to force scrolling
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Insert comments before line 5 (will push line 5 down in display)
+	view.activeSession = &Session{
+		ID:      "test-session",
+		DocPath: doc.Path,
+		Comments: []Comment{
+			{
+				ID:          "c1",
+				SessionID:   "test-session",
+				StartLine:   3,
+				EndLine:     3,
+				ContextText: lines[2],
+				CommentText: "Comment 1",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "c2",
+				SessionID:   "test-session",
+				StartLine:   4,
+				EndLine:     4,
+				ContextText: lines[3],
+				CommentText: "Comment 2",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Build line mapping by rendering with comments
+	rendered := content
+	rendered, lineMapping := view.insertCommentsInline(rendered)
+	view.lineMapping = lineMapping
+	view.viewport.SetContent(rendered)
+
+	// Set cursor to doc line 5 (which should be at display line 7 due to 2 inserted comments)
+	view.cursorLine = 5
+	displayLine := view.mapDocToDisplay(5, lineMapping)
+	if displayLine != 7 {
+		t.Fatalf("expected doc line 5 to map to display line 7, got %d", displayLine)
+	}
+
+	// Call ensureCursorVisible
+	view.ensureCursorVisible()
+
+	// Verify viewport scrolled to show the display line, not the document line
+	offset := view.viewport.YOffset()
+	visibleHeight := view.viewport.VisibleLineCount() - 1 // -1 for status bar
+
+	// Display line 7 should be visible within the viewport
+	if displayLine < offset+1 || displayLine > offset+visibleHeight {
+		t.Errorf("display line %d not visible in viewport (offset=%d, visibleHeight=%d)",
+			displayLine, offset, visibleHeight)
+	}
+}
+
+// TestJumpToMatchWithComments verifies that jumpToMatch scrolls to the correct
+// display line when comments are inserted before the match.
+func TestJumpToMatchWithComments(t *testing.T) {
+	// Create a document with search-able content
+	lines := []string{
+		"Line 1",
+		"Line 2",
+		"Line 3 with keyword",
+		"Line 4",
+		"Line 5",
+		"Line 6",
+		"Line 7 with keyword",
+		"Line 8",
+	}
+	content := strings.Join(lines, "\n")
+
+	doc := Document{
+		Path:          "/path/to/test.md",
+		RelPath:       "test.md",
+		Type:          DocTypePlan,
+		ModTime:       time.Now(),
+		Content:       content,
+		RenderedLines: lines,
+	}
+
+	view := New([]Document{doc}, "", nil)
+	view.SetSize(80, 10)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Insert comments before the first search match (line 3)
+	view.activeSession = &Session{
+		ID:      "test-session",
+		DocPath: doc.Path,
+		Comments: []Comment{
+			{
+				ID:          "c1",
+				SessionID:   "test-session",
+				StartLine:   1,
+				EndLine:     1,
+				ContextText: lines[0],
+				CommentText: "Comment on line 1",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "c2",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     2,
+				ContextText: lines[1],
+				CommentText: "Comment on line 2",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Build line mapping
+	rendered := content
+	rendered, lineMapping := view.insertCommentsInline(rendered)
+	view.lineMapping = lineMapping
+	view.viewport.SetContent(rendered)
+
+	// Set up search matches (lines 3 and 7)
+	view.searchMatches = []int{3, 7}
+	view.searchMatchIndex = 0
+
+	// Jump to first match (doc line 3)
+	view.jumpToMatch(3)
+
+	// Doc line 3 should map to display line 5 (due to 2 comments inserted before it)
+	displayLine := view.mapDocToDisplay(3, lineMapping)
+	if displayLine != 5 {
+		t.Fatalf("expected doc line 3 to map to display line 5, got %d", displayLine)
+	}
+
+	// Verify cursor is at the correct document line
+	if view.cursorLine != 3 {
+		t.Errorf("expected cursor at doc line 3, got %d", view.cursorLine)
+	}
+
+	// Verify viewport scrolled to make display line visible
+	offset := view.viewport.YOffset()
+	visibleHeight := view.viewport.VisibleLineCount() - 1 // -1 for status bar
+
+	if displayLine < offset+1 || displayLine > offset+visibleHeight {
+		t.Errorf("display line %d not visible after jumpToMatch (offset=%d, visibleHeight=%d)",
+			displayLine, offset, visibleHeight)
+	}
+}
+
+// TestBuildDisplayToDocMap verifies the reverse mapping helper function.
+func TestBuildDisplayToDocMap(t *testing.T) {
+	// Create a line mapping: doc -> display
+	lineMapping := map[int]int{
+		1: 1,
+		2: 2,
+		3: 4, // Comment inserted at line 3 (display line 3)
+		4: 5,
+		5: 7, // Comment inserted at line 5 (display line 6)
+	}
+
+	// Build reverse map
+	displayToDoc := buildDisplayToDocMap(lineMapping)
+
+	// Verify reverse mapping
+	expectedReverse := map[int]int{
+		1: 1,
+		2: 2,
+		4: 3,
+		5: 4,
+		7: 5,
+	}
+
+	if len(displayToDoc) != len(expectedReverse) {
+		t.Fatalf("expected %d entries in reverse map, got %d", len(expectedReverse), len(displayToDoc))
+	}
+
+	for displayLine, expectedDocLine := range expectedReverse {
+		if docLine, ok := displayToDoc[displayLine]; !ok {
+			t.Errorf("display line %d missing from reverse map", displayLine)
+		} else if docLine != expectedDocLine {
+			t.Errorf("displayToDoc[%d] = %d, want %d", displayLine, docLine, expectedDocLine)
+		}
+	}
+
+	// Verify comment lines (3, 6) are NOT in the reverse map
+	commentDisplayLines := []int{3, 6}
+	for _, displayLine := range commentDisplayLines {
+		if _, ok := displayToDoc[displayLine]; ok {
+			t.Errorf("comment display line %d should not be in reverse map", displayLine)
+		}
+	}
+}
+
+// TestReverseMappingCorrectness verifies that the reverse mapping correctly
+// identifies comment lines vs document lines.
+func TestReverseMappingCorrectness(t *testing.T) {
+	doc := Document{
+		Path:    "/path/to/test.md",
+		RelPath: "test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+	}
+
+	view := New([]Document{doc}, "", nil)
+	view.selectedDoc = &doc
+
+	// Create session with comments
+	view.activeSession = &Session{
+		ID:      "test-session",
+		DocPath: doc.Path,
+		Comments: []Comment{
+			{
+				ID:          "c1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     2,
+				ContextText: "Line 2",
+				CommentText: "First comment",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "c2",
+				SessionID:   "test-session",
+				StartLine:   4,
+				EndLine:     4,
+				ContextText: "Line 4",
+				CommentText: "Second comment",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Build line mapping
+	content := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+	_, lineMapping := view.insertCommentsInline(content)
+
+	// Build reverse map
+	displayToDoc := buildDisplayToDocMap(lineMapping)
+
+	// Test document lines map correctly
+	tests := []struct {
+		displayLine int
+		wantDocLine int
+		isComment   bool
+	}{
+		{1, 1, false}, // Doc line 1
+		{2, 2, false}, // Doc line 2
+		{3, 0, true},  // Comment after line 2
+		{4, 3, false}, // Doc line 3
+		{5, 4, false}, // Doc line 4
+		{6, 0, true},  // Comment after line 4
+		{7, 5, false}, // Doc line 5
+	}
+
+	for _, tt := range tests {
+		docLine, ok := displayToDoc[tt.displayLine]
+		if tt.isComment {
+			if ok {
+				t.Errorf("display line %d should be comment (not in map), but got doc line %d",
+					tt.displayLine, docLine)
+			}
+		} else {
+			if !ok {
+				t.Errorf("display line %d should map to doc line %d, but not found in map",
+					tt.displayLine, tt.wantDocLine)
+			} else if docLine != tt.wantDocLine {
+				t.Errorf("displayToDoc[%d] = %d, want %d",
+					tt.displayLine, docLine, tt.wantDocLine)
+			}
+		}
+	}
+
+	// Verify nil lineMapping returns nil
+	nilResult := buildDisplayToDocMap(nil)
+	if nilResult != nil {
+		t.Error("buildDisplayToDocMap(nil) should return nil")
+	}
+}

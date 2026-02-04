@@ -920,6 +920,9 @@ func (v *View) jumpToMatch(lineNum int) {
 func (v *View) highlightSelection(content string, lineMapping map[int]int) string {
 	lines := strings.Split(content, "\n")
 
+	// Build reverse lookup map once for O(1) lookups
+	displayToDoc := buildDisplayToDocMap(lineMapping)
+
 	// Get commented line numbers (in document coordinates)
 	commentedLines := v.getCommentedLines()
 
@@ -967,7 +970,17 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 		line := lines[i]
 
 		// Map back to document line number for comment checking
-		docLineNum := v.mapDisplayToDoc(displayLineNum, lineMapping)
+		var docLineNum int
+		if displayToDoc != nil {
+			if doc, ok := displayToDoc[displayLineNum]; ok {
+				docLineNum = doc
+			} else {
+				// Comment line - not a document line
+				docLineNum = 0
+			}
+		} else {
+			docLineNum = displayLineNum
+		}
 
 		// Check if line will be highlighted with cursor/selection/search
 		willBeHighlighted := displayLineNum == currentSearchLine ||
@@ -1048,6 +1061,20 @@ func (v *View) mapDocToDisplay(docLine int, lineMapping map[int]int) int {
 		return displayLine
 	}
 	return docLine // fallback to same line if not in mapping
+}
+
+// buildDisplayToDocMap builds a reverse lookup map from display lines to document lines.
+// Returns nil if lineMapping is nil (no comments inserted).
+func buildDisplayToDocMap(lineMapping map[int]int) map[int]int {
+	if lineMapping == nil {
+		return nil
+	}
+
+	displayToDoc := make(map[int]int, len(lineMapping))
+	for docLine, displayLine := range lineMapping {
+		displayToDoc[displayLine] = docLine
+	}
+	return displayToDoc
 }
 
 // mapDisplayToDoc maps a display line number back to a document line number.
