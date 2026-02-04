@@ -539,14 +539,26 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				return v, nil
 			case "ctrl+d":
 				v.viewport.HalfPageDown()
-				// Update cursor to center of viewport
-				v.cursorLine = v.viewport.YOffset() + v.viewport.VisibleLineCount()/2
+				// Update cursor to center of viewport (in display coordinates)
+				displayLine := v.viewport.YOffset() + v.viewport.VisibleLineCount()/2
+				// Map back to document coordinates
+				v.cursorLine = v.mapDisplayToDoc(displayLine, v.lineMapping)
+				// If mapped to comment line (0), adjust to nearest valid document line
+				if v.cursorLine == 0 && v.selectedDoc != nil {
+					v.cursorLine = 1 // Default to first line
+				}
 				v.renderSelection()
 				return v, nil
 			case "ctrl+u":
 				v.viewport.HalfPageUp()
-				// Update cursor to center of viewport
-				v.cursorLine = v.viewport.YOffset() + v.viewport.VisibleLineCount()/2
+				// Update cursor to center of viewport (in display coordinates)
+				displayLine := v.viewport.YOffset() + v.viewport.VisibleLineCount()/2
+				// Map back to document coordinates
+				v.cursorLine = v.mapDisplayToDoc(displayLine, v.lineMapping)
+				// If mapped to comment line (0), adjust to nearest valid document line
+				if v.cursorLine == 0 && v.selectedDoc != nil {
+					v.cursorLine = 1 // Default to first line
+				}
 				v.renderSelection()
 				return v, nil
 			case "g":
@@ -751,34 +763,42 @@ func (v *View) loadDocument(doc *Document) {
 			// Try to get session with matching hash
 			dbSession, err := v.store.GetSessionByHash(ctx, doc.Path, currentHash)
 			if err == nil {
-				log.Debug().
-					Str("session_id", dbSession.ID).
-					Str("document", doc.RelPath).
-					Msg("review: loaded existing session")
+				// Skip finalized sessions - they should not be edited
+				if dbSession.IsFinalized() {
+					log.Debug().
+						Str("session_id", dbSession.ID).
+						Str("document", doc.RelPath).
+						Msg("review: skipping finalized session")
+				} else {
+					log.Debug().
+						Str("session_id", dbSession.ID).
+						Str("document", doc.RelPath).
+						Msg("review: loaded existing session")
 
-				// Load comments from database
-				dbComments, err := v.store.ListComments(ctx, dbSession.ID)
-				if err == nil {
-					// Convert to TUI types
-					comments := make([]Comment, 0, len(dbComments))
-					for _, dbComment := range dbComments {
-						comments = append(comments, Comment{
-							ID:          dbComment.ID,
-							SessionID:   dbComment.SessionID,
-							StartLine:   dbComment.StartLine,
-							EndLine:     dbComment.EndLine,
-							ContextText: dbComment.ContextText,
-							CommentText: dbComment.CommentText,
-							CreatedAt:   dbComment.CreatedAt,
-						})
-					}
+					// Load comments from database
+					dbComments, err := v.store.ListComments(ctx, dbSession.ID)
+					if err == nil {
+						// Convert to TUI types
+						comments := make([]Comment, 0, len(dbComments))
+						for _, dbComment := range dbComments {
+							comments = append(comments, Comment{
+								ID:          dbComment.ID,
+								SessionID:   dbComment.SessionID,
+								StartLine:   dbComment.StartLine,
+								EndLine:     dbComment.EndLine,
+								ContextText: dbComment.ContextText,
+								CommentText: dbComment.CommentText,
+								CreatedAt:   dbComment.CreatedAt,
+							})
+						}
 
-					v.activeSession = &Session{
-						ID:         dbSession.ID,
-						DocPath:    dbSession.DocumentPath,
-						Comments:   comments,
-						CreatedAt:  dbSession.CreatedAt,
-						ModifiedAt: time.Now(),
+						v.activeSession = &Session{
+							ID:         dbSession.ID,
+							DocPath:    dbSession.DocumentPath,
+							Comments:   comments,
+							CreatedAt:  dbSession.CreatedAt,
+							ModifiedAt: time.Now(),
+						}
 					}
 				}
 			} else {

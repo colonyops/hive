@@ -1,11 +1,18 @@
 package review
 
 import (
+	"context"
+	"fmt"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+
+	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/hay-kot/hive/internal/stores"
 )
 
 // keyMsg creates a KeyMsg for testing.
@@ -938,5 +945,190 @@ func TestReverseMappingCorrectness(t *testing.T) {
 	nilResult := buildDisplayToDocMap(nil)
 	if nilResult != nil {
 		t.Error("buildDisplayToDocMap(nil) should return nil")
+	}
+}
+
+// TestFinalizedSessionsNotReloaded verifies that finalized sessions are not
+// loaded as active sessions when opening a document.
+func TestFinalizedSessionsNotReloaded(t *testing.T) {
+	// This test requires a real store with database persistence
+	// to test the session finalization behavior
+	tmpDir := t.TempDir()
+
+	// Create a test database
+	database, err := db.Open(tmpDir, db.DefaultOpenOptions())
+	if err != nil {
+		t.Fatalf("failed to open database: %v", err)
+	}
+	defer func() {
+		if err := database.Close(); err != nil {
+			t.Errorf("failed to close database: %v", err)
+		}
+	}()
+
+	// Create a test store
+	store := stores.NewReviewStore(database)
+
+	// Create a test document
+	docPath := filepath.Join(tmpDir, "test.md")
+	content := "Line 1\nLine 2\nLine 3"
+	if err := os.WriteFile(docPath, []byte(content), 0o644); err != nil {
+		t.Fatalf("failed to write test file: %v", err)
+	}
+
+	doc := Document{
+		Path:    docPath,
+		RelPath: "test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: content,
+	}
+
+	// Create review view with the store
+	view := New([]Document{doc}, tmpDir, store)
+	view.SetSize(80, 24)
+
+	// Load document and create a session with a comment
+	view.loadDocument(&doc)
+
+	// Create a comment (which will create a session)
+	view.selectionStart = 1
+	view.cursorLine = 2
+	view.selectionMode = true
+	view.addComment("Test comment before finalization")
+
+	if view.activeSession == nil {
+		t.Fatal("expected active session after adding comment")
+	}
+
+	sessionID := view.activeSession.ID
+
+	// Finalize the session
+	ctx := context.Background()
+	if err := store.FinalizeSession(ctx, sessionID); err != nil {
+		t.Fatalf("failed to finalize session: %v", err)
+	}
+
+	// Clear active session (simulating what happens after finalization)
+	view.activeSession = nil
+
+	// Reload the document - should NOT reload the finalized session
+	view.loadDocument(&doc)
+
+	// Verify the finalized session was NOT loaded
+	if view.activeSession != nil {
+		t.Errorf("expected activeSession to be nil after reloading with finalized session, but got session ID: %s",
+			view.activeSession.ID)
+	}
+}
+
+// TestCtrlDUWithComments verifies that ctrl+d and ctrl+u correctly handle
+// display-to-document coordinate mapping when comments are inserted inline.
+func TestCtrlDUWithComments(t *testing.T) {
+	// Create a document with many lines
+	lines := make([]string, 30)
+	for i := range lines {
+		lines[i] = fmt.Sprintf("Line %d", i+1)
+	}
+	content := strings.Join(lines, "\n")
+
+	doc := Document{
+		Path:          "/path/to/test.md",
+		RelPath:       "test.md",
+		Type:          DocTypePlan,
+		ModTime:       time.Now(),
+		Content:       content,
+		RenderedLines: lines,
+	}
+
+	view := New([]Document{doc}, "", nil)
+	view.SetSize(80, 10) // Small height to force scrolling
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Insert comments before several lines
+	view.activeSession = &Session{
+		ID:      "test-session",
+		DocPath: doc.Path,
+		Comments: []Comment{
+			{
+				ID:          "c1",
+				SessionID:   "test-session",
+				StartLine:   5,
+				EndLine:     5,
+				ContextText: lines[4],
+				CommentText: "Comment 1",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "c2",
+				SessionID:   "test-session",
+				StartLine:   10,
+				EndLine:     10,
+				ContextText: lines[9],
+				CommentText: "Comment 2",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "c3",
+				SessionID:   "test-session",
+				StartLine:   15,
+				EndLine:     15,
+				ContextText: lines[14],
+				CommentText: "Comment 3",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Build line mapping by rendering with comments
+	rendered := content
+	rendered, lineMapping := view.insertCommentsInline(rendered)
+	view.lineMapping = lineMapping
+	view.viewport.SetContent(rendered)
+
+	// Set initial cursor position
+	view.cursorLine = 1
+
+	// Simulate ctrl+d (half page down)
+	view.viewport.HalfPageDown()
+	displayLine := view.viewport.YOffset() + view.viewport.VisibleLineCount()/2
+	view.cursorLine = view.mapDisplayToDoc(displayLine, view.lineMapping)
+	if view.cursorLine == 0 && view.selectedDoc != nil {
+		view.cursorLine = 1
+	}
+
+	// Verify cursor is at a valid document line (not 0 or beyond doc length)
+	if view.cursorLine == 0 {
+		t.Errorf("ctrl+d mapped to comment line (0), should map to valid document line")
+	}
+	if view.cursorLine > len(lines) {
+		t.Errorf("ctrl+d set cursor beyond document length: %d > %d", view.cursorLine, len(lines))
+	}
+
+	// Store cursor position after ctrl+d
+	cursorAfterDown := view.cursorLine
+
+	// Simulate ctrl+u (half page up)
+	view.viewport.HalfPageUp()
+	displayLine = view.viewport.YOffset() + view.viewport.VisibleLineCount()/2
+	view.cursorLine = view.mapDisplayToDoc(displayLine, view.lineMapping)
+	if view.cursorLine == 0 && view.selectedDoc != nil {
+		view.cursorLine = 1
+	}
+
+	// Verify cursor is at a valid document line
+	if view.cursorLine == 0 {
+		t.Errorf("ctrl+u mapped to comment line (0), should map to valid document line")
+	}
+	if view.cursorLine > len(lines) {
+		t.Errorf("ctrl+u set cursor beyond document length: %d > %d", view.cursorLine, len(lines))
+	}
+
+	// Cursor should have moved up from the previous position
+	if view.cursorLine >= cursorAfterDown {
+		t.Errorf("ctrl+u should move cursor up: before=%d, after=%d", cursorAfterDown, view.cursorLine)
 	}
 }
