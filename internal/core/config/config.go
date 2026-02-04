@@ -55,6 +55,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
 	},
+	"DocReview": {
+		Action: ActionDocReview,
+		Help:   "review documents",
+		Silent: true,
+	},
 	"FilterAll": {
 		Action: ActionFilterAll,
 		Help:   "show all sessions",
