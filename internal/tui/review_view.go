@@ -309,6 +309,9 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			v.searchInput.Focus()
 			v.searchInput.SetValue("")
 			v.searchQuery = ""
+			// Clear previous search results
+			v.searchMatches = nil
+			v.searchMatchIndex = 0
 			return v, nil
 		}
 
@@ -602,9 +605,11 @@ func (v *ReviewView) findSearchMatches() {
 	// Case-insensitive search
 	queryLower := strings.ToLower(v.searchQuery)
 
-	// Search through rendered lines
+	// Search through rendered lines (strip ANSI codes for searching)
 	for i, line := range v.selectedDoc.RenderedLines {
-		if strings.Contains(strings.ToLower(line), queryLower) {
+		// Strip ANSI codes before searching
+		cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+		if strings.Contains(strings.ToLower(cleanLine), queryLower) {
 			v.searchMatches = append(v.searchMatches, i+1) // Store 1-indexed line numbers
 		}
 	}

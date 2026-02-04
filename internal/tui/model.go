@@ -1097,7 +1097,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 	case "tab":
 		return m.handleTabKey()
 	case "?":
-		return m.showHelpDialog()
+		// Don't show help dialog when in review view - let review view handle keys
+		if !m.isReviewFocused() {
+			return m.showHelpDialog()
+		}
 	}
 
 	// Session-specific keys only when sessions focused
