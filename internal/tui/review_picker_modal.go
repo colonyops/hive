@@ -1,12 +1,15 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+
+	"github.com/hay-kot/hive/internal/stores"
 )
 
 // DocumentPickerModal is a fuzzy search modal for selecting documents.
@@ -20,36 +23,42 @@ type DocumentPickerModal struct {
 	cancelled    bool
 	selectedDoc  *ReviewDocument
 	filterQuery  string
+	store        *stores.ReviewStore // For checking which documents have active sessions
 }
 
 // NewDocumentPickerModal creates a new document picker modal.
-func NewDocumentPickerModal(documents []ReviewDocument, width, height int) *DocumentPickerModal {
+// If store is provided, documents with active review sessions will be highlighted.
+func NewDocumentPickerModal(documents []ReviewDocument, width, height int, store *stores.ReviewStore) *DocumentPickerModal {
 	// Create search input
 	ti := textinput.New()
 	ti.Placeholder = "Type to filter documents..."
 	ti.CharLimit = 100
 	ti.Focus()
 
-	// Build tree items (headers + documents grouped by type)
-	items := BuildReviewTreeItems(documents)
-
 	// Create list with tree delegate
 	delegate := NewReviewTreeDelegate()
-	l := list.New(items, delegate, 0, 0)
+	l := list.New(nil, delegate, 0, 0)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false) // We handle filtering manually for fuzzy matching
 	l.SetShowTitle(false)
 	l.SetShowHelp(false) // Disable built-in help to avoid duplicate help text
 	l.Styles.Title = lipgloss.NewStyle()
 
-	return &DocumentPickerModal{
+	modal := &DocumentPickerModal{
 		documents:    documents,
 		filteredDocs: documents,
 		list:         l,
 		searchInput:  ti,
 		width:        width,
 		height:       height,
+		store:        store,
 	}
+
+	// Build tree items with session information
+	items := modal.buildTreeItemsWithSessions(documents)
+	l.SetItems(items)
+
+	return modal
 }
 
 // Update handles messages for the picker modal.
@@ -104,8 +113,8 @@ func (m *DocumentPickerModal) updateFilter() {
 		m.filteredDocs = filtered
 	}
 
-	// Rebuild tree items
-	items := BuildReviewTreeItems(m.filteredDocs)
+	// Rebuild tree items with session information
+	items := m.buildTreeItemsWithSessions(m.filteredDocs)
 	m.list.SetItems(items)
 
 	// Reset selection to first non-header item
@@ -118,6 +127,43 @@ func (m *DocumentPickerModal) updateFilter() {
 			}
 		}
 	}
+}
+
+// buildTreeItemsWithSessions builds tree items and marks which documents have active sessions.
+func (m *DocumentPickerModal) buildTreeItemsWithSessions(documents []ReviewDocument) []list.Item {
+	// Build base items
+	items := BuildReviewTreeItems(documents)
+
+	// If no store, return items as-is
+	if m.store == nil {
+		return items
+	}
+
+	// Check each document for active sessions
+	ctx := context.Background()
+	for i, item := range items {
+		treeItem, ok := item.(ReviewTreeItem)
+		if !ok || treeItem.IsHeader {
+			continue
+		}
+
+		// Check if document has an active session
+		session, err := m.store.GetSession(ctx, treeItem.Document.Path)
+		if err == nil && !session.IsFinalized() {
+			// Has active session - mark it
+			treeItem.HasActiveSession = true
+
+			// Count comments for badge
+			comments, err := m.store.ListComments(ctx, session.ID)
+			if err == nil {
+				treeItem.CommentCount = len(comments)
+			}
+
+			items[i] = treeItem
+		}
+	}
+
+	return items
 }
 
 // fuzzyMatch checks if target contains all characters from query in order (case-insensitive).
@@ -157,7 +203,14 @@ func (m *DocumentPickerModal) View() string {
 	title := modalTitleStyle.Render("Select Document")
 	searchView := m.searchInput.View()
 	listView := m.list.View()
-	help := modalHelpStyle.Render("↑/↓ navigate  enter select  esc cancel")
+
+	// Build help text with legend for active sessions
+	helpText := "↑/↓ navigate  enter select  esc cancel"
+	if m.store != nil {
+		legendStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
+		helpText += "  " + legendStyle.Render("●") + " active review"
+	}
+	help := modalHelpStyle.Render(helpText)
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,

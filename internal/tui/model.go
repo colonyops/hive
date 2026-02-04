@@ -156,6 +156,9 @@ type Model struct {
 
 	// Review view
 	reviewView *ReviewView
+
+	// Document picker (shown on Sessions view to start reviews)
+	docPickerModal *DocumentPickerModal
 }
 
 // PendingCreate returns any pending session creation data.
@@ -722,6 +725,32 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case tea.KeyMsg:
+		// Handle document picker modal if active (on Sessions view)
+		if m.docPickerModal != nil {
+			modal, cmd := m.docPickerModal.Update(msg)
+			m.docPickerModal = modal
+
+			if m.docPickerModal.SelectedDocument() != nil {
+				// User selected a document - switch to review view and load it
+				doc := m.docPickerModal.SelectedDocument()
+				m.docPickerModal = nil
+				m.activeView = ViewReview
+				m.handler.SetActiveView(ViewReview)
+				if m.reviewView != nil {
+					m.reviewView.loadDocument(doc)
+				}
+				return m, cmd
+			}
+
+			if m.docPickerModal.Cancelled() {
+				// User cancelled picker
+				m.docPickerModal = nil
+				return m, cmd
+			}
+
+			return m, cmd
+		}
+
 		return m.handleKey(msg)
 
 	case spinner.TickMsg:
@@ -1629,6 +1658,11 @@ func (m Model) View() tea.View {
 		return newView(m.helpDialog.Overlay(mainView, w, h))
 	}
 
+	// Overlay document picker modal (shown on Sessions view)
+	if m.docPickerModal != nil {
+		return newView(m.docPickerModal.Overlay(mainView, w, h))
+	}
+
 	return newView(mainView)
 }
 
@@ -1636,21 +1670,36 @@ func (m Model) View() tea.View {
 func (m Model) renderTabView() string {
 	// Build tab bar with tabs on left and branding on right
 	var sessionsTab, messagesTab, reviewTab string
+
+	// Check if Review tab should be shown (only when there's an active review session)
+	showReviewTab := m.reviewView != nil && m.reviewView.activeSession != nil && m.reviewView.selectedDoc != nil
+
 	switch m.activeView {
 	case ViewSessions:
 		sessionsTab = viewSelectedStyle.Render("Sessions")
 		messagesTab = viewNormalStyle.Render("Messages")
-		reviewTab = viewNormalStyle.Render("Review")
+		if showReviewTab {
+			reviewTab = viewNormalStyle.Render("Review")
+		}
 	case ViewMessages:
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
-		reviewTab = viewNormalStyle.Render("Review")
+		if showReviewTab {
+			reviewTab = viewNormalStyle.Render("Review")
+		}
 	case ViewReview:
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewNormalStyle.Render("Messages")
 		reviewTab = viewSelectedStyle.Render("Review")
 	}
-	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab, " | ", reviewTab)
+
+	// Build tabs with conditional Review tab
+	var tabsLeft string
+	if showReviewTab || m.activeView == ViewReview {
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab, " | ", reviewTab)
+	} else {
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+	}
 
 	// Add filter indicator if active
 	if m.statusFilter != "" {

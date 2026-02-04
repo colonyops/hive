@@ -30,20 +30,22 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		activeView: ViewSessions,
 		reviewView: &reviewView,
 		handler:    handler,
+		width:      100,
+		height:     40,
 	}
 
 	// Execute command without argument
 	cmd := HiveDocReviewCmd{Arg: ""}
 	_ = cmd.Execute(m)
 
-	// Check that view switched to review
-	if m.activeView != ViewReview {
-		t.Errorf("Expected active view to be ViewReview, got %v", m.activeView)
+	// Check that view stays on Sessions (picker shown on Sessions view)
+	if m.activeView != ViewSessions {
+		t.Errorf("Expected active view to stay on ViewSessions, got %v", m.activeView)
 	}
 
-	// Check that picker modal is shown
-	if reviewView.pickerModal == nil {
-		t.Error("Expected picker modal to be created")
+	// Check that picker modal is shown on the Model (not reviewView)
+	if m.docPickerModal == nil {
+		t.Error("Expected picker modal to be created on Model")
 	}
 }
 
@@ -141,7 +143,7 @@ func TestDocumentPickerModal_UpdateFilter(t *testing.T) {
 		{RelPath: ".hive/research/api-design.md", Type: DocTypeResearch},
 	}
 
-	modal := NewDocumentPickerModal(docs, 100, 40)
+	modal := NewDocumentPickerModal(docs, 100, 40, nil)
 
 	// Initially all documents should be shown
 	if len(modal.filteredDocs) != 3 {

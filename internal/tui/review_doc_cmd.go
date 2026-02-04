@@ -21,24 +21,24 @@ type HiveDocReviewCmd struct {
 	Arg string // Optional document path argument
 }
 
-// Execute switches to review view and optionally opens a specific document.
+// Execute shows document picker on current view, then switches to review when document selected.
 func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
-	// Switch to review view
-	m.activeView = ViewReview
-	m.handler.SetActiveView(ViewReview)
-
 	if m.reviewView == nil {
 		// No review view available
 		return nil
 	}
 
-	// If argument provided, try to open specific document
+	// If argument provided, open document directly and switch to review view
 	if c.Arg != "" {
+		m.activeView = ViewReview
+		m.handler.SetActiveView(ViewReview)
 		return m.reviewView.OpenDocument(c.Arg)
 	}
 
-	// Otherwise show document picker modal
-	return m.reviewView.ShowDocumentPicker()
+	// Otherwise show document picker modal on current view (Sessions)
+	// Don't switch to Review until document is selected
+	m.docPickerModal = NewDocumentPickerModal(m.reviewView.getAllDocuments(), m.width, m.height, m.reviewView.store)
+	return nil
 }
 
 // openDocumentMsg is sent when a document should be opened.
@@ -85,7 +85,7 @@ func (v *ReviewView) OpenDocument(path string) tea.Cmd {
 // ShowDocumentPicker shows the fuzzy search document picker modal.
 func (v *ReviewView) ShowDocumentPicker() tea.Cmd {
 	// Create and show the picker modal
-	v.pickerModal = NewDocumentPickerModal(v.getAllDocuments(), v.width, v.height)
+	v.pickerModal = NewDocumentPickerModal(v.getAllDocuments(), v.width, v.height, v.store)
 	return nil
 }
 

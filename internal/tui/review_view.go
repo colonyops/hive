@@ -1365,11 +1365,12 @@ func (v *ReviewView) insertCommentsInline(content string) string {
 
 // ReviewTreeItem represents an item in the review tree.
 type ReviewTreeItem struct {
-	IsHeader     bool           // True if this is a document type header
-	HeaderName   string         // Document type name (e.g., "Plans", "Research")
-	Document     ReviewDocument // The document (when !IsHeader)
-	IsLastInType bool           // True if last document in this type group
-	CommentCount int            // Number of comments on this document
+	IsHeader         bool           // True if this is a document type header
+	HeaderName       string         // Document type name (e.g., "Plans", "Research")
+	Document         ReviewDocument // The document (when !IsHeader)
+	IsLastInType     bool           // True if last document in this type group
+	CommentCount     int            // Number of comments on this document
+	HasActiveSession bool           // True if document has an active (non-finalized) review session
 }
 
 // FilterValue returns the value used for filtering.
@@ -1531,11 +1532,19 @@ func (d ReviewTreeDelegate) renderDocument(item ReviewTreeItem, isSelected bool)
 	}
 	name := nameStyle.Render(item.Document.RelPath)
 
+	// Active session indicator (shown before comment count)
+	var sessionIndicator string
+	if item.HasActiveSession {
+		// Blue dot to indicate active review session
+		indicatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
+		sessionIndicator = indicatorStyle.Render(" ●")
+	}
+
 	// Comment count (if any)
 	var comments string
 	if item.CommentCount > 0 {
 		comments = d.styles.DocMeta.Render(fmt.Sprintf(" (%d)", item.CommentCount))
 	}
 
-	return fmt.Sprintf("%s %s%s", prefixStyled, name, comments)
+	return fmt.Sprintf("%s %s%s%s", prefixStyled, name, sessionIndicator, comments)
 }
