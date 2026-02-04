@@ -317,6 +317,8 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	}
 
 	reviewView := NewReviewView(docs, contextDir, reviewStore)
+	// Check if send-claude command is available
+	reviewView.hasAgentCommand = hasSendClaudeCommand()
 
 	return Model{
 		cfg:                cfg,
@@ -694,6 +696,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.err = nil // Clear any previous errors
 		}
 		return m, nil
+
+	case sendToAgentMsg:
+		// Send feedback to Claude agent via send-claude command
+		return m, m.sendFeedbackToAgent(msg.feedback)
 
 	case openDocumentMsg:
 		// Handle document opening (from HiveDocReview command)
@@ -1089,6 +1095,27 @@ func (m Model) copyToClipboard(text string) error {
 	cmd := exec.Command(parts[0], parts[1:]...)
 	cmd.Stdin = strings.NewReader(text)
 	return cmd.Run()
+}
+
+// hasSendClaudeCommand checks if the send-claude command is available in PATH.
+func hasSendClaudeCommand() bool {
+	_, err := exec.LookPath("send-claude")
+	return err == nil
+}
+
+// sendFeedbackToAgent sends review feedback to Claude agent via send-claude command.
+func (m *Model) sendFeedbackToAgent(feedback string) tea.Cmd {
+	return func() tea.Msg {
+		// Use send-claude command to send feedback to agent
+		cmd := exec.Command("send-claude", feedback)
+		if err := cmd.Run(); err != nil {
+			// Return feedback finalized message but log error
+			log.Warn().Err(err).Msg("failed to send feedback to agent")
+			return reviewFinalizedMsg{feedback: feedback} // Fallback to clipboard
+		}
+		// Success - feedback was sent
+		return nil
+	}
 }
 
 // handleFilteringKey handles keys when filter input is active.

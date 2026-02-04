@@ -21,36 +21,43 @@ import (
 	"github.com/hay-kot/hive/internal/stores"
 )
 
-// reviewFinalizedMsg is sent when review is finalized.
+// reviewFinalizedMsg is sent when review is finalized and copied to clipboard.
 type reviewFinalizedMsg struct {
+	feedback string
+}
+
+// sendToAgentMsg is sent when feedback should be sent to Claude agent.
+type sendToAgentMsg struct {
 	feedback string
 }
 
 // ReviewView manages the review interface.
 type ReviewView struct {
-	list              list.Model
-	viewport          viewport.Model
-	watcher           *DocumentWatcher
-	contextDir        string
-	store             *stores.ReviewStore     // SQLite persistence for review sessions
-	width             int
-	height            int
-	previewMode       bool                    // True when showing dual-column layout
-	fullScreen        bool                    // True when showing document in full-screen
-	selectedDoc       *ReviewDocument         // Currently selected document for preview
-	selectionMode     bool                    // True when in visual selection mode
-	selectionStart    int                     // Line number where selection starts (1-indexed)
-	cursorLine        int                     // Line number where cursor is positioned (1-indexed)
-	activeSession     *ReviewSession          // Current review session with comments
-	commentModal      *ReviewCommentModal     // Active comment entry modal
-	confirmModal      *ConfirmModal           // Active confirmation modal
-	pickerModal       *DocumentPickerModal    // Active document picker modal
-	feedbackGenerated string                  // Generated feedback (for clipboard)
-	searchMode        bool                    // True when in search/filter mode
-	searchInput       textinput.Model         // Search input field
-	searchQuery       string                  // Current search query
-	searchMatches     []int                   // Line numbers of search matches (1-indexed)
-	searchMatchIndex  int                     // Current match index in searchMatches
+	list               list.Model
+	viewport           viewport.Model
+	watcher            *DocumentWatcher
+	contextDir         string
+	store              *stores.ReviewStore     // SQLite persistence for review sessions
+	width              int
+	height             int
+	previewMode        bool                    // True when showing dual-column layout
+	fullScreen         bool                    // True when showing document in full-screen
+	selectedDoc        *ReviewDocument         // Currently selected document for preview
+	selectionMode      bool                    // True when in visual selection mode
+	selectionStart     int                     // Line number where selection starts (1-indexed)
+	cursorLine         int                     // Line number where cursor is positioned (1-indexed)
+	activeSession      *ReviewSession          // Current review session with comments
+	commentModal       *ReviewCommentModal     // Active comment entry modal
+	confirmModal       *ConfirmModal           // Active confirmation modal
+	finalizationModal  *FinalizationModal      // Active finalization options modal
+	pickerModal        *DocumentPickerModal    // Active document picker modal
+	feedbackGenerated  string                  // Generated feedback (for clipboard)
+	searchMode         bool                    // True when in search/filter mode
+	searchInput        textinput.Model         // Search input field
+	searchQuery        string                  // Current search query
+	searchMatches      []int                   // Line numbers of search matches (1-indexed)
+	searchMatchIndex   int                     // Current match index in searchMatches
+	hasAgentCommand    bool                    // Whether send-claude command is available
 }
 
 // NewReviewView creates a new review view.
@@ -175,7 +182,51 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			return v, cmd
 		}
 
-		// Handle confirmation modal if active
+		// Handle finalization modal for choosing action
+		if v.finalizationModal != nil {
+			modal, cmd := v.finalizationModal.Update(msg)
+			v.finalizationModal = &modal
+
+			if v.finalizationModal.Confirmed() {
+				action := v.finalizationModal.SelectedAction()
+				v.finalizationModal = nil
+
+				// Finalize session in database if store is available
+				if v.store != nil && v.activeSession != nil {
+					ctx := context.Background()
+					_ = v.store.FinalizeSession(ctx, v.activeSession.ID)
+					// Ignore errors - finalization is best effort
+				}
+
+				// Clear active session
+				v.activeSession = nil
+				// Reload document without comments
+				v.loadDocument(v.selectedDoc)
+
+				// Execute selected action
+				switch action {
+				case FinalizationActionClipboard:
+					return v, func() tea.Msg {
+						return reviewFinalizedMsg{feedback: v.feedbackGenerated}
+					}
+				case FinalizationActionSendToAgent:
+					return v, func() tea.Msg {
+						return sendToAgentMsg{feedback: v.feedbackGenerated}
+					}
+				}
+
+				return v, cmd
+			}
+
+			if v.finalizationModal.Cancelled() {
+				v.finalizationModal = nil
+				return v, cmd
+			}
+
+			return v, cmd
+		}
+
+		// Handle confirmation modal if active (keep for backward compatibility)
 		if v.confirmModal != nil {
 			modal, cmd := v.confirmModal.Update(msg)
 			v.confirmModal = &modal
@@ -302,11 +353,13 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		if v.fullScreen && v.selectedDoc != nil {
 			switch msg.String() {
 			case "f":
-				// Finalize review - show confirmation if there are comments
+				// Finalize review - show finalization options if there are comments
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
-					confirmMsg := fmt.Sprintf("Finalize review with %d comment(s) and copy to clipboard?", len(v.activeSession.Comments))
-					modal := NewConfirmModal(confirmMsg)
-					v.confirmModal = &modal
+					// Generate feedback now so we can pass it to the modal
+					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
+					modal := NewFinalizationModal(feedback, v.hasAgentCommand, v.width, v.height)
+					v.finalizationModal = &modal
+					v.feedbackGenerated = feedback
 					return v, nil
 				}
 			case "c":
@@ -481,6 +534,11 @@ func (v ReviewView) View() string {
 	// Overlay document picker modal if active (highest priority)
 	if v.pickerModal != nil {
 		return v.pickerModal.Overlay(baseView, v.width, v.height)
+	}
+
+	// Overlay finalization modal if active
+	if v.finalizationModal != nil {
+		return v.finalizationModal.View()
 	}
 
 	// Overlay confirmation modal if active
