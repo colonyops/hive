@@ -167,8 +167,8 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 
 	// Create a session with comments
 	view.activeSession = &ReviewSession{
-		ID:       "test-session",
-		DocPath:  doc.Path,
+		ID:      "test-session",
+		DocPath: doc.Path,
 		Comments: []ReviewComment{
 			{
 				ID:          "comment-1",
@@ -231,8 +231,8 @@ func TestCommentDeletionCancellation(t *testing.T) {
 
 	// Create a session with comments
 	view.activeSession = &ReviewSession{
-		ID:       "test-session",
-		DocPath:  doc.Path,
+		ID:      "test-session",
+		DocPath: doc.Path,
 		Comments: []ReviewComment{
 			{
 				ID:          "comment-1",
@@ -287,8 +287,8 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 
 	// Create a session with multiple comments
 	view.activeSession = &ReviewSession{
-		ID:       "test-session",
-		DocPath:  doc.Path,
+		ID:      "test-session",
+		DocPath: doc.Path,
 		Comments: []ReviewComment{
 			{
 				ID:          "comment-1",
@@ -368,8 +368,8 @@ func TestReviewDiscardCancellation(t *testing.T) {
 
 	// Create a session with comments
 	view.activeSession = &ReviewSession{
-		ID:       "test-session",
-		DocPath:  doc.Path,
+		ID:      "test-session",
+		DocPath: doc.Path,
 		Comments: []ReviewComment{
 			{
 				ID:          "comment-1",
@@ -459,8 +459,8 @@ func TestCommentVisualStyling(t *testing.T) {
 
 	// Create a session with a comment
 	view.activeSession = &ReviewSession{
-		ID:       "test-session",
-		DocPath:  doc.Path,
+		ID:      "test-session",
+		DocPath: doc.Path,
 		Comments: []ReviewComment{
 			{
 				ID:          "comment-1",

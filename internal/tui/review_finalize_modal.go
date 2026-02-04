@@ -18,14 +18,14 @@ const (
 
 // FinalizationModal shows options for finalizing a review.
 type FinalizationModal struct {
-	feedback     string
-	selectedIdx  int
-	options      []finalizationOption
-	width        int
-	height       int
-	confirmed    bool
-	cancelled    bool
-	hasAgentCmd  bool // Whether send-claude command is available
+	feedback    string
+	selectedIdx int
+	options     []finalizationOption
+	width       int
+	height      int
+	confirmed   bool
+	cancelled   bool
+	hasAgentCmd bool // Whether send-claude command is available
 }
 
 type finalizationOption struct {

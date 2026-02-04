@@ -38,7 +38,7 @@ func NewDocumentWatcher(contextDir string) (*DocumentWatcher, error) {
 
 	// Add the context directory and all subdirectories to the watcher
 	if err := w.addRecursive(contextDir); err != nil {
-		watcher.Close()
+		_ = watcher.Close()
 		return nil, err
 	}
 
@@ -69,7 +69,7 @@ func (w *DocumentWatcher) Start() tea.Cmd {
 				// If it's a directory creation, add it to the watcher
 				if event.Has(fsnotify.Create) {
 					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
-						w.addRecursive(event.Name)
+						_ = w.addRecursive(event.Name)
 					}
 				}
 

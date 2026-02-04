@@ -230,12 +230,12 @@ type Keybinding struct {
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  string   `yaml:"action"`         // built-in action (recycle, delete) - mutually exclusive with sh
-	Sh      string   `yaml:"sh"`             // shell command template - mutually exclusive with action
-	Help    string   `yaml:"help"`           // description shown in palette/help
-	Confirm string   `yaml:"confirm"`        // confirmation prompt (empty = no confirm)
-	Silent  bool     `yaml:"silent"`         // skip loading popup for fast commands
-	Exit    string   `yaml:"exit"`           // exit hive after command (bool or $ENV_VAR)
+	Action  string   `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
+	Sh      string   `yaml:"sh"`              // shell command template - mutually exclusive with action
+	Help    string   `yaml:"help"`            // description shown in palette/help
+	Confirm string   `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
+	Silent  bool     `yaml:"silent"`          // skip loading popup for fast commands
+	Exit    string   `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
 	Scope   []string `yaml:"scope,omitempty"` // views where command is active (empty = global)
 }
 

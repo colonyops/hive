@@ -38,33 +38,33 @@ type reviewDiscardedMsg struct{}
 
 // ReviewView manages the review interface.
 type ReviewView struct {
-	list               list.Model
-	viewport           viewport.Model
-	watcher            *DocumentWatcher
-	contextDir         string
-	store              *stores.ReviewStore     // SQLite persistence for review sessions
-	width              int
-	height             int
-	previewMode        bool                    // True when showing dual-column layout
-	fullScreen         bool                    // True when showing document in full-screen
-	selectedDoc        *ReviewDocument         // Currently selected document for preview
-	selectionMode      bool                    // True when in visual selection mode
-	selectionStart     int                     // Line number where selection starts (1-indexed)
-	cursorLine         int                     // Line number where cursor is positioned (1-indexed)
-	activeSession      *ReviewSession              // Current review session with comments
-	commentModal       *ReviewCommentModal         // Active comment entry modal
-	confirmModal       *components.ConfirmModal    // Active confirmation modal
-	finalizationModal  *FinalizationModal          // Active finalization options modal
-	pickerModal        *DocumentPickerModal    // Active document picker modal
-	feedbackGenerated  string                  // Generated feedback (for clipboard)
-	searchMode         bool                    // True when in search/filter mode
-	searchInput        textinput.Model         // Search input field
-	searchQuery        string                  // Current search query
-	searchMatches      []int                   // Line numbers of search matches (1-indexed)
-	searchMatchIndex   int                     // Current match index in searchMatches
-	hasAgentCommand    bool                    // Whether send-claude command is available
-	pendingDeleteLine  int                     // Line number for pending comment deletion (0 if none)
-	pendingDiscard     bool                    // True when waiting for discard confirmation
+	list              list.Model
+	viewport          viewport.Model
+	watcher           *DocumentWatcher
+	contextDir        string
+	store             *stores.ReviewStore // SQLite persistence for review sessions
+	width             int
+	height            int
+	previewMode       bool                     // True when showing dual-column layout
+	fullScreen        bool                     // True when showing document in full-screen
+	selectedDoc       *ReviewDocument          // Currently selected document for preview
+	selectionMode     bool                     // True when in visual selection mode
+	selectionStart    int                      // Line number where selection starts (1-indexed)
+	cursorLine        int                      // Line number where cursor is positioned (1-indexed)
+	activeSession     *ReviewSession           // Current review session with comments
+	commentModal      *ReviewCommentModal      // Active comment entry modal
+	confirmModal      *components.ConfirmModal // Active confirmation modal
+	finalizationModal *FinalizationModal       // Active finalization options modal
+	pickerModal       *DocumentPickerModal     // Active document picker modal
+	feedbackGenerated string                   // Generated feedback (for clipboard)
+	searchMode        bool                     // True when in search/filter mode
+	searchInput       textinput.Model          // Search input field
+	searchQuery       string                   // Current search query
+	searchMatches     []int                    // Line numbers of search matches (1-indexed)
+	searchMatchIndex  int                      // Current match index in searchMatches
+	hasAgentCommand   bool                     // Whether send-claude command is available
+	pendingDeleteLine int                      // Line number for pending comment deletion (0 if none)
+	pendingDiscard    bool                     // True when waiting for discard confirmation
 }
 
 // NewReviewView creates a new review view.
@@ -117,8 +117,8 @@ func NewReviewView(documents []ReviewDocument, contextDir string, store *stores.
 		store:       store,
 		previewMode: false, // Disable dual-column preview by default
 		fullScreen:  false, // Start without a document (will show picker or message)
-		cursorLine:   1,    // Initialize cursor at line 1
-		searchInput:  ti,
+		cursorLine:  1,     // Initialize cursor at line 1
+		searchInput: ti,
 	}
 }
 
@@ -223,6 +223,8 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					return v, func() tea.Msg {
 						return sendToAgentMsg{feedback: v.feedbackGenerated}
 					}
+				case FinalizationActionNone:
+					// User cancelled, do nothing
 				}
 
 				return v, cmd
@@ -284,7 +286,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 
 			if v.confirmModal.Cancelled() {
 				v.confirmModal = nil
-				v.pendingDeleteLine = 0 // Clear pending delete
+				v.pendingDeleteLine = 0  // Clear pending delete
 				v.pendingDiscard = false // Clear pending discard
 				return v, cmd
 			}
@@ -775,7 +777,7 @@ func (v *ReviewView) ensureCursorVisible() {
 
 	// In full-screen mode, reserve 1 line for status bar
 	if v.fullScreen {
-		visibleHeight = visibleHeight - 1
+		visibleHeight--
 	}
 
 	// Cursor above viewport - scroll up
@@ -1224,34 +1226,6 @@ func (v *ReviewView) updateTreeItemCommentCount() {
 			}
 		}
 	}
-}
-
-// renderWithComments renders the document with inline comments.
-func (v *ReviewView) renderWithComments() {
-	if v.selectedDoc == nil {
-		return
-	}
-
-	// Calculate preview width for rendering
-	previewWidth := v.width
-	if v.previewMode && v.width >= 80 {
-		listWidth := int(float64(v.width) * 0.25)
-		previewWidth = v.width - listWidth - 1
-	}
-
-	// Render document
-	rendered, err := v.selectedDoc.Render(previewWidth)
-	if err != nil {
-		v.viewport.SetContent("Error rendering document: " + err.Error())
-		return
-	}
-
-	// Insert comments inline if session exists
-	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
-		rendered = v.insertCommentsInline(rendered)
-	}
-
-	v.viewport.SetContent(rendered)
 }
 
 // insertCommentsInline inserts comments after their referenced lines.
