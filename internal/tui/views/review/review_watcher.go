@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"os"
@@ -11,9 +11,9 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// documentChangeMsg is sent when documents change on disk.
-type documentChangeMsg struct {
-	documents []ReviewDocument
+// DocumentChangeMsg is sent when documents change on disk.
+type DocumentChangeMsg struct {
+	Documents []Document
 }
 
 // DocumentWatcher watches a directory for document changes.
@@ -92,7 +92,7 @@ func (w *DocumentWatcher) Start() tea.Cmd {
 				if err != nil {
 					continue
 				}
-				return documentChangeMsg{documents: docs}
+				return DocumentChangeMsg{Documents: docs}
 
 			case err, ok := <-w.watcher.Errors:
 				if !ok {

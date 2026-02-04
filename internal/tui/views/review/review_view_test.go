@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"strings"
@@ -16,10 +16,10 @@ func keyMsg(s string) tea.Msg {
 	return tea.KeyPressMsg{Text: s, Code: rune(s[0])}
 }
 
-func TestBuildReviewTreeItems(t *testing.T) {
+func TestBuildTreeItems(t *testing.T) {
 	now := time.Now()
 
-	docs := []ReviewDocument{
+	docs := []Document{
 		{
 			Path:    "/path/to/plans/plan1.md",
 			RelPath: "plans/plan1.md",
@@ -46,7 +46,7 @@ func TestBuildReviewTreeItems(t *testing.T) {
 		},
 	}
 
-	items := BuildReviewTreeItems(docs)
+	items := BuildTreeItems(docs)
 
 	// Should have: 3 headers (Plan, Research, Context) + 4 documents = 7 items
 	expectedCount := 7
@@ -55,18 +55,18 @@ func TestBuildReviewTreeItems(t *testing.T) {
 	}
 
 	// First item should be Plans header
-	item0, ok := items[0].(ReviewTreeItem)
+	item0, ok := items[0].(TreeItem)
 	if !ok {
-		t.Fatal("item 0 is not a ReviewTreeItem")
+		t.Fatal("item 0 is not a TreeItem")
 	}
 	if !item0.IsHeader || item0.HeaderName != "Plan" {
 		t.Errorf("expected Plans header, got: IsHeader=%v, HeaderName=%s", item0.IsHeader, item0.HeaderName)
 	}
 
 	// Second item should be first plan document
-	item1, ok := items[1].(ReviewTreeItem)
+	item1, ok := items[1].(TreeItem)
 	if !ok {
-		t.Fatal("item 1 is not a ReviewTreeItem")
+		t.Fatal("item 1 is not a TreeItem")
 	}
 	if item1.IsHeader {
 		t.Error("expected document, got header")
@@ -79,17 +79,17 @@ func TestBuildReviewTreeItems(t *testing.T) {
 	}
 
 	// Third item should be second plan document (last in type)
-	item2, ok := items[2].(ReviewTreeItem)
+	item2, ok := items[2].(TreeItem)
 	if !ok {
-		t.Fatal("item 2 is not a ReviewTreeItem")
+		t.Fatal("item 2 is not a TreeItem")
 	}
 	if !item2.IsLastInType {
 		t.Error("expected IsLastInType=true for second plan")
 	}
 }
 
-func TestReviewTreeItemFilterValue(t *testing.T) {
-	header := ReviewTreeItem{
+func TestTreeItemFilterValue(t *testing.T) {
+	header := TreeItem{
 		IsHeader:   true,
 		HeaderName: "Plans",
 	}
@@ -98,9 +98,9 @@ func TestReviewTreeItemFilterValue(t *testing.T) {
 		t.Errorf("expected empty filter value for header, got %s", header.FilterValue())
 	}
 
-	doc := ReviewTreeItem{
+	doc := TreeItem{
 		IsHeader: false,
-		Document: ReviewDocument{
+		Document: Document{
 			RelPath: "plans/implementation.md",
 		},
 	}
@@ -111,8 +111,8 @@ func TestReviewTreeItemFilterValue(t *testing.T) {
 	}
 }
 
-func TestNewReviewView(t *testing.T) {
-	docs := []ReviewDocument{
+func TestNew(t *testing.T) {
+	docs := []Document{
 		{
 			Path:    "/path/to/test.md",
 			RelPath: "plans/test.md",
@@ -121,7 +121,7 @@ func TestNewReviewView(t *testing.T) {
 		},
 	}
 
-	view := NewReviewView(docs, "", nil)
+	view := New(docs, "", nil)
 
 	// Should not panic and should have a list
 	if view.list.Items() == nil {
@@ -137,7 +137,7 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create review view with watcher
-	view := NewReviewView([]ReviewDocument{}, tmpDir, nil)
+	view := New([]Document{}, tmpDir, nil)
 
 	// View should have a watcher
 	if view.watcher == nil {
@@ -152,7 +152,7 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 }
 
 func TestCommentDeletionWithConfirmation(t *testing.T) {
-	doc := ReviewDocument{
+	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
 		Type:    DocTypePlan,
@@ -160,16 +160,16 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
 
 	// Create a session with comments
-	view.activeSession = &ReviewSession{
+	view.activeSession = &Session{
 		ID:      "test-session",
 		DocPath: doc.Path,
-		Comments: []ReviewComment{
+		Comments: []Comment{
 			{
 				ID:          "comment-1",
 				SessionID:   "test-session",
@@ -216,7 +216,7 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 }
 
 func TestCommentDeletionCancellation(t *testing.T) {
-	doc := ReviewDocument{
+	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
 		Type:    DocTypePlan,
@@ -224,16 +224,16 @@ func TestCommentDeletionCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
 
 	// Create a session with comments
-	view.activeSession = &ReviewSession{
+	view.activeSession = &Session{
 		ID:      "test-session",
 		DocPath: doc.Path,
-		Comments: []ReviewComment{
+		Comments: []Comment{
 			{
 				ID:          "comment-1",
 				SessionID:   "test-session",
@@ -272,7 +272,7 @@ func TestCommentDeletionCancellation(t *testing.T) {
 }
 
 func TestReviewDiscardWithConfirmation(t *testing.T) {
-	doc := ReviewDocument{
+	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
 		Type:    DocTypePlan,
@@ -280,16 +280,16 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
 
 	// Create a session with multiple comments
-	view.activeSession = &ReviewSession{
+	view.activeSession = &Session{
 		ID:      "test-session",
 		DocPath: doc.Path,
-		Comments: []ReviewComment{
+		Comments: []Comment{
 			{
 				ID:          "comment-1",
 				SessionID:   "test-session",
@@ -353,7 +353,7 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 }
 
 func TestReviewDiscardCancellation(t *testing.T) {
-	doc := ReviewDocument{
+	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
 		Type:    DocTypePlan,
@@ -361,16 +361,16 @@ func TestReviewDiscardCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
 
 	// Create a session with comments
-	view.activeSession = &ReviewSession{
+	view.activeSession = &Session{
 		ID:      "test-session",
 		DocPath: doc.Path,
-		Comments: []ReviewComment{
+		Comments: []Comment{
 			{
 				ID:          "comment-1",
 				SessionID:   "test-session",
@@ -410,7 +410,7 @@ func TestReviewDiscardCancellation(t *testing.T) {
 }
 
 func TestReviewDiscardWithNoComments(t *testing.T) {
-	doc := ReviewDocument{
+	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
 		Type:    DocTypePlan,
@@ -418,16 +418,16 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
 
 	// Create a session with no comments
-	view.activeSession = &ReviewSession{
+	view.activeSession = &Session{
 		ID:         "test-session",
 		DocPath:    doc.Path,
-		Comments:   []ReviewComment{},
+		Comments:   []Comment{},
 		CreatedAt:  time.Now(),
 		ModifiedAt: time.Now(),
 	}
@@ -445,7 +445,7 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 }
 
 func TestCommentVisualStyling(t *testing.T) {
-	doc := ReviewDocument{
+	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
 		Type:    DocTypePlan,
@@ -453,15 +453,15 @@ func TestCommentVisualStyling(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.selectedDoc = &doc
 
 	// Create a session with a comment
-	view.activeSession = &ReviewSession{
+	view.activeSession = &Session{
 		ID:      "test-session",
 		DocPath: doc.Path,
-		Comments: []ReviewComment{
+		Comments: []Comment{
 			{
 				ID:          "comment-1",
 				SessionID:   "test-session",
@@ -507,4 +507,34 @@ func TestCommentVisualStyling(t *testing.T) {
 	if !commentLineFound {
 		t.Error("expected to find a comment line in rendered output")
 	}
+}
+
+func TestView_WithPickerModal(t *testing.T) {
+	docs := []Document{
+		{RelPath: "doc1.md", Type: DocTypePlan},
+	}
+
+	reviewView := New(docs, "/test", nil)
+	reviewView.SetSize(100, 40)
+
+	// Show picker
+	_ = reviewView.ShowDocumentPicker()
+
+	if reviewView.pickerModal == nil {
+		t.Error("Expected picker modal to be created")
+	}
+
+	// Verify picker has documents
+	if len(reviewView.pickerModal.documents) != 1 {
+		t.Errorf("Expected 1 document in picker, got %d", len(reviewView.pickerModal.documents))
+	}
+}
+
+func TestView_HasPickerModalField(t *testing.T) {
+	reviewView := New(nil, "", nil)
+
+	// Access the field to ensure it exists
+	_ = reviewView.pickerModal
+
+	// This test passes if it compiles
 }

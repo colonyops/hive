@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"context"
@@ -14,21 +14,21 @@ import (
 
 // DocumentPickerModal is a fuzzy search modal for selecting documents.
 type DocumentPickerModal struct {
-	documents    []ReviewDocument
-	filteredDocs []ReviewDocument
+	documents    []Document
+	filteredDocs []Document
 	list         list.Model
 	searchInput  textinput.Model
 	width        int
 	height       int
 	cancelled    bool
-	selectedDoc  *ReviewDocument
+	selectedDoc  *Document
 	filterQuery  string
 	store        *stores.ReviewStore // For checking which documents have active sessions
 }
 
 // NewDocumentPickerModal creates a new document picker modal.
 // If store is provided, documents with active review sessions will be highlighted.
-func NewDocumentPickerModal(documents []ReviewDocument, width, height int, store *stores.ReviewStore) *DocumentPickerModal {
+func NewDocumentPickerModal(documents []Document, width, height int, store *stores.ReviewStore) *DocumentPickerModal {
 	// Create search input
 	ti := textinput.New()
 	ti.Placeholder = "Type to filter documents..."
@@ -61,7 +61,7 @@ func NewDocumentPickerModal(documents []ReviewDocument, width, height int, store
 	// Select first non-header item by default
 	if len(items) > 0 {
 		for i, item := range items {
-			if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
 				l.Select(i)
 				break
 			}
@@ -85,7 +85,7 @@ func (m *DocumentPickerModal) Update(msg tea.Msg) (*DocumentPickerModal, tea.Cmd
 	case "enter":
 		// Select current item (skip headers)
 		if item := m.list.SelectedItem(); item != nil {
-			if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
 				m.selectedDoc = &treeItem.Document
 			}
 		}
@@ -114,7 +114,7 @@ func (m *DocumentPickerModal) updateFilter() {
 		m.filteredDocs = m.documents
 	} else {
 		// Fuzzy match on filename and path
-		filtered := make([]ReviewDocument, 0)
+		filtered := make([]Document, 0)
 		for _, doc := range m.documents {
 			if fuzzyMatch(doc.RelPath, query) {
 				filtered = append(filtered, doc)
@@ -131,7 +131,7 @@ func (m *DocumentPickerModal) updateFilter() {
 	if len(items) > 0 {
 		// Find first non-header item
 		for i, item := range items {
-			if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
 				m.list.Select(i)
 				break
 			}
@@ -140,9 +140,9 @@ func (m *DocumentPickerModal) updateFilter() {
 }
 
 // buildTreeItemsWithSessions builds tree items and marks which documents have active sessions.
-func (m *DocumentPickerModal) buildTreeItemsWithSessions(documents []ReviewDocument) []list.Item {
+func (m *DocumentPickerModal) buildTreeItemsWithSessions(documents []Document) []list.Item {
 	// Build base items
-	items := BuildReviewTreeItems(documents)
+	items := BuildTreeItems(documents)
 
 	// If no store, return items as-is
 	if m.store == nil {
@@ -152,7 +152,7 @@ func (m *DocumentPickerModal) buildTreeItemsWithSessions(documents []ReviewDocum
 	// Check each document for active sessions
 	ctx := context.Background()
 	for i, item := range items {
-		treeItem, ok := item.(ReviewTreeItem)
+		treeItem, ok := item.(TreeItem)
 		if !ok || treeItem.IsHeader {
 			continue
 		}
@@ -268,6 +268,6 @@ func (m *DocumentPickerModal) Cancelled() bool {
 }
 
 // SelectedDocument returns the selected document, or nil if none selected.
-func (m *DocumentPickerModal) SelectedDocument() *ReviewDocument {
+func (m *DocumentPickerModal) SelectedDocument() *Document {
 	return m.selectedDoc
 }

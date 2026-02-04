@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"fmt"
@@ -9,8 +9,8 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 )
 
-// ReviewCommentModal handles comment entry for selected text.
-type ReviewCommentModal struct {
+// CommentModal handles comment entry for selected text.
+type CommentModal struct {
 	textInput      textinput.Model
 	lineRange      string // e.g., "Lines 10-15"
 	contextPreview string // First 100 chars of selected text
@@ -20,8 +20,8 @@ type ReviewCommentModal struct {
 	cancelled      bool
 }
 
-// NewReviewCommentModal creates a new comment modal.
-func NewReviewCommentModal(startLine, endLine int, contextText string, width, height int) ReviewCommentModal {
+// NewCommentModal creates a new comment modal.
+func NewCommentModal(startLine, endLine int, contextText string, width, height int) CommentModal {
 	ti := textinput.New()
 	ti.Placeholder = "Enter your review comment..."
 	ti.Focus()
@@ -36,7 +36,7 @@ func NewReviewCommentModal(startLine, endLine int, contextText string, width, he
 	// Format context preview - show first 20 lines + ... + last 3 lines
 	contextPreview := formatContextPreview(contextText)
 
-	return ReviewCommentModal{
+	return CommentModal{
 		textInput:      ti,
 		lineRange:      lineRange,
 		contextPreview: contextPreview,
@@ -63,7 +63,7 @@ func formatContextPreview(text string) string {
 }
 
 // Update handles messages.
-func (m ReviewCommentModal) Update(msg tea.Msg) (ReviewCommentModal, tea.Cmd) {
+func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
 	switch msg := msg.(type) {
 	case tea.KeyMsg:
 		switch msg.String() {
@@ -84,7 +84,7 @@ func (m ReviewCommentModal) Update(msg tea.Msg) (ReviewCommentModal, tea.Cmd) {
 }
 
 // View renders the modal.
-func (m ReviewCommentModal) View() string {
+func (m CommentModal) View() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
 		Foreground(lipgloss.Color("#7aa2f7")).
@@ -115,22 +115,22 @@ func (m ReviewCommentModal) View() string {
 }
 
 // Submitted returns true if the comment was submitted.
-func (m ReviewCommentModal) Submitted() bool {
+func (m CommentModal) Submitted() bool {
 	return m.submitted
 }
 
 // Cancelled returns true if the modal was cancelled.
-func (m ReviewCommentModal) Cancelled() bool {
+func (m CommentModal) Cancelled() bool {
 	return m.cancelled
 }
 
 // Value returns the entered comment text.
-func (m ReviewCommentModal) Value() string {
+func (m CommentModal) Value() string {
 	return m.textInput.Value()
 }
 
 // SetExistingComment pre-fills the modal with existing comment text for editing.
-func (m *ReviewCommentModal) SetExistingComment(text string) {
+func (m *CommentModal) SetExistingComment(text string) {
 	m.textInput.SetValue(text)
 	// Position cursor at end of text
 	m.textInput.CursorEnd()

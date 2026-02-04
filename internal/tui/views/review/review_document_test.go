@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"os"
@@ -71,7 +71,7 @@ func TestSortDocuments(t *testing.T) {
 	older := now.Add(-1 * time.Hour)
 	newest := now.Add(1 * time.Hour)
 
-	docs := []ReviewDocument{
+	docs := []Document{
 		{Type: DocTypeOther, ModTime: now},
 		{Type: DocTypePlan, ModTime: older},
 		{Type: DocTypeResearch, ModTime: newest},

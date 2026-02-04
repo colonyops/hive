@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"fmt"
@@ -24,7 +24,7 @@ var ansiStripPattern = regexp.MustCompile(`\x1b\[[0-9;]*[a-zA-Z]`)
 //	Lines <start>-<end>:
 //	> <context>
 //	<feedback>
-func GenerateReviewFeedback(session *ReviewSession, docRelPath string) string {
+func GenerateReviewFeedback(session *Session, docRelPath string) string {
 	if session == nil || len(session.Comments) == 0 {
 		return ""
 	}
@@ -36,7 +36,7 @@ func GenerateReviewFeedback(session *ReviewSession, docRelPath string) string {
 	b.WriteString(fmt.Sprintf("Comments: %d\n\n", len(session.Comments)))
 
 	// Sort comments by line number
-	sortedComments := make([]ReviewComment, len(session.Comments))
+	sortedComments := make([]Comment, len(session.Comments))
 	copy(sortedComments, session.Comments)
 	sort.Slice(sortedComments, func(i, j int) bool {
 		return sortedComments[i].StartLine < sortedComments[j].StartLine

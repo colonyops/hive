@@ -29,6 +29,7 @@ import (
 	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
+	"github.com/hay-kot/hive/internal/tui/views/review"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
@@ -155,10 +156,10 @@ type Model struct {
 	pendingCreate *PendingCreate
 
 	// Review view
-	reviewView *ReviewView
+	reviewView *review.View
 
 	// Document picker (shown on Sessions view to start reviews)
-	docPickerModal *DocumentPickerModal
+	docPickerModal *review.DocumentPickerModal
 }
 
 // PendingCreate returns any pending session creation data.
@@ -299,18 +300,18 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	// Initialize review view with document discovery
 	// Use repo-specific context directory if we have a local remote, otherwise shared
 	var contextDir string
-	var docs []ReviewDocument
+	var docs []review.Document
 	if opts.LocalRemote != "" {
 		owner, repo := git.ExtractOwnerRepo(opts.LocalRemote)
 		if owner != "" && repo != "" {
 			contextDir = cfg.RepoContextDir(owner, repo)
-			docs, _ = DiscoverDocuments(contextDir)
+			docs, _ = review.DiscoverDocuments(contextDir)
 		}
 	}
 	// Fallback to shared if no repo context
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
-		docs, _ = DiscoverDocuments(contextDir)
+		docs, _ = review.DiscoverDocuments(contextDir)
 	}
 
 	// Create review store if database is available
@@ -319,9 +320,9 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		reviewStore = stores.NewReviewStore(opts.DB)
 	}
 
-	reviewView := NewReviewView(docs, contextDir, reviewStore)
+	reviewView := review.New(docs, contextDir, reviewStore)
 	// Check if send-claude command is available
-	reviewView.hasAgentCommand = hasSendClaudeCommand()
+	reviewView.SetHasAgentCommand(hasSendClaudeCommand())
 
 	return Model{
 		cfg:                cfg,
@@ -684,39 +685,39 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Help keybindings remain minimal - full list shown via ? dialog
 		return m, nil
 
-	case documentChangeMsg:
+	case review.DocumentChangeMsg:
 		// Forward to review view if it's active
 		if m.reviewView != nil {
 			*m.reviewView, _ = m.reviewView.Update(msg)
 		}
 		return m, nil
 
-	case reviewFinalizedMsg:
+	case review.ReviewFinalizedMsg:
 		// Copy feedback to clipboard
-		if err := m.copyToClipboard(msg.feedback); err != nil {
+		if err := m.copyToClipboard(msg.Feedback); err != nil {
 			m.err = fmt.Errorf("failed to copy feedback: %w", err)
 		} else {
 			m.err = nil // Clear any previous errors
 		}
 		return m, nil
 
-	case sendToAgentMsg:
+	case review.SendToAgentMsg:
 		// Send feedback to Claude agent via send-claude command
-		return m, m.sendFeedbackToAgent(msg.feedback)
+		return m, m.sendFeedbackToAgent(msg.Feedback)
 
-	case openDocumentMsg:
+	case review.OpenDocumentMsg:
 		// Handle document opening (from HiveDocReview command)
-		if msg.err != nil {
-			m.err = msg.err
+		if msg.Err != nil {
+			m.err = msg.Err
 			return m, nil
 		}
 		// Document path is provided, tell review view to load it
 		if m.reviewView != nil {
 			// Find and load the document
-			for _, item := range m.reviewView.list.Items() {
-				if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
-					if treeItem.Document.Path == msg.path {
-						m.reviewView.loadDocument(&treeItem.Document)
+			for _, item := range m.reviewView.List().Items() {
+				if treeItem, ok := item.(review.TreeItem); ok && !treeItem.IsHeader {
+					if treeItem.Document.Path == msg.Path {
+						m.reviewView.LoadDocument(&treeItem.Document)
 						break
 					}
 				}
@@ -737,7 +738,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.activeView = ViewReview
 				m.handler.SetActiveView(ViewReview)
 				if m.reviewView != nil {
-					m.reviewView.loadDocument(doc)
+					m.reviewView.LoadDocument(doc)
 				}
 				return m, cmd
 			}
@@ -1140,7 +1141,7 @@ func (m *Model) sendFeedbackToAgent(feedback string) tea.Cmd {
 		if err := cmd.Run(); err != nil {
 			// Return feedback finalized message but log error
 			log.Warn().Err(err).Msg("failed to send feedback to agent")
-			return reviewFinalizedMsg{feedback: feedback} // Fallback to clipboard
+			return review.ReviewFinalizedMsg{Feedback: feedback} // Fallback to clipboard
 		}
 		// Success - feedback was sent
 		return nil
@@ -1244,7 +1245,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 // If Review tab is visible (has active session), it's included in cycling.
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	// Check if Review tab should be visible
-	showReviewTab := m.reviewView != nil && m.reviewView.activeSession != nil && m.reviewView.selectedDoc != nil
+	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 
 	switch m.activeView {
 	case ViewSessions:
@@ -1681,7 +1682,7 @@ func (m Model) renderTabView() string {
 	var sessionsTab, messagesTab, reviewTab string
 
 	// Check if Review tab should be shown (only when there's an active review session)
-	showReviewTab := m.reviewView != nil && m.reviewView.activeSession != nil && m.reviewView.selectedDoc != nil
+	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 
 	switch m.activeView {
 	case ViewSessions:

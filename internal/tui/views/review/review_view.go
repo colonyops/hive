@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -18,26 +19,26 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	"github.com/hay-kot/hive/internal/core/review"
+	corereview "github.com/hay-kot/hive/internal/core/review"
 	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/internal/tui/components"
 )
 
-// reviewFinalizedMsg is sent when review is finalized and copied to clipboard.
-type reviewFinalizedMsg struct {
-	feedback string
+// ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.
+type ReviewFinalizedMsg struct {
+	Feedback string
 }
 
-// sendToAgentMsg is sent when feedback should be sent to Claude agent.
-type sendToAgentMsg struct {
-	feedback string
+// SendToAgentMsg is sent when feedback should be sent to Claude agent.
+type SendToAgentMsg struct {
+	Feedback string
 }
 
-// reviewDiscardedMsg is sent when review is discarded.
+// reviewDiscardedMsg is sent when review is discarded (internal only).
 type reviewDiscardedMsg struct{}
 
-// ReviewView manages the review interface.
-type ReviewView struct {
+// View manages the review interface.
+type View struct {
 	list              list.Model
 	viewport          viewport.Model
 	watcher           *DocumentWatcher
@@ -47,12 +48,12 @@ type ReviewView struct {
 	height            int
 	previewMode       bool                     // True when showing dual-column layout
 	fullScreen        bool                     // True when showing document in full-screen
-	selectedDoc       *ReviewDocument          // Currently selected document for preview
+	selectedDoc       *Document                // Currently selected document for preview
 	selectionMode     bool                     // True when in visual selection mode
 	selectionStart    int                      // Line number where selection starts (1-indexed)
 	cursorLine        int                      // Line number where cursor is positioned (1-indexed)
-	activeSession     *ReviewSession           // Current review session with comments
-	commentModal      *ReviewCommentModal      // Active comment entry modal
+	activeSession     *Session                 // Current review session with comments
+	commentModal      *CommentModal            // Active comment entry modal
 	confirmModal      *components.ConfirmModal // Active confirmation modal
 	finalizationModal *FinalizationModal       // Active finalization options modal
 	pickerModal       *DocumentPickerModal     // Active document picker modal
@@ -68,11 +69,11 @@ type ReviewView struct {
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 }
 
-// NewReviewView creates a new review view.
+// New creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
 // If store is non-nil, comments will be persisted to the database.
-func NewReviewView(documents []ReviewDocument, contextDir string, store *stores.ReviewStore) ReviewView {
-	items := BuildReviewTreeItems(documents)
+func New(documents []Document, contextDir string, store *stores.ReviewStore) View {
+	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
 	l.SetShowStatusBar(false)
@@ -110,7 +111,7 @@ func NewReviewView(documents []ReviewDocument, contextDir string, store *stores.
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
 
-	return ReviewView{
+	return View{
 		list:        l,
 		viewport:    vp,
 		watcher:     watcher,
@@ -124,7 +125,7 @@ func NewReviewView(documents []ReviewDocument, contextDir string, store *stores.
 }
 
 // SetSize updates the view dimensions.
-func (v *ReviewView) SetSize(width, height int) {
+func (v *View) SetSize(width, height int) {
 	v.width = width
 	v.height = height
 
@@ -138,7 +139,7 @@ func (v *ReviewView) SetSize(width, height int) {
 }
 
 // Init initializes the review view and starts the file watcher.
-func (v ReviewView) Init() tea.Cmd {
+func (v View) Init() tea.Cmd {
 	if v.watcher != nil {
 		return v.watcher.Start()
 	}
@@ -147,14 +148,14 @@ func (v ReviewView) Init() tea.Cmd {
 
 // Update handles messages.
 // The underlying list handles j/k navigation, Enter selection, and / filtering.
-func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
+func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 	switch msg := msg.(type) {
-	case documentChangeMsg:
+	case DocumentChangeMsg:
 		// Rebuild tree with new documents
 		log.Debug().
-			Int("document_count", len(msg.documents)).
+			Int("document_count", len(msg.Documents)).
 			Msg("review: rebuilding document tree from file watcher")
-		items := BuildReviewTreeItems(msg.documents)
+		items := BuildTreeItems(msg.Documents)
 		v.list.SetItems(items)
 		// Continue watching for more changes
 		if v.watcher != nil {
@@ -218,11 +219,11 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				switch action {
 				case FinalizationActionClipboard:
 					return v, func() tea.Msg {
-						return reviewFinalizedMsg{feedback: v.feedbackGenerated}
+						return ReviewFinalizedMsg{Feedback: v.feedbackGenerated}
 					}
 				case FinalizationActionSendToAgent:
 					return v, func() tea.Msg {
-						return sendToAgentMsg{feedback: v.feedbackGenerated}
+						return SendToAgentMsg{Feedback: v.feedbackGenerated}
 					}
 				case FinalizationActionNone:
 					// User cancelled, do nothing
@@ -281,7 +282,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				v.loadDocument(v.selectedDoc)
 				// Return message to trigger clipboard copy
 				return v, func() tea.Msg {
-					return reviewFinalizedMsg{feedback: feedback}
+					return ReviewFinalizedMsg{Feedback: feedback}
 				}
 			}
 
@@ -395,7 +396,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					// Calculate selection range from anchor to cursor
 					start := min(v.selectionStart, v.cursorLine)
 					end := max(v.selectionStart, v.cursorLine)
-					modal := NewReviewCommentModal(start, end, contextText, v.width, v.height)
+					modal := NewCommentModal(start, end, contextText, v.width, v.height)
 					v.commentModal = &modal
 					return v, nil
 				}
@@ -406,7 +407,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					for _, comment := range v.activeSession.Comments {
 						if v.cursorLine >= comment.StartLine && v.cursorLine <= comment.EndLine {
 							// Open comment modal pre-filled with existing comment
-							modal := NewReviewCommentModal(
+							modal := NewCommentModal(
 								comment.StartLine,
 								comment.EndLine,
 								comment.ContextText,
@@ -572,7 +573,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 }
 
 // View renders the review view.
-func (v ReviewView) View() string {
+func (v View) View() string {
 	var baseView string
 
 	// Show helpful message if no document is selected
@@ -674,12 +675,12 @@ func (v ReviewView) View() string {
 }
 
 // SelectedDocument returns the currently selected document, or nil if none.
-func (v ReviewView) SelectedDocument() *ReviewDocument {
+func (v View) SelectedDocument() *Document {
 	item := v.list.SelectedItem()
 	if item == nil {
 		return nil
 	}
-	if reviewItem, ok := item.(ReviewTreeItem); ok {
+	if reviewItem, ok := item.(TreeItem); ok {
 		if reviewItem.IsHeader {
 			return nil
 		}
@@ -700,7 +701,7 @@ func calculateContentHash(path string) (string, error) {
 
 // loadDocument loads and renders a document for preview.
 // Also loads any existing review session from the database.
-func (v *ReviewView) loadDocument(doc *ReviewDocument) {
+func (v *View) loadDocument(doc *Document) {
 	v.selectedDoc = doc
 	if doc == nil {
 		v.viewport.SetContent("")
@@ -742,9 +743,9 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 				dbComments, err := v.store.ListComments(ctx, dbSession.ID)
 				if err == nil {
 					// Convert to TUI types
-					comments := make([]ReviewComment, 0, len(dbComments))
+					comments := make([]Comment, 0, len(dbComments))
 					for _, dbComment := range dbComments {
-						comments = append(comments, ReviewComment{
+						comments = append(comments, Comment{
 							ID:          dbComment.ID,
 							SessionID:   dbComment.SessionID,
 							StartLine:   dbComment.StartLine,
@@ -755,7 +756,7 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 						})
 					}
 
-					v.activeSession = &ReviewSession{
+					v.activeSession = &Session{
 						ID:         dbSession.ID,
 						DocPath:    dbSession.DocumentPath,
 						Comments:   comments,
@@ -788,7 +789,7 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 }
 
 // moveCursorDown moves cursor down by n lines, scrolling if needed.
-func (v *ReviewView) moveCursorDown(n int) {
+func (v *View) moveCursorDown(n int) {
 	if v.selectedDoc == nil {
 		return
 	}
@@ -799,14 +800,14 @@ func (v *ReviewView) moveCursorDown(n int) {
 }
 
 // moveCursorUp moves cursor up by n lines, scrolling if needed.
-func (v *ReviewView) moveCursorUp(n int) {
+func (v *View) moveCursorUp(n int) {
 	v.cursorLine = max(v.cursorLine-n, 1)
 	v.ensureCursorVisible()
 }
 
 // ensureCursorVisible scrolls viewport to keep cursor visible.
 // Accounts for status bar in full-screen mode to prevent cursor from being hidden.
-func (v *ReviewView) ensureCursorVisible() {
+func (v *View) ensureCursorVisible() {
 	offset := v.viewport.YOffset()
 	visibleHeight := v.viewport.VisibleLineCount()
 
@@ -828,7 +829,7 @@ func (v *ReviewView) ensureCursorVisible() {
 }
 
 // renderSelection re-renders the document with comments, selection and cursor highlighting.
-func (v *ReviewView) renderSelection() {
+func (v *View) renderSelection() {
 	if v.selectedDoc == nil {
 		return
 	}
@@ -859,7 +860,7 @@ func (v *ReviewView) renderSelection() {
 }
 
 // findSearchMatches finds all lines matching the search query and stores their line numbers.
-func (v *ReviewView) findSearchMatches() {
+func (v *View) findSearchMatches() {
 	v.searchMatches = nil
 	v.searchMatchIndex = 0
 
@@ -881,14 +882,14 @@ func (v *ReviewView) findSearchMatches() {
 }
 
 // jumpToMatch moves the cursor to the specified line and scrolls to make it visible.
-func (v *ReviewView) jumpToMatch(lineNum int) {
+func (v *View) jumpToMatch(lineNum int) {
 	v.cursorLine = lineNum
 	v.ensureCursorVisible()
 }
 
 // highlightSelection applies background color to cursor and selected lines.
 // Also highlights line numbers of commented lines.
-func (v *ReviewView) highlightSelection(content string) string {
+func (v *View) highlightSelection(content string) string {
 	lines := strings.Split(content, "\n")
 
 	// Get commented line numbers
@@ -964,7 +965,7 @@ func (v *ReviewView) highlightSelection(content string) string {
 
 // highlightLineNumber applies a style to the line number and separator of a rendered line.
 // Assumes format: "<number> │ <content>"
-func (v *ReviewView) highlightLineNumber(line string, style lipgloss.Style) string {
+func (v *View) highlightLineNumber(line string, style lipgloss.Style) string {
 	// Find the separator " │ "
 	sepIdx := strings.Index(line, " │ ")
 	if sepIdx == -1 {
@@ -983,7 +984,7 @@ func (v *ReviewView) highlightLineNumber(line string, style lipgloss.Style) stri
 }
 
 // getCommentedLines returns a map of line numbers that have comments.
-func (v *ReviewView) getCommentedLines() map[int]bool {
+func (v *View) getCommentedLines() map[int]bool {
 	commented := make(map[int]bool)
 	if v.activeSession == nil {
 		return commented
@@ -999,7 +1000,7 @@ func (v *ReviewView) getCommentedLines() map[int]bool {
 }
 
 // renderStatusBar creates a status bar showing mode and position info.
-func (v ReviewView) renderStatusBar() string {
+func (v View) renderStatusBar() string {
 	// Show search input when in search mode
 	if v.searchMode {
 		searchStyle := lipgloss.NewStyle().
@@ -1075,7 +1076,7 @@ func (v ReviewView) renderStatusBar() string {
 }
 
 // getSelectedText extracts the text from the selected line range.
-func (v *ReviewView) getSelectedText() string {
+func (v *View) getSelectedText() string {
 	if v.selectedDoc == nil || len(v.selectedDoc.RenderedLines) == 0 {
 		return ""
 	}
@@ -1094,7 +1095,7 @@ func (v *ReviewView) getSelectedText() string {
 }
 
 // addComment creates a new comment and adds it to the active session.
-func (v *ReviewView) addComment(commentText string) {
+func (v *View) addComment(commentText string) {
 	if v.selectedDoc == nil {
 		return
 	}
@@ -1130,10 +1131,10 @@ func (v *ReviewView) addComment(commentText string) {
 			}
 		}
 
-		v.activeSession = &ReviewSession{
+		v.activeSession = &Session{
 			ID:         sessionID,
 			DocPath:    v.selectedDoc.Path,
-			Comments:   []ReviewComment{},
+			Comments:   []Comment{},
 			CreatedAt:  time.Now(),
 			ModifiedAt: time.Now(),
 		}
@@ -1144,7 +1145,7 @@ func (v *ReviewView) addComment(commentText string) {
 	end := max(v.selectionStart, v.cursorLine)
 
 	// Create comment
-	comment := ReviewComment{
+	comment := Comment{
 		ID:          uuid.NewString(),
 		SessionID:   v.activeSession.ID,
 		StartLine:   start,
@@ -1156,7 +1157,7 @@ func (v *ReviewView) addComment(commentText string) {
 
 	// Save to database if store is available
 	if v.store != nil {
-		dbComment := review.Comment{
+		dbComment := corereview.Comment{
 			ID:          comment.ID,
 			SessionID:   comment.SessionID,
 			StartLine:   comment.StartLine,
@@ -1181,7 +1182,7 @@ func (v *ReviewView) addComment(commentText string) {
 }
 
 // updateComment updates the text of an existing comment.
-func (v *ReviewView) updateComment(commentID, newText string) {
+func (v *View) updateComment(commentID, newText string) {
 	if v.activeSession == nil {
 		return
 	}
@@ -1196,7 +1197,7 @@ func (v *ReviewView) updateComment(commentID, newText string) {
 
 			// Update in database if store is available
 			if v.store != nil {
-				dbComment := review.Comment{
+				dbComment := corereview.Comment{
 					ID:          comment.ID,
 					SessionID:   comment.SessionID,
 					StartLine:   comment.StartLine,
@@ -1220,7 +1221,7 @@ func (v *ReviewView) updateComment(commentID, newText string) {
 }
 
 // deleteCommentsAtLine removes all comments that include the specified line number.
-func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
+func (v *View) deleteCommentsAtLine(lineNum int) {
 	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
 		return
 	}
@@ -1228,7 +1229,7 @@ func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
 	ctx := context.Background()
 
 	// Filter out comments that include this line
-	var remainingComments []ReviewComment
+	var remainingComments []Comment
 	for _, comment := range v.activeSession.Comments {
 		// Keep comment if it doesn't include the cursor line
 		if lineNum < comment.StartLine || lineNum > comment.EndLine {
@@ -1260,7 +1261,7 @@ func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
 }
 
 // discardReview discards the entire review session, deleting it from the database.
-func (v *ReviewView) discardReview() tea.Cmd {
+func (v *View) discardReview() tea.Cmd {
 	if v.activeSession == nil {
 		return nil
 	}
@@ -1282,7 +1283,7 @@ func (v *ReviewView) discardReview() tea.Cmd {
 }
 
 // updateTreeItemCommentCount updates the comment count badge in the tree for the current document.
-func (v *ReviewView) updateTreeItemCommentCount() {
+func (v *View) updateTreeItemCommentCount() {
 	if v.selectedDoc == nil {
 		return
 	}
@@ -1295,7 +1296,7 @@ func (v *ReviewView) updateTreeItemCommentCount() {
 
 	// Find and update the tree item for the current document
 	for i, item := range items {
-		if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+		if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
 			if treeItem.Document.Path == v.selectedDoc.Path {
 				treeItem.CommentCount = commentCount
 				items[i] = treeItem
@@ -1307,11 +1308,11 @@ func (v *ReviewView) updateTreeItemCommentCount() {
 }
 
 // insertCommentsInline inserts comments after their referenced lines.
-func (v *ReviewView) insertCommentsInline(content string) string {
+func (v *View) insertCommentsInline(content string) string {
 	lines := strings.Split(content, "\n")
 
 	// Group comments by end line
-	commentsByLine := make(map[int][]ReviewComment)
+	commentsByLine := make(map[int][]Comment)
 	for _, comment := range v.activeSession.Comments {
 		commentsByLine[comment.EndLine] = append(commentsByLine[comment.EndLine], comment)
 	}
@@ -1363,26 +1364,26 @@ func (v *ReviewView) insertCommentsInline(content string) string {
 	return strings.Join(lines, "\n")
 }
 
-// ReviewTreeItem represents an item in the review tree.
-type ReviewTreeItem struct {
-	IsHeader         bool           // True if this is a document type header
-	HeaderName       string         // Document type name (e.g., "Plans", "Research")
-	Document         ReviewDocument // The document (when !IsHeader)
-	IsLastInType     bool           // True if last document in this type group
-	CommentCount     int            // Number of comments on this document
-	HasActiveSession bool           // True if document has an active (non-finalized) review session
+// TreeItem represents an item in the review tree.
+type TreeItem struct {
+	IsHeader         bool     // True if this is a document type header
+	HeaderName       string   // Document type name (e.g., "Plans", "Research")
+	Document         Document // The document (when !IsHeader)
+	IsLastInType     bool     // True if last document in this type group
+	CommentCount     int      // Number of comments on this document
+	HasActiveSession bool     // True if document has an active (non-finalized) review session
 }
 
 // FilterValue returns the value used for filtering.
-func (i ReviewTreeItem) FilterValue() string {
+func (i TreeItem) FilterValue() string {
 	if i.IsHeader {
 		return ""
 	}
 	return i.Document.RelPath
 }
 
-// BuildReviewTreeItems converts documents into tree items grouped by type.
-func BuildReviewTreeItems(documents []ReviewDocument) []list.Item {
+// BuildTreeItems converts documents into tree items grouped by type.
+func BuildTreeItems(documents []Document) []list.Item {
 	if len(documents) == 0 {
 		return nil
 	}
@@ -1390,7 +1391,7 @@ func BuildReviewTreeItems(documents []ReviewDocument) []list.Item {
 	items := make([]list.Item, 0)
 
 	// Group documents by type
-	groups := make(map[DocumentType][]ReviewDocument)
+	groups := make(map[DocumentType][]Document)
 	for _, doc := range documents {
 		groups[doc.Type] = append(groups[doc.Type], doc)
 	}
@@ -1405,7 +1406,7 @@ func BuildReviewTreeItems(documents []ReviewDocument) []list.Item {
 		}
 
 		// Add header
-		header := ReviewTreeItem{
+		header := TreeItem{
 			IsHeader:   true,
 			HeaderName: docType.String(),
 		}
@@ -1414,7 +1415,7 @@ func BuildReviewTreeItems(documents []ReviewDocument) []list.Item {
 		// Add documents
 		for idx, doc := range docs {
 			isLast := idx == len(docs)-1
-			item := ReviewTreeItem{
+			item := TreeItem{
 				IsHeader:     false,
 				Document:     doc,
 				IsLastInType: isLast,
@@ -1480,7 +1481,7 @@ func (d ReviewTreeDelegate) Update(_ tea.Msg, _ *list.Model) tea.Cmd {
 
 // Render renders a single review tree item.
 func (d ReviewTreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Item) {
-	reviewItem, ok := item.(ReviewTreeItem)
+	reviewItem, ok := item.(TreeItem)
 	if !ok {
 		return
 	}
@@ -1506,7 +1507,7 @@ func (d ReviewTreeDelegate) Render(w io.Writer, m list.Model, index int, item li
 }
 
 // renderHeader renders a document type header.
-func (d ReviewTreeDelegate) renderHeader(item ReviewTreeItem, isSelected bool) string {
+func (d ReviewTreeDelegate) renderHeader(item TreeItem, isSelected bool) string {
 	nameStyle := d.styles.HeaderNormal
 	if isSelected {
 		nameStyle = d.styles.HeaderSelected
@@ -1515,7 +1516,7 @@ func (d ReviewTreeDelegate) renderHeader(item ReviewTreeItem, isSelected bool) s
 }
 
 // renderDocument renders a document entry with tree prefix.
-func (d ReviewTreeDelegate) renderDocument(item ReviewTreeItem, isSelected bool) string {
+func (d ReviewTreeDelegate) renderDocument(item TreeItem, isSelected bool) string {
 	// Tree prefix
 	var prefix string
 	if item.IsLastInType {
@@ -1547,4 +1548,122 @@ func (d ReviewTreeDelegate) renderDocument(item ReviewTreeItem, isSelected bool)
 	}
 
 	return fmt.Sprintf("%s %s%s%s", prefixStyled, name, sessionIndicator, comments)
+}
+
+// Accessor methods for cross-package access.
+
+// Width returns the view width.
+func (v *View) Width() int {
+	return v.width
+}
+
+// Height returns the view height.
+func (v *View) Height() int {
+	return v.height
+}
+
+// Store returns the review store.
+func (v *View) Store() *stores.ReviewStore {
+	return v.store
+}
+
+// List returns the list model.
+func (v *View) List() *list.Model {
+	return &v.list
+}
+
+// SetPickerModal sets the document picker modal.
+func (v *View) SetPickerModal(modal *DocumentPickerModal) {
+	v.pickerModal = modal
+}
+
+// HasActiveSession returns whether there is an active review session.
+func (v *View) HasActiveSession() bool {
+	return v.activeSession != nil
+}
+
+// SelectedDocPath returns the path of the selected document, or empty string if none.
+func (v *View) SelectedDocPath() string {
+	if v.selectedDoc == nil {
+		return ""
+	}
+	return v.selectedDoc.Path
+}
+
+// GetAllDocuments returns all documents from the tree items.
+func (v *View) GetAllDocuments() []Document {
+	var docs []Document
+	for _, item := range v.list.Items() {
+		if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
+			docs = append(docs, treeItem.Document)
+		}
+	}
+	return docs
+}
+
+// ShowDocumentPicker shows the fuzzy search document picker modal.
+func (v *View) ShowDocumentPicker() tea.Cmd {
+	// Create and show the picker modal
+	v.pickerModal = NewDocumentPickerModal(v.GetAllDocuments(), v.width, v.height, v.store)
+	return nil
+}
+
+// SetHasAgentCommand sets whether the send-claude command is available.
+func (v *View) SetHasAgentCommand(has bool) {
+	v.hasAgentCommand = has
+}
+
+// LoadDocument loads and renders a document for preview.
+func (v *View) LoadDocument(doc *Document) {
+	v.loadDocument(doc)
+}
+
+// CanShowInTabBar returns true if the review view should be shown in tab bar.
+// This is true when there's an active session with a selected document.
+func (v *View) CanShowInTabBar() bool {
+	return v.activeSession != nil && v.selectedDoc != nil
+}
+
+// OpenDocumentMsg is a message sent when attempting to open a document.
+type OpenDocumentMsg struct {
+	Path string
+	Err  error
+}
+
+// OpenDocumentByPath attempts to open a specific document by path.
+// Path can be absolute or relative to context directory.
+// Returns a command that sends an OpenDocumentMsg.
+func (v *View) OpenDocumentByPath(path string) tea.Cmd {
+	return func() tea.Msg {
+		// Try to find document by matching path
+		var found *Document
+		for i := range v.list.Items() {
+			item, ok := v.list.Items()[i].(TreeItem)
+			if !ok || item.IsHeader {
+				continue
+			}
+
+			// Check if path matches (either full path or relative path)
+			if item.Document.Path == path || item.Document.RelPath == path {
+				doc := item.Document
+				found = &doc
+				break
+			}
+
+			// Also check basename match
+			if filepath.Base(item.Document.Path) == filepath.Base(path) {
+				doc := item.Document
+				found = &doc
+				break
+			}
+		}
+
+		if found == nil {
+			// Return error message that will be handled by model
+			return OpenDocumentMsg{Path: path, Err: fmt.Errorf("document not found")}
+		}
+
+		// Return success message with path
+		return OpenDocumentMsg{Path: found.Path}
+	}
 }

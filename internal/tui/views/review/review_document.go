@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"fmt"
@@ -37,8 +37,8 @@ func (t DocumentType) String() string {
 	}
 }
 
-// ReviewDocument represents a reviewable file.
-type ReviewDocument struct {
+// Document represents a reviewable file.
+type Document struct {
 	Path          string       // Absolute path
 	RelPath       string       // Relative to repo (e.g., ".hive/plans/...")
 	Type          DocumentType // Plan, Research, Context, Other
@@ -47,8 +47,8 @@ type ReviewDocument struct {
 	RenderedLines []string // Glamour-rendered lines with ANSI (cached)
 }
 
-// ReviewComment represents inline feedback.
-type ReviewComment struct {
+// Comment represents inline feedback.
+type Comment struct {
 	ID          string // UUID
 	SessionID   string // Associated session ID
 	StartLine   int    // 1-indexed line number
@@ -58,11 +58,11 @@ type ReviewComment struct {
 	CreatedAt   time.Time
 }
 
-// ReviewSession holds state for active review.
-type ReviewSession struct {
+// Session holds state for active review.
+type Session struct {
 	ID         string
 	DocPath    string
-	Comments   []ReviewComment
+	Comments   []Comment
 	CreatedAt  time.Time
 	ModifiedAt time.Time
 }
@@ -70,13 +70,13 @@ type ReviewSession struct {
 // DiscoverDocuments walks the actual context directory and returns categorized documents.
 // It uses the context directory path directly, avoiding symlink issues.
 // Returns documents sorted by type, then by modification time (newest first).
-func DiscoverDocuments(contextDir string) ([]ReviewDocument, error) {
+func DiscoverDocuments(contextDir string) ([]Document, error) {
 	// Check if context directory exists
 	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
-		return []ReviewDocument{}, nil
+		return []Document{}, nil
 	}
 
-	var docs []ReviewDocument
+	var docs []Document
 
 	// Walk directory tree
 	err := filepath.WalkDir(contextDir, func(path string, d os.DirEntry, err error) error {
@@ -109,7 +109,7 @@ func DiscoverDocuments(contextDir string) ([]ReviewDocument, error) {
 			return err
 		}
 
-		docs = append(docs, ReviewDocument{
+		docs = append(docs, Document{
 			Path:    path,
 			RelPath: relPath,
 			Type:    docType,
@@ -151,7 +151,7 @@ func inferDocumentType(relPath string) DocumentType {
 }
 
 // sortDocuments sorts documents by type, then by modification time (newest first).
-func sortDocuments(docs []ReviewDocument) {
+func sortDocuments(docs []Document) {
 	// Use simple bubble sort for small collections
 	// Type priority: Plans > Research > Context > Other
 	for i := range docs {
@@ -170,7 +170,7 @@ func sortDocuments(docs []ReviewDocument) {
 }
 
 // LoadContent reads the document content from disk.
-func (d *ReviewDocument) LoadContent() error {
+func (d *Document) LoadContent() error {
 	content, err := os.ReadFile(d.Path)
 	if err != nil {
 		return err
@@ -182,7 +182,7 @@ func (d *ReviewDocument) LoadContent() error {
 
 // Render renders the document content using Glamour with line numbers.
 // Returns a string with ANSI-styled markdown and line numbers.
-func (d *ReviewDocument) Render(width int) (string, error) {
+func (d *Document) Render(width int) (string, error) {
 	// Use cached rendered lines if available
 	if d.RenderedLines != nil {
 		return d.formatWithLineNumbers(d.RenderedLines), nil
@@ -217,7 +217,7 @@ func (d *ReviewDocument) Render(width int) (string, error) {
 }
 
 // formatWithLineNumbers adds line numbers to rendered content.
-func (d *ReviewDocument) formatWithLineNumbers(lines []string) string {
+func (d *Document) formatWithLineNumbers(lines []string) string {
 	if len(lines) == 0 {
 		return ""
 	}

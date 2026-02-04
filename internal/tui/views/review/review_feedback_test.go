@@ -1,4 +1,4 @@
-package tui
+package review
 
 import (
 	"strings"
@@ -9,7 +9,7 @@ import (
 func TestGenerateReviewFeedback(t *testing.T) {
 	tests := []struct {
 		name       string
-		session    *ReviewSession
+		session    *Session
 		docRelPath string
 		want       string
 		wantEmpty  bool
@@ -22,20 +22,20 @@ func TestGenerateReviewFeedback(t *testing.T) {
 		},
 		{
 			name: "empty comments",
-			session: &ReviewSession{
+			session: &Session{
 				ID:       "session-1",
 				DocPath:  "/path/to/doc.md",
-				Comments: []ReviewComment{},
+				Comments: []Comment{},
 			},
 			docRelPath: "plans/test.md",
 			wantEmpty:  true,
 		},
 		{
 			name: "single comment",
-			session: &ReviewSession{
+			session: &Session{
 				ID:      "session-1",
 				DocPath: "/path/to/doc.md",
-				Comments: []ReviewComment{
+				Comments: []Comment{
 					{
 						ID:          "comment-1",
 						SessionID:   "session-1",
@@ -52,10 +52,10 @@ func TestGenerateReviewFeedback(t *testing.T) {
 		},
 		{
 			name: "multiple comments sorted by line",
-			session: &ReviewSession{
+			session: &Session{
 				ID:      "session-1",
 				DocPath: "/path/to/doc.md",
-				Comments: []ReviewComment{
+				Comments: []Comment{
 					{
 						ID:          "comment-2",
 						SessionID:   "session-1",
@@ -81,10 +81,10 @@ func TestGenerateReviewFeedback(t *testing.T) {
 		},
 		{
 			name: "multiline context",
-			session: &ReviewSession{
+			session: &Session{
 				ID:      "session-1",
 				DocPath: "/path/to/doc.md",
-				Comments: []ReviewComment{
+				Comments: []Comment{
 					{
 						ID:          "comment-1",
 						SessionID:   "session-1",
