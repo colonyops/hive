@@ -21,6 +21,7 @@ import (
 
 	corereview "github.com/hay-kot/hive/internal/core/review"
 	"github.com/hay-kot/hive/internal/stores"
+	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/components"
 )
 
@@ -642,7 +643,7 @@ func (v View) View() string {
 
 	// Overlay finalization modal if active
 	if v.finalizationModal != nil {
-		return v.finalizationModal.View()
+		return v.finalizationModal.Overlay(baseView)
 	}
 
 	// Overlay confirmation modal if active
@@ -1451,7 +1452,7 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 
 	// Insert comments after their lines with enhanced visual styling
 	commentStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#FF79C6")). // More vibrant pink
+		Foreground(lipgloss.Color("#F74D50")). // More vibrant pink
 		Background(lipgloss.Color("#282A36")). // Subtle background
 		Padding(0, 1).
 		Bold(true)
@@ -1470,8 +1471,7 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 		// Build comment lines to insert
 		commentLines := make([]string, 0, len(comments))
 		for _, comment := range comments {
-			// Use '<profile>' placeholder for future icon/avatar
-			icon := "<profile>"
+			icon := styles.IconProfile
 			// Add increased indentation (6 spaces) for visual separation
 			indent := "      "
 			commentLine := indent + commentStyle.Render(fmt.Sprintf("%s %s", icon, comment.CommentText))

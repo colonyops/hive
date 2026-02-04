@@ -91,7 +91,7 @@ func (m FinalizationModal) Update(msg tea.Msg) (FinalizationModal, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the finalization modal.
+// View renders the finalization modal content (without overlay).
 func (m FinalizationModal) View() string {
 	title := "Finalize Review"
 
@@ -121,7 +121,7 @@ func (m FinalizationModal) View() string {
 	content.WriteString("\n")
 	content.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("[j/k] select • [enter] confirm • [esc] cancel"))
 
-	// Center the modal
+	// Style the modal
 	modalWidth := 60
 	modalContent := content.String()
 
@@ -129,15 +129,29 @@ func (m FinalizationModal) View() string {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(colorBlue).
 		Padding(1, 2).
-		Width(modalWidth)
+		Width(modalWidth).
+		Background(lipgloss.Color("#1a1b26"))
 
-	return lipgloss.Place(
-		m.width,
-		m.height,
-		lipgloss.Center,
-		lipgloss.Center,
-		modalStyle.Render(modalContent),
-	)
+	return modalStyle.Render(modalContent)
+}
+
+// Overlay renders the modal over the background content.
+func (m FinalizationModal) Overlay(background string) string {
+	modal := m.View()
+
+	// Use Compositor/Layer for true overlay
+	bgLayer := lipgloss.NewLayer(background)
+	modalLayer := lipgloss.NewLayer(modal)
+
+	// Center the modal
+	modalW := lipgloss.Width(modal)
+	modalH := lipgloss.Height(modal)
+	centerX := (m.width - modalW) / 2
+	centerY := (m.height - modalH) / 2
+	modalLayer.X(centerX).Y(centerY).Z(1)
+
+	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
+	return compositor.Render()
 }
 
 // Confirmed returns true if user confirmed the selection.

@@ -13,6 +13,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/stores"
+	"github.com/hay-kot/hive/internal/styles"
 )
 
 // keyMsg creates a KeyMsg for testing.
@@ -488,8 +489,8 @@ func TestCommentVisualStyling(t *testing.T) {
 	rendered, _ := view.insertCommentsInline(content)
 
 	// Check that the rendered output contains the profile placeholder
-	if !strings.Contains(rendered, "<profile>") {
-		t.Error("expected rendered output to contain '<profile>' placeholder")
+	if !strings.Contains(rendered, styles.IconProfile) {
+		t.Errorf("expected rendered output to contain '%s' placeholder", styles.IconProfile)
 	}
 
 	// Check that the comment text is present
@@ -501,7 +502,7 @@ func TestCommentVisualStyling(t *testing.T) {
 	lines := strings.Split(rendered, "\n")
 	var commentLineFound bool
 	for _, line := range lines {
-		if strings.Contains(line, "<profile>") {
+		if strings.Contains(line, styles.IconProfile) {
 			// Check for leading spaces (indentation)
 			if !strings.HasPrefix(line, "    ") {
 				t.Error("expected comment line to have increased indentation (at least 4 spaces)")
