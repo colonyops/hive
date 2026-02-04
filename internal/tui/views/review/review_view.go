@@ -67,6 +67,7 @@ type View struct {
 	pendingDeleteLine int                      // Line number for pending comment deletion (0 if none)
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
+	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
 }
 
 // New creates a new review view.
@@ -363,8 +364,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		}
 
 		// Handle esc key
-		switch msg.String() {
-		case "esc":
+		if msg.String() == "esc" {
 			// Priority order: search mode > visual mode > close document
 			if v.searchMode {
 				// Exit search mode
@@ -589,8 +589,9 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 func (v View) View() string {
 	var baseView string
 
-	// Show helpful message if no document is selected
-	if v.selectedDoc == nil {
+	switch {
+	case v.selectedDoc == nil:
+		// Show helpful message if no document is selected
 		messageStyle := lipgloss.NewStyle().
 			Foreground(lipgloss.Color("#c0caf5")).
 			Padding(2, 4)
@@ -604,7 +605,7 @@ func (v View) View() string {
 		message += helpStyle.Render("Press 'tab'") + " to switch to another view"
 
 		baseView = messageStyle.Render(message)
-	} else if v.fullScreen {
+	case v.fullScreen:
 		// Full-screen mode: show viewport with status bar
 		contentHeight := v.height - 1 // Reserve 1 line for status bar
 		content := v.viewport.View()
@@ -617,7 +618,7 @@ func (v View) View() string {
 		}
 
 		baseView = strings.Join(contentLines, "\n") + "\n" + statusBar
-	} else {
+	default:
 		// Fallback to list view (should not normally happen)
 		baseView = v.list.View()
 	}
@@ -737,6 +738,9 @@ func (v *View) loadDocument(doc *Document) {
 	// Reset cursor to top when loading new document
 	v.cursorLine = 1
 
+	// Clear line mapping on document load (will be rebuilt when rendering)
+	v.lineMapping = nil
+
 	// Load existing session from database if store is available
 	if v.store != nil {
 		ctx := context.Background()
@@ -820,7 +824,11 @@ func (v *View) moveCursorUp(n int) {
 
 // ensureCursorVisible scrolls viewport to keep cursor visible.
 // Accounts for status bar in full-screen mode to prevent cursor from being hidden.
+// Uses display coordinates when comments are inserted inline.
 func (v *View) ensureCursorVisible() {
+	// Map cursor line from document coordinates to display coordinates
+	displayCursorLine := v.mapDocToDisplay(v.cursorLine, v.lineMapping)
+
 	offset := v.viewport.YOffset()
 	visibleHeight := v.viewport.VisibleLineCount()
 
@@ -830,14 +838,14 @@ func (v *View) ensureCursorVisible() {
 	}
 
 	// Cursor above viewport - scroll up
-	if v.cursorLine < offset+1 {
-		v.viewport.SetYOffset(v.cursorLine - 1)
+	if displayCursorLine < offset+1 {
+		v.viewport.SetYOffset(displayCursorLine - 1)
 	}
 
 	// Cursor below viewport - scroll down
 	// Keep cursor at least 1 line away from bottom to avoid status bar overlap
-	if v.cursorLine > offset+visibleHeight {
-		v.viewport.SetYOffset(v.cursorLine - visibleHeight)
+	if displayCursorLine > offset+visibleHeight {
+		v.viewport.SetYOffset(displayCursorLine - visibleHeight)
 	}
 }
 
@@ -862,15 +870,17 @@ func (v *View) renderSelection() {
 	}
 
 	// Insert comments inline if session exists and build line mapping
-	var lineMapping map[int]int // maps document line -> display line
 	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 		var mappedContent string
-		mappedContent, lineMapping = v.insertCommentsInline(rendered)
+		mappedContent, v.lineMapping = v.insertCommentsInline(rendered)
 		rendered = mappedContent
+	} else {
+		// Clear line mapping when no comments
+		v.lineMapping = nil
 	}
 
 	// Apply cursor and selection highlighting (includes search match highlighting)
-	rendered = v.highlightSelection(rendered, lineMapping)
+	rendered = v.highlightSelection(rendered, v.lineMapping)
 
 	v.viewport.SetContent(rendered)
 }
@@ -898,6 +908,7 @@ func (v *View) findSearchMatches() {
 }
 
 // jumpToMatch moves the cursor to the specified line and scrolls to make it visible.
+// lineNum should be in document coordinates; this function will map to display coordinates for scrolling.
 func (v *View) jumpToMatch(lineNum int) {
 	v.cursorLine = lineNum
 	v.ensureCursorVisible()
@@ -970,19 +981,20 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 		}
 
 		// Apply highlighting based on priority
-		if displayLineNum == currentSearchLine {
+		switch {
+		case displayLineNum == currentSearchLine:
 			// Current search match (highest priority)
 			lines[i] = currentSearchMatchStyle.Render(line)
-		} else if displayLineNum == displayCursorLine {
+		case displayLineNum == displayCursorLine:
 			// Cursor highlight
 			lines[i] = cursorStyle.Render(line)
-		} else if v.selectionMode && displayLineNum >= start && displayLineNum <= end {
+		case v.selectionMode && displayLineNum >= start && displayLineNum <= end:
 			// Visual selection highlight
 			lines[i] = selectionStyle.Render(line)
-		} else if searchMatchLines[displayLineNum] {
+		case searchMatchLines[displayLineNum]:
 			// Other search matches (subtle)
 			lines[i] = searchMatchStyle.Render(line)
-		} else {
+		default:
 			lines[i] = line
 		}
 	}
@@ -1293,12 +1305,10 @@ func (v *View) deleteCommentsAtLine(lineNum int) {
 		// Keep comment if it doesn't include the cursor line
 		if lineNum < comment.StartLine || lineNum > comment.EndLine {
 			remainingComments = append(remainingComments, comment)
-		} else {
+		} else if v.store != nil {
 			// Delete from database if store is available
-			if v.store != nil {
-				_ = v.store.DeleteComment(ctx, comment.ID)
-				// Ignore errors - deletion is best effort
-			}
+			_ = v.store.DeleteComment(ctx, comment.ID)
+			// Ignore errors - deletion is best effort
 		}
 	}
 

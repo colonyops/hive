@@ -1,5 +1,7 @@
 package tui
 
+const unknownViewType = "unknown"
+
 // ViewType represents which view is active.
 type ViewType int
 
@@ -19,6 +21,6 @@ func (v ViewType) String() string {
 	case ViewReview:
 		return "review"
 	default:
-		return "unknown"
+		return unknownViewType
 	}
 }

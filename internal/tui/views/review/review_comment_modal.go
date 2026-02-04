@@ -64,9 +64,8 @@ func formatContextPreview(text string) string {
 
 // Update handles messages.
 func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		switch keyMsg.String() {
 		case "enter":
 			if m.textInput.Value() != "" {
 				m.submitted = true

@@ -66,9 +66,8 @@ func NewFinalizationModal(feedback string, hasAgentCmd bool, width, height int) 
 
 // Update handles input events for the finalization modal.
 func (m FinalizationModal) Update(msg tea.Msg) (FinalizationModal, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		keyStr := msg.String()
+	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		keyStr := keyMsg.String()
 		log.Debug().
 			Str("key", keyStr).
 			Int("current_idx", m.selectedIdx).

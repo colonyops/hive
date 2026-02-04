@@ -6,8 +6,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+const testFeedback = "Test feedback"
+
 func TestFinalizationModal_Creation(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 
 	t.Run("with agent command available", func(t *testing.T) {
 		modal := NewFinalizationModal(feedback, true, 100, 40)
@@ -36,7 +38,7 @@ func TestFinalizationModal_Creation(t *testing.T) {
 }
 
 func TestFinalizationModal_Navigation(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 	modal := NewFinalizationModal(feedback, true, 100, 40)
 
 	// Initial selection should be 0
@@ -59,7 +61,7 @@ func TestFinalizationModal_Navigation(t *testing.T) {
 }
 
 func TestFinalizationModal_Confirmation(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 	modal := NewFinalizationModal(feedback, true, 100, 40)
 
 	// Set confirmed flag
@@ -75,7 +77,7 @@ func TestFinalizationModal_Confirmation(t *testing.T) {
 }
 
 func TestFinalizationModal_Cancellation(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 	modal := NewFinalizationModal(feedback, true, 100, 40)
 
 	// Set cancelled flag
@@ -86,7 +88,7 @@ func TestFinalizationModal_Cancellation(t *testing.T) {
 }
 
 func TestFinalizationModal_SelectedAction(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 	modal := NewFinalizationModal(feedback, true, 100, 40)
 
 	// Select second option (send to agent)
@@ -99,7 +101,7 @@ func TestFinalizationModal_SelectedAction(t *testing.T) {
 }
 
 func TestFinalizationModal_View(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 	modal := NewFinalizationModal(feedback, true, 100, 40)
 
 	view := modal.View()
@@ -134,7 +136,7 @@ func stringContains(s, substr string) bool {
 }
 
 func TestFinalizationModal_KeyHandling(t *testing.T) {
-	feedback := "Test feedback"
+	feedback := testFeedback
 	modal := NewFinalizationModal(feedback, true, 100, 40)
 
 	// Test 'j' key - should move selection down

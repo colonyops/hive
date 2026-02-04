@@ -117,7 +117,7 @@ func TestDiscoverDocuments(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create context directory structure
 	plansPath := filepath.Join(tmpDir, "plans")
@@ -226,7 +226,7 @@ func TestDiscoverDocuments_EmptyContextDir(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer os.RemoveAll(tmpDir)
+	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Empty context directory
 	docs, err := DiscoverDocuments(tmpDir)

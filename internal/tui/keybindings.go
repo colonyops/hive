@@ -218,7 +218,7 @@ func (h *KeybindingResolver) HelpEntries() []string {
 			}
 		}
 		if help == "" {
-			help = "unknown"
+			help = unknownViewType
 		}
 		entries = append(entries, fmt.Sprintf("[%s] %s", key, help))
 	}
@@ -256,7 +256,7 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 			}
 		}
 		if help == "" {
-			help = "unknown"
+			help = unknownViewType
 		}
 
 		bindings = append(bindings, key.NewBinding(
