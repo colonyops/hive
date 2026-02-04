@@ -738,3 +738,30 @@ func TestValidate_UserCommandValidNames(t *testing.T) {
 	err := cfg.Validate()
 	assert.NoError(t, err)
 }
+
+func TestValidate_UserCommandValidScopes(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"global-cmd":   {Sh: "echo test", Scope: []string{"global"}},
+		"review-cmd":   {Sh: "echo test", Scope: []string{"review"}},
+		"sessions-cmd": {Sh: "echo test", Scope: []string{"sessions"}},
+		"messages-cmd": {Sh: "echo test", Scope: []string{"messages"}},
+		"multi-scope":  {Sh: "echo test", Scope: []string{"review", "sessions"}},
+		"no-scope":     {Sh: "echo test"}, // nil scope = global
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
+func TestValidate_UserCommandInvalidScope(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"bad-scope": {Sh: "echo test", Scope: []string{"invalid"}},
+	}
+
+	err := cfg.Validate()
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid scope")
+	assert.Contains(t, err.Error(), "must be one of: global, sessions, messages, review")
+}

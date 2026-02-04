@@ -1196,6 +1196,7 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 		// If currently in review view, tab should cycle back to sessions
 		m.activeView = ViewSessions
 	}
+	m.handler.SetActiveView(m.activeView)
 	return m, nil
 }
 
@@ -1230,7 +1231,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 	// Handle ':' for command palette (allow even without selection for filter commands)
 	if keyStr == ":" {
-		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height)
+		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height, m.activeView)
 		m.state = stateCommandPalette
 		return m, nil
 	}

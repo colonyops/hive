@@ -230,12 +230,13 @@ type Keybinding struct {
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  string `yaml:"action"`  // built-in action (recycle, delete) - mutually exclusive with sh
-	Sh      string `yaml:"sh"`      // shell command template - mutually exclusive with action
-	Help    string `yaml:"help"`    // description shown in palette/help
-	Confirm string `yaml:"confirm"` // confirmation prompt (empty = no confirm)
-	Silent  bool   `yaml:"silent"`  // skip loading popup for fast commands
-	Exit    string `yaml:"exit"`    // exit hive after command (bool or $ENV_VAR)
+	Action  string   `yaml:"action"`         // built-in action (recycle, delete) - mutually exclusive with sh
+	Sh      string   `yaml:"sh"`             // shell command template - mutually exclusive with action
+	Help    string   `yaml:"help"`           // description shown in palette/help
+	Confirm string   `yaml:"confirm"`        // confirmation prompt (empty = no confirm)
+	Silent  bool     `yaml:"silent"`         // skip loading popup for fast commands
+	Exit    string   `yaml:"exit"`           // exit hive after command (bool or $ENV_VAR)
+	Scope   []string `yaml:"scope,omitempty"` // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
@@ -467,6 +468,13 @@ func (c *Config) validateUserCommandsBasic() error {
 		if cmd.Action != "" && !isValidAction(cmd.Action) {
 			errs = errs.Append(field, fmt.Errorf("invalid action %q", cmd.Action))
 		}
+
+		// Validate scope values
+		for _, scope := range cmd.Scope {
+			if !isValidScope(scope) {
+				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review", scope))
+			}
+		}
 	}
 
 	return errs.ToError()
@@ -553,6 +561,16 @@ func (c *Config) DatabaseFile() string {
 func isValidAction(action string) bool {
 	switch action {
 	case ActionRecycle, ActionDelete:
+		return true
+	default:
+		return false
+	}
+}
+
+// isValidScope checks if a scope value is valid.
+func isValidScope(scope string) bool {
+	switch scope {
+	case "global", "sessions", "messages", "review":
 		return true
 	default:
 		return false

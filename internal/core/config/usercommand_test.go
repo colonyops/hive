@@ -84,3 +84,59 @@ usercommands:
 	assert.Equal(t, "echo world", complex.Sh)
 	assert.Equal(t, "Complex command", complex.Help)
 }
+
+func TestUserCommand_Scope(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		expected UserCommand
+	}{
+		{
+			name: "single scope",
+			yaml: `
+sh: "echo hello"
+scope: ["review"]`,
+			expected: UserCommand{
+				Sh:    "echo hello",
+				Scope: []string{"review"},
+			},
+		},
+		{
+			name: "multiple scopes",
+			yaml: `
+sh: "echo hello"
+scope: ["review", "sessions"]`,
+			expected: UserCommand{
+				Sh:    "echo hello",
+				Scope: []string{"review", "sessions"},
+			},
+		},
+		{
+			name: "global scope",
+			yaml: `
+sh: "echo hello"
+scope: ["global"]`,
+			expected: UserCommand{
+				Sh:    "echo hello",
+				Scope: []string{"global"},
+			},
+		},
+		{
+			name: "no scope (omitted)",
+			yaml: `sh: "echo hello"`,
+			expected: UserCommand{
+				Sh:    "echo hello",
+				Scope: nil,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cmd UserCommand
+			err := yaml.Unmarshal([]byte(tt.yaml), &cmd)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, cmd)
+		})
+	}
+}

@@ -2,6 +2,8 @@ package tui
 
 import (
 	"testing"
+
+	"github.com/hay-kot/hive/internal/core/config"
 )
 
 func TestHiveDocReviewCmd_Execute(t *testing.T) {
@@ -21,9 +23,13 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	reviewView := NewReviewView(docs, "/test", nil)
 	reviewView.SetSize(100, 40)
 
+	// Create a minimal handler for testing
+	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{})
+
 	m := &Model{
 		activeView: ViewSessions,
 		reviewView: &reviewView,
+		handler:    handler,
 	}
 
 	// Execute command without argument

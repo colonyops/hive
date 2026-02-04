@@ -25,6 +25,7 @@ type HiveDocReviewCmd struct {
 func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	// Switch to review view
 	m.activeView = ViewReview
+	m.handler.SetActiveView(ViewReview)
 
 	if m.reviewView == nil {
 		// No review view available
