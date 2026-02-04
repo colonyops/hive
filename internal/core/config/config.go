@@ -40,6 +40,7 @@ const (
 	ActionFilterActive   = "filter-active"
 	ActionFilterApproval = "filter-approval"
 	ActionFilterReady    = "filter-ready"
+	ActionDocReview      = "doc-review" // Open review tab with document picker
 )
 
 // defaultUserCommands provides built-in commands that users can override.

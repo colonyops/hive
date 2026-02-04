@@ -26,6 +26,7 @@ const (
 	ActionTypeFilterActive
 	ActionTypeFilterApproval
 	ActionTypeFilterReady
+	ActionTypeDocReview
 )
 
 // Action represents a resolved keybinding action ready for execution.
@@ -125,6 +126,11 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			action.Type = ActionTypeFilterApproval
 		case config.ActionFilterReady:
 			action.Type = ActionTypeFilterReady
+		case config.ActionDocReview:
+			action.Type = ActionTypeDocReview
+			if action.Help == "" {
+				action.Help = "review document"
+			}
 		}
 		return action, true
 	}

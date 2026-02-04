@@ -1,8 +1,12 @@
 package tui
 
 import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +15,10 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/google/uuid"
+
+	"github.com/hay-kot/hive/internal/core/review"
+	"github.com/hay-kot/hive/internal/stores"
 )
 
 // reviewFinalizedMsg is sent when review is finalized.
@@ -24,28 +32,31 @@ type ReviewView struct {
 	viewport          viewport.Model
 	watcher           *DocumentWatcher
 	contextDir        string
+	store             *stores.ReviewStore     // SQLite persistence for review sessions
 	width             int
 	height            int
-	previewMode       bool                // True when showing dual-column layout
-	fullScreen        bool                // True when showing document in full-screen
-	selectedDoc       *ReviewDocument     // Currently selected document for preview
-	selectionMode     bool                // True when in visual selection mode
-	selectionStart    int                 // Line number where selection starts (1-indexed)
-	cursorLine        int                 // Line number where cursor is positioned (1-indexed)
-	activeSession     *ReviewSession      // Current review session with comments
-	commentModal      *ReviewCommentModal // Active comment entry modal
-	confirmModal      *ConfirmModal       // Active confirmation modal
-	feedbackGenerated string              // Generated feedback (for clipboard)
-	searchMode        bool                // True when in search/filter mode
-	searchInput       textinput.Model     // Search input field
-	searchQuery       string              // Current search query
-	searchMatches     []int               // Line numbers of search matches (1-indexed)
-	searchMatchIndex  int                 // Current match index in searchMatches
+	previewMode       bool                    // True when showing dual-column layout
+	fullScreen        bool                    // True when showing document in full-screen
+	selectedDoc       *ReviewDocument         // Currently selected document for preview
+	selectionMode     bool                    // True when in visual selection mode
+	selectionStart    int                     // Line number where selection starts (1-indexed)
+	cursorLine        int                     // Line number where cursor is positioned (1-indexed)
+	activeSession     *ReviewSession          // Current review session with comments
+	commentModal      *ReviewCommentModal     // Active comment entry modal
+	confirmModal      *ConfirmModal           // Active confirmation modal
+	pickerModal       *DocumentPickerModal    // Active document picker modal
+	feedbackGenerated string                  // Generated feedback (for clipboard)
+	searchMode        bool                    // True when in search/filter mode
+	searchInput       textinput.Model         // Search input field
+	searchQuery       string                  // Current search query
+	searchMatches     []int                   // Line numbers of search matches (1-indexed)
+	searchMatchIndex  int                     // Current match index in searchMatches
 }
 
 // NewReviewView creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
-func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
+// If store is non-nil, comments will be persisted to the database.
+func NewReviewView(documents []ReviewDocument, contextDir string, store *stores.ReviewStore) ReviewView {
 	items := BuildReviewTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -89,6 +100,7 @@ func NewReviewView(documents []ReviewDocument, contextDir string) ReviewView {
 		viewport:    vp,
 		watcher:     watcher,
 		contextDir:  contextDir,
+		store:       store,
 		previewMode: true, // Enable preview by default
 		cursorLine:  1,    // Initialize cursor at line 1
 		searchInput: ti,
@@ -142,7 +154,28 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyMsg:
-		// Handle confirmation modal if active (MUST be first to prevent key conflicts)
+		// Handle document picker modal if active (MUST be first to prevent key conflicts)
+		if v.pickerModal != nil {
+			modal, cmd := v.pickerModal.Update(msg)
+			v.pickerModal = modal
+
+			if v.pickerModal.SelectedDocument() != nil {
+				// User selected a document - open it
+				doc := v.pickerModal.SelectedDocument()
+				v.pickerModal = nil
+				v.loadDocument(doc)
+				return v, cmd
+			}
+
+			if v.pickerModal.Cancelled() {
+				v.pickerModal = nil
+				return v, cmd
+			}
+
+			return v, cmd
+		}
+
+		// Handle confirmation modal if active
 		if v.confirmModal != nil {
 			modal, cmd := v.confirmModal.Update(msg)
 			v.confirmModal = &modal
@@ -152,6 +185,14 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
 				v.feedbackGenerated = feedback
 				v.confirmModal = nil
+
+				// Finalize session in database if store is available
+				if v.store != nil && v.activeSession != nil {
+					ctx := context.Background()
+					_ = v.store.FinalizeSession(ctx, v.activeSession.ID)
+					// Ignore errors - finalization is best effort
+				}
+
 				// Clear active session
 				v.activeSession = nil
 				// Reload document without comments
@@ -170,7 +211,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			return v, cmd
 		}
 
-		// Handle comment modal if active (MUST be after confirm modal)
+		// Handle comment modal if active
 		if v.commentModal != nil {
 			modal, cmd := v.commentModal.Update(msg)
 			v.commentModal = &modal
@@ -437,6 +478,11 @@ func (v ReviewView) View() string {
 		baseView = lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView)
 	}
 
+	// Overlay document picker modal if active (highest priority)
+	if v.pickerModal != nil {
+		return v.pickerModal.Overlay(baseView, v.width, v.height)
+	}
+
 	// Overlay confirmation modal if active
 	if v.confirmModal != nil {
 		modalContent := v.confirmModal.View()
@@ -507,16 +553,71 @@ func (v ReviewView) SelectedDocument() *ReviewDocument {
 	return nil
 }
 
+// calculateContentHash computes SHA256 hash of file content.
+func calculateContentHash(path string) (string, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	hash := sha256.Sum256(content)
+	return hex.EncodeToString(hash[:]), nil
+}
+
 // loadDocument loads and renders a document for preview.
+// Also loads any existing review session from the database.
 func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 	v.selectedDoc = doc
 	if doc == nil {
 		v.viewport.SetContent("")
+		v.activeSession = nil
 		return
 	}
 
 	// Reset cursor to top when loading new document
 	v.cursorLine = 1
+
+	// Load existing session from database if store is available
+	if v.store != nil {
+		ctx := context.Background()
+
+		// Calculate current content hash
+		currentHash, err := calculateContentHash(doc.Path)
+		if err == nil {
+			// Try to get session with matching hash
+			dbSession, err := v.store.GetSessionByHash(ctx, doc.Path, currentHash)
+			if err == nil {
+				// Load comments from database
+				dbComments, err := v.store.ListComments(ctx, dbSession.ID)
+				if err == nil {
+					// Convert to TUI types
+					comments := make([]ReviewComment, 0, len(dbComments))
+					for _, dbComment := range dbComments {
+						comments = append(comments, ReviewComment{
+							ID:          dbComment.ID,
+							SessionID:   dbComment.SessionID,
+							StartLine:   dbComment.StartLine,
+							EndLine:     dbComment.EndLine,
+							ContextText: dbComment.ContextText,
+							CommentText: dbComment.CommentText,
+							CreatedAt:   dbComment.CreatedAt,
+						})
+					}
+
+					v.activeSession = &ReviewSession{
+						ID:         dbSession.ID,
+						DocPath:    dbSession.DocumentPath,
+						Comments:   comments,
+						CreatedAt:  dbSession.CreatedAt,
+						ModifiedAt: time.Now(),
+					}
+				}
+			} else {
+				// No matching session found, cleanup stale sessions
+				_ = v.store.CleanupStaleSessions(ctx, doc.Path, currentHash)
+			}
+		}
+		// If hash calculation or session load fails, activeSession remains nil
+	}
 
 	// Calculate preview width for rendering
 	previewWidth := v.width
@@ -844,10 +945,39 @@ func (v *ReviewView) addComment(commentText string) {
 		return
 	}
 
+	ctx := context.Background()
+
 	// Initialize session if needed
 	if v.activeSession == nil {
+		sessionID := uuid.NewString()
+
+		// Create session in database if store is available
+		if v.store != nil {
+			// Calculate content hash
+			contentHash, err := calculateContentHash(v.selectedDoc.Path)
+			if err != nil {
+				contentHash = "" // Fallback to empty hash
+			}
+
+			if contentHash != "" {
+				dbSession, err := v.store.CreateSession(ctx, v.selectedDoc.Path, contentHash)
+				if err != nil {
+					// Session might already exist, try to get it by hash
+					dbSession, err = v.store.GetSessionByHash(ctx, v.selectedDoc.Path, contentHash)
+					if err != nil {
+						// Failed to create or get session, fall back to in-memory only
+						sessionID = fmt.Sprintf("session-%d", time.Now().Unix())
+					} else {
+						sessionID = dbSession.ID
+					}
+				} else {
+					sessionID = dbSession.ID
+				}
+			}
+		}
+
 		v.activeSession = &ReviewSession{
-			ID:         fmt.Sprintf("session-%d", time.Now().Unix()),
+			ID:         sessionID,
 			DocPath:    v.selectedDoc.Path,
 			Comments:   []ReviewComment{},
 			CreatedAt:  time.Now(),
@@ -861,13 +991,28 @@ func (v *ReviewView) addComment(commentText string) {
 
 	// Create comment
 	comment := ReviewComment{
-		ID:          fmt.Sprintf("comment-%d", time.Now().UnixNano()),
+		ID:          uuid.NewString(),
 		SessionID:   v.activeSession.ID,
 		StartLine:   start,
 		EndLine:     end,
 		ContextText: v.getSelectedText(),
 		CommentText: commentText,
 		CreatedAt:   time.Now(),
+	}
+
+	// Save to database if store is available
+	if v.store != nil {
+		dbComment := review.Comment{
+			ID:          comment.ID,
+			SessionID:   comment.SessionID,
+			StartLine:   comment.StartLine,
+			EndLine:     comment.EndLine,
+			ContextText: comment.ContextText,
+			CommentText: comment.CommentText,
+			CreatedAt:   comment.CreatedAt,
+		}
+		_ = v.store.SaveComment(ctx, dbComment)
+		// Ignore errors - keep comment in memory even if DB save fails
 	}
 
 	v.activeSession.Comments = append(v.activeSession.Comments, comment)
@@ -880,12 +1025,20 @@ func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
 		return
 	}
 
+	ctx := context.Background()
+
 	// Filter out comments that include this line
 	var remainingComments []ReviewComment
 	for _, comment := range v.activeSession.Comments {
 		// Keep comment if it doesn't include the cursor line
 		if lineNum < comment.StartLine || lineNum > comment.EndLine {
 			remainingComments = append(remainingComments, comment)
+		} else {
+			// Delete from database if store is available
+			if v.store != nil {
+				_ = v.store.DeleteComment(ctx, comment.ID)
+				// Ignore errors - deletion is best effort
+			}
 		}
 	}
 

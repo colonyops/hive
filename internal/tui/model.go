@@ -20,9 +20,11 @@ import (
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
@@ -62,6 +64,7 @@ type Options struct {
 	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
 	TerminalManager *terminal.Manager // Terminal integration manager (optional)
 	PluginManager   *plugins.Manager  // Plugin manager (optional)
+	DB              *db.DB            // Database connection for stores
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -305,7 +308,14 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = DiscoverDocuments(contextDir)
 	}
-	reviewView := NewReviewView(docs, contextDir)
+
+	// Create review store if database is available
+	var reviewStore *stores.ReviewStore
+	if opts.DB != nil {
+		reviewStore = stores.NewReviewStore(opts.DB)
+	}
+
+	reviewView := NewReviewView(docs, contextDir, reviewStore)
 
 	return Model{
 		cfg:                cfg,
@@ -684,6 +694,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
+	case openDocumentMsg:
+		// Handle document opening (from HiveDocReview command)
+		if msg.err != nil {
+			m.err = msg.err
+			return m, nil
+		}
+		// Document path is provided, tell review view to load it
+		if m.reviewView != nil {
+			// Find and load the document
+			for _, item := range m.reviewView.list.Items() {
+				if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+					if treeItem.Document.Path == msg.path {
+						m.reviewView.loadDocument(&treeItem.Document)
+						break
+					}
+				}
+			}
+		}
+		return m, nil
+
 	case tea.KeyMsg:
 		return m.handleKey(msg)
 
@@ -955,6 +985,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 
+		// Check if this is a doc review action (doesn't require a session)
+		if entry.Command.Action == config.ActionDocReview {
+			m.state = stateNormal
+			cmd := HiveDocReviewCmd{Arg: ""}
+			return m, cmd.Execute(&m)
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1147,13 +1184,15 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 }
 
 // handleTabKey handles tab key for switching views.
+// Review tab is excluded from normal tab cycling - use HiveDocReview command to access it.
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	switch m.activeView {
 	case ViewSessions:
 		m.activeView = ViewMessages
 	case ViewMessages:
-		m.activeView = ViewReview
+		m.activeView = ViewSessions
 	case ViewReview:
+		// If currently in review view, tab should cycle back to sessions
 		m.activeView = ViewSessions
 	}
 	return m, nil
@@ -1217,6 +1256,11 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		}
 		if action.Type == ActionTypeRecycle {
 			return m, m.startRecycle(action.SessionID)
+		}
+		// Handle doc review action
+		if action.Type == ActionTypeDocReview {
+			cmd := HiveDocReviewCmd{Arg: ""}
+			return m, cmd.Execute(&m)
 		}
 		// Handle filter actions
 		if m.handleFilterAction(action.Type) {
@@ -1360,7 +1404,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell, ActionTypeDocReview:
 		return false
 	}
 	return false
