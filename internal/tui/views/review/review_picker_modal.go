@@ -41,28 +41,29 @@ func NewDocumentPickerModal(documents []Document, width, height int, store *stor
 	modalHeight := max(int(float64(height)*0.8), 10)
 	listHeight := max(modalHeight-5, 3)
 
-	// Create list with tree delegate and initial size
-	delegate := NewReviewTreeDelegate()
-	l := list.New(nil, delegate, modalWidth-4, listHeight)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(false) // We handle filtering manually for fuzzy matching
-	l.SetShowTitle(false)
-	l.SetShowHelp(false) // Disable built-in help to avoid duplicate help text
-	l.Styles.Title = lipgloss.NewStyle()
-
+	// Build modal struct first so we can call buildTreeItemsWithSessions
 	modal := &DocumentPickerModal{
 		documents:    documents,
 		filteredDocs: documents,
-		list:         l,
 		searchInput:  ti,
 		width:        width,
 		height:       height,
 		store:        store,
 	}
 
-	// Build tree items with session information
+	// Build tree items with session information BEFORE creating list
 	items := modal.buildTreeItemsWithSessions(documents)
-	l.SetItems(items)
+
+	// Create list with items, delegate, and initial size
+	delegate := NewReviewTreeDelegate()
+	l := list.New(items, delegate, modalWidth-4, listHeight)
+	l.SetShowStatusBar(false)
+	l.SetFilteringEnabled(false) // We handle filtering manually for fuzzy matching
+	l.SetShowTitle(false)
+	l.SetShowHelp(false) // Disable built-in help to avoid duplicate help text
+	l.Styles.Title = lipgloss.NewStyle()
+
+	modal.list = l
 
 	// Select first non-header item by default
 	if len(items) > 0 {
@@ -247,11 +248,11 @@ func (m *DocumentPickerModal) Overlay(background string, width, height int) stri
 	bgLayer := lipgloss.NewLayer(background)
 	modalLayer := lipgloss.NewLayer(modal)
 
-	// Center the modal
+	// Center the modal (clamped to 0 for tiny terminals)
 	modalW := lipgloss.Width(modal)
 	modalH := lipgloss.Height(modal)
-	centerX := (width - modalW) / 2
-	centerY := (height - modalH) / 2
+	centerX := max((width-modalW)/2, 0)
+	centerY := max((height-modalH)/2, 0)
 	modalLayer.X(centerX).Y(centerY).Z(1)
 
 	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)

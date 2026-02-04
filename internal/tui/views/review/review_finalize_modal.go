@@ -143,11 +143,11 @@ func (m FinalizationModal) Overlay(background string) string {
 	bgLayer := lipgloss.NewLayer(background)
 	modalLayer := lipgloss.NewLayer(modal)
 
-	// Center the modal
+	// Center the modal (clamped to 0 for tiny terminals)
 	modalW := lipgloss.Width(modal)
 	modalH := lipgloss.Height(modal)
-	centerX := (m.width - modalW) / 2
-	centerY := (m.height - modalH) / 2
+	centerX := max((m.width-modalW)/2, 0)
+	centerY := max((m.height-modalH)/2, 0)
 	modalLayer.X(centerX).Y(centerY).Z(1)
 
 	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
