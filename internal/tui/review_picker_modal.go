@@ -39,6 +39,7 @@ func NewDocumentPickerModal(documents []ReviewDocument, width, height int) *Docu
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false) // We handle filtering manually for fuzzy matching
 	l.SetShowTitle(false)
+	l.SetShowHelp(false) // Disable built-in help to avoid duplicate help text
 	l.Styles.Title = lipgloss.NewStyle()
 
 	return &DocumentPickerModal{
@@ -53,36 +54,36 @@ func NewDocumentPickerModal(documents []ReviewDocument, width, height int) *Docu
 
 // Update handles messages for the picker modal.
 func (m *DocumentPickerModal) Update(msg tea.Msg) (*DocumentPickerModal, tea.Cmd) {
-	switch msg := msg.(type) {
-	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			m.cancelled = true
-			return m, nil
-		case "enter":
-			// Select current item (skip headers)
-			if item := m.list.SelectedItem(); item != nil {
-				if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
-					m.selectedDoc = &treeItem.Document
-				}
-			}
-			return m, nil
-		case "up", "down":
-			// Navigation - forward to list
-			var cmd tea.Cmd
-			m.list, cmd = m.list.Update(msg)
-			return m, cmd
-		default:
-			// Text input - update filter
-			var cmd tea.Cmd
-			m.searchInput, cmd = m.searchInput.Update(msg)
-			m.filterQuery = m.searchInput.Value()
-			m.updateFilter()
-			return m, cmd
-		}
+	keyMsg, ok := msg.(tea.KeyMsg)
+	if !ok {
+		return m, nil
 	}
 
-	return m, nil
+	switch keyMsg.String() {
+	case "esc", "q":
+		m.cancelled = true
+		return m, nil
+	case "enter":
+		// Select current item (skip headers)
+		if item := m.list.SelectedItem(); item != nil {
+			if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+				m.selectedDoc = &treeItem.Document
+			}
+		}
+		return m, nil
+	case "up", "down":
+		// Navigation - forward to list
+		var cmd tea.Cmd
+		m.list, cmd = m.list.Update(msg)
+		return m, cmd
+	default:
+		// Text input - update filter
+		var cmd tea.Cmd
+		m.searchInput, cmd = m.searchInput.Update(msg)
+		m.filterQuery = m.searchInput.Value()
+		m.updateFilter()
+		return m, cmd
+	}
 }
 
 // updateFilter applies fuzzy filtering to the document list.

@@ -750,6 +750,11 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 
 	v.viewport.SetContent(rendered)
 	v.viewport.GotoTop()
+
+	// Render selection to show comments immediately if session was loaded
+	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+		v.renderSelection()
+	}
 }
 
 // moveCursorDown moves cursor down by n lines, scrolling if needed.
