@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/fsnotify/fsnotify"
+	"github.com/rs/zerolog/log"
 )
 
 // documentChangeMsg is sent when documents change on disk.
@@ -60,6 +61,11 @@ func (w *DocumentWatcher) Start() tea.Cmd {
 					continue
 				}
 
+				log.Debug().
+					Str("path", event.Name).
+					Str("operation", event.Op.String()).
+					Msg("review: file system event")
+
 				// If it's a directory creation, add it to the watcher
 				if event.Has(fsnotify.Create) {
 					if info, err := os.Stat(event.Name); err == nil && info.IsDir() {
@@ -88,11 +94,14 @@ func (w *DocumentWatcher) Start() tea.Cmd {
 				}
 				return documentChangeMsg{documents: docs}
 
-			case _, ok := <-w.watcher.Errors:
+			case err, ok := <-w.watcher.Errors:
 				if !ok {
 					return nil
 				}
-				// Ignore errors, continue watching
+				// Log error but continue watching
+				log.Error().
+					Err(err).
+					Msg("review: file watcher error")
 			}
 		}
 	}

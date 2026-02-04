@@ -16,6 +16,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 
 	"github.com/hay-kot/hive/internal/core/review"
 	"github.com/hay-kot/hive/internal/stores"
@@ -149,6 +150,9 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 	switch msg := msg.(type) {
 	case documentChangeMsg:
 		// Rebuild tree with new documents
+		log.Debug().
+			Int("document_count", len(msg.documents)).
+			Msg("review: rebuilding document tree from file watcher")
 		items := BuildReviewTreeItems(msg.documents)
 		v.list.SetItems(items)
 		// Continue watching for more changes
@@ -673,6 +677,11 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 		return
 	}
 
+	log.Debug().
+		Str("path", doc.RelPath).
+		Str("type", doc.Type.String()).
+		Msg("review: loading document")
+
 	// Enter full-screen mode when loading a document
 	v.fullScreen = true
 
@@ -692,6 +701,11 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 			// Try to get session with matching hash
 			dbSession, err := v.store.GetSessionByHash(ctx, doc.Path, currentHash)
 			if err == nil {
+				log.Debug().
+					Str("session_id", dbSession.ID).
+					Str("document", doc.RelPath).
+					Msg("review: loaded existing session")
+
 				// Load comments from database
 				dbComments, err := v.store.ListComments(ctx, dbSession.ID)
 				if err == nil {
@@ -1116,6 +1130,13 @@ func (v *ReviewView) addComment(commentText string) {
 
 	v.activeSession.Comments = append(v.activeSession.Comments, comment)
 	v.activeSession.ModifiedAt = time.Now()
+
+	log.Debug().
+		Str("session_id", v.activeSession.ID).
+		Int("start_line", comment.StartLine).
+		Int("end_line", comment.EndLine).
+		Int("total_comments", len(v.activeSession.Comments)).
+		Msg("review: added comment")
 }
 
 // deleteCommentsAtLine removes all comments that include the specified line number.
@@ -1143,6 +1164,11 @@ func (v *ReviewView) deleteCommentsAtLine(lineNum int) {
 
 	v.activeSession.Comments = remainingComments
 	v.activeSession.ModifiedAt = time.Now()
+
+	log.Debug().
+		Int("line", lineNum).
+		Int("remaining_comments", len(remainingComments)).
+		Msg("review: deleted comment(s) at line")
 
 	// Update comment count in tree
 	v.updateTreeItemCommentCount()
