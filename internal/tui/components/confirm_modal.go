@@ -1,4 +1,4 @@
-package tui
+package components
 
 import (
 	tea "charm.land/bubbletea/v2"

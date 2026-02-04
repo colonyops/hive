@@ -19,6 +19,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/review"
 	"github.com/hay-kot/hive/internal/stores"
+	"github.com/hay-kot/hive/internal/tui/components"
 )
 
 // reviewFinalizedMsg is sent when review is finalized and copied to clipboard.
@@ -49,10 +50,10 @@ type ReviewView struct {
 	selectionMode      bool                    // True when in visual selection mode
 	selectionStart     int                     // Line number where selection starts (1-indexed)
 	cursorLine         int                     // Line number where cursor is positioned (1-indexed)
-	activeSession      *ReviewSession          // Current review session with comments
-	commentModal       *ReviewCommentModal     // Active comment entry modal
-	confirmModal       *ConfirmModal           // Active confirmation modal
-	finalizationModal  *FinalizationModal      // Active finalization options modal
+	activeSession      *ReviewSession              // Current review session with comments
+	commentModal       *ReviewCommentModal         // Active comment entry modal
+	confirmModal       *components.ConfirmModal    // Active confirmation modal
+	finalizationModal  *FinalizationModal          // Active finalization options modal
 	pickerModal        *DocumentPickerModal    // Active document picker modal
 	feedbackGenerated  string                  // Generated feedback (for clipboard)
 	searchMode         bool                    // True when in search/filter mode
@@ -113,9 +114,10 @@ func NewReviewView(documents []ReviewDocument, contextDir string, store *stores.
 		watcher:     watcher,
 		contextDir:  contextDir,
 		store:       store,
-		previewMode: true, // Enable preview by default
-		cursorLine:  1,    // Initialize cursor at line 1
-		searchInput: ti,
+		previewMode: false, // Disable dual-column preview by default
+		fullScreen:  false, // Start without a document (will show picker or message)
+		cursorLine:   1,    // Initialize cursor at line 1
+		searchInput:  ti,
 	}
 }
 
@@ -124,22 +126,12 @@ func (v *ReviewView) SetSize(width, height int) {
 	v.width = width
 	v.height = height
 
-	if v.previewMode && width >= 80 {
-		// Dual-column mode: 25% list, 75% preview
-		listWidth := int(float64(width) * 0.25)
-		v.list.SetSize(listWidth, height)
+	// Always use full-screen mode for documents
+	v.viewport = viewport.New(viewport.WithWidth(width), viewport.WithHeight(height))
 
-		// Preview gets remaining width minus divider
-		previewWidth := width - listWidth - 1
-		v.viewport = viewport.New(viewport.WithWidth(previewWidth), viewport.WithHeight(height))
-
-		// Reload document if one is selected
-		if v.selectedDoc != nil {
-			v.loadDocument(v.selectedDoc)
-		}
-	} else {
-		// Single column mode
-		v.list.SetSize(width, height)
+	// Reload document if one is selected
+	if v.selectedDoc != nil {
+		v.loadDocument(v.selectedDoc)
 	}
 }
 
@@ -341,26 +333,10 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			}
 		}
 
-		// Handle full-screen toggle
+		// Handle esc key
 		switch msg.String() {
-		case "enter":
-			// Toggle full-screen mode if a document is selected
-			if v.selectedDoc != nil && !v.list.SettingFilter() {
-				v.fullScreen = !v.fullScreen
-				// Adjust viewport size for full-screen
-				if v.fullScreen {
-					v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
-					v.loadDocument(v.selectedDoc)
-					// Initialize cursor to center of viewport
-					v.cursorLine = max(1, v.viewport.VisibleLineCount()/2)
-				} else {
-					// Return to dual-column mode
-					v.SetSize(v.width, v.height)
-				}
-				return v, nil
-			}
 		case "esc":
-			// Priority order: search mode > visual mode > full-screen
+			// Priority order: search mode > visual mode > close document
 			if v.searchMode {
 				// Exit search mode
 				v.searchMode = false
@@ -375,10 +351,11 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				v.renderSelection()
 				return v, nil
 			}
-			// Exit full-screen mode
-			if v.fullScreen {
+			// Close document (return to "no document" view)
+			if v.selectedDoc != nil {
+				v.selectedDoc = nil
 				v.fullScreen = false
-				v.SetSize(v.width, v.height)
+				v.activeSession = nil
 				return v, nil
 			}
 		}
@@ -422,7 +399,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					if hasComment {
 						// Show confirmation modal
 						v.pendingDeleteLine = v.cursorLine
-						modal := NewConfirmModal("Delete comment(s) at this line?")
+						modal := components.NewConfirmModal("Delete comment(s) at this line?")
 						v.confirmModal = &modal
 						return v, nil
 					}
@@ -433,7 +410,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					// Show confirmation modal with comment count
 					commentCount := len(v.activeSession.Comments)
 					message := fmt.Sprintf("Discard review? This will permanently delete %d comment(s). This cannot be undone.", commentCount)
-					modal := NewConfirmModal(message)
+					modal := components.NewConfirmModal(message)
 					v.confirmModal = &modal
 					v.pendingDiscard = true
 					return v, nil
@@ -460,6 +437,11 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					return v, nil
 				}
 			}
+		}
+
+		// Handle 'p' to open document picker
+		if msg.String() == "p" && !v.selectionMode && !v.searchMode {
+			return v, v.ShowDocumentPicker()
 		}
 
 		// Handle '/' to enter search mode in full-screen
@@ -557,8 +539,23 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 func (v ReviewView) View() string {
 	var baseView string
 
-	// Full-screen mode: show viewport with status bar
-	if v.fullScreen {
+	// Show helpful message if no document is selected
+	if v.selectedDoc == nil {
+		messageStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#c0caf5")).
+			Padding(2, 4)
+
+		helpStyle := lipgloss.NewStyle().
+			Foreground(lipgloss.Color("#7aa2f7")).
+			Bold(true)
+
+		message := "No document selected\n\n"
+		message += helpStyle.Render("Press 'p'") + " to open document picker\n"
+		message += helpStyle.Render("Press 'tab'") + " to switch to another view"
+
+		baseView = messageStyle.Render(message)
+	} else if v.fullScreen {
+		// Full-screen mode: show viewport with status bar
 		contentHeight := v.height - 1 // Reserve 1 line for status bar
 		content := v.viewport.View()
 		statusBar := v.renderStatusBar()
@@ -570,23 +567,9 @@ func (v ReviewView) View() string {
 		}
 
 		baseView = strings.Join(contentLines, "\n") + "\n" + statusBar
-	} else if !v.previewMode || v.width < 80 {
-		// Single column mode
-		baseView = v.list.View()
 	} else {
-		// Dual-column mode: list | divider | preview
-		listView := v.list.View()
-		previewView := v.viewport.View()
-
-		// Create vertical divider
-		dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-		dividerLines := make([]string, v.height)
-		for i := range dividerLines {
-			dividerLines[i] = dividerStyle.Render("│")
-		}
-		divider := strings.Join(dividerLines, "\n")
-
-		baseView = lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewView)
+		// Fallback to list view (should not normally happen)
+		baseView = v.list.View()
 	}
 
 	// Overlay document picker modal if active (highest priority)
@@ -686,8 +669,15 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 	if doc == nil {
 		v.viewport.SetContent("")
 		v.activeSession = nil
+		v.fullScreen = false
 		return
 	}
+
+	// Enter full-screen mode when loading a document
+	v.fullScreen = true
+
+	// Adjust viewport size for full-screen
+	v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
 
 	// Reset cursor to top when loading new document
 	v.cursorLine = 1
@@ -735,15 +725,8 @@ func (v *ReviewView) loadDocument(doc *ReviewDocument) {
 		// If hash calculation or session load fails, activeSession remains nil
 	}
 
-	// Calculate preview width for rendering
-	previewWidth := v.width
-	if v.previewMode && v.width >= 80 {
-		listWidth := int(float64(v.width) * 0.25)
-		previewWidth = v.width - listWidth - 1
-	}
-
-	// Render document
-	rendered, err := doc.Render(previewWidth)
+	// Render document using full width
+	rendered, err := doc.Render(v.width)
 	if err != nil {
 		v.viewport.SetContent("Error rendering document: " + err.Error())
 		return
@@ -1012,7 +995,7 @@ func (v ReviewView) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • d:delete • /:search • f:finalize+copy • esc:exit"
+		helpText = "V:visual • p:picker • d:delete • /:search • f:finalize • esc:close"
 	}
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#565f89")).
