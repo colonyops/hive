@@ -116,6 +116,11 @@ SELECT * FROM review_comments
 WHERE session_id = ?
 ORDER BY start_line ASC;
 
+-- name: UpdateReviewComment :exec
+UPDATE review_comments
+SET comment_text = ?
+WHERE id = ?;
+
 -- name: DeleteReviewComment :exec
 DELETE FROM review_comments
 WHERE id = ?;

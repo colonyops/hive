@@ -143,6 +143,18 @@ func (s *ReviewStore) ListComments(ctx context.Context, sessionID string) ([]rev
 	return comments, nil
 }
 
+// UpdateComment updates the comment text for an existing comment.
+func (s *ReviewStore) UpdateComment(ctx context.Context, comment review.Comment) error {
+	err := s.db.Queries().UpdateReviewComment(ctx, db.UpdateReviewCommentParams{
+		CommentText: comment.CommentText,
+		ID:          comment.ID,
+	})
+	if err != nil {
+		return fmt.Errorf("failed to update review comment: %w", err)
+	}
+	return nil
+}
+
 // DeleteComment removes a specific comment.
 func (s *ReviewStore) DeleteComment(ctx context.Context, commentID string) error {
 	err := s.db.Queries().DeleteReviewComment(ctx, commentID)

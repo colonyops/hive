@@ -65,6 +65,7 @@ type ReviewView struct {
 	hasAgentCommand   bool                     // Whether send-claude command is available
 	pendingDeleteLine int                      // Line number for pending comment deletion (0 if none)
 	pendingDiscard    bool                     // True when waiting for discard confirmation
+	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 }
 
 // NewReviewView creates a new review view.
@@ -300,16 +301,24 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			v.commentModal = &modal
 
 			if v.commentModal.Submitted() {
-				// Create comment and add to session
-				v.addComment(v.commentModal.Value())
+				// Check if we're editing an existing comment or creating a new one
+				if v.editingCommentID != "" {
+					// Update existing comment
+					v.updateComment(v.editingCommentID, v.commentModal.Value())
+					v.editingCommentID = ""
+				} else {
+					// Create new comment
+					v.addComment(v.commentModal.Value())
+					v.selectionMode = false
+				}
 				v.commentModal = nil
-				v.selectionMode = false
 				v.renderSelection()
 				return v, cmd
 			}
 
 			if v.commentModal.Cancelled() {
 				v.commentModal = nil
+				v.editingCommentID = "" // Clear editing state
 				v.renderSelection()
 				return v, cmd
 			}
@@ -389,6 +398,27 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 					modal := NewReviewCommentModal(start, end, contextText, v.width, v.height)
 					v.commentModal = &modal
 					return v, nil
+				}
+			case "e":
+				// Edit comment on current cursor line
+				if !v.selectionMode && v.activeSession != nil {
+					// Find comment at cursor line
+					for _, comment := range v.activeSession.Comments {
+						if v.cursorLine >= comment.StartLine && v.cursorLine <= comment.EndLine {
+							// Open comment modal pre-filled with existing comment
+							modal := NewReviewCommentModal(
+								comment.StartLine,
+								comment.EndLine,
+								comment.ContextText,
+								v.width,
+								v.height,
+							)
+							modal.SetExistingComment(comment.CommentText)
+							v.commentModal = &modal
+							v.editingCommentID = comment.ID // Track which comment is being edited
+							return v, nil
+						}
+					}
 				}
 			case "d":
 				// Delete comment(s) on current cursor line
@@ -1020,7 +1050,7 @@ func (v ReviewView) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • p:picker • d:delete • /:search • f:finalize • esc:close"
+		helpText = "V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close"
 	}
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#565f89")).
@@ -1148,6 +1178,45 @@ func (v *ReviewView) addComment(commentText string) {
 		Int("end_line", comment.EndLine).
 		Int("total_comments", len(v.activeSession.Comments)).
 		Msg("review: added comment")
+}
+
+// updateComment updates the text of an existing comment.
+func (v *ReviewView) updateComment(commentID, newText string) {
+	if v.activeSession == nil {
+		return
+	}
+
+	ctx := context.Background()
+
+	// Find and update the comment
+	for i, comment := range v.activeSession.Comments {
+		if comment.ID == commentID {
+			v.activeSession.Comments[i].CommentText = newText
+			v.activeSession.ModifiedAt = time.Now()
+
+			// Update in database if store is available
+			if v.store != nil {
+				dbComment := review.Comment{
+					ID:          comment.ID,
+					SessionID:   comment.SessionID,
+					StartLine:   comment.StartLine,
+					EndLine:     comment.EndLine,
+					ContextText: comment.ContextText,
+					CommentText: newText,
+					CreatedAt:   comment.CreatedAt,
+				}
+				_ = v.store.UpdateComment(ctx, dbComment)
+				// Ignore errors - keep updated text in memory
+			}
+
+			log.Debug().
+				Str("comment_id", commentID).
+				Int("start_line", comment.StartLine).
+				Int("end_line", comment.EndLine).
+				Msg("review: updated comment")
+			break
+		}
+	}
 }
 
 // deleteCommentsAtLine removes all comments that include the specified line number.

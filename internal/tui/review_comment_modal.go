@@ -128,3 +128,10 @@ func (m ReviewCommentModal) Cancelled() bool {
 func (m ReviewCommentModal) Value() string {
 	return m.textInput.Value()
 }
+
+// SetExistingComment pre-fills the modal with existing comment text for editing.
+func (m *ReviewCommentModal) SetExistingComment(text string) {
+	m.textInput.SetValue(text)
+	// Position cursor at end of text
+	m.textInput.CursorEnd()
+}

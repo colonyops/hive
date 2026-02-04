@@ -541,3 +541,19 @@ func (q *Queries) SubscribeToTopic(ctx context.Context, arg SubscribeToTopicPara
 	}
 	return items, nil
 }
+
+const updateReviewComment = `-- name: UpdateReviewComment :exec
+UPDATE review_comments
+SET comment_text = ?
+WHERE id = ?
+`
+
+type UpdateReviewCommentParams struct {
+	CommentText string `json:"comment_text"`
+	ID          string `json:"id"`
+}
+
+func (q *Queries) UpdateReviewComment(ctx context.Context, arg UpdateReviewCommentParams) error {
+	_, err := q.db.ExecContext(ctx, updateReviewComment, arg.CommentText, arg.ID)
+	return err
+}
