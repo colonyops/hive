@@ -478,7 +478,7 @@ func TestCommentVisualStyling(t *testing.T) {
 
 	// Render the document with comments
 	content := "Line 1\nLine 2\nLine 3"
-	rendered := view.insertCommentsInline(content)
+	rendered, _ := view.insertCommentsInline(content)
 
 	// Check that the rendered output contains the profile placeholder
 	if !strings.Contains(rendered, "<profile>") {
@@ -506,6 +506,104 @@ func TestCommentVisualStyling(t *testing.T) {
 
 	if !commentLineFound {
 		t.Error("expected to find a comment line in rendered output")
+	}
+}
+
+func TestLineMappingWithComments(t *testing.T) {
+	doc := Document{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
+	}
+
+	view := New([]Document{doc}, "", nil)
+	view.selectedDoc = &doc
+
+	// Create a session with comments on lines 2 and 4
+	view.activeSession = &Session{
+		ID:      "test-session",
+		DocPath: doc.Path,
+		Comments: []Comment{
+			{
+				ID:          "comment-1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     2,
+				ContextText: "Line 2",
+				CommentText: "Comment on line 2",
+				CreatedAt:   time.Now(),
+			},
+			{
+				ID:          "comment-2",
+				SessionID:   "test-session",
+				StartLine:   4,
+				EndLine:     4,
+				ContextText: "Line 4",
+				CommentText: "Comment on line 4",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Insert comments and get line mapping
+	content := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
+	_, lineMapping := view.insertCommentsInline(content)
+
+	// Verify line mapping
+	// Expected mapping:
+	// Doc line 1 -> Display line 1
+	// Doc line 2 -> Display line 2
+	// [comment after line 2]
+	// Doc line 3 -> Display line 4
+	// Doc line 4 -> Display line 5
+	// [comment after line 4]
+	// Doc line 5 -> Display line 7
+
+	tests := []struct {
+		docLine     int
+		displayLine int
+	}{
+		{1, 1}, // Line 1 - no comments before
+		{2, 2}, // Line 2 - no comments before
+		{3, 4}, // Line 3 - 1 comment inserted before (after line 2)
+		{4, 5}, // Line 4 - 1 comment inserted before
+		{5, 7}, // Line 5 - 2 comments inserted before
+	}
+
+	for _, tt := range tests {
+		got := lineMapping[tt.docLine]
+		if got != tt.displayLine {
+			t.Errorf("lineMapping[%d] = %d, want %d", tt.docLine, got, tt.displayLine)
+		}
+	}
+
+	// Test mapDocToDisplay helper
+	for _, tt := range tests {
+		got := view.mapDocToDisplay(tt.docLine, lineMapping)
+		if got != tt.displayLine {
+			t.Errorf("mapDocToDisplay(%d) = %d, want %d", tt.docLine, got, tt.displayLine)
+		}
+	}
+
+	// Test mapDisplayToDoc helper (reverse mapping)
+	for _, tt := range tests {
+		got := view.mapDisplayToDoc(tt.displayLine, lineMapping)
+		if got != tt.docLine {
+			t.Errorf("mapDisplayToDoc(%d) = %d, want %d", tt.displayLine, got, tt.docLine)
+		}
+	}
+
+	// Test that comment lines map back to 0 (not a document line)
+	commentDisplayLines := []int{3, 6} // Lines where comments are inserted
+	for _, displayLine := range commentDisplayLines {
+		got := view.mapDisplayToDoc(displayLine, lineMapping)
+		if got != 0 {
+			t.Errorf("mapDisplayToDoc(%d) = %d, want 0 (comment line, not a doc line)", displayLine, got)
+		}
 	}
 }
 

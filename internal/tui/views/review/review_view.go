@@ -848,13 +848,16 @@ func (v *View) renderSelection() {
 		return
 	}
 
-	// Insert comments inline if session exists
+	// Insert comments inline if session exists and build line mapping
+	var lineMapping map[int]int // maps document line -> display line
 	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
-		rendered = v.insertCommentsInline(rendered)
+		var mappedContent string
+		mappedContent, lineMapping = v.insertCommentsInline(rendered)
+		rendered = mappedContent
 	}
 
 	// Apply cursor and selection highlighting (includes search match highlighting)
-	rendered = v.highlightSelection(rendered)
+	rendered = v.highlightSelection(rendered, lineMapping)
 
 	v.viewport.SetContent(rendered)
 }
@@ -889,16 +892,18 @@ func (v *View) jumpToMatch(lineNum int) {
 
 // highlightSelection applies background color to cursor and selected lines.
 // Also highlights line numbers of commented lines.
-func (v *View) highlightSelection(content string) string {
+// lineMapping maps document line numbers to display line numbers (nil if no comments inserted).
+func (v *View) highlightSelection(content string, lineMapping map[int]int) string {
 	lines := strings.Split(content, "\n")
 
-	// Get commented line numbers
+	// Get commented line numbers (in document coordinates)
 	commentedLines := v.getCommentedLines()
 
-	// Create map of search matches for quick lookup
+	// Create map of search matches for quick lookup (in display coordinates)
 	searchMatchLines := make(map[int]bool)
-	for _, lineNum := range v.searchMatches {
-		searchMatchLines[lineNum] = true
+	for _, docLineNum := range v.searchMatches {
+		displayLineNum := v.mapDocToDisplay(docLineNum, lineMapping)
+		searchMatchLines[displayLineNum] = true
 	}
 
 	// Styles for cursor and selection (no explicit width)
@@ -913,46 +918,55 @@ func (v *View) highlightSelection(content string) string {
 		Background(lipgloss.Color("#e0af68")). // Gold background
 		Bold(true)
 
-	// Calculate selection range if in visual mode
+	// Calculate selection range if in visual mode (map to display coordinates)
 	var start, end int
 	if v.selectionMode {
-		start = min(v.selectionStart, v.cursorLine)
-		end = max(v.selectionStart, v.cursorLine)
+		docStart := min(v.selectionStart, v.cursorLine)
+		docEnd := max(v.selectionStart, v.cursorLine)
+		start = v.mapDocToDisplay(docStart, lineMapping)
+		end = v.mapDocToDisplay(docEnd, lineMapping)
 	}
 
-	// Determine current search match line number
+	// Determine current search match line number (map to display coordinates)
 	var currentSearchLine int
 	if len(v.searchMatches) > 0 && v.searchMatchIndex >= 0 && v.searchMatchIndex < len(v.searchMatches) {
-		currentSearchLine = v.searchMatches[v.searchMatchIndex]
+		docLine := v.searchMatches[v.searchMatchIndex]
+		currentSearchLine = v.mapDocToDisplay(docLine, lineMapping)
 	}
+
+	// Map cursor line to display coordinates
+	displayCursorLine := v.mapDocToDisplay(v.cursorLine, lineMapping)
 
 	// Apply highlighting (priority: current search > cursor > visual selection > other search > comments > normal)
 	for i := range lines {
-		lineNum := i + 1
+		displayLineNum := i + 1
 		line := lines[i]
 
+		// Map back to document line number for comment checking
+		docLineNum := v.mapDisplayToDoc(displayLineNum, lineMapping)
+
 		// Check if line will be highlighted with cursor/selection/search
-		willBeHighlighted := lineNum == currentSearchLine ||
-			lineNum == v.cursorLine ||
-			(v.selectionMode && lineNum >= start && lineNum <= end) ||
-			searchMatchLines[lineNum]
+		willBeHighlighted := displayLineNum == currentSearchLine ||
+			displayLineNum == displayCursorLine ||
+			(v.selectionMode && displayLineNum >= start && displayLineNum <= end) ||
+			searchMatchLines[displayLineNum]
 
 		// Only highlight line number for comments if line won't be highlighted otherwise
-		if commentedLines[lineNum] && !willBeHighlighted {
+		if commentedLines[docLineNum] && !willBeHighlighted {
 			line = v.highlightLineNumber(line, commentedLineNumStyle)
 		}
 
 		// Apply highlighting based on priority
-		if lineNum == currentSearchLine {
+		if displayLineNum == currentSearchLine {
 			// Current search match (highest priority)
 			lines[i] = currentSearchMatchStyle.Render(line)
-		} else if lineNum == v.cursorLine {
+		} else if displayLineNum == displayCursorLine {
 			// Cursor highlight
 			lines[i] = cursorStyle.Render(line)
-		} else if v.selectionMode && lineNum >= start && lineNum <= end {
+		} else if v.selectionMode && displayLineNum >= start && displayLineNum <= end {
 			// Visual selection highlight
 			lines[i] = selectionStyle.Render(line)
-		} else if searchMatchLines[lineNum] {
+		} else if searchMatchLines[displayLineNum] {
 			// Other search matches (subtle)
 			lines[i] = searchMatchStyle.Render(line)
 		} else {
@@ -997,6 +1011,35 @@ func (v *View) getCommentedLines() map[int]bool {
 	}
 
 	return commented
+}
+
+// mapDocToDisplay maps a document line number to a display line number.
+// If lineMapping is nil (no comments inserted), returns the same line number.
+func (v *View) mapDocToDisplay(docLine int, lineMapping map[int]int) int {
+	if lineMapping == nil {
+		return docLine
+	}
+	if displayLine, ok := lineMapping[docLine]; ok {
+		return displayLine
+	}
+	return docLine // fallback to same line if not in mapping
+}
+
+// mapDisplayToDoc maps a display line number back to a document line number.
+// If lineMapping is nil (no comments inserted), returns the same line number.
+func (v *View) mapDisplayToDoc(displayLine int, lineMapping map[int]int) int {
+	if lineMapping == nil {
+		return displayLine
+	}
+	// Reverse lookup: find document line that maps to this display line
+	for docLine, dispLine := range lineMapping {
+		if dispLine == displayLine {
+			return docLine
+		}
+	}
+	// If display line is a comment line (not found in mapping), return 0 or -1
+	// to indicate it's not a document line
+	return 0
 }
 
 // renderStatusBar creates a status bar showing mode and position info.
@@ -1308,8 +1351,10 @@ func (v *View) updateTreeItemCommentCount() {
 }
 
 // insertCommentsInline inserts comments after their referenced lines.
-func (v *View) insertCommentsInline(content string) string {
+// Returns the rendered content and a mapping from document line numbers to display line numbers.
+func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 	lines := strings.Split(content, "\n")
+	originalLineCount := len(lines)
 
 	// Group comments by end line
 	commentsByLine := make(map[int][]Comment)
@@ -1338,6 +1383,10 @@ func (v *View) insertCommentsInline(content string) string {
 		Padding(0, 1).
 		Bold(true)
 
+	// Track how many comment lines were inserted before each document line
+	// This allows us to map document line numbers to display line numbers
+	insertedBeforeLine := make(map[int]int) // document line -> number of comment lines inserted before it
+
 	// Insert comments in reverse order to avoid offset issues
 	for _, lineNum := range lineNumbers {
 		if lineNum < 1 || lineNum > len(lines) {
@@ -1359,9 +1408,22 @@ func (v *View) insertCommentsInline(content string) string {
 		// Insert comment lines after the target line
 		insertPos := lineNum
 		lines = append(lines[:insertPos], append(commentLines, lines[insertPos:]...)...)
+
+		// Track insertions for lines after this one
+		numInserted := len(commentLines)
+		for i := lineNum + 1; i <= originalLineCount; i++ {
+			insertedBeforeLine[i] += numInserted
+		}
 	}
 
-	return strings.Join(lines, "\n")
+	// Build the mapping: document line number -> display line number
+	lineMapping := make(map[int]int)
+	for docLine := 1; docLine <= originalLineCount; docLine++ {
+		displayLine := docLine + insertedBeforeLine[docLine]
+		lineMapping[docLine] = displayLine
+	}
+
+	return strings.Join(lines, "\n"), lineMapping
 }
 
 // TreeItem represents an item in the review tree.
