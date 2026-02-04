@@ -86,20 +86,20 @@ func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
 func (m CommentModal) View() string {
 	titleStyle := lipgloss.NewStyle().
 		Bold(true).
-		Foreground(lipgloss.Color("#7aa2f7")).
+		Foreground(colorBlue).
 		MarginBottom(1)
 
 	labelStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#565f89")).
+		Foreground(colorGray).
 		MarginBottom(1)
 
 	contextStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#9aa5ce")).
+		Foreground(colorLightGray).
 		Italic(true).
 		MarginBottom(1)
 
 	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#565f89")).
+		Foreground(colorGray).
 		MarginTop(1)
 
 	content := strings.Join([]string{

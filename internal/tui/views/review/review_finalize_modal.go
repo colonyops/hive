@@ -130,7 +130,7 @@ func (m FinalizationModal) View() string {
 		BorderForeground(colorBlue).
 		Padding(1, 2).
 		Width(modalWidth).
-		Background(lipgloss.Color("#1a1b26"))
+		Background(colorBgDark)
 
 	return modalStyle.Render(modalContent)
 }

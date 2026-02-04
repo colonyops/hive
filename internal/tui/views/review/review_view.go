@@ -86,7 +86,7 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	l.Styles.Title = lipgloss.NewStyle()
 
 	// Configure help to match sessions view
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	helpStyle := lipgloss.NewStyle().Foreground(colorGray)
 	l.Help.Styles.ShortKey = helpStyle
 	l.Help.Styles.ShortDesc = helpStyle
 	l.Help.Styles.ShortSeparator = helpStyle
@@ -606,11 +606,11 @@ func (v View) View() string {
 	case v.selectedDoc == nil:
 		// Show helpful message if no document is selected
 		messageStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#c0caf5")).
+			Foreground(colorWhite).
 			Padding(2, 4)
 
 		helpStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7aa2f7")).
+			Foreground(colorBlue).
 			Bold(true)
 
 		message := "No document selected\n\n"
@@ -651,9 +651,9 @@ func (v View) View() string {
 		modalContent := v.confirmModal.View()
 		modalStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7aa2f7")).
+			BorderForeground(colorBlue).
 			Padding(1, 2).
-			Background(lipgloss.Color("#1a1b26"))
+			Background(colorBgDark)
 
 		modal := modalStyle.Render(modalContent)
 
@@ -677,9 +677,9 @@ func (v View) View() string {
 		modalContent := v.commentModal.View()
 		modalStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(lipgloss.Color("#7aa2f7")).
+			BorderForeground(colorBlue).
 			Padding(1, 2).
-			Background(lipgloss.Color("#1a1b26"))
+			Background(colorBgDark)
 
 		modal := modalStyle.Render(modalContent)
 
@@ -955,15 +955,15 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 	}
 
 	// Styles for cursor and selection (no explicit width)
-	selectionStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
-	cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#2a3158"))
-	searchMatchStyle := lipgloss.NewStyle().Background(lipgloss.Color("#565f89"))        // Subtle highlight for other matches
-	currentSearchMatchStyle := lipgloss.NewStyle().Background(lipgloss.Color("#f7768e")) // Bright for current match
+	selectionStyle := lipgloss.NewStyle().Background(colorBgSelection)
+	cursorStyle := lipgloss.NewStyle().Background(colorBgCursor)
+	searchMatchStyle := lipgloss.NewStyle().Background(colorGray)        // Subtle highlight for other matches
+	currentSearchMatchStyle := lipgloss.NewStyle().Background(colorPink) // Bright for current match
 
 	// Style for commented line numbers
 	commentedLineNumStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#1a1b26")). // Dark text
-		Background(lipgloss.Color("#e0af68")). // Gold background
+		Foreground(colorBgDark). // Dark text
+		Background(colorGold).   // Gold background
 		Bold(true)
 
 	// Calculate selection range if in visual mode (map to display coordinates)
@@ -1120,11 +1120,11 @@ func (v View) renderStatusBar() string {
 	// Show search input when in search mode
 	if v.searchMode {
 		searchStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7aa2f7")).
-			Background(lipgloss.Color("#1f2335")).
+			Foreground(colorBlue).
+			Background(colorBgDarker).
 			Bold(true)
 
-		bgStyle := lipgloss.NewStyle().Background(lipgloss.Color("#1f2335"))
+		bgStyle := lipgloss.NewStyle().Background(colorBgDarker)
 		prefix := searchStyle.Render("/")
 		input := v.searchInput.View()
 		remaining := max(0, v.width-lipgloss.Width(prefix)-lipgloss.Width(input))
@@ -1135,18 +1135,18 @@ func (v View) renderStatusBar() string {
 	// Determine mode
 	mode := "NORMAL"
 	modeStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#c0caf5")).
-		Background(lipgloss.Color("#3b4261")).
+		Foreground(colorWhite).
+		Background(colorBgSelection).
 		Bold(true).
 		Padding(0, 1)
 
 	if v.selectionMode {
 		mode = "VISUAL"
-		modeStyle = modeStyle.Background(lipgloss.Color("#7aa2f7"))
+		modeStyle = modeStyle.Background(colorBlue)
 	} else if v.searchQuery != "" && len(v.searchMatches) > 0 {
 		// Show search match count when search is active
 		mode = fmt.Sprintf("SEARCH | Match %d/%d", v.searchMatchIndex+1, len(v.searchMatches))
-		modeStyle = modeStyle.Background(lipgloss.Color("#f7768e"))
+		modeStyle = modeStyle.Background(colorPink)
 	}
 
 	// Calculate total lines
@@ -1158,8 +1158,8 @@ func (v View) renderStatusBar() string {
 	// Position info
 	posInfo := fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines)
 	posStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#565f89")).
-		Background(lipgloss.Color("#1f2335")).
+		Foreground(colorGray).
+		Background(colorBgDarker).
 		Padding(0, 1)
 
 	// Help text
@@ -1170,8 +1170,8 @@ func (v View) renderStatusBar() string {
 		helpText = "V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close"
 	}
 	helpStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#565f89")).
-		Background(lipgloss.Color("#1f2335")).
+		Foreground(colorGray).
+		Background(colorBgDarker).
 		Padding(0, 1)
 
 	// Build status bar
@@ -1187,7 +1187,7 @@ func (v View) renderStatusBar() string {
 	leftSpacing := availableSpace / 2
 	rightSpacing := availableSpace - leftSpacing
 
-	bgStyle := lipgloss.NewStyle().Background(lipgloss.Color("#1f2335"))
+	bgStyle := lipgloss.NewStyle().Background(colorBgDarker)
 	return leftPart + bgStyle.Render(strings.Repeat(" ", leftSpacing)) + middlePart + bgStyle.Render(strings.Repeat(" ", rightSpacing)) + rightPart
 }
 
@@ -1452,8 +1452,8 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 
 	// Insert comments after their lines with enhanced visual styling
 	commentStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#F74D50")). // More vibrant pink
-		Background(lipgloss.Color("#282A36")). // Subtle background
+		Foreground(colorPinkVibrant). // More vibrant pink
+		Background(colorBgVeryDark).  // Subtle background
 		Padding(0, 1).
 		Bold(true)
 
@@ -1674,7 +1674,7 @@ func (d ReviewTreeDelegate) renderDocument(item TreeItem, isSelected bool) strin
 	var sessionIndicator string
 	if item.HasActiveSession {
 		// Blue dot to indicate active review session
-		indicatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
+		indicatorStyle := lipgloss.NewStyle().Foreground(colorBlue)
 		sessionIndicator = indicatorStyle.Render(" ●")
 	}
 

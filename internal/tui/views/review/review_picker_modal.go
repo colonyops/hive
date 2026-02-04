@@ -220,7 +220,7 @@ func (m *DocumentPickerModal) View() string {
 	// Build help text with legend for active sessions
 	helpText := "↑/↓ navigate  enter select  esc cancel"
 	if m.store != nil {
-		legendStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7"))
+		legendStyle := lipgloss.NewStyle().Foreground(colorBlue)
 		helpText += "  " + legendStyle.Render("●") + " active review"
 	}
 	help := modalHelpStyle.Render(helpText)

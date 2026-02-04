@@ -233,8 +233,8 @@ func (d *Document) formatWithLineNumbers(lines []string) string {
 
 	// Build output with line numbers
 	var result strings.Builder
-	lineNumStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	lineNumStyle := lipgloss.NewStyle().Foreground(colorGray)
+	separatorStyle := lipgloss.NewStyle().Foreground(colorGray)
 
 	for i, line := range lines {
 		lineNum := fmt.Sprintf("%*d", lineNumWidth, i+1)
