@@ -42,6 +42,9 @@ type Store interface {
 	// ListComments returns all comments for a review session, sorted by start line.
 	ListComments(ctx context.Context, sessionID string) ([]Comment, error)
 
+	// UpdateComment updates the comment text for an existing comment.
+	UpdateComment(ctx context.Context, comment Comment) error
+
 	// DeleteComment removes a specific comment.
 	DeleteComment(ctx context.Context, commentID string) error
 }

@@ -560,7 +560,7 @@ func (c *Config) DatabaseFile() string {
 
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete:
+	case ActionRecycle, ActionDelete, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview:
 		return true
 	default:
 		return false

@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/rs/zerolog/log"
 
 	"github.com/hay-kot/hive/internal/stores"
 )
@@ -149,28 +150,30 @@ func (m *DocumentPickerModal) buildTreeItemsWithSessions(documents []Document) [
 		return items
 	}
 
-	// Check each document for active sessions
+	// Fetch all active sessions with counts in one query (optimized)
 	ctx := context.Background()
+	sessionMap, err := m.store.GetAllActiveSessionsWithCounts(ctx)
+	if err != nil {
+		// If query fails, return items without session info
+		log.Debug().Err(err).Msg("review: failed to fetch active sessions")
+		return items
+	}
+
+	// Mark items with active sessions using the pre-fetched map
 	for i, item := range items {
 		treeItem, ok := item.(TreeItem)
 		if !ok || treeItem.IsHeader {
 			continue
 		}
 
-		// Check if document has an active session
-		session, err := m.store.GetSession(ctx, treeItem.Document.Path)
-		if err == nil && !session.IsFinalized() {
+		// Check if document has an active session in the map
+		if sessionInfo, found := sessionMap[treeItem.Document.Path]; found {
 			// Has active session - mark it
 			treeItem.HasActiveSession = true
-
-			// Count comments for badge
-			comments, err := m.store.ListComments(ctx, session.ID)
-			if err == nil {
-				treeItem.CommentCount = len(comments)
-			}
-
-			items[i] = treeItem
+			treeItem.CommentCount = sessionInfo.CommentCount
 		}
+
+		items[i] = treeItem
 	}
 
 	return items

@@ -45,6 +45,7 @@ type Document struct {
 	ModTime       time.Time
 	Content       string   // Raw content
 	RenderedLines []string // Glamour-rendered lines with ANSI (cached)
+	cachedWidth   int      // Width used for cached rendering
 }
 
 // Comment represents inline feedback.
@@ -183,8 +184,8 @@ func (d *Document) LoadContent() error {
 // Render renders the document content using Glamour with line numbers.
 // Returns a string with ANSI-styled markdown and line numbers.
 func (d *Document) Render(width int) (string, error) {
-	// Use cached rendered lines if available
-	if d.RenderedLines != nil {
+	// Use cached rendered lines if available and width matches
+	if d.RenderedLines != nil && d.cachedWidth == width {
 		return d.formatWithLineNumbers(d.RenderedLines), nil
 	}
 
@@ -196,9 +197,12 @@ func (d *Document) Render(width int) (string, error) {
 	}
 
 	// Create glamour renderer with Tokyo Night theme
+	// Account for line numbers (4 chars) + separator (2 chars)
+	// Ensure minimum reasonable width of 20 characters
+	wrapWidth := max(width-6, 20)
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStylePath("dark"),
-		glamour.WithWordWrap(width-6), // Account for line numbers (4 chars) + separator (2 chars)
+		glamour.WithWordWrap(wrapWidth),
 	)
 	if err != nil {
 		return "", err
@@ -210,8 +214,9 @@ func (d *Document) Render(width int) (string, error) {
 		return "", err
 	}
 
-	// Split into lines and cache
+	// Split into lines and cache with width
 	d.RenderedLines = strings.Split(strings.TrimRight(rendered, "\n"), "\n")
+	d.cachedWidth = width
 
 	return d.formatWithLineNumbers(d.RenderedLines), nil
 }

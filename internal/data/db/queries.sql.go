@@ -181,6 +181,59 @@ func (q *Queries) FindRecyclableSession(ctx context.Context, remote string) (Ses
 	return i, err
 }
 
+const getAllActiveSessionsWithCounts = `-- name: GetAllActiveSessionsWithCounts :many
+SELECT
+    rs.id,
+    rs.document_path,
+    rs.content_hash,
+    rs.created_at,
+    rs.finalized_at,
+    COUNT(rc.id) as comment_count
+FROM review_sessions rs
+LEFT JOIN review_comments rc ON rs.id = rc.session_id
+WHERE rs.finalized_at IS NULL
+GROUP BY rs.id
+`
+
+type GetAllActiveSessionsWithCountsRow struct {
+	ID           string        `json:"id"`
+	DocumentPath string        `json:"document_path"`
+	ContentHash  string        `json:"content_hash"`
+	CreatedAt    int64         `json:"created_at"`
+	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
+	CommentCount int64         `json:"comment_count"`
+}
+
+func (q *Queries) GetAllActiveSessionsWithCounts(ctx context.Context) ([]GetAllActiveSessionsWithCountsRow, error) {
+	rows, err := q.db.QueryContext(ctx, getAllActiveSessionsWithCounts)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []GetAllActiveSessionsWithCountsRow{}
+	for rows.Next() {
+		var i GetAllActiveSessionsWithCountsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.DocumentPath,
+			&i.ContentHash,
+			&i.CreatedAt,
+			&i.FinalizedAt,
+			&i.CommentCount,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const getReviewSessionByDocPath = `-- name: GetReviewSessionByDocPath :one
 SELECT id, document_path, content_hash, created_at, finalized_at FROM review_sessions
 WHERE document_path = ?

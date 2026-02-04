@@ -157,6 +157,19 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			Msg("review: rebuilding document tree from file watcher")
 		items := BuildTreeItems(msg.Documents)
 		v.list.SetItems(items)
+
+		// Refresh currently open document if one is selected
+		if v.selectedDoc != nil {
+			// Find updated version of current document
+			for _, doc := range msg.Documents {
+				if doc.Path == v.selectedDoc.Path {
+					// Reload the document to refresh the view
+					v.loadDocument(&doc)
+					break
+				}
+			}
+		}
+
 		// Continue watching for more changes
 		if v.watcher != nil {
 			return v, v.watcher.Start()
@@ -1222,6 +1235,9 @@ func (v *View) addComment(commentText string) {
 		Int("end_line", comment.EndLine).
 		Int("total_comments", len(v.activeSession.Comments)).
 		Msg("review: added comment")
+
+	// Update comment count in tree
+	v.updateTreeItemCommentCount()
 }
 
 // updateComment updates the text of an existing comment.

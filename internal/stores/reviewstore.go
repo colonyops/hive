@@ -164,6 +164,46 @@ func (s *ReviewStore) DeleteComment(ctx context.Context, commentID string) error
 	return nil
 }
 
+// SessionInfo contains session data with comment count for efficient batch queries.
+type SessionInfo struct {
+	Session      review.Session
+	CommentCount int
+}
+
+// GetAllActiveSessionsWithCounts returns all active (non-finalized) sessions with comment counts.
+// This is optimized for batch operations like the document picker.
+func (s *ReviewStore) GetAllActiveSessionsWithCounts(ctx context.Context) (map[string]SessionInfo, error) {
+	rows, err := s.db.Queries().GetAllActiveSessionsWithCounts(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get active sessions with counts: %w", err)
+	}
+
+	// Convert to map keyed by document path for fast lookup
+	result := make(map[string]SessionInfo)
+	for _, row := range rows {
+		var finalizedAt *time.Time
+		if row.FinalizedAt.Valid {
+			t := time.Unix(0, row.FinalizedAt.Int64)
+			finalizedAt = &t
+		}
+
+		session := review.Session{
+			ID:           row.ID,
+			DocumentPath: row.DocumentPath,
+			ContentHash:  row.ContentHash,
+			CreatedAt:    time.Unix(0, row.CreatedAt),
+			FinalizedAt:  finalizedAt,
+		}
+
+		result[row.DocumentPath] = SessionInfo{
+			Session:      session,
+			CommentCount: int(row.CommentCount),
+		}
+	}
+
+	return result, nil
+}
+
 // rowToReviewSession converts a db.ReviewSession to a review.Session.
 func rowToReviewSession(row db.ReviewSession) review.Session {
 	var finalizedAt *time.Time

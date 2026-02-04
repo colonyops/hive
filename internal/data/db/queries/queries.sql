@@ -124,3 +124,16 @@ WHERE id = ?;
 -- name: DeleteReviewComment :exec
 DELETE FROM review_comments
 WHERE id = ?;
+
+-- name: GetAllActiveSessionsWithCounts :many
+SELECT
+    rs.id,
+    rs.document_path,
+    rs.content_hash,
+    rs.created_at,
+    rs.finalized_at,
+    COUNT(rc.id) as comment_count
+FROM review_sessions rs
+LEFT JOIN review_comments rc ON rs.id = rc.session_id
+WHERE rs.finalized_at IS NULL
+GROUP BY rs.id;
