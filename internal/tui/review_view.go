@@ -39,6 +39,8 @@ type ReviewView struct {
 	searchMode        bool                // True when in search/filter mode
 	searchInput       textinput.Model     // Search input field
 	searchQuery       string              // Current search query
+	searchMatches     []int               // Line numbers of search matches (1-indexed)
+	searchMatchIndex  int                 // Current match index in searchMatches
 }
 
 // NewReviewView creates a new review view.
@@ -210,7 +212,16 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 				return v, nil
 			}
 		case "esc":
-			// Exit visual mode first if active, otherwise exit full-screen
+			// Priority order: search mode > visual mode > full-screen
+			if v.searchMode {
+				// Exit search mode
+				v.searchMode = false
+				v.searchQuery = ""
+				v.searchInput.SetValue("")
+				v.renderSelection()
+				return v, nil
+			}
+			// Exit visual mode if active
 			if v.selectionMode {
 				v.selectionMode = false
 				v.renderSelection()
@@ -230,7 +241,7 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			case "f":
 				// Finalize review - show confirmation if there are comments
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
-					confirmMsg := fmt.Sprintf("Finalize review with %d comment(s)?", len(v.activeSession.Comments))
+					confirmMsg := fmt.Sprintf("Finalize review with %d comment(s) and copy to clipboard?", len(v.activeSession.Comments))
 					modal := NewConfirmModal(confirmMsg)
 					v.confirmModal = &modal
 					return v, nil
@@ -274,25 +285,20 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 		if v.searchMode && v.fullScreen {
 			switch msg.String() {
 			case "enter":
-				// Apply search and exit search mode
+				// Find matches and jump to first
 				v.searchQuery = v.searchInput.Value()
 				v.searchMode = false
-				v.renderSelection()
-				return v, nil
-			case "esc":
-				// Cancel search
-				v.searchMode = false
-				v.searchQuery = ""
-				v.searchInput.SetValue("")
+				v.findSearchMatches()
+				if len(v.searchMatches) > 0 {
+					v.searchMatchIndex = 0
+					v.jumpToMatch(v.searchMatches[0])
+				}
 				v.renderSelection()
 				return v, nil
 			default:
 				// Update search input
 				var cmd tea.Cmd
 				v.searchInput, cmd = v.searchInput.Update(msg)
-				// Live search - update as user types
-				v.searchQuery = v.searchInput.Value()
-				v.renderSelection()
 				return v, cmd
 			}
 		}
@@ -304,6 +310,24 @@ func (v ReviewView) Update(msg tea.Msg) (ReviewView, tea.Cmd) {
 			v.searchInput.SetValue("")
 			v.searchQuery = ""
 			return v, nil
+		}
+
+		// Handle search navigation (n/N for next/previous match)
+		if v.fullScreen && v.searchQuery != "" && len(v.searchMatches) > 0 {
+			switch msg.String() {
+			case "n":
+				// Jump to next match
+				v.searchMatchIndex = (v.searchMatchIndex + 1) % len(v.searchMatches)
+				v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
+				v.renderSelection()
+				return v, nil
+			case "N", "shift+n":
+				// Jump to previous match
+				v.searchMatchIndex = (v.searchMatchIndex - 1 + len(v.searchMatches)) % len(v.searchMatches)
+				v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
+				v.renderSelection()
+				return v, nil
+			}
 		}
 
 		// Handle navigation in full-screen mode
@@ -560,40 +584,36 @@ func (v *ReviewView) renderSelection() {
 		rendered = v.insertCommentsInline(rendered)
 	}
 
-	// Filter lines if search query is active
-	if v.searchQuery != "" {
-		rendered = v.filterLines(rendered, v.searchQuery)
-	}
-
-	// Apply cursor and selection highlighting
+	// Apply cursor and selection highlighting (includes search match highlighting)
 	rendered = v.highlightSelection(rendered)
 
 	v.viewport.SetContent(rendered)
 }
 
-// filterLines filters content to only show lines matching the search query.
-func (v *ReviewView) filterLines(content string, query string) string {
-	if query == "" {
-		return content
-	}
+// findSearchMatches finds all lines matching the search query and stores their line numbers.
+func (v *ReviewView) findSearchMatches() {
+	v.searchMatches = nil
+	v.searchMatchIndex = 0
 
-	lines := strings.Split(content, "\n")
-	var filtered []string
+	if v.searchQuery == "" || v.selectedDoc == nil {
+		return
+	}
 
 	// Case-insensitive search
-	queryLower := strings.ToLower(query)
+	queryLower := strings.ToLower(v.searchQuery)
 
-	for _, line := range lines {
+	// Search through rendered lines
+	for i, line := range v.selectedDoc.RenderedLines {
 		if strings.Contains(strings.ToLower(line), queryLower) {
-			filtered = append(filtered, line)
+			v.searchMatches = append(v.searchMatches, i+1) // Store 1-indexed line numbers
 		}
 	}
+}
 
-	if len(filtered) == 0 {
-		return "No matches found"
-	}
-
-	return strings.Join(filtered, "\n")
+// jumpToMatch moves the cursor to the specified line and scrolls to make it visible.
+func (v *ReviewView) jumpToMatch(lineNum int) {
+	v.cursorLine = lineNum
+	v.ensureCursorVisible()
 }
 
 // highlightSelection applies background color to cursor and selected lines.
@@ -604,9 +624,17 @@ func (v *ReviewView) highlightSelection(content string) string {
 	// Get commented line numbers
 	commentedLines := v.getCommentedLines()
 
+	// Create map of search matches for quick lookup
+	searchMatchLines := make(map[int]bool)
+	for _, lineNum := range v.searchMatches {
+		searchMatchLines[lineNum] = true
+	}
+
 	// Styles for cursor and selection (no explicit width)
 	selectionStyle := lipgloss.NewStyle().Background(lipgloss.Color("#3b4261"))
 	cursorStyle := lipgloss.NewStyle().Background(lipgloss.Color("#2a3158"))
+	searchMatchStyle := lipgloss.NewStyle().Background(lipgloss.Color("#565f89"))        // Subtle highlight for other matches
+	currentSearchMatchStyle := lipgloss.NewStyle().Background(lipgloss.Color("#f7768e")) // Bright for current match
 
 	// Style for commented line numbers
 	commentedLineNumStyle := lipgloss.NewStyle().
@@ -621,7 +649,13 @@ func (v *ReviewView) highlightSelection(content string) string {
 		end = max(v.selectionStart, v.cursorLine)
 	}
 
-	// Apply highlighting
+	// Determine current search match line number
+	var currentSearchLine int
+	if len(v.searchMatches) > 0 && v.searchMatchIndex >= 0 && v.searchMatchIndex < len(v.searchMatches) {
+		currentSearchLine = v.searchMatches[v.searchMatchIndex]
+	}
+
+	// Apply highlighting (priority: current search > cursor > visual selection > other search > normal)
 	for i := range lines {
 		lineNum := i + 1
 		line := lines[i]
@@ -631,12 +665,19 @@ func (v *ReviewView) highlightSelection(content string) string {
 			line = v.highlightLineNumber(line, commentedLineNumStyle)
 		}
 
-		// Apply cursor highlight (always visible in full-screen)
-		if lineNum == v.cursorLine {
+		// Apply highlighting based on priority
+		if lineNum == currentSearchLine {
+			// Current search match (highest priority)
+			lines[i] = currentSearchMatchStyle.Render(line)
+		} else if lineNum == v.cursorLine {
+			// Cursor highlight
 			lines[i] = cursorStyle.Render(line)
 		} else if v.selectionMode && lineNum >= start && lineNum <= end {
-			// Apply selection highlight
+			// Visual selection highlight
 			lines[i] = selectionStyle.Render(line)
+		} else if searchMatchLines[lineNum] {
+			// Other search matches (subtle)
+			lines[i] = searchMatchStyle.Render(line)
 		} else {
 			lines[i] = line
 		}
@@ -645,7 +686,7 @@ func (v *ReviewView) highlightSelection(content string) string {
 	return strings.Join(lines, "\n")
 }
 
-// highlightLineNumber applies a style to the line number portion of a rendered line.
+// highlightLineNumber applies a style to the line number and separator of a rendered line.
 // Assumes format: "<number> │ <content>"
 func (v *ReviewView) highlightLineNumber(line string, style lipgloss.Style) string {
 	// Find the separator " │ "
@@ -654,13 +695,15 @@ func (v *ReviewView) highlightLineNumber(line string, style lipgloss.Style) stri
 		return line // No line number found
 	}
 
-	// Extract and style the line number
+	// Extract parts
 	lineNum := line[:sepIdx]
 	separator := " │ "
 	content := line[sepIdx+len(separator):]
 
-	styledNum := style.Render(lineNum)
-	return styledNum + separator + content
+	// Style the line number + separator together (entire gutter)
+	gutter := lineNum + separator
+	styledGutter := style.Render(gutter)
+	return styledGutter + content
 }
 
 // getCommentedLines returns a map of line numbers that have comments.
@@ -727,7 +770,7 @@ func (v ReviewView) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • /:search • f:finalize • esc:exit"
+		helpText = "V:visual • /:search • f:finalize+copy • esc:exit"
 	}
 	helpStyle := lipgloss.NewStyle().
 		Foreground(lipgloss.Color("#565f89")).
