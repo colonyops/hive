@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -440,5 +441,70 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 
 	if view.pendingDiscard {
 		t.Error("expected pendingDiscard to remain false")
+	}
+}
+
+func TestCommentVisualStyling(t *testing.T) {
+	doc := ReviewDocument{
+		Path:    "/path/to/test.md",
+		RelPath: "plans/test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3",
+	}
+
+	view := NewReviewView([]ReviewDocument{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.selectedDoc = &doc
+
+	// Create a session with a comment
+	view.activeSession = &ReviewSession{
+		ID:       "test-session",
+		DocPath:  doc.Path,
+		Comments: []ReviewComment{
+			{
+				ID:          "comment-1",
+				SessionID:   "test-session",
+				StartLine:   2,
+				EndLine:     2,
+				ContextText: "Line 2",
+				CommentText: "This is a test comment",
+				CreatedAt:   time.Now(),
+			},
+		},
+		CreatedAt:  time.Now(),
+		ModifiedAt: time.Now(),
+	}
+
+	// Render the document with comments
+	content := "Line 1\nLine 2\nLine 3"
+	rendered := view.insertCommentsInline(content)
+
+	// Check that the rendered output contains the profile placeholder
+	if !strings.Contains(rendered, "<profile>") {
+		t.Error("expected rendered output to contain '<profile>' placeholder")
+	}
+
+	// Check that the comment text is present
+	if !strings.Contains(rendered, "This is a test comment") {
+		t.Error("expected rendered output to contain comment text")
+	}
+
+	// Check that there's increased indentation (at least 4 spaces before the styled content)
+	lines := strings.Split(rendered, "\n")
+	var commentLineFound bool
+	for _, line := range lines {
+		if strings.Contains(line, "<profile>") {
+			// Check for leading spaces (indentation)
+			if !strings.HasPrefix(line, "    ") {
+				t.Error("expected comment line to have increased indentation (at least 4 spaces)")
+			}
+			commentLineFound = true
+			break
+		}
+	}
+
+	if !commentLineFound {
+		t.Error("expected to find a comment line in rendered output")
 	}
 }

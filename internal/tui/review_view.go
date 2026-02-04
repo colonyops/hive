@@ -1255,10 +1255,12 @@ func (v *ReviewView) insertCommentsInline(content string) string {
 		commentsByLine[comment.EndLine] = append(commentsByLine[comment.EndLine], comment)
 	}
 
-	// Insert comments after their lines
+	// Insert comments after their lines with enhanced visual styling
 	commentStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7aa2f7")).
-		Italic(true)
+		Foreground(lipgloss.Color("#FF79C6")). // More vibrant pink
+		Background(lipgloss.Color("#282A36")). // Subtle background
+		Padding(0, 1).
+		Bold(true)
 
 	var result []string
 	for i, line := range lines {
@@ -1267,7 +1269,11 @@ func (v *ReviewView) insertCommentsInline(content string) string {
 		lineNum := i + 1
 		if comments, ok := commentsByLine[lineNum]; ok {
 			for _, comment := range comments {
-				commentLine := commentStyle.Render("  ▸ " + comment.CommentText)
+				// Use '<profile>' placeholder for future icon/avatar
+				icon := "<profile>"
+				// Add increased indentation (6 spaces) for visual separation
+				indent := "      "
+				commentLine := indent + commentStyle.Render(fmt.Sprintf("%s %s", icon, comment.CommentText))
 				result = append(result, commentLine)
 			}
 		}
