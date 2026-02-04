@@ -1518,6 +1518,8 @@ func (i TreeItem) FilterValue() string {
 }
 
 // BuildTreeItems converts documents into tree items grouped by type.
+// Note: CommentCount is intentionally set to 0 to keep this function simple and stateless.
+// Callers that need comment counts should enrich the items separately (see buildTreeItemsWithSessions in picker modal).
 func BuildTreeItems(documents []Document) []list.Item {
 	if len(documents) == 0 {
 		return nil
@@ -1554,7 +1556,7 @@ func BuildTreeItems(documents []Document) []list.Item {
 				IsHeader:     false,
 				Document:     doc,
 				IsLastInType: isLast,
-				CommentCount: 0, // TODO: Load from store in Phase 6
+				CommentCount: 0, // Intentionally 0 - callers should enrich if needed
 			}
 			items = append(items, item)
 		}
