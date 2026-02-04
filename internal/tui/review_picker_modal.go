@@ -58,6 +58,16 @@ func NewDocumentPickerModal(documents []ReviewDocument, width, height int, store
 	items := modal.buildTreeItemsWithSessions(documents)
 	l.SetItems(items)
 
+	// Select first non-header item by default
+	if len(items) > 0 {
+		for i, item := range items {
+			if treeItem, ok := item.(ReviewTreeItem); ok && !treeItem.IsHeader {
+				l.Select(i)
+				break
+			}
+		}
+	}
+
 	return modal
 }
 
@@ -198,6 +208,13 @@ func (m *DocumentPickerModal) View() string {
 		listHeight = 3
 	}
 	m.list.SetSize(modalWidth-4, listHeight)
+
+	// Set search input width (with minimum for placeholder visibility)
+	searchWidth := modalWidth - 4
+	if searchWidth < 30 {
+		searchWidth = 30
+	}
+	m.searchInput.SetWidth(searchWidth)
 
 	// Build modal content
 	title := modalTitleStyle.Render("Select Document")

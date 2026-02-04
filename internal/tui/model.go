@@ -1241,15 +1241,24 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 }
 
 // handleTabKey handles tab key for switching views.
-// Review tab is excluded from normal tab cycling - use HiveDocReview command to access it.
+// If Review tab is visible (has active session), it's included in cycling.
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
+	// Check if Review tab should be visible
+	showReviewTab := m.reviewView != nil && m.reviewView.activeSession != nil && m.reviewView.selectedDoc != nil
+
 	switch m.activeView {
 	case ViewSessions:
 		m.activeView = ViewMessages
 	case ViewMessages:
-		m.activeView = ViewSessions
+		if showReviewTab {
+			// If Review is visible, cycle to it
+			m.activeView = ViewReview
+		} else {
+			// Otherwise cycle back to Sessions
+			m.activeView = ViewSessions
+		}
 	case ViewReview:
-		// If currently in review view, tab should cycle back to sessions
+		// From Review, cycle back to Sessions
 		m.activeView = ViewSessions
 	}
 	m.handler.SetActiveView(m.activeView)
