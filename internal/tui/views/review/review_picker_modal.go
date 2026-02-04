@@ -36,9 +36,14 @@ func NewDocumentPickerModal(documents []Document, width, height int, store *stor
 	ti.CharLimit = 100
 	ti.Focus()
 
-	// Create list with tree delegate
+	// Calculate initial modal and list dimensions
+	modalWidth := max(int(float64(width)*0.8), 40)
+	modalHeight := max(int(float64(height)*0.8), 10)
+	listHeight := max(modalHeight-5, 3)
+
+	// Create list with tree delegate and initial size
 	delegate := NewReviewTreeDelegate()
-	l := list.New(nil, delegate, 0, 0)
+	l := list.New(nil, delegate, modalWidth-4, listHeight)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(false) // We handle filtering manually for fuzzy matching
 	l.SetShowTitle(false)
@@ -196,27 +201,15 @@ func fuzzyMatch(target, query string) bool {
 // View renders the picker modal.
 func (m *DocumentPickerModal) View() string {
 	// Calculate modal dimensions (80% of screen)
-	modalWidth := int(float64(m.width) * 0.8)
-	modalHeight := int(float64(m.height) * 0.8)
-	if modalWidth < 40 {
-		modalWidth = 40
-	}
-	if modalHeight < 10 {
-		modalHeight = 10
-	}
+	modalWidth := max(int(float64(m.width)*0.8), 40)
+	modalHeight := max(int(float64(m.height)*0.8), 10)
 
 	// Set list size (leave room for search input and help)
-	listHeight := modalHeight - 5
-	if listHeight < 3 {
-		listHeight = 3
-	}
+	listHeight := max(modalHeight-5, 3)
 	m.list.SetSize(modalWidth-4, listHeight)
 
 	// Set search input width (with minimum for placeholder visibility)
-	searchWidth := modalWidth - 4
-	if searchWidth < 30 {
-		searchWidth = 30
-	}
+	searchWidth := max(modalWidth-4, 30)
 	m.searchInput.SetWidth(searchWidth)
 
 	// Build modal content
