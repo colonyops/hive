@@ -996,6 +996,10 @@ func (v ReviewView) renderStatusBar() string {
 	if v.selectionMode {
 		mode = "VISUAL"
 		modeStyle = modeStyle.Background(lipgloss.Color("#7aa2f7"))
+	} else if v.searchQuery != "" && len(v.searchMatches) > 0 {
+		// Show search match count when search is active
+		mode = fmt.Sprintf("SEARCH | Match %d/%d", v.searchMatchIndex+1, len(v.searchMatches))
+		modeStyle = modeStyle.Background(lipgloss.Color("#f7768e"))
 	}
 
 	// Calculate total lines
