@@ -1198,11 +1198,17 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 
 // handleNormalKey handles keys in normal state.
 func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// Check if Review view has an active editor (search or comment modal)
+	hasReviewEditor := m.isReviewFocused() && m.reviewView != nil && m.reviewView.HasActiveEditor()
+
 	// Global keys that work regardless of focus
 	switch keyStr {
 	case "q", keyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
+		// Don't handle global quit when typing in Review view editor
+		if !hasReviewEditor {
+			m.quitting = true
+			return m, tea.Quit
+		}
 	case "tab":
 		return m.handleTabKey()
 	case "?":
