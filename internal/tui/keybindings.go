@@ -21,13 +21,13 @@ const (
 	ActionTypeNone ActionType = iota
 	ActionTypeRecycle
 	ActionTypeDelete
-	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once
 	ActionTypeShell
 	ActionTypeFilterAll
 	ActionTypeFilterActive
 	ActionTypeFilterApproval
 	ActionTypeFilterReady
 	ActionTypeDocReview
+	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
 )
 
 // Action represents a resolved keybinding action ready for execution.
