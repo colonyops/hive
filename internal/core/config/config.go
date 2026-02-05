@@ -160,7 +160,6 @@ type PluginsConfig struct {
 	Beads        BeadsPluginConfig        `yaml:"beads"`
 	LazyGit      LazyGitPluginConfig      `yaml:"lazygit"`
 	Neovim       NeovimPluginConfig       `yaml:"neovim"`
-	Yazi         YaziPluginConfig         `yaml:"yazi"`
 	ContextDir   ContextDirPluginConfig   `yaml:"contextdir"`
 }
 
@@ -183,11 +182,6 @@ type LazyGitPluginConfig struct {
 
 // NeovimPluginConfig holds neovim plugin configuration.
 type NeovimPluginConfig struct {
-	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
-}
-
-// YaziPluginConfig holds yazi plugin configuration.
-type YaziPluginConfig struct {
 	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
