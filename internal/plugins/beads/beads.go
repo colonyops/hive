@@ -21,7 +21,8 @@ import (
 
 // Plugin implements the Beads plugin for Hive.
 type Plugin struct {
-	cfg config.BeadsPluginConfig
+	cfg       config.BeadsPluginConfig
+	hasPerles bool
 }
 
 // New creates a new Beads plugin.
@@ -41,14 +42,31 @@ func (p *Plugin) Available() bool {
 	return err == nil
 }
 
-func (p *Plugin) Init(_ context.Context) error { return nil }
-func (p *Plugin) Close() error                 { return nil }
+func (p *Plugin) Init(_ context.Context) error {
+	// Detect if perles is available for better TUI
+	_, err := exec.LookPath("perles")
+	p.hasPerles = err == nil
+	return nil
+}
+
+func (p *Plugin) Close() error { return nil }
 
 func (p *Plugin) Commands() map[string]config.UserCommand {
-	return map[string]config.UserCommand{
+	cmds := map[string]config.UserCommand{
 		"BeadsReady": pluglib.TmuxPopup(`cd "{{ .Path }}" && bd ready {{ join .Args " " }}`, "show ready tasks [flags]"),
 		"BeadsList":  pluglib.TmuxPopup(`cd "{{ .Path }}" && bd list --tree {{ join .Args " " }}`, "list all issues [flags]"),
 	}
+
+	// Add perles TUI command if available
+	if p.hasPerles {
+		cmds["BeadsTUI"] = config.UserCommand{
+			Sh:     `tmux popup -E -w 95% -h 95% -- sh -c 'cd "{{ .Path }}" && perles'`,
+			Help:   "open perles kanban TUI",
+			Silent: true,
+		}
+	}
+
+	return cmds
 }
 
 func (p *Plugin) StatusProvider() plugins.StatusProvider {
