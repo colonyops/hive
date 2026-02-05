@@ -12,7 +12,7 @@
     {
       "name": "hive",
       "description": "Skills for using the hive CLI",
-      "source": "./plugs/hive",
+      "source": "./.claude-plugin/plugs/hive",
       "strict": false
     }
   ]
