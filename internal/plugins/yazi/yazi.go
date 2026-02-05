@@ -37,7 +37,7 @@ func (p *Plugin) Close() error                 { return nil }
 func (p *Plugin) Commands() map[string]config.UserCommand {
 	return map[string]config.UserCommand{
 		"YaziOpen": {
-			Sh:     `tmux popup -E -w 95% -h 95% -- bash -c 'cd "{{ .Path }}" && exec yazi'`,
+			Sh:     `tmux popup -E -w 95% -h 95% -- bash -l -c 'cd "{{ .Path }}" && exec yazi'`,
 			Help:   "open yazi file manager in session directory",
 			Silent: true,
 		},
