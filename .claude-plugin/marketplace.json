@@ -6,14 +6,15 @@
   },
   "metadata": {
     "description": "Skills for managing AI coding agent sessions with hive CLI",
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "plugins": [
     {
       "name": "hive",
       "description": "Skills for using the hive CLI",
       "source": "./claude-plugin/hive",
-      "strict": false
+      "strict": false,
+      "skills": ["./claude-plugin/hive"]
     }
   ]
 }
