@@ -1,5 +1,5 @@
 ---
-name: hive:inbox
+name: inbox
 description: Check your inbox for inter-agent messages. Use when you need to read messages, check for unread messages, or review communication from other agents.
 compatibility: claude, opencode
 ---

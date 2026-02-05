@@ -1,5 +1,5 @@
 ---
-name: hive:publish
+name: publish
 description: Send messages to other agents or broadcast to multiple sessions. Use when coordinating work, sending notifications, or communicating with other Claude sessions.
 compatibility: claude, opencode
 ---

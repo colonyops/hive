@@ -1,5 +1,5 @@
 ---
-name: hive:config
+name: config
 description: Configure hive for your workflow - rules, spawn commands, keybindings, and terminal integration. Use when setting up new repos or customizing session behavior.
 compatibility: claude, opencode
 ---

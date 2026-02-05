@@ -1,5 +1,5 @@
 ---
-name: hive:wait
+name: wait
 description: Wait for messages from other agents with timeout. Use for synchronization points, agent handoff coordination, or blocking until responses arrive.
 compatibility: claude, opencode
 ---

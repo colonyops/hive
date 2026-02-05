@@ -1,5 +1,5 @@
 ---
-name: hive:session-info
+name: session-info
 description: Get your current session ID, inbox topic, and session information. Use when you need to know your agent identity for messaging coordination.
 compatibility: claude, opencode
 ---
