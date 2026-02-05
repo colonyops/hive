@@ -124,7 +124,7 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	// Build metadata header
 	sender := m.message.Sender
 	if sender == "" {
-		sender = "unknown"
+		sender = unknownViewType
 	}
 	topicStr := previewTopicStyle.Render(fmt.Sprintf("[%s]", m.message.Topic))
 	senderStr := previewSenderStyle.Render(sender)

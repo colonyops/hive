@@ -23,6 +23,24 @@ type MessageRead struct {
 	ReadAt     int64  `json:"read_at"`
 }
 
+type ReviewComment struct {
+	ID          string `json:"id"`
+	SessionID   string `json:"session_id"`
+	StartLine   int64  `json:"start_line"`
+	EndLine     int64  `json:"end_line"`
+	ContextText string `json:"context_text"`
+	CommentText string `json:"comment_text"`
+	CreatedAt   int64  `json:"created_at"`
+}
+
+type ReviewSession struct {
+	ID           string        `json:"id"`
+	DocumentPath string        `json:"document_path"`
+	ContentHash  string        `json:"content_hash"`
+	CreatedAt    int64         `json:"created_at"`
+	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
+}
+
 type SchemaVersion struct {
 	Version int64 `json:"version"`
 }

@@ -384,18 +384,129 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		}
 	})
 
-	t.Run("unknown fallback for invalid command reference", func(t *testing.T) {
+	t.Run("invalid command reference is filtered out", func(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"x": {Cmd: "NonExistent"},
 		}
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
-		if len(entries) != 1 {
-			t.Fatalf("expected 1 entry, got %d", len(entries))
+		// Invalid command references are filtered out (not shown in help)
+		if len(entries) != 0 {
+			t.Fatalf("expected 0 entries, got %d", len(entries))
 		}
-		if entries[0] != "[x] unknown" {
-			t.Errorf("entries[0] = %q, want %q", entries[0], "[x] unknown")
+	})
+}
+
+func TestKeybindingResolver_Scope(t *testing.T) {
+	commands := map[string]config.UserCommand{
+		"global-cmd":   {Sh: "echo global", Help: "global command"},
+		"review-cmd":   {Sh: "echo review", Help: "review command", Scope: []string{"review"}},
+		"sessions-cmd": {Sh: "echo sessions", Help: "sessions command", Scope: []string{"sessions"}},
+		"multi-cmd":    {Sh: "echo multi", Help: "multi command", Scope: []string{"review", "messages"}},
+	}
+	keybindings := map[string]config.Keybinding{
+		"g": {Cmd: "global-cmd"},
+		"r": {Cmd: "review-cmd"},
+		"s": {Cmd: "sessions-cmd"},
+		"m": {Cmd: "multi-cmd"},
+	}
+
+	handler := NewKeybindingResolver(keybindings, commands)
+	sess := session.Session{
+		ID:    "test-id",
+		Path:  "/test/path",
+		State: session.StateActive,
+	}
+
+	t.Run("global command works in all views", func(t *testing.T) {
+		for _, view := range []ViewType{ViewSessions, ViewMessages, ViewReview} {
+			handler.SetActiveView(view)
+			action, ok := handler.Resolve("g", sess)
+			if !ok {
+				t.Errorf("global command should work in view %s", view.String())
+			}
+			if action.Type != ActionTypeShell {
+				t.Errorf("expected shell action, got %v", action.Type)
+			}
+		}
+	})
+
+	t.Run("scoped command only works in its scope", func(t *testing.T) {
+		// review-cmd should only work in review view
+		handler.SetActiveView(ViewReview)
+		action, ok := handler.Resolve("r", sess)
+		if !ok {
+			t.Error("review-cmd should work in review view")
+		}
+		if action.Type != ActionTypeShell {
+			t.Errorf("expected shell action, got %v", action.Type)
+		}
+
+		// Should not work in sessions view
+		handler.SetActiveView(ViewSessions)
+		_, ok = handler.Resolve("r", sess)
+		if ok {
+			t.Error("review-cmd should not work in sessions view")
+		}
+
+		// Should not work in messages view
+		handler.SetActiveView(ViewMessages)
+		_, ok = handler.Resolve("r", sess)
+		if ok {
+			t.Error("review-cmd should not work in messages view")
+		}
+	})
+
+	t.Run("multi-scope command works in multiple views", func(t *testing.T) {
+		// Should work in review view
+		handler.SetActiveView(ViewReview)
+		action, ok := handler.Resolve("m", sess)
+		if !ok {
+			t.Error("multi-cmd should work in review view")
+		}
+		if action.Type != ActionTypeShell {
+			t.Errorf("expected shell action, got %v", action.Type)
+		}
+
+		// Should work in messages view
+		handler.SetActiveView(ViewMessages)
+		action, ok = handler.Resolve("m", sess)
+		if !ok {
+			t.Error("multi-cmd should work in messages view")
+		}
+		if action.Type != ActionTypeShell {
+			t.Errorf("expected shell action, got %v", action.Type)
+		}
+
+		// Should not work in sessions view
+		handler.SetActiveView(ViewSessions)
+		_, ok = handler.Resolve("m", sess)
+		if ok {
+			t.Error("multi-cmd should not work in sessions view")
+		}
+	})
+
+	t.Run("help entries filtered by scope", func(t *testing.T) {
+		// In sessions view, should only see global and sessions commands
+		handler.SetActiveView(ViewSessions)
+		entries := handler.HelpEntries()
+		if len(entries) != 2 {
+			t.Errorf("expected 2 entries in sessions view, got %d", len(entries))
+		}
+
+		// In review view, should see global, review, and multi commands
+		handler.SetActiveView(ViewReview)
+		entries = handler.HelpEntries()
+		if len(entries) != 3 {
+			t.Errorf("expected 3 entries in review view, got %d", len(entries))
+		}
+
+		// In messages view, should see global and multi commands
+		handler.SetActiveView(ViewMessages)
+		entries = handler.HelpEntries()
+		if len(entries) != 2 {
+			t.Errorf("expected 2 entries in messages view, got %d", len(entries))
 		}
 	})
 }

@@ -10,4 +10,5 @@ var (
 	IconMail      = "\ueb1c"     // 
 	IconBee       = "\U000F0FA1" // 󰾡
 	IconHive      = "\U000F10CE" // 󱃎
+	IconProfile   = " "
 )

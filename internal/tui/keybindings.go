@@ -26,6 +26,7 @@ const (
 	ActionTypeFilterActive
 	ActionTypeFilterApproval
 	ActionTypeFilterReady
+	ActionTypeDocReview
 )
 
 // Action represents a resolved keybinding action ready for execution.
@@ -52,6 +53,7 @@ func (a Action) NeedsConfirm() bool {
 type KeybindingResolver struct {
 	keybindings map[string]config.Keybinding
 	commands    map[string]config.UserCommand
+	activeView  ViewType // current active view for scope checking
 }
 
 // NewKeybindingResolver creates a new resolver with the given config.
@@ -60,7 +62,27 @@ func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands ma
 	return &KeybindingResolver{
 		keybindings: keybindings,
 		commands:    commands,
+		activeView:  ViewSessions, // default to sessions view
 	}
+}
+
+// SetActiveView updates the current active view for scope checking.
+func (h *KeybindingResolver) SetActiveView(view ViewType) {
+	h.activeView = view
+}
+
+// isCommandInScope checks if a command is active in the current view.
+func (h *KeybindingResolver) isCommandInScope(cmd config.UserCommand) bool {
+	if len(cmd.Scope) == 0 {
+		return true // global by default
+	}
+	currentScope := h.activeView.String()
+	for _, scope := range cmd.Scope {
+		if scope == "global" || scope == currentScope {
+			return true
+		}
+	}
+	return false
 }
 
 // Resolve attempts to resolve a key press to an action for the given session.
@@ -77,6 +99,11 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 		// Command reference is invalid - validation should catch this,
 		// but log and return gracefully for debugging
 		log.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
+		return Action{}, false
+	}
+
+	// Check if command is in scope for current view
+	if !h.isCommandInScope(cmd) {
 		return Action{}, false
 	}
 
@@ -125,6 +152,11 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			action.Type = ActionTypeFilterApproval
 		case config.ActionFilterReady:
 			action.Type = ActionTypeFilterReady
+		case config.ActionDocReview:
+			action.Type = ActionTypeDocReview
+			if action.Help == "" {
+				action.Help = "review document"
+			}
 		}
 		return action, true
 	}
@@ -161,6 +193,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 }
 
 // HelpEntries returns all configured keybindings for display, sorted by key.
+// Only returns keybindings that are in scope for the current view.
 func (h *KeybindingResolver) HelpEntries() []string {
 	// Get sorted keys for consistent ordering
 	keys := slices.Sorted(maps.Keys(h.keybindings))
@@ -168,19 +201,24 @@ func (h *KeybindingResolver) HelpEntries() []string {
 	entries := make([]string, 0, len(h.keybindings))
 	for _, key := range keys {
 		kb := h.keybindings[key]
+
+		// Get command and check scope
+		cmd, ok := h.commands[kb.Cmd]
+		if !ok || !h.isCommandInScope(cmd) {
+			continue // skip out-of-scope commands
+		}
+
 		help := kb.Help
 
 		// If keybinding doesn't override help, get from command
 		if help == "" {
-			if cmd, ok := h.commands[kb.Cmd]; ok {
-				help = cmd.Help
-				if help == "" && cmd.Action != "" {
-					help = cmd.Action
-				}
+			help = cmd.Help
+			if help == "" && cmd.Action != "" {
+				help = cmd.Action
 			}
 		}
 		if help == "" {
-			help = "unknown"
+			help = unknownViewType
 		}
 		entries = append(entries, fmt.Sprintf("[%s] %s", key, help))
 	}
@@ -194,25 +232,31 @@ func (h *KeybindingResolver) HelpString() string {
 }
 
 // KeyBindings returns key.Binding objects for integration with bubbles help system.
+// Only returns keybindings that are in scope for the current view.
 func (h *KeybindingResolver) KeyBindings() []key.Binding {
 	keys := slices.Sorted(maps.Keys(h.keybindings))
 	bindings := make([]key.Binding, 0, len(keys))
 
 	for _, k := range keys {
 		kb := h.keybindings[k]
+
+		// Get command and check scope
+		cmd, ok := h.commands[kb.Cmd]
+		if !ok || !h.isCommandInScope(cmd) {
+			continue // skip out-of-scope commands
+		}
+
 		help := kb.Help
 
 		// If keybinding doesn't override help, get from command
 		if help == "" {
-			if cmd, ok := h.commands[kb.Cmd]; ok {
-				help = cmd.Help
-				if help == "" && cmd.Action != "" {
-					help = cmd.Action
-				}
+			help = cmd.Help
+			if help == "" && cmd.Action != "" {
+				help = cmd.Action
 			}
 		}
 		if help == "" {
-			help = "unknown"
+			help = unknownViewType
 		}
 
 		bindings = append(bindings, key.NewBinding(

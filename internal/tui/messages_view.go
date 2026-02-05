@@ -306,7 +306,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 	// Sender (with color hashing, fixed width, in brackets)
 	sender := msg.Sender
 	if sender == "" {
-		sender = "unknown"
+		sender = unknownViewType
 	}
 	if len(sender) > senderW-2 { // -2 for brackets
 		sender = sender[:senderW-3] + "…"

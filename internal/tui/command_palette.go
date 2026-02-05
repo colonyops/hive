@@ -13,6 +13,20 @@ import (
 	"github.com/sahilm/fuzzy"
 )
 
+// isCommandInScopeForView checks if a command is active in the given view.
+func isCommandInScopeForView(cmd config.UserCommand, view ViewType) bool {
+	if len(cmd.Scope) == 0 {
+		return true // global by default
+	}
+	currentScope := view.String()
+	for _, scope := range cmd.Scope {
+		if scope == "global" || scope == currentScope {
+			return true
+		}
+	}
+	return false
+}
+
 const (
 	// MaxVisibleCommands is the maximum number of commands shown in the palette.
 	MaxVisibleCommands = 12
@@ -47,11 +61,15 @@ type CommandPalette struct {
 }
 
 // NewCommandPalette creates a new command palette with the given commands.
-func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session, width, height int) *CommandPalette {
+// Commands are filtered by scope - only commands active in the current view are shown.
+func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session, width, height int, activeView ViewType) *CommandPalette {
 	// Sort command names for consistent ordering
 	names := make([]string, 0, len(cmds))
-	for name := range cmds {
-		names = append(names, name)
+	for name, cmd := range cmds {
+		// Filter by scope
+		if isCommandInScopeForView(cmd, activeView) {
+			names = append(names, name)
+		}
 	}
 	sort.Strings(names)
 

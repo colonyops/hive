@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"strings"
 	"sync"
@@ -17,14 +18,18 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
+	"github.com/hay-kot/hive/internal/tui/views/review"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 
@@ -61,6 +66,7 @@ type Options struct {
 	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
 	TerminalManager *terminal.Manager // Terminal integration manager (optional)
 	PluginManager   *plugins.Manager  // Plugin manager (optional)
+	DB              *db.DB            // Database connection for stores
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -148,6 +154,12 @@ type Model struct {
 
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
+
+	// Review view
+	reviewView *review.View
+
+	// Document picker (shown on Sessions view to start reviews)
+	docPickerModal *review.DocumentPickerModal
 }
 
 // PendingCreate returns any pending session creation data.
@@ -285,6 +297,33 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		cfg.TUI.Preview.StatusTemplate,
 	)
 
+	// Initialize review view with document discovery
+	// Use repo-specific context directory if we have a local remote, otherwise shared
+	var contextDir string
+	var docs []review.Document
+	if opts.LocalRemote != "" {
+		owner, repo := git.ExtractOwnerRepo(opts.LocalRemote)
+		if owner != "" && repo != "" {
+			contextDir = cfg.RepoContextDir(owner, repo)
+			docs, _ = review.DiscoverDocuments(contextDir)
+		}
+	}
+	// Fallback to shared if no repo context
+	if contextDir == "" {
+		contextDir = cfg.SharedContextDir()
+		docs, _ = review.DiscoverDocuments(contextDir)
+	}
+
+	// Create review store if database is available
+	var reviewStore *stores.ReviewStore
+	if opts.DB != nil {
+		reviewStore = stores.NewReviewStore(opts.DB)
+	}
+
+	reviewView := review.New(docs, contextDir, reviewStore)
+	// Check if send-claude command is available
+	reviewView.SetHasAgentCommand(hasSendClaudeCommand())
+
 	return Model{
 		cfg:                cfg,
 		service:            service,
@@ -313,6 +352,7 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		copyCommand:        cfg.CopyCommand,
 		repoDirs:           cfg.RepoDirs,
 		mergedCommands:     mergedCommands,
+		reviewView:         &reviewView,
 	}
 }
 
@@ -378,6 +418,12 @@ func (m Model) Init() tea.Cmd {
 	// Start plugin background worker if plugins are enabled
 	if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
 		cmds = append(cmds, m.startPluginWorker())
+	}
+	// Start review view file watcher
+	if m.reviewView != nil {
+		if cmd := m.reviewView.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
 	return tea.Batch(cmds...)
 }
@@ -470,6 +516,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 		// msgView gets -1 because we prepend a blank line for consistent spacing
 		m.msgView.SetSize(msg.Width, contentHeight-1)
+
+		// Set review view size
+		if m.reviewView != nil {
+			m.reviewView.SetSize(msg.Width, contentHeight)
+		}
 		return m, nil
 
 	case messagesLoadedMsg:
@@ -634,7 +685,73 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Help keybindings remain minimal - full list shown via ? dialog
 		return m, nil
 
+	case review.DocumentChangeMsg:
+		// Forward to review view if it's active
+		if m.reviewView != nil {
+			*m.reviewView, _ = m.reviewView.Update(msg)
+		}
+		return m, nil
+
+	case review.ReviewFinalizedMsg:
+		// Copy feedback to clipboard
+		if err := m.copyToClipboard(msg.Feedback); err != nil {
+			m.err = fmt.Errorf("failed to copy feedback: %w", err)
+		} else {
+			m.err = nil // Clear any previous errors
+		}
+		return m, nil
+
+	case review.SendToAgentMsg:
+		// Send feedback to Claude agent via send-claude command
+		return m, m.sendFeedbackToAgent(msg.Feedback)
+
+	case review.OpenDocumentMsg:
+		// Handle document opening (from HiveDocReview command)
+		if msg.Err != nil {
+			m.err = msg.Err
+			return m, nil
+		}
+		// Document path is provided, tell review view to load it
+		if m.reviewView != nil {
+			// Find and load the document
+			for _, item := range m.reviewView.List().Items() {
+				if treeItem, ok := item.(review.TreeItem); ok && !treeItem.IsHeader {
+					if treeItem.Document.Path == msg.Path {
+						m.reviewView.LoadDocument(&treeItem.Document)
+						break
+					}
+				}
+			}
+		}
+		return m, nil
+
 	case tea.KeyMsg:
+		// Handle document picker modal if active (on Sessions view)
+		if m.docPickerModal != nil {
+			modal, cmd := m.docPickerModal.Update(msg)
+			m.docPickerModal = modal
+
+			if m.docPickerModal.SelectedDocument() != nil {
+				// User selected a document - switch to review view and load it
+				doc := m.docPickerModal.SelectedDocument()
+				m.docPickerModal = nil
+				m.activeView = ViewReview
+				m.handler.SetActiveView(ViewReview)
+				if m.reviewView != nil {
+					m.reviewView.LoadDocument(doc)
+				}
+				return m, cmd
+			}
+
+			if m.docPickerModal.Cancelled() {
+				// User cancelled picker
+				m.docPickerModal = nil
+				return m, cmd
+			}
+
+			return m, cmd
+		}
+
 		return m.handleKey(msg)
 
 	case spinner.TickMsg:
@@ -648,10 +765,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNewSessionForm(msg)
 	}
 
-	// Update the focused list for any other messages (only session list needs this)
+	// Update the appropriate view based on active view
 	var cmd tea.Cmd
-	if !m.isMessagesFocused() {
+	switch m.activeView {
+	case ViewSessions:
 		m.list, cmd = m.list.Update(msg)
+	case ViewMessages:
+		// Messages view handles its own updates
+	case ViewReview:
+		if m.reviewView != nil {
+			*m.reviewView, cmd = m.reviewView.Update(msg)
+		}
 	}
 	return m, cmd
 }
@@ -898,6 +1022,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 
+		// Check if this is a doc review action (doesn't require a session)
+		if entry.Command.Action == config.ActionDocReview {
+			m.state = stateNormal
+			cmd := HiveDocReviewCmd{Arg: ""}
+			return m, cmd.Execute(&m)
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -996,6 +1127,27 @@ func (m Model) copyToClipboard(text string) error {
 	return cmd.Run()
 }
 
+// hasSendClaudeCommand checks if the send-claude command is available in PATH.
+func hasSendClaudeCommand() bool {
+	_, err := exec.LookPath("send-claude")
+	return err == nil
+}
+
+// sendFeedbackToAgent sends review feedback to Claude agent via send-claude command.
+func (m *Model) sendFeedbackToAgent(feedback string) tea.Cmd {
+	return func() tea.Msg {
+		// Use send-claude command to send feedback to agent
+		cmd := exec.Command("send-claude", feedback)
+		if err := cmd.Run(); err != nil {
+			// Return feedback finalized message but log error
+			log.Warn().Err(err).Msg("failed to send feedback to agent")
+			return review.ReviewFinalizedMsg{Feedback: feedback} // Fallback to clipboard
+		}
+		// Success - feedback was sent
+		return nil
+	}
+}
+
 // handleFilteringKey handles keys when filter input is active.
 func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
@@ -1040,7 +1192,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 	case "tab":
 		return m.handleTabKey()
 	case "?":
-		return m.showHelpDialog()
+		// Don't show help dialog when in review view - let review view handle keys
+		if !m.isReviewFocused() {
+			return m.showHelpDialog()
+		}
 	}
 
 	// Session-specific keys only when sessions focused
@@ -1055,32 +1210,59 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.handleSessionsKey(msg, keyStr)
 	}
 
-	// Messages view focused - handle navigation
-	switch keyStr {
-	case keyEnter:
-		// Open message preview modal
-		selectedMsg := m.selectedMessage()
-		if selectedMsg != nil {
-			m.state = statePreviewingMessage
-			m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
+	// Handle keys based on active view
+	if m.isMessagesFocused() {
+		// Messages view focused - handle navigation
+		switch keyStr {
+		case keyEnter:
+			// Open message preview modal
+			selectedMsg := m.selectedMessage()
+			if selectedMsg != nil {
+				m.state = statePreviewingMessage
+				m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
+			}
+		case "up", "k":
+			m.msgView.MoveUp()
+		case "down", "j":
+			m.msgView.MoveDown()
+		case "/":
+			m.msgView.StartFilter()
 		}
-	case "up", "k":
-		m.msgView.MoveUp()
-	case "down", "j":
-		m.msgView.MoveDown()
-	case "/":
-		m.msgView.StartFilter()
+		return m, nil
 	}
+
+	// Review view focused - forward keys to review view
+	if m.isReviewFocused() && m.reviewView != nil {
+		var cmd tea.Cmd
+		*m.reviewView, cmd = m.reviewView.Update(msg)
+		return m, cmd
+	}
+
 	return m, nil
 }
 
 // handleTabKey handles tab key for switching views.
+// If Review tab is visible (has active session), it's included in cycling.
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
-	if m.activeView == ViewSessions {
+	// Check if Review tab should be visible
+	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
+
+	switch m.activeView {
+	case ViewSessions:
 		m.activeView = ViewMessages
-	} else {
+	case ViewMessages:
+		if showReviewTab {
+			// If Review is visible, cycle to it
+			m.activeView = ViewReview
+		} else {
+			// Otherwise cycle back to Sessions
+			m.activeView = ViewSessions
+		}
+	case ViewReview:
+		// From Review, cycle back to Sessions
 		m.activeView = ViewSessions
 	}
+	m.handler.SetActiveView(m.activeView)
 	return m, nil
 }
 
@@ -1115,7 +1297,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 	// Handle ':' for command palette (allow even without selection for filter commands)
 	if keyStr == ":" {
-		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height)
+		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height, m.activeView)
 		m.state = stateCommandPalette
 		return m, nil
 	}
@@ -1142,6 +1324,11 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		}
 		if action.Type == ActionTypeRecycle {
 			return m, m.startRecycle(action.SessionID)
+		}
+		// Handle doc review action
+		if action.Type == ActionTypeDocReview {
+			cmd := HiveDocReviewCmd{Arg: ""}
+			return m, cmd.Execute(&m)
 		}
 		// Handle filter actions
 		if m.handleFilterAction(action.Type) {
@@ -1285,7 +1472,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell, ActionTypeDocReview:
 		return false
 	}
 	return false
@@ -1304,6 +1491,11 @@ func (m Model) isSessionsFocused() bool {
 // isMessagesFocused returns true if the messages view is active.
 func (m Model) isMessagesFocused() bool {
 	return m.activeView == ViewMessages
+}
+
+// isReviewFocused returns true if the review view is active.
+func (m Model) isReviewFocused() bool {
+	return m.activeView == ViewReview
 }
 
 // shouldPollMessages returns true if messages should be polled.
@@ -1476,21 +1668,48 @@ func (m Model) View() tea.View {
 		return newView(m.helpDialog.Overlay(mainView, w, h))
 	}
 
+	// Overlay document picker modal (shown on Sessions view)
+	if m.docPickerModal != nil {
+		return newView(m.docPickerModal.Overlay(mainView, w, h))
+	}
+
 	return newView(mainView)
 }
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
 	// Build tab bar with tabs on left and branding on right
-	var sessionsTab, messagesTab string
-	if m.activeView == ViewSessions {
+	var sessionsTab, messagesTab, reviewTab string
+
+	// Check if Review tab should be shown (only when there's an active review session)
+	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
+
+	switch m.activeView {
+	case ViewSessions:
 		sessionsTab = viewSelectedStyle.Render("Sessions")
 		messagesTab = viewNormalStyle.Render("Messages")
-	} else {
+		if showReviewTab {
+			reviewTab = viewNormalStyle.Render("Review")
+		}
+	case ViewMessages:
 		sessionsTab = viewNormalStyle.Render("Sessions")
 		messagesTab = viewSelectedStyle.Render("Messages")
+		if showReviewTab {
+			reviewTab = viewNormalStyle.Render("Review")
+		}
+	case ViewReview:
+		sessionsTab = viewNormalStyle.Render("Sessions")
+		messagesTab = viewNormalStyle.Render("Messages")
+		reviewTab = viewSelectedStyle.Render("Review")
 	}
-	tabsLeft := lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+
+	// Build tabs with conditional Review tab
+	var tabsLeft string
+	if showReviewTab || m.activeView == ViewReview {
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab, " | ", reviewTab)
+	} else {
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+	}
 
 	// Add filter indicator if active
 	if m.statusFilter != "" {
@@ -1534,7 +1753,8 @@ func (m Model) renderTabView() string {
 
 	// Build content with fixed height to prevent layout shift
 	var content string
-	if m.activeView == ViewSessions {
+	switch m.activeView {
+	case ViewSessions:
 		// Check if preview should be shown
 		if m.previewEnabled && m.width >= 80 {
 			content = m.renderDualColumnLayout(contentHeight)
@@ -1545,9 +1765,14 @@ func (m Model) renderTabView() string {
 			content = m.list.View()
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
-	} else {
+	case ViewMessages:
 		content = m.msgView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+	case ViewReview:
+		if m.reviewView != nil {
+			content = m.reviewView.View()
+			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+		}
 	}
 
 	return lipgloss.JoinVertical(lipgloss.Left, topDivider, header, headerDivider, content)
