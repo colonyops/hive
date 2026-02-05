@@ -6,7 +6,7 @@
   },
   "metadata": {
     "description": "Skills for managing AI coding agent sessions with hive CLI",
-    "version": "0.3.0"
+    "version": "0.4.0"
   },
   "plugins": [
     {
