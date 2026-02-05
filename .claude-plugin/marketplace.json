@@ -1,0 +1,19 @@
+{
+  "name": "hive",
+  "owner": {
+    "name": "Hayden K",
+    "email": ""
+  },
+  "metadata": {
+    "description": "Skills for managing AI coding agent sessions with hive CLI",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "hive",
+      "description": "Skills for using the hive CLI",
+      "source": "../.claude-plugin/plugs/hive",
+      "strict": false
+    }
+  ]
+}
