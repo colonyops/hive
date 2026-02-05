@@ -10,59 +10,35 @@ const testFeedback = "Test feedback"
 
 func TestFinalizationModal_Creation(t *testing.T) {
 	feedback := testFeedback
+	modal := NewFinalizationModal(feedback, 100, 40)
 
-	t.Run("with agent command available", func(t *testing.T) {
-		modal := NewFinalizationModal(feedback, true, 100, 40)
-
-		if len(modal.options) != 2 {
-			t.Errorf("Expected 2 options with agent command, got %d", len(modal.options))
-		}
-		if modal.options[0].action != FinalizationActionClipboard {
-			t.Error("First option should be clipboard")
-		}
-		if modal.options[1].action != FinalizationActionSendToAgent {
-			t.Error("Second option should be send to agent")
-		}
-	})
-
-	t.Run("without agent command", func(t *testing.T) {
-		modal := NewFinalizationModal(feedback, false, 100, 40)
-
-		if len(modal.options) != 1 {
-			t.Errorf("Expected 1 option without agent command, got %d", len(modal.options))
-		}
-		if modal.options[0].action != FinalizationActionClipboard {
-			t.Error("Only option should be clipboard")
-		}
-	})
+	if len(modal.options) != 1 {
+		t.Errorf("Expected 1 option, got %d", len(modal.options))
+	}
+	if modal.options[0].action != FinalizationActionClipboard {
+		t.Error("Option should be clipboard")
+	}
 }
 
 func TestFinalizationModal_Navigation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, true, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40)
 
 	// Initial selection should be 0
 	if modal.selectedIdx != 0 {
 		t.Errorf("Initial selection should be 0, got %d", modal.selectedIdx)
 	}
 
-	// Test navigation directly by updating selectedIdx
-	// (Integration tests would test key handling)
-	modal.selectedIdx = 1
-	if modal.selectedIdx != 1 {
-		t.Errorf("Selection should be 1, got %d", modal.selectedIdx)
-	}
-
-	// Test wrap around
+	// With single option, navigation stays at 0
 	modal.selectedIdx = 0
 	if modal.selectedIdx != 0 {
-		t.Errorf("Selection should wrap to 0, got %d", modal.selectedIdx)
+		t.Errorf("Selection should be 0, got %d", modal.selectedIdx)
 	}
 }
 
 func TestFinalizationModal_Confirmation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, true, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40)
 
 	// Set confirmed flag
 	modal.confirmed = true
@@ -78,7 +54,7 @@ func TestFinalizationModal_Confirmation(t *testing.T) {
 
 func TestFinalizationModal_Cancellation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, true, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40)
 
 	// Set cancelled flag
 	modal.cancelled = true
@@ -87,22 +63,9 @@ func TestFinalizationModal_Cancellation(t *testing.T) {
 	}
 }
 
-func TestFinalizationModal_SelectedAction(t *testing.T) {
-	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, true, 100, 40)
-
-	// Select second option (send to agent)
-	modal.selectedIdx = 1
-	modal.confirmed = true
-
-	if modal.SelectedAction() != FinalizationActionSendToAgent {
-		t.Errorf("Expected send to agent action, got %v", modal.SelectedAction())
-	}
-}
-
 func TestFinalizationModal_View(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, true, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40)
 
 	view := modal.View()
 	if view == "" {
@@ -115,9 +78,6 @@ func TestFinalizationModal_View(t *testing.T) {
 	}
 	if !contains(view, "Copy to clipboard") {
 		t.Error("View should contain clipboard option")
-	}
-	if !contains(view, "Send to Claude agent") {
-		t.Error("View should contain agent option")
 	}
 }
 
@@ -137,21 +97,13 @@ func stringContains(s, substr string) bool {
 
 func TestFinalizationModal_KeyHandling(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, true, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40)
 
-	// Test 'j' key - should move selection down
+	// With single option, j/k don't change selectedIdx
 	keyMsg := tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'})
 	updatedModal, _ := modal.Update(keyMsg)
-	if updatedModal.selectedIdx != 1 {
-		t.Errorf("After pressing 'j', selectedIdx should be 1, got %d", updatedModal.selectedIdx)
-	}
-
-	// Test 'k' key - should move selection up
-	modal = updatedModal
-	keyMsg = tea.KeyPressMsg(tea.Key{Text: "k", Code: 'k'})
-	updatedModal, _ = modal.Update(keyMsg)
 	if updatedModal.selectedIdx != 0 {
-		t.Errorf("After pressing 'k', selectedIdx should be 0, got %d", updatedModal.selectedIdx)
+		t.Errorf("With single option, selectedIdx should remain 0, got %d", updatedModal.selectedIdx)
 	}
 
 	// Test 'enter' key - should confirm
@@ -162,7 +114,7 @@ func TestFinalizationModal_KeyHandling(t *testing.T) {
 	}
 
 	// Test 'esc' key - should cancel
-	modal = NewFinalizationModal(feedback, true, 100, 40)
+	modal = NewFinalizationModal(feedback, 100, 40)
 	keyMsg = tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc})
 	updatedModal, _ = modal.Update(keyMsg)
 	if !updatedModal.Cancelled() {

@@ -30,11 +30,6 @@ type ReviewFinalizedMsg struct {
 	Feedback string
 }
 
-// SendToAgentMsg is sent when feedback should be sent to Claude agent.
-type SendToAgentMsg struct {
-	Feedback string
-}
-
 // reviewDiscardedMsg is sent when review is discarded (internal only).
 type reviewDiscardedMsg struct{}
 
@@ -64,7 +59,6 @@ type View struct {
 	searchQuery       string                   // Current search query
 	searchMatches     []int                    // Line numbers of search matches (1-indexed)
 	searchMatchIndex  int                      // Current match index in searchMatches
-	hasAgentCommand   bool                     // Whether send-claude command is available
 	pendingDeleteLine int                      // Line number for pending comment deletion (0 if none)
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
@@ -236,12 +230,8 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					return v, func() tea.Msg {
 						return ReviewFinalizedMsg{Feedback: v.feedbackGenerated}
 					}
-				case FinalizationActionSendToAgent:
-					return v, func() tea.Msg {
-						return SendToAgentMsg{Feedback: v.feedbackGenerated}
-					}
-				case FinalizationActionNone:
-					// User cancelled, do nothing
+				case FinalizationActionNone, FinalizationActionSendToAgent:
+					// User cancelled or unsupported action, do nothing
 				}
 
 				return v, cmd
@@ -398,7 +388,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 					// Generate feedback now so we can pass it to the modal
 					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
-					modal := NewFinalizationModal(feedback, v.hasAgentCommand, v.width, v.height)
+					modal := NewFinalizationModal(feedback, v.width, v.height)
 					v.finalizationModal = &modal
 					v.feedbackGenerated = feedback
 					return v, nil
@@ -1743,11 +1733,6 @@ func (v *View) ShowDocumentPicker() tea.Cmd {
 	// Create and show the picker modal
 	v.pickerModal = NewDocumentPickerModal(v.GetAllDocuments(), v.width, v.height, v.store)
 	return nil
-}
-
-// SetHasAgentCommand sets whether the send-claude command is available.
-func (v *View) SetHasAgentCommand(has bool) {
-	v.hasAgentCommand = has
 }
 
 // LoadDocument loads and renders a document for preview.

@@ -26,7 +26,6 @@ type FinalizationModal struct {
 	height      int
 	confirmed   bool
 	cancelled   bool
-	hasAgentCmd bool // Whether send-claude command is available
 }
 
 type finalizationOption struct {
@@ -36,7 +35,7 @@ type finalizationOption struct {
 }
 
 // NewFinalizationModal creates a modal for choosing finalization action.
-func NewFinalizationModal(feedback string, hasAgentCmd bool, width, height int) FinalizationModal {
+func NewFinalizationModal(feedback string, width, height int) FinalizationModal {
 	options := []finalizationOption{
 		{
 			label:       "Copy to clipboard",
@@ -45,22 +44,12 @@ func NewFinalizationModal(feedback string, hasAgentCmd bool, width, height int) 
 		},
 	}
 
-	// Only show send to agent option if command is available
-	if hasAgentCmd {
-		options = append(options, finalizationOption{
-			label:       "Send to Claude agent",
-			description: "Send feedback directly to Claude in current session",
-			action:      FinalizationActionSendToAgent,
-		})
-	}
-
 	return FinalizationModal{
 		feedback:    feedback,
 		selectedIdx: 0,
 		options:     options,
 		width:       width,
 		height:      height,
-		hasAgentCmd: hasAgentCmd,
 	}
 }
 

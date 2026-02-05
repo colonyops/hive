@@ -35,7 +35,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		height:     40,
 	}
 
-	// Execute command without argument
+	// Execute command without argument - falls back to review view documents
 	cmd := HiveDocReviewCmd{Arg: ""}
 	_ = cmd.Execute(m)
 
@@ -44,7 +44,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		t.Errorf("Expected active view to stay on ViewSessions, got %v", m.activeView)
 	}
 
-	// Check that picker modal is shown on the Model (not reviewView)
+	// Check that picker modal is shown on the Model (using fallback docs)
 	if m.docPickerModal == nil {
 		t.Error("Expected picker modal to be created on Model")
 	}

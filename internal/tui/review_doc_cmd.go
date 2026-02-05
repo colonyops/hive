@@ -2,6 +2,7 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/tui/views/review"
 )
 
@@ -21,6 +22,7 @@ type HiveDocReviewCmd struct {
 }
 
 // Execute shows document picker on current view, then switches to review when document selected.
+// When invoked without an argument, it scopes to the selected session's repository context.
 func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	if m.reviewView == nil {
 		// No review view available
@@ -34,8 +36,30 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 		return m.reviewView.OpenDocumentByPath(c.Arg)
 	}
 
-	// Otherwise show document picker modal on current view (Sessions)
+	// Get documents scoped to the selected session's repository
+	// If a session is selected, use its remote to find the context directory
+	var docs []review.Document
+	selected := m.selectedSession()
+	if selected != nil && selected.Remote != "" {
+		owner, repo := git.ExtractOwnerRepo(selected.Remote)
+		if owner != "" && repo != "" {
+			contextDir := m.cfg.RepoContextDir(owner, repo)
+			docs, _ = review.DiscoverDocuments(contextDir)
+		}
+	}
+
+	// Fallback to the review view's documents if no session-specific docs found
+	if len(docs) == 0 {
+		docs = m.reviewView.GetAllDocuments()
+	}
+
+	if len(docs) == 0 {
+		m.err = ErrDocumentNotFound
+		return nil
+	}
+
+	// Show document picker modal on current view (Sessions)
 	// Don't switch to Review until document is selected
-	m.docPickerModal = review.NewDocumentPickerModal(m.reviewView.GetAllDocuments(), m.width, m.height, m.reviewView.Store())
+	m.docPickerModal = review.NewDocumentPickerModal(docs, m.width, m.height, m.reviewView.Store())
 	return nil
 }

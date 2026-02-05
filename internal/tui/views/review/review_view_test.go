@@ -1133,3 +1133,45 @@ func TestCtrlDUWithComments(t *testing.T) {
 		t.Errorf("ctrl+u should move cursor up: before=%d, after=%d", cursorAfterDown, view.cursorLine)
 	}
 }
+
+func TestFinalizationModal_IntegrationWithView(t *testing.T) {
+	// Create a view with a finalization modal active
+	docs := []Document{
+		{
+			Path:    "/test/doc.md",
+			RelPath: "doc.md",
+			Type:    DocTypePlan,
+		},
+	}
+	v := New(docs, "/test", nil)
+	v.SetSize(100, 40)
+
+	// Manually set up the finalization modal state (simulating pressing 'f')
+	v.fullScreen = true
+	v.selectedDoc = &docs[0]
+	modal := NewFinalizationModal("test feedback", 100, 40)
+	v.finalizationModal = &modal
+
+	// Verify initial state
+	if v.finalizationModal.selectedIdx != 0 {
+		t.Errorf("Initial selectedIdx should be 0, got %d", v.finalizationModal.selectedIdx)
+	}
+
+	// Send 'j' key to view - should be forwarded to modal (stays at 0 with single option)
+	jKey := keyMsg("j")
+	v, _ = v.Update(jKey)
+
+	// Verify modal received the key
+	if v.finalizationModal == nil {
+		t.Fatal("finalizationModal should not be nil")
+	}
+	// With single option, selectedIdx stays at 0
+	if v.finalizationModal.selectedIdx != 0 {
+		t.Errorf("With single option, selectedIdx should remain 0, got %d", v.finalizationModal.selectedIdx)
+	}
+
+	// Test enter key confirms the modal
+	enterKey := keyMsg("enter")
+	v, _ = v.Update(enterKey)
+	// Note: After confirmation, finalizationModal might be nil (handled by view)
+}

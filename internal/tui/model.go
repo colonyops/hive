@@ -155,6 +155,9 @@ type Model struct {
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
 
+	// Pending recycled sessions for batch delete
+	pendingRecycledSessions []session.Session
+
 	// Review view
 	reviewView *review.View
 
@@ -321,8 +324,6 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	}
 
 	reviewView := review.New(docs, contextDir, reviewStore)
-	// Check if send-claude command is available
-	reviewView.SetHasAgentCommand(hasSendClaudeCommand())
 
 	return Model{
 		cfg:                cfg,
@@ -701,10 +702,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case review.SendToAgentMsg:
-		// Send feedback to Claude agent via send-claude command
-		return m, m.sendFeedbackToAgent(msg.Feedback)
-
 	case review.OpenDocumentMsg:
 		// Handle document opening (from HiveDocReview command)
 		if msg.Err != nil {
@@ -885,18 +882,56 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 			if action.Type == ActionTypeRecycle {
 				return m, m.startRecycle(action.SessionID)
 			}
+			// Handle batch delete of recycled sessions
+			if action.Type == ActionTypeDeleteRecycledBatch {
+				sessions := m.pendingRecycledSessions
+				m.pending = Action{}
+				m.pendingRecycledSessions = nil
+				return m, m.deleteRecycledSessionsBatch(sessions)
+			}
 			return m, m.executeAction(action)
 		}
 		m.pending = Action{}
+		m.pendingRecycledSessions = nil
 		return m, nil
 	case "esc":
 		m.state = stateNormal
 		m.pending = Action{}
+		m.pendingRecycledSessions = nil
 		return m, nil
 	case "left", "right", "h", "l", "tab":
 		m.modal.ToggleSelection()
 		return m, nil
 	}
+	return m, nil
+}
+
+// handleRecycledPlaceholderKey handles keys when a recycled placeholder is selected.
+// Only allows delete action to permanently remove all recycled sessions.
+func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (tea.Model, tea.Cmd) {
+	// Check if this key is bound to delete action
+	kb, exists := m.handler.keybindings[keyStr]
+	if !exists {
+		return m, nil
+	}
+
+	cmd, cmdExists := m.handler.commands[kb.Cmd]
+	if !cmdExists || cmd.Action != config.ActionDelete {
+		return m, nil // Only delete is allowed on recycled placeholders
+	}
+
+	// Show confirmation modal for deleting all recycled sessions
+	confirmMsg := fmt.Sprintf("Permanently delete %d recycled session(s)?", treeItem.RecycledCount)
+	m.state = stateConfirming
+	m.pending = Action{
+		Type:    ActionTypeDeleteRecycledBatch,
+		Key:     keyStr,
+		Help:    "delete recycled sessions",
+		Confirm: confirmMsg,
+	}
+	// Store recycled sessions in pending action for later deletion
+	m.pendingRecycledSessions = treeItem.RecycledSessions
+	m.modal = NewModal("Confirm", confirmMsg)
 	return m, nil
 }
 
@@ -1127,27 +1162,6 @@ func (m Model) copyToClipboard(text string) error {
 	return cmd.Run()
 }
 
-// hasSendClaudeCommand checks if the send-claude command is available in PATH.
-func hasSendClaudeCommand() bool {
-	_, err := exec.LookPath("send-claude")
-	return err == nil
-}
-
-// sendFeedbackToAgent sends review feedback to Claude agent via send-claude command.
-func (m *Model) sendFeedbackToAgent(feedback string) tea.Cmd {
-	return func() tea.Msg {
-		// Use send-claude command to send feedback to agent
-		cmd := exec.Command("send-claude", feedback)
-		if err := cmd.Run(); err != nil {
-			// Return feedback finalized message but log error
-			log.Warn().Err(err).Msg("failed to send feedback to agent")
-			return review.ReviewFinalizedMsg{Feedback: feedback} // Fallback to clipboard
-		}
-		// Success - feedback was sent
-		return nil
-	}
-}
-
 // handleFilteringKey handles keys when filter input is active.
 func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
@@ -1302,6 +1316,12 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, nil
 	}
 
+	// Check for recycled placeholder selection - allow delete action
+	treeItem := m.selectedTreeItem()
+	if treeItem != nil && treeItem.IsRecycledPlaceholder {
+		return m.handleRecycledPlaceholderKey(keyStr, treeItem)
+	}
+
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
@@ -1366,6 +1386,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 }
 
 // selectedSession returns the currently selected session, or nil if none.
+// Returns nil for headers and recycled placeholders.
 func (m Model) selectedSession() *session.Session {
 	item := m.list.SelectedItem()
 	if item == nil {
@@ -1373,10 +1394,22 @@ func (m Model) selectedSession() *session.Session {
 	}
 	// Handle TreeItem (tree view mode)
 	if treeItem, ok := item.(TreeItem); ok {
-		if treeItem.IsHeader {
-			return nil // Headers aren't sessions
+		if treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
+			return nil // Headers and recycled placeholders aren't sessions
 		}
 		return &treeItem.Session
+	}
+	return nil
+}
+
+// selectedTreeItem returns the currently selected tree item, or nil if none.
+func (m Model) selectedTreeItem() *TreeItem {
+	item := m.list.SelectedItem()
+	if item == nil {
+		return nil
+	}
+	if treeItem, ok := item.(TreeItem); ok {
+		return &treeItem
 	}
 	return nil
 }
@@ -1472,7 +1505,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeShell, ActionTypeDocReview:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview:
 		return false
 	}
 	return false
@@ -2088,6 +2121,30 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 			done:   done,
 			cancel: cancel,
 		}
+	}
+}
+
+// deleteRecycledSessionsBatch returns a command that deletes multiple recycled sessions.
+func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
+	return func() tea.Msg {
+		var lastErr error
+		for _, sess := range sessions {
+			cmdAction := command.Action{
+				Type:      command.ActionTypeDelete,
+				SessionID: sess.ID,
+			}
+
+			exec, err := m.cmdService.CreateExecutor(cmdAction)
+			if err != nil {
+				lastErr = err
+				continue
+			}
+
+			if err := command.ExecuteSync(context.Background(), exec); err != nil {
+				lastErr = err
+			}
+		}
+		return actionCompleteMsg{err: lastErr}
 	}
 }
 

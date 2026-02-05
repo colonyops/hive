@@ -21,6 +21,7 @@ const (
 	ActionTypeNone ActionType = iota
 	ActionTypeRecycle
 	ActionTypeDelete
+	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once
 	ActionTypeShell
 	ActionTypeFilterAll
 	ActionTypeFilterActive

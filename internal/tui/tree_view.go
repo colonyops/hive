@@ -118,6 +118,7 @@ type TreeItem struct {
 	// Recycled placeholder fields (only used when IsRecycledPlaceholder is true)
 	IsRecycledPlaceholder bool
 	RecycledCount         int
+	RecycledSessions      []session.Session // Actual recycled sessions for deletion support
 }
 
 // FilterValue returns the value used for filtering.
@@ -171,6 +172,7 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 			placeholder := TreeItem{
 				IsRecycledPlaceholder: true,
 				RecycledCount:         group.RecycledCount,
+				RecycledSessions:      group.RecycledSessions,
 				IsLastInRepo:          true,
 				RepoPrefix:            group.Name,
 			}
