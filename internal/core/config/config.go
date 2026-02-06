@@ -192,7 +192,6 @@ type DatabaseConfig struct {
 	BusyTimeout  int `yaml:"busy_timeout"`   // busy timeout in milliseconds (default: 5000)
 }
 
-
 // GitConfig holds git-related configuration.
 type GitConfig struct {
 	StatusWorkers int `yaml:"status_workers"`
