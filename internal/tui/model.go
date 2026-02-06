@@ -2030,7 +2030,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 
 	// Plugin statuses (neutral color)
 	if m.pluginStatuses != nil {
-		pluginOrder := []string{"github", "beads"}
+		pluginOrder := []string{"github", "beads", "claude"}
 		for _, name := range pluginOrder {
 			store, ok := m.pluginStatuses[name]
 			if !ok || store == nil {
@@ -2048,6 +2048,8 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 					icon = styles.IconGithub
 				case "beads":
 					icon = styles.IconCheckList
+				case "claude":
+					icon = "🤖 "
 				}
 			} else {
 				icon = status.Icon
