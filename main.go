@@ -18,8 +18,10 @@ import (
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/plugins"
 	"github.com/hay-kot/hive/internal/plugins/beads"
+	"github.com/hay-kot/hive/internal/plugins/contextdir"
 	"github.com/hay-kot/hive/internal/plugins/github"
 	"github.com/hay-kot/hive/internal/plugins/lazygit"
+	"github.com/hay-kot/hive/internal/plugins/neovim"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/pkg/executil"
@@ -156,6 +158,8 @@ Run 'hive new' to create a new session from the current repository.`,
 			pluginMgr.Register(github.New(cfg.Plugins.GitHub))
 			pluginMgr.Register(beads.New(cfg.Plugins.Beads))
 			pluginMgr.Register(lazygit.New(cfg.Plugins.LazyGit))
+			pluginMgr.Register(neovim.New(cfg.Plugins.Neovim))
+			pluginMgr.Register(contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir))
 
 			// Initialize plugins (errors are logged but don't stop startup)
 			if err := pluginMgr.InitAll(ctx); err != nil {

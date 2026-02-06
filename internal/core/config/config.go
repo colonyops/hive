@@ -155,10 +155,12 @@ type IntegrationsConfig struct {
 
 // PluginsConfig holds configuration for the plugin system.
 type PluginsConfig struct {
-	ShellWorkers int                 `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
-	GitHub       GitHubPluginConfig  `yaml:"github"`
-	Beads        BeadsPluginConfig   `yaml:"beads"`
-	LazyGit      LazyGitPluginConfig `yaml:"lazygit"`
+	ShellWorkers int                    `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
+	GitHub       GitHubPluginConfig     `yaml:"github"`
+	Beads        BeadsPluginConfig      `yaml:"beads"`
+	LazyGit      LazyGitPluginConfig    `yaml:"lazygit"`
+	Neovim       NeovimPluginConfig     `yaml:"neovim"`
+	ContextDir   ContextDirPluginConfig `yaml:"contextdir"`
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -175,6 +177,16 @@ type BeadsPluginConfig struct {
 
 // LazyGitPluginConfig holds lazygit plugin configuration.
 type LazyGitPluginConfig struct {
+	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+}
+
+// NeovimPluginConfig holds neovim plugin configuration.
+type NeovimPluginConfig struct {
+	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+}
+
+// ContextDirPluginConfig holds context directory plugin configuration.
+type ContextDirPluginConfig struct {
 	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
