@@ -43,10 +43,10 @@ func (p *Plugin) Close() error                 { return nil }
 
 func (p *Plugin) Commands() map[string]config.UserCommand {
 	return map[string]config.UserCommand{
-		"GithubOpenRepo": {Sh: "cd {{ .Path }} && gh browse", Help: "open repo in browser", Exit: "true"},
-		"GithubOpenPR":   {Sh: "cd {{ .Path }} && gh pr view --web", Help: "view current PR in browser", Exit: "true"},
+		"GithubOpenRepo": {Sh: "cd {{ .Path }} && gh browse", Help: "open repo in browser"},
+		"GithubOpenPR":   {Sh: "cd {{ .Path }} && gh pr view --web", Help: "view current PR in browser"},
 		"GithubPRStatus": pluglib.TmuxPopup(`cd "{{ .Path }}" && gh pr status {{ join .Args " " }}`, "show PR status [flags]"),
-		"GithubPRCreate": {Sh: "cd {{ .Path }} && gh pr create --web", Help: "create PR in browser", Exit: "true"},
+		"GithubPRCreate": {Sh: "cd {{ .Path }} && gh pr create --web", Help: "create PR in browser"},
 	}
 }
 
