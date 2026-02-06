@@ -2049,7 +2049,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 				case "beads":
 					icon = styles.IconCheckList
 				case "claude":
-					icon = "🤖 "
+					icon = styles.IconBrain
 				}
 			} else {
 				icon = status.Icon

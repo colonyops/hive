@@ -588,7 +588,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 			case "beads":
 				icon = styles.IconCheckList
 			case "claude":
-				icon = "🤖"
+				icon = styles.IconBrain
 			default:
 				icon = status.Icon
 			}
