@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -150,14 +149,8 @@ type MessagingConfig struct {
 
 // TmuxConfig holds tmux integration configuration.
 type TmuxConfig struct {
-	Enabled              []string      `yaml:"enabled"`                // list of enabled integrations, e.g. ["tmux"]
 	PollInterval         time.Duration `yaml:"poll_interval"`          // status check frequency, default 1.5s
 	PreviewWindowMatcher []string      `yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
-}
-
-// IsEnabled returns true if the given integration name is in the enabled list.
-func (t TmuxConfig) IsEnabled(name string) bool {
-	return slices.Contains(t.Enabled, name)
 }
 
 // PluginsConfig holds configuration for the plugin system.
