@@ -1175,3 +1175,55 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 	v, _ = v.Update(enterKey)
 	// Note: After confirmation, finalizationModal might be nil (handled by view)
 }
+
+func TestHasActiveEditor(t *testing.T) {
+	doc := Document{
+		Path:    "/path/to/test.md",
+		RelPath: "test.md",
+		Type:    DocTypePlan,
+		ModTime: time.Now(),
+		Content: "Line 1\nLine 2\nLine 3",
+	}
+
+	view := New([]Document{doc}, "", nil)
+	view.SetSize(80, 24)
+	view.fullScreen = true
+	view.selectedDoc = &doc
+
+	// Initially no active editor
+	if view.HasActiveEditor() {
+		t.Error("expected HasActiveEditor to be false initially")
+	}
+
+	// Enable search mode - should have active editor
+	view.searchMode = true
+	if !view.HasActiveEditor() {
+		t.Error("expected HasActiveEditor to be true when searchMode is active")
+	}
+
+	// Disable search mode
+	view.searchMode = false
+	if view.HasActiveEditor() {
+		t.Error("expected HasActiveEditor to be false after disabling search mode")
+	}
+
+	// Open comment modal - should have active editor
+	modal := NewCommentModal(1, 2, "context", 80, 24)
+	view.commentModal = &modal
+	if !view.HasActiveEditor() {
+		t.Error("expected HasActiveEditor to be true when comment modal is active")
+	}
+
+	// Close comment modal
+	view.commentModal = nil
+	if view.HasActiveEditor() {
+		t.Error("expected HasActiveEditor to be false after closing comment modal")
+	}
+
+	// Both search mode and comment modal active
+	view.searchMode = true
+	view.commentModal = &modal
+	if !view.HasActiveEditor() {
+		t.Error("expected HasActiveEditor to be true when both are active")
+	}
+}

@@ -134,6 +134,11 @@ func (v *View) SetSize(width, height int) {
 	}
 }
 
+// HasActiveEditor returns true if an input field has focus (search or comment modal).
+func (v *View) HasActiveEditor() bool {
+	return v.searchMode || v.commentModal != nil
+}
+
 // Init initializes the review view and starts the file watcher.
 func (v View) Init() tea.Cmd {
 	if v.watcher != nil {

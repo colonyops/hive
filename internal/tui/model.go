@@ -1198,6 +1198,26 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 
 // handleNormalKey handles keys in normal state.
 func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	// When editor has focus, block all keybindings except critical ones
+	if m.hasEditorFocus() {
+		switch keyStr {
+		case keyCtrlC:
+			// Allow quitting even when typing
+			m.quitting = true
+			return m, tea.Quit
+		case "esc":
+			// Allow canceling input - delegate to component
+			return m.delegateToComponent(msg)
+		case keyEnter:
+			// Allow confirming input - delegate to component
+			return m.delegateToComponent(msg)
+		default:
+			// Everything else goes directly to the component for typing
+			return m.delegateToComponent(msg)
+		}
+	}
+
+	// Not in editor - handle core hardcoded keys
 	// Global keys that work regardless of focus
 	switch keyStr {
 	case "q", keyCtrlC:
@@ -1412,6 +1432,76 @@ func (m Model) selectedTreeItem() *TreeItem {
 		return &treeItem
 	}
 	return nil
+}
+
+// hasEditorFocus returns true if any text input currently has focus.
+// When an editor has focus, most keybindings should be blocked to allow normal typing.
+func (m *Model) hasEditorFocus() bool {
+	// Check session list filter
+	if m.list.SettingFilter() {
+		return true
+	}
+
+	// Check message view filter
+	if m.msgView != nil && m.msgView.IsFiltering() {
+		return true
+	}
+
+	// Check review view editors (search or comment modal)
+	if m.reviewView != nil && m.reviewView.HasActiveEditor() {
+		return true
+	}
+
+	// Check command palette
+	if m.state == stateCommandPalette {
+		return true
+	}
+
+	// Check new session form
+	if m.state == stateCreatingSession {
+		return true
+	}
+
+	return false
+}
+
+// delegateToComponent forwards a key message to the appropriate component.
+// This is used when editor has focus to allow normal typing.
+func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+	var cmd tea.Cmd
+
+	// Route based on current state
+	switch m.state {
+	case stateCommandPalette:
+		if m.commandPalette != nil {
+			m.commandPalette, cmd = m.commandPalette.Update(msg)
+		}
+		return m, cmd
+	case stateCreatingSession:
+		if m.newSessionForm != nil {
+			*m.newSessionForm, cmd = m.newSessionForm.Update(msg)
+		}
+		return m, cmd
+	default:
+		// For other states (normal, confirming, loading, etc.),
+		// delegate to active view
+	}
+
+	// Route to active view
+	switch m.activeView {
+	case ViewSessions:
+		m.list, cmd = m.list.Update(msg)
+	case ViewMessages:
+		// MessagesView handles its own filtering internally, no Update method
+		// Key events are handled by specific methods called from handleNormalKey
+		return m, nil
+	case ViewReview:
+		if m.reviewView != nil {
+			*m.reviewView, cmd = m.reviewView.Update(msg)
+		}
+	}
+
+	return m, cmd
 }
 
 // navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down),
