@@ -8,13 +8,12 @@ Add these tmux-specific settings to your `~/.config/hive/config.yaml` (not a com
 
 ```yaml
 # Enable tmux status monitoring
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
-    # Regex patterns for preferred windows when capturing pane content
-    # Hive will prioritize windows matching these patterns over the active window
-    preview_window_matcher: [claude, aider, codex]
+tmux:
+  enabled: [tmux]
+  poll_interval: 500ms
+  # Regex patterns for preferred windows when capturing pane content
+  # Hive will prioritize windows matching these patterns over the active window
+  preview_window_matcher: [claude, aider, codex]
 
 # Use hive.sh script for session creation
 commands:

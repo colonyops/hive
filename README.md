@@ -114,10 +114,9 @@ repo_dirs:
   - ~/code/repos
 
 # Terminal integration for real-time agent status
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
+tmux:
+  enabled: [tmux]
+  poll_interval: 500ms
 
 # Rules for repository-specific setup
 rules:
@@ -289,9 +288,9 @@ keybindings:
 | `usercommands`                        | `map[string]UserCommand`| Recycle, Delete (system)       | Named commands for palette and keybindings |
 | `tui.refresh_interval`                         | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
 | `tui.preview_enabled`                          | `bool`                  | `false`                        | Enable tmux pane preview sidebar on startup |
-| `integrations.terminal.enabled`                | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
-| `integrations.terminal.poll_interval`          | `duration`              | `500ms`                        | Status check frequency                   |
-| `integrations.terminal.preview_window_matcher` | `[]string`              | `["claude", "aider", "codex"]` | Regex patterns for preferred window names |
+| `tmux.enabled`                                 | `[]string`              | `[]`                           | Terminal integrations (e.g., `["tmux"]`) |
+| `tmux.poll_interval`                           | `duration`              | `500ms`                        | Status check frequency                   |
+| `tmux.preview_window_matcher`                  | `[]string`              | `["claude", "aider", "codex"]` | Regex patterns for preferred window names |
 | `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
 | `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
 

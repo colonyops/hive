@@ -584,7 +584,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		}
 
 		// Icon unstyled, only the label gets neutral color
-		parts = append(parts, icon+neutralStyle.Render(":"+status.Label))
+		parts = append(parts, icon+neutralStyle.Render(status.Label))
 	}
 
 	if len(parts) == 0 {

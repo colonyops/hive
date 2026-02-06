@@ -413,7 +413,7 @@ func (m Model) Init() tea.Cmd {
 	}
 	// Start terminal status polling and animation if integration is enabled
 	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-		cmds = append(cmds, startTerminalPollTicker(m.cfg.Integrations.Terminal.PollInterval))
+		cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
 		cmds = append(cmds, scheduleAnimationTick())
 	}
 	// Start plugin background worker if plugins are enabled
@@ -602,7 +602,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		cmds = append(cmds, fetchTerminalStatusBatch(m.terminalManager, sessions, m.gitWorkers))
 		if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-			cmds = append(cmds, startTerminalPollTicker(m.cfg.Integrations.Terminal.PollInterval))
+			cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
 		}
 		return m, tea.Batch(cmds...)
 
@@ -2052,7 +2052,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 			}
 
 			// Icon unstyled, only the label gets neutral color
-			pluginPart := icon + separatorStyle.Render(":"+status.Label)
+			pluginPart := icon + separatorStyle.Render(status.Label)
 			statusParts = append(statusParts, pluginPart)
 		}
 	}

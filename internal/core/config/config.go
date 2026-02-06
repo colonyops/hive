@@ -106,7 +106,7 @@ type Config struct {
 	Context             ContextConfig          `yaml:"context"`
 	TUI                 TUIConfig              `yaml:"tui"`
 	Messaging           MessagingConfig        `yaml:"messaging"`
-	Integrations        IntegrationsConfig     `yaml:"integrations"`
+	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
@@ -148,9 +148,16 @@ type MessagingConfig struct {
 	MaxMessages int    `yaml:"max_messages"` // max messages per topic (default: 100, 0 = unlimited)
 }
 
-// IntegrationsConfig holds configuration for external integrations.
-type IntegrationsConfig struct {
-	Terminal TerminalConfig `yaml:"terminal"`
+// TmuxConfig holds tmux integration configuration.
+type TmuxConfig struct {
+	Enabled              []string      `yaml:"enabled"`                // list of enabled integrations, e.g. ["tmux"]
+	PollInterval         time.Duration `yaml:"poll_interval"`          // status check frequency, default 1.5s
+	PreviewWindowMatcher []string      `yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
+}
+
+// IsEnabled returns true if the given integration name is in the enabled list.
+func (t TmuxConfig) IsEnabled(name string) bool {
+	return slices.Contains(t.Enabled, name)
 }
 
 // PluginsConfig holds configuration for the plugin system.
@@ -195,18 +202,6 @@ type DatabaseConfig struct {
 	MaxOpenConns int `yaml:"max_open_conns"` // max open connections (default: 2)
 	MaxIdleConns int `yaml:"max_idle_conns"` // max idle connections (default: 2)
 	BusyTimeout  int `yaml:"busy_timeout"`   // busy timeout in milliseconds (default: 5000)
-}
-
-// TerminalConfig holds terminal multiplexer integration configuration.
-type TerminalConfig struct {
-	Enabled              []string      `yaml:"enabled"`                // list of enabled integrations, e.g. ["tmux"]
-	PollInterval         time.Duration `yaml:"poll_interval"`          // status check frequency, default 1.5s
-	PreviewWindowMatcher []string      `yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
-}
-
-// IsEnabled returns true if the given integration name is in the enabled list.
-func (t TerminalConfig) IsEnabled(name string) bool {
-	return slices.Contains(t.Enabled, name)
 }
 
 // GitConfig holds git-related configuration.
@@ -362,11 +357,11 @@ func (c *Config) applyDefaults() {
 	if c.CopyCommand == "" {
 		c.CopyCommand = defaultCopyCommand()
 	}
-	if c.Integrations.Terminal.PollInterval == 0 {
-		c.Integrations.Terminal.PollInterval = 1500 * time.Millisecond
+	if c.Tmux.PollInterval == 0 {
+		c.Tmux.PollInterval = 1500 * time.Millisecond
 	}
-	if len(c.Integrations.Terminal.PreviewWindowMatcher) == 0 {
-		c.Integrations.Terminal.PreviewWindowMatcher = []string{"claude", "aider", "codex"}
+	if len(c.Tmux.PreviewWindowMatcher) == 0 {
+		c.Tmux.PreviewWindowMatcher = []string{"claude", "aider", "codex"}
 	}
 	if c.Database.MaxOpenConns == 0 {
 		c.Database.MaxOpenConns = 2
