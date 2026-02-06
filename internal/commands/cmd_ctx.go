@@ -54,6 +54,7 @@ Use 'hive ctx init' in a git repository to create a .hive symlink pointing to th
 		},
 		Commands: []*cli.Command{
 			cmd.initCmd(),
+			cmd.lsCmd(),
 			cmd.pruneCmd(),
 		},
 	})
@@ -71,6 +72,64 @@ The symlink name is configured via context.symlink_name (default: .hive).
 The target is $XDG_DATA_HOME/hive/context/{owner}/{repo}/.`,
 		Action: cmd.runInit,
 	}
+}
+
+func (cmd *CtxCmd) lsCmd() *cli.Command {
+	return &cli.Command{
+		Name:  "ls",
+		Usage: "List context directory contents as a tree",
+		Description: `Displays the context directory contents in a tree view.
+
+Example: hive ctx ls`,
+		Action: cmd.runLs,
+	}
+}
+
+func (cmd *CtxCmd) runLs(ctx context.Context, c *cli.Command) error {
+	p := printer.Ctx(ctx)
+
+	ctxDir, err := cmd.resolveContextDir(ctx)
+	if err != nil {
+		return err
+	}
+
+	if _, err := os.Stat(ctxDir); os.IsNotExist(err) {
+		p.Infof("Context directory does not exist. Run 'hive ctx init' first.")
+		return nil
+	}
+
+	p.Printf("%s", ctxDir)
+	return printTree(p, ctxDir, "")
+}
+
+func printTree(p *printer.Printer, dir, prefix string) error {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return fmt.Errorf("read directory: %w", err)
+	}
+
+	for i, entry := range entries {
+		isLast := i == len(entries)-1
+
+		connector := "├── "
+		if isLast {
+			connector = "└── "
+		}
+
+		p.Printf("%s%s%s", prefix, connector, entry.Name())
+
+		if entry.IsDir() {
+			childPrefix := prefix + "│   "
+			if isLast {
+				childPrefix = prefix + "    "
+			}
+			if err := printTree(p, filepath.Join(dir, entry.Name()), childPrefix); err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
 }
 
 func (cmd *CtxCmd) pruneCmd() *cli.Command {
