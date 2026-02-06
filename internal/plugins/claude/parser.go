@@ -45,11 +45,24 @@ type jsonlEntry struct {
 	} `json:"message"`
 }
 
+// getClaudeConfigDir returns the Claude config directory.
+// Priority: 1) CLAUDE_CONFIG_DIR env var, 2) default ~/.claude
+func getClaudeConfigDir() string {
+	// Check env var first (allows user override)
+	if envDir := os.Getenv("CLAUDE_CONFIG_DIR"); envDir != "" {
+		return os.ExpandEnv(envDir)
+	}
+
+	// Default to ~/.claude
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".claude")
+}
+
 // DetectClaudeSessionID attempts to find the ACTIVE session ID for a project.
 // It looks for the most recently modified UUID-named session file (within 5 minutes).
 // Returns empty string if no active session found.
 func DetectClaudeSessionID(projectPath string) string {
-	configDir := os.ExpandEnv("$HOME/.config/claude")
+	configDir := getClaudeConfigDir()
 
 	// Resolve symlinks (macOS /tmp -> /private/tmp)
 	resolvedPath, _ := filepath.EvalSymlinks(projectPath)
@@ -113,7 +126,7 @@ func DetectClaudeSessionID(projectPath string) string {
 
 // GetClaudeJSONLPath resolves the JSONL file path for a Claude session.
 func GetClaudeJSONLPath(projectPath, claudeSessionID string) string {
-	configDir := os.ExpandEnv("$HOME/.config/claude")
+	configDir := getClaudeConfigDir()
 
 	// Resolve symlinks (macOS /tmp -> /private/tmp)
 	resolvedPath, _ := filepath.EvalSymlinks(projectPath)
@@ -149,6 +162,10 @@ func ParseSessionJSONL(path string) (*SessionAnalytics, error) {
 	}
 
 	scanner := bufio.NewScanner(file)
+	// Increase buffer for large lines (some tool outputs can be huge)
+	buf := make([]byte, 0, 1024*1024)
+	scanner.Buffer(buf, 10*1024*1024)
+
 	toolCounts := make(map[string]int)
 	var firstTime, lastTime time.Time
 
@@ -164,10 +181,14 @@ func ParseSessionJSONL(path string) (*SessionAnalytics, error) {
 		}
 
 		// Track timing
-		if firstTime.IsZero() || entry.Timestamp.Before(firstTime) {
-			firstTime = entry.Timestamp
+		if !entry.Timestamp.IsZero() {
+			if firstTime.IsZero() || entry.Timestamp.Before(firstTime) {
+				firstTime = entry.Timestamp
+			}
+			if entry.Timestamp.After(lastTime) {
+				lastTime = entry.Timestamp
+			}
 		}
-		lastTime = entry.Timestamp
 
 		// Accumulate tokens (cumulative for cost)
 		analytics.InputTokens += entry.Message.Usage.InputTokens
@@ -195,7 +216,10 @@ func ParseSessionJSONL(path string) (*SessionAnalytics, error) {
 			ToolCall{Name: name, Count: count})
 	}
 
-	analytics.Duration = lastTime.Sub(firstTime)
+	// Calculate duration only if we have valid timestamps
+	if !firstTime.IsZero() && !lastTime.IsZero() {
+		analytics.Duration = lastTime.Sub(firstTime)
+	}
 
 	return analytics, scanner.Err()
 }
@@ -208,12 +232,13 @@ func (a *SessionAnalytics) ContextPercent(modelLimit int) float64 {
 	return float64(a.CurrentContextTokens) / float64(modelLimit) * 100
 }
 
+// claudeDirNameRegex matches any character that's not alphanumeric or hyphen.
+// Claude Code replaces all such characters with hyphens in project directory names.
+var claudeDirNameRegex = regexp.MustCompile(`[^a-zA-Z0-9-]`)
+
 // convertToClaudeDirName converts a path to Claude's directory naming format.
+// Claude Code replaces all non-alphanumeric characters (except hyphens) with hyphens.
+// Example: /Users/name/.local/share -> -Users-name--local-share
 func convertToClaudeDirName(path string) string {
-	// Claude converts: /Users/name/Code -> -Users-name-Code
-	result := strings.ReplaceAll(path, "/", "-")
-	result = strings.TrimPrefix(result, "-")
-	// Handle special chars
-	result = strings.ReplaceAll(result, " ", "-")
-	return result
+	return claudeDirNameRegex.ReplaceAllString(path, "-")
 }

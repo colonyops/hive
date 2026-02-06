@@ -95,17 +95,22 @@ func TestConvertToClaudeDirName(t *testing.T) {
 		{
 			name:     "basic path",
 			input:    "/Users/name/Code/project",
-			expected: "Users-name-Code-project",
+			expected: "-Users-name-Code-project",
 		},
 		{
 			name:     "path with spaces",
 			input:    "/Users/name/My Documents/project",
-			expected: "Users-name-My-Documents-project",
+			expected: "-Users-name-My-Documents-project",
 		},
 		{
 			name:     "single directory",
 			input:    "/project",
-			expected: "project",
+			expected: "-project",
+		},
+		{
+			name:     "path with dots",
+			input:    "/Users/name/.local/share/hive",
+			expected: "-Users-name--local-share-hive",
 		},
 	}
 
