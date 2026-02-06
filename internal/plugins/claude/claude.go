@@ -4,6 +4,7 @@ package claude
 
 import (
 	"context"
+	"fmt"
 	"os/exec"
 	"sync"
 	"time"
@@ -156,6 +157,9 @@ func (p *Plugin) renderStatus(a *SessionAnalytics) plugins.Status {
 		redThreshold = p.cfg.RedThreshold
 	}
 
+	// Format percentage label (always shown in preview)
+	label := fmt.Sprintf("%d%%", int(percent))
+
 	var style lipgloss.Style
 	switch {
 	case percent >= float64(redThreshold):
@@ -163,12 +167,16 @@ func (p *Plugin) renderStatus(a *SessionAnalytics) plugins.Status {
 	case percent >= float64(yellowThreshold):
 		style = lipgloss.NewStyle().Foreground(styles.ColorYellow)
 	default:
-		// No color change (default text color)
-		return plugins.Status{}
+		// Below threshold - still show label but no color change
+		return plugins.Status{
+			Label: label,
+			Icon:  "",
+			Style: lipgloss.NewStyle(),
+		}
 	}
 
 	return plugins.Status{
-		Label: "", // No label - just color change
+		Label: label,
 		Icon:  "",
 		Style: style,
 	}

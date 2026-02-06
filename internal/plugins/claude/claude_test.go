@@ -194,37 +194,37 @@ func TestParseSessionJSONL(t *testing.T) {
 }
 
 func TestPlugin_renderStatus(t *testing.T) {
-	t.Run("returns empty status for low usage", func(t *testing.T) {
+	t.Run("returns percentage label for low usage", func(t *testing.T) {
 		plugin := New(config.ClaudePluginConfig{})
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 100000, // 50%
 		}
 
 		status := plugin.renderStatus(analytics)
-		assert.Empty(t, status.Label)
+		assert.Equal(t, "50%", status.Label)
 		assert.Empty(t, status.Icon)
 	})
 
-	t.Run("returns yellow for 60-79% usage", func(t *testing.T) {
+	t.Run("returns yellow with percentage for 60-79% usage", func(t *testing.T) {
 		plugin := New(config.ClaudePluginConfig{})
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 130000, // 65%
 		}
 
 		status := plugin.renderStatus(analytics)
-		assert.Empty(t, status.Label)
+		assert.Equal(t, "65%", status.Label)
 		assert.Empty(t, status.Icon)
 		assert.NotNil(t, status.Style)
 	})
 
-	t.Run("returns red for 80%+ usage", func(t *testing.T) {
+	t.Run("returns red with percentage for 80%+ usage", func(t *testing.T) {
 		plugin := New(config.ClaudePluginConfig{})
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 170000, // 85%
 		}
 
 		status := plugin.renderStatus(analytics)
-		assert.Empty(t, status.Label)
+		assert.Equal(t, "85%", status.Label)
 		assert.Empty(t, status.Icon)
 		assert.NotNil(t, status.Style)
 	})
