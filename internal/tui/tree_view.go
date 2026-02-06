@@ -603,12 +603,17 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return " " + neutralStyle.Render("•") + " " + parts[0] + func() string {
-		if len(parts) > 1 {
-			return " " + neutralStyle.Render("•") + " " + parts[1]
+
+	// Join all parts with bullet separators
+	result := ""
+	for i, part := range parts {
+		if i == 0 {
+			result = " " + neutralStyle.Render("•") + " " + part
+		} else {
+			result += " " + neutralStyle.Render("•") + " " + part
 		}
-		return ""
-	}()
+	}
+	return result
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.
