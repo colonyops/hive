@@ -630,6 +630,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Msg("plugin status updated")
 			}
 		}
+		// Update delegate's reference to plugin statuses
+		m.treeDelegate.PluginStatuses = m.pluginStatuses
 		// Force list to re-render with updated plugin status
 		m.list.SetDelegate(m.treeDelegate)
 		// Continue listening for more results
