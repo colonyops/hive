@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -42,6 +43,72 @@ type jsonlEntry struct {
 			Name string `json:"name"`
 		} `json:"content"`
 	} `json:"message"`
+}
+
+// DetectClaudeSessionID attempts to find the ACTIVE session ID for a project.
+// It looks for the most recently modified UUID-named session file (within 5 minutes).
+// Returns empty string if no active session found.
+func DetectClaudeSessionID(projectPath string) string {
+	configDir := os.ExpandEnv("$HOME/.config/claude")
+
+	// Resolve symlinks (macOS /tmp -> /private/tmp)
+	resolvedPath, _ := filepath.EvalSymlinks(projectPath)
+
+	// Convert to Claude directory naming
+	projectDir := convertToClaudeDirName(resolvedPath)
+
+	projectConfigDir := filepath.Join(configDir, "projects", projectDir)
+
+	// Check if project directory exists
+	if _, err := os.Stat(projectConfigDir); os.IsNotExist(err) {
+		return ""
+	}
+
+	// Find session files (*.jsonl)
+	files, err := filepath.Glob(filepath.Join(projectConfigDir, "*.jsonl"))
+	if err != nil || len(files) == 0 {
+		return ""
+	}
+
+	// UUID pattern for session files (e.g., "a1b2c3d4-1234-5678-90ab-cdef12345678.jsonl")
+	// Matches: 8hex-4hex-4hex-4hex-12hex
+	uuidPattern := `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$`
+	uuidRegex := regexp.MustCompile(uuidPattern)
+
+	var mostRecent string
+	var mostRecentTime time.Time
+
+	for _, file := range files {
+		base := filepath.Base(file)
+
+		// Skip agent files (agent-*.jsonl)
+		if strings.HasPrefix(base, "agent-") {
+			continue
+		}
+
+		// Only consider UUID-named files
+		if !uuidRegex.MatchString(base) {
+			continue
+		}
+
+		info, err := os.Stat(file)
+		if err != nil {
+			continue
+		}
+
+		// Find the most recently modified file
+		if info.ModTime().After(mostRecentTime) {
+			mostRecentTime = info.ModTime()
+			mostRecent = strings.TrimSuffix(base, ".jsonl")
+		}
+	}
+
+	// Only return if modified within last 5 minutes (actively used)
+	if mostRecent != "" && time.Since(mostRecentTime) < 5*time.Minute {
+		return mostRecent
+	}
+
+	return ""
 }
 
 // GetClaudeJSONLPath resolves the JSONL file path for a Claude session.

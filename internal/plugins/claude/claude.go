@@ -84,10 +84,13 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 	var wg sync.WaitGroup
 
 	for _, sess := range sessions {
-		// Only process Claude sessions
+		// Try to get Claude session ID from metadata, or auto-detect
 		claudeSessionID := sess.GetMeta("claude_session_id")
 		if claudeSessionID == "" {
-			continue
+			claudeSessionID = DetectClaudeSessionID(sess.Path)
+			if claudeSessionID == "" {
+				continue
+			}
 		}
 
 		wg.Add(1)
