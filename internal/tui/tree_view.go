@@ -464,6 +464,17 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		matchStyle = d.Styles.SelectedMatch
 	}
 
+	// Apply Claude plugin style (context usage color) if present
+	if d.PluginStatuses != nil {
+		if claudeStore, ok := d.PluginStatuses["claude"]; ok {
+			if status, ok := claudeStore.Get(item.Session.ID); ok {
+				// Claude plugin returns style (color) but no label/icon
+				// Apply the color to the name style
+				nameStyle = status.Style
+			}
+		}
+	}
+
 	// Get filter matches
 	matches := m.MatchesForItem(index)
 	matchSet := make(map[int]bool, len(matches))

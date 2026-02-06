@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/plugins"
