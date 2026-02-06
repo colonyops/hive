@@ -178,6 +178,24 @@ type Migration struct {
 var migrations = []Migration{
 	{
 		Version:     "0.2.4",
+		Title:       "Tmux config moved to top-level",
+		Description: "Terminal integration config has been moved from integrations.terminal to a top-level tmux key. This simplifies the config structure since tmux is now a core feature rather than an optional integration.",
+		Migration: `Update your config.yaml to move integrations.terminal settings to the tmux key.
+All three settings (enabled, poll_interval, preview_window_matcher) are now directly under tmux.`,
+		Before: `# config.yaml (old - 0.2.3)
+integrations:
+  terminal:
+    enabled: [tmux]
+    poll_interval: 500ms
+    preview_window_matcher: [claude, aider, codex]`,
+		After: `# config.yaml (new - 0.2.4)
+tmux:
+  enabled: [tmux]
+  poll_interval: 500ms
+  preview_window_matcher: [claude, aider, codex]`,
+	},
+	{
+		Version:     "0.2.4",
 		Title:       "Keybindings now reference commands",
 		Description: "Keybindings have been simplified to only reference UserCommands. Built-in actions (recycle, delete) are now provided as default UserCommands named 'Recycle' and 'Delete'. All keybindings must have a 'cmd' field referencing a UserCommand.",
 		Migration: `1. Move any 'sh:' commands from keybindings to usercommands
