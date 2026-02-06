@@ -134,5 +134,5 @@ func (p *Plugin) StatusCacheDuration() time.Duration {
 	if p.cfg.ResultsCache > 0 {
 		return p.cfg.ResultsCache
 	}
-	return 30 * time.Second
+	return 2 * time.Minute
 }
