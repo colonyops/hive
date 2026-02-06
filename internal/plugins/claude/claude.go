@@ -85,9 +85,21 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 	var wg sync.WaitGroup
 
 	for _, sess := range sessions {
-		// Try to get Claude session ID from metadata, or auto-detect
+		// Try to get Claude session ID from metadata first (fast)
 		claudeSessionID := sess.GetMeta("claude_session_id")
+
+		// If no metadata, try cache before expensive detection
 		if claudeSessionID == "" {
+			// Check if we have cached analytics - if so, session was detected before
+			if cached := p.cache.Get(sess.ID); cached != nil {
+				// Return cached status immediately without re-detection
+				mu.Lock()
+				results[sess.ID] = p.renderStatus(cached)
+				mu.Unlock()
+				continue
+			}
+
+			// No cache - do expensive detection
 			claudeSessionID = DetectClaudeSessionID(sess.Path)
 			if claudeSessionID == "" {
 				continue

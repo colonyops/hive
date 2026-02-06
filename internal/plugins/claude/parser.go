@@ -83,10 +83,7 @@ func DetectClaudeSessionID(projectPath string) string {
 		return ""
 	}
 
-	// UUID pattern for session files (e.g., "a1b2c3d4-1234-5678-90ab-cdef12345678.jsonl")
-	// Matches: 8hex-4hex-4hex-4hex-12hex
-	uuidPattern := `^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$`
-	uuidRegex := regexp.MustCompile(uuidPattern)
+	// Use pre-compiled regex for UUID matching (performance optimization)
 
 	var mostRecent string
 	var mostRecentTime time.Time
@@ -100,7 +97,7 @@ func DetectClaudeSessionID(projectPath string) string {
 		}
 
 		// Only consider UUID-named files
-		if !uuidRegex.MatchString(base) {
+		if !uuidSessionRegex.MatchString(base) {
 			continue
 		}
 
@@ -235,6 +232,9 @@ func (a *SessionAnalytics) ContextPercent(modelLimit int) float64 {
 // claudeDirNameRegex matches any character that's not alphanumeric or hyphen.
 // Claude Code replaces all such characters with hyphens in project directory names.
 var claudeDirNameRegex = regexp.MustCompile(`[^a-zA-Z0-9-]`)
+
+// uuidSessionRegex matches UUID-named session files (compiled once for performance).
+var uuidSessionRegex = regexp.MustCompile(`^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.jsonl$`)
 
 // convertToClaudeDirName converts a path to Claude's directory naming format.
 // Claude Code replaces all non-alphanumeric characters (except hyphens) with hyphens.
