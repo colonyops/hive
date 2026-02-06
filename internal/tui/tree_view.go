@@ -569,7 +569,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	neutralStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 
 	var parts []string
-	pluginOrder := []string{"github", "beads"}
+	pluginOrder := []string{"github", "beads", "claude"}
 	for _, name := range pluginOrder {
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
@@ -587,6 +587,8 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 				icon = styles.IconGithub
 			case "beads":
 				icon = styles.IconCheckList
+			case "claude":
+				icon = "🤖"
 			default:
 				icon = status.Icon
 			}
