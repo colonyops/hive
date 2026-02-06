@@ -155,12 +155,12 @@ type IntegrationsConfig struct {
 
 // PluginsConfig holds configuration for the plugin system.
 type PluginsConfig struct {
-	ShellWorkers int                      `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
-	GitHub       GitHubPluginConfig       `yaml:"github"`
-	Beads        BeadsPluginConfig        `yaml:"beads"`
-	LazyGit      LazyGitPluginConfig      `yaml:"lazygit"`
-	Neovim       NeovimPluginConfig       `yaml:"neovim"`
-	ContextDir   ContextDirPluginConfig   `yaml:"contextdir"`
+	ShellWorkers int                    `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
+	GitHub       GitHubPluginConfig     `yaml:"github"`
+	Beads        BeadsPluginConfig      `yaml:"beads"`
+	LazyGit      LazyGitPluginConfig    `yaml:"lazygit"`
+	Neovim       NeovimPluginConfig     `yaml:"neovim"`
+	ContextDir   ContextDirPluginConfig `yaml:"contextdir"`
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
