@@ -270,6 +270,65 @@ keybindings:
     confirm: "Run tidy on this session?" # Override command's confirm
 ```
 
+### Plugins
+
+Hive supports plugins that extend functionality with custom commands and status providers.
+
+#### Claude Plugin
+
+The Claude plugin provides integration with Claude Code sessions:
+
+- **ClaudeFork** — Fork the current Claude session in a new tmux window with conversation history
+- **Analytics Status** — Display context usage with color warnings (yellow at 60%, red at 80%)
+
+**Configuration:**
+
+```yaml
+plugins:
+  claude:
+    enabled: true              # nil = auto-detect, true/false = override
+    cache_ttl: 30s             # status cache duration
+    yellow_threshold: 60       # yellow above this % (default: 60)
+    red_threshold: 80          # red above this % (default: 80)
+    model_limit: 200000        # context limit (default: 200000 for Sonnet)
+```
+
+**Usage:**
+
+```yaml
+# Add keybinding for fork
+keybindings:
+  f:
+    cmd: ClaudeFork
+
+# Or invoke via command palette
+:ClaudeFork
+```
+
+**Context Analytics:**
+
+The plugin displays session names in color based on context usage:
+- **Default color**: < 60% (no warning)
+- **Yellow**: 60-79% (approaching limit)
+- **Red**: ≥ 80% (at/near limit)
+
+**Requirements:**
+
+- Claude CLI installed (`claude`)
+- Claude session metadata stored in session (see spawn configuration below)
+
+**Spawn Configuration:**
+
+For analytics to work, sessions need the Claude session ID stored in metadata. Add this to your spawn command:
+
+```yaml
+rules:
+  - pattern: ""
+    spawn:
+      - 'tmux new-window -c "{{ .Path }}" "exec claude"'
+      - 'hive session meta --set claude_session_id="$(tmux display-message -p "#S")"'
+```
+
 ### Configuration Options
 
 | Option                                | Type                    | Default                        | Description                              |
@@ -293,6 +352,11 @@ keybindings:
 | `tmux.preview_window_matcher`                  | `[]string`              | `["claude", "aider", "codex"]` | Regex patterns for preferred window names |
 | `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
 | `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
+| `plugins.claude.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable Claude plugin             |
+| `plugins.claude.cache_ttl`            | `duration`              | `30s`                          | Status cache duration                    |
+| `plugins.claude.yellow_threshold`     | `int`                   | `60`                           | Yellow warning threshold (%)             |
+| `plugins.claude.red_threshold`        | `int`                   | `80`                           | Red warning threshold (%)                |
+| `plugins.claude.model_limit`          | `int`                   | `200000`                       | Context token limit                      |
 
 ## Data Storage
 
