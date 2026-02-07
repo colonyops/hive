@@ -495,6 +495,12 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		}
 	}
 
+	// Window name (from terminal status, shown when multi-window)
+	windowLabel := ""
+	if termStatus != nil && termStatus.WindowName != "" {
+		windowLabel = d.Styles.SessionBranch.Render(" [" + termStatus.WindowName + "]")
+	}
+
 	// Short ID (always show)
 	shortID := item.Session.ID
 	if len(shortID) > 4 {
@@ -502,16 +508,16 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	}
 	id := d.Styles.SessionID.Render(" #" + shortID)
 
-	// In preview mode, show minimal info (status + name + ID only)
+	// In preview mode, show minimal info (status + name + window + ID only)
 	if d.PreviewMode {
-		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
+		return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, windowLabel, id)
 	}
 
-	// Full mode: show ID, git status, and plugin statuses
+	// Full mode: show ID, window name, git status, and plugin statuses
 	gitInfo := d.renderGitStatus(item.Session.Path)
 	pluginInfo := d.renderPluginStatuses(item.Session.ID)
 
-	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
+	return fmt.Sprintf("%s %s %s%s%s%s%s%s", prefixStyled, statusStr, name, namePadding, windowLabel, id, gitInfo, pluginInfo)
 }
 
 // renderGitStatus returns the formatted git status for a session path.

@@ -16,7 +16,8 @@ const (
 // SessionInfo holds information about a discovered terminal session.
 type SessionInfo struct {
 	Name         string // terminal session name (e.g., tmux session name)
-	Pane         string // pane identifier if applicable
+	Pane         string // pane identifier if applicable (window index for tmux)
+	WindowName   string // window name (for display and template data)
 	Status       Status // current detected status
 	DetectedTool string // detected AI tool (claude, gemini, etc.)
 	PaneContent  string // captured pane content for preview

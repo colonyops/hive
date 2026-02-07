@@ -16,6 +16,7 @@ const terminalStatusTimeout = 2 * time.Second
 type TerminalStatus struct {
 	Status      terminal.Status
 	Tool        string
+	WindowName  string
 	PaneContent string
 	IsLoading   bool
 	Error       error
@@ -80,8 +81,18 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 		Status: terminal.StatusMissing,
 	}
 
+	// Inject session path into metadata for multi-window disambiguation
+	metadata := sess.Metadata
+	if sess.Path != "" {
+		metadata = make(map[string]string, len(sess.Metadata)+1)
+		for k, v := range sess.Metadata {
+			metadata[k] = v
+		}
+		metadata["_session_path"] = sess.Path
+	}
+
 	// Try to discover terminal session
-	info, integration, err := mgr.DiscoverSession(ctx, sess.Slug, sess.Metadata)
+	info, integration, err := mgr.DiscoverSession(ctx, sess.Slug, metadata)
 	if err != nil {
 		status.Error = err
 		return status
@@ -100,6 +111,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 
 	status.Status = termStatus
 	status.Tool = info.DetectedTool
+	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
 	return status
 }

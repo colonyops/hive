@@ -52,9 +52,10 @@ func (a Action) NeedsConfirm() bool {
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
 type KeybindingResolver struct {
-	keybindings map[string]config.Keybinding
-	commands    map[string]config.UserCommand
-	activeView  ViewType // current active view for scope checking
+	keybindings      map[string]config.Keybinding
+	commands         map[string]config.UserCommand
+	activeView       ViewType                      // current active view for scope checking
+	tmuxWindowLookup func(sessionID string) string // optional: returns tmux window name for a session
 }
 
 // NewKeybindingResolver creates a new resolver with the given config.
@@ -70,6 +71,20 @@ func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands ma
 // SetActiveView updates the current active view for scope checking.
 func (h *KeybindingResolver) SetActiveView(view ViewType) {
 	h.activeView = view
+}
+
+// SetTmuxWindowLookup sets a function that resolves tmux window names for sessions.
+// This enables the TmuxWindow field in shell command templates.
+func (h *KeybindingResolver) SetTmuxWindowLookup(fn func(sessionID string) string) {
+	h.tmuxWindowLookup = fn
+}
+
+// tmuxWindowForSession returns the tmux window name for a session, or empty.
+func (h *KeybindingResolver) tmuxWindowForSession(sessionID string) string {
+	if h.tmuxWindowLookup == nil {
+		return ""
+	}
+	return h.tmuxWindowLookup(sessionID)
 }
 
 // isCommandInScope checks if a command is active in the current view.
@@ -165,15 +180,17 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	// Shell command
 	if cmd.Sh != "" {
 		data := struct {
-			Path   string
-			Remote string
-			ID     string
-			Name   string
+			Path       string
+			Remote     string
+			ID         string
+			Name       string
+			TmuxWindow string
 		}{
-			Path:   sess.Path,
-			Remote: sess.Remote,
-			ID:     sess.ID,
-			Name:   sess.Name,
+			Path:       sess.Path,
+			Remote:     sess.Remote,
+			ID:         sess.ID,
+			Name:       sess.Name,
+			TmuxWindow: h.tmuxWindowForSession(sess.ID),
 		}
 
 		rendered, err := tmpl.Render(cmd.Sh, data)
@@ -310,17 +327,19 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 
 	// Shell command
 	data := struct {
-		Path   string
-		Remote string
-		ID     string
-		Name   string
-		Args   []string
+		Path       string
+		Remote     string
+		ID         string
+		Name       string
+		TmuxWindow string
+		Args       []string
 	}{
-		Path:   sess.Path,
-		Remote: sess.Remote,
-		ID:     sess.ID,
-		Name:   sess.Name,
-		Args:   args,
+		Path:       sess.Path,
+		Remote:     sess.Remote,
+		ID:         sess.ID,
+		Name:       sess.Name,
+		TmuxWindow: h.tmuxWindowForSession(sess.ID),
+		Args:       args,
 	}
 
 	rendered, err := tmpl.Render(cmd.Sh, data)

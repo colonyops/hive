@@ -274,6 +274,12 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 	}
 
 	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands)
+	handler.SetTmuxWindowLookup(func(sessionID string) string {
+		if status, ok := terminalStatuses.Get(sessionID); ok {
+			return status.WindowName
+		}
+		return ""
+	})
 	cmdService := command.NewService(service, service)
 
 	// Add minimal keybindings to list help - just navigation and help trigger
@@ -2001,12 +2007,17 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 
 	divider := strings.Repeat("─", maxWidth)
 
-	// Build title line: "SessionName • #abcd"
+	// Build title line: "SessionName [window] • #abcd"
 	shortID := sess.ID
 	if len(shortID) > 4 {
 		shortID = shortID[len(shortID)-4:]
 	}
-	title := nameStyle.Render(sess.Name) + separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
+	title := nameStyle.Render(sess.Name)
+	if status, ok := m.terminalStatuses.Get(sess.ID); ok && status.WindowName != "" {
+		windowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
+		title += " " + windowStyle.Render("["+status.WindowName+"]")
+	}
+	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
 
 	// Build status line with colors
 	var statusParts []string
