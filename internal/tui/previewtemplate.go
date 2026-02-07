@@ -19,6 +19,7 @@ type PreviewIcons struct {
 	CheckList string
 	Bee       string
 	Hive      string
+	Claude    string
 }
 
 // DefaultPreviewIcons returns the default nerd font icons from styles package.
@@ -30,6 +31,7 @@ func DefaultPreviewIcons() PreviewIcons {
 		CheckList: styles.IconCheckList,
 		Bee:       styles.IconBee,
 		Hive:      styles.IconHive,
+		Claude:    "󰧑", // Nerd font icon for AI/Claude
 	}
 }
 
@@ -50,6 +52,7 @@ type PreviewGitData struct {
 type PreviewPluginData struct {
 	Github string // e.g., "open", "draft", "merged"
 	Beads  string // e.g., "0/3"
+	Claude string // e.g., "65%" (context usage percentage)
 }
 
 // PreviewTemplateData holds all data available to preview templates.
@@ -120,6 +123,11 @@ func BuildPreviewTemplateData(
 				data.Plugin.Beads = status.Label
 			}
 		}
+		if store, ok := pluginStatuses["claude"]; ok && store != nil {
+			if status, ok := store.Get(sess.ID); ok && status.Label != "" {
+				data.Plugin.Claude = status.Label
+			}
+		}
 	}
 
 	// Terminal status
@@ -152,7 +160,7 @@ const DefaultTitleTemplate = "{{ .Name }} • #{{ .ShortID }}"
 
 // DefaultStatusTemplate is the default Go template for the preview status line.
 // Shows git info with icons and plugin statuses.
-const DefaultStatusTemplate = "{{ if .Branch }}{{ .Icon.GitBranch }} {{ .Branch }} +{{ .GitStatus.Additions }} -{{ .GitStatus.Deletions }}{{ if .GitStatus.HasChanges }} {{ .Icon.Git }}{{ end }}{{ end }}{{ if .Plugin.Github }} | {{ .Icon.Github }} {{ .Plugin.Github }}{{ end }}{{ if .Plugin.Beads }} | {{ .Icon.CheckList }} {{ .Plugin.Beads }}{{ end }}"
+const DefaultStatusTemplate = "{{ if .Branch }}{{ .Icon.GitBranch }} {{ .Branch }} +{{ .GitStatus.Additions }} -{{ .GitStatus.Deletions }}{{ if .GitStatus.HasChanges }} {{ .Icon.Git }}{{ end }}{{ end }}{{ if .Plugin.Github }} | {{ .Icon.Github }} {{ .Plugin.Github }}{{ end }}{{ if .Plugin.Beads }} | {{ .Icon.CheckList }} {{ .Plugin.Beads }}{{ end }}{{ if .Plugin.Claude }} | {{ .Icon.Claude }} {{ .Plugin.Claude }}{{ end }}"
 
 // ParsePreviewTemplates parses the title and status templates.
 // Falls back to defaults if templates are empty or invalid.

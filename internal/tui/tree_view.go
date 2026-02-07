@@ -464,6 +464,17 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		matchStyle = d.Styles.SelectedMatch
 	}
 
+	// Apply Claude plugin style (context usage color) if present
+	if d.PluginStatuses != nil {
+		if claudeStore, ok := d.PluginStatuses["claude"]; ok {
+			if status, ok := claudeStore.Get(item.Session.ID); ok {
+				// Claude plugin returns style (color) but no label/icon
+				// Use Inherit to merge the color while preserving selection state
+				nameStyle = nameStyle.Inherit(status.Style)
+			}
+		}
+	}
+
 	// Get filter matches
 	matches := m.MatchesForItem(index)
 	matchSet := make(map[int]bool, len(matches))
@@ -558,7 +569,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	neutralStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 
 	var parts []string
-	pluginOrder := []string{"github", "beads"}
+	pluginOrder := []string{"github", "beads", "claude"}
 	for _, name := range pluginOrder {
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
@@ -576,6 +587,8 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 				icon = styles.IconGithub
 			case "beads":
 				icon = styles.IconCheckList
+			case "claude":
+				icon = styles.IconBrain
 			default:
 				icon = status.Icon
 			}
@@ -590,12 +603,17 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return " " + neutralStyle.Render("•") + " " + parts[0] + func() string {
-		if len(parts) > 1 {
-			return " " + neutralStyle.Render("•") + " " + parts[1]
+
+	// Join all parts with bullet separators
+	result := ""
+	for i, part := range parts {
+		if i == 0 {
+			result = " " + neutralStyle.Render("•") + " " + part
+		} else {
+			result += " " + neutralStyle.Render("•") + " " + part
 		}
-		return ""
-	}()
+	}
+	return result
 }
 
 // renderWithMatches renders text with underlined characters at matched positions.

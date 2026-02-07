@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/charmbracelet/lipgloss"
+	"charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/plugins"
@@ -134,5 +134,5 @@ func (p *Plugin) StatusCacheDuration() time.Duration {
 	if p.cfg.ResultsCache > 0 {
 		return p.cfg.ResultsCache
 	}
-	return 30 * time.Second
+	return 2 * time.Minute
 }

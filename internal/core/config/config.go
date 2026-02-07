@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
-	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -150,14 +149,8 @@ type MessagingConfig struct {
 
 // TmuxConfig holds tmux integration configuration.
 type TmuxConfig struct {
-	Enabled              []string      `yaml:"enabled"`                // list of enabled integrations, e.g. ["tmux"]
 	PollInterval         time.Duration `yaml:"poll_interval"`          // status check frequency, default 1.5s
 	PreviewWindowMatcher []string      `yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
-}
-
-// IsEnabled returns true if the given integration name is in the enabled list.
-func (t TmuxConfig) IsEnabled(name string) bool {
-	return slices.Contains(t.Enabled, name)
 }
 
 // PluginsConfig holds configuration for the plugin system.
@@ -168,6 +161,7 @@ type PluginsConfig struct {
 	LazyGit      LazyGitPluginConfig    `yaml:"lazygit"`
 	Neovim       NeovimPluginConfig     `yaml:"neovim"`
 	ContextDir   ContextDirPluginConfig `yaml:"contextdir"`
+	Claude       ClaudePluginConfig     `yaml:"claude"`
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -195,6 +189,15 @@ type NeovimPluginConfig struct {
 // ContextDirPluginConfig holds context directory plugin configuration.
 type ContextDirPluginConfig struct {
 	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+}
+
+// ClaudePluginConfig holds Claude Code plugin configuration.
+type ClaudePluginConfig struct {
+	Enabled         *bool         `yaml:"enabled"`          // nil = auto-detect, true/false = override
+	CacheTTL        time.Duration `yaml:"cache_ttl"`        // status cache duration (default: 30s)
+	YellowThreshold int           `yaml:"yellow_threshold"` // yellow above this % (default: 60)
+	RedThreshold    int           `yaml:"red_threshold"`    // red above this % (default: 80)
+	ModelLimit      int           `yaml:"model_limit"`      // context limit (default: 200000)
 }
 
 // DatabaseConfig holds SQLite database configuration.

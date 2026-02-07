@@ -70,16 +70,13 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Use SQLite message store
 	msgStore := cmd.flags.MsgStore
 
-	// Create terminal integration manager if configured
-	var termMgr *terminal.Manager
-	if len(cmd.flags.Config.Tmux.Enabled) > 0 {
-		termMgr = terminal.NewManager(cmd.flags.Config.Tmux.Enabled)
-		// Register tmux integration with preview window matcher patterns
-		preferredWindows := cmd.flags.Config.Tmux.PreviewWindowMatcher
-		tmuxIntegration := tmux.New(preferredWindows)
-		if tmuxIntegration.Available() {
-			termMgr.Register(tmuxIntegration)
-		}
+	// Create terminal integration manager (tmux always enabled)
+	termMgr := terminal.NewManager([]string{"tmux"})
+	// Register tmux integration with preview window matcher patterns
+	preferredWindows := cmd.flags.Config.Tmux.PreviewWindowMatcher
+	tmuxIntegration := tmux.New(preferredWindows)
+	if tmuxIntegration.Available() {
+		termMgr.Register(tmuxIntegration)
 	}
 
 	for {

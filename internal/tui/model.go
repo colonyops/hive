@@ -630,6 +630,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					Msg("plugin status updated")
 			}
 		}
+		// Update delegate's reference to plugin statuses
+		m.treeDelegate.PluginStatuses = m.pluginStatuses
 		// Force list to re-render with updated plugin status
 		m.list.SetDelegate(m.treeDelegate)
 		// Continue listening for more results
@@ -2028,7 +2030,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 
 	// Plugin statuses (neutral color)
 	if m.pluginStatuses != nil {
-		pluginOrder := []string{"github", "beads"}
+		pluginOrder := []string{"github", "beads", "claude"}
 		for _, name := range pluginOrder {
 			store, ok := m.pluginStatuses[name]
 			if !ok || store == nil {
@@ -2046,6 +2048,8 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 					icon = styles.IconGithub
 				case "beads":
 					icon = styles.IconCheckList
+				case "claude":
+					icon = styles.IconBrain
 				}
 			} else {
 				icon = status.Icon

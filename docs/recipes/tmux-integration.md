@@ -7,9 +7,8 @@ Manage AI agent sessions in tmux with automated session creation, status monitor
 Add these tmux-specific settings to your `~/.config/hive/config.yaml` (not a complete config, just the tmux-related parts):
 
 ```yaml
-# Enable tmux status monitoring
+# Tmux integration (always enabled)
 tmux:
-  enabled: [tmux]
   poll_interval: 500ms
   # Regex patterns for preferred windows when capturing pane content
   # Hive will prioritize windows matching these patterns over the active window
