@@ -119,6 +119,13 @@ type TreeItem struct {
 	IsRecycledPlaceholder bool
 	RecycledCount         int
 	RecycledSessions      []session.Session // Actual recycled sessions for deletion support
+
+	// Window sub-item fields (only used when IsWindowItem is true)
+	IsWindowItem  bool
+	WindowIndex   string
+	WindowName    string
+	ParentSession session.Session // Session this window belongs to
+	IsLastWindow  bool            // For └─ vs ├─ rendering within the window group
 }
 
 // FilterValue returns the value used for filtering.
@@ -131,6 +138,9 @@ func (i TreeItem) FilterValue() string {
 	}
 	if i.IsRecycledPlaceholder {
 		return i.RepoPrefix + " recycled"
+	}
+	if i.IsWindowItem {
+		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.WindowName
 	}
 	return i.RepoPrefix + " " + i.Session.Name
 }
@@ -378,6 +388,8 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		line = d.renderHeader(treeItem, isSelected, m, index)
 	case treeItem.IsRecycledPlaceholder:
 		line = d.renderRecycledPlaceholder(treeItem, isSelected)
+	case treeItem.IsWindowItem:
+		line = d.renderWindow(treeItem, isSelected)
 	default:
 		line = d.renderSession(treeItem, isSelected, m, index)
 	}
@@ -466,7 +478,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Apply Claude plugin style (context usage color) if present
 	if d.PluginStatuses != nil {
-		if claudeStore, ok := d.PluginStatuses["claude"]; ok {
+		if claudeStore, ok := d.PluginStatuses[pluginClaude]; ok {
 			if status, ok := claudeStore.Get(item.Session.ID); ok {
 				// Claude plugin returns style (color) but no label/icon
 				// Use Inherit to merge the color while preserving selection state
@@ -512,6 +524,76 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	pluginInfo := d.renderPluginStatuses(item.Session.ID)
 
 	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
+}
+
+// renderWindow renders a window sub-item nested under a session.
+func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
+	// Deeper indent: "│     ├─" or "│     └─" depending on position
+	var connector string
+	if item.IsLastWindow {
+		connector = treeLast
+	} else {
+		connector = treeBranch
+	}
+
+	// The parent session's tree line continues vertically
+	var parentLine string
+	if item.IsLastInRepo {
+		parentLine = "    " // parent was └─, no continuing line
+	} else {
+		parentLine = "│   " // parent was ├─, line continues
+	}
+	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+
+	// Get per-window terminal status from the delegate's store
+	var windowStatus *WindowStatus
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
+			for i := range ts.Windows {
+				if ts.Windows[i].WindowIndex == item.WindowIndex {
+					windowStatus = &ts.Windows[i]
+					break
+				}
+			}
+		}
+	}
+
+	// Status indicator
+	var statusStr string
+	if windowStatus != nil {
+		termStatus := &TerminalStatus{Status: windowStatus.Status}
+		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	} else {
+		statusStr = d.Styles.StatusUnknown.Render(statusUnknown)
+	}
+
+	// Window name
+	nameStyle := d.Styles.SessionName
+	if isSelected {
+		nameStyle = d.Styles.Selected
+	}
+	name := nameStyle.Render(item.WindowName)
+
+	// Only show a compact index when needed to disambiguate window names.
+	// Also show when the window name is empty.
+	showIndex := item.WindowName == ""
+	if !showIndex && d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
+			for i := range ts.Windows {
+				if ts.Windows[i].WindowName == item.WindowName && ts.Windows[i].WindowIndex != item.WindowIndex {
+					showIndex = true
+					break
+				}
+			}
+		}
+	}
+
+	var indexStr string
+	if showIndex {
+		indexStr = d.Styles.SessionBranch.Render(fmt.Sprintf(" #%s", item.WindowIndex))
+	}
+
+	return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, indexStr)
 }
 
 // renderGitStatus returns the formatted git status for a session path.
@@ -569,7 +651,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	neutralStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 
 	var parts []string
-	pluginOrder := []string{"github", "beads", "claude"}
+	pluginOrder := []string{pluginGitHub, pluginBeads, pluginClaude}
 	for _, name := range pluginOrder {
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
@@ -583,11 +665,11 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		var icon string
 		if d.IconsEnabled {
 			switch name {
-			case "github":
+			case pluginGitHub:
 				icon = styles.IconGithub
-			case "beads":
+			case pluginBeads:
 				icon = styles.IconCheckList
-			case "claude":
+			case pluginClaude:
 				icon = styles.IconBrain
 			default:
 				icon = status.Icon

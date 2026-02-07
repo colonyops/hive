@@ -398,6 +398,94 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 	})
 }
 
+func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
+	commands := map[string]config.UserCommand{
+		"window-cmd": {Sh: "echo {{ .TmuxWindow }} {{ .Tool }}", Help: "test"},
+	}
+	keybindings := map[string]config.Keybinding{
+		"w": {Cmd: "window-cmd"},
+	}
+
+	sess := session.Session{
+		ID:    "test-id",
+		Path:  "/test/path",
+		State: session.StateActive,
+	}
+
+	t.Run("uses lookup functions for TmuxWindow and Tool", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands)
+		handler.SetTmuxWindowLookup(func(id string) string { return "claude-window" })
+		handler.SetToolLookup(func(id string) string { return "claude" })
+
+		action, ok := handler.Resolve("w", sess)
+		if !ok {
+			t.Fatal("expected ok = true")
+		}
+		if action.ShellCmd != "echo claude-window claude" {
+			t.Errorf("ShellCmd = %q, want %q", action.ShellCmd, "echo claude-window claude")
+		}
+	})
+
+	t.Run("SetSelectedWindow overrides lookup", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands)
+		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
+		handler.SetToolLookup(func(id string) string { return "claude" })
+		handler.SetSelectedWindow("override-window")
+
+		action, ok := handler.Resolve("w", sess)
+		if !ok {
+			t.Fatal("expected ok = true")
+		}
+		if action.ShellCmd != "echo override-window claude" {
+			t.Errorf("ShellCmd = %q, want %q", action.ShellCmd, "echo override-window claude")
+		}
+	})
+
+	t.Run("override is consumed after resolve", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands)
+		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
+		handler.SetToolLookup(func(id string) string { return "claude" })
+		handler.SetSelectedWindow("override-window")
+
+		// First resolve consumes the override
+		action, ok := handler.Resolve("w", sess)
+		if !ok {
+			t.Fatal("expected ok = true")
+		}
+		if action.ShellCmd != "echo override-window claude" {
+			t.Errorf("first resolve: ShellCmd = %q, want %q", action.ShellCmd, "echo override-window claude")
+		}
+
+		// Second resolve should use the lookup (override was consumed)
+		action, ok = handler.Resolve("w", sess)
+		if !ok {
+			t.Fatal("expected ok = true")
+		}
+		if action.ShellCmd != "echo default-window claude" {
+			t.Errorf("second resolve: ShellCmd = %q, want %q", action.ShellCmd, "echo default-window claude")
+		}
+	})
+
+	t.Run("ResolveUserCommand also consumes override", func(t *testing.T) {
+		handler := NewKeybindingResolver(nil, nil)
+		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
+		handler.SetToolLookup(func(id string) string { return "claude" })
+		handler.SetSelectedWindow("override-window")
+
+		cmd := config.UserCommand{Sh: "echo {{ .TmuxWindow }}", Help: "test"}
+		action := handler.ResolveUserCommand("test", cmd, sess, nil)
+		if action.ShellCmd != "echo override-window" {
+			t.Errorf("ShellCmd = %q, want %q", action.ShellCmd, "echo override-window")
+		}
+
+		// Override should be consumed
+		action = handler.ResolveUserCommand("test", cmd, sess, nil)
+		if action.ShellCmd != "echo default-window" {
+			t.Errorf("after consume: ShellCmd = %q, want %q", action.ShellCmd, "echo default-window")
+		}
+	})
+}
+
 func TestKeybindingResolver_Scope(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"global-cmd":   {Sh: "echo global", Help: "global command"},

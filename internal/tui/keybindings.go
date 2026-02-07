@@ -52,9 +52,12 @@ func (a Action) NeedsConfirm() bool {
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
 type KeybindingResolver struct {
-	keybindings map[string]config.Keybinding
-	commands    map[string]config.UserCommand
-	activeView  ViewType // current active view for scope checking
+	keybindings            map[string]config.Keybinding
+	commands               map[string]config.UserCommand
+	activeView             ViewType                      // current active view for scope checking
+	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
+	toolLookup             func(sessionID string) string // optional: returns detected tool name for a session
+	selectedWindowOverride string                        // if set, overrides tmuxWindowLookup for the next resolve
 }
 
 // NewKeybindingResolver creates a new resolver with the given config.
@@ -70,6 +73,46 @@ func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands ma
 // SetActiveView updates the current active view for scope checking.
 func (h *KeybindingResolver) SetActiveView(view ViewType) {
 	h.activeView = view
+}
+
+// SetTmuxWindowLookup sets a function that resolves tmux window names for sessions.
+// This enables the TmuxWindow field in shell command templates.
+func (h *KeybindingResolver) SetTmuxWindowLookup(fn func(sessionID string) string) {
+	h.tmuxWindowLookup = fn
+}
+
+// SetToolLookup sets a function that resolves tool names for sessions.
+func (h *KeybindingResolver) SetToolLookup(fn func(sessionID string) string) {
+	h.toolLookup = fn
+}
+
+// SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
+// The override is consumed (cleared) after each Resolve or ResolveUserCommand call.
+// Pass empty string to clear the override and fall back to the lookup function.
+func (h *KeybindingResolver) SetSelectedWindow(windowName string) {
+	h.selectedWindowOverride = windowName
+}
+
+// consumeWindowOverride returns the current selectedWindowOverride for a session,
+// falling back to the lookup function, and clears the override afterward.
+func (h *KeybindingResolver) consumeWindowOverride(sessionID string) string {
+	if h.selectedWindowOverride != "" {
+		result := h.selectedWindowOverride
+		h.selectedWindowOverride = ""
+		return result
+	}
+	if h.tmuxWindowLookup == nil {
+		return ""
+	}
+	return h.tmuxWindowLookup(sessionID)
+}
+
+// toolForSession returns the detected tool name for a session, or empty.
+func (h *KeybindingResolver) toolForSession(sessionID string) string {
+	if h.toolLookup == nil {
+		return ""
+	}
+	return h.toolLookup(sessionID)
 }
 
 // isCommandInScope checks if a command is active in the current view.
@@ -165,15 +208,19 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	// Shell command
 	if cmd.Sh != "" {
 		data := struct {
-			Path   string
-			Remote string
-			ID     string
-			Name   string
+			Path       string
+			Remote     string
+			ID         string
+			Name       string
+			Tool       string
+			TmuxWindow string
 		}{
-			Path:   sess.Path,
-			Remote: sess.Remote,
-			ID:     sess.ID,
-			Name:   sess.Name,
+			Path:       sess.Path,
+			Remote:     sess.Remote,
+			ID:         sess.ID,
+			Name:       sess.Name,
+			Tool:       h.toolForSession(sess.ID),
+			TmuxWindow: h.consumeWindowOverride(sess.ID),
 		}
 
 		rendered, err := tmpl.Render(cmd.Sh, data)
@@ -310,17 +357,21 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 
 	// Shell command
 	data := struct {
-		Path   string
-		Remote string
-		ID     string
-		Name   string
-		Args   []string
+		Path       string
+		Remote     string
+		ID         string
+		Name       string
+		Tool       string
+		TmuxWindow string
+		Args       []string
 	}{
-		Path:   sess.Path,
-		Remote: sess.Remote,
-		ID:     sess.ID,
-		Name:   sess.Name,
-		Args:   args,
+		Path:       sess.Path,
+		Remote:     sess.Remote,
+		ID:         sess.ID,
+		Name:       sess.Name,
+		Tool:       h.toolForSession(sess.ID),
+		TmuxWindow: h.consumeWindowOverride(sess.ID),
+		Args:       args,
 	}
 
 	rendered, err := tmpl.Render(cmd.Sh, data)

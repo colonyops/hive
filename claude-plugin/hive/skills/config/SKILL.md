@@ -234,7 +234,7 @@ Commands support Go templates with `{{ .Variable }}` syntax.
 | `spawn`, `batch_spawn` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
 | `batch_spawn` (additional) | `.Prompt` |
 | `recycle` | `.DefaultBranch` |
-| `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.Args` |
+| `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.TmuxWindow`, `.Args` |
 
 ### Variable Descriptions
 
@@ -267,6 +267,12 @@ Commands support Go templates with `{{ .Variable }}` syntax.
 
 **`.Remote`** - Git remote URL (usercommands only)
 - Example: `git@github.com:my-org/myrepo.git`
+
+**`.TmuxWindow`** - Tmux window name (usercommands only)
+- When a window sub-item is selected: that window's name (e.g., `claude`, `aider`)
+- When a session row is selected: the best disambiguated window name
+- When empty: single-window session or no terminal status
+- Example: `claude`
 
 **`.Args`** - Command arguments array (usercommands only)
 - Example: `["arg1", "arg2"]`
@@ -573,7 +579,7 @@ rules:
 rules:
   - pattern: ""
     spawn:
-      - ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
+      - ~/.config/tmux/layouts/hive.sh {{ .Name | shq }} {{ .Path | shq }}
 
 # Kitty with tab
 rules:
@@ -673,7 +679,13 @@ Check your config version and migrate if needed:
 hive doc migrate
 ```
 
-Current version: **0.2.4**
+Current version: **0.2.5**
+
+### Key Changes in 0.2.5
+
+- **Multi-window tree items:** Sessions with multiple agent windows now show each window as a selectable sub-item
+- **TmuxWindow template variable:** `{{ .TmuxWindow }}` available in user commands for window targeting
+- **Breaking:** User commands that open/attach tmux sessions should pass `{{ .TmuxWindow }}` to focus the correct window
 
 ### Key Changes in 0.2.4
 

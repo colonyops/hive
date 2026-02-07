@@ -137,6 +137,9 @@ func (d *Detector) NeedsApproval(content string) bool {
 		"Yes, allow always",
 		"Allow once",
 		"Allow always",
+		// Codex approval prompts
+		"Would you like to run the following command?",
+		"Press enter to confirm or esc to cancel",
 		// Box-drawing permission dialogs
 		"│ Do you want",
 		"│ Would you like",
@@ -179,6 +182,10 @@ func (d *Detector) NeedsApproval(content string) bool {
 		"Execute plan?",
 	}
 	for _, pattern := range confirmPatterns {
+		if d.tool == "codex" && pattern == "Continue?" {
+			// Codex uses "Continue?" as a prompt, not an approval dialog.
+			continue
+		}
 		if strings.Contains(recentContent, pattern) {
 			return true
 		}
@@ -199,6 +206,8 @@ func (d *Detector) IsReady(content string) bool {
 	}
 
 	lines := getLastNonEmptyLines(content, 15)
+	recentContent := strings.Join(lines, "\n")
+	recentLower := strings.ToLower(recentContent)
 
 	// Check for standalone prompt character in last few lines
 	// Claude Code's UI has status bar AFTER the prompt, so check multiple lines
@@ -211,6 +220,22 @@ func (d *Detector) IsReady(content string) bool {
 		// Normalize non-breaking spaces (U+00A0) to regular spaces
 		cleanLine = strings.ReplaceAll(cleanLine, "\u00A0", " ")
 
+		// Codex CLI prompt and welcome text.
+		if d.tool == "codex" {
+			if strings.Contains(cleanLine, "codex>") {
+				return true
+			}
+			if strings.Contains(recentLower, "continue?") {
+				return true
+			}
+			if strings.Contains(recentContent, "How can I help") {
+				return true
+			}
+			if hasLineEndingWith(checkLines, ">") {
+				return true
+			}
+		}
+
 		// Claude Code shows ">" or "❯" when waiting for input
 		if cleanLine == ">" || cleanLine == "❯" || cleanLine == "> " || cleanLine == "❯ " {
 			return true
@@ -222,6 +247,18 @@ func (d *Detector) IsReady(content string) bool {
 		}
 	}
 
+	return false
+}
+
+// hasLineEndingWith checks if any line ends with the given suffix.
+// Uses trimmed lines so trailing spaces/cursor position don't break detection.
+func hasLineEndingWith(lines []string, suffix string) bool {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(stripANSI(lines[i]))
+		if line == suffix || strings.HasSuffix(line+" ", suffix+" ") {
+			return true
+		}
+	}
 	return false
 }
 

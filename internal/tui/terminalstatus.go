@@ -6,19 +6,37 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/rs/zerolog/log"
+
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 )
 
 const terminalStatusTimeout = 2 * time.Second
 
+// WindowStatus holds per-window terminal status for multi-window sessions.
+type WindowStatus struct {
+	WindowIndex string
+	WindowName  string
+	Status      terminal.Status
+	Tool        string
+	PaneContent string
+}
+
 // TerminalStatus holds the terminal integration status for a session.
 type TerminalStatus struct {
 	Status      terminal.Status
 	Tool        string
+	WindowName  string
 	PaneContent string
 	IsLoading   bool
 	Error       error
+	Windows     []WindowStatus // per-window statuses (populated only for multi-window sessions)
+}
+
+// allWindowsDiscoverer is implemented by integrations that can return all windows.
+type allWindowsDiscoverer interface {
+	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error)
 }
 
 // terminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
@@ -80,8 +98,18 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 		Status: terminal.StatusMissing,
 	}
 
+	// Inject session path into metadata for multi-window disambiguation
+	metadata := sess.Metadata
+	if sess.Path != "" {
+		metadata = make(map[string]string, len(sess.Metadata)+1)
+		for k, v := range sess.Metadata {
+			metadata[k] = v
+		}
+		metadata["_session_path"] = sess.Path
+	}
+
 	// Try to discover terminal session
-	info, integration, err := mgr.DiscoverSession(ctx, sess.Slug, sess.Metadata)
+	info, integration, err := mgr.DiscoverSession(ctx, sess.Slug, metadata)
 	if err != nil {
 		status.Error = err
 		return status
@@ -100,7 +128,37 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 
 	status.Status = termStatus
 	status.Tool = info.DetectedTool
+	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
+
+	// Discover all windows if the integration supports it.
+	if disc, ok := integration.(allWindowsDiscoverer); ok {
+		allInfos, discErr := disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
+		if discErr != nil {
+			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
+		} else if len(allInfos) > 1 {
+			windows := make([]WindowStatus, 0, len(allInfos))
+			for _, wi := range allInfos {
+				// Get per-window status and content
+				wStatus, wErr := integration.GetStatus(ctx, wi)
+				if wErr != nil {
+					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.Pane).Msg("per-window status failed, marking missing")
+					wStatus = terminal.StatusMissing
+				}
+				windows = append(windows, WindowStatus{
+					WindowIndex: wi.Pane,
+					WindowName:  wi.WindowName,
+					Status:      wStatus,
+					Tool:        wi.DetectedTool,
+					PaneContent: wi.PaneContent,
+				})
+			}
+			if len(windows) > 1 {
+				status.Windows = windows
+			}
+		}
+	}
+
 	return status
 }
 
