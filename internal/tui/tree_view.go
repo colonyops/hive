@@ -574,8 +574,24 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	}
 	name := nameStyle.Render(item.WindowName)
 
-	// Window index shown in gray
-	indexStr := d.Styles.SessionBranch.Render(fmt.Sprintf(" (window %s)", item.WindowIndex))
+	// Only show a compact index when needed to disambiguate window names.
+	// Also show when the window name is empty.
+	showIndex := item.WindowName == ""
+	if !showIndex && d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
+			for i := range ts.Windows {
+				if ts.Windows[i].WindowName == item.WindowName && ts.Windows[i].WindowIndex != item.WindowIndex {
+					showIndex = true
+					break
+				}
+			}
+		}
+	}
+
+	var indexStr string
+	if showIndex {
+		indexStr = d.Styles.SessionBranch.Render(fmt.Sprintf(" #%s", item.WindowIndex))
+	}
 
 	return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, indexStr)
 }
