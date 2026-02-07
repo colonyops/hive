@@ -150,6 +150,12 @@ func TestDetector_NeedsApproval(t *testing.T) {
 			content: "Previous output\n❯",
 			want:    false,
 		},
+		{
+			name:    "codex continue is not approval",
+			tool:    "codex",
+			content: "Continue?",
+			want:    false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -221,6 +227,18 @@ func TestDetector_IsReady(t *testing.T) {
 			name:    "codex welcome",
 			tool:    "codex",
 			content: "How can I help today?",
+			want:    true,
+		},
+		{
+			name:    "codex continue prompt",
+			tool:    "codex",
+			content: "Continue?",
+			want:    true,
+		},
+		{
+			name:    "codex generic prompt",
+			tool:    "codex",
+			content: "some output\n>",
 			want:    true,
 		},
 	}

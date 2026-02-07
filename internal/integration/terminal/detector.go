@@ -179,6 +179,10 @@ func (d *Detector) NeedsApproval(content string) bool {
 		"Execute plan?",
 	}
 	for _, pattern := range confirmPatterns {
+		if d.tool == "codex" && pattern == "Continue?" {
+			// Codex uses "Continue?" as a prompt, not an approval dialog.
+			continue
+		}
 		if strings.Contains(recentContent, pattern) {
 			return true
 		}
@@ -200,6 +204,7 @@ func (d *Detector) IsReady(content string) bool {
 
 	lines := getLastNonEmptyLines(content, 15)
 	recentContent := strings.Join(lines, "\n")
+	recentLower := strings.ToLower(recentContent)
 
 	// Check for standalone prompt character in last few lines
 	// Claude Code's UI has status bar AFTER the prompt, so check multiple lines
@@ -217,7 +222,13 @@ func (d *Detector) IsReady(content string) bool {
 			if strings.Contains(cleanLine, "codex>") {
 				return true
 			}
+			if strings.Contains(recentLower, "continue?") {
+				return true
+			}
 			if strings.Contains(recentContent, "How can I help") {
+				return true
+			}
+			if hasLineEndingWith(checkLines, ">") {
 				return true
 			}
 		}
@@ -233,6 +244,18 @@ func (d *Detector) IsReady(content string) bool {
 		}
 	}
 
+	return false
+}
+
+// hasLineEndingWith checks if any line ends with the given suffix.
+// Uses trimmed lines so trailing spaces/cursor position don't break detection.
+func hasLineEndingWith(lines []string, suffix string) bool {
+	for i := len(lines) - 1; i >= 0; i-- {
+		line := strings.TrimSpace(stripANSI(lines[i]))
+		if line == suffix || strings.HasSuffix(line+" ", suffix+" ") {
+			return true
+		}
+	}
 	return false
 }
 
