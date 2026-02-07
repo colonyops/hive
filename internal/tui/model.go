@@ -1786,8 +1786,8 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 func (m *Model) rebuildWindowItems() {
 	items := m.list.Items()
 
-	// Build sets of current and expected windows keyed by "sessionID:windowIndex"
-	// to detect actual changes. Window index is unique per session (names can repeat).
+	// Build sets of current and expected windows keyed by "sessionID:windowIndex:windowName"
+	// so window renames trigger a rebuild.
 	current := make(map[string]struct{})
 	expected := make(map[string]struct{})
 	for _, item := range items {
@@ -1796,7 +1796,7 @@ func (m *Model) rebuildWindowItems() {
 			continue
 		}
 		if ti.IsWindowItem {
-			current[ti.ParentSession.ID+":"+ti.WindowIndex] = struct{}{}
+			current[ti.ParentSession.ID+"\x1f"+ti.WindowIndex+"\x1f"+ti.WindowName] = struct{}{}
 			continue
 		}
 		if ti.IsHeader || ti.IsRecycledPlaceholder {
@@ -1804,7 +1804,7 @@ func (m *Model) rebuildWindowItems() {
 		}
 		if ts, ok := m.terminalStatuses.Get(ti.Session.ID); ok && len(ts.Windows) > 1 {
 			for _, w := range ts.Windows {
-				expected[ti.Session.ID+":"+w.WindowIndex] = struct{}{}
+				expected[ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
 			}
 		}
 	}

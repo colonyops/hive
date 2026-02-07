@@ -34,25 +34,28 @@ func saveTreeSelection(item *TreeItem, index int) treeSelection {
 // restore returns the best matching index in items for the saved selection.
 //
 // Priority:
-//  1. Window sub-item by session ID + window name
-//  2. Window sub-item by session ID + window index
+//  1. Window sub-item by session ID + window index (unique within session)
+//  2. Window sub-item by session ID + window name
 //  3. Recycled placeholder by repo prefix
 //  4. Session by ID
 //  5. Original index (clamped to bounds)
 //  6. First non-header item
 func (s treeSelection) restore(items []TreeItem) int {
-	// 1. Window by name
+	// 1. Window by index
+	if s.windowIndex != "" {
+		for i, ti := range items {
+			if ti.IsWindowItem &&
+				ti.ParentSession.ID == s.sessionID && ti.WindowIndex == s.windowIndex {
+				return i
+			}
+		}
+	}
+
+	// 2. Window by name
 	if s.windowName != "" {
 		for i, ti := range items {
 			if ti.IsWindowItem &&
 				ti.ParentSession.ID == s.sessionID && ti.WindowName == s.windowName {
-				return i
-			}
-		}
-		// 2. Window by index
-		for i, ti := range items {
-			if ti.IsWindowItem &&
-				ti.ParentSession.ID == s.sessionID && ti.WindowIndex == s.windowIndex {
 				return i
 			}
 		}

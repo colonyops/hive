@@ -52,6 +52,19 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 			wantMatch: "window aider after reorder",
 		},
 		{
+			name:   "window prefers index when names collide",
+			selIdx: 2, // claude window index 0
+			newItems: []TreeItem{
+				{IsHeader: true, RepoName: "repo1"},
+				{Session: sessA, RepoPrefix: "repo1"},
+				{IsWindowItem: true, ParentSession: sessA, WindowName: "claude", WindowIndex: "1", RepoPrefix: "repo1"},
+				{IsWindowItem: true, ParentSession: sessA, WindowName: "claude", WindowIndex: "0", RepoPrefix: "repo1"},
+				{Session: sessB, RepoPrefix: "repo1"},
+			},
+			wantIdx:   3, // should restore to index 0, not first matching name
+			wantMatch: "window index preferred over name",
+		},
+		{
 			name:   "window falls back to index when name gone",
 			selIdx: 3, // aider window
 			newItems: []TreeItem{
