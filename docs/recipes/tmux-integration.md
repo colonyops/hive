@@ -2,6 +2,27 @@
 
 Manage AI agent sessions in tmux with automated session creation, status monitoring, and convenient keybindings.
 
+## Terminology Note
+
+When using tmux integration, it's important to understand the distinction between:
+
+- **Hive session** - An isolated git clone + terminal environment managed by hive
+- **Tmux session** - A terminal multiplexer session that hosts the hive session
+- **Agent** - The AI tool (Claude, Aider, etc.) running within the tmux session
+
+When you create a hive session with tmux integration enabled, hive spawns a tmux session with the same name. The relationship is:
+
+```
+Hive Session "fix-bug" (ID: abc123)
+  ↓ spawns
+Tmux Session "fix-bug"
+  ↓ contains windows
+  ├─ Window: claude (runs the AI agent)
+  └─ Window: shell (regular shell)
+```
+
+Throughout this guide, "session" refers to the hive session unless explicitly noted as "tmux session".
+
 ## Config
 
 Add these tmux-specific settings to your `~/.config/hive/config.yaml` (not a complete config, just the tmux-related parts):

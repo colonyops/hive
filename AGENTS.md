@@ -13,6 +13,31 @@ Key capabilities:
 
 ## Architecture
 
+### Core Concepts
+
+**Session** - An isolated git environment for an AI agent
+  - Isolated git clone in a dedicated directory
+  - Lifecycle states: active, recycled, corrupted
+  - Unique ID and display name
+  - Metadata for terminal integration
+
+**Agent** - The AI tool instance (Claude, Aider, Codex) running within a session
+  - Detected via terminal output patterns
+  - Status monitoring: Active, Idle, Waiting, Error, Missing
+  - Future: Multiple agents per session
+
+**Terminal Integration** - Real-time status monitoring (tmux)
+  - Maps hive sessions to tmux sessions
+  - Captures terminal output for status detection
+  - Shows live preview of agent work
+
+**Messaging** - Inter-agent communication via pub/sub
+  - Inbox convention: `agent.<session-id>.inbox`
+  - Topics support wildcards for broadcast
+  - Persistent message storage
+
+### Code Structure
+
 ```
 internal/
 ├── commands/       # CLI command handlers (urfave/cli/v3)

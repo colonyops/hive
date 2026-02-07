@@ -34,6 +34,16 @@ const (
 )
 
 // Session represents an isolated git environment for an AI agent.
+//
+// Terminology:
+//   - Session: The hive-managed git clone + terminal environment
+//   - Agent: The AI tool (Claude, Aider, etc.) running within the session
+//   - Tmux session: The terminal multiplexer session (if tmux integration enabled)
+//
+// Relationship: Hive Session → spawns → Tmux Session → runs → Agent
+//
+// Future: Hive will support multiple agents per session, enabling
+// concurrent agents like a primary assistant and a test runner.
 type Session struct {
 	ID        string            `json:"id"`
 	Name      string            `json:"name"`
@@ -47,7 +57,14 @@ type Session struct {
 }
 
 // InboxTopic returns the conventional inbox topic name for this session.
+//
 // Format: agent.<session-id>.inbox
+//
+// The "agent" prefix refers to the AI agent running in the session.
+// When multi-agent support is added, named agents will use:
+// agent.<session-id>.<agent-name>.inbox
+//
+// Example: agent.26kj0c.inbox
 func (s *Session) InboxTopic() string {
 	return "agent." + s.ID + ".inbox"
 }

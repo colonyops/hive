@@ -27,7 +27,9 @@ We also publish binaries as a part of our release cycle.
 
 ## Overview
 
-Hive creates isolated git environments for running multiple AI agents in parallel. Instead of managing worktrees manually, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool.
+Hive manages isolated git sessions for running AI agents in parallel. Instead of manually managing git worktrees or directories, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool (Claude, Aider, Codex).
+
+Each hive session is a complete git clone in a dedicated directory with its own terminal environment. Sessions are tracked through a lifecycle (active → recycled → deleted) and can be reused, reducing clone time and disk usage.
 
 **Key Features:**
 
@@ -37,6 +39,51 @@ Hive creates isolated git environments for running multiple AI agents in paralle
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
 - **Custom Keybindings** — Bind keys to user-defined or system commands
 - **Command Palette** — Vim-style command palette for custom commands (`:` key)
+
+## Terminology
+
+Hive uses specific terminology to describe its components:
+
+### Hive Session
+An isolated git clone in a dedicated directory, running an AI agent in a terminal. Each session is a self-contained environment for working on a specific task or feature.
+
+**Key characteristics**:
+- Unique 6-character ID (e.g., `26kj0c`)
+- Display name (e.g., `fix-auth-bug`)
+- Isolated git clone at a specific path
+- Lifecycle: `active` → `recycled` → `deleted`
+
+**Not to be confused with**: Tmux session (see relationship below)
+
+### Agent
+An AI tool instance (Claude, Aider, Codex) running within a session. The agent is the actual AI assistant that processes your requests.
+
+**Future**: Hive will support multiple agents per session (e.g., primary agent + test runner).
+
+### Tmux Session
+A terminal multiplexer session that hosts a hive session. When you create a hive session with tmux integration enabled, hive spawns a tmux session with the same name as the session slug.
+
+**Relationship**:
+```
+Hive Session: fix-auth-bug (ID: 26kj0c)
+   ↓ spawns
+Tmux Session: fix-auth-bug
+   ├─ Window: claude (runs Claude AI agent)
+   └─ Window: shell (regular shell)
+```
+
+### Repository
+A git remote URL (e.g., `github.com/colonyops/hive`). Multiple sessions can be created from the same repository.
+
+### Inbox
+A message topic for inter-agent communication. Each session has a conventional inbox topic at `agent.<session-id>.inbox`.
+
+**Example**: Session `26kj0c` has inbox `agent.26kj0c.inbox`
+
+### Context Directory
+A shared directory symlinked as `.hive/` in each session's working directory. All sessions from the same repository share this context directory, making it useful for storing plans, research notes, and other artifacts that should be accessible across sessions.
+
+**Location**: `~/.local/share/hive/context/{owner}/{repo}/`
 
 ## Quick Start
 
@@ -102,7 +149,18 @@ hive msg sub -t agent.x7k2 --last 1
 
 ### Inbox Convention
 
-A common pattern is to give each agent an inbox topic using the format `agent.{session-id}.inbox`. This isn't built into hive automatically. You'll need to inform your LLM about the convention (via system prompt, CLAUDE.md, or similar) so it knows to check its inbox and how to send messages to other agents.
+Each hive session has a conventional inbox topic using the format `agent.{session-id}.inbox`. This convention makes it easy for agents to find each other's inboxes and send direct messages.
+
+**Example**:
+- Session ID: `26kj0c`
+- Inbox topic: `agent.26kj0c.inbox`
+
+You can find your current session ID and inbox with:
+```bash
+hive session info
+```
+
+**Note**: The `agent.` prefix refers to the AI agent running in the session, not the session itself. In the future when hive supports multiple agents per session, inbox addressing will use `agent.<session-id>.<agent-name>.inbox`.
 
 ## Configuration
 
@@ -385,6 +443,46 @@ This project was heavily inspired by [agent-deck](https://github.com/asheshgopla
 
 - Git (available in PATH or configured via `git_path`)
 - Terminal emulator with CLI spawning support (e.g., wezterm, kitty, alacritty, tmux)
+
+---
+
+## FAQ
+
+### What's the difference between a hive session and a tmux session?
+
+- **Hive session**: A git clone + terminal environment managed by hive
+- **Tmux session**: A terminal multiplexer session that hosts the hive session
+
+When you create a hive session with tmux integration, hive spawns a tmux session with the same name. The relationship is:
+
+```
+Hive Session "fix-bug" (ID: abc123)
+  ↓ creates
+Tmux Session "fix-bug"
+  ↓ contains
+Agent (Claude) running in tmux window
+```
+
+### Can I run multiple agents in one session?
+
+Not yet, but it's planned. Currently each session runs one agent. Future versions will support multiple agents per session (e.g., Claude + test runner).
+
+When multi-agent support is added, agents will have individual inboxes:
+- `agent.<session-id>.claude.inbox`
+- `agent.<session-id>.test-runner.inbox`
+
+### Why is the inbox format `agent.<id>.inbox` not `session.<id>.inbox`?
+
+The inbox belongs to the agent (AI tool), not the session (container). When multi-agent support is added, you'll be able to send messages to specific agents within a session using `agent.<session-id>.<agent-name>.inbox`.
+
+### What's a "recycled" session?
+
+When you're done with a session, you can recycle it instead of deleting it. Recycling:
+1. Resets the git repository to a clean state
+2. Renames the directory to a recycled pattern
+3. Makes it available for reuse
+
+When you create a new session, hive will reuse a recycled session if available, avoiding a fresh clone and saving time.
 
 ---
 

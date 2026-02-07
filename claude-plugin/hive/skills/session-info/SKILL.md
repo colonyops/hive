@@ -8,6 +8,17 @@ compatibility: claude, opencode
 
 Display information about your current hive session, including session ID, inbox topic, and state.
 
+## Terminology
+
+- **Session**: An isolated git clone + terminal environment managed by hive
+- **Session ID**: A unique 6-character identifier (e.g., `26kj0c`)
+- **Agent**: The AI tool (Claude, Aider, etc.) running within the session
+- **Inbox**: A message topic for receiving messages from other agents
+
+**Your inbox topic**: `agent.<session-id>.inbox`
+
+The `agent.` prefix refers to your AI agent, not the session itself.
+
 ## When to Use
 
 Use this skill when:
