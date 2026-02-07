@@ -184,7 +184,7 @@ type TmuxPluginConfig struct {
 // GitHubPluginConfig holds GitHub plugin configuration.
 type GitHubPluginConfig struct {
 	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
-	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 30s)
+	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 8m)
 }
 
 // BeadsPluginConfig holds Beads plugin configuration.
@@ -412,7 +412,7 @@ func (c *Config) applyDefaults() {
 		c.Plugins.ShellWorkers = 5
 	}
 	if c.Plugins.GitHub.ResultsCache == 0 {
-		c.Plugins.GitHub.ResultsCache = 30 * time.Second
+		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
 	if c.Plugins.Beads.ResultsCache == 0 {
 		c.Plugins.Beads.ResultsCache = 30 * time.Second

@@ -436,6 +436,10 @@ plugins:
 | `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
 | `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
 | `plugins.tmux.enabled`                | `*bool`                 | `nil` (auto-detect)            | Enable/disable tmux plugin               |
+| `plugins.github.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable GitHub plugin             |
+| `plugins.github.results_cache`        | `duration`              | `8m`                           | GitHub status polling interval           |
+| `plugins.beads.enabled`               | `*bool`                 | `nil` (auto-detect)            | Enable/disable Beads plugin              |
+| `plugins.beads.results_cache`         | `duration`              | `30s`                          | Beads status polling interval            |
 | `plugins.claude.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable Claude plugin             |
 | `plugins.claude.cache_ttl`            | `duration`              | `30s`                          | Status cache duration                    |
 | `plugins.claude.yellow_threshold`     | `int`                   | `60`                           | Yellow warning threshold (%)             |
