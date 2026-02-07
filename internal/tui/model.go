@@ -1004,11 +1004,6 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		{Key: "g", Desc: "refresh git status"},
 	}
 
-	// Add new session if repos discovered
-	if len(m.discoveredRepos) > 0 {
-		navEntries = append(navEntries, components.HelpEntry{Key: "n", Desc: "new session"})
-	}
-
 	// Add preview toggle if terminal integration enabled
 	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
 		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
@@ -1337,8 +1332,8 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, nil
 	}
 
-	// Handle 'n' for new session (only if repos are discovered)
-	if keyStr == "n" && len(m.discoveredRepos) > 0 {
+	// Handle new session action (only if repos are discovered)
+	if m.handler.IsAction(keyStr, config.ActionNewSession) && len(m.discoveredRepos) > 0 {
 		// Determine preselected remote
 		preselectedRemote := m.localRemote
 		if selected := m.selectedSession(); selected != nil {
@@ -1695,7 +1690,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession:
 		return false
 	}
 	return false

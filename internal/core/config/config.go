@@ -35,6 +35,7 @@ func ParseExitCondition(s string) bool {
 const (
 	ActionRecycle        = "recycle"
 	ActionDelete         = "delete"
+	ActionNewSession     = "new-session"
 	ActionFilterAll      = "filter-all"
 	ActionFilterActive   = "filter-active"
 	ActionFilterApproval = "filter-approval"
@@ -53,6 +54,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Action:  ActionDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
+	},
+	"NewSession": {
+		Action: ActionNewSession,
+		Help:   "new session",
+		Silent: true,
 	},
 	"DocReview": {
 		Action: ActionDocReview,
@@ -85,6 +91,7 @@ var defaultUserCommands = map[string]UserCommand{
 var defaultKeybindings = map[string]Keybinding{
 	"r":      {Cmd: "Recycle"},
 	"d":      {Cmd: "Delete"},
+	"n":      {Cmd: "NewSession"},
 	"enter":  {Cmd: "TmuxOpen"},
 	"ctrl+d": {Cmd: "TmuxKill"},
 	"A":      {Cmd: "AgentSend"},
@@ -617,7 +624,7 @@ func (c *Config) BinDir() string {
 
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview:
+	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview:
 		return true
 	default:
 		return false

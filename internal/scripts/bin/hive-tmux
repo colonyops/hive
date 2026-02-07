@@ -26,13 +26,6 @@ SESSION="${1:-hive}"
 WORKDIR="${2:-$PWD}"
 PROMPT="${3:-}"
 
-# Build claude command
-if [ -n "$PROMPT" ]; then
-    CLAUDE_CMD="claude '$PROMPT'"
-else
-    CLAUDE_CMD="claude"
-fi
-
 if tmux has-session -t "$SESSION" 2>/dev/null; then
     # Session exists
     if [ "$BACKGROUND" = false ]; then
@@ -40,7 +33,12 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
     fi
 else
     # Create new session running claude directly
-    tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" "$CLAUDE_CMD"
+    # Pass prompt as separate arg so tmux execv works correctly
+    if [ -n "$PROMPT" ]; then
+        tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" -- claude "$PROMPT"
+    else
+        tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" -- claude
+    fi
     tmux new-window -t "$SESSION" -n shell -c "$WORKDIR"
     tmux select-window -t "$SESSION:claude"
 
