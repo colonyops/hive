@@ -199,6 +199,7 @@ func (d *Detector) IsReady(content string) bool {
 	}
 
 	lines := getLastNonEmptyLines(content, 15)
+	recentContent := strings.Join(lines, "\n")
 
 	// Check for standalone prompt character in last few lines
 	// Claude Code's UI has status bar AFTER the prompt, so check multiple lines
@@ -210,6 +211,16 @@ func (d *Detector) IsReady(content string) bool {
 		cleanLine := strings.TrimSpace(stripANSI(line))
 		// Normalize non-breaking spaces (U+00A0) to regular spaces
 		cleanLine = strings.ReplaceAll(cleanLine, "\u00A0", " ")
+
+		// Codex CLI prompt and welcome text.
+		if d.tool == "codex" {
+			if strings.Contains(cleanLine, "codex>") {
+				return true
+			}
+			if strings.Contains(recentContent, "How can I help") {
+				return true
+			}
+		}
 
 		// Claude Code shows ">" or "❯" when waiting for input
 		if cleanLine == ">" || cleanLine == "❯" || cleanLine == "> " || cleanLine == "❯ " {

@@ -42,6 +42,7 @@ type UserCommandTemplateData struct {
 	Remote     string   // Git remote URL (origin)
 	ID         string   // Unique session identifier
 	Name       string   // Session name (directory basename)
+	Tool       string   // Detected tool name (claude, codex, gemini, etc.)
 	TmuxWindow string   // Tmux window name (when multi-window integration is active)
 	Args       []string // Command arguments passed from the command palette
 }
@@ -197,6 +198,7 @@ func (c *Config) validateUserCommandTemplates() error {
 		if cmd.Sh != "" {
 			// Provide dummy args for validation to support templates that access Args
 			testData := UserCommandTemplateData{
+				Tool: "claude",
 				Args: []string{"arg1", "arg2", "arg3"},
 			}
 			if err := validateTemplate(cmd.Sh, testData); err != nil {

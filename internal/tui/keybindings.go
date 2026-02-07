@@ -56,6 +56,7 @@ type KeybindingResolver struct {
 	commands               map[string]config.UserCommand
 	activeView             ViewType                      // current active view for scope checking
 	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
+	toolLookup             func(sessionID string) string // optional: returns detected tool name for a session
 	selectedWindowOverride string                        // if set, overrides tmuxWindowLookup for the next resolve
 }
 
@@ -80,6 +81,11 @@ func (h *KeybindingResolver) SetTmuxWindowLookup(fn func(sessionID string) strin
 	h.tmuxWindowLookup = fn
 }
 
+// SetToolLookup sets a function that resolves tool names for sessions.
+func (h *KeybindingResolver) SetToolLookup(fn func(sessionID string) string) {
+	h.toolLookup = fn
+}
+
 // SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
 // Pass empty string to clear the override and fall back to the lookup function.
 func (h *KeybindingResolver) SetSelectedWindow(windowName string) {
@@ -96,6 +102,14 @@ func (h *KeybindingResolver) tmuxWindowForSession(sessionID string) string {
 		return ""
 	}
 	return h.tmuxWindowLookup(sessionID)
+}
+
+// toolForSession returns the detected tool name for a session, or empty.
+func (h *KeybindingResolver) toolForSession(sessionID string) string {
+	if h.toolLookup == nil {
+		return ""
+	}
+	return h.toolLookup(sessionID)
 }
 
 // isCommandInScope checks if a command is active in the current view.
@@ -195,12 +209,14 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			Remote     string
 			ID         string
 			Name       string
+			Tool       string
 			TmuxWindow string
 		}{
 			Path:       sess.Path,
 			Remote:     sess.Remote,
 			ID:         sess.ID,
 			Name:       sess.Name,
+			Tool:       h.toolForSession(sess.ID),
 			TmuxWindow: h.tmuxWindowForSession(sess.ID),
 		}
 
@@ -342,6 +358,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		Remote     string
 		ID         string
 		Name       string
+		Tool       string
 		TmuxWindow string
 		Args       []string
 	}{
@@ -349,6 +366,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		Remote:     sess.Remote,
 		ID:         sess.ID,
 		Name:       sess.Name,
+		Tool:       h.toolForSession(sess.ID),
 		TmuxWindow: h.tmuxWindowForSession(sess.ID),
 		Args:       args,
 	}

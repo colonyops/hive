@@ -211,6 +211,18 @@ func TestDetector_IsReady(t *testing.T) {
 			content: "Here is the code:\nfunction hello() { }",
 			want:    false,
 		},
+		{
+			name:    "codex prompt",
+			tool:    "codex",
+			content: "codex>",
+			want:    true,
+		},
+		{
+			name:    "codex welcome",
+			tool:    "codex",
+			content: "How can I help today?",
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {
@@ -258,6 +270,24 @@ func TestDetector_DetectStatus(t *testing.T) {
 			name:    "ready - regular output defaults to ready",
 			tool:    "claude",
 			content: "Here is the result:\nfunction foo() {}",
+			want:    StatusReady,
+		},
+		{
+			name:    "codex active",
+			tool:    "codex",
+			content: "Working... (ctrl+c to interrupt)",
+			want:    StatusActive,
+		},
+		{
+			name:    "codex approval",
+			tool:    "codex",
+			content: "Do you want to continue? (Y/n)",
+			want:    StatusApproval,
+		},
+		{
+			name:    "codex ready",
+			tool:    "codex",
+			content: "codex>",
 			want:    StatusReady,
 		},
 	}

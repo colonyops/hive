@@ -280,6 +280,12 @@ func New(service *hive.Service, cfg *config.Config, opts Options) Model {
 		}
 		return ""
 	})
+	handler.SetToolLookup(func(sessionID string) string {
+		if status, ok := terminalStatuses.Get(sessionID); ok {
+			return status.Tool
+		}
+		return ""
+	})
 	cmdService := command.NewService(service, service)
 
 	// Add minimal keybindings to list help - just navigation and help trigger
