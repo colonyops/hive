@@ -39,8 +39,8 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 			wantMatch: "window aider",
 		},
 		{
-			name:      "window by name after reorder",
-			selIdx:    3, // aider window at index 3
+			name:   "window by name after reorder",
+			selIdx: 3, // aider window at index 3
 			newItems: []TreeItem{
 				{IsHeader: true, RepoName: "repo1"},
 				{Session: sessA, RepoPrefix: "repo1"},
@@ -52,8 +52,8 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 			wantMatch: "window aider after reorder",
 		},
 		{
-			name:      "window falls back to index when name gone",
-			selIdx:    3, // aider window
+			name:   "window falls back to index when name gone",
+			selIdx: 3, // aider window
 			newItems: []TreeItem{
 				{IsHeader: true, RepoName: "repo1"},
 				{Session: sessA, RepoPrefix: "repo1"},
@@ -65,8 +65,8 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 			wantMatch: "window index fallback",
 		},
 		{
-			name:      "window falls back to parent session when window gone",
-			selIdx:    2, // claude window
+			name:   "window falls back to parent session when window gone",
+			selIdx: 2, // claude window
 			newItems: []TreeItem{
 				{IsHeader: true, RepoName: "repo1"},
 				{Session: sessA, RepoPrefix: "repo1"},
