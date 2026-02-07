@@ -318,15 +318,14 @@ The plugin displays session names in color based on context usage:
 
 **Spawn Configuration:**
 
-For analytics to work, sessions need the Claude session ID stored in metadata. Add this to your spawn command:
-
 ```yaml
 rules:
   - pattern: ""
     spawn:
       - 'tmux new-window -c "{{ .Path }}" "exec claude"'
-      - 'hive session meta --set claude_session_id="$(tmux display-message -p "#S")"'
 ```
+
+The Claude plugin automatically detects active session IDs by scanning `~/.claude/projects/{project-dir}/` for the most recently modified UUID session file (within 5 minutes). No manual metadata configuration needed.
 
 ### Configuration Options
 

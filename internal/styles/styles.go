@@ -1,8 +1,8 @@
-// Package styles provides shared lipgloss styles for CLI and TUI components.
+// Package styles provides shared lipgloss v2 styles for CLI and TUI components.
 package styles
 
 import (
-	"github.com/charmbracelet/lipgloss"
+	lipgloss "charm.land/lipgloss/v2"
 )
 
 // Tokyo Night color palette.

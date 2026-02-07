@@ -469,8 +469,8 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		if claudeStore, ok := d.PluginStatuses["claude"]; ok {
 			if status, ok := claudeStore.Get(item.Session.ID); ok {
 				// Claude plugin returns style (color) but no label/icon
-				// Apply the color to the name style
-				nameStyle = status.Style
+				// Use Inherit to merge the color while preserving selection state
+				nameStyle = nameStyle.Inherit(status.Style)
 			}
 		}
 	}
