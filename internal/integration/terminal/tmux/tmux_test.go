@@ -228,7 +228,7 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 }
 
 func TestMatchesPreferredWindow(t *testing.T) {
-	integ := New([]string{"claude", "aider"})
+	integ := New([]string{"claude", "aider", "codex"})
 
 	tests := []struct {
 		name string
@@ -237,6 +237,8 @@ func TestMatchesPreferredWindow(t *testing.T) {
 		{"claude", true},
 		{"Claude-Work", true},
 		{"aider", true},
+		{"codex", true},
+		{"Codex-Agent", true},
 		{"bash", false},
 		{"vim", false},
 	}
