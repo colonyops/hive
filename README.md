@@ -239,7 +239,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
 | `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                               |
 | `rules[].recycle`      | `.DefaultBranch`                                            |
-| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Args`                 |
+| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.TmuxWindow`, `.Args`  |
 
 ### User Commands & Command Palette
 

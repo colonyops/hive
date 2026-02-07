@@ -177,6 +177,33 @@ type Migration struct {
 
 var migrations = []Migration{
 	{
+		Version:     "0.2.5",
+		Title:       "Multi-window tmux sessions with TmuxWindow template variable",
+		Description: "When a tmux session has multiple agent windows (matched by preview_window_matcher), each window now appears as its own selectable tree item with independent status and preview. The new {{ .TmuxWindow }} template variable is available in user commands and resolves to the selected window name. If you use a custom script (like hive.sh) with an enter keybinding, you must update the template to pass the window name so that pressing enter on a window sub-item focuses the correct window.",
+		Migration: `1. Add {{ .TmuxWindow }} to your tmux-open (or attach/enter) user command
+2. Update your spawn script to accept a window target flag (e.g., -w)
+3. Handle the window argument in your script to switch to the correct window`,
+		Before: `# config.yaml (old)
+usercommands:
+  tmux-open:
+    sh: ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
+    help: "open/create tmux"
+    exit: $HIVE_POPUP
+    silent: true`,
+		After: `# config.yaml (new)
+usercommands:
+  tmux-open:
+    sh: ~/.config/tmux/layouts/hive.sh -w {{ .TmuxWindow | shq }} {{ .Name | shq }} {{ .Path | shq }}
+    help: "open/create tmux"
+    exit: $HIVE_POPUP
+    silent: true
+
+# The -w flag tells your script which window to focus.
+# When a window sub-item is selected, .TmuxWindow = that window's name.
+# When a session row is selected, .TmuxWindow = best disambiguated window.
+# When empty (single window), the -w "" is ignored by the script.`,
+	},
+	{
 		Version:     "0.2.4",
 		Title:       "Tmux config moved to top-level",
 		Description: "Terminal integration config has been moved from integrations.terminal to a top-level tmux key. This simplifies the config structure since tmux is now a core feature rather than an optional integration.",

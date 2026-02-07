@@ -12,6 +12,15 @@ import (
 
 const terminalStatusTimeout = 2 * time.Second
 
+// WindowStatus holds per-window terminal status for multi-window sessions.
+type WindowStatus struct {
+	WindowIndex string
+	WindowName  string
+	Status      terminal.Status
+	Tool        string
+	PaneContent string
+}
+
 // TerminalStatus holds the terminal integration status for a session.
 type TerminalStatus struct {
 	Status      terminal.Status
@@ -20,6 +29,12 @@ type TerminalStatus struct {
 	PaneContent string
 	IsLoading   bool
 	Error       error
+	Windows     []WindowStatus // per-window statuses (populated only for multi-window sessions)
+}
+
+// allWindowsDiscoverer is implemented by integrations that can return all windows.
+type allWindowsDiscoverer interface {
+	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error)
 }
 
 // terminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
@@ -113,6 +128,32 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	status.Tool = info.DetectedTool
 	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
+
+	// Discover all windows if the integration supports it.
+	if disc, ok := integration.(allWindowsDiscoverer); ok {
+		allInfos, err := disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
+		if err == nil && len(allInfos) > 1 {
+			windows := make([]WindowStatus, 0, len(allInfos))
+			for _, wi := range allInfos {
+				// Get per-window status and content
+				wStatus, wErr := integration.GetStatus(ctx, wi)
+				if wErr != nil {
+					continue
+				}
+				windows = append(windows, WindowStatus{
+					WindowIndex: wi.Pane,
+					WindowName:  wi.WindowName,
+					Status:      wStatus,
+					Tool:        wi.DetectedTool,
+					PaneContent: wi.PaneContent,
+				})
+			}
+			if len(windows) > 1 {
+				status.Windows = windows
+			}
+		}
+	}
+
 	return status
 }
 

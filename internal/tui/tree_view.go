@@ -119,6 +119,13 @@ type TreeItem struct {
 	IsRecycledPlaceholder bool
 	RecycledCount         int
 	RecycledSessions      []session.Session // Actual recycled sessions for deletion support
+
+	// Window sub-item fields (only used when IsWindowItem is true)
+	IsWindowItem  bool
+	WindowIndex   string
+	WindowName    string
+	ParentSession session.Session // Session this window belongs to
+	IsLastWindow  bool            // For └─ vs ├─ rendering within the window group
 }
 
 // FilterValue returns the value used for filtering.
@@ -131,6 +138,9 @@ func (i TreeItem) FilterValue() string {
 	}
 	if i.IsRecycledPlaceholder {
 		return i.RepoPrefix + " recycled"
+	}
+	if i.IsWindowItem {
+		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.WindowName
 	}
 	return i.RepoPrefix + " " + i.Session.Name
 }
@@ -378,6 +388,8 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		line = d.renderHeader(treeItem, isSelected, m, index)
 	case treeItem.IsRecycledPlaceholder:
 		line = d.renderRecycledPlaceholder(treeItem, isSelected)
+	case treeItem.IsWindowItem:
+		line = d.renderWindow(treeItem, isSelected)
 	default:
 		line = d.renderSession(treeItem, isSelected, m, index)
 	}
@@ -495,12 +507,6 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		}
 	}
 
-	// Window name (from terminal status, shown when multi-window)
-	windowLabel := ""
-	if termStatus != nil && termStatus.WindowName != "" {
-		windowLabel = d.Styles.SessionBranch.Render(" [" + termStatus.WindowName + "]")
-	}
-
 	// Short ID (always show)
 	shortID := item.Session.ID
 	if len(shortID) > 4 {
@@ -508,16 +514,70 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	}
 	id := d.Styles.SessionID.Render(" #" + shortID)
 
-	// In preview mode, show minimal info (status + name + window + ID only)
+	// In preview mode, show minimal info (status + name + ID only)
 	if d.PreviewMode {
-		return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, windowLabel, id)
+		return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, id)
 	}
 
-	// Full mode: show ID, window name, git status, and plugin statuses
+	// Full mode: show ID, git status, and plugin statuses
 	gitInfo := d.renderGitStatus(item.Session.Path)
 	pluginInfo := d.renderPluginStatuses(item.Session.ID)
 
-	return fmt.Sprintf("%s %s %s%s%s%s%s%s", prefixStyled, statusStr, name, namePadding, windowLabel, id, gitInfo, pluginInfo)
+	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
+}
+
+// renderWindow renders a window sub-item nested under a session.
+func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
+	// Deeper indent: "│     ├─" or "│     └─" depending on position
+	var connector string
+	if item.IsLastWindow {
+		connector = treeLast
+	} else {
+		connector = treeBranch
+	}
+
+	// The parent session's tree line continues vertically
+	var parentLine string
+	if item.IsLastInRepo {
+		parentLine = "      " // parent was └─, no continuing line
+	} else {
+		parentLine = "│     " // parent was ├─, line continues
+	}
+	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+
+	// Get per-window terminal status from the delegate's store
+	var windowStatus *WindowStatus
+	if d.TerminalStatuses != nil {
+		if ts, ok := d.TerminalStatuses.Get(item.ParentSession.ID); ok {
+			for i := range ts.Windows {
+				if ts.Windows[i].WindowIndex == item.WindowIndex {
+					windowStatus = &ts.Windows[i]
+					break
+				}
+			}
+		}
+	}
+
+	// Status indicator
+	var statusStr string
+	if windowStatus != nil {
+		termStatus := &TerminalStatus{Status: windowStatus.Status}
+		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	} else {
+		statusStr = d.Styles.StatusUnknown.Render(statusUnknown)
+	}
+
+	// Window name
+	nameStyle := d.Styles.SessionName
+	if isSelected {
+		nameStyle = d.Styles.Selected
+	}
+	name := nameStyle.Render(item.WindowName)
+
+	// Window index shown in gray
+	indexStr := d.Styles.SessionBranch.Render(fmt.Sprintf(" (window %s)", item.WindowIndex))
+
+	return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, indexStr)
 }
 
 // renderGitStatus returns the formatted git status for a session path.

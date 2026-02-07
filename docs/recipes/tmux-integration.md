@@ -38,14 +38,14 @@ tmux:
 # Use hive.sh script for session creation
 commands:
   spawn:
-    - ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
+    - ~/.config/tmux/layouts/hive.sh {{ .Name | shq }} {{ .Path | shq }}
   batch_spawn:
-    - ~/.config/tmux/layouts/hive.sh -b "{{ .Name }}" "{{ .Path }}" "{{ .Prompt }}"
+    - ~/.config/tmux/layouts/hive.sh -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}
 
 # User commands for tmux operations
 usercommands:
   tmux-open:
-    sh: ~/.config/tmux/layouts/hive.sh "{{ .Name }}" "{{ .Path }}"
+    sh: ~/.config/tmux/layouts/hive.sh -w {{ .TmuxWindow | shq }} {{ .Name | shq }} {{ .Path | shq }}
     help: "open/create tmux"
     exit: $HIVE_POPUP
     silent: true
@@ -77,20 +77,26 @@ keybindings:
 
 ### hive.sh
 
-Creates a tmux session with two windows: `claude` (running the AI) and `shell`. Supports background mode for batch session creation.
+Creates a tmux session with two windows: `claude` (running the AI) and `shell`. Supports background mode for batch creation and `-w` for targeting a specific window.
 
 Save to `~/.config/tmux/layouts/hive.sh`:
 
 ```bash
 #!/bin/bash
-# Usage: hive.sh [-b] [session-name] [working-dir] [prompt]
+# Usage: hive.sh [-b] [-w window] [session-name] [working-dir] [prompt]
 #   -b: background mode (create session without attaching)
+#   -w: target window in an existing session
 
 BACKGROUND=false
-if [ "$1" = "-b" ]; then
-    BACKGROUND=true
-    shift
-fi
+TARGET_WINDOW=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -b) BACKGROUND=true; shift ;;
+        -w) TARGET_WINDOW="$2"; shift 2 ;;
+        *)  break ;;
+    esac
+done
 
 SESSION="${1:-hive}"
 WORKDIR="${2:-$PWD}"
@@ -100,6 +106,17 @@ if [ -n "$PROMPT" ]; then
     CLAUDE_CMD="claude '$PROMPT'"
 else
     CLAUDE_CMD="claude"
+fi
+
+# Target a specific window in an existing session
+if [ -n "$TARGET_WINDOW" ] && tmux has-session -t "$SESSION" 2>/dev/null; then
+    [ "$BACKGROUND" = true ] && exit 0
+    if [ -n "$TMUX" ]; then
+        tmux switch-client -t "$SESSION:$TARGET_WINDOW"
+    else
+        tmux attach-session -t "$SESSION" \; select-window -t "$TARGET_WINDOW"
+    fi
+    exit 0
 fi
 
 if tmux has-session -t "$SESSION" 2>/dev/null; then
@@ -182,12 +199,27 @@ hv  # Opens hive in a persistent tmux session
 
 ### In the TUI
 
-- **Enter** - Opens or switches to the selected session's tmux session
+- **Enter** - Opens or switches to the selected session (or specific window)
 - **p** - Opens the session in a tmux popup
 - **Ctrl+d** - Kills the tmux session
 - **t** - Sends `/tidy` command to the session
 - **v** - Toggle preview sidebar
 - **:** - Open command palette (filter by status, etc.)
+
+### Multi-Window Sessions
+
+When a tmux session has multiple agent windows (matched by `preview_window_matcher` patterns), each window appears as a selectable sub-item:
+
+```
+repo-name
+├─ [●] my-session #abcd
+│     ├─ claude (window 0)
+│     └─ aider (window 1)
+├─ [?] other-session #efgh
+└─ Recycled (2)
+```
+
+Each window has its own status indicator and preview content. Pressing **Enter** on a window sub-item focuses that specific window via the `{{ .TmuxWindow }}` template variable.
 
 ### Popup Mode
 
@@ -206,10 +238,11 @@ claude-send "session-name:claude" "explain this code"
 ## How It Works
 
 1. **Status Monitoring**: Hive polls tmux windows every 500ms to detect agent status (working, waiting, needs approval)
-2. **Window Targeting**: The `preview_window_matcher` patterns let Hive capture the right window (e.g., "claude") even if another window is active
-3. **Session Management**: The hive.sh script creates/attaches tmux sessions with consistent layouts
-4. **Keybindings**: Custom keybindings provide quick access without leaving the TUI
-5. **Popup Integration**: Run hive as an overlay without dedicating a full window
+2. **Multi-Window Discovery**: The `preview_window_matcher` patterns identify agent windows. When multiple windows match, each appears as a selectable tree item with its own status and preview
+3. **Window Targeting**: The `{{ .TmuxWindow }}` template variable resolves to the selected window name, enabling keybindings to focus specific windows
+4. **Session Management**: The hive.sh script creates/attaches tmux sessions with consistent layouts
+5. **Keybindings**: Custom keybindings provide quick access without leaving the TUI
+6. **Popup Integration**: Run hive as an overlay without dedicating a full window
 
 ## Filtering by Status
 

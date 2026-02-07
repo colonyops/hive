@@ -298,20 +298,17 @@ func (t *Integration) disambiguateWindow(sc *sessionCache, sessionPath, slug str
 }
 
 // sessionInfoFromWindow builds a SessionInfo from a matched agentWindow.
-// WindowName is only set when the tmux session has multiple tracked windows,
-// to avoid visual noise in the common single-window case.
-func (t *Integration) sessionInfoFromWindow(sessionName string, sc *sessionCache, w *agentWindow) *terminal.SessionInfo {
+// WindowName is always set so that template variables (e.g., .TmuxWindow) are
+// populated regardless of whether the session has one or many windows.
+func (t *Integration) sessionInfoFromWindow(sessionName string, _ *sessionCache, w *agentWindow) *terminal.SessionInfo {
 	if w == nil {
 		return &terminal.SessionInfo{Name: sessionName}
 	}
-	info := &terminal.SessionInfo{
-		Name: sessionName,
-		Pane: w.windowIndex,
+	return &terminal.SessionInfo{
+		Name:       sessionName,
+		Pane:       w.windowIndex,
+		WindowName: w.windowName,
 	}
-	if len(sc.agentWindows) > 1 {
-		info.WindowName = w.windowName
-	}
-	return info
 }
 
 // GetStatus returns the current status of a session.
@@ -427,6 +424,58 @@ func (t *Integration) capturePane(_ context.Context, sessionName, pane string) (
 	}
 
 	return string(output), nil
+}
+
+// DiscoverAllWindows returns a SessionInfo for every tracked window in the tmux session
+// matching the given slug and metadata. For single-window sessions it returns a single entry.
+// This is used by the TUI to render each agent window as its own selectable tree item.
+func (t *Integration) DiscoverAllWindows(_ context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.cache == nil || time.Since(t.cacheTime) > 2*time.Second {
+		return nil, nil
+	}
+
+	// Find the session cache using the same lookup logic as DiscoverSession.
+	var sessionName string
+	var sc *sessionCache
+
+	if name := metadata[session.MetaTmuxSession]; name != "" {
+		if c, exists := t.cache[name]; exists {
+			sessionName = name
+			sc = c
+		}
+	}
+	if sc == nil {
+		if c, exists := t.cache[slug]; exists {
+			sessionName = slug
+			sc = c
+		}
+	}
+	if sc == nil {
+		for name, c := range t.cache {
+			if strings.HasPrefix(name, slug+"_") || strings.HasPrefix(name, slug+"-") {
+				sessionName = name
+				sc = c
+				break
+			}
+		}
+	}
+
+	if sc == nil || len(sc.agentWindows) == 0 {
+		return nil, nil
+	}
+
+	infos := make([]*terminal.SessionInfo, 0, len(sc.agentWindows))
+	for _, w := range sc.agentWindows {
+		infos = append(infos, &terminal.SessionInfo{
+			Name:       sessionName,
+			Pane:       w.windowIndex,
+			WindowName: w.windowName,
+		})
+	}
+	return infos, nil
 }
 
 // Ensure Integration implements terminal.Integration.

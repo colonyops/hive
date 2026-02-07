@@ -52,10 +52,11 @@ func (a Action) NeedsConfirm() bool {
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
 type KeybindingResolver struct {
-	keybindings      map[string]config.Keybinding
-	commands         map[string]config.UserCommand
-	activeView       ViewType                      // current active view for scope checking
-	tmuxWindowLookup func(sessionID string) string // optional: returns tmux window name for a session
+	keybindings            map[string]config.Keybinding
+	commands               map[string]config.UserCommand
+	activeView             ViewType                      // current active view for scope checking
+	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
+	selectedWindowOverride string                        // if set, overrides tmuxWindowLookup for the next resolve
 }
 
 // NewKeybindingResolver creates a new resolver with the given config.
@@ -79,8 +80,18 @@ func (h *KeybindingResolver) SetTmuxWindowLookup(fn func(sessionID string) strin
 	h.tmuxWindowLookup = fn
 }
 
+// SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
+// Pass empty string to clear the override and fall back to the lookup function.
+func (h *KeybindingResolver) SetSelectedWindow(windowName string) {
+	h.selectedWindowOverride = windowName
+}
+
 // tmuxWindowForSession returns the tmux window name for a session, or empty.
+// If selectedWindowOverride is set, it takes precedence over the lookup function.
 func (h *KeybindingResolver) tmuxWindowForSession(sessionID string) string {
+	if h.selectedWindowOverride != "" {
+		return h.selectedWindowOverride
+	}
 	if h.tmuxWindowLookup == nil {
 		return ""
 	}

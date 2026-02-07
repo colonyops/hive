@@ -615,6 +615,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case terminalStatusBatchCompleteMsg:
 		if m.terminalStatuses != nil {
 			m.terminalStatuses.SetBatch(msg.Results)
+			// Re-expand window items if multi-window sessions appeared or changed
+			m.rebuildWindowItems()
 		}
 		return m, nil
 
@@ -1097,6 +1099,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m, nil
 		}
 
+		// If a window sub-item is selected, override TmuxWindow for template rendering
+		if ti := m.selectedTreeItem(); ti != nil && ti.IsWindowItem {
+			m.handler.SetSelectedWindow(ti.WindowName)
+		} else {
+			m.handler.SetSelectedWindow("")
+		}
+
 		// Resolve the user command to an Action
 		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
 
@@ -1357,6 +1366,13 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, cmd
 	}
 
+	// If a window sub-item is selected, override TmuxWindow for template rendering
+	if treeItem != nil && treeItem.IsWindowItem {
+		m.handler.SetSelectedWindow(treeItem.WindowName)
+	} else {
+		m.handler.SetSelectedWindow("")
+	}
+
 	action, ok := m.handler.Resolve(keyStr, *selected)
 	if ok {
 		// Check for resolution errors (e.g., template errors)
@@ -1415,6 +1431,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 // selectedSession returns the currently selected session, or nil if none.
 // Returns nil for headers and recycled placeholders.
+// For window sub-items, returns the parent session.
 func (m Model) selectedSession() *session.Session {
 	item := m.list.SelectedItem()
 	if item == nil {
@@ -1425,7 +1442,36 @@ func (m Model) selectedSession() *session.Session {
 		if treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
 			return nil // Headers and recycled placeholders aren't sessions
 		}
+		if treeItem.IsWindowItem {
+			return &treeItem.ParentSession
+		}
 		return &treeItem.Session
+	}
+	return nil
+}
+
+// selectedWindowStatus returns the WindowStatus for the currently selected window item,
+// or nil if a session (not a window) is selected.
+func (m Model) selectedWindowStatus() *WindowStatus {
+	item := m.list.SelectedItem()
+	if item == nil {
+		return nil
+	}
+	treeItem, ok := item.(TreeItem)
+	if !ok || !treeItem.IsWindowItem {
+		return nil
+	}
+	if m.terminalStatuses == nil {
+		return nil
+	}
+	ts, ok := m.terminalStatuses.Get(treeItem.ParentSession.ID)
+	if !ok {
+		return nil
+	}
+	for i := range ts.Windows {
+		if ts.Windows[i].WindowIndex == treeItem.WindowIndex {
+			return &ts.Windows[i]
+		}
 	}
 	return nil
 }
@@ -1567,7 +1613,10 @@ func (m *Model) selectSessionByID(id string) {
 	items := m.list.Items()
 	for i, item := range items {
 		if treeItem, ok := item.(TreeItem); ok {
-			if !treeItem.IsHeader && treeItem.Session.ID == id {
+			if treeItem.IsHeader || treeItem.IsRecycledPlaceholder || treeItem.IsWindowItem {
+				continue
+			}
+			if treeItem.Session.ID == id {
 				m.list.Select(i)
 				return
 			}
@@ -1665,6 +1714,9 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	groups := GroupSessionsByRepo(sessions, m.localRemote)
 	items := BuildTreeItems(groups, m.localRemote)
 
+	// Expand multi-window sessions into window sub-items
+	items = m.expandWindowItems(items)
+
 	// Calculate column widths across all sessions (use filtered set)
 	*m.columnWidths = CalculateColumnWidths(sessions, nil)
 
@@ -1696,6 +1748,114 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	return m, fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
 }
 
+// rebuildWindowItems strips existing window sub-items from the list and re-expands
+// based on current terminal statuses. Preserves the current selection.
+func (m *Model) rebuildWindowItems() {
+	items := m.list.Items()
+
+	// Check if rebuild is needed: count current window items and expected window items
+	currentWindows := 0
+	expectedWindows := 0
+	for _, item := range items {
+		ti, ok := item.(TreeItem)
+		if !ok {
+			continue
+		}
+		if ti.IsWindowItem {
+			currentWindows++
+			continue
+		}
+		if ti.IsHeader || ti.IsRecycledPlaceholder {
+			continue
+		}
+		if ts, ok := m.terminalStatuses.Get(ti.Session.ID); ok && len(ts.Windows) > 1 {
+			expectedWindows += len(ts.Windows)
+		}
+	}
+	if currentWindows == expectedWindows {
+		return // no change needed
+	}
+
+	// Remember selection
+	var selectedID string
+	var selectedWindowIdx string
+	if ti := m.selectedTreeItem(); ti != nil {
+		if ti.IsWindowItem {
+			selectedID = ti.ParentSession.ID
+			selectedWindowIdx = ti.WindowIndex
+		} else if !ti.IsHeader && !ti.IsRecycledPlaceholder {
+			selectedID = ti.Session.ID
+		}
+	}
+
+	// Strip window items
+	stripped := make([]list.Item, 0, len(items))
+	for _, item := range items {
+		if ti, ok := item.(TreeItem); ok && ti.IsWindowItem {
+			continue
+		}
+		stripped = append(stripped, item)
+	}
+
+	// Re-expand
+	expanded := m.expandWindowItems(stripped)
+	m.list.SetItems(expanded)
+
+	// Restore selection
+	if selectedWindowIdx != "" {
+		// Try to re-select the same window item
+		for i, item := range m.list.Items() {
+			if ti, ok := item.(TreeItem); ok && ti.IsWindowItem &&
+				ti.ParentSession.ID == selectedID && ti.WindowIndex == selectedWindowIdx {
+				m.list.Select(i)
+				return
+			}
+		}
+	}
+	if selectedID != "" {
+		m.selectSessionByID(selectedID)
+	}
+}
+
+// expandWindowItems inserts window sub-items after each session that has multiple
+// terminal windows. Single-window sessions are left unchanged.
+func (m Model) expandWindowItems(items []list.Item) []list.Item {
+	if m.terminalStatuses == nil {
+		return items
+	}
+
+	expanded := make([]list.Item, 0, len(items))
+	for _, item := range items {
+		expanded = append(expanded, item)
+
+		treeItem, ok := item.(TreeItem)
+		if !ok || treeItem.IsHeader || treeItem.IsRecycledPlaceholder || treeItem.IsWindowItem {
+			continue
+		}
+
+		ts, ok := m.terminalStatuses.Get(treeItem.Session.ID)
+		if !ok || len(ts.Windows) <= 1 {
+			continue
+		}
+
+		// Add a window sub-item for each window
+		for i, w := range ts.Windows {
+			windowItem := TreeItem{
+				IsWindowItem:  true,
+				WindowIndex:   w.WindowIndex,
+				WindowName:    w.WindowName,
+				ParentSession: treeItem.Session,
+				IsLastWindow:  i == len(ts.Windows)-1,
+				IsLastInRepo:  treeItem.IsLastInRepo,
+				RepoPrefix:    treeItem.RepoPrefix,
+			}
+			expanded = append(expanded, windowItem)
+		}
+	}
+
+	return expanded
+}
+
 // refreshGitStatuses returns a command that refreshes git status for all sessions.
 func (m Model) refreshGitStatuses() tea.Cmd {
 	items := m.list.Items()
@@ -1703,7 +1863,7 @@ func (m Model) refreshGitStatuses() tea.Cmd {
 
 	for _, item := range items {
 		treeItem, ok := item.(TreeItem)
-		if !ok || treeItem.IsHeader {
+		if !ok || treeItem.IsHeader || treeItem.IsWindowItem || treeItem.IsRecycledPlaceholder {
 			continue
 		}
 		path := treeItem.Session.Path
@@ -1933,10 +2093,20 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 		// Check if this is the current session (would cause recursive preview)
 		isSelf := m.isCurrentTmuxSession(selected)
 
-		if isSelf {
+		// Determine pane content: use per-window content if a window item is selected,
+		// otherwise fall back to session-level content.
+		var paneContent string
+		if ws := m.selectedWindowStatus(); ws != nil {
+			paneContent = ws.PaneContent
+		} else if status, ok := m.terminalStatuses.Get(selected.ID); ok {
+			paneContent = status.PaneContent
+		}
+
+		switch {
+		case isSelf:
 			// Show placeholder instead of recursive preview
 			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\n(current session, preventing recursive view)"
-		} else if status, ok := m.terminalStatuses.Get(selected.ID); ok && status.PaneContent != "" {
+		case paneContent != "":
 			// Account for padding: 2 chars on each side = 4 total
 			usableWidth := previewWidth - 4
 
@@ -1944,15 +2114,15 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 			header := m.renderPreviewHeader(selected, usableWidth)
 			headerHeight := strings.Count(header, "\n") + 1
 
-			// Calculate available lines for content (subtract 2 for Projects header)
+			// Calculate available lines for content
 			outputHeight := max(contentHeight-headerHeight, 1)
 
 			// Get content and truncate to width
-			content := tailLines(status.PaneContent, outputHeight)
+			content := tailLines(paneContent, outputHeight)
 			content = truncateLines(content, usableWidth)
 
 			previewContent = header + "\n" + content
-		} else {
+		default:
 			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\nNo pane content available"
 		}
 	} else {
@@ -2013,9 +2183,10 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 		shortID = shortID[len(shortID)-4:]
 	}
 	title := nameStyle.Render(sess.Name)
-	if status, ok := m.terminalStatuses.Get(sess.ID); ok && status.WindowName != "" {
+	// Show window name if a specific window is selected
+	if ws := m.selectedWindowStatus(); ws != nil {
 		windowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
-		title += " " + windowStyle.Render("["+status.WindowName+"]")
+		title += " " + windowStyle.Render("["+ws.WindowName+"]")
 	}
 	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
 

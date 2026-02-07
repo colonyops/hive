@@ -164,12 +164,12 @@ func TestSessionInfoFromWindow(t *testing.T) {
 		}
 	})
 
-	t.Run("single window omits WindowName", func(t *testing.T) {
+	t.Run("single window sets WindowName", func(t *testing.T) {
 		w := &agentWindow{windowIndex: "2", windowName: "claude"}
 		sc := &sessionCache{agentWindows: []*agentWindow{w}}
 		info := integ.sessionInfoFromWindow("mysess", sc, w)
-		if info.Name != "mysess" || info.Pane != "2" || info.WindowName != "" {
-			t.Fatalf("single window should not set WindowName: %+v", info)
+		if info.Name != "mysess" || info.Pane != "2" || info.WindowName != "claude" {
+			t.Fatalf("single window should set WindowName: %+v", info)
 		}
 	})
 
@@ -263,6 +263,77 @@ func TestMatchesPreferredWindow(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDiscoverAllWindows(t *testing.T) {
+	integ := New([]string{"claude", "aider"})
+
+	// Populate cache with a multi-window session and a single-window session
+	integ.cache = map[string]*sessionCache{
+		"multi-sess": {
+			agentWindows: []*agentWindow{
+				{windowIndex: "0", windowName: "claude", workDir: "/project-a"},
+				{windowIndex: "1", windowName: "aider", workDir: "/project-b"},
+			},
+		},
+		"single-sess": {
+			agentWindows: []*agentWindow{
+				{windowIndex: "0", windowName: "claude", workDir: "/project-c"},
+			},
+		},
+	}
+	integ.cacheTime = time.Now()
+	ctx := context.Background()
+
+	t.Run("returns all windows for multi-window session", func(t *testing.T) {
+		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(infos) != 2 {
+			t.Fatalf("expected 2 windows, got %d", len(infos))
+		}
+		if infos[0].Pane != "0" || infos[0].WindowName != "claude" {
+			t.Fatalf("unexpected first window: %+v", infos[0])
+		}
+		if infos[1].Pane != "1" || infos[1].WindowName != "aider" {
+			t.Fatalf("unexpected second window: %+v", infos[1])
+		}
+	})
+
+	t.Run("returns single window for single-window session", func(t *testing.T) {
+		infos, err := integ.DiscoverAllWindows(ctx, "single-sess", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(infos) != 1 {
+			t.Fatalf("expected 1 window, got %d", len(infos))
+		}
+		if infos[0].Pane != "0" {
+			t.Fatalf("unexpected window: %+v", infos[0])
+		}
+	})
+
+	t.Run("returns nil for unknown session", func(t *testing.T) {
+		infos, err := integ.DiscoverAllWindows(ctx, "nonexistent", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if infos != nil {
+			t.Fatalf("expected nil, got %v", infos)
+		}
+	})
+
+	t.Run("returns nil with stale cache", func(t *testing.T) {
+		integ.cacheTime = time.Now().Add(-5 * time.Second)
+		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if infos != nil {
+			t.Fatalf("expected nil with stale cache, got %v", infos)
+		}
+	})
 }
 
 // timeNow returns a time that makes cache fresh for tests.
