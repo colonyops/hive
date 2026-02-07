@@ -156,6 +156,18 @@ func TestDetector_NeedsApproval(t *testing.T) {
 			content: "Continue?",
 			want:    false,
 		},
+		{
+			name:    "codex approval command prompt",
+			tool:    "codex",
+			content: "Would you like to run the following command?",
+			want:    true,
+		},
+		{
+			name:    "codex approval confirm prompt",
+			tool:    "codex",
+			content: "Press enter to confirm or esc to cancel",
+			want:    true,
+		},
 	}
 
 	for _, tt := range tests {

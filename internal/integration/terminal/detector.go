@@ -137,6 +137,9 @@ func (d *Detector) NeedsApproval(content string) bool {
 		"Yes, allow always",
 		"Allow once",
 		"Allow always",
+		// Codex approval prompts
+		"Would you like to run the following command?",
+		"Press enter to confirm or esc to cancel",
 		// Box-drawing permission dialogs
 		"│ Do you want",
 		"│ Would you like",
