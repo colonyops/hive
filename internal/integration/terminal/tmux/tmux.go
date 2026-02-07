@@ -238,25 +238,25 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 				if w == nil {
 					w = sc.bestWindow()
 				}
-				return t.sessionInfoFromWindow(sessionName, w), nil
+				return t.sessionInfoFromWindow(sessionName, sc, w), nil
 			}
 			// Multi-window disambiguation
 			w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-			return t.sessionInfoFromWindow(sessionName, w), nil
+			return t.sessionInfoFromWindow(sessionName, sc, w), nil
 		}
 	}
 
 	// Try exact slug match
 	if sc, exists := t.cache[slug]; exists {
 		w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-		return t.sessionInfoFromWindow(slug, w), nil
+		return t.sessionInfoFromWindow(slug, sc, w), nil
 	}
 
 	// Try prefix match (session name starts with slug)
 	for name, sc := range t.cache {
 		if strings.HasPrefix(name, slug+"_") || strings.HasPrefix(name, slug+"-") {
 			w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-			return t.sessionInfoFromWindow(name, w), nil
+			return t.sessionInfoFromWindow(name, sc, w), nil
 		}
 	}
 
@@ -298,15 +298,20 @@ func (t *Integration) disambiguateWindow(sc *sessionCache, sessionPath, slug str
 }
 
 // sessionInfoFromWindow builds a SessionInfo from a matched agentWindow.
-func (t *Integration) sessionInfoFromWindow(sessionName string, w *agentWindow) *terminal.SessionInfo {
+// WindowName is only set when the tmux session has multiple tracked windows,
+// to avoid visual noise in the common single-window case.
+func (t *Integration) sessionInfoFromWindow(sessionName string, sc *sessionCache, w *agentWindow) *terminal.SessionInfo {
 	if w == nil {
 		return &terminal.SessionInfo{Name: sessionName}
 	}
-	return &terminal.SessionInfo{
-		Name:       sessionName,
-		Pane:       w.windowIndex,
-		WindowName: w.windowName,
+	info := &terminal.SessionInfo{
+		Name: sessionName,
+		Pane: w.windowIndex,
 	}
+	if len(sc.agentWindows) > 1 {
+		info.WindowName = w.windowName
+	}
+	return info
 }
 
 // GetStatus returns the current status of a session.

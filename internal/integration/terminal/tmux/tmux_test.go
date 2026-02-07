@@ -157,17 +157,29 @@ func TestSessionInfoFromWindow(t *testing.T) {
 	integ := New(nil)
 
 	t.Run("nil window", func(t *testing.T) {
-		info := integ.sessionInfoFromWindow("mysess", nil)
+		sc := &sessionCache{}
+		info := integ.sessionInfoFromWindow("mysess", sc, nil)
 		if info.Name != "mysess" || info.Pane != "" || info.WindowName != "" {
 			t.Fatalf("unexpected info: %+v", info)
 		}
 	})
 
-	t.Run("with window", func(t *testing.T) {
+	t.Run("single window omits WindowName", func(t *testing.T) {
 		w := &agentWindow{windowIndex: "2", windowName: "claude"}
-		info := integ.sessionInfoFromWindow("mysess", w)
-		if info.Name != "mysess" || info.Pane != "2" || info.WindowName != "claude" {
-			t.Fatalf("unexpected info: %+v", info)
+		sc := &sessionCache{agentWindows: []*agentWindow{w}}
+		info := integ.sessionInfoFromWindow("mysess", sc, w)
+		if info.Name != "mysess" || info.Pane != "2" || info.WindowName != "" {
+			t.Fatalf("single window should not set WindowName: %+v", info)
+		}
+	})
+
+	t.Run("multi window sets WindowName", func(t *testing.T) {
+		w1 := &agentWindow{windowIndex: "0", windowName: "claude"}
+		w2 := &agentWindow{windowIndex: "1", windowName: "aider"}
+		sc := &sessionCache{agentWindows: []*agentWindow{w1, w2}}
+		info := integ.sessionInfoFromWindow("mysess", sc, w2)
+		if info.Name != "mysess" || info.Pane != "1" || info.WindowName != "aider" {
+			t.Fatalf("multi window should set WindowName: %+v", info)
 		}
 	})
 }
