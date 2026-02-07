@@ -478,7 +478,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Apply Claude plugin style (context usage color) if present
 	if d.PluginStatuses != nil {
-		if claudeStore, ok := d.PluginStatuses["claude"]; ok {
+		if claudeStore, ok := d.PluginStatuses[pluginClaude]; ok {
 			if status, ok := claudeStore.Get(item.Session.ID); ok {
 				// Claude plugin returns style (color) but no label/icon
 				// Use Inherit to merge the color while preserving selection state
@@ -651,7 +651,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	neutralStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 
 	var parts []string
-	pluginOrder := []string{"github", "beads", "claude"}
+	pluginOrder := []string{pluginGitHub, pluginBeads, pluginClaude}
 	for _, name := range pluginOrder {
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
@@ -665,11 +665,11 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		var icon string
 		if d.IconsEnabled {
 			switch name {
-			case "github":
+			case pluginGitHub:
 				icon = styles.IconGithub
-			case "beads":
+			case pluginBeads:
 				icon = styles.IconCheckList
-			case "claude":
+			case pluginClaude:
 				icon = styles.IconBrain
 			default:
 				icon = status.Icon
