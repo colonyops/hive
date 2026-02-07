@@ -2072,6 +2072,9 @@ func (m Model) renderTabView() string {
 			m.treeDelegate.PreviewMode = false
 			m.list.SetDelegate(m.treeDelegate)
 			content = m.list.View()
+			if m.list.SettingFilter() {
+				content = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), content)
+			}
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	case ViewMessages:
@@ -2149,6 +2152,9 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 
 	// Render list
 	listView := m.list.View()
+	if m.list.SettingFilter() {
+		listView = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), listView)
+	}
 
 	// Apply exact height to both panels
 	listView = ensureExactHeight(listView, contentHeight)
