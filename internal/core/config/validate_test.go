@@ -132,13 +132,13 @@ func TestValidateDeep_KeybindingMissingCmd(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "cmd is required")
 }
 
-func TestValidateDeep_KeybindingInvalidCmdReference(t *testing.T) {
+func TestValidateUserKeybindings_InvalidCmdReference(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Keybindings = map[string]Keybinding{
 		"x": {Cmd: "NonExistentCommand"},
 	}
 
-	err := cfg.ValidateDeep("")
+	err := cfg.validateUserKeybindings()
 
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
@@ -278,46 +278,6 @@ func TestWarnings_EmptyRule(t *testing.T) {
 		}
 	}
 	assert.True(t, hasWarning, "expected warning about empty rule")
-}
-
-func TestWarnings_NoSpawnCommands(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Rules = []Rule{
-		{Pattern: "", Commands: []string{"echo test"}},
-	}
-
-	err := cfg.ValidateDeep("")
-	require.NoError(t, err)
-
-	warnings := cfg.Warnings()
-	hasWarning := false
-	for _, w := range warnings {
-		if w.Category == "Spawn Commands" {
-			hasWarning = true
-			break
-		}
-	}
-	assert.True(t, hasWarning, "expected warning about no spawn commands")
-}
-
-func TestWarnings_HasSpawnCommands(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Rules = []Rule{
-		{Pattern: "", Spawn: []string{"echo spawn"}},
-	}
-
-	err := cfg.ValidateDeep("")
-	require.NoError(t, err)
-
-	warnings := cfg.Warnings()
-	hasWarning := false
-	for _, w := range warnings {
-		if w.Category == "Spawn Commands" {
-			hasWarning = true
-			break
-		}
-	}
-	assert.False(t, hasWarning, "should not warn when spawn commands are defined")
 }
 
 func TestValidateDeep_ValidRulesWithCopy(t *testing.T) {
@@ -461,11 +421,11 @@ func TestGetSpawnCommands(t *testing.T) {
 		expected []string
 	}{
 		{
-			name:     "no rules returns empty",
+			name:     "no rules returns defaults",
 			rules:    nil,
 			remote:   "https://github.com/foo/bar",
 			batch:    false,
-			expected: nil,
+			expected: DefaultSpawnCommands,
 		},
 		{
 			name: "catch-all rule provides spawn",
@@ -490,13 +450,13 @@ func TestGetSpawnCommands(t *testing.T) {
 			expected: []string{"echo batch"},
 		},
 		{
-			name: "batch falls back to spawn when no batch_spawn",
+			name: "batch falls back to defaults when no batch_spawn",
 			rules: []Rule{
 				{Pattern: "", Spawn: []string{"echo spawn"}},
 			},
 			remote:   "https://github.com/foo/bar",
 			batch:    true,
-			expected: nil, // batch_spawn is empty, so returns nil
+			expected: DefaultBatchSpawnCommands,
 		},
 		{
 			name: "specific rule overrides catch-all",

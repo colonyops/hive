@@ -74,22 +74,6 @@ func (c *Config) ValidateDeep(configPath string) error {
 func (c *Config) Warnings() []ValidationWarning {
 	var warnings []ValidationWarning
 
-	// Check if any rule has spawn commands defined
-	hasSpawn := false
-	for _, rule := range c.Rules {
-		if len(rule.Spawn) > 0 {
-			hasSpawn = true
-			break
-		}
-	}
-	if !hasSpawn {
-		warnings = append(warnings, ValidationWarning{
-			Category: "Spawn Commands",
-			Item:     "rules",
-			Message:  "No spawn commands defined in any rule; sessions will be created without spawning a terminal",
-		})
-	}
-
 	for i, rule := range c.Rules {
 		if len(rule.Commands) == 0 && len(rule.Copy) == 0 {
 			warnings = append(warnings, ValidationWarning{

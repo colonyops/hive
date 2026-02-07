@@ -83,8 +83,12 @@ var defaultUserCommands = map[string]UserCommand{
 
 // defaultKeybindings provides built-in keybindings that users can override.
 var defaultKeybindings = map[string]Keybinding{
-	"r": {Cmd: "Recycle"},
-	"d": {Cmd: "Delete"},
+	"r":      {Cmd: "Recycle"},
+	"d":      {Cmd: "Delete"},
+	"enter":  {Cmd: "TmuxOpen"},
+	"ctrl+d": {Cmd: "TmuxKill"},
+	"A":      {Cmd: "AgentSend"},
+	"p":      {Cmd: "TmuxPopUp"},
 }
 
 // CurrentConfigVersion is the latest config schema version.
@@ -162,6 +166,12 @@ type PluginsConfig struct {
 	Neovim       NeovimPluginConfig     `yaml:"neovim"`
 	ContextDir   ContextDirPluginConfig `yaml:"contextdir"`
 	Claude       ClaudePluginConfig     `yaml:"claude"`
+	Tmux         TmuxPluginConfig       `yaml:"tmux"`
+}
+
+// TmuxPluginConfig holds tmux plugin configuration.
+type TmuxPluginConfig struct {
+	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -276,6 +286,16 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// DefaultSpawnCommands are the default commands run when spawning a new session.
+var DefaultSpawnCommands = []string{
+	`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+}
+
+// DefaultBatchSpawnCommands are the default commands run when spawning a batch session.
+var DefaultBatchSpawnCommands = []string{
+	`{{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
+}
+
 // DefaultRecycleCommands are the default commands run when recycling a session.
 var DefaultRecycleCommands = []string{
 	"git fetch origin",
@@ -330,6 +350,12 @@ func Load(configPath, dataDir string) (*Config, error) {
 			// Re-set dataDir since Unmarshal may have cleared it
 			cfg.DataDir = dataDir
 		}
+	}
+
+	// Validate user keybindings before merging defaults (defaults may reference
+	// plugin commands that don't exist at config-load time).
+	if err := cfg.validateUserKeybindings(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
 	// Merge user keybindings into defaults (user config overrides defaults)
@@ -504,11 +530,28 @@ func (c *Config) validateMaxRecycled() error {
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.
-// Keybindings must reference existing UserCommands (including system defaults).
+// Only checks structural validity (non-empty cmd). Command reference validation
+// is done earlier via validateUserKeybindings() before defaults are merged,
+// since default keybindings may reference plugin commands not yet registered.
 func (c *Config) validateKeybindingsBasic() error {
 	var errs criterio.FieldErrorsBuilder
 
-	// Build merged commands map (user commands + system defaults)
+	for key, kb := range c.Keybindings {
+		field := fmt.Sprintf("keybindings[%q]", key)
+
+		if kb.Cmd == "" {
+			errs = errs.Append(field, fmt.Errorf("cmd is required"))
+		}
+	}
+
+	return errs.ToError()
+}
+
+// validateUserKeybindings validates user-defined keybindings reference valid commands.
+// Called before merging with defaults so only user-provided keybindings are checked.
+func (c *Config) validateUserKeybindings() error {
+	var errs criterio.FieldErrorsBuilder
+
 	allCommands := c.MergedUserCommands()
 
 	for key, kb := range c.Keybindings {
@@ -519,7 +562,6 @@ func (c *Config) validateKeybindingsBasic() error {
 			continue
 		}
 
-		// Validate that cmd references an existing command
 		if _, exists := allCommands[kb.Cmd]; !exists {
 			errs = errs.Append(field, fmt.Errorf("cmd %q does not reference a valid user command", kb.Cmd))
 		}
@@ -566,6 +608,11 @@ func (c *Config) SharedContextDir() string {
 // DatabaseFile returns the path to the SQLite database file.
 func (c *Config) DatabaseFile() string {
 	return filepath.Join(c.DataDir, "hive.db")
+}
+
+// BinDir returns the path to the extracted bundled scripts directory.
+func (c *Config) BinDir() string {
+	return filepath.Join(c.DataDir, "bin")
 }
 
 func isValidAction(action string) bool {
@@ -628,6 +675,7 @@ func (c *Config) GetMaxRecycled(remote string) int {
 // GetSpawnCommands returns the spawn commands for the given remote URL.
 // If batch is true, returns BatchSpawn commands; otherwise returns Spawn commands.
 // Rules are evaluated in order; the last matching rule with spawn commands wins.
+// If no rules define spawn commands, returns DefaultSpawnCommands/DefaultBatchSpawnCommands.
 func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
 	var result []string
 	for _, rule := range c.Rules {
@@ -638,6 +686,12 @@ func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
 				result = rule.Spawn
 			}
 		}
+	}
+	if len(result) == 0 {
+		if batch {
+			return DefaultBatchSpawnCommands
+		}
+		return DefaultSpawnCommands
 	}
 	return result
 }

@@ -23,9 +23,12 @@ import (
 	"github.com/hay-kot/hive/internal/plugins/github"
 	"github.com/hay-kot/hive/internal/plugins/lazygit"
 	"github.com/hay-kot/hive/internal/plugins/neovim"
+	plugintmux "github.com/hay-kot/hive/internal/plugins/tmux"
 	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/internal/scripts"
 	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/pkg/executil"
+	"github.com/hay-kot/hive/pkg/tmpl"
 	"github.com/hay-kot/hive/pkg/utils"
 )
 
@@ -115,6 +118,14 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, err
 			}
 
+			// Register bundled script paths for template functions (before config load renders templates)
+			tmpl.SetScriptPaths(scripts.ScriptPaths(flags.DataDir))
+
+			// Extract bundled scripts (non-fatal on failure)
+			if err := scripts.EnsureExtracted(flags.DataDir, version); err != nil {
+				log.Warn().Err(err).Msg("failed to extract bundled scripts")
+			}
+
 			cfg, err := config.Load(flags.ConfigPath, flags.DataDir)
 			if err != nil {
 				return ctx, fmt.Errorf("load config: %w", err)
@@ -162,6 +173,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			pluginMgr.Register(neovim.New(cfg.Plugins.Neovim))
 			pluginMgr.Register(contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir))
 			pluginMgr.Register(claude.New(cfg.Plugins.Claude))
+			pluginMgr.Register(plugintmux.New(cfg.Plugins.Tmux))
 
 			// Initialize plugins (errors are logged but don't stop startup)
 			if err := pluginMgr.InitAll(ctx); err != nil {
