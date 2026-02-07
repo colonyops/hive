@@ -51,22 +51,22 @@ func TestRecoverFromCorruption_Success(t *testing.T) {
 
 	// Verify original files no longer exist
 	_, err = os.Stat(dbPath)
-	assert.Error(t, err, "Original database file should not exist after recovery")
+	require.Error(t, err, "Original database file should not exist after recovery")
 	_, err = os.Stat(walPath)
-	assert.Error(t, err, "Original WAL file should not exist after recovery")
+	require.Error(t, err, "Original WAL file should not exist after recovery")
 	_, err = os.Stat(shmPath)
-	assert.Error(t, err, "Original SHM file should not exist after recovery")
+	require.Error(t, err, "Original SHM file should not exist after recovery")
 }
 
 func TestRecoverFromCorruption_MissingFile(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// Run recovery on non-existent database - should not error
-	assert.NoError(t, RecoverFromCorruption(tempDir), "RecoverFromCorruption should not error on missing file")
+	require.NoError(t, RecoverFromCorruption(tempDir), "RecoverFromCorruption should not error on missing file")
 
 	// Verify no backup files were created
 	files, _ := filepath.Glob(filepath.Join(tempDir, "*.corrupt.*"))
-	assert.Len(t, files, 0, "Expected no backup files for missing DB, found %d", len(files))
+	assert.Empty(t, files, "Expected no backup files for missing DB, found %d", len(files))
 }
 
 func TestRecoverFromCorruption_OnlyDatabase(t *testing.T) {
@@ -85,7 +85,7 @@ func TestRecoverFromCorruption_OnlyDatabase(t *testing.T) {
 
 	// Verify no WAL/SHM backups (they didn't exist)
 	walBackups, _ := filepath.Glob(filepath.Join(tempDir, "*-wal"))
-	assert.Len(t, walBackups, 0, "Expected no WAL backups, found %d", len(walBackups))
+	assert.Empty(t, walBackups, "Expected no WAL backups, found %d", len(walBackups))
 }
 
 func TestRecoverFromCorruption_BackupNaming(t *testing.T) {
@@ -114,7 +114,7 @@ func TestRecoverFromCorruption_BackupNaming(t *testing.T) {
 	// Verify backup file exists and is readable
 	info, err := os.Stat(files[0])
 	require.NoError(t, err, "Stat backup")
-	assert.Greater(t, info.Size(), int64(0), "Backup file should not be empty")
+	assert.Positive(t, info.Size(), "Backup file should not be empty")
 }
 
 func TestRecoverFromCorruption_WALWithoutDatabase(t *testing.T) {
@@ -135,7 +135,7 @@ func TestRecoverFromCorruption_WALWithoutDatabase(t *testing.T) {
 
 	// Original WAL should no longer exist
 	_, err := os.Stat(walPath)
-	assert.Error(t, err, "Original WAL file should not exist after recovery")
+	require.Error(t, err, "Original WAL file should not exist after recovery")
 }
 
 func TestIsNotFoundError(t *testing.T) {

@@ -288,7 +288,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 
 		action, ok := handler.Resolve("b", sess)
 		require.True(t, ok, "expected ok = true even with template error")
-		assert.Error(t, action.Err, "expected action.Err to be non-nil for template error")
+		require.Error(t, action.Err, "expected action.Err to be non-nil for template error")
 		assert.Empty(t, action.ShellCmd, "expected empty ShellCmd, got %q", action.ShellCmd)
 	})
 }

@@ -25,7 +25,7 @@ func TestGenerate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Generate(tt.length)
 
-			assert.Equal(t, tt.length, len(result), "Generate(%d) returned length %d, want %d", tt.length, len(result), tt.length)
+			assert.Len(t, result, tt.length, "Generate(%d) returned length %d, want %d", tt.length, len(result), tt.length)
 			assert.True(t, pattern.MatchString(result), "Generate(%d) = %q, want only lowercase alphanumeric [a-z0-9]", tt.length, result)
 		})
 	}

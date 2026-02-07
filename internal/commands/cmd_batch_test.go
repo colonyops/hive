@@ -2,7 +2,6 @@ package commands
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -97,7 +96,7 @@ func TestBatchInput_Validate(t *testing.T) {
 				return
 			}
 			require.Error(t, err, "expected error containing %q, got nil", tt.wantErr)
-			assert.True(t, strings.Contains(err.Error(), tt.wantErr), "expected error containing %q, got %q", tt.wantErr, err.Error())
+			assert.Contains(t, err.Error(), tt.wantErr, "expected error containing %q, got %q", tt.wantErr, err.Error())
 		})
 	}
 }

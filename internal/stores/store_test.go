@@ -114,7 +114,7 @@ func TestStore(t *testing.T) {
 		require.NoError(t, store.Delete(ctx, "delete-me"), "Delete")
 
 		_, err = store.Get(ctx, "delete-me")
-		assert.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
+		require.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
 	t.Run("delete not found", func(t *testing.T) {
@@ -125,7 +125,7 @@ func TestStore(t *testing.T) {
 		store := NewSessionStore(database)
 
 		err = store.Delete(ctx, "nonexistent")
-		assert.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
+		require.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
 	t.Run("find recyclable", func(t *testing.T) {
@@ -138,7 +138,7 @@ func TestStore(t *testing.T) {
 
 		// No recyclable sessions
 		_, err = store.FindRecyclable(ctx, remote)
-		assert.ErrorIs(t, err, session.ErrNoRecyclable, "empty store: got %v, want ErrNoRecyclable", err)
+		require.ErrorIs(t, err, session.ErrNoRecyclable, "empty store: got %v, want ErrNoRecyclable", err)
 
 		// Active session with matching remote - not recyclable
 		require.NoError(t, store.Save(ctx, session.Session{
@@ -148,7 +148,7 @@ func TestStore(t *testing.T) {
 		}), "Save")
 
 		_, err = store.FindRecyclable(ctx, remote)
-		assert.ErrorIs(t, err, session.ErrNoRecyclable, "active session: got %v, want ErrNoRecyclable", err)
+		require.ErrorIs(t, err, session.ErrNoRecyclable, "active session: got %v, want ErrNoRecyclable", err)
 
 		// Recycled session with different remote - not found
 		require.NoError(t, store.Save(ctx, session.Session{
@@ -158,7 +158,7 @@ func TestStore(t *testing.T) {
 		}), "Save")
 
 		_, err = store.FindRecyclable(ctx, remote)
-		assert.ErrorIs(t, err, session.ErrNoRecyclable, "different remote: got %v, want ErrNoRecyclable", err)
+		require.ErrorIs(t, err, session.ErrNoRecyclable, "different remote: got %v, want ErrNoRecyclable", err)
 
 		// Recycled session with matching remote - found
 		require.NoError(t, store.Save(ctx, session.Session{

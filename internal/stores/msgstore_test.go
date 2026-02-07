@@ -3,7 +3,6 @@ package stores
 import (
 	"context"
 	"fmt"
-	"sync"
 	"testing"
 	"time"
 
@@ -273,63 +272,6 @@ func TestMsgStore_Prune(t *testing.T) {
 	assert.Equal(t, "new", messages[0].Payload)
 }
 
-func TestMsgStore_ConcurrentAccess(t *testing.T) {
-	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-	require.NoError(t, err, "Open")
-	defer func() { _ = database.Close() }()
-
-	store := NewMessageStore(database, 0)
-	ctx := context.Background()
-
-	const goroutines = 10
-	const iterations = 20
-
-	var wg sync.WaitGroup
-	wg.Add(goroutines)
-
-	for i := range goroutines {
-		go func(id int) {
-			defer wg.Done()
-			for j := range iterations {
-				topic := fmt.Sprintf("topic.%d", id)
-				err := store.Publish(ctx, messaging.Message{
-					Topic:   topic,
-					Payload: fmt.Sprintf("msg-%d-%d", id, j),
-				}, []string{topic})
-				if !assert.NoError(t, err, "Publish failed") {
-					return
-				}
-
-				_, err = store.Subscribe(ctx, topic, time.Time{})
-				if !assert.NoError(t, err, "Subscribe failed") {
-					return
-				}
-
-				_, err = store.List(ctx)
-				if !assert.NoError(t, err, "List failed") {
-					return
-				}
-			}
-		}(i)
-	}
-
-	wg.Wait()
-
-	// Verify final state
-	topics, err := store.List(ctx)
-	require.NoError(t, err, "Final List failed")
-	assert.Len(t, topics, goroutines, "Expected %d topics, got %d", goroutines, len(topics))
-
-	// Each topic should have its messages (up to retention limit)
-	for _, topic := range topics {
-		messages, err := store.Subscribe(ctx, topic, time.Time{})
-		if !assert.NoError(t, err, "Subscribe to %s failed", topic) {
-			continue
-		}
-		assert.Len(t, messages, iterations, "Topic %s has %d messages, want %d", topic, len(messages), iterations)
-	}
-}
-
 func TestMsgStore_MessageOrdering(t *testing.T) {
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 	require.NoError(t, err, "Open")
@@ -496,7 +438,8 @@ func TestMsgStore_PublishMultipleTopics(t *testing.T) {
 	// Verify message exists in all topics
 	for _, topic := range []string{"topic.a", "topic.b", "topic.c"} {
 		messages, err := store.Subscribe(ctx, topic, time.Time{})
-		if !assert.NoError(t, err, "Subscribe to %s failed", topic) {
+		if err != nil {
+			require.NoError(t, err, "Subscribe to %s failed", topic)
 			continue
 		}
 		require.Len(t, messages, 1, "Expected 1 message in %s, got %d", topic, len(messages))

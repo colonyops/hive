@@ -214,7 +214,7 @@ func TestExecuteSync(t *testing.T) {
 		}
 
 		err := ExecuteSync(context.Background(), exec)
-		assert.NoError(t, err, "ExecuteSync() error")
+		require.NoError(t, err, "ExecuteSync() error")
 
 		assert.Len(t, mock.deleted, 1, "Expected delete to be called")
 	})
@@ -227,7 +227,7 @@ func TestExecuteSync(t *testing.T) {
 		}
 
 		err := ExecuteSync(context.Background(), exec)
-		assert.NoError(t, err, "ExecuteSync() error")
+		require.NoError(t, err, "ExecuteSync() error")
 
 		assert.Len(t, mock.recycled, 1, "Expected recycle to be called")
 	})

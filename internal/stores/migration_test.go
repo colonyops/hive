@@ -24,7 +24,7 @@ func TestMigrateFromJSON_NoFiles(t *testing.T) {
 	ctx := context.Background()
 
 	// Migrate with no JSON files - should succeed silently
-	assert.NoError(t, MigrateFromJSON(ctx, database, tempDir), "MigrateFromJSON failed")
+	require.NoError(t, MigrateFromJSON(ctx, database, tempDir), "MigrateFromJSON failed")
 
 	// Verify no sessions were created
 	store := NewSessionStore(database)
