@@ -202,6 +202,7 @@ hv  # Opens hive in a persistent tmux session
 - **Enter** - Opens or switches to the selected session (or specific window)
 - **p** - Opens the session in a tmux popup
 - **Ctrl+d** - Kills the tmux session
+- **d** - Deletes the selected session (or selected window)
 - **t** - Sends `/tidy` command to the session
 - **v** - Toggle preview sidebar
 - **:** - Open command palette (filter by status, etc.)

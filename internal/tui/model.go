@@ -31,6 +31,7 @@ import (
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/internal/tui/views/review"
 	"github.com/hay-kot/hive/pkg/kv"
+	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
 // Buffer pools for reducing allocations in rendering.
@@ -1114,6 +1115,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Resolve the user command to an Action
 		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
+		action = m.maybeOverrideWindowDelete(action, m.selectedTreeItem())
 
 		// Check for resolution errors (e.g., template errors)
 		if action.Err != nil {
@@ -1380,6 +1382,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 	}
 
 	action, ok := m.handler.Resolve(keyStr, *selected)
+	action = m.maybeOverrideWindowDelete(action, treeItem)
 	if ok {
 		// Check for resolution errors (e.g., template errors)
 		if action.Err != nil {
@@ -1492,6 +1495,47 @@ func (m Model) selectedTreeItem() *TreeItem {
 		return &treeItem
 	}
 	return nil
+}
+
+// maybeOverrideWindowDelete converts a delete action into a tmux window kill
+// when a window sub-item is selected. This keeps "d" context-aware.
+func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Action {
+	if treeItem == nil || !treeItem.IsWindowItem {
+		return action
+	}
+	if action.Type != ActionTypeDelete {
+		return action
+	}
+
+	tmuxSession := treeItem.ParentSession.GetMeta(session.MetaTmuxSession)
+	if tmuxSession == "" {
+		tmuxSession = treeItem.ParentSession.Slug
+	}
+	if tmuxSession == "" {
+		tmuxSession = treeItem.ParentSession.Name
+	}
+	if tmuxSession == "" || treeItem.WindowIndex == "" {
+		action.Err = fmt.Errorf("unable to resolve tmux window target")
+		return action
+	}
+
+	target := tmuxSession + ":" + treeItem.WindowIndex
+	cmd, err := tmpl.Render("tmux kill-window -t {{ .Target | shq }}", map[string]string{
+		"Target": target,
+	})
+	if err != nil {
+		action.Err = err
+		return action
+	}
+
+	action.Type = ActionTypeShell
+	action.ShellCmd = cmd
+	if treeItem.WindowName != "" {
+		action.Confirm = fmt.Sprintf("Kill tmux window %q?", treeItem.WindowName)
+	} else {
+		action.Confirm = "Kill tmux window?"
+	}
+	return action
 }
 
 // hasEditorFocus returns true if any text input currently has focus.

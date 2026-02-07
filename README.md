@@ -271,7 +271,7 @@ Hive provides built-in commands that can be overridden in usercommands:
 | Name      | Action   | Description                    |
 | --------- | -------- | ------------------------------ |
 | `Recycle` | recycle  | Recycles the selected session  |
-| `Delete`  | delete   | Deletes the selected session   |
+| `Delete`  | delete   | Deletes the selected session (or selected tmux window) |
 
 **Using Arguments:**
 
@@ -515,7 +515,7 @@ Launches the interactive TUI for managing sessions.
 - `:` - Open command palette
 - `v` - Toggle preview sidebar (shows tmux pane output)
 - `r` - Recycle session
-- `d` - Delete session
+- `d` - Delete session (or selected tmux window)
 - `n` - New session (when repos discovered)
 - `g` - Refresh git statuses
 - `tab` - Switch views
@@ -528,7 +528,7 @@ Launches the interactive TUI for managing sessions.
 - `FilterApproval` - Show sessions needing approval
 - `FilterReady` - Show sessions with idle agents
 - `Recycle` - Recycle selected session
-- `Delete` - Delete selected session
+- `Delete` - Delete selected session (or selected tmux window)
 
 ### `hive new`
 
