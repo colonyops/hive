@@ -1,6 +1,10 @@
 package git
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestExtractOwnerRepo(t *testing.T) {
 	tests := []struct {
@@ -21,10 +25,8 @@ func TestExtractOwnerRepo(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.remote, func(t *testing.T) {
 			owner, repo := ExtractOwnerRepo(tt.remote)
-			if owner != tt.wantOwner || repo != tt.wantRepo {
-				t.Errorf("ExtractOwnerRepo(%q) = (%q, %q), want (%q, %q)",
-					tt.remote, owner, repo, tt.wantOwner, tt.wantRepo)
-			}
+			assert.Equal(t, tt.wantOwner, owner, "ExtractOwnerRepo(%q) owner mismatch", tt.remote)
+			assert.Equal(t, tt.wantRepo, repo, "ExtractOwnerRepo(%q) repo mismatch", tt.remote)
 		})
 	}
 }
@@ -43,9 +45,7 @@ func TestExtractRepoName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.remote, func(t *testing.T) {
 			repo := ExtractRepoName(tt.remote)
-			if repo != tt.wantRepo {
-				t.Errorf("ExtractRepoName(%q) = %q, want %q", tt.remote, repo, tt.wantRepo)
-			}
+			assert.Equal(t, tt.wantRepo, repo, "ExtractRepoName(%q) = %q, want %q", tt.remote, repo, tt.wantRepo)
 		})
 	}
 }

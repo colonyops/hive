@@ -2,6 +2,8 @@ package terminal
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDetector_IsBusy(t *testing.T) {
@@ -82,9 +84,8 @@ func TestDetector_IsBusy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := NewDetector(tt.tool)
-			if got := d.IsBusy(tt.content); got != tt.want {
-				t.Errorf("IsBusy() = %v, want %v", got, tt.want)
-			}
+			got := d.IsBusy(tt.content)
+			assert.Equal(t, tt.want, got, "IsBusy() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -173,9 +174,8 @@ func TestDetector_NeedsApproval(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := NewDetector(tt.tool)
-			if got := d.NeedsApproval(tt.content); got != tt.want {
-				t.Errorf("NeedsApproval() = %v, want %v", got, tt.want)
-			}
+			got := d.NeedsApproval(tt.content)
+			assert.Equal(t, tt.want, got, "NeedsApproval() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -258,9 +258,8 @@ func TestDetector_IsReady(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := NewDetector(tt.tool)
-			if got := d.IsReady(tt.content); got != tt.want {
-				t.Errorf("IsReady() = %v, want %v", got, tt.want)
-			}
+			got := d.IsReady(tt.content)
+			assert.Equal(t, tt.want, got, "IsReady() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -325,9 +324,8 @@ func TestDetector_DetectStatus(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			d := NewDetector(tt.tool)
-			if got := d.DetectStatus(tt.content); got != tt.want {
-				t.Errorf("DetectStatus() = %v, want %v", got, tt.want)
-			}
+			got := d.DetectStatus(tt.content)
+			assert.Equal(t, tt.want, got, "DetectStatus() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -377,9 +375,8 @@ func TestDetectTool(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := DetectTool(tt.content); got != tt.want {
-				t.Errorf("DetectTool() = %v, want %v", got, tt.want)
-			}
+			got := DetectTool(tt.content)
+			assert.Equal(t, tt.want, got, "DetectTool() = %v, want %v", got, tt.want)
 		})
 	}
 }
@@ -424,9 +421,8 @@ func TestStripANSI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := stripANSI(tt.content); got != tt.want {
-				t.Errorf("stripANSI() = %v, want %v", got, tt.want)
-			}
+			got := stripANSI(tt.content)
+			assert.Equal(t, tt.want, got, "stripANSI() = %v, want %v", got, tt.want)
 		})
 	}
 }

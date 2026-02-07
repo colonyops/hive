@@ -2,13 +2,14 @@ package stores
 
 import (
 	"context"
-	"errors"
 	"testing"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/hay-kot/hive/internal/core/review"
 	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestReviewStore(t *testing.T) {
@@ -16,9 +17,7 @@ func TestReviewStore(t *testing.T) {
 
 	t.Run("create and get session", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
@@ -26,156 +25,98 @@ func TestReviewStore(t *testing.T) {
 		docPath := "/tmp/test.md"
 		contentHash := "abc123"
 		session, err := store.CreateSession(ctx, docPath, contentHash)
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
-
-		if session.ID == "" {
-			t.Error("expected non-empty session ID")
-		}
-		if session.DocumentPath != docPath {
-			t.Errorf("got path %q, want %q", session.DocumentPath, docPath)
-		}
-		if session.FinalizedAt != nil {
-			t.Error("expected new session to not be finalized")
-		}
+		require.NoError(t, err, "CreateSession")
+		assert.NotEmpty(t, session.ID, "expected non-empty session ID")
+		assert.Equal(t, docPath, session.DocumentPath)
+		assert.Nil(t, session.FinalizedAt, "expected new session to not be finalized")
 
 		got, err := store.GetSession(ctx, docPath)
-		if err != nil {
-			t.Fatalf("GetSession: %v", err)
-		}
-
-		if got.ID != session.ID {
-			t.Errorf("got ID %q, want %q", got.ID, session.ID)
-		}
-		if got.DocumentPath != docPath {
-			t.Errorf("got path %q, want %q", got.DocumentPath, docPath)
-		}
+		require.NoError(t, err, "GetSession")
+		assert.Equal(t, session.ID, got.ID)
+		assert.Equal(t, docPath, got.DocumentPath)
 	})
 
 	t.Run("get session not found", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		_, err = store.GetSession(ctx, "/nonexistent.md")
-		if !errors.Is(err, review.ErrSessionNotFound) {
-			t.Errorf("got %v, want ErrSessionNotFound", err)
-		}
+		assert.ErrorIs(t, err, review.ErrSessionNotFound, "got %v, want ErrSessionNotFound", err)
 	})
 
 	t.Run("unique document path constraint", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/unique.md"
 		_, err = store.CreateSession(ctx, docPath, "test-hash")
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
+		require.NoError(t, err, "CreateSession")
 
 		// Attempt to create another session for the same document
 		_, err = store.CreateSession(ctx, docPath, "test-hash")
-		if err == nil {
-			t.Error("expected error when creating duplicate session")
-		}
+		assert.Error(t, err, "expected error when creating duplicate session")
 	})
 
 	t.Run("finalize session", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/finalize-test.md"
 		session, err := store.CreateSession(ctx, docPath, "test-hash")
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
-
-		if session.IsFinalized() {
-			t.Error("new session should not be finalized")
-		}
+		require.NoError(t, err, "CreateSession")
+		assert.False(t, session.IsFinalized(), "new session should not be finalized")
 
 		err = store.FinalizeSession(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("FinalizeSession: %v", err)
-		}
+		require.NoError(t, err, "FinalizeSession")
 
 		got, err := store.GetSession(ctx, docPath)
-		if err != nil {
-			t.Fatalf("GetSession: %v", err)
-		}
-
-		if !got.IsFinalized() {
-			t.Error("session should be finalized")
-		}
-		if got.FinalizedAt == nil {
-			t.Error("expected non-nil FinalizedAt")
-		}
+		require.NoError(t, err, "GetSession")
+		assert.True(t, got.IsFinalized(), "session should be finalized")
+		assert.NotNil(t, got.FinalizedAt, "expected non-nil FinalizedAt")
 	})
 
 	t.Run("delete session", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/delete-test.md"
 		session, err := store.CreateSession(ctx, docPath, "test-hash")
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
+		require.NoError(t, err, "CreateSession")
 
 		err = store.DeleteSession(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("DeleteSession: %v", err)
-		}
+		require.NoError(t, err, "DeleteSession")
 
 		_, err = store.GetSession(ctx, docPath)
-		if !errors.Is(err, review.ErrSessionNotFound) {
-			t.Errorf("got %v, want ErrSessionNotFound", err)
-		}
+		assert.ErrorIs(t, err, review.ErrSessionNotFound, "got %v, want ErrSessionNotFound", err)
 	})
 
 	t.Run("save and list comments", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/comments-test.md"
 		session, err := store.CreateSession(ctx, docPath, "test-hash")
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
+		require.NoError(t, err, "CreateSession")
 
 		// Initially no comments
 		comments, err := store.ListComments(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("ListComments: %v", err)
-		}
-		if len(comments) != 0 {
-			t.Errorf("got %d comments, want 0", len(comments))
-		}
+		require.NoError(t, err, "ListComments")
+		assert.Empty(t, comments, "got %d comments, want 0", len(comments))
 
 		// Add first comment
 		comment1 := review.Comment{
@@ -188,9 +129,7 @@ func TestReviewStore(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 		err = store.SaveComment(ctx, comment1)
-		if err != nil {
-			t.Fatalf("SaveComment: %v", err)
-		}
+		require.NoError(t, err, "SaveComment")
 
 		// Add second comment
 		comment2 := review.Comment{
@@ -203,47 +142,31 @@ func TestReviewStore(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 		err = store.SaveComment(ctx, comment2)
-		if err != nil {
-			t.Fatalf("SaveComment: %v", err)
-		}
+		require.NoError(t, err, "SaveComment")
 
 		// List comments - should be sorted by start line
 		comments, err = store.ListComments(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("ListComments: %v", err)
-		}
-		if len(comments) != 2 {
-			t.Errorf("got %d comments, want 2", len(comments))
-		}
+		require.NoError(t, err, "ListComments")
+		require.Len(t, comments, 2, "got %d comments, want 2", len(comments))
 
 		// Verify sorting (comment2 should be first)
-		if comments[0].StartLine != 5 {
-			t.Errorf("first comment start line: got %d, want 5", comments[0].StartLine)
-		}
-		if comments[1].StartLine != 10 {
-			t.Errorf("second comment start line: got %d, want 10", comments[1].StartLine)
-		}
+		assert.Equal(t, 5, comments[0].StartLine, "first comment start line")
+		assert.Equal(t, 10, comments[1].StartLine, "second comment start line")
 
 		// Verify comment data
-		if comments[0].CommentText != comment2.CommentText {
-			t.Errorf("got comment text %q, want %q", comments[0].CommentText, comment2.CommentText)
-		}
+		assert.Equal(t, comment2.CommentText, comments[0].CommentText)
 	})
 
 	t.Run("delete comment", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/delete-comment-test.md"
 		session, err := store.CreateSession(ctx, docPath, "test-hash")
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
+		require.NoError(t, err, "CreateSession")
 
 		comment := review.Comment{
 			ID:          uuid.NewString(),
@@ -255,38 +178,26 @@ func TestReviewStore(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 		err = store.SaveComment(ctx, comment)
-		if err != nil {
-			t.Fatalf("SaveComment: %v", err)
-		}
+		require.NoError(t, err, "SaveComment")
 
 		err = store.DeleteComment(ctx, comment.ID)
-		if err != nil {
-			t.Fatalf("DeleteComment: %v", err)
-		}
+		require.NoError(t, err, "DeleteComment")
 
 		comments, err := store.ListComments(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("ListComments: %v", err)
-		}
-		if len(comments) != 0 {
-			t.Errorf("got %d comments after delete, want 0", len(comments))
-		}
+		require.NoError(t, err, "ListComments")
+		assert.Empty(t, comments, "got %d comments after delete, want 0", len(comments))
 	})
 
 	t.Run("delete session cascades to comments", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		docPath := "/tmp/cascade-test.md"
 		session, err := store.CreateSession(ctx, docPath, "test-hash")
-		if err != nil {
-			t.Fatalf("CreateSession: %v", err)
-		}
+		require.NoError(t, err, "CreateSession")
 
 		// Add a comment
 		comment := review.Comment{
@@ -299,54 +210,36 @@ func TestReviewStore(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 		err = store.SaveComment(ctx, comment)
-		if err != nil {
-			t.Fatalf("SaveComment: %v", err)
-		}
+		require.NoError(t, err, "SaveComment")
 
 		// Verify comment exists
 		comments, err := store.ListComments(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("ListComments: %v", err)
-		}
-		if len(comments) != 1 {
-			t.Errorf("got %d comments, want 1", len(comments))
-		}
+		require.NoError(t, err, "ListComments")
+		require.Len(t, comments, 1, "got %d comments, want 1", len(comments))
 
 		// Delete session
 		err = store.DeleteSession(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("DeleteSession: %v", err)
-		}
+		require.NoError(t, err, "DeleteSession")
 
 		// Verify comments were cascaded
 		comments, err = store.ListComments(ctx, session.ID)
-		if err != nil {
-			t.Fatalf("ListComments: %v", err)
-		}
-		if len(comments) != 0 {
-			t.Errorf("got %d comments after session delete, want 0", len(comments))
-		}
+		require.NoError(t, err, "ListComments")
+		assert.Empty(t, comments, "got %d comments after session delete, want 0", len(comments))
 	})
 
 	t.Run("comments isolated by session", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		if err != nil {
-			t.Fatalf("Open: %v", err)
-		}
+		require.NoError(t, err, "Open")
 		defer func() { _ = database.Close() }()
 
 		store := NewReviewStore(database)
 
 		// Create two sessions
 		session1, err := store.CreateSession(ctx, "/tmp/doc1.md", "hash1")
-		if err != nil {
-			t.Fatalf("CreateSession 1: %v", err)
-		}
+		require.NoError(t, err, "CreateSession 1")
 
 		session2, err := store.CreateSession(ctx, "/tmp/doc2.md", "hash2")
-		if err != nil {
-			t.Fatalf("CreateSession 2: %v", err)
-		}
+		require.NoError(t, err, "CreateSession 2")
 
 		// Add comment to first session
 		comment1 := review.Comment{
@@ -359,9 +252,7 @@ func TestReviewStore(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 		err = store.SaveComment(ctx, comment1)
-		if err != nil {
-			t.Fatalf("SaveComment 1: %v", err)
-		}
+		require.NoError(t, err, "SaveComment 1")
 
 		// Add comment to second session
 		comment2 := review.Comment{
@@ -374,31 +265,17 @@ func TestReviewStore(t *testing.T) {
 			CreatedAt:   time.Now(),
 		}
 		err = store.SaveComment(ctx, comment2)
-		if err != nil {
-			t.Fatalf("SaveComment 2: %v", err)
-		}
+		require.NoError(t, err, "SaveComment 2")
 
 		// Verify each session only sees its own comments
 		comments1, err := store.ListComments(ctx, session1.ID)
-		if err != nil {
-			t.Fatalf("ListComments 1: %v", err)
-		}
-		if len(comments1) != 1 {
-			t.Errorf("session1: got %d comments, want 1", len(comments1))
-		}
-		if comments1[0].CommentText != comment1.CommentText {
-			t.Errorf("session1: got comment %q, want %q", comments1[0].CommentText, comment1.CommentText)
-		}
+		require.NoError(t, err, "ListComments 1")
+		require.Len(t, comments1, 1, "session1: got %d comments, want 1", len(comments1))
+		assert.Equal(t, comment1.CommentText, comments1[0].CommentText)
 
 		comments2, err := store.ListComments(ctx, session2.ID)
-		if err != nil {
-			t.Fatalf("ListComments 2: %v", err)
-		}
-		if len(comments2) != 1 {
-			t.Errorf("session2: got %d comments, want 1", len(comments2))
-		}
-		if comments2[0].CommentText != comment2.CommentText {
-			t.Errorf("session2: got comment %q, want %q", comments2[0].CommentText, comment2.CommentText)
-		}
+		require.NoError(t, err, "ListComments 2")
+		require.Len(t, comments2, 1, "session2: got %d comments, want 1", len(comments2))
+		assert.Equal(t, comment2.CommentText, comments2[0].CommentText)
 	})
 }

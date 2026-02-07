@@ -3,6 +3,8 @@ package randid
 import (
 	"regexp"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerate(t *testing.T) {
@@ -23,13 +25,8 @@ func TestGenerate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := Generate(tt.length)
 
-			if len(result) != tt.length {
-				t.Errorf("Generate(%d) returned length %d, want %d", tt.length, len(result), tt.length)
-			}
-
-			if !pattern.MatchString(result) {
-				t.Errorf("Generate(%d) = %q, want only lowercase alphanumeric [a-z0-9]", tt.length, result)
-			}
+			assert.Equal(t, tt.length, len(result), "Generate(%d) returned length %d, want %d", tt.length, len(result), tt.length)
+			assert.True(t, pattern.MatchString(result), "Generate(%d) = %q, want only lowercase alphanumeric [a-z0-9]", tt.length, result)
 		})
 	}
 }
@@ -45,9 +42,7 @@ func TestGenerate_Uniqueness(t *testing.T) {
 
 	// With 36^8 possible combinations, getting fewer than 90 unique values
 	// in 100 tries would indicate a serious randomness problem
-	if len(seen) < 90 {
-		t.Errorf("Generate produced only %d unique values in 100 calls, expected near 100", len(seen))
-	}
+	assert.GreaterOrEqual(t, len(seen), 90, "Generate produced only %d unique values in 100 calls, expected near 100", len(seen))
 }
 
 func TestGenerate_CharacterDistribution(t *testing.T) {
@@ -72,10 +67,6 @@ func TestGenerate_CharacterDistribution(t *testing.T) {
 		}
 	}
 
-	if !hasLetter {
-		t.Error("Generate never produced any lowercase letters")
-	}
-	if !hasDigit {
-		t.Error("Generate never produced any digits")
-	}
+	assert.True(t, hasLetter, "Generate never produced any lowercase letters")
+	assert.True(t, hasDigit, "Generate never produced any digits")
 }

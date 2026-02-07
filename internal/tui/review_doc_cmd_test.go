@@ -5,6 +5,8 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/tui/views/review"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestHiveDocReviewCmd_Execute(t *testing.T) {
@@ -40,14 +42,10 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	_ = cmd.Execute(m)
 
 	// Check that view stays on Sessions (picker shown on Sessions view)
-	if m.activeView != ViewSessions {
-		t.Errorf("Expected active view to stay on ViewSessions, got %v", m.activeView)
-	}
+	assert.Equal(t, ViewSessions, m.activeView)
 
 	// Check that picker modal is shown on the Model (using fallback docs)
-	if m.docPickerModal == nil {
-		t.Error("Expected picker modal to be created on Model")
-	}
+	require.NotNil(t, m.docPickerModal, "Expected picker modal to be created on Model")
 }
 
 func TestOpenDocument(t *testing.T) {
@@ -98,15 +96,12 @@ func TestOpenDocument(t *testing.T) {
 			cmd := reviewView.OpenDocumentByPath(tt.path)
 			msg := cmd()
 
-			if openMsg, ok := msg.(review.OpenDocumentMsg); ok {
-				if tt.wantErr && openMsg.Err == nil {
-					t.Error("Expected error but got none")
-				}
-				if !tt.wantErr && openMsg.Err != nil {
-					t.Errorf("Expected no error but got: %v", openMsg.Err)
-				}
+			openMsg, ok := msg.(review.OpenDocumentMsg)
+			require.True(t, ok, "Expected OpenDocumentMsg, got %T", msg)
+			if tt.wantErr {
+				assert.Error(t, openMsg.Err, "Expected error but got none")
 			} else {
-				t.Errorf("Expected OpenDocumentMsg, got %T", msg)
+				assert.NoError(t, openMsg.Err, "Expected no error but got: %v", openMsg.Err)
 			}
 		})
 	}
@@ -123,7 +118,5 @@ func TestGetAllDocuments(t *testing.T) {
 	allDocs := reviewView.GetAllDocuments()
 
 	// Should return all non-header documents
-	if len(allDocs) != 2 {
-		t.Errorf("Expected 2 documents, got %d", len(allDocs))
-	}
+	assert.Len(t, allDocs, 2, "Expected 2 documents, got %d", len(allDocs))
 }

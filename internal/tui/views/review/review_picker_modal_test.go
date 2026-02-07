@@ -2,6 +2,8 @@ package review
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestFuzzyMatch(t *testing.T) {
@@ -22,9 +24,7 @@ func TestFuzzyMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.target+"_"+tt.query, func(t *testing.T) {
 			got := fuzzyMatch(tt.target, tt.query)
-			if got != tt.want {
-				t.Errorf("fuzzyMatch(%q, %q) = %v, want %v", tt.target, tt.query, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "fuzzyMatch(%q, %q) = %v, want %v", tt.target, tt.query, got, tt.want)
 		})
 	}
 }
@@ -39,9 +39,7 @@ func TestDocumentPickerModal_UpdateFilter(t *testing.T) {
 	modal := NewDocumentPickerModal(docs, 100, 40, nil)
 
 	// Initially all documents should be shown
-	if len(modal.filteredDocs) != 3 {
-		t.Errorf("Expected 3 documents initially, got %d", len(modal.filteredDocs))
-	}
+	assert.Len(t, modal.filteredDocs, 3, "Expected 3 documents initially, got %d", len(modal.filteredDocs))
 
 	// Set filter query
 	modal.searchInput.SetValue("feat")
@@ -49,9 +47,7 @@ func TestDocumentPickerModal_UpdateFilter(t *testing.T) {
 	modal.updateFilter()
 
 	// Should match 2 documents (feature-a and feature-b)
-	if len(modal.filteredDocs) != 2 {
-		t.Errorf("Expected 2 documents after filtering 'feat', got %d", len(modal.filteredDocs))
-	}
+	assert.Len(t, modal.filteredDocs, 2, "Expected 2 documents after filtering 'feat', got %d", len(modal.filteredDocs))
 
 	// Clear filter
 	modal.searchInput.SetValue("")
@@ -59,7 +55,5 @@ func TestDocumentPickerModal_UpdateFilter(t *testing.T) {
 	modal.updateFilter()
 
 	// Should show all documents again
-	if len(modal.filteredDocs) != 3 {
-		t.Errorf("Expected 3 documents after clearing filter, got %d", len(modal.filteredDocs))
-	}
+	assert.Len(t, modal.filteredDocs, 3, "Expected 3 documents after clearing filter, got %d", len(modal.filteredDocs))
 }

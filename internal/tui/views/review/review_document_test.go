@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestInferDocumentType(t *testing.T) {
@@ -38,9 +41,7 @@ func TestInferDocumentType(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			result := inferDocumentType(tt.relPath)
-			if result != tt.expected {
-				t.Errorf("inferDocumentType(%q) = %v, want %v", tt.relPath, result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result, "inferDocumentType(%q) = %v, want %v", tt.relPath, result, tt.expected)
 		})
 	}
 }
@@ -59,9 +60,7 @@ func TestDocumentTypeString(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
 			result := tt.docType.String()
-			if result != tt.expected {
-				t.Errorf("DocumentType.String() = %q, want %q", result, tt.expected)
-			}
+			assert.Equal(t, tt.expected, result, "DocumentType.String() = %q, want %q", result, tt.expected)
 		})
 	}
 }
@@ -97,26 +96,18 @@ func TestSortDocuments(t *testing.T) {
 		{DocTypeOther, now},
 	}
 
-	if len(docs) != len(expected) {
-		t.Fatalf("expected %d documents, got %d", len(expected), len(docs))
-	}
+	require.Len(t, docs, len(expected), "expected %d documents, got %d", len(expected), len(docs))
 
 	for i, exp := range expected {
-		if docs[i].Type != exp.docType {
-			t.Errorf("position %d: expected type %v, got %v", i, exp.docType, docs[i].Type)
-		}
-		if !docs[i].ModTime.Equal(exp.modTime) {
-			t.Errorf("position %d: expected time %v, got %v", i, exp.modTime, docs[i].ModTime)
-		}
+		assert.Equal(t, exp.docType, docs[i].Type, "position %d: expected type %v, got %v", i, exp.docType, docs[i].Type)
+		assert.True(t, docs[i].ModTime.Equal(exp.modTime), "position %d: expected time %v, got %v", i, exp.modTime, docs[i].ModTime)
 	}
 }
 
 func TestDiscoverDocuments(t *testing.T) {
 	// Create temporary directory structure (simulating context directory)
 	tmpDir, err := os.MkdirTemp("", "hive-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Create context directory structure
@@ -125,9 +116,7 @@ func TestDiscoverDocuments(t *testing.T) {
 	contextPath := filepath.Join(tmpDir, "context")
 
 	for _, dir := range []string{plansPath, researchPath, contextPath} {
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.MkdirAll(dir, 0o755))
 	}
 
 	// Create test files
@@ -144,38 +133,24 @@ func TestDiscoverDocuments(t *testing.T) {
 	}
 
 	for _, tf := range testFiles {
-		if err := os.WriteFile(tf.path, []byte(tf.content), 0o644); err != nil {
-			t.Fatal(err)
-		}
+		require.NoError(t, os.WriteFile(tf.path, []byte(tf.content), 0o644))
 	}
 
 	// Discover documents
 	docs, err := DiscoverDocuments(tmpDir)
-	if err != nil {
-		t.Fatalf("DiscoverDocuments() error = %v", err)
-	}
+	require.NoError(t, err, "DiscoverDocuments() error")
 
 	// Verify count (should exclude .json file)
 	expectedCount := 5
-	if len(docs) != expectedCount {
-		t.Errorf("expected %d documents, got %d", expectedCount, len(docs))
-	}
+	assert.Len(t, docs, expectedCount, "expected %d documents, got %d", expectedCount, len(docs))
 
 	// Verify all documents have required fields
 	for i, doc := range docs {
-		if doc.Path == "" {
-			t.Errorf("document %d: empty Path", i)
-		}
-		if doc.RelPath == "" {
-			t.Errorf("document %d: empty RelPath", i)
-		}
-		if doc.ModTime.IsZero() {
-			t.Errorf("document %d: zero ModTime", i)
-		}
+		assert.NotEmpty(t, doc.Path, "document %d: empty Path", i)
+		assert.NotEmpty(t, doc.RelPath, "document %d: empty RelPath", i)
+		assert.False(t, doc.ModTime.IsZero(), "document %d: zero ModTime", i)
 		// Verify RelPath is relative
-		if filepath.IsAbs(doc.RelPath) {
-			t.Errorf("document %d: RelPath should be relative, got %q", i, doc.RelPath)
-		}
+		assert.False(t, filepath.IsAbs(doc.RelPath), "document %d: RelPath should be relative, got %q", i, doc.RelPath)
 	}
 
 	// Verify document types
@@ -192,16 +167,14 @@ func TestDiscoverDocuments(t *testing.T) {
 	}
 
 	for docType, expected := range expectedTypes {
-		if typeCount[docType] != expected {
-			t.Errorf("expected %d %v documents, got %d", expected, docType, typeCount[docType])
-		}
+		assert.Equal(t, expected, typeCount[docType], "expected %d %v documents, got %d", expected, docType, typeCount[docType])
 	}
 
 	// Verify documents are sorted by type
 	var lastType DocumentType
 	for i, doc := range docs {
-		if i > 0 && doc.Type < lastType {
-			t.Errorf("documents not sorted by type: position %d has type %v after %v", i, doc.Type, lastType)
+		if i > 0 {
+			assert.GreaterOrEqual(t, doc.Type, lastType, "documents not sorted by type: position %d has type %v after %v", i, doc.Type, lastType)
 		}
 		lastType = doc.Type
 	}
@@ -212,29 +185,17 @@ func TestDiscoverDocuments_NoContextDir(t *testing.T) {
 	nonExistentDir := "/tmp/hive-test-nonexistent-" + time.Now().Format("20060102150405")
 
 	docs, err := DiscoverDocuments(nonExistentDir)
-	if err != nil {
-		t.Fatalf("DiscoverDocuments() error = %v", err)
-	}
-
-	if len(docs) != 0 {
-		t.Errorf("expected 0 documents, got %d", len(docs))
-	}
+	require.NoError(t, err, "DiscoverDocuments() error")
+	assert.Empty(t, docs, "expected 0 documents, got %d", len(docs))
 }
 
 func TestDiscoverDocuments_EmptyContextDir(t *testing.T) {
 	tmpDir, err := os.MkdirTemp("", "hive-test-*")
-	if err != nil {
-		t.Fatal(err)
-	}
+	require.NoError(t, err)
 	defer func() { _ = os.RemoveAll(tmpDir) }()
 
 	// Empty context directory
 	docs, err := DiscoverDocuments(tmpDir)
-	if err != nil {
-		t.Fatalf("DiscoverDocuments() error = %v", err)
-	}
-
-	if len(docs) != 0 {
-		t.Errorf("expected 0 documents, got %d", len(docs))
-	}
+	require.NoError(t, err, "DiscoverDocuments() error")
+	assert.Empty(t, docs, "expected 0 documents, got %d", len(docs))
 }

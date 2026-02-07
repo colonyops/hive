@@ -4,6 +4,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestGenerateReviewFeedback(t *testing.T) {
@@ -106,14 +108,11 @@ func TestGenerateReviewFeedback(t *testing.T) {
 			got := GenerateReviewFeedback(tt.session, tt.docRelPath)
 
 			if tt.wantEmpty {
-				if got != "" {
-					t.Errorf("GenerateReviewFeedback() = %q, want empty string", got)
-				}
+				assert.Empty(t, got, "GenerateReviewFeedback() = %q, want empty string", got)
 				return
 			}
 
-			if got != tt.want {
-				t.Errorf("GenerateReviewFeedback() mismatch:\ngot:\n%s\n\nwant:\n%s", got, tt.want)
+			if !assert.Equal(t, tt.want, got, "GenerateReviewFeedback() mismatch:\ngot:\n%s\n\nwant:\n%s", got, tt.want) {
 				// Show detailed diff
 				gotLines := strings.Split(got, "\n")
 				wantLines := strings.Split(tt.want, "\n")

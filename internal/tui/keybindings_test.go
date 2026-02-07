@@ -5,6 +5,8 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
@@ -91,11 +93,9 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			action, ok := handler.Resolve(tt.key, tt.sess)
-			if ok != tt.wantOK {
-				t.Errorf("Resolve() ok = %v, want %v", ok, tt.wantOK)
-			}
-			if ok && action.Type != tt.wantTyp {
-				t.Errorf("Resolve() action.Type = %v, want %v", action.Type, tt.wantTyp)
+			assert.Equal(t, tt.wantOK, ok, "Resolve() ok = %v, want %v", ok, tt.wantOK)
+			if ok {
+				assert.Equal(t, tt.wantTyp, action.Type, "Resolve() action.Type = %v, want %v", action.Type, tt.wantTyp)
 			}
 		})
 	}
@@ -186,20 +186,12 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			action := handler.ResolveUserCommand(tt.cmdName, tt.cmd, sess, tt.args)
 
-			if action.Key != tt.wantKey {
-				t.Errorf("ResolveUserCommand() Key = %v, want %v", action.Key, tt.wantKey)
-			}
-			if action.Help != tt.wantHelp {
-				t.Errorf("ResolveUserCommand() Help = %v, want %v", action.Help, tt.wantHelp)
-			}
-			if action.Exit != tt.wantExit {
-				t.Errorf("ResolveUserCommand() Exit = %v, want %v", action.Exit, tt.wantExit)
-			}
-			if action.Type != tt.wantType {
-				t.Errorf("ResolveUserCommand() Type = %v, want %v", action.Type, tt.wantType)
-			}
-			if tt.wantCmdPart != "" && action.ShellCmd != tt.wantCmdPart {
-				t.Errorf("ResolveUserCommand() ShellCmd = %v, want %v", action.ShellCmd, tt.wantCmdPart)
+			assert.Equal(t, tt.wantKey, action.Key, "ResolveUserCommand() Key = %v, want %v", action.Key, tt.wantKey)
+			assert.Equal(t, tt.wantHelp, action.Help, "ResolveUserCommand() Help = %v, want %v", action.Help, tt.wantHelp)
+			assert.Equal(t, tt.wantExit, action.Exit, "ResolveUserCommand() Exit = %v, want %v", action.Exit, tt.wantExit)
+			assert.Equal(t, tt.wantType, action.Type, "ResolveUserCommand() Type = %v, want %v", action.Type, tt.wantType)
+			if tt.wantCmdPart != "" {
+				assert.Equal(t, tt.wantCmdPart, action.ShellCmd, "ResolveUserCommand() ShellCmd = %v, want %v", action.ShellCmd, tt.wantCmdPart)
 			}
 		})
 	}
@@ -233,12 +225,8 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		action, ok := handler.Resolve("r", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.Help != "keybinding help" {
-			t.Errorf("Help = %q, want %q", action.Help, "keybinding help")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "keybinding help", action.Help)
 	})
 
 	t.Run("keybinding confirm overrides command confirm", func(t *testing.T) {
@@ -248,12 +236,8 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		action, ok := handler.Resolve("r", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.Confirm != "keybinding confirm" {
-			t.Errorf("Confirm = %q, want %q", action.Confirm, "keybinding confirm")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "keybinding confirm", action.Confirm)
 	})
 
 	t.Run("command values used when keybinding doesn't override", func(t *testing.T) {
@@ -263,18 +247,10 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		action, ok := handler.Resolve("s", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.Help != "shell help" {
-			t.Errorf("Help = %q, want %q", action.Help, "shell help")
-		}
-		if action.Confirm != "shell confirm" {
-			t.Errorf("Confirm = %q, want %q", action.Confirm, "shell confirm")
-		}
-		if !action.Silent {
-			t.Error("Silent = false, want true")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "shell help", action.Help)
+		assert.Equal(t, "shell confirm", action.Confirm)
+		assert.True(t, action.Silent, "Silent = false, want true")
 	})
 
 	t.Run("invalid command reference returns false", func(t *testing.T) {
@@ -284,9 +260,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		_, ok := handler.Resolve("x", sess)
-		if ok {
-			t.Error("expected ok = false for invalid command reference")
-		}
+		assert.False(t, ok, "expected ok = false for invalid command reference")
 	})
 
 	t.Run("command with neither action nor sh returns false", func(t *testing.T) {
@@ -300,9 +274,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, emptyCommands)
 
 		_, ok := handler.Resolve("e", sess)
-		if ok {
-			t.Error("expected ok = false for command with neither action nor sh")
-		}
+		assert.False(t, ok, "expected ok = false for command with neither action nor sh")
 	})
 
 	t.Run("template error sets Err field", func(t *testing.T) {
@@ -315,15 +287,9 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, badTemplateCommands)
 
 		action, ok := handler.Resolve("b", sess)
-		if !ok {
-			t.Fatal("expected ok = true even with template error")
-		}
-		if action.Err == nil {
-			t.Error("expected action.Err to be non-nil for template error")
-		}
-		if action.ShellCmd != "" {
-			t.Errorf("expected empty ShellCmd, got %q", action.ShellCmd)
-		}
+		require.True(t, ok, "expected ok = true even with template error")
+		assert.Error(t, action.Err, "expected action.Err to be non-nil for template error")
+		assert.Empty(t, action.ShellCmd, "expected empty ShellCmd, got %q", action.ShellCmd)
 	})
 }
 
@@ -343,15 +309,9 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 
 		entries := handler.HelpEntries()
 		// Entries are sorted by key
-		if len(entries) != 2 {
-			t.Fatalf("expected 2 entries, got %d", len(entries))
-		}
-		if entries[0] != "[o] open in editor" {
-			t.Errorf("entries[0] = %q, want %q", entries[0], "[o] open in editor")
-		}
-		if entries[1] != "[r] recycle session" {
-			t.Errorf("entries[1] = %q, want %q", entries[1], "[r] recycle session")
-		}
+		require.Len(t, entries, 2, "expected 2 entries, got %d", len(entries))
+		assert.Equal(t, "[o] open in editor", entries[0])
+		assert.Equal(t, "[r] recycle session", entries[1])
 	})
 
 	t.Run("keybinding help overrides command help", func(t *testing.T) {
@@ -361,12 +321,8 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
-		if len(entries) != 1 {
-			t.Fatalf("expected 1 entry, got %d", len(entries))
-		}
-		if entries[0] != "[r] custom help" {
-			t.Errorf("entries[0] = %q, want %q", entries[0], "[r] custom help")
-		}
+		require.Len(t, entries, 1, "expected 1 entry, got %d", len(entries))
+		assert.Equal(t, "[r] custom help", entries[0])
 	})
 
 	t.Run("uses action name when help empty", func(t *testing.T) {
@@ -376,12 +332,8 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		handler := NewKeybindingResolver(keybindings, commands)
 
 		entries := handler.HelpEntries()
-		if len(entries) != 1 {
-			t.Fatalf("expected 1 entry, got %d", len(entries))
-		}
-		if entries[0] != "[d] delete" {
-			t.Errorf("entries[0] = %q, want %q", entries[0], "[d] delete")
-		}
+		require.Len(t, entries, 1, "expected 1 entry, got %d", len(entries))
+		assert.Equal(t, "[d] delete", entries[0])
 	})
 
 	t.Run("invalid command reference is filtered out", func(t *testing.T) {
@@ -392,9 +344,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 
 		entries := handler.HelpEntries()
 		// Invalid command references are filtered out (not shown in help)
-		if len(entries) != 0 {
-			t.Fatalf("expected 0 entries, got %d", len(entries))
-		}
+		assert.Empty(t, entries, "expected 0 entries, got %d", len(entries))
 	})
 }
 
@@ -418,12 +368,8 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 		handler.SetToolLookup(func(id string) string { return "claude" })
 
 		action, ok := handler.Resolve("w", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.ShellCmd != "echo claude-window claude" {
-			t.Errorf("ShellCmd = %q, want %q", action.ShellCmd, "echo claude-window claude")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "echo claude-window claude", action.ShellCmd)
 	})
 
 	t.Run("SetSelectedWindow overrides lookup", func(t *testing.T) {
@@ -433,12 +379,8 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 		handler.SetSelectedWindow("override-window")
 
 		action, ok := handler.Resolve("w", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.ShellCmd != "echo override-window claude" {
-			t.Errorf("ShellCmd = %q, want %q", action.ShellCmd, "echo override-window claude")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "echo override-window claude", action.ShellCmd)
 	})
 
 	t.Run("override is consumed after resolve", func(t *testing.T) {
@@ -449,21 +391,13 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 
 		// First resolve consumes the override
 		action, ok := handler.Resolve("w", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.ShellCmd != "echo override-window claude" {
-			t.Errorf("first resolve: ShellCmd = %q, want %q", action.ShellCmd, "echo override-window claude")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "echo override-window claude", action.ShellCmd, "first resolve")
 
 		// Second resolve should use the lookup (override was consumed)
 		action, ok = handler.Resolve("w", sess)
-		if !ok {
-			t.Fatal("expected ok = true")
-		}
-		if action.ShellCmd != "echo default-window claude" {
-			t.Errorf("second resolve: ShellCmd = %q, want %q", action.ShellCmd, "echo default-window claude")
-		}
+		require.True(t, ok, "expected ok = true")
+		assert.Equal(t, "echo default-window claude", action.ShellCmd, "second resolve")
 	})
 
 	t.Run("ResolveUserCommand also consumes override", func(t *testing.T) {
@@ -474,15 +408,11 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 
 		cmd := config.UserCommand{Sh: "echo {{ .TmuxWindow }}", Help: "test"}
 		action := handler.ResolveUserCommand("test", cmd, sess, nil)
-		if action.ShellCmd != "echo override-window" {
-			t.Errorf("ShellCmd = %q, want %q", action.ShellCmd, "echo override-window")
-		}
+		assert.Equal(t, "echo override-window", action.ShellCmd)
 
 		// Override should be consumed
 		action = handler.ResolveUserCommand("test", cmd, sess, nil)
-		if action.ShellCmd != "echo default-window" {
-			t.Errorf("after consume: ShellCmd = %q, want %q", action.ShellCmd, "echo default-window")
-		}
+		assert.Equal(t, "echo default-window", action.ShellCmd, "after consume")
 	})
 }
 
@@ -511,12 +441,8 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 		for _, view := range []ViewType{ViewSessions, ViewMessages, ViewReview} {
 			handler.SetActiveView(view)
 			action, ok := handler.Resolve("g", sess)
-			if !ok {
-				t.Errorf("global command should work in view %s", view.String())
-			}
-			if action.Type != ActionTypeShell {
-				t.Errorf("expected shell action, got %v", action.Type)
-			}
+			assert.True(t, ok, "global command should work in view %s", view.String())
+			assert.Equal(t, ActionTypeShell, action.Type)
 		}
 	})
 
@@ -524,77 +450,53 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 		// review-cmd should only work in review view
 		handler.SetActiveView(ViewReview)
 		action, ok := handler.Resolve("r", sess)
-		if !ok {
-			t.Error("review-cmd should work in review view")
-		}
-		if action.Type != ActionTypeShell {
-			t.Errorf("expected shell action, got %v", action.Type)
-		}
+		assert.True(t, ok, "review-cmd should work in review view")
+		assert.Equal(t, ActionTypeShell, action.Type)
 
 		// Should not work in sessions view
 		handler.SetActiveView(ViewSessions)
 		_, ok = handler.Resolve("r", sess)
-		if ok {
-			t.Error("review-cmd should not work in sessions view")
-		}
+		assert.False(t, ok, "review-cmd should not work in sessions view")
 
 		// Should not work in messages view
 		handler.SetActiveView(ViewMessages)
 		_, ok = handler.Resolve("r", sess)
-		if ok {
-			t.Error("review-cmd should not work in messages view")
-		}
+		assert.False(t, ok, "review-cmd should not work in messages view")
 	})
 
 	t.Run("multi-scope command works in multiple views", func(t *testing.T) {
 		// Should work in review view
 		handler.SetActiveView(ViewReview)
 		action, ok := handler.Resolve("m", sess)
-		if !ok {
-			t.Error("multi-cmd should work in review view")
-		}
-		if action.Type != ActionTypeShell {
-			t.Errorf("expected shell action, got %v", action.Type)
-		}
+		assert.True(t, ok, "multi-cmd should work in review view")
+		assert.Equal(t, ActionTypeShell, action.Type)
 
 		// Should work in messages view
 		handler.SetActiveView(ViewMessages)
 		action, ok = handler.Resolve("m", sess)
-		if !ok {
-			t.Error("multi-cmd should work in messages view")
-		}
-		if action.Type != ActionTypeShell {
-			t.Errorf("expected shell action, got %v", action.Type)
-		}
+		assert.True(t, ok, "multi-cmd should work in messages view")
+		assert.Equal(t, ActionTypeShell, action.Type)
 
 		// Should not work in sessions view
 		handler.SetActiveView(ViewSessions)
 		_, ok = handler.Resolve("m", sess)
-		if ok {
-			t.Error("multi-cmd should not work in sessions view")
-		}
+		assert.False(t, ok, "multi-cmd should not work in sessions view")
 	})
 
 	t.Run("help entries filtered by scope", func(t *testing.T) {
 		// In sessions view, should only see global and sessions commands
 		handler.SetActiveView(ViewSessions)
 		entries := handler.HelpEntries()
-		if len(entries) != 2 {
-			t.Errorf("expected 2 entries in sessions view, got %d", len(entries))
-		}
+		assert.Len(t, entries, 2, "expected 2 entries in sessions view, got %d", len(entries))
 
 		// In review view, should see global, review, and multi commands
 		handler.SetActiveView(ViewReview)
 		entries = handler.HelpEntries()
-		if len(entries) != 3 {
-			t.Errorf("expected 3 entries in review view, got %d", len(entries))
-		}
+		assert.Len(t, entries, 3, "expected 3 entries in review view, got %d", len(entries))
 
 		// In messages view, should see global and multi commands
 		handler.SetActiveView(ViewMessages)
 		entries = handler.HelpEntries()
-		if len(entries) != 2 {
-			t.Errorf("expected 2 entries in messages view, got %d", len(entries))
-		}
+		assert.Len(t, entries, 2, "expected 2 entries in messages view, got %d", len(entries))
 	})
 }

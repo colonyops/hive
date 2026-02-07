@@ -7,6 +7,8 @@ import (
 	"testing"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
 )
 
@@ -29,10 +31,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	err := app.Run(context.Background(), []string{"hive", "msg", "topic"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic"}))
 
 	output := buf.String()
 	// Remove trailing newline
@@ -42,9 +41,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 
 	// Should be "agent.XXXX" format
 	pattern := regexp.MustCompile(`^agent\.[a-z0-9]{4}$`)
-	if !pattern.MatchString(output) {
-		t.Errorf("output %q does not match expected pattern agent.[a-z0-9]{4}", output)
-	}
+	assert.True(t, pattern.MatchString(output), "output %q does not match expected pattern agent.[a-z0-9]{4}", output)
 }
 
 func TestRunTopic_CustomPrefixFlag(t *testing.T) {
@@ -66,10 +63,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	err := app.Run(context.Background(), []string{"hive", "msg", "topic", "--prefix", "task"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "--prefix", "task"}))
 
 	output := buf.String()
 	if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -78,9 +72,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 
 	// Should be "task.XXXX" format (flag overrides config)
 	pattern := regexp.MustCompile(`^task\.[a-z0-9]{4}$`)
-	if !pattern.MatchString(output) {
-		t.Errorf("output %q does not match expected pattern task.[a-z0-9]{4}", output)
-	}
+	assert.True(t, pattern.MatchString(output), "output %q does not match expected pattern task.[a-z0-9]{4}", output)
 }
 
 func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
@@ -102,10 +94,7 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	err := app.Run(context.Background(), []string{"hive", "msg", "topic", "--prefix", ""})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic", "--prefix", ""}))
 
 	output := buf.String()
 	if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -114,14 +103,10 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 
 	// Should be just "XXXX" format (no prefix, no dot)
 	pattern := regexp.MustCompile(`^[a-z0-9]{4}$`)
-	if !pattern.MatchString(output) {
-		t.Errorf("output %q does not match expected pattern [a-z0-9]{4}", output)
-	}
+	assert.True(t, pattern.MatchString(output), "output %q does not match expected pattern [a-z0-9]{4}", output)
 
 	// Verify no dot present
-	if bytes.Contains([]byte(output), []byte(".")) {
-		t.Errorf("output %q should not contain a dot when prefix is empty", output)
-	}
+	assert.False(t, bytes.Contains([]byte(output), []byte(".")), "output %q should not contain a dot when prefix is empty", output)
 }
 
 func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
@@ -143,10 +128,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 	}
 	cmd.Register(app)
 
-	err := app.Run(context.Background(), []string{"hive", "msg", "topic"})
-	if err != nil {
-		t.Fatalf("unexpected error: %v", err)
-	}
+	require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic"}))
 
 	output := buf.String()
 	if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -155,9 +137,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 
 	// Should be just "XXXX" format (no prefix from config)
 	pattern := regexp.MustCompile(`^[a-z0-9]{4}$`)
-	if !pattern.MatchString(output) {
-		t.Errorf("output %q does not match expected pattern [a-z0-9]{4}", output)
-	}
+	assert.True(t, pattern.MatchString(output), "output %q does not match expected pattern [a-z0-9]{4}", output)
 }
 
 func TestRunTopic_Uniqueness(t *testing.T) {
@@ -183,10 +163,7 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 		}
 		cmd.Register(app)
 
-		err := app.Run(context.Background(), []string{"hive", "msg", "topic"})
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
+		require.NoError(t, app.Run(context.Background(), []string{"hive", "msg", "topic"}))
 
 		output := buf.String()
 		if len(output) > 0 && output[len(output)-1] == '\n' {
@@ -197,7 +174,5 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 	}
 
 	// Should have generated unique IDs (with 36^4 = 1.6M combinations, duplicates in 10 tries would be very rare)
-	if len(seen) < 9 {
-		t.Errorf("generated only %d unique topic IDs in 10 attempts, expected near 10", len(seen))
-	}
+	assert.GreaterOrEqual(t, len(seen), 9, "generated only %d unique topic IDs in 10 attempts, expected near 10", len(seen))
 }

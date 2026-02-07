@@ -2,6 +2,8 @@ package tui
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestParseCommandInput(t *testing.T) {
@@ -80,19 +82,9 @@ func TestParseCommandInput(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			result := ParseCommandInput(tt.input)
 
-			if result.Name != tt.expected.Name {
-				t.Errorf("ParseCommandInput(%q) name = %q, want %q", tt.input, result.Name, tt.expected.Name)
-			}
-
-			if len(result.Args) != len(tt.expected.Args) {
-				t.Errorf("ParseCommandInput(%q) args length = %d, want %d", tt.input, len(result.Args), len(tt.expected.Args))
-			}
-
-			for i := range result.Args {
-				if result.Args[i] != tt.expected.Args[i] {
-					t.Errorf("ParseCommandInput(%q) args[%d] = %q, want %q", tt.input, i, result.Args[i], tt.expected.Args[i])
-				}
-			}
+			assert.Equal(t, tt.expected.Name, result.Name, "ParseCommandInput(%q) name = %q, want %q", tt.input, result.Name, tt.expected.Name)
+			assert.Len(t, result.Args, len(tt.expected.Args), "ParseCommandInput(%q) args length = %d, want %d", tt.input, len(result.Args), len(tt.expected.Args))
+			assert.Equal(t, tt.expected.Args, result.Args, "ParseCommandInput(%q) args = %v, want %v", tt.input, result.Args, tt.expected.Args)
 		})
 	}
 }

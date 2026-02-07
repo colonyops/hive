@@ -14,6 +14,8 @@ import (
 	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/stores"
 	"github.com/hay-kot/hive/internal/styles"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // keyMsg creates a KeyMsg for testing.
@@ -58,42 +60,25 @@ func TestBuildTreeItems(t *testing.T) {
 
 	// Should have: 3 headers (Plan, Research, Context) + 4 documents = 7 items
 	expectedCount := 7
-	if len(items) != expectedCount {
-		t.Fatalf("expected %d items, got %d", expectedCount, len(items))
-	}
+	require.Len(t, items, expectedCount, "expected %d items, got %d", expectedCount, len(items))
 
 	// First item should be Plans header
 	item0, ok := items[0].(TreeItem)
-	if !ok {
-		t.Fatal("item 0 is not a TreeItem")
-	}
-	if !item0.IsHeader || item0.HeaderName != "Plan" {
-		t.Errorf("expected Plans header, got: IsHeader=%v, HeaderName=%s", item0.IsHeader, item0.HeaderName)
-	}
+	require.True(t, ok, "item 0 is not a TreeItem")
+	assert.True(t, item0.IsHeader)
+	assert.Equal(t, "Plan", item0.HeaderName, "expected Plans header, got: IsHeader=%v, HeaderName=%s", item0.IsHeader, item0.HeaderName)
 
 	// Second item should be first plan document
 	item1, ok := items[1].(TreeItem)
-	if !ok {
-		t.Fatal("item 1 is not a TreeItem")
-	}
-	if item1.IsHeader {
-		t.Error("expected document, got header")
-	}
-	if item1.Document.RelPath != "plans/plan1.md" {
-		t.Errorf("expected plan1.md, got %s", item1.Document.RelPath)
-	}
-	if item1.IsLastInType {
-		t.Error("expected IsLastInType=false for first plan")
-	}
+	require.True(t, ok, "item 1 is not a TreeItem")
+	assert.False(t, item1.IsHeader, "expected document, got header")
+	assert.Equal(t, "plans/plan1.md", item1.Document.RelPath)
+	assert.False(t, item1.IsLastInType, "expected IsLastInType=false for first plan")
 
 	// Third item should be second plan document (last in type)
 	item2, ok := items[2].(TreeItem)
-	if !ok {
-		t.Fatal("item 2 is not a TreeItem")
-	}
-	if !item2.IsLastInType {
-		t.Error("expected IsLastInType=true for second plan")
-	}
+	require.True(t, ok, "item 2 is not a TreeItem")
+	assert.True(t, item2.IsLastInType, "expected IsLastInType=true for second plan")
 }
 
 func TestTreeItemFilterValue(t *testing.T) {
@@ -102,9 +87,7 @@ func TestTreeItemFilterValue(t *testing.T) {
 		HeaderName: "Plans",
 	}
 
-	if header.FilterValue() != "" {
-		t.Errorf("expected empty filter value for header, got %s", header.FilterValue())
-	}
+	assert.Empty(t, header.FilterValue(), "expected empty filter value for header, got %s", header.FilterValue())
 
 	doc := TreeItem{
 		IsHeader: false,
@@ -114,9 +97,7 @@ func TestTreeItemFilterValue(t *testing.T) {
 	}
 
 	filterValue := doc.FilterValue()
-	if filterValue != "plans/implementation.md" {
-		t.Errorf("expected 'plans/implementation.md', got %s", filterValue)
-	}
+	assert.Equal(t, "plans/implementation.md", filterValue)
 }
 
 func TestNew(t *testing.T) {
@@ -132,9 +113,7 @@ func TestNew(t *testing.T) {
 	view := New(docs, "", nil)
 
 	// Should not panic and should have a list
-	if view.list.Items() == nil {
-		t.Error("expected list items to be initialized")
-	}
+	require.NotNil(t, view.list.Items(), "expected list items to be initialized")
 
 	// Should be able to set size
 	view.SetSize(80, 24)
@@ -148,15 +127,11 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	view := New([]Document{}, tmpDir, nil)
 
 	// View should have a watcher
-	if view.watcher == nil {
-		t.Error("expected watcher to be initialized")
-	}
+	require.NotNil(t, view.watcher, "expected watcher to be initialized")
 
 	// Init should return a command
 	cmd := view.Init()
-	if cmd == nil {
-		t.Error("expected Init to return a watch command")
-	}
+	require.NotNil(t, cmd, "expected Init to return a watch command")
 }
 
 func TestCommentDeletionWithConfirmation(t *testing.T) {
@@ -198,29 +173,17 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 	// Press 'd' should show confirmation modal
 	view, _ = view.Update(keyMsg("d"))
 
-	if view.confirmModal == nil {
-		t.Fatal("expected confirmation modal to be shown")
-	}
-
-	if view.pendingDeleteLine != 2 {
-		t.Fatalf("expected pendingDeleteLine=2, got %d", view.pendingDeleteLine)
-	}
+	require.NotNil(t, view.confirmModal, "expected confirmation modal to be shown")
+	assert.Equal(t, 2, view.pendingDeleteLine, "expected pendingDeleteLine=2, got %d", view.pendingDeleteLine)
 
 	// Press 'y' to confirm deletion
 	view, _ = view.Update(keyMsg("y"))
 
-	if view.confirmModal != nil {
-		t.Error("expected confirmation modal to be closed")
-	}
-
-	if view.pendingDeleteLine != 0 {
-		t.Errorf("expected pendingDeleteLine to be cleared, got %d", view.pendingDeleteLine)
-	}
+	assert.Nil(t, view.confirmModal, "expected confirmation modal to be closed")
+	assert.Equal(t, 0, view.pendingDeleteLine, "expected pendingDeleteLine to be cleared, got %d", view.pendingDeleteLine)
 
 	// Comment should be deleted (session cleared when all comments removed)
-	if view.activeSession != nil {
-		t.Errorf("expected session to be cleared, got %d comments", len(view.activeSession.Comments))
-	}
+	assert.Nil(t, view.activeSession, "expected session to be cleared")
 }
 
 func TestCommentDeletionCancellation(t *testing.T) {
@@ -265,18 +228,11 @@ func TestCommentDeletionCancellation(t *testing.T) {
 	// Press 'n' to cancel
 	view, _ = view.Update(keyMsg("n"))
 
-	if view.confirmModal != nil {
-		t.Error("expected confirmation modal to be closed")
-	}
-
-	if view.pendingDeleteLine != 0 {
-		t.Error("expected pendingDeleteLine to be cleared")
-	}
+	assert.Nil(t, view.confirmModal, "expected confirmation modal to be closed")
+	assert.Equal(t, 0, view.pendingDeleteLine, "expected pendingDeleteLine to be cleared")
 
 	// Comment should still exist
-	if len(view.activeSession.Comments) != 1 {
-		t.Errorf("expected 1 comment, got %d", len(view.activeSession.Comments))
-	}
+	assert.Len(t, view.activeSession.Comments, 1, "expected 1 comment, got %d", len(view.activeSession.Comments))
 }
 
 func TestReviewDiscardWithConfirmation(t *testing.T) {
@@ -324,40 +280,26 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 	// Press 'D' should show confirmation modal
 	view, _ = view.Update(keyMsg("D"))
 
-	if view.confirmModal == nil {
-		t.Fatal("expected confirmation modal to be shown")
-	}
-
-	if !view.pendingDiscard {
-		t.Error("expected pendingDiscard to be true")
-	}
+	require.NotNil(t, view.confirmModal, "expected confirmation modal to be shown")
+	assert.True(t, view.pendingDiscard, "expected pendingDiscard to be true")
 
 	// Press 'y' to confirm discard
 	view, cmd := view.Update(keyMsg("y"))
 
-	if view.confirmModal != nil {
-		t.Error("expected confirmation modal to be closed")
-	}
-
-	if view.pendingDiscard {
-		t.Error("expected pendingDiscard to be cleared")
-	}
+	assert.Nil(t, view.confirmModal, "expected confirmation modal to be closed")
+	assert.False(t, view.pendingDiscard, "expected pendingDiscard to be cleared")
 
 	// Execute the discard command
 	if cmd != nil {
 		msg := cmd()
-		if _, ok := msg.(reviewDiscardedMsg); !ok {
-			t.Errorf("expected reviewDiscardedMsg, got %T", msg)
-		}
+		assert.IsType(t, reviewDiscardedMsg{}, msg, "expected reviewDiscardedMsg, got %T", msg)
 
 		// Process the discard message
 		view, _ = view.Update(msg)
 	}
 
 	// Session should be cleared
-	if view.activeSession != nil {
-		t.Error("expected session to be cleared after discard")
-	}
+	assert.Nil(t, view.activeSession, "expected session to be cleared after discard")
 }
 
 func TestReviewDiscardCancellation(t *testing.T) {
@@ -399,22 +341,12 @@ func TestReviewDiscardCancellation(t *testing.T) {
 	// Press 'n' to cancel
 	view, _ = view.Update(keyMsg("n"))
 
-	if view.confirmModal != nil {
-		t.Error("expected confirmation modal to be closed")
-	}
-
-	if view.pendingDiscard {
-		t.Error("expected pendingDiscard to be cleared")
-	}
+	assert.Nil(t, view.confirmModal, "expected confirmation modal to be closed")
+	assert.False(t, view.pendingDiscard, "expected pendingDiscard to be cleared")
 
 	// Session should still exist
-	if view.activeSession == nil {
-		t.Error("expected session to still exist after cancellation")
-	}
-
-	if len(view.activeSession.Comments) != 1 {
-		t.Errorf("expected 1 comment, got %d", len(view.activeSession.Comments))
-	}
+	require.NotNil(t, view.activeSession, "expected session to still exist after cancellation")
+	assert.Len(t, view.activeSession.Comments, 1, "expected 1 comment, got %d", len(view.activeSession.Comments))
 }
 
 func TestReviewDiscardWithNoComments(t *testing.T) {
@@ -443,13 +375,8 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 	// Press 'D' should NOT show confirmation modal (no comments to discard)
 	view, _ = view.Update(keyMsg("D"))
 
-	if view.confirmModal != nil {
-		t.Error("expected no confirmation modal when there are no comments")
-	}
-
-	if view.pendingDiscard {
-		t.Error("expected pendingDiscard to remain false")
-	}
+	assert.Nil(t, view.confirmModal, "expected no confirmation modal when there are no comments")
+	assert.False(t, view.pendingDiscard, "expected pendingDiscard to remain false")
 }
 
 func TestCommentVisualStyling(t *testing.T) {
@@ -489,14 +416,10 @@ func TestCommentVisualStyling(t *testing.T) {
 	rendered, _ := view.insertCommentsInline(content)
 
 	// Check that the rendered output contains the profile placeholder
-	if !strings.Contains(rendered, styles.IconProfile) {
-		t.Errorf("expected rendered output to contain '%s' placeholder", styles.IconProfile)
-	}
+	assert.Contains(t, rendered, styles.IconProfile, "expected rendered output to contain '%s' placeholder", styles.IconProfile)
 
 	// Check that the comment text is present
-	if !strings.Contains(rendered, "This is a test comment") {
-		t.Error("expected rendered output to contain comment text")
-	}
+	assert.Contains(t, rendered, "This is a test comment", "expected rendered output to contain comment text")
 
 	// Check that there's increased indentation (at least 4 spaces before the styled content)
 	lines := strings.Split(rendered, "\n")
@@ -504,17 +427,13 @@ func TestCommentVisualStyling(t *testing.T) {
 	for _, line := range lines {
 		if strings.Contains(line, styles.IconProfile) {
 			// Check for leading spaces (indentation)
-			if !strings.HasPrefix(line, "    ") {
-				t.Error("expected comment line to have increased indentation (at least 4 spaces)")
-			}
+			assert.True(t, strings.HasPrefix(line, "    "), "expected comment line to have increased indentation (at least 4 spaces)")
 			commentLineFound = true
 			break
 		}
 	}
 
-	if !commentLineFound {
-		t.Error("expected to find a comment line in rendered output")
-	}
+	assert.True(t, commentLineFound, "expected to find a comment line in rendered output")
 }
 
 func TestLineMappingWithComments(t *testing.T) {
@@ -584,34 +503,26 @@ func TestLineMappingWithComments(t *testing.T) {
 
 	for _, tt := range tests {
 		got := lineMapping[tt.docLine]
-		if got != tt.displayLine {
-			t.Errorf("lineMapping[%d] = %d, want %d", tt.docLine, got, tt.displayLine)
-		}
+		assert.Equal(t, tt.displayLine, got, "lineMapping[%d] = %d, want %d", tt.docLine, got, tt.displayLine)
 	}
 
 	// Test mapDocToDisplay helper
 	for _, tt := range tests {
 		got := view.mapDocToDisplay(tt.docLine, lineMapping)
-		if got != tt.displayLine {
-			t.Errorf("mapDocToDisplay(%d) = %d, want %d", tt.docLine, got, tt.displayLine)
-		}
+		assert.Equal(t, tt.displayLine, got, "mapDocToDisplay(%d) = %d, want %d", tt.docLine, got, tt.displayLine)
 	}
 
 	// Test mapDisplayToDoc helper (reverse mapping)
 	for _, tt := range tests {
 		got := view.mapDisplayToDoc(tt.displayLine, lineMapping)
-		if got != tt.docLine {
-			t.Errorf("mapDisplayToDoc(%d) = %d, want %d", tt.displayLine, got, tt.docLine)
-		}
+		assert.Equal(t, tt.docLine, got, "mapDisplayToDoc(%d) = %d, want %d", tt.displayLine, got, tt.docLine)
 	}
 
 	// Test that comment lines map back to 0 (not a document line)
 	commentDisplayLines := []int{3, 6} // Lines where comments are inserted
 	for _, displayLine := range commentDisplayLines {
 		got := view.mapDisplayToDoc(displayLine, lineMapping)
-		if got != 0 {
-			t.Errorf("mapDisplayToDoc(%d) = %d, want 0 (comment line, not a doc line)", displayLine, got)
-		}
+		assert.Equal(t, 0, got, "mapDisplayToDoc(%d) = %d, want 0 (comment line, not a doc line)", displayLine, got)
 	}
 }
 
@@ -626,14 +537,10 @@ func TestView_WithPickerModal(t *testing.T) {
 	// Show picker
 	_ = reviewView.ShowDocumentPicker()
 
-	if reviewView.pickerModal == nil {
-		t.Error("Expected picker modal to be created")
-	}
+	require.NotNil(t, reviewView.pickerModal, "Expected picker modal to be created")
 
 	// Verify picker has documents
-	if len(reviewView.pickerModal.documents) != 1 {
-		t.Errorf("Expected 1 document in picker, got %d", len(reviewView.pickerModal.documents))
-	}
+	assert.Len(t, reviewView.pickerModal.documents, 1, "Expected 1 document in picker, got %d", len(reviewView.pickerModal.documents))
 }
 
 func TestView_HasPickerModalField(t *testing.T) {
@@ -706,9 +613,7 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 	// Set cursor to doc line 5 (which should be at display line 7 due to 2 inserted comments)
 	view.cursorLine = 5
 	displayLine := view.mapDocToDisplay(5, lineMapping)
-	if displayLine != 7 {
-		t.Fatalf("expected doc line 5 to map to display line 7, got %d", displayLine)
-	}
+	require.Equal(t, 7, displayLine, "expected doc line 5 to map to display line 7, got %d", displayLine)
 
 	// Call ensureCursorVisible
 	view.ensureCursorVisible()
@@ -718,10 +623,9 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 	visibleHeight := view.viewport.VisibleLineCount() - 1 // -1 for status bar
 
 	// Display line 7 should be visible within the viewport
-	if displayLine < offset+1 || displayLine > offset+visibleHeight {
-		t.Errorf("display line %d not visible in viewport (offset=%d, visibleHeight=%d)",
-			displayLine, offset, visibleHeight)
-	}
+	assert.True(t, displayLine >= offset+1 && displayLine <= offset+visibleHeight,
+		"display line %d not visible in viewport (offset=%d, visibleHeight=%d)",
+		displayLine, offset, visibleHeight)
 }
 
 // TestJumpToMatchWithComments verifies that jumpToMatch scrolls to the correct
@@ -797,23 +701,18 @@ func TestJumpToMatchWithComments(t *testing.T) {
 
 	// Doc line 3 should map to display line 5 (due to 2 comments inserted before it)
 	displayLine := view.mapDocToDisplay(3, lineMapping)
-	if displayLine != 5 {
-		t.Fatalf("expected doc line 3 to map to display line 5, got %d", displayLine)
-	}
+	require.Equal(t, 5, displayLine, "expected doc line 3 to map to display line 5, got %d", displayLine)
 
 	// Verify cursor is at the correct document line
-	if view.cursorLine != 3 {
-		t.Errorf("expected cursor at doc line 3, got %d", view.cursorLine)
-	}
+	assert.Equal(t, 3, view.cursorLine, "expected cursor at doc line 3, got %d", view.cursorLine)
 
 	// Verify viewport scrolled to make display line visible
 	offset := view.viewport.YOffset()
 	visibleHeight := view.viewport.VisibleLineCount() - 1 // -1 for status bar
 
-	if displayLine < offset+1 || displayLine > offset+visibleHeight {
-		t.Errorf("display line %d not visible after jumpToMatch (offset=%d, visibleHeight=%d)",
-			displayLine, offset, visibleHeight)
-	}
+	assert.True(t, displayLine >= offset+1 && displayLine <= offset+visibleHeight,
+		"display line %d not visible after jumpToMatch (offset=%d, visibleHeight=%d)",
+		displayLine, offset, visibleHeight)
 }
 
 // TestBuildDisplayToDocMap verifies the reverse mapping helper function.
@@ -839,24 +738,21 @@ func TestBuildDisplayToDocMap(t *testing.T) {
 		7: 5,
 	}
 
-	if len(displayToDoc) != len(expectedReverse) {
-		t.Fatalf("expected %d entries in reverse map, got %d", len(expectedReverse), len(displayToDoc))
-	}
+	require.Len(t, displayToDoc, len(expectedReverse), "expected %d entries in reverse map, got %d", len(expectedReverse), len(displayToDoc))
 
 	for displayLine, expectedDocLine := range expectedReverse {
-		if docLine, ok := displayToDoc[displayLine]; !ok {
-			t.Errorf("display line %d missing from reverse map", displayLine)
-		} else if docLine != expectedDocLine {
-			t.Errorf("displayToDoc[%d] = %d, want %d", displayLine, docLine, expectedDocLine)
+		docLine, ok := displayToDoc[displayLine]
+		assert.True(t, ok, "display line %d missing from reverse map", displayLine)
+		if ok {
+			assert.Equal(t, expectedDocLine, docLine, "displayToDoc[%d] = %d, want %d", displayLine, docLine, expectedDocLine)
 		}
 	}
 
 	// Verify comment lines (3, 6) are NOT in the reverse map
 	commentDisplayLines := []int{3, 6}
 	for _, displayLine := range commentDisplayLines {
-		if _, ok := displayToDoc[displayLine]; ok {
-			t.Errorf("comment display line %d should not be in reverse map", displayLine)
-		}
+		_, ok := displayToDoc[displayLine]
+		assert.False(t, ok, "comment display line %d should not be in reverse map", displayLine)
 	}
 }
 
@@ -927,26 +823,18 @@ func TestReverseMappingCorrectness(t *testing.T) {
 	for _, tt := range tests {
 		docLine, ok := displayToDoc[tt.displayLine]
 		if tt.isComment {
-			if ok {
-				t.Errorf("display line %d should be comment (not in map), but got doc line %d",
-					tt.displayLine, docLine)
-			}
+			assert.False(t, ok, "display line %d should be comment (not in map), but got doc line %d", tt.displayLine, docLine)
 		} else {
-			if !ok {
-				t.Errorf("display line %d should map to doc line %d, but not found in map",
-					tt.displayLine, tt.wantDocLine)
-			} else if docLine != tt.wantDocLine {
-				t.Errorf("displayToDoc[%d] = %d, want %d",
-					tt.displayLine, docLine, tt.wantDocLine)
+			assert.True(t, ok, "display line %d should map to doc line %d, but not found in map", tt.displayLine, tt.wantDocLine)
+			if ok {
+				assert.Equal(t, tt.wantDocLine, docLine, "displayToDoc[%d] = %d, want %d", tt.displayLine, docLine, tt.wantDocLine)
 			}
 		}
 	}
 
 	// Verify nil lineMapping returns nil
 	nilResult := buildDisplayToDocMap(nil)
-	if nilResult != nil {
-		t.Error("buildDisplayToDocMap(nil) should return nil")
-	}
+	assert.Nil(t, nilResult, "buildDisplayToDocMap(nil) should return nil")
 }
 
 // TestFinalizedSessionsNotReloaded verifies that finalized sessions are not
@@ -958,13 +846,9 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 
 	// Create a test database
 	database, err := db.Open(tmpDir, db.DefaultOpenOptions())
-	if err != nil {
-		t.Fatalf("failed to open database: %v", err)
-	}
+	require.NoError(t, err, "failed to open database")
 	defer func() {
-		if err := database.Close(); err != nil {
-			t.Errorf("failed to close database: %v", err)
-		}
+		assert.NoError(t, database.Close(), "failed to close database")
 	}()
 
 	// Create a test store
@@ -973,9 +857,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	// Create a test document
 	docPath := filepath.Join(tmpDir, "test.md")
 	content := "Line 1\nLine 2\nLine 3"
-	if err := os.WriteFile(docPath, []byte(content), 0o644); err != nil {
-		t.Fatalf("failed to write test file: %v", err)
-	}
+	require.NoError(t, os.WriteFile(docPath, []byte(content), 0o644), "failed to write test file")
 
 	doc := Document{
 		Path:    docPath,
@@ -998,17 +880,13 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	view.selectionMode = true
 	view.addComment("Test comment before finalization")
 
-	if view.activeSession == nil {
-		t.Fatal("expected active session after adding comment")
-	}
+	require.NotNil(t, view.activeSession, "expected active session after adding comment")
 
 	sessionID := view.activeSession.ID
 
 	// Finalize the session
 	ctx := context.Background()
-	if err := store.FinalizeSession(ctx, sessionID); err != nil {
-		t.Fatalf("failed to finalize session: %v", err)
-	}
+	require.NoError(t, store.FinalizeSession(ctx, sessionID), "failed to finalize session")
 
 	// Clear active session (simulating what happens after finalization)
 	view.activeSession = nil
@@ -1017,10 +895,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	view.loadDocument(&doc)
 
 	// Verify the finalized session was NOT loaded
-	if view.activeSession != nil {
-		t.Errorf("expected activeSession to be nil after reloading with finalized session, but got session ID: %s",
-			view.activeSession.ID)
-	}
+	assert.Nil(t, view.activeSession, "expected activeSession to be nil after reloading with finalized session")
 }
 
 // TestCtrlDUWithComments verifies that ctrl+d and ctrl+u correctly handle
@@ -1102,12 +977,8 @@ func TestCtrlDUWithComments(t *testing.T) {
 	}
 
 	// Verify cursor is at a valid document line (not 0 or beyond doc length)
-	if view.cursorLine == 0 {
-		t.Errorf("ctrl+d mapped to comment line (0), should map to valid document line")
-	}
-	if view.cursorLine > len(lines) {
-		t.Errorf("ctrl+d set cursor beyond document length: %d > %d", view.cursorLine, len(lines))
-	}
+	assert.NotZero(t, view.cursorLine, "ctrl+d mapped to comment line (0), should map to valid document line")
+	assert.LessOrEqual(t, view.cursorLine, len(lines), "ctrl+d set cursor beyond document length: %d > %d", view.cursorLine, len(lines))
 
 	// Store cursor position after ctrl+d
 	cursorAfterDown := view.cursorLine
@@ -1121,17 +992,11 @@ func TestCtrlDUWithComments(t *testing.T) {
 	}
 
 	// Verify cursor is at a valid document line
-	if view.cursorLine == 0 {
-		t.Errorf("ctrl+u mapped to comment line (0), should map to valid document line")
-	}
-	if view.cursorLine > len(lines) {
-		t.Errorf("ctrl+u set cursor beyond document length: %d > %d", view.cursorLine, len(lines))
-	}
+	assert.NotZero(t, view.cursorLine, "ctrl+u mapped to comment line (0), should map to valid document line")
+	assert.LessOrEqual(t, view.cursorLine, len(lines), "ctrl+u set cursor beyond document length: %d > %d", view.cursorLine, len(lines))
 
 	// Cursor should have moved up from the previous position
-	if view.cursorLine >= cursorAfterDown {
-		t.Errorf("ctrl+u should move cursor up: before=%d, after=%d", cursorAfterDown, view.cursorLine)
-	}
+	assert.Less(t, view.cursorLine, cursorAfterDown, "ctrl+u should move cursor up: before=%d, after=%d", cursorAfterDown, view.cursorLine)
 }
 
 func TestFinalizationModal_IntegrationWithView(t *testing.T) {
@@ -1153,22 +1018,16 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 	v.finalizationModal = &modal
 
 	// Verify initial state
-	if v.finalizationModal.selectedIdx != 0 {
-		t.Errorf("Initial selectedIdx should be 0, got %d", v.finalizationModal.selectedIdx)
-	}
+	assert.Equal(t, 0, v.finalizationModal.selectedIdx, "Initial selectedIdx should be 0, got %d", v.finalizationModal.selectedIdx)
 
 	// Send 'j' key to view - should be forwarded to modal (stays at 0 with single option)
 	jKey := keyMsg("j")
 	v, _ = v.Update(jKey)
 
 	// Verify modal received the key
-	if v.finalizationModal == nil {
-		t.Fatal("finalizationModal should not be nil")
-	}
+	require.NotNil(t, v.finalizationModal, "finalizationModal should not be nil")
 	// With single option, selectedIdx stays at 0
-	if v.finalizationModal.selectedIdx != 0 {
-		t.Errorf("With single option, selectedIdx should remain 0, got %d", v.finalizationModal.selectedIdx)
-	}
+	assert.Equal(t, 0, v.finalizationModal.selectedIdx, "With single option, selectedIdx should remain 0, got %d", v.finalizationModal.selectedIdx)
 
 	// Test enter key confirms the modal
 	enterKey := keyMsg("enter")
@@ -1191,39 +1050,27 @@ func TestHasActiveEditor(t *testing.T) {
 	view.selectedDoc = &doc
 
 	// Initially no active editor
-	if view.HasActiveEditor() {
-		t.Error("expected HasActiveEditor to be false initially")
-	}
+	assert.False(t, view.HasActiveEditor(), "expected HasActiveEditor to be false initially")
 
 	// Enable search mode - should have active editor
 	view.searchMode = true
-	if !view.HasActiveEditor() {
-		t.Error("expected HasActiveEditor to be true when searchMode is active")
-	}
+	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when searchMode is active")
 
 	// Disable search mode
 	view.searchMode = false
-	if view.HasActiveEditor() {
-		t.Error("expected HasActiveEditor to be false after disabling search mode")
-	}
+	assert.False(t, view.HasActiveEditor(), "expected HasActiveEditor to be false after disabling search mode")
 
 	// Open comment modal - should have active editor
 	modal := NewCommentModal(1, 2, "context", 80, 24)
 	view.commentModal = &modal
-	if !view.HasActiveEditor() {
-		t.Error("expected HasActiveEditor to be true when comment modal is active")
-	}
+	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when comment modal is active")
 
 	// Close comment modal
 	view.commentModal = nil
-	if view.HasActiveEditor() {
-		t.Error("expected HasActiveEditor to be false after closing comment modal")
-	}
+	assert.False(t, view.HasActiveEditor(), "expected HasActiveEditor to be false after closing comment modal")
 
 	// Both search mode and comment modal active
 	view.searchMode = true
 	view.commentModal = &modal
-	if !view.HasActiveEditor() {
-		t.Error("expected HasActiveEditor to be true when both are active")
-	}
+	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when both are active")
 }

@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestServer_StartAndShutdown(t *testing.T) {
@@ -23,16 +26,12 @@ func TestServer_StartAndShutdown(t *testing.T) {
 			server := New(tt.port)
 
 			ctx := context.Background()
-			if err := server.Start(ctx); err != nil {
-				t.Fatalf("Start() error = %v", err)
-			}
+			require.NoError(t, server.Start(ctx), "Start() error")
 
 			shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 
-			if err := server.Shutdown(shutdownCtx); err != nil {
-				t.Errorf("Shutdown() error = %v", err)
-			}
+			assert.NoError(t, server.Shutdown(shutdownCtx), "Shutdown() error")
 		})
 	}
 }
@@ -41,9 +40,7 @@ func TestServer_PprofEndpoints(t *testing.T) {
 	server := New(0)
 
 	ctx := context.Background()
-	if err := server.Start(ctx); err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
+	require.NoError(t, server.Start(ctx), "Start() error")
 	defer func() {
 		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -81,16 +78,12 @@ func TestServer_PprofEndpoints(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			resp, err := http.Get(baseURL + tt.endpoint)
-			if err != nil {
-				t.Fatalf("GET %s error = %v", tt.endpoint, err)
-			}
+			require.NoError(t, err, "GET %s error", tt.endpoint)
 			defer func() {
 				_ = resp.Body.Close()
 			}()
 
-			if resp.StatusCode != http.StatusOK {
-				t.Errorf("GET %s status = %v, want %v", tt.endpoint, resp.StatusCode, http.StatusOK)
-			}
+			assert.Equal(t, http.StatusOK, resp.StatusCode, "GET %s status = %v, want %v", tt.endpoint, resp.StatusCode, http.StatusOK)
 		})
 	}
 }

@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // mockSessionStore implements session.Store for testing.
@@ -95,12 +97,8 @@ func TestSessionDetector_DetectSessionFromPath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := detector.DetectSessionFromPath(ctx, tt.path)
-			if err != nil {
-				t.Fatalf("DetectSessionFromPath failed: %v", err)
-			}
-			if got != tt.expected {
-				t.Errorf("DetectSessionFromPath(%q) = %q, want %q", tt.path, got, tt.expected)
-			}
+			require.NoError(t, err, "DetectSessionFromPath failed: %v", err)
+			assert.Equal(t, tt.expected, got, "DetectSessionFromPath(%q) = %q, want %q", tt.path, got, tt.expected)
 		})
 	}
 }
@@ -111,12 +109,8 @@ func TestSessionDetector_EmptyStore(t *testing.T) {
 	ctx := context.Background()
 
 	got, err := detector.DetectSessionFromPath(ctx, "/any/path")
-	if err != nil {
-		t.Fatalf("DetectSessionFromPath failed: %v", err)
-	}
-	if got != "" {
-		t.Errorf("DetectSessionFromPath with empty store = %q, want empty", got)
-	}
+	require.NoError(t, err, "DetectSessionFromPath failed: %v", err)
+	assert.Empty(t, got, "DetectSessionFromPath with empty store = %q, want empty", got)
 }
 
 func TestIsSubpath(t *testing.T) {
@@ -135,9 +129,7 @@ func TestIsSubpath(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.parent+"->"+tt.child, func(t *testing.T) {
 			got := isSubpath(tt.parent, tt.child)
-			if got != tt.expected {
-				t.Errorf("isSubpath(%q, %q) = %v, want %v", tt.parent, tt.child, got, tt.expected)
-			}
+			assert.Equal(t, tt.expected, got, "isSubpath(%q, %q) = %v, want %v", tt.parent, tt.child, got, tt.expected)
 		})
 	}
 }

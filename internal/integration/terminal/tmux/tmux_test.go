@@ -4,6 +4,9 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSessionCache_FindWindow(t *testing.T) {
@@ -30,17 +33,11 @@ func TestSessionCache_FindWindow(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			w := sc.findWindow(tt.index)
 			if tt.wantNil {
-				if w != nil {
-					t.Fatalf("expected nil, got window %q", w.windowName)
-				}
+				assert.Nil(t, w, "expected nil, got window")
 				return
 			}
-			if w == nil {
-				t.Fatal("expected window, got nil")
-			}
-			if w.windowName != tt.want {
-				t.Fatalf("expected %q, got %q", tt.want, w.windowName)
-			}
+			require.NotNil(t, w, "expected window, got nil")
+			assert.Equal(t, tt.want, w.windowName)
 		})
 	}
 }
@@ -77,17 +74,11 @@ func TestSessionCache_BestWindow(t *testing.T) {
 			sc := &sessionCache{agentWindows: tt.windows}
 			w := sc.bestWindow()
 			if tt.want == "" {
-				if w != nil {
-					t.Fatalf("expected nil, got window %q", w.windowIndex)
-				}
+				assert.Nil(t, w, "expected nil, got window")
 				return
 			}
-			if w == nil {
-				t.Fatal("expected window, got nil")
-			}
-			if w.windowIndex != tt.want {
-				t.Fatalf("expected %q, got %q", tt.want, w.windowIndex)
-			}
+			require.NotNil(t, w, "expected window, got nil")
+			assert.Equal(t, tt.want, w.windowIndex)
 		})
 	}
 }
@@ -101,9 +92,8 @@ func TestDisambiguateWindow_SingleWindow(t *testing.T) {
 	}
 
 	w := integ.disambiguateWindow(sc, "/other/path", "myslug")
-	if w == nil || w.windowIndex != "0" {
-		t.Fatal("single window should always be returned")
-	}
+	require.NotNil(t, w, "single window should always be returned")
+	assert.Equal(t, "0", w.windowIndex)
 }
 
 func TestDisambiguateWindow_PathMatch(t *testing.T) {
@@ -116,9 +106,8 @@ func TestDisambiguateWindow_PathMatch(t *testing.T) {
 	}
 
 	w := integ.disambiguateWindow(sc, "/home/user/project-b", "myslug")
-	if w == nil || w.windowIndex != "1" {
-		t.Fatalf("expected window 1 (path match), got %v", w)
-	}
+	require.NotNil(t, w, "expected window 1 (path match), got nil")
+	assert.Equal(t, "1", w.windowIndex)
 }
 
 func TestDisambiguateWindow_NameMatch(t *testing.T) {
@@ -132,9 +121,8 @@ func TestDisambiguateWindow_NameMatch(t *testing.T) {
 
 	// No path match, should fall back to name match
 	w := integ.disambiguateWindow(sc, "/nonexistent", "myslug")
-	if w == nil || w.windowIndex != "1" {
-		t.Fatalf("expected window 1 (name match), got %v", w)
-	}
+	require.NotNil(t, w, "expected window 1 (name match), got nil")
+	assert.Equal(t, "1", w.windowIndex)
 }
 
 func TestDisambiguateWindow_FallbackToActivity(t *testing.T) {
@@ -148,9 +136,8 @@ func TestDisambiguateWindow_FallbackToActivity(t *testing.T) {
 
 	// No path match, no name match — should pick highest activity
 	w := integ.disambiguateWindow(sc, "/nonexistent", "notfound")
-	if w == nil || w.windowIndex != "1" {
-		t.Fatalf("expected window 1 (highest activity), got %v", w)
-	}
+	require.NotNil(t, w, "expected window 1 (highest activity), got nil")
+	assert.Equal(t, "1", w.windowIndex)
 }
 
 func TestSessionInfoFromWindow(t *testing.T) {
@@ -159,18 +146,18 @@ func TestSessionInfoFromWindow(t *testing.T) {
 	t.Run("nil window", func(t *testing.T) {
 		sc := &sessionCache{}
 		info := integ.sessionInfoFromWindow("mysess", sc, nil)
-		if info.Name != "mysess" || info.Pane != "" || info.WindowName != "" {
-			t.Fatalf("unexpected info: %+v", info)
-		}
+		assert.Equal(t, "mysess", info.Name)
+		assert.Empty(t, info.Pane)
+		assert.Empty(t, info.WindowName)
 	})
 
 	t.Run("single window sets WindowName", func(t *testing.T) {
 		w := &agentWindow{windowIndex: "2", windowName: "claude"}
 		sc := &sessionCache{agentWindows: []*agentWindow{w}}
 		info := integ.sessionInfoFromWindow("mysess", sc, w)
-		if info.Name != "mysess" || info.Pane != "2" || info.WindowName != "claude" {
-			t.Fatalf("single window should set WindowName: %+v", info)
-		}
+		assert.Equal(t, "mysess", info.Name)
+		assert.Equal(t, "2", info.Pane)
+		assert.Equal(t, "claude", info.WindowName)
 	})
 
 	t.Run("multi window sets WindowName", func(t *testing.T) {
@@ -178,9 +165,9 @@ func TestSessionInfoFromWindow(t *testing.T) {
 		w2 := &agentWindow{windowIndex: "1", windowName: "aider"}
 		sc := &sessionCache{agentWindows: []*agentWindow{w1, w2}}
 		info := integ.sessionInfoFromWindow("mysess", sc, w2)
-		if info.Name != "mysess" || info.Pane != "1" || info.WindowName != "aider" {
-			t.Fatalf("multi window should set WindowName: %+v", info)
-		}
+		assert.Equal(t, "mysess", info.Name)
+		assert.Equal(t, "1", info.Pane)
+		assert.Equal(t, "aider", info.WindowName)
 	})
 }
 
@@ -204,18 +191,10 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 		info, err := integ.DiscoverSession(ctx, "my-session", map[string]string{
 			sessionPathKey: "/project-b",
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if info == nil {
-			t.Fatal("expected info")
-		}
-		if info.Pane != "1" {
-			t.Fatalf("expected pane 1 (path match), got %q", info.Pane)
-		}
-		if info.WindowName != "claude" {
-			t.Fatalf("expected window name 'claude', got %q", info.WindowName)
-		}
+		require.NoError(t, err)
+		require.NotNil(t, info, "expected info")
+		assert.Equal(t, "1", info.Pane)
+		assert.Equal(t, "claude", info.WindowName)
 	})
 
 	t.Run("no path match falls to activity", func(t *testing.T) {
@@ -226,16 +205,10 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 		info, err := integ.DiscoverSession(ctx, "my-session", map[string]string{
 			sessionPathKey: "/nonexistent",
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if info == nil {
-			t.Fatal("expected info")
-		}
+		require.NoError(t, err)
+		require.NotNil(t, info, "expected info")
 		// No path match, no name match for slug "my-session" in window names — should pick highest activity
-		if info.Pane != "0" {
-			t.Fatalf("expected pane 0 (highest activity), got %q", info.Pane)
-		}
+		assert.Equal(t, "0", info.Pane)
 	})
 }
 
@@ -258,9 +231,7 @@ func TestMatchesPreferredWindow(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := integ.matchesPreferredWindow(tt.name)
-			if got != tt.want {
-				t.Fatalf("matchesPreferredWindow(%q) = %v, want %v", tt.name, got, tt.want)
-			}
+			assert.Equal(t, tt.want, got, "matchesPreferredWindow(%q) = %v, want %v", tt.name, got, tt.want)
 		})
 	}
 }
@@ -287,52 +258,32 @@ func TestDiscoverAllWindows(t *testing.T) {
 
 	t.Run("returns all windows for multi-window session", func(t *testing.T) {
 		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(infos) != 2 {
-			t.Fatalf("expected 2 windows, got %d", len(infos))
-		}
-		if infos[0].Pane != "0" || infos[0].WindowName != "claude" {
-			t.Fatalf("unexpected first window: %+v", infos[0])
-		}
-		if infos[1].Pane != "1" || infos[1].WindowName != "aider" {
-			t.Fatalf("unexpected second window: %+v", infos[1])
-		}
+		require.NoError(t, err)
+		require.Len(t, infos, 2, "expected 2 windows, got %d", len(infos))
+		assert.Equal(t, "0", infos[0].Pane)
+		assert.Equal(t, "claude", infos[0].WindowName)
+		assert.Equal(t, "1", infos[1].Pane)
+		assert.Equal(t, "aider", infos[1].WindowName)
 	})
 
 	t.Run("returns single window for single-window session", func(t *testing.T) {
 		infos, err := integ.DiscoverAllWindows(ctx, "single-sess", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(infos) != 1 {
-			t.Fatalf("expected 1 window, got %d", len(infos))
-		}
-		if infos[0].Pane != "0" {
-			t.Fatalf("unexpected window: %+v", infos[0])
-		}
+		require.NoError(t, err)
+		require.Len(t, infos, 1, "expected 1 window, got %d", len(infos))
+		assert.Equal(t, "0", infos[0].Pane)
 	})
 
 	t.Run("returns nil for unknown session", func(t *testing.T) {
 		infos, err := integ.DiscoverAllWindows(ctx, "nonexistent", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if infos != nil {
-			t.Fatalf("expected nil, got %v", infos)
-		}
+		require.NoError(t, err)
+		assert.Nil(t, infos, "expected nil, got %v", infos)
 	})
 
 	t.Run("returns nil with stale cache", func(t *testing.T) {
 		integ.cacheTime = time.Now().Add(-5 * time.Second)
 		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if infos != nil {
-			t.Fatalf("expected nil with stale cache, got %v", infos)
-		}
+		require.NoError(t, err)
+		assert.Nil(t, infos, "expected nil with stale cache, got %v", infos)
 	})
 
 	t.Run("prefix match finds session", func(t *testing.T) {
@@ -346,15 +297,9 @@ func TestDiscoverAllWindows(t *testing.T) {
 		integ.cacheTime = time.Now()
 
 		infos, err := integ.DiscoverAllWindows(ctx, "myslug", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(infos) != 2 {
-			t.Fatalf("expected 2 windows via prefix match, got %d", len(infos))
-		}
-		if infos[0].Name != "myslug-extra" {
-			t.Fatalf("expected session name 'myslug-extra', got %q", infos[0].Name)
-		}
+		require.NoError(t, err)
+		require.Len(t, infos, 2, "expected 2 windows via prefix match, got %d", len(infos))
+		assert.Equal(t, "myslug-extra", infos[0].Name)
 	})
 
 	t.Run("metadata match takes precedence over prefix", func(t *testing.T) {
@@ -362,15 +307,9 @@ func TestDiscoverAllWindows(t *testing.T) {
 		infos, err := integ.DiscoverAllWindows(ctx, "myslug", map[string]string{
 			"tmux_session": "multi-sess",
 		})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if len(infos) != 2 {
-			t.Fatalf("expected 2 windows, got %d", len(infos))
-		}
-		if infos[0].Name != "multi-sess" {
-			t.Fatalf("expected metadata match 'multi-sess', got %q", infos[0].Name)
-		}
+		require.NoError(t, err)
+		require.Len(t, infos, 2, "expected 2 windows, got %d", len(infos))
+		assert.Equal(t, "multi-sess", infos[0].Name)
 	})
 }
 

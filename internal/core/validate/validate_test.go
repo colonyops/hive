@@ -2,6 +2,8 @@ package validate
 
 import (
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestSessionName(t *testing.T) {
@@ -20,9 +22,7 @@ func TestSessionName(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SessionName(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SessionName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, err != nil, "SessionName(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 		})
 	}
 }
@@ -49,9 +49,7 @@ func TestSessionID(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := SessionID(tt.input)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("SessionID(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, err != nil, "SessionID(%q) error = %v, wantErr %v", tt.input, err, tt.wantErr)
 		})
 	}
 }

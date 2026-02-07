@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestBatchInput_Validate(t *testing.T) {
@@ -90,18 +93,11 @@ func TestBatchInput_Validate(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			err := tt.input.Validate()
 			if tt.wantErr == "" {
-				if err != nil {
-					t.Errorf("expected no error, got %v", err)
-				}
+				require.NoError(t, err)
 				return
 			}
-			if err == nil {
-				t.Errorf("expected error containing %q, got nil", tt.wantErr)
-				return
-			}
-			if !strings.Contains(err.Error(), tt.wantErr) {
-				t.Errorf("expected error containing %q, got %q", tt.wantErr, err.Error())
-			}
+			require.Error(t, err, "expected error containing %q, got nil", tt.wantErr)
+			assert.True(t, strings.Contains(err.Error(), tt.wantErr), "expected error containing %q, got %q", tt.wantErr, err.Error())
 		})
 	}
 }
@@ -115,25 +111,12 @@ func TestBatchInput_JSON(t *testing.T) {
 	}`
 
 	var input BatchInput
-	if err := json.Unmarshal([]byte(jsonInput), &input); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
+	require.NoError(t, json.Unmarshal([]byte(jsonInput), &input))
 
-	if len(input.Sessions) != 2 {
-		t.Errorf("expected 2 sessions, got %d", len(input.Sessions))
-	}
-
-	if input.Sessions[0].Name != "task1" {
-		t.Errorf("expected name 'task1', got %q", input.Sessions[0].Name)
-	}
-
-	if input.Sessions[0].SessionID != "abc123" {
-		t.Errorf("expected session_id 'abc123', got %q", input.Sessions[0].SessionID)
-	}
-
-	if input.Sessions[1].Remote != "https://github.com/org/repo" {
-		t.Errorf("expected remote URL, got %q", input.Sessions[1].Remote)
-	}
+	assert.Len(t, input.Sessions, 2, "expected 2 sessions, got %d", len(input.Sessions))
+	assert.Equal(t, "task1", input.Sessions[0].Name)
+	assert.Equal(t, "abc123", input.Sessions[0].SessionID)
+	assert.Equal(t, "https://github.com/org/repo", input.Sessions[1].Remote)
 }
 
 func TestBatchOutput_JSON(t *testing.T) {
@@ -148,56 +131,29 @@ func TestBatchOutput_JSON(t *testing.T) {
 	}
 
 	data, err := json.Marshal(output)
-	if err != nil {
-		t.Fatalf("failed to marshal: %v", err)
-	}
+	require.NoError(t, err)
 
 	var decoded BatchOutput
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(data, &decoded))
 
-	if decoded.BatchID != "abc123" {
-		t.Errorf("expected batch_id 'abc123', got %q", decoded.BatchID)
-	}
-
-	if decoded.LogFile != "/tmp/logs/batch-abc123.log" {
-		t.Errorf("expected log_file path, got %q", decoded.LogFile)
-	}
-
-	if len(decoded.Results) != 3 {
-		t.Errorf("expected 3 results, got %d", len(decoded.Results))
-	}
-
-	if decoded.Results[0].Status != StatusCreated {
-		t.Errorf("expected status 'created', got %q", decoded.Results[0].Status)
-	}
-
-	if decoded.Results[1].Error != "clone failed" {
-		t.Errorf("expected error message, got %q", decoded.Results[1].Error)
-	}
-
-	if decoded.Results[2].Status != StatusSkipped {
-		t.Errorf("expected status 'skipped', got %q", decoded.Results[2].Status)
-	}
+	assert.Equal(t, "abc123", decoded.BatchID)
+	assert.Equal(t, "/tmp/logs/batch-abc123.log", decoded.LogFile)
+	assert.Len(t, decoded.Results, 3, "expected 3 results, got %d", len(decoded.Results))
+	assert.Equal(t, StatusCreated, decoded.Results[0].Status)
+	assert.Equal(t, "clone failed", decoded.Results[1].Error)
+	assert.Equal(t, StatusSkipped, decoded.Results[2].Status)
 }
 
 func TestBatchErrorOutput_JSON(t *testing.T) {
 	output := BatchErrorOutput{Error: "something went wrong"}
 
 	data, err := json.Marshal(output)
-	if err != nil {
-		t.Fatalf("failed to marshal: %v", err)
-	}
+	require.NoError(t, err)
 
 	var decoded BatchErrorOutput
-	if err := json.Unmarshal(data, &decoded); err != nil {
-		t.Fatalf("failed to unmarshal: %v", err)
-	}
+	require.NoError(t, json.Unmarshal(data, &decoded))
 
-	if decoded.Error != "something went wrong" {
-		t.Errorf("expected error message, got %q", decoded.Error)
-	}
+	assert.Equal(t, "something went wrong", decoded.Error)
 }
 
 func TestCountByStatus(t *testing.T) {
@@ -210,13 +166,7 @@ func TestCountByStatus(t *testing.T) {
 		{Status: StatusSkipped},
 	}
 
-	if got := countByStatus(results, StatusCreated); got != 2 {
-		t.Errorf("countByStatus(created) = %d, want 2", got)
-	}
-	if got := countByStatus(results, StatusFailed); got != 1 {
-		t.Errorf("countByStatus(failed) = %d, want 1", got)
-	}
-	if got := countByStatus(results, StatusSkipped); got != 3 {
-		t.Errorf("countByStatus(skipped) = %d, want 3", got)
-	}
+	assert.Equal(t, 2, countByStatus(results, StatusCreated), "countByStatus(created) = %d, want 2", countByStatus(results, StatusCreated))
+	assert.Equal(t, 1, countByStatus(results, StatusFailed), "countByStatus(failed) = %d, want 1", countByStatus(results, StatusFailed))
+	assert.Equal(t, 3, countByStatus(results, StatusSkipped), "countByStatus(skipped) = %d, want 3", countByStatus(results, StatusSkipped))
 }

@@ -5,6 +5,9 @@ import (
 	"errors"
 	"io"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // Mock implementations
@@ -68,20 +71,15 @@ func TestDeleteExecutor_Execute(t *testing.T) {
 			defer cancel()
 
 			// Non-streaming executor should return nil output
-			if output != nil {
-				t.Error("Expected nil output channel for non-streaming executor")
-			}
+			assert.Nil(t, output, "Expected nil output channel for non-streaming executor")
 
 			// Wait for completion
 			err := <-done
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
 
-			if len(mock.deleted) != 1 || mock.deleted[0] != tt.sessionID {
-				t.Errorf("Expected delete called with %q, got %v", tt.sessionID, mock.deleted)
-			}
+			require.Len(t, mock.deleted, 1, "Expected delete called with %q, got %v", tt.sessionID, mock.deleted)
+			assert.Equal(t, tt.sessionID, mock.deleted[0])
 		})
 	}
 }
@@ -124,9 +122,7 @@ func TestRecycleExecutor_Execute(t *testing.T) {
 			defer cancel()
 
 			// Streaming executor should return non-nil output
-			if output == nil {
-				t.Error("Expected non-nil output channel for streaming executor")
-			}
+			require.NotNil(t, output, "Expected non-nil output channel for streaming executor")
 
 			// Collect all output
 			var outputs []string
@@ -137,17 +133,14 @@ func TestRecycleExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
 
-			if len(mock.recycled) != 1 || mock.recycled[0] != tt.sessionID {
-				t.Errorf("Expected recycle called with %q, got %v", tt.sessionID, mock.recycled)
-			}
+			require.Len(t, mock.recycled, 1, "Expected recycle called with %q, got %v", tt.sessionID, mock.recycled)
+			assert.Equal(t, tt.sessionID, mock.recycled[0])
 
 			// Check output was received
-			if tt.output != "" && len(outputs) == 0 {
-				t.Error("Expected output but got none")
+			if tt.output != "" {
+				assert.NotEmpty(t, outputs, "Expected output but got none")
 			}
 		})
 	}
@@ -200,16 +193,12 @@ func TestShellExecutor_Execute(t *testing.T) {
 			defer cancel()
 
 			// Non-streaming executor should return nil output
-			if output != nil {
-				t.Error("Expected nil output channel for non-streaming executor")
-			}
+			assert.Nil(t, output, "Expected nil output channel for non-streaming executor")
 
 			// Wait for completion
 			err := <-done
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() error = %v, wantErr %v", err, tt.wantErr)
-			}
+			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
 		})
 	}
 }
@@ -225,13 +214,9 @@ func TestExecuteSync(t *testing.T) {
 		}
 
 		err := ExecuteSync(context.Background(), exec)
-		if err != nil {
-			t.Errorf("ExecuteSync() error = %v", err)
-		}
+		assert.NoError(t, err, "ExecuteSync() error")
 
-		if len(mock.deleted) != 1 {
-			t.Error("Expected delete to be called")
-		}
+		assert.Len(t, mock.deleted, 1, "Expected delete to be called")
 	})
 
 	t.Run("streaming executor drains output", func(t *testing.T) {
@@ -242,13 +227,9 @@ func TestExecuteSync(t *testing.T) {
 		}
 
 		err := ExecuteSync(context.Background(), exec)
-		if err != nil {
-			t.Errorf("ExecuteSync() error = %v", err)
-		}
+		assert.NoError(t, err, "ExecuteSync() error")
 
-		if len(mock.recycled) != 1 {
-			t.Error("Expected recycle to be called")
-		}
+		assert.Len(t, mock.recycled, 1, "Expected recycle to be called")
 	})
 
 	t.Run("returns error", func(t *testing.T) {
@@ -259,9 +240,7 @@ func TestExecuteSync(t *testing.T) {
 		}
 
 		err := ExecuteSync(context.Background(), exec)
-		if err == nil {
-			t.Error("Expected error")
-		}
+		assert.Error(t, err, "Expected error")
 	})
 }
 
@@ -274,20 +253,14 @@ func TestChannelWriter_Write(t *testing.T) {
 		w := &channelWriter{ch: ch, ctx: ctx}
 
 		n, err := w.Write([]byte("hello"))
-		if err != nil {
-			t.Fatalf("Write() error = %v", err)
-		}
-		if n != 5 {
-			t.Errorf("Write() n = %d, want 5", n)
-		}
+		require.NoError(t, err, "Write() error")
+		assert.Equal(t, 5, n, "Write() n = %d, want 5", n)
 
 		select {
 		case msg := <-ch:
-			if msg != "hello" {
-				t.Errorf("got message %q, want %q", msg, "hello")
-			}
+			assert.Equal(t, "hello", msg)
 		default:
-			t.Fatal("expected message in channel")
+			require.FailNow(t, "expected message in channel")
 		}
 	})
 
@@ -300,9 +273,7 @@ func TestChannelWriter_Write(t *testing.T) {
 		cancel()
 
 		_, err := w.Write([]byte("hello"))
-		if !errors.Is(err, context.Canceled) {
-			t.Errorf("Write() error = %v, want context.Canceled", err)
-		}
+		assert.ErrorIs(t, err, context.Canceled, "Write() error = %v, want context.Canceled", err)
 	})
 
 	t.Run("handles multiple writes", func(t *testing.T) {
@@ -314,15 +285,9 @@ func TestChannelWriter_Write(t *testing.T) {
 		_, _ = w.Write([]byte("two"))
 		_, _ = w.Write([]byte("three"))
 
-		if msg := <-ch; msg != "one" {
-			t.Errorf("got %q, want %q", msg, "one")
-		}
-		if msg := <-ch; msg != "two" {
-			t.Errorf("got %q, want %q", msg, "two")
-		}
-		if msg := <-ch; msg != "three" {
-			t.Errorf("got %q, want %q", msg, "three")
-		}
+		assert.Equal(t, "one", <-ch)
+		assert.Equal(t, "two", <-ch)
+		assert.Equal(t, "three", <-ch)
 	})
 }
 
@@ -362,12 +327,9 @@ func TestService_CreateExecutor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			exec, err := svc.CreateExecutor(tt.action)
 
-			if (err != nil) != tt.wantErr {
-				t.Errorf("CreateExecutor() error = %v, wantErr %v", err, tt.wantErr)
-			}
-
-			if !tt.wantErr && exec == nil {
-				t.Error("Expected executor but got nil")
+			assert.Equal(t, tt.wantErr, err != nil, "CreateExecutor() error = %v, wantErr %v", err, tt.wantErr)
+			if !tt.wantErr {
+				assert.NotNil(t, exec, "Expected executor but got nil")
 			}
 		})
 	}

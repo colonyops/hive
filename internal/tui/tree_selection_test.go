@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestTreeSelection_SaveRestore(t *testing.T) {
@@ -147,9 +148,7 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 			}
 
 			got := sel.restore(target)
-			if got != tt.wantIdx {
-				t.Fatalf("restore() = %d, want %d (%s)", got, tt.wantIdx, tt.wantMatch)
-			}
+			assert.Equal(t, tt.wantIdx, got, "restore() = %d, want %d (%s)", got, tt.wantIdx, tt.wantMatch)
 		})
 	}
 }
@@ -162,15 +161,11 @@ func TestTreeSelection_NilItem(t *testing.T) {
 
 	sel := saveTreeSelection(nil, 1)
 	got := sel.restore(items)
-	if got != 1 {
-		t.Fatalf("nil item should fall back to original index, got %d", got)
-	}
+	assert.Equal(t, 1, got, "nil item should fall back to original index, got %d", got)
 }
 
 func TestTreeSelection_EmptyItems(t *testing.T) {
 	sel := saveTreeSelection(nil, 5)
 	got := sel.restore(nil)
-	if got != 0 {
-		t.Fatalf("empty items should return 0, got %d", got)
-	}
+	assert.Equal(t, 0, got, "empty items should return 0, got %d", got)
 }
