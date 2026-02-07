@@ -6,6 +6,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/rs/zerolog/log"
+
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 )
@@ -131,14 +133,17 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 
 	// Discover all windows if the integration supports it.
 	if disc, ok := integration.(allWindowsDiscoverer); ok {
-		allInfos, err := disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
-		if err == nil && len(allInfos) > 1 {
+		allInfos, discErr := disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
+		if discErr != nil {
+			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
+		} else if len(allInfos) > 1 {
 			windows := make([]WindowStatus, 0, len(allInfos))
 			for _, wi := range allInfos {
 				// Get per-window status and content
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
-					continue
+					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.Pane).Msg("per-window status failed, marking missing")
+					wStatus = terminal.StatusMissing
 				}
 				windows = append(windows, WindowStatus{
 					WindowIndex: wi.Pane,

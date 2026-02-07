@@ -334,6 +334,44 @@ func TestDiscoverAllWindows(t *testing.T) {
 			t.Fatalf("expected nil with stale cache, got %v", infos)
 		}
 	})
+
+	t.Run("prefix match finds session", func(t *testing.T) {
+		// Add a session keyed with a slug prefix
+		integ.cache["myslug-extra"] = &sessionCache{
+			agentWindows: []*agentWindow{
+				{windowIndex: "0", windowName: "claude"},
+				{windowIndex: "1", windowName: "aider"},
+			},
+		}
+		integ.cacheTime = time.Now()
+
+		infos, err := integ.DiscoverAllWindows(ctx, "myslug", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(infos) != 2 {
+			t.Fatalf("expected 2 windows via prefix match, got %d", len(infos))
+		}
+		if infos[0].Name != "myslug-extra" {
+			t.Fatalf("expected session name 'myslug-extra', got %q", infos[0].Name)
+		}
+	})
+
+	t.Run("metadata match takes precedence over prefix", func(t *testing.T) {
+		integ.cacheTime = time.Now()
+		infos, err := integ.DiscoverAllWindows(ctx, "myslug", map[string]string{
+			"tmux_session": "multi-sess",
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(infos) != 2 {
+			t.Fatalf("expected 2 windows, got %d", len(infos))
+		}
+		if infos[0].Name != "multi-sess" {
+			t.Fatalf("expected metadata match 'multi-sess', got %q", infos[0].Name)
+		}
+	})
 }
 
 // timeNow returns a time that makes cache fresh for tests.

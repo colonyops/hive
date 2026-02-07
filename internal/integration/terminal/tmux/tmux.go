@@ -10,6 +10,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/integration/terminal"
 )
@@ -68,9 +70,12 @@ func (sc *sessionCache) bestWindow() *agentWindow {
 func New(preferredWindowPatterns []string) *Integration {
 	var patterns []*regexp.Regexp
 	for _, p := range preferredWindowPatterns {
-		if re, err := regexp.Compile("(?i)" + p); err == nil { // case-insensitive
-			patterns = append(patterns, re)
+		re, err := regexp.Compile("(?i)" + p) // case-insensitive
+		if err != nil {
+			log.Warn().Str("pattern", p).Err(err).Msg("invalid preferred window pattern, skipping")
+			continue
 		}
+		patterns = append(patterns, re)
 	}
 
 	return &Integration{
@@ -102,6 +107,7 @@ func (t *Integration) RefreshCache() {
 		"#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_activity}")
 	output, err := cmd.Output()
 	if err != nil {
+		log.Debug().Err(err).Msg("tmux list-windows failed, clearing cache")
 		t.mu.Lock()
 		t.cache = make(map[string]*sessionCache)
 		t.cacheTime = time.Time{}
@@ -229,6 +235,25 @@ func (t *Integration) matchesPreferredWindow(windowName string) bool {
 // sessionPathKey is the metadata key injected by the TUI to pass session path for multi-window matching.
 const sessionPathKey = "_session_path"
 
+// findSessionCache locates the sessionCache for a slug using metadata, exact match, or prefix match.
+// Must be called with t.mu held (read or write). Returns the session name and cache, or ("", nil).
+func (t *Integration) findSessionCache(slug string, metadata map[string]string) (string, *sessionCache) {
+	if name := metadata[session.MetaTmuxSession]; name != "" {
+		if sc, exists := t.cache[name]; exists {
+			return name, sc
+		}
+	}
+	if sc, exists := t.cache[slug]; exists {
+		return slug, sc
+	}
+	for name, sc := range t.cache {
+		if strings.HasPrefix(name, slug+"_") || strings.HasPrefix(name, slug+"-") {
+			return name, sc
+		}
+	}
+	return "", nil
+}
+
 // DiscoverSession finds a tmux session for the given slug and metadata.
 func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata map[string]string) (*terminal.SessionInfo, error) {
 	t.mu.RLock()
@@ -239,38 +264,24 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 		return nil, nil
 	}
 
-	// First check metadata for explicit session name
-	if sessionName := metadata[session.MetaTmuxSession]; sessionName != "" {
-		if sc, exists := t.cache[sessionName]; exists {
-			// If explicit pane given, use it directly
-			if pane := metadata[session.MetaTmuxPane]; pane != "" {
-				w := sc.findWindow(pane)
-				if w == nil {
-					w = sc.bestWindow()
-				}
-				return t.sessionInfoFromWindow(sessionName, sc, w), nil
-			}
-			// Multi-window disambiguation
-			w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-			return t.sessionInfoFromWindow(sessionName, sc, w), nil
+	sessionName, sc := t.findSessionCache(slug, metadata)
+	if sc == nil {
+		return nil, nil
+	}
+
+	// If explicit pane given, use it directly
+	if pane := metadata[session.MetaTmuxPane]; pane != "" {
+		w := sc.findWindow(pane)
+		if w == nil {
+			log.Debug().Str("session", sessionName).Str("pane", pane).Msg("explicit pane not found, falling back to best window")
+			w = sc.bestWindow()
 		}
+		return t.sessionInfoFromWindow(sessionName, sc, w), nil
 	}
 
-	// Try exact slug match
-	if sc, exists := t.cache[slug]; exists {
-		w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-		return t.sessionInfoFromWindow(slug, sc, w), nil
-	}
-
-	// Try prefix match (session name starts with slug)
-	for name, sc := range t.cache {
-		if strings.HasPrefix(name, slug+"_") || strings.HasPrefix(name, slug+"-") {
-			w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-			return t.sessionInfoFromWindow(name, sc, w), nil
-		}
-	}
-
-	return nil, nil
+	// Multi-window disambiguation
+	w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
+	return t.sessionInfoFromWindow(sessionName, sc, w), nil
 }
 
 // disambiguateWindow selects the best window from a multi-window session cache.
@@ -338,6 +349,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 
 	w := sc.findWindow(info.Pane)
 	if w == nil {
+		log.Debug().Str("session", info.Name).Str("pane", info.Pane).Msg("window not found in cache, falling back to best window")
 		w = sc.bestWindow()
 	}
 	if w == nil {
@@ -351,6 +363,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	lastCaptureActive := w.lastCaptureActive
 	cachedStatus := w.cachedStatus
 	windowIndex := w.windowIndex
+	sessionName := info.Name
 	t.mu.RUnlock()
 
 	// Get or create rate limiter for this window
@@ -379,10 +392,15 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 			return terminal.StatusMissing, err
 		}
 
-		// Update cached content and activity timestamp
+		// Update cached content and activity timestamp.
+		// Re-lookup the window under write lock in case RefreshCache swapped the cache.
 		t.mu.Lock()
-		w.paneContent = content
-		w.lastCaptureActive = activity
+		if currentSC, ok := t.cache[sessionName]; ok {
+			if currentW := currentSC.findWindow(windowIndex); currentW != nil {
+				currentW.paneContent = content
+				currentW.lastCaptureActive = activity
+			}
+		}
 		t.mu.Unlock()
 	}
 
@@ -415,9 +433,14 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	detector := terminal.NewDetector(tool)
 	status := tracker.Update(content, activity, detector)
 
-	// Cache the status result
+	// Cache the status result.
+	// Re-lookup the window under write lock in case RefreshCache swapped the cache.
 	t.mu.Lock()
-	w.cachedStatus = status
+	if currentSC, ok := t.cache[sessionName]; ok {
+		if currentW := currentSC.findWindow(windowIndex); currentW != nil {
+			currentW.cachedStatus = status
+		}
+	}
 	t.mu.Unlock()
 
 	return status, nil
@@ -452,31 +475,7 @@ func (t *Integration) DiscoverAllWindows(_ context.Context, slug string, metadat
 		return nil, nil
 	}
 
-	// Find the session cache using the same lookup logic as DiscoverSession.
-	var sessionName string
-	var sc *sessionCache
-
-	if name := metadata[session.MetaTmuxSession]; name != "" {
-		if c, exists := t.cache[name]; exists {
-			sessionName = name
-			sc = c
-		}
-	}
-	if sc == nil {
-		if c, exists := t.cache[slug]; exists {
-			sessionName = slug
-			sc = c
-		}
-	}
-	if sc == nil {
-		for name, c := range t.cache {
-			if strings.HasPrefix(name, slug+"_") || strings.HasPrefix(name, slug+"-") {
-				sessionName = name
-				sc = c
-				break
-			}
-		}
-	}
+	sessionName, sc := t.findSessionCache(slug, metadata)
 
 	if sc == nil || len(sc.agentWindows) == 0 {
 		return nil, nil

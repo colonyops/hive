@@ -123,6 +123,10 @@ spawn:
 
 Available variables vary by context - see `internal/core/config/validate.go` for `*TemplateData` structs.
 
+### Error Handling
+
+Never silently discard errors. If an error cannot be presented to the user (e.g., in background polling, cache refresh, or TUI status fetching), log it at an appropriate level (`debug` for expected/transient failures, `warn` for configuration problems). Prefer degraded behavior with logging over silent fallbacks — for example, show a `StatusMissing` indicator instead of dropping an item from the UI.
+
 ### Session States
 
 ```
