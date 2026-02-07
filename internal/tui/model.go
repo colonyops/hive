@@ -1004,11 +1004,6 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		{Key: "g", Desc: "refresh git status"},
 	}
 
-	// Add new session if repos discovered
-	if len(m.discoveredRepos) > 0 {
-		navEntries = append(navEntries, components.HelpEntry{Key: "n", Desc: "new session"})
-	}
-
 	// Add preview toggle if terminal integration enabled
 	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
 		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
@@ -1079,6 +1074,15 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			m.state = stateNormal
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
+		}
+
+		// NewSession doesn't require a selected session
+		if entry.Command.Action == config.ActionNewSession {
+			m.state = stateNormal
+			if len(m.discoveredRepos) == 0 {
+				return m, nil
+			}
+			return m.openNewSessionForm()
 		}
 
 		// Check if this is a filter action (doesn't require a session)
@@ -1325,6 +1329,21 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// openNewSessionForm initializes the new session form and transitions to the creating state.
+func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
+	preselectedRemote := m.localRemote
+	if selected := m.selectedSession(); selected != nil {
+		preselectedRemote = selected.Remote
+	}
+	existingNames := make(map[string]bool, len(m.allSessions))
+	for _, s := range m.allSessions {
+		existingNames[s.Name] = true
+	}
+	m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
+	m.state = stateCreatingSession
+	return m, m.newSessionForm.Init()
+}
+
 // handleSessionsKey handles keys when sessions pane is focused.
 func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	// Handle navigation keys - skip over headers
@@ -1337,21 +1356,9 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, nil
 	}
 
-	// Handle 'n' for new session (only if repos are discovered)
-	if keyStr == "n" && len(m.discoveredRepos) > 0 {
-		// Determine preselected remote
-		preselectedRemote := m.localRemote
-		if selected := m.selectedSession(); selected != nil {
-			preselectedRemote = selected.Remote
-		}
-		// Build map of existing session names for validation
-		existingNames := make(map[string]bool, len(m.allSessions))
-		for _, s := range m.allSessions {
-			existingNames[s.Name] = true
-		}
-		m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
-		m.state = stateCreatingSession
-		return m, m.newSessionForm.Init()
+	// Handle new session action (only if repos are discovered)
+	if m.handler.IsAction(keyStr, config.ActionNewSession) && len(m.discoveredRepos) > 0 {
+		return m.openNewSessionForm()
 	}
 
 	// Handle ':' for command palette (allow even without selection for filter commands)
@@ -1695,7 +1702,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession:
 		return false
 	}
 	return false
@@ -2077,6 +2084,9 @@ func (m Model) renderTabView() string {
 			m.treeDelegate.PreviewMode = false
 			m.list.SetDelegate(m.treeDelegate)
 			content = m.list.View()
+			if m.list.SettingFilter() {
+				content = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), content)
+			}
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	case ViewMessages:
@@ -2154,6 +2164,9 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 
 	// Render list
 	listView := m.list.View()
+	if m.list.SettingFilter() {
+		listView = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), listView)
+	}
 
 	// Apply exact height to both panels
 	listView = ensureExactHeight(listView, contentHeight)

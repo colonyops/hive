@@ -9,7 +9,7 @@ import (
 )
 
 // shellQuote returns a shell-safe quoted string. It wraps the string in single
-// quotes and escapes any existing single quotes using the '\” technique.
+// quotes and escapes any existing single quotes using the '\" technique.
 func shellQuote(s string) string {
 	if s == "" {
 		return "''"
@@ -19,9 +19,30 @@ func shellQuote(s string) string {
 	return "'" + escaped + "'"
 }
 
+// scriptPaths holds paths to bundled scripts, set once at startup via SetScriptPaths.
+var scriptPaths map[string]string
+
+// SetScriptPaths registers bundled script paths for template functions.
+// Call once at startup before any templates are rendered.
+func SetScriptPaths(paths map[string]string) {
+	scriptPaths = paths
+}
+
+func scriptPath(name string) string {
+	if scriptPaths == nil {
+		return name
+	}
+	if p, ok := scriptPaths[name]; ok {
+		return p
+	}
+	return name
+}
+
 var funcs = template.FuncMap{
-	"shq":  shellQuote,
-	"join": strings.Join,
+	"shq":       shellQuote,
+	"join":      strings.Join,
+	"hiveTmux":  func() string { return scriptPath("hive-tmux") },
+	"agentSend": func() string { return scriptPath("agent-send") },
 }
 
 // Render executes a Go template string with the given data.

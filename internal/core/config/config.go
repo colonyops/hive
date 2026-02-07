@@ -35,6 +35,7 @@ func ParseExitCondition(s string) bool {
 const (
 	ActionRecycle        = "recycle"
 	ActionDelete         = "delete"
+	ActionNewSession     = "new-session"
 	ActionFilterAll      = "filter-all"
 	ActionFilterActive   = "filter-active"
 	ActionFilterApproval = "filter-approval"
@@ -53,6 +54,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Action:  ActionDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
+	},
+	"NewSession": {
+		Action: ActionNewSession,
+		Help:   "new session",
+		Silent: true,
 	},
 	"DocReview": {
 		Action: ActionDocReview,
@@ -83,8 +89,13 @@ var defaultUserCommands = map[string]UserCommand{
 
 // defaultKeybindings provides built-in keybindings that users can override.
 var defaultKeybindings = map[string]Keybinding{
-	"r": {Cmd: "Recycle"},
-	"d": {Cmd: "Delete"},
+	"r":      {Cmd: "Recycle"},
+	"d":      {Cmd: "Delete"},
+	"n":      {Cmd: "NewSession"},
+	"enter":  {Cmd: "TmuxOpen"},
+	"ctrl+d": {Cmd: "TmuxKill"},
+	"A":      {Cmd: "AgentSend"},
+	"p":      {Cmd: "TmuxPopUp"},
 }
 
 // CurrentConfigVersion is the latest config schema version.
@@ -162,12 +173,18 @@ type PluginsConfig struct {
 	Neovim       NeovimPluginConfig     `yaml:"neovim"`
 	ContextDir   ContextDirPluginConfig `yaml:"contextdir"`
 	Claude       ClaudePluginConfig     `yaml:"claude"`
+	Tmux         TmuxPluginConfig       `yaml:"tmux"`
+}
+
+// TmuxPluginConfig holds tmux plugin configuration.
+type TmuxPluginConfig struct {
+	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
 type GitHubPluginConfig struct {
 	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
-	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 30s)
+	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 8m)
 }
 
 // BeadsPluginConfig holds Beads plugin configuration.
@@ -276,6 +293,16 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
+// DefaultSpawnCommands are the default commands run when spawning a new session.
+var DefaultSpawnCommands = []string{
+	`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+}
+
+// DefaultBatchSpawnCommands are the default commands run when spawning a batch session.
+var DefaultBatchSpawnCommands = []string{
+	`{{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
+}
+
 // DefaultRecycleCommands are the default commands run when recycling a session.
 var DefaultRecycleCommands = []string{
 	"git fetch origin",
@@ -332,6 +359,12 @@ func Load(configPath, dataDir string) (*Config, error) {
 		}
 	}
 
+	// Validate user keybindings before merging defaults (defaults may reference
+	// plugin commands that don't exist at config-load time).
+	if err := cfg.validateUserKeybindings(); err != nil {
+		return nil, fmt.Errorf("invalid config: %w", err)
+	}
+
 	// Merge user keybindings into defaults (user config overrides defaults)
 	cfg.Keybindings = mergeKeybindings(defaultKeybindings, cfg.Keybindings)
 
@@ -379,7 +412,7 @@ func (c *Config) applyDefaults() {
 		c.Plugins.ShellWorkers = 5
 	}
 	if c.Plugins.GitHub.ResultsCache == 0 {
-		c.Plugins.GitHub.ResultsCache = 30 * time.Second
+		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
 	if c.Plugins.Beads.ResultsCache == 0 {
 		c.Plugins.Beads.ResultsCache = 30 * time.Second
@@ -504,12 +537,36 @@ func (c *Config) validateMaxRecycled() error {
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.
-// Keybindings must reference existing UserCommands (including system defaults).
+// Only checks structural validity (non-empty cmd). Command reference validation
+// is done earlier via validateUserKeybindings() before defaults are merged,
+// since default keybindings may reference plugin commands not yet registered.
 func (c *Config) validateKeybindingsBasic() error {
 	var errs criterio.FieldErrorsBuilder
 
-	// Build merged commands map (user commands + system defaults)
+	for key, kb := range c.Keybindings {
+		field := fmt.Sprintf("keybindings[%q]", key)
+
+		if kb.Cmd == "" {
+			errs = errs.Append(field, fmt.Errorf("cmd is required"))
+		}
+	}
+
+	return errs.ToError()
+}
+
+// validateUserKeybindings validates user-defined keybindings reference valid commands.
+// Called before merging with defaults so only user-provided keybindings are checked.
+func (c *Config) validateUserKeybindings() error {
+	var errs criterio.FieldErrorsBuilder
+
 	allCommands := c.MergedUserCommands()
+
+	// Commands referenced by default keybindings are valid targets for user rebinding.
+	// This includes plugin commands (TmuxOpen, etc.) not yet registered at config-load time.
+	defaultBindingCmds := make(map[string]bool, len(defaultKeybindings))
+	for _, kb := range defaultKeybindings {
+		defaultBindingCmds[kb.Cmd] = true
+	}
 
 	for key, kb := range c.Keybindings {
 		field := fmt.Sprintf("keybindings[%q]", key)
@@ -519,8 +576,7 @@ func (c *Config) validateKeybindingsBasic() error {
 			continue
 		}
 
-		// Validate that cmd references an existing command
-		if _, exists := allCommands[kb.Cmd]; !exists {
+		if _, exists := allCommands[kb.Cmd]; !exists && !defaultBindingCmds[kb.Cmd] {
 			errs = errs.Append(field, fmt.Errorf("cmd %q does not reference a valid user command", kb.Cmd))
 		}
 	}
@@ -568,9 +624,14 @@ func (c *Config) DatabaseFile() string {
 	return filepath.Join(c.DataDir, "hive.db")
 }
 
+// BinDir returns the path to the extracted bundled scripts directory.
+func (c *Config) BinDir() string {
+	return filepath.Join(c.DataDir, "bin")
+}
+
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview:
+	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview:
 		return true
 	default:
 		return false
@@ -628,6 +689,7 @@ func (c *Config) GetMaxRecycled(remote string) int {
 // GetSpawnCommands returns the spawn commands for the given remote URL.
 // If batch is true, returns BatchSpawn commands; otherwise returns Spawn commands.
 // Rules are evaluated in order; the last matching rule with spawn commands wins.
+// If no rules define spawn commands, returns DefaultSpawnCommands/DefaultBatchSpawnCommands.
 func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
 	var result []string
 	for _, rule := range c.Rules {
@@ -638,6 +700,12 @@ func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
 				result = rule.Spawn
 			}
 		}
+	}
+	if len(result) == 0 {
+		if batch {
+			return DefaultBatchSpawnCommands
+		}
+		return DefaultSpawnCommands
 	}
 	return result
 }

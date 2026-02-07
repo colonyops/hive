@@ -19,11 +19,7 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 
 ## Installation
 
-```bash
-go install github.com/colonyops/hive@latest
-```
-
-We also publish binaries as a part of our release cycle.
+Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH.
 
 ## Overview
 
@@ -34,7 +30,7 @@ Each hive session is a complete git clone in a dedicated directory with its own 
 **Key Features:**
 
 - **Session Management** — Create, recycle, and prune isolated git clones
-- **Terminal Integration** — Real-time status monitoring of AI agents in tmux
+- **Terminal Integration** — Real-time status monitoring of AI agents in tmux (works out of the box)
 - **Inter-agent Messaging** — Pub/sub communication between sessions
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
 - **Custom Keybindings** — Bind keys to user-defined or system commands
@@ -87,7 +83,55 @@ A shared directory symlinked as `.hive/` in each session's working directory. Al
 
 ## Quick Start
 
-// TODO
+**Prerequisites:** Git and tmux installed.
+
+### 1. Set up a shell alias
+
+Hive works best when running inside tmux. When you create a session, hive spawns a tmux session for the agent — if hive itself is also a tmux session, you can seamlessly switch between hive and your agents without leaving tmux. Hive becomes your home base: open an agent, do some work, jump back to hive, spin up another.
+
+Add to your `.bashrc` / `.zshrc`:
+
+```bash
+alias hv='tmux new-session -As hive hive'
+```
+
+This runs hive inside a dedicated tmux session called `hive`. If the session already exists, it reattaches.
+
+### 2. Add a tmux keybinding to jump back
+
+Add to your `~/.tmux.conf`:
+
+```tmux
+bind l switch-client -t hive
+```
+
+Now `<prefix> l` returns you to hive from any agent session.
+
+### 3. Configure repo directories (optional)
+
+To create sessions from the TUI with `n`, tell hive where your repos live:
+
+```yaml
+# ~/.config/hive/config.yaml
+repo_dirs:
+  - ~/projects
+  - ~/work
+```
+
+Without this, you can still create sessions from the CLI:
+
+```bash
+cd ~/projects/my-app
+hive new Fix Auth Bug
+```
+
+### 4. Launch
+
+```bash
+hv
+```
+
+Hive auto-detects tmux, bundles its own session management scripts, and registers default keybindings — no other config needed. Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
 ## TUI Status Indicators
 
@@ -180,16 +224,12 @@ rules:
   # Default rule (empty pattern matches all)
   - pattern: ""
     max_recycled: 5
-    spawn:
-      - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
-    batch_spawn:
-      - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude "{{ .Prompt }}"'
-    # recycle commands have sensible defaults; override if needed:
-    # recycle:
-    #   - git fetch origin
-    #   - git checkout -f {{ .DefaultBranch }}
-    #   - git reset --hard origin/{{ .DefaultBranch }}
-    #   - git clean -fd
+    # spawn/batch_spawn default to bundled hive-tmux script if not set:
+    #   spawn: ['{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}']
+    #   batch_spawn: ['{{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}']
+    # Override for non-tmux terminals:
+    # spawn:
+    #   - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
     commands:
       - hive ctx init
 
@@ -240,6 +280,15 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                               |
 | `rules[].recycle`      | `.DefaultBranch`                                            |
 | `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`  |
+
+**Template functions:**
+
+| Function       | Description                                    |
+| -------------- | ---------------------------------------------- |
+| `shq`          | Shell-quote a string for safe use in commands  |
+| `join`         | Join string slice with separator               |
+| `hiveTmux`     | Path to bundled `hive-tmux` script             |
+| `agentSend`    | Path to bundled `agent-send` script            |
 
 ### User Commands & Command Palette
 
@@ -385,6 +434,29 @@ rules:
 
 The Claude plugin automatically detects active session IDs by scanning `~/.claude/projects/{project-dir}/` for the most recently modified UUID session file (within 5 minutes). No manual metadata configuration needed.
 
+#### Tmux Plugin
+
+The tmux plugin is auto-detected when `tmux` is on PATH. It provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.
+
+**Commands provided:**
+
+| Command          | Description                          | Default Key |
+| ---------------- | ------------------------------------ | ----------- |
+| `TmuxOpen`       | Open/attach tmux session             | `enter`     |
+| `TmuxStart`      | Start tmux session (background)      | —           |
+| `TmuxKill`       | Kill tmux session                    | `ctrl+d`    |
+| `TmuxPopUp`      | Popup tmux session                   | `p`         |
+| `AgentSend`      | Send Enter to agent                  | `A`         |
+| `AgentSendClear` | Send /clear to agent                 | —           |
+
+**Configuration:**
+
+```yaml
+plugins:
+  tmux:
+    enabled: true  # nil = auto-detect, true/false = override
+```
+
 ### Configuration Options
 
 | Option                                | Type                    | Default                        | Description                              |
@@ -393,20 +465,25 @@ The Claude plugin automatically detects active session IDs by scanning `~/.claud
 | `copy_command`                        | `string`                | `pbcopy` (macOS)               | Command to copy to clipboard             |
 | `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
 | `rules[].pattern`                     | `string`                | `""`                           | Regex pattern to match remote URL        |
-| `rules[].spawn`                       | `[]string`              | `[]`                           | Commands after session creation          |
-| `rules[].batch_spawn`                 | `[]string`              | `[]`                           | Commands after batch session creation    |
+| `rules[].spawn`                       | `[]string`              | bundled `hive-tmux`            | Commands after session creation          |
+| `rules[].batch_spawn`                 | `[]string`              | bundled `hive-tmux -b`         | Commands after batch session creation    |
 | `rules[].recycle`                     | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling a session        |
 | `rules[].commands`                    | `[]string`              | `[]`                           | Setup commands to run after clone        |
 | `rules[].copy`                        | `[]string`              | `[]`                           | Glob patterns for files to copy          |
 | `rules[].max_recycled`                | `*int`                  | `5`                            | Max recycled sessions (0 = unlimited)    |
-| `keybindings`                         | `map[string]Keybinding` | `r`=Recycle, `d`=Delete        | TUI keybindings (reference usercommands) |
-| `usercommands`                        | `map[string]UserCommand`| Recycle, Delete (system)       | Named commands for palette and keybindings |
+| `keybindings`                         | `map[string]Keybinding` | See [default keybindings](#hive-default) | TUI keybindings (reference usercommands) |
+| `usercommands`                        | `map[string]UserCommand`| Recycle, Delete, NewSession (system) | Named commands for palette and keybindings |
 | `tui.refresh_interval`                         | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
 | `tui.preview_enabled`                          | `bool`                  | `false`                        | Enable tmux pane preview sidebar on startup |
 | `tmux.poll_interval`                           | `duration`              | `500ms`                        | Status check frequency (tmux always enabled) |
 | `tmux.preview_window_matcher`                  | `[]string`              | `["claude", "aider", "codex"]` | Regex patterns for preferred window names |
 | `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
 | `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
+| `plugins.tmux.enabled`                | `*bool`                 | `nil` (auto-detect)            | Enable/disable tmux plugin               |
+| `plugins.github.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable GitHub plugin             |
+| `plugins.github.results_cache`        | `duration`              | `8m`                           | GitHub status polling interval           |
+| `plugins.beads.enabled`               | `*bool`                 | `nil` (auto-detect)            | Enable/disable Beads plugin              |
+| `plugins.beads.results_cache`         | `duration`              | `30s`                          | Beads status polling interval            |
 | `plugins.claude.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable Claude plugin             |
 | `plugins.claude.cache_ttl`            | `duration`              | `30s`                          | Status cache duration                    |
 | `plugins.claude.yellow_threshold`     | `int`                   | `60`                           | Yellow warning threshold (%)             |
@@ -420,6 +497,9 @@ All data is stored at `~/.local/share/hive/`:
 ```
 ~/.local/share/hive/
 ├── sessions.json              # Session state
+├── bin/                       # Bundled scripts (auto-extracted)
+│   ├── hive-tmux              # Tmux session launcher
+│   └── agent-send             # Send text to agent in tmux
 ├── repos/                     # Cloned repositories
 │   └── myproject-feature1-abc123/
 ├── context/                   # Per-repo context directories
@@ -431,7 +511,7 @@ All data is stored at `~/.local/share/hive/`:
 
 ## Tmux Integration
 
-Hive integrates with tmux for real-time status monitoring and session management. See the [Tmux Integration recipe](docs/recipes/tmux-integration.md) for complete setup with helper scripts, keybindings, and configuration examples.
+Hive integrates with tmux out of the box. When tmux is detected on PATH, the tmux plugin activates automatically with bundled scripts, default spawn commands, and keybindings. No manual script setup required. See the [Tmux Integration recipe](docs/recipes/tmux-integration.md) for advanced configuration.
 
 ## Acknowledgments
 
@@ -442,7 +522,7 @@ This project was heavily inspired by [agent-deck](https://github.com/asheshgopla
 ## Dependencies
 
 - Git (available in PATH or configured via `git_path`)
-- Terminal emulator with CLI spawning support (e.g., wezterm, kitty, alacritty, tmux)
+- tmux (optional, auto-detected — enables bundled session management and status monitoring)
 
 ---
 
@@ -517,6 +597,10 @@ Launches the interactive TUI for managing sessions.
 - `r` - Recycle session
 - `d` - Delete session (or selected tmux window)
 - `n` - New session (when repos discovered)
+- `enter` - Open/attach tmux session (tmux plugin)
+- `ctrl+d` - Kill tmux session (tmux plugin)
+- `A` - Send Enter to agent (tmux plugin)
+- `p` - Popup tmux session (tmux plugin)
 - `g` - Refresh git statuses
 - `tab` - Switch views
 - `q` / `Ctrl+C` - Quit
@@ -529,6 +613,7 @@ Launches the interactive TUI for managing sessions.
 - `FilterReady` - Show sessions with idle agents
 - `Recycle` - Recycle selected session
 - `Delete` - Delete selected session (or selected tmux window)
+- `NewSession` - Create a new session
 
 ### `hive new`
 

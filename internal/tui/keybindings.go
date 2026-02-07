@@ -27,6 +27,7 @@ const (
 	ActionTypeFilterApproval
 	ActionTypeFilterReady
 	ActionTypeDocReview
+	ActionTypeNewSession
 	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
 )
 
@@ -127,6 +128,16 @@ func (h *KeybindingResolver) isCommandInScope(cmd config.UserCommand) bool {
 		}
 	}
 	return false
+}
+
+// IsAction checks if a key maps to the given built-in action.
+func (h *KeybindingResolver) IsAction(key string, action string) bool {
+	kb, exists := h.keybindings[key]
+	if !exists {
+		return false
+	}
+	cmd, exists := h.commands[kb.Cmd]
+	return exists && cmd.Action == action
 }
 
 // Resolve attempts to resolve a key press to an action for the given session.
