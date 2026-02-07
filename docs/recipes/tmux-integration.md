@@ -2,15 +2,19 @@
 
 Manage AI agent sessions in tmux with automated session creation, status monitoring, and convenient keybindings.
 
-## Terminology Note
+## Quick Start
 
-When using tmux integration, it's important to understand the distinction between:
+Tmux integration works out of the box when `tmux` is on PATH. The tmux plugin activates automatically and provides:
+
+- **Bundled scripts** — `hive-tmux` and `agent-send` are embedded in the binary and auto-extracted to `~/.local/share/hive/bin/`
+- **Default spawn commands** — Sessions create tmux sessions automatically (no config needed)
+- **Default keybindings** — `enter` to open, `ctrl+d` to kill, `p` for popup, `A` to send Enter
+
+## Terminology Note
 
 - **Hive session** - An isolated git clone + terminal environment managed by hive
 - **Tmux session** - A terminal multiplexer session that hosts the hive session
 - **Agent** - The AI tool (Claude, Aider, etc.) running within the tmux session
-
-When you create a hive session with tmux integration enabled, hive spawns a tmux session with the same name. The relationship is:
 
 ```
 Hive Session "fix-bug" (ID: abc123)
@@ -21,150 +25,55 @@ Tmux Session "fix-bug"
   └─ Window: shell (regular shell)
 ```
 
-Throughout this guide, "session" refers to the hive session unless explicitly noted as "tmux session".
-
 ## Config
 
-Add these tmux-specific settings to your `~/.config/hive/config.yaml` (not a complete config, just the tmux-related parts):
+The defaults work for most setups. Override only what you need:
 
 ```yaml
 # Tmux integration (always enabled)
 tmux:
   poll_interval: 500ms
   # Regex patterns for preferred windows when capturing pane content
-  # Hive will prioritize windows matching these patterns over the active window
   preview_window_matcher: [claude, aider, codex]
 
-# Use hive.sh script for session creation
-commands:
-  spawn:
-    - ~/.config/tmux/layouts/hive.sh {{ .Name | shq }} {{ .Path | shq }}
-  batch_spawn:
-    - ~/.config/tmux/layouts/hive.sh -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}
+# Tmux plugin (auto-detected)
+plugins:
+  tmux:
+    enabled: true  # nil = auto-detect
 
-# User commands for tmux operations
+# Override spawn commands if you don't want the bundled hive-tmux:
+# rules:
+#   - pattern: ""
+#     spawn:
+#       - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
+```
+
+### Custom User Commands
+
+You can add additional tmux-related commands:
+
+```yaml
 usercommands:
-  tmux-open:
-    sh: ~/.config/tmux/layouts/hive.sh -w {{ .TmuxWindow | shq }} {{ .Name | shq }} {{ .Path | shq }}
-    help: "open/create tmux"
-    exit: $HIVE_POPUP
+  send-review:
+    sh: '{{ agentSend }} {{ .Name | shq }}:claude /review'
+    help: "send /review to agent"
     silent: true
-  tmux-popup:
-    sh: tmux display-popup -E -w 80% -h 80% "tmux new-session -s hive-popup -t '{{ .Name }}'"
-    help: "popup"
-    silent: true
-  tmux-kill:
-    sh: tmux kill-session -t "{{ .Name }}" 2>/dev/null || true
-    help: "kill session"
-  send-tidy:
-    sh: claude-send "{{ .Name }}:claude" "/tidy"
-    help: "send /tidy"
-    silent: true
+```
 
-# Keybindings reference the commands above
+### Keybinding Overrides
+
+Default keybindings can be overridden in your config:
+
+```yaml
 keybindings:
   enter:
-    cmd: tmux-open
-  p:
-    cmd: tmux-popup
+    cmd: TmuxOpen       # default
   ctrl+d:
-    cmd: tmux-kill
-  t:
-    cmd: send-tidy
-```
-
-## Scripts
-
-### hive.sh
-
-Creates a tmux session with two windows: `claude` (running the AI) and `shell`. Supports background mode for batch creation and `-w` for targeting a specific window.
-
-Save to `~/.config/tmux/layouts/hive.sh`:
-
-```bash
-#!/bin/bash
-# Usage: hive.sh [-b] [-w window] [session-name] [working-dir] [prompt]
-#   -b: background mode (create session without attaching)
-#   -w: target window in an existing session
-
-BACKGROUND=false
-TARGET_WINDOW=""
-
-while [ $# -gt 0 ]; do
-    case "$1" in
-        -b) BACKGROUND=true; shift ;;
-        -w) TARGET_WINDOW="$2"; shift 2 ;;
-        *)  break ;;
-    esac
-done
-
-SESSION="${1:-hive}"
-WORKDIR="${2:-$PWD}"
-PROMPT="${3:-}"
-
-if [ -n "$PROMPT" ]; then
-    CLAUDE_CMD="claude '$PROMPT'"
-else
-    CLAUDE_CMD="claude"
-fi
-
-# Target a specific window in an existing session
-if [ -n "$TARGET_WINDOW" ] && tmux has-session -t "$SESSION" 2>/dev/null; then
-    [ "$BACKGROUND" = true ] && exit 0
-    if [ -n "$TMUX" ]; then
-        tmux switch-client -t "$SESSION:$TARGET_WINDOW"
-    else
-        tmux attach-session -t "$SESSION" \; select-window -t "$TARGET_WINDOW"
-    fi
-    exit 0
-fi
-
-if tmux has-session -t "$SESSION" 2>/dev/null; then
-    [ "$BACKGROUND" = true ] && exit 0
-    if [ -n "$TMUX" ]; then
-        tmux switch-client -t "$SESSION"
-    else
-        tmux attach-session -t "$SESSION"
-    fi
-else
-    tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" "$CLAUDE_CMD"
-    tmux new-window -t "$SESSION" -n shell -c "$WORKDIR"
-    tmux select-window -t "$SESSION:claude"
-
-    [ "$BACKGROUND" = true ] && exit 0
-    if [ -n "$TMUX" ]; then
-        tmux switch-client -t "$SESSION"
-    else
-        tmux attach-session -t "$SESSION"
-    fi
-fi
-```
-
-Make it executable:
-```bash
-chmod +x ~/.config/tmux/layouts/hive.sh
-```
-
-### claude-send
-
-Sends text to a Claude session in tmux, useful for remote commands like `/tidy`.
-
-Save to your `$PATH` (e.g., `~/bin/claude-send`):
-
-```bash
-#!/bin/bash
-# Usage: claude-send <target> <text>
-TARGET="${1:?Usage: claude-send <target> <text>}"
-TEXT="${2:?Usage: claude-send <target> <text>}"
-
-tmux send-keys -t "$TARGET" "$TEXT"
-sleep 0.5
-tmux send-keys -t "$TARGET" C-m
-```
-
-Make it executable:
-```bash
-chmod +x ~/bin/claude-send
+    cmd: TmuxKill       # default
+  p:
+    cmd: TmuxPopUp      # default
+  A:
+    cmd: AgentSend       # default
 ```
 
 ## Tmux Config
@@ -203,7 +112,7 @@ hv  # Opens hive in a persistent tmux session
 - **p** - Opens the session in a tmux popup
 - **Ctrl+d** - Kills the tmux session
 - **d** - Deletes the selected session (or selected window)
-- **t** - Sends `/tidy` command to the session
+- **A** - Sends Enter to the agent
 - **v** - Toggle preview sidebar
 - **:** - Open command palette (filter by status, etc.)
 
@@ -230,19 +139,45 @@ Press `prefix + Space` (in tmux) to open hive as a popup overlay. When you selec
 
 ### Remote Commands
 
-Send commands to any session from anywhere:
+Send commands to any session using the bundled `agent-send` script:
 ```bash
-claude-send "session-name:claude" "/tidy"
-claude-send "session-name:claude" "explain this code"
+~/.local/share/hive/bin/agent-send "session-name:claude" "/tidy"
+~/.local/share/hive/bin/agent-send "session-name:claude" "explain this code"
+```
+
+Or add it to your PATH for convenience.
+
+## Bundled Scripts
+
+### hive-tmux
+
+Creates a tmux session with two windows: `claude` (running the AI) and `shell`. Supports background mode for batch creation.
+
+```
+Usage: hive-tmux [-b] [session-name] [working-dir] [prompt]
+  -b: background mode (create session without attaching)
+```
+
+### agent-send
+
+Sends text to a tmux pane with a delayed Enter keystroke.
+
+```
+Usage: agent-send <target> [text]
+  target: tmux target (session:window or session:window.pane)
+  text: text to send (omit to just send Enter)
+
+Environment:
+  CLAUDE_SEND_DELAY: delay before Enter (default: 0.5s)
 ```
 
 ## How It Works
 
-1. **Status Monitoring**: Hive polls tmux windows every 500ms to detect agent status (working, waiting, needs approval)
-2. **Multi-Window Discovery**: The `preview_window_matcher` patterns identify agent windows. When multiple windows match, each appears as a selectable tree item with its own status and preview
-3. **Window Targeting**: The `{{ .TmuxWindow }}` template variable resolves to the selected window name, enabling keybindings to focus specific windows
-4. **Session Management**: The hive.sh script creates/attaches tmux sessions with consistent layouts
-5. **Keybindings**: Custom keybindings provide quick access without leaving the TUI
+1. **Script Extraction**: On startup, hive extracts bundled scripts to `~/.local/share/hive/bin/` (re-extracts on version change)
+2. **Status Monitoring**: Hive polls tmux windows every 500ms to detect agent status (working, waiting, needs approval)
+3. **Multi-Window Discovery**: The `preview_window_matcher` patterns identify agent windows. When multiple windows match, each appears as a selectable tree item with its own status and preview
+4. **Window Targeting**: The `{{ .TmuxWindow }}` template variable resolves to the selected window name, enabling keybindings to focus specific windows
+5. **Keybindings**: The tmux plugin registers commands that are mapped to default keybindings, all user-configurable
 6. **Popup Integration**: Run hive as an overlay without dedicating a full window
 
 ## Filtering by Status
