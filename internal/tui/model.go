@@ -1076,6 +1076,15 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m, cmd.Execute(&m)
 		}
 
+		// NewSession doesn't require a selected session
+		if entry.Command.Action == config.ActionNewSession {
+			m.state = stateNormal
+			if len(m.discoveredRepos) == 0 {
+				return m, nil
+			}
+			return m.openNewSessionForm()
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1320,6 +1329,21 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// openNewSessionForm initializes the new session form and transitions to the creating state.
+func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
+	preselectedRemote := m.localRemote
+	if selected := m.selectedSession(); selected != nil {
+		preselectedRemote = selected.Remote
+	}
+	existingNames := make(map[string]bool, len(m.allSessions))
+	for _, s := range m.allSessions {
+		existingNames[s.Name] = true
+	}
+	m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
+	m.state = stateCreatingSession
+	return m, m.newSessionForm.Init()
+}
+
 // handleSessionsKey handles keys when sessions pane is focused.
 func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	// Handle navigation keys - skip over headers
@@ -1334,19 +1358,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 	// Handle new session action (only if repos are discovered)
 	if m.handler.IsAction(keyStr, config.ActionNewSession) && len(m.discoveredRepos) > 0 {
-		// Determine preselected remote
-		preselectedRemote := m.localRemote
-		if selected := m.selectedSession(); selected != nil {
-			preselectedRemote = selected.Remote
-		}
-		// Build map of existing session names for validation
-		existingNames := make(map[string]bool, len(m.allSessions))
-		for _, s := range m.allSessions {
-			existingNames[s.Name] = true
-		}
-		m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
-		m.state = stateCreatingSession
-		return m, m.newSessionForm.Init()
+		return m.openNewSessionForm()
 	}
 
 	// Handle ':' for command palette (allow even without selection for filter commands)

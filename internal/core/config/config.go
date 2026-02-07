@@ -561,6 +561,13 @@ func (c *Config) validateUserKeybindings() error {
 
 	allCommands := c.MergedUserCommands()
 
+	// Commands referenced by default keybindings are valid targets for user rebinding.
+	// This includes plugin commands (TmuxOpen, etc.) not yet registered at config-load time.
+	defaultBindingCmds := make(map[string]bool, len(defaultKeybindings))
+	for _, kb := range defaultKeybindings {
+		defaultBindingCmds[kb.Cmd] = true
+	}
+
 	for key, kb := range c.Keybindings {
 		field := fmt.Sprintf("keybindings[%q]", key)
 
@@ -569,7 +576,7 @@ func (c *Config) validateUserKeybindings() error {
 			continue
 		}
 
-		if _, exists := allCommands[kb.Cmd]; !exists {
+		if _, exists := allCommands[kb.Cmd]; !exists && !defaultBindingCmds[kb.Cmd] {
 			errs = errs.Append(field, fmt.Errorf("cmd %q does not reference a valid user command", kb.Cmd))
 		}
 	}

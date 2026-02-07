@@ -146,6 +146,17 @@ func TestValidateUserKeybindings_InvalidCmdReference(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "does not reference a valid user command")
 }
 
+func TestValidateUserKeybindings_PluginCommandFromDefaults(t *testing.T) {
+	cfg := validConfig(t)
+	// TmuxOpen is a plugin command referenced by defaultKeybindings — should be valid
+	cfg.Keybindings = map[string]Keybinding{
+		"x": {Cmd: "TmuxOpen"},
+	}
+
+	err := cfg.validateUserKeybindings()
+	assert.NoError(t, err)
+}
+
 func TestValidateDeep_KeybindingValidCmdReference(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
