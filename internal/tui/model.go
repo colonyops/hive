@@ -1594,36 +1594,29 @@ func (m *Model) navigateSkippingHeaders(direction int) {
 	}
 }
 
-// selectFirstNonHeader selects the first non-header item in the list.
-func (m *Model) selectFirstNonHeader() {
-	items := m.list.Items()
-	for i, item := range items {
-		if treeItem, ok := item.(TreeItem); ok {
-			if !treeItem.IsHeader {
-				m.list.Select(i)
-				return
-			}
-		}
-	}
+// saveSelection snapshots the current selection for restore after a list rebuild.
+func (m *Model) saveSelection() treeSelection {
+	return saveTreeSelection(m.selectedTreeItem(), m.list.Index())
 }
 
-// selectSessionByID finds and selects a session by its ID.
-// Falls back to selectFirstNonHeader if not found.
-func (m *Model) selectSessionByID(id string) {
-	items := m.list.Items()
+// restoreSelection applies a saved selection to the current list items.
+func (m *Model) restoreSelection(sel treeSelection) {
+	treeItems := listItemsToTreeItems(m.list.Items())
+	m.list.Select(sel.restore(treeItems))
+}
+
+// listItemsToTreeItems extracts TreeItems from list items, preserving indices.
+// Non-TreeItem entries are marked as headers so restore skips them.
+func listItemsToTreeItems(items []list.Item) []TreeItem {
+	result := make([]TreeItem, len(items))
 	for i, item := range items {
-		if treeItem, ok := item.(TreeItem); ok {
-			if treeItem.IsHeader || treeItem.IsRecycledPlaceholder || treeItem.IsWindowItem {
-				continue
-			}
-			if treeItem.Session.ID == id {
-				m.list.Select(i)
-				return
-			}
+		if ti, ok := item.(TreeItem); ok {
+			result[i] = ti
+		} else {
+			result[i] = TreeItem{IsHeader: true}
 		}
 	}
-	// Session no longer exists, select first non-header
-	m.selectFirstNonHeader()
+	return result
 }
 
 // isFilterAction returns true if the action string is a filter action.
@@ -1690,11 +1683,7 @@ func (m Model) isModalActive() bool {
 
 // applyFilter rebuilds the tree view from all sessions.
 func (m Model) applyFilter() (tea.Model, tea.Cmd) {
-	// Remember currently selected session to restore after refresh
-	var selectedID string
-	if selected := m.selectedSession(); selected != nil {
-		selectedID = selected.ID
-	}
+	sel := m.saveSelection()
 
 	// Filter sessions by terminal status if a filter is active
 	sessions := m.allSessions
@@ -1731,13 +1720,7 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	}
 
 	m.list.SetItems(items)
-
-	// Restore selection or select first non-header
-	if selectedID != "" {
-		m.selectSessionByID(selectedID)
-	} else {
-		m.selectFirstNonHeader()
-	}
+	m.restoreSelection(sel)
 	m.state = stateNormal
 
 	if len(paths) == 0 {
@@ -1753,40 +1736,44 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 func (m *Model) rebuildWindowItems() {
 	items := m.list.Items()
 
-	// Check if rebuild is needed: count current window items and expected window items
-	currentWindows := 0
-	expectedWindows := 0
+	// Build sets of current and expected windows keyed by "sessionID:windowIndex"
+	// to detect actual changes. Window index is unique per session (names can repeat).
+	current := make(map[string]struct{})
+	expected := make(map[string]struct{})
 	for _, item := range items {
 		ti, ok := item.(TreeItem)
 		if !ok {
 			continue
 		}
 		if ti.IsWindowItem {
-			currentWindows++
+			current[ti.ParentSession.ID+":"+ti.WindowIndex] = struct{}{}
 			continue
 		}
 		if ti.IsHeader || ti.IsRecycledPlaceholder {
 			continue
 		}
 		if ts, ok := m.terminalStatuses.Get(ti.Session.ID); ok && len(ts.Windows) > 1 {
-			expectedWindows += len(ts.Windows)
+			for _, w := range ts.Windows {
+				expected[ti.Session.ID+":"+w.WindowIndex] = struct{}{}
+			}
 		}
-	}
-	if currentWindows == expectedWindows {
-		return // no change needed
 	}
 
-	// Remember selection
-	var selectedID string
-	var selectedWindowIdx string
-	if ti := m.selectedTreeItem(); ti != nil {
-		if ti.IsWindowItem {
-			selectedID = ti.ParentSession.ID
-			selectedWindowIdx = ti.WindowIndex
-		} else if !ti.IsHeader && !ti.IsRecycledPlaceholder {
-			selectedID = ti.Session.ID
+	// Only rebuild if the window sets actually differ.
+	if len(current) == len(expected) {
+		same := true
+		for k := range current {
+			if _, ok := expected[k]; !ok {
+				same = false
+				break
+			}
+		}
+		if same {
+			return
 		}
 	}
+
+	sel := m.saveSelection()
 
 	// Strip window items
 	stripped := make([]list.Item, 0, len(items))
@@ -1800,21 +1787,7 @@ func (m *Model) rebuildWindowItems() {
 	// Re-expand
 	expanded := m.expandWindowItems(stripped)
 	m.list.SetItems(expanded)
-
-	// Restore selection
-	if selectedWindowIdx != "" {
-		// Try to re-select the same window item
-		for i, item := range m.list.Items() {
-			if ti, ok := item.(TreeItem); ok && ti.IsWindowItem &&
-				ti.ParentSession.ID == selectedID && ti.WindowIndex == selectedWindowIdx {
-				m.list.Select(i)
-				return
-			}
-		}
-	}
-	if selectedID != "" {
-		m.selectSessionByID(selectedID)
-	}
+	m.restoreSelection(sel)
 }
 
 // expandWindowItems inserts window sub-items after each session that has multiple

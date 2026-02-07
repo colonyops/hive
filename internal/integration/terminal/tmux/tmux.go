@@ -109,9 +109,24 @@ func (t *Integration) RefreshCache() {
 		return
 	}
 
-	t.mu.Lock()
-	oldCache := t.cache
-	t.mu.Unlock()
+	// Snapshot old window state under lock so we can safely copy into new entries.
+	type windowSnapshot struct {
+		paneContent       string
+		lastCaptureActive int64
+		cachedStatus      terminal.Status
+	}
+	t.mu.RLock()
+	oldWindows := make(map[string]windowSnapshot) // key: "session:windowIndex"
+	for name, sc := range t.cache {
+		for _, w := range sc.agentWindows {
+			oldWindows[name+":"+w.windowIndex] = windowSnapshot{
+				paneContent:       w.paneContent,
+				lastCaptureActive: w.lastCaptureActive,
+				cachedStatus:      w.cachedStatus,
+			}
+		}
+	}
+	t.mu.RUnlock()
 
 	// First pass: collect all windows grouped by tmux session, tracking preferred status
 	type windowEntry struct {
@@ -145,16 +160,11 @@ func (t *Integration) RefreshCache() {
 			_, _ = fmt.Sscanf(parts[4], "%d", &w.activity)
 		}
 
-		// Preserve cached content from previous cache for this session:window
-		if old, exists := oldCache[sessionName]; exists {
-			for _, ow := range old.agentWindows {
-				if ow.windowIndex == windowIndex {
-					w.paneContent = ow.paneContent
-					w.lastCaptureActive = ow.lastCaptureActive
-					w.cachedStatus = ow.cachedStatus
-					break
-				}
-			}
+		// Preserve cached content from snapshot
+		if snap, exists := oldWindows[sessionName+":"+windowIndex]; exists {
+			w.paneContent = snap.paneContent
+			w.lastCaptureActive = snap.lastCaptureActive
+			w.cachedStatus = snap.cachedStatus
 		}
 
 		isPreferred := t.matchesPreferredWindow(windowName)
@@ -317,26 +327,31 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return terminal.StatusMissing, nil
 	}
 
-	// Check session exists and find the specific window
+	// Snapshot window state under lock to avoid races with RefreshCache and
+	// concurrent GetStatus calls on the same window.
 	t.mu.RLock()
 	sc, exists := t.cache[info.Name]
-	t.mu.RUnlock()
-
 	if !exists || len(sc.agentWindows) == 0 {
+		t.mu.RUnlock()
 		return terminal.StatusMissing, nil
 	}
 
-	// Find the specific window by Pane (window index)
 	w := sc.findWindow(info.Pane)
 	if w == nil {
 		w = sc.bestWindow()
 	}
 	if w == nil {
+		t.mu.RUnlock()
 		return terminal.StatusMissing, nil
 	}
 
-	// Key for per-window rate limiters and trackers
 	windowKey := info.Name + ":" + w.windowIndex
+	prevContent := w.paneContent
+	activity := w.activity
+	lastCaptureActive := w.lastCaptureActive
+	cachedStatus := w.cachedStatus
+	windowIndex := w.windowIndex
+	t.mu.RUnlock()
 
 	// Get or create rate limiter for this window
 	t.mu.Lock()
@@ -350,16 +365,16 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	// Capture pane content only if activity changed and rate limit allows
 	var content string
 	switch {
-	case w.paneContent != "" && w.activity == w.lastCaptureActive:
+	case prevContent != "" && activity == lastCaptureActive:
 		// Activity hasn't changed, use cached content
-		content = w.paneContent
+		content = prevContent
 	case !limiter.Allow():
 		// Activity changed but rate limited, use cached content
-		content = w.paneContent
+		content = prevContent
 	default:
 		// Activity changed and rate limit allows, capture fresh
 		var err error
-		content, err = t.capturePane(ctx, info.Name, w.windowIndex)
+		content, err = t.capturePane(ctx, info.Name, windowIndex)
 		if err != nil {
 			return terminal.StatusMissing, err
 		}
@@ -367,17 +382,17 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		// Update cached content and activity timestamp
 		t.mu.Lock()
 		w.paneContent = content
-		w.lastCaptureActive = w.activity
+		w.lastCaptureActive = activity
 		t.mu.Unlock()
 	}
 
 	// Store pane content in SessionInfo for preview
 	info.PaneContent = content
 
-	// If content hasn't changed and we have a cached status, return it
-	// This avoids expensive detector string operations on unchanged content
-	if content == w.paneContent && w.cachedStatus != "" {
-		return w.cachedStatus, nil
+	// If content hasn't changed and we have a cached status, return it.
+	// Compare against prevContent (the snapshot), not w.paneContent.
+	if content == prevContent && cachedStatus != "" {
+		return cachedStatus, nil
 	}
 
 	// Detect tool if not already set
@@ -398,9 +413,9 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 
 	// Use state tracker to determine status with spike detection
 	detector := terminal.NewDetector(tool)
-	status := tracker.Update(content, w.activity, detector)
+	status := tracker.Update(content, activity, detector)
 
-	// Cache the status result for future polls
+	// Cache the status result
 	t.mu.Lock()
 	w.cachedStatus = status
 	t.mu.Unlock()

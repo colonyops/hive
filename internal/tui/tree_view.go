@@ -539,9 +539,9 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	// The parent session's tree line continues vertically
 	var parentLine string
 	if item.IsLastInRepo {
-		parentLine = "      " // parent was └─, no continuing line
+		parentLine = "    " // parent was └─, no continuing line
 	} else {
-		parentLine = "│     " // parent was ├─, line continues
+		parentLine = "│   " // parent was ├─, line continues
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
