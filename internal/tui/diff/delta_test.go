@@ -15,11 +15,10 @@ func TestCheckDeltaAvailable(t *testing.T) {
 	// This is an integration test that checks if delta is in the system PATH.
 	// It will pass if delta is installed, fail with DeltaNotFoundError if not.
 	err := CheckDeltaAvailable()
-
 	// We can't mock exec.LookPath easily, so we just verify the error type if delta is missing
 	if err != nil {
 		var deltaErr *DeltaNotFoundError
-		require.True(t, errors.As(err, &deltaErr), "expected DeltaNotFoundError")
+		require.ErrorAs(t, err, &deltaErr, "expected DeltaNotFoundError")
 		assert.Contains(t, err.Error(), "delta not found")
 		assert.Contains(t, err.Error(), "brew install git-delta")
 		assert.Contains(t, err.Error(), "https://github.com/dandavison/delta")

@@ -1,0 +1,9 @@
+▼ internal/
+  ▼ tui/
+    ▼ diff/
+      * filetree.go +3 -0
+      * filetree_test.go +1 -1
+  ▼ core/
+    ▼ config/
+      * config.go +1 -0
+* README.md +2 -0
