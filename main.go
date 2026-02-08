@@ -51,6 +51,8 @@ func main() {
 	var (
 		logCloser func()
 		hiveApp   *hive.App
+		database  *db.DB
+		pluginMgr *plugins.Manager
 	)
 
 	flags := &commands.Flags{}
@@ -123,7 +125,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			if err != nil {
 				return ctx, fmt.Errorf("load config: %w", err)
 			}
-			flags.Config = cfg
 
 			// Open database connection
 			dbOpts := db.OpenOptions{
@@ -131,11 +132,10 @@ Run 'hive new' to create a new session from the current repository.`,
 				MaxIdleConns: cfg.Database.MaxIdleConns,
 				BusyTimeout:  cfg.Database.BusyTimeout,
 			}
-			database, err := db.Open(cfg.DataDir, dbOpts)
+			database, err = db.Open(cfg.DataDir, dbOpts)
 			if err != nil {
 				return ctx, fmt.Errorf("open database: %w", err)
 			}
-			flags.DB = database
 
 			// Migrate from JSON files if they exist
 			if err := stores.MigrateFromJSON(ctx, database, cfg.DataDir); err != nil {
@@ -146,9 +146,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			sessionStore := stores.NewSessionStore(database)
 			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
 
-			flags.Store = sessionStore
-			flags.MsgStore = msgStore
-
 			// Create service
 			var (
 				exec      = &executil.RealExecutor{}
@@ -156,10 +153,10 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			flags.Service = hive.NewSessionService(sessionStore, gitExec, cfg, exec, svcLogger, os.Stdout, os.Stderr)
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, exec, svcLogger, os.Stdout, os.Stderr)
 
 			// Create plugin manager and register plugins
-			pluginMgr := plugins.NewManager(cfg.Plugins)
+			pluginMgr = plugins.NewManager(cfg.Plugins)
 			pluginMgr.Register(github.New(cfg.Plugins.GitHub))
 			pluginMgr.Register(beads.New(cfg.Plugins.Beads))
 			pluginMgr.Register(lazygit.New(cfg.Plugins.LazyGit))
@@ -173,11 +170,9 @@ Run 'hive new' to create a new session from the current repository.`,
 				log.Warn().Err(err).Msg("plugin initialization error")
 			}
 
-			flags.PluginManager = pluginMgr
-
 			// Build the App struct
 			hiveApp = hive.NewApp(
-				flags.Service,
+				sessionSvc,
 				msgStore,
 				cfg,
 				nil, // terminal manager created in TUI command
@@ -189,13 +184,13 @@ Run 'hive new' to create a new session from the current repository.`,
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
 			// Close plugins
-			if flags.PluginManager != nil {
-				flags.PluginManager.CloseAll()
+			if pluginMgr != nil {
+				pluginMgr.CloseAll()
 			}
 
 			// Close database connection
-			if flags.DB != nil {
-				if err := flags.DB.Close(); err != nil {
+			if database != nil {
+				if err := database.Close(); err != nil {
 					log.Error().Err(err).Msg("failed to close database")
 					return err
 				}

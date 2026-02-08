@@ -16,6 +16,10 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
+func (cmd *MsgCmd) messages() *hive.MessageService {
+	return cmd.app.Messages
+}
+
 type MsgCmd struct {
 	flags *Flags
 	app   *hive.App
@@ -252,7 +256,7 @@ func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
 }
 
 func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
-	store := cmd.getMsgStore()
+	msgs := cmd.messages()
 
 	topics := cmd.pubTopics
 	if len(topics) == 0 {
@@ -292,7 +296,7 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 		SessionID: sessionID,
 	}
 
-	if err := store.Publish(ctx, msg, topics); err != nil {
+	if err := msgs.Publish(ctx, msg, topics); err != nil {
 		return fmt.Errorf("publish message: %w", err)
 	}
 
@@ -300,7 +304,7 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
-	store := cmd.getMsgStore()
+	msgs := cmd.messages()
 
 	topic := cmd.subTopic
 	if topic == "" {
@@ -309,16 +313,16 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 
 	// Wait mode: wait for a single message and exit
 	if cmd.subWait {
-		return cmd.waitForMessage(ctx, c, store, topic)
+		return cmd.waitForMessage(ctx, c, msgs, topic)
 	}
 
 	// Listen mode: poll for new messages
 	if cmd.subListen {
-		return cmd.listenForMessages(ctx, c, store, topic)
+		return cmd.listenForMessages(ctx, c, msgs, topic)
 	}
 
 	// Default: return messages immediately
-	messages, err := store.Subscribe(ctx, topic, time.Time{})
+	messages, err := msgs.Subscribe(ctx, topic, time.Time{})
 	if err != nil {
 		if errors.Is(err, messaging.ErrTopicNotFound) {
 			return nil // No messages, no output
@@ -337,13 +341,13 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 
 	// Auto-acknowledge unless peeking
 	if !cmd.subPeek && len(messages) > 0 {
-		cmd.acknowledgeMessages(ctx, store, messages)
+		cmd.acknowledgeMessages(ctx, msgs, messages)
 	}
 
 	return nil
 }
 
-func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store messaging.Store, topic string) error {
+func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string) error {
 	timeout, err := time.ParseDuration(cmd.subTimeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout: %w", err)
@@ -363,7 +367,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 				return nil // Timeout reached, exit silently
 			}
 
-			messages, err := store.Subscribe(ctx, topic, since)
+			messages, err := msgs.Subscribe(ctx, topic, since)
 			if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
 				return fmt.Errorf("subscribe: %w", err)
 			}
@@ -376,14 +380,14 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, store 
 
 				// Auto-acknowledge unless peeking
 				if !cmd.subPeek {
-					cmd.acknowledgeMessages(ctx, store, messages)
+					cmd.acknowledgeMessages(ctx, msgs, messages)
 				}
 			}
 		}
 	}
 }
 
-func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store messaging.Store, topic string) error {
+func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string) error {
 	// Use 24h default for --wait mode (essentially forever for handoff scenarios)
 	timeout := 24 * time.Hour
 	if cmd.subTimeout != "30s" { // User explicitly set a timeout
@@ -408,7 +412,7 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store mes
 				return fmt.Errorf("timeout waiting for message on topic %q", topic)
 			}
 
-			messages, err := store.Subscribe(ctx, topic, since)
+			messages, err := msgs.Subscribe(ctx, topic, since)
 			if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
 				return fmt.Errorf("subscribe: %w", err)
 			}
@@ -422,7 +426,7 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store mes
 
 				// Auto-acknowledge unless peeking
 				if !cmd.subPeek {
-					cmd.acknowledgeMessages(ctx, store, firstMsg)
+					cmd.acknowledgeMessages(ctx, msgs, firstMsg)
 				}
 				return nil
 			}
@@ -431,9 +435,9 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, store mes
 }
 
 func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
-	store := cmd.getMsgStore()
+	msgs := cmd.messages()
 
-	topics, err := store.List(ctx)
+	topics, err := msgs.ListTopics(ctx)
 	if err != nil {
 		return fmt.Errorf("list topics: %w", err)
 	}
@@ -450,7 +454,7 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 
 	var infos []topicInfo
 	for _, t := range topics {
-		messages, err := store.Subscribe(ctx, t, time.Time{})
+		messages, err := msgs.Subscribe(ctx, t, time.Time{})
 		if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
 			return fmt.Errorf("get messages for topic %s: %w", t, err)
 		}
@@ -463,10 +467,6 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 		}
 	}
 	return nil
-}
-
-func (cmd *MsgCmd) getMsgStore() messaging.Store {
-	return cmd.flags.MsgStore // TODO: remove after TUI migration, use app.Messages directly
 }
 
 func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
@@ -484,7 +484,7 @@ func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) erro
 
 // acknowledgeMessages marks messages as read by the current session.
 // Logs errors but does not fail the operation.
-func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, store messaging.Store, messages []messaging.Message) {
+func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, msgs *hive.MessageService, messages []messaging.Message) {
 	sessionID, err := cmd.detectSessionID(ctx)
 	if err != nil {
 		log.Printf("warning: failed to detect session for acknowledgment: %v", err)
@@ -498,7 +498,7 @@ func (cmd *MsgCmd) acknowledgeMessages(ctx context.Context, store messaging.Stor
 	for i, msg := range messages {
 		messageIDs[i] = msg.ID
 	}
-	if err := store.Acknowledge(ctx, sessionID, messageIDs); err != nil {
+	if err := msgs.Acknowledge(ctx, sessionID, messageIDs); err != nil {
 		log.Printf("warning: failed to acknowledge %d messages: %v", len(messageIDs), err)
 	}
 }
@@ -531,7 +531,7 @@ Examples:
 }
 
 func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
-	store := cmd.getMsgStore()
+	msgs := cmd.messages()
 
 	sessionID, err := cmd.detectSessionID(ctx)
 	if err != nil {
@@ -547,9 +547,9 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 	var msgErr error
 
 	if cmd.inboxAll {
-		messages, msgErr = store.Subscribe(ctx, inboxTopic, time.Time{})
+		messages, msgErr = msgs.Subscribe(ctx, inboxTopic, time.Time{})
 	} else {
-		messages, msgErr = store.GetUnread(ctx, sessionID, inboxTopic)
+		messages, msgErr = msgs.GetUnread(ctx, sessionID, inboxTopic)
 	}
 
 	if msgErr != nil && !errors.Is(msgErr, messaging.ErrTopicNotFound) {
@@ -562,7 +562,7 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 
 	// Auto-acknowledge unless peeking
 	if !cmd.inboxPeek && len(messages) > 0 {
-		cmd.acknowledgeMessages(ctx, store, messages)
+		cmd.acknowledgeMessages(ctx, msgs, messages)
 	}
 
 	return nil
