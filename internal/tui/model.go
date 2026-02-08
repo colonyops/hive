@@ -63,11 +63,11 @@ const (
 
 // Options configures the TUI behavior.
 type Options struct {
-	LocalRemote     string            // Remote URL of current directory (empty if not in git repo)
-	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
-	TerminalManager *terminal.Manager // Terminal integration manager (optional)
-	PluginManager   *plugins.Manager  // Plugin manager (optional)
-	DB              *db.DB            // Database connection for stores
+	LocalRemote     string               // Remote URL of current directory (empty if not in git repo)
+	MsgStore        *hive.MessageService // Message service for pub/sub events (optional)
+	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
+	PluginManager   *plugins.Manager     // Plugin manager (optional)
+	DB              *db.DB               // Database connection for stores
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -129,7 +129,7 @@ type Model struct {
 	refreshing bool     // true during background session refresh
 
 	// Messages
-	msgStore     messaging.Store
+	msgStore     *hive.MessageService
 	msgView      *MessagesView
 	allMessages  []messaging.Message
 	lastPollTime time.Time

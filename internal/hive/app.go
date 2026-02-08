@@ -3,8 +3,8 @@ package hive
 import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/core/terminal"
+	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/plugins"
 )
 

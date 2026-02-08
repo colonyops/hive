@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/hive"
 )
 
 const messagesPollInterval = 500 * time.Millisecond
@@ -23,17 +24,17 @@ type pollTickMsg struct{}
 // sessionRefreshTickMsg is sent to trigger session list refresh.
 type sessionRefreshTickMsg struct{}
 
-// loadMessages returns a command that loads messages from the store.
-func loadMessages(store messaging.Store, topic string, since time.Time) tea.Cmd {
+// loadMessages returns a command that loads messages from the message service.
+func loadMessages(svc *hive.MessageService, topic string, since time.Time) tea.Cmd {
 	return func() tea.Msg {
-		if store == nil {
+		if svc == nil {
 			return messagesLoadedMsg{err: nil}
 		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		messages, err := store.Subscribe(ctx, topic, since)
+		messages, err := svc.Subscribe(ctx, topic, since)
 		if err != nil {
 			// ErrTopicNotFound is not an error, just no messages
 			if errors.Is(err, messaging.ErrTopicNotFound) {

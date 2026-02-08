@@ -81,7 +81,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	for {
 		opts := tui.Options{
 			LocalRemote:     localRemote,
-			MsgStore:        cmd.flags.MsgStore, // TODO: migrate to app.Messages in Phase 5
+			MsgStore:        cmd.app.Messages,
 			TerminalManager: termMgr,
 			PluginManager:   cmd.app.Plugins,
 			DB:              cmd.app.DB,
