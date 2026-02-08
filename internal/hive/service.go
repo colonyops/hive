@@ -11,6 +11,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/hay-kot/hive/pkg/randid"
@@ -354,6 +355,13 @@ func (s *SessionService) pruneExcessRecycled(ctx context.Context, sessions []ses
 // DetectRemote gets the git remote URL from the specified directory.
 func (s *SessionService) DetectRemote(ctx context.Context, dir string) (string, error) {
 	return s.git.RemoteURL(ctx, dir)
+}
+
+// DetectSession returns the session ID for the current working directory.
+// Returns empty string if not in a hive session.
+func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
+	detector := messaging.NewSessionDetector(s.sessions)
+	return detector.DetectSession(ctx)
 }
 
 // Git returns the git client for use in background operations.

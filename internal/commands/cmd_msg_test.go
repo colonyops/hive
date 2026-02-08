@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/urfave/cli/v3"
@@ -23,7 +24,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags, nil)
+	cmd := NewMsgCmd(flags, &hive.App{Config: flags.Config})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -55,7 +56,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags, nil)
+	cmd := NewMsgCmd(flags, &hive.App{Config: flags.Config})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -86,7 +87,7 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags, nil)
+	cmd := NewMsgCmd(flags, &hive.App{Config: flags.Config})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -120,7 +121,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags, nil)
+	cmd := NewMsgCmd(flags, &hive.App{Config: flags.Config})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -155,7 +156,7 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 			},
 		}
 
-		cmd := NewMsgCmd(flags, nil)
+		cmd := NewMsgCmd(flags, &hive.App{Config: flags.Config})
 
 		app := &cli.Command{
 			Name:   "hive",

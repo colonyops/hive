@@ -47,12 +47,7 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 }
 
 func (cmd *DoctorCmd) run(ctx context.Context, c *cli.Command) error {
-	checks := []doctor.Check{
-		doctor.NewConfigCheck(cmd.flags.Config, cmd.flags.ConfigPath),
-		doctor.NewOrphanCheck(cmd.flags.Store, cmd.flags.Config.ReposDir(), cmd.autofix),
-	}
-
-	results := doctor.RunAll(ctx, checks)
+	results := cmd.app.Doctor.RunChecks(ctx, cmd.flags.ConfigPath, cmd.autofix)
 
 	if cmd.format == "json" {
 		return cmd.outputJSON(c, results)

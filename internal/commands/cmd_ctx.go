@@ -8,7 +8,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
@@ -161,48 +160,23 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	// Create the context directory if it doesn't exist
-	if err := os.MkdirAll(ctxDir, 0o755); err != nil {
-		return fmt.Errorf("create context directory: %w", err)
+	createdSubdirs, err := cmd.app.Context.Init(ctxDir)
+	if err != nil {
+		return err
 	}
 
-	// Create standard subdirectories
-	subdirs := []string{"research", "plans", "references"}
-	var createdSubdirs []string
-	for _, subdir := range subdirs {
-		subdirPath := filepath.Join(ctxDir, subdir)
-		if _, err := os.Stat(subdirPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(subdirPath, 0o755); err != nil {
-				return fmt.Errorf("create subdirectory %s: %w", subdir, err)
-			}
-			createdSubdirs = append(createdSubdirs, subdir)
-		}
+	alreadyExists, err := cmd.app.Context.CreateSymlink(ctxDir)
+	if err != nil {
+		return err
 	}
 
-	symlinkName := cmd.flags.Config.Context.SymlinkName
-	symlinkPath := filepath.Join(".", symlinkName)
-
-	// Check if symlink already exists
-	if info, err := os.Lstat(symlinkPath); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, _ := os.Readlink(symlinkPath)
-			if target == ctxDir {
-				p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
-				if len(createdSubdirs) > 0 {
-					p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
-				}
-				return nil
-			}
-			return fmt.Errorf("symlink %s exists but points to %s, not %s", symlinkName, target, ctxDir)
-		}
-		return fmt.Errorf("%s already exists and is not a symlink", symlinkName)
+	symlinkName := cmd.app.Config.Context.SymlinkName
+	if alreadyExists {
+		p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
+	} else {
+		p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
 	}
 
-	if err := os.Symlink(ctxDir, symlinkPath); err != nil {
-		return fmt.Errorf("create symlink: %w", err)
-	}
-
-	p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
 	if len(createdSubdirs) > 0 {
 		p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
 	}
@@ -222,63 +196,21 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("invalid duration: %w", err)
 	}
 
-	cutoff := time.Now().Add(-duration)
-	count := 0
-
-	entries, err := os.ReadDir(ctxDir)
+	count, err := cmd.app.Context.Prune(ctxDir, duration)
 	if err != nil {
-		if os.IsNotExist(err) {
-			p.Infof("Context directory does not exist")
-			return nil
-		}
-		return fmt.Errorf("read directory: %w", err)
+		return err
 	}
 
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		if info.ModTime().Before(cutoff) {
-			path := filepath.Join(ctxDir, entry.Name())
-			if err := os.RemoveAll(path); err != nil {
-				p.Warnf("Failed to remove %s: %v", entry.Name(), err)
-				continue
-			}
-			count++
-		}
+	if count == 0 {
+		p.Infof("No files older than %s", cmd.olderThan)
+	} else {
+		p.Successf("Removed %d file(s) older than %s", count, cmd.olderThan)
 	}
-
-	p.Successf("Removed %d file(s) older than %s", count, cmd.olderThan)
 	return nil
 }
 
 func (cmd *CtxCmd) resolveContextDir(ctx context.Context) (string, error) {
-	if cmd.shared {
-		return cmd.flags.Config.SharedContextDir(), nil
-	}
-
-	if cmd.repo != "" {
-		parts := strings.SplitN(cmd.repo, "/", 2)
-		if len(parts) != 2 {
-			return "", fmt.Errorf("invalid repo format, expected owner/repo: %s", cmd.repo)
-		}
-		return cmd.flags.Config.RepoContextDir(parts[0], parts[1]), nil
-	}
-
-	// Detect from current directory
-	remote, err := cmd.flags.Service.DetectRemote(ctx, ".")
-	if err != nil {
-		return "", fmt.Errorf("detect remote (are you in a git repository?): %w", err)
-	}
-
-	owner, repo := git.ExtractOwnerRepo(remote)
-	if owner == "" || repo == "" {
-		return "", fmt.Errorf("could not extract owner/repo from remote: %s", remote)
-	}
-
-	return cmd.flags.Config.RepoContextDir(owner, repo), nil
+	return cmd.app.Context.ResolveDir(ctx, cmd.repo, cmd.shared)
 }
 
 func parseDuration(s string) (time.Duration, error) {

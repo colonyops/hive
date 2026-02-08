@@ -50,7 +50,7 @@ func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
 
 	all := c.Bool("all")
-	count, err := cmd.flags.Service.Prune(ctx, all)
+	count, err := cmd.app.Sessions.Prune(ctx, all)
 	if err != nil {
 		return fmt.Errorf("prune sessions: %w", err)
 	}

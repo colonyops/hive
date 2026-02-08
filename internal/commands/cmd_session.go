@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/pkg/iojson"
@@ -76,8 +75,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
 
 	// Detect session from current working directory
-	detector := messaging.NewSessionDetector(cmd.flags.Store)
-	sessionID, err := detector.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
 	if err != nil {
 		return fmt.Errorf("detect session: %w", err)
 	}
@@ -93,7 +91,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Get full session details
-	sess, err := cmd.flags.Service.GetSession(ctx, sessionID)
+	sess, err := cmd.app.Sessions.GetSession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}

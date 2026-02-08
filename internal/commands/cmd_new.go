@@ -84,7 +84,7 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		Source: source,
 	}
 
-	sess, err := cmd.flags.Service.CreateSession(ctx, opts)
+	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}

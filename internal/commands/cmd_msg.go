@@ -233,7 +233,7 @@ Examples:
 
 func (cmd *MsgCmd) runTopic(_ context.Context, c *cli.Command) error {
 	// Determine prefix: flag override > config > default "agent"
-	prefix := cmd.flags.Config.Messaging.TopicPrefix
+	prefix := cmd.app.Config.Messaging.TopicPrefix
 	if c.IsSet("prefix") {
 		prefix = cmd.topicPrefix
 	}
@@ -466,12 +466,11 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *MsgCmd) getMsgStore() messaging.Store {
-	return cmd.flags.MsgStore
+	return cmd.flags.MsgStore // TODO: remove after TUI migration, use app.Messages directly
 }
 
 func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
-	detector := messaging.NewSessionDetector(cmd.flags.Store)
-	return detector.DetectSession(ctx)
+	return cmd.app.Sessions.DetectSession(ctx)
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {

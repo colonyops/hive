@@ -59,7 +59,7 @@ Use --all to show all migrations.`,
 
 func (cmd *DocCmd) runMigrate(_ context.Context, c *cli.Command) error {
 	w := c.Root().Writer
-	configVersion := cmd.flags.Config.Version
+	configVersion := cmd.app.Config.Version
 	printMigrationGuide(w, configVersion, cmd.all)
 	return nil
 }

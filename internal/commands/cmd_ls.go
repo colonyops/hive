@@ -53,7 +53,7 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
 	p := printer.Ctx(ctx)
 
-	sessions, err := cmd.flags.Service.ListSessions(ctx)
+	sessions, err := cmd.app.Sessions.ListSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("list sessions: %w", err)
 	}
@@ -141,7 +141,7 @@ func (cmd *LsCmd) buildSessionInfo(ctx context.Context, s session.Session) sessi
 	}
 
 	// Count unread inbox messages
-	if msgs, err := cmd.flags.MsgStore.GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
+	if msgs, err := cmd.app.Messages.GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
 		info.Unread = len(msgs)
 	}
 
