@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/styles"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/rs/zerolog"
 )

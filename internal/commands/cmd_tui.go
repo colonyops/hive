@@ -13,8 +13,8 @@ import (
 	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/core/terminal/tmux"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/profiler"
 	"github.com/hay-kot/hive/internal/tui"
+	"github.com/hay-kot/hive/pkg/profiler"
 )
 
 type TuiCmd struct {

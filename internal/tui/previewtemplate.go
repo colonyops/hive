@@ -6,8 +6,8 @@ import (
 	"text/template"
 
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/plugins"
-	"github.com/hay-kot/hive/internal/styles"
+	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/hay-kot/hive/internal/hive/plugins"
 	"github.com/hay-kot/hive/pkg/kv"
 )
 

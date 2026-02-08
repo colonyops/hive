@@ -5,7 +5,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/hive/plugins"
 )
 
 // App is the central entry point for all hive operations.

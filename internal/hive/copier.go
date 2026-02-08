@@ -11,7 +11,7 @@ import (
 
 	"github.com/bmatcuk/doublestar/v4"
 	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/styles"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/rs/zerolog"
 )
 
