@@ -118,9 +118,9 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	case m.running:
 		status = m.spinner.View() + " Running..."
 	case m.err != nil:
-		status = outputErrorStyle.Render("✗ Error: " + m.err.Error())
+		status = outputErrorStyle().Render("✗ Error: " + m.err.Error())
 	default:
-		status = outputSuccessStyle.Render("✓ Complete")
+		status = outputSuccessStyle().Render("✓ Complete")
 	}
 
 	// Build help line
@@ -136,7 +136,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		lipgloss.Left,
 		styles.ModalTitleStyle.Render(m.title),
 		"",
-		outputContentStyle.Width(modalWidth-outputModalPadding).Render(content),
+		outputContentStyle().Width(modalWidth-outputModalPadding).Render(content),
 		"",
 		status,
 		styles.ModalHelpStyle.Render(help),
@@ -159,14 +159,14 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	return compositor.Render()
 }
 
-// Output modal specific styles.
-var (
-	outputContentStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorMuted)
+func outputContentStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorMuted)
+}
 
-	outputErrorStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorError)
+func outputErrorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorError)
+}
 
-	outputSuccessStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorSuccess)
-)
+func outputSuccessStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorSuccess)
+}

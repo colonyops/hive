@@ -8,35 +8,34 @@ import (
 	"github.com/hay-kot/hive/internal/core/styles"
 )
 
-// HelpDialog styles.
-var (
-	helpDialogTitleStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(styles.ColorForeground)
+// HelpDialog style constructors - functions to respect theme updates.
+func helpDialogTitleStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Bold(true).Foreground(styles.ColorForeground)
+}
 
-	helpDialogSectionStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorMuted).
-				Italic(true)
+func helpDialogSectionStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorMuted).Italic(true)
+}
 
-	helpDialogSeparatorStyle = lipgloss.NewStyle().
-					Foreground(styles.ColorMuted)
+func helpDialogSeparatorStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorMuted)
+}
 
-	helpDialogKeyStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorPrimary).
-				Bold(true)
+func helpDialogKeyStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true)
+}
 
-	helpDialogDescStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorForeground)
+func helpDialogDescStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorForeground)
+}
 
-	helpDialogHelpStyle = lipgloss.NewStyle().
-				Foreground(styles.ColorMuted).
-				MarginTop(1)
+func helpDialogHelpStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Foreground(styles.ColorMuted).MarginTop(1)
+}
 
-	helpDialogModalStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(styles.ColorPrimary).
-				Padding(1, 2)
-)
+func helpDialogModalStyle() lipgloss.Style {
+	return lipgloss.NewStyle().Border(lipgloss.RoundedBorder()).BorderForeground(styles.ColorPrimary).Padding(1, 2)
+}
 
 // HelpEntry represents a single keyboard shortcut entry.
 type HelpEntry struct {
@@ -70,10 +69,10 @@ func NewHelpDialog(title string, sections []HelpDialogSection, width, height int
 
 // View renders the help dialog.
 func (h *HelpDialog) View() string {
-	title := helpDialogTitleStyle.Render(h.title)
+	title := helpDialogTitleStyle().Render(h.title)
 
 	var lines []string
-	separator := helpDialogSeparatorStyle.Render("─────────────────────────")
+	separator := helpDialogSeparatorStyle().Render("─────────────────────────")
 
 	for i, section := range h.sections {
 		// Add section header if present
@@ -82,7 +81,7 @@ func (h *HelpDialog) View() string {
 			if i > 0 {
 				lines = append(lines, "")
 			}
-			lines = append(lines, helpDialogSectionStyle.Render(section.Title))
+			lines = append(lines, helpDialogSectionStyle().Render(section.Title))
 			lines = append(lines, separator)
 		}
 
@@ -97,10 +96,10 @@ func (h *HelpDialog) View() string {
 		strings.Join(lines, "\n"),
 	)
 
-	help := helpDialogHelpStyle.Render("esc/? close")
+	help := helpDialogHelpStyle().Render("esc/? close")
 	content = lipgloss.JoinVertical(lipgloss.Left, content, help)
 
-	return helpDialogModalStyle.Render(content)
+	return helpDialogModalStyle().Render(content)
 }
 
 // Overlay renders the help dialog as a layer over the given background.
@@ -129,5 +128,5 @@ func formatKeyDesc(key, desc string) string {
 	displayWidth := lipgloss.Width(key)
 	paddedKey := key + Pad(keyWidth-displayWidth)
 
-	return helpDialogKeyStyle.Render(paddedKey) + helpDialogDescStyle.Render(desc)
+	return helpDialogKeyStyle().Render(paddedKey) + helpDialogDescStyle().Render(desc)
 }
