@@ -109,9 +109,9 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styl
 // renderActiveIndicator renders the active status with fade animation.
 func renderActiveIndicator(frame int) string {
 	// Regenerate colors if the theme's green changed
-	r, _, _, _ := styles.ColorGreen.RGBA() //nolint:dogsled // RGBA returns 4 values, only r is needed for seed
+	r, _, _, _ := styles.ColorSuccess.RGBA() //nolint:dogsled // RGBA returns 4 values, only r is needed for seed
 	if activeAnimationColors == nil || activeAnimationSeed != r {
-		activeAnimationColors = generatePulseColors(styles.ColorGreen, AnimationFrameCount, 0.80)
+		activeAnimationColors = generatePulseColors(styles.ColorSuccess, AnimationFrameCount, 0.80)
 		activeAnimationSeed = r
 	}
 

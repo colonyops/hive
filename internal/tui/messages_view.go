@@ -305,14 +305,14 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 	if len(sender) > senderW-2 { // -2 for brackets
 		sender = sender[:senderW-3] + "…"
 	}
-	senderColor := ColorForString(sender)
+	senderColor := styles.ColorForString(sender)
 	senderStyle := lipgloss.NewStyle().Foreground(senderColor)
 	senderPadded := fmt.Sprintf("[%-*s]", senderW-2, sender)
 	b.WriteString(senderStyle.Render(senderPadded))
 	b.WriteString(" ")
 
 	// Topic (with color hashing, fixed width, in brackets)
-	topicColor := ColorForString(msg.Topic)
+	topicColor := styles.ColorForString(msg.Topic)
 	topicStyle := lipgloss.NewStyle().Foreground(topicColor)
 	topic := msg.Topic
 	if len(topic) > topicW-2 { // -2 for brackets

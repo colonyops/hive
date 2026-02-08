@@ -12,6 +12,8 @@ import (
 	"github.com/hay-kot/hive/internal/core/styles"
 )
 
+const iconDot = "•"
+
 // Message preview modal layout constants.
 const (
 	previewModalMaxWidth  = 100 // maximum modal width in columns

@@ -177,7 +177,7 @@ func (p *Plugin) renderStatus(a *SessionAnalytics) plugins.Status {
 	case percent >= float64(redThreshold):
 		style = lipgloss.NewStyle().Foreground(styles.ColorError)
 	case percent >= float64(yellowThreshold):
-		style = lipgloss.NewStyle().Foreground(styles.ColorYellow)
+		style = lipgloss.NewStyle().Foreground(styles.ColorWarning)
 	default:
 		// Below threshold - still show label but no color change
 		return plugins.Status{

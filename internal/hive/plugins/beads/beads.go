@@ -127,11 +127,11 @@ func (p *Plugin) fetchBeadsStatus(ctx context.Context, path string) plugins.Stat
 	var style lipgloss.Style
 	switch {
 	case closedCount == total:
-		style = lipgloss.NewStyle().Foreground(styles.ColorGreen)
+		style = lipgloss.NewStyle().Foreground(styles.ColorSuccess)
 	case openCount > 0:
-		style = lipgloss.NewStyle().Foreground(styles.ColorBlue)
+		style = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 	default:
-		style = lipgloss.NewStyle().Foreground(styles.ColorGray)
+		style = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	}
 
 	return plugins.Status{
