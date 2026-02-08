@@ -207,8 +207,8 @@ func TestModelSetSize(t *testing.T) {
 	expectedTreeWidth := 120 * 30 / 100
 	assert.Equal(t, expectedTreeWidth, m.fileTree.width)
 
-	// Diff viewer should get remaining width (gutter is embedded in tree panel)
-	expectedDiffWidth := 120 - expectedTreeWidth
+	// Diff viewer should get remaining width (minus tree and gutter)
+	expectedDiffWidth := 120 - expectedTreeWidth - 1 // -1 for gutter
 	assert.Equal(t, expectedDiffWidth, m.diffViewer.width)
 
 	// Both should get height minus headers and status bar

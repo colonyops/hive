@@ -358,16 +358,22 @@ func (m FileTreeModel) renderNode(node *TreeNode, selected bool) string {
 	}
 
 	// Calculate available width for filename
-	// Available = panelWidth - indent - icon - space - stats - padding
+	// Account for: left padding (1) + indent + icon + space (1) + name + space (1) + stats + line indicator (~10) + margin (2)
 	iconWidth := lipgloss.Width(icon) + 1 // icon + space
 	statsWidth := 0
 	if statsPlain != "" {
-		statsWidth = len(statsPlain)
+		statsWidth = len(statsPlain) + 1 // stats + space
 	}
-	availableWidth := m.width - indentWidth - iconWidth - statsWidth - 2 // 2 for padding
+	lineIndicatorSpace := 0
+	if m.selectionStart >= 0 && m.selectionEnd >= 0 {
+		lineIndicatorSpace = 12 // Reserve space for " [L999-999]"
+	}
+
+	reservedWidth := 1 + indentWidth + iconWidth + statsWidth + lineIndicatorSpace + 2
+	availableWidth := m.width - reservedWidth
 
 	// Truncate filename if needed
-	if availableWidth < len(name) && availableWidth > 3 {
+	if availableWidth > 3 && len(name) > availableWidth {
 		name = name[:availableWidth-2] + ".."
 	}
 
