@@ -12,6 +12,7 @@ import (
 	"github.com/hay-kot/hive/internal/commands"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/data/stores"
 	"github.com/hay-kot/hive/internal/hive"
@@ -125,6 +126,10 @@ Run 'hive new' to create a new session from the current repository.`,
 			if err != nil {
 				return ctx, fmt.Errorf("load config: %w", err)
 			}
+
+			// Apply configured theme (validation ensures name is valid)
+			palette, _ := styles.GetPalette(cfg.TUI.Theme)
+			styles.SetTheme(palette)
 
 			// Open database connection
 			dbOpts := db.OpenOptions{

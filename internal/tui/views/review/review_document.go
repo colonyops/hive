@@ -7,8 +7,8 @@ import (
 	"strings"
 	"time"
 
-	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // DocumentType categorizes documents.
@@ -201,7 +201,7 @@ func (d *Document) Render(width int) (string, error) {
 	// Ensure minimum reasonable width of 20 characters, maximum of 80 for readability
 	wrapWidth := max(min(width-6, 80), 20)
 	r, err := glamour.NewTermRenderer(
-		glamour.WithStylePath("dark"),
+		glamour.WithStyles(styles.GlamourStyle()),
 		glamour.WithWordWrap(wrapWidth),
 	)
 	if err != nil {
@@ -233,8 +233,8 @@ func (d *Document) formatWithLineNumbers(lines []string) string {
 
 	// Build output with line numbers
 	var result strings.Builder
-	lineNumStyle := lipgloss.NewStyle().Foreground(colorGray)
-	separatorStyle := lipgloss.NewStyle().Foreground(colorGray)
+	lineNumStyle := styles.TextMutedStyle
+	separatorStyle := styles.TextMutedStyle
 
 	for i, line := range lines {
 		lineNum := fmt.Sprintf("%*d", lineNumWidth, i+1)

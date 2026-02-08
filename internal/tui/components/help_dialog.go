@@ -5,43 +5,7 @@ import (
 	"strings"
 
 	lipgloss "charm.land/lipgloss/v2"
-)
-
-// Tokyo Night color palette.
-var (
-	colorBlue  = lipgloss.Color("#7aa2f7")
-	colorGray  = lipgloss.Color("#565f89")
-	colorWhite = lipgloss.Color("#c0caf5")
-)
-
-// HelpDialog styles.
-var (
-	helpDialogTitleStyle = lipgloss.NewStyle().
-				Bold(true).
-				Foreground(colorWhite)
-
-	helpDialogSectionStyle = lipgloss.NewStyle().
-				Foreground(colorGray).
-				Italic(true)
-
-	helpDialogSeparatorStyle = lipgloss.NewStyle().
-					Foreground(colorGray)
-
-	helpDialogKeyStyle = lipgloss.NewStyle().
-				Foreground(colorBlue).
-				Bold(true)
-
-	helpDialogDescStyle = lipgloss.NewStyle().
-				Foreground(colorWhite)
-
-	helpDialogHelpStyle = lipgloss.NewStyle().
-				Foreground(colorGray).
-				MarginTop(1)
-
-	helpDialogModalStyle = lipgloss.NewStyle().
-				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBlue).
-				Padding(1, 2)
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // HelpEntry represents a single keyboard shortcut entry.
@@ -76,10 +40,10 @@ func NewHelpDialog(title string, sections []HelpDialogSection, width, height int
 
 // View renders the help dialog.
 func (h *HelpDialog) View() string {
-	title := helpDialogTitleStyle.Render(h.title)
+	title := styles.TextForegroundBoldStyle.Render(h.title)
 
 	var lines []string
-	separator := helpDialogSeparatorStyle.Render("─────────────────────────")
+	separator := styles.TextMutedStyle.Render("─────────────────────────")
 
 	for i, section := range h.sections {
 		// Add section header if present
@@ -88,7 +52,7 @@ func (h *HelpDialog) View() string {
 			if i > 0 {
 				lines = append(lines, "")
 			}
-			lines = append(lines, helpDialogSectionStyle.Render(section.Title))
+			lines = append(lines, styles.HelpDialogSectionStyle.Render(section.Title))
 			lines = append(lines, separator)
 		}
 
@@ -103,10 +67,10 @@ func (h *HelpDialog) View() string {
 		strings.Join(lines, "\n"),
 	)
 
-	help := helpDialogHelpStyle.Render("esc/? close")
+	help := styles.HelpDialogHelpStyle.Render("esc/? close")
 	content = lipgloss.JoinVertical(lipgloss.Left, content, help)
 
-	return helpDialogModalStyle.Render(content)
+	return styles.HelpDialogModalStyle.Render(content)
 }
 
 // Overlay renders the help dialog as a layer over the given background.
@@ -135,5 +99,5 @@ func formatKeyDesc(key, desc string) string {
 	displayWidth := lipgloss.Width(key)
 	paddedKey := key + Pad(keyWidth-displayWidth)
 
-	return helpDialogKeyStyle.Render(paddedKey) + helpDialogDescStyle.Render(desc)
+	return styles.TextPrimaryBoldStyle.Render(paddedKey) + styles.TextForegroundStyle.Render(desc)
 }
