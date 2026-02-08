@@ -87,23 +87,21 @@ Example: hive ctx ls`,
 }
 
 func (cmd *CtxCmd) runLs(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
 	}
 
 	if _, err := os.Stat(ctxDir); os.IsNotExist(err) {
-		p.Infof("Context directory does not exist. Run 'hive ctx init' first.")
+		fmt.Printf("Context directory does not exist. Run 'hive ctx init' first.")
 		return nil
 	}
 
-	p.Printf("%s", ctxDir)
-	return printTree(p, ctxDir, "")
+	fmt.Printf("%s", ctxDir)
+	return printTree(ctxDir, "")
 }
 
-func printTree(p *printer.Printer, dir, prefix string) error {
+func printTree(dir, prefix string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("read directory: %w", err)
@@ -117,14 +115,14 @@ func printTree(p *printer.Printer, dir, prefix string) error {
 			connector = "└── "
 		}
 
-		p.Printf("%s%s%s", prefix, connector, entry.Name())
+		fmt.Printf("%s%s%s", prefix, connector, entry.Name())
 
 		if entry.IsDir() {
 			childPrefix := prefix + "│   "
 			if isLast {
 				childPrefix = prefix + "    "
 			}
-			if err := printTree(p, filepath.Join(dir, entry.Name()), childPrefix); err != nil {
+			if err := printTree(filepath.Join(dir, entry.Name()), childPrefix); err != nil {
 				return err
 			}
 		}
@@ -215,8 +213,8 @@ func (cmd *CtxCmd) resolveContextDir(ctx context.Context) (string, error) {
 
 func parseDuration(s string) (time.Duration, error) {
 	// Handle day suffix (not supported by time.ParseDuration)
-	if strings.HasSuffix(s, "d") {
-		days := strings.TrimSuffix(s, "d")
+	if before, ok := strings.CutSuffix(s, "d"); ok {
+		days := before
 		var d int
 		if _, err := fmt.Sscanf(days, "%d", &d); err != nil {
 			return 0, fmt.Errorf("invalid days: %s", s)

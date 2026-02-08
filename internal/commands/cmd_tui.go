@@ -10,9 +10,9 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
+	"github.com/hay-kot/hive/internal/core/terminal"
+	"github.com/hay-kot/hive/internal/core/terminal/tmux"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/integration/terminal"
-	"github.com/hay-kot/hive/internal/integration/terminal/tmux"
 	"github.com/hay-kot/hive/internal/profiler"
 	"github.com/hay-kot/hive/internal/tui"
 )

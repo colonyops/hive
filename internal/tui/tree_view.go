@@ -9,7 +9,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/plugins"
 	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/components"
