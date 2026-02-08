@@ -251,12 +251,12 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	// Configure filter input styles for bubbles v2
 	l.FilterInput.Prompt = "Filter: "
 	filterStyles := textinput.DefaultStyles(true) // dark mode
-	filterStyles.Focused.Prompt = lipgloss.NewStyle().PaddingLeft(1).Foreground(lipgloss.Color("#7aa2f7")).Bold(true)
-	filterStyles.Cursor.Color = lipgloss.Color("#7aa2f7")
+	filterStyles.Focused.Prompt = styles.ListFilterPromptStyle
+	filterStyles.Cursor.Color = styles.ColorPrimary
 	l.FilterInput.SetStyles(filterStyles)
 
 	// Style help to match messages view (consistent gray, bullet separators, left padding)
-	helpStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	helpStyle := styles.TextMutedStyle
 	l.Help.Styles.ShortKey = helpStyle
 	l.Help.Styles.ShortDesc = helpStyle
 	l.Help.Styles.ShortSeparator = helpStyle
@@ -264,7 +264,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	l.Help.Styles.FullDesc = helpStyle
 	l.Help.Styles.FullSeparator = helpStyle
 	l.Help.ShortSeparator = " • "
-	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
+	l.Styles.HelpStyle = styles.ListHelpContainerStyle
 
 	// Compute merged commands: system → plugins → user
 	var mergedCommands map[string]config.UserCommand
@@ -299,7 +299,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(lipgloss.Color("#7aa2f7")) // blue, lipgloss v1 for bubbles v1
+	s.Style = styles.TextPrimaryStyle
 
 	// Create message view
 	msgView := NewMessagesView()
@@ -1085,6 +1085,15 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m.openNewSessionForm()
 		}
 
+		// SetTheme doesn't require a session
+		if entry.Command.Action == config.ActionSetTheme {
+			m.state = stateNormal
+			if len(args) > 0 {
+				m.applyTheme(args[0])
+			}
+			return m, nil
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1410,6 +1419,10 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
 		}
+		// Handle set-theme action (requires args only available via command palette)
+		if action.Type == ActionTypeSetTheme {
+			return m, nil
+		}
 		// Handle filter actions
 		if m.handleFilterAction(action.Type) {
 			return m.applyFilter()
@@ -1702,7 +1715,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme:
 		return false
 	}
 	return false
@@ -1943,11 +1956,11 @@ func (m Model) View() tea.View {
 	if m.state == stateCreatingSession && m.newSessionForm != nil {
 		formContent := lipgloss.JoinVertical(
 			lipgloss.Left,
-			modalTitleStyle.Render("New Session"),
+			styles.ModalTitleStyle.Render("New Session"),
 			"",
 			m.newSessionForm.View(),
 		)
-		formOverlay := modalStyle.Render(formContent)
+		formOverlay := styles.ModalStyle.Render(formContent)
 
 		// Use Compositor/Layer for true overlay (background remains visible)
 		bgLayer := lipgloss.NewLayer(mainView)
@@ -2007,21 +2020,21 @@ func (m Model) renderTabView() string {
 
 	switch m.activeView {
 	case ViewSessions:
-		sessionsTab = viewSelectedStyle.Render("Sessions")
-		messagesTab = viewNormalStyle.Render("Messages")
+		sessionsTab = styles.ViewSelectedStyle.Render("Sessions")
+		messagesTab = styles.ViewNormalStyle.Render("Messages")
 		if showReviewTab {
-			reviewTab = viewNormalStyle.Render("Review")
+			reviewTab = styles.ViewNormalStyle.Render("Review")
 		}
 	case ViewMessages:
-		sessionsTab = viewNormalStyle.Render("Sessions")
-		messagesTab = viewSelectedStyle.Render("Messages")
+		sessionsTab = styles.ViewNormalStyle.Render("Sessions")
+		messagesTab = styles.ViewSelectedStyle.Render("Messages")
 		if showReviewTab {
-			reviewTab = viewNormalStyle.Render("Review")
+			reviewTab = styles.ViewNormalStyle.Render("Review")
 		}
 	case ViewReview:
-		sessionsTab = viewNormalStyle.Render("Sessions")
-		messagesTab = viewNormalStyle.Render("Messages")
-		reviewTab = viewSelectedStyle.Render("Review")
+		sessionsTab = styles.ViewNormalStyle.Render("Sessions")
+		messagesTab = styles.ViewNormalStyle.Render("Messages")
+		reviewTab = styles.ViewSelectedStyle.Render("Review")
 	}
 
 	// Build tabs with conditional Review tab
@@ -2034,19 +2047,12 @@ func (m Model) renderTabView() string {
 
 	// Add filter indicator if active
 	if m.statusFilter != "" {
-		filterStyle := lipgloss.NewStyle().
-			Foreground(lipgloss.Color("#7aa2f7")).
-			Bold(true)
 		filterLabel := string(m.statusFilter)
-		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", filterStyle.Render("["+filterLabel+"]"))
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
 	}
 
 	// Branding on right with background
-	brandingStyle := lipgloss.NewStyle().
-		Background(lipgloss.Color("#3b4261")).
-		Foreground(lipgloss.Color("#c0caf5")).
-		Padding(0, 1)
-	branding := brandingStyle.Render(styles.IconHive + " Hive")
+	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
 
 	// Calculate spacing to push branding to right edge with even margins
 	// Layout: [margin] tabs [spacer] branding [margin]
@@ -2061,13 +2067,12 @@ func (m Model) renderTabView() string {
 	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
 
 	// Horizontal dividers above and below header
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 	dividerWidth := m.width
 	if dividerWidth < 1 {
 		dividerWidth = 80 // default width before WindowSizeMsg
 	}
-	topDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
-	headerDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
+	topDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
+	headerDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
 
 	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
 	contentHeight := max(m.height-3, 1)
@@ -2184,12 +2189,12 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	}
 	previewContent = strings.Join(previewLines, "\n")
 	previewContent = ensureExactWidth(previewContent, previewWidth)
+	previewContent = styles.TextForegroundStyle.Render(previewContent)
 
 	// Create vertical divider between list and preview
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
 	dividerLines := make([]string, contentHeight)
 	for i := range dividerLines {
-		dividerLines[i] = dividerStyle.Render("│")
+		dividerLines[i] = styles.TextMutedStyle.Render("│")
 	}
 	divider := strings.Join(dividerLines, "\n")
 
@@ -2202,14 +2207,14 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	iconsEnabled := m.cfg.TUI.IconsEnabled()
 
 	// Styles
-	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(lipgloss.Color("#7aa2f7"))
-	separatorStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
-	idStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")) // purple, same as tree view
-	branchStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
-	addStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#9ece6a"))
-	delStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#f7768e"))
-	dirtyStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#e0af68"))
-	dividerStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	nameStyle := styles.PreviewHeaderNameStyle
+	separatorStyle := styles.TextMutedStyle
+	idStyle := styles.TextSecondaryStyle
+	branchStyle := styles.TextSecondaryStyle
+	addStyle := styles.TextSuccessStyle
+	delStyle := styles.TextErrorStyle
+	dirtyStyle := styles.TextWarningStyle
+	dividerStyle := styles.TextMutedStyle
 
 	divider := strings.Repeat("─", maxWidth)
 
@@ -2221,8 +2226,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	title := nameStyle.Render(sess.Name)
 	// Show window name if a specific window is selected
 	if ws := m.selectedWindowStatus(); ws != nil {
-		windowStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#73daca"))
-		title += " " + windowStyle.Render("["+ws.WindowName+"]")
+		title += " " + styles.TextSecondaryStyle.Render("["+ws.WindowName+"]")
 	}
 	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
 
@@ -2289,7 +2293,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 		parts = append(parts, status)
 	}
 	parts = append(parts, "")
-	parts = append(parts, lipgloss.NewStyle().Foreground(lipgloss.Color("#9aa5ce")).Render("Output"))
+	parts = append(parts, styles.TextMutedStyle.Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))
 
 	return strings.Join(parts, "\n")
@@ -2458,6 +2462,20 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 		}
 		return actionCompleteMsg{err: lastErr}
 	}
+}
+
+// applyTheme switches the active theme at runtime.
+func (m *Model) applyTheme(name string) {
+	palette, ok := styles.GetPalette(name)
+	if !ok {
+		m.err = fmt.Errorf("unknown theme %q, available: %v", name, styles.ThemeNames())
+		return
+	}
+	styles.SetTheme(palette)
+	m.treeDelegate.Styles = DefaultTreeDelegateStyles()
+	m.list.SetDelegate(m.treeDelegate)
+	// Clear cached animation colors so they regenerate from new theme
+	activeAnimationColors = nil
 }
 
 // listenForRecycleOutput returns a command that waits for the next output or completion.

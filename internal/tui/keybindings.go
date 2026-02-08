@@ -28,6 +28,7 @@ const (
 	ActionTypeFilterReady
 	ActionTypeDocReview
 	ActionTypeNewSession
+	ActionTypeSetTheme
 	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
 )
 
@@ -212,6 +213,8 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			if action.Help == "" {
 				action.Help = "review document"
 			}
+		case config.ActionSetTheme:
+			action.Type = ActionTypeSetTheme
 		}
 		return action, true
 	}
@@ -362,6 +365,8 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 			action.Type = ActionTypeFilterApproval
 		case config.ActionFilterReady:
 			action.Type = ActionTypeFilterReady
+		case config.ActionSetTheme:
+			action.Type = ActionTypeSetTheme
 		}
 		return action
 	}

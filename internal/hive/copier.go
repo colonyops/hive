@@ -262,10 +262,10 @@ func (c *FileCopier) copyRegularFile(src, dst string, srcInfo fs.FileInfo) error
 
 // printCopyHeader prints a styled header for a copy operation.
 func (c *FileCopier) printCopyHeader(pattern string, count int) {
-	divider := styles.DividerStyle.Render(strings.Repeat("─", 50))
+	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 50))
 	header := styles.CommandHeaderStyle.Render("copy")
-	patternLabel := styles.CommandStyle.Render(pattern)
-	countLabel := styles.DividerStyle.Render(fmt.Sprintf("[%d files]", count))
+	patternLabel := styles.TextForegroundStyle.Render(pattern)
+	countLabel := styles.TextMutedStyle.Render(fmt.Sprintf("[%d files]", count))
 
 	_, _ = fmt.Fprintln(c.stdout)
 	_, _ = fmt.Fprintln(c.stdout, divider)

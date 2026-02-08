@@ -8,9 +8,11 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
-	"github.com/charmbracelet/glamour/styles"
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
+
+const iconDot = "•"
 
 // Message preview modal layout constants.
 const (
@@ -55,7 +57,7 @@ func NewMessagePreviewModal(msg messaging.Message, width, height int) MessagePre
 // renderContent renders the message payload as markdown.
 func (m *MessagePreviewModal) renderContent(width int) {
 	// Use tokyo-night style but with no document margin
-	style := styles.TokyoNightStyleConfig
+	style := styles.GlamourStyle()
 	noMargin := uint(0)
 	style.Document.Margin = &noMargin
 
@@ -126,42 +128,42 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	if sender == "" {
 		sender = unknownViewType
 	}
-	topicStr := previewTopicStyle.Render(fmt.Sprintf("[%s]", m.message.Topic))
-	senderStr := previewSenderStyle.Render(sender)
-	timeStr := previewTimeStyle.Render(m.message.CreatedAt.Format("2006-01-02 15:04:05"))
+	topicStr := styles.PreviewTopicStyle.Render(fmt.Sprintf("[%s]", m.message.Topic))
+	senderStr := styles.TextSuccessStyle.Render(sender)
+	timeStr := styles.TextMutedStyle.Render(m.message.CreatedAt.Format("2006-01-02 15:04:05"))
 	metadata := fmt.Sprintf("%s %s %s %s", topicStr, senderStr, iconDot, timeStr)
 
 	// Add session ID if present
 	if m.message.SessionID != "" {
-		sessionStr := previewSessionStyle.Render(fmt.Sprintf("session: %s", m.message.SessionID))
+		sessionStr := styles.PreviewSessionStyle.Render(fmt.Sprintf("session: %s", m.message.SessionID))
 		metadata = fmt.Sprintf("%s\n%s", metadata, sessionStr)
 	}
 
 	// Build scroll indicator
 	scrollInfo := ""
 	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
-		scrollInfo = previewScrollStyle.Render(fmt.Sprintf(" (%.0f%%)", m.viewport.ScrollPercent()*100))
+		scrollInfo = styles.TextMutedStyle.Render(fmt.Sprintf(" (%.0f%%)", m.viewport.ScrollPercent()*100))
 	}
 
 	// Build help line with copy status
 	helpText := "[↑/↓/j/k] scroll  [c] copy  [enter/esc] close"
 	if m.copyStatus != "" {
-		helpText = previewCopiedStyle.Render(m.copyStatus)
+		helpText = styles.TextSuccessStyle.Render(m.copyStatus)
 	}
 
 	// Assemble modal content
-	divider := previewDividerStyle.Render("────────────────────────────────────────")
+	divider := styles.TextSurfaceStyle.Render("────────────────────────────────────────")
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
-		modalTitleStyle.Render("Message Preview"+scrollInfo),
+		styles.ModalTitleStyle.Render("Message Preview"+scrollInfo),
 		"",
 		metadata,
 		divider,
 		m.viewport.View(),
-		modalHelpStyle.Render(helpText),
+		styles.ModalHelpStyle.Render(helpText),
 	)
 
-	modal := modalStyle.
+	modal := styles.ModalStyle.
 		Width(modalWidth).
 		Height(modalHeight).
 		Render(modalContent)
@@ -180,32 +182,6 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
 	return compositor.Render()
 }
-
-// Preview modal specific styles.
-var (
-	previewTopicStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#7aa2f7")).
-				Bold(true)
-
-	previewSenderStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#9ece6a"))
-
-	previewTimeStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#565f89"))
-
-	previewSessionStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#565f89")).
-				Italic(true)
-
-	previewDividerStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#3b4261"))
-
-	previewScrollStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#565f89"))
-
-	previewCopiedStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#9ece6a")) // green for success
-)
 
 // ansiPattern matches ANSI escape sequences.
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)

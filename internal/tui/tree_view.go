@@ -37,21 +37,37 @@ const (
 	AnimationFrameCount = 12
 )
 
-// activeAnimationColors are the colors for a subtle pulse animation.
-// Uses a narrow range for a gentle breathing effect.
-var activeAnimationColors = []color.Color{
-	lipgloss.Color("#9ece6a"), // bright green (frame 0)
-	lipgloss.Color("#93c761"), // slightly dimmer
-	lipgloss.Color("#8bc058"), // dimmer
-	lipgloss.Color("#84b94f"), // even dimmer
-	lipgloss.Color("#7db246"), // dim
-	lipgloss.Color("#76ab3d"), // dimmest (frame 5)
-	lipgloss.Color("#76ab3d"), // dimmest (frame 6) - hold
-	lipgloss.Color("#7db246"), // brightening
-	lipgloss.Color("#84b94f"), // brighter
-	lipgloss.Color("#8bc058"), // even brighter
-	lipgloss.Color("#93c761"), // almost bright
-	lipgloss.Color("#9ece6a"), // bright green (frame 11)
+// activeAnimationColors caches the pulse colors derived from the current theme.
+var (
+	activeAnimationColors []color.Color
+	activeAnimationSeed   uint32 // R channel of seed color, used to detect theme changes
+)
+
+// generatePulseColors creates a symmetric fade animation from a seed color.
+// It dims the color to minBrightness (0.0–1.0) at the midpoint and returns to full brightness.
+func generatePulseColors(base color.Color, frames int, minBrightness float64) []color.Color {
+	r, g, b, _ := base.RGBA()
+	br, bg, bb := float64(r>>8), float64(g>>8), float64(b>>8)
+
+	half := frames / 2
+	colors := make([]color.Color, frames)
+	for i := range frames {
+		// Triangle wave: 1.0 at edges, minBrightness at midpoint
+		var t float64
+		if i <= half {
+			t = float64(i) / float64(half)
+		} else {
+			t = float64(frames-i) / float64(half)
+		}
+		scale := 1.0 - t*(1.0-minBrightness)
+
+		colors[i] = lipgloss.Color(fmt.Sprintf("#%02x%02x%02x",
+			uint8(br*scale),
+			uint8(bg*scale),
+			uint8(bb*scale),
+		))
+	}
+	return colors
 }
 
 // Star indicator for current repository.
@@ -92,7 +108,13 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styl
 
 // renderActiveIndicator renders the active status with fade animation.
 func renderActiveIndicator(frame int) string {
-	// Ensure frame is in bounds
+	// Regenerate colors if the theme's green changed
+	r, _, _, _ := styles.ColorSuccess.RGBA() //nolint:dogsled // RGBA returns 4 values, only r is needed for seed
+	if activeAnimationColors == nil || activeAnimationSeed != r {
+		activeAnimationColors = generatePulseColors(styles.ColorSuccess, AnimationFrameCount, 0.80)
+		activeAnimationSeed = r
+	}
+
 	if frame < 0 || frame >= len(activeAnimationColors) {
 		frame = 0
 	}
@@ -221,24 +243,24 @@ type TreeDelegateStyles struct {
 // DefaultTreeDelegateStyles returns the default styles for tree rendering.
 func DefaultTreeDelegateStyles() TreeDelegateStyles {
 	return TreeDelegateStyles{
-		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(colorWhite),
-		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(colorBlue),
-		HeaderStar:     lipgloss.NewStyle().Foreground(colorYellow),
+		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(styles.ColorForeground),
+		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(styles.ColorPrimary),
+		HeaderStar:     lipgloss.NewStyle().Foreground(styles.ColorWarning),
 
-		TreeLine:       lipgloss.NewStyle().Foreground(colorGray),
-		SessionName:    lipgloss.NewStyle().Foreground(colorWhite),
-		SessionBranch:  lipgloss.NewStyle().Foreground(colorGray),
-		SessionID:      lipgloss.NewStyle().Foreground(lipgloss.Color("#bb9af7")), // purple
-		StatusActive:   lipgloss.NewStyle().Foreground(colorGreen),
-		StatusApproval: lipgloss.NewStyle().Foreground(colorYellow),
-		StatusReady:    lipgloss.NewStyle().Foreground(colorCyan),
-		StatusUnknown:  lipgloss.NewStyle().Foreground(colorGray).Faint(true),
-		StatusRecycled: lipgloss.NewStyle().Foreground(colorGray),
+		TreeLine:       lipgloss.NewStyle().Foreground(styles.ColorMuted),
+		SessionName:    lipgloss.NewStyle().Foreground(styles.ColorForeground),
+		SessionBranch:  lipgloss.NewStyle().Foreground(styles.ColorMuted),
+		SessionID:      lipgloss.NewStyle().Foreground(styles.ColorSecondary),
+		StatusActive:   lipgloss.NewStyle().Foreground(styles.ColorSuccess),
+		StatusApproval: lipgloss.NewStyle().Foreground(styles.ColorWarning),
+		StatusReady:    lipgloss.NewStyle().Foreground(styles.ColorSecondary),
+		StatusUnknown:  lipgloss.NewStyle().Foreground(styles.ColorMuted).Faint(true),
+		StatusRecycled: lipgloss.NewStyle().Foreground(styles.ColorMuted),
 
-		Selected:       lipgloss.NewStyle().Foreground(colorBlue).Bold(true),
-		SelectedBorder: lipgloss.NewStyle().Foreground(colorBlue),
+		Selected:       lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true),
+		SelectedBorder: lipgloss.NewStyle().Foreground(styles.ColorPrimary),
 		FilterMatch:    lipgloss.NewStyle().Underline(true),
-		SelectedMatch:  lipgloss.NewStyle().Underline(true).Foreground(colorBlue).Bold(true),
+		SelectedMatch:  lipgloss.NewStyle().Underline(true).Foreground(styles.ColorPrimary).Bold(true),
 	}
 }
 
@@ -599,12 +621,12 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 // renderGitStatus returns the formatted git status for a session path.
 func (d TreeDelegate) renderGitStatus(path string) string {
 	if d.GitStatuses == nil {
-		return gitLoadingStyle.Render(" ...")
+		return styles.TextMutedStyle.Render(" ...")
 	}
 
 	status, ok := d.GitStatuses.Get(path)
 	if !ok || status.IsLoading {
-		return gitLoadingStyle.Render(" ...")
+		return styles.TextMutedStyle.Render(" ...")
 	}
 
 	if status.Error != nil {
@@ -619,21 +641,21 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 	} else {
 		branch = d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
 	}
-	additions := gitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))
-	deletions := gitDeletionsStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
+	additions := styles.TextSuccessStyle.Render(fmt.Sprintf(" +%d", status.Additions))
+	deletions := styles.TextErrorStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
 
 	var indicator string
 	if d.IconsEnabled {
 		// With icons: show yellow git icon for uncommitted, nothing for clean
 		if status.HasChanges {
-			indicator = gitDirtyStyle.Render(" " + styles.IconGit)
+			indicator = styles.TextWarningStyle.Render(" " + styles.IconGit)
 		}
 	} else {
 		// Without icons: show text indicator
 		if status.HasChanges {
-			indicator = gitDirtyStyle.Render(" • uncommitted")
+			indicator = styles.TextWarningStyle.Render(" • uncommitted")
 		} else {
-			indicator = gitCleanStyle.Render(" • clean")
+			indicator = styles.TextMutedStyle.Render(" • clean")
 		}
 	}
 
@@ -648,7 +670,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	}
 
 	// Neutral gray style for all plugin text
-	neutralStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("#565f89"))
+	neutralStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 
 	var parts []string
 	pluginOrder := []string{pluginGitHub, pluginBeads, pluginClaude}

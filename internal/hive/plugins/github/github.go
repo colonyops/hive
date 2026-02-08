@@ -105,18 +105,18 @@ func (p *Plugin) fetchPRStatus(ctx context.Context, path string) plugins.Status 
 
 	if info.IsDraft {
 		label = "draft"
-		style = lipgloss.NewStyle().Foreground(styles.ColorGray)
+		style = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	} else {
 		switch info.State {
 		case "OPEN":
 			label = "open"
-			style = lipgloss.NewStyle().Foreground(styles.ColorGreen)
+			style = lipgloss.NewStyle().Foreground(styles.ColorSuccess)
 		case "MERGED":
 			label = "merged"
-			style = lipgloss.NewStyle().Foreground(styles.ColorBlue)
+			style = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 		case "CLOSED":
 			label = "closed"
-			style = lipgloss.NewStyle().Foreground(styles.ColorGray)
+			style = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 		default:
 			label = info.State
 			style = lipgloss.NewStyle()

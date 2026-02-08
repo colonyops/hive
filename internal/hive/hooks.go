@@ -58,10 +58,10 @@ func (h *HookRunner) RunHooks(ctx context.Context, rule config.Rule, path string
 
 // printCommandHeader prints a styled header for a hook command.
 func (h *HookRunner) printCommandHeader(cmdNum, totalCmds int, cmd string) {
-	divider := styles.DividerStyle.Render(strings.Repeat("─", 50))
+	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 50))
 	header := styles.CommandHeaderStyle.Render("hook")
-	cmdLabel := styles.DividerStyle.Render(fmt.Sprintf("[%d/%d]", cmdNum, totalCmds))
-	command := styles.CommandStyle.Render(cmd)
+	cmdLabel := styles.TextMutedStyle.Render(fmt.Sprintf("[%d/%d]", cmdNum, totalCmds))
+	command := styles.TextForegroundStyle.Render(cmd)
 
 	_, _ = fmt.Fprintln(h.stdout)
 	_, _ = fmt.Fprintln(h.stdout, divider)

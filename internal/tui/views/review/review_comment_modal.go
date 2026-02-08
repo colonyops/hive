@@ -6,7 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // CommentModal handles comment entry for selected text.
@@ -84,30 +84,12 @@ func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
 
 // View renders the modal.
 func (m CommentModal) View() string {
-	titleStyle := lipgloss.NewStyle().
-		Bold(true).
-		Foreground(colorBlue).
-		MarginBottom(1)
-
-	labelStyle := lipgloss.NewStyle().
-		Foreground(colorGray).
-		MarginBottom(1)
-
-	contextStyle := lipgloss.NewStyle().
-		Foreground(colorLightGray).
-		Italic(true).
-		MarginBottom(1)
-
-	helpStyle := lipgloss.NewStyle().
-		Foreground(colorGray).
-		MarginTop(1)
-
 	content := strings.Join([]string{
-		titleStyle.Render("Add Review Comment"),
-		labelStyle.Render(m.lineRange),
-		contextStyle.Render(m.contextPreview),
+		styles.ReviewCommentTitleStyle.Render("Add Review Comment"),
+		styles.ReviewCommentLabelStyle.Render(m.lineRange),
+		styles.ReviewCommentContextStyle.Render(m.contextPreview),
 		m.textInput.View(),
-		helpStyle.Render("enter: submit • esc: cancel"),
+		styles.ReviewCommentHelpStyle.Render("enter: submit • esc: cancel"),
 	}, "\n")
 
 	return content

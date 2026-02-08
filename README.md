@@ -11,7 +11,7 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/colonyops/hive)
 [![Release](https://img.shields.io/github/v/release/colonyops/hive?style=for-the-badge&color=e0af68&labelColor=1a1b26)](https://github.com/colonyops/hive/releases)
 
-[Installation](#installation) | [Configuration](#configuration) | [Tmux Integration](#tmux-integration) | [CLI Reference](#cli-reference)
+[Installation](#installation) | [Configuration](#configuration) | [Themes](#themes) | [Tmux Integration](#tmux-integration) | [CLI Reference](#cli-reference)
 
 </div>
 
@@ -484,6 +484,7 @@ plugins:
 | `rules[].max_recycled`            | `*int`                   | `5`                                      | Max recycled sessions (0 = unlimited)        |
 | `keybindings`                     | `map[string]Keybinding`  | See [default keybindings](#hive-default) | TUI keybindings (reference usercommands)     |
 | `usercommands`                    | `map[string]UserCommand` | Recycle, Delete, NewSession (system)     | Named commands for palette and keybindings   |
+| `tui.theme`                       | `string`                 | `tokyo-night`                            | Built-in theme name                          |
 | `tui.refresh_interval`            | `duration`               | `15s`                                    | Auto-refresh interval (0 to disable)         |
 | `tui.preview_enabled`             | `bool`                   | `false`                                  | Enable tmux pane preview sidebar on startup  |
 | `tmux.poll_interval`              | `duration`               | `500ms`                                  | Status check frequency (tmux always enabled) |
@@ -500,6 +501,61 @@ plugins:
 | `plugins.claude.yellow_threshold` | `int`                    | `60`                                     | Yellow warning threshold (%)                 |
 | `plugins.claude.red_threshold`    | `int`                    | `80`                                     | Red warning threshold (%)                    |
 | `plugins.claude.model_limit`      | `int`                    | `200000`                                 | Context token limit                          |
+
+## Themes
+
+Hive ships with five built-in color themes:
+
+| Theme         | Description                |
+| ------------- | -------------------------- |
+| `tokyo-night` | Default — cool blue/purple |
+| `gruvbox`     | Warm retro                 |
+| `catppuccin`  | Catppuccin Mocha           |
+| `kanagawa`    | Kanagawa Wave              |
+| `onedark`     | One Dark                   |
+
+Set a theme in your config:
+
+```yaml
+tui:
+  theme: catppuccin
+```
+
+### Semantic Color Roles
+
+Each theme defines 9 semantic colors. All TUI styles derive from these values:
+
+| Role         | Usage                                                    |
+| ------------ | -------------------------------------------------------- |
+| `Primary`    | Selections, borders, active elements                     |
+| `Secondary`  | IDs, branches, links                                     |
+| `Foreground` | Main text                                                |
+| `Muted`      | De-emphasized text, help text, dividers                  |
+| `Background` | Base background                                          |
+| `Surface`    | Elevated surfaces (modals, selections, status bar)       |
+| `Success`    | Positive states (active agent, open PRs, clean git)      |
+| `Warning`    | Caution states (needs approval, dirty git)               |
+| `Error`      | Error states, destructive actions, search highlights     |
+
+### Adding a Theme
+
+Add a new palette to `internal/core/styles/themes.go`:
+
+```go
+"my-theme": {
+    Primary:    lipgloss.Color("#hex"),
+    Secondary:  lipgloss.Color("#hex"),
+    Foreground: lipgloss.Color("#hex"),
+    Muted:      lipgloss.Color("#hex"),
+    Background: lipgloss.Color("#hex"),
+    Surface:    lipgloss.Color("#hex"),
+    Success:    lipgloss.Color("#hex"),
+    Warning:    lipgloss.Color("#hex"),
+    Error:      lipgloss.Color("#hex"),
+},
+```
+
+All 70+ lipgloss styles are rebuilt from these 9 colors by `SetTheme()`, so adding a palette entry is all that's needed.
 
 ## Data Storage
 

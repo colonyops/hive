@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/rs/zerolog/log"
 )
 
@@ -95,7 +96,7 @@ func (m FinalizationModal) View() string {
 
 		if i == m.selectedIdx {
 			prefix = "▸ "
-			style = style.Foreground(colorBlue).Bold(true)
+			style = styles.ReviewFinalizeOptionStyle
 		}
 
 		content.WriteString(prefix)
@@ -103,25 +104,16 @@ func (m FinalizationModal) View() string {
 		content.WriteString("\n")
 
 		// Description in gray
-		descStyle := lipgloss.NewStyle().Foreground(colorGray)
-		content.WriteString("  " + descStyle.Render(opt.description) + "\n\n")
+		content.WriteString("  " + styles.TextMutedStyle.Render(opt.description) + "\n\n")
 	}
 
 	content.WriteString("\n")
-	content.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("[j/k] select • [enter] confirm • [esc] cancel"))
+	content.WriteString(styles.TextMutedStyle.Render("[j/k] select • [enter] confirm • [esc] cancel"))
 
 	// Style the modal
-	modalWidth := 60
 	modalContent := content.String()
 
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorBlue).
-		Padding(1, 2).
-		Width(modalWidth).
-		Background(colorBgDark)
-
-	return modalStyle.Render(modalContent)
+	return styles.ReviewFinalizeModalStyle.Render(modalContent)
 }
 
 // Overlay renders the modal over the background content.

@@ -2,7 +2,8 @@ package components
 
 import (
 	tea "charm.land/bubbletea/v2"
-	lipgloss "charm.land/lipgloss/v2"
+
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // ConfirmModal is a simple yes/no confirmation dialog.
@@ -40,16 +41,8 @@ func (m ConfirmModal) Update(msg tea.Msg) (ConfirmModal, tea.Cmd) {
 
 // View renders the confirmation modal.
 func (m ConfirmModal) View() string {
-	messageStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#c0caf5")).
-		MarginBottom(1)
-
-	promptStyle := lipgloss.NewStyle().
-		Foreground(lipgloss.Color("#7aa2f7")).
-		Bold(true)
-
-	message := messageStyle.Render(m.message)
-	prompt := promptStyle.Render("Continue? (y/n)")
+	message := styles.ConfirmMessageStyle.Render(m.message)
+	prompt := styles.TextPrimaryBoldStyle.Render("Continue? (y/n)")
 
 	return message + "\n" + prompt
 }

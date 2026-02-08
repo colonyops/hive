@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/hay-kot/criterio"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,6 +42,7 @@ const (
 	ActionFilterApproval = "filter-approval"
 	ActionFilterReady    = "filter-ready"
 	ActionDocReview      = "doc-review" // Open review tab with document picker
+	ActionSetTheme       = "set-theme"  // Preview a built-in theme at runtime
 )
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -83,6 +85,11 @@ var defaultUserCommands = map[string]UserCommand{
 	"FilterReady": {
 		Action: ActionFilterReady,
 		Help:   "show sessions with idle agents",
+		Silent: true,
+	},
+	"ThemePreview": {
+		Action: ActionSetTheme,
+		Help:   "preview theme (" + strings.Join(styles.ThemeNames(), ", ") + ")",
 		Silent: true,
 	},
 }
@@ -135,6 +142,7 @@ type ContextConfig struct {
 
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
+	Theme           string        `yaml:"theme"`            // built-in theme name (default: "tokyo-night")
 	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
 	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
 	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
@@ -390,6 +398,9 @@ func (c *Config) applyDefaults() {
 	if c.Context.SymlinkName == "" {
 		c.Context.SymlinkName = defaults.Context.SymlinkName
 	}
+	if c.TUI.Theme == "" {
+		c.TUI.Theme = styles.DefaultTheme
+	}
 	if c.CopyCommand == "" {
 		c.CopyCommand = defaultCopyCommand()
 	}
@@ -477,6 +488,7 @@ func (c *Config) Validate() error {
 		criterio.Run("database.max_open_conns", c.Database.MaxOpenConns, criterio.Min(1)),
 		criterio.Run("database.max_idle_conns", c.Database.MaxIdleConns, criterio.Min(1)),
 		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
+		c.validateTheme(),
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
@@ -534,6 +546,14 @@ func (c *Config) validateMaxRecycled() error {
 	}
 
 	return errs.ToError()
+}
+
+// validateTheme checks that the configured theme name is a valid built-in theme.
+func (c *Config) validateTheme() error {
+	if _, ok := styles.GetPalette(c.TUI.Theme); !ok {
+		return fmt.Errorf("tui.theme: unknown theme %q, available themes: %v", c.TUI.Theme, styles.ThemeNames())
+	}
+	return nil
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.
@@ -631,7 +651,7 @@ func (c *Config) BinDir() string {
 
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview:
+	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme:
 		return true
 	default:
 		return false

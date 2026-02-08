@@ -8,6 +8,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // SelectItem represents an item in a SelectField.
@@ -44,10 +45,10 @@ func (d selectItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	isSelected := index == m.Index()
 
 	// Style for selected vs unselected
-	style := lipgloss.NewStyle().Foreground(colorWhite)
+	style := styles.TextForegroundStyle
 	cursor := "  "
 	if isSelected {
-		style = style.Foreground(colorBlue).Bold(true)
+		style = styles.SelectFieldItemSelectedStyle
 		cursor = "> "
 	}
 
@@ -76,8 +77,8 @@ func NewSelectField(title string, items []SelectItem, selected int) SelectField 
 	// Configure filter input styles
 	l.FilterInput.Prompt = "/ "
 	filterStyles := textinput.DefaultStyles(true)
-	filterStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(colorBlue)
-	filterStyles.Cursor.Color = colorBlue
+	filterStyles.Focused.Prompt = styles.TextPrimaryStyle
+	filterStyles.Cursor.Color = styles.ColorPrimary
 	l.FilterInput.SetStyles(filterStyles)
 
 	// Pre-select the item
@@ -156,9 +157,9 @@ func (s *SelectField) KeyMap() []key.Binding {
 // View renders the select field.
 func (s SelectField) View() string {
 	// Title style based on focus
-	titleStyle := formTitleBlurredStyle
+	titleStyle := styles.TextMutedStyle
 	if s.focused {
-		titleStyle = formTitleStyle
+		titleStyle = styles.FormTitleStyle
 	}
 	title := titleStyle.Render(s.title)
 
@@ -176,9 +177,9 @@ func (s SelectField) View() string {
 	}
 
 	// Border style based on focus (left border only)
-	borderStyle := formFieldStyle
+	borderStyle := styles.FormFieldStyle
 	if s.focused {
-		borderStyle = formFieldFocusedStyle
+		borderStyle = styles.FormFieldFocusedStyle
 	}
 
 	return borderStyle.Render(content)

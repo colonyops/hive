@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // NewSessionForm manages the new session creation form.
@@ -60,11 +61,11 @@ func NewNewSessionForm(repos []DiscoveredRepo, preselectedRemote string, existin
 	nameInput.SetWidth(40)
 
 	// Style the input
-	styles := textinput.DefaultStyles(true)
-	styles.Cursor.Color = colorBlue
-	styles.Focused.Placeholder = lipgloss.NewStyle().Foreground(colorGray)
-	styles.Blurred.Placeholder = lipgloss.NewStyle().Foreground(colorGray)
-	nameInput.SetStyles(styles)
+	inputStyles := textinput.DefaultStyles(true)
+	inputStyles.Cursor.Color = styles.ColorPrimary
+	inputStyles.Focused.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	inputStyles.Blurred.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	nameInput.SetStyles(inputStyles)
 
 	return &NewSessionForm{
 		repos:         repos,
@@ -195,9 +196,9 @@ func (f *NewSessionForm) View() string {
 	repoView := f.repoSelect.View()
 
 	// Name input section - title integrated into bordered area
-	nameTitleStyle := formTitleBlurredStyle
+	nameTitleStyle := styles.TextMutedStyle
 	if f.focusedField == 1 {
-		nameTitleStyle = formTitleStyle
+		nameTitleStyle = styles.FormTitleStyle
 	}
 	nameTitle := nameTitleStyle.Render("Session Name")
 
@@ -206,19 +207,19 @@ func (f *NewSessionForm) View() string {
 
 	// Add error inside the bordered area if present
 	if f.nameError != "" {
-		errorView := formErrorStyle.Render(f.nameError)
+		errorView := styles.TextErrorStyle.Render(f.nameError)
 		nameContent = lipgloss.JoinVertical(lipgloss.Left, nameContent, errorView)
 	}
 
 	// Apply border style
-	inputBorderStyle := formFieldStyle
+	inputBorderStyle := styles.FormFieldStyle
 	if f.focusedField == 1 {
-		inputBorderStyle = formFieldFocusedStyle
+		inputBorderStyle = styles.FormFieldFocusedStyle
 	}
 	nameSection := inputBorderStyle.Render(nameContent)
 
 	// Help text
-	helpText := formHelpStyle.Render("tab: switch fields • enter: submit • esc: cancel")
+	helpText := styles.TextMutedStyle.Render("tab: switch fields • enter: submit • esc: cancel")
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,

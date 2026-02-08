@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // Output modal layout constants.
@@ -117,9 +118,9 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	case m.running:
 		status = m.spinner.View() + " Running..."
 	case m.err != nil:
-		status = outputErrorStyle.Render("✗ Error: " + m.err.Error())
+		status = styles.TextErrorStyle.Render("✗ Error: " + m.err.Error())
 	default:
-		status = outputSuccessStyle.Render("✓ Complete")
+		status = styles.TextSuccessStyle.Render("✓ Complete")
 	}
 
 	// Build help line
@@ -133,15 +134,15 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	// Assemble modal content
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
-		modalTitleStyle.Render(m.title),
+		styles.ModalTitleStyle.Render(m.title),
 		"",
-		outputContentStyle.Width(modalWidth-outputModalPadding).Render(content),
+		styles.TextMutedStyle.Width(modalWidth-outputModalPadding).Render(content),
 		"",
 		status,
-		modalHelpStyle.Render(help),
+		styles.ModalHelpStyle.Render(help),
 	)
 
-	modal := modalStyle.Render(modalContent)
+	modal := styles.ModalStyle.Render(modalContent)
 
 	// Use Compositor/Layer for true overlay (background remains visible)
 	bgLayer := lipgloss.NewLayer(background)
@@ -157,15 +158,3 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
 	return compositor.Render()
 }
-
-// Output modal specific styles.
-var (
-	outputContentStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#a9b1d6"))
-
-	outputErrorStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#f38ba8"))
-
-	outputSuccessStyle = lipgloss.NewStyle().
-				Foreground(lipgloss.Color("#9ece6a"))
-)

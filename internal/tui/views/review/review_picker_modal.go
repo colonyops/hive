@@ -10,6 +10,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/data/stores"
 )
 
@@ -214,17 +215,17 @@ func (m *DocumentPickerModal) View() string {
 	m.searchInput.SetWidth(searchWidth)
 
 	// Build modal content
-	title := modalTitleStyle.Render("Select Document")
+	title := styles.ModalTitleStyle.Render("Select Document")
 	searchView := m.searchInput.View()
 	listView := m.list.View()
 
 	// Build help text with legend for active sessions
 	helpText := "↑/↓ navigate  enter select  esc cancel"
 	if m.store != nil {
-		legendStyle := lipgloss.NewStyle().Foreground(colorBlue)
+		legendStyle := lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 		helpText += "  " + legendStyle.Render("●") + " active review"
 	}
-	help := modalHelpStyle.Render(helpText)
+	help := styles.ModalHelpStyle.Render(helpText)
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -237,7 +238,7 @@ func (m *DocumentPickerModal) View() string {
 		help,
 	)
 
-	return modalStyle.Render(content)
+	return styles.ModalStyle.Render(content)
 }
 
 // Overlay renders the modal over the background content.
