@@ -20,7 +20,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	corereview "github.com/hay-kot/hive/internal/core/review"
-	"github.com/hay-kot/hive/internal/stores"
+	"github.com/hay-kot/hive/internal/data/stores"
 	"github.com/hay-kot/hive/internal/styles"
 	"github.com/hay-kot/hive/internal/tui/components"
 )
