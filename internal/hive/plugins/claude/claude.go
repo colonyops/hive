@@ -175,7 +175,7 @@ func (p *Plugin) renderStatus(a *SessionAnalytics) plugins.Status {
 	var style lipgloss.Style
 	switch {
 	case percent >= float64(redThreshold):
-		style = lipgloss.NewStyle().Foreground(lipgloss.Color("#f7768e"))
+		style = lipgloss.NewStyle().Foreground(styles.ColorError)
 	case percent >= float64(yellowThreshold):
 		style = lipgloss.NewStyle().Foreground(styles.ColorYellow)
 	default:

@@ -10,6 +10,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -85,8 +86,8 @@ func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session
 	input.Prompt = ":"
 	input.Focus()
 	inputStyles := textinput.DefaultStyles(true)
-	inputStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(colorBlue)
-	inputStyles.Cursor.Color = colorBlue
+	inputStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
+	inputStyles.Cursor.Color = styles.ColorPrimary
 	input.SetWidth(40)
 	input.SetStyles(inputStyles)
 
@@ -280,7 +281,7 @@ func wrapText(text string, maxWidth, maxLines int) []string {
 
 // View renders the command palette.
 func (p *CommandPalette) View() string {
-	title := modalTitleStyle.Render("Command Palette")
+	title := styles.ModalTitleStyle.Render("Command Palette")
 
 	// Render input
 	inputView := p.input.View()
@@ -301,12 +302,12 @@ func (p *CommandPalette) View() string {
 		isSelected := actualIdx == p.selectedIdx
 
 		// Style for selected vs unselected
-		nameStyle := lipgloss.NewStyle().Foreground(colorWhite)
-		helpStyle := lipgloss.NewStyle().Foreground(colorGray)
+		nameStyle := lipgloss.NewStyle().Foreground(styles.ColorForeground)
+		helpStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 		cursor := "  "
 		if isSelected {
-			nameStyle = nameStyle.Foreground(colorBlue).Bold(true)
-			helpStyle = helpStyle.Foreground(colorBlue).Faint(true)
+			nameStyle = nameStyle.Foreground(styles.ColorPrimary).Bold(true)
+			helpStyle = helpStyle.Foreground(styles.ColorPrimary).Faint(true)
 			cursor = "> "
 		}
 
@@ -336,7 +337,7 @@ func (p *CommandPalette) View() string {
 	// Show count if more suggestions available beyond visible window
 	remaining := len(p.filteredList) - endIdx
 	if remaining > 0 {
-		moreStyle := lipgloss.NewStyle().Foreground(colorGray).Italic(true)
+		moreStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted).Italic(true)
 		suggestions = append(suggestions, moreStyle.Render("  ... and more"))
 	}
 
@@ -349,10 +350,10 @@ func (p *CommandPalette) View() string {
 		strings.Join(suggestions, "\n"),
 	)
 
-	help := modalHelpStyle.Render("↑/k up  ↓/j down  tab fill  enter select  esc cancel")
+	help := styles.ModalHelpStyle.Render("↑/k up  ↓/j down  tab fill  enter select  esc cancel")
 	content = lipgloss.JoinVertical(lipgloss.Left, content, help)
 
-	return modalStyle.Width(contentWidth).Render(content)
+	return styles.ModalStyle.Width(contentWidth).Render(content)
 }
 
 // Overlay renders the command palette as a layer over the given background.

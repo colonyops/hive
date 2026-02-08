@@ -7,6 +7,7 @@ import (
 
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // MessagesView is a custom compact renderer for messages.
@@ -212,21 +213,21 @@ func (v *MessagesView) View() string {
 
 	// Filter line (only shown when filtering or filter is active)
 	if v.filtering {
-		filterPrompt := lipgloss.NewStyle().Foreground(colorBlue).Bold(true).Render("Filter: ")
+		filterPrompt := lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true).Render("Filter: ")
 		b.WriteString(" ")
 		b.WriteString(filterPrompt)
 		b.WriteString(v.filter)
 		b.WriteString("▎") // cursor
 		b.WriteString("\n")
 	} else if v.filter != "" {
-		filterShow := lipgloss.NewStyle().Foreground(colorGray).Render(fmt.Sprintf("Filter: %s", v.filter))
+		filterShow := lipgloss.NewStyle().Foreground(styles.ColorMuted).Render(fmt.Sprintf("Filter: %s", v.filter))
 		b.WriteString(" ")
 		b.WriteString(filterShow)
 		b.WriteString("\n")
 	}
 
 	// Column headers (Time | Sender | Topic | Message | Age)
-	headerStyle := lipgloss.NewStyle().Foreground(colorGray)
+	headerStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	timeHeader := fmt.Sprintf("%-*s", timeWidth, "Time")
 	senderHeader := fmt.Sprintf("%-*s", senderWidth, "Sender")
 	topicHeader := fmt.Sprintf("%-*s", topicWidth, "Topic")
@@ -242,11 +243,11 @@ func (v *MessagesView) View() string {
 	// No messages
 	if len(v.filteredAt) == 0 {
 		if len(v.messages) == 0 {
-			noMsg := lipgloss.NewStyle().Foreground(colorGray).Render("  No messages")
+			noMsg := lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("  No messages")
 			b.WriteString(noMsg)
 			b.WriteString("\n")
 		} else {
-			noMatch := lipgloss.NewStyle().Foreground(colorGray).Render("  No matching messages")
+			noMatch := lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("  No matching messages")
 			b.WriteString(noMatch)
 			b.WriteString("\n")
 		}
@@ -278,7 +279,7 @@ func (v *MessagesView) View() string {
 	}
 
 	// Help line (pinned to bottom, styled to match sessions view)
-	help := lipgloss.NewStyle().Foreground(colorGray).PaddingLeft(1).Render("↑/↓ navigate • enter preview • / filter • tab switch view")
+	help := lipgloss.NewStyle().Foreground(styles.ColorMuted).PaddingLeft(1).Render("↑/↓ navigate • enter preview • / filter • tab switch view")
 	b.WriteString(help)
 
 	return b.String()
@@ -291,7 +292,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 
 	// Selection indicator
 	if selected {
-		b.WriteString(selectedBorderStyle.Render("┃"))
+		b.WriteString(styles.SelectedBorderStyle.Render("┃"))
 		b.WriteString(" ")
 	} else {
 		b.WriteString("  ")
@@ -299,7 +300,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 
 	// Timestamp
 	timeStr := msg.CreatedAt.Format("15:04:05")
-	timeStyle := lipgloss.NewStyle().Foreground(colorGray)
+	timeStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	b.WriteString(timeStyle.Render(timeStr))
 	b.WriteString(" ")
 
@@ -335,7 +336,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 	if len(payloadRunes) > contentW-1 {
 		payload = string(payloadRunes[:contentW-1]) + "…"
 	}
-	payloadStyle := lipgloss.NewStyle().Foreground(colorWhite)
+	payloadStyle := lipgloss.NewStyle().Foreground(styles.ColorForeground)
 	if selected {
 		payloadStyle = payloadStyle.Bold(true)
 	}
@@ -346,7 +347,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 
 	// Age (right-aligned, provides visual end cap)
 	age := formatAge(msg.CreatedAt)
-	ageStyle := lipgloss.NewStyle().Foreground(colorGray)
+	ageStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	agePadded := fmt.Sprintf("%*s", ageW, age)
 	b.WriteString(ageStyle.Render(agePadded))
 

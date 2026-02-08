@@ -80,7 +80,7 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	l.Styles.Title = lipgloss.NewStyle()
 
 	// Configure help to match sessions view
-	helpStyle := lipgloss.NewStyle().Foreground(colorGray)
+	helpStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	l.Help.Styles.ShortKey = helpStyle
 	l.Help.Styles.ShortDesc = helpStyle
 	l.Help.Styles.ShortSeparator = helpStyle
@@ -601,11 +601,11 @@ func (v View) View() string {
 	case v.selectedDoc == nil:
 		// Show helpful message if no document is selected
 		messageStyle := lipgloss.NewStyle().
-			Foreground(colorWhite).
+			Foreground(styles.ColorForeground).
 			Padding(2, 4)
 
 		helpStyle := lipgloss.NewStyle().
-			Foreground(colorBlue).
+			Foreground(styles.ColorPrimary).
 			Bold(true)
 
 		message := "No document selected\n\n"
@@ -646,9 +646,9 @@ func (v View) View() string {
 		modalContent := v.confirmModal.View()
 		modalStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBlue).
+			BorderForeground(styles.ColorPrimary).
 			Padding(1, 2).
-			Background(colorBgDark)
+			Background(styles.ColorBackground)
 
 		modal := modalStyle.Render(modalContent)
 
@@ -672,9 +672,9 @@ func (v View) View() string {
 		modalContent := v.commentModal.View()
 		modalStyle := lipgloss.NewStyle().
 			Border(lipgloss.RoundedBorder()).
-			BorderForeground(colorBlue).
+			BorderForeground(styles.ColorPrimary).
 			Padding(1, 2).
-			Background(colorBgDark)
+			Background(styles.ColorBackground)
 
 		modal := modalStyle.Render(modalContent)
 
@@ -950,15 +950,15 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 	}
 
 	// Styles for cursor and selection (no explicit width)
-	selectionStyle := lipgloss.NewStyle().Background(colorBgSelection)
-	cursorStyle := lipgloss.NewStyle().Background(colorBgCursor)
-	searchMatchStyle := lipgloss.NewStyle().Background(colorGray)        // Subtle highlight for other matches
-	currentSearchMatchStyle := lipgloss.NewStyle().Background(colorPink) // Bright for current match
+	selectionStyle := lipgloss.NewStyle().Background(styles.ColorSurface)
+	cursorStyle := lipgloss.NewStyle().Background(styles.ColorSurface)
+	searchMatchStyle := lipgloss.NewStyle().Background(styles.ColorMuted)        // Subtle highlight for other matches
+	currentSearchMatchStyle := lipgloss.NewStyle().Background(styles.ColorError) // Bright for current match
 
 	// Style for commented line numbers
 	commentedLineNumStyle := lipgloss.NewStyle().
-		Foreground(colorBgDark). // Dark text
-		Background(colorGold).   // Gold background
+		Foreground(styles.ColorBackground). // Dark text
+		Background(styles.ColorWarning).    // Gold background
 		Bold(true)
 
 	// Calculate selection range if in visual mode (map to display coordinates)
@@ -1115,11 +1115,11 @@ func (v View) renderStatusBar() string {
 	// Show search input when in search mode
 	if v.searchMode {
 		searchStyle := lipgloss.NewStyle().
-			Foreground(colorBlue).
-			Background(colorBgDarker).
+			Foreground(styles.ColorPrimary).
+			Background(styles.ColorBackground).
 			Bold(true)
 
-		bgStyle := lipgloss.NewStyle().Background(colorBgDarker)
+		bgStyle := lipgloss.NewStyle().Background(styles.ColorBackground)
 		prefix := searchStyle.Render("/")
 		input := v.searchInput.View()
 		remaining := max(0, v.width-lipgloss.Width(prefix)-lipgloss.Width(input))
@@ -1130,18 +1130,18 @@ func (v View) renderStatusBar() string {
 	// Determine mode
 	mode := "NORMAL"
 	modeStyle := lipgloss.NewStyle().
-		Foreground(colorWhite).
-		Background(colorBgSelection).
+		Foreground(styles.ColorForeground).
+		Background(styles.ColorSurface).
 		Bold(true).
 		Padding(0, 1)
 
 	if v.selectionMode {
 		mode = "VISUAL"
-		modeStyle = modeStyle.Background(colorBlue)
+		modeStyle = modeStyle.Background(styles.ColorPrimary)
 	} else if v.searchQuery != "" && len(v.searchMatches) > 0 {
 		// Show search match count when search is active
 		mode = fmt.Sprintf("SEARCH | Match %d/%d", v.searchMatchIndex+1, len(v.searchMatches))
-		modeStyle = modeStyle.Background(colorPink)
+		modeStyle = modeStyle.Background(styles.ColorError)
 	}
 
 	// Calculate total lines
@@ -1153,8 +1153,8 @@ func (v View) renderStatusBar() string {
 	// Position info
 	posInfo := fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines)
 	posStyle := lipgloss.NewStyle().
-		Foreground(colorGray).
-		Background(colorBgDarker).
+		Foreground(styles.ColorMuted).
+		Background(styles.ColorBackground).
 		Padding(0, 1)
 
 	// Help text
@@ -1165,8 +1165,8 @@ func (v View) renderStatusBar() string {
 		helpText = "V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close"
 	}
 	helpStyle := lipgloss.NewStyle().
-		Foreground(colorGray).
-		Background(colorBgDarker).
+		Foreground(styles.ColorMuted).
+		Background(styles.ColorBackground).
 		Padding(0, 1)
 
 	// Build status bar
@@ -1182,7 +1182,7 @@ func (v View) renderStatusBar() string {
 	leftSpacing := availableSpace / 2
 	rightSpacing := availableSpace - leftSpacing
 
-	bgStyle := lipgloss.NewStyle().Background(colorBgDarker)
+	bgStyle := lipgloss.NewStyle().Background(styles.ColorBackground)
 	return leftPart + bgStyle.Render(strings.Repeat(" ", leftSpacing)) + middlePart + bgStyle.Render(strings.Repeat(" ", rightSpacing)) + rightPart
 }
 
@@ -1447,8 +1447,8 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 
 	// Insert comments after their lines with enhanced visual styling
 	commentStyle := lipgloss.NewStyle().
-		Foreground(colorPinkVibrant). // More vibrant pink
-		Background(colorBgVeryDark).  // Subtle background
+		Foreground(styles.ColorError).      // More vibrant pink
+		Background(styles.ColorBackground). // Subtle background
 		Padding(0, 1).
 		Bold(true)
 
@@ -1579,13 +1579,13 @@ type ReviewTreeDelegateStyles struct {
 // DefaultReviewTreeDelegateStyles returns the default styles.
 func DefaultReviewTreeDelegateStyles() ReviewTreeDelegateStyles {
 	return ReviewTreeDelegateStyles{
-		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(colorWhite),
-		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(colorBlue),
-		TreeLine:       lipgloss.NewStyle().Foreground(colorGray),
-		DocName:        lipgloss.NewStyle().Foreground(colorWhite),
-		DocMeta:        lipgloss.NewStyle().Foreground(colorGray),
-		Selected:       lipgloss.NewStyle().Foreground(colorBlue).Bold(true),
-		SelectedBorder: lipgloss.NewStyle().Foreground(colorBlue),
+		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(styles.ColorForeground),
+		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(styles.ColorPrimary),
+		TreeLine:       lipgloss.NewStyle().Foreground(styles.ColorMuted),
+		DocName:        lipgloss.NewStyle().Foreground(styles.ColorForeground),
+		DocMeta:        lipgloss.NewStyle().Foreground(styles.ColorMuted),
+		Selected:       lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true),
+		SelectedBorder: lipgloss.NewStyle().Foreground(styles.ColorPrimary),
 	}
 }
 
@@ -1669,7 +1669,7 @@ func (d ReviewTreeDelegate) renderDocument(item TreeItem, isSelected bool) strin
 	var sessionIndicator string
 	if item.HasActiveSession {
 		// Blue dot to indicate active review session
-		indicatorStyle := lipgloss.NewStyle().Foreground(colorBlue)
+		indicatorStyle := lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 		sessionIndicator = indicatorStyle.Render(" ●")
 	}
 

@@ -5,6 +5,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/rs/zerolog/log"
 )
 
@@ -95,7 +96,7 @@ func (m FinalizationModal) View() string {
 
 		if i == m.selectedIdx {
 			prefix = "▸ "
-			style = style.Foreground(colorBlue).Bold(true)
+			style = style.Foreground(styles.ColorPrimary).Bold(true)
 		}
 
 		content.WriteString(prefix)
@@ -103,12 +104,12 @@ func (m FinalizationModal) View() string {
 		content.WriteString("\n")
 
 		// Description in gray
-		descStyle := lipgloss.NewStyle().Foreground(colorGray)
+		descStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 		content.WriteString("  " + descStyle.Render(opt.description) + "\n\n")
 	}
 
 	content.WriteString("\n")
-	content.WriteString(lipgloss.NewStyle().Foreground(colorGray).Render("[j/k] select • [enter] confirm • [esc] cancel"))
+	content.WriteString(lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("[j/k] select • [enter] confirm • [esc] cancel"))
 
 	// Style the modal
 	modalWidth := 60
@@ -116,10 +117,10 @@ func (m FinalizationModal) View() string {
 
 	modalStyle := lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
-		BorderForeground(colorBlue).
+		BorderForeground(styles.ColorPrimary).
 		Padding(1, 2).
 		Width(modalWidth).
-		Background(colorBgDark)
+		Background(styles.ColorBackground)
 
 	return modalStyle.Render(modalContent)
 }

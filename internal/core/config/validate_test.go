@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/hay-kot/criterio"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +19,7 @@ func validConfig(t *testing.T) *Config {
 		GitPath: "git",
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
+		TUI:     TUIConfig{Theme: styles.DefaultTheme},
 		Database: DatabaseConfig{
 			MaxOpenConns: 2,
 			MaxIdleConns: 2,

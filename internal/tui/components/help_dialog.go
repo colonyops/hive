@@ -5,42 +5,36 @@ import (
 	"strings"
 
 	lipgloss "charm.land/lipgloss/v2"
-)
-
-// Tokyo Night color palette.
-var (
-	colorBlue  = lipgloss.Color("#7aa2f7")
-	colorGray  = lipgloss.Color("#565f89")
-	colorWhite = lipgloss.Color("#c0caf5")
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // HelpDialog styles.
 var (
 	helpDialogTitleStyle = lipgloss.NewStyle().
 				Bold(true).
-				Foreground(colorWhite)
+				Foreground(styles.ColorForeground)
 
 	helpDialogSectionStyle = lipgloss.NewStyle().
-				Foreground(colorGray).
+				Foreground(styles.ColorMuted).
 				Italic(true)
 
 	helpDialogSeparatorStyle = lipgloss.NewStyle().
-					Foreground(colorGray)
+					Foreground(styles.ColorMuted)
 
 	helpDialogKeyStyle = lipgloss.NewStyle().
-				Foreground(colorBlue).
+				Foreground(styles.ColorPrimary).
 				Bold(true)
 
 	helpDialogDescStyle = lipgloss.NewStyle().
-				Foreground(colorWhite)
+				Foreground(styles.ColorForeground)
 
 	helpDialogHelpStyle = lipgloss.NewStyle().
-				Foreground(colorGray).
+				Foreground(styles.ColorMuted).
 				MarginTop(1)
 
 	helpDialogModalStyle = lipgloss.NewStyle().
 				Border(lipgloss.RoundedBorder()).
-				BorderForeground(colorBlue).
+				BorderForeground(styles.ColorPrimary).
 				Padding(1, 2)
 )
 

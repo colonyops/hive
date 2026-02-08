@@ -2,6 +2,7 @@ package tui
 
 import (
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/hay-kot/hive/internal/core/styles"
 )
 
 // Modal represents a confirmation dialog.
@@ -46,11 +47,11 @@ func (m Modal) Overlay(background string, width, height int) string {
 	// Render buttons with selection state
 	var confirmBtn, cancelBtn string
 	if m.confirmSelected {
-		confirmBtn = modalButtonSelectedStyle.Render("Confirm")
-		cancelBtn = modalButtonStyle.Render("Cancel")
+		confirmBtn = styles.ModalButtonSelectedStyle.Render("Confirm")
+		cancelBtn = styles.ModalButtonStyle.Render("Cancel")
 	} else {
-		confirmBtn = modalButtonStyle.Render("Confirm")
-		cancelBtn = modalButtonSelectedStyle.Render("Cancel")
+		confirmBtn = styles.ModalButtonStyle.Render("Confirm")
+		cancelBtn = styles.ModalButtonSelectedStyle.Render("Cancel")
 	}
 
 	buttons := lipgloss.JoinHorizontal(lipgloss.Center, confirmBtn, "  ", cancelBtn)
@@ -59,14 +60,14 @@ func (m Modal) Overlay(background string, width, height int) string {
 	// Build the modal content
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,
-		modalTitleStyle.Render(m.title),
+		styles.ModalTitleStyle.Render(m.title),
 		"",
 		m.message,
 		buttonRow,
-		modalHelpStyle.Render("←/→ select  enter confirm  esc cancel"),
+		styles.ModalHelpStyle.Render("←/→ select  enter confirm  esc cancel"),
 	)
 
-	modal := modalStyle.Render(content)
+	modal := styles.ModalStyle.Render(content)
 
 	// Use Compositor/Layer for true overlay (background remains visible)
 	bgLayer := lipgloss.NewLayer(background)
