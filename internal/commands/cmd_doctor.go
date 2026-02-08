@@ -4,7 +4,7 @@ import (
 	"context"
 	"os"
 
-	"github.com/hay-kot/hive/internal/commands/doctor"
+	"github.com/hay-kot/hive/internal/core/doctor"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
