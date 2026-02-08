@@ -41,9 +41,11 @@ Each hive session is a complete git clone in a dedicated directory with its own 
 Hive uses specific terminology to describe its components:
 
 ### Hive Session
+
 An isolated git clone in a dedicated directory, running an AI agent in a terminal. Each session is a self-contained environment for working on a specific task or feature.
 
 **Key characteristics**:
+
 - Unique 6-character ID (e.g., `26kj0c`)
 - Display name (e.g., `fix-auth-bug`)
 - Isolated git clone at a specific path
@@ -52,14 +54,17 @@ An isolated git clone in a dedicated directory, running an AI agent in a termina
 **Not to be confused with**: Tmux session (see relationship below)
 
 ### Agent
+
 An AI tool instance (Claude, Aider, Codex) running within a session. The agent is the actual AI assistant that processes your requests.
 
 **Future**: Hive will support multiple agents per session (e.g., primary agent + test runner).
 
 ### Tmux Session
+
 A terminal multiplexer session that hosts a hive session. When you create a hive session with tmux integration enabled, hive spawns a tmux session with the same name as the session slug.
 
 **Relationship**:
+
 ```
 Hive Session: fix-auth-bug (ID: 26kj0c)
    ↓ spawns
@@ -69,14 +74,17 @@ Tmux Session: fix-auth-bug
 ```
 
 ### Repository
+
 A git remote URL (e.g., `github.com/colonyops/hive`). Multiple sessions can be created from the same repository.
 
 ### Inbox
+
 A message topic for inter-agent communication. Each session has a conventional inbox topic at `agent.<session-id>.inbox`.
 
 **Example**: Session `26kj0c` has inbox `agent.26kj0c.inbox`
 
 ### Context Directory
+
 A shared directory symlinked as `.hive/` in each session's working directory. All sessions from the same repository share this context directory, making it useful for storing plans, research notes, and other artifacts that should be accessible across sessions.
 
 **Location**: `~/.local/share/hive/context/{owner}/{repo}/`
@@ -196,10 +204,12 @@ hive msg sub -t agent.x7k2 --last 1
 Each hive session has a conventional inbox topic using the format `agent.{session-id}.inbox`. This convention makes it easy for agents to find each other's inboxes and send direct messages.
 
 **Example**:
+
 - Session ID: `26kj0c`
 - Inbox topic: `agent.26kj0c.inbox`
 
 You can find your current session ID and inbox with:
+
 ```bash
 hive session info
 ```
@@ -262,33 +272,33 @@ usercommands:
 # TUI keybindings (all reference usercommands)
 keybindings:
   r:
-    cmd: Recycle  # System default command
-    confirm: "Recycle this session?"  # Override default confirm
+    cmd: Recycle # System default command
+    confirm: "Recycle this session?" # Override default confirm
   d:
-    cmd: Delete   # System default command
+    cmd: Delete # System default command
   o:
-    cmd: open     # User-defined command above
+    cmd: open # User-defined command above
 ```
 
 ### Template Variables
 
 Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | shq }}` for shell-safe quoting.
 
-| Context                | Variables                                                   |
-| ---------------------- | ----------------------------------------------------------- |
-| `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
-| `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                               |
-| `rules[].recycle`      | `.DefaultBranch`                                            |
-| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`  |
+| Context               | Variables                                                           |
+| --------------------- | ------------------------------------------------------------------- |
+| `rules[].spawn`       | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
+| `rules[].batch_spawn` | Same as spawn, plus `.Prompt`                                       |
+| `rules[].recycle`     | `.DefaultBranch`                                                    |
+| `usercommands.*.sh`   | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args` |
 
 **Template functions:**
 
-| Function       | Description                                    |
-| -------------- | ---------------------------------------------- |
-| `shq`          | Shell-quote a string for safe use in commands  |
-| `join`         | Join string slice with separator               |
-| `hiveTmux`     | Path to bundled `hive-tmux` script             |
-| `agentSend`    | Path to bundled `agent-send` script            |
+| Function    | Description                                   |
+| ----------- | --------------------------------------------- |
+| `shq`       | Shell-quote a string for safe use in commands |
+| `join`      | Join string slice with separator              |
+| `hiveTmux`  | Path to bundled `hive-tmux` script            |
+| `agentSend` | Path to bundled `agent-send` script           |
 
 ### User Commands & Command Palette
 
@@ -304,23 +314,23 @@ User commands provide a vim-style command palette accessible by pressing `:` in 
 
 **Command Options:**
 
-| Field     | Type   | Description                                              |
-| --------- | ------ | -------------------------------------------------------- |
-| `sh`      | string | Shell command template (mutually exclusive with action)  |
+| Field     | Type   | Description                                                         |
+| --------- | ------ | ------------------------------------------------------------------- |
+| `sh`      | string | Shell command template (mutually exclusive with action)             |
 | `action`  | string | Built-in action: `recycle` or `delete` (mutually exclusive with sh) |
-| `help`    | string | Description shown in palette                             |
-| `confirm` | string | Confirmation prompt (empty = no confirmation)            |
-| `silent`  | bool   | Skip loading popup for fast commands                     |
-| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)              |
+| `help`    | string | Description shown in palette                                        |
+| `confirm` | string | Confirmation prompt (empty = no confirmation)                       |
+| `silent`  | bool   | Skip loading popup for fast commands                                |
+| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)                         |
 
 **System Default Commands:**
 
 Hive provides built-in commands that can be overridden in usercommands:
 
-| Name      | Action   | Description                    |
-| --------- | -------- | ------------------------------ |
-| `Recycle` | recycle  | Recycles the selected session  |
-| `Delete`  | delete   | Deletes the selected session (or selected tmux window) |
+| Name      | Action  | Description                                            |
+| --------- | ------- | ------------------------------------------------------ |
+| `Recycle` | recycle | Recycles the selected session                          |
+| `Delete`  | delete  | Deletes the selected session (or selected tmux window) |
 
 **Using Arguments:**
 
@@ -344,7 +354,7 @@ The `exit` field supports environment variables for conditional behavior:
 usercommands:
   attach:
     sh: "tmux attach -t {{ .Name }}"
-    exit: "$HIVE_POPUP"  # Only exit if HIVE_POPUP=true
+    exit: "$HIVE_POPUP" # Only exit if HIVE_POPUP=true
 ```
 
 This is useful when running hive in a tmux popup vs a dedicated session.
@@ -355,22 +365,22 @@ Keybindings map keys to user commands. All keybindings must reference a command 
 
 **Keybinding Options:**
 
-| Field     | Type   | Description                                         |
-| --------- | ------ | --------------------------------------------------- |
-| `cmd`     | string | Command name to execute (required)                  |
-| `help`    | string | Override help text from the command                 |
-| `confirm` | string | Override confirmation prompt from the command       |
+| Field     | Type   | Description                                   |
+| --------- | ------ | --------------------------------------------- |
+| `cmd`     | string | Command name to execute (required)            |
+| `help`    | string | Override help text from the command           |
+| `confirm` | string | Override confirmation prompt from the command |
 
 **Example:**
 
 ```yaml
 keybindings:
   r:
-    cmd: Recycle                         # System default
+    cmd: Recycle # System default
   d:
-    cmd: Delete                          # System default
+    cmd: Delete # System default
   o:
-    cmd: open                            # User-defined command
+    cmd: open # User-defined command
   t:
     cmd: tidy
     confirm: "Run tidy on this session?" # Override command's confirm
@@ -392,11 +402,11 @@ The Claude plugin provides integration with Claude Code sessions:
 ```yaml
 plugins:
   claude:
-    enabled: true              # nil = auto-detect, true/false = override
-    cache_ttl: 30s             # status cache duration
-    yellow_threshold: 60       # yellow above this % (default: 60)
-    red_threshold: 80          # red above this % (default: 80)
-    model_limit: 200000        # context limit (default: 200000 for Sonnet)
+    enabled: true # nil = auto-detect, true/false = override
+    cache_ttl: 30s # status cache duration
+    yellow_threshold: 60 # yellow above this % (default: 60)
+    red_threshold: 80 # red above this % (default: 80)
+    model_limit: 200000 # context limit (default: 200000 for Sonnet)
 ```
 
 **Usage:**
@@ -414,6 +424,7 @@ keybindings:
 **Context Analytics:**
 
 The plugin displays session names in color based on context usage:
+
 - **Default color**: < 60% (no warning)
 - **Yellow**: 60-79% (approaching limit)
 - **Red**: ≥ 80% (at/near limit)
@@ -440,55 +451,55 @@ The tmux plugin is auto-detected when `tmux` is on PATH. It provides default com
 
 **Commands provided:**
 
-| Command          | Description                          | Default Key |
-| ---------------- | ------------------------------------ | ----------- |
-| `TmuxOpen`       | Open/attach tmux session             | `enter`     |
-| `TmuxStart`      | Start tmux session (background)      | —           |
-| `TmuxKill`       | Kill tmux session                    | `ctrl+d`    |
-| `TmuxPopUp`      | Popup tmux session                   | `p`         |
-| `AgentSend`      | Send Enter to agent                  | `A`         |
-| `AgentSendClear` | Send /clear to agent                 | —           |
+| Command          | Description                     | Default Key |
+| ---------------- | ------------------------------- | ----------- |
+| `TmuxOpen`       | Open/attach tmux session        | `enter`     |
+| `TmuxStart`      | Start tmux session (background) | —           |
+| `TmuxKill`       | Kill tmux session               | `ctrl+d`    |
+| `TmuxPopUp`      | Popup tmux session              | `p`         |
+| `AgentSend`      | Send Enter to agent             | `A`         |
+| `AgentSendClear` | Send /clear to agent            | —           |
 
 **Configuration:**
 
 ```yaml
 plugins:
   tmux:
-    enabled: true  # nil = auto-detect, true/false = override
+    enabled: true # nil = auto-detect, true/false = override
 ```
 
 ### Configuration Options
 
-| Option                                | Type                    | Default                        | Description                              |
-| ------------------------------------- | ----------------------- | ------------------------------ | ---------------------------------------- |
-| `repo_dirs`                           | `[]string`              | `[]`                           | Directories to scan for repositories     |
-| `copy_command`                        | `string`                | `pbcopy` (macOS)               | Command to copy to clipboard             |
-| `rules`                               | `[]Rule`                | `[]`                           | Repository-specific setup rules          |
-| `rules[].pattern`                     | `string`                | `""`                           | Regex pattern to match remote URL        |
-| `rules[].spawn`                       | `[]string`              | bundled `hive-tmux`            | Commands after session creation          |
-| `rules[].batch_spawn`                 | `[]string`              | bundled `hive-tmux -b`         | Commands after batch session creation    |
-| `rules[].recycle`                     | `[]string`              | git fetch/checkout/reset/clean | Commands when recycling a session        |
-| `rules[].commands`                    | `[]string`              | `[]`                           | Setup commands to run after clone        |
-| `rules[].copy`                        | `[]string`              | `[]`                           | Glob patterns for files to copy          |
-| `rules[].max_recycled`                | `*int`                  | `5`                            | Max recycled sessions (0 = unlimited)    |
-| `keybindings`                         | `map[string]Keybinding` | See [default keybindings](#hive-default) | TUI keybindings (reference usercommands) |
-| `usercommands`                        | `map[string]UserCommand`| Recycle, Delete, NewSession (system) | Named commands for palette and keybindings |
-| `tui.refresh_interval`                         | `duration`              | `15s`                          | Auto-refresh interval (0 to disable)     |
-| `tui.preview_enabled`                          | `bool`                  | `false`                        | Enable tmux pane preview sidebar on startup |
-| `tmux.poll_interval`                           | `duration`              | `500ms`                        | Status check frequency (tmux always enabled) |
-| `tmux.preview_window_matcher`                  | `[]string`              | `["claude", "aider", "codex"]` | Regex patterns for preferred window names |
-| `messaging.topic_prefix`              | `string`                | `agent`                        | Default prefix for topic IDs             |
-| `context.symlink_name`                | `string`                | `.hive`                        | Symlink name for context directories     |
-| `plugins.tmux.enabled`                | `*bool`                 | `nil` (auto-detect)            | Enable/disable tmux plugin               |
-| `plugins.github.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable GitHub plugin             |
-| `plugins.github.results_cache`        | `duration`              | `8m`                           | GitHub status polling interval           |
-| `plugins.beads.enabled`               | `*bool`                 | `nil` (auto-detect)            | Enable/disable Beads plugin              |
-| `plugins.beads.results_cache`         | `duration`              | `30s`                          | Beads status polling interval            |
-| `plugins.claude.enabled`              | `*bool`                 | `nil` (auto-detect)            | Enable/disable Claude plugin             |
-| `plugins.claude.cache_ttl`            | `duration`              | `30s`                          | Status cache duration                    |
-| `plugins.claude.yellow_threshold`     | `int`                   | `60`                           | Yellow warning threshold (%)             |
-| `plugins.claude.red_threshold`        | `int`                   | `80`                           | Red warning threshold (%)                |
-| `plugins.claude.model_limit`          | `int`                   | `200000`                       | Context token limit                      |
+| Option                            | Type                     | Default                                  | Description                                  |
+| --------------------------------- | ------------------------ | ---------------------------------------- | -------------------------------------------- |
+| `repo_dirs`                       | `[]string`               | `[]`                                     | Directories to scan for repositories         |
+| `copy_command`                    | `string`                 | `pbcopy` (macOS)                         | Command to copy to clipboard                 |
+| `rules`                           | `[]Rule`                 | `[]`                                     | Repository-specific setup rules              |
+| `rules[].pattern`                 | `string`                 | `""`                                     | Regex pattern to match remote URL            |
+| `rules[].spawn`                   | `[]string`               | bundled `hive-tmux`                      | Commands after session creation              |
+| `rules[].batch_spawn`             | `[]string`               | bundled `hive-tmux -b`                   | Commands after batch session creation        |
+| `rules[].recycle`                 | `[]string`               | git fetch/checkout/reset/clean           | Commands when recycling a session            |
+| `rules[].commands`                | `[]string`               | `[]`                                     | Setup commands to run after clone            |
+| `rules[].copy`                    | `[]string`               | `[]`                                     | Glob patterns for files to copy              |
+| `rules[].max_recycled`            | `*int`                   | `5`                                      | Max recycled sessions (0 = unlimited)        |
+| `keybindings`                     | `map[string]Keybinding`  | See [default keybindings](#hive-default) | TUI keybindings (reference usercommands)     |
+| `usercommands`                    | `map[string]UserCommand` | Recycle, Delete, NewSession (system)     | Named commands for palette and keybindings   |
+| `tui.refresh_interval`            | `duration`               | `15s`                                    | Auto-refresh interval (0 to disable)         |
+| `tui.preview_enabled`             | `bool`                   | `false`                                  | Enable tmux pane preview sidebar on startup  |
+| `tmux.poll_interval`              | `duration`               | `500ms`                                  | Status check frequency (tmux always enabled) |
+| `tmux.preview_window_matcher`     | `[]string`               | `["claude", "aider", "codex"]`           | Regex patterns for preferred window names    |
+| `messaging.topic_prefix`          | `string`                 | `agent`                                  | Default prefix for topic IDs                 |
+| `context.symlink_name`            | `string`                 | `.hive`                                  | Symlink name for context directories         |
+| `plugins.tmux.enabled`            | `*bool`                  | `nil` (auto-detect)                      | Enable/disable tmux plugin                   |
+| `plugins.github.enabled`          | `*bool`                  | `nil` (auto-detect)                      | Enable/disable GitHub plugin                 |
+| `plugins.github.results_cache`    | `duration`               | `8m`                                     | GitHub status polling interval               |
+| `plugins.beads.enabled`           | `*bool`                  | `nil` (auto-detect)                      | Enable/disable Beads plugin                  |
+| `plugins.beads.results_cache`     | `duration`               | `30s`                                    | Beads status polling interval                |
+| `plugins.claude.enabled`          | `*bool`                  | `nil` (auto-detect)                      | Enable/disable Claude plugin                 |
+| `plugins.claude.cache_ttl`        | `duration`               | `30s`                                    | Status cache duration                        |
+| `plugins.claude.yellow_threshold` | `int`                    | `60`                                     | Yellow warning threshold (%)                 |
+| `plugins.claude.red_threshold`    | `int`                    | `80`                                     | Red warning threshold (%)                    |
+| `plugins.claude.model_limit`      | `int`                    | `200000`                                 | Context token limit                          |
 
 ## Data Storage
 
@@ -548,6 +559,7 @@ Agent (Claude) running in tmux window
 Not yet, but it's planned. Currently each session runs one agent. Future versions will support multiple agents per session (e.g., Claude + test runner).
 
 When multi-agent support is added, agents will have individual inboxes:
+
 - `agent.<session-id>.claude.inbox`
 - `agent.<session-id>.test-runner.inbox`
 
@@ -558,6 +570,7 @@ The inbox belongs to the agent (AI tool), not the session (container). When mult
 ### What's a "recycled" session?
 
 When you're done with a session, you can recycle it instead of deleting it. Recycling:
+
 1. Resets the git repository to a clean state
 2. Renames the directory to a recycled pattern
 3. Makes it available for reuse
