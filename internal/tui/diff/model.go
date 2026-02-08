@@ -43,11 +43,58 @@ func New(files []*gitdiff.File, cfg *config.Config) Model {
 		diffViewer = NewDiffViewer(nil)
 	}
 
+	// Create help dialog
+	helpDialog := createHelpDialog()
+
 	return Model{
 		fileTree:   fileTree,
 		diffViewer: diffViewer,
 		focused:    FocusFileTree, // Start with file tree focused
+		helpDialog: helpDialog,
+		showHelp:   false,
 	}
+}
+
+// createHelpDialog creates the help dialog with all keyboard shortcuts.
+func createHelpDialog() *components.HelpDialog {
+	sections := []components.HelpDialogSection{
+		{
+			Title: "Navigation",
+			Entries: []components.HelpEntry{
+				{Key: "tab", Desc: "Switch between file tree and diff viewer"},
+				{Key: "↑/k", Desc: "Move up"},
+				{Key: "↓/j", Desc: "Move down"},
+				{Key: "g", Desc: "Jump to top"},
+				{Key: "G", Desc: "Jump to bottom"},
+				{Key: "ctrl+d", Desc: "Scroll down half page"},
+				{Key: "ctrl+u", Desc: "Scroll up half page"},
+			},
+		},
+		{
+			Title: "File Tree",
+			Entries: []components.HelpEntry{
+				{Key: "enter", Desc: "Expand/collapse directory or select file"},
+				{Key: "←/h", Desc: "Jump to parent directory"},
+			},
+		},
+		{
+			Title: "Visual Selection",
+			Entries: []components.HelpEntry{
+				{Key: "v", Desc: "Enter/exit visual mode"},
+				{Key: "↑/↓", Desc: "Extend selection (in visual mode)"},
+				{Key: "esc", Desc: "Cancel selection"},
+			},
+		},
+		{
+			Title: "General",
+			Entries: []components.HelpEntry{
+				{Key: "?", Desc: "Toggle this help"},
+				{Key: "q/ctrl+c", Desc: "Quit"},
+			},
+		},
+	}
+
+	return components.NewHelpDialog("Diff Viewer Help", sections, 80, 40)
 }
 
 // Init initializes the model (no commands needed).
@@ -65,6 +112,20 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		// Handle help toggle (works from any state)
+		if keyMsg.String() == "?" {
+			m.showHelp = !m.showHelp
+			return m, nil
+		}
+
+		// If help is shown, only handle escape to close it
+		if m.showHelp {
+			if keyMsg.String() == "escape" || keyMsg.String() == "?" {
+				m.showHelp = false
+			}
+			return m, nil
+		}
+
 		switch keyMsg.String() {
 		case "q", "ctrl+c":
 			// Quit the application
@@ -183,6 +244,11 @@ func (m Model) View() tea.View {
 		statusBar,
 	)
 
+	// Render help overlay if shown
+	if m.showHelp {
+		result = m.helpDialog.Overlay(result, m.width, m.height)
+	}
+
 	// Create and return tea.View
 	v := tea.NewView(result)
 	v.AltScreen = true // Use alternate screen buffer
@@ -197,7 +263,7 @@ func (m Model) renderStatusBar() string {
 	switch m.focused {
 	case FocusFileTree:
 		leftSection = styles.TextPrimaryBoldStyle.Render("File Tree")
-		help = "↑/↓ navigate • enter expand/select • tab switch panel • q quit"
+		help = "↑/↓ navigate • enter expand/select • tab switch • ? help • q quit"
 	case FocusDiffViewer:
 		// Show mode indicator for diff viewer
 		var modeIndicator string
@@ -209,9 +275,9 @@ func (m Model) renderStatusBar() string {
 		leftSection = modeIndicator + " " + styles.TextPrimaryBoldStyle.Render("Diff Viewer")
 
 		if m.diffViewer.SelectionMode() {
-			help = "↑/↓ move selection • v exit visual • esc cancel • tab switch panel"
+			help = "↑/↓ move selection • v exit visual • esc cancel • ? help"
 		} else {
-			help = "↑/↓ scroll • v visual mode • ctrl+d/u page • g/G top/bottom • tab switch • q quit"
+			help = "↑/↓ scroll • v visual • ctrl+d/u page • g/G jump • ? help • q quit"
 		}
 	}
 
