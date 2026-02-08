@@ -2,12 +2,13 @@ package diff
 
 import (
 	"fmt"
+	"image/color"
 	"path/filepath"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
-	"github.com/charmbracelet/lipgloss"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/styles"
 )
@@ -23,26 +24,28 @@ const (
 
 // TreeNode represents a node in the file tree (either a directory or file).
 type TreeNode struct {
-	Name      string          // Directory or file name
-	Path      string          // Full path
-	IsDir     bool            // True if this is a directory
-	File      *gitdiff.File   // Associated git file (nil for directories)
-	Children  []*TreeNode     // Child nodes (for directories)
-	Expanded  bool            // Whether this directory is expanded
-	Depth     int             // Depth in tree (0 = root level)
+	Name     string        // Directory or file name
+	Path     string        // Full path
+	IsDir    bool          // True if this is a directory
+	File     *gitdiff.File // Associated git file (nil for directories)
+	Children []*TreeNode   // Child nodes (for directories)
+	Expanded bool          // Whether this directory is expanded
+	Depth    int           // Depth in tree (0 = root level)
 }
 
 // FileTreeModel displays a hierarchical list of changed files.
 // This is a small, focused component that can be tested independently.
 type FileTreeModel struct {
-	files       []*gitdiff.File // Original flat file list
-	root        *TreeNode       // Root of the tree
-	visible     []*TreeNode     // Currently visible nodes (flattened view)
-	selected    int             // Index in visible list
-	width       int
-	height      int
-	iconStyle   IconStyle
-	hierarchical bool           // Display mode: true = tree, false = flat
+	files          []*gitdiff.File // Original flat file list
+	root           *TreeNode       // Root of the tree
+	visible        []*TreeNode     // Currently visible nodes (flattened view)
+	selected       int             // Index in visible list
+	width          int
+	height         int
+	iconStyle      IconStyle
+	hierarchical   bool // Display mode: true = tree, false = flat
+	selectionStart int  // Start line of selection in diff viewer (0-indexed, -1 if no selection)
+	selectionEnd   int  // End line of selection in diff viewer (0-indexed, -1 if no selection)
 }
 
 // NewFileTree creates a new file tree from diff files.
@@ -53,10 +56,12 @@ func NewFileTree(files []*gitdiff.File, cfg *config.Config) FileTreeModel {
 	}
 
 	m := FileTreeModel{
-		files:        files,
-		selected:     0,
-		iconStyle:    iconStyle,
-		hierarchical: true, // Default to tree view
+		files:          files,
+		selected:       0,
+		iconStyle:      iconStyle,
+		hierarchical:   true, // Default to tree view
+		selectionStart: -1,   // No selection initially
+		selectionEnd:   -1,
 	}
 
 	// Build tree structure
@@ -244,10 +249,10 @@ func (m *FileTreeModel) jumpToParent() {
 	}
 }
 
-// View renders the file tree.
+// View renders the file tree without header (header is now in unified layout).
 func (m FileTreeModel) View() string {
 	if len(m.files) == 0 {
-		return styles.TextMutedStyle.Render("No files changed")
+		return m.renderEmptyState()
 	}
 
 	var lines []string
@@ -256,7 +261,6 @@ func (m FileTreeModel) View() string {
 		lines = append(lines, line)
 	}
 
-	// Join lines and apply height constraint
 	content := strings.Join(lines, "\n")
 	return lipgloss.NewStyle().
 		Width(m.width).
@@ -264,66 +268,175 @@ func (m FileTreeModel) View() string {
 		Render(content)
 }
 
+// renderHeader renders the file tree panel header with branding.
+// renderEmptyState renders a centered message when there are no files.
+func (m FileTreeModel) renderEmptyState() string {
+	title := styles.TextForegroundBoldStyle.Render("No Files Changed")
+	hint := styles.TextMutedStyle.Render("No differences found in the working tree")
+
+	content := lipgloss.JoinVertical(lipgloss.Center,
+		"",
+		title,
+		hint,
+		"",
+	)
+
+	return lipgloss.Place(m.width, m.height,
+		lipgloss.Center, lipgloss.Center,
+		content)
+}
+
 // renderNode renders a tree node (directory or file) with indentation.
 func (m FileTreeModel) renderNode(node *TreeNode, selected bool) string {
 	// Build indentation
 	indent := strings.Repeat("  ", node.Depth)
+	indentWidth := len(indent)
 
-	var icon, name, stats string
+	var icon, name string
+	var fileColor lipgloss.Style
 
 	if node.IsDir {
 		// Directory node
 		icon = m.getDirIcon(node.Expanded)
 		name = node.Name + "/"
-		stats = "" // Directories don't show stats
+		fileColor = styles.TextForegroundStyle
 	} else {
 		// File node
 		icon = m.getFileIcon(node.Path)
 		name = node.Name
+		fileColor = m.getFileStatusColor(node.File)
+	}
 
-		// Calculate diff stats
-		if node.File != nil {
-			var additions, deletions int
-			for _, frag := range node.File.TextFragments {
-				for _, line := range frag.Lines {
-					switch line.Op {
-					case gitdiff.OpAdd:
-						additions++
-					case gitdiff.OpDelete:
-						deletions++
-					}
+	// Calculate stats for files
+	var additions, deletions int
+	if !node.IsDir && node.File != nil {
+		for _, frag := range node.File.TextFragments {
+			for _, line := range frag.Lines {
+				switch line.Op {
+				case gitdiff.OpAdd:
+					additions++
+				case gitdiff.OpDelete:
+					deletions++
 				}
 			}
-			stats = fmt.Sprintf("+%d -%d", additions, deletions)
 		}
 	}
 
-	// Apply selection style
+	// Build stats string (compact format without colors for width calculation)
+	var statsPlain string
+	if additions > 0 || deletions > 0 {
+		if additions > 0 && deletions > 0 {
+			statsPlain = fmt.Sprintf("+%d -%d", additions, deletions)
+		} else if additions > 0 {
+			statsPlain = fmt.Sprintf("+%d", additions)
+		} else {
+			statsPlain = fmt.Sprintf("-%d", deletions)
+		}
+	}
+
+	// Calculate available width for filename
+	// Available = panelWidth - indent - icon - space - stats - padding
+	iconWidth := lipgloss.Width(icon) + 1 // icon + space
+	statsWidth := 0
+	if statsPlain != "" {
+		statsWidth = len(statsPlain)
+	}
+	availableWidth := m.width - indentWidth - iconWidth - statsWidth - 2 // 2 for padding
+
+	// Truncate filename if needed
+	if availableWidth < len(name) && availableWidth > 3 {
+		name = name[:availableWidth-2] + ".."
+	}
+
+	// Render the line
 	if selected {
-		if stats != "" {
-			return fmt.Sprintf("%s%s %s %s",
-				indent,
-				styles.TextPrimaryStyle.Render(icon),
-				styles.TextPrimaryBoldStyle.Render(name),
-				styles.TextMutedStyle.Render(stats))
+		// Selected: apply background to all components for full-width highlighting
+		bgStyle := lipgloss.NewStyle().Background(styles.ColorSurface)
+		iconStyled := fileColor.Background(styles.ColorSurface).Render(icon)
+		nameStyled := fileColor.Bold(true).Background(styles.ColorSurface).Render(name)
+
+		// Add line range indicator if selection is active
+		var lineIndicator string
+		if m.selectionStart >= 0 && m.selectionEnd >= 0 {
+			// Display 1-indexed line numbers for user clarity
+			start := m.selectionStart + 1
+			end := m.selectionEnd + 1
+			if start == end {
+				lineIndicator = fmt.Sprintf(" [L%d]", start)
+			} else {
+				lineIndicator = fmt.Sprintf(" [L%d-%d]", start, end)
+			}
+			lineIndicator = styles.TextMutedStyle.Background(styles.ColorSurface).Render(lineIndicator)
 		}
-		return fmt.Sprintf("%s%s %s",
-			indent,
-			styles.TextPrimaryStyle.Render(icon),
-			styles.TextPrimaryBoldStyle.Render(name))
+
+		var line string
+		if statsPlain != "" {
+			statsStyled := m.renderDiffStatsInlineWithBg(additions, deletions, styles.ColorSurface)
+			line = fmt.Sprintf("%s%s %s %s%s", indent, iconStyled, nameStyled, statsStyled, lineIndicator)
+		} else {
+			line = fmt.Sprintf("%s%s %s%s", indent, iconStyled, nameStyled, lineIndicator)
+		}
+
+		// Apply background to full line width including padding
+		return bgStyle.Width(m.width).Render(line)
 	}
 
-	if stats != "" {
-		return fmt.Sprintf("%s%s %s %s",
-			indent,
-			styles.TextForegroundStyle.Render(icon),
-			styles.TextForegroundStyle.Render(name),
-			styles.TextMutedStyle.Render(stats))
+	// Normal (unselected) style
+	iconStyled := fileColor.Render(icon)
+	nameStyled := styles.TextForegroundStyle.Render(name)
+	if statsPlain != "" {
+		statsStyled := m.renderDiffStatsInline(additions, deletions)
+		return fmt.Sprintf("%s%s %s %s", indent, iconStyled, nameStyled, statsStyled)
 	}
-	return fmt.Sprintf("%s%s %s",
-		indent,
-		styles.TextForegroundStyle.Render(icon),
-		styles.TextForegroundStyle.Render(name))
+	return fmt.Sprintf("%s%s %s", indent, iconStyled, nameStyled)
+}
+
+// getFileStatusColor returns the color for a file based on its git status.
+func (m FileTreeModel) getFileStatusColor(file *gitdiff.File) lipgloss.Style {
+	if file == nil {
+		return styles.TextForegroundStyle
+	}
+
+	if file.IsNew {
+		return styles.TextSuccessStyle // Green for new files
+	} else if file.IsDelete {
+		return styles.TextErrorStyle // Red for deleted files
+	}
+	return styles.TextWarningStyle // Yellow for modified files
+}
+
+// renderDiffStatsInline renders compact inline diff statistics with color.
+func (m FileTreeModel) renderDiffStatsInline(additions, deletions int) string {
+	return m.renderDiffStatsInlineWithBg(additions, deletions, nil)
+}
+
+// renderDiffStatsInlineWithBg renders compact inline diff statistics with color and optional background.
+func (m FileTreeModel) renderDiffStatsInlineWithBg(additions, deletions int, bg color.Color) string {
+	if additions == 0 && deletions == 0 {
+		return ""
+	}
+
+	var parts []string
+
+	if additions > 0 {
+		addStr := fmt.Sprintf("+%d", additions)
+		style := styles.TextSuccessStyle
+		if bg != nil {
+			style = style.Background(bg)
+		}
+		parts = append(parts, style.Render(addStr))
+	}
+
+	if deletions > 0 {
+		delStr := fmt.Sprintf("-%d", deletions)
+		style := styles.TextErrorStyle
+		if bg != nil {
+			style = style.Background(bg)
+		}
+		parts = append(parts, style.Render(delStr))
+	}
+
+	return strings.Join(parts, " ")
 }
 
 // getDirIcon returns the icon for a directory (expanded or collapsed).
@@ -351,7 +464,6 @@ func (m FileTreeModel) getDirIcon(expanded bool) string {
 		return "▸"
 	}
 }
-
 
 // getFileIcon returns the appropriate icon for a file path.
 func (m FileTreeModel) getFileIcon(path string) string {
@@ -471,6 +583,18 @@ func (m FileTreeModel) SelectedIndex() int {
 func (m *FileTreeModel) SetSize(width, height int) {
 	m.width = width
 	m.height = height
+}
+
+// SetSelection updates the selection range from the diff viewer.
+// Pass -1, -1 to clear the selection.
+func (m *FileTreeModel) SetSelection(start, end int) {
+	m.selectionStart = start
+	m.selectionEnd = end
+}
+
+// FileCount returns the total number of files in the tree.
+func (m FileTreeModel) FileCount() int {
+	return len(m.files)
 }
 
 // SetFiles updates the files list and rebuilds the tree.

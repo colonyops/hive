@@ -69,7 +69,7 @@ func TestDiffViewerScrollDown(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
-	m.SetSize(80, 5) // Small height to force scrolling (viewport shows lines 0-4)
+	m.SetSize(80, 8) // Height 8 = 3 header + 5 content (viewport shows lines 0-4)
 
 	// Initial position
 	assert.Equal(t, 0, m.offset)
@@ -159,11 +159,11 @@ func TestDiffViewerPageScroll(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
-	m.SetSize(80, 10) // Height = 10
+	m.SetSize(80, 13) // Height 13 = 3 header + 10 content
 
 	// Scroll down half page (ctrl+d)
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Mod: tea.ModCtrl}))
-	assert.Equal(t, 5, m.offset) // 10/2 = 5
+	assert.Equal(t, 5, m.offset) // contentHeight 10/2 = 5
 
 	// Scroll up half page (ctrl+u)
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'u', Mod: tea.ModCtrl}))
@@ -192,7 +192,7 @@ func TestDiffViewerJumpToTopBottom(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
-	m.SetSize(80, 5)
+	m.SetSize(80, 8) // Height 8 = 3 header + 5 content
 	m.offset = 10
 
 	// Jump to top with 'g'
@@ -201,7 +201,8 @@ func TestDiffViewerJumpToTopBottom(t *testing.T) {
 
 	// Jump to bottom with 'G'
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'G'}))
-	maxOffset := len(m.lines) - m.height
+	contentHeight := 5 // 8 - 3 header
+	maxOffset := len(m.lines) - contentHeight
 	assert.Equal(t, maxOffset, m.offset)
 }
 
@@ -264,7 +265,7 @@ func TestDiffViewerViewEmpty(t *testing.T) {
 
 	view := m.View()
 
-	assert.Contains(t, view, "No file selected")
+	assert.Contains(t, view, "No File Selected")
 }
 
 func TestDiffViewerGenerateContent(t *testing.T) {

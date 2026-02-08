@@ -133,8 +133,11 @@ func (cmd *ReviewCmd) runDiff(ctx context.Context, c *cli.Command) error {
 		fmt.Fprintf(os.Stderr, "Syntax highlighting will not be available.\n\n")
 	}
 
+	// Build review context string
+	reviewContext := cmd.buildReviewContext(ctx, cwd, diffOpts)
+
 	// Create diff model
-	model := diff.New(files, cmd.app.Config)
+	model := diff.NewWithContext(files, cmd.app.Config, reviewContext)
 
 	// Get terminal size and set model size
 	// BubbleTea will handle this automatically, but we can set initial size
@@ -147,4 +150,40 @@ func (cmd *ReviewCmd) runDiff(ctx context.Context, c *cli.Command) error {
 	}
 
 	return nil
+}
+
+// buildReviewContext creates a descriptive title for the review session.
+func (cmd *ReviewCmd) buildReviewContext(ctx context.Context, cwd string, opts git.DiffOptions) string {
+	// If user provided a name, use it
+	if cmd.diffName != "" {
+		return cmd.diffName
+	}
+
+	// Build context based on diff mode
+	exec := &executil.RealExecutor{}
+	gitExec := git.NewExecutor(cmd.app.Config.GitPath, exec)
+
+	switch opts.Mode {
+	case git.DiffBranch:
+		// Get current branch name
+		currentBranch, err := gitExec.Branch(ctx, cwd)
+		if err == nil && currentBranch != "" {
+			return fmt.Sprintf("%s..%s", opts.BaseBranch, currentBranch)
+		}
+		return fmt.Sprintf("Changes vs %s", opts.BaseBranch)
+
+	case git.DiffStaged:
+		return "Staged Changes"
+
+	case git.DiffUncommitted:
+		// Get current branch name
+		currentBranch, err := gitExec.Branch(ctx, cwd)
+		if err == nil && currentBranch != "" {
+			return fmt.Sprintf("Uncommitted (%s)", currentBranch)
+		}
+		return "Uncommitted Changes"
+
+	default:
+		return "Diff Review"
+	}
 }

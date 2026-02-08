@@ -1,6 +1,7 @@
 package diff
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -21,17 +22,23 @@ const (
 
 // Model is the main diff viewer model that composes the file tree and diff viewer.
 type Model struct {
-	fileTree   FileTreeModel
-	diffViewer DiffViewerModel
-	focused    FocusedPanel
-	width      int
-	height     int
-	helpDialog *components.HelpDialog
-	showHelp   bool
+	fileTree      FileTreeModel
+	diffViewer    DiffViewerModel
+	focused       FocusedPanel
+	width         int
+	height        int
+	helpDialog    *components.HelpDialog
+	showHelp      bool
+	reviewContext string // Review title/context to display in header
 }
 
 // New creates a new diff viewer model from git diff files.
 func New(files []*gitdiff.File, cfg *config.Config) Model {
+	return NewWithContext(files, cfg, "Diff Review")
+}
+
+// NewWithContext creates a new diff viewer model with a custom review context.
+func NewWithContext(files []*gitdiff.File, cfg *config.Config, reviewContext string) Model {
 	// Create file tree
 	fileTree := NewFileTree(files, cfg)
 
@@ -47,11 +54,12 @@ func New(files []*gitdiff.File, cfg *config.Config) Model {
 	helpDialog := createHelpDialog()
 
 	return Model{
-		fileTree:   fileTree,
-		diffViewer: diffViewer,
-		focused:    FocusFileTree, // Start with file tree focused
-		helpDialog: helpDialog,
-		showHelp:   false,
+		fileTree:      fileTree,
+		diffViewer:    diffViewer,
+		focused:       FocusFileTree, // Start with file tree focused
+		helpDialog:    helpDialog,
+		showHelp:      false,
+		reviewContext: reviewContext,
 	}
 }
 
@@ -182,13 +190,29 @@ func (m Model) View() tea.View {
 		return tea.NewView("")
 	}
 
+	// Render unified header (3 lines: top border, content, bottom border)
+	unifiedHeader := m.renderUnifiedHeader()
+	headerHeight := 3
+
+	// Render panel sub-header (1 line)
+	subHeader := m.renderPanelSubHeader()
+	subHeaderHeight := 1
+
 	// Calculate panel dimensions
 	// File tree takes 30% of width, diff viewer takes 70%
 	treeWidth := m.width * 30 / 100
 	diffWidth := m.width - treeWidth - 1 // -1 for separator
 
-	// Both panels use full height minus 1 for status bar
-	panelHeight := m.height - 1
+	// Panel height = total - headers - status bar
+	panelHeight := m.height - headerHeight - subHeaderHeight - 1
+
+	// Sync selection info from diff viewer to file tree
+	start, end, active := m.diffViewer.GetSelectionInfo()
+	if active {
+		m.fileTree.SetSelection(start, end)
+	} else {
+		m.fileTree.SetSelection(-1, -1)
+	}
 
 	// Render file tree
 	fileTreeView := m.fileTree.View()
@@ -202,27 +226,13 @@ func (m Model) View() tea.View {
 		Height(panelHeight).
 		Render(styles.TextMutedStyle.Render("│"))
 
-	// Apply focus styling
-	var treeStyle, diffStyle lipgloss.Style
-	if m.focused == FocusFileTree {
-		treeStyle = lipgloss.NewStyle().
-			Width(treeWidth).
-			Height(panelHeight).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(styles.ColorPrimary)
-		diffStyle = lipgloss.NewStyle().
-			Width(diffWidth).
-			Height(panelHeight)
-	} else {
-		treeStyle = lipgloss.NewStyle().
-			Width(treeWidth).
-			Height(panelHeight)
-		diffStyle = lipgloss.NewStyle().
-			Width(diffWidth).
-			Height(panelHeight).
-			BorderStyle(lipgloss.NormalBorder()).
-			BorderForeground(styles.ColorPrimary)
-	}
+	// Apply consistent styling (no borders to avoid layout shift)
+	treeStyle := lipgloss.NewStyle().
+		Width(treeWidth).
+		Height(panelHeight)
+	diffStyle := lipgloss.NewStyle().
+		Width(diffWidth).
+		Height(panelHeight)
 
 	// Render panels
 	leftPanel := treeStyle.Render(fileTreeView)
@@ -238,8 +248,10 @@ func (m Model) View() tea.View {
 	// Render status bar
 	statusBar := m.renderStatusBar()
 
-	// Join content and status bar vertically
+	// Join all components vertically
 	result := lipgloss.JoinVertical(lipgloss.Left,
+		unifiedHeader,
+		subHeader,
 		content,
 		statusBar,
 	)
@@ -255,41 +267,112 @@ func (m Model) View() tea.View {
 	return v
 }
 
+// renderUnifiedHeader renders the top header with review context and branding.
+func (m Model) renderUnifiedHeader() string {
+	// Top border
+	topBorder := strings.Repeat("─", m.width)
+
+	// Content line: review context on left, branded "Hive" on right
+	contextLeft := styles.TextMutedStyle.Render(m.reviewContext)
+	brandingRight := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
+
+	leftWidth := lipgloss.Width(contextLeft)
+	rightWidth := lipgloss.Width(brandingRight)
+	spacing := m.width - leftWidth - rightWidth
+
+	if spacing < 1 {
+		spacing = 1
+	}
+
+	contentLine := contextLeft + strings.Repeat(" ", spacing) + brandingRight
+
+	// Bottom border
+	bottomBorder := strings.Repeat("─", m.width)
+
+	return lipgloss.JoinVertical(lipgloss.Left,
+		topBorder,
+		contentLine,
+		bottomBorder,
+	)
+}
+
+// renderPanelSubHeader renders the panel title bar with focus indicators.
+func (m Model) renderPanelSubHeader() string {
+	// Calculate widths for layout
+	treeWidth := m.width * 30 / 100
+	diffWidth := m.width - treeWidth - 1 // -1 for separator
+
+	// Render left panel title based on focus
+	var filesTitle, diffTitle string
+	if m.focused == FocusFileTree {
+		filesTitle = styles.TextPrimaryBoldStyle.Render("Files Changed")
+		diffTitle = styles.TextMutedStyle.Render("Diff View")
+	} else {
+		filesTitle = styles.TextMutedStyle.Render("Files Changed")
+		diffTitle = styles.TextPrimaryBoldStyle.Render("Diff View")
+	}
+
+	// Left side (left-aligned with padding)
+	leftSide := " " + filesTitle
+	leftSide = lipgloss.NewStyle().Width(treeWidth).Render(leftSide)
+
+	// Separator
+	sep := styles.TextMutedStyle.Render("│")
+
+	// Right side (left-aligned with padding)
+	rightSide := " " + diffTitle
+	rightSide = lipgloss.NewStyle().Width(diffWidth).Render(rightSide)
+
+	return leftSide + sep + rightSide
+}
+
 // renderStatusBar renders the status bar at the bottom.
 func (m Model) renderStatusBar() string {
-	// Show current panel and help text
-	var leftSection, help string
+	// Left section: panel name with mode indicator and context
+	var leftSection, rightSection string
 
 	switch m.focused {
 	case FocusFileTree:
-		leftSection = styles.TextPrimaryBoldStyle.Render("File Tree")
-		help = "↑/↓ navigate • enter expand/select • tab switch • ? help • q quit"
+		// File tree: show file count
+		fileCount := m.fileTree.FileCount()
+		panelName := styles.TextPrimaryBoldStyle.Render("Files")
+		count := styles.TextMutedStyle.Render(fmt.Sprintf("(%d)", fileCount))
+		leftSection = panelName + " " + count
+
+		// Help text
+		rightSection = styles.TextMutedStyle.Render("↑↓:nav  enter:select  tab:switch  ?:help  q:quit")
+
 	case FocusDiffViewer:
-		// Show mode indicator for diff viewer
+		// Diff viewer: show mode indicator and line position
 		var modeIndicator string
 		if m.diffViewer.SelectionMode() {
-			modeIndicator = styles.ReviewModeVisualStyle.Render("VISUAL")
+			modeIndicator = styles.ReviewModeVisualStyle.Render(" VISUAL ")
 		} else {
-			modeIndicator = styles.ReviewModeNormalStyle.Render("NORMAL")
+			modeIndicator = styles.ReviewModeNormalStyle.Render(" NORMAL ")
 		}
-		leftSection = modeIndicator + " " + styles.TextPrimaryBoldStyle.Render("Diff Viewer")
 
+		// Position info (line X/Y)
+		currentLine := m.diffViewer.CurrentLine()
+		totalLines := m.diffViewer.TotalLines()
+		position := styles.TextMutedStyle.Render(fmt.Sprintf(" %d/%d", currentLine, totalLines))
+
+		leftSection = modeIndicator + position
+
+		// Help text
 		if m.diffViewer.SelectionMode() {
-			help = "↑/↓ move selection • v exit visual • esc cancel • ? help"
+			rightSection = styles.TextMutedStyle.Render("↑↓:move  v:exit  esc:cancel  ?:help")
 		} else {
-			help = "↑/↓ scroll • v visual • ctrl+d/u page • g/G jump • ? help • q quit"
+			rightSection = styles.TextMutedStyle.Render("↑↓:scroll  v:visual  ctrl+d/u:page  g/G:jump  ?:help  q:quit")
 		}
 	}
 
-	rightSection := styles.TextMutedStyle.Render(help)
-
-	// Calculate spacing
+	// Calculate spacing for layout: [left] ... [right]
 	leftWidth := lipgloss.Width(leftSection)
 	rightWidth := lipgloss.Width(rightSection)
-	spacing := m.width - leftWidth - rightWidth - 2 // -2 for padding
+	spacing := m.width - leftWidth - rightWidth
 
-	if spacing < 0 {
-		spacing = 0
+	if spacing < 1 {
+		spacing = 1
 	}
 
 	statusBar := leftSection + strings.Repeat(" ", spacing) + rightSection
@@ -297,6 +380,7 @@ func (m Model) renderStatusBar() string {
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Background(styles.ColorSurface).
+		Padding(0, 1).
 		Render(statusBar)
 }
 

@@ -22,31 +22,31 @@ var (
 
 // File type icons
 var (
-	IconFileDefault  = " " //
-	IconFileGo       = " " //
-	IconFileJS       = "󰌞 " //
-	IconFileTS       = "󰛦 " //
-	IconFileTSX      = IconFileTS //
-	IconFileJSX      = IconFileJS //
-	IconFilePython   = " " //
-	IconFileMarkdown = " " //
-	IconFileJSON     = " " //
-	IconFileYAML     = "" //
-	IconFileTOML     = " " //
-	IconFileXML      = "󰗀 " //
-	IconFileHTML     = " " //
-	IconFileCSS      = " " //
-	IconFileRust     = " " //
-	IconFileC        = " " //
-	IconFileCPP      = " " //
-	IconFileJava     = " " //
-	IconFileRuby     = " " //
-	IconFilePHP      = " " //
-	IconFileShell    = " " //
-	IconFileSQL      = IconFileDefault//
-	IconFileVim      = " " //
-	IconFileLua      = " " //
-	IconFileDocker   = "󰡨 " //
-	IconFileMakefile = " " //
+	IconFileDefault  = " "             //
+	IconFileGo       = " "             //
+	IconFileJS       = "󰌞 "             //
+	IconFileTS       = "󰛦 "             //
+	IconFileTSX      = IconFileTS       //
+	IconFileJSX      = IconFileJS       //
+	IconFilePython   = " "             //
+	IconFileMarkdown = " "             //
+	IconFileJSON     = " "             //
+	IconFileYAML     = ""              //
+	IconFileTOML     = " "             //
+	IconFileXML      = "󰗀 "             //
+	IconFileHTML     = " "             //
+	IconFileCSS      = " "             //
+	IconFileRust     = " "             //
+	IconFileC        = " "             //
+	IconFileCPP      = " "             //
+	IconFileJava     = " "             //
+	IconFileRuby     = " "             //
+	IconFilePHP      = " "             //
+	IconFileShell    = " "             //
+	IconFileSQL      = IconFileDefault  //
+	IconFileVim      = " "             //
+	IconFileLua      = " "             //
+	IconFileDocker   = "󰡨 "             //
+	IconFileMakefile = " "             //
 	IconFileReadme   = IconFileMarkdown //
 )

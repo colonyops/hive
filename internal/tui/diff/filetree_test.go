@@ -237,7 +237,7 @@ func TestFileTreeViewEmpty(t *testing.T) {
 	m.SetSize(80, 20)
 
 	view := m.View()
-	assert.Contains(t, view, "No files changed")
+	assert.Contains(t, view, "No Files Changed")
 }
 
 func TestFileTreeViewWithFiles(t *testing.T) {
@@ -262,7 +262,9 @@ func TestFileTreeViewWithFiles(t *testing.T) {
 
 	view := m.View()
 	assert.Contains(t, view, "file1.go")
-	assert.Contains(t, view, "+2 -1") // Stats from diff
+	// Stats are now color-coded and separate
+	assert.Contains(t, view, "+2")
+	assert.Contains(t, view, "-1")
 }
 
 func TestFileTreeRenderFileWithDeletion(t *testing.T) {
@@ -286,7 +288,8 @@ func TestFileTreeRenderFileWithDeletion(t *testing.T) {
 
 	view := m.View()
 	assert.Contains(t, view, "deleted.go")
-	assert.Contains(t, view, "+0 -2")
+	// Only deletions shown (no +0)
+	assert.Contains(t, view, "-2")
 }
 
 // Golden file tests for View rendering

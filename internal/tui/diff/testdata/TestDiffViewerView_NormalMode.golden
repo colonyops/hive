@@ -1,7 +1,10 @@
---- test.go
-+++ test.go
-@@ -1,3 +1,4 @@
- package main
--old line
-+new line
- }
+  test.go (-1, +1)
+────────────────────────────────────────────────────────────────────────────────
+│ ▶ │ --- test.go
+│   │ +++ test.go
+│   │ @@ -1,3 +1,4 @@
+│   │  package main
+│   │ -old line
+│   │ +new line
+│   │  }
+│   │
