@@ -1085,6 +1085,15 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m.openNewSessionForm()
 		}
 
+		// SetTheme doesn't require a session
+		if entry.Command.Action == config.ActionSetTheme {
+			m.state = stateNormal
+			if len(args) > 0 {
+				m.applyTheme(args[0])
+			}
+			return m, nil
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1702,7 +1711,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme:
 		return false
 	}
 	return false
@@ -2449,6 +2458,20 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 		}
 		return actionCompleteMsg{err: lastErr}
 	}
+}
+
+// applyTheme switches the active theme at runtime.
+func (m *Model) applyTheme(name string) {
+	palette, ok := styles.GetPalette(name)
+	if !ok {
+		m.err = fmt.Errorf("unknown theme %q, available: %v", name, styles.ThemeNames())
+		return
+	}
+	styles.SetTheme(palette)
+	m.treeDelegate.Styles = DefaultTreeDelegateStyles()
+	m.list.SetDelegate(m.treeDelegate)
+	// Clear cached animation colors so they regenerate from new theme
+	activeAnimationColors = nil
 }
 
 // listenForRecycleOutput returns a command that waits for the next output or completion.
