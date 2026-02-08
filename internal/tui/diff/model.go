@@ -199,9 +199,9 @@ func (m Model) View() tea.View {
 	subHeaderHeight := 1
 
 	// Calculate panel dimensions
-	// File tree takes 30% of width, diff viewer takes 70%
+	// File tree takes 30% of width (including embedded gutter), diff viewer takes 70%
 	treeWidth := m.width * 30 / 100
-	diffWidth := m.width - treeWidth - 1 // -1 for separator
+	diffWidth := m.width - treeWidth
 
 	// Panel height = total - headers - status bar
 	panelHeight := m.height - headerHeight - subHeaderHeight - 1
@@ -220,29 +220,28 @@ func (m Model) View() tea.View {
 	// Render diff viewer
 	diffViewerView := m.diffViewer.View()
 
-	// Create full-height gutter separator
-	gutterLines := make([]string, panelHeight)
-	for i := 0; i < panelHeight; i++ {
-		gutterLines[i] = styles.TextMutedStyle.Render("│")
-	}
-	separator := strings.Join(gutterLines, "\n")
-
-	// Apply consistent styling (no borders to avoid layout shift)
+	// Apply consistent styling with embedded gutter
+	// Tree panel has border on the right (acts as gutter/separator)
 	treeStyle := lipgloss.NewStyle().
 		Width(treeWidth).
-		Height(panelHeight)
+		Height(panelHeight).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderRight(true).
+		BorderForeground(styles.ColorMuted).
+		PaddingLeft(1) // Indent tree to align with header
+
 	diffStyle := lipgloss.NewStyle().
 		Width(diffWidth).
-		Height(panelHeight)
+		Height(panelHeight).
+		PaddingLeft(1) // Add padding for alignment
 
 	// Render panels
 	leftPanel := treeStyle.Render(fileTreeView)
 	rightPanel := diffStyle.Render(diffViewerView)
 
-	// Join panels horizontally
+	// Join panels horizontally (no separate separator needed)
 	content := lipgloss.JoinHorizontal(lipgloss.Top,
 		leftPanel,
-		separator,
 		rightPanel,
 	)
 
@@ -273,19 +272,20 @@ func (m Model) renderUnifiedHeader() string {
 	// Top border
 	topBorder := strings.Repeat("─", m.width)
 
-	// Content line: review context on left, branded "Hive" on right
+	// Content line: review context on left, branded "Hive" on right, with 1 space padding
 	contextLeft := styles.TextMutedStyle.Render(m.reviewContext)
 	brandingRight := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
 
 	leftWidth := lipgloss.Width(contextLeft)
 	rightWidth := lipgloss.Width(brandingRight)
-	spacing := m.width - leftWidth - rightWidth
+	// Account for 1 space padding on left and right
+	spacing := m.width - leftWidth - rightWidth - 2
 
 	if spacing < 1 {
 		spacing = 1
 	}
 
-	contentLine := contextLeft + strings.Repeat(" ", spacing) + brandingRight
+	contentLine := " " + contextLeft + strings.Repeat(" ", spacing) + brandingRight + " "
 
 	// Bottom border
 	bottomBorder := strings.Repeat("─", m.width)
@@ -299,9 +299,9 @@ func (m Model) renderUnifiedHeader() string {
 
 // renderPanelSubHeader renders the panel title bar with focus indicators.
 func (m Model) renderPanelSubHeader() string {
-	// Calculate widths for layout
+	// Calculate widths for layout (matching panel widths with embedded gutter)
 	treeWidth := m.width * 30 / 100
-	diffWidth := m.width - treeWidth - 1 // -1 for separator
+	diffWidth := m.width - treeWidth
 
 	// Render left panel title based on focus
 	var filesTitle, diffTitle string
@@ -313,18 +313,20 @@ func (m Model) renderPanelSubHeader() string {
 		diffTitle = styles.TextPrimaryBoldStyle.Render("Diff View")
 	}
 
-	// Left side (left-aligned with padding)
+	// Left side (left-aligned with padding, includes border on right as gutter)
 	leftSide := " " + filesTitle
-	leftSide = lipgloss.NewStyle().Width(treeWidth).Render(leftSide)
-
-	// Separator
-	sep := styles.TextMutedStyle.Render("│")
+	leftStyle := lipgloss.NewStyle().
+		Width(treeWidth).
+		BorderStyle(lipgloss.NormalBorder()).
+		BorderRight(true).
+		BorderForeground(styles.ColorMuted)
+	leftSide = leftStyle.Render(leftSide)
 
 	// Right side (left-aligned with padding)
 	rightSide := " " + diffTitle
 	rightSide = lipgloss.NewStyle().Width(diffWidth).Render(rightSide)
 
-	return leftSide + sep + rightSide
+	return leftSide + rightSide
 }
 
 // renderStatusBar renders the status bar at the bottom.
@@ -378,9 +380,12 @@ func (m Model) renderStatusBar() string {
 
 	statusBar := leftSection + strings.Repeat(" ", spacing) + rightSection
 
+	// Status bar with distinct background (like vim's status bar)
 	return lipgloss.NewStyle().
 		Width(m.width).
-		Background(styles.ColorSurface).
+		Background(styles.ColorPrimary).
+		Foreground(styles.ColorBackground).
+		Bold(true).
 		Padding(0, 1).
 		Render(statusBar)
 }
@@ -396,7 +401,7 @@ func (m *Model) SetSize(width, height int) {
 	statusBarHeight := 1    // status bar
 
 	treeWidth := width * 30 / 100
-	diffWidth := width - treeWidth - 1
+	diffWidth := width - treeWidth
 	panelHeight := height - headerHeight - subHeaderHeight - statusBarHeight
 
 	// Update child components
