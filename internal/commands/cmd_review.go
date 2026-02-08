@@ -3,8 +3,15 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
+	"strings"
 
+	tea "charm.land/bubbletea/v2"
+	"github.com/bluekeyes/go-gitdiff/gitdiff"
+	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/hive"
+	"github.com/hay-kot/hive/internal/tui/diff"
+	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/urfave/cli/v3"
 )
 
@@ -78,9 +85,66 @@ Examples:
 }
 
 func (cmd *ReviewCmd) runDiff(ctx context.Context, c *cli.Command) error {
-	// TODO: Implement diff TUI launch
-	// 1. Get git diff using appropriate mode (uncommitted, staged, or branch comparison)
-	// 2. Verify delta is available
-	// 3. Launch TUI with diff viewer
-	return fmt.Errorf("not implemented yet")
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		return fmt.Errorf("get working directory: %w", err)
+	}
+
+	// Determine diff mode from flags
+	var diffOpts git.DiffOptions
+	if cmd.diffBase != "" {
+		diffOpts.Mode = git.DiffBranch
+		diffOpts.BaseBranch = cmd.diffBase
+	} else if cmd.diffStaged {
+		diffOpts.Mode = git.DiffStaged
+	} else {
+		diffOpts.Mode = git.DiffUncommitted
+	}
+
+	// Get git diff
+	exec := &executil.RealExecutor{}
+	gitExec := git.NewExecutor(cmd.app.Config.GitPath, exec)
+	diffContent, err := gitExec.GetDiff(ctx, cwd, diffOpts)
+	if err != nil {
+		return fmt.Errorf("get git diff: %w", err)
+	}
+
+	// Check if there are any changes
+	if strings.TrimSpace(diffContent) == "" {
+		fmt.Println("No changes to review.")
+		return nil
+	}
+
+	// Parse diff
+	files, _, err := gitdiff.Parse(strings.NewReader(diffContent))
+	if err != nil {
+		return fmt.Errorf("parse git diff: %w", err)
+	}
+
+	if len(files) == 0 {
+		fmt.Println("No files changed.")
+		return nil
+	}
+
+	// Check delta availability (warn if not present)
+	if err := diff.CheckDeltaAvailable(); err != nil {
+		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Syntax highlighting will not be available.\n\n")
+	}
+
+	// Create diff model
+	model := diff.New(files, cmd.app.Config)
+
+	// Get terminal size and set model size
+	// BubbleTea will handle this automatically, but we can set initial size
+	model.SetSize(120, 40) // Default size, will be updated by BubbleTea
+
+	// Run TUI
+	p := tea.NewProgram(model)
+	if _, err := p.Run(); err != nil {
+		return fmt.Errorf("run TUI: %w", err)
+	}
+
+	return nil
 }

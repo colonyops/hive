@@ -53,11 +53,13 @@ func TestModelTabSwitching(t *testing.T) {
 	assert.Equal(t, FocusFileTree, m.focused)
 
 	// Press tab to switch to diff viewer
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
+	result, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
+	m = result.(Model)
 	assert.Equal(t, FocusDiffViewer, m.focused)
 
 	// Press tab again to switch back to file tree
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
+	result, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
+	m = result.(Model)
 	assert.Equal(t, FocusFileTree, m.focused)
 }
 
@@ -103,7 +105,8 @@ func TestModelFileTreeNavigation(t *testing.T) {
 	assert.Equal(t, "file1.go", selectedFile.NewName)
 
 	// Navigate down with 'j'
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
+	result, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
+	m = result.(Model)
 
 	// Diff viewer should sync to second file
 	selectedFile = m.fileTree.SelectedFile()
@@ -134,7 +137,8 @@ func TestModelEnterOnFileTree(t *testing.T) {
 	m.SetSize(100, 40)
 
 	// Press enter on file tree (should sync to diff viewer)
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	result, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
+	m = result.(Model)
 
 	// Verify diff viewer has the file
 	assert.NotNil(t, m.diffViewer.file)
@@ -168,18 +172,21 @@ func TestModelDiffViewerScrolling(t *testing.T) {
 	m.SetSize(100, 10)
 
 	// Switch to diff viewer
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
+	result, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
+	m = result.(Model)
 	assert.Equal(t, FocusDiffViewer, m.focused)
 
 	// Initial scroll position
 	assert.Equal(t, 0, m.diffViewer.offset)
 
 	// Scroll down
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
+	result, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
+	m = result.(Model)
 	assert.Equal(t, 1, m.diffViewer.offset)
 
 	// Scroll up
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'k'}))
+	result, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'k'}))
+	m = result.(Model)
 	assert.Equal(t, 0, m.diffViewer.offset)
 }
 

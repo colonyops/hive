@@ -53,7 +53,7 @@ func (m Model) Init() tea.Cmd {
 }
 
 // Update handles keyboard input and updates the focused panel.
-func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
+func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
 		case "tab":
@@ -102,9 +102,9 @@ func (m Model) Update(msg tea.Msg) (Model, tea.Cmd) {
 }
 
 // View renders the two-panel layout with file tree on left and diff viewer on right.
-func (m Model) View() string {
+func (m Model) View() tea.View {
 	if m.width == 0 || m.height == 0 {
-		return ""
+		return tea.NewView("")
 	}
 
 	// Calculate panel dimensions
@@ -164,10 +164,15 @@ func (m Model) View() string {
 	statusBar := m.renderStatusBar()
 
 	// Join content and status bar vertically
-	return lipgloss.JoinVertical(lipgloss.Left,
+	result := lipgloss.JoinVertical(lipgloss.Left,
 		content,
 		statusBar,
 	)
+
+	// Create and return tea.View
+	v := tea.NewView(result)
+	v.AltScreen = true // Use alternate screen buffer
+	return v
 }
 
 // renderStatusBar renders the status bar at the bottom.
