@@ -422,3 +422,288 @@ func TestParseDiffLines_PreservesRawLine(t *testing.T) {
 	assert.Equal(t, "addition", addition.Content)
 	assert.Equal(t, "deletion", deletion.Content)
 }
+
+func TestCalculateSelection_AdditionsOnly(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,2 +1,4 @@
+ context1
++added1
++added2
+ context2`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find indices of the two additions
+	var addIdx1, addIdx2 int
+	for i, line := range lines {
+		if line.Type == LineTypeAdd {
+			if addIdx1 == 0 {
+				addIdx1 = i
+			} else {
+				addIdx2 = i
+				break
+			}
+		}
+	}
+
+	// Select both additions
+	sel := CalculateSelection(lines, addIdx1, addIdx2)
+	require.NotNil(t, sel)
+
+	assert.Equal(t, SelectionSideNew, sel.Side)
+	assert.Equal(t, 2, sel.StartLine)
+	assert.Equal(t, 3, sel.EndLine)
+	assert.Len(t, sel.Lines, 2)
+	assert.Equal(t, LineTypeAdd, sel.Lines[0].Type)
+	assert.Equal(t, LineTypeAdd, sel.Lines[1].Type)
+}
+
+func TestCalculateSelection_DeletionsOnly(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,4 +1,2 @@
+ context1
+-deleted1
+-deleted2
+ context2`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find indices of the two deletions
+	var delIdx1, delIdx2 int
+	for i, line := range lines {
+		if line.Type == LineTypeDelete {
+			if delIdx1 == 0 {
+				delIdx1 = i
+			} else {
+				delIdx2 = i
+				break
+			}
+		}
+	}
+
+	// Select both deletions
+	sel := CalculateSelection(lines, delIdx1, delIdx2)
+	require.NotNil(t, sel)
+
+	assert.Equal(t, SelectionSideOld, sel.Side)
+	assert.Equal(t, 2, sel.StartLine)
+	assert.Equal(t, 3, sel.EndLine)
+	assert.Len(t, sel.Lines, 2)
+	assert.Equal(t, LineTypeDelete, sel.Lines[0].Type)
+	assert.Equal(t, LineTypeDelete, sel.Lines[1].Type)
+}
+
+func TestCalculateSelection_ContextLines(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,3 +1,3 @@
+ context1
+ context2
+ context3`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find first and last context lines
+	var firstCtx, lastCtx int
+	found := false
+	for i, line := range lines {
+		if line.Type == LineTypeContext {
+			if !found {
+				firstCtx = i
+				found = true
+			}
+			lastCtx = i
+		}
+	}
+
+	// Select context lines
+	sel := CalculateSelection(lines, firstCtx, lastCtx)
+	require.NotNil(t, sel)
+
+	assert.Equal(t, SelectionSideOld, sel.Side) // Context defaults to old
+	assert.Equal(t, 1, sel.StartLine)
+	assert.Equal(t, 3, sel.EndLine)
+	assert.Len(t, sel.Lines, 3)
+}
+
+func TestCalculateSelection_DeletionsWithContext(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,4 +1,3 @@
+ context1
+-deleted1
+-deleted2
+ context2`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find first context and second deletion
+	var firstCtx, lastDel int
+	foundCtx := false
+	for i, line := range lines {
+		if line.Type == LineTypeContext && !foundCtx {
+			firstCtx = i
+			foundCtx = true
+		}
+		if line.Type == LineTypeDelete {
+			lastDel = i
+		}
+	}
+
+	// Select from context through deletions
+	sel := CalculateSelection(lines, firstCtx, lastDel)
+	require.NotNil(t, sel)
+
+	assert.Equal(t, SelectionSideOld, sel.Side)
+	assert.Equal(t, 1, sel.StartLine) // context1 is line 1
+	assert.Equal(t, 3, sel.EndLine)   // deleted2 is line 3
+	assert.Len(t, sel.Lines, 3)
+}
+
+func TestCalculateSelection_AdditionsWithContext(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,2 +1,4 @@
+ context1
++added1
++added2
+ context2`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find first addition and last context
+	var firstAdd, lastCtx int
+	foundAdd := false
+	for i, line := range lines {
+		if line.Type == LineTypeAdd && !foundAdd {
+			firstAdd = i
+			foundAdd = true
+		}
+		if line.Type == LineTypeContext {
+			lastCtx = i
+		}
+	}
+
+	// Select from first addition through last context
+	sel := CalculateSelection(lines, firstAdd, lastCtx)
+	require.NotNil(t, sel)
+
+	assert.Equal(t, SelectionSideNew, sel.Side)
+	assert.Equal(t, 2, sel.StartLine) // added1 is line 2
+	assert.Equal(t, 4, sel.EndLine)   // context2 is line 4
+	assert.Len(t, sel.Lines, 3)
+}
+
+func TestCalculateSelection_InvalidMixedChanges(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,3 +1,3 @@
+ context
+-deleted
++added`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find deletion and addition indices
+	var delIdx, addIdx int
+	for i, line := range lines {
+		if line.Type == LineTypeDelete {
+			delIdx = i
+		}
+		if line.Type == LineTypeAdd {
+			addIdx = i
+		}
+	}
+
+	// Selecting from deletion to addition should return nil (mixed sides)
+	sel := CalculateSelection(lines, delIdx, addIdx)
+	assert.Nil(t, sel, "cannot mix deletions and additions")
+}
+
+func TestCalculateSelection_OnlyHeaders(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,2 +1,2 @@
+ context`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Try selecting only file headers
+	sel := CalculateSelection(lines, 0, 1)
+	assert.Nil(t, sel, "selection with only headers should be nil")
+
+	// Try selecting hunk header
+	hunkIdx := -1
+	for i, line := range lines {
+		if line.Type == LineTypeHunk {
+			hunkIdx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, hunkIdx)
+
+	sel = CalculateSelection(lines, hunkIdx, hunkIdx)
+	assert.Nil(t, sel, "selection with only hunk header should be nil")
+}
+
+func TestCalculateSelection_OutOfBounds(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,2 +1,2 @@
+ context1
+ context2`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Negative start
+	sel := CalculateSelection(lines, -1, 2)
+	assert.Nil(t, sel)
+
+	// End beyond bounds
+	sel = CalculateSelection(lines, 0, len(lines))
+	assert.Nil(t, sel)
+
+	// Start > end
+	sel = CalculateSelection(lines, 5, 2)
+	assert.Nil(t, sel)
+}
+
+func TestCalculateSelection_SingleLine(t *testing.T) {
+	diff := `--- a/file.go
++++ b/file.go
+@@ -1,2 +1,3 @@
+ context
++added`
+
+	lines, err := ParseDiffLines(diff)
+	require.NoError(t, err)
+
+	// Find the addition
+	addIdx := -1
+	for i, line := range lines {
+		if line.Type == LineTypeAdd {
+			addIdx = i
+			break
+		}
+	}
+	require.NotEqual(t, -1, addIdx)
+
+	// Select single addition
+	sel := CalculateSelection(lines, addIdx, addIdx)
+	require.NotNil(t, sel)
+
+	assert.Equal(t, SelectionSideNew, sel.Side)
+	assert.Equal(t, 2, sel.StartLine)
+	assert.Equal(t, 2, sel.EndLine)
+	assert.Len(t, sel.Lines, 1)
+}

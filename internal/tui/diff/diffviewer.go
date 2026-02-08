@@ -201,7 +201,7 @@ func (m DiffViewerModel) Update(msg tea.Msg) (DiffViewerModel, tea.Cmd) {
 	return m, nil
 }
 
-// View renders the visible portion of the diff.
+// View renders the visible portion of the diff with selection and cursor highlighting.
 func (m DiffViewerModel) View() string {
 	if m.file == nil {
 		return styles.TextMutedStyle.Render("No file selected")
@@ -213,14 +213,45 @@ func (m DiffViewerModel) View() string {
 
 	// Calculate visible range
 	endOffset := min(m.offset+m.height, len(m.lines))
-	visibleLines := m.lines[m.offset:endOffset]
 
-	content := strings.Join(visibleLines, "\n")
+	// Build output with selection/cursor highlighting
+	var styledLines []string
+	for i := m.offset; i < endOffset; i++ {
+		line := m.lines[i]
+
+		// Determine if this line should be styled
+		isCursor := i == m.cursorLine
+		isSelected := m.isLineSelected(i)
+
+		// Apply styles in priority order: cursor > selection > normal
+		if isCursor {
+			line = styles.ReviewCursorStyle.Render(line)
+		} else if isSelected {
+			line = styles.ReviewSelectionStyle.Render(line)
+		}
+
+		styledLines = append(styledLines, line)
+	}
+
+	content := strings.Join(styledLines, "\n")
 
 	return lipgloss.NewStyle().
 		Width(m.width).
 		Height(m.height).
 		Render(content)
+}
+
+// isLineSelected returns whether the given line index is within the current selection.
+func (m DiffViewerModel) isLineSelected(lineIdx int) bool {
+	if !m.selectionMode {
+		return false
+	}
+
+	// Selection range is inclusive of both start and cursor
+	start := min(m.selectionStart, m.cursorLine)
+	end := max(m.selectionStart, m.cursorLine)
+
+	return lineIdx >= start && lineIdx <= end
 }
 
 // SetSize updates the dimensions of the diff viewer.
@@ -239,9 +270,3 @@ func (m *DiffViewerModel) SetFile(file *gitdiff.File) {
 	m.generateContent()
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

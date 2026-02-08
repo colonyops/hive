@@ -483,10 +483,3 @@ func (m *FileTreeModel) SetFiles(files []*gitdiff.File) {
 		m.selected = max(0, len(m.visible)-1)
 	}
 }
-
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

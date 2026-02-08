@@ -241,3 +241,99 @@ func GetLineAtOffset(lines []ParsedLine, offset int) *ParsedLine {
 	}
 	return &lines[offset]
 }
+
+// SelectionSide represents which file the selection belongs to.
+type SelectionSide int
+
+const (
+	SelectionSideOld SelectionSide = iota // Selection is in old file (deletions)
+	SelectionSideNew                      // Selection is in new file (additions)
+)
+
+// SelectionRange represents a range of selected lines with their file line numbers.
+type SelectionRange struct {
+	Side      SelectionSide // Which file the selection is in
+	StartLine int           // Starting line number in the file (1-indexed)
+	EndLine   int           // Ending line number in the file (1-indexed, inclusive)
+	Lines     []ParsedLine  // The actual parsed lines in the selection
+}
+
+// CalculateSelection computes the selection range from display line indices.
+// startIdx and endIdx are 0-indexed positions in the parsed lines array.
+// Returns nil if the selection is invalid (crosses file boundaries, includes only headers, etc.).
+func CalculateSelection(lines []ParsedLine, startIdx, endIdx int) *SelectionRange {
+	if startIdx < 0 || endIdx >= len(lines) || startIdx > endIdx {
+		return nil
+	}
+
+	// Extract selected lines
+	selectedLines := lines[startIdx : endIdx+1]
+
+	// Filter out file headers and hunk headers
+	var contentLines []ParsedLine
+	for _, line := range selectedLines {
+		if line.Type != LineTypeFileHeader && line.Type != LineTypeHunk {
+			contentLines = append(contentLines, line)
+		}
+	}
+
+	if len(contentLines) == 0 {
+		return nil
+	}
+
+	// Determine the side based on the first content line
+	var side SelectionSide
+	firstLine := contentLines[0]
+
+	switch firstLine.Type {
+	case LineTypeDelete:
+		side = SelectionSideOld
+	case LineTypeAdd:
+		side = SelectionSideNew
+	case LineTypeContext:
+		// Context lines exist in both files - default to old for consistency
+		side = SelectionSideOld
+	default:
+		return nil
+	}
+
+	// Validate that all lines are compatible with the selected side
+	for _, line := range contentLines {
+		switch side {
+		case SelectionSideOld:
+			// Old side can include deletions and context
+			if line.Type == LineTypeAdd {
+				return nil // Cannot mix additions with old side
+			}
+			if line.OldLineNum == 0 {
+				return nil // Old side must have old line numbers
+			}
+		case SelectionSideNew:
+			// New side can include additions and context
+			if line.Type == LineTypeDelete {
+				return nil // Cannot mix deletions with new side
+			}
+			if line.NewLineNum == 0 {
+				return nil // New side must have new line numbers
+			}
+		}
+	}
+
+	// Extract line number range based on side
+	var startLineNum, endLineNum int
+
+	if side == SelectionSideOld {
+		startLineNum = contentLines[0].OldLineNum
+		endLineNum = contentLines[len(contentLines)-1].OldLineNum
+	} else {
+		startLineNum = contentLines[0].NewLineNum
+		endLineNum = contentLines[len(contentLines)-1].NewLineNum
+	}
+
+	return &SelectionRange{
+		Side:      side,
+		StartLine: startLineNum,
+		EndLine:   endLineNum,
+		Lines:     contentLines,
+	}
+}
