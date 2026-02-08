@@ -54,8 +54,19 @@ func (m Model) Init() tea.Cmd {
 
 // Update handles keyboard input and updates the focused panel.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	switch msg := msg.(type) {
+	case tea.WindowSizeMsg:
+		// Handle window resize
+		m.SetSize(msg.Width, msg.Height)
+		return m, nil
+	}
+
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
+		case "q", "ctrl+c":
+			// Quit the application
+			return m, tea.Quit
+
 		case "tab":
 			// Switch focus between panels
 			if m.focused == FocusFileTree {
@@ -178,19 +189,29 @@ func (m Model) View() tea.View {
 // renderStatusBar renders the status bar at the bottom.
 func (m Model) renderStatusBar() string {
 	// Show current panel and help text
-	var panelName string
-	var help string
+	var leftSection, help string
 
 	switch m.focused {
 	case FocusFileTree:
-		panelName = "File Tree"
-		help = "↑/↓ navigate • enter expand/select • tab switch panel"
+		leftSection = styles.TextPrimaryBoldStyle.Render("File Tree")
+		help = "↑/↓ navigate • enter expand/select • tab switch panel • q quit"
 	case FocusDiffViewer:
-		panelName = "Diff Viewer"
-		help = "↑/↓ scroll • ctrl+d/u page • g/G top/bottom • tab switch panel"
+		// Show mode indicator for diff viewer
+		var modeIndicator string
+		if m.diffViewer.SelectionMode() {
+			modeIndicator = styles.ReviewModeVisualStyle.Render("VISUAL")
+		} else {
+			modeIndicator = styles.ReviewModeNormalStyle.Render("NORMAL")
+		}
+		leftSection = modeIndicator + " " + styles.TextPrimaryBoldStyle.Render("Diff Viewer")
+
+		if m.diffViewer.SelectionMode() {
+			help = "↑/↓ move selection • v exit visual • esc cancel • tab switch panel"
+		} else {
+			help = "↑/↓ scroll • v visual mode • ctrl+d/u page • g/G top/bottom • tab switch • q quit"
+		}
 	}
 
-	leftSection := styles.TextPrimaryBoldStyle.Render(panelName)
 	rightSection := styles.TextMutedStyle.Render(help)
 
 	// Calculate spacing

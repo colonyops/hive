@@ -270,3 +270,8 @@ func (m *DiffViewerModel) SetFile(file *gitdiff.File) {
 	m.generateContent()
 }
 
+// SelectionMode returns whether visual selection mode is active.
+func (m DiffViewerModel) SelectionMode() bool {
+	return m.selectionMode
+}
+
