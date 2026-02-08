@@ -10,6 +10,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/rs/zerolog/log"
 )
 
 // ContextService manages per-repository context directories.
@@ -124,6 +125,7 @@ func (c *ContextService) Prune(ctxDir string, olderThan time.Duration) (int, err
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(ctxDir, entry.Name())
 			if err := os.RemoveAll(path); err != nil {
+				log.Warn().Err(err).Str("path", path).Msg("failed to remove context entry during prune")
 				continue
 			}
 			count++

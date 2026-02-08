@@ -50,7 +50,7 @@ func main() {
 
 	var (
 		logCloser func()
-		hiveApp   *hive.App
+		hiveApp   = &hive.App{}
 		database  *db.DB
 		pluginMgr *plugins.Manager
 	)
@@ -170,8 +170,8 @@ Run 'hive new' to create a new session from the current repository.`,
 				log.Warn().Err(err).Msg("plugin initialization error")
 			}
 
-			// Build the App struct
-			hiveApp = hive.NewApp(
+			// Populate the pre-allocated App struct (commands already hold a pointer to it)
+			*hiveApp = *hive.NewApp(
 				sessionSvc,
 				msgStore,
 				cfg,

@@ -92,11 +92,11 @@ func (cmd *CtxCmd) runLs(ctx context.Context, c *cli.Command) error {
 	}
 
 	if _, err := os.Stat(ctxDir); os.IsNotExist(err) {
-		fmt.Printf("Context directory does not exist. Run 'hive ctx init' first.")
+		fmt.Println("Context directory does not exist. Run 'hive ctx init' first.")
 		return nil
 	}
 
-	fmt.Printf("%s", ctxDir)
+	fmt.Println(ctxDir)
 	return printTree(ctxDir, "")
 }
 
@@ -114,7 +114,7 @@ func printTree(dir, prefix string) error {
 			connector = "└── "
 		}
 
-		fmt.Printf("%s%s%s", prefix, connector, entry.Name())
+		fmt.Printf("%s%s%s\n", prefix, connector, entry.Name())
 
 		if entry.IsDir() {
 			childPrefix := prefix + "│   "
