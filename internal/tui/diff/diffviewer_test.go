@@ -5,6 +5,8 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
+	"github.com/charmbracelet/x/exp/golden"
+	"github.com/hay-kot/hive/pkg/tuitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -326,4 +328,169 @@ func TestFormatRange(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
+}
+
+// Golden file tests for selection rendering
+
+func TestDiffViewerView_NormalMode(t *testing.T) {
+	file := &gitdiff.File{
+		OldName: "test.go",
+		NewName: "test.go",
+		TextFragments: []*gitdiff.TextFragment{
+			{
+				OldPosition: 1,
+				OldLines:    3,
+				NewPosition: 1,
+				NewLines:    4,
+				Lines: []gitdiff.Line{
+					{Op: gitdiff.OpContext, Line: "package main\n"},
+					{Op: gitdiff.OpDelete, Line: "old line\n"},
+					{Op: gitdiff.OpAdd, Line: "new line\n"},
+					{Op: gitdiff.OpContext, Line: "}\n"},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewer(file)
+	m.SetSize(80, 10)
+
+	output := tuitest.StripANSI(m.View())
+	golden.RequireEqual(t, []byte(output))
+}
+
+func TestDiffViewerView_CursorHighlight(t *testing.T) {
+	file := &gitdiff.File{
+		OldName: "test.go",
+		NewName: "test.go",
+		TextFragments: []*gitdiff.TextFragment{
+			{
+				OldPosition: 1,
+				OldLines:    3,
+				NewPosition: 1,
+				NewLines:    4,
+				Lines: []gitdiff.Line{
+					{Op: gitdiff.OpContext, Line: "package main\n"},
+					{Op: gitdiff.OpDelete, Line: "old line\n"},
+					{Op: gitdiff.OpAdd, Line: "new line\n"},
+					{Op: gitdiff.OpContext, Line: "}\n"},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewer(file)
+	m.SetSize(80, 10)
+
+	// Move cursor down to highlight a line
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+
+	output := tuitest.StripANSI(m.View())
+	golden.RequireEqual(t, []byte(output))
+}
+
+func TestDiffViewerView_SingleLineSelection(t *testing.T) {
+	file := &gitdiff.File{
+		OldName: "test.go",
+		NewName: "test.go",
+		TextFragments: []*gitdiff.TextFragment{
+			{
+				OldPosition: 1,
+				OldLines:    3,
+				NewPosition: 1,
+				NewLines:    4,
+				Lines: []gitdiff.Line{
+					{Op: gitdiff.OpContext, Line: "package main\n"},
+					{Op: gitdiff.OpDelete, Line: "old line\n"},
+					{Op: gitdiff.OpAdd, Line: "new line\n"},
+					{Op: gitdiff.OpContext, Line: "}\n"},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewer(file)
+	m.SetSize(80, 10)
+
+	// Move cursor and enter visual mode
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'v'}))
+
+	output := tuitest.StripANSI(m.View())
+	golden.RequireEqual(t, []byte(output))
+}
+
+func TestDiffViewerView_MultiLineSelection(t *testing.T) {
+	file := &gitdiff.File{
+		OldName: "test.go",
+		NewName: "test.go",
+		TextFragments: []*gitdiff.TextFragment{
+			{
+				OldPosition: 1,
+				OldLines:    5,
+				NewPosition: 1,
+				NewLines:    6,
+				Lines: []gitdiff.Line{
+					{Op: gitdiff.OpContext, Line: "package main\n"},
+					{Op: gitdiff.OpContext, Line: "func main() {\n"},
+					{Op: gitdiff.OpDelete, Line: "old line 1\n"},
+					{Op: gitdiff.OpDelete, Line: "old line 2\n"},
+					{Op: gitdiff.OpAdd, Line: "new line 1\n"},
+					{Op: gitdiff.OpAdd, Line: "new line 2\n"},
+					{Op: gitdiff.OpContext, Line: "}\n"},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewer(file)
+	m.SetSize(80, 15)
+
+	// Move cursor, enter visual mode, and extend selection
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'v'})) // Start selection
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+
+	output := tuitest.StripANSI(m.View())
+	golden.RequireEqual(t, []byte(output))
+}
+
+func TestDiffViewerView_SelectionAcrossAdditions(t *testing.T) {
+	file := &gitdiff.File{
+		OldName: "test.go",
+		NewName: "test.go",
+		TextFragments: []*gitdiff.TextFragment{
+			{
+				OldPosition: 1,
+				OldLines:    2,
+				NewPosition: 1,
+				NewLines:    5,
+				Lines: []gitdiff.Line{
+					{Op: gitdiff.OpContext, Line: "package main\n"},
+					{Op: gitdiff.OpAdd, Line: "import \"fmt\"\n"},
+					{Op: gitdiff.OpAdd, Line: "import \"os\"\n"},
+					{Op: gitdiff.OpAdd, Line: "\n"},
+					{Op: gitdiff.OpContext, Line: "func main() {\n"},
+				},
+			},
+		},
+	}
+
+	m := NewDiffViewer(file)
+	m.SetSize(80, 12)
+
+	// Select multiple addition lines
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'v'})) // Start on first addition
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
+
+	output := tuitest.StripANSI(m.View())
+	golden.RequireEqual(t, []byte(output))
 }

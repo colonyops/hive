@@ -1,0 +1,8 @@
+--- test.go
++++ test.go
+@@ -1,2 +1,5 @@
+ package main
++import "fmt"
++import "os"
++
+ func main() {

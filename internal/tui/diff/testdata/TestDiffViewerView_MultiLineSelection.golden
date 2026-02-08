@@ -1,0 +1,10 @@
+--- test.go
++++ test.go
+@@ -1,5 +1,6 @@
+ package main
+ func main() {
+-old line 1
+-old line 2
++new line 1
++new line 2
+ }

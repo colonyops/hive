@@ -8,6 +8,7 @@ import (
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/hay-kot/hive/internal/tui/components"
 )
 
 // FocusedPanel represents which panel has keyboard focus.
@@ -25,6 +26,8 @@ type Model struct {
 	focused    FocusedPanel
 	width      int
 	height     int
+	helpDialog *components.HelpDialog
+	showHelp   bool
 }
 
 // New creates a new diff viewer model from git diff files.
