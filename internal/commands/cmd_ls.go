@@ -9,6 +9,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -16,14 +17,15 @@ import (
 
 type LsCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// flags
 	jsonOutput bool
 }
 
 // NewLsCmd creates a new ls command
-func NewLsCmd(flags *Flags) *LsCmd {
-	return &LsCmd{flags: flags}
+func NewLsCmd(flags *Flags, app *hive.App) *LsCmd {
+	return &LsCmd{flags: flags, app: app}
 }
 
 // Register adds the ls command to the application

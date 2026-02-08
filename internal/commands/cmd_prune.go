@@ -4,17 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
 type PruneCmd struct {
 	flags *Flags
+	app   *hive.App
 }
 
 // NewPruneCmd creates a new prune command
-func NewPruneCmd(flags *Flags) *PruneCmd {
-	return &PruneCmd{flags: flags}
+func NewPruneCmd(flags *Flags, app *hive.App) *PruneCmd {
+	return &PruneCmd{flags: flags, app: app}
 }
 
 // Register adds the prune command to the application

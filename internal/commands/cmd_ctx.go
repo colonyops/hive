@@ -9,12 +9,14 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
 type CtxCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// Shared flags
 	repo   string
@@ -25,8 +27,8 @@ type CtxCmd struct {
 }
 
 // NewCtxCmd creates a new ctx command.
-func NewCtxCmd(flags *Flags) *CtxCmd {
-	return &CtxCmd{flags: flags}
+func NewCtxCmd(flags *Flags, app *hive.App) *CtxCmd {
+	return &CtxCmd{flags: flags, app: app}
 }
 
 // Register adds the ctx command to the application.

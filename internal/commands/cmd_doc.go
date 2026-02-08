@@ -8,16 +8,18 @@ import (
 	"strings"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
 type DocCmd struct {
 	flags *Flags
+	app   *hive.App
 	all   bool
 }
 
-func NewDocCmd(flags *Flags) *DocCmd {
-	return &DocCmd{flags: flags}
+func NewDocCmd(flags *Flags, app *hive.App) *DocCmd {
+	return &DocCmd{flags: flags, app: app}
 }
 
 func (cmd *DocCmd) Register(app *cli.Command) *cli.Command {

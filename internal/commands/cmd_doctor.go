@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/hay-kot/hive/internal/core/doctor"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -12,12 +13,13 @@ import (
 
 type DoctorCmd struct {
 	flags   *Flags
+	app     *hive.App
 	format  string
 	autofix bool
 }
 
-func NewDoctorCmd(flags *Flags) *DoctorCmd {
-	return &DoctorCmd{flags: flags}
+func NewDoctorCmd(flags *Flags, app *hive.App) *DoctorCmd {
+	return &DoctorCmd{flags: flags, app: app}
 }
 
 func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {

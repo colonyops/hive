@@ -19,12 +19,14 @@ import (
 
 type TuiCmd struct {
 	flags *Flags
+	app   *hive.App
 }
 
 // NewTuiCmd creates a new tui command
-func NewTuiCmd(flags *Flags) *TuiCmd {
+func NewTuiCmd(flags *Flags, app *hive.App) *TuiCmd {
 	return &TuiCmd{
 		flags: flags,
+		app:   app,
 	}
 }
 

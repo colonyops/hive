@@ -23,7 +23,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags)
+	cmd := NewMsgCmd(flags, nil)
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -55,7 +55,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags)
+	cmd := NewMsgCmd(flags, nil)
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -86,7 +86,7 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags)
+	cmd := NewMsgCmd(flags, nil)
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -120,7 +120,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 		},
 	}
 
-	cmd := NewMsgCmd(flags)
+	cmd := NewMsgCmd(flags, nil)
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -155,7 +155,7 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 			},
 		}
 
-		cmd := NewMsgCmd(flags)
+		cmd := NewMsgCmd(flags, nil)
 
 		app := &cli.Command{
 			Name:   "hive",

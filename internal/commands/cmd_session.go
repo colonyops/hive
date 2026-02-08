@@ -6,6 +6,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -13,14 +14,15 @@ import (
 
 type SessionCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// flags
 	jsonOutput bool
 }
 
 // NewSessionCmd creates a new session command
-func NewSessionCmd(flags *Flags) *SessionCmd {
-	return &SessionCmd{flags: flags}
+func NewSessionCmd(flags *Flags, app *hive.App) *SessionCmd {
+	return &SessionCmd{flags: flags, app: app}
 }
 
 // Register adds the session command to the application

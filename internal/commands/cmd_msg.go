@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/hay-kot/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
@@ -17,6 +18,7 @@ import (
 
 type MsgCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// pub flags
 	pubTopics []string
@@ -41,8 +43,8 @@ type MsgCmd struct {
 }
 
 // NewMsgCmd creates a new msg command.
-func NewMsgCmd(flags *Flags) *MsgCmd {
-	return &MsgCmd{flags: flags}
+func NewMsgCmd(flags *Flags, app *hive.App) *MsgCmd {
+	return &MsgCmd{flags: flags, app: app}
 }
 
 // Register adds the msg command to the application.

@@ -13,13 +13,14 @@ import (
 
 type NewCmd struct {
 	flags  *Flags
+	app    *hive.App
 	remote string
 	source string
 }
 
 // NewNewCmd creates a new new command
-func NewNewCmd(flags *Flags) *NewCmd {
-	return &NewCmd{flags: flags}
+func NewNewCmd(flags *Flags, app *hive.App) *NewCmd {
+	return &NewCmd{flags: flags, app: app}
 }
 
 // Register adds the new command to the application

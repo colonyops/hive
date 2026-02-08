@@ -17,12 +17,14 @@ import (
 
 type BatchCmd struct {
 	flags *Flags
+	app   *hive.App
 	fr    *iojson.FileReader[BatchInput]
 }
 
-func NewBatchCmd(flags *Flags) *BatchCmd {
+func NewBatchCmd(flags *Flags, app *hive.App) *BatchCmd {
 	return &BatchCmd{
 		flags: flags,
+		app:   app,
 		fr:    &iojson.FileReader[BatchInput]{},
 	}
 }

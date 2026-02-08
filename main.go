@@ -54,9 +54,10 @@ func main() {
 	}
 
 	var (
-		p     = printer.New(os.Stderr)
-		ctx   = printer.NewContext(context.Background(), p)
-		flags = &commands.Flags{}
+		p       = printer.New(os.Stderr)
+		ctx     = printer.NewContext(context.Background(), p)
+		flags   = &commands.Flags{}
+		hiveApp *hive.App
 	)
 
 	var deferredLogs *utils.DeferredWriter
@@ -181,6 +182,17 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			flags.PluginManager = pluginMgr
+
+			// Build the App struct
+			hiveApp = hive.NewApp(
+				flags.Service,
+				msgStore,
+				cfg,
+				nil, // terminal manager created in TUI command
+				pluginMgr,
+				database,
+			)
+
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
@@ -200,17 +212,17 @@ Run 'hive new' to create a new session from the current repository.`,
 		},
 	}
 
-	tuiCmd := commands.NewTuiCmd(flags)
+	tuiCmd := commands.NewTuiCmd(flags, hiveApp)
 
-	app = commands.NewNewCmd(flags).Register(app)
-	app = commands.NewLsCmd(flags).Register(app)
-	app = commands.NewPruneCmd(flags).Register(app)
-	app = commands.NewDoctorCmd(flags).Register(app)
-	app = commands.NewBatchCmd(flags).Register(app)
-	app = commands.NewCtxCmd(flags).Register(app)
-	app = commands.NewMsgCmd(flags).Register(app)
-	app = commands.NewDocCmd(flags).Register(app)
-	app = commands.NewSessionCmd(flags).Register(app)
+	app = commands.NewNewCmd(flags, hiveApp).Register(app)
+	app = commands.NewLsCmd(flags, hiveApp).Register(app)
+	app = commands.NewPruneCmd(flags, hiveApp).Register(app)
+	app = commands.NewDoctorCmd(flags, hiveApp).Register(app)
+	app = commands.NewBatchCmd(flags, hiveApp).Register(app)
+	app = commands.NewCtxCmd(flags, hiveApp).Register(app)
+	app = commands.NewMsgCmd(flags, hiveApp).Register(app)
+	app = commands.NewDocCmd(flags, hiveApp).Register(app)
+	app = commands.NewSessionCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
