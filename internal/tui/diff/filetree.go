@@ -40,6 +40,7 @@ type FileTreeModel struct {
 	root           *TreeNode       // Root of the tree
 	visible        []*TreeNode     // Currently visible nodes (flattened view)
 	selected       int             // Index in visible list
+	offset         int             // Scroll offset (first visible item index)
 	width          int
 	height         int
 	iconStyle      IconStyle
@@ -58,6 +59,7 @@ func NewFileTree(files []*gitdiff.File, cfg *config.Config) FileTreeModel {
 	m := FileTreeModel{
 		files:          files,
 		selected:       0,
+		offset:         0,
 		iconStyle:      iconStyle,
 		hierarchical:   true, // Default to tree view
 		selectionStart: -1,   // No selection initially
@@ -184,6 +186,28 @@ func (m *FileTreeModel) collectVisible(node *TreeNode) {
 	}
 }
 
+// adjustViewport adjusts the scroll offset to keep the selected item visible.
+func (m *FileTreeModel) adjustViewport() {
+	if m.height <= 0 {
+		return
+	}
+
+	// Scroll down if selected is below viewport
+	if m.selected >= m.offset+m.height {
+		m.offset = m.selected - m.height + 1
+	}
+
+	// Scroll up if selected is above viewport
+	if m.selected < m.offset {
+		m.offset = m.selected
+	}
+
+	// Ensure offset is valid
+	if m.offset < 0 {
+		m.offset = 0
+	}
+}
+
 // Update handles key messages for file tree navigation.
 func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
@@ -191,18 +215,22 @@ func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 		case "j", "down":
 			if m.selected < len(m.visible)-1 {
 				m.selected++
+				m.adjustViewport()
 			}
 		case "k", "up":
 			if m.selected > 0 {
 				m.selected--
+				m.adjustViewport()
 			}
 		case "g":
 			// Jump to top
 			m.selected = 0
+			m.offset = 0
 		case "G":
 			// Jump to bottom
 			if len(m.visible) > 0 {
 				m.selected = len(m.visible) - 1
+				m.adjustViewport()
 			}
 		case "enter", "right", " ":
 			// Expand/collapse directory or select file
@@ -255,8 +283,16 @@ func (m FileTreeModel) View() string {
 		return m.renderEmptyState()
 	}
 
+	// Calculate visible range
+	start := m.offset
+	end := m.offset + m.height
+	if end > len(m.visible) {
+		end = len(m.visible)
+	}
+
 	var lines []string
-	for i, node := range m.visible {
+	for i := start; i < end; i++ {
+		node := m.visible[i]
 		line := m.renderNode(node, i == m.selected)
 		lines = append(lines, line)
 	}
@@ -352,7 +388,11 @@ func (m FileTreeModel) renderNode(node *TreeNode, selected bool) string {
 	if selected {
 		// Selected: apply background to all components for full-width highlighting
 		bgStyle := lipgloss.NewStyle().Background(styles.ColorSurface)
+
+		// Style all parts with background
+		indentStyled := bgStyle.Render(indent)
 		iconStyled := fileColor.Background(styles.ColorSurface).Render(icon)
+		spaceStyled := bgStyle.Render(" ")
 		nameStyled := fileColor.Bold(true).Background(styles.ColorSurface).Render(name)
 
 		// Add line range indicator if selection is active
@@ -372,9 +412,9 @@ func (m FileTreeModel) renderNode(node *TreeNode, selected bool) string {
 		var line string
 		if statsPlain != "" {
 			statsStyled := m.renderDiffStatsInlineWithBg(additions, deletions, styles.ColorSurface)
-			line = fmt.Sprintf("%s%s %s %s%s", indent, iconStyled, nameStyled, statsStyled, lineIndicator)
+			line = indentStyled + iconStyled + spaceStyled + nameStyled + spaceStyled + statsStyled + lineIndicator
 		} else {
-			line = fmt.Sprintf("%s%s %s%s", indent, iconStyled, nameStyled, lineIndicator)
+			line = indentStyled + iconStyled + spaceStyled + nameStyled + lineIndicator
 		}
 
 		// Apply background to full line width including padding

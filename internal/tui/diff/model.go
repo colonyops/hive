@@ -220,11 +220,12 @@ func (m Model) View() tea.View {
 	// Render diff viewer
 	diffViewerView := m.diffViewer.View()
 
-	// Create separator
-	separator := lipgloss.NewStyle().
-		Width(1).
-		Height(panelHeight).
-		Render(styles.TextMutedStyle.Render("│"))
+	// Create full-height gutter separator
+	gutterLines := make([]string, panelHeight)
+	for i := 0; i < panelHeight; i++ {
+		gutterLines[i] = styles.TextMutedStyle.Render("│")
+	}
+	separator := strings.Join(gutterLines, "\n")
 
 	// Apply consistent styling (no borders to avoid layout shift)
 	treeStyle := lipgloss.NewStyle().
