@@ -178,15 +178,18 @@ func TestModelDiffViewerScrolling(t *testing.T) {
 
 	// Initial scroll position
 	assert.Equal(t, 0, m.diffViewer.offset)
+	assert.Equal(t, 0, m.diffViewer.cursorLine)
 
-	// Scroll down
+	// Move cursor down - cursor moves but viewport stays if cursor is still visible
 	result, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
 	m = result.(Model)
-	assert.Equal(t, 1, m.diffViewer.offset)
+	assert.Equal(t, 1, m.diffViewer.cursorLine)
+	assert.Equal(t, 0, m.diffViewer.offset) // viewport doesn't scroll yet
 
-	// Scroll up
+	// Move cursor back up
 	result, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'k'}))
 	m = result.(Model)
+	assert.Equal(t, 0, m.diffViewer.cursorLine)
 	assert.Equal(t, 0, m.diffViewer.offset)
 }
 

@@ -67,18 +67,28 @@ func TestDiffViewerScrollDown(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
-	m.SetSize(80, 5) // Small height to force scrolling
+	m.SetSize(80, 5) // Small height to force scrolling (viewport shows lines 0-4)
 
 	// Initial position
 	assert.Equal(t, 0, m.offset)
+	assert.Equal(t, 0, m.cursorLine)
 
-	// Scroll down with 'j'
+	// Move cursor down with 'j' - cursor moves but viewport stays since cursor is still visible
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
-	assert.Equal(t, 1, m.offset)
+	assert.Equal(t, 1, m.cursorLine)
+	assert.Equal(t, 0, m.offset) // viewport doesn't need to scroll yet
 
-	// Scroll down with arrow key
-	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
-	assert.Equal(t, 2, m.offset)
+	// Move down more to reach viewport bottom (line 4)
+	for i := 0; i < 3; i++ {
+		m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
+	}
+	assert.Equal(t, 4, m.cursorLine)
+	assert.Equal(t, 0, m.offset) // still fits in viewport (0-4)
+
+	// Move down one more - now viewport must scroll
+	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'j'}))
+	assert.Equal(t, 5, m.cursorLine)
+	assert.Equal(t, 1, m.offset) // viewport scrolls to show line 5
 }
 
 func TestDiffViewerScrollUp(t *testing.T) {
@@ -103,20 +113,25 @@ func TestDiffViewerScrollUp(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
-	m.SetSize(80, 5)
-	m.offset = 5 // Start in the middle
+	m.SetSize(80, 5) // viewport shows 5 lines at a time
+	m.offset = 5     // Start in the middle (showing lines 5-9)
+	m.cursorLine = 5 // Cursor at top of viewport
 
-	// Scroll up with 'k'
+	// Move up with 'k' - cursor moves up, forcing viewport to scroll
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'k'}))
-	assert.Equal(t, 4, m.offset)
+	assert.Equal(t, 4, m.cursorLine)
+	assert.Equal(t, 4, m.offset) // viewport scrolls to keep cursor visible
 
-	// Scroll up with arrow key
+	// Move up with arrow key
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyUp}))
+	assert.Equal(t, 3, m.cursorLine)
 	assert.Equal(t, 3, m.offset)
 
 	// Can't scroll above 0
 	m.offset = 0
+	m.cursorLine = 0
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'k'}))
+	assert.Equal(t, 0, m.cursorLine)
 	assert.Equal(t, 0, m.offset)
 }
 

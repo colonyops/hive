@@ -21,6 +21,11 @@ type DiffViewerModel struct {
 	height  int
 
 	deltaAvailable bool // Whether delta is available for syntax highlighting
+
+	// Visual selection state
+	selectionMode  bool // Whether visual selection mode is active
+	selectionStart int  // Line where selection started (0-indexed, relative to file)
+	cursorLine     int  // Current cursor position (0-indexed, relative to file)
 }
 
 // NewDiffViewer creates a new diff viewer for the given file.
@@ -33,6 +38,9 @@ func NewDiffViewer(file *gitdiff.File) DiffViewerModel {
 		file:           file,
 		offset:         0,
 		deltaAvailable: deltaAvailable,
+		selectionMode:  false,
+		selectionStart: 0,
+		cursorLine:     0,
 	}
 
 	// Generate initial content
@@ -121,34 +129,73 @@ func formatRange(pos, length int64) string {
 	return strconv.FormatInt(pos, 10) + "," + strconv.FormatInt(length, 10)
 }
 
-// Update handles keyboard input for scrolling.
+// Update handles keyboard input for scrolling and visual selection.
 func (m DiffViewerModel) Update(msg tea.Msg) (DiffViewerModel, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+		maxLine := max(0, len(m.lines)-1)
 		maxOffset := max(0, len(m.lines)-m.height)
 
 		switch keyMsg.String() {
+		case "v":
+			// Toggle visual selection mode
+			if !m.selectionMode {
+				// Enter visual mode
+				m.selectionMode = true
+				m.selectionStart = m.cursorLine
+			} else {
+				// Exit visual mode
+				m.selectionMode = false
+			}
+
 		case "j", "down":
-			// Scroll down one line
-			if m.offset < maxOffset {
-				m.offset++
+			// Move cursor down one line
+			if m.cursorLine < maxLine {
+				m.cursorLine++
+				// Scroll viewport if cursor moves beyond visible area
+				if m.cursorLine >= m.offset+m.height {
+					m.offset = min(m.offset+1, maxOffset)
+				}
 			}
+
 		case "k", "up":
-			// Scroll up one line
-			if m.offset > 0 {
-				m.offset--
+			// Move cursor up one line
+			if m.cursorLine > 0 {
+				m.cursorLine--
+				// Scroll viewport if cursor moves before visible area
+				if m.cursorLine < m.offset {
+					m.offset = max(m.offset-1, 0)
+				}
 			}
+
 		case "d", "ctrl+d":
-			// Scroll down half page
-			m.offset = min(m.offset+m.height/2, maxOffset)
+			// Move cursor down half page
+			oldCursor := m.cursorLine
+			m.cursorLine = min(m.cursorLine+m.height/2, maxLine)
+			// Scroll to keep cursor in view
+			m.offset = min(m.offset+(m.cursorLine-oldCursor), maxOffset)
+
 		case "u", "ctrl+u":
-			// Scroll up half page
-			m.offset = max(m.offset-m.height/2, 0)
+			// Move cursor up half page
+			oldCursor := m.cursorLine
+			m.cursorLine = max(m.cursorLine-m.height/2, 0)
+			// Scroll to keep cursor in view
+			m.offset = max(m.offset-(oldCursor-m.cursorLine), 0)
+
 		case "g":
-			// Jump to top
+			// Jump cursor to top
+			m.cursorLine = 0
 			m.offset = 0
+
 		case "G":
-			// Jump to bottom
+			// Jump cursor to bottom
+			m.cursorLine = maxLine
 			m.offset = maxOffset
+
+		case "escape":
+			// Exit visual mode
+			if m.selectionMode {
+				m.selectionMode = false
+			}
 		}
 	}
 	return m, nil
@@ -186,6 +233,9 @@ func (m *DiffViewerModel) SetSize(width, height int) {
 func (m *DiffViewerModel) SetFile(file *gitdiff.File) {
 	m.file = file
 	m.offset = 0 // Reset scroll position
+	m.cursorLine = 0
+	m.selectionMode = false
+	m.selectionStart = 0
 	m.generateContent()
 }
 
