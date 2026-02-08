@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
@@ -150,8 +149,6 @@ Example: hive ctx prune --older-than 7d`,
 }
 
 func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
@@ -183,9 +180,9 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		if info.Mode()&os.ModeSymlink != 0 {
 			target, _ := os.Readlink(symlinkPath)
 			if target == ctxDir {
-				p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
+				fmt.Fprintf(os.Stderr, "Symlink already exists: %s -> %s\n", symlinkName, ctxDir)
 				if len(createdSubdirs) > 0 {
-					p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
+					fmt.Fprintf(os.Stderr, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
 				}
 				return nil
 			}
@@ -198,16 +195,14 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("create symlink: %w", err)
 	}
 
-	p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
+	fmt.Fprintf(os.Stderr, "Created symlink: %s -> %s\n", symlinkName, ctxDir)
 	if len(createdSubdirs) > 0 {
-		p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
+		fmt.Fprintf(os.Stderr, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
 	}
 	return nil
 }
 
 func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
@@ -224,7 +219,7 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 	entries, err := os.ReadDir(ctxDir)
 	if err != nil {
 		if os.IsNotExist(err) {
-			p.Infof("Context directory does not exist")
+			fmt.Fprintf(os.Stderr, "Context directory does not exist\n")
 			return nil
 		}
 		return fmt.Errorf("read directory: %w", err)
@@ -239,14 +234,14 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 		if info.ModTime().Before(cutoff) {
 			path := filepath.Join(ctxDir, entry.Name())
 			if err := os.RemoveAll(path); err != nil {
-				p.Warnf("Failed to remove %s: %v", entry.Name(), err)
+				fmt.Fprintf(os.Stderr, "Failed to remove %s: %v\n", entry.Name(), err)
 				continue
 			}
 			count++
 		}
 	}
 
-	p.Successf("Removed %d file(s) older than %s", count, cmd.olderThan)
+	fmt.Fprintf(os.Stderr, "Removed %d file(s) older than %s\n", count, cmd.olderThan)
 	return nil
 }
 

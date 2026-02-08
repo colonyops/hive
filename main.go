@@ -148,9 +148,9 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Create service
 			var (
-				exec       = &executil.RealExecutor{}
-				gitExec    = git.NewExecutor(cfg.GitPath, exec)
-				svcLogger  = log.With().Str("component", "hive").Logger()
+				exec      = &executil.RealExecutor{}
+				gitExec   = git.NewExecutor(cfg.GitPath, exec)
+				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
 			flags.Service = hive.New(sessionStore, gitExec, cfg, exec, svcLogger, os.Stdout, os.Stderr)
