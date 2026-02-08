@@ -211,8 +211,9 @@ func TestModelSetSize(t *testing.T) {
 	expectedDiffWidth := 120 - expectedTreeWidth - 1
 	assert.Equal(t, expectedDiffWidth, m.diffViewer.width)
 
-	// Both should get height minus status bar
-	expectedHeight := 50 - 1
+	// Both should get height minus headers and status bar
+	// height - unified header (3) - sub header (1) - status bar (1)
+	expectedHeight := 50 - 3 - 1 - 1
 	assert.Equal(t, expectedHeight, m.fileTree.height)
 	assert.Equal(t, expectedHeight, m.diffViewer.height)
 }

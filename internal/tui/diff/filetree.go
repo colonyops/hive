@@ -186,28 +186,6 @@ func (m *FileTreeModel) collectVisible(node *TreeNode) {
 	}
 }
 
-// adjustViewport adjusts the scroll offset to keep the selected item visible.
-func (m *FileTreeModel) adjustViewport() {
-	if m.height <= 0 {
-		return
-	}
-
-	// Scroll down if selected is below viewport
-	if m.selected >= m.offset+m.height {
-		m.offset = m.selected - m.height + 1
-	}
-
-	// Scroll up if selected is above viewport
-	if m.selected < m.offset {
-		m.offset = m.selected
-	}
-
-	// Ensure offset is valid
-	if m.offset < 0 {
-		m.offset = 0
-	}
-}
-
 // Update handles key messages for file tree navigation.
 func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
@@ -215,12 +193,18 @@ func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 		case "j", "down":
 			if m.selected < len(m.visible)-1 {
 				m.selected++
-				m.adjustViewport()
+				// Adjust viewport to keep selection visible
+				if m.height > 0 && m.selected >= m.offset+m.height {
+					m.offset = m.selected - m.height + 1
+				}
 			}
 		case "k", "up":
 			if m.selected > 0 {
 				m.selected--
-				m.adjustViewport()
+				// Adjust viewport to keep selection visible
+				if m.height > 0 && m.selected < m.offset {
+					m.offset = m.selected
+				}
 			}
 		case "g":
 			// Jump to top
@@ -230,7 +214,10 @@ func (m FileTreeModel) Update(msg tea.Msg) (FileTreeModel, tea.Cmd) {
 			// Jump to bottom
 			if len(m.visible) > 0 {
 				m.selected = len(m.visible) - 1
-				m.adjustViewport()
+				// Adjust viewport to show last item
+				if m.height > 0 && m.selected >= m.offset+m.height {
+					m.offset = m.selected - m.height + 1
+				}
 			}
 		case "enter", "right", " ":
 			// Expand/collapse directory or select file

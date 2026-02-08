@@ -391,9 +391,13 @@ func (m *Model) SetSize(width, height int) {
 	m.height = height
 
 	// Calculate panel dimensions (same logic as View)
+	headerHeight := 3       // unified header
+	subHeaderHeight := 1    // panel titles
+	statusBarHeight := 1    // status bar
+
 	treeWidth := width * 30 / 100
 	diffWidth := width - treeWidth - 1
-	panelHeight := height - 1
+	panelHeight := height - headerHeight - subHeaderHeight - statusBarHeight
 
 	// Update child components
 	m.fileTree.SetSize(treeWidth, panelHeight)
