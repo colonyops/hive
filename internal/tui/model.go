@@ -79,7 +79,7 @@ type PendingCreate struct {
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
 	cfg            *config.Config
-	service        *hive.Service
+	service        *hive.SessionService
 	cmdService     *command.Service
 	list           list.Model
 	handler        *KeybindingResolver
@@ -218,7 +218,7 @@ type pluginWorkerStartedMsg struct {
 }
 
 // New creates a new TUI model.
-func New(service *hive.Service, cfg *config.Config, opts Options) Model {
+func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	gitStatuses := kv.New[string, GitStatus]()
 	terminalStatuses := kv.New[string, TerminalStatus]()
 	columnWidths := &ColumnWidths{}

@@ -163,7 +163,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				logger  = log.With().Str("component", "hive").Logger()
 			)
 
-			flags.Service = hive.New(sessionStore, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
+			flags.Service = hive.NewSessionService(sessionStore, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
 
 			// Create plugin manager and register plugins
 			pluginMgr := plugins.NewManager(cfg.Plugins)

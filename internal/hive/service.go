@@ -27,8 +27,8 @@ type CreateOptions struct {
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
 }
 
-// Service orchestrates hive operations.
-type Service struct {
+// SessionService orchestrates hive session operations.
+type SessionService struct {
 	sessions   session.Store
 	git        git.Git
 	config     *config.Config
@@ -40,16 +40,16 @@ type Service struct {
 	fileCopier *FileCopier
 }
 
-// New creates a new Service.
-func New(
+// NewSessionService creates a new SessionService.
+func NewSessionService(
 	sessions session.Store,
 	gitClient git.Git,
 	cfg *config.Config,
 	exec executil.Executor,
 	log zerolog.Logger,
 	stdout, stderr io.Writer,
-) *Service {
-	return &Service{
+) *SessionService {
+	return &SessionService{
 		sessions:   sessions,
 		git:        gitClient,
 		config:     cfg,
@@ -63,7 +63,7 @@ func New(
 }
 
 // CreateSession creates a new session or recycles an existing one.
-func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*session.Session, error) {
+func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) (*session.Session, error) {
 	s.log.Info().Str("name", opts.Name).Str("remote", opts.Remote).Msg("creating session")
 
 	remote := opts.Remote
@@ -176,19 +176,19 @@ func (s *Service) CreateSession(ctx context.Context, opts CreateOptions) (*sessi
 }
 
 // ListSessions returns all sessions.
-func (s *Service) ListSessions(ctx context.Context) ([]session.Session, error) {
+func (s *SessionService) ListSessions(ctx context.Context) ([]session.Session, error) {
 	return s.sessions.List(ctx)
 }
 
 // GetSession returns a session by ID.
-func (s *Service) GetSession(ctx context.Context, id string) (session.Session, error) {
+func (s *SessionService) GetSession(ctx context.Context, id string) (session.Session, error) {
 	return s.sessions.Get(ctx, id)
 }
 
 // RecycleSession marks a session for recycling and runs recycle commands.
 // The directory is renamed to a recycled name pattern immediately.
 // Output is written to w. If w is nil, output is discarded.
-func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) error {
+func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Writer) error {
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
@@ -246,7 +246,7 @@ func (s *Service) RecycleSession(ctx context.Context, id string, w io.Writer) er
 }
 
 // DeleteSession removes a session and its directory.
-func (s *Service) DeleteSession(ctx context.Context, id string) error {
+func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
@@ -270,7 +270,7 @@ func (s *Service) DeleteSession(ctx context.Context, id string) error {
 // Prune removes recycled and corrupted sessions and their directories.
 // If all is true, deletes ALL recycled sessions.
 // If all is false, respects max_recycled limit per repository (keeps newest N).
-func (s *Service) Prune(ctx context.Context, all bool) (int, error) {
+func (s *SessionService) Prune(ctx context.Context, all bool) (int, error) {
 	s.log.Info().Bool("all", all).Msg("pruning sessions")
 
 	sessions, err := s.sessions.List(ctx)
@@ -317,7 +317,7 @@ func (s *Service) Prune(ctx context.Context, all bool) (int, error) {
 }
 
 // pruneExcessRecycled deletes recycled sessions exceeding max_recycled per repository.
-func (s *Service) pruneExcessRecycled(ctx context.Context, sessions []session.Session) (int, error) {
+func (s *SessionService) pruneExcessRecycled(ctx context.Context, sessions []session.Session) (int, error) {
 	// Group recycled sessions by remote
 	byRemote := make(map[string][]session.Session)
 	for _, sess := range sessions {
@@ -352,12 +352,12 @@ func (s *Service) pruneExcessRecycled(ctx context.Context, sessions []session.Se
 }
 
 // DetectRemote gets the git remote URL from the specified directory.
-func (s *Service) DetectRemote(ctx context.Context, dir string) (string, error) {
+func (s *SessionService) DetectRemote(ctx context.Context, dir string) (string, error) {
 	return s.git.RemoteURL(ctx, dir)
 }
 
 // Git returns the git client for use in background operations.
-func (s *Service) Git() git.Git {
+func (s *SessionService) Git() git.Git {
 	return s.git
 }
 
@@ -368,7 +368,7 @@ func generateID() string {
 
 // findValidRecyclable finds a recyclable session and validates it.
 // Returns nil if none found or all candidates are corrupted.
-func (s *Service) findValidRecyclable(ctx context.Context, remote string) *session.Session {
+func (s *SessionService) findValidRecyclable(ctx context.Context, remote string) *session.Session {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
 		s.log.Warn().Err(err).Msg("failed to list sessions")
@@ -397,7 +397,7 @@ func (s *Service) findValidRecyclable(ctx context.Context, remote string) *sessi
 }
 
 // markCorrupted marks a session as corrupted and optionally deletes it.
-func (s *Service) markCorrupted(ctx context.Context, sess *session.Session) {
+func (s *SessionService) markCorrupted(ctx context.Context, sess *session.Session) {
 	sess.MarkCorrupted(time.Now())
 
 	if s.config.AutoDeleteCorrupted {
@@ -417,7 +417,7 @@ func (s *Service) markCorrupted(ctx context.Context, sess *session.Session) {
 }
 
 // executeRules executes all rules matching the remote URL.
-func (s *Service) executeRules(ctx context.Context, remote, source, dest string) error {
+func (s *SessionService) executeRules(ctx context.Context, remote, source, dest string) error {
 	for _, rule := range s.config.Rules {
 		matched, err := matchRemotePattern(rule.Pattern, remote)
 		if err != nil {
@@ -451,7 +451,7 @@ func (s *Service) executeRules(ctx context.Context, remote, source, dest string)
 }
 
 // enforceMaxRecycled deletes oldest recycled sessions for a remote when limit is exceeded.
-func (s *Service) enforceMaxRecycled(ctx context.Context, remote string) error {
+func (s *SessionService) enforceMaxRecycled(ctx context.Context, remote string) error {
 	limit := s.config.GetMaxRecycled(remote)
 	if limit == 0 {
 		// Unlimited

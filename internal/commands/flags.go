@@ -23,7 +23,7 @@ type Flags struct {
 	Config *config.Config
 
 	// Service is the hive service for orchestrating operations
-	Service *hive.Service
+	Service *hive.SessionService
 
 	// Store is the session store for direct access (used by doctor checks)
 	Store session.Store
