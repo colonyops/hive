@@ -104,11 +104,11 @@ func (m FinalizationModal) View() string {
 		content.WriteString("\n")
 
 		// Description in gray
-		content.WriteString("  " + styles.ReviewFinalizeDescStyle.Render(opt.description) + "\n\n")
+		content.WriteString("  " + styles.TextMutedStyle.Render(opt.description) + "\n\n")
 	}
 
 	content.WriteString("\n")
-	content.WriteString(styles.ReviewFinalizeHelpStyle.Render("[j/k] select • [enter] confirm • [esc] cancel"))
+	content.WriteString(styles.TextMutedStyle.Render("[j/k] select • [enter] confirm • [esc] cancel"))
 
 	// Style the modal
 	modalContent := content.String()

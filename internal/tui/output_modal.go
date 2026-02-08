@@ -118,9 +118,9 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	case m.running:
 		status = m.spinner.View() + " Running..."
 	case m.err != nil:
-		status = styles.OutputErrorStyle.Render("✗ Error: " + m.err.Error())
+		status = styles.TextErrorStyle.Render("✗ Error: " + m.err.Error())
 	default:
-		status = styles.OutputSuccessStyle.Render("✓ Complete")
+		status = styles.TextSuccessStyle.Render("✓ Complete")
 	}
 
 	// Build help line
@@ -136,7 +136,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		lipgloss.Left,
 		styles.ModalTitleStyle.Render(m.title),
 		"",
-		styles.OutputContentStyle.Width(modalWidth-outputModalPadding).Render(content),
+		styles.TextMutedStyle.Width(modalWidth-outputModalPadding).Render(content),
 		"",
 		status,
 		styles.ModalHelpStyle.Render(help),

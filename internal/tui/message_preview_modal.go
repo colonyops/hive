@@ -129,8 +129,8 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 		sender = unknownViewType
 	}
 	topicStr := styles.PreviewTopicStyle.Render(fmt.Sprintf("[%s]", m.message.Topic))
-	senderStr := styles.PreviewSenderStyle.Render(sender)
-	timeStr := styles.PreviewTimeStyle.Render(m.message.CreatedAt.Format("2006-01-02 15:04:05"))
+	senderStr := styles.TextSuccessStyle.Render(sender)
+	timeStr := styles.TextMutedStyle.Render(m.message.CreatedAt.Format("2006-01-02 15:04:05"))
 	metadata := fmt.Sprintf("%s %s %s %s", topicStr, senderStr, iconDot, timeStr)
 
 	// Add session ID if present
@@ -142,17 +142,17 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	// Build scroll indicator
 	scrollInfo := ""
 	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
-		scrollInfo = styles.PreviewScrollStyle.Render(fmt.Sprintf(" (%.0f%%)", m.viewport.ScrollPercent()*100))
+		scrollInfo = styles.TextMutedStyle.Render(fmt.Sprintf(" (%.0f%%)", m.viewport.ScrollPercent()*100))
 	}
 
 	// Build help line with copy status
 	helpText := "[↑/↓/j/k] scroll  [c] copy  [enter/esc] close"
 	if m.copyStatus != "" {
-		helpText = styles.PreviewCopiedStyle.Render(m.copyStatus)
+		helpText = styles.TextSuccessStyle.Render(m.copyStatus)
 	}
 
 	// Assemble modal content
-	divider := styles.PreviewDividerStyle.Render("────────────────────────────────────────")
+	divider := styles.TextSurfaceStyle.Render("────────────────────────────────────────")
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
 		styles.ModalTitleStyle.Render("Message Preview"+scrollInfo),

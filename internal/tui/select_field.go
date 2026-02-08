@@ -45,7 +45,7 @@ func (d selectItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	isSelected := index == m.Index()
 
 	// Style for selected vs unselected
-	style := styles.SelectFieldItemStyle
+	style := styles.TextForegroundStyle
 	cursor := "  "
 	if isSelected {
 		style = styles.SelectFieldItemSelectedStyle
@@ -157,7 +157,7 @@ func (s *SelectField) KeyMap() []key.Binding {
 // View renders the select field.
 func (s SelectField) View() string {
 	// Title style based on focus
-	titleStyle := styles.FormTitleBlurredStyle
+	titleStyle := styles.TextMutedStyle
 	if s.focused {
 		titleStyle = styles.FormTitleStyle
 	}

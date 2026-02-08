@@ -621,12 +621,12 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 // renderGitStatus returns the formatted git status for a session path.
 func (d TreeDelegate) renderGitStatus(path string) string {
 	if d.GitStatuses == nil {
-		return styles.GitLoadingStyle.Render(" ...")
+		return styles.TextMutedStyle.Render(" ...")
 	}
 
 	status, ok := d.GitStatuses.Get(path)
 	if !ok || status.IsLoading {
-		return styles.GitLoadingStyle.Render(" ...")
+		return styles.TextMutedStyle.Render(" ...")
 	}
 
 	if status.Error != nil {
@@ -641,21 +641,21 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 	} else {
 		branch = d.Styles.SessionBranch.Render(" (" + status.Branch + ")")
 	}
-	additions := styles.GitAdditionsStyle.Render(fmt.Sprintf(" +%d", status.Additions))
-	deletions := styles.GitDeletionsStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
+	additions := styles.TextSuccessStyle.Render(fmt.Sprintf(" +%d", status.Additions))
+	deletions := styles.TextErrorStyle.Render(fmt.Sprintf(" -%d", status.Deletions))
 
 	var indicator string
 	if d.IconsEnabled {
 		// With icons: show yellow git icon for uncommitted, nothing for clean
 		if status.HasChanges {
-			indicator = styles.GitDirtyStyle.Render(" " + styles.IconGit)
+			indicator = styles.TextWarningStyle.Render(" " + styles.IconGit)
 		}
 	} else {
 		// Without icons: show text indicator
 		if status.HasChanges {
-			indicator = styles.GitDirtyStyle.Render(" • uncommitted")
+			indicator = styles.TextWarningStyle.Render(" • uncommitted")
 		} else {
-			indicator = styles.GitCleanStyle.Render(" • clean")
+			indicator = styles.TextMutedStyle.Render(" • clean")
 		}
 	}
 

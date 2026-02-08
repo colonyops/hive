@@ -286,7 +286,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 
 	// Selection indicator
 	if selected {
-		b.WriteString(styles.SelectedBorderStyle.Render("┃"))
+		b.WriteString(styles.TextPrimaryStyle.Render("┃"))
 		b.WriteString(" ")
 	} else {
 		b.WriteString("  ")

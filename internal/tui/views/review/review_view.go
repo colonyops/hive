@@ -1541,7 +1541,7 @@ func DefaultReviewTreeDelegateStyles() ReviewTreeDelegateStyles {
 		DocName:        styles.TextForegroundStyle,
 		DocMeta:        styles.TextMutedStyle,
 		Selected:       styles.TextPrimaryBoldStyle,
-		SelectedBorder: styles.ReviewTreeSelectedBorderStyle,
+		SelectedBorder: styles.TextPrimaryStyle,
 	}
 }
 

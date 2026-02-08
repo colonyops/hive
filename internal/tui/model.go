@@ -299,7 +299,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = styles.SpinnerStyle // blue, lipgloss v1 for bubbles v1
+	s.Style = styles.TextPrimaryStyle
 
 	// Create message view
 	msgView := NewMessagesView()
@@ -2185,7 +2185,7 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	}
 	previewContent = strings.Join(previewLines, "\n")
 	previewContent = ensureExactWidth(previewContent, previewWidth)
-	previewContent = styles.PreviewContentStyle.Render(previewContent)
+	previewContent = styles.TextForegroundStyle.Render(previewContent)
 
 	// Create vertical divider between list and preview
 	dividerLines := make([]string, contentHeight)
@@ -2204,13 +2204,13 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 
 	// Styles
 	nameStyle := styles.PreviewHeaderNameStyle
-	separatorStyle := styles.PreviewHeaderSeparatorStyle
-	idStyle := styles.PreviewHeaderIDStyle
-	branchStyle := styles.PreviewHeaderBranchStyle
-	addStyle := styles.PreviewHeaderAddStyle
-	delStyle := styles.PreviewHeaderDelStyle
-	dirtyStyle := styles.PreviewHeaderDirtyStyle
-	dividerStyle := styles.PreviewHeaderDividerStyle
+	separatorStyle := styles.TextMutedStyle
+	idStyle := styles.TextSecondaryStyle
+	branchStyle := styles.TextSecondaryStyle
+	addStyle := styles.TextSuccessStyle
+	delStyle := styles.TextErrorStyle
+	dirtyStyle := styles.TextWarningStyle
+	dividerStyle := styles.TextMutedStyle
 
 	divider := strings.Repeat("─", maxWidth)
 
@@ -2222,7 +2222,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	title := nameStyle.Render(sess.Name)
 	// Show window name if a specific window is selected
 	if ws := m.selectedWindowStatus(); ws != nil {
-		title += " " + styles.PreviewHeaderWindowStyle.Render("["+ws.WindowName+"]")
+		title += " " + styles.TextSecondaryStyle.Render("["+ws.WindowName+"]")
 	}
 	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
 

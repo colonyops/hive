@@ -27,11 +27,8 @@ var (
 var (
 	// CLI styles.
 	CommandHeaderStyle lipgloss.Style
-	CommandStyle       lipgloss.Style
-	DividerStyle       lipgloss.Style
 
 	// TUI shared styles.
-	SelectedBorderStyle      lipgloss.Style
 	ModalStyle               lipgloss.Style
 	ModalTitleStyle          lipgloss.Style
 	ModalHelpStyle           lipgloss.Style
@@ -40,38 +37,20 @@ var (
 	TextMutedStyle           lipgloss.Style
 	TextPrimaryStyle         lipgloss.Style
 	TextPrimaryBoldStyle     lipgloss.Style
+	TextSecondaryStyle       lipgloss.Style
 	TextForegroundStyle      lipgloss.Style
 	TextForegroundBoldStyle  lipgloss.Style
+	TextSuccessStyle         lipgloss.Style
+	TextWarningStyle         lipgloss.Style
+	TextErrorStyle           lipgloss.Style
+	TextSurfaceStyle         lipgloss.Style
 
 	ViewSelectedStyle lipgloss.Style
 	ViewNormalStyle   lipgloss.Style
 
-	GitAdditionsStyle lipgloss.Style
-	GitDeletionsStyle lipgloss.Style
-	GitCleanStyle     lipgloss.Style
-	GitDirtyStyle     lipgloss.Style
-	GitLoadingStyle   lipgloss.Style
-
 	FormTitleStyle        lipgloss.Style
-	FormTitleBlurredStyle lipgloss.Style
 	FormFieldStyle        lipgloss.Style
 	FormFieldFocusedStyle lipgloss.Style
-	FormErrorStyle        lipgloss.Style
-	FormHelpStyle         lipgloss.Style
-
-	// Message preview modal styles.
-	PreviewTopicStyle   lipgloss.Style
-	PreviewSenderStyle  lipgloss.Style
-	PreviewTimeStyle    lipgloss.Style
-	PreviewSessionStyle lipgloss.Style
-	PreviewDividerStyle lipgloss.Style
-	PreviewScrollStyle  lipgloss.Style
-	PreviewCopiedStyle  lipgloss.Style
-
-	// Output modal styles.
-	OutputContentStyle lipgloss.Style
-	OutputErrorStyle   lipgloss.Style
-	OutputSuccessStyle lipgloss.Style
 
 	// Help dialog styles.
 	HelpDialogSectionStyle lipgloss.Style
@@ -89,8 +68,6 @@ var (
 
 	// Review finalize modal styles.
 	ReviewFinalizeOptionStyle lipgloss.Style
-	ReviewFinalizeDescStyle   lipgloss.Style
-	ReviewFinalizeHelpStyle   lipgloss.Style
 	ReviewFinalizeModalStyle  lipgloss.Style
 
 	// Review view styles.
@@ -112,7 +89,6 @@ var (
 
 	ReviewTreeHeaderStyle         lipgloss.Style
 	ReviewTreeHeaderSelectedStyle lipgloss.Style
-	ReviewTreeSelectedBorderStyle lipgloss.Style
 
 	// Messages view styles.
 	MessagesHelpStyle            lipgloss.Style
@@ -123,24 +99,15 @@ var (
 	CommandPaletteMoreStyle         lipgloss.Style
 
 	// Select field styles.
-	SelectFieldItemStyle         lipgloss.Style
 	SelectFieldItemSelectedStyle lipgloss.Style
 
 	// TUI layout styles.
-	ListFilterPromptStyle       lipgloss.Style
-	ListHelpContainerStyle      lipgloss.Style
-	SpinnerStyle                lipgloss.Style
-	TabBrandingStyle            lipgloss.Style
-	PreviewContentStyle         lipgloss.Style
-	PreviewHeaderNameStyle      lipgloss.Style
-	PreviewHeaderSeparatorStyle lipgloss.Style
-	PreviewHeaderIDStyle        lipgloss.Style
-	PreviewHeaderBranchStyle    lipgloss.Style
-	PreviewHeaderAddStyle       lipgloss.Style
-	PreviewHeaderDelStyle       lipgloss.Style
-	PreviewHeaderDirtyStyle     lipgloss.Style
-	PreviewHeaderWindowStyle    lipgloss.Style
-	PreviewHeaderDividerStyle   lipgloss.Style
+	ListFilterPromptStyle  lipgloss.Style
+	ListHelpContainerStyle lipgloss.Style
+	TabBrandingStyle       lipgloss.Style
+	PreviewHeaderNameStyle lipgloss.Style
+	PreviewTopicStyle      lipgloss.Style
+	PreviewSessionStyle    lipgloss.Style
 )
 
 // ColorPool is used for deterministic color hashing of topics and senders.
@@ -163,13 +130,6 @@ func SetTheme(p Palette) {
 	CommandHeaderStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
 		Bold(true)
-	CommandStyle = lipgloss.NewStyle().
-		Foreground(ColorForeground)
-	DividerStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-
-	SelectedBorderStyle = lipgloss.NewStyle().
-		Foreground(ColorPrimary)
 
 	ModalStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
@@ -198,11 +158,21 @@ func SetTheme(p Palette) {
 	TextPrimaryBoldStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
 		Bold(true)
+	TextSecondaryStyle = lipgloss.NewStyle().
+		Foreground(ColorSecondary)
 	TextForegroundStyle = lipgloss.NewStyle().
 		Foreground(ColorForeground)
 	TextForegroundBoldStyle = lipgloss.NewStyle().
 		Foreground(ColorForeground).
 		Bold(true)
+	TextSuccessStyle = lipgloss.NewStyle().
+		Foreground(ColorSuccess)
+	TextWarningStyle = lipgloss.NewStyle().
+		Foreground(ColorWarning)
+	TextErrorStyle = lipgloss.NewStyle().
+		Foreground(ColorError)
+	TextSurfaceStyle = lipgloss.NewStyle().
+		Foreground(ColorSurface)
 
 	ViewSelectedStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
@@ -210,17 +180,9 @@ func SetTheme(p Palette) {
 	ViewNormalStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted)
 
-	GitAdditionsStyle = lipgloss.NewStyle().Foreground(ColorSuccess)
-	GitDeletionsStyle = lipgloss.NewStyle().Foreground(ColorError)
-	GitCleanStyle = lipgloss.NewStyle().Foreground(ColorMuted)
-	GitDirtyStyle = lipgloss.NewStyle().Foreground(ColorWarning)
-	GitLoadingStyle = lipgloss.NewStyle().Foreground(ColorMuted)
-
 	FormTitleStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
 		Bold(true)
-	FormTitleBlurredStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
 	FormFieldStyle = lipgloss.NewStyle().
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(ColorMuted).
@@ -229,34 +191,6 @@ func SetTheme(p Palette) {
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(ColorPrimary).
 		PaddingLeft(1)
-	FormErrorStyle = lipgloss.NewStyle().
-		Foreground(ColorError)
-	FormHelpStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-
-	PreviewTopicStyle = lipgloss.NewStyle().
-		Foreground(ColorPrimary).
-		Bold(true)
-	PreviewSenderStyle = lipgloss.NewStyle().
-		Foreground(ColorSuccess)
-	PreviewTimeStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-	PreviewSessionStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted).
-		Italic(true)
-	PreviewDividerStyle = lipgloss.NewStyle().
-		Foreground(ColorSurface)
-	PreviewScrollStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-	PreviewCopiedStyle = lipgloss.NewStyle().
-		Foreground(ColorSuccess)
-
-	OutputContentStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-	OutputErrorStyle = lipgloss.NewStyle().
-		Foreground(ColorError)
-	OutputSuccessStyle = lipgloss.NewStyle().
-		Foreground(ColorSuccess)
 
 	HelpDialogSectionStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).
@@ -291,10 +225,6 @@ func SetTheme(p Palette) {
 	ReviewFinalizeOptionStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
 		Bold(true)
-	ReviewFinalizeDescStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-	ReviewFinalizeHelpStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
 	ReviewFinalizeModalStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
@@ -363,8 +293,6 @@ func SetTheme(p Palette) {
 	ReviewTreeHeaderSelectedStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorPrimary)
-	ReviewTreeSelectedBorderStyle = lipgloss.NewStyle().
-		Foreground(ColorPrimary)
 
 	MessagesHelpStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).
@@ -380,8 +308,6 @@ func SetTheme(p Palette) {
 		Foreground(ColorMuted).
 		Italic(true)
 
-	SelectFieldItemStyle = lipgloss.NewStyle().
-		Foreground(ColorForeground)
 	SelectFieldItemSelectedStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
 		Bold(true)
@@ -392,33 +318,19 @@ func SetTheme(p Palette) {
 		Bold(true)
 	ListHelpContainerStyle = lipgloss.NewStyle().
 		PaddingLeft(1)
-	SpinnerStyle = lipgloss.NewStyle().
-		Foreground(ColorPrimary)
 	TabBrandingStyle = lipgloss.NewStyle().
 		Background(ColorSurface).
 		Foreground(ColorForeground).
 		Padding(0, 1)
-	PreviewContentStyle = lipgloss.NewStyle().
-		Foreground(ColorForeground)
 	PreviewHeaderNameStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorPrimary)
-	PreviewHeaderSeparatorStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
-	PreviewHeaderIDStyle = lipgloss.NewStyle().
-		Foreground(ColorSecondary)
-	PreviewHeaderBranchStyle = lipgloss.NewStyle().
-		Foreground(ColorSecondary)
-	PreviewHeaderAddStyle = lipgloss.NewStyle().
-		Foreground(ColorSuccess)
-	PreviewHeaderDelStyle = lipgloss.NewStyle().
-		Foreground(ColorError)
-	PreviewHeaderDirtyStyle = lipgloss.NewStyle().
-		Foreground(ColorWarning)
-	PreviewHeaderWindowStyle = lipgloss.NewStyle().
-		Foreground(ColorSecondary)
-	PreviewHeaderDividerStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted)
+	PreviewTopicStyle = lipgloss.NewStyle().
+		Foreground(ColorPrimary).
+		Bold(true)
+	PreviewSessionStyle = lipgloss.NewStyle().
+		Foreground(ColorMuted).
+		Italic(true)
 
 	ColorPool = []color.Color{
 		ColorPrimary,

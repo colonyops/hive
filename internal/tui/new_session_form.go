@@ -196,7 +196,7 @@ func (f *NewSessionForm) View() string {
 	repoView := f.repoSelect.View()
 
 	// Name input section - title integrated into bordered area
-	nameTitleStyle := styles.FormTitleBlurredStyle
+	nameTitleStyle := styles.TextMutedStyle
 	if f.focusedField == 1 {
 		nameTitleStyle = styles.FormTitleStyle
 	}
@@ -207,7 +207,7 @@ func (f *NewSessionForm) View() string {
 
 	// Add error inside the bordered area if present
 	if f.nameError != "" {
-		errorView := styles.FormErrorStyle.Render(f.nameError)
+		errorView := styles.TextErrorStyle.Render(f.nameError)
 		nameContent = lipgloss.JoinVertical(lipgloss.Left, nameContent, errorView)
 	}
 
@@ -219,7 +219,7 @@ func (f *NewSessionForm) View() string {
 	nameSection := inputBorderStyle.Render(nameContent)
 
 	// Help text
-	helpText := styles.FormHelpStyle.Render("tab: switch fields • enter: submit • esc: cancel")
+	helpText := styles.TextMutedStyle.Render("tab: switch fields • enter: submit • esc: cancel")
 
 	return lipgloss.JoinVertical(
 		lipgloss.Left,
