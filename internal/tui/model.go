@@ -79,7 +79,7 @@ type PendingCreate struct {
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
 	cfg            *config.Config
-	service        *hive.Service
+	service        SessionLister
 	cmdService     *command.Service
 	list           list.Model
 	handler        *KeybindingResolver
