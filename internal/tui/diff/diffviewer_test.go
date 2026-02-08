@@ -6,7 +6,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/charmbracelet/x/exp/golden"
-	"github.com/hay-kot/hive/pkg/tuitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -355,7 +354,8 @@ func TestDiffViewerView_NormalMode(t *testing.T) {
 	m := NewDiffViewer(file)
 	m.SetSize(80, 10)
 
-	output := tuitest.StripANSI(m.View())
+	// Keep ANSI codes to verify styling
+	output := m.View()
 	golden.RequireEqual(t, []byte(output))
 }
 
@@ -386,7 +386,8 @@ func TestDiffViewerView_CursorHighlight(t *testing.T) {
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 
-	output := tuitest.StripANSI(m.View())
+	// Keep ANSI codes to verify styling
+	output := m.View()
 	golden.RequireEqual(t, []byte(output))
 }
 
@@ -418,7 +419,8 @@ func TestDiffViewerView_SingleLineSelection(t *testing.T) {
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: 'v'}))
 
-	output := tuitest.StripANSI(m.View())
+	// Keep ANSI codes to verify styling
+	output := m.View()
 	golden.RequireEqual(t, []byte(output))
 }
 
@@ -456,7 +458,8 @@ func TestDiffViewerView_MultiLineSelection(t *testing.T) {
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 
-	output := tuitest.StripANSI(m.View())
+	// Keep ANSI codes to verify styling
+	output := m.View()
 	golden.RequireEqual(t, []byte(output))
 }
 
@@ -491,6 +494,7 @@ func TestDiffViewerView_SelectionAcrossAdditions(t *testing.T) {
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 	m, _ = m.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyDown}))
 
-	output := tuitest.StripANSI(m.View())
+	// Keep ANSI codes to verify styling
+	output := m.View()
 	golden.RequireEqual(t, []byte(output))
 }
