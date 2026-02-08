@@ -1419,6 +1419,10 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
 		}
+		// Handle set-theme action (requires args only available via command palette)
+		if action.Type == ActionTypeSetTheme {
+			return m, nil
+		}
 		// Handle filter actions
 		if m.handleFilterAction(action.Type) {
 			return m.applyFilter()
