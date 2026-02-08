@@ -3,9 +3,9 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
@@ -47,8 +47,6 @@ Active sessions are not affected.`,
 }
 
 func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	all := c.Bool("all")
 	count, err := cmd.app.Sessions.Prune(ctx, all)
 	if err != nil {
@@ -57,14 +55,14 @@ func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
 
 	if count == 0 {
 		if all {
-			p.Infof("No recycled sessions to prune")
+			fmt.Fprintf(os.Stderr, "No recycled sessions to prune\n")
 		} else {
-			p.Infof("No sessions exceed max_recycled limit")
+			fmt.Fprintf(os.Stderr, "No sessions exceed max_recycled limit\n")
 		}
 		return nil
 	}
 
-	p.Successf("Pruned %d session(s)", count)
+	fmt.Fprintf(os.Stderr, "Pruned %d session(s)\n", count)
 
 	return nil
 }

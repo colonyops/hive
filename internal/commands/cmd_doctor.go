@@ -2,11 +2,11 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"os"
 
 	"github.com/hay-kot/hive/internal/core/doctor"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
@@ -78,35 +78,40 @@ type summaryJSON struct {
 	Failed int `json:"failed"`
 }
 
-func (cmd *DoctorCmd) outputText(ctx context.Context, results []doctor.Result) error {
-	p := printer.Ctx(ctx)
+func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) error {
+	w := os.Stderr
 
 	for _, result := range results {
-		p.Section(result.Name)
+		_, _ = fmt.Fprintf(w, "%s\n", result.Name)
 
 		for _, item := range result.Items {
+			detail := ""
+			if item.Detail != "" {
+				detail = ": " + item.Detail
+			}
+
 			switch item.Status {
 			case doctor.StatusPass:
-				p.CheckItem(item.Label, item.Detail)
+				_, _ = fmt.Fprintf(w, "  ✔ %s%s\n", item.Label, detail)
 			case doctor.StatusWarn:
-				p.WarnItem(item.Label, item.Detail)
+				_, _ = fmt.Fprintf(w, "  • %s%s\n", item.Label, detail)
 			case doctor.StatusFail:
-				p.FailItem(item.Label, item.Detail)
+				_, _ = fmt.Fprintf(w, "  ✘ %s%s\n", item.Label, detail)
 			}
 		}
 
-		p.Printf("")
+		_, _ = fmt.Fprintln(w)
 	}
 
 	passed, warned, failed := doctor.Summary(results)
-	p.Printf("Summary: %d passed, %d warnings, %d failed", passed, warned, failed)
+	_, _ = fmt.Fprintf(w, "Summary: %d passed, %d warnings, %d failed\n", passed, warned, failed)
 
 	// Show hint if there are fixable issues and autofix wasn't used
 	if !cmd.autofix {
 		fixable := doctor.CountFixable(results)
 		if fixable > 0 {
-			p.Printf("")
-			p.Printf("Run 'hive doctor --autofix' to fix %d issue(s)", fixable)
+			_, _ = fmt.Fprintln(w)
+			_, _ = fmt.Fprintf(w, "Run 'hive doctor --autofix' to fix %d issue(s)\n", fixable)
 		}
 	}
 

@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
@@ -151,8 +150,6 @@ Example: hive ctx prune --older-than 7d`,
 }
 
 func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
@@ -170,20 +167,18 @@ func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
 
 	symlinkName := cmd.app.Config.Context.SymlinkName
 	if alreadyExists {
-		p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
+		fmt.Fprintf(os.Stderr, "Symlink already exists: %s -> %s\n", symlinkName, ctxDir)
 	} else {
-		p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
+		fmt.Fprintf(os.Stderr, "Created symlink: %s -> %s\n", symlinkName, ctxDir)
 	}
 
 	if len(createdSubdirs) > 0 {
-		p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
+		fmt.Fprintf(os.Stderr, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
 	}
 	return nil
 }
 
 func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
@@ -200,9 +195,9 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 	}
 
 	if count == 0 {
-		p.Infof("No files older than %s", cmd.olderThan)
+		fmt.Fprintf(os.Stderr, "No files older than %s\n", cmd.olderThan)
 	} else {
-		p.Successf("Removed %d file(s) older than %s", count, cmd.olderThan)
+		fmt.Fprintf(os.Stderr, "Removed %d file(s) older than %s\n", count, cmd.olderThan)
 	}
 	return nil
 }

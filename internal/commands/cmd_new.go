@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
@@ -61,8 +60,6 @@ Example:
 }
 
 func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	args := c.Args().Slice()
 	if len(args) == 0 {
 		return fmt.Errorf("session name required\n\nUsage: hive new <name...>\n\nExample: hive new Fix Auth Bug")
@@ -89,6 +86,6 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("create session: %w", err)
 	}
 
-	p.Success("Session created", sess.Path)
+	fmt.Fprintf(os.Stderr, "Session created\n  %s\n", sess.Path)
 	return nil
 }
