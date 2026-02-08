@@ -8,13 +8,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
 type CtxCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// Shared flags
 	repo   string
@@ -25,8 +25,8 @@ type CtxCmd struct {
 }
 
 // NewCtxCmd creates a new ctx command.
-func NewCtxCmd(flags *Flags) *CtxCmd {
-	return &CtxCmd{flags: flags}
+func NewCtxCmd(flags *Flags, app *hive.App) *CtxCmd {
+	return &CtxCmd{flags: flags, app: app}
 }
 
 // Register adds the ctx command to the application.
@@ -86,23 +86,21 @@ Example: hive ctx ls`,
 }
 
 func (cmd *CtxCmd) runLs(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
 	}
 
 	if _, err := os.Stat(ctxDir); os.IsNotExist(err) {
-		p.Infof("Context directory does not exist. Run 'hive ctx init' first.")
+		fmt.Println("Context directory does not exist. Run 'hive ctx init' first.")
 		return nil
 	}
 
-	p.Printf("%s", ctxDir)
-	return printTree(p, ctxDir, "")
+	fmt.Println(ctxDir)
+	return printTree(ctxDir, "")
 }
 
-func printTree(p *printer.Printer, dir, prefix string) error {
+func printTree(dir, prefix string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return fmt.Errorf("read directory: %w", err)
@@ -116,14 +114,14 @@ func printTree(p *printer.Printer, dir, prefix string) error {
 			connector = "└── "
 		}
 
-		p.Printf("%s%s%s", prefix, connector, entry.Name())
+		fmt.Printf("%s%s%s\n", prefix, connector, entry.Name())
 
 		if entry.IsDir() {
 			childPrefix := prefix + "│   "
 			if isLast {
 				childPrefix = prefix + "    "
 			}
-			if err := printTree(p, filepath.Join(dir, entry.Name()), childPrefix); err != nil {
+			if err := printTree(filepath.Join(dir, entry.Name()), childPrefix); err != nil {
 				return err
 			}
 		}
@@ -152,64 +150,35 @@ Example: hive ctx prune --older-than 7d`,
 }
 
 func (cmd *CtxCmd) runInit(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
 	}
 
-	// Create the context directory if it doesn't exist
-	if err := os.MkdirAll(ctxDir, 0o755); err != nil {
-		return fmt.Errorf("create context directory: %w", err)
+	createdSubdirs, err := cmd.app.Context.Init(ctxDir)
+	if err != nil {
+		return err
 	}
 
-	// Create standard subdirectories
-	subdirs := []string{"research", "plans", "references"}
-	var createdSubdirs []string
-	for _, subdir := range subdirs {
-		subdirPath := filepath.Join(ctxDir, subdir)
-		if _, err := os.Stat(subdirPath); os.IsNotExist(err) {
-			if err := os.MkdirAll(subdirPath, 0o755); err != nil {
-				return fmt.Errorf("create subdirectory %s: %w", subdir, err)
-			}
-			createdSubdirs = append(createdSubdirs, subdir)
-		}
+	alreadyExists, err := cmd.app.Context.CreateSymlink(ctxDir)
+	if err != nil {
+		return err
 	}
 
-	symlinkName := cmd.flags.Config.Context.SymlinkName
-	symlinkPath := filepath.Join(".", symlinkName)
-
-	// Check if symlink already exists
-	if info, err := os.Lstat(symlinkPath); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			target, _ := os.Readlink(symlinkPath)
-			if target == ctxDir {
-				p.Infof("Symlink already exists: %s -> %s", symlinkName, ctxDir)
-				if len(createdSubdirs) > 0 {
-					p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
-				}
-				return nil
-			}
-			return fmt.Errorf("symlink %s exists but points to %s, not %s", symlinkName, target, ctxDir)
-		}
-		return fmt.Errorf("%s already exists and is not a symlink", symlinkName)
+	symlinkName := cmd.app.Config.Context.SymlinkName
+	if alreadyExists {
+		fmt.Fprintf(os.Stderr, "Symlink already exists: %s -> %s\n", symlinkName, ctxDir)
+	} else {
+		fmt.Fprintf(os.Stderr, "Created symlink: %s -> %s\n", symlinkName, ctxDir)
 	}
 
-	if err := os.Symlink(ctxDir, symlinkPath); err != nil {
-		return fmt.Errorf("create symlink: %w", err)
-	}
-
-	p.Successf("Created symlink: %s -> %s", symlinkName, ctxDir)
 	if len(createdSubdirs) > 0 {
-		p.Successf("Created subdirectories: %s", strings.Join(createdSubdirs, ", "))
+		fmt.Fprintf(os.Stderr, "Created subdirectories: %s\n", strings.Join(createdSubdirs, ", "))
 	}
 	return nil
 }
 
 func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	ctxDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
 		return err
@@ -220,69 +189,27 @@ func (cmd *CtxCmd) runPrune(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("invalid duration: %w", err)
 	}
 
-	cutoff := time.Now().Add(-duration)
-	count := 0
-
-	entries, err := os.ReadDir(ctxDir)
+	count, err := cmd.app.Context.Prune(ctxDir, duration)
 	if err != nil {
-		if os.IsNotExist(err) {
-			p.Infof("Context directory does not exist")
-			return nil
-		}
-		return fmt.Errorf("read directory: %w", err)
+		return err
 	}
 
-	for _, entry := range entries {
-		info, err := entry.Info()
-		if err != nil {
-			continue
-		}
-
-		if info.ModTime().Before(cutoff) {
-			path := filepath.Join(ctxDir, entry.Name())
-			if err := os.RemoveAll(path); err != nil {
-				p.Warnf("Failed to remove %s: %v", entry.Name(), err)
-				continue
-			}
-			count++
-		}
+	if count == 0 {
+		fmt.Fprintf(os.Stderr, "No files older than %s\n", cmd.olderThan)
+	} else {
+		fmt.Fprintf(os.Stderr, "Removed %d file(s) older than %s\n", count, cmd.olderThan)
 	}
-
-	p.Successf("Removed %d file(s) older than %s", count, cmd.olderThan)
 	return nil
 }
 
 func (cmd *CtxCmd) resolveContextDir(ctx context.Context) (string, error) {
-	if cmd.shared {
-		return cmd.flags.Config.SharedContextDir(), nil
-	}
-
-	if cmd.repo != "" {
-		parts := strings.SplitN(cmd.repo, "/", 2)
-		if len(parts) != 2 {
-			return "", fmt.Errorf("invalid repo format, expected owner/repo: %s", cmd.repo)
-		}
-		return cmd.flags.Config.RepoContextDir(parts[0], parts[1]), nil
-	}
-
-	// Detect from current directory
-	remote, err := cmd.flags.Service.DetectRemote(ctx, ".")
-	if err != nil {
-		return "", fmt.Errorf("detect remote (are you in a git repository?): %w", err)
-	}
-
-	owner, repo := git.ExtractOwnerRepo(remote)
-	if owner == "" || repo == "" {
-		return "", fmt.Errorf("could not extract owner/repo from remote: %s", remote)
-	}
-
-	return cmd.flags.Config.RepoContextDir(owner, repo), nil
+	return cmd.app.Context.ResolveDir(ctx, cmd.repo, cmd.shared)
 }
 
 func parseDuration(s string) (time.Duration, error) {
 	// Handle day suffix (not supported by time.ParseDuration)
-	if strings.HasSuffix(s, "d") {
-		days := strings.TrimSuffix(s, "d")
+	if before, ok := strings.CutSuffix(s, "d"); ok {
+		days := before
 		var d int
 		if _, err := fmt.Sscanf(days, "%d", &d); err != nil {
 			return 0, fmt.Errorf("invalid days: %s", s)

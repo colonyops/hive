@@ -178,19 +178,42 @@ func (m *Manager) StartBackgroundWorker(ctx context.Context, pollInterval time.D
 	return output
 }
 
-// UpdateSessions updates the session list and triggers an immediate refresh.
+// UpdateSessions updates the session list. A plugin refresh is only triggered
+// when sessions are added or removed to avoid unnecessary API calls (e.g. GitHub).
 func (m *Manager) UpdateSessions(sessions []*session.Session) {
 	m.sessionsMu.Lock()
+	changed := sessionsChanged(m.sessions, sessions)
 	m.sessions = sessions
 	m.sessionsMu.Unlock()
+
+	if !changed {
+		return
+	}
 
 	// Trigger immediate refresh (non-blocking)
 	select {
 	case m.refreshTrigger <- struct{}{}:
-		log.Debug().Int("sessions", len(sessions)).Msg("refresh triggered")
+		log.Debug().Int("sessions", len(sessions)).Msg("refresh triggered (sessions changed)")
 	default:
 		// Refresh already pending
 	}
+}
+
+// sessionsChanged reports whether the set of session IDs differs between old and new.
+func sessionsChanged(old, new []*session.Session) bool {
+	if len(old) != len(new) {
+		return true
+	}
+	ids := make(map[string]struct{}, len(old))
+	for _, s := range old {
+		ids[s.ID] = struct{}{}
+	}
+	for _, s := range new {
+		if _, ok := ids[s.ID]; !ok {
+			return true
+		}
+	}
+	return false
 }
 
 // Stop shuts down background workers and waits for them to finish.

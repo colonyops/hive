@@ -14,9 +14,9 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/plugins"
-	"github.com/hay-kot/hive/internal/plugins/pluglib"
-	"github.com/hay-kot/hive/internal/styles"
+	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/hay-kot/hive/internal/hive/plugins"
+	"github.com/hay-kot/hive/internal/hive/plugins/pluglib"
 )
 
 // Plugin implements the Beads plugin for Hive.

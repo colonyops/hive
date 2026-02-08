@@ -3,18 +3,20 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 
-	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
 type PruneCmd struct {
 	flags *Flags
+	app   *hive.App
 }
 
 // NewPruneCmd creates a new prune command
-func NewPruneCmd(flags *Flags) *PruneCmd {
-	return &PruneCmd{flags: flags}
+func NewPruneCmd(flags *Flags, app *hive.App) *PruneCmd {
+	return &PruneCmd{flags: flags, app: app}
 }
 
 // Register adds the prune command to the application
@@ -45,24 +47,22 @@ Active sessions are not affected.`,
 }
 
 func (cmd *PruneCmd) run(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	all := c.Bool("all")
-	count, err := cmd.flags.Service.Prune(ctx, all)
+	count, err := cmd.app.Sessions.Prune(ctx, all)
 	if err != nil {
 		return fmt.Errorf("prune sessions: %w", err)
 	}
 
 	if count == 0 {
 		if all {
-			p.Infof("No recycled sessions to prune")
+			fmt.Fprintf(os.Stderr, "No recycled sessions to prune\n")
 		} else {
-			p.Infof("No sessions exceed max_recycled limit")
+			fmt.Fprintf(os.Stderr, "No sessions exceed max_recycled limit\n")
 		}
 		return nil
 	}
 
-	p.Successf("Pruned %d session(s)", count)
+	fmt.Fprintf(os.Stderr, "Pruned %d session(s)\n", count)
 
 	return nil
 }

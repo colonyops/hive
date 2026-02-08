@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
@@ -15,21 +13,20 @@ import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/hay-kot/hive/internal/data/stores"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/plugins"
-	"github.com/hay-kot/hive/internal/plugins/beads"
-	"github.com/hay-kot/hive/internal/plugins/claude"
-	"github.com/hay-kot/hive/internal/plugins/contextdir"
-	"github.com/hay-kot/hive/internal/plugins/github"
-	"github.com/hay-kot/hive/internal/plugins/lazygit"
-	"github.com/hay-kot/hive/internal/plugins/neovim"
-	plugintmux "github.com/hay-kot/hive/internal/plugins/tmux"
-	"github.com/hay-kot/hive/internal/printer"
-	"github.com/hay-kot/hive/internal/scripts"
-	"github.com/hay-kot/hive/internal/stores"
+	"github.com/hay-kot/hive/internal/hive/plugins"
+	"github.com/hay-kot/hive/internal/hive/plugins/beads"
+	"github.com/hay-kot/hive/internal/hive/plugins/claude"
+	"github.com/hay-kot/hive/internal/hive/plugins/contextdir"
+	"github.com/hay-kot/hive/internal/hive/plugins/github"
+	"github.com/hay-kot/hive/internal/hive/plugins/lazygit"
+	"github.com/hay-kot/hive/internal/hive/plugins/neovim"
+	plugintmux "github.com/hay-kot/hive/internal/hive/plugins/tmux"
+	"github.com/hay-kot/hive/internal/hive/scripts"
 	"github.com/hay-kot/hive/pkg/executil"
+	"github.com/hay-kot/hive/pkg/logutils"
 	"github.com/hay-kot/hive/pkg/tmpl"
-	"github.com/hay-kot/hive/pkg/utils"
 )
 
 var (
@@ -49,17 +46,16 @@ func build() string {
 }
 
 func main() {
-	if err := setupLogger("info", "", nil); err != nil {
-		panic(err)
-	}
+	ctx := context.Background()
 
 	var (
-		p     = printer.New(os.Stderr)
-		ctx   = printer.NewContext(context.Background(), p)
-		flags = &commands.Flags{}
+		logCloser func()
+		hiveApp   = &hive.App{}
+		database  *db.DB
+		pluginMgr *plugins.Manager
 	)
 
-	var deferredLogs *utils.DeferredWriter
+	flags := &commands.Flags{}
 
 	app := &cli.Command{
 		Name:      "hive",
@@ -83,7 +79,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			},
 			&cli.StringFlag{
 				Name:        "log-file",
-				Usage:       "path to log file (optional)",
+				Usage:       "path to log file (defaults to <data-dir>/hive.log)",
 				Sources:     cli.EnvVars("HIVE_LOG_FILE"),
 				Destination: &flags.LogFile,
 			},
@@ -104,19 +100,18 @@ Run 'hive new' to create a new session from the current repository.`,
 			},
 		},
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
-			// Detect TUI mode: no subcommand means TUI (default action)
-			isTUI := len(c.Args().Slice()) == 0
-
-			// In TUI mode, buffer logs to display after exit
-			var deferred io.Writer
-			if isTUI {
-				deferredLogs = &utils.DeferredWriter{}
-				deferred = deferredLogs
+			// Always log to a file; use explicit path or default to <datadir>/hive.log
+			logFile := flags.LogFile
+			if logFile == "" {
+				logFile = filepath.Join(flags.DataDir, "hive.log")
 			}
 
-			if err := setupLogger(flags.LogLevel, flags.LogFile, deferred); err != nil {
-				return ctx, err
+			logger, closer, err := logutils.New(flags.LogLevel, logFile)
+			if err != nil {
+				return ctx, fmt.Errorf("setup logger: %w", err)
 			}
+			log.Logger = logger
+			logCloser = closer
 
 			// Register bundled script paths for template functions (before config load renders templates)
 			tmpl.SetScriptPaths(scripts.ScriptPaths(flags.DataDir))
@@ -130,7 +125,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			if err != nil {
 				return ctx, fmt.Errorf("load config: %w", err)
 			}
-			flags.Config = cfg
 
 			// Open database connection
 			dbOpts := db.OpenOptions{
@@ -138,11 +132,10 @@ Run 'hive new' to create a new session from the current repository.`,
 				MaxIdleConns: cfg.Database.MaxIdleConns,
 				BusyTimeout:  cfg.Database.BusyTimeout,
 			}
-			database, err := db.Open(cfg.DataDir, dbOpts)
+			database, err = db.Open(cfg.DataDir, dbOpts)
 			if err != nil {
 				return ctx, fmt.Errorf("open database: %w", err)
 			}
-			flags.DB = database
 
 			// Migrate from JSON files if they exist
 			if err := stores.MigrateFromJSON(ctx, database, cfg.DataDir); err != nil {
@@ -153,20 +146,17 @@ Run 'hive new' to create a new session from the current repository.`,
 			sessionStore := stores.NewSessionStore(database)
 			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
 
-			flags.Store = sessionStore
-			flags.MsgStore = msgStore
-
 			// Create service
 			var (
-				exec    = &executil.RealExecutor{}
-				gitExec = git.NewExecutor(cfg.GitPath, exec)
-				logger  = log.With().Str("component", "hive").Logger()
+				exec      = &executil.RealExecutor{}
+				gitExec   = git.NewExecutor(cfg.GitPath, exec)
+				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			flags.Service = hive.New(sessionStore, gitExec, cfg, exec, logger, os.Stdout, os.Stderr)
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, exec, svcLogger, os.Stdout, os.Stderr)
 
 			// Create plugin manager and register plugins
-			pluginMgr := plugins.NewManager(cfg.Plugins)
+			pluginMgr = plugins.NewManager(cfg.Plugins)
 			pluginMgr.Register(github.New(cfg.Plugins.GitHub))
 			pluginMgr.Register(beads.New(cfg.Plugins.Beads))
 			pluginMgr.Register(lazygit.New(cfg.Plugins.LazyGit))
@@ -180,37 +170,51 @@ Run 'hive new' to create a new session from the current repository.`,
 				log.Warn().Err(err).Msg("plugin initialization error")
 			}
 
-			flags.PluginManager = pluginMgr
+			// Populate the pre-allocated App struct (commands already hold a pointer to it)
+			*hiveApp = *hive.NewApp(
+				sessionSvc,
+				msgStore,
+				cfg,
+				nil, // terminal manager created in TUI command
+				pluginMgr,
+				database,
+			)
+
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
 			// Close plugins
-			if flags.PluginManager != nil {
-				flags.PluginManager.CloseAll()
+			if pluginMgr != nil {
+				pluginMgr.CloseAll()
 			}
 
 			// Close database connection
-			if flags.DB != nil {
-				if err := flags.DB.Close(); err != nil {
+			if database != nil {
+				if err := database.Close(); err != nil {
 					log.Error().Err(err).Msg("failed to close database")
 					return err
 				}
+			}
+
+			// Close log file
+			if logCloser != nil {
+				logCloser()
 			}
 			return nil
 		},
 	}
 
-	tuiCmd := commands.NewTuiCmd(flags)
+	tuiCmd := commands.NewTuiCmd(flags, hiveApp)
 
-	app = commands.NewNewCmd(flags).Register(app)
-	app = commands.NewLsCmd(flags).Register(app)
-	app = commands.NewPruneCmd(flags).Register(app)
-	app = commands.NewDoctorCmd(flags).Register(app)
-	app = commands.NewBatchCmd(flags).Register(app)
-	app = commands.NewCtxCmd(flags).Register(app)
-	app = commands.NewMsgCmd(flags).Register(app)
-	app = commands.NewDocCmd(flags).Register(app)
-	app = commands.NewSessionCmd(flags).Register(app)
+	app = commands.NewNewCmd(flags, hiveApp).Register(app)
+	app = commands.NewLsCmd(flags, hiveApp).Register(app)
+	app = commands.NewPruneCmd(flags, hiveApp).Register(app)
+	app = commands.NewDoctorCmd(flags, hiveApp).Register(app)
+	app = commands.NewBatchCmd(flags, hiveApp).Register(app)
+	app = commands.NewCtxCmd(flags, hiveApp).Register(app)
+	app = commands.NewMsgCmd(flags, hiveApp).Register(app)
+	app = commands.NewDocCmd(flags, hiveApp).Register(app)
+	app = commands.NewSessionCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
@@ -227,57 +231,9 @@ Run 'hive new' to create a new session from the current repository.`,
 	runErr := app.Run(ctx, os.Args)
 	if runErr != nil {
 		fmt.Println()
-		printer.Ctx(ctx).FatalError(runErr)
+		fmt.Println(runErr.Error())
 		exitCode = 1
 	}
 
-	// Flush deferred logs to console after TUI exits
-	if deferredLogs != nil {
-		if err := deferredLogs.Flush(zerolog.ConsoleWriter{Out: os.Stderr}); err != nil {
-			fmt.Fprintf(os.Stderr, "failed to flush logs: %v\n", err)
-		}
-	}
-
 	os.Exit(exitCode)
-}
-
-func setupLogger(level string, logFile string, deferred io.Writer) error {
-	parsedLevel, err := zerolog.ParseLevel(level)
-	if err != nil {
-		return fmt.Errorf("failed to parse log level: %w", err)
-	}
-
-	var output io.Writer = zerolog.ConsoleWriter{Out: os.Stderr}
-
-	if logFile != "" {
-		// Create log directory if it doesn't exist
-		logDir := filepath.Dir(logFile)
-		if err := os.MkdirAll(logDir, 0o755); err != nil {
-			return fmt.Errorf("failed to create log directory: %w", err)
-		}
-
-		// Open log file
-		file, err := os.OpenFile(logFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
-		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
-		}
-
-		if deferred != nil {
-			// TUI mode with explicit log file - write to both file and deferred buffer
-			output = io.MultiWriter(file, deferred)
-		} else {
-			// Write to both console and file
-			output = io.MultiWriter(
-				zerolog.ConsoleWriter{Out: os.Stderr},
-				file,
-			)
-		}
-	} else if deferred != nil {
-		// TUI mode without log file - buffer for display after exit
-		output = deferred
-	}
-
-	log.Logger = log.Output(output).Level(parsedLevel)
-
-	return nil
 }

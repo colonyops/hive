@@ -7,19 +7,19 @@ import (
 	"strings"
 
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/printer"
 	"github.com/urfave/cli/v3"
 )
 
 type NewCmd struct {
 	flags  *Flags
+	app    *hive.App
 	remote string
 	source string
 }
 
 // NewNewCmd creates a new new command
-func NewNewCmd(flags *Flags) *NewCmd {
-	return &NewCmd{flags: flags}
+func NewNewCmd(flags *Flags, app *hive.App) *NewCmd {
+	return &NewCmd{flags: flags, app: app}
 }
 
 // Register adds the new command to the application
@@ -60,8 +60,6 @@ Example:
 }
 
 func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	args := c.Args().Slice()
 	if len(args) == 0 {
 		return fmt.Errorf("session name required\n\nUsage: hive new <name...>\n\nExample: hive new Fix Auth Bug")
@@ -83,11 +81,11 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		Source: source,
 	}
 
-	sess, err := cmd.flags.Service.CreateSession(ctx, opts)
+	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)
 	if err != nil {
 		return fmt.Errorf("create session: %w", err)
 	}
 
-	p.Success("Session created", sess.Path)
+	fmt.Fprintf(os.Stderr, "Session created\n  %s\n", sess.Path)
 	return nil
 }

@@ -8,7 +8,7 @@ import (
 	"runtime"
 
 	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/hive/plugins"
 )
 
 // Plugin implements the context directory plugin for Hive.

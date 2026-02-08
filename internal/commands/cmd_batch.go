@@ -17,12 +17,14 @@ import (
 
 type BatchCmd struct {
 	flags *Flags
+	app   *hive.App
 	fr    *iojson.FileReader[BatchInput]
 }
 
-func NewBatchCmd(flags *Flags) *BatchCmd {
+func NewBatchCmd(flags *Flags, app *hive.App) *BatchCmd {
 	return &BatchCmd{
 		flags: flags,
+		app:   app,
 		fr:    &iojson.FileReader[BatchInput]{},
 	}
 }
@@ -86,7 +88,7 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 
 	logger, closer, err := logutils.New(
 		cmd.flags.LogLevel,
-		filepath.Join(cmd.flags.Config.LogsDir(), "batch-"+batchID+".log"),
+		filepath.Join(cmd.app.Config.LogsDir(), "batch-"+batchID+".log"),
 	)
 	if err != nil {
 		return iojson.WriteError(fmt.Sprintf("setup logger: %s", err), nil)
@@ -108,7 +110,7 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 
 	output := BatchOutput{
 		BatchID: batchID,
-		LogFile: filepath.Join(cmd.flags.Config.LogsDir(), fmt.Sprintf("batch-%s.log", batchID)),
+		LogFile: filepath.Join(cmd.app.Config.LogsDir(), fmt.Sprintf("batch-%s.log", batchID)),
 		Results: make([]BatchResult, 0, len(input.Sessions)),
 	}
 
@@ -171,7 +173,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		UseBatchSpawn: true,
 	}
 
-	created, err := cmd.flags.Service.CreateSession(ctx, opts)
+	created, err := cmd.app.Sessions.CreateSession(ctx, opts)
 	if err != nil {
 		return BatchResult{
 			Name:   sess.Name,

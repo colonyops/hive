@@ -3,27 +3,29 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 	"slices"
 	"strings"
 	"text/tabwriter"
 
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
 type LsCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// flags
 	jsonOutput bool
 }
 
 // NewLsCmd creates a new ls command
-func NewLsCmd(flags *Flags) *LsCmd {
-	return &LsCmd{flags: flags}
+func NewLsCmd(flags *Flags, app *hive.App) *LsCmd {
+	return &LsCmd{flags: flags, app: app}
 }
 
 // Register adds the ls command to the application
@@ -49,16 +51,14 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 }
 
 func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
-	sessions, err := cmd.flags.Service.ListSessions(ctx)
+	sessions, err := cmd.app.Sessions.ListSessions(ctx)
 	if err != nil {
 		return fmt.Errorf("list sessions: %w", err)
 	}
 
 	if len(sessions) == 0 {
 		if !cmd.jsonOutput {
-			p.Infof("No sessions found")
+			fmt.Fprintf(os.Stderr, "No sessions found\n")
 		}
 		return nil
 	}
@@ -106,13 +106,13 @@ func (cmd *LsCmd) run(ctx context.Context, c *cli.Command) error {
 
 	if len(corrupted) > 0 {
 		_, _ = fmt.Fprintln(out)
-		p.Warnf("Found %d corrupted session(s) with invalid git repositories:", len(corrupted))
+		fmt.Fprintf(os.Stderr, "Found %d corrupted session(s) with invalid git repositories:\n", len(corrupted))
 		for _, s := range corrupted {
 			repo := git.ExtractRepoName(s.Remote)
-			p.Infof("%s (%s)", repo, s.Path)
+			fmt.Fprintf(os.Stderr, "  %s (%s)\n", repo, s.Path)
 		}
 		_, _ = fmt.Fprintln(out)
-		p.Printf("Run 'hive prune' to clean up")
+		fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
 	}
 
 	return nil
@@ -139,7 +139,7 @@ func (cmd *LsCmd) buildSessionInfo(ctx context.Context, s session.Session) sessi
 	}
 
 	// Count unread inbox messages
-	if msgs, err := cmd.flags.MsgStore.GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
+	if msgs, err := cmd.app.Messages.GetUnread(ctx, s.ID, s.InboxTopic()); err == nil {
 		info.Unread = len(msgs)
 	}
 

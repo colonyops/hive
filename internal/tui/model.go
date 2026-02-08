@@ -21,12 +21,12 @@ import (
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/hay-kot/hive/internal/data/stores"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/integration/terminal"
-	"github.com/hay-kot/hive/internal/plugins"
-	"github.com/hay-kot/hive/internal/stores"
-	"github.com/hay-kot/hive/internal/styles"
+	"github.com/hay-kot/hive/internal/hive/plugins"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
 	"github.com/hay-kot/hive/internal/tui/views/review"
@@ -63,11 +63,11 @@ const (
 
 // Options configures the TUI behavior.
 type Options struct {
-	LocalRemote     string            // Remote URL of current directory (empty if not in git repo)
-	MsgStore        messaging.Store   // Message store for pub/sub events (optional)
-	TerminalManager *terminal.Manager // Terminal integration manager (optional)
-	PluginManager   *plugins.Manager  // Plugin manager (optional)
-	DB              *db.DB            // Database connection for stores
+	LocalRemote     string               // Remote URL of current directory (empty if not in git repo)
+	MsgStore        *hive.MessageService // Message service for pub/sub events (optional)
+	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
+	PluginManager   *plugins.Manager     // Plugin manager (optional)
+	DB              *db.DB               // Database connection for stores
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -79,7 +79,7 @@ type PendingCreate struct {
 // Model is the main Bubble Tea model for the TUI.
 type Model struct {
 	cfg            *config.Config
-	service        *hive.Service
+	service        *hive.SessionService
 	cmdService     *command.Service
 	list           list.Model
 	handler        *KeybindingResolver
@@ -129,7 +129,7 @@ type Model struct {
 	refreshing bool     // true during background session refresh
 
 	// Messages
-	msgStore     messaging.Store
+	msgStore     *hive.MessageService
 	msgView      *MessagesView
 	allMessages  []messaging.Message
 	lastPollTime time.Time
@@ -218,7 +218,7 @@ type pluginWorkerStartedMsg struct {
 }
 
 // New creates a new TUI model.
-func New(service *hive.Service, cfg *config.Config, opts Options) Model {
+func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	gitStatuses := kv.New[string, GitStatus]()
 	terminalStatuses := kv.New[string, TerminalStatus]()
 	columnWidths := &ColumnWidths{}

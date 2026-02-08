@@ -13,7 +13,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/integration/terminal"
+	"github.com/hay-kot/hive/internal/core/terminal"
 )
 
 // Integration implements terminal.Integration for tmux.

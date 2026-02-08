@@ -8,16 +8,18 @@ import (
 	"strings"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
 type DocCmd struct {
 	flags *Flags
+	app   *hive.App
 	all   bool
 }
 
-func NewDocCmd(flags *Flags) *DocCmd {
-	return &DocCmd{flags: flags}
+func NewDocCmd(flags *Flags, app *hive.App) *DocCmd {
+	return &DocCmd{flags: flags, app: app}
 }
 
 func (cmd *DocCmd) Register(app *cli.Command) *cli.Command {
@@ -57,7 +59,7 @@ Use --all to show all migrations.`,
 
 func (cmd *DocCmd) runMigrate(_ context.Context, c *cli.Command) error {
 	w := c.Root().Writer
-	configVersion := cmd.flags.Config.Version
+	configVersion := cmd.app.Config.Version
 	printMigrationGuide(w, configVersion, cmd.all)
 	return nil
 }

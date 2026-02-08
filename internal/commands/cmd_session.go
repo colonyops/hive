@@ -3,24 +3,25 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 
 	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/printer"
+	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
 type SessionCmd struct {
 	flags *Flags
+	app   *hive.App
 
 	// flags
 	jsonOutput bool
 }
 
 // NewSessionCmd creates a new session command
-func NewSessionCmd(flags *Flags) *SessionCmd {
-	return &SessionCmd{flags: flags}
+func NewSessionCmd(flags *Flags, app *hive.App) *SessionCmd {
+	return &SessionCmd{flags: flags, app: app}
 }
 
 // Register adds the session command to the application
@@ -71,11 +72,8 @@ type sessionInfoOutput struct {
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
-	p := printer.Ctx(ctx)
-
 	// Detect session from current working directory
-	detector := messaging.NewSessionDetector(cmd.flags.Store)
-	sessionID, err := detector.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
 	if err != nil {
 		return fmt.Errorf("detect session: %w", err)
 	}
@@ -85,13 +83,12 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 			_, _ = fmt.Fprintln(c.Root().Writer, "{\"error\":\"not in a hive session\"}")
 			return nil
 		}
-		p.Warnf("Not in a hive session")
-		p.Infof("Run this command from within a hive session directory")
+		fmt.Fprintf(os.Stderr, "Not in a hive session\nRun this command from within a hive session directory\n")
 		return nil
 	}
 
 	// Get full session details
-	sess, err := cmd.flags.Service.GetSession(ctx, sessionID)
+	sess, err := cmd.app.Sessions.GetSession(ctx, sessionID)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}

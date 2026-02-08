@@ -74,7 +74,7 @@ func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 func (m *mockGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
 func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
 
-func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Service {
+func newTestService(t *testing.T, store session.Store, cfg *config.Config) *SessionService {
 	t.Helper()
 	if cfg == nil {
 		cfg = &config.Config{
@@ -83,7 +83,7 @@ func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Serv
 		}
 	}
 	log := zerolog.New(io.Discard)
-	return New(store, &mockGit{}, cfg, nil, log, io.Discard, io.Discard)
+	return NewSessionService(store, &mockGit{}, cfg, nil, log, io.Discard, io.Discard)
 }
 
 func TestEnforceMaxRecycled(t *testing.T) {

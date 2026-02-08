@@ -6,7 +6,7 @@ import (
 	"os/exec"
 
 	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/plugins"
+	"github.com/hay-kot/hive/internal/hive/plugins"
 )
 
 // Plugin implements the tmux plugin for Hive.

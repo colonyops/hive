@@ -10,21 +10,23 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
+	"github.com/hay-kot/hive/internal/core/terminal"
+	"github.com/hay-kot/hive/internal/core/terminal/tmux"
 	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/integration/terminal"
-	"github.com/hay-kot/hive/internal/integration/terminal/tmux"
-	"github.com/hay-kot/hive/internal/profiler"
 	"github.com/hay-kot/hive/internal/tui"
+	"github.com/hay-kot/hive/pkg/profiler"
 )
 
 type TuiCmd struct {
 	flags *Flags
+	app   *hive.App
 }
 
 // NewTuiCmd creates a new tui command
-func NewTuiCmd(flags *Flags) *TuiCmd {
+func NewTuiCmd(flags *Flags, app *hive.App) *TuiCmd {
 	return &TuiCmd{
 		flags: flags,
+		app:   app,
 	}
 }
 
@@ -65,15 +67,12 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	}
 
 	// Detect current repository remote for highlighting current repo
-	localRemote, _ := cmd.flags.Service.DetectRemote(ctx, ".")
-
-	// Use SQLite message store
-	msgStore := cmd.flags.MsgStore
+	localRemote, _ := cmd.app.Sessions.DetectRemote(ctx, ".")
 
 	// Create terminal integration manager (tmux always enabled)
 	termMgr := terminal.NewManager([]string{"tmux"})
 	// Register tmux integration with preview window matcher patterns
-	preferredWindows := cmd.flags.Config.Tmux.PreviewWindowMatcher
+	preferredWindows := cmd.app.Config.Tmux.PreviewWindowMatcher
 	tmuxIntegration := tmux.New(preferredWindows)
 	if tmuxIntegration.Available() {
 		termMgr.Register(tmuxIntegration)
@@ -82,13 +81,13 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	for {
 		opts := tui.Options{
 			LocalRemote:     localRemote,
-			MsgStore:        msgStore,
+			MsgStore:        cmd.app.Messages,
 			TerminalManager: termMgr,
-			PluginManager:   cmd.flags.PluginManager,
-			DB:              cmd.flags.DB,
+			PluginManager:   cmd.app.Plugins,
+			DB:              cmd.app.DB,
 		}
 
-		m := tui.New(cmd.flags.Service, cmd.flags.Config, opts)
+		m := tui.New(cmd.app.Sessions, cmd.app.Config, opts)
 		p := tea.NewProgram(m)
 
 		finalModel, err := p.Run()
@@ -101,7 +100,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		// Handle pending session creation
 		if pending := model.PendingCreate(); pending != nil {
 			source, _ := os.Getwd()
-			_, err := cmd.flags.Service.CreateSession(ctx, hive.CreateOptions{
+			_, err := cmd.app.Sessions.CreateSession(ctx, hive.CreateOptions{
 				Name:   pending.Name,
 				Remote: pending.Remote,
 				Source: source,
