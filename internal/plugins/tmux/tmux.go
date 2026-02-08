@@ -35,7 +35,7 @@ func (p *Plugin) Close() error                 { return nil }
 func (p *Plugin) Commands() map[string]config.UserCommand {
 	return map[string]config.UserCommand{
 		"TmuxOpen": {
-			Sh:     `{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+			Sh:     `{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }} {{ .TmuxWindow | shq }}`,
 			Help:   "open tmux session",
 			Exit:   "$HIVE_POPUP",
 			Silent: true,
