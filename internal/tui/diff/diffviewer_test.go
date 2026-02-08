@@ -6,6 +6,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/bluekeyes/go-gitdiff/gitdiff"
 	"github.com/charmbracelet/x/exp/golden"
+	"github.com/hay-kot/hive/pkg/tuitest"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -354,8 +355,8 @@ func TestDiffViewerView_NormalMode(t *testing.T) {
 	m := NewDiffViewer(file)
 	m.SetSize(80, 10)
 
-	// Keep ANSI codes to verify styling
-	output := m.View()
+	// Strip ANSI for easy inspection - this test verifies content structure only
+	output := tuitest.StripANSI(m.View())
 	golden.RequireEqual(t, []byte(output))
 }
 
