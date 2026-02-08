@@ -213,28 +213,25 @@ func (v *MessagesView) View() string {
 
 	// Filter line (only shown when filtering or filter is active)
 	if v.filtering {
-		filterPrompt := lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true).Render("Filter: ")
 		b.WriteString(" ")
-		b.WriteString(filterPrompt)
+		b.WriteString(styles.TextPrimaryBoldStyle.Render("Filter: "))
 		b.WriteString(v.filter)
 		b.WriteString("▎") // cursor
 		b.WriteString("\n")
 	} else if v.filter != "" {
-		filterShow := lipgloss.NewStyle().Foreground(styles.ColorMuted).Render(fmt.Sprintf("Filter: %s", v.filter))
 		b.WriteString(" ")
-		b.WriteString(filterShow)
+		b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("Filter: %s", v.filter)))
 		b.WriteString("\n")
 	}
 
 	// Column headers (Time | Sender | Topic | Message | Age)
-	headerStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	timeHeader := fmt.Sprintf("%-*s", timeWidth, "Time")
 	senderHeader := fmt.Sprintf("%-*s", senderWidth, "Sender")
 	topicHeader := fmt.Sprintf("%-*s", topicWidth, "Topic")
 	msgHeader := fmt.Sprintf("%-*s", contentWidth, "Message")
 	ageHeader := fmt.Sprintf("%*s", ageWidth, "Age")
 	b.WriteString("  ") // align with content (selection indicator space)
-	b.WriteString(headerStyle.Render(timeHeader + " " + senderHeader + " " + topicHeader + " " + msgHeader + " " + ageHeader))
+	b.WriteString(styles.TextMutedStyle.Render(timeHeader + " " + senderHeader + " " + topicHeader + " " + msgHeader + " " + ageHeader))
 	b.WriteString("\n")
 
 	// Track lines rendered for padding calculation
@@ -243,12 +240,10 @@ func (v *MessagesView) View() string {
 	// No messages
 	if len(v.filteredAt) == 0 {
 		if len(v.messages) == 0 {
-			noMsg := lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("  No messages")
-			b.WriteString(noMsg)
+			b.WriteString(styles.TextMutedStyle.Render("  No messages"))
 			b.WriteString("\n")
 		} else {
-			noMatch := lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("  No matching messages")
-			b.WriteString(noMatch)
+			b.WriteString(styles.TextMutedStyle.Render("  No matching messages"))
 			b.WriteString("\n")
 		}
 		linesRendered = 1
@@ -279,8 +274,7 @@ func (v *MessagesView) View() string {
 	}
 
 	// Help line (pinned to bottom, styled to match sessions view)
-	help := lipgloss.NewStyle().Foreground(styles.ColorMuted).PaddingLeft(1).Render("↑/↓ navigate • enter preview • / filter • tab switch view")
-	b.WriteString(help)
+	b.WriteString(styles.MessagesHelpStyle.Render("↑/↓ navigate • enter preview • / filter • tab switch view"))
 
 	return b.String()
 }
@@ -300,8 +294,7 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 
 	// Timestamp
 	timeStr := msg.CreatedAt.Format("15:04:05")
-	timeStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
-	b.WriteString(timeStyle.Render(timeStr))
+	b.WriteString(styles.TextMutedStyle.Render(timeStr))
 	b.WriteString(" ")
 
 	// Sender (with color hashing, fixed width, in brackets)
@@ -336,9 +329,9 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 	if len(payloadRunes) > contentW-1 {
 		payload = string(payloadRunes[:contentW-1]) + "…"
 	}
-	payloadStyle := lipgloss.NewStyle().Foreground(styles.ColorForeground)
+	payloadStyle := styles.TextForegroundStyle
 	if selected {
-		payloadStyle = payloadStyle.Bold(true)
+		payloadStyle = styles.MessagesPayloadSelectedStyle
 	}
 	// Pad payload to fill content width
 	payloadPadded := fmt.Sprintf("%-*s", contentW, payload)
@@ -347,9 +340,8 @@ func (v *MessagesView) renderMessageLine(msg *messaging.Message, selected bool, 
 
 	// Age (right-aligned, provides visual end cap)
 	age := formatAge(msg.CreatedAt)
-	ageStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	agePadded := fmt.Sprintf("%*s", ageW, age)
-	b.WriteString(ageStyle.Render(agePadded))
+	b.WriteString(styles.TextMutedStyle.Render(agePadded))
 
 	return b.String()
 }

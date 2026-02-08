@@ -45,10 +45,10 @@ func (d selectItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	isSelected := index == m.Index()
 
 	// Style for selected vs unselected
-	style := lipgloss.NewStyle().Foreground(styles.ColorForeground)
+	style := styles.SelectFieldItemStyle
 	cursor := "  "
 	if isSelected {
-		style = style.Foreground(styles.ColorPrimary).Bold(true)
+		style = styles.SelectFieldItemSelectedStyle
 		cursor = "> "
 	}
 
@@ -77,7 +77,7 @@ func NewSelectField(title string, items []SelectItem, selected int) SelectField 
 	// Configure filter input styles
 	l.FilterInput.Prompt = "/ "
 	filterStyles := textinput.DefaultStyles(true)
-	filterStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
+	filterStyles.Focused.Prompt = styles.TextPrimaryStyle
 	filterStyles.Cursor.Color = styles.ColorPrimary
 	l.FilterInput.SetStyles(filterStyles)
 

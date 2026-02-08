@@ -251,12 +251,12 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	// Configure filter input styles for bubbles v2
 	l.FilterInput.Prompt = "Filter: "
 	filterStyles := textinput.DefaultStyles(true) // dark mode
-	filterStyles.Focused.Prompt = lipgloss.NewStyle().PaddingLeft(1).Foreground(styles.ColorPrimary).Bold(true)
+	filterStyles.Focused.Prompt = styles.ListFilterPromptStyle
 	filterStyles.Cursor.Color = styles.ColorPrimary
 	l.FilterInput.SetStyles(filterStyles)
 
 	// Style help to match messages view (consistent gray, bullet separators, left padding)
-	helpStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	helpStyle := styles.TextMutedStyle
 	l.Help.Styles.ShortKey = helpStyle
 	l.Help.Styles.ShortDesc = helpStyle
 	l.Help.Styles.ShortSeparator = helpStyle
@@ -264,7 +264,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	l.Help.Styles.FullDesc = helpStyle
 	l.Help.Styles.FullSeparator = helpStyle
 	l.Help.ShortSeparator = " • "
-	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
+	l.Styles.HelpStyle = styles.ListHelpContainerStyle
 
 	// Compute merged commands: system → plugins → user
 	var mergedCommands map[string]config.UserCommand
@@ -299,7 +299,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
-	s.Style = lipgloss.NewStyle().Foreground(styles.ColorPrimary) // blue, lipgloss v1 for bubbles v1
+	s.Style = styles.SpinnerStyle // blue, lipgloss v1 for bubbles v1
 
 	// Create message view
 	msgView := NewMessagesView()
@@ -2034,19 +2034,12 @@ func (m Model) renderTabView() string {
 
 	// Add filter indicator if active
 	if m.statusFilter != "" {
-		filterStyle := lipgloss.NewStyle().
-			Foreground(styles.ColorPrimary).
-			Bold(true)
 		filterLabel := string(m.statusFilter)
-		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", filterStyle.Render("["+filterLabel+"]"))
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
 	}
 
 	// Branding on right with background
-	brandingStyle := lipgloss.NewStyle().
-		Background(styles.ColorSurface).
-		Foreground(styles.ColorForeground).
-		Padding(0, 1)
-	branding := brandingStyle.Render(styles.IconHive + " Hive")
+	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
 
 	// Calculate spacing to push branding to right edge with even margins
 	// Layout: [margin] tabs [spacer] branding [margin]
@@ -2061,13 +2054,12 @@ func (m Model) renderTabView() string {
 	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
 
 	// Horizontal dividers above and below header
-	dividerStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	dividerWidth := m.width
 	if dividerWidth < 1 {
 		dividerWidth = 80 // default width before WindowSizeMsg
 	}
-	topDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
-	headerDivider := dividerStyle.Render(strings.Repeat("─", dividerWidth))
+	topDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
+	headerDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
 
 	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
 	contentHeight := max(m.height-3, 1)
@@ -2184,15 +2176,12 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 	}
 	previewContent = strings.Join(previewLines, "\n")
 	previewContent = ensureExactWidth(previewContent, previewWidth)
-	previewContent = lipgloss.NewStyle().
-		Foreground(styles.ColorForeground).
-		Render(previewContent)
+	previewContent = styles.PreviewContentStyle.Render(previewContent)
 
 	// Create vertical divider between list and preview
-	dividerStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	dividerLines := make([]string, contentHeight)
 	for i := range dividerLines {
-		dividerLines[i] = dividerStyle.Render("│")
+		dividerLines[i] = styles.TextMutedStyle.Render("│")
 	}
 	divider := strings.Join(dividerLines, "\n")
 
@@ -2205,14 +2194,14 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	iconsEnabled := m.cfg.TUI.IconsEnabled()
 
 	// Styles
-	nameStyle := lipgloss.NewStyle().Bold(true).Foreground(styles.ColorPrimary)
-	separatorStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
-	idStyle := lipgloss.NewStyle().Foreground(styles.ColorSecondary)
-	branchStyle := lipgloss.NewStyle().Foreground(styles.ColorSecondary)
-	addStyle := lipgloss.NewStyle().Foreground(styles.ColorSuccess)
-	delStyle := lipgloss.NewStyle().Foreground(styles.ColorError)
-	dirtyStyle := lipgloss.NewStyle().Foreground(styles.ColorWarning)
-	dividerStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	nameStyle := styles.PreviewHeaderNameStyle
+	separatorStyle := styles.PreviewHeaderSeparatorStyle
+	idStyle := styles.PreviewHeaderIDStyle
+	branchStyle := styles.PreviewHeaderBranchStyle
+	addStyle := styles.PreviewHeaderAddStyle
+	delStyle := styles.PreviewHeaderDelStyle
+	dirtyStyle := styles.PreviewHeaderDirtyStyle
+	dividerStyle := styles.PreviewHeaderDividerStyle
 
 	divider := strings.Repeat("─", maxWidth)
 
@@ -2224,8 +2213,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 	title := nameStyle.Render(sess.Name)
 	// Show window name if a specific window is selected
 	if ws := m.selectedWindowStatus(); ws != nil {
-		windowStyle := lipgloss.NewStyle().Foreground(styles.ColorSecondary)
-		title += " " + windowStyle.Render("["+ws.WindowName+"]")
+		title += " " + styles.PreviewHeaderWindowStyle.Render("["+ws.WindowName+"]")
 	}
 	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
 
@@ -2292,7 +2280,7 @@ func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 		parts = append(parts, status)
 	}
 	parts = append(parts, "")
-	parts = append(parts, lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("Output"))
+	parts = append(parts, styles.TextMutedStyle.Render("Output"))
 	parts = append(parts, dividerStyle.Render(divider))
 
 	return strings.Join(parts, "\n")

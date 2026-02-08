@@ -7,7 +7,6 @@ import (
 	"strings"
 	"time"
 
-	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
 	"github.com/hay-kot/hive/internal/core/styles"
 )
@@ -234,8 +233,8 @@ func (d *Document) formatWithLineNumbers(lines []string) string {
 
 	// Build output with line numbers
 	var result strings.Builder
-	lineNumStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
-	separatorStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	lineNumStyle := styles.TextMutedStyle
+	separatorStyle := styles.TextMutedStyle
 
 	for i, line := range lines {
 		lineNum := fmt.Sprintf("%*d", lineNumWidth, i+1)

@@ -96,7 +96,7 @@ func (m FinalizationModal) View() string {
 
 		if i == m.selectedIdx {
 			prefix = "▸ "
-			style = style.Foreground(styles.ColorPrimary).Bold(true)
+			style = styles.ReviewFinalizeOptionStyle
 		}
 
 		content.WriteString(prefix)
@@ -104,25 +104,16 @@ func (m FinalizationModal) View() string {
 		content.WriteString("\n")
 
 		// Description in gray
-		descStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
-		content.WriteString("  " + descStyle.Render(opt.description) + "\n\n")
+		content.WriteString("  " + styles.ReviewFinalizeDescStyle.Render(opt.description) + "\n\n")
 	}
 
 	content.WriteString("\n")
-	content.WriteString(lipgloss.NewStyle().Foreground(styles.ColorMuted).Render("[j/k] select • [enter] confirm • [esc] cancel"))
+	content.WriteString(styles.ReviewFinalizeHelpStyle.Render("[j/k] select • [enter] confirm • [esc] cancel"))
 
 	// Style the modal
-	modalWidth := 60
 	modalContent := content.String()
 
-	modalStyle := lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(styles.ColorPrimary).
-		Padding(1, 2).
-		Width(modalWidth).
-		Background(styles.ColorBackground)
-
-	return modalStyle.Render(modalContent)
+	return styles.ReviewFinalizeModalStyle.Render(modalContent)
 }
 
 // Overlay renders the modal over the background content.

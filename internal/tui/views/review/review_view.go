@@ -80,7 +80,7 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	l.Styles.Title = lipgloss.NewStyle()
 
 	// Configure help to match sessions view
-	helpStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
+	helpStyle := styles.TextMutedStyle
 	l.Help.Styles.ShortKey = helpStyle
 	l.Help.Styles.ShortDesc = helpStyle
 	l.Help.Styles.ShortSeparator = helpStyle
@@ -88,7 +88,7 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	l.Help.Styles.FullDesc = helpStyle
 	l.Help.Styles.FullSeparator = helpStyle
 	l.Help.ShortSeparator = " • "
-	l.Styles.HelpStyle = lipgloss.NewStyle().PaddingLeft(1)
+	l.Styles.HelpStyle = styles.ListHelpContainerStyle
 
 	// Initialize watcher if context directory is provided
 	var watcher *DocumentWatcher
@@ -600,19 +600,11 @@ func (v View) View() string {
 	switch {
 	case v.selectedDoc == nil:
 		// Show helpful message if no document is selected
-		messageStyle := lipgloss.NewStyle().
-			Foreground(styles.ColorForeground).
-			Padding(2, 4)
-
-		helpStyle := lipgloss.NewStyle().
-			Foreground(styles.ColorPrimary).
-			Bold(true)
-
 		message := "No document selected\n\n"
-		message += helpStyle.Render("Press 'p'") + " to open document picker\n"
-		message += helpStyle.Render("Press 'tab'") + " to switch to another view"
+		message += styles.TextPrimaryBoldStyle.Render("Press 'p'") + " to open document picker\n"
+		message += styles.TextPrimaryBoldStyle.Render("Press 'tab'") + " to switch to another view"
 
-		baseView = messageStyle.Render(message)
+		baseView = styles.ReviewEmptyMessageStyle.Render(message)
 	case v.fullScreen:
 		// Full-screen mode: show viewport with status bar
 		contentHeight := v.height - 1 // Reserve 1 line for status bar
@@ -644,13 +636,7 @@ func (v View) View() string {
 	// Overlay confirmation modal if active
 	if v.confirmModal != nil {
 		modalContent := v.confirmModal.View()
-		modalStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.ColorPrimary).
-			Padding(1, 2).
-			Background(styles.ColorBackground)
-
-		modal := modalStyle.Render(modalContent)
+		modal := styles.ReviewOverlayModalStyle.Render(modalContent)
 
 		// Center the modal
 		modalW := lipgloss.Width(modal)
@@ -670,13 +656,7 @@ func (v View) View() string {
 	// Overlay comment modal if active
 	if v.commentModal != nil {
 		modalContent := v.commentModal.View()
-		modalStyle := lipgloss.NewStyle().
-			Border(lipgloss.RoundedBorder()).
-			BorderForeground(styles.ColorPrimary).
-			Padding(1, 2).
-			Background(styles.ColorBackground)
-
-		modal := modalStyle.Render(modalContent)
+		modal := styles.ReviewOverlayModalStyle.Render(modalContent)
 
 		// Center the modal
 		modalW := lipgloss.Width(modal)
@@ -950,16 +930,13 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 	}
 
 	// Styles for cursor and selection (no explicit width)
-	selectionStyle := lipgloss.NewStyle().Background(styles.ColorSurface)
-	cursorStyle := lipgloss.NewStyle().Background(styles.ColorSurface)
-	searchMatchStyle := lipgloss.NewStyle().Background(styles.ColorMuted)        // Subtle highlight for other matches
-	currentSearchMatchStyle := lipgloss.NewStyle().Background(styles.ColorError) // Bright for current match
+	selectionStyle := styles.ReviewSelectionStyle
+	cursorStyle := styles.ReviewCursorStyle
+	searchMatchStyle := styles.ReviewSearchMatchStyle               // Subtle highlight for other matches
+	currentSearchMatchStyle := styles.ReviewCurrentSearchMatchStyle // Bright for current match
 
 	// Style for commented line numbers
-	commentedLineNumStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorBackground). // Dark text
-		Background(styles.ColorWarning).    // Gold background
-		Bold(true)
+	commentedLineNumStyle := styles.ReviewCommentedLineNumStyle
 
 	// Calculate selection range if in visual mode (map to display coordinates)
 	var start, end int
@@ -1114,34 +1091,24 @@ func (v *View) mapDisplayToDoc(displayLine int, lineMapping map[int]int) int {
 func (v View) renderStatusBar() string {
 	// Show search input when in search mode
 	if v.searchMode {
-		searchStyle := lipgloss.NewStyle().
-			Foreground(styles.ColorPrimary).
-			Background(styles.ColorBackground).
-			Bold(true)
-
-		bgStyle := lipgloss.NewStyle().Background(styles.ColorBackground)
-		prefix := searchStyle.Render("/")
+		prefix := styles.ReviewSearchInputStyle.Render("/")
 		input := v.searchInput.View()
 		remaining := max(0, v.width-lipgloss.Width(prefix)-lipgloss.Width(input))
 
-		return prefix + input + bgStyle.Render(strings.Repeat(" ", remaining))
+		return prefix + input + styles.ReviewStatusBarBgStyle.Render(strings.Repeat(" ", remaining))
 	}
 
 	// Determine mode
 	mode := "NORMAL"
-	modeStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorForeground).
-		Background(styles.ColorSurface).
-		Bold(true).
-		Padding(0, 1)
+	modeStyle := styles.ReviewModeNormalStyle
 
 	if v.selectionMode {
 		mode = "VISUAL"
-		modeStyle = modeStyle.Background(styles.ColorPrimary)
+		modeStyle = styles.ReviewModeVisualStyle
 	} else if v.searchQuery != "" && len(v.searchMatches) > 0 {
 		// Show search match count when search is active
 		mode = fmt.Sprintf("SEARCH | Match %d/%d", v.searchMatchIndex+1, len(v.searchMatches))
-		modeStyle = modeStyle.Background(styles.ColorError)
+		modeStyle = styles.ReviewModeSearchStyle
 	}
 
 	// Calculate total lines
@@ -1152,10 +1119,7 @@ func (v View) renderStatusBar() string {
 
 	// Position info
 	posInfo := fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines)
-	posStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorMuted).
-		Background(styles.ColorBackground).
-		Padding(0, 1)
+	posStyle := styles.ReviewPosStyle
 
 	// Help text
 	var helpText string
@@ -1164,10 +1128,7 @@ func (v View) renderStatusBar() string {
 	} else {
 		helpText = "V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close"
 	}
-	helpStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorMuted).
-		Background(styles.ColorBackground).
-		Padding(0, 1)
+	helpStyle := styles.ReviewHelpStyle
 
 	// Build status bar
 	leftPart := modeStyle.Render(mode)
@@ -1182,8 +1143,7 @@ func (v View) renderStatusBar() string {
 	leftSpacing := availableSpace / 2
 	rightSpacing := availableSpace - leftSpacing
 
-	bgStyle := lipgloss.NewStyle().Background(styles.ColorBackground)
-	return leftPart + bgStyle.Render(strings.Repeat(" ", leftSpacing)) + middlePart + bgStyle.Render(strings.Repeat(" ", rightSpacing)) + rightPart
+	return leftPart + styles.ReviewStatusBarBgStyle.Render(strings.Repeat(" ", leftSpacing)) + middlePart + styles.ReviewStatusBarBgStyle.Render(strings.Repeat(" ", rightSpacing)) + rightPart
 }
 
 // getSelectedText extracts the text from the selected line range.
@@ -1446,11 +1406,7 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 	}
 
 	// Insert comments after their lines with enhanced visual styling
-	commentStyle := lipgloss.NewStyle().
-		Foreground(styles.ColorError).      // More vibrant pink
-		Background(styles.ColorBackground). // Subtle background
-		Padding(0, 1).
-		Bold(true)
+	commentStyle := styles.ReviewInlineCommentStyle
 
 	// Track how many comment lines were inserted before each document line
 	// This allows us to map document line numbers to display line numbers
@@ -1579,13 +1535,13 @@ type ReviewTreeDelegateStyles struct {
 // DefaultReviewTreeDelegateStyles returns the default styles.
 func DefaultReviewTreeDelegateStyles() ReviewTreeDelegateStyles {
 	return ReviewTreeDelegateStyles{
-		HeaderNormal:   lipgloss.NewStyle().Bold(true).Foreground(styles.ColorForeground),
-		HeaderSelected: lipgloss.NewStyle().Bold(true).Foreground(styles.ColorPrimary),
-		TreeLine:       lipgloss.NewStyle().Foreground(styles.ColorMuted),
-		DocName:        lipgloss.NewStyle().Foreground(styles.ColorForeground),
-		DocMeta:        lipgloss.NewStyle().Foreground(styles.ColorMuted),
-		Selected:       lipgloss.NewStyle().Foreground(styles.ColorPrimary).Bold(true),
-		SelectedBorder: lipgloss.NewStyle().Foreground(styles.ColorPrimary),
+		HeaderNormal:   styles.ReviewTreeHeaderStyle,
+		HeaderSelected: styles.ReviewTreeHeaderSelectedStyle,
+		TreeLine:       styles.TextMutedStyle,
+		DocName:        styles.TextForegroundStyle,
+		DocMeta:        styles.TextMutedStyle,
+		Selected:       styles.TextPrimaryBoldStyle,
+		SelectedBorder: styles.ReviewTreeSelectedBorderStyle,
 	}
 }
 
@@ -1669,8 +1625,7 @@ func (d ReviewTreeDelegate) renderDocument(item TreeItem, isSelected bool) strin
 	var sessionIndicator string
 	if item.HasActiveSession {
 		// Blue dot to indicate active review session
-		indicatorStyle := lipgloss.NewStyle().Foreground(styles.ColorPrimary)
-		sessionIndicator = indicatorStyle.Render(" ●")
+		sessionIndicator = styles.TextPrimaryStyle.Render(" ●")
 	}
 
 	// Comment count (if any)

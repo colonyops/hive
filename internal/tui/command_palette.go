@@ -86,7 +86,7 @@ func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session
 	input.Prompt = ":"
 	input.Focus()
 	inputStyles := textinput.DefaultStyles(true)
-	inputStyles.Focused.Prompt = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
+	inputStyles.Focused.Prompt = styles.TextPrimaryStyle
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	input.SetWidth(40)
 	input.SetStyles(inputStyles)
@@ -302,12 +302,12 @@ func (p *CommandPalette) View() string {
 		isSelected := actualIdx == p.selectedIdx
 
 		// Style for selected vs unselected
-		nameStyle := lipgloss.NewStyle().Foreground(styles.ColorForeground)
-		helpStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
+		nameStyle := styles.TextForegroundStyle
+		helpStyle := styles.TextMutedStyle
 		cursor := "  "
 		if isSelected {
-			nameStyle = nameStyle.Foreground(styles.ColorPrimary).Bold(true)
-			helpStyle = helpStyle.Foreground(styles.ColorPrimary).Faint(true)
+			nameStyle = styles.TextPrimaryBoldStyle
+			helpStyle = styles.CommandPaletteHelpSelectedStyle
 			cursor = "> "
 		}
 
@@ -337,8 +337,7 @@ func (p *CommandPalette) View() string {
 	// Show count if more suggestions available beyond visible window
 	remaining := len(p.filteredList) - endIdx
 	if remaining > 0 {
-		moreStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted).Italic(true)
-		suggestions = append(suggestions, moreStyle.Render("  ... and more"))
+		suggestions = append(suggestions, styles.CommandPaletteMoreStyle.Render("  ... and more"))
 	}
 
 	// Join all parts with constrained width
