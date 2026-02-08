@@ -54,8 +54,8 @@ func (q *Queries) CountPrunableMessages(ctx context.Context, createdAt int64) (i
 
 const createReviewSession = `-- name: CreateReviewSession :exec
 INSERT INTO review_sessions (
-    id, document_path, content_hash, created_at, finalized_at
-) VALUES (?, ?, ?, ?, ?)
+    id, document_path, content_hash, created_at, finalized_at, session_name, diff_context
+) VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateReviewSessionParams struct {
@@ -64,6 +64,8 @@ type CreateReviewSessionParams struct {
 	ContentHash  string        `json:"content_hash"`
 	CreatedAt    int64         `json:"created_at"`
 	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
+	SessionName  string        `json:"session_name"`
+	DiffContext  string        `json:"diff_context"`
 }
 
 func (q *Queries) CreateReviewSession(ctx context.Context, arg CreateReviewSessionParams) error {
@@ -73,6 +75,8 @@ func (q *Queries) CreateReviewSession(ctx context.Context, arg CreateReviewSessi
 		arg.ContentHash,
 		arg.CreatedAt,
 		arg.FinalizedAt,
+		arg.SessionName,
+		arg.DiffContext,
 	)
 	return err
 }
@@ -188,6 +192,8 @@ SELECT
     rs.content_hash,
     rs.created_at,
     rs.finalized_at,
+    rs.session_name,
+    rs.diff_context,
     COUNT(rc.id) as comment_count
 FROM review_sessions rs
 LEFT JOIN review_comments rc ON rs.id = rc.session_id
@@ -201,6 +207,8 @@ type GetAllActiveSessionsWithCountsRow struct {
 	ContentHash  string        `json:"content_hash"`
 	CreatedAt    int64         `json:"created_at"`
 	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
+	SessionName  string        `json:"session_name"`
+	DiffContext  string        `json:"diff_context"`
 	CommentCount int64         `json:"comment_count"`
 }
 
@@ -219,6 +227,8 @@ func (q *Queries) GetAllActiveSessionsWithCounts(ctx context.Context) ([]GetAllA
 			&i.ContentHash,
 			&i.CreatedAt,
 			&i.FinalizedAt,
+			&i.SessionName,
+			&i.DiffContext,
 			&i.CommentCount,
 		); err != nil {
 			return nil, err
@@ -234,8 +244,35 @@ func (q *Queries) GetAllActiveSessionsWithCounts(ctx context.Context) ([]GetAllA
 	return items, nil
 }
 
+const getReviewSessionByContext = `-- name: GetReviewSessionByContext :one
+SELECT id, document_path, content_hash, created_at, finalized_at, session_name, diff_context FROM review_sessions
+WHERE session_name = ? AND diff_context = ?
+ORDER BY created_at DESC
+LIMIT 1
+`
+
+type GetReviewSessionByContextParams struct {
+	SessionName string `json:"session_name"`
+	DiffContext string `json:"diff_context"`
+}
+
+func (q *Queries) GetReviewSessionByContext(ctx context.Context, arg GetReviewSessionByContextParams) (ReviewSession, error) {
+	row := q.db.QueryRowContext(ctx, getReviewSessionByContext, arg.SessionName, arg.DiffContext)
+	var i ReviewSession
+	err := row.Scan(
+		&i.ID,
+		&i.DocumentPath,
+		&i.ContentHash,
+		&i.CreatedAt,
+		&i.FinalizedAt,
+		&i.SessionName,
+		&i.DiffContext,
+	)
+	return i, err
+}
+
 const getReviewSessionByDocPath = `-- name: GetReviewSessionByDocPath :one
-SELECT id, document_path, content_hash, created_at, finalized_at FROM review_sessions
+SELECT id, document_path, content_hash, created_at, finalized_at, session_name, diff_context FROM review_sessions
 WHERE document_path = ?
 ORDER BY created_at DESC
 LIMIT 1
@@ -250,12 +287,14 @@ func (q *Queries) GetReviewSessionByDocPath(ctx context.Context, documentPath st
 		&i.ContentHash,
 		&i.CreatedAt,
 		&i.FinalizedAt,
+		&i.SessionName,
+		&i.DiffContext,
 	)
 	return i, err
 }
 
 const getReviewSessionByDocPathAndHash = `-- name: GetReviewSessionByDocPathAndHash :one
-SELECT id, document_path, content_hash, created_at, finalized_at FROM review_sessions
+SELECT id, document_path, content_hash, created_at, finalized_at, session_name, diff_context FROM review_sessions
 WHERE document_path = ? AND content_hash = ?
 `
 
@@ -273,6 +312,8 @@ func (q *Queries) GetReviewSessionByDocPathAndHash(ctx context.Context, arg GetR
 		&i.ContentHash,
 		&i.CreatedAt,
 		&i.FinalizedAt,
+		&i.SessionName,
+		&i.DiffContext,
 	)
 	return i, err
 }
@@ -344,7 +385,7 @@ func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesPa
 }
 
 const listReviewComments = `-- name: ListReviewComments :many
-SELECT id, session_id, start_line, end_line, context_text, comment_text, created_at FROM review_comments
+SELECT id, session_id, start_line, end_line, context_text, comment_text, created_at, side FROM review_comments
 WHERE session_id = ?
 ORDER BY start_line ASC
 `
@@ -366,6 +407,7 @@ func (q *Queries) ListReviewComments(ctx context.Context, sessionID string) ([]R
 			&i.ContextText,
 			&i.CommentText,
 			&i.CreatedAt,
+			&i.Side,
 		); err != nil {
 			return nil, err
 		}
@@ -485,8 +527,8 @@ func (q *Queries) PublishMessage(ctx context.Context, arg PublishMessageParams) 
 
 const saveReviewComment = `-- name: SaveReviewComment :exec
 INSERT INTO review_comments (
-    id, session_id, start_line, end_line, context_text, comment_text, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?)
+    id, session_id, start_line, end_line, context_text, comment_text, created_at, side
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type SaveReviewCommentParams struct {
@@ -497,6 +539,7 @@ type SaveReviewCommentParams struct {
 	ContextText string `json:"context_text"`
 	CommentText string `json:"comment_text"`
 	CreatedAt   int64  `json:"created_at"`
+	Side        string `json:"side"`
 }
 
 func (q *Queries) SaveReviewComment(ctx context.Context, arg SaveReviewCommentParams) error {
@@ -508,6 +551,7 @@ func (q *Queries) SaveReviewComment(ctx context.Context, arg SaveReviewCommentPa
 		arg.ContextText,
 		arg.CommentText,
 		arg.CreatedAt,
+		arg.Side,
 	)
 	return err
 }

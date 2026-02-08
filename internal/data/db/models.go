@@ -31,6 +31,7 @@ type ReviewComment struct {
 	ContextText string `json:"context_text"`
 	CommentText string `json:"comment_text"`
 	CreatedAt   int64  `json:"created_at"`
+	Side        string `json:"side"`
 }
 
 type ReviewSession struct {
@@ -39,6 +40,8 @@ type ReviewSession struct {
 	ContentHash  string        `json:"content_hash"`
 	CreatedAt    int64         `json:"created_at"`
 	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
+	SessionName  string        `json:"session_name"`
+	DiffContext  string        `json:"diff_context"`
 }
 
 type SchemaVersion struct {

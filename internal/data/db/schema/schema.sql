@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version
-INSERT OR IGNORE INTO schema_version (version) VALUES (4);
+INSERT OR IGNORE INTO schema_version (version) VALUES (5);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
@@ -62,6 +62,8 @@ CREATE TABLE IF NOT EXISTS review_sessions (
     content_hash TEXT NOT NULL,           -- SHA256 hash of document content
     created_at INTEGER NOT NULL,          -- Unix timestamp in nanoseconds
     finalized_at INTEGER,                 -- Unix timestamp in nanoseconds, NULL if not finalized
+    session_name TEXT DEFAULT '' NOT NULL, -- Human-readable name for diff sessions
+    diff_context TEXT DEFAULT '' NOT NULL, -- Git context for diff sessions (e.g., "main..feat", "staged")
     UNIQUE(document_path, content_hash)   -- One session per document+hash combination
 );
 
@@ -77,7 +79,14 @@ CREATE TABLE IF NOT EXISTS review_comments (
     context_text TEXT NOT NULL,          -- Quoted text from document
     comment_text TEXT NOT NULL,          -- User's feedback
     created_at INTEGER NOT NULL,         -- Unix timestamp in nanoseconds
+    side TEXT DEFAULT '' NOT NULL CHECK(side IN ('', 'old', 'new')), -- For diffs: 'old' (deletion), 'new' (addition), '' (document)
     FOREIGN KEY (session_id) REFERENCES review_sessions(id) ON DELETE CASCADE
 );
 
 CREATE INDEX IF NOT EXISTS idx_review_comments_session_id ON review_comments(session_id);
+
+-- Schema version 5: Add diff context support
+-- Note: ALTER TABLE will fail if columns exist; initSchema handles this by checking version
+-- Add session_name and diff_context to review_sessions for diff review sessions
+-- Add side column to review_comments to distinguish old lines (deletions) from new lines (additions)
+-- Empty string means document review (not a diff comment). Values: 'old' (deletion) or 'new' (addition)

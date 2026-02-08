@@ -278,4 +278,127 @@ func TestReviewStore(t *testing.T) {
 		require.Len(t, comments2, 1, "session2: got %d comments, want 1", len(comments2))
 		assert.Equal(t, comment2.CommentText, comments2[0].CommentText)
 	})
+
+	t.Run("create and get diff session", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err, "Open")
+		defer func() { _ = database.Close() }()
+
+		store := NewReviewStore(database)
+
+		sessionName := "feat-auth-vs-main"
+		diffContext := "main..feat-auth"
+		docPath := "/tmp/diff/test.go"
+		contentHash := "diff123"
+
+		session, err := store.CreateDiffSession(ctx, sessionName, diffContext, docPath, contentHash)
+		require.NoError(t, err, "CreateDiffSession")
+		assert.NotEmpty(t, session.ID, "expected non-empty session ID")
+		assert.Equal(t, sessionName, session.SessionName)
+		assert.Equal(t, diffContext, session.DiffContext)
+		assert.Equal(t, docPath, session.DocumentPath)
+		assert.Nil(t, session.FinalizedAt, "expected new session to not be finalized")
+
+		// Get by context
+		got, err := store.GetSessionByContext(ctx, sessionName, diffContext)
+		require.NoError(t, err, "GetSessionByContext")
+		assert.Equal(t, session.ID, got.ID)
+		assert.Equal(t, sessionName, got.SessionName)
+		assert.Equal(t, diffContext, got.DiffContext)
+	})
+
+	t.Run("get diff session by context not found", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err, "Open")
+		defer func() { _ = database.Close() }()
+
+		store := NewReviewStore(database)
+
+		_, err = store.GetSessionByContext(ctx, "nonexistent", "main..branch")
+		assert.ErrorIs(t, err, review.ErrSessionNotFound, "got %v, want ErrSessionNotFound", err)
+	})
+
+	t.Run("save and list diff comments with side", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err, "Open")
+		defer func() { _ = database.Close() }()
+
+		store := NewReviewStore(database)
+
+		sessionName := "test-diff"
+		diffContext := "main..feature"
+		docPath := "/tmp/diff/comments.go"
+		session, err := store.CreateDiffSession(ctx, sessionName, diffContext, docPath, "hash1")
+		require.NoError(t, err, "CreateDiffSession")
+
+		// Add comment on old side (deletion)
+		commentOld := review.Comment{
+			ID:          uuid.NewString(),
+			SessionID:   session.ID,
+			StartLine:   10,
+			EndLine:     12,
+			ContextText: "- old code",
+			CommentText: "This was removed",
+			CreatedAt:   time.Now(),
+			Side:        "old",
+		}
+		err = store.SaveComment(ctx, commentOld)
+		require.NoError(t, err, "SaveComment old")
+
+		// Add comment on new side (addition)
+		commentNew := review.Comment{
+			ID:          uuid.NewString(),
+			SessionID:   session.ID,
+			StartLine:   15,
+			EndLine:     17,
+			ContextText: "+ new code",
+			CommentText: "This is the new implementation",
+			CreatedAt:   time.Now(),
+			Side:        "new",
+		}
+		err = store.SaveComment(ctx, commentNew)
+		require.NoError(t, err, "SaveComment new")
+
+		// List comments
+		comments, err := store.ListComments(ctx, session.ID)
+		require.NoError(t, err, "ListComments")
+		require.Len(t, comments, 2, "got %d comments, want 2", len(comments))
+
+		// Verify side field is preserved
+		assert.Equal(t, "old", comments[0].Side, "first comment side")
+		assert.Equal(t, "new", comments[1].Side, "second comment side")
+		assert.Equal(t, commentOld.CommentText, comments[0].CommentText)
+		assert.Equal(t, commentNew.CommentText, comments[1].CommentText)
+	})
+
+	t.Run("document review comment has empty side", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err, "Open")
+		defer func() { _ = database.Close() }()
+
+		store := NewReviewStore(database)
+
+		docPath := "/tmp/doc.md"
+		session, err := store.CreateSession(ctx, docPath, "hash1")
+		require.NoError(t, err, "CreateSession")
+
+		// Add comment without side (document review)
+		comment := review.Comment{
+			ID:          uuid.NewString(),
+			SessionID:   session.ID,
+			StartLine:   5,
+			EndLine:     10,
+			ContextText: "document text",
+			CommentText: "Regular document comment",
+			CreatedAt:   time.Now(),
+			Side:        "",
+		}
+		err = store.SaveComment(ctx, comment)
+		require.NoError(t, err, "SaveComment")
+
+		comments, err := store.ListComments(ctx, session.ID)
+		require.NoError(t, err, "ListComments")
+		require.Len(t, comments, 1, "got %d comments, want 1", len(comments))
+		assert.Equal(t, "", comments[0].Side, "document comment should have empty side")
+	})
 }

@@ -24,6 +24,7 @@ func NewReviewStore(db *db.DB) *ReviewStore {
 }
 
 // CreateSession creates a new review session for a document with content hash.
+// For diff sessions, use CreateDiffSession instead.
 func (s *ReviewStore) CreateSession(ctx context.Context, documentPath string, contentHash string) (review.Session, error) {
 	sessionID := uuid.NewString()
 	now := time.Now()
@@ -34,6 +35,8 @@ func (s *ReviewStore) CreateSession(ctx context.Context, documentPath string, co
 		ContentHash:  contentHash,
 		CreatedAt:    now.UnixNano(),
 		FinalizedAt:  sql.NullInt64{Valid: false},
+		SessionName:  "",
+		DiffContext:  "",
 	})
 	if err != nil {
 		return review.Session{}, fmt.Errorf("failed to create review session: %w", err)
@@ -45,6 +48,37 @@ func (s *ReviewStore) CreateSession(ctx context.Context, documentPath string, co
 		ContentHash:  contentHash,
 		CreatedAt:    now,
 		FinalizedAt:  nil,
+		SessionName:  "",
+		DiffContext:  "",
+	}, nil
+}
+
+// CreateDiffSession creates a new review session for a diff with context.
+func (s *ReviewStore) CreateDiffSession(ctx context.Context, sessionName string, diffContext string, documentPath string, contentHash string) (review.Session, error) {
+	sessionID := uuid.NewString()
+	now := time.Now()
+
+	err := s.db.Queries().CreateReviewSession(ctx, db.CreateReviewSessionParams{
+		ID:           sessionID,
+		DocumentPath: documentPath,
+		ContentHash:  contentHash,
+		CreatedAt:    now.UnixNano(),
+		FinalizedAt:  sql.NullInt64{Valid: false},
+		SessionName:  sessionName,
+		DiffContext:  diffContext,
+	})
+	if err != nil {
+		return review.Session{}, fmt.Errorf("failed to create diff review session: %w", err)
+	}
+
+	return review.Session{
+		ID:           sessionID,
+		DocumentPath: documentPath,
+		ContentHash:  contentHash,
+		CreatedAt:    now,
+		FinalizedAt:  nil,
+		SessionName:  sessionName,
+		DiffContext:  diffContext,
 	}, nil
 }
 
@@ -56,6 +90,22 @@ func (s *ReviewStore) GetSession(ctx context.Context, documentPath string) (revi
 	}
 	if err != nil {
 		return review.Session{}, fmt.Errorf("failed to get review session: %w", err)
+	}
+
+	return rowToReviewSession(row), nil
+}
+
+// GetSessionByContext returns a review session for the given session name and diff context.
+func (s *ReviewStore) GetSessionByContext(ctx context.Context, sessionName string, diffContext string) (review.Session, error) {
+	row, err := s.db.Queries().GetReviewSessionByContext(ctx, db.GetReviewSessionByContextParams{
+		SessionName: sessionName,
+		DiffContext: diffContext,
+	})
+	if IsNotFoundError(err) {
+		return review.Session{}, review.ErrSessionNotFound
+	}
+	if err != nil {
+		return review.Session{}, fmt.Errorf("failed to get review session by context: %w", err)
 	}
 
 	return rowToReviewSession(row), nil
@@ -121,6 +171,7 @@ func (s *ReviewStore) SaveComment(ctx context.Context, comment review.Comment) e
 		ContextText: comment.ContextText,
 		CommentText: comment.CommentText,
 		CreatedAt:   comment.CreatedAt.UnixNano(),
+		Side:        comment.Side,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save review comment: %w", err)
@@ -193,6 +244,8 @@ func (s *ReviewStore) GetAllActiveSessionsWithCounts(ctx context.Context) (map[s
 			ContentHash:  row.ContentHash,
 			CreatedAt:    time.Unix(0, row.CreatedAt),
 			FinalizedAt:  finalizedAt,
+			SessionName:  row.SessionName,
+			DiffContext:  row.DiffContext,
 		}
 
 		result[row.DocumentPath] = SessionInfo{
@@ -218,6 +271,8 @@ func rowToReviewSession(row db.ReviewSession) review.Session {
 		ContentHash:  row.ContentHash,
 		CreatedAt:    time.Unix(0, row.CreatedAt),
 		FinalizedAt:  finalizedAt,
+		SessionName:  row.SessionName,
+		DiffContext:  row.DiffContext,
 	}
 }
 
@@ -231,5 +286,6 @@ func rowToReviewComment(row db.ReviewComment) review.Comment {
 		ContextText: row.ContextText,
 		CommentText: row.CommentText,
 		CreatedAt:   time.Unix(0, row.CreatedAt),
+		Side:        row.Side,
 	}
 }

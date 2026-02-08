@@ -80,8 +80,8 @@ ORDER BY m.created_at ASC;
 
 -- name: CreateReviewSession :exec
 INSERT INTO review_sessions (
-    id, document_path, content_hash, created_at, finalized_at
-) VALUES (?, ?, ?, ?, ?);
+    id, document_path, content_hash, created_at, finalized_at, session_name, diff_context
+) VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetReviewSessionByDocPath :one
 SELECT * FROM review_sessions
@@ -92,6 +92,12 @@ LIMIT 1;
 -- name: GetReviewSessionByDocPathAndHash :one
 SELECT * FROM review_sessions
 WHERE document_path = ? AND content_hash = ?;
+
+-- name: GetReviewSessionByContext :one
+SELECT * FROM review_sessions
+WHERE session_name = ? AND diff_context = ?
+ORDER BY created_at DESC
+LIMIT 1;
 
 -- name: FinalizeReviewSession :exec
 UPDATE review_sessions
@@ -108,8 +114,8 @@ WHERE document_path = ? AND content_hash != ?;
 
 -- name: SaveReviewComment :exec
 INSERT INTO review_comments (
-    id, session_id, start_line, end_line, context_text, comment_text, created_at
-) VALUES (?, ?, ?, ?, ?, ?, ?);
+    id, session_id, start_line, end_line, context_text, comment_text, created_at, side
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: ListReviewComments :many
 SELECT * FROM review_comments
@@ -132,6 +138,8 @@ SELECT
     rs.content_hash,
     rs.created_at,
     rs.finalized_at,
+    rs.session_name,
+    rs.diff_context,
     COUNT(rc.id) as comment_count
 FROM review_sessions rs
 LEFT JOIN review_comments rc ON rs.id = rc.session_id

@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	_ "modernc.org/sqlite"
 )
@@ -123,11 +124,83 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 	return nil
 }
 
-// initSchema creates the database schema if it doesn't exist.
+// initSchema creates the database schema if it doesn't exist and runs migrations.
 func (db *DB) initSchema(ctx context.Context) error {
+	// Execute base schema (idempotent)
 	_, err := db.conn.ExecContext(ctx, schemaSQL)
 	if err != nil {
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}
+
+	// Get current schema version
+	var currentVersion int
+	err = db.conn.QueryRowContext(ctx, "SELECT version FROM schema_version").Scan(&currentVersion)
+	if err != nil {
+		return fmt.Errorf("failed to read schema version: %w", err)
+	}
+
+	// Run migrations
+	if err := db.runMigrations(ctx, currentVersion); err != nil {
+		return fmt.Errorf("failed to run migrations: %w", err)
+	}
+
 	return nil
+}
+
+// runMigrations applies schema migrations from the current version to the latest.
+func (db *DB) runMigrations(ctx context.Context, currentVersion int) error {
+	const targetVersion = 5
+
+	if currentVersion >= targetVersion {
+		return nil
+	}
+
+	// Wrap all migrations in a single transaction
+	return db.WithTx(ctx, func(q *Queries) error {
+		// Migration from version 4 to 5: Add diff context support
+		if currentVersion < 5 {
+			// Add columns to review_sessions
+			if _, err := db.conn.ExecContext(ctx, `
+				ALTER TABLE review_sessions ADD COLUMN session_name TEXT DEFAULT '' NOT NULL;
+			`); err != nil && !isColumnExistsError(err) {
+				return fmt.Errorf("failed to add session_name column: %w", err)
+			}
+
+			if _, err := db.conn.ExecContext(ctx, `
+				ALTER TABLE review_sessions ADD COLUMN diff_context TEXT DEFAULT '' NOT NULL;
+			`); err != nil && !isColumnExistsError(err) {
+				return fmt.Errorf("failed to add diff_context column: %w", err)
+			}
+
+			// Add side column to review_comments
+			if _, err := db.conn.ExecContext(ctx, `
+				ALTER TABLE review_comments ADD COLUMN side TEXT DEFAULT '' NOT NULL CHECK(side IN ('', 'old', 'new'));
+			`); err != nil && !isColumnExistsError(err) {
+				return fmt.Errorf("failed to add side column: %w", err)
+			}
+
+			// Update schema version (DELETE + INSERT because version is PRIMARY KEY)
+			if _, err := db.conn.ExecContext(ctx, `
+				DELETE FROM schema_version;
+			`); err != nil {
+				return fmt.Errorf("failed to clear schema version: %w", err)
+			}
+			if _, err := db.conn.ExecContext(ctx, `
+				INSERT INTO schema_version (version) VALUES (5);
+			`); err != nil {
+				return fmt.Errorf("failed to set schema version to 5: %w", err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// isColumnExistsError checks if the error is due to a column already existing.
+// SQLite error message contains "duplicate column name"
+func isColumnExistsError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "duplicate column name")
 }
