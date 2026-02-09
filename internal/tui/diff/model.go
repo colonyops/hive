@@ -221,9 +221,18 @@ func (m Model) View() tea.View {
 	// Render diff viewer
 	diffViewerView := m.diffViewer.View()
 
-	// Create thin gutter divider between panels (single column, full height)
-	gutterChar := styles.TextMutedStyle.Render("│")
-	gutter := strings.Repeat(gutterChar+"\n", panelHeight-1) + gutterChar
+	// Create thin gutter divider between panels
+	// Build gutter content as multiple lines
+	var gutterBuilder strings.Builder
+	for i := 0; i < panelHeight; i++ {
+		if i > 0 {
+			gutterBuilder.WriteString("\n")
+		}
+		gutterBuilder.WriteString("│")
+	}
+	gutter := lipgloss.NewStyle().
+		Foreground(styles.ColorMuted).
+		Render(gutterBuilder.String())
 
 	// Apply consistent styling
 	treeStyle := lipgloss.NewStyle().
