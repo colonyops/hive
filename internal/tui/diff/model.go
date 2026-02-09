@@ -105,13 +105,24 @@ func createHelpDialog() *components.HelpDialog {
 	return components.NewHelpDialog("Diff Viewer Help", sections, 80, 40)
 }
 
-// Init initializes the model (no commands needed).
+// Init initializes the model and starts loading the first file.
 func (m Model) Init() tea.Cmd {
+	// If there's a file in the diff viewer, trigger initial load
+	if m.diffViewer.file != nil {
+		return m.diffViewer.SetFile(m.diffViewer.file)
+	}
 	return nil
 }
 
 // Update handles keyboard input and updates the focused panel.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	// Forward diffGeneratedMsg to diff viewer first
+	if _, ok := msg.(diffGeneratedMsg); ok {
+		var cmd tea.Cmd
+		m.diffViewer, cmd = m.diffViewer.Update(msg)
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		// Handle window resize
@@ -153,7 +164,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.focused == FocusFileTree {
 				selectedFile := m.fileTree.SelectedFile()
 				if selectedFile != nil {
-					m.diffViewer.SetFile(selectedFile)
+					return m, m.diffViewer.SetFile(selectedFile)
 				}
 			}
 			// Fall through to let file tree handle expand/collapse
@@ -172,7 +183,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "j", "k", "up", "down", "g", "G":
 				selectedFile := m.fileTree.SelectedFile()
 				if selectedFile != nil {
-					m.diffViewer.SetFile(selectedFile)
+					// Return the async command from SetFile
+					diffCmd := m.diffViewer.SetFile(selectedFile)
+					// Batch both commands
+					return m, tea.Batch(cmd, diffCmd)
 				}
 			}
 		}

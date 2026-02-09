@@ -171,6 +171,14 @@ func TestModelDiffViewerScrolling(t *testing.T) {
 	m := New(files, cfg)
 	m.SetSize(100, 10)
 
+	// Process init command to load initial file
+	if cmd := m.Init(); cmd != nil {
+		if msg := cmd(); msg != nil {
+			result, _ := m.Update(msg)
+			m = result.(Model)
+		}
+	}
+
 	// Switch to diff viewer
 	result, _ := m.Update(tea.KeyPressMsg(tea.Key{Code: '\t'}))
 	m = result.(Model)

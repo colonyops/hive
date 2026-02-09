@@ -13,6 +13,20 @@ import (
 	"github.com/hay-kot/hive/internal/core/styles"
 )
 
+// cachedDiff stores generated diff content for quick retrieval.
+type cachedDiff struct {
+	content string
+	lines   []string
+}
+
+// diffGeneratedMsg is sent when async diff generation completes.
+type diffGeneratedMsg struct {
+	filePath string
+	content  string
+	lines    []string
+	err      error
+}
+
 // DiffViewerModel displays the diff content of a single file with syntax highlighting.
 type DiffViewerModel struct {
 	file    *gitdiff.File // Current file being viewed
@@ -28,6 +42,10 @@ type DiffViewerModel struct {
 	selectionMode  bool // Whether visual selection mode is active
 	selectionStart int  // Line where selection started (0-indexed, relative to file)
 	cursorLine     int  // Current cursor position (0-indexed, relative to file)
+
+	// Caching and async generation
+	cache   map[string]*cachedDiff // Cache of generated diffs by file path
+	loading bool                   // Whether diff is being generated asynchronously
 }
 
 const (
@@ -48,21 +66,21 @@ func NewDiffViewer(file *gitdiff.File) DiffViewerModel {
 		selectionMode:  false,
 		selectionStart: 0,
 		cursorLine:     0,
+		cache:          make(map[string]*cachedDiff),
+		loading:        false,
 	}
 
-	// Generate initial content
-	m.generateContent()
+	// Don't generate content here - will be done async on first SetFile call
 
 	return m
 }
 
-// generateContent builds the diff content string from the file.
+// generateDiffContent builds the diff content string from the file.
 // If delta is available, applies syntax highlighting.
-func (m *DiffViewerModel) generateContent() {
-	if m.file == nil {
-		m.content = ""
-		m.lines = nil
-		return
+// This function is separate from the model to allow async execution.
+func generateDiffContent(file *gitdiff.File, deltaAvailable bool) (string, []string) {
+	if file == nil {
+		return "", nil
 	}
 
 	// Build unified diff format
@@ -70,14 +88,14 @@ func (m *DiffViewerModel) generateContent() {
 
 	// Write diff header
 	sb.WriteString("--- ")
-	sb.WriteString(m.file.OldName)
+	sb.WriteString(file.OldName)
 	sb.WriteString("\n")
 	sb.WriteString("+++ ")
-	sb.WriteString(m.file.NewName)
+	sb.WriteString(file.NewName)
 	sb.WriteString("\n")
 
 	// Write text fragments (hunks)
-	for _, frag := range m.file.TextFragments {
+	for _, frag := range file.TextFragments {
 		// Write hunk header
 		sb.WriteString("@@ -")
 		sb.WriteString(formatRange(frag.OldPosition, frag.OldLines))
@@ -111,21 +129,24 @@ func (m *DiffViewerModel) generateContent() {
 	diff := sb.String()
 
 	// Apply delta highlighting if available
-	if m.deltaAvailable {
+	var content string
+	if deltaAvailable {
 		ctx := context.Background()
 		highlighted, err := ExecDelta(ctx, diff)
 		if err == nil {
-			m.content = highlighted
+			content = highlighted
 		} else {
 			// Fallback to plain diff if delta fails
-			m.content = diff
+			content = diff
 		}
 	} else {
-		m.content = diff
+		content = diff
 	}
 
 	// Split into lines for scrolling
-	m.lines = strings.Split(m.content, "\n")
+	lines := strings.Split(content, "\n")
+
+	return content, lines
 }
 
 // formatRange formats a hunk range (position, length) for unified diff format.
@@ -136,8 +157,50 @@ func formatRange(pos, length int64) string {
 	return strconv.FormatInt(pos, 10) + "," + strconv.FormatInt(length, 10)
 }
 
+// generateDiffCmd creates a tea.Cmd that generates diff content asynchronously.
+func (m *DiffViewerModel) generateDiffCmd(filePath string) tea.Cmd {
+	file := m.file          // Capture current file
+	deltaAvailable := m.deltaAvailable
+
+	return func() tea.Msg {
+		content, lines := generateDiffContent(file, deltaAvailable)
+		return diffGeneratedMsg{
+			filePath: filePath,
+			content:  content,
+			lines:    lines,
+		}
+	}
+}
+
 // Update handles keyboard input for scrolling and visual selection.
 func (m DiffViewerModel) Update(msg tea.Msg) (DiffViewerModel, tea.Cmd) {
+	// Handle async diff generation completion
+	if msg, ok := msg.(diffGeneratedMsg); ok {
+		// Only apply if still viewing this file
+		currentPath := ""
+		if m.file != nil {
+			currentPath = m.file.NewName
+			if currentPath == "" || currentPath == "/dev/null" {
+				currentPath = m.file.OldName
+			}
+		}
+
+		if currentPath == msg.filePath {
+			// Cache the result
+			m.cache[msg.filePath] = &cachedDiff{
+				content: msg.content,
+				lines:   msg.lines,
+			}
+
+			// Apply to model
+			m.content = msg.content
+			m.lines = msg.lines
+			m.loading = false
+		}
+		// Ignore stale messages for files we're no longer viewing
+		return m, nil
+	}
+
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		// Calculate content height (accounting for header)
 		contentHeight := m.height - headerHeight
@@ -219,6 +282,10 @@ func (m DiffViewerModel) View() string {
 	// Handle empty states
 	if m.file == nil {
 		return m.renderEmptyState("No File Selected", "Select a file from the tree to view its diff")
+	}
+
+	if m.loading {
+		return m.renderEmptyState("Generating Diff...", "Please wait while the diff is being generated")
 	}
 
 	if len(m.lines) == 0 {
@@ -428,13 +495,40 @@ func (m *DiffViewerModel) SetSize(width, height int) {
 }
 
 // SetFile updates the file being viewed and regenerates content.
-func (m *DiffViewerModel) SetFile(file *gitdiff.File) {
+// Returns a tea.Cmd for async diff generation if needed.
+func (m *DiffViewerModel) SetFile(file *gitdiff.File) tea.Cmd {
 	m.file = file
 	m.offset = 0 // Reset scroll position
 	m.cursorLine = 0
 	m.selectionMode = false
 	m.selectionStart = 0
-	m.generateContent()
+
+	if file == nil {
+		m.content = ""
+		m.lines = nil
+		m.loading = false
+		return nil
+	}
+
+	// Get file path for caching
+	filePath := file.NewName
+	if filePath == "" || filePath == "/dev/null" {
+		filePath = file.OldName
+	}
+
+	// Check cache first
+	if cached, ok := m.cache[filePath]; ok {
+		m.content = cached.content
+		m.lines = cached.lines
+		m.loading = false
+		return nil
+	}
+
+	// Cache miss - generate asynchronously
+	m.loading = true
+	m.content = ""
+	m.lines = nil
+	return m.generateDiffCmd(filePath)
 }
 
 // SelectionMode returns whether visual selection mode is active.

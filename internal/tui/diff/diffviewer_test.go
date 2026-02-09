@@ -11,6 +11,18 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// loadFileSync is a test helper that synchronously loads a file into the diff viewer
+// by manually executing the async command and applying the message.
+func loadFileSync(m *DiffViewerModel, file *gitdiff.File) {
+	cmd := m.SetFile(file)
+	if cmd != nil {
+		// Execute the command to get the message
+		msg := cmd()
+		// Apply the message
+		*m, _ = m.Update(msg)
+	}
+}
+
 func TestNewDiffViewer(t *testing.T) {
 	file := &gitdiff.File{
 		OldName: "test.go",
@@ -31,6 +43,7 @@ func TestNewDiffViewer(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 
 	assert.NotNil(t, m.file)
 	assert.Equal(t, 0, m.offset)
@@ -69,6 +82,7 @@ func TestDiffViewerScrollDown(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 8) // Height 8 = 3 header + 5 content (viewport shows lines 0-4)
 
 	// Initial position
@@ -115,6 +129,7 @@ func TestDiffViewerScrollUp(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 5) // viewport shows 5 lines at a time
 	m.offset = 5     // Start in the middle (showing lines 5-9)
 	m.cursorLine = 5 // Cursor at top of viewport
@@ -159,6 +174,7 @@ func TestDiffViewerPageScroll(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 13) // Height 13 = 3 header + 10 content
 
 	// Scroll down half page (ctrl+d)
@@ -192,6 +208,7 @@ func TestDiffViewerJumpToTopBottom(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 8) // Height 8 = 3 header + 5 content
 	m.offset = 10
 
@@ -249,10 +266,11 @@ func TestDiffViewerSetFile(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file1)
+	loadFileSync(&m, file1)
 	m.offset = 5 // Set non-zero offset
 
 	// Change to file2
-	m.SetFile(file2)
+	loadFileSync(&m, file2)
 
 	assert.Equal(t, "file2.go", m.file.NewName)
 	assert.Equal(t, 0, m.offset) // Offset should reset
@@ -290,6 +308,7 @@ func TestDiffViewerGenerateContent(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 
 	require.NotEmpty(t, m.content)
 	require.NotEmpty(t, m.lines)
@@ -354,6 +373,7 @@ func TestDiffViewerView_NormalMode(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 10)
 
 	// Strip ANSI for easy inspection - this test verifies content structure only
@@ -382,6 +402,7 @@ func TestDiffViewerView_CursorHighlight(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 10)
 
 	// Move cursor down to highlight a line
@@ -414,6 +435,7 @@ func TestDiffViewerView_SingleLineSelection(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 10)
 
 	// Move cursor and enter visual mode
@@ -450,6 +472,7 @@ func TestDiffViewerView_MultiLineSelection(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 15)
 
 	// Move cursor, enter visual mode, and extend selection
@@ -487,6 +510,7 @@ func TestDiffViewerView_SelectionAcrossAdditions(t *testing.T) {
 	}
 
 	m := NewDiffViewer(file)
+	loadFileSync(&m, file)
 	m.SetSize(80, 12)
 
 	// Select multiple addition lines
