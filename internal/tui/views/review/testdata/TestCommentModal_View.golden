@@ -8,6 +8,10 @@ func main() {
     return              
 }                       
                         
-> Enter your review comment...                                           
-                           
-enter: submit • esc: cancel
+┃ Enter your review comment...                                        
+┃                                                                     
+┃                                                                     
+┃                                                                     
+┃                                                                     
+                                       
+ctrl+enter/ctrl+s: submit • esc: cancel

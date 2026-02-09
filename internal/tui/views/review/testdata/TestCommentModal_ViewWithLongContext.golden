@@ -27,6 +27,10 @@ Line B with some context text that is longer
 Line C with some context text that is longer
 Line D with some context text that is longer
                                             
-> Enter your review comment...                                           
-                           
-enter: submit • esc: cancel
+┃ Enter your review comment...                                        
+┃                                                                     
+┃                                                                     
+┃                                                                     
+┃                                                                     
+                                       
+ctrl+enter/ctrl+s: submit • esc: cancel
