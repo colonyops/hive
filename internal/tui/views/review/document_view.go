@@ -13,14 +13,14 @@ import (
 // DocumentView handles document rendering with line numbers, comments, and cursor highlighting.
 type DocumentView struct {
 	viewport       viewport.Model
-	document       *Document       // Currently loaded document
-	cursorLine     int             // 1-indexed cursor position
-	selectionStart int             // 1-indexed selection anchor (0 if none)
-	lineMapping    map[int]int     // Maps document line numbers to display line numbers (nil when no comments)
-	searchMatches  []int           // Line numbers of search matches (1-indexed, in document coordinates)
-	searchIndex    int             // Current match index in searchMatches
-	width          int             // Viewport width
-	height         int             // Viewport height
+	document       *Document   // Currently loaded document
+	cursorLine     int         // 1-indexed cursor position
+	selectionStart int         // 1-indexed selection anchor (0 if none)
+	lineMapping    map[int]int // Maps document line numbers to display line numbers (nil when no comments)
+	searchMatches  []int       // Line numbers of search matches (1-indexed, in document coordinates)
+	searchIndex    int         // Current match index in searchMatches
+	width          int         // Viewport width
+	height         int         // Viewport height
 }
 
 // NewDocumentView creates a new DocumentView instance.
@@ -263,6 +263,8 @@ func (dv *DocumentView) insertCommentsInline(content string, comments []corerevi
 // highlightSelection applies background color to cursor and selected lines.
 // Also highlights line numbers of commented lines.
 // lineMapping maps document line numbers to display line numbers (nil if no comments inserted).
+//
+//nolint:unused // Will be integrated in task 8
 func (dv *DocumentView) highlightSelection(content string, commentedLines map[int]bool, lineMapping map[int]int) string {
 	lines := strings.Split(content, "\n")
 
@@ -357,6 +359,8 @@ func (dv *DocumentView) highlightSelection(content string, commentedLines map[in
 
 // highlightLineNumber applies a style to the line number and separator of a rendered line.
 // Assumes format: "<number> │ <content>"
+//
+//nolint:unused // Will be integrated in task 8
 func (dv *DocumentView) highlightLineNumber(line string, style lipgloss.Style) string {
 	// Find the separator " │ "
 	sepIdx := strings.Index(line, " │ ")
@@ -389,6 +393,8 @@ func (dv *DocumentView) mapDocToDisplay(docLine int, lineMapping map[int]int) in
 
 // mapDisplayToDoc maps a display line number back to a document line number.
 // If lineMapping is nil (no comments inserted), returns the same line number.
+//
+//nolint:unused // Will be integrated in task 8
 func (dv *DocumentView) mapDisplayToDoc(displayLine int, lineMapping map[int]int) int {
 	if lineMapping == nil {
 		return displayLine
