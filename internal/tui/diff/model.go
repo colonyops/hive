@@ -221,12 +221,9 @@ func (m Model) View() tea.View {
 	// Render diff viewer
 	diffViewerView := m.diffViewer.View()
 
-	// Create thin gutter divider between panels
-	gutterLines := make([]string, panelHeight)
-	for i := 0; i < panelHeight; i++ {
-		gutterLines[i] = styles.TextMutedStyle.Render("│")
-	}
-	gutter := strings.Join(gutterLines, "\n")
+	// Create thin gutter divider between panels (single column, full height)
+	gutterChar := styles.TextMutedStyle.Render("│")
+	gutter := strings.Repeat(gutterChar+"\n", panelHeight-1) + gutterChar
 
 	// Apply consistent styling
 	treeStyle := lipgloss.NewStyle().
@@ -400,9 +397,9 @@ func (m *Model) SetSize(width, height int) {
 	m.height = height
 
 	// Calculate panel dimensions (same logic as View)
-	headerHeight := 3       // unified header
-	subHeaderHeight := 1    // panel titles
-	statusBarHeight := 1    // status bar
+	headerHeight := 3    // unified header
+	subHeaderHeight := 1 // panel titles
+	statusBarHeight := 1 // status bar
 
 	treeWidth := width * 30 / 100
 	gutterWidth := 1
