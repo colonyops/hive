@@ -246,9 +246,9 @@ func (m DiffViewerModel) View() string {
 		// Add gutter with cursor indicator
 		var gutter string
 		if i == m.cursorLine {
-			gutter = styles.TextPrimaryStyle.Render("│ ▶ │ ")
+			gutter = styles.TextPrimaryStyle.Render("▶") + "│ "
 		} else {
-			gutter = styles.TextMutedStyle.Render("│   │ ")
+			gutter = " │ "
 		}
 
 		// Determine if this line should be styled
@@ -307,10 +307,10 @@ func (m DiffViewerModel) renderFileInfoHeader() string {
 	statsStr := fmt.Sprintf("(-%d, +%d)", deletions, additions)
 	infoLine := icon + " " + fileName + " " + styles.TextMutedStyle.Render(statsStr)
 
-	// Separator line
-	separator := strings.Repeat("─", m.width)
+	// Separator line - full width to match content gutters
+	separator := strings.Repeat("─", m.width-1)
 
-	return lipgloss.JoinVertical(lipgloss.Left, infoLine, separator)
+	return infoLine + "\n" + styles.TextMutedStyle.Render(separator)
 }
 
 // renderPanelHeader renders the panel header with branding (deprecated - now in unified header).

@@ -224,7 +224,7 @@ func (m Model) View() tea.View {
 	// Create thin gutter divider between panels
 	// Build gutter content as multiple lines
 	var gutterBuilder strings.Builder
-	for i := 0; i < panelHeight; i++ {
+	for i := range panelHeight {
 		if i > 0 {
 			gutterBuilder.WriteString("\n")
 		}
@@ -242,8 +242,7 @@ func (m Model) View() tea.View {
 
 	diffStyle := lipgloss.NewStyle().
 		Width(diffWidth).
-		Height(panelHeight).
-		PaddingLeft(1) // Add padding for alignment
+		Height(panelHeight)
 
 	// Render panels
 	leftPanel := treeStyle.Render(fileTreeView)
