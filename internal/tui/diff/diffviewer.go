@@ -3,6 +3,8 @@ package diff
 import (
 	"context"
 	"fmt"
+	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -24,7 +26,11 @@ type diffGeneratedMsg struct {
 	filePath string
 	content  string
 	lines    []string
-	err      error
+}
+
+// editorFinishedMsg is sent when the editor process completes.
+type editorFinishedMsg struct {
+	err error
 }
 
 // DiffViewerModel displays the diff content of a single file with syntax highlighting.
@@ -172,6 +178,39 @@ func (m *DiffViewerModel) generateDiffCmd(filePath string) tea.Cmd {
 	}
 }
 
+// openInEditor returns a tea.Cmd that suspends the TUI and opens the current file in $EDITOR.
+func (m *DiffViewerModel) openInEditor() tea.Cmd {
+	if m.file == nil {
+		return nil
+	}
+
+	// Get file path to edit
+	filePath := m.file.NewName
+	if filePath == "" || filePath == "/dev/null" {
+		// If the file was deleted, try to open the old name
+		filePath = m.file.OldName
+	}
+
+	// If still no valid path, abort
+	if filePath == "" || filePath == "/dev/null" {
+		return nil
+	}
+
+	// Get editor from environment (default to vi if not set)
+	editor := os.Getenv("EDITOR")
+	if editor == "" {
+		editor = "vi"
+	}
+
+	// Create the command
+	c := exec.Command(editor, filePath)
+
+	// ExecProcess suspends the TUI, runs the command, then resumes
+	return tea.ExecProcess(c, func(err error) tea.Msg {
+		return editorFinishedMsg{err: err}
+	})
+}
+
 // Update handles keyboard input for scrolling and visual selection.
 func (m DiffViewerModel) Update(msg tea.Msg) (DiffViewerModel, tea.Cmd) {
 	// Handle async diff generation completion
@@ -201,6 +240,13 @@ func (m DiffViewerModel) Update(msg tea.Msg) (DiffViewerModel, tea.Cmd) {
 		return m, nil
 	}
 
+	// Handle editor finished
+	if _, ok := msg.(editorFinishedMsg); ok {
+		// Editor has finished - TUI is resuming
+		// Could refresh diff or handle errors here if needed
+		return m, nil
+	}
+
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		// Calculate content height (accounting for header)
 		contentHeight := m.height - headerHeight
@@ -212,6 +258,10 @@ func (m DiffViewerModel) Update(msg tea.Msg) (DiffViewerModel, tea.Cmd) {
 		maxOffset := max(0, len(m.lines)-contentHeight)
 
 		switch keyMsg.String() {
+		case "e":
+			// Open file in editor
+			return m, m.openInEditor()
+
 		case "v":
 			// Toggle visual selection mode
 			if !m.selectionMode {

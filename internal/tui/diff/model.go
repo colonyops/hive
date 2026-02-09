@@ -94,6 +94,12 @@ func createHelpDialog() *components.HelpDialog {
 			},
 		},
 		{
+			Title: "Editor",
+			Entries: []components.HelpEntry{
+				{Key: "e", Desc: "Open current file in $EDITOR"},
+			},
+		},
+		{
 			Title: "General",
 			Entries: []components.HelpEntry{
 				{Key: "?", Desc: "Toggle this help"},
@@ -118,6 +124,13 @@ func (m Model) Init() tea.Cmd {
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Forward diffGeneratedMsg to diff viewer first
 	if _, ok := msg.(diffGeneratedMsg); ok {
+		var cmd tea.Cmd
+		m.diffViewer, cmd = m.diffViewer.Update(msg)
+		return m, cmd
+	}
+
+	// Forward editorFinishedMsg to diff viewer
+	if _, ok := msg.(editorFinishedMsg); ok {
 		var cmd tea.Cmd
 		m.diffViewer, cmd = m.diffViewer.Update(msg)
 		return m, cmd
@@ -388,7 +401,7 @@ func (m Model) renderStatusBar() string {
 		if m.diffViewer.SelectionMode() {
 			rightSection = styles.TextMutedStyle.Render("↑↓:move  v:exit  esc:cancel  ?:help")
 		} else {
-			rightSection = styles.TextMutedStyle.Render("↑↓:scroll  v:visual  ctrl+d/u:page  g/G:jump  ?:help  q:quit")
+			rightSection = styles.TextMutedStyle.Render("↑↓:scroll  e:edit  v:visual  ctrl+d/u:page  g/G:jump  ?:help  q:quit")
 		}
 	}
 
