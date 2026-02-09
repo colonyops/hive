@@ -38,3 +38,35 @@ func TestCommentModal_ViewWithLongContext(t *testing.T) {
 
 	testutil.RequireGolden(t, output)
 }
+
+func TestCommentModal_ViewMultiline(t *testing.T) {
+	// Create modal with simple multiline input
+	contextText := "func example() {\n    return true\n}"
+
+	modal := NewCommentModal(1, 3, contextText, 80, 24)
+	// Simulate multiline textArea input
+	modal.textArea.SetValue("Line 1\nLine 2\nLine 3")
+
+	output := modal.View()
+	output = testutil.StripANSI(output)
+
+	testutil.RequireGolden(t, output)
+}
+
+func TestCommentModal_ViewLongMultiline(t *testing.T) {
+	// Create modal with 10 lines to test textArea scrolling
+	contextText := "func example() {\n    return true\n}"
+
+	modal := NewCommentModal(1, 3, contextText, 80, 24)
+	// Simulate 10 lines of input
+	lines := make([]string, 10)
+	for i := range 10 {
+		lines[i] = "This is comment line " + string(rune('0'+i)) + " with some text"
+	}
+	modal.textArea.SetValue(strings.Join(lines, "\n"))
+
+	output := modal.View()
+	output = testutil.StripANSI(output)
+
+	testutil.RequireGolden(t, output)
+}

@@ -1,0 +1,15 @@
+Add Review Comment
+                  
+Lines 1-3
+         
+func example() {
+    return true 
+}               
+                
+┃ Line 1                                                              
+┃ Line 2                                                              
+┃ Line 3                                                              
+┃                                                                     
+┃                                                                     
+                                       
+ctrl+enter/ctrl+s: submit • esc: cancel

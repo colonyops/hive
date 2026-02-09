@@ -189,6 +189,61 @@ func (dv *DocumentView) ensureCursorVisible() {
 	}
 }
 
+// wrapComment wraps comment text to fit within viewport with adaptive width.
+// Uses minimum width of 80 chars and adjusts based on viewport width.
+// indent specifies number of spaces to add at the start of each wrapped line.
+func (dv *DocumentView) wrapComment(text string, indent int) []string {
+	const minWidth = 80
+	// Reserve 15 chars for line numbers and padding
+	maxWidth := max(minWidth, dv.width-15)
+
+	// Split text into words
+	words := strings.Fields(text)
+	if len(words) == 0 {
+		return []string{strings.Repeat(" ", indent)}
+	}
+
+	var lines []string
+	var currentLine strings.Builder
+	indentStr := strings.Repeat(" ", indent)
+
+	// Add indent to first line
+	currentLine.WriteString(indentStr)
+	currentLineLen := indent
+
+	for i, word := range words {
+		wordLen := len(word)
+		spaceLen := 0
+		if i > 0 {
+			spaceLen = 1 // Space before word (except first word)
+		}
+
+		// Check if adding this word would exceed maxWidth
+		if currentLineLen+spaceLen+wordLen > maxWidth && currentLineLen > indent {
+			// Finish current line and start new one
+			lines = append(lines, currentLine.String())
+			currentLine.Reset()
+			currentLine.WriteString(indentStr)
+			currentLine.WriteString(word)
+			currentLineLen = indent + wordLen
+		} else {
+			// Add word to current line
+			if i > 0 {
+				currentLine.WriteString(" ")
+			}
+			currentLine.WriteString(word)
+			currentLineLen += spaceLen + wordLen
+		}
+	}
+
+	// Add final line if not empty
+	if currentLine.Len() > indent {
+		lines = append(lines, currentLine.String())
+	}
+
+	return lines
+}
+
 // insertCommentsInline inserts comments after their referenced lines.
 // Returns the rendered content and a mapping from document line numbers to display line numbers.
 func (dv *DocumentView) insertCommentsInline(content string, comments []corereview.Comment) (string, map[int]int) {
@@ -233,10 +288,13 @@ func (dv *DocumentView) insertCommentsInline(content string, comments []corerevi
 		commentLines := make([]string, 0, len(comments))
 		for _, comment := range comments {
 			icon := styles.IconProfile
-			// Add increased indentation (6 spaces) for visual separation
-			indent := "      "
-			commentLine := indent + commentStyle.Render(icon+" "+comment.CommentText)
-			commentLines = append(commentLines, commentLine)
+			// Use adaptive wrapping with 6 spaces indentation for visual separation
+			wrappedLines := dv.wrapComment(icon+" "+comment.CommentText, 6)
+			// Apply styling to each wrapped line
+			for _, wrappedLine := range wrappedLines {
+				styledLine := commentStyle.Render(wrappedLine)
+				commentLines = append(commentLines, styledLine)
+			}
 		}
 
 		// Insert comment lines after the target line

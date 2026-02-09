@@ -6,6 +6,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
+const (
+	keyEnter = "enter"
+)
+
 // PickerView handles the view and user interaction for the document picker.
 type PickerView struct {
 	controller  PickerController
@@ -127,7 +131,7 @@ func (v PickerView) Update(msg tea.Msg) (PickerView, tea.Cmd) {
 	case "esc", "q":
 		v.cancelled = true
 		return v, nil
-	case "enter":
+	case keyEnter:
 		// Select current item (skip headers)
 		if item := v.list.SelectedItem(); item != nil {
 			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
