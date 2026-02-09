@@ -23,3 +23,4 @@ dist/
 .data/
 ./dev.log
 agent-deck/
+diffnav
