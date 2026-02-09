@@ -63,6 +63,11 @@ type View struct {
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
+
+	// Phase 1 refactor: extracted components
+	documentView        DocumentView // Document rendering and navigation
+	searchModeComponent SearchMode   // Search functionality
+	modalState          ModalState   // Modal coordination
 }
 
 // New creates a new review view.
@@ -107,6 +112,11 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
 
+	// Initialize Phase 1 components
+	documentView := NewDocumentView(nil) // Will be populated when document is loaded
+	searchModeComponent := NewSearchMode()
+	modalState := NewModalState()
+
 	return View{
 		list:        l,
 		viewport:    vp,
@@ -117,6 +127,10 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 		fullScreen:  false, // Start without a document (will show picker or message)
 		cursorLine:  1,     // Initialize cursor at line 1
 		searchInput: ti,
+		// Phase 1 components
+		documentView:        documentView,
+		searchModeComponent: searchModeComponent,
+		modalState:          modalState,
 	}
 }
 
@@ -591,6 +605,39 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 	}
 
 	return v, cmd
+}
+
+// handleDocumentKeys delegates document navigation to documentView component.
+// Returns the updated View and any commands.
+//
+//nolint:unused // Phase 2 integration
+func (v View) handleDocumentKeys(msg tea.KeyMsg) (View, tea.Cmd) {
+	_ = msg // Will be used in Phase 2
+	// Document keys are still implemented inline in Update()
+	// This method is a placeholder for future Phase 2 integration
+	return v, nil
+}
+
+// handleSearchKeys delegates search operations to searchMode component.
+// Returns the updated View and any commands.
+//
+//nolint:unused // Phase 2 integration
+func (v View) handleSearchKeys(msg tea.KeyMsg) (View, tea.Cmd) {
+	_ = msg // Will be used in Phase 2
+	// Search keys are still implemented inline in Update()
+	// This method is a placeholder for future Phase 2 integration
+	return v, nil
+}
+
+// handleModalKeys delegates modal interaction to modalState component.
+// Returns the updated View and any commands.
+//
+//nolint:unused // Phase 2 integration
+func (v View) handleModalKeys(msg tea.KeyMsg) (View, tea.Cmd) {
+	_ = msg // Will be used in Phase 2
+	// Modal keys are still implemented inline in Update()
+	// This method is a placeholder for future Phase 2 integration
+	return v, nil
 }
 
 // View renders the review view.

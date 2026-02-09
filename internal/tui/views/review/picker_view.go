@@ -8,14 +8,14 @@ import (
 
 // PickerView handles the view and user interaction for the document picker.
 type PickerView struct {
-	controller   PickerController
-	list         list.Model
-	searchInput  textinput.Model
-	width        int
-	height       int
-	selectedDoc  *Document
-	cancelled    bool
-	filterQuery  string
+	controller  PickerController
+	list        list.Model
+	searchInput textinput.Model
+	width       int
+	height      int
+	selectedDoc *Document
+	cancelled   bool
+	filterQuery string
 }
 
 // NewPickerView creates a new PickerView with the provided controller and dimensions.
