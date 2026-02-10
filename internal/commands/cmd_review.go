@@ -71,8 +71,8 @@ func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
 	}
 
 	if len(documents) == 0 {
-		fmt.Fprintf(c.Root().Writer, "No documents found in %s\n", contextDir)
-		fmt.Fprintln(c.Root().Writer, "Create .md or .txt files in subdirectories: plans/, research/, context/")
+		_, _ = fmt.Fprintf(c.Root().Writer, "No documents found in %s\n", contextDir)
+		_, _ = fmt.Fprintln(c.Root().Writer, "Create .md or .txt files in subdirectories: plans/, research/, context/")
 		return nil
 	}
 
