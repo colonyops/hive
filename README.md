@@ -824,11 +824,10 @@ hive review --latest                 # Review most recent document
 
 **Interactive Features:**
 
-- **Document Picker** — Fuzzy search through context documents
+- **Document Picker** — Fuzzy search through context documents (only available when multiple documents exist)
 - **Line Selection** — Navigate and select specific lines with visual feedback
 - **Inline Comments** — Add multiline comments at any line with automatic indentation
 - **Smart Wrapping** — Comments wrap at 80 characters preserving indentation
-- **Session Filtering** — Filter documents by current session or show all
 - **Search** — `/` to search within document, `n/N` to navigate matches
 - **Persistence** — Comments are saved directly to the file
 

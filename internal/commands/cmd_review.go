@@ -29,26 +29,31 @@ func NewReviewCmd(flags *Flags, app *hive.App) *ReviewCmd {
 func (cmd *ReviewCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:  "review",
-		Usage: "Review context documents (plans, research, etc.)",
-		Description: `Review command opens a focused TUI for reviewing context documents.
+		Usage: "Review and annotate markdown documents",
+		Description: `Review command opens a focused TUI for reviewing markdown documents.
 
 The review TUI supports document navigation, inline comments, search,
 and document picking. Comments are persisted per-document with session IDs.
 
+With --file, you can review any markdown file without requiring context directory.
+Without --file, the picker mode discovers documents from your context directory.
+
 Examples:
-  hive review                    # Open picker to select a document
-  hive review --latest           # Open most recently modified document
-  hive review -f plans/my.md     # Open specific document directly`,
+  hive review                        # Open picker (requires context dir)
+  hive review --latest               # Open latest document (requires context dir)
+  hive review -f plans/my.md         # Open file relative to context dir
+  hive review -f ./notes.md          # Open file relative to current directory
+  hive review -f /tmp/notes.md       # Open file with absolute path`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "file",
 				Aliases:     []string{"f"},
-				Usage:       "open specific document file (relative to context dir)",
+				Usage:       "path to markdown file (absolute or relative to cwd)",
 				Destination: &cmd.file,
 			},
 			&cli.BoolFlag{
 				Name:        "latest",
-				Usage:       "open most recently modified document",
+				Usage:       "open most recently modified document (requires context dir)",
 				Destination: &cmd.latest,
 			},
 		},
@@ -59,6 +64,60 @@ Examples:
 }
 
 func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
+	// If --file is specified, load directly without context directory requirement
+	if cmd.file != "" {
+		return cmd.runWithDirectFile(ctx)
+	}
+
+	// For picker/latest modes, require context directory
+	return cmd.runWithContextDir(ctx, c)
+}
+
+// runWithDirectFile loads a specific file directly without context directory requirements.
+func (cmd *ReviewCmd) runWithDirectFile(ctx context.Context) error {
+	// Resolve file path (absolute or relative to cwd)
+	var targetPath string
+	if filepath.IsAbs(cmd.file) {
+		targetPath = cmd.file
+	} else {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return fmt.Errorf("failed to get current directory: %w", err)
+		}
+		targetPath = filepath.Join(cwd, cmd.file)
+	}
+
+	// Clean the path
+	targetPath = filepath.Clean(targetPath)
+
+	// Verify file exists
+	info, err := os.Stat(targetPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return fmt.Errorf("file not found: %s", targetPath)
+		}
+		return fmt.Errorf("failed to access file: %w", err)
+	}
+
+	if info.IsDir() {
+		return fmt.Errorf("path is a directory, not a file: %s", targetPath)
+	}
+
+	// Create a single document for the specified file
+	doc := review.Document{
+		Path:    targetPath,
+		RelPath: filepath.Base(targetPath),
+		ModTime: info.ModTime(),
+	}
+
+	// Launch review TUI with single document
+	// contextDir is the parent directory of the file
+	contextDir := filepath.Dir(targetPath)
+	return cmd.launchReviewTUI(ctx, []review.Document{doc}, &doc, contextDir)
+}
+
+// runWithContextDir uses context directory discovery for picker/latest modes.
+func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) error {
 	// Resolve context directory with session filtering
 	contextDir, err := cmd.resolveContextDir(ctx)
 	if err != nil {
@@ -96,29 +155,6 @@ func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
 		initialDoc = controller.GetLatest()
 		if initialDoc == nil {
 			return fmt.Errorf("no documents found")
-		}
-	} else if cmd.file != "" {
-		// Use specific file (resolve relative to context directory)
-		var targetPath string
-		if filepath.IsAbs(cmd.file) {
-			targetPath = cmd.file
-		} else {
-			targetPath = filepath.Join(contextDir, cmd.file)
-		}
-
-		// Clean the path
-		targetPath = filepath.Clean(targetPath)
-
-		// Search for matching document
-		for i := range documents {
-			if documents[i].Path == targetPath {
-				initialDoc = &documents[i]
-				break
-			}
-		}
-
-		if initialDoc == nil {
-			return fmt.Errorf("file not found in context directory: %s", cmd.file)
 		}
 	}
 

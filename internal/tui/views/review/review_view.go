@@ -501,7 +501,12 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		}
 
 		if msg.String() == "p" && !v.selectionMode && !v.searchMode {
-			return v, v.ShowDocumentPicker()
+			// Only show picker if there are multiple documents
+			if len(v.GetAllDocuments()) > 1 {
+				return v, v.ShowDocumentPicker()
+			}
+			// In single-file mode, picker is disabled
+			return v, nil
 		}
 
 		if v.fullScreen && !v.selectionMode && msg.String() == "/" {
@@ -624,6 +629,11 @@ func (v View) View() string {
 		baseView = styles.ReviewEmptyMessageStyle.Render(message)
 	case v.fullScreen:
 		// Full-screen mode: show viewport with status bar
+		// Guard against rendering before window size is set
+		if v.height < 2 {
+			return "Loading..."
+		}
+
 		contentHeight := v.height - 1 // Reserve 1 line for status bar
 		content := v.viewport.View()
 		statusBar := v.renderStatusBar()
