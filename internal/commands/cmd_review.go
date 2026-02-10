@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
@@ -64,6 +65,13 @@ func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
+	// Check if directory exists before discovering
+	if _, err := os.Stat(contextDir); os.IsNotExist(err) {
+		return fmt.Errorf("context directory does not exist: %s\nRun 'hive ctx init' to create it", contextDir)
+	} else if err != nil {
+		return fmt.Errorf("failed to access context directory %s: %w", contextDir, err)
+	}
+
 	// Discover documents from context directory
 	documents, err := review.DiscoverDocuments(contextDir)
 	if err != nil {
@@ -71,8 +79,12 @@ func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
 	}
 
 	if len(documents) == 0 {
-		_, _ = fmt.Fprintf(c.Root().Writer, "No documents found in %s\n", contextDir)
-		_, _ = fmt.Fprintln(c.Root().Writer, "Create .md or .txt files in subdirectories: plans/, research/, context/")
+		if _, err := fmt.Fprintf(c.Root().Writer, "No documents found in %s\n", contextDir); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
+		if _, err := fmt.Fprintln(c.Root().Writer, "Create .md or .txt files in subdirectories: plans/, research/, context/"); err != nil {
+			return fmt.Errorf("failed to write output: %w", err)
+		}
 		return nil
 	}
 

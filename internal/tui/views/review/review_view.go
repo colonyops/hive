@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -123,9 +124,9 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 		watcher:     watcher,
 		contextDir:  contextDir,
 		store:       store,
-		previewMode: false, // Disable dual-column preview by default
-		fullScreen:  false, // Start without a document (will show picker or message)
-		cursorLine:  1,     // Initialize cursor at line 1
+		previewMode: false,
+		fullScreen:  false,
+		cursorLine:  1,
 		searchInput: ti,
 		// Phase 1 components
 		documentView:        documentView,
@@ -499,12 +500,10 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			}
 		}
 
-		// Handle 'p' to open document picker
 		if msg.String() == "p" && !v.selectionMode && !v.searchMode {
 			return v, v.ShowDocumentPicker()
 		}
 
-		// Handle '/' to enter search mode in full-screen
 		if v.fullScreen && !v.selectionMode && msg.String() == "/" {
 			v.searchMode = true
 			v.searchInput.Focus()
@@ -610,35 +609,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 // handleDocumentKeys delegates document navigation to documentView component.
 // Returns the updated View and any commands.
 //
-//nolint:unused // Phase 2 integration
-func (v View) handleDocumentKeys(msg tea.KeyMsg) (View, tea.Cmd) {
-	_ = msg // Will be used in Phase 2
-	// Document keys are still implemented inline in Update()
-	// This method is a placeholder for future Phase 2 integration
-	return v, nil
-}
-
-// handleSearchKeys delegates search operations to searchMode component.
-// Returns the updated View and any commands.
-//
-//nolint:unused // Phase 2 integration
-func (v View) handleSearchKeys(msg tea.KeyMsg) (View, tea.Cmd) {
-	_ = msg // Will be used in Phase 2
-	// Search keys are still implemented inline in Update()
-	// This method is a placeholder for future Phase 2 integration
-	return v, nil
-}
-
-// handleModalKeys delegates modal interaction to modalState component.
-// Returns the updated View and any commands.
-//
-//nolint:unused // Phase 2 integration
-func (v View) handleModalKeys(msg tea.KeyMsg) (View, tea.Cmd) {
-	_ = msg // Will be used in Phase 2
-	// Modal keys are still implemented inline in Update()
-	// This method is a placeholder for future Phase 2 integration
-	return v, nil
-}
 
 // View renders the review view.
 func (v View) View() string {
@@ -1034,19 +1004,24 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 		}
 
 		// Apply highlighting based on priority
+		// Strip ANSI codes first to prevent embedded reset codes from terminating highlights
 		switch {
 		case displayLineNum == currentSearchLine:
 			// Current search match (highest priority)
-			lines[i] = currentSearchMatchStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = currentSearchMatchStyle.Render(cleanLine)
 		case displayLineNum == displayCursorLine:
 			// Cursor highlight
-			lines[i] = cursorStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = cursorStyle.Render(cleanLine)
 		case v.selectionMode && displayLineNum >= start && displayLineNum <= end:
 			// Visual selection highlight
-			lines[i] = selectionStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = selectionStyle.Render(cleanLine)
 		case searchMatchLines[displayLineNum]:
 			// Other search matches (subtle)
-			lines[i] = searchMatchStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = searchMatchStyle.Render(cleanLine)
 		default:
 			lines[i] = line
 		}
@@ -1055,24 +1030,52 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 	return strings.Join(lines, "\n")
 }
 
+// lineNumGutterPattern matches the gutter format: " <number>  <content>"
+// Group 1 captures only the gutter (leading spaces + digits), excluding the trailing two spaces
+var lineNumGutterPattern = regexp.MustCompile(`^( *\d+)  `)
+
 // highlightLineNumber applies a style to the line number and separator of a rendered line.
-// Assumes format: "<number> │ <content>"
+// Assumes format: " n  content" (optional leading spaces, number, two spaces, content)
+// Highlights just the line number portion including leading spaces.
 func (v *View) highlightLineNumber(line string, style lipgloss.Style) string {
-	// Find the separator " │ "
-	sepIdx := strings.Index(line, " │ ")
-	if sepIdx == -1 {
-		return line // No line number found
+	// Strip ANSI codes to find the actual line number
+	cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+
+	// Find the gutter using pattern matching
+	matches := lineNumGutterPattern.FindStringSubmatch(cleanLine)
+	if len(matches) < 2 {
+		return line // No gutter found
 	}
 
-	// Extract parts
-	lineNum := line[:sepIdx]
-	separator := " │ "
-	content := line[sepIdx+len(separator):]
+	gutterClean := matches[1] // The captured gutter (spaces + digits)
+	gutterLen := len(gutterClean)
 
-	// Style the line number + separator together (entire gutter)
-	gutter := lineNum + separator
-	styledGutter := style.Render(gutter)
-	return styledGutter + content
+	// Find the same position in the original line (with ANSI codes)
+	// We need to count visible characters, not bytes
+	visibleChars := 0
+	bytePos := 0
+	inANSI := false
+
+	for bytePos < len(line) && visibleChars < gutterLen {
+		if line[bytePos] == '\x1b' {
+			inANSI = true
+		}
+		if inANSI {
+			if line[bytePos] == 'm' {
+				inANSI = false
+			}
+			bytePos++
+		} else {
+			visibleChars++
+			bytePos++
+		}
+	}
+
+	restOfLine := line[bytePos:]
+
+	// Apply new style to clean gutter
+	styledGutter := style.Render(gutterClean)
+	return styledGutter + restOfLine
 }
 
 // getCommentedLines returns a map of line numbers that have comments.
@@ -1213,6 +1216,9 @@ func (v *View) getSelectedText() string {
 }
 
 // addComment creates a new comment and adds it to the active session.
+// Database operations are best-effort: comments are kept in-memory even if persistence fails.
+// Errors are logged but do not prevent the comment from being added to the session.
+// If no session exists, one is created (either in the database or in-memory only).
 func (v *View) addComment(commentText string) {
 	if v.selectedDoc == nil {
 		return
@@ -1284,8 +1290,13 @@ func (v *View) addComment(commentText string) {
 			CommentText: comment.CommentText,
 			CreatedAt:   comment.CreatedAt,
 		}
-		_ = v.store.SaveComment(ctx, dbComment)
-		// Ignore errors - keep comment in memory even if DB save fails
+		if err := v.store.SaveComment(ctx, dbComment); err != nil {
+			log.Error().
+				Err(err).
+				Str("session_id", comment.SessionID).
+				Str("comment_id", comment.ID).
+				Msg("review: failed to save comment to database - comment will only exist in memory")
+		}
 	}
 
 	v.activeSession.Comments = append(v.activeSession.Comments, comment)
@@ -1327,8 +1338,12 @@ func (v *View) updateComment(commentID, newText string) {
 					CommentText: newText,
 					CreatedAt:   comment.CreatedAt,
 				}
-				_ = v.store.UpdateComment(ctx, dbComment)
-				// Ignore errors - keep updated text in memory
+				if err := v.store.UpdateComment(ctx, dbComment); err != nil {
+					log.Error().
+						Err(err).
+						Str("comment_id", commentID).
+						Msg("review: failed to update comment in database - changes will be lost on restart")
+				}
 			}
 
 			log.Debug().
@@ -1342,6 +1357,10 @@ func (v *View) updateComment(commentID, newText string) {
 }
 
 // deleteCommentsAtLine removes all comments that include the specified line number.
+// Multiple comments may be deleted if they overlap the target line.
+// Database deletion errors are logged but do not prevent in-memory deletion.
+// If all comments are deleted, activeSession is set to nil (ending the review session).
+// Callers should call updateTreeItemCommentCount() after deletion.
 func (v *View) deleteCommentsAtLine(lineNum int) {
 	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
 		return
@@ -1357,8 +1376,12 @@ func (v *View) deleteCommentsAtLine(lineNum int) {
 			remainingComments = append(remainingComments, comment)
 		} else if v.store != nil {
 			// Delete from database if store is available
-			_ = v.store.DeleteComment(ctx, comment.ID)
-			// Ignore errors - deletion is best effort
+			if err := v.store.DeleteComment(ctx, comment.ID); err != nil {
+				log.Error().
+					Err(err).
+					Str("comment_id", comment.ID).
+					Msg("review: failed to delete comment from database - may reappear on restart")
+			}
 		}
 	}
 
@@ -1435,8 +1458,8 @@ func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
 
 	var result []string
 	baseIndentStr := strings.Repeat(" ", baseIndent)
-	// Continuation lines should align with text after icon
-	// Icon visual width is typically 1 char + 1 space = 2 chars total
+	// Continuation lines use baseIndent + 3 spaces for visual separation
+	// (icon is 1 char + 1 space = 2 chars, but we add 3 for better readability)
 	continuationIndentStr := baseIndentStr + "   "
 
 	for i, line := range inputLines {
@@ -1562,7 +1585,7 @@ func BuildTreeItems(documents []Document) []list.Item {
 		groups[doc.Type] = append(groups[doc.Type], doc)
 	}
 
-	// Render in order: Plans, Research, Context, Other
+	// Render in priority order (most relevant types first)
 	typeOrder := []DocumentType{DocTypePlan, DocTypeResearch, DocTypeContext, DocTypeOther}
 
 	for _, docType := range typeOrder {

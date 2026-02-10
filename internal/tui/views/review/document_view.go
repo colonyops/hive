@@ -417,7 +417,7 @@ func (dv *DocumentView) highlightSelection(content string, commentedLines map[in
 }
 
 // highlightLineNumber applies a style to the line number and separator of a rendered line.
-// Assumes format: "<number> │ <content>"
+// Assumes format: " <number>  <content>" (space, number, two spaces, content)
 //
 //nolint:unused // Will be integrated in task 8
 func (dv *DocumentView) highlightLineNumber(line string, style lipgloss.Style) string {

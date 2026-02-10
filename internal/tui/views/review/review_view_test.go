@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -1074,4 +1075,90 @@ func TestHasActiveEditor(t *testing.T) {
 	view.searchMode = true
 	view.commentModal = &modal
 	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when both are active")
+}
+
+func TestHighlightLineNumber(t *testing.T) {
+	view := View{
+		width:  80,
+		height: 24,
+	}
+
+	// Test with actual format: " n  content" (no pipe, two spaces)
+	tests := []struct {
+		name     string
+		input    string
+		wantText string // What text should be in the gutter
+	}{
+		{
+			name:     "single digit line number",
+			input:    " 1  This is content",
+			wantText: " 1",
+		},
+		{
+			name:     "double digit line number",
+			input:    " 10  This is content",
+			wantText: " 10",
+		},
+		{
+			name:     "triple digit line number",
+			input:    " 100  This is content",
+			wantText: " 100",
+		},
+		{
+			name:     "with padding (right-aligned)",
+			input:    "   5  This is content",
+			wantText: "   5",
+		},
+		{
+			name:     "empty content",
+			input:    " 1  ",
+			wantText: " 1",
+		},
+		{
+			name:     "real world example from output",
+			input:    " 6    ## Quality Gates",
+			wantText: " 6",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use a test style that adds markers we can detect
+			testStyle := styles.ReviewCommentedLineNumStyle
+
+			result := view.highlightLineNumber(tt.input, testStyle)
+
+			// Strip ANSI codes to verify structure
+			cleanResult := ansiStripPattern.ReplaceAllString(result, "")
+			assert.Equal(t, tt.input, cleanResult, "stripped result should match input")
+
+			// Verify the result contains ANSI codes (meaning styling was applied)
+			assert.NotEqual(t, tt.input, result, "result should contain ANSI styling codes")
+
+			// Verify the gutter portion was extracted correctly
+			// Use regex to find the gutter in the clean result
+			gutterPattern := regexp.MustCompile(`^( *\d+)  `)
+			matches := gutterPattern.FindStringSubmatch(cleanResult)
+			if len(matches) >= 2 {
+				gutterPart := matches[1]
+				assert.Equal(t, tt.wantText, gutterPart, "gutter should be correct")
+			}
+		})
+	}
+}
+
+func TestHighlightLineNumber_NoSeparator(t *testing.T) {
+	view := View{
+		width:  80,
+		height: 24,
+	}
+
+	// Test line without separator
+	input := "No separator here"
+	testStyle := styles.ReviewCommentedLineNumStyle
+
+	result := view.highlightLineNumber(input, testStyle)
+
+	// Should return unchanged
+	assert.Equal(t, input, result, "line without separator should be returned unchanged")
 }
