@@ -17,10 +17,12 @@ type ReviewOnlyOptions struct {
 
 // ReviewOnlyModel is a minimal TUI for reviewing context documents.
 type ReviewOnlyModel struct {
-	reviewView review.View
-	width      int
-	height     int
-	quitting   bool
+	reviewView  review.View
+	initialDoc  *review.Document
+	width       int
+	height      int
+	quitting    bool
+	initialized bool
 }
 
 // NewReviewOnly creates a new review-only TUI model.
@@ -31,16 +33,13 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	// Create review view
 	reviewView := review.New(opts.Documents, opts.ContextDir, store)
 
-	// If initial document is provided, load it
-	if opts.InitialDoc != nil {
-		reviewView.LoadDocument(opts.InitialDoc)
-	}
-
 	return ReviewOnlyModel{
-		reviewView: reviewView,
-		width:      80,
-		height:     24,
-		quitting:   false,
+		reviewView:  reviewView,
+		initialDoc:  opts.InitialDoc,
+		width:       80,
+		height:      24,
+		quitting:    false,
+		initialized: false,
 	}
 }
 
@@ -56,6 +55,15 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.width = msg.Width
 		m.height = msg.Height
 		m.reviewView.SetSize(msg.Width, msg.Height)
+
+		// TODO: Fix document loading - currently causes panic
+		// Load initial document after first resize (when we know the window size)
+		// if !m.initialized && m.initialDoc != nil {
+		// 	m.reviewView.LoadDocument(m.initialDoc)
+		// 	m.initialized = true
+		// }
+		_ = m.initialDoc // Suppress unused warning
+		m.initialized = true
 		return m, nil
 
 	case tea.KeyMsg:

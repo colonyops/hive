@@ -86,15 +86,20 @@ func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
 			return fmt.Errorf("no documents found")
 		}
 	} else if cmd.file != "" {
-		// Use specific file
-		absPath, err := filepath.Abs(cmd.file)
-		if err != nil {
-			return fmt.Errorf("resolve file path: %w", err)
+		// Use specific file (resolve relative to context directory)
+		var targetPath string
+		if filepath.IsAbs(cmd.file) {
+			targetPath = cmd.file
+		} else {
+			targetPath = filepath.Join(contextDir, cmd.file)
 		}
+
+		// Clean the path
+		targetPath = filepath.Clean(targetPath)
 
 		// Search for matching document
 		for i := range documents {
-			if documents[i].Path == absPath {
+			if documents[i].Path == targetPath {
 				initialDoc = &documents[i]
 				break
 			}
@@ -133,26 +138,12 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 	return nil
 }
 
-// resolveContextDir resolves the context directory, preferring the current session's repo.
+// resolveContextDir resolves the context directory for the current working directory.
+// Uses the same logic as 'hive ctx' - detects git remote from cwd and resolves to context dir.
 func (cmd *ReviewCmd) resolveContextDir(ctx context.Context) (string, error) {
-	// Detect current session
-	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
-	if err != nil {
-		return "", err
-	}
-
-	var repo string
-	if sessionID != "" {
-		// Get session to extract remote
-		sess, err := cmd.app.Sessions.GetSession(ctx, sessionID)
-		if err != nil {
-			return "", err
-		}
-		repo = sess.Remote
-	}
-
-	// Resolve context dir (uses repo if set, otherwise detects from cwd)
-	contextDir, err := cmd.app.Context.ResolveDir(ctx, repo, false)
+	// Let ResolveDir detect from current working directory
+	// This uses the same git remote detection as 'hive ctx'
+	contextDir, err := cmd.app.Context.ResolveDir(ctx, "", false)
 	if err != nil {
 		return "", err
 	}
