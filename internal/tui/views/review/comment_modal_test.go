@@ -17,7 +17,7 @@ func TestCommentModal_View(t *testing.T) {
 		"}",
 	}, "\n")
 
-	modal := NewCommentModal(10, 14, contextText, 80, 24)
+	modal := NewCommentModal(10, 14, contextText, 80, 24, 80)
 	output := modal.View()
 	output = testutil.StripANSI(output)
 
@@ -32,7 +32,7 @@ func TestCommentModal_ViewWithLongContext(t *testing.T) {
 	}
 	contextText := strings.Join(lines, "\n")
 
-	modal := NewCommentModal(1, 30, contextText, 80, 24)
+	modal := NewCommentModal(1, 30, contextText, 80, 24, 80)
 	output := modal.View()
 	output = testutil.StripANSI(output)
 
@@ -43,7 +43,7 @@ func TestCommentModal_ViewMultiline(t *testing.T) {
 	// Create modal with simple multiline input
 	contextText := "func example() {\n    return true\n}"
 
-	modal := NewCommentModal(1, 3, contextText, 80, 24)
+	modal := NewCommentModal(1, 3, contextText, 80, 24, 80)
 	// Simulate multiline textArea input
 	modal.textArea.SetValue("Line 1\nLine 2\nLine 3")
 
@@ -57,7 +57,7 @@ func TestCommentModal_ViewLongMultiline(t *testing.T) {
 	// Create modal with 10 lines to test textArea scrolling
 	contextText := "func example() {\n    return true\n}"
 
-	modal := NewCommentModal(1, 3, contextText, 80, 24)
+	modal := NewCommentModal(1, 3, contextText, 80, 24, 80)
 	// Simulate 10 lines of input
 	lines := make([]string, 10)
 	for i := range 10 {

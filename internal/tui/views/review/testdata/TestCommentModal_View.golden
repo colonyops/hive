@@ -8,10 +8,10 @@ func main() {
     return              
 }                       
                         
-┃ Enter your review comment...                                        
-┃                                                                     
-┃                                                                     
-┃                                                                     
-┃                                                                     
+┃ Enter your review comment...                              
+┃                                                           
+┃                                                           
+┃                                                           
+┃                                                           
                                        
 ctrl+enter/ctrl+s: submit • esc: cancel

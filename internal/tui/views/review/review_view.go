@@ -64,6 +64,7 @@ type View struct {
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
+	commentLineWidth  int                      // Max width for comment modal (from config, default: 80)
 
 	// Phase 1 refactor: extracted components
 	documentView        DocumentView // Document rendering and navigation
@@ -74,7 +75,8 @@ type View struct {
 // New creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
 // If store is non-nil, comments will be persisted to the database.
-func New(documents []Document, contextDir string, store *stores.ReviewStore) View {
+// commentLineWidth sets the max width for the comment modal (0 = default 80).
+func New(documents []Document, contextDir string, store *stores.ReviewStore, commentLineWidth int) View {
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -118,16 +120,22 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	searchModeComponent := NewSearchMode()
 	modalState := NewModalState()
 
+	// Apply default comment line width if not set
+	if commentLineWidth <= 0 {
+		commentLineWidth = 80
+	}
+
 	return View{
-		list:        l,
-		viewport:    vp,
-		watcher:     watcher,
-		contextDir:  contextDir,
-		store:       store,
-		previewMode: false,
-		fullScreen:  false,
-		cursorLine:  1,
-		searchInput: ti,
+		list:             l,
+		viewport:         vp,
+		watcher:          watcher,
+		contextDir:       contextDir,
+		store:            store,
+		previewMode:      false,
+		fullScreen:       false,
+		cursorLine:       1,
+		searchInput:      ti,
+		commentLineWidth: commentLineWidth,
 		// Phase 1 components
 		documentView:        documentView,
 		searchModeComponent: searchModeComponent,
@@ -420,7 +428,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					// Calculate selection range from anchor to cursor
 					start := min(v.selectionStart, v.cursorLine)
 					end := max(v.selectionStart, v.cursorLine)
-					modal := NewCommentModal(start, end, contextText, v.width, v.height)
+					modal := NewCommentModal(start, end, contextText, v.width, v.height, v.commentLineWidth)
 					v.commentModal = &modal
 					return v, nil
 				}
@@ -437,6 +445,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 								comment.ContextText,
 								v.width,
 								v.height,
+								v.commentLineWidth,
 							)
 							modal.SetExistingComment(comment.CommentText)
 							v.commentModal = &modal

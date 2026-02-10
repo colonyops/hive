@@ -25,12 +25,16 @@ type CommentModal struct {
 }
 
 // NewCommentModal creates a new comment modal.
-func NewCommentModal(startLine, endLine int, contextText string, width, height int) CommentModal {
+// maxWidth constrains the modal width (e.g., from config.Review.CommentLineWidth).
+func NewCommentModal(startLine, endLine int, contextText string, width, height int, maxWidth int) CommentModal {
+	// Constrain modal width to maxWidth (with padding for borders)
+	modalWidth := min(width-10, maxWidth+10) // +10 for padding/borders
+
 	ta := textarea.New()
 	ta.Placeholder = "Enter your review comment..."
 	ta.Focus()
-	ta.SetWidth(width - 10) // Account for padding and borders
-	ta.SetHeight(5)         // 5 lines of input height
+	ta.SetWidth(modalWidth - 10) // Account for padding and borders
+	ta.SetHeight(5)              // 5 lines of input height
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 1000
 

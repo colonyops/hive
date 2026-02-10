@@ -9,10 +9,11 @@ import (
 
 // ReviewOnlyOptions configures the review-only TUI.
 type ReviewOnlyOptions struct {
-	Documents  []review.Document
-	InitialDoc *review.Document
-	ContextDir string
-	DB         *db.DB
+	Documents        []review.Document
+	InitialDoc       *review.Document
+	ContextDir       string
+	DB               *db.DB
+	CommentLineWidth int
 }
 
 // ReviewOnlyModel is a minimal TUI for reviewing context documents.
@@ -31,7 +32,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	store := stores.NewReviewStore(opts.DB)
 
 	// Create review view
-	reviewView := review.New(opts.Documents, opts.ContextDir, store)
+	reviewView := review.New(opts.Documents, opts.ContextDir, store, opts.CommentLineWidth)
 
 	return ReviewOnlyModel{
 		reviewView:  reviewView,

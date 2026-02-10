@@ -27,7 +27,7 @@ func TestView_ListMode(t *testing.T) {
 		},
 	}
 
-	view := New(docs, "", nil)
+	view := New(docs, "", nil, 0)
 	view.SetSize(80, 24)
 
 	output := view.View()
@@ -59,7 +59,7 @@ func TestView_DocumentMode(t *testing.T) {
 		Content: testContent,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 
 	// Load the document to enter fullscreen mode
