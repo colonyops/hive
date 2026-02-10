@@ -111,15 +111,12 @@ func (cmd *ReviewCmd) run(ctx context.Context, c *cli.Command) error {
 
 // launchReviewTUI starts the review-only TUI with the given documents.
 func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, contextDir string) error {
-	// Get database queries
-	queries := cmd.app.DB.Queries()
-
 	// Create review-only options
 	opts := tui.ReviewOnlyOptions{
 		Documents:  documents,
 		InitialDoc: initialDoc,
 		ContextDir: contextDir,
-		DB:         queries,
+		DB:         cmd.app.DB,
 	}
 
 	// Create review-only model
