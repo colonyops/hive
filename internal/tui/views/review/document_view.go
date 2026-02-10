@@ -190,10 +190,11 @@ func (dv *DocumentView) ensureCursorVisible() {
 }
 
 // wrapComment wraps comment text to fit within viewport with adaptive width.
-// Uses minimum width of 80 chars and adjusts based on viewport width.
+// Uses minimum width of 120 chars and adjusts based on viewport width.
 // indent specifies number of spaces to add at the start of each wrapped line.
+// TODO: Make minWidth configurable via config.review.comment_line_width
 func (dv *DocumentView) wrapComment(text string, indent int) []string {
-	const minWidth = 80
+	const minWidth = 120
 	// Reserve 15 chars for line numbers and padding
 	maxWidth := max(minWidth, dv.width-15)
 

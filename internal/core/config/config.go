@@ -122,6 +122,7 @@ type Config struct {
 	History             HistoryConfig          `yaml:"history"`
 	Context             ContextConfig          `yaml:"context"`
 	TUI                 TUIConfig              `yaml:"tui"`
+	Review              ReviewConfig           `yaml:"review"`
 	Messaging           MessagingConfig        `yaml:"messaging"`
 	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
@@ -147,6 +148,19 @@ type TUIConfig struct {
 	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
 	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
 	Preview         PreviewConfig `yaml:"preview"`          // preview panel configuration
+}
+
+// ReviewConfig holds review-related configuration.
+type ReviewConfig struct {
+	CommentLineWidth int `yaml:"comment_line_width"` // minimum width for comment wrapping (default: 80)
+}
+
+// CommentLineWidthOrDefault returns the configured comment line width or 80 if not set.
+func (r ReviewConfig) CommentLineWidthOrDefault() int {
+	if r.CommentLineWidth <= 0 {
+		return 80
+	}
+	return r.CommentLineWidth
 }
 
 // IconsEnabled returns true if nerd font icons should be shown.
