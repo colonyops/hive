@@ -1435,8 +1435,9 @@ func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
 
 	var result []string
 	baseIndentStr := strings.Repeat(" ", baseIndent)
-	// Continuation lines should align with text after icon (icon + space = 2 extra chars)
-	continuationIndentStr := baseIndentStr + strings.Repeat(" ", len(icon)+1)
+	// Continuation lines should align with text after icon
+	// Icon visual width is typically 1 char + 1 space = 2 chars total
+	continuationIndentStr := baseIndentStr + "  "
 
 	for i, line := range inputLines {
 		line = strings.TrimRight(line, " \t") // Remove trailing whitespace
