@@ -415,8 +415,8 @@ func TestCommentVisualStyling(t *testing.T) {
 	content := "Line 1\nLine 2\nLine 3"
 	rendered, _ := view.insertCommentsInline(content)
 
-	// Check that the rendered output contains the profile placeholder
-	assert.Contains(t, rendered, styles.IconProfile, "expected rendered output to contain '%s' placeholder", styles.IconProfile)
+	// Check that the rendered output contains the comment icon
+	assert.Contains(t, rendered, styles.IconComment, "expected rendered output to contain '%s' icon", styles.IconComment)
 
 	// Check that the comment text is present
 	assert.Contains(t, rendered, "This is a test comment", "expected rendered output to contain comment text")
@@ -425,9 +425,10 @@ func TestCommentVisualStyling(t *testing.T) {
 	lines := strings.Split(rendered, "\n")
 	var commentLineFound bool
 	for _, line := range lines {
-		if strings.Contains(line, styles.IconProfile) {
-			// Check for leading spaces (indentation)
-			assert.True(t, strings.HasPrefix(line, "    "), "expected comment line to have increased indentation (at least 4 spaces)")
+		if strings.Contains(line, styles.IconComment) {
+			// Strip ANSI codes and check for leading spaces (indentation)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			assert.True(t, strings.HasPrefix(cleanLine, "    "), "expected comment line to have increased indentation (at least 4 spaces)")
 			commentLineFound = true
 			break
 		}

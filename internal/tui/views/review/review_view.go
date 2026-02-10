@@ -1426,6 +1426,33 @@ func (v *View) updateTreeItemCommentCount() {
 	}
 }
 
+// formatCommentLines formats comment text with proper indentation.
+// Preserves explicit newlines and aligns continuation lines.
+// The first line includes the icon and base indent, subsequent lines align with text after icon.
+func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
+	// Split by explicit newlines first (preserve user's line breaks)
+	inputLines := strings.Split(text, "\n")
+
+	var result []string
+	baseIndentStr := strings.Repeat(" ", baseIndent)
+	// Continuation lines should align with text after icon (icon + space = 2 extra chars)
+	continuationIndentStr := baseIndentStr + strings.Repeat(" ", len(icon)+1)
+
+	for i, line := range inputLines {
+		line = strings.TrimRight(line, " \t") // Remove trailing whitespace
+
+		if i == 0 {
+			// First line: add icon
+			result = append(result, baseIndentStr+icon+" "+line)
+		} else {
+			// Subsequent lines: align with first line's text
+			result = append(result, continuationIndentStr+line)
+		}
+	}
+
+	return result
+}
+
 // insertCommentsInline inserts comments after their referenced lines.
 // Returns the rendered content and a mapping from document line numbers to display line numbers.
 func (v *View) insertCommentsInline(content string) (string, map[int]int) {
@@ -1469,11 +1496,14 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 		// Build comment lines to insert
 		commentLines := make([]string, 0, len(comments))
 		for _, comment := range comments {
-			icon := styles.IconProfile
-			// Add increased indentation (6 spaces) for visual separation
-			indent := "      "
-			commentLine := indent + commentStyle.Render(fmt.Sprintf("%s %s", icon, comment.CommentText))
-			commentLines = append(commentLines, commentLine)
+			icon := styles.IconComment
+			// Format with proper indentation, preserving explicit newlines
+			formattedLines := v.formatCommentLines(icon, comment.CommentText, 6)
+			// Apply styling to each formatted line
+			for _, formattedLine := range formattedLines {
+				styledLine := commentStyle.Render(formattedLine)
+				commentLines = append(commentLines, styledLine)
+			}
 		}
 
 		// Insert comment lines after the target line

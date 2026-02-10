@@ -288,7 +288,7 @@ func (dv *DocumentView) insertCommentsInline(content string, comments []corerevi
 		// Build comment lines to insert
 		commentLines := make([]string, 0, len(comments))
 		for _, comment := range comments {
-			icon := styles.IconProfile
+			icon := styles.IconComment
 			// Use adaptive wrapping with 6 spaces indentation for visual separation
 			wrappedLines := dv.wrapComment(icon+" "+comment.CommentText, 6)
 			// Apply styling to each wrapped line
