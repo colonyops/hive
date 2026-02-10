@@ -56,14 +56,17 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.reviewView.SetSize(msg.Width, msg.Height)
 
-		// TODO: Fix document loading - currently causes panic
-		// Load initial document after first resize (when we know the window size)
-		// if !m.initialized && m.initialDoc != nil {
-		// 	m.reviewView.LoadDocument(m.initialDoc)
-		// 	m.initialized = true
-		// }
-		_ = m.initialDoc // Suppress unused warning
-		m.initialized = true
+		// After first resize (when we know window size), open picker or load initial doc
+		if !m.initialized {
+			m.initialized = true
+			if m.initialDoc != nil {
+				// Load initial document directly
+				m.reviewView.LoadDocument(m.initialDoc)
+			} else {
+				// Open picker in fullscreen mode
+				return m, m.reviewView.ShowDocumentPicker()
+			}
+		}
 		return m, nil
 
 	case tea.KeyMsg:
