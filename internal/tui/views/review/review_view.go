@@ -64,6 +64,8 @@ type View struct {
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
+	centerDocument    bool                     // Center document horizontally with padding
+	maxDocumentWidth  int                      // Max width for centered document (default: 100)
 
 	// Phase 1 refactor: extracted components
 	documentView        DocumentView // Document rendering and navigation
@@ -119,15 +121,17 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	modalState := NewModalState()
 
 	return View{
-		list:        l,
-		viewport:    vp,
-		watcher:     watcher,
-		contextDir:  contextDir,
-		store:       store,
-		previewMode: false,
-		fullScreen:  false,
-		cursorLine:  1,
-		searchInput: ti,
+		list:             l,
+		viewport:         vp,
+		watcher:          watcher,
+		contextDir:       contextDir,
+		store:            store,
+		previewMode:      false,
+		fullScreen:       false,
+		cursorLine:       1,
+		searchInput:      ti,
+		centerDocument:   false, // TODO: load from config
+		maxDocumentWidth: 100,   // TODO: load from config
 		// Phase 1 components
 		documentView:        documentView,
 		searchModeComponent: searchModeComponent,
@@ -520,21 +524,37 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			return v, nil
 		}
 
-		// Handle search navigation (n/N for next/previous match)
-		if v.fullScreen && v.searchQuery != "" && len(v.searchMatches) > 0 {
+		// Handle n/N navigation (search matches or comments)
+		if v.fullScreen && !v.selectionMode {
 			switch msg.String() {
 			case "n":
-				// Jump to next match
-				v.searchMatchIndex = (v.searchMatchIndex + 1) % len(v.searchMatches)
-				v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
-				v.renderSelection()
-				return v, nil
+				// Priority: search matches > comments
+				if v.searchQuery != "" && len(v.searchMatches) > 0 {
+					// Jump to next search match
+					v.searchMatchIndex = (v.searchMatchIndex + 1) % len(v.searchMatches)
+					v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
+					v.renderSelection()
+					return v, nil
+				} else if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+					// Jump to next comment
+					v.jumpToNextComment()
+					v.renderSelection()
+					return v, nil
+				}
 			case "N", "shift+n":
-				// Jump to previous match
-				v.searchMatchIndex = (v.searchMatchIndex - 1 + len(v.searchMatches)) % len(v.searchMatches)
-				v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
-				v.renderSelection()
-				return v, nil
+				// Priority: search matches > comments
+				if v.searchQuery != "" && len(v.searchMatches) > 0 {
+					// Jump to previous search match
+					v.searchMatchIndex = (v.searchMatchIndex - 1 + len(v.searchMatches)) % len(v.searchMatches)
+					v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
+					v.renderSelection()
+					return v, nil
+				} else if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+					// Jump to previous comment
+					v.jumpToPrevComment()
+					v.renderSelection()
+					return v, nil
+				}
 			}
 		}
 
@@ -819,6 +839,9 @@ func (v *View) loadDocument(doc *Document) {
 		return
 	}
 
+	// Apply centering if enabled
+	rendered = v.applyCentering(rendered)
+
 	v.viewport.SetContent(rendered)
 	v.viewport.GotoTop()
 
@@ -872,6 +895,52 @@ func (v *View) ensureCursorVisible() {
 	}
 }
 
+// applyCentering centers the document content horizontally if centerDocument is enabled.
+// Adds left padding to center content within the viewport, constraining max width.
+func (v *View) applyCentering(content string) string {
+	if !v.centerDocument {
+		return content
+	}
+
+	lines := strings.Split(content, "\n")
+	if len(lines) == 0 {
+		return content
+	}
+
+	// Find the maximum content width (excluding ANSI codes)
+	maxContentWidth := 0
+	for _, line := range lines {
+		// Strip ANSI to measure actual visible width
+		cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+		width := len(cleanLine)
+		if width > maxContentWidth {
+			maxContentWidth = width
+		}
+	}
+
+	// Apply max width constraint
+	contentWidth := min(maxContentWidth, v.maxDocumentWidth)
+
+	// Calculate left padding to center
+	leftPadding := 0
+	if v.width > contentWidth {
+		leftPadding = (v.width - contentWidth) / 2
+	}
+
+	if leftPadding <= 0 {
+		return content // No centering needed
+	}
+
+	// Add left padding to each line
+	paddingStr := strings.Repeat(" ", leftPadding)
+	var centeredLines []string
+	for _, line := range lines {
+		centeredLines = append(centeredLines, paddingStr+line)
+	}
+
+	return strings.Join(centeredLines, "\n")
+}
+
 // renderSelection re-renders the document with comments, selection and cursor highlighting.
 func (v *View) renderSelection() {
 	if v.selectedDoc == nil {
@@ -905,6 +974,9 @@ func (v *View) renderSelection() {
 	// Apply cursor and selection highlighting (includes search match highlighting)
 	rendered = v.highlightSelection(rendered, v.lineMapping)
 
+	// Apply centering if enabled
+	rendered = v.applyCentering(rendered)
+
 	v.viewport.SetContent(rendered)
 }
 
@@ -934,6 +1006,76 @@ func (v *View) findSearchMatches() {
 // lineNum should be in document coordinates; this function will map to display coordinates for scrolling.
 func (v *View) jumpToMatch(lineNum int) {
 	v.cursorLine = lineNum
+	v.ensureCursorVisible()
+}
+
+// jumpToNextComment moves the cursor to the next comment after the current cursor position.
+// If at or past the last comment, wraps to the first comment.
+func (v *View) jumpToNextComment() {
+	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
+		return
+	}
+
+	// Sort comments by start line to ensure consistent navigation order
+	comments := v.activeSession.Comments
+	sortedComments := make([]Comment, len(comments))
+	copy(sortedComments, comments)
+
+	// Simple bubble sort by start line
+	for i := range sortedComments {
+		for j := i + 1; j < len(sortedComments); j++ {
+			if sortedComments[i].StartLine > sortedComments[j].StartLine {
+				sortedComments[i], sortedComments[j] = sortedComments[j], sortedComments[i]
+			}
+		}
+	}
+
+	// Find first comment after cursor position
+	for _, comment := range sortedComments {
+		if comment.StartLine > v.cursorLine {
+			v.cursorLine = comment.StartLine
+			v.ensureCursorVisible()
+			return
+		}
+	}
+
+	// No comment found after cursor - wrap to first comment
+	v.cursorLine = sortedComments[0].StartLine
+	v.ensureCursorVisible()
+}
+
+// jumpToPrevComment moves the cursor to the previous comment before the current cursor position.
+// If at or before the first comment, wraps to the last comment.
+func (v *View) jumpToPrevComment() {
+	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
+		return
+	}
+
+	// Sort comments by start line to ensure consistent navigation order
+	comments := v.activeSession.Comments
+	sortedComments := make([]Comment, len(comments))
+	copy(sortedComments, comments)
+
+	// Simple bubble sort by start line
+	for i := range sortedComments {
+		for j := i + 1; j < len(sortedComments); j++ {
+			if sortedComments[i].StartLine > sortedComments[j].StartLine {
+				sortedComments[i], sortedComments[j] = sortedComments[j], sortedComments[i]
+			}
+		}
+	}
+
+	// Find last comment before cursor position (iterate in reverse)
+	for i := len(sortedComments) - 1; i >= 0; i-- {
+		if sortedComments[i].StartLine < v.cursorLine {
+			v.cursorLine = sortedComments[i].StartLine
+			v.ensureCursorVisible()
+			return
+		}
+	}
+
+	// No comment found before cursor - wrap to last comment
+	v.cursorLine = sortedComments[len(sortedComments)-1].StartLine
 	v.ensureCursorVisible()
 }
 
@@ -1041,8 +1183,8 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 }
 
 // lineNumGutterPattern matches the gutter format: " <number>  <content>"
-// Group 1 captures only the gutter (leading spaces + digits), excluding the trailing two spaces
-var lineNumGutterPattern = regexp.MustCompile(`^( *\d+)  `)
+// Group 1 captures the full gutter including all spaces and the line number
+var lineNumGutterPattern = regexp.MustCompile(`^( *\d+  )`)
 
 // highlightLineNumber applies a style to the line number and separator of a rendered line.
 // Assumes format: " n  content" (optional leading spaces, number, two spaces, content)
@@ -1186,7 +1328,7 @@ func (v View) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close"
+		helpText = "V:visual • p:picker • n/N:navigate • e:edit • d:delete • /:search • f:finalize • esc:close"
 	}
 	helpStyle := styles.ReviewHelpStyle
 

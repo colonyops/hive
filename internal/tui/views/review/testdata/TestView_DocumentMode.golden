@@ -21,4 +21,4 @@
                                                                                 
                                                                                 
                                                                                 
- NORMAL  V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close  Line 1/9 
+ NORMAL  V:visual • p:picker • n/N:navigate • e:edit • d:delete • /:search • f:finalize • esc:close  Line 1/9 
