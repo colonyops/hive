@@ -1,5 +1,5 @@
-1 │ 
-2 │    Test Document                                                        
-3 │                                                                         
+│ 1 │ 
+│ 2 │    Test Document                                                        
+│ 3 │                                                                         
         This is a very long comment that exceeds 80 characters to test wrapping behavior and formatting. 
-4 │   This is line 3. This is line 4.                                       
+│ 4 │   This is line 3. This is line 4.                                       

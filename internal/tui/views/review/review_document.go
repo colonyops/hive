@@ -239,8 +239,9 @@ func (d *Document) formatWithLineNumbers(lines []string) string {
 	for i, line := range lines {
 		lineNum := fmt.Sprintf("%*d", lineNumWidth, i+1)
 		styledNum := lineNumStyle.Render(lineNum)
-		separator := separatorStyle.Render(" │ ")
-		result.WriteString(styledNum + separator + line + "\n")
+		leftSep := separatorStyle.Render("│ ")
+		rightSep := separatorStyle.Render(" │ ")
+		result.WriteString(leftSep + styledNum + rightSep + line + "\n")
 	}
 
 	return result.String()
