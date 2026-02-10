@@ -249,8 +249,7 @@ func SetTheme(p Palette) {
 	ReviewCurrentSearchMatchStyle = lipgloss.NewStyle().
 		Background(ColorError)
 	ReviewCommentedLineNumStyle = lipgloss.NewStyle().
-		Foreground(ColorBackground).
-		Background(ColorPrimary).
+		Foreground(ColorWarning).
 		Bold(true)
 	ReviewSearchInputStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
@@ -282,7 +281,7 @@ func SetTheme(p Palette) {
 	ReviewStatusBarBgStyle = lipgloss.NewStyle().
 		Background(ColorBackground)
 	ReviewInlineCommentStyle = lipgloss.NewStyle().
-		Foreground(ColorError).
+		Foreground(ColorWarning).
 		Background(ColorBackground).
 		Padding(0, 1).
 		Bold(true)

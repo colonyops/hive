@@ -152,9 +152,7 @@ type TUIConfig struct {
 
 // ReviewConfig holds review-related configuration.
 type ReviewConfig struct {
-	CommentLineWidth int  `yaml:"comment_line_width"` // minimum width for comment wrapping (default: 80)
-	CenterDocument   bool `yaml:"center_document"`    // center document horizontally in viewport (default: false)
-	MaxWidth         int  `yaml:"max_width"`          // max width for centered document (default: 100)
+	CommentLineWidth int `yaml:"comment_line_width"` // minimum width for comment wrapping (default: 80)
 }
 
 // CommentLineWidthOrDefault returns the configured comment line width or 80 if not set.
@@ -163,14 +161,6 @@ func (r ReviewConfig) CommentLineWidthOrDefault() int {
 		return 80
 	}
 	return r.CommentLineWidth
-}
-
-// MaxWidthOrDefault returns the configured max width or 100 if not set.
-func (r ReviewConfig) MaxWidthOrDefault() int {
-	if r.MaxWidth <= 0 {
-		return 100
-	}
-	return r.MaxWidth
 }
 
 // IconsEnabled returns true if nerd font icons should be shown.

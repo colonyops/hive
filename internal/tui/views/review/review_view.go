@@ -64,8 +64,6 @@ type View struct {
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
-	centerDocument    bool                     // Center document horizontally with padding
-	maxDocumentWidth  int                      // Max width for centered document (default: 100)
 
 	// Phase 1 refactor: extracted components
 	documentView        DocumentView // Document rendering and navigation
@@ -121,17 +119,15 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	modalState := NewModalState()
 
 	return View{
-		list:             l,
-		viewport:         vp,
-		watcher:          watcher,
-		contextDir:       contextDir,
-		store:            store,
-		previewMode:      false,
-		fullScreen:       false,
-		cursorLine:       1,
-		searchInput:      ti,
-		centerDocument:   false, // TODO: load from config
-		maxDocumentWidth: 100,   // TODO: load from config
+		list:        l,
+		viewport:    vp,
+		watcher:     watcher,
+		contextDir:  contextDir,
+		store:       store,
+		previewMode: false,
+		fullScreen:  false,
+		cursorLine:  1,
+		searchInput: ti,
 		// Phase 1 components
 		documentView:        documentView,
 		searchModeComponent: searchModeComponent,
@@ -839,9 +835,6 @@ func (v *View) loadDocument(doc *Document) {
 		return
 	}
 
-	// Apply centering if enabled
-	rendered = v.applyCentering(rendered)
-
 	v.viewport.SetContent(rendered)
 	v.viewport.GotoTop()
 
@@ -895,52 +888,6 @@ func (v *View) ensureCursorVisible() {
 	}
 }
 
-// applyCentering centers the document content horizontally if centerDocument is enabled.
-// Adds left padding to center content within the viewport, constraining max width.
-func (v *View) applyCentering(content string) string {
-	if !v.centerDocument {
-		return content
-	}
-
-	lines := strings.Split(content, "\n")
-	if len(lines) == 0 {
-		return content
-	}
-
-	// Find the maximum content width (excluding ANSI codes)
-	maxContentWidth := 0
-	for _, line := range lines {
-		// Strip ANSI to measure actual visible width
-		cleanLine := ansiStripPattern.ReplaceAllString(line, "")
-		width := len(cleanLine)
-		if width > maxContentWidth {
-			maxContentWidth = width
-		}
-	}
-
-	// Apply max width constraint
-	contentWidth := min(maxContentWidth, v.maxDocumentWidth)
-
-	// Calculate left padding to center
-	leftPadding := 0
-	if v.width > contentWidth {
-		leftPadding = (v.width - contentWidth) / 2
-	}
-
-	if leftPadding <= 0 {
-		return content // No centering needed
-	}
-
-	// Add left padding to each line
-	paddingStr := strings.Repeat(" ", leftPadding)
-	var centeredLines []string
-	for _, line := range lines {
-		centeredLines = append(centeredLines, paddingStr+line)
-	}
-
-	return strings.Join(centeredLines, "\n")
-}
-
 // renderSelection re-renders the document with comments, selection and cursor highlighting.
 func (v *View) renderSelection() {
 	if v.selectedDoc == nil {
@@ -973,9 +920,6 @@ func (v *View) renderSelection() {
 
 	// Apply cursor and selection highlighting (includes search match highlighting)
 	rendered = v.highlightSelection(rendered, v.lineMapping)
-
-	// Apply centering if enabled
-	rendered = v.applyCentering(rendered)
 
 	v.viewport.SetContent(rendered)
 }
