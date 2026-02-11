@@ -216,7 +216,7 @@ func (d *Detector) IsReady(content string) bool {
 		checkLines = checkLines[len(checkLines)-5:]
 	}
 	for _, line := range checkLines {
-		cleanLine := strings.TrimSpace(stripANSI(line))
+		cleanLine := strings.TrimSpace(StripANSI(line))
 		// Normalize non-breaking spaces (U+00A0) to regular spaces
 		cleanLine = strings.ReplaceAll(cleanLine, "\u00A0", " ")
 
@@ -254,7 +254,7 @@ func (d *Detector) IsReady(content string) bool {
 // Uses trimmed lines so trailing spaces/cursor position don't break detection.
 func hasLineEndingWith(lines []string, suffix string) bool {
 	for i := len(lines) - 1; i >= 0; i-- {
-		line := strings.TrimSpace(stripANSI(lines[i]))
+		line := strings.TrimSpace(StripANSI(lines[i]))
 		if line == suffix || strings.HasSuffix(line+" ", suffix+" ") {
 			return true
 		}
@@ -328,8 +328,8 @@ func getLastNonEmptyLines(content string, n int) []string {
 	return result
 }
 
-// stripANSI removes ANSI escape codes from content.
-func stripANSI(content string) string {
+// StripANSI removes ANSI escape codes from content.
+func StripANSI(content string) string {
 	// Fast path: if no escape chars, return as-is
 	if !strings.Contains(content, "\x1b") && !strings.Contains(content, "\x9B") {
 		return content

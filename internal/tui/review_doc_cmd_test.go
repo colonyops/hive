@@ -23,7 +23,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(docs, "/test", nil)
+	reviewView := review.New(docs, "/test", nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
@@ -61,7 +61,7 @@ func TestOpenDocument(t *testing.T) {
 			Type:    review.DocTypeResearch,
 		},
 	}
-	reviewView := review.New(docs, "/test", nil)
+	reviewView := review.New(docs, "/test", nil, 0)
 	reviewView.SetSize(100, 40)
 
 	tests := []struct {
@@ -113,7 +113,7 @@ func TestGetAllDocuments(t *testing.T) {
 		{RelPath: "doc2.md", Type: review.DocTypeResearch},
 	}
 
-	reviewView := review.New(docs, "/test", nil)
+	reviewView := review.New(docs, "/test", nil, 0)
 
 	allDocs := reviewView.GetAllDocuments()
 

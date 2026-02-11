@@ -4,14 +4,18 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	"github.com/hay-kot/hive/internal/core/styles"
 )
 
-// CommentModal handles comment entry for selected text.
+// CommentModal handles multiline comment entry for selected text.
+// Uses textarea for multiline input with the following keybindings:
+//   - Enter: Insert newline
+//   - Ctrl+Enter or Ctrl+S: Submit comment
+//   - Esc: Cancel modal
 type CommentModal struct {
-	textInput      textinput.Model
+	textArea       textarea.Model
 	lineRange      string // e.g., "Lines 10-15"
 	contextPreview string // First 100 chars of selected text
 	width          int
@@ -21,11 +25,21 @@ type CommentModal struct {
 }
 
 // NewCommentModal creates a new comment modal.
-func NewCommentModal(startLine, endLine int, contextText string, width, height int) CommentModal {
-	ti := textinput.New()
-	ti.Placeholder = "Enter your review comment..."
-	ti.Focus()
-	ti.SetWidth(width - 10) // Account for padding and borders
+// maxWidth constrains the modal width (e.g., from config.Review.CommentLineWidth).
+func NewCommentModal(startLine, endLine int, contextText string, width, height int, maxWidth int) CommentModal {
+	// Constrain modal width to maxWidth (with padding for borders)
+	modalWidth := min(width-10, maxWidth+10) // +10 for padding/borders
+
+	ta := textarea.New()
+	ta.Placeholder = "Enter your review comment..."
+	ta.Focus()
+	ta.SetWidth(modalWidth - 10) // Account for padding and borders
+	ta.SetHeight(5)              // 5 lines of input height
+	ta.ShowLineNumbers = false
+	ta.CharLimit = 1000
+
+	// Enable multiline input
+	ta.KeyMap.InsertNewline.SetEnabled(true)
 
 	// Format line range
 	lineRange := fmt.Sprintf("Lines %d-%d", startLine, endLine)
@@ -37,7 +51,7 @@ func NewCommentModal(startLine, endLine int, contextText string, width, height i
 	contextPreview := formatContextPreview(contextText)
 
 	return CommentModal{
-		textInput:      ti,
+		textArea:       ta,
 		lineRange:      lineRange,
 		contextPreview: contextPreview,
 		width:          width,
@@ -66,19 +80,23 @@ func formatContextPreview(text string) string {
 func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		switch keyMsg.String() {
-		case "enter":
-			if m.textInput.Value() != "" {
+		case "ctrl+enter", "ctrl+s":
+			// Submit with Ctrl+Enter or Ctrl+S
+			if m.textArea.Value() != "" {
 				m.submitted = true
 				return m, nil
 			}
 		case "esc":
+			// Cancel modal
 			m.cancelled = true
 			return m, nil
+			// Note: Regular "enter" is handled by textarea to insert newline
 		}
 	}
 
+	// Forward all other keys to textarea (including Enter for newline)
 	var cmd tea.Cmd
-	m.textInput, cmd = m.textInput.Update(msg)
+	m.textArea, cmd = m.textArea.Update(msg)
 	return m, cmd
 }
 
@@ -88,8 +106,8 @@ func (m CommentModal) View() string {
 		styles.ReviewCommentTitleStyle.Render("Add Review Comment"),
 		styles.ReviewCommentLabelStyle.Render(m.lineRange),
 		styles.ReviewCommentContextStyle.Render(m.contextPreview),
-		m.textInput.View(),
-		styles.ReviewCommentHelpStyle.Render("enter: submit • esc: cancel"),
+		m.textArea.View(),
+		styles.ReviewCommentHelpStyle.Render("ctrl+enter/ctrl+s: submit • esc: cancel"),
 	}, "\n")
 
 	return content
@@ -107,12 +125,12 @@ func (m CommentModal) Cancelled() bool {
 
 // Value returns the entered comment text.
 func (m CommentModal) Value() string {
-	return m.textInput.Value()
+	return m.textArea.Value()
 }
 
 // SetExistingComment pre-fills the modal with existing comment text for editing.
 func (m *CommentModal) SetExistingComment(text string) {
-	m.textInput.SetValue(text)
+	m.textArea.SetValue(text)
 	// Position cursor at end of text
-	m.textInput.CursorEnd()
+	m.textArea.CursorEnd()
 }

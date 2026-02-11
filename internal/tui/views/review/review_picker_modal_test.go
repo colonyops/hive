@@ -2,7 +2,9 @@ package review
 
 import (
 	"testing"
+	"time"
 
+	"github.com/hay-kot/hive/internal/tui/testutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -56,4 +58,75 @@ func TestDocumentPickerModal_UpdateFilter(t *testing.T) {
 
 	// Should show all documents again
 	assert.Len(t, modal.filteredDocs, 3, "Expected 3 documents after clearing filter, got %d", len(modal.filteredDocs))
+}
+
+func TestDocumentPickerModal_View(t *testing.T) {
+	// Create picker with 3 documents (plan, research, context)
+	docs := []Document{
+		{
+			Path:    "/test/.hive/plans/feature-a.md",
+			RelPath: ".hive/plans/feature-a.md",
+			Type:    DocTypePlan,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:    "/test/.hive/research/api-design.md",
+			RelPath: ".hive/research/api-design.md",
+			Type:    DocTypeResearch,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:    "/test/.hive/context/overview.md",
+			RelPath: ".hive/context/overview.md",
+			Type:    DocTypeContext,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	modal := NewDocumentPickerModal(docs, 80, 24, nil)
+	output := modal.View()
+	output = testutil.StripANSI(output)
+
+	testutil.RequireGolden(t, output)
+}
+
+func TestDocumentPickerModal_ViewWithFilter(t *testing.T) {
+	// Create picker with documents that can be filtered
+	docs := []Document{
+		{
+			Path:    "/test/.hive/plans/feature-a.md",
+			RelPath: ".hive/plans/feature-a.md",
+			Type:    DocTypePlan,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:    "/test/.hive/plans/feature-a-spec.md",
+			RelPath: ".hive/plans/feature-a-spec.md",
+			Type:    DocTypePlan,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:    "/test/.hive/plans/feature-b.md",
+			RelPath: ".hive/plans/feature-b.md",
+			Type:    DocTypePlan,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+		{
+			Path:    "/test/.hive/research/api-design.md",
+			RelPath: ".hive/research/api-design.md",
+			Type:    DocTypeResearch,
+			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
+		},
+	}
+
+	modal := NewDocumentPickerModal(docs, 80, 24, nil)
+	// Apply filter to show only 'feature-a' documents
+	modal.searchInput.SetValue("feature-a")
+	modal.filterQuery = "feature-a"
+	modal.updateFilter()
+
+	output := modal.View()
+	output = testutil.StripANSI(output)
+
+	testutil.RequireGolden(t, output)
 }

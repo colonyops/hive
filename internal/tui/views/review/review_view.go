@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"time"
 
@@ -63,12 +64,19 @@ type View struct {
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
+	commentLineWidth  int                      // Max width for comment modal (from config, default: 80)
+
+	// Phase 1 refactor: extracted components
+	documentView        DocumentView // Document rendering and navigation
+	searchModeComponent SearchMode   // Search functionality
+	modalState          ModalState   // Modal coordination
 }
 
 // New creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
 // If store is non-nil, comments will be persisted to the database.
-func New(documents []Document, contextDir string, store *stores.ReviewStore) View {
+// commentLineWidth sets the max width for the comment modal (0 = default 80).
+func New(documents []Document, contextDir string, store *stores.ReviewStore, commentLineWidth int) View {
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -107,16 +115,31 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
 
+	// Initialize Phase 1 components
+	documentView := NewDocumentView(nil) // Will be populated when document is loaded
+	searchModeComponent := NewSearchMode()
+	modalState := NewModalState()
+
+	// Apply default comment line width if not set
+	if commentLineWidth <= 0 {
+		commentLineWidth = 80
+	}
+
 	return View{
-		list:        l,
-		viewport:    vp,
-		watcher:     watcher,
-		contextDir:  contextDir,
-		store:       store,
-		previewMode: false, // Disable dual-column preview by default
-		fullScreen:  false, // Start without a document (will show picker or message)
-		cursorLine:  1,     // Initialize cursor at line 1
-		searchInput: ti,
+		list:             l,
+		viewport:         vp,
+		watcher:          watcher,
+		contextDir:       contextDir,
+		store:            store,
+		previewMode:      false,
+		fullScreen:       false,
+		cursorLine:       1,
+		searchInput:      ti,
+		commentLineWidth: commentLineWidth,
+		// Phase 1 components
+		documentView:        documentView,
+		searchModeComponent: searchModeComponent,
+		modalState:          modalState,
 	}
 }
 
@@ -405,7 +428,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					// Calculate selection range from anchor to cursor
 					start := min(v.selectionStart, v.cursorLine)
 					end := max(v.selectionStart, v.cursorLine)
-					modal := NewCommentModal(start, end, contextText, v.width, v.height)
+					modal := NewCommentModal(start, end, contextText, v.width, v.height, v.commentLineWidth)
 					v.commentModal = &modal
 					return v, nil
 				}
@@ -422,6 +445,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 								comment.ContextText,
 								v.width,
 								v.height,
+								v.commentLineWidth,
 							)
 							modal.SetExistingComment(comment.CommentText)
 							v.commentModal = &modal
@@ -485,12 +509,15 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			}
 		}
 
-		// Handle 'p' to open document picker
 		if msg.String() == "p" && !v.selectionMode && !v.searchMode {
-			return v, v.ShowDocumentPicker()
+			// Only show picker if there are multiple documents
+			if len(v.GetAllDocuments()) > 1 {
+				return v, v.ShowDocumentPicker()
+			}
+			// In single-file mode, picker is disabled
+			return v, nil
 		}
 
-		// Handle '/' to enter search mode in full-screen
 		if v.fullScreen && !v.selectionMode && msg.String() == "/" {
 			v.searchMode = true
 			v.searchInput.Focus()
@@ -502,21 +529,37 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			return v, nil
 		}
 
-		// Handle search navigation (n/N for next/previous match)
-		if v.fullScreen && v.searchQuery != "" && len(v.searchMatches) > 0 {
+		// Handle n/N navigation (search matches or comments)
+		if v.fullScreen && !v.selectionMode {
 			switch msg.String() {
 			case "n":
-				// Jump to next match
-				v.searchMatchIndex = (v.searchMatchIndex + 1) % len(v.searchMatches)
-				v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
-				v.renderSelection()
-				return v, nil
+				// Priority: search matches > comments
+				if v.searchQuery != "" && len(v.searchMatches) > 0 {
+					// Jump to next search match
+					v.searchMatchIndex = (v.searchMatchIndex + 1) % len(v.searchMatches)
+					v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
+					v.renderSelection()
+					return v, nil
+				} else if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+					// Jump to next comment
+					v.jumpToNextComment()
+					v.renderSelection()
+					return v, nil
+				}
 			case "N", "shift+n":
-				// Jump to previous match
-				v.searchMatchIndex = (v.searchMatchIndex - 1 + len(v.searchMatches)) % len(v.searchMatches)
-				v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
-				v.renderSelection()
-				return v, nil
+				// Priority: search matches > comments
+				if v.searchQuery != "" && len(v.searchMatches) > 0 {
+					// Jump to previous search match
+					v.searchMatchIndex = (v.searchMatchIndex - 1 + len(v.searchMatches)) % len(v.searchMatches)
+					v.jumpToMatch(v.searchMatches[v.searchMatchIndex])
+					v.renderSelection()
+					return v, nil
+				} else if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+					// Jump to previous comment
+					v.jumpToPrevComment()
+					v.renderSelection()
+					return v, nil
+				}
 			}
 		}
 
@@ -593,6 +636,10 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 	return v, cmd
 }
 
+// handleDocumentKeys delegates document navigation to documentView component.
+// Returns the updated View and any commands.
+//
+
 // View renders the review view.
 func (v View) View() string {
 	var baseView string
@@ -607,6 +654,11 @@ func (v View) View() string {
 		baseView = styles.ReviewEmptyMessageStyle.Render(message)
 	case v.fullScreen:
 		// Full-screen mode: show viewport with status bar
+		// Guard against rendering before window size is set
+		if v.height < 2 {
+			return "Loading..."
+		}
+
 		contentHeight := v.height - 1 // Reserve 1 line for status bar
 		content := v.viewport.View()
 		statusBar := v.renderStatusBar()
@@ -910,6 +962,76 @@ func (v *View) jumpToMatch(lineNum int) {
 	v.ensureCursorVisible()
 }
 
+// jumpToNextComment moves the cursor to the next comment after the current cursor position.
+// If at or past the last comment, wraps to the first comment.
+func (v *View) jumpToNextComment() {
+	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
+		return
+	}
+
+	// Sort comments by start line to ensure consistent navigation order
+	comments := v.activeSession.Comments
+	sortedComments := make([]Comment, len(comments))
+	copy(sortedComments, comments)
+
+	// Simple bubble sort by start line
+	for i := range sortedComments {
+		for j := i + 1; j < len(sortedComments); j++ {
+			if sortedComments[i].StartLine > sortedComments[j].StartLine {
+				sortedComments[i], sortedComments[j] = sortedComments[j], sortedComments[i]
+			}
+		}
+	}
+
+	// Find first comment after cursor position
+	for _, comment := range sortedComments {
+		if comment.StartLine > v.cursorLine {
+			v.cursorLine = comment.StartLine
+			v.ensureCursorVisible()
+			return
+		}
+	}
+
+	// No comment found after cursor - wrap to first comment
+	v.cursorLine = sortedComments[0].StartLine
+	v.ensureCursorVisible()
+}
+
+// jumpToPrevComment moves the cursor to the previous comment before the current cursor position.
+// If at or before the first comment, wraps to the last comment.
+func (v *View) jumpToPrevComment() {
+	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
+		return
+	}
+
+	// Sort comments by start line to ensure consistent navigation order
+	comments := v.activeSession.Comments
+	sortedComments := make([]Comment, len(comments))
+	copy(sortedComments, comments)
+
+	// Simple bubble sort by start line
+	for i := range sortedComments {
+		for j := i + 1; j < len(sortedComments); j++ {
+			if sortedComments[i].StartLine > sortedComments[j].StartLine {
+				sortedComments[i], sortedComments[j] = sortedComments[j], sortedComments[i]
+			}
+		}
+	}
+
+	// Find last comment before cursor position (iterate in reverse)
+	for i := len(sortedComments) - 1; i >= 0; i-- {
+		if sortedComments[i].StartLine < v.cursorLine {
+			v.cursorLine = sortedComments[i].StartLine
+			v.ensureCursorVisible()
+			return
+		}
+	}
+
+	// No comment found before cursor - wrap to last comment
+	v.cursorLine = sortedComments[len(sortedComments)-1].StartLine
+	v.ensureCursorVisible()
+}
+
 // highlightSelection applies background color to cursor and selected lines.
 // Also highlights line numbers of commented lines.
 // lineMapping maps document line numbers to display line numbers (nil if no comments inserted).
@@ -987,19 +1109,24 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 		}
 
 		// Apply highlighting based on priority
+		// Strip ANSI codes first to prevent embedded reset codes from terminating highlights
 		switch {
 		case displayLineNum == currentSearchLine:
 			// Current search match (highest priority)
-			lines[i] = currentSearchMatchStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = currentSearchMatchStyle.Render(cleanLine)
 		case displayLineNum == displayCursorLine:
 			// Cursor highlight
-			lines[i] = cursorStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = cursorStyle.Render(cleanLine)
 		case v.selectionMode && displayLineNum >= start && displayLineNum <= end:
 			// Visual selection highlight
-			lines[i] = selectionStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = selectionStyle.Render(cleanLine)
 		case searchMatchLines[displayLineNum]:
 			// Other search matches (subtle)
-			lines[i] = searchMatchStyle.Render(line)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			lines[i] = searchMatchStyle.Render(cleanLine)
 		default:
 			lines[i] = line
 		}
@@ -1008,24 +1135,52 @@ func (v *View) highlightSelection(content string, lineMapping map[int]int) strin
 	return strings.Join(lines, "\n")
 }
 
+// lineNumGutterPattern matches the gutter format: " <number>  <content>"
+// Group 1 captures the full gutter including all spaces and the line number
+var lineNumGutterPattern = regexp.MustCompile(`^( *\d+  )`)
+
 // highlightLineNumber applies a style to the line number and separator of a rendered line.
-// Assumes format: "<number> │ <content>"
+// Assumes format: " n  content" (optional leading spaces, number, two spaces, content)
+// Highlights just the line number portion including leading spaces.
 func (v *View) highlightLineNumber(line string, style lipgloss.Style) string {
-	// Find the separator " │ "
-	sepIdx := strings.Index(line, " │ ")
-	if sepIdx == -1 {
-		return line // No line number found
+	// Strip ANSI codes to find the actual line number
+	cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+
+	// Find the gutter using pattern matching
+	matches := lineNumGutterPattern.FindStringSubmatch(cleanLine)
+	if len(matches) < 2 {
+		return line // No gutter found
 	}
 
-	// Extract parts
-	lineNum := line[:sepIdx]
-	separator := " │ "
-	content := line[sepIdx+len(separator):]
+	gutterClean := matches[1] // The captured gutter (spaces + digits)
+	gutterLen := len(gutterClean)
 
-	// Style the line number + separator together (entire gutter)
-	gutter := lineNum + separator
-	styledGutter := style.Render(gutter)
-	return styledGutter + content
+	// Find the same position in the original line (with ANSI codes)
+	// We need to count visible characters, not bytes
+	visibleChars := 0
+	bytePos := 0
+	inANSI := false
+
+	for bytePos < len(line) && visibleChars < gutterLen {
+		if line[bytePos] == '\x1b' {
+			inANSI = true
+		}
+		if inANSI {
+			if line[bytePos] == 'm' {
+				inANSI = false
+			}
+			bytePos++
+		} else {
+			visibleChars++
+			bytePos++
+		}
+	}
+
+	restOfLine := line[bytePos:]
+
+	// Apply new style to clean gutter
+	styledGutter := style.Render(gutterClean)
+	return styledGutter + restOfLine
 }
 
 // getCommentedLines returns a map of line numbers that have comments.
@@ -1126,7 +1281,7 @@ func (v View) renderStatusBar() string {
 	if v.selectionMode {
 		helpText = "c:comment • v/esc:exit visual"
 	} else {
-		helpText = "V:visual • p:picker • e:edit • d:delete • /:search • f:finalize • esc:close"
+		helpText = "V:visual • p:picker • n/N:navigate • e:edit • d:delete • /:search • f:finalize • esc:close"
 	}
 	helpStyle := styles.ReviewHelpStyle
 
@@ -1166,6 +1321,9 @@ func (v *View) getSelectedText() string {
 }
 
 // addComment creates a new comment and adds it to the active session.
+// Database operations are best-effort: comments are kept in-memory even if persistence fails.
+// Errors are logged but do not prevent the comment from being added to the session.
+// If no session exists, one is created (either in the database or in-memory only).
 func (v *View) addComment(commentText string) {
 	if v.selectedDoc == nil {
 		return
@@ -1237,8 +1395,13 @@ func (v *View) addComment(commentText string) {
 			CommentText: comment.CommentText,
 			CreatedAt:   comment.CreatedAt,
 		}
-		_ = v.store.SaveComment(ctx, dbComment)
-		// Ignore errors - keep comment in memory even if DB save fails
+		if err := v.store.SaveComment(ctx, dbComment); err != nil {
+			log.Error().
+				Err(err).
+				Str("session_id", comment.SessionID).
+				Str("comment_id", comment.ID).
+				Msg("review: failed to save comment to database - comment will only exist in memory")
+		}
 	}
 
 	v.activeSession.Comments = append(v.activeSession.Comments, comment)
@@ -1280,8 +1443,12 @@ func (v *View) updateComment(commentID, newText string) {
 					CommentText: newText,
 					CreatedAt:   comment.CreatedAt,
 				}
-				_ = v.store.UpdateComment(ctx, dbComment)
-				// Ignore errors - keep updated text in memory
+				if err := v.store.UpdateComment(ctx, dbComment); err != nil {
+					log.Error().
+						Err(err).
+						Str("comment_id", commentID).
+						Msg("review: failed to update comment in database - changes will be lost on restart")
+				}
 			}
 
 			log.Debug().
@@ -1295,6 +1462,10 @@ func (v *View) updateComment(commentID, newText string) {
 }
 
 // deleteCommentsAtLine removes all comments that include the specified line number.
+// Multiple comments may be deleted if they overlap the target line.
+// Database deletion errors are logged but do not prevent in-memory deletion.
+// If all comments are deleted, activeSession is set to nil (ending the review session).
+// Callers should call updateTreeItemCommentCount() after deletion.
 func (v *View) deleteCommentsAtLine(lineNum int) {
 	if v.activeSession == nil || len(v.activeSession.Comments) == 0 {
 		return
@@ -1310,8 +1481,12 @@ func (v *View) deleteCommentsAtLine(lineNum int) {
 			remainingComments = append(remainingComments, comment)
 		} else if v.store != nil {
 			// Delete from database if store is available
-			_ = v.store.DeleteComment(ctx, comment.ID)
-			// Ignore errors - deletion is best effort
+			if err := v.store.DeleteComment(ctx, comment.ID); err != nil {
+				log.Error().
+					Err(err).
+					Str("comment_id", comment.ID).
+					Msg("review: failed to delete comment from database - may reappear on restart")
+			}
 		}
 	}
 
@@ -1379,6 +1554,34 @@ func (v *View) updateTreeItemCommentCount() {
 	}
 }
 
+// formatCommentLines formats comment text with proper indentation.
+// Preserves explicit newlines and aligns continuation lines.
+// The first line includes the icon and base indent, subsequent lines align with text after icon.
+func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
+	// Split by explicit newlines first (preserve user's line breaks)
+	inputLines := strings.Split(text, "\n")
+
+	var result []string
+	baseIndentStr := strings.Repeat(" ", baseIndent)
+	// Continuation lines use baseIndent + 3 spaces for visual separation
+	// (icon is 1 char + 1 space = 2 chars, but we add 3 for better readability)
+	continuationIndentStr := baseIndentStr + "   "
+
+	for i, line := range inputLines {
+		line = strings.TrimRight(line, " \t") // Remove trailing whitespace
+
+		if i == 0 {
+			// First line: add icon
+			result = append(result, baseIndentStr+icon+" "+line)
+		} else {
+			// Subsequent lines: align with first line's text
+			result = append(result, continuationIndentStr+line)
+		}
+	}
+
+	return result
+}
+
 // insertCommentsInline inserts comments after their referenced lines.
 // Returns the rendered content and a mapping from document line numbers to display line numbers.
 func (v *View) insertCommentsInline(content string) (string, map[int]int) {
@@ -1422,11 +1625,14 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 		// Build comment lines to insert
 		commentLines := make([]string, 0, len(comments))
 		for _, comment := range comments {
-			icon := styles.IconProfile
-			// Add increased indentation (6 spaces) for visual separation
-			indent := "      "
-			commentLine := indent + commentStyle.Render(fmt.Sprintf("%s %s", icon, comment.CommentText))
-			commentLines = append(commentLines, commentLine)
+			icon := styles.IconComment
+			// Format with proper indentation, preserving explicit newlines
+			formattedLines := v.formatCommentLines(icon, comment.CommentText, 6)
+			// Apply styling to each formatted line
+			for _, formattedLine := range formattedLines {
+				styledLine := commentStyle.Render(formattedLine)
+				commentLines = append(commentLines, styledLine)
+			}
 		}
 
 		// Insert comment lines after the target line
@@ -1484,7 +1690,7 @@ func BuildTreeItems(documents []Document) []list.Item {
 		groups[doc.Type] = append(groups[doc.Type], doc)
 	}
 
-	// Render in order: Plans, Research, Context, Other
+	// Render in priority order (most relevant types first)
 	typeOrder := []DocumentType{DocTypePlan, DocTypeResearch, DocTypeContext, DocTypeOther}
 
 	for _, docType := range typeOrder {

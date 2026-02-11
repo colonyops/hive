@@ -63,7 +63,7 @@ func (s SearchMode) Update(msg tea.Msg) (SearchMode, tea.Cmd) {
 	}
 
 	switch keyMsg.String() {
-	case "enter":
+	case "enter": //nolint:goconst // Phase 1 refactor: will be extracted to constants in Phase 2
 		// Execute search
 		s.query = s.input.Value()
 		// Note: actual search execution is handled by the caller

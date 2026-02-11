@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -110,7 +111,7 @@ func TestNew(t *testing.T) {
 		},
 	}
 
-	view := New(docs, "", nil)
+	view := New(docs, "", nil, 0)
 
 	// Should not panic and should have a list
 	require.NotNil(t, view.list.Items(), "expected list items to be initialized")
@@ -124,7 +125,7 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create review view with watcher
-	view := New([]Document{}, tmpDir, nil)
+	view := New([]Document{}, tmpDir, nil, 0)
 
 	// View should have a watcher
 	require.NotNil(t, view.watcher, "expected watcher to be initialized")
@@ -143,7 +144,7 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -195,7 +196,7 @@ func TestCommentDeletionCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -244,7 +245,7 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -311,7 +312,7 @@ func TestReviewDiscardCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -358,7 +359,7 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -388,7 +389,7 @@ func TestCommentVisualStyling(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.selectedDoc = &doc
 
@@ -415,8 +416,8 @@ func TestCommentVisualStyling(t *testing.T) {
 	content := "Line 1\nLine 2\nLine 3"
 	rendered, _ := view.insertCommentsInline(content)
 
-	// Check that the rendered output contains the profile placeholder
-	assert.Contains(t, rendered, styles.IconProfile, "expected rendered output to contain '%s' placeholder", styles.IconProfile)
+	// Check that the rendered output contains the comment icon
+	assert.Contains(t, rendered, styles.IconComment, "expected rendered output to contain '%s' icon", styles.IconComment)
 
 	// Check that the comment text is present
 	assert.Contains(t, rendered, "This is a test comment", "expected rendered output to contain comment text")
@@ -425,9 +426,10 @@ func TestCommentVisualStyling(t *testing.T) {
 	lines := strings.Split(rendered, "\n")
 	var commentLineFound bool
 	for _, line := range lines {
-		if strings.Contains(line, styles.IconProfile) {
-			// Check for leading spaces (indentation)
-			assert.True(t, strings.HasPrefix(line, "    "), "expected comment line to have increased indentation (at least 4 spaces)")
+		if strings.Contains(line, styles.IconComment) {
+			// Strip ANSI codes and check for leading spaces (indentation)
+			cleanLine := ansiStripPattern.ReplaceAllString(line, "")
+			assert.True(t, strings.HasPrefix(cleanLine, "    "), "expected comment line to have increased indentation (at least 4 spaces)")
 			commentLineFound = true
 			break
 		}
@@ -445,7 +447,7 @@ func TestLineMappingWithComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.selectedDoc = &doc
 
 	// Create a session with comments on lines 2 and 4
@@ -531,7 +533,7 @@ func TestView_WithPickerModal(t *testing.T) {
 		{RelPath: "doc1.md", Type: DocTypePlan},
 	}
 
-	reviewView := New(docs, "/test", nil)
+	reviewView := New(docs, "/test", nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Show picker
@@ -544,7 +546,7 @@ func TestView_WithPickerModal(t *testing.T) {
 }
 
 func TestView_HasPickerModalField(t *testing.T) {
-	reviewView := New(nil, "", nil)
+	reviewView := New(nil, "", nil, 0)
 
 	// Access the field to ensure it exists
 	_ = reviewView.pickerModal
@@ -571,7 +573,7 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -653,7 +655,7 @@ func TestJumpToMatchWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 10)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -767,7 +769,7 @@ func TestReverseMappingCorrectness(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.selectedDoc = &doc
 
 	// Create session with comments
@@ -868,7 +870,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	}
 
 	// Create review view with the store
-	view := New([]Document{doc}, tmpDir, store)
+	view := New([]Document{doc}, tmpDir, store, 0)
 	view.SetSize(80, 24)
 
 	// Load document and create a session with a comment
@@ -917,7 +919,7 @@ func TestCtrlDUWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -1008,7 +1010,7 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 			Type:    DocTypePlan,
 		},
 	}
-	v := New(docs, "/test", nil)
+	v := New(docs, "/test", nil, 0)
 	v.SetSize(100, 40)
 
 	// Manually set up the finalization modal state (simulating pressing 'f')
@@ -1044,7 +1046,7 @@ func TestHasActiveEditor(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -1061,7 +1063,7 @@ func TestHasActiveEditor(t *testing.T) {
 	assert.False(t, view.HasActiveEditor(), "expected HasActiveEditor to be false after disabling search mode")
 
 	// Open comment modal - should have active editor
-	modal := NewCommentModal(1, 2, "context", 80, 24)
+	modal := NewCommentModal(1, 2, "context", 80, 24, 80)
 	view.commentModal = &modal
 	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when comment modal is active")
 
@@ -1073,4 +1075,90 @@ func TestHasActiveEditor(t *testing.T) {
 	view.searchMode = true
 	view.commentModal = &modal
 	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when both are active")
+}
+
+func TestHighlightLineNumber(t *testing.T) {
+	view := View{
+		width:  80,
+		height: 24,
+	}
+
+	// Test with actual format: " n  content" (no pipe, two spaces)
+	tests := []struct {
+		name     string
+		input    string
+		wantText string // What text should be in the gutter
+	}{
+		{
+			name:     "single digit line number",
+			input:    " 1  This is content",
+			wantText: " 1",
+		},
+		{
+			name:     "double digit line number",
+			input:    " 10  This is content",
+			wantText: " 10",
+		},
+		{
+			name:     "triple digit line number",
+			input:    " 100  This is content",
+			wantText: " 100",
+		},
+		{
+			name:     "with padding (right-aligned)",
+			input:    "   5  This is content",
+			wantText: "   5",
+		},
+		{
+			name:     "empty content",
+			input:    " 1  ",
+			wantText: " 1",
+		},
+		{
+			name:     "real world example from output",
+			input:    " 6    ## Quality Gates",
+			wantText: " 6",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Use a test style that adds markers we can detect
+			testStyle := styles.ReviewCommentedLineNumStyle
+
+			result := view.highlightLineNumber(tt.input, testStyle)
+
+			// Strip ANSI codes to verify structure
+			cleanResult := ansiStripPattern.ReplaceAllString(result, "")
+			assert.Equal(t, tt.input, cleanResult, "stripped result should match input")
+
+			// Verify the result contains ANSI codes (meaning styling was applied)
+			assert.NotEqual(t, tt.input, result, "result should contain ANSI styling codes")
+
+			// Verify the gutter portion was extracted correctly
+			// Use regex to find the gutter in the clean result
+			gutterPattern := regexp.MustCompile(`^( *\d+)  `)
+			matches := gutterPattern.FindStringSubmatch(cleanResult)
+			if len(matches) >= 2 {
+				gutterPart := matches[1]
+				assert.Equal(t, tt.wantText, gutterPart, "gutter should be correct")
+			}
+		})
+	}
+}
+
+func TestHighlightLineNumber_NoSeparator(t *testing.T) {
+	view := View{
+		width:  80,
+		height: 24,
+	}
+
+	// Test line without separator
+	input := "No separator here"
+	testStyle := styles.ReviewCommentedLineNumStyle
+
+	result := view.highlightLineNumber(input, testStyle)
+
+	// Should return unchanged
+	assert.Equal(t, input, result, "line without separator should be returned unchanged")
 }

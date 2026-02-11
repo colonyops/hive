@@ -1,0 +1,25 @@
+╭───────────────────────────────────────────────────────────────────╮
+│                                                                   │
+│  Select Document                                                  │
+│                                                                   │
+│  > Type to filter documents...                                    │
+│                                                                   │
+│  ┃ Plan                                                           │
+│    └─ .hive/plans/feature-a.md                                    │
+│    Research                                                       │
+│    └─ .hive/research/api-design.md                                │
+│    Context                                                        │
+│    └─ .hive/context/overview.md                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│                                                                   │
+│  ↑/↓ navigate  enter select  esc cancel                           │
+│                                                                   │
+╰───────────────────────────────────────────────────────────────────╯

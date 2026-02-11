@@ -421,8 +421,8 @@ func TestStripANSI(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := stripANSI(tt.content)
-			assert.Equal(t, tt.want, got, "stripANSI() = %v, want %v", got, tt.want)
+			got := StripANSI(tt.content)
+			assert.Equal(t, tt.want, got, "StripANSI() = %v, want %v", got, tt.want)
 		})
 	}
 }

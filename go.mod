@@ -9,6 +9,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/x/ansi v0.11.3
+	github.com/charmbracelet/x/exp/golden v0.0.0-20260209194814-eeb2896ac759
 	github.com/fsnotify/fsnotify v1.7.0
 	github.com/google/uuid v1.6.0
 	github.com/hay-kot/criterio v1.0.0
@@ -26,6 +27,7 @@ require (
 	github.com/alecthomas/chroma/v2 v2.14.0 // indirect
 	github.com/atotto/clipboard v0.1.4 // indirect
 	github.com/aymanbagabas/go-osc52/v2 v2.0.1 // indirect
+	github.com/aymanbagabas/go-udiff v0.3.1 // indirect
 	github.com/aymerick/douceur v0.2.0 // indirect
 	github.com/charmbracelet/colorprofile v0.4.1 // indirect
 	github.com/charmbracelet/lipgloss v1.1.1-0.20250404203927-76690c660834 // indirect

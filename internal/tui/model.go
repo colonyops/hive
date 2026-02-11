@@ -336,7 +336,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		reviewStore = stores.NewReviewStore(opts.DB)
 	}
 
-	reviewView := review.New(docs, contextDir, reviewStore)
+	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
 
 	return Model{
 		cfg:                cfg,

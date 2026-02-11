@@ -176,7 +176,7 @@ var (
 // NormalizeContent prepares content for hashing by removing dynamic elements.
 // This prevents false hash changes from animations and counters.
 func NormalizeContent(content string) string {
-	result := stripANSI(content)
+	result := StripANSI(content)
 
 	// Strip control characters (keep tab, newline, carriage return)
 	result = stripControlChars(result)
