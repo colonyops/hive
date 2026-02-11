@@ -12,31 +12,38 @@ import (
 
 // DocumentView handles document rendering with line numbers, comments, and cursor highlighting.
 type DocumentView struct {
-	viewport       viewport.Model
-	document       *Document   // Currently loaded document
-	cursorLine     int         // 1-indexed cursor position
-	selectionStart int         // 1-indexed selection anchor (0 if none)
-	lineMapping    map[int]int // Maps document line numbers to display line numbers (nil when no comments)
-	searchMatches  []int       // Line numbers of search matches (1-indexed, in document coordinates)
-	searchIndex    int         // Current match index in searchMatches
-	width          int         // Viewport width
-	height         int         // Viewport height
+	viewport         viewport.Model
+	document         *Document   // Currently loaded document
+	cursorLine       int         // 1-indexed cursor position
+	selectionStart   int         // 1-indexed selection anchor (0 if none)
+	lineMapping      map[int]int // Maps document line numbers to display line numbers (nil when no comments)
+	searchMatches    []int       // Line numbers of search matches (1-indexed, in document coordinates)
+	searchIndex      int         // Current match index in searchMatches
+	width            int         // Viewport width
+	height           int         // Viewport height
+	commentLineWidth int         // Configured max width for comment wrapping (from config, default: 80)
 }
 
 // NewDocumentView creates a new DocumentView instance.
-func NewDocumentView(doc *Document) DocumentView {
+// commentLineWidth sets the max width for comment wrapping (0 = default 80).
+func NewDocumentView(doc *Document, commentLineWidth int) DocumentView {
 	vp := viewport.New()
 
+	if commentLineWidth <= 0 {
+		commentLineWidth = 80
+	}
+
 	return DocumentView{
-		viewport:       vp,
-		document:       doc,
-		cursorLine:     1,
-		selectionStart: 0,
-		lineMapping:    nil,
-		searchMatches:  nil,
-		searchIndex:    0,
-		width:          80,
-		height:         24,
+		viewport:         vp,
+		document:         doc,
+		cursorLine:       1,
+		selectionStart:   0,
+		lineMapping:      nil,
+		searchMatches:    nil,
+		searchIndex:      0,
+		width:            80,
+		height:           24,
+		commentLineWidth: commentLineWidth,
 	}
 }
 
@@ -189,12 +196,13 @@ func (dv *DocumentView) ensureCursorVisible() {
 	}
 }
 
-// wrapComment wraps comment text to fit within viewport with adaptive width.
-// Uses minimum width of 120 chars and adjusts based on viewport width.
-// indent specifies number of spaces to add at the start of each wrapped line.
-// TODO: Make minWidth configurable via config.review.comment_line_width
+// wrapComment wraps comment text to fit within configured width.
+// Uses commentLineWidth as the target width, adjusting based on viewport width.
+// indent specifies number of spaces to add at the start of the first line.
+// Continuation lines get 2 additional spaces of indentation.
 func (dv *DocumentView) wrapComment(text string, indent int) []string {
-	const minWidth = 120
+	// Use configured comment line width
+	minWidth := dv.commentLineWidth
 	// Reserve 15 chars for line numbers and padding
 	maxWidth := max(minWidth, dv.width-15)
 
@@ -206,10 +214,12 @@ func (dv *DocumentView) wrapComment(text string, indent int) []string {
 
 	var lines []string
 	var currentLine strings.Builder
-	indentStr := strings.Repeat(" ", indent)
+	firstLineIndent := strings.Repeat(" ", indent)
+	continuationIndent := strings.Repeat(" ", indent+2) // 2 extra spaces for continuation
+	isFirstLine := true
 
 	// Add indent to first line
-	currentLine.WriteString(indentStr)
+	currentLine.WriteString(firstLineIndent)
 	currentLineLen := indent
 
 	for i, word := range words {
@@ -224,9 +234,12 @@ func (dv *DocumentView) wrapComment(text string, indent int) []string {
 			// Finish current line and start new one
 			lines = append(lines, currentLine.String())
 			currentLine.Reset()
-			currentLine.WriteString(indentStr)
+
+			// Use continuation indent for subsequent lines
+			currentLine.WriteString(continuationIndent)
 			currentLine.WriteString(word)
-			currentLineLen = indent + wordLen
+			currentLineLen = indent + 2 + wordLen // +2 for continuation indent
+			isFirstLine = false
 		} else {
 			// Add word to current line
 			if i > 0 {
@@ -238,7 +251,11 @@ func (dv *DocumentView) wrapComment(text string, indent int) []string {
 	}
 
 	// Add final line if not empty
-	if currentLine.Len() > indent {
+	minLen := indent
+	if !isFirstLine {
+		minLen = indent + 2 // Continuation lines have 2 extra spaces
+	}
+	if currentLine.Len() > minLen {
 		lines = append(lines, currentLine.String())
 	}
 

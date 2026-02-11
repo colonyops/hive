@@ -38,8 +38,9 @@ func NewCommentModal(startLine, endLine int, contextText string, width, height i
 	ta.ShowLineNumbers = false
 	ta.CharLimit = 1000
 
-	// Enable multiline input
+	// Enable multiline input and paste
 	ta.KeyMap.InsertNewline.SetEnabled(true)
+	ta.KeyMap.Paste.SetEnabled(true)
 
 	// Format line range
 	lineRange := fmt.Sprintf("Lines %d-%d", startLine, endLine)
