@@ -115,15 +115,18 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore, com
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
 
-	// Initialize Phase 1 components
-	documentView := NewDocumentView(nil) // Will be populated when document is loaded
-	searchModeComponent := NewSearchMode()
-	modalState := NewModalState()
+	// Enable paste
+	ti.KeyMap.Paste.SetEnabled(true)
 
 	// Apply default comment line width if not set
 	if commentLineWidth <= 0 {
 		commentLineWidth = 80
 	}
+
+	// Initialize Phase 1 components
+	documentView := NewDocumentView(nil, commentLineWidth) // Will be populated when document is loaded
+	searchModeComponent := NewSearchMode()
+	modalState := NewModalState()
 
 	return View{
 		list:             l,
@@ -157,9 +160,9 @@ func (v *View) SetSize(width, height int) {
 	}
 }
 
-// HasActiveEditor returns true if an input field has focus (search or comment modal).
+// HasActiveEditor returns true if an input field has focus (search, comment modal, or picker modal).
 func (v *View) HasActiveEditor() bool {
-	return v.searchMode || v.commentModal != nil
+	return v.searchMode || v.commentModal != nil || v.pickerModal != nil
 }
 
 // Init initializes the review view and starts the file watcher.

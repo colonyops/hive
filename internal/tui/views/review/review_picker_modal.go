@@ -37,6 +37,9 @@ func NewDocumentPickerModal(documents []Document, width, height int, store *stor
 	ti.CharLimit = 100
 	ti.Focus()
 
+	// Enable paste
+	ti.KeyMap.Paste.SetEnabled(true)
+
 	// Calculate initial modal and list dimensions
 	modalWidth := max(int(float64(width)*0.8), 40)
 	modalHeight := max(int(float64(height)*0.8), 10)

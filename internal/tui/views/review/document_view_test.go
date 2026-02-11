@@ -23,7 +23,7 @@ func createTestDocument(lines []string) *Document {
 
 func TestDocumentView_RenderEmpty(t *testing.T) {
 	doc := createTestDocument([]string{})
-	dv := NewDocumentView(doc)
+	dv := NewDocumentView(doc, 80)
 	dv.SetSize(80, 24)
 
 	output := dv.Render()
@@ -39,7 +39,7 @@ func TestDocumentView_RenderWithLineNumbers(t *testing.T) {
 		"This is line 3.",
 		"This is line 4.",
 	})
-	dv := NewDocumentView(doc)
+	dv := NewDocumentView(doc, 80)
 	dv.SetSize(80, 24)
 
 	output := dv.Render()
@@ -55,7 +55,7 @@ func TestDocumentView_RenderWithComments(t *testing.T) {
 		"This is line 3.",
 		"This is line 4.",
 	})
-	dv := NewDocumentView(doc)
+	dv := NewDocumentView(doc, 80)
 	dv.SetSize(80, 24)
 
 	comments := []corereview.Comment{
@@ -74,7 +74,7 @@ func TestDocumentView_RenderWithLongComment(t *testing.T) {
 		"This is line 3.",
 		"This is line 4.",
 	})
-	dv := NewDocumentView(doc)
+	dv := NewDocumentView(doc, 80)
 	dv.SetSize(80, 24)
 
 	longComment := "This is a very long comment that exceeds 80 characters to test wrapping behavior and formatting."
@@ -97,7 +97,7 @@ func TestDocumentView_RenderWithSelection(t *testing.T) {
 		"Line 6",
 		"Line 7",
 	})
-	dv := NewDocumentView(doc)
+	dv := NewDocumentView(doc, 80)
 	dv.SetSize(80, 24)
 
 	// Set selection on lines 4-6
@@ -117,7 +117,7 @@ func TestDocumentView_RenderWithSearchHighlight(t *testing.T) {
 		"Another line with search.",
 		"Last line.",
 	})
-	dv := NewDocumentView(doc)
+	dv := NewDocumentView(doc, 80)
 	dv.SetSize(80, 24)
 
 	// Highlight matches at lines 3 and 4, with current match at index 0 (line 3)
@@ -184,7 +184,7 @@ func TestDocumentView_MoveCursor(t *testing.T) {
 				"Line 5",
 			})
 
-			dv := NewDocumentView(doc)
+			dv := NewDocumentView(doc, 80)
 			dv.SetSize(80, 24)
 
 			// Override RenderedLines to bypass glamour rendering for testing
@@ -208,7 +208,7 @@ func TestDocumentView_MoveCursor(t *testing.T) {
 }
 
 func TestDocumentView_MoveCursor_NilDocument(t *testing.T) {
-	dv := NewDocumentView(nil)
+	dv := NewDocumentView(nil, 80)
 	dv.SetSize(80, 24)
 	dv.cursorLine = 1
 
@@ -269,7 +269,7 @@ func TestDocumentView_JumpToLine(t *testing.T) {
 				"Line 5",
 			})
 
-			dv := NewDocumentView(doc)
+			dv := NewDocumentView(doc, 80)
 			dv.SetSize(80, 24)
 
 			// Override RenderedLines to bypass glamour rendering for testing
@@ -291,7 +291,7 @@ func TestDocumentView_JumpToLine(t *testing.T) {
 }
 
 func TestDocumentView_JumpToLine_NilDocument(t *testing.T) {
-	dv := NewDocumentView(nil)
+	dv := NewDocumentView(nil, 80)
 	dv.SetSize(80, 24)
 	dv.cursorLine = 1
 
@@ -305,7 +305,7 @@ func TestDocumentView_JumpToLine_NilDocument(t *testing.T) {
 }
 
 func TestDocumentView_CoordinateMapping(t *testing.T) {
-	dv := NewDocumentView(nil) // don't need actual document for these tests
+	dv := NewDocumentView(nil, 80) // don't need actual document for these tests
 
 	t.Run("mapDocToDisplay with nil mapping", func(t *testing.T) {
 		// With nil mapping, document and display coordinates are the same

@@ -171,6 +171,7 @@ func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Do
 		ContextDir:       contextDir,
 		DB:               cmd.app.DB,
 		CommentLineWidth: cmd.app.Config.Review.CommentLineWidthOrDefault(),
+		CopyCommand:      cmd.app.Config.CopyCommand,
 	}
 
 	// Create review-only model
