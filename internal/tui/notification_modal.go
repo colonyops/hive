@@ -6,6 +6,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/rs/zerolog/log"
 
 	"github.com/hay-kot/hive/internal/core/notify"
 	"github.com/hay-kot/hive/internal/core/styles"
@@ -52,7 +53,8 @@ func NewNotificationModal(bus *tuinotify.Bus, width, height int) *NotificationMo
 func (m *NotificationModal) refreshContent() {
 	history, err := m.bus.History()
 	if err != nil {
-		m.viewport.SetContent(styles.TextErrorStyle.Render("failed to load notifications"))
+		log.Error().Err(err).Msg("failed to load notification history")
+		m.viewport.SetContent(styles.TextErrorStyle.Render(fmt.Sprintf("failed to load notifications: %v", err)))
 		return
 	}
 
