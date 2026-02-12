@@ -614,7 +614,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if m.toastController.HasToasts() {
 			return m, scheduleToastTick()
 		}
-		m.toastController.SetTicking(false)
 		return m, nil
 
 	case notificationMsg:
@@ -1161,7 +1160,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			if len(args) > 0 {
 				m.applyTheme(args[0])
 			}
-			return m, nil
+			return m, m.ensureToastTick()
 		}
 
 		// Check if this is a filter action (doesn't require a session)
@@ -1494,7 +1493,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		}
 		// Handle set-theme action (requires args only available via command palette)
 		if action.Type == ActionTypeSetTheme {
-			return m, nil
+			return m, m.ensureToastTick()
 		}
 		// Handle filter actions
 		if m.handleFilterAction(action.Type) {
@@ -2521,11 +2520,12 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 	}
 }
 
-// ensureToastTick starts the toast tick timer if there are active toasts
-// and the timer is not already running.
+// ensureToastTick returns a tick command when there are active toasts.
+// Multiple concurrent tick chains are harmless — Tick() uses absolute time
+// and is idempotent, so extra ticks just no-op. Chains naturally stop when
+// all toasts expire.
 func (m *Model) ensureToastTick() tea.Cmd {
-	if m.toastController.HasToasts() && !m.toastController.Ticking() {
-		m.toastController.SetTicking(true)
+	if m.toastController.HasToasts() {
 		return scheduleToastTick()
 	}
 	return nil

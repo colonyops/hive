@@ -21,9 +21,8 @@ type toast struct {
 // ToastController manages the lifecycle of active toast notifications.
 // It handles push, eviction, TTL countdown, and dismissal.
 type ToastController struct {
-	toasts  []toast
-	ticking bool
-	now     func() time.Time // injectable clock for testing
+	toasts []toast
+	now    func() time.Time // injectable clock for testing
 }
 
 func NewToastController() *ToastController {
@@ -74,14 +73,4 @@ func (c *ToastController) HasToasts() bool {
 // Toasts returns the current active toast slice.
 func (c *ToastController) Toasts() []toast {
 	return c.toasts
-}
-
-// Ticking returns whether the tick timer is currently running.
-func (c *ToastController) Ticking() bool {
-	return c.ticking
-}
-
-// SetTicking sets the tick timer state.
-func (c *ToastController) SetTicking(v bool) {
-	c.ticking = v
 }

@@ -106,14 +106,3 @@ func TestToastController_DismissAll(t *testing.T) {
 	assert.False(t, c.HasToasts())
 	assert.Empty(t, c.Toasts())
 }
-
-func TestToastController_Ticking(t *testing.T) {
-	c := NewToastController()
-	assert.False(t, c.Ticking())
-
-	c.SetTicking(true)
-	assert.True(t, c.Ticking())
-
-	c.SetTicking(false)
-	assert.False(t, c.Ticking())
-}
