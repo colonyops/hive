@@ -40,6 +40,17 @@ func (q *Queries) CountMessagesInTopic(ctx context.Context, topic string) (int64
 	return count, err
 }
 
+const countNotifications = `-- name: CountNotifications :one
+SELECT COUNT(*) FROM notifications
+`
+
+func (q *Queries) CountNotifications(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countNotifications)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPrunableMessages = `-- name: CountPrunableMessages :one
 SELECT COUNT(*) FROM messages
 WHERE created_at < ?
@@ -74,6 +85,15 @@ func (q *Queries) CreateReviewSession(ctx context.Context, arg CreateReviewSessi
 		arg.CreatedAt,
 		arg.FinalizedAt,
 	)
+	return err
+}
+
+const deleteAllNotifications = `-- name: DeleteAllNotifications :exec
+DELETE FROM notifications
+`
+
+func (q *Queries) DeleteAllNotifications(ctx context.Context) error {
+	_, err := q.db.ExecContext(ctx, deleteAllNotifications)
 	return err
 }
 
@@ -328,6 +348,58 @@ func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesPa
 			&i.Payload,
 			&i.Sender,
 			&i.SessionID,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const insertNotification = `-- name: InsertNotification :one
+INSERT INTO notifications (level, message, created_at)
+VALUES (?, ?, ?)
+RETURNING id
+`
+
+type InsertNotificationParams struct {
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotificationParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, insertNotification, arg.Level, arg.Message, arg.CreatedAt)
+	var id int64
+	err := row.Scan(&id)
+	return id, err
+}
+
+const listNotifications = `-- name: ListNotifications :many
+SELECT id, level, message, created_at FROM notifications
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListNotifications(ctx context.Context) ([]Notification, error) {
+	rows, err := q.db.QueryContext(ctx, listNotifications)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Notification{}
+	for rows.Next() {
+		var i Notification
+		if err := rows.Scan(
+			&i.ID,
+			&i.Level,
+			&i.Message,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err

@@ -23,6 +23,13 @@ type MessageRead struct {
 	ReadAt     int64  `json:"read_at"`
 }
 
+type Notification struct {
+	ID        int64  `json:"id"`
+	Level     string `json:"level"`
+	Message   string `json:"message"`
+	CreatedAt int64  `json:"created_at"`
+}
+
 type ReviewComment struct {
 	ID          string `json:"id"`
 	SessionID   string `json:"session_id"`

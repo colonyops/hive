@@ -6,16 +6,6 @@ import (
 	"github.com/hay-kot/hive/internal/tui/views/review"
 )
 
-// DocumentNotFoundError is returned when a document cannot be found.
-type DocumentNotFoundError struct{}
-
-func (e *DocumentNotFoundError) Error() string {
-	return "document not found"
-}
-
-// ErrDocumentNotFound is returned when a document cannot be found.
-var ErrDocumentNotFound = &DocumentNotFoundError{}
-
 // HiveDocReviewCmd activates the review tab with optional document selection.
 type HiveDocReviewCmd struct {
 	Arg string // Optional document path argument
@@ -54,8 +44,8 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	}
 
 	if len(docs) == 0 {
-		m.err = ErrDocumentNotFound
-		return nil
+		m.notifyBus.Errorf("no documents found for review")
+		return m.ensureToastTick()
 	}
 
 	// Show document picker modal on current view (Sessions)

@@ -20,6 +20,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/messaging"
+	"github.com/hay-kot/hive/internal/core/notify"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/core/terminal"
@@ -29,6 +30,7 @@ import (
 	"github.com/hay-kot/hive/internal/hive/plugins"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
+	tuinotify "github.com/hay-kot/hive/internal/tui/notify"
 	"github.com/hay-kot/hive/internal/tui/views/review"
 	"github.com/hay-kot/hive/pkg/kv"
 	"github.com/hay-kot/hive/pkg/tmpl"
@@ -53,6 +55,7 @@ const (
 	stateCreatingSession
 	stateCommandPalette
 	stateShowingHelp
+	stateShowingNotifications
 )
 
 // Key constants for event handling.
@@ -88,7 +91,6 @@ type Model struct {
 	pending        Action
 	width          int
 	height         int
-	err            error
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
@@ -164,6 +166,12 @@ type Model struct {
 
 	// Document picker (shown on Sessions view to start reviews)
 	docPickerModal *review.DocumentPickerModal
+
+	// Notifications
+	notifyBus         *tuinotify.Bus
+	toastController   *ToastController
+	toastView         *ToastView
+	notificationModal *NotificationModal
 }
 
 // PendingCreate returns any pending session creation data.
@@ -215,6 +223,11 @@ type pluginStatusUpdateMsg struct {
 // pluginWorkerStartedMsg is sent when the background plugin worker starts.
 type pluginWorkerStartedMsg struct {
 	resultsChan <-chan plugins.Result
+}
+
+// notificationMsg carries a notification from an async tea.Cmd into the Update loop.
+type notificationMsg struct {
+	notification notify.Notification
 }
 
 // New creates a new TUI model.
@@ -338,6 +351,20 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 
 	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
 
+	// Initialize notification system
+	var notifyStore notify.Store
+	if opts.DB != nil {
+		notifyStore = stores.NewNotifyStore(opts.DB)
+	}
+	notifyBus := tuinotify.NewBus(notifyStore)
+	toastCtrl := NewToastController()
+	toastView := NewToastView(toastCtrl)
+
+	// Wire bus -> toast controller
+	notifyBus.Subscribe(func(n notify.Notification) {
+		toastCtrl.Push(n)
+	})
+
 	return Model{
 		cfg:                cfg,
 		service:            service,
@@ -367,6 +394,9 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		repoDirs:           cfg.RepoDirs,
 		mergedCommands:     mergedCommands,
 		reviewView:         &reviewView,
+		notifyBus:          notifyBus,
+		toastController:    toastCtrl,
+		toastView:          toastView,
 	}
 }
 
@@ -579,12 +609,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Keep scheduling refresh ticks even if not actively refreshing
 		return m, m.scheduleSessionRefresh()
 
+	case toastTickMsg:
+		m.toastController.Tick(toastTickInterval)
+		if m.toastController.HasToasts() {
+			return m, scheduleToastTick()
+		}
+		m.toastController.SetTicking(false)
+		return m, nil
+
+	case notificationMsg:
+		m.notifyBus.Publish(msg.notification)
+		return m, m.ensureToastTick()
+
 	case sessionsLoadedMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("failed to load sessions")
-			m.err = msg.err
 			m.state = stateNormal
-			return m, nil
+			return m, m.notifyError("failed to load sessions: %v", msg.err)
 		}
 		// Store all sessions for filtering
 		m.allSessions = msg.sessions
@@ -664,10 +705,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionCompleteMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("action failed")
-			m.err = msg.err
 			m.state = stateNormal
 			m.pending = Action{}
-			return m, nil
+			return m, m.notifyError("action failed: %v", msg.err)
 		}
 		m.state = stateNormal
 		m.pending = Action{}
@@ -713,17 +753,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case review.ReviewFinalizedMsg:
 		// Copy feedback to clipboard
 		if err := m.copyToClipboard(msg.Feedback); err != nil {
-			m.err = fmt.Errorf("failed to copy feedback: %w", err)
-		} else {
-			m.err = nil // Clear any previous errors
+			return m, m.notifyError("failed to copy feedback: %v", err)
 		}
 		return m, nil
 
 	case review.OpenDocumentMsg:
 		// Handle document opening (from HiveDocReview command)
 		if msg.Err != nil {
-			m.err = msg.Err
-			return m, nil
+			return m, m.notifyError("open document: %v", msg.Err)
 		}
 		// Document path is provided, tell review view to load it
 		if m.reviewView != nil {
@@ -810,6 +847,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateShowingHelp {
 		return m.handleHelpDialogKey(keyStr)
+	}
+	if m.state == stateShowingNotifications {
+		return m.handleNotificationModalKey(keyStr)
 	}
 	if m.state == stateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
@@ -966,6 +1006,29 @@ func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+	case "esc", "q":
+		m.state = stateNormal
+		m.notificationModal = nil
+		return m, nil
+	case "j", "down":
+		m.notificationModal.ScrollDown()
+	case "k", "up":
+		m.notificationModal.ScrollUp()
+	case "D":
+		if err := m.notificationModal.Clear(); err != nil {
+			return m, m.notifyError("failed to clear notifications: %v", err)
+		}
+		m.notifyBus.Infof("notifications cleared")
+		return m, m.ensureToastTick()
+	}
+	return m, nil
+}
+
 // showHelpDialog creates and displays the help dialog.
 func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	var sections []components.HelpDialogSection
@@ -1076,6 +1139,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m, cmd.Execute(&m)
 		}
 
+		// Messages doesn't require a session
+		if entry.Command.Action == config.ActionMessages {
+			m.state = stateShowingNotifications
+			m.notificationModal = NewNotificationModal(m.notifyBus, m.width, m.height)
+			return m, nil
+		}
+
 		// NewSession doesn't require a selected session
 		if entry.Command.Action == config.ActionNewSession {
 			m.state = stateNormal
@@ -1133,8 +1203,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Check for resolution errors (e.g., template errors)
 		if action.Err != nil {
 			m.state = stateNormal
-			m.err = action.Err
-			return m, nil
+			return m, m.notifyError("command error: %v", action.Err)
 		}
 
 		// Reset to normal state
@@ -1261,6 +1330,11 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 	case "q", keyCtrlC:
 		m.quitting = true
 		return m, tea.Quit
+	case "esc":
+		if m.toastController.HasToasts() {
+			m.toastController.Dismiss()
+			return m, nil
+		}
 	case "tab":
 		return m.handleTabKey()
 	case "?":
@@ -1402,8 +1476,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 	if ok {
 		// Check for resolution errors (e.g., template errors)
 		if action.Err != nil {
-			m.err = action.Err
-			return m, nil
+			return m, m.notifyError("keybinding error: %v", action.Err)
 		}
 		if action.NeedsConfirm() {
 			m.state = stateConfirming
@@ -1715,7 +1788,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme, ActionTypeMessages:
 		return false
 	}
 	return false
@@ -1940,20 +2013,12 @@ func (m Model) View() tea.View {
 		h = 24
 	}
 
-	// Helper to create view with alt screen enabled
-	newView := func(content string) tea.View {
-		v := tea.NewView(content)
-		v.AltScreen = true
-		return v
-	}
-
-	// Overlay output modal if running recycle
-	if m.state == stateRunningRecycle {
-		return newView(m.outputModal.Overlay(mainView, w, h))
-	}
-
-	// Overlay new session form (render directly without Modal's Confirm/Cancel buttons)
-	if m.state == stateCreatingSession && m.newSessionForm != nil {
+	// Determine overlay content based on state
+	var content string
+	switch {
+	case m.state == stateRunningRecycle:
+		content = m.outputModal.Overlay(mainView, w, h)
+	case m.state == stateCreatingSession && m.newSessionForm != nil:
 		formContent := lipgloss.JoinVertical(
 			lipgloss.Left,
 			styles.ModalTitleStyle.Render("New Session"),
@@ -1962,7 +2027,6 @@ func (m Model) View() tea.View {
 		)
 		formOverlay := styles.ModalStyle.Render(formContent)
 
-		// Use Compositor/Layer for true overlay (background remains visible)
 		bgLayer := lipgloss.NewLayer(mainView)
 		formLayer := lipgloss.NewLayer(formOverlay)
 		formW := lipgloss.Width(formOverlay)
@@ -1972,42 +2036,35 @@ func (m Model) View() tea.View {
 		formLayer.X(centerX).Y(centerY).Z(1)
 
 		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		return newView(compositor.Render())
-	}
-
-	// Overlay message preview modal
-	if m.state == statePreviewingMessage {
-		return newView(m.previewModal.Overlay(mainView, w, h))
-	}
-
-	// Overlay loading spinner if loading
-	if m.state == stateLoading {
+		content = compositor.Render()
+	case m.state == statePreviewingMessage:
+		content = m.previewModal.Overlay(mainView, w, h)
+	case m.state == stateLoading:
 		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, m.spinner.View(), " "+m.loadingMessage)
 		modal := NewModal("", loadingView)
-		return newView(modal.Overlay(mainView, w, h))
+		content = modal.Overlay(mainView, w, h)
+	case m.state == stateConfirming:
+		content = m.modal.Overlay(mainView, w, h)
+	case m.state == stateCommandPalette && m.commandPalette != nil:
+		content = m.commandPalette.Overlay(mainView, w, h)
+	case m.state == stateShowingHelp && m.helpDialog != nil:
+		content = m.helpDialog.Overlay(mainView, w, h)
+	case m.state == stateShowingNotifications && m.notificationModal != nil:
+		content = m.notificationModal.Overlay(mainView, w, h)
+	case m.docPickerModal != nil:
+		content = m.docPickerModal.Overlay(mainView, w, h)
+	default:
+		content = mainView
 	}
 
-	// Overlay modal if confirming
-	if m.state == stateConfirming {
-		return newView(m.modal.Overlay(mainView, w, h))
+	// Apply toast overlay on top of everything
+	if m.toastController.HasToasts() {
+		content = m.toastView.Overlay(content, w, h)
 	}
 
-	// Overlay command palette
-	if m.state == stateCommandPalette && m.commandPalette != nil {
-		return newView(m.commandPalette.Overlay(mainView, w, h))
-	}
-
-	// Overlay help dialog
-	if m.state == stateShowingHelp && m.helpDialog != nil {
-		return newView(m.helpDialog.Overlay(mainView, w, h))
-	}
-
-	// Overlay document picker modal (shown on Sessions view)
-	if m.docPickerModal != nil {
-		return newView(m.docPickerModal.Overlay(mainView, w, h))
-	}
-
-	return newView(mainView)
+	v := tea.NewView(content)
+	v.AltScreen = true
+	return v
 }
 
 // renderTabView renders the tab-based view layout.
@@ -2464,11 +2521,28 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 	}
 }
 
+// ensureToastTick starts the toast tick timer if there are active toasts
+// and the timer is not already running.
+func (m *Model) ensureToastTick() tea.Cmd {
+	if m.toastController.HasToasts() && !m.toastController.Ticking() {
+		m.toastController.SetTicking(true)
+		return scheduleToastTick()
+	}
+	return nil
+}
+
+// notifyError publishes an error-level notification and returns a command
+// to start the toast tick timer if needed.
+func (m *Model) notifyError(format string, args ...any) tea.Cmd {
+	m.notifyBus.Errorf(format, args...)
+	return m.ensureToastTick()
+}
+
 // applyTheme switches the active theme at runtime.
 func (m *Model) applyTheme(name string) {
 	palette, ok := styles.GetPalette(name)
 	if !ok {
-		m.err = fmt.Errorf("unknown theme %q, available: %v", name, styles.ThemeNames())
+		m.notifyBus.Errorf("unknown theme %q, available: %v", name, styles.ThemeNames())
 		return
 	}
 	styles.SetTheme(palette)
