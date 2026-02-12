@@ -15,7 +15,7 @@ const (
 
 type toast struct {
 	notification notify.Notification
-	remaining    time.Duration
+	expiresAt    time.Time
 }
 
 // ToastController manages the lifecycle of active toast notifications.
@@ -23,10 +23,11 @@ type toast struct {
 type ToastController struct {
 	toasts  []toast
 	ticking bool
+	now     func() time.Time // injectable clock for testing
 }
 
 func NewToastController() *ToastController {
-	return &ToastController{}
+	return &ToastController{now: time.Now}
 }
 
 // Push adds a notification to the toast stack. If the stack exceeds
@@ -34,20 +35,19 @@ func NewToastController() *ToastController {
 func (c *ToastController) Push(n notify.Notification) {
 	c.toasts = append(c.toasts, toast{
 		notification: n,
-		remaining:    defaultToastTTL,
+		expiresAt:    c.now().Add(defaultToastTTL),
 	})
 	if len(c.toasts) > defaultMaxToasts {
 		c.toasts = c.toasts[len(c.toasts)-defaultMaxToasts:]
 	}
 }
 
-// Tick decrements the remaining TTL on all toasts by d and removes
-// any that have expired.
-func (c *ToastController) Tick(d time.Duration) {
+// Tick removes any toasts whose expiration time has passed.
+func (c *ToastController) Tick() {
+	now := c.now()
 	alive := c.toasts[:0]
 	for _, t := range c.toasts {
-		t.remaining -= d
-		if t.remaining > 0 {
+		if now.Before(t.expiresAt) {
 			alive = append(alive, t)
 		}
 	}

@@ -610,7 +610,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, m.scheduleSessionRefresh()
 
 	case toastTickMsg:
-		m.toastController.Tick(toastTickInterval)
+		m.toastController.Tick()
 		if m.toastController.HasToasts() {
 			return m, scheduleToastTick()
 		}
