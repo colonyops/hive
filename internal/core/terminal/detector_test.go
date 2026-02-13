@@ -367,6 +367,21 @@ func TestDetectTool(t *testing.T) {
 			want:    "codex",
 		},
 		{
+			name:    "cursor keyword",
+			content: "Welcome to Cursor IDE",
+			want:    "cursor",
+		},
+		{
+			name:    "crush keyword",
+			content: "Crush v2.0 ready",
+			want:    "crush",
+		},
+		{
+			name:    "agent keyword",
+			content: "Starting Agent session",
+			want:    "agent",
+		},
+		{
 			name:    "unknown - defaults to shell",
 			content: "user@host:~$",
 			want:    "shell",
