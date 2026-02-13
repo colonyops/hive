@@ -85,6 +85,127 @@ usercommands:
 	assert.Equal(t, "Complex command", complex.Help)
 }
 
+func TestUserCommand_WithForm(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		expected UserCommand
+	}{
+		{
+			name: "text field",
+			yaml: `
+sh: "echo {{ .Form.message }}"
+form:
+  - variable: message
+    type: text
+    label: "Message"
+    placeholder: "Type here..."`,
+			expected: UserCommand{
+				Sh: "echo {{ .Form.message }}",
+				Form: []FormField{
+					{
+						Variable:    "message",
+						Type:        FormTypeText,
+						Label:       "Message",
+						Placeholder: "Type here...",
+					},
+				},
+			},
+		},
+		{
+			name: "preset with multi",
+			yaml: `
+sh: "echo targets"
+form:
+  - variable: targets
+    preset: SessionSelector
+    multi: true
+    label: "Select recipients"`,
+			expected: UserCommand{
+				Sh: "echo targets",
+				Form: []FormField{
+					{
+						Variable: "targets",
+						Preset:   FormPresetSessionSelector,
+						Multi:    true,
+						Label:    "Select recipients",
+					},
+				},
+			},
+		},
+		{
+			name: "select with options",
+			yaml: `
+sh: "echo {{ .Form.env }}"
+form:
+  - variable: env
+    type: select
+    label: "Environment"
+    options: ["dev", "staging", "prod"]
+    default: "dev"`,
+			expected: UserCommand{
+				Sh: "echo {{ .Form.env }}",
+				Form: []FormField{
+					{
+						Variable: "env",
+						Type:     FormTypeSelect,
+						Label:    "Environment",
+						Options:  []string{"dev", "staging", "prod"},
+						Default:  "dev",
+					},
+				},
+			},
+		},
+		{
+			name: "multiple form fields",
+			yaml: `
+sh: "echo"
+form:
+  - variable: targets
+    preset: SessionSelector
+    multi: true
+    label: "Recipients"
+  - variable: message
+    type: text
+    label: "Message"
+    placeholder: "Type your message..."`,
+			expected: UserCommand{
+				Sh: "echo",
+				Form: []FormField{
+					{
+						Variable: "targets",
+						Preset:   FormPresetSessionSelector,
+						Multi:    true,
+						Label:    "Recipients",
+					},
+					{
+						Variable:    "message",
+						Type:        FormTypeText,
+						Label:       "Message",
+						Placeholder: "Type your message...",
+					},
+				},
+			},
+		},
+		{
+			name: "no form (omitted)",
+			yaml: `sh: "echo hello"`,
+			expected: UserCommand{
+				Sh: "echo hello",
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cmd UserCommand
+			err := yaml.Unmarshal([]byte(tt.yaml), &cmd)
+			require.NoError(t, err)
+			assert.Equal(t, tt.expected, cmd)
+		})
+	}
+}
+
 func TestUserCommand_Scope(t *testing.T) {
 	tests := []struct {
 		name     string

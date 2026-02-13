@@ -49,6 +49,38 @@ const (
 	ActionPrevActive     = "prev-active"    // Navigate to previous active session
 )
 
+// Form field type constants.
+const (
+	FormTypeText        = "text"
+	FormTypeTextArea    = "textarea"
+	FormTypeSelect      = "select"
+	FormTypeMultiSelect = "multi-select"
+)
+
+// Form preset constants.
+const (
+	FormPresetSessionSelector = "SessionSelector"
+	FormPresetProjectSelector = "ProjectSelector"
+)
+
+// ValidFormTypes lists all valid form field types.
+var ValidFormTypes = []string{FormTypeText, FormTypeTextArea, FormTypeSelect, FormTypeMultiSelect}
+
+// ValidFormPresets lists all valid form field presets.
+var ValidFormPresets = []string{FormPresetSessionSelector, FormPresetProjectSelector}
+
+// FormField defines an input field in a UserCommand form.
+type FormField struct {
+	Variable    string   `yaml:"variable"`              // Template variable name (under .Form)
+	Type        string   `yaml:"type,omitempty"`        // text, textarea, select, multi-select
+	Preset      string   `yaml:"preset,omitempty"`      // SessionSelector, ProjectSelector
+	Label       string   `yaml:"label"`                 // Display label
+	Placeholder string   `yaml:"placeholder,omitempty"` // Input placeholder text
+	Default     string   `yaml:"default,omitempty"`     // Default value (text/textarea/select)
+	Options     []string `yaml:"options,omitempty"`     // Static options for select/multi-select
+	Multi       bool     `yaml:"multi,omitempty"`       // For presets: enable multi-select
+}
+
 // defaultUserCommands provides built-in commands that users can override.
 var defaultUserCommands = map[string]UserCommand{
 	"Recycle": {
@@ -306,13 +338,14 @@ type Keybinding struct {
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  string   `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
-	Sh      string   `yaml:"sh"`              // shell command template - mutually exclusive with action
-	Help    string   `yaml:"help"`            // description shown in palette/help
-	Confirm string   `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
-	Silent  bool     `yaml:"silent"`          // skip loading popup for fast commands
-	Exit    string   `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
-	Scope   []string `yaml:"scope,omitempty"` // views where command is active (empty = global)
+	Action  string      `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
+	Sh      string      `yaml:"sh"`              // shell command template - mutually exclusive with action
+	Form    []FormField `yaml:"form,omitempty"`  // interactive input fields collected before sh execution
+	Help    string      `yaml:"help"`            // description shown in palette/help
+	Confirm string      `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
+	Silent  bool        `yaml:"silent"`          // skip loading popup for fast commands
+	Exit    string      `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
+	Scope   []string    `yaml:"scope,omitempty"` // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
