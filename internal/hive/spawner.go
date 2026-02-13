@@ -26,15 +26,17 @@ type SpawnData struct {
 type Spawner struct {
 	log      zerolog.Logger
 	executor executil.Executor
+	renderer *tmpl.Renderer
 	stdout   io.Writer
 	stderr   io.Writer
 }
 
 // NewSpawner creates a new Spawner.
-func NewSpawner(log zerolog.Logger, executor executil.Executor, stdout, stderr io.Writer) *Spawner {
+func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, stdout, stderr io.Writer) *Spawner {
 	return &Spawner{
 		log:      log,
 		executor: executor,
+		renderer: renderer,
 		stdout:   stdout,
 		stderr:   stderr,
 	}
@@ -45,7 +47,7 @@ func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) 
 	for _, cmdTmpl := range commands {
 		s.log.Debug().Str("command", cmdTmpl).Msg("executing spawn command")
 
-		rendered, err := tmpl.Render(cmdTmpl, data)
+		rendered, err := s.renderer.Render(cmdTmpl, data)
 		if err != nil {
 			return fmt.Errorf("render spawn command %q: %w", cmdTmpl, err)
 		}

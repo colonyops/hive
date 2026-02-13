@@ -8,7 +8,7 @@ import (
 )
 
 func TestMaybeOverrideWindowDelete(t *testing.T) {
-	m := Model{}
+	m := Model{renderer: testRenderer}
 
 	deleteAction := Action{
 		Type:      ActionTypeDelete,

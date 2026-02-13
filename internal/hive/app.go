@@ -6,6 +6,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/data/db"
 	"github.com/hay-kot/hive/internal/hive/plugins"
+	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
 // App is the central entry point for all hive operations.
@@ -20,6 +21,7 @@ type App struct {
 	Plugins  *plugins.Manager
 	Config   *config.Config
 	DB       *db.DB
+	Renderer *tmpl.Renderer
 }
 
 // NewApp constructs an App from explicit dependencies.
@@ -30,6 +32,7 @@ func NewApp(
 	termMgr *terminal.Manager,
 	pluginMgr *plugins.Manager,
 	database *db.DB,
+	renderer *tmpl.Renderer,
 ) *App {
 	return &App{
 		Sessions: sessions,
@@ -40,5 +43,6 @@ func NewApp(
 		Plugins:  pluginMgr,
 		Config:   cfg,
 		DB:       database,
+		Renderer: renderer,
 	}
 }

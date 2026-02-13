@@ -19,13 +19,15 @@ type RecycleData struct {
 type Recycler struct {
 	log      zerolog.Logger
 	executor executil.Executor
+	renderer *tmpl.Renderer
 }
 
 // NewRecycler creates a new Recycler.
-func NewRecycler(log zerolog.Logger, executor executil.Executor) *Recycler {
+func NewRecycler(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer) *Recycler {
 	return &Recycler{
 		log:      log,
 		executor: executor,
+		renderer: renderer,
 	}
 }
 
@@ -40,7 +42,7 @@ func (r *Recycler) Recycle(ctx context.Context, path string, commands []string, 
 	}
 
 	for _, cmd := range commands {
-		rendered, err := tmpl.Render(cmd, data)
+		rendered, err := r.renderer.Render(cmd, data)
 		if err != nil {
 			return fmt.Errorf("render recycle command %q: %w", cmd, err)
 		}

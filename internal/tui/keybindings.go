@@ -60,6 +60,7 @@ func (a Action) NeedsConfirm() bool {
 type KeybindingResolver struct {
 	keybindings            map[string]config.Keybinding
 	commands               map[string]config.UserCommand
+	renderer               *tmpl.Renderer
 	activeView             ViewType                      // current active view for scope checking
 	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
 	toolLookup             func(sessionID string) string // optional: returns detected tool name for a session
@@ -68,10 +69,11 @@ type KeybindingResolver struct {
 
 // NewKeybindingResolver creates a new resolver with the given config.
 // Commands should be the merged user commands (user config + system defaults).
-func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand) *KeybindingResolver {
+func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand, renderer *tmpl.Renderer) *KeybindingResolver {
 	return &KeybindingResolver{
 		keybindings: keybindings,
 		commands:    commands,
+		renderer:    renderer,
 		activeView:  ViewSessions, // default to sessions view
 	}
 }
@@ -254,7 +256,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		}
 
-		rendered, err := tmpl.Render(cmd.Sh, data)
+		rendered, err := h.renderer.Render(cmd.Sh, data)
 		if err != nil {
 			// Surface template error instead of masking it
 			action.Type = ActionTypeShell
@@ -410,7 +412,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		"Args":       args,
 	}
 
-	rendered, err := tmpl.Render(cmd.Sh, data)
+	rendered, err := h.renderer.Render(cmd.Sh, data)
 	if err != nil {
 		// Surface template error instead of masking it
 		action.Type = ActionTypeShell
@@ -454,7 +456,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 		"Form":       formData,
 	}
 
-	rendered, err := tmpl.Render(cmd.Sh, data)
+	rendered, err := h.renderer.Render(cmd.Sh, data)
 	if err != nil {
 		action.Type = ActionTypeShell
 		action.Err = fmt.Errorf("template error in command %q: %w", name, err)

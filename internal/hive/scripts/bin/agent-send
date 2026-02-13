@@ -1,5 +1,5 @@
 #!/bin/bash
-# Send text to Claude Code in a tmux pane with delayed Enter
+# Send text to an AI agent in a tmux pane with delayed Enter
 # Usage: agent-send <target> <text>
 #   target: tmux target (session:window or session:window.pane)
 #   text: text to send

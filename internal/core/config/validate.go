@@ -216,8 +216,12 @@ func buildValidationData(formFields []FormField) map[string]any {
 	return data
 }
 
+// validationRenderer is used for template syntax checking during config validation.
+// It uses placeholder values since output is discarded — only parse errors matter.
+var validationRenderer = tmpl.NewValidation()
+
 // validateTemplate checks if a template string is valid.
 func validateTemplate(tmplStr string, data any) error {
-	_, err := tmpl.Render(tmplStr, data)
+	_, err := validationRenderer.Render(tmplStr, data)
 	return err
 }

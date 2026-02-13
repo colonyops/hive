@@ -208,6 +208,7 @@ type Config struct {
 	Keybindings         map[string]Keybinding  `yaml:"keybindings"`
 	UserCommands        map[string]UserCommand `yaml:"usercommands"`
 	Rules               []Rule                 `yaml:"rules"`
+	Agents              AgentsConfig           `yaml:"agents"`
 	AutoDeleteCorrupted bool                   `yaml:"auto_delete_corrupted"`
 	History             HistoryConfig          `yaml:"history"`
 	Context             ContextConfig          `yaml:"context"`
@@ -219,6 +220,75 @@ type Config struct {
 	Plugins             PluginsConfig          `yaml:"plugins"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
+}
+
+// AgentsConfig holds agent profile configuration.
+// The "default" key selects which profile to use; all other keys are profile definitions.
+type AgentsConfig struct {
+	Default  string                  // reserved key selecting the active profile
+	Profiles map[string]AgentProfile // profile name → agent configuration
+}
+
+// UnmarshalYAML separates the "default" key from profile entries.
+func (a *AgentsConfig) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("agents: expected mapping, got %v", node.Kind)
+	}
+
+	a.Profiles = make(map[string]AgentProfile)
+
+	for i := 0; i < len(node.Content)-1; i += 2 {
+		key := node.Content[i].Value
+		val := node.Content[i+1]
+
+		if key == "default" {
+			var s string
+			if err := val.Decode(&s); err != nil {
+				return fmt.Errorf("agents.default: %w", err)
+			}
+			a.Default = s
+			continue
+		}
+
+		var profile AgentProfile
+		if err := val.Decode(&profile); err != nil {
+			return fmt.Errorf("agents.%s: %w", key, err)
+		}
+		a.Profiles[key] = profile
+	}
+
+	return nil
+}
+
+// DefaultProfile returns the profile selected by the Default key.
+// Returns a zero AgentProfile if the default is not found.
+func (a AgentsConfig) DefaultProfile() AgentProfile {
+	if p, ok := a.Profiles[a.Default]; ok {
+		return p
+	}
+	return AgentProfile{}
+}
+
+// AgentProfile defines an agent's command and flags.
+type AgentProfile struct {
+	Command string   `yaml:"command"` // CLI binary (defaults to profile key if omitted)
+	Flags   []string `yaml:"flags"`   // extra CLI args appended to command on spawn
+}
+
+// CommandOrDefault returns the command, falling back to the given key name.
+func (p AgentProfile) CommandOrDefault(key string) string {
+	if p.Command != "" {
+		return p.Command
+	}
+	return key
+}
+
+// ShellFlags returns the flags as a space-joined string.
+// Individual flags are NOT quoted — the caller is responsible for quoting
+// the entire value (e.g., via shq in templates) or relying on shell word
+// splitting when consuming the value.
+func (p AgentProfile) ShellFlags() string {
+	return strings.Join(p.Flags, " ")
 }
 
 // HistoryConfig holds command history configuration.
@@ -408,12 +478,12 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 
 // DefaultSpawnCommands are the default commands run when spawning a new session.
 var DefaultSpawnCommands = []string{
-	`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
 }
 
 // DefaultBatchSpawnCommands are the default commands run when spawning a batch session.
 var DefaultBatchSpawnCommands = []string{
-	`{{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
+	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
 }
 
 // DefaultRecycleCommands are the default commands run when recycling a session.
@@ -533,6 +603,14 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.Beads.ResultsCache == 0 {
 		c.Plugins.Beads.ResultsCache = 30 * time.Second
 	}
+	if len(c.Agents.Profiles) == 0 {
+		c.Agents.Profiles = map[string]AgentProfile{
+			"claude": {},
+		}
+	}
+	if c.Agents.Default == "" {
+		c.Agents.Default = "claude"
+	}
 }
 
 // defaultCopyCommand returns the default clipboard command for the current OS.
@@ -597,6 +675,7 @@ func (c *Config) Validate() error {
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
+		c.validateAgents(),
 	)
 }
 
@@ -725,6 +804,14 @@ func (c *Config) validateMaxRecycled() error {
 	}
 
 	return errs.ToError()
+}
+
+// validateAgents checks that agents.default references an existing profile.
+func (c *Config) validateAgents() error {
+	if _, ok := c.Agents.Profiles[c.Agents.Default]; !ok {
+		return criterio.NewFieldErrors("agents.default", fmt.Errorf("profile %q not found in agents config", c.Agents.Default))
+	}
+	return nil
 }
 
 // validateTheme checks that the configured theme name is a valid built-in theme.

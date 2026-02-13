@@ -74,6 +74,7 @@ type Options struct {
 	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
 	PluginManager   *plugins.Manager     // Plugin manager (optional)
 	DB              *db.DB               // Database connection for stores
+	Renderer        *tmpl.Renderer       // Template renderer for shell commands
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -191,6 +192,9 @@ type Model struct {
 	pendingFormName string
 	pendingFormSess *session.Session
 	pendingFormArgs []string
+
+	// Template rendering
+	renderer *tmpl.Renderer
 }
 
 // PendingCreate returns any pending session creation data.
@@ -314,7 +318,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		mergedCommands = cfg.MergedUserCommands()
 	}
 
-	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands)
+	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, opts.Renderer)
 	handler.SetTmuxWindowLookup(func(sessionID string) string {
 		if status, ok := terminalStatuses.Get(sessionID); ok {
 			return status.WindowName
@@ -425,6 +429,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		toastController:    toastCtrl,
 		toastView:          toastView,
 		focusFilterInput:   focusInput,
+		renderer:           opts.Renderer,
 	}
 }
 
@@ -1877,7 +1882,7 @@ func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
 	}
 
 	// Render the hive-tmux command to open at the repo directory
-	shellCmd, err := tmpl.Render(
+	shellCmd, err := m.renderer.Render(
 		`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
 		struct{ Name, Path string }{Name: header.RepoName, Path: repoPath},
 	)
@@ -1994,7 +1999,7 @@ func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Acti
 	}
 
 	target := tmuxSession + ":" + treeItem.WindowIndex
-	cmd, err := tmpl.Render("tmux kill-window -t {{ .Target | shq }}", map[string]string{
+	cmd, err := m.renderer.Render("tmux kill-window -t {{ .Target | shq }}", map[string]string{
 		"Target": target,
 	})
 	if err != nil {
