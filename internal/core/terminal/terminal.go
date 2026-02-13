@@ -4,14 +4,8 @@ package terminal
 import "context"
 
 // Status represents the detected state of a terminal session.
+// ENUM(active, approval, ready, missing).
 type Status string
-
-const (
-	StatusActive   Status = "active"   // agent is actively working (spinner/busy indicator)
-	StatusApproval Status = "approval" // agent needs permission (Yes/No dialog)
-	StatusReady    Status = "ready"    // agent finished, waiting for next input (❯ prompt)
-	StatusMissing  Status = "missing"  // terminal session not found
-)
 
 // SessionInfo holds information about a discovered terminal session.
 type SessionInfo struct {

@@ -6,13 +6,8 @@ import (
 )
 
 // Level represents the severity of a notification.
+// ENUM(info, warning, error).
 type Level string
-
-const (
-	LevelInfo    Level = "info"
-	LevelWarning Level = "warning"
-	LevelError   Level = "error"
-)
 
 // Notification represents a single notification event.
 type Notification struct {

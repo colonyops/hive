@@ -19,13 +19,8 @@ func Slugify(name string) string {
 }
 
 // State represents the lifecycle state of a session.
+// ENUM(active, recycled, corrupted).
 type State string
-
-const (
-	StateActive    State = "active"
-	StateRecycled  State = "recycled"
-	StateCorrupted State = "corrupted"
-)
 
 // Metadata keys for terminal integration.
 const (

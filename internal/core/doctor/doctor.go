@@ -3,26 +3,8 @@ package doctor
 import "context"
 
 // Status represents the result status of a check item.
-type Status int
-
-const (
-	StatusPass Status = iota
-	StatusWarn
-	StatusFail
-)
-
-func (s Status) String() string {
-	switch s {
-	case StatusPass:
-		return "pass"
-	case StatusWarn:
-		return "warn"
-	case StatusFail:
-		return "fail"
-	default:
-		return "unknown"
-	}
-}
+// ENUM(pass, warn, fail).
+type Status string
 
 // CheckItem represents a single line item within a check result.
 type CheckItem struct {
@@ -53,7 +35,7 @@ func RunAll(ctx context.Context, checks []Check) []Result {
 	for _, check := range checks {
 		result := check.Run(ctx)
 		for i := range result.Items {
-			result.Items[i].StatusStr = result.Items[i].Status.String()
+			result.Items[i].StatusStr = string(result.Items[i].Status)
 		}
 		results = append(results, result)
 	}
