@@ -121,6 +121,11 @@ type Model struct {
 	allSessions  []session.Session // All sessions (unfiltered)
 	statusFilter terminal.Status   // Filter by terminal status (empty = show all)
 
+	// Focus mode filtering (sessions tree only)
+	focusMode        bool            // true when focus mode filter is active
+	focusFilter      string          // current focus filter text
+	focusFilterInput textinput.Model // dedicated input for focus mode
+
 	// Recycle streaming state
 	outputModal   OutputModal
 	recycleOutput <-chan string
@@ -273,6 +278,14 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	filterStyles.Cursor.Color = styles.ColorPrimary
 	l.FilterInput.SetStyles(filterStyles)
 
+	// Create dedicated focus filter input (matches list filter styling)
+	focusInput := textinput.New()
+	focusInput.Prompt = "/"
+	focusInputStyles := textinput.DefaultStyles(true)
+	focusInputStyles.Focused.Prompt = styles.ListFilterPromptStyle
+	focusInputStyles.Cursor.Color = styles.ColorPrimary
+	focusInput.SetStyles(focusInputStyles)
+
 	// Style help to match messages view (consistent gray, bullet separators, left padding)
 	helpStyle := styles.TextMutedStyle
 	l.Help.Styles.ShortKey = helpStyle
@@ -402,6 +415,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		notifyBus:          notifyBus,
 		toastController:    toastCtrl,
 		toastView:          toastView,
+		focusFilterInput:   focusInput,
 	}
 }
 
@@ -874,7 +888,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// When filtering in either list, pass most keys except quit
-	if m.list.SettingFilter() || m.msgView.IsFiltering() {
+	if m.list.SettingFilter() || m.msgView.IsFiltering() || m.focusMode {
 		return m.handleFilteringKey(msg, keyStr)
 	}
 
@@ -1304,6 +1318,24 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		return m, tea.Quit
 	}
 
+	// Handle focus mode filtering (sessions view)
+	if m.focusMode {
+		switch keyStr {
+		case "esc":
+			m.stopFocusMode()
+			return m, nil
+		case keyEnter:
+			m.stopFocusMode()
+			return m, nil
+		default:
+			var cmd tea.Cmd
+			m.focusFilterInput, cmd = m.focusFilterInput.Update(msg)
+			// Update filter and navigate on every keystroke
+			m.updateFocusFilter(m.focusFilterInput.Value())
+			return m, cmd
+		}
+	}
+
 	// Handle message view filtering
 	if m.msgView.IsFiltering() {
 		switch keyStr {
@@ -1573,6 +1605,32 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m.openNewSessionForm()
 	}
 
+	// Handle '/' for focus mode filter
+	if keyStr == "/" {
+		m.focusMode = true
+		m.focusFilter = ""
+		m.focusFilterInput.Reset()
+		m.focusFilterInput.SetValue("")
+
+		// Hide list help and reduce list size to make room for search input
+		contentHeight := m.height - 3
+		if contentHeight < 2 {
+			contentHeight = 2
+		}
+
+		var listWidth int
+		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
+			listWidth = int(float64(m.width) * 0.25)
+		} else {
+			listWidth = m.width
+		}
+
+		m.list.SetShowHelp(false)
+		m.list.SetSize(listWidth, contentHeight-1) // Make room for search input
+
+		return m, m.focusFilterInput.Focus()
+	}
+
 	// Handle ':' for command palette (allow even without selection for filter commands)
 	if keyStr == ":" {
 		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height, m.activeView)
@@ -1600,7 +1658,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 
 	// If a window sub-item is selected, override TmuxWindow for template rendering
 	if treeItem != nil && treeItem.IsWindowItem {
-		m.handler.SetSelectedWindow(treeItem.WindowName)
+		m.handler.SetSelectedWindow(treeItem.WindowIndex)
 	} else {
 		m.handler.SetSelectedWindow("")
 	}
@@ -1822,8 +1880,13 @@ func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Acti
 // hasEditorFocus returns true if any text input currently has focus.
 // When an editor has focus, most keybindings should be blocked to allow normal typing.
 func (m *Model) hasEditorFocus() bool {
-	// Check session list filter
+	// Check session list filter (built-in bubbles filter)
 	if m.list.SettingFilter() {
+		return true
+	}
+
+	// Check focus mode filter
+	if m.focusMode {
 		return true
 	}
 
@@ -1883,6 +1946,13 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Route to active view
 	switch m.activeView {
 	case ViewSessions:
+		if m.focusMode {
+			// Route to focus filter input
+			var cmd tea.Cmd
+			m.focusFilterInput, cmd = m.focusFilterInput.Update(msg)
+			m.updateFocusFilter(m.focusFilterInput.Value())
+			return m, cmd
+		}
 		m.list, cmd = m.list.Update(msg)
 	case ViewMessages:
 		// MessagesView handles its own filtering internally, no Update method
@@ -2057,6 +2127,61 @@ func (m Model) shouldPollMessages() bool {
 // isModalActive returns true if any modal is currently open.
 func (m Model) isModalActive() bool {
 	return m.state != stateNormal
+}
+
+// stopFocusMode deactivates focus mode filtering.
+func (m *Model) stopFocusMode() {
+	m.focusMode = false
+	m.focusFilter = ""
+
+	// Restore list size and show help
+	contentHeight := m.height - 3
+	if contentHeight < 1 {
+		contentHeight = 1
+	}
+
+	var listWidth int
+	if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
+		listWidth = int(float64(m.width) * 0.25)
+	} else {
+		listWidth = m.width
+	}
+
+	m.list.SetSize(listWidth, contentHeight)
+	m.list.SetShowHelp(true)
+}
+
+// updateFocusFilter updates the filter and navigates to first match.
+func (m *Model) updateFocusFilter(filter string) {
+	m.focusFilter = filter
+	if filter == "" {
+		return // no navigation with empty filter
+	}
+
+	// Find first matching item
+	items := m.list.Items()
+	filterLower := strings.ToLower(filter)
+
+	for i, item := range items {
+		treeItem, ok := item.(TreeItem)
+		if !ok {
+			continue
+		}
+
+		// Skip headers (FilterValue returns empty for headers)
+		if treeItem.IsHeader {
+			continue
+		}
+
+		// Check if filter value matches
+		filterValue := strings.ToLower(treeItem.FilterValue())
+		if strings.Contains(filterValue, filterLower) {
+			m.list.Select(i)
+			return
+		}
+	}
+
+	// No match found - cursor stays at current position
 }
 
 // applyFilter rebuilds the tree view from all sessions.
@@ -2398,9 +2523,15 @@ func (m Model) renderTabView() string {
 			m.treeDelegate.PreviewMode = false
 			m.list.SetDelegate(m.treeDelegate)
 			content = m.list.View()
-			if m.list.SettingFilter() {
+
+			// Show focus mode filter input if active (at bottom to avoid layout shift)
+			if m.focusMode {
+				content = lipgloss.JoinVertical(lipgloss.Left, content, m.focusFilterInput.View())
+			} else if m.list.SettingFilter() {
+				// Fallback: show bubbles built-in filter if somehow active
 				content = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), content)
 			}
+
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
 	case ViewMessages:
@@ -2478,7 +2609,9 @@ func (m Model) renderDualColumnLayout(contentHeight int) string {
 
 	// Render list
 	listView := m.list.View()
-	if m.list.SettingFilter() {
+	if m.focusMode {
+		listView = lipgloss.JoinVertical(lipgloss.Left, listView, m.focusFilterInput.View())
+	} else if m.list.SettingFilter() {
 		listView = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), listView)
 	}
 
