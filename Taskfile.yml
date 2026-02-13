@@ -25,18 +25,42 @@ tasks:
       - sqlc generate
 
   enum:generate:
-    desc: Generates enum methods using go-enum
+    desc: Generates enum methods using go-enum (only runs if source files changed)
+    sources:
+      - internal/core/session/session.go
+      - internal/core/terminal/terminal.go
+      - internal/core/notify/store.go
+      - internal/core/doctor/doctor.go
+      - internal/tui/view.go
+      - internal/tui/keybindings.go
+      - internal/tui/model.go
+      - internal/tui/command/service.go
+      - internal/tui/views/review/review_document.go
+      - internal/tui/views/review/review_finalize_modal.go
+    generates:
+      - internal/core/session/session_enum.go
+      - internal/core/terminal/terminal_enum.go
+      - internal/core/notify/store_enum.go
+      - internal/core/doctor/doctor_enum.go
+      - internal/tui/view_enum.go
+      - internal/tui/keybindings_enum.go
+      - internal/tui/model_enum.go
+      - internal/tui/command/service_enum.go
+      - internal/tui/views/review/review_document_enum.go
+      - internal/tui/views/review/review_finalize_modal_enum.go
     cmds:
-      - go-enum --nocase --names --marshal --file internal/core/session/session.go
-      - go-enum --nocase --names --marshal --file internal/core/terminal/terminal.go
-      - go-enum --nocase --names --marshal --file internal/core/notify/store.go
-      - go-enum --nocase --names --marshal --file internal/core/doctor/doctor.go
-      - go-enum --nocase --names --marshal --file internal/tui/view.go
-      - go-enum --nocase --names --marshal --file internal/tui/keybindings.go
-      - go-enum --nocase --names --marshal --file internal/tui/model.go
-      - go-enum --nocase --names --marshal --file internal/tui/command/service.go
-      - go-enum --nocase --names --marshal --file internal/tui/views/review/review_document.go
-      - go-enum --nocase --names --marshal --file internal/tui/views/review/review_finalize_modal.go
+      - >
+        go-enum --nocase --names --marshal
+        -f internal/core/session/session.go
+        -f internal/core/terminal/terminal.go
+        -f internal/core/notify/store.go
+        -f internal/core/doctor/doctor.go
+        -f internal/tui/view.go
+        -f internal/tui/keybindings.go
+        -f internal/tui/model.go
+        -f internal/tui/command/service.go
+        -f internal/tui/views/review/review_document.go
+        -f internal/tui/views/review/review_finalize_modal.go
 
   test:
     desc: Runs all go tests using gotestsum - supports passing gotestsum args
@@ -72,6 +96,7 @@ tasks:
   check:
     desc: Runs all go test and lint related tasks
     cmds:
+      - task: enum:generate
       - task: tidy
       - task: lint
       - task: test

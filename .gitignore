@@ -24,3 +24,4 @@ dist/
 ./dev.log
 agent-deck/
 diffnav
+/.task/
