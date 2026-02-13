@@ -1105,17 +1105,17 @@ func TestAgentProfile_ShellFlags(t *testing.T) {
 
 	t.Run("single flag", func(t *testing.T) {
 		p := AgentProfile{Flags: []string{"--verbose"}}
-		assert.Equal(t, "'--verbose'", p.ShellFlags())
+		assert.Equal(t, "--verbose", p.ShellFlags())
 	})
 
 	t.Run("multiple flags", func(t *testing.T) {
 		p := AgentProfile{Flags: []string{"--model", "opus"}}
-		assert.Equal(t, "'--model' 'opus'", p.ShellFlags())
+		assert.Equal(t, "--model opus", p.ShellFlags())
 	})
 
 	t.Run("flags with special chars", func(t *testing.T) {
 		p := AgentProfile{Flags: []string{"--prompt", "it's a test"}}
-		assert.Equal(t, `'--prompt' 'it'\''s a test'`, p.ShellFlags())
+		assert.Equal(t, "--prompt it's a test", p.ShellFlags())
 	})
 }
 

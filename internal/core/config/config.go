@@ -283,21 +283,12 @@ func (p AgentProfile) CommandOrDefault(key string) string {
 	return key
 }
 
-// ShellFlags returns the flags as a shell-safe string (each element quoted, space-joined).
+// ShellFlags returns the flags as a space-joined string.
+// Individual flags are NOT quoted — the caller is responsible for quoting
+// the entire value (e.g., via shq in templates) or relying on shell word
+// splitting when consuming the value.
 func (p AgentProfile) ShellFlags() string {
-	if len(p.Flags) == 0 {
-		return ""
-	}
-	quoted := make([]string, len(p.Flags))
-	for i, f := range p.Flags {
-		quoted[i] = shellQuote(f)
-	}
-	return strings.Join(quoted, " ")
-}
-
-// shellQuote wraps s in single quotes, escaping embedded single quotes.
-func shellQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+	return strings.Join(p.Flags, " ")
 }
 
 // HistoryConfig holds command history configuration.
@@ -487,12 +478,12 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 
 // DefaultSpawnCommands are the default commands run when spawning a new session.
 var DefaultSpawnCommands = []string{
-	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
 }
 
 // DefaultBatchSpawnCommands are the default commands run when spawning a batch session.
 var DefaultBatchSpawnCommands = []string{
-	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags }} {{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
+	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
 }
 
 // DefaultRecycleCommands are the default commands run when recycling a session.

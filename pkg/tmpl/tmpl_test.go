@@ -130,7 +130,7 @@ func TestRenderer_Configured(t *testing.T) {
 	r := New(Config{
 		AgentCommand: "aider",
 		AgentWindow:  "aider",
-		AgentFlags:   "'--model' 'sonnet'",
+		AgentFlags:   "--model sonnet",
 	})
 
 	got, err := r.Render("{{ agentCommand }}", nil)
@@ -143,7 +143,7 @@ func TestRenderer_Configured(t *testing.T) {
 
 	got, err = r.Render("{{ agentFlags }}", nil)
 	require.NoError(t, err)
-	assert.Equal(t, "'--model' 'sonnet'", got)
+	assert.Equal(t, "--model sonnet", got)
 }
 
 func TestRenderer_ScriptPaths(t *testing.T) {
@@ -178,10 +178,10 @@ func TestRenderer_SpawnCommand(t *testing.T) {
 		},
 		AgentCommand: "aider",
 		AgentWindow:  "aider",
-		AgentFlags:   "'--model' 'sonnet'",
+		AgentFlags:   "--model sonnet",
 	})
 
-	tmplStr := `HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`
+	tmplStr := `HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`
 	data := struct {
 		Name string
 		Path string
@@ -189,7 +189,7 @@ func TestRenderer_SpawnCommand(t *testing.T) {
 
 	got, err := r.Render(tmplStr, data)
 	require.NoError(t, err)
-	assert.Equal(t, "HIVE_AGENT_COMMAND='aider' HIVE_AGENT_WINDOW='aider' HIVE_AGENT_FLAGS='--model' 'sonnet' /bin/hive-tmux 'test-session' '/tmp/work'", got)
+	assert.Equal(t, "HIVE_AGENT_COMMAND='aider' HIVE_AGENT_WINDOW='aider' HIVE_AGENT_FLAGS='--model sonnet' /bin/hive-tmux 'test-session' '/tmp/work'", got)
 }
 
 func TestNewValidation(t *testing.T) {
