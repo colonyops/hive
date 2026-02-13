@@ -1493,11 +1493,41 @@ func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 	return m, cmd
 }
 
-// executeRename returns a command that renames a session.
+// executeRename returns a command that renames a session and its tmux session.
 func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 	return func() tea.Msg {
-		err := m.service.RenameSession(context.Background(), sessionID, newName)
-		return renameCompleteMsg{err: err}
+		ctx := context.Background()
+
+		// Look up old session to find current tmux session name
+		oldSess, err := m.service.GetSession(ctx, sessionID)
+		if err != nil {
+			return renameCompleteMsg{err: err}
+		}
+
+		oldTmuxName := oldSess.GetMeta(session.MetaTmuxSession)
+		if oldTmuxName == "" {
+			oldTmuxName = oldSess.Slug
+		}
+
+		// Rename in hive store
+		if err := m.service.RenameSession(ctx, sessionID, newName); err != nil {
+			return renameCompleteMsg{err: err}
+		}
+
+		// Rename tmux session (best-effort — session may not have a tmux session)
+		newSlug := session.Slugify(newName)
+		if oldTmuxName != "" && newSlug != "" && oldTmuxName != newSlug {
+			//nolint:gosec // arguments are slugified, not user-controlled shell input
+			tmuxCmd := exec.Command("tmux", "rename-session", "-t", oldTmuxName, newSlug)
+			if tmuxErr := tmuxCmd.Run(); tmuxErr != nil {
+				log.Debug().Err(tmuxErr).
+					Str("old", oldTmuxName).
+					Str("new", newSlug).
+					Msg("tmux rename-session failed (session may not exist)")
+			}
+		}
+
+		return renameCompleteMsg{err: nil}
 	}
 }
 
