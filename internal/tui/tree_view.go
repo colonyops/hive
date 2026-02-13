@@ -130,6 +130,7 @@ type TreeItem struct {
 
 	// Header fields (only used when IsHeader is true)
 	RepoName      string
+	RepoRemote    string // Git remote URL for the repo group
 	IsCurrentRepo bool
 
 	// Session fields (only used when IsHeader is false and IsRecycledPlaceholder is false)
@@ -180,6 +181,7 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 		header := TreeItem{
 			IsHeader:      true,
 			RepoName:      group.Name,
+			RepoRemote:    group.Remote,
 			IsCurrentRepo: group.Remote == localRemote,
 		}
 		items = append(items, header)

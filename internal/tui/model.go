@@ -1586,6 +1586,11 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m.handleRecycledPlaceholderKey(keyStr, treeItem)
 	}
 
+	// Handle enter on project headers - open original repo directory
+	if treeItem != nil && treeItem.IsHeader && m.handler.IsCommand(keyStr, "TmuxOpen") {
+		return m.openRepoHeader(treeItem)
+	}
+
 	selected := m.selectedSession()
 	if selected == nil {
 		var cmd tea.Cmd
@@ -1662,6 +1667,56 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
 	return m, cmd
+}
+
+// openRepoHeader handles enter on a project header by opening the original repo directory.
+func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
+	// Find the original repo path from discovered repos
+	var repoPath string
+	for _, repo := range m.discoveredRepos {
+		if repo.Remote == header.RepoRemote {
+			repoPath = repo.Path
+			break
+		}
+	}
+	if repoPath == "" {
+		return m, m.notifyError("no local repository found for %s", header.RepoName)
+	}
+
+	// Render the hive-tmux command to open at the repo directory
+	shellCmd, err := tmpl.Render(
+		`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+		struct{ Name, Path string }{Name: header.RepoName, Path: repoPath},
+	)
+	if err != nil {
+		return m, m.notifyError("template error: %v", err)
+	}
+
+	action := Action{
+		Type:     ActionTypeShell,
+		Key:      "enter",
+		Help:     "open repo",
+		ShellCmd: shellCmd,
+		Silent:   true,
+		Exit:     config.ParseExitCondition("$HIVE_POPUP"),
+	}
+
+	if action.Exit {
+		cmdAction := command.Action{
+			Type:     command.ActionType(action.Type),
+			ShellCmd: action.ShellCmd,
+		}
+		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create executor for repo open")
+		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
+			log.Error().Err(err).Msg("repo open command failed")
+		}
+		m.quitting = true
+		return m, tea.Quit
+	}
+
+	return m, m.executeAction(action)
 }
 
 // selectedSession returns the currently selected session, or nil if none.
@@ -1889,8 +1944,8 @@ func (m *Model) navigateToNextActive(direction int) {
 	}
 }
 
-// navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down),
-// skipping over header items which are not actionable.
+// navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down).
+// Headers are selectable (enter opens original repo). Only recycled placeholders are skipped.
 func (m *Model) navigateSkippingHeaders(direction int) {
 	items := m.list.Items()
 	if len(items) == 0 {
@@ -1900,7 +1955,6 @@ func (m *Model) navigateSkippingHeaders(direction int) {
 	current := m.list.Index()
 	target := current
 
-	// Move in the given direction until we find a non-header or hit bounds
 	for {
 		target += direction
 
@@ -1909,19 +1963,12 @@ func (m *Model) navigateSkippingHeaders(direction int) {
 			return // Can't move further, stay at current position
 		}
 
-		// Check if target is a header
-		if treeItem, ok := items[target].(TreeItem); ok {
-			if !treeItem.IsHeader {
-				// Found a non-header, select it
-				m.list.Select(target)
-				return
-			}
-			// It's a header, keep looking
-		} else {
-			// Not a TreeItem, select it
-			m.list.Select(target)
-			return
+		// Skip recycled placeholders, allow everything else (including headers)
+		if treeItem, ok := items[target].(TreeItem); ok && treeItem.IsRecycledPlaceholder {
+			continue
 		}
+		m.list.Select(target)
+		return
 	}
 }
 

@@ -288,6 +288,15 @@ func DetectTool(content string) string {
 			"anthropic",
 			"ctrl+c to interrupt",
 		},
+		"cursor": {
+			"cursor",
+		},
+		"crush": {
+			"crush",
+		},
+		"agent": {
+			"agent",
+		},
 		"gemini": {
 			"gemini",
 			"google ai",

@@ -145,6 +145,15 @@ func (h *KeybindingResolver) IsAction(key string, action string) bool {
 	return exists && cmd.Action == action
 }
 
+// IsCommand checks if a key maps to the given command name.
+func (h *KeybindingResolver) IsCommand(key string, cmdName string) bool {
+	kb, exists := h.keybindings[key]
+	if !exists {
+		return false
+	}
+	return kb.Cmd == cmdName
+}
+
 // Resolve attempts to resolve a key press to an action for the given session.
 // Recycled sessions only allow delete actions to prevent accidental operations.
 func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, bool) {
