@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/hay-kot/hive/internal/core/config"
@@ -248,13 +249,23 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 
 // RenameSession changes the name (and slug) of an existing session.
 func (s *SessionService) RenameSession(ctx context.Context, id, newName string) error {
+	newName = strings.TrimSpace(newName)
+	if newName == "" {
+		return fmt.Errorf("rename session: name cannot be empty")
+	}
+
+	slug := session.Slugify(newName)
+	if slug == "" {
+		return fmt.Errorf("rename session: name %q produces an empty slug", newName)
+	}
+
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
 		return fmt.Errorf("get session: %w", err)
 	}
 
 	sess.Name = newName
-	sess.Slug = session.Slugify(newName)
+	sess.Slug = slug
 	sess.UpdatedAt = time.Now()
 
 	if err := s.sessions.Save(ctx, sess); err != nil {

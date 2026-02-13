@@ -54,6 +54,13 @@ func TestModel_hasEditorFocus(t *testing.T) {
 			},
 			want: false,
 		},
+		{
+			name: "renaming state has editor focus",
+			setupFunc: func(m *Model) {
+				m.state = stateRenaming
+			},
+			want: true,
+		},
 	}
 
 	for _, tt := range tests {
