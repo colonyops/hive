@@ -42,12 +42,12 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		{
 			Path:    "/test/doc1.md",
 			RelPath: ".hive/plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    review.DocumentTypePlan,
 		},
 		{
 			Path:    "/test/doc2.md",
 			RelPath: ".hive/research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    review.DocumentTypeResearch,
 		},
 	}
 	reviewView := review.New(docs, "/test", nil, 0)
@@ -81,12 +81,12 @@ func TestOpenDocument(t *testing.T) {
 		{
 			Path:    "/test/doc1.md",
 			RelPath: ".hive/plans/doc1.md",
-			Type:    review.DocTypePlan,
+			Type:    review.DocumentTypePlan,
 		},
 		{
 			Path:    "/test/doc2.md",
 			RelPath: ".hive/research/doc2.md",
-			Type:    review.DocTypeResearch,
+			Type:    review.DocumentTypeResearch,
 		},
 	}
 	reviewView := review.New(docs, "/test", nil, 0)
@@ -137,8 +137,8 @@ func TestOpenDocument(t *testing.T) {
 
 func TestGetAllDocuments(t *testing.T) {
 	docs := []review.Document{
-		{RelPath: "doc1.md", Type: review.DocTypePlan},
-		{RelPath: "doc2.md", Type: review.DocTypeResearch},
+		{RelPath: "doc1.md", Type: review.DocumentTypePlan},
+		{RelPath: "doc2.md", Type: review.DocumentTypeResearch},
 	}
 
 	reviewView := review.New(docs, "/test", nil, 0)

@@ -34,25 +34,25 @@ func TestBuildTreeItems(t *testing.T) {
 		{
 			Path:    "/path/to/plans/plan1.md",
 			RelPath: "plans/plan1.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: now,
 		},
 		{
 			Path:    "/path/to/plans/plan2.md",
 			RelPath: "plans/plan2.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: now.Add(-time.Hour),
 		},
 		{
 			Path:    "/path/to/research/research1.md",
 			RelPath: "research/research1.md",
-			Type:    DocTypeResearch,
+			Type:    DocumentTypeResearch,
 			ModTime: now,
 		},
 		{
 			Path:    "/path/to/context/notes.md",
 			RelPath: "context/notes.md",
-			Type:    DocTypeContext,
+			Type:    DocumentTypeContext,
 			ModTime: now,
 		},
 	}
@@ -106,7 +106,7 @@ func TestNew(t *testing.T) {
 		{
 			Path:    "/path/to/test.md",
 			RelPath: "plans/test.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: time.Now(),
 		},
 	}
@@ -139,7 +139,7 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
@@ -191,7 +191,7 @@ func TestCommentDeletionCancellation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
@@ -240,7 +240,7 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
@@ -307,7 +307,7 @@ func TestReviewDiscardCancellation(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
@@ -354,7 +354,7 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3",
 	}
@@ -384,7 +384,7 @@ func TestCommentVisualStyling(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3",
 	}
@@ -442,7 +442,7 @@ func TestLineMappingWithComments(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "plans/test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
@@ -530,7 +530,7 @@ func TestLineMappingWithComments(t *testing.T) {
 
 func TestView_WithPickerModal(t *testing.T) {
 	docs := []Document{
-		{RelPath: "doc1.md", Type: DocTypePlan},
+		{RelPath: "doc1.md", Type: DocumentTypePlan},
 	}
 
 	reviewView := New(docs, "/test", nil, 0)
@@ -567,7 +567,7 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 	doc := Document{
 		Path:          "/path/to/test.md",
 		RelPath:       "test.md",
-		Type:          DocTypePlan,
+		Type:          DocumentTypePlan,
 		ModTime:       time.Now(),
 		Content:       content,
 		RenderedLines: lines,
@@ -649,7 +649,7 @@ func TestJumpToMatchWithComments(t *testing.T) {
 	doc := Document{
 		Path:          "/path/to/test.md",
 		RelPath:       "test.md",
-		Type:          DocTypePlan,
+		Type:          DocumentTypePlan,
 		ModTime:       time.Now(),
 		Content:       content,
 		RenderedLines: lines,
@@ -764,7 +764,7 @@ func TestReverseMappingCorrectness(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
@@ -864,7 +864,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	doc := Document{
 		Path:    docPath,
 		RelPath: "test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: content,
 	}
@@ -913,7 +913,7 @@ func TestCtrlDUWithComments(t *testing.T) {
 	doc := Document{
 		Path:          "/path/to/test.md",
 		RelPath:       "test.md",
-		Type:          DocTypePlan,
+		Type:          DocumentTypePlan,
 		ModTime:       time.Now(),
 		Content:       content,
 		RenderedLines: lines,
@@ -1007,7 +1007,7 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 		{
 			Path:    "/test/doc.md",
 			RelPath: "doc.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 		},
 	}
 	v := New(docs, "/test", nil, 0)
@@ -1041,7 +1041,7 @@ func TestHasActiveEditor(t *testing.T) {
 	doc := Document{
 		Path:    "/path/to/test.md",
 		RelPath: "test.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Now(),
 		Content: "Line 1\nLine 2\nLine 3",
 	}

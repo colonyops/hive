@@ -19,22 +19,22 @@ func TestInferDocumentType(t *testing.T) {
 		{
 			name:     "plan document",
 			relPath:  "plans/2026-02-01-feature.md",
-			expected: DocTypePlan,
+			expected: DocumentTypePlan,
 		},
 		{
 			name:     "research document",
 			relPath:  "research/2026-02-01-investigation.md",
-			expected: DocTypeResearch,
+			expected: DocumentTypeResearch,
 		},
 		{
 			name:     "context document",
 			relPath:  "context/architecture.md",
-			expected: DocTypeContext,
+			expected: DocumentTypeContext,
 		},
 		{
 			name:     "other document",
 			relPath:  "notes.md",
-			expected: DocTypeOther,
+			expected: DocumentTypeOther,
 		},
 	}
 
@@ -51,15 +51,15 @@ func TestDocumentTypeString(t *testing.T) {
 		docType  DocumentType
 		expected string
 	}{
-		{DocTypePlan, "Plan"},
-		{DocTypeResearch, "Research"},
-		{DocTypeContext, "Context"},
-		{DocTypeOther, "Other"},
+		{DocumentTypePlan, "Plan"},
+		{DocumentTypeResearch, "Research"},
+		{DocumentTypeContext, "Context"},
+		{DocumentTypeOther, "Other"},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.expected, func(t *testing.T) {
-			result := tt.docType.String()
+			result := tt.docType.DisplayName()
 			assert.Equal(t, tt.expected, result, "DocumentType.String() = %q, want %q", result, tt.expected)
 		})
 	}
@@ -71,11 +71,11 @@ func TestSortDocuments(t *testing.T) {
 	newest := now.Add(1 * time.Hour)
 
 	docs := []Document{
-		{Type: DocTypeOther, ModTime: now},
-		{Type: DocTypePlan, ModTime: older},
-		{Type: DocTypeResearch, ModTime: newest},
-		{Type: DocTypePlan, ModTime: newest},
-		{Type: DocTypeContext, ModTime: now},
+		{Type: DocumentTypeOther, ModTime: now},
+		{Type: DocumentTypePlan, ModTime: older},
+		{Type: DocumentTypeResearch, ModTime: newest},
+		{Type: DocumentTypePlan, ModTime: newest},
+		{Type: DocumentTypeContext, ModTime: now},
 	}
 
 	sortDocuments(docs)
@@ -89,11 +89,11 @@ func TestSortDocuments(t *testing.T) {
 		docType DocumentType
 		modTime time.Time
 	}{
-		{DocTypePlan, newest},
-		{DocTypePlan, older},
-		{DocTypeResearch, newest},
-		{DocTypeContext, now},
-		{DocTypeOther, now},
+		{DocumentTypePlan, newest},
+		{DocumentTypePlan, older},
+		{DocumentTypeResearch, newest},
+		{DocumentTypeContext, now},
+		{DocumentTypeOther, now},
 	}
 
 	require.Len(t, docs, len(expected), "expected %d documents, got %d", len(expected), len(docs))
@@ -160,23 +160,23 @@ func TestDiscoverDocuments(t *testing.T) {
 	}
 
 	expectedTypes := map[DocumentType]int{
-		DocTypePlan:     2,
-		DocTypeResearch: 1,
-		DocTypeContext:  1,
-		DocTypeOther:    1,
+		DocumentTypePlan:     2,
+		DocumentTypeResearch: 1,
+		DocumentTypeContext:  1,
+		DocumentTypeOther:    1,
 	}
 
 	for docType, expected := range expectedTypes {
 		assert.Equal(t, expected, typeCount[docType], "expected %d %v documents, got %d", expected, docType, typeCount[docType])
 	}
 
-	// Verify documents are sorted by type
-	var lastType DocumentType
+	// Verify documents are sorted by type (using priority)
+	lastPriority := -1
 	for i, doc := range docs {
 		if i > 0 {
-			assert.GreaterOrEqual(t, doc.Type, lastType, "documents not sorted by type: position %d has type %v after %v", i, doc.Type, lastType)
+			assert.GreaterOrEqual(t, doc.Type.priority(), lastPriority, "documents not sorted by type: position %d has type %v (priority %d) after priority %d", i, doc.Type, doc.Type.priority(), lastPriority)
 		}
-		lastType = doc.Type
+		lastPriority = doc.Type.priority()
 	}
 }
 

@@ -33,9 +33,9 @@ func TestFuzzyMatch(t *testing.T) {
 
 func TestDocumentPickerModal_UpdateFilter(t *testing.T) {
 	docs := []Document{
-		{RelPath: ".hive/plans/feature-a.md", Type: DocTypePlan},
-		{RelPath: ".hive/plans/feature-b.md", Type: DocTypePlan},
-		{RelPath: ".hive/research/api-design.md", Type: DocTypeResearch},
+		{RelPath: ".hive/plans/feature-a.md", Type: DocumentTypePlan},
+		{RelPath: ".hive/plans/feature-b.md", Type: DocumentTypePlan},
+		{RelPath: ".hive/research/api-design.md", Type: DocumentTypeResearch},
 	}
 
 	modal := NewDocumentPickerModal(docs, 100, 40, nil)
@@ -66,19 +66,19 @@ func TestDocumentPickerModal_View(t *testing.T) {
 		{
 			Path:    "/test/.hive/plans/feature-a.md",
 			RelPath: ".hive/plans/feature-a.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			Path:    "/test/.hive/research/api-design.md",
 			RelPath: ".hive/research/api-design.md",
-			Type:    DocTypeResearch,
+			Type:    DocumentTypeResearch,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			Path:    "/test/.hive/context/overview.md",
 			RelPath: ".hive/context/overview.md",
-			Type:    DocTypeContext,
+			Type:    DocumentTypeContext,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 	}
@@ -96,25 +96,25 @@ func TestDocumentPickerModal_ViewWithFilter(t *testing.T) {
 		{
 			Path:    "/test/.hive/plans/feature-a.md",
 			RelPath: ".hive/plans/feature-a.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			Path:    "/test/.hive/plans/feature-a-spec.md",
 			RelPath: ".hive/plans/feature-a-spec.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			Path:    "/test/.hive/plans/feature-b.md",
 			RelPath: ".hive/plans/feature-b.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 		{
 			Path:    "/test/.hive/research/api-design.md",
 			RelPath: ".hive/research/api-design.md",
-			Type:    DocTypeResearch,
+			Type:    DocumentTypeResearch,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		},
 	}

@@ -79,7 +79,7 @@ func buildTreeItemsWithIndicators(controller PickerController) []list.Item {
 	}
 
 	// Render in order: Plans, Research, Context, Other
-	typeOrder := []DocumentType{DocTypePlan, DocTypeResearch, DocTypeContext, DocTypeOther}
+	typeOrder := []DocumentType{DocumentTypePlan, DocumentTypeResearch, DocumentTypeContext, DocumentTypeOther}
 
 	for _, docType := range typeOrder {
 		docs, exists := groups[docType]
@@ -90,7 +90,7 @@ func buildTreeItemsWithIndicators(controller PickerController) []list.Item {
 		// Add header
 		header := TreeItem{
 			IsHeader:   true,
-			HeaderName: docType.String(),
+			HeaderName: docType.DisplayName(),
 		}
 		items = append(items, header)
 

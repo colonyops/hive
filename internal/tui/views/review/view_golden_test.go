@@ -14,14 +14,14 @@ func TestView_ListMode(t *testing.T) {
 		{
 			Path:    "/test/.hive/plans/feature-a.md",
 			RelPath: ".hive/plans/feature-a.md",
-			Type:    DocTypePlan,
+			Type:    DocumentTypePlan,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 			Content: "# Feature A\n\nImplementation plan for feature A.",
 		},
 		{
 			Path:    "/test/.hive/research/api-design.md",
 			RelPath: ".hive/research/api-design.md",
-			Type:    DocTypeResearch,
+			Type:    DocumentTypeResearch,
 			ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 			Content: "# API Design\n\nResearch notes for API design.",
 		},
@@ -54,7 +54,7 @@ func TestView_DocumentMode(t *testing.T) {
 	doc := Document{
 		Path:    "/test/document.md",
 		RelPath: "test/document.md",
-		Type:    DocTypePlan,
+		Type:    DocumentTypePlan,
 		ModTime: time.Date(2025, 1, 1, 12, 0, 0, 0, time.UTC),
 		Content: testContent,
 	}

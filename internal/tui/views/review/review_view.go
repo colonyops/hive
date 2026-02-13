@@ -769,7 +769,7 @@ func (v *View) loadDocument(doc *Document) {
 
 	log.Debug().
 		Str("path", doc.RelPath).
-		Str("type", doc.Type.String()).
+		Str("type", doc.Type.DisplayName()).
 		Msg("review: loading document")
 
 	// Enter full-screen mode when loading a document
@@ -1694,7 +1694,7 @@ func BuildTreeItems(documents []Document) []list.Item {
 	}
 
 	// Render in priority order (most relevant types first)
-	typeOrder := []DocumentType{DocTypePlan, DocTypeResearch, DocTypeContext, DocTypeOther}
+	typeOrder := []DocumentType{DocumentTypePlan, DocumentTypeResearch, DocumentTypeContext, DocumentTypeOther}
 
 	for _, docType := range typeOrder {
 		docs, exists := groups[docType]
@@ -1705,7 +1705,7 @@ func BuildTreeItems(documents []Document) []list.Item {
 		// Add header
 		header := TreeItem{
 			IsHeader:   true,
-			HeaderName: docType.String(),
+			HeaderName: docType.DisplayName(),
 		}
 		items = append(items, header)
 

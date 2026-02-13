@@ -10,13 +10,8 @@ import (
 )
 
 // FinalizationAction represents the action to take on finalization.
-type FinalizationAction int
-
-const (
-	FinalizationActionNone FinalizationAction = iota
-	FinalizationActionClipboard
-	FinalizationActionSendToAgent
-)
+// ENUM(none, clipboard, send_to_agent).
+type FinalizationAction string
 
 // FinalizationModal shows options for finalizing a review.
 type FinalizationModal struct {

@@ -12,28 +12,38 @@ import (
 )
 
 // DocumentType categorizes documents.
-type DocumentType int
+// ENUM(plan, research, context, other).
+type DocumentType string
 
-const (
-	DocTypePlan DocumentType = iota
-	DocTypeResearch
-	DocTypeContext
-	DocTypeOther
-)
-
-// String returns the string representation of the document type.
-func (t DocumentType) String() string {
+// DisplayName returns the capitalized display name for UI rendering.
+func (t DocumentType) DisplayName() string {
 	switch t {
-	case DocTypePlan:
+	case DocumentTypePlan:
 		return "Plan"
-	case DocTypeResearch:
+	case DocumentTypeResearch:
 		return "Research"
-	case DocTypeContext:
+	case DocumentTypeContext:
 		return "Context"
-	case DocTypeOther:
+	case DocumentTypeOther:
 		return "Other"
 	default:
 		return "Unknown"
+	}
+}
+
+// priority returns the sort priority (lower values sort first).
+func (t DocumentType) priority() int {
+	switch t {
+	case DocumentTypePlan:
+		return 0
+	case DocumentTypeResearch:
+		return 1
+	case DocumentTypeContext:
+		return 2
+	case DocumentTypeOther:
+		return 3
+	default:
+		return 999
 	}
 }
 
@@ -140,15 +150,15 @@ func inferDocumentType(relPath string) DocumentType {
 	if len(parts) > 0 {
 		switch parts[0] {
 		case "plans":
-			return DocTypePlan
+			return DocumentTypePlan
 		case "research":
-			return DocTypeResearch
+			return DocumentTypeResearch
 		case "context":
-			return DocTypeContext
+			return DocumentTypeContext
 		}
 	}
 
-	return DocTypeOther
+	return DocumentTypeOther
 }
 
 // sortDocuments sorts documents by type, then by modification time (newest first).
@@ -157,8 +167,8 @@ func sortDocuments(docs []Document) {
 	// Type priority: Plans > Research > Context > Other
 	for i := range docs {
 		for j := i + 1; j < len(docs); j++ {
-			// Compare types first
-			if docs[i].Type > docs[j].Type {
+			// Compare types first using priority
+			if docs[i].Type.priority() > docs[j].Type.priority() {
 				docs[i], docs[j] = docs[j], docs[i]
 				continue
 			}

@@ -25,7 +25,7 @@ func TestReviewOnly_QKeyWithActiveEditor(t *testing.T) {
 	doc := review.Document{
 		Path:    "/test/doc.md",
 		RelPath: "doc.md",
-		Type:    review.DocTypePlan,
+		Type:    review.DocumentTypePlan,
 		Content: "# Test Document\n\nSome content",
 	}
 
@@ -82,7 +82,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 	doc := review.Document{
 		Path:    "/test/doc.md",
 		RelPath: "doc.md",
-		Type:    review.DocTypePlan,
+		Type:    review.DocumentTypePlan,
 		Content: "# Test Document\n\nSome content",
 	}
 
