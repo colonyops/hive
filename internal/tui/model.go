@@ -2549,7 +2549,7 @@ func (m Model) View() tea.View {
 			"",
 			m.formDialog.View(),
 		)
-		formOverlay := styles.ModalStyle.Render(formContent)
+		formOverlay := styles.FormModalStyle.Render(formContent)
 
 		bgLayer := lipgloss.NewLayer(mainView)
 		formLayer := lipgloss.NewLayer(formOverlay)

@@ -30,6 +30,7 @@ var (
 
 	// TUI shared styles.
 	ModalStyle               lipgloss.Style
+	FormModalStyle           lipgloss.Style
 	ModalTitleStyle          lipgloss.Style
 	ModalHelpStyle           lipgloss.Style
 	ModalButtonStyle         lipgloss.Style
@@ -140,6 +141,11 @@ func SetTheme(p Palette) {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
 		Padding(1, 2)
+	FormModalStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Padding(1, 2).
+		Width(70)
 	ModalTitleStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorForeground)
