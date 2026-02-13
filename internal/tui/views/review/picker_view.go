@@ -29,6 +29,7 @@ func NewPickerView(controller PickerController, width, height int) PickerView {
 	ti.Placeholder = "Type to filter documents..."
 	ti.CharLimit = 100
 	ti.Focus()
+	ti.KeyMap.Paste.SetEnabled(true)
 
 	// Calculate initial list dimensions
 	modalWidth := max(int(float64(width)*0.8), 40)

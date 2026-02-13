@@ -86,6 +86,78 @@ func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Sess
 	return NewSessionService(store, &mockGit{}, cfg, nil, log, io.Discard, io.Discard)
 }
 
+func TestRenameSession(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	past := time.Now().Add(-1 * time.Hour)
+	sess := session.Session{
+		ID:        "test1",
+		Name:      "old-name",
+		Slug:      "old-name",
+		State:     session.StateActive,
+		CreatedAt: past,
+		UpdatedAt: past,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RenameSession(context.Background(), "test1", "new-name")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "new-name", updated.Name)
+	assert.Equal(t, "new-name", updated.Slug)
+	assert.True(t, updated.UpdatedAt.After(past))
+}
+
+func TestRenameSession_Slugify(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	sess := session.Session{
+		ID:    "test1",
+		Name:  "old",
+		Slug:  "old",
+		State: session.StateActive,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RenameSession(context.Background(), "test1", "My Feature Branch!")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "My Feature Branch!", updated.Name)
+	assert.Equal(t, "my-feature-branch", updated.Slug)
+}
+
+func TestRenameSession_NotFound(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "nonexistent", "new-name")
+	assert.Error(t, err)
+}
+
+func TestRenameSession_EmptyName(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "test1", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "name cannot be empty")
+}
+
+func TestRenameSession_EmptySlug(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "test1", "!!!")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "empty slug")
+}
+
 func TestEnforceMaxRecycled(t *testing.T) {
 	intPtr := func(n int) *int { return &n }
 

@@ -41,9 +41,12 @@ const (
 	ActionFilterActive   = "filter-active"
 	ActionFilterApproval = "filter-approval"
 	ActionFilterReady    = "filter-ready"
-	ActionDocReview      = "doc-review" // Open review tab with document picker
-	ActionSetTheme       = "set-theme"  // Preview a built-in theme at runtime
-	ActionMessages       = "messages"   // Show notification history modal
+	ActionDocReview      = "doc-review"     // Open review tab with document picker
+	ActionSetTheme       = "set-theme"      // Preview a built-in theme at runtime
+	ActionMessages       = "messages"       // Show notification history modal
+	ActionRenameSession  = "rename-session" // Rename the selected session
+	ActionNextActive     = "next-active"    // Navigate to next active session
+	ActionPrevActive     = "prev-active"    // Navigate to previous active session
 )
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -98,6 +101,21 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "show notification history",
 		Silent: true,
 	},
+	"RenameSession": {
+		Action: ActionRenameSession,
+		Help:   "rename session",
+		Silent: true,
+	},
+	"NextActive": {
+		Action: ActionNextActive,
+		Help:   "next active session",
+		Silent: true,
+	},
+	"PrevActive": {
+		Action: ActionPrevActive,
+		Help:   "prev active session",
+		Silent: true,
+	},
 }
 
 // defaultKeybindings provides built-in keybindings that users can override.
@@ -109,6 +127,9 @@ var defaultKeybindings = map[string]Keybinding{
 	"ctrl+d": {Cmd: "TmuxKill"},
 	"A":      {Cmd: "AgentSend"},
 	"p":      {Cmd: "TmuxPopUp"},
+	"R":      {Cmd: "RenameSession"},
+	"J":      {Cmd: "NextActive"},
+	"K":      {Cmd: "PrevActive"},
 }
 
 // CurrentConfigVersion is the latest config schema version.
@@ -671,7 +692,7 @@ func (c *Config) BinDir() string {
 
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages:
+	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages, ActionRenameSession, ActionNextActive, ActionPrevActive:
 		return true
 	default:
 		return false

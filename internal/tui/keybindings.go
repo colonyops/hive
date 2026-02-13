@@ -30,6 +30,9 @@ const (
 	ActionTypeNewSession
 	ActionTypeSetTheme
 	ActionTypeMessages
+	ActionTypeRenameSession
+	ActionTypeNextActive
+	ActionTypePrevActive
 	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
 )
 
@@ -218,6 +221,15 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			action.Type = ActionTypeSetTheme
 		case config.ActionMessages:
 			action.Type = ActionTypeMessages
+		case config.ActionRenameSession:
+			action.Type = ActionTypeRenameSession
+			if action.Help == "" {
+				action.Help = "rename session"
+			}
+		case config.ActionNextActive:
+			action.Type = ActionTypeNextActive
+		case config.ActionPrevActive:
+			action.Type = ActionTypePrevActive
 		}
 		return action, true
 	}
@@ -372,6 +384,15 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 			action.Type = ActionTypeSetTheme
 		case config.ActionMessages:
 			action.Type = ActionTypeMessages
+		case config.ActionRenameSession:
+			action.Type = ActionTypeRenameSession
+			if action.Help == "" {
+				action.Help = "rename session"
+			}
+		case config.ActionNextActive:
+			action.Type = ActionTypeNextActive
+		case config.ActionPrevActive:
+			action.Type = ActionTypePrevActive
 		}
 		return action
 	}
