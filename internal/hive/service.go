@@ -246,6 +246,25 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 	return nil
 }
 
+// RenameSession changes the name (and slug) of an existing session.
+func (s *SessionService) RenameSession(ctx context.Context, id, newName string) error {
+	sess, err := s.sessions.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("get session: %w", err)
+	}
+
+	sess.Name = newName
+	sess.Slug = session.Slugify(newName)
+	sess.UpdatedAt = time.Now()
+
+	if err := s.sessions.Save(ctx, sess); err != nil {
+		return fmt.Errorf("save session: %w", err)
+	}
+
+	s.log.Info().Str("session_id", id).Str("new_name", newName).Msg("session renamed")
+	return nil
+}
+
 // DeleteSession removes a session and its directory.
 func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	sess, err := s.sessions.Get(ctx, id)

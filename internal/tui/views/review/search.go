@@ -21,6 +21,7 @@ func NewSearchMode() SearchMode {
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
+	ti.KeyMap.Paste.SetEnabled(true)
 
 	return SearchMode{
 		active:       false,

@@ -56,6 +56,7 @@ const (
 	stateCommandPalette
 	stateShowingHelp
 	stateShowingNotifications
+	stateRenaming
 )
 
 // Key constants for event handling.
@@ -154,6 +155,10 @@ type Model struct {
 
 	// Help dialog
 	helpDialog *components.HelpDialog
+
+	// Rename session
+	renameInput     textinput.Model
+	renameSessionID string
 
 	// Pending action for after TUI exits
 	pendingCreate *PendingCreate
@@ -701,6 +706,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Schedule next tick
 		return m, scheduleAnimationTick()
 
+	case renameCompleteMsg:
+		if msg.err != nil {
+			log.Error().Err(msg.err).Msg("rename failed")
+			m.err = msg.err
+			return m, nil
+		}
+		return m, m.loadSessions()
+
 	case actionCompleteMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("action failed")
@@ -849,6 +862,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateShowingNotifications {
 		return m.handleNotificationModalKey(keyStr)
+	}
+	if m.state == stateRenaming {
+		return m.handleRenameKey(msg, keyStr)
 	}
 	if m.state == stateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
@@ -1059,6 +1075,7 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	navEntries := []components.HelpEntry{
 		{Key: "↑/k", Desc: "move up"},
 		{Key: "↓/j", Desc: "move down"},
+		{Key: "J/K", Desc: "next/prev active session"},
 		{Key: "enter", Desc: "select session"},
 		{Key: "/", Desc: "filter"},
 		{Key: "tab", Desc: "switch view"},
@@ -1071,6 +1088,9 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
 	}
 
+	navEntries = append(navEntries,
+		components.HelpEntry{Key: "R", Desc: "rename session"},
+	)
 	navEntries = append(navEntries, components.HelpEntry{Key: "q", Desc: "quit"})
 
 	sections = append(sections, components.HelpDialogSection{
@@ -1152,6 +1172,15 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 				return m, nil
 			}
 			return m.openNewSessionForm()
+		}
+
+		// RenameSession requires a selected session
+		if entry.Command.Action == config.ActionRenameSession {
+			m.state = stateNormal
+			if selected == nil {
+				return m, nil
+			}
+			return m.openRenameInput(selected)
 		}
 
 		// SetTheme doesn't require a session
@@ -1411,6 +1440,67 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// renameCompleteMsg is sent when a rename operation completes.
+type renameCompleteMsg struct {
+	err error
+}
+
+// openRenameInput initializes the rename text input with the current session name.
+func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
+	input := textinput.New()
+	input.SetValue(sess.Name)
+	input.Focus()
+	input.CharLimit = 64
+	input.Prompt = ""
+	input.SetWidth(40)
+	input.KeyMap.Paste.SetEnabled(true)
+	inputStyles := textinput.DefaultStyles(true)
+	inputStyles.Cursor.Color = styles.ColorPrimary
+	input.SetStyles(inputStyles)
+
+	m.renameInput = input
+	m.renameSessionID = sess.ID
+	m.state = stateRenaming
+	return m, nil
+}
+
+// handleRenameKey handles keys when the rename input is active.
+func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		m.quitting = true
+		return m, tea.Quit
+	case "esc":
+		m.state = stateNormal
+		m.renameSessionID = ""
+		return m, nil
+	case keyEnter:
+		newName := strings.TrimSpace(m.renameInput.Value())
+		if newName == "" {
+			m.state = stateNormal
+			m.renameSessionID = ""
+			return m, nil
+		}
+		sessionID := m.renameSessionID
+		m.state = stateNormal
+		m.renameSessionID = ""
+		return m, m.executeRename(sessionID, newName)
+	}
+
+	// Forward to textinput
+	var cmd tea.Cmd
+	m.renameInput, cmd = m.renameInput.Update(msg)
+	return m, cmd
+}
+
+// executeRename returns a command that renames a session.
+func (m Model) executeRename(sessionID, newName string) tea.Cmd {
+	return func() tea.Msg {
+		err := m.service.RenameSession(context.Background(), sessionID, newName)
+		return renameCompleteMsg{err: err}
+	}
+}
+
 // openNewSessionForm initializes the new session form and transitions to the creating state.
 func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	preselectedRemote := m.localRemote
@@ -1435,6 +1525,16 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		return m, nil
 	case "down", "j":
 		m.navigateSkippingHeaders(1)
+		return m, nil
+	}
+
+	// Handle navigation to next/prev active session (doesn't require selection)
+	if m.handler.IsAction(keyStr, config.ActionNextActive) {
+		m.navigateToNextActive(1)
+		return m, nil
+	}
+	if m.handler.IsAction(keyStr, config.ActionPrevActive) {
+		m.navigateToNextActive(-1)
 		return m, nil
 	}
 
@@ -1490,6 +1590,10 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		if action.Type == ActionTypeDocReview {
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
+		}
+		// Handle rename action
+		if action.Type == ActionTypeRenameSession {
+			return m.openRenameInput(selected)
 		}
 		// Handle set-theme action (requires args only available via command palette)
 		if action.Type == ActionTypeSetTheme {
@@ -1658,6 +1762,11 @@ func (m *Model) hasEditorFocus() bool {
 		return true
 	}
 
+	// Check rename input
+	if m.state == stateRenaming {
+		return true
+	}
+
 	return false
 }
 
@@ -1677,6 +1786,9 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		if m.newSessionForm != nil {
 			*m.newSessionForm, cmd = m.newSessionForm.Update(msg)
 		}
+		return m, cmd
+	case stateRenaming:
+		m.renameInput, cmd = m.renameInput.Update(msg)
 		return m, cmd
 	default:
 		// For other states (normal, confirming, loading, etc.),
@@ -1698,6 +1810,53 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// isActiveStatus returns true for any session with a live terminal (not missing).
+func isActiveStatus(s terminal.Status) bool {
+	return s != terminal.StatusMissing && s != ""
+}
+
+// navigateToNextActive moves the cursor to the next session with active terminal status.
+// Wraps around to the beginning if no match is found after the current position.
+// For multi-window sessions, also checks per-window statuses.
+func (m *Model) navigateToNextActive(direction int) {
+	items := m.list.Items()
+	if len(items) == 0 || m.terminalStatuses == nil {
+		return
+	}
+
+	current := m.list.Index()
+	n := len(items)
+
+	for step := 1; step < n; step++ {
+		idx := (current + step*direction + n) % n
+		treeItem, ok := items[idx].(TreeItem)
+		if !ok || treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
+			continue
+		}
+
+		if treeItem.IsWindowItem {
+			// Check per-window status
+			if ts, ok := m.terminalStatuses.Get(treeItem.ParentSession.ID); ok {
+				for i := range ts.Windows {
+					if ts.Windows[i].WindowIndex == treeItem.WindowIndex && isActiveStatus(ts.Windows[i].Status) {
+						m.list.Select(idx)
+						return
+					}
+				}
+			}
+			continue
+		}
+
+		// Check top-level session status
+		if ts, ok := m.terminalStatuses.Get(treeItem.Session.ID); ok {
+			if isActiveStatus(ts.Status) {
+				m.list.Select(idx)
+				return
+			}
+		}
+	}
 }
 
 // navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down),
@@ -1787,7 +1946,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme, ActionTypeMessages:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme, ActionTypeMessages, ActionTypeRenameSession, ActionTypeNextActive, ActionTypePrevActive:
 		return false
 	}
 	return false
@@ -2050,6 +2209,23 @@ func (m Model) View() tea.View {
 		content = m.helpDialog.Overlay(mainView, w, h)
 	case m.state == stateShowingNotifications && m.notificationModal != nil:
 		content = m.notificationModal.Overlay(mainView, w, h)
+	case m.state == stateRenaming:
+		renameContent := lipgloss.JoinVertical(
+			lipgloss.Left,
+			styles.ModalTitleStyle.Render("Rename Session"),
+			"",
+			m.renameInput.View(),
+			"",
+			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel"),
+		)
+		renameOverlay := styles.ModalStyle.Width(50).Render(renameContent)
+		bgLayer := lipgloss.NewLayer(mainView)
+		renameLayer := lipgloss.NewLayer(renameOverlay)
+		rW := lipgloss.Width(renameOverlay)
+		rH := lipgloss.Height(renameOverlay)
+		renameLayer.X((w - rW) / 2).Y((h - rH) / 2).Z(1)
+		compositor := lipgloss.NewCompositor(bgLayer, renameLayer)
+		content = compositor.Render()
 	case m.docPickerModal != nil:
 		content = m.docPickerModal.Overlay(mainView, w, h)
 	default:

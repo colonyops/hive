@@ -86,6 +86,41 @@ func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Sess
 	return NewSessionService(store, &mockGit{}, cfg, nil, log, io.Discard, io.Discard)
 }
 
+func TestRenameSession(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	// Create a session
+	sess := session.Session{
+		ID:        "test1",
+		Name:      "old-name",
+		Slug:      "old-name",
+		State:     session.StateActive,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	// Rename it
+	err := svc.RenameSession(context.Background(), "test1", "new-name")
+	require.NoError(t, err)
+
+	// Verify
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "new-name", updated.Name)
+	assert.Equal(t, "new-name", updated.Slug)
+	assert.True(t, updated.UpdatedAt.After(sess.UpdatedAt) || updated.UpdatedAt.Equal(sess.UpdatedAt))
+}
+
+func TestRenameSession_NotFound(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.RenameSession(context.Background(), "nonexistent", "new-name")
+	assert.Error(t, err)
+}
+
 func TestEnforceMaxRecycled(t *testing.T) {
 	intPtr := func(n int) *int { return &n }
 

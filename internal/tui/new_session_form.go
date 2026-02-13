@@ -59,6 +59,7 @@ func NewNewSessionForm(repos []DiscoveredRepo, preselectedRemote string, existin
 	nameInput.CharLimit = 64
 	nameInput.Prompt = "" // No prompt prefix
 	nameInput.SetWidth(40)
+	nameInput.KeyMap.Paste.SetEnabled(true)
 
 	// Style the input
 	inputStyles := textinput.DefaultStyles(true)

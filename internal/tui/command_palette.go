@@ -85,6 +85,7 @@ func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session
 	input.Placeholder = "command [args...]"
 	input.Prompt = ":"
 	input.Focus()
+	input.KeyMap.Paste.SetEnabled(true)
 	inputStyles := textinput.DefaultStyles(true)
 	inputStyles.Focused.Prompt = styles.TextPrimaryStyle
 	inputStyles.Cursor.Color = styles.ColorPrimary
