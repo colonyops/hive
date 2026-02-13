@@ -462,7 +462,7 @@ func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 		formData := map[string]any{}
 
 		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
-		assert.Error(t, action.Err)
+		require.Error(t, action.Err)
 		assert.Empty(t, action.ShellCmd)
 	})
 }
