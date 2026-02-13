@@ -905,6 +905,68 @@ func TestValidate_FormValidConfig(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestBuildValidationData(t *testing.T) {
+	t.Run("no form fields returns base data", func(t *testing.T) {
+		data := buildValidationData(nil)
+		assert.NotEmpty(t, data["Path"])
+		assert.NotEmpty(t, data["Name"])
+		assert.NotEmpty(t, data["ID"])
+		assert.Nil(t, data["Form"])
+	})
+
+	t.Run("text field produces string", func(t *testing.T) {
+		data := buildValidationData([]FormField{
+			{Variable: "msg", Type: FormTypeText},
+		})
+		form := data["Form"].(map[string]any)
+		assert.IsType(t, "", form["msg"])
+	})
+
+	t.Run("multi-select produces string slice", func(t *testing.T) {
+		data := buildValidationData([]FormField{
+			{Variable: "tags", Type: FormTypeMultiSelect},
+		})
+		form := data["Form"].(map[string]any)
+		assert.IsType(t, []string{}, form["tags"])
+	})
+
+	t.Run("preset single produces map", func(t *testing.T) {
+		data := buildValidationData([]FormField{
+			{Variable: "target", Preset: FormPresetSessionSelector},
+		})
+		form := data["Form"].(map[string]any)
+		item, ok := form["target"].(map[string]any)
+		require.True(t, ok)
+		assert.NotEmpty(t, item["Name"])
+	})
+
+	t.Run("preset multi produces slice of maps", func(t *testing.T) {
+		data := buildValidationData([]FormField{
+			{Variable: "targets", Preset: FormPresetSessionSelector, Multi: true},
+		})
+		form := data["Form"].(map[string]any)
+		items, ok := form["targets"].([]map[string]any)
+		require.True(t, ok)
+		require.Len(t, items, 1)
+		assert.NotEmpty(t, items[0]["Name"])
+	})
+}
+
+func TestValidateDeep_UserCommandWithFormTemplate(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"broadcast": {
+			Sh: `{{ range .Form.targets }}echo {{ .Name }}{{ end }}`,
+			Form: []FormField{
+				{Variable: "targets", Preset: FormPresetSessionSelector, Multi: true, Label: "Targets"},
+			},
+		},
+	}
+
+	err := cfg.ValidateDeep("")
+	assert.NoError(t, err)
+}
+
 func TestValidate_UserCommandInvalidScope(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{

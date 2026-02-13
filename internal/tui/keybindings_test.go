@@ -416,6 +416,57 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	})
 }
 
+func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
+	handler := NewKeybindingResolver(nil, nil)
+
+	sess := session.Session{
+		ID:     "test-id",
+		Path:   "/test/path",
+		Name:   "test-name",
+		Remote: "https://github.com/test/repo",
+	}
+
+	t.Run("injects form data under .Form namespace", func(t *testing.T) {
+		cmd := config.UserCommand{
+			Sh:   "echo {{ .Form.message }}",
+			Help: "test",
+		}
+		formData := map[string]any{
+			"message": "hello world",
+		}
+
+		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
+		assert.Equal(t, ActionTypeShell, action.Type)
+		assert.Equal(t, "echo hello world", action.ShellCmd)
+		assert.NoError(t, action.Err)
+	})
+
+	t.Run("form data coexists with session fields", func(t *testing.T) {
+		cmd := config.UserCommand{
+			Sh:   "echo {{ .Name }} {{ .Form.env }}",
+			Help: "test",
+		}
+		formData := map[string]any{
+			"env": "staging",
+		}
+
+		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
+		assert.Equal(t, "echo test-name staging", action.ShellCmd)
+	})
+
+	t.Run("template error sets Err", func(t *testing.T) {
+		cmd := config.UserCommand{
+			Sh:   "echo {{ .Form.missing }}",
+			Help: "test",
+		}
+		formData := map[string]any{}
+
+		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
+		assert.Error(t, action.Err)
+		assert.Empty(t, action.ShellCmd)
+	})
+}
+
 func TestKeybindingResolver_Scope(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"global-cmd":   {Sh: "echo global", Help: "global command"},
