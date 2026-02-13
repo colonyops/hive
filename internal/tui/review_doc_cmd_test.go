@@ -21,7 +21,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 
 	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
 	m := &Model{
-		activeView:      ViewSessions,
+		activeView:      ViewTypeSessions,
 		reviewView:      nil,
 		handler:         handler,
 		notifyBus:       bus,
@@ -57,7 +57,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
 
 	m := &Model{
-		activeView: ViewSessions,
+		activeView: ViewTypeSessions,
 		reviewView: &reviewView,
 		handler:    handler,
 		notifyBus:  tuinotify.NewBus(nil),
@@ -70,7 +70,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	_ = cmd.Execute(m)
 
 	// Check that view stays on Sessions (picker shown on Sessions view)
-	assert.Equal(t, ViewSessions, m.activeView)
+	assert.Equal(t, ViewTypeSessions, m.activeView)
 
 	// Check that picker modal is shown on the Model (using fallback docs)
 	require.NotNil(t, m.docPickerModal, "Expected picker modal to be created on Model")

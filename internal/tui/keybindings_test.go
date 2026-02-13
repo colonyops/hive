@@ -492,7 +492,7 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 	}
 
 	t.Run("global command works in all views", func(t *testing.T) {
-		for _, view := range []ViewType{ViewSessions, ViewMessages, ViewReview} {
+		for _, view := range []ViewType{ViewTypeSessions, ViewTypeMessages, ViewTypeReview} {
 			handler.SetActiveView(view)
 			action, ok := handler.Resolve("g", sess)
 			assert.True(t, ok, "global command should work in view %s", view.String())
@@ -502,54 +502,54 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 
 	t.Run("scoped command only works in its scope", func(t *testing.T) {
 		// review-cmd should only work in review view
-		handler.SetActiveView(ViewReview)
+		handler.SetActiveView(ViewTypeReview)
 		action, ok := handler.Resolve("r", sess)
 		assert.True(t, ok, "review-cmd should work in review view")
 		assert.Equal(t, ActionTypeShell, action.Type)
 
 		// Should not work in sessions view
-		handler.SetActiveView(ViewSessions)
+		handler.SetActiveView(ViewTypeSessions)
 		_, ok = handler.Resolve("r", sess)
 		assert.False(t, ok, "review-cmd should not work in sessions view")
 
 		// Should not work in messages view
-		handler.SetActiveView(ViewMessages)
+		handler.SetActiveView(ViewTypeMessages)
 		_, ok = handler.Resolve("r", sess)
 		assert.False(t, ok, "review-cmd should not work in messages view")
 	})
 
 	t.Run("multi-scope command works in multiple views", func(t *testing.T) {
 		// Should work in review view
-		handler.SetActiveView(ViewReview)
+		handler.SetActiveView(ViewTypeReview)
 		action, ok := handler.Resolve("m", sess)
 		assert.True(t, ok, "multi-cmd should work in review view")
 		assert.Equal(t, ActionTypeShell, action.Type)
 
 		// Should work in messages view
-		handler.SetActiveView(ViewMessages)
+		handler.SetActiveView(ViewTypeMessages)
 		action, ok = handler.Resolve("m", sess)
 		assert.True(t, ok, "multi-cmd should work in messages view")
 		assert.Equal(t, ActionTypeShell, action.Type)
 
 		// Should not work in sessions view
-		handler.SetActiveView(ViewSessions)
+		handler.SetActiveView(ViewTypeSessions)
 		_, ok = handler.Resolve("m", sess)
 		assert.False(t, ok, "multi-cmd should not work in sessions view")
 	})
 
 	t.Run("help entries filtered by scope", func(t *testing.T) {
 		// In sessions view, should only see global and sessions commands
-		handler.SetActiveView(ViewSessions)
+		handler.SetActiveView(ViewTypeSessions)
 		entries := handler.HelpEntries()
 		assert.Len(t, entries, 2, "expected 2 entries in sessions view, got %d", len(entries))
 
 		// In review view, should see global, review, and multi commands
-		handler.SetActiveView(ViewReview)
+		handler.SetActiveView(ViewTypeReview)
 		entries = handler.HelpEntries()
 		assert.Len(t, entries, 3, "expected 3 entries in review view, got %d", len(entries))
 
 		// In messages view, should see global and multi commands
-		handler.SetActiveView(ViewMessages)
+		handler.SetActiveView(ViewTypeMessages)
 		entries = handler.HelpEntries()
 		assert.Len(t, entries, 2, "expected 2 entries in messages view, got %d", len(entries))
 	})

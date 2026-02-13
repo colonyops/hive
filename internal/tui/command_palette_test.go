@@ -15,7 +15,7 @@ func TestNewCommandPalette(t *testing.T) {
 		"open":   {Sh: "open {{ .Path }}"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	require.NotNil(t, p)
 	assert.Len(t, p.commands, 2)
@@ -29,7 +29,7 @@ func TestCommandPalette_Selection(t *testing.T) {
 		"test": {Sh: "echo test"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Initially no selection
 	_, _, ok := p.SelectedCommand()
@@ -49,7 +49,7 @@ func TestCommandPalette_Cancel(t *testing.T) {
 		"test": {Sh: "echo test"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 	assert.False(t, p.Cancelled())
 
 	// Press escape to cancel
@@ -62,7 +62,7 @@ func TestCommandPalette_View(t *testing.T) {
 		"test": {Sh: "echo test", Help: "Test command"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 	view := p.View()
 
 	assert.Contains(t, view, "Command Palette")
@@ -78,7 +78,7 @@ func TestCommandPalette_ViewWithLongHelpText(t *testing.T) {
 		},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 	view := p.View()
 
 	assert.Contains(t, view, "Command Palette")
@@ -94,7 +94,7 @@ func TestCommandPalette_WithArgs(t *testing.T) {
 		"deploy": {Sh: "deploy {{ index .Args 0 }}"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Type command with args
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Text: "d"}))
@@ -127,7 +127,7 @@ func TestCommandPalette_Filtering(t *testing.T) {
 		"restart": {Sh: "restart"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Initially all commands visible
 	assert.Len(t, p.filteredList, 3)
@@ -156,7 +156,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 		"restart":        {Sh: "restart"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Fuzzy match: 'dpl' should match 'deploy-staging' and 'deploy-prod'
 	for _, r := range "dpl" {
@@ -167,7 +167,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 	assert.ElementsMatch(t, []string{"deploy-prod", "deploy-staging"}, names)
 
 	// Reset and try another fuzzy pattern
-	p = NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p = NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// 'dpst' should match 'deploy-staging' (d-p-st)
 	for _, r := range "dpst" {
@@ -177,7 +177,7 @@ func TestCommandPalette_FuzzyMatching(t *testing.T) {
 	assert.Equal(t, "deploy-staging", p.filteredList[0].Name)
 
 	// Reset and try 'rst' - should match 'restart'
-	p = NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p = NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 	for _, r := range "rst" {
 		p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: r, Text: string(r)}))
 	}
@@ -192,7 +192,7 @@ func TestCommandPalette_Navigation(t *testing.T) {
 		"third":  {Sh: "third"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Initially at index 0
 	assert.Equal(t, 0, p.selectedIdx)
@@ -227,7 +227,7 @@ func TestCommandPalette_MultipleArgs(t *testing.T) {
 		"cmd": {Sh: "cmd {{ index .Args 0 }} {{ index .Args 1 }}"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Type: cmd arg1 arg2
 	for _, ch := range "cmd arg1 arg2" {
@@ -247,7 +247,7 @@ func TestCommandPalette_NoMatch(t *testing.T) {
 		"deploy": {Sh: "deploy"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Type something that doesn't match
 	for _, ch := range "xyz" {
@@ -270,7 +270,7 @@ func TestCommandPalette_TabAutoFill(t *testing.T) {
 		"restart": {Sh: "restart"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Type 'd' to filter to deploy and delete
 	p, _ = p.Update(tea.KeyPressMsg(tea.Key{Code: 'd', Text: "d"}))
@@ -300,7 +300,7 @@ func TestCommandPalette_TabAutoFillPreservesArgs(t *testing.T) {
 		"delete": {Sh: "delete {{ index .Args 0 }}"},
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Type "d staging" to have args
 	for _, ch := range "d staging" {
@@ -337,7 +337,7 @@ func TestCommandPalette_Scrolling(t *testing.T) {
 		cmds[name] = config.UserCommand{Sh: "echo " + name}
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Initially at top, no scroll
 	assert.Equal(t, 0, p.selectedIdx)
@@ -402,7 +402,7 @@ func TestCommandPalette_ScrollingWithFiltering(t *testing.T) {
 	}
 	cmds["restart"] = config.UserCommand{Sh: "restart"}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// Navigate down to scroll
 	for i := 0; i < 15; i++ {
@@ -432,7 +432,7 @@ func TestCommandPalette_ViewWithScrolling(t *testing.T) {
 		cmds[name] = config.UserCommand{Sh: "echo " + name}
 	}
 
-	p := NewCommandPalette(cmds, nil, 80, 24, ViewSessions)
+	p := NewCommandPalette(cmds, nil, 80, 24, ViewTypeSessions)
 
 	// View at top should show "... and more"
 	view := p.View()

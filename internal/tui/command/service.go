@@ -31,14 +31,8 @@ func NewService(deleter SessionDeleter, recycler SessionRecycler) *Service {
 }
 
 // ActionType identifies the kind of action.
-type ActionType int
-
-const (
-	ActionTypeNone ActionType = iota
-	ActionTypeRecycle
-	ActionTypeDelete
-	ActionTypeShell
-)
+// ENUM(none, recycle, delete, shell).
+type ActionType string
 
 // Action represents a resolved command action ready for execution.
 type Action struct {
@@ -78,6 +72,6 @@ func (s *Service) CreateExecutor(action Action) (Executor, error) {
 			cmd: action.ShellCmd,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported action type: %d", action.Type)
+		return nil, fmt.Errorf("unsupported action type: %s", action.Type)
 	}
 }

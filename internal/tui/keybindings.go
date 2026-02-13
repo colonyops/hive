@@ -11,30 +11,13 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
 // ActionType identifies the kind of action a keybinding triggers.
-type ActionType int
-
-const (
-	ActionTypeNone ActionType = iota
-	ActionTypeRecycle
-	ActionTypeDelete
-	ActionTypeShell
-	ActionTypeFilterAll
-	ActionTypeFilterActive
-	ActionTypeFilterApproval
-	ActionTypeFilterReady
-	ActionTypeDocReview
-	ActionTypeNewSession
-	ActionTypeSetTheme
-	ActionTypeMessages
-	ActionTypeRenameSession
-	ActionTypeNextActive
-	ActionTypePrevActive
-	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
-)
+// ENUM(none, recycle, delete, shell, filter_all, filter_active, filter_approval, filter_ready, doc_review, new_session, set_theme, messages, rename_session, next_active, prev_active, delete_recycled_batch).
+type ActionType string
 
 // Action represents a resolved keybinding action ready for execution.
 type Action struct {
@@ -53,6 +36,22 @@ type Action struct {
 // NeedsConfirm returns true if the action requires user confirmation.
 func (a Action) NeedsConfirm() bool {
 	return a.Confirm != ""
+}
+
+// ToCommandActionType converts a tui.ActionType to command.ActionType.
+// Only ActionTypeRecycle, ActionTypeDelete, and ActionTypeShell are valid.
+// Returns command.ActionTypeNone for all other types.
+func (a ActionType) ToCommandActionType() command.ActionType {
+	switch a {
+	case ActionTypeRecycle:
+		return command.ActionTypeRecycle
+	case ActionTypeDelete:
+		return command.ActionTypeDelete
+	case ActionTypeShell:
+		return command.ActionTypeShell
+	default:
+		return command.ActionTypeNone
+	}
 }
 
 // KeybindingResolver resolves keybindings to actions via UserCommands.
@@ -74,7 +73,7 @@ func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands ma
 		keybindings: keybindings,
 		commands:    commands,
 		renderer:    renderer,
-		activeView:  ViewSessions, // default to sessions view
+		activeView:  ViewTypeSessions, // default to sessions view
 	}
 }
 

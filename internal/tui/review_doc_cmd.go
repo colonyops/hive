@@ -23,8 +23,8 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 
 	// If argument provided, open document directly and switch to review view
 	if c.Arg != "" {
-		m.activeView = ViewReview
-		m.handler.SetActiveView(ViewReview)
+		m.activeView = ViewTypeReview
+		m.handler.SetActiveView(ViewTypeReview)
 		return m.reviewView.OpenDocumentByPath(c.Arg)
 	}
 

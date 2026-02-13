@@ -45,21 +45,8 @@ var builderPool = sync.Pool{
 }
 
 // UIState represents the current state of the TUI.
-type UIState int
-
-const (
-	stateNormal UIState = iota
-	stateConfirming
-	stateLoading
-	stateRunningRecycle
-	statePreviewingMessage
-	stateCreatingSession
-	stateCommandPalette
-	stateShowingHelp
-	stateShowingNotifications
-	stateRenaming
-	stateFormInput
-)
+// ENUM(normal, confirming, loading, running_recycle, previewing_message, creating_session, command_palette, showing_help, showing_notifications, renaming, form_input).
+type UIState string
 
 // Key constants for event handling.
 const (
@@ -402,7 +389,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		cmdService:         cmdService,
 		list:               l,
 		handler:            handler,
-		state:              stateNormal,
+		state:              UIStateNormal,
 		spinner:            s,
 		gitStatuses:        gitStatuses,
 		gitWorkers:         cfg.Git.StatusWorkers,
@@ -420,7 +407,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		msgStore:           opts.MsgStore,
 		msgView:            msgView,
 		topicFilter:        "*",
-		activeView:         ViewSessions,
+		activeView:         ViewTypeSessions,
 		copyCommand:        cfg.CopyCommand,
 		repoDirs:           cfg.RepoDirs,
 		mergedCommands:     mergedCommands,
@@ -553,7 +540,7 @@ func (m Model) loadSessions() tea.Cmd {
 func (m Model) executeAction(action Action) tea.Cmd {
 	return func() tea.Msg {
 		cmdAction := command.Action{
-			Type:      command.ActionType(action.Type),
+			Type:      action.Type.ToCommandActionType(),
 			SessionID: action.SessionID,
 			ShellCmd:  action.ShellCmd,
 		}
@@ -582,7 +569,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 
 		// Set list size based on preview mode
-		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
+		if m.previewEnabled && m.width >= 80 && m.activeView == ViewTypeSessions {
 			// In dual-column mode, list takes 25% of width
 			listWidth := int(float64(m.width) * 0.25)
 			m.list.SetSize(listWidth, contentHeight)
@@ -632,7 +619,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case sessionRefreshTickMsg:
 		// Refresh sessions when Sessions view is active and no modal open
-		if m.activeView == ViewSessions && !m.isModalActive() {
+		if m.activeView == ViewTypeSessions && !m.isModalActive() {
 			m.refreshing = true
 			return m, tea.Batch(
 				m.loadSessions(),
@@ -656,7 +643,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessionsLoadedMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("failed to load sessions")
-			m.state = stateNormal
+			m.state = UIStateNormal
 			return m, m.notifyError("failed to load sessions: %v", msg.err)
 		}
 		// Store all sessions for filtering
@@ -737,7 +724,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case renameCompleteMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("rename failed")
-			m.state = stateNormal
+			m.state = UIStateNormal
 			return m, m.notifyError("rename failed: %v", msg.err)
 		}
 		return m, m.loadSessions()
@@ -745,17 +732,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionCompleteMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("action failed")
-			m.state = stateNormal
+			m.state = UIStateNormal
 			m.pending = Action{}
 			return m, m.notifyError("action failed: %v", msg.err)
 		}
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.pending = Action{}
 		// Reload sessions after action
 		return m, m.loadSessions()
 
 	case recycleStartedMsg:
-		m.state = stateRunningRecycle
+		m.state = UIStateRunningRecycle
 		m.outputModal = NewOutputModal("Recycling session...")
 		m.recycleOutput = msg.output
 		m.recycleDone = msg.done
@@ -775,7 +762,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.recycleOutput = nil
 		m.recycleDone = nil
 		m.recycleCancel = nil
-		// Stay in stateRunningRecycle until user dismisses
+		// Stay in UIStateRunningRecycle until user dismisses
 		return m, nil
 
 	case reposDiscoveredMsg:
@@ -826,8 +813,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				// User selected a document - switch to review view and load it
 				doc := m.docPickerModal.SelectedDocument()
 				m.docPickerModal = nil
-				m.activeView = ViewReview
-				m.handler.SetActiveView(ViewReview)
+				m.activeView = ViewTypeReview
+				m.handler.SetActiveView(ViewTypeReview)
 				if m.reviewView != nil {
 					m.reviewView.LoadDocument(doc)
 				}
@@ -852,18 +839,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	// Route all other messages to the form when creating session
-	if m.state == stateCreatingSession && m.newSessionForm != nil {
+	if m.state == UIStateCreatingSession && m.newSessionForm != nil {
 		return m.updateNewSessionForm(msg)
 	}
 
 	// Update the appropriate view based on active view
 	var cmd tea.Cmd
 	switch m.activeView {
-	case ViewSessions:
+	case ViewTypeSessions:
 		m.list, cmd = m.list.Update(msg)
-	case ViewMessages:
+	case ViewTypeMessages:
 		// Messages view handles its own updates
-	case ViewReview:
+	case ViewTypeReview:
 		if m.reviewView != nil {
 			*m.reviewView, cmd = m.reviewView.Update(msg)
 		}
@@ -876,31 +863,31 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Handle modal states first
-	if m.state == stateCreatingSession {
+	if m.state == UIStateCreatingSession {
 		return m.handleNewSessionFormKey(msg, keyStr)
 	}
-	if m.state == stateCommandPalette {
+	if m.state == UIStateCommandPalette {
 		return m.handleCommandPaletteKey(msg, keyStr)
 	}
-	if m.state == statePreviewingMessage {
+	if m.state == UIStatePreviewingMessage {
 		return m.handlePreviewModalKey(msg, keyStr)
 	}
-	if m.state == stateShowingHelp {
+	if m.state == UIStateShowingHelp {
 		return m.handleHelpDialogKey(keyStr)
 	}
-	if m.state == stateShowingNotifications {
+	if m.state == UIStateShowingNotifications {
 		return m.handleNotificationModalKey(keyStr)
 	}
-	if m.state == stateRenaming {
+	if m.state == UIStateRenaming {
 		return m.handleRenameKey(msg, keyStr)
 	}
-	if m.state == stateRunningRecycle {
+	if m.state == UIStateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
 	}
-	if m.state == stateConfirming {
+	if m.state == UIStateConfirming {
 		return m.handleConfirmModalKey(keyStr)
 	}
-	if m.state == stateFormInput {
+	if m.state == UIStateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
 	}
 
@@ -931,7 +918,7 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.newSessionForm.Submitted() {
 		result := m.newSessionForm.Result()
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.newSessionForm = nil
 		m.pendingCreate = &PendingCreate{
 			Remote: result.Repo.Remote,
@@ -941,7 +928,7 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	if m.newSessionForm.Cancelled() {
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.newSessionForm = nil
 		return m, nil
 	}
@@ -967,7 +954,7 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 	m.pendingFormName = name
 	m.pendingFormSess = &sess
 	m.pendingFormArgs = args
-	m.state = stateFormInput
+	m.state = UIStateFormInput
 	return m, nil
 }
 
@@ -996,7 +983,7 @@ func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, te
 
 	if m.formDialog.Cancelled() {
 		m.clearFormState()
-		m.state = stateNormal
+		m.state = UIStateNormal
 		return m, nil
 	}
 
@@ -1015,25 +1002,25 @@ func (m *Model) clearFormState() {
 // dispatchAction handles an action that may need confirmation or immediate execution.
 func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if action.Err != nil {
-		m.state = stateNormal
+		m.state = UIStateNormal
 		return m, m.notifyError("%v", action.Err)
 	}
 
 	if action.NeedsConfirm() {
-		m.state = stateConfirming
+		m.state = UIStateConfirming
 		m.pending = action
 		m.modal = NewModal("Confirm", action.Confirm)
 		return m, nil
 	}
 
 	if action.Type == ActionTypeRecycle {
-		m.state = stateNormal
+		m.state = UIStateNormal
 		return m, m.startRecycle(action.SessionID)
 	}
 
 	if action.Exit {
 		cmdAction := command.Action{
-			Type:      command.ActionType(action.Type),
+			Type:      action.Type.ToCommandActionType(),
 			SessionID: action.SessionID,
 			ShellCmd:  action.ShellCmd,
 		}
@@ -1047,10 +1034,10 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		return m, tea.Quit
 	}
 
-	m.state = stateNormal
+	m.state = UIStateNormal
 	m.pending = action
 	if !action.Silent {
-		m.state = stateLoading
+		m.state = UIStateLoading
 		m.loadingMessage = "Processing..."
 	}
 	return m, m.executeAction(action)
@@ -1069,12 +1056,12 @@ func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		if m.outputModal.IsRunning() && m.recycleCancel != nil {
 			m.recycleCancel()
 		}
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.pending = Action{}
 		return m, m.loadSessions()
 	case keyEnter:
 		if !m.outputModal.IsRunning() {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			m.pending = Action{}
 			return m, m.loadSessions()
 		}
@@ -1086,7 +1073,7 @@ func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyEnter:
-		m.state = stateNormal
+		m.state = UIStateNormal
 		if m.modal.ConfirmSelected() {
 			action := m.pending
 			if action.Type == ActionTypeRecycle {
@@ -1105,7 +1092,7 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.pendingRecycledSessions = nil
 		return m, nil
 	case "esc":
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.pending = Action{}
 		m.pendingRecycledSessions = nil
 		return m, nil
@@ -1132,7 +1119,7 @@ func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (
 
 	// Show confirmation modal for deleting all recycled sessions
 	confirmMsg := fmt.Sprintf("Permanently delete %d recycled session(s)?", treeItem.RecycledCount)
-	m.state = stateConfirming
+	m.state = UIStateConfirming
 	m.pending = Action{
 		Type:    ActionTypeDeleteRecycledBatch,
 		Key:     keyStr,
@@ -1152,7 +1139,7 @@ func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "esc", "?", "q":
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.helpDialog = nil
 		return m, nil
 	}
@@ -1165,7 +1152,7 @@ func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.quitting = true
 		return m, tea.Quit
 	case "esc", "q":
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.notificationModal = nil
 		return m, nil
 	case "j", "down":
@@ -1237,7 +1224,7 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	})
 
 	m.helpDialog = components.NewHelpDialog("Keyboard Shortcuts", sections, m.width, m.height)
-	m.state = stateShowingHelp
+	m.state = UIStateShowingHelp
 	return m, nil
 }
 
@@ -1251,7 +1238,7 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 		m.quitting = true
 		return m, tea.Quit
 	case "esc", keyEnter, "q":
-		m.state = stateNormal
+		m.state = UIStateNormal
 		return m, nil
 	case "up", "k":
 		m.previewModal.ScrollUp()
@@ -1291,21 +1278,21 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Check if this is a doc review action (doesn't require a session)
 		if entry.Command.Action == config.ActionDocReview {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
 		}
 
 		// Messages doesn't require a session
 		if entry.Command.Action == config.ActionMessages {
-			m.state = stateShowingNotifications
+			m.state = UIStateShowingNotifications
 			m.notificationModal = NewNotificationModal(m.notifyBus, m.width, m.height)
 			return m, nil
 		}
 
 		// NewSession doesn't require a selected session
 		if entry.Command.Action == config.ActionNewSession {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			if len(m.discoveredRepos) == 0 {
 				return m, nil
 			}
@@ -1314,7 +1301,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// RenameSession requires a selected session
 		if entry.Command.Action == config.ActionRenameSession {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			if selected == nil {
 				return m, nil
 			}
@@ -1323,7 +1310,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// SetTheme doesn't require a session
 		if entry.Command.Action == config.ActionSetTheme {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			if len(args) > 0 {
 				m.applyTheme(args[0])
 			}
@@ -1332,7 +1319,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			// Resolve action type directly from command action
 			var actionType ActionType
 			switch entry.Command.Action {
@@ -1351,7 +1338,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Form commands don't require a selected session (they collect their own input)
 		if len(entry.Command.Form) > 0 {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			var sess session.Session
 			if selected != nil {
 				sess = *selected
@@ -1361,7 +1348,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Other commands require a selected session
 		if selected == nil {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			return m, nil
 		}
 
@@ -1378,16 +1365,16 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Check for resolution errors (e.g., template errors)
 		if action.Err != nil {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			return m, m.notifyError("command error: %v", action.Err)
 		}
 
 		// Reset to normal state
-		m.state = stateNormal
+		m.state = UIStateNormal
 
 		// Handle confirmation if needed
 		if action.NeedsConfirm() {
-			m.state = stateConfirming
+			m.state = UIStateConfirming
 			m.pending = action
 			m.modal = NewModal("Confirm", action.Confirm)
 			return m, nil
@@ -1396,7 +1383,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Execute immediately if exit requested (synchronous to avoid race conditions)
 		if action.Exit {
 			cmdAction := command.Action{
-				Type:      command.ActionType(action.Type),
+				Type:      action.Type.ToCommandActionType(),
 				SessionID: action.SessionID,
 				ShellCmd:  action.ShellCmd,
 			}
@@ -1413,7 +1400,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Store pending action for exit check after completion
 		m.pending = action
 		if !action.Silent {
-			m.state = stateLoading
+			m.state = UIStateLoading
 			m.loadingMessage = "Processing..."
 		}
 		return m, m.executeAction(action)
@@ -1421,7 +1408,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 	// Check if user cancelled
 	if m.commandPalette.Cancelled() {
-		m.state = stateNormal
+		m.state = UIStateNormal
 		return m, nil
 	}
 
@@ -1558,7 +1545,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 			// Open message preview modal
 			selectedMsg := m.selectedMessage()
 			if selectedMsg != nil {
-				m.state = statePreviewingMessage
+				m.state = UIStatePreviewingMessage
 				m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
 			}
 		case "up", "k":
@@ -1588,19 +1575,19 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 
 	switch m.activeView {
-	case ViewSessions:
-		m.activeView = ViewMessages
-	case ViewMessages:
+	case ViewTypeSessions:
+		m.activeView = ViewTypeMessages
+	case ViewTypeMessages:
 		if showReviewTab {
 			// If Review is visible, cycle to it
-			m.activeView = ViewReview
+			m.activeView = ViewTypeReview
 		} else {
 			// Otherwise cycle back to Sessions
-			m.activeView = ViewSessions
+			m.activeView = ViewTypeSessions
 		}
-	case ViewReview:
+	case ViewTypeReview:
 		// From Review, cycle back to Sessions
-		m.activeView = ViewSessions
+		m.activeView = ViewTypeSessions
 	}
 	m.handler.SetActiveView(m.activeView)
 	return m, nil
@@ -1626,7 +1613,7 @@ func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
 
 	m.renameInput = input
 	m.renameSessionID = sess.ID
-	m.state = stateRenaming
+	m.state = UIStateRenaming
 	return m, nil
 }
 
@@ -1637,18 +1624,18 @@ func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		m.quitting = true
 		return m, tea.Quit
 	case "esc":
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.renameSessionID = ""
 		return m, nil
 	case keyEnter:
 		newName := strings.TrimSpace(m.renameInput.Value())
 		if newName == "" {
-			m.state = stateNormal
+			m.state = UIStateNormal
 			m.renameSessionID = ""
 			return m, nil
 		}
 		sessionID := m.renameSessionID
-		m.state = stateNormal
+		m.state = UIStateNormal
 		m.renameSessionID = ""
 		return m, m.executeRename(sessionID, newName)
 	}
@@ -1708,7 +1695,7 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		existingNames[s.Name] = true
 	}
 	m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
-	m.state = stateCreatingSession
+	m.state = UIStateCreatingSession
 	return m, m.newSessionForm.Init()
 }
 
@@ -1753,7 +1740,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		}
 
 		var listWidth int
-		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
+		if m.previewEnabled && m.width >= 80 && m.activeView == ViewTypeSessions {
 			listWidth = int(float64(m.width) * 0.25)
 		} else {
 			listWidth = m.width
@@ -1768,7 +1755,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 	// Handle ':' for command palette (allow even without selection for filter commands)
 	if keyStr == ":" {
 		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height, m.activeView)
-		m.state = stateCommandPalette
+		m.state = UIStateCommandPalette
 		return m, nil
 	}
 
@@ -1811,7 +1798,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 			return m, m.notifyError("keybinding error: %v", action.Err)
 		}
 		if action.NeedsConfirm() {
-			m.state = stateConfirming
+			m.state = UIStateConfirming
 			m.pending = action
 			m.modal = NewModal("Confirm", action.Confirm)
 			return m, nil
@@ -1840,7 +1827,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
 		if action.Exit {
 			cmdAction := command.Action{
-				Type:      command.ActionType(action.Type),
+				Type:      action.Type.ToCommandActionType(),
 				SessionID: action.SessionID,
 				ShellCmd:  action.ShellCmd,
 			}
@@ -1856,7 +1843,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		// Store pending action for exit check after completion
 		m.pending = action
 		if !action.Silent {
-			m.state = stateLoading
+			m.state = UIStateLoading
 			m.loadingMessage = "Processing..."
 		}
 		return m, m.executeAction(action)
@@ -1901,7 +1888,7 @@ func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
 
 	if action.Exit {
 		cmdAction := command.Action{
-			Type:     command.ActionType(action.Type),
+			Type:     action.Type.ToCommandActionType(),
 			ShellCmd: action.ShellCmd,
 		}
 		exec, err := m.cmdService.CreateExecutor(cmdAction)
@@ -2041,22 +2028,22 @@ func (m *Model) hasEditorFocus() bool {
 	}
 
 	// Check command palette
-	if m.state == stateCommandPalette {
+	if m.state == UIStateCommandPalette {
 		return true
 	}
 
 	// Check new session form
-	if m.state == stateCreatingSession {
+	if m.state == UIStateCreatingSession {
 		return true
 	}
 
 	// Check rename input
-	if m.state == stateRenaming {
+	if m.state == UIStateRenaming {
 		return true
 	}
 
 	// Check form dialog
-	if m.state == stateFormInput {
+	if m.state == UIStateFormInput {
 		return true
 	}
 
@@ -2070,20 +2057,20 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Route based on current state
 	switch m.state {
-	case stateCommandPalette:
+	case UIStateCommandPalette:
 		if m.commandPalette != nil {
 			m.commandPalette, cmd = m.commandPalette.Update(msg)
 		}
 		return m, cmd
-	case stateCreatingSession:
+	case UIStateCreatingSession:
 		if m.newSessionForm != nil {
 			*m.newSessionForm, cmd = m.newSessionForm.Update(msg)
 		}
 		return m, cmd
-	case stateRenaming:
+	case UIStateRenaming:
 		m.renameInput, cmd = m.renameInput.Update(msg)
 		return m, cmd
-	case stateFormInput:
+	case UIStateFormInput:
 		if m.formDialog != nil {
 			m.formDialog, cmd = m.formDialog.Update(msg)
 		}
@@ -2095,7 +2082,7 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 
 	// Route to active view
 	switch m.activeView {
-	case ViewSessions:
+	case ViewTypeSessions:
 		if m.focusMode {
 			// Route to focus filter input
 			var cmd tea.Cmd
@@ -2104,11 +2091,11 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		m.list, cmd = m.list.Update(msg)
-	case ViewMessages:
+	case ViewTypeMessages:
 		// MessagesView handles its own filtering internally, no Update method
 		// Key events are handled by specific methods called from handleNormalKey
 		return m, nil
-	case ViewReview:
+	case ViewTypeReview:
 		if m.reviewView != nil {
 			*m.reviewView, cmd = m.reviewView.Update(msg)
 		}
@@ -2256,27 +2243,27 @@ func (m Model) selectedMessage() *messaging.Message {
 
 // isSessionsFocused returns true if the sessions view is active.
 func (m Model) isSessionsFocused() bool {
-	return m.activeView == ViewSessions
+	return m.activeView == ViewTypeSessions
 }
 
 // isMessagesFocused returns true if the messages view is active.
 func (m Model) isMessagesFocused() bool {
-	return m.activeView == ViewMessages
+	return m.activeView == ViewTypeMessages
 }
 
 // isReviewFocused returns true if the review view is active.
 func (m Model) isReviewFocused() bool {
-	return m.activeView == ViewReview
+	return m.activeView == ViewTypeReview
 }
 
 // shouldPollMessages returns true if messages should be polled.
 func (m Model) shouldPollMessages() bool {
-	return m.activeView == ViewMessages
+	return m.activeView == ViewTypeMessages
 }
 
 // isModalActive returns true if any modal is currently open.
 func (m Model) isModalActive() bool {
-	return m.state != stateNormal
+	return m.state != UIStateNormal
 }
 
 // stopFocusMode deactivates focus mode filtering.
@@ -2291,7 +2278,7 @@ func (m *Model) stopFocusMode() {
 	}
 
 	var listWidth int
-	if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
+	if m.previewEnabled && m.width >= 80 && m.activeView == ViewTypeSessions {
 		listWidth = int(float64(m.width) * 0.25)
 	} else {
 		listWidth = m.width
@@ -2374,7 +2361,7 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 
 	m.list.SetItems(items)
 	m.restoreSelection(sel)
-	m.state = stateNormal
+	m.state = UIStateNormal
 
 	if len(paths) == 0 {
 		m.refreshing = false
@@ -2526,9 +2513,9 @@ func (m Model) View() tea.View {
 	// Determine overlay content based on state
 	var content string
 	switch {
-	case m.state == stateRunningRecycle:
+	case m.state == UIStateRunningRecycle:
 		content = m.outputModal.Overlay(mainView, w, h)
-	case m.state == stateCreatingSession && m.newSessionForm != nil:
+	case m.state == UIStateCreatingSession && m.newSessionForm != nil:
 		formContent := lipgloss.JoinVertical(
 			lipgloss.Left,
 			styles.ModalTitleStyle.Render("New Session"),
@@ -2547,7 +2534,7 @@ func (m Model) View() tea.View {
 
 		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
 		content = compositor.Render()
-	case m.state == stateFormInput && m.formDialog != nil:
+	case m.state == UIStateFormInput && m.formDialog != nil:
 		formContent := lipgloss.JoinVertical(
 			lipgloss.Left,
 			styles.ModalTitleStyle.Render(m.formDialog.Title),
@@ -2566,21 +2553,21 @@ func (m Model) View() tea.View {
 
 		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
 		content = compositor.Render()
-	case m.state == statePreviewingMessage:
+	case m.state == UIStatePreviewingMessage:
 		content = m.previewModal.Overlay(mainView, w, h)
-	case m.state == stateLoading:
+	case m.state == UIStateLoading:
 		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, m.spinner.View(), " "+m.loadingMessage)
 		modal := NewModal("", loadingView)
 		content = modal.Overlay(mainView, w, h)
-	case m.state == stateConfirming:
+	case m.state == UIStateConfirming:
 		content = m.modal.Overlay(mainView, w, h)
-	case m.state == stateCommandPalette && m.commandPalette != nil:
+	case m.state == UIStateCommandPalette && m.commandPalette != nil:
 		content = m.commandPalette.Overlay(mainView, w, h)
-	case m.state == stateShowingHelp && m.helpDialog != nil:
+	case m.state == UIStateShowingHelp && m.helpDialog != nil:
 		content = m.helpDialog.Overlay(mainView, w, h)
-	case m.state == stateShowingNotifications && m.notificationModal != nil:
+	case m.state == UIStateShowingNotifications && m.notificationModal != nil:
 		content = m.notificationModal.Overlay(mainView, w, h)
-	case m.state == stateRenaming:
+	case m.state == UIStateRenaming:
 		renameContent := lipgloss.JoinVertical(
 			lipgloss.Left,
 			styles.ModalTitleStyle.Render("Rename Session"),
@@ -2622,19 +2609,19 @@ func (m Model) renderTabView() string {
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 
 	switch m.activeView {
-	case ViewSessions:
+	case ViewTypeSessions:
 		sessionsTab = styles.ViewSelectedStyle.Render("Sessions")
 		messagesTab = styles.ViewNormalStyle.Render("Messages")
 		if showReviewTab {
 			reviewTab = styles.ViewNormalStyle.Render("Review")
 		}
-	case ViewMessages:
+	case ViewTypeMessages:
 		sessionsTab = styles.ViewNormalStyle.Render("Sessions")
 		messagesTab = styles.ViewSelectedStyle.Render("Messages")
 		if showReviewTab {
 			reviewTab = styles.ViewNormalStyle.Render("Review")
 		}
-	case ViewReview:
+	case ViewTypeReview:
 		sessionsTab = styles.ViewNormalStyle.Render("Sessions")
 		messagesTab = styles.ViewNormalStyle.Render("Messages")
 		reviewTab = styles.ViewSelectedStyle.Render("Review")
@@ -2642,7 +2629,7 @@ func (m Model) renderTabView() string {
 
 	// Build tabs with conditional Review tab
 	var tabsLeft string
-	if showReviewTab || m.activeView == ViewReview {
+	if showReviewTab || m.activeView == ViewTypeReview {
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab, " | ", reviewTab)
 	} else {
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
@@ -2683,7 +2670,7 @@ func (m Model) renderTabView() string {
 	// Build content with fixed height to prevent layout shift
 	var content string
 	switch m.activeView {
-	case ViewSessions:
+	case ViewTypeSessions:
 		// Check if preview should be shown
 		if m.previewEnabled && m.width >= 80 {
 			content = m.renderDualColumnLayout(contentHeight)
@@ -2703,10 +2690,10 @@ func (m Model) renderTabView() string {
 
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 		}
-	case ViewMessages:
+	case ViewTypeMessages:
 		content = m.msgView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-	case ViewReview:
+	case ViewTypeReview:
 		if m.reviewView != nil {
 			content = m.reviewView.View()
 			content = lipgloss.NewStyle().Height(contentHeight).Render(content)

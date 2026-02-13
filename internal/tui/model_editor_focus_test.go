@@ -22,42 +22,42 @@ func TestModel_hasEditorFocus(t *testing.T) {
 		{
 			name: "command palette has editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateCommandPalette
+				m.state = UIStateCommandPalette
 			},
 			want: true,
 		},
 		{
 			name: "creating session has editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateCreatingSession
+				m.state = UIStateCreatingSession
 			},
 			want: true,
 		},
 		{
 			name: "normal state has no editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateNormal
+				m.state = UIStateNormal
 			},
 			want: false,
 		},
 		{
 			name: "confirming modal has no editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateConfirming
+				m.state = UIStateConfirming
 			},
 			want: false,
 		},
 		{
 			name: "loading state has no editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateLoading
+				m.state = UIStateLoading
 			},
 			want: false,
 		},
 		{
 			name: "renaming state has editor focus",
 			setupFunc: func(m *Model) {
-				m.state = stateRenaming
+				m.state = UIStateRenaming
 			},
 			want: true,
 		},
@@ -76,7 +76,7 @@ func TestModel_hasEditorFocus(t *testing.T) {
 func TestModel_hasEditorFocus_Integration(t *testing.T) {
 	t.Run("blocking keybindings when in command palette", func(t *testing.T) {
 		m := &Model{
-			state: stateCommandPalette,
+			state: UIStateCommandPalette,
 		}
 
 		// Should have editor focus
@@ -87,7 +87,7 @@ func TestModel_hasEditorFocus_Integration(t *testing.T) {
 
 	t.Run("blocking keybindings when creating session", func(t *testing.T) {
 		m := &Model{
-			state: stateCreatingSession,
+			state: UIStateCreatingSession,
 		}
 
 		// Should have editor focus
@@ -96,7 +96,7 @@ func TestModel_hasEditorFocus_Integration(t *testing.T) {
 
 	t.Run("allowing keybindings in normal state", func(t *testing.T) {
 		m := &Model{
-			state: stateNormal,
+			state: UIStateNormal,
 		}
 
 		// Should NOT have editor focus
