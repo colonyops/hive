@@ -26,7 +26,7 @@ func TestNewFormDialog(t *testing.T) {
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "msg")
-		assert.Equal(t, "", vals["msg"])
+		assert.Empty(t, vals["msg"])
 	})
 
 	t.Run("text field with default", func(t *testing.T) {

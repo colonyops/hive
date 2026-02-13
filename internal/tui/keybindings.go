@@ -465,3 +465,27 @@ func (h *KeybindingResolver) RenderWithFormData(
 	action.ShellCmd = rendered
 	return action
 }
+
+// ResolveFormCommand checks if a key maps to a user command with form fields.
+// Returns the command name and command if found, after scope and recycle checks.
+func (h *KeybindingResolver) ResolveFormCommand(key string, sess session.Session) (string, config.UserCommand, bool) {
+	kb, exists := h.keybindings[key]
+	if !exists {
+		return "", config.UserCommand{}, false
+	}
+
+	cmd, cmdExists := h.commands[kb.Cmd]
+	if !cmdExists || len(cmd.Form) == 0 {
+		return "", config.UserCommand{}, false
+	}
+
+	if !h.isCommandInScope(cmd) {
+		return "", config.UserCommand{}, false
+	}
+
+	if sess.State == session.StateRecycled {
+		return "", config.UserCommand{}, false
+	}
+
+	return kb.Cmd, cmd, true
+}
