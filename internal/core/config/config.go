@@ -148,6 +148,27 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "prev active session",
 		Silent: true,
 	},
+	"Broadcast": {
+		Sh: `{{ range .Form.targets }}
+{{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+{{ end }}`,
+		Form: []FormField{
+			{
+				Variable: "targets",
+				Preset:   FormPresetSessionSelector,
+				Multi:    true,
+				Label:    "Select recipients",
+			},
+			{
+				Variable:    "message",
+				Type:        FormTypeText,
+				Label:       "Message",
+				Placeholder: "Type your message...",
+			},
+		},
+		Help:   "broadcast message to agents",
+		Silent: true,
+	},
 }
 
 // defaultKeybindings provides built-in keybindings that users can override.
