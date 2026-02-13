@@ -29,6 +29,7 @@ const (
 	ActionTypeDocReview
 	ActionTypeNewSession
 	ActionTypeSetTheme
+	ActionTypeMessages
 	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
 )
 
@@ -215,6 +216,8 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			}
 		case config.ActionSetTheme:
 			action.Type = ActionTypeSetTheme
+		case config.ActionMessages:
+			action.Type = ActionTypeMessages
 		}
 		return action, true
 	}
@@ -367,6 +370,8 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 			action.Type = ActionTypeFilterReady
 		case config.ActionSetTheme:
 			action.Type = ActionTypeSetTheme
+		case config.ActionMessages:
+			action.Type = ActionTypeMessages
 		}
 		return action
 	}

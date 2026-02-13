@@ -43,6 +43,7 @@ const (
 	ActionFilterReady    = "filter-ready"
 	ActionDocReview      = "doc-review" // Open review tab with document picker
 	ActionSetTheme       = "set-theme"  // Preview a built-in theme at runtime
+	ActionMessages       = "messages"   // Show notification history modal
 )
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -90,6 +91,11 @@ var defaultUserCommands = map[string]UserCommand{
 	"ThemePreview": {
 		Action: ActionSetTheme,
 		Help:   "preview theme (" + strings.Join(styles.ThemeNames(), ", ") + ")",
+		Silent: true,
+	},
+	"Messages": {
+		Action: ActionMessages,
+		Help:   "show notification history",
 		Silent: true,
 	},
 }
@@ -665,7 +671,7 @@ func (c *Config) BinDir() string {
 
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme:
+	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages:
 		return true
 	default:
 		return false

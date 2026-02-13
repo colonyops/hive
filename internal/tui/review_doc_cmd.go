@@ -2,19 +2,11 @@ package tui
 
 import (
 	tea "charm.land/bubbletea/v2"
+	"github.com/rs/zerolog/log"
+
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/tui/views/review"
 )
-
-// DocumentNotFoundError is returned when a document cannot be found.
-type DocumentNotFoundError struct{}
-
-func (e *DocumentNotFoundError) Error() string {
-	return "document not found"
-}
-
-// ErrDocumentNotFound is returned when a document cannot be found.
-var ErrDocumentNotFound = &DocumentNotFoundError{}
 
 // HiveDocReviewCmd activates the review tab with optional document selection.
 type HiveDocReviewCmd struct {
@@ -25,8 +17,8 @@ type HiveDocReviewCmd struct {
 // When invoked without an argument, it scopes to the selected session's repository context.
 func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	if m.reviewView == nil {
-		// No review view available
-		return nil
+		m.notifyBus.Warnf("review view is not available")
+		return m.ensureToastTick()
 	}
 
 	// If argument provided, open document directly and switch to review view
@@ -44,7 +36,11 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 		owner, repo := git.ExtractOwnerRepo(selected.Remote)
 		if owner != "" && repo != "" {
 			contextDir := m.cfg.RepoContextDir(owner, repo)
-			docs, _ = review.DiscoverDocuments(contextDir)
+			var err error
+			docs, err = review.DiscoverDocuments(contextDir)
+			if err != nil {
+				log.Warn().Err(err).Str("dir", contextDir).Msg("failed to discover review documents")
+			}
 		}
 	}
 
@@ -54,8 +50,8 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	}
 
 	if len(docs) == 0 {
-		m.err = ErrDocumentNotFound
-		return nil
+		m.notifyBus.Errorf("no documents found for review")
+		return m.ensureToastTick()
 	}
 
 	// Show document picker modal on current view (Sessions)

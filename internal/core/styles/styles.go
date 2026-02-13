@@ -98,6 +98,11 @@ var (
 	CommandPaletteHelpSelectedStyle lipgloss.Style
 	CommandPaletteMoreStyle         lipgloss.Style
 
+	// Toast styles.
+	ToastInfoStyle    lipgloss.Style
+	ToastWarningStyle lipgloss.Style
+	ToastErrorStyle   lipgloss.Style
+
 	// Select field styles.
 	SelectFieldItemSelectedStyle lipgloss.Style
 
@@ -306,6 +311,22 @@ func SetTheme(p Palette) {
 	CommandPaletteMoreStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).
 		Italic(true)
+
+	ToastInfoStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorPrimary).
+		Padding(0, 1).
+		Background(ColorBackground)
+	ToastWarningStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorWarning).
+		Padding(0, 1).
+		Background(ColorBackground)
+	ToastErrorStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorError).
+		Padding(0, 1).
+		Background(ColorBackground)
 
 	SelectFieldItemSelectedStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).

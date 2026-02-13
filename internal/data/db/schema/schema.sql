@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version
-INSERT OR IGNORE INTO schema_version (version) VALUES (4);
+INSERT OR IGNORE INTO schema_version (version) VALUES (5);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
@@ -81,3 +81,13 @@ CREATE TABLE IF NOT EXISTS review_comments (
 );
 
 CREATE INDEX IF NOT EXISTS idx_review_comments_session_id ON review_comments(session_id);
+
+-- Notifications table
+CREATE TABLE IF NOT EXISTS notifications (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    level TEXT NOT NULL CHECK(level IN ('info', 'warning', 'error')),
+    message TEXT NOT NULL,
+    created_at INTEGER NOT NULL -- Unix timestamp in nanoseconds
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);

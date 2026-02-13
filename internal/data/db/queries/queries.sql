@@ -137,3 +137,18 @@ FROM review_sessions rs
 LEFT JOIN review_comments rc ON rs.id = rc.session_id
 WHERE rs.finalized_at IS NULL
 GROUP BY rs.id;
+
+-- name: InsertNotification :one
+INSERT INTO notifications (level, message, created_at)
+VALUES (?, ?, ?)
+RETURNING id;
+
+-- name: ListNotifications :many
+SELECT * FROM notifications
+ORDER BY created_at DESC;
+
+-- name: DeleteAllNotifications :exec
+DELETE FROM notifications;
+
+-- name: CountNotifications :one
+SELECT COUNT(*) FROM notifications;

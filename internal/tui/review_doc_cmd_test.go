@@ -4,10 +4,37 @@ import (
 	"testing"
 
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/notify"
+	tuinotify "github.com/hay-kot/hive/internal/tui/notify"
 	"github.com/hay-kot/hive/internal/tui/views/review"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
+	bus := tuinotify.NewBus(nil)
+
+	var received int
+	bus.Subscribe(func(_ notify.Notification) {
+		received++
+	})
+
+	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{})
+	m := &Model{
+		activeView:      ViewSessions,
+		reviewView:      nil,
+		handler:         handler,
+		notifyBus:       bus,
+		toastController: NewToastController(),
+		width:           100,
+		height:          40,
+	}
+
+	cmd := HiveDocReviewCmd{Arg: ""}
+	_ = cmd.Execute(m)
+
+	assert.Equal(t, 1, received, "expected a warning notification to be published")
+}
 
 func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	// Create a mock model with review view
@@ -33,6 +60,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		activeView: ViewSessions,
 		reviewView: &reviewView,
 		handler:    handler,
+		notifyBus:  tuinotify.NewBus(nil),
 		width:      100,
 		height:     40,
 	}
