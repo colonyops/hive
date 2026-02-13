@@ -456,7 +456,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 		"Form":       formData,
 	}
 
-	rendered, err := tmpl.Render(cmd.Sh, data)
+	rendered, err := h.renderer.Render(cmd.Sh, data)
 	if err != nil {
 		action.Type = ActionTypeShell
 		action.Err = fmt.Errorf("template error in command %q: %w", name, err)

@@ -420,7 +420,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 }
 
 func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
-	handler := NewKeybindingResolver(nil, nil)
+	handler := NewKeybindingResolver(nil, nil, testRenderer)
 
 	sess := session.Session{
 		ID:     "test-id",
