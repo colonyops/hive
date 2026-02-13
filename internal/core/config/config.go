@@ -604,9 +604,75 @@ func (c *Config) validateUserCommandsBasic() error {
 				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review", scope))
 			}
 		}
+
+		// Validate form fields
+		if len(cmd.Form) > 0 {
+			if cmd.Action != "" {
+				errs = errs.Append(field, fmt.Errorf("form can only be used with sh, not action"))
+				continue
+			}
+
+			if err := criterio.ValidateSlice(field+".form", cmd.Form, validateFormField); err != nil {
+				errs = errs.Append("", err)
+				continue
+			}
+
+			// Check for duplicate variables
+			seenVars := make(map[string]bool, len(cmd.Form))
+			for j, ff := range cmd.Form {
+				if seenVars[ff.Variable] {
+					errs = errs.Append(fmt.Sprintf("%s.form[%d].variable", field, j),
+						fmt.Errorf("duplicate variable %q", ff.Variable))
+				}
+				seenVars[ff.Variable] = true
+			}
+		}
 	}
 
 	return errs.ToError()
+}
+
+// validateFormField validates a single form field definition.
+func validateFormField(ff FormField) error {
+	var extra criterio.FieldErrorsBuilder
+
+	// Cross-field: exactly one of type or preset
+	switch {
+	case ff.Type == "" && ff.Preset == "":
+		extra = extra.Append("type", fmt.Errorf("must specify either type or preset"))
+	case ff.Type != "" && ff.Preset != "":
+		extra = extra.Append("type", fmt.Errorf("cannot specify both type and preset"))
+	}
+
+	// Select types require options (when not a preset)
+	if (ff.Type == FormTypeSelect || ff.Type == FormTypeMultiSelect) && len(ff.Options) == 0 {
+		extra = extra.Append("options", fmt.Errorf("required for %s type", ff.Type))
+	}
+
+	return criterio.ValidateStruct(
+		criterio.Run("variable", ff.Variable, criterio.Required[string], isValidIdentifier),
+		criterio.Run("type", ff.Type,
+			criterio.When(ff.Type != "", criterio.StrOneOf(ValidFormTypes...)),
+		),
+		criterio.Run("preset", ff.Preset,
+			criterio.When(ff.Preset != "", criterio.StrOneOf(ValidFormPresets...)),
+		),
+		extra.ToError(),
+	)
+}
+
+// isValidIdentifier checks that a string is a valid Go-style identifier
+// (letters, digits, underscores; must not start with a digit).
+var isValidIdentifier criterio.Validator[string] = func(s string) error {
+	for i, r := range s {
+		if i == 0 && r >= '0' && r <= '9' {
+			return fmt.Errorf("must not start with a digit")
+		}
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
+			return fmt.Errorf("must contain only letters, digits, and underscores")
+		}
+	}
+	return nil
 }
 
 // validateMaxRecycled checks that max_recycled values are non-negative.

@@ -727,6 +727,184 @@ func TestValidate_UserCommandValidScopes(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestIsValidIdentifier(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+		errMsg  string
+	}{
+		{name: "simple", input: "message", wantErr: false},
+		{name: "with underscore", input: "my_var", wantErr: false},
+		{name: "with digits", input: "var123", wantErr: false},
+		{name: "single char", input: "x", wantErr: false},
+		{name: "uppercase", input: "MyVar", wantErr: false},
+		{name: "starts with digit", input: "1var", wantErr: true, errMsg: "must not start with a digit"},
+		{name: "has dash", input: "my-var", wantErr: true, errMsg: "must contain only letters"},
+		{name: "has space", input: "my var", wantErr: true, errMsg: "must contain only letters"},
+		{name: "has dot", input: "my.var", wantErr: true, errMsg: "must contain only letters"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := isValidIdentifier(tt.input)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateFormField(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   FormField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid text field",
+			field:   FormField{Variable: "message", Type: FormTypeText, Label: "Message"},
+			wantErr: false,
+		},
+		{
+			name:    "valid textarea field",
+			field:   FormField{Variable: "body", Type: FormTypeTextArea, Label: "Body"},
+			wantErr: false,
+		},
+		{
+			name:    "valid select field",
+			field:   FormField{Variable: "env", Type: FormTypeSelect, Label: "Env", Options: []string{"dev", "prod"}},
+			wantErr: false,
+		},
+		{
+			name:    "valid multi-select field",
+			field:   FormField{Variable: "tags", Type: FormTypeMultiSelect, Label: "Tags", Options: []string{"a", "b"}},
+			wantErr: false,
+		},
+		{
+			name:    "valid session preset",
+			field:   FormField{Variable: "target", Preset: FormPresetSessionSelector, Label: "Target"},
+			wantErr: false,
+		},
+		{
+			name:    "valid project preset with multi",
+			field:   FormField{Variable: "repos", Preset: FormPresetProjectSelector, Multi: true, Label: "Repos"},
+			wantErr: false,
+		},
+		{
+			name:    "missing variable",
+			field:   FormField{Type: FormTypeText, Label: "Message"},
+			wantErr: true,
+			errMsg:  "variable",
+		},
+		{
+			name:    "invalid variable (starts with digit)",
+			field:   FormField{Variable: "1bad", Type: FormTypeText, Label: "X"},
+			wantErr: true,
+			errMsg:  "must not start with a digit",
+		},
+		{
+			name:    "neither type nor preset",
+			field:   FormField{Variable: "x", Label: "X"},
+			wantErr: true,
+			errMsg:  "must specify either type or preset",
+		},
+		{
+			name:    "both type and preset",
+			field:   FormField{Variable: "x", Type: FormTypeText, Preset: FormPresetSessionSelector, Label: "X"},
+			wantErr: true,
+			errMsg:  "cannot specify both type and preset",
+		},
+		{
+			name:    "unknown type",
+			field:   FormField{Variable: "x", Type: "unknown", Label: "X"},
+			wantErr: true,
+			errMsg:  "must be one of",
+		},
+		{
+			name:    "unknown preset",
+			field:   FormField{Variable: "x", Preset: "BadPreset", Label: "X"},
+			wantErr: true,
+			errMsg:  "must be one of",
+		},
+		{
+			name:    "select without options",
+			field:   FormField{Variable: "x", Type: FormTypeSelect, Label: "X"},
+			wantErr: true,
+			errMsg:  "options",
+		},
+		{
+			name:    "multi-select without options",
+			field:   FormField{Variable: "x", Type: FormTypeMultiSelect, Label: "X"},
+			wantErr: true,
+			errMsg:  "options",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFormField(tt.field)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidate_FormWithAction(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"bad": {
+			Action: ActionRecycle,
+			Form:   []FormField{{Variable: "x", Type: FormTypeText, Label: "X"}},
+		},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "form can only be used with sh, not action")
+}
+
+func TestValidate_FormDuplicateVariables(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"dup": {
+			Sh: "echo test",
+			Form: []FormField{
+				{Variable: "msg", Type: FormTypeText, Label: "A"},
+				{Variable: "msg", Type: FormTypeText, Label: "B"},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate variable")
+}
+
+func TestValidate_FormValidConfig(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"broadcast": {
+			Sh: "echo {{ .Form.message }}",
+			Form: []FormField{
+				{Variable: "targets", Preset: FormPresetSessionSelector, Multi: true, Label: "Recipients"},
+				{Variable: "message", Type: FormTypeText, Label: "Message", Placeholder: "Type here..."},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
 func TestValidate_UserCommandInvalidScope(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
