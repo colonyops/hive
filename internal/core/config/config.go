@@ -925,6 +925,8 @@ func isValidAction(action string) bool {
 }
 
 // isValidScope checks if a scope value is valid.
+// Valid scopes: "global", "sessions", "messages", "review"
+// Matches ViewType enum values from internal/tui/view.go
 func isValidScope(scope string) bool {
 	switch scope {
 	case "global", "sessions", "messages", "review":
