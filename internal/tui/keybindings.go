@@ -245,20 +245,13 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 
 	// Shell command
 	if cmd.Sh != "" {
-		data := struct {
-			Path       string
-			Remote     string
-			ID         string
-			Name       string
-			Tool       string
-			TmuxWindow string
-		}{
-			Path:       sess.Path,
-			Remote:     sess.Remote,
-			ID:         sess.ID,
-			Name:       sess.Name,
-			Tool:       h.toolForSession(sess.ID),
-			TmuxWindow: h.consumeWindowOverride(sess.ID),
+		data := map[string]any{
+			"Path":       sess.Path,
+			"Remote":     sess.Remote,
+			"ID":         sess.ID,
+			"Name":       sess.Name,
+			"Tool":       h.toolForSession(sess.ID),
+			"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		}
 
 		rendered, err := tmpl.Render(cmd.Sh, data)
@@ -407,22 +400,14 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 	}
 
 	// Shell command
-	data := struct {
-		Path       string
-		Remote     string
-		ID         string
-		Name       string
-		Tool       string
-		TmuxWindow string
-		Args       []string
-	}{
-		Path:       sess.Path,
-		Remote:     sess.Remote,
-		ID:         sess.ID,
-		Name:       sess.Name,
-		Tool:       h.toolForSession(sess.ID),
-		TmuxWindow: h.consumeWindowOverride(sess.ID),
-		Args:       args,
+	data := map[string]any{
+		"Path":       sess.Path,
+		"Remote":     sess.Remote,
+		"ID":         sess.ID,
+		"Name":       sess.Name,
+		"Tool":       h.toolForSession(sess.ID),
+		"TmuxWindow": h.consumeWindowOverride(sess.ID),
+		"Args":       args,
 	}
 
 	rendered, err := tmpl.Render(cmd.Sh, data)
@@ -437,4 +422,70 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 	action.Type = ActionTypeShell
 	action.ShellCmd = rendered
 	return action
+}
+
+// RenderWithFormData resolves a user command with form data injected
+// into the template context under the .Form namespace.
+func (h *KeybindingResolver) RenderWithFormData(
+	name string,
+	cmd config.UserCommand,
+	sess session.Session,
+	args []string,
+	formData map[string]any,
+) Action {
+	action := Action{
+		Key:         ":" + name,
+		Help:        cmd.Help,
+		Confirm:     cmd.Confirm,
+		SessionID:   sess.ID,
+		SessionPath: sess.Path,
+		Silent:      cmd.Silent,
+		Exit:        cmd.ShouldExit(),
+	}
+
+	data := map[string]any{
+		"Path":       sess.Path,
+		"Remote":     sess.Remote,
+		"ID":         sess.ID,
+		"Name":       sess.Name,
+		"Tool":       h.toolForSession(sess.ID),
+		"TmuxWindow": h.consumeWindowOverride(sess.ID),
+		"Args":       args,
+		"Form":       formData,
+	}
+
+	rendered, err := tmpl.Render(cmd.Sh, data)
+	if err != nil {
+		action.Type = ActionTypeShell
+		action.Err = fmt.Errorf("template error in command %q: %w", name, err)
+		return action
+	}
+
+	action.Type = ActionTypeShell
+	action.ShellCmd = rendered
+	return action
+}
+
+// ResolveFormCommand checks if a key maps to a user command with form fields.
+// Returns the command name and command if found, after scope and recycle checks.
+func (h *KeybindingResolver) ResolveFormCommand(key string, sess session.Session) (string, config.UserCommand, bool) {
+	kb, exists := h.keybindings[key]
+	if !exists {
+		return "", config.UserCommand{}, false
+	}
+
+	cmd, cmdExists := h.commands[kb.Cmd]
+	if !cmdExists || len(cmd.Form) == 0 {
+		return "", config.UserCommand{}, false
+	}
+
+	if !h.isCommandInScope(cmd) {
+		return "", config.UserCommand{}, false
+	}
+
+	if sess.State == session.StateRecycled {
+		return "", config.UserCommand{}, false
+	}
+
+	return kb.Cmd, cmd, true
 }

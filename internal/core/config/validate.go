@@ -36,17 +36,6 @@ type RecycleTemplateData struct {
 	DefaultBranch string // Default branch name (e.g., "main" or "master")
 }
 
-// UserCommandTemplateData defines available fields for user command shell templates.
-type UserCommandTemplateData struct {
-	Path       string   // Absolute path to the session directory
-	Remote     string   // Git remote URL (origin)
-	ID         string   // Unique session identifier
-	Name       string   // Session name (directory basename)
-	Tool       string   // Detected tool name (claude, codex, gemini, etc.)
-	TmuxWindow string   // Tmux window name (when multi-window integration is active)
-	Args       []string // Command arguments passed from the command palette
-}
-
 // ValidationWarning represents a non-fatal configuration issue.
 type ValidationWarning struct {
 	Category string `json:"category"`
@@ -180,17 +169,51 @@ func (c *Config) validateUserCommandTemplates() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		if cmd.Sh != "" {
-			// Provide dummy args for validation to support templates that access Args
-			testData := UserCommandTemplateData{
-				Tool: "claude",
-				Args: []string{"arg1", "arg2", "arg3"},
-			}
+			testData := buildValidationData(cmd.Form)
 			if err := validateTemplate(cmd.Sh, testData); err != nil {
 				errs = errs.Append(fmt.Sprintf("usercommands[%q]", name), fmt.Errorf("template error in sh: %w", err))
 			}
 		}
 	}
 	return errs.ToError()
+}
+
+// buildValidationData constructs test data for template validation.
+// Fixed fields are always present; form fields are added under the Form key.
+func buildValidationData(formFields []FormField) map[string]any {
+	data := map[string]any{
+		"Path":       "/tmp/test",
+		"Remote":     "https://github.com/test/repo",
+		"ID":         "test123",
+		"Name":       "test-session",
+		"Tool":       "claude",
+		"TmuxWindow": "main",
+		"Args":       []string{"arg1", "arg2"},
+	}
+
+	if len(formFields) > 0 {
+		formData := make(map[string]any, len(formFields))
+		for _, field := range formFields {
+			switch {
+			case field.Preset != "":
+				dummyItem := map[string]any{
+					"ID": "test", "Name": "test", "Path": "/tmp", "Remote": "test",
+				}
+				if field.Multi {
+					formData[field.Variable] = []map[string]any{dummyItem}
+				} else {
+					formData[field.Variable] = dummyItem
+				}
+			case field.Type == FormTypeMultiSelect:
+				formData[field.Variable] = []string{"test"}
+			default:
+				formData[field.Variable] = "test"
+			}
+		}
+		data["Form"] = formData
+	}
+
+	return data
 }
 
 // validateTemplate checks if a template string is valid.

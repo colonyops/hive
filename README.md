@@ -289,7 +289,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].spawn`       | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
 | `rules[].batch_spawn` | Same as spawn, plus `.Prompt`                                       |
 | `rules[].recycle`     | `.DefaultBranch`                                                    |
-| `usercommands.*.sh`   | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args` |
+| `usercommands.*.sh`   | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
 
 **Template functions:**
 
@@ -314,23 +314,25 @@ User commands provide a vim-style command palette accessible by pressing `:` in 
 
 **Command Options:**
 
-| Field     | Type   | Description                                                         |
-| --------- | ------ | ------------------------------------------------------------------- |
-| `sh`      | string | Shell command template (mutually exclusive with action)             |
-| `action`  | string | Built-in action: `recycle` or `delete` (mutually exclusive with sh) |
-| `help`    | string | Description shown in palette                                        |
-| `confirm` | string | Confirmation prompt (empty = no confirmation)                       |
-| `silent`  | bool   | Skip loading popup for fast commands                                |
-| `exit`    | string | Exit TUI after command (bool or `$ENV_VAR`)                         |
+| Field     | Type           | Description                                                         |
+| --------- | -------------- | ------------------------------------------------------------------- |
+| `sh`      | string         | Shell command template (mutually exclusive with action)             |
+| `action`  | string         | Built-in action: `recycle` or `delete` (mutually exclusive with sh) |
+| `help`    | string         | Description shown in palette                                        |
+| `confirm` | string         | Confirmation prompt (empty = no confirmation)                       |
+| `silent`  | bool           | Skip loading popup for fast commands                                |
+| `exit`    | string         | Exit TUI after command (bool or `$ENV_VAR`)                         |
+| `form`    | `[]FormField`  | Interactive form fields collected before execution (see below)      |
 
 **System Default Commands:**
 
 Hive provides built-in commands that can be overridden in usercommands:
 
-| Name      | Action  | Description                                            |
-| --------- | ------- | ------------------------------------------------------ |
-| `Recycle` | recycle | Recycles the selected session                          |
-| `Delete`  | delete  | Deletes the selected session (or selected tmux window) |
+| Name        | Type   | Description                                            |
+| ----------- | ------ | ------------------------------------------------------ |
+| `Recycle`   | action | Recycles the selected session                          |
+| `Delete`    | action | Deletes the selected session (or selected tmux window) |
+| `SendBatch` | form   | Send a message to multiple agents via `agent-send`     |
 
 **Using Arguments:**
 
@@ -358,6 +360,48 @@ usercommands:
 ```
 
 This is useful when running hive in a tmux popup vs a dedicated session.
+
+**Form Fields:**
+
+Commands with `form` fields display an interactive dialog before execution. Form values are available under `.Form.<variable>` in the shell template.
+
+| Field         | Type     | Description                                                     |
+| ------------- | -------- | --------------------------------------------------------------- |
+| `variable`    | string   | Template variable name (accessed as `.Form.<variable>`)         |
+| `type`        | string   | `text`, `textarea`, `select`, or `multi-select` (one of type/preset) |
+| `preset`      | string   | `SessionSelector` or `ProjectSelector` (one of type/preset)    |
+| `label`       | string   | Display label for the field                                     |
+| `placeholder` | string   | Placeholder text (text/textarea)                                |
+| `default`     | string   | Default value (text/textarea/select)                            |
+| `options`     | []string | Static options (select/multi-select)                            |
+| `multi`       | bool     | Enable multi-select (presets only)                              |
+| `filter`      | string   | `active` (default) or `all` — SessionSelector only             |
+
+Preset fields populate from runtime data. `SessionSelector` shows active sessions with running tmux sessions (grouped by project when multiple remotes exist). `ProjectSelector` shows discovered repositories.
+
+Form commands don't require a focused session — they collect their own targets.
+
+**Example:**
+
+```yaml
+usercommands:
+  broadcast:
+    sh: |
+      {{ range .Form.targets }}
+      {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+      {{ end }}
+    form:
+      - variable: targets
+        preset: SessionSelector
+        multi: true
+        label: "Select recipients"
+      - variable: message
+        type: text
+        label: "Message"
+        placeholder: "Type your message..."
+    help: "send message to multiple agents"
+    silent: true
+```
 
 ### Keybindings
 
@@ -683,6 +727,7 @@ Launches the interactive TUI for managing sessions.
 - `Recycle` - Recycle selected session
 - `Delete` - Delete selected session (or selected tmux window)
 - `NewSession` - Create a new session
+- `SendBatch` - Send a message to multiple agents (form-based)
 
 ### `hive new`
 

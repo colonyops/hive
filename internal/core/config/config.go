@@ -49,6 +49,48 @@ const (
 	ActionPrevActive     = "prev-active"    // Navigate to previous active session
 )
 
+// Form field type constants.
+const (
+	FormTypeText        = "text"
+	FormTypeTextArea    = "textarea"
+	FormTypeSelect      = "select"
+	FormTypeMultiSelect = "multi-select"
+)
+
+// Form preset constants.
+const (
+	FormPresetSessionSelector = "SessionSelector"
+	FormPresetProjectSelector = "ProjectSelector"
+)
+
+// Form filter constants for SessionSelector preset.
+const (
+	FormFilterActive = "active" // Only active sessions (default)
+	FormFilterAll    = "all"    // All sessions regardless of state
+)
+
+// ValidSessionFilters lists valid filter values for SessionSelector.
+var ValidSessionFilters = []string{FormFilterActive, FormFilterAll}
+
+// ValidFormTypes lists all valid form field types.
+var ValidFormTypes = []string{FormTypeText, FormTypeTextArea, FormTypeSelect, FormTypeMultiSelect}
+
+// ValidFormPresets lists all valid form field presets.
+var ValidFormPresets = []string{FormPresetSessionSelector, FormPresetProjectSelector}
+
+// FormField defines an input field in a UserCommand form.
+type FormField struct {
+	Variable    string   `yaml:"variable"`              // Template variable name (under .Form)
+	Type        string   `yaml:"type,omitempty"`        // text, textarea, select, multi-select
+	Preset      string   `yaml:"preset,omitempty"`      // SessionSelector, ProjectSelector
+	Label       string   `yaml:"label"`                 // Display label
+	Placeholder string   `yaml:"placeholder,omitempty"` // Input placeholder text
+	Default     string   `yaml:"default,omitempty"`     // Default value (text/textarea/select)
+	Options     []string `yaml:"options,omitempty"`     // Static options for select/multi-select
+	Multi       bool     `yaml:"multi,omitempty"`       // For presets: enable multi-select
+	Filter      string   `yaml:"filter,omitempty"`      // For SessionSelector: "active" (default) or "all"
+}
+
 // defaultUserCommands provides built-in commands that users can override.
 var defaultUserCommands = map[string]UserCommand{
 	"Recycle": {
@@ -114,6 +156,27 @@ var defaultUserCommands = map[string]UserCommand{
 	"PrevActive": {
 		Action: ActionPrevActive,
 		Help:   "prev active session",
+		Silent: true,
+	},
+	"SendBatch": {
+		Sh: `{{ range .Form.targets }}
+{{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+{{ end }}`,
+		Form: []FormField{
+			{
+				Variable: "targets",
+				Preset:   FormPresetSessionSelector,
+				Multi:    true,
+				Label:    "Select recipients",
+			},
+			{
+				Variable:    "message",
+				Type:        FormTypeText,
+				Label:       "Message",
+				Placeholder: "Type your message...",
+			},
+		},
+		Help:   "send message to multiple agents",
 		Silent: true,
 	},
 }
@@ -306,13 +369,14 @@ type Keybinding struct {
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  string   `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
-	Sh      string   `yaml:"sh"`              // shell command template - mutually exclusive with action
-	Help    string   `yaml:"help"`            // description shown in palette/help
-	Confirm string   `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
-	Silent  bool     `yaml:"silent"`          // skip loading popup for fast commands
-	Exit    string   `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
-	Scope   []string `yaml:"scope,omitempty"` // views where command is active (empty = global)
+	Action  string      `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
+	Sh      string      `yaml:"sh"`              // shell command template - mutually exclusive with action
+	Form    []FormField `yaml:"form,omitempty"`  // interactive input fields collected before sh execution
+	Help    string      `yaml:"help"`            // description shown in palette/help
+	Confirm string      `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
+	Silent  bool        `yaml:"silent"`          // skip loading popup for fast commands
+	Exit    string      `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
+	Scope   []string    `yaml:"scope,omitempty"` // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
@@ -571,9 +635,83 @@ func (c *Config) validateUserCommandsBasic() error {
 				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review", scope))
 			}
 		}
+
+		// Validate form fields
+		if len(cmd.Form) > 0 {
+			if cmd.Action != "" {
+				errs = errs.Append(field, fmt.Errorf("form can only be used with sh, not action"))
+				continue
+			}
+
+			if err := criterio.ValidateSlice(field+".form", cmd.Form, validateFormField); err != nil {
+				errs = errs.Append("", err)
+				continue
+			}
+
+			// Check for duplicate variables
+			seenVars := make(map[string]bool, len(cmd.Form))
+			for j, ff := range cmd.Form {
+				if seenVars[ff.Variable] {
+					errs = errs.Append(fmt.Sprintf("%s.form[%d].variable", field, j),
+						fmt.Errorf("duplicate variable %q", ff.Variable))
+				}
+				seenVars[ff.Variable] = true
+			}
+		}
 	}
 
 	return errs.ToError()
+}
+
+// validateFormField validates a single form field definition.
+func validateFormField(ff FormField) error {
+	var extra criterio.FieldErrorsBuilder
+
+	// Cross-field: exactly one of type or preset
+	switch {
+	case ff.Type == "" && ff.Preset == "":
+		extra = extra.Append("type", fmt.Errorf("must specify either type or preset"))
+	case ff.Type != "" && ff.Preset != "":
+		extra = extra.Append("type", fmt.Errorf("cannot specify both type and preset"))
+	}
+
+	// Select types require options (when not a preset)
+	if (ff.Type == FormTypeSelect || ff.Type == FormTypeMultiSelect) && len(ff.Options) == 0 {
+		extra = extra.Append("options", fmt.Errorf("required for %s type", ff.Type))
+	}
+
+	// Filter is only valid for SessionSelector preset
+	if ff.Filter != "" && ff.Preset != FormPresetSessionSelector {
+		extra = extra.Append("filter", fmt.Errorf("only valid for %s preset", FormPresetSessionSelector))
+	}
+
+	return criterio.ValidateStruct(
+		criterio.Run("variable", ff.Variable, criterio.Required[string], isValidIdentifier),
+		criterio.Run("type", ff.Type,
+			criterio.When(ff.Type != "", criterio.StrOneOf(ValidFormTypes...)),
+		),
+		criterio.Run("preset", ff.Preset,
+			criterio.When(ff.Preset != "", criterio.StrOneOf(ValidFormPresets...)),
+		),
+		criterio.Run("filter", ff.Filter,
+			criterio.When(ff.Filter != "", criterio.StrOneOf(ValidSessionFilters...)),
+		),
+		extra.ToError(),
+	)
+}
+
+// isValidIdentifier checks that a string is a valid Go-style identifier
+// (letters, digits, underscores; must not start with a digit).
+var isValidIdentifier criterio.Validator[string] = func(s string) error {
+	for i, r := range s {
+		if i == 0 && r >= '0' && r <= '9' {
+			return fmt.Errorf("must not start with a digit")
+		}
+		if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '_' {
+			return fmt.Errorf("must contain only letters, digits, and underscores")
+		}
+	}
+	return nil
 }
 
 // validateMaxRecycled checks that max_recycled values are non-negative.

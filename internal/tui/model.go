@@ -30,6 +30,7 @@ import (
 	"github.com/hay-kot/hive/internal/hive/plugins"
 	"github.com/hay-kot/hive/internal/tui/command"
 	"github.com/hay-kot/hive/internal/tui/components"
+	"github.com/hay-kot/hive/internal/tui/components/form"
 	tuinotify "github.com/hay-kot/hive/internal/tui/notify"
 	"github.com/hay-kot/hive/internal/tui/views/review"
 	"github.com/hay-kot/hive/pkg/kv"
@@ -57,6 +58,7 @@ const (
 	stateShowingHelp
 	stateShowingNotifications
 	stateRenaming
+	stateFormInput
 )
 
 // Key constants for event handling.
@@ -182,6 +184,13 @@ type Model struct {
 	toastController   *ToastController
 	toastView         *ToastView
 	notificationModal *NotificationModal
+
+	// Form dialog (for user command forms)
+	formDialog      *form.Dialog
+	pendingFormCmd  config.UserCommand
+	pendingFormName string
+	pendingFormSess *session.Session
+	pendingFormArgs []string
 }
 
 // PendingCreate returns any pending session creation data.
@@ -886,6 +895,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateConfirming {
 		return m.handleConfirmModalKey(keyStr)
 	}
+	if m.state == stateFormInput {
+		return m.handleFormDialogKey(msg, keyStr)
+	}
 
 	// When filtering in either list, pass most keys except quit
 	if m.list.SettingFilter() || m.msgView.IsFiltering() || m.focusMode {
@@ -930,6 +942,113 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+// showFormOrExecute checks if a command has form fields. If so, creates a form
+// dialog. Otherwise falls through to normal execution via ResolveUserCommand.
+func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess session.Session, args []string) (Model, tea.Cmd) {
+	if len(cmd.Form) == 0 {
+		action := m.handler.ResolveUserCommand(name, cmd, sess, args)
+		return m.dispatchAction(action)
+	}
+
+	dialog, err := newFormDialog(name, cmd.Form, m.allSessions, m.discoveredRepos, m.terminalStatuses)
+	if err != nil {
+		return m, m.notifyError("form error: %v", err)
+	}
+
+	m.formDialog = dialog
+	m.pendingFormCmd = cmd
+	m.pendingFormName = name
+	m.pendingFormSess = &sess
+	m.pendingFormArgs = args
+	m.state = stateFormInput
+	return m, nil
+}
+
+// handleFormDialogKey handles keys when the form dialog is shown.
+func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	if keyStr == keyCtrlC {
+		m.quitting = true
+		return m, tea.Quit
+	}
+
+	var cmd tea.Cmd
+	m.formDialog, cmd = m.formDialog.Update(msg)
+
+	if m.formDialog.Submitted() {
+		formValues := m.formDialog.FormValues()
+		action := m.handler.RenderWithFormData(
+			m.pendingFormName,
+			m.pendingFormCmd,
+			*m.pendingFormSess,
+			m.pendingFormArgs,
+			formValues,
+		)
+		m.clearFormState()
+		return m.dispatchAction(action)
+	}
+
+	if m.formDialog.Cancelled() {
+		m.clearFormState()
+		m.state = stateNormal
+		return m, nil
+	}
+
+	return m, cmd
+}
+
+// clearFormState resets all form dialog state.
+func (m *Model) clearFormState() {
+	m.formDialog = nil
+	m.pendingFormCmd = config.UserCommand{}
+	m.pendingFormName = ""
+	m.pendingFormSess = nil
+	m.pendingFormArgs = nil
+}
+
+// dispatchAction handles an action that may need confirmation or immediate execution.
+func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
+	if action.Err != nil {
+		m.state = stateNormal
+		return m, m.notifyError("%v", action.Err)
+	}
+
+	if action.NeedsConfirm() {
+		m.state = stateConfirming
+		m.pending = action
+		m.modal = NewModal("Confirm", action.Confirm)
+		return m, nil
+	}
+
+	if action.Type == ActionTypeRecycle {
+		m.state = stateNormal
+		return m, m.startRecycle(action.SessionID)
+	}
+
+	if action.Exit {
+		cmdAction := command.Action{
+			Type:      command.ActionType(action.Type),
+			SessionID: action.SessionID,
+			ShellCmd:  action.ShellCmd,
+		}
+		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		if err != nil {
+			log.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
+		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
+			log.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
+		}
+		m.quitting = true
+		return m, tea.Quit
+	}
+
+	m.state = stateNormal
+	m.pending = action
+	if !action.Silent {
+		m.state = stateLoading
+		m.loadingMessage = "Processing..."
+	}
+	return m, m.executeAction(action)
 }
 
 // handleRecycleModalKey handles keys when recycle modal is shown.
@@ -1223,6 +1342,16 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			}
 			m.handleFilterAction(actionType)
 			return m.applyFilter()
+		}
+
+		// Form commands don't require a selected session (they collect their own input)
+		if len(entry.Command.Form) > 0 {
+			m.state = stateNormal
+			var sess session.Session
+			if selected != nil {
+				sess = *selected
+			}
+			return m.showFormOrExecute(entry.Name, entry.Command, sess, args)
 		}
 
 		// Other commands require a selected session
@@ -1663,6 +1792,12 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		m.handler.SetSelectedWindow("")
 	}
 
+	// Check if this key maps to a form command (intercept before Resolve to
+	// avoid template errors from missing .Form data)
+	if cmdName, cmd, hasForm := m.handler.ResolveFormCommand(keyStr, *selected); hasForm {
+		return m.showFormOrExecute(cmdName, cmd, *selected, nil)
+	}
+
 	action, ok := m.handler.Resolve(keyStr, *selected)
 	action = m.maybeOverrideWindowDelete(action, treeItem)
 	if ok {
@@ -1915,6 +2050,11 @@ func (m *Model) hasEditorFocus() bool {
 		return true
 	}
 
+	// Check form dialog
+	if m.state == stateFormInput {
+		return true
+	}
+
 	return false
 }
 
@@ -1937,6 +2077,11 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case stateRenaming:
 		m.renameInput, cmd = m.renameInput.Update(msg)
+		return m, cmd
+	case stateFormInput:
+		if m.formDialog != nil {
+			m.formDialog, cmd = m.formDialog.Update(msg)
+		}
 		return m, cmd
 	default:
 		// For other states (normal, confirming, loading, etc.),
@@ -2386,6 +2531,25 @@ func (m Model) View() tea.View {
 			m.newSessionForm.View(),
 		)
 		formOverlay := styles.ModalStyle.Render(formContent)
+
+		bgLayer := lipgloss.NewLayer(mainView)
+		formLayer := lipgloss.NewLayer(formOverlay)
+		formW := lipgloss.Width(formOverlay)
+		formH := lipgloss.Height(formOverlay)
+		centerX := (w - formW) / 2
+		centerY := (h - formH) / 2
+		formLayer.X(centerX).Y(centerY).Z(1)
+
+		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
+		content = compositor.Render()
+	case m.state == stateFormInput && m.formDialog != nil:
+		formContent := lipgloss.JoinVertical(
+			lipgloss.Left,
+			styles.ModalTitleStyle.Render(m.formDialog.Title),
+			"",
+			m.formDialog.View(),
+		)
+		formOverlay := styles.FormModalStyle.Render(formContent)
 
 		bgLayer := lipgloss.NewLayer(mainView)
 		formLayer := lipgloss.NewLayer(formOverlay)
