@@ -709,8 +709,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case renameCompleteMsg:
 		if msg.err != nil {
 			log.Error().Err(msg.err).Msg("rename failed")
-			m.err = msg.err
-			return m, nil
+			m.state = stateNormal
+			return m, m.notifyError("rename failed: %v", msg.err)
 		}
 		return m, m.loadSessions()
 
