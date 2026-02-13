@@ -22,6 +22,21 @@ func shellQuote(s string) string {
 // scriptPaths holds paths to bundled scripts, set once at startup via SetScriptPaths.
 var scriptPaths map[string]string
 
+// agentConfig holds agent profile values, set once at startup via SetAgentConfig.
+var agentConfig struct {
+	command string
+	window  string
+	flags   string
+}
+
+// SetAgentConfig registers the active agent profile for template functions.
+// Call once at startup after config load.
+func SetAgentConfig(command, window, flags string) {
+	agentConfig.command = command
+	agentConfig.window = window
+	agentConfig.flags = flags
+}
+
 // SetScriptPaths registers bundled script paths for template functions.
 // Call once at startup before any templates are rendered.
 func SetScriptPaths(paths map[string]string) {
@@ -39,10 +54,20 @@ func scriptPath(name string) string {
 }
 
 var funcs = template.FuncMap{
-	"shq":       shellQuote,
-	"join":      strings.Join,
-	"hiveTmux":  func() string { return scriptPath("hive-tmux") },
-	"agentSend": func() string { return scriptPath("agent-send") },
+	"shq":          shellQuote,
+	"join":         strings.Join,
+	"hiveTmux":     func() string { return scriptPath("hive-tmux") },
+	"agentSend":    func() string { return scriptPath("agent-send") },
+	"agentCommand": func() string { return stringOrDefault(agentConfig.command, "claude") },
+	"agentWindow":  func() string { return stringOrDefault(agentConfig.window, "claude") },
+	"agentFlags":   func() string { return agentConfig.flags },
+}
+
+func stringOrDefault(s, def string) string {
+	if s != "" {
+		return s
+	}
+	return def
 }
 
 // Render executes a Go template string with the given data.

@@ -10,6 +10,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // validConfig returns a Config with all required fields set for testing.
@@ -20,6 +21,10 @@ func validConfig(t *testing.T) *Config {
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
 		TUI:     TUIConfig{Theme: styles.DefaultTheme},
+		Agents: AgentsConfig{
+			Default:  "claude",
+			Profiles: map[string]AgentProfile{"claude": {}},
+		},
 		Database: DatabaseConfig{
 			MaxOpenConns: 2,
 			MaxIdleConns: 2,
@@ -999,4 +1004,166 @@ func TestValidate_UserCommandInvalidScope(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid scope")
 	assert.Contains(t, err.Error(), "must be one of: global, sessions, messages, review")
+}
+
+func TestAgentsConfig_UnmarshalYAML(t *testing.T) {
+	tests := []struct {
+		name     string
+		yaml     string
+		wantDef  string
+		wantKeys []string
+	}{
+		{
+			name: "full config",
+			yaml: `
+default: aider
+claude:
+  command: claude
+  flags:
+    - "--model"
+    - "opus"
+aider:
+  command: /opt/bin/aider
+  flags: ["--model", "sonnet"]
+`,
+			wantDef:  "aider",
+			wantKeys: []string{"claude", "aider"},
+		},
+		{
+			name: "minimal profile",
+			yaml: `
+default: claude
+claude: {}
+`,
+			wantDef:  "claude",
+			wantKeys: []string{"claude"},
+		},
+		{
+			name: "command defaults to empty",
+			yaml: `
+default: myagent
+myagent: {}
+`,
+			wantDef:  "myagent",
+			wantKeys: []string{"myagent"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got AgentsConfig
+			err := yaml.Unmarshal([]byte(tt.yaml), &got)
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantDef, got.Default)
+			for _, key := range tt.wantKeys {
+				assert.Contains(t, got.Profiles, key)
+			}
+		})
+	}
+}
+
+func TestAgentsConfig_DefaultProfile(t *testing.T) {
+	cfg := AgentsConfig{
+		Default: "aider",
+		Profiles: map[string]AgentProfile{
+			"claude": {Command: "claude"},
+			"aider":  {Command: "/opt/bin/aider", Flags: []string{"--model", "sonnet"}},
+		},
+	}
+
+	p := cfg.DefaultProfile()
+	assert.Equal(t, "/opt/bin/aider", p.Command)
+	assert.Equal(t, []string{"--model", "sonnet"}, p.Flags)
+}
+
+func TestAgentsConfig_DefaultProfileMissing(t *testing.T) {
+	cfg := AgentsConfig{
+		Default:  "missing",
+		Profiles: map[string]AgentProfile{},
+	}
+	p := cfg.DefaultProfile()
+	assert.Empty(t, p.Command)
+}
+
+func TestAgentProfile_CommandOrDefault(t *testing.T) {
+	t.Run("uses command when set", func(t *testing.T) {
+		p := AgentProfile{Command: "/usr/bin/aider"}
+		assert.Equal(t, "/usr/bin/aider", p.CommandOrDefault("aider"))
+	})
+
+	t.Run("falls back to key", func(t *testing.T) {
+		p := AgentProfile{}
+		assert.Equal(t, "claude", p.CommandOrDefault("claude"))
+	})
+}
+
+func TestAgentProfile_ShellFlags(t *testing.T) {
+	t.Run("empty flags", func(t *testing.T) {
+		p := AgentProfile{}
+		assert.Empty(t, p.ShellFlags())
+	})
+
+	t.Run("single flag", func(t *testing.T) {
+		p := AgentProfile{Flags: []string{"--verbose"}}
+		assert.Equal(t, "'--verbose'", p.ShellFlags())
+	})
+
+	t.Run("multiple flags", func(t *testing.T) {
+		p := AgentProfile{Flags: []string{"--model", "opus"}}
+		assert.Equal(t, "'--model' 'opus'", p.ShellFlags())
+	})
+
+	t.Run("flags with special chars", func(t *testing.T) {
+		p := AgentProfile{Flags: []string{"--prompt", "it's a test"}}
+		assert.Equal(t, `'--prompt' 'it'\''s a test'`, p.ShellFlags())
+	})
+}
+
+func TestValidate_AgentsDefaultMissing(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Agents = AgentsConfig{
+		Default:  "nonexistent",
+		Profiles: map[string]AgentProfile{"claude": {}},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agents.default")
+	assert.Contains(t, err.Error(), "nonexistent")
+}
+
+func TestValidate_AgentsDefaultValid(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Agents = AgentsConfig{
+		Default:  "claude",
+		Profiles: map[string]AgentProfile{"claude": {}},
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
+func TestApplyDefaults_AgentsEmpty(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.applyDefaults()
+
+	assert.Equal(t, "claude", cfg.Agents.Default)
+	assert.Contains(t, cfg.Agents.Profiles, "claude")
+}
+
+func TestApplyDefaults_AgentsPreserved(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.Agents = AgentsConfig{
+		Default: "aider",
+		Profiles: map[string]AgentProfile{
+			"aider": {Command: "/opt/bin/aider"},
+		},
+	}
+	cfg.applyDefaults()
+
+	assert.Equal(t, "aider", cfg.Agents.Default)
+	assert.Equal(t, "/opt/bin/aider", cfg.Agents.Profiles["aider"].Command)
+	assert.NotContains(t, cfg.Agents.Profiles, "claude")
 }

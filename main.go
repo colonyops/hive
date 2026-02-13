@@ -127,6 +127,14 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, fmt.Errorf("load config: %w", err)
 			}
 
+			// Register active agent profile for template functions
+			agentProfile := cfg.Agents.DefaultProfile()
+			tmpl.SetAgentConfig(
+				agentProfile.CommandOrDefault(cfg.Agents.Default),
+				cfg.Agents.Default,
+				agentProfile.ShellFlags(),
+			)
+
 			// Apply configured theme (validation ensures name is valid)
 			palette, _ := styles.GetPalette(cfg.TUI.Theme)
 			styles.SetTheme(palette)

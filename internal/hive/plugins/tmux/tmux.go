@@ -57,12 +57,12 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Silent: true,
 		},
 		"AgentSend": {
-			Sh:     `{{ agentSend }} {{ .Name | shq }}:claude`,
+			Sh:     `{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }}`,
 			Help:   "send enter to agent",
 			Silent: true,
 		},
 		"AgentSendClear": {
-			Sh:     `{{ agentSend }} {{ .Name | shq }}:claude /clear`,
+			Sh:     `{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /clear`,
 			Help:   "send /clear to agent",
 			Silent: true,
 		},

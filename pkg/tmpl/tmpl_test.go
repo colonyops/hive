@@ -107,3 +107,62 @@ func TestRender(t *testing.T) {
 		})
 	}
 }
+
+func TestAgentTemplateFunctions_Defaults(t *testing.T) {
+	// Reset agent config to ensure defaults
+	agentConfig.command = ""
+	agentConfig.window = ""
+	agentConfig.flags = ""
+
+	got, err := Render("{{ agentCommand }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "claude", got)
+
+	got, err = Render("{{ agentWindow }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "claude", got)
+
+	got, err = Render("{{ agentFlags }}", nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestAgentTemplateFunctions_Configured(t *testing.T) {
+	SetAgentConfig("aider", "aider", "'--model' 'sonnet'")
+	t.Cleanup(func() {
+		agentConfig.command = ""
+		agentConfig.window = ""
+		agentConfig.flags = ""
+	})
+
+	got, err := Render("{{ agentCommand }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "aider", got)
+
+	got, err = Render("{{ agentWindow }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "aider", got)
+
+	got, err = Render("{{ agentFlags }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "'--model' 'sonnet'", got)
+}
+
+func TestAgentTemplateFunctions_InSpawnCommand(t *testing.T) {
+	SetAgentConfig("aider", "aider", "'--model' 'sonnet'")
+	t.Cleanup(func() {
+		agentConfig.command = ""
+		agentConfig.window = ""
+		agentConfig.flags = ""
+	})
+
+	tmplStr := `HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags }} hive-tmux {{ .Name | shq }} {{ .Path | shq }}`
+	data := struct {
+		Name string
+		Path string
+	}{Name: "test-session", Path: "/tmp/work"}
+
+	got, err := Render(tmplStr, data)
+	require.NoError(t, err)
+	assert.Equal(t, "HIVE_AGENT_COMMAND='aider' HIVE_AGENT_WINDOW='aider' HIVE_AGENT_FLAGS='--model' 'sonnet' hive-tmux 'test-session' '/tmp/work'", got)
+}

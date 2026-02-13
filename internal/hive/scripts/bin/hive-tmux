@@ -1,12 +1,21 @@
 #!/bin/bash
 set -eo pipefail
 
-# Hive layout - two windows: claude + shell
+# Hive layout - two windows: agent + shell
 # Usage: hive-tmux [-b] [session-name] [working-dir] [prompt] [window]
 #   -b: background mode (create session without attaching)
 #   window: optional window name to select (for existing sessions)
 # If session exists, switches/attaches. Otherwise creates new.
 # Works both inside and outside tmux.
+#
+# Environment variables:
+#   HIVE_AGENT_COMMAND  - agent CLI binary (default: claude)
+#   HIVE_AGENT_WINDOW   - tmux window name (default: claude)
+#   HIVE_AGENT_FLAGS    - extra flags appended to agent command
+
+AGENT_CMD="${HIVE_AGENT_COMMAND:-claude}"
+AGENT_WINDOW="${HIVE_AGENT_WINDOW:-claude}"
+AGENT_FLAGS="${HIVE_AGENT_FLAGS:-}"
 
 attach_or_switch() {
     local session=$1
@@ -42,15 +51,15 @@ if tmux has-session -t "$SESSION" 2>/dev/null; then
         attach_or_switch "$SESSION" "$WINDOW"
     fi
 else
-    # Create new session running claude directly
-    # Pass prompt as separate arg so tmux execv works correctly
+    # Build agent command arguments
+    # shellcheck disable=SC2086
     if [ -n "$PROMPT" ]; then
-        tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" -- claude "$PROMPT"
+        tmux new-session -d -s "$SESSION" -n "$AGENT_WINDOW" -c "$WORKDIR" -- $AGENT_CMD $AGENT_FLAGS "$PROMPT"
     else
-        tmux new-session -d -s "$SESSION" -n claude -c "$WORKDIR" -- claude
+        tmux new-session -d -s "$SESSION" -n "$AGENT_WINDOW" -c "$WORKDIR" -- $AGENT_CMD $AGENT_FLAGS
     fi
     tmux new-window -t "$SESSION" -n shell -c "$WORKDIR"
-    tmux select-window -t "$SESSION:claude"
+    tmux select-window -t "$SESSION:$AGENT_WINDOW"
 
     if [ "$BACKGROUND" = false ]; then
         attach_or_switch "$SESSION"
