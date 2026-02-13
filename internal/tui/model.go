@@ -952,7 +952,7 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 		return m.dispatchAction(action)
 	}
 
-	dialog, err := newFormDialog(name, cmd.Form, m.allSessions, m.discoveredRepos)
+	dialog, err := newFormDialog(name, cmd.Form, m.allSessions, m.discoveredRepos, m.terminalStatuses)
 	if err != nil {
 		return m, m.notifyError("form error: %v", err)
 	}
@@ -1344,6 +1344,16 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m.applyFilter()
 		}
 
+		// Form commands don't require a selected session (they collect their own input)
+		if len(entry.Command.Form) > 0 {
+			m.state = stateNormal
+			var sess session.Session
+			if selected != nil {
+				sess = *selected
+			}
+			return m.showFormOrExecute(entry.Name, entry.Command, sess, args)
+		}
+
 		// Other commands require a selected session
 		if selected == nil {
 			m.state = stateNormal
@@ -1355,12 +1365,6 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			m.handler.SetSelectedWindow(ti.WindowName)
 		} else {
 			m.handler.SetSelectedWindow("")
-		}
-
-		// Check if this command has a form — show form dialog instead of resolving
-		if len(entry.Command.Form) > 0 {
-			m.state = stateNormal
-			return m.showFormOrExecute(entry.Name, entry.Command, *selected, args)
 		}
 
 		// Resolve the user command to an Action

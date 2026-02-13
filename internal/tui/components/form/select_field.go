@@ -56,7 +56,8 @@ func NewSelectFormField(label string, options []string, defaultVal string) *Sele
 		}
 	}
 
-	height := max(min(len(options), 8), 1)
+	const maxVisible = 8
+	height := max(min(len(options), maxVisible), 1)
 
 	delegate := selectDelegate{}
 	l := list.New(items, delegate, 40, height)
@@ -65,6 +66,7 @@ func NewSelectFormField(label string, options []string, defaultVal string) *Sele
 	l.SetFilteringEnabled(true)
 	l.SetShowFilter(false)
 	l.SetShowHelp(false)
+	l.SetShowPagination(len(options) > maxVisible)
 	l.Styles.TitleBar = lipgloss.NewStyle()
 
 	l.FilterInput.Prompt = "/ "

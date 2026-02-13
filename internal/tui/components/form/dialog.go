@@ -68,15 +68,18 @@ func (d *Dialog) Update(msg tea.Msg) (*Dialog, tea.Cmd) {
 	return d.updateFocusedField(msg)
 }
 
-// View renders all fields vertically with help text.
+// View renders all fields vertically with spacing and help text.
 func (d *Dialog) View() string {
 	var parts []string
-	for _, field := range d.fields {
+	for i, field := range d.fields {
+		if i > 0 {
+			parts = append(parts, "")
+		}
 		parts = append(parts, field.View())
 	}
 
 	help := styles.TextMutedStyle.Render("tab: next  shift+tab: prev  enter: submit  esc: cancel")
-	parts = append(parts, help)
+	parts = append(parts, "", help)
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
 }

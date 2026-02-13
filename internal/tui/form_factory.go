@@ -5,15 +5,19 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/tui/components/form"
+	"github.com/hay-kot/hive/pkg/kv"
 )
 
 // newFormDialog creates a form.Dialog from config fields, injecting runtime data.
+// termStatuses may be nil if terminal integration is not configured.
 func newFormDialog(
 	title string,
 	fields []config.FormField,
 	sessions []session.Session,
 	repos []DiscoveredRepo,
+	termStatuses *kv.Store[string, TerminalStatus],
 ) (*form.Dialog, error) {
 	components := make([]form.Field, 0, len(fields))
 	variables := make([]string, 0, len(fields))
@@ -24,12 +28,7 @@ func newFormDialog(
 		case f.Preset == config.FormPresetSessionSelector:
 			filtered := sessions
 			if f.Filter != config.FormFilterAll {
-				filtered = make([]session.Session, 0, len(sessions))
-				for _, s := range sessions {
-					if s.State == session.StateActive {
-						filtered = append(filtered, s)
-					}
-				}
+				filtered = filterActiveSessions(sessions, termStatuses)
 			}
 			comp = form.NewSessionSelectorField(f.Label, filtered, f.Multi)
 		case f.Preset == config.FormPresetProjectSelector:
@@ -54,4 +53,24 @@ func newFormDialog(
 	}
 
 	return form.NewDialog(title, components, variables), nil
+}
+
+// filterActiveSessions returns sessions that are active and have a non-missing
+// terminal status. When termStatuses is nil (no terminal integration), falls
+// back to filtering by session state only.
+func filterActiveSessions(sessions []session.Session, termStatuses *kv.Store[string, TerminalStatus]) []session.Session {
+	filtered := make([]session.Session, 0, len(sessions))
+	for _, s := range sessions {
+		if s.State != session.StateActive {
+			continue
+		}
+		if termStatuses != nil {
+			ts, ok := termStatuses.Get(s.ID)
+			if !ok || ts.Status == terminal.StatusMissing {
+				continue
+			}
+		}
+		filtered = append(filtered, s)
+	}
+	return filtered
 }

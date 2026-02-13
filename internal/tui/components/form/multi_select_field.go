@@ -58,7 +58,8 @@ func NewMultiSelectFormField(label string, options []string) *MultiSelectField {
 		items[i] = selectItem{label: opt, index: i}
 	}
 
-	height := max(min(len(options), 8), 1)
+	const maxVisible = 8
+	height := max(min(len(options), maxVisible), 1)
 
 	checked := make(map[int]bool)
 	delegate := multiSelectDelegate{checked: &checked}
@@ -69,6 +70,7 @@ func NewMultiSelectFormField(label string, options []string) *MultiSelectField {
 	l.SetFilteringEnabled(true)
 	l.SetShowFilter(false)
 	l.SetShowHelp(false)
+	l.SetShowPagination(len(options) > maxVisible)
 	l.Styles.TitleBar = lipgloss.NewStyle()
 
 	l.FilterInput.Prompt = "/ "
