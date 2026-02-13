@@ -16,6 +16,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/hay-kot/hive/pkg/randid"
+	"github.com/hay-kot/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
 
@@ -48,6 +49,7 @@ func NewSessionService(
 	gitClient git.Git,
 	cfg *config.Config,
 	exec executil.Executor,
+	renderer *tmpl.Renderer,
 	log zerolog.Logger,
 	stdout, stderr io.Writer,
 ) *SessionService {
@@ -57,8 +59,8 @@ func NewSessionService(
 		config:     cfg,
 		executor:   exec,
 		log:        log,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, stdout, stderr),
-		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec),
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, stdout, stderr),
+		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), stdout),
 	}

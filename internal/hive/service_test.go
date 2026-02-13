@@ -9,6 +9,7 @@ import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/hay-kot/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -83,7 +84,8 @@ func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Sess
 		}
 	}
 	log := zerolog.New(io.Discard)
-	return NewSessionService(store, &mockGit{}, cfg, nil, log, io.Discard, io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	return NewSessionService(store, &mockGit{}, cfg, nil, renderer, log, io.Discard, io.Discard)
 }
 
 func TestRenameSession(t *testing.T) {

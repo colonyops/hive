@@ -19,7 +19,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 		received++
 	})
 
-	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{})
+	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
 	m := &Model{
 		activeView:      ViewSessions,
 		reviewView:      nil,
@@ -54,7 +54,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
-	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{})
+	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
 
 	m := &Model{
 		activeView: ViewSessions,

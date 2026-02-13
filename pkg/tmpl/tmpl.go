@@ -19,50 +19,6 @@ func shellQuote(s string) string {
 	return "'" + escaped + "'"
 }
 
-// scriptPaths holds paths to bundled scripts, set once at startup via SetScriptPaths.
-var scriptPaths map[string]string
-
-// agentConfig holds agent profile values, set once at startup via SetAgentConfig.
-var agentConfig struct {
-	command string
-	window  string
-	flags   string
-}
-
-// SetAgentConfig registers the active agent profile for template functions.
-// Call once at startup after config load.
-func SetAgentConfig(command, window, flags string) {
-	agentConfig.command = command
-	agentConfig.window = window
-	agentConfig.flags = flags
-}
-
-// SetScriptPaths registers bundled script paths for template functions.
-// Call once at startup before any templates are rendered.
-func SetScriptPaths(paths map[string]string) {
-	scriptPaths = paths
-}
-
-func scriptPath(name string) string {
-	if scriptPaths == nil {
-		return name
-	}
-	if p, ok := scriptPaths[name]; ok {
-		return p
-	}
-	return name
-}
-
-var funcs = template.FuncMap{
-	"shq":          shellQuote,
-	"join":         strings.Join,
-	"hiveTmux":     func() string { return scriptPath("hive-tmux") },
-	"agentSend":    func() string { return scriptPath("agent-send") },
-	"agentCommand": func() string { return stringOrDefault(agentConfig.command, "claude") },
-	"agentWindow":  func() string { return stringOrDefault(agentConfig.window, "claude") },
-	"agentFlags":   func() string { return agentConfig.flags },
-}
-
 func stringOrDefault(s, def string) string {
 	if s != "" {
 		return s
@@ -70,14 +26,57 @@ func stringOrDefault(s, def string) string {
 	return def
 }
 
+// Config holds all template rendering context.
+type Config struct {
+	ScriptPaths  map[string]string // "hive-tmux" -> "/path/to/bin/hive-tmux"
+	AgentCommand string            // default profile command (e.g., "claude")
+	AgentWindow  string            // default profile key / tmux window name
+	AgentFlags   string            // shell-quoted flags string
+}
+
+func (c Config) scriptPath(name string) string {
+	if c.ScriptPaths == nil {
+		return name
+	}
+	if p, ok := c.ScriptPaths[name]; ok {
+		return p
+	}
+	return name
+}
+
+// Renderer renders Go templates with shell-oriented helper functions.
+type Renderer struct {
+	funcs template.FuncMap
+}
+
+// New creates a Renderer with the given config baked into template functions.
+func New(cfg Config) *Renderer {
+	return &Renderer{
+		funcs: template.FuncMap{
+			"shq":          shellQuote,
+			"join":         strings.Join,
+			"hiveTmux":     func() string { return cfg.scriptPath("hive-tmux") },
+			"agentSend":    func() string { return cfg.scriptPath("agent-send") },
+			"agentCommand": func() string { return stringOrDefault(cfg.AgentCommand, "claude") },
+			"agentWindow":  func() string { return stringOrDefault(cfg.AgentWindow, "claude") },
+			"agentFlags":   func() string { return cfg.AgentFlags },
+		},
+	}
+}
+
+// NewValidation creates a Renderer with safe defaults for template syntax checking.
+// Template functions return placeholder values — output is discarded, only parse errors matter.
+func NewValidation() *Renderer {
+	return New(Config{
+		ScriptPaths:  map[string]string{"hive-tmux": "hive-tmux", "agent-send": "agent-send"},
+		AgentCommand: "claude",
+		AgentWindow:  "claude",
+	})
+}
+
 // Render executes a Go template string with the given data.
-// Returns an error if the template is invalid or references undefined keys.
-//
-// Available template functions:
-//   - shq: Shell-quote a string for safe use in shell commands
-//   - join: Join string slice with separator (e.g., join .Args " ")
-func Render(tmpl string, data any) (string, error) {
-	t, err := template.New("").Funcs(funcs).Option("missingkey=error").Parse(tmpl)
+func (r *Renderer) Render(tmpl string, data any) (string, error) {
+	t, err := template.New("").Funcs(r.funcs).Option("missingkey=error").Parse(tmpl)
 	if err != nil {
 		return "", fmt.Errorf("parse template: %w", err)
 	}

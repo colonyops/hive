@@ -7,7 +7,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestRender(t *testing.T) {
+func TestRenderer_Render(t *testing.T) {
+	r := New(Config{})
+
 	tests := []struct {
 		name    string
 		tmpl    string
@@ -97,7 +99,7 @@ func TestRender(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := Render(tt.tmpl, tt.data)
+			got, err := r.Render(tt.tmpl, tt.data)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -108,61 +110,113 @@ func TestRender(t *testing.T) {
 	}
 }
 
-func TestAgentTemplateFunctions_Defaults(t *testing.T) {
-	// Reset agent config to ensure defaults
-	agentConfig.command = ""
-	agentConfig.window = ""
-	agentConfig.flags = ""
+func TestRenderer_Defaults(t *testing.T) {
+	r := New(Config{})
 
-	got, err := Render("{{ agentCommand }}", nil)
+	got, err := r.Render("{{ agentCommand }}", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "claude", got)
 
-	got, err = Render("{{ agentWindow }}", nil)
+	got, err = r.Render("{{ agentWindow }}", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "claude", got)
 
-	got, err = Render("{{ agentFlags }}", nil)
+	got, err = r.Render("{{ agentFlags }}", nil)
 	require.NoError(t, err)
 	assert.Empty(t, got)
 }
 
-func TestAgentTemplateFunctions_Configured(t *testing.T) {
-	SetAgentConfig("aider", "aider", "'--model' 'sonnet'")
-	t.Cleanup(func() {
-		agentConfig.command = ""
-		agentConfig.window = ""
-		agentConfig.flags = ""
+func TestRenderer_Configured(t *testing.T) {
+	r := New(Config{
+		AgentCommand: "aider",
+		AgentWindow:  "aider",
+		AgentFlags:   "'--model' 'sonnet'",
 	})
 
-	got, err := Render("{{ agentCommand }}", nil)
+	got, err := r.Render("{{ agentCommand }}", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "aider", got)
 
-	got, err = Render("{{ agentWindow }}", nil)
+	got, err = r.Render("{{ agentWindow }}", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "aider", got)
 
-	got, err = Render("{{ agentFlags }}", nil)
+	got, err = r.Render("{{ agentFlags }}", nil)
 	require.NoError(t, err)
 	assert.Equal(t, "'--model' 'sonnet'", got)
 }
 
-func TestAgentTemplateFunctions_InSpawnCommand(t *testing.T) {
-	SetAgentConfig("aider", "aider", "'--model' 'sonnet'")
-	t.Cleanup(func() {
-		agentConfig.command = ""
-		agentConfig.window = ""
-		agentConfig.flags = ""
+func TestRenderer_ScriptPaths(t *testing.T) {
+	r := New(Config{
+		ScriptPaths: map[string]string{
+			"hive-tmux":  "/usr/local/bin/hive-tmux",
+			"agent-send": "/usr/local/bin/agent-send",
+		},
 	})
 
-	tmplStr := `HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags }} hive-tmux {{ .Name | shq }} {{ .Path | shq }}`
+	got, err := r.Render("{{ hiveTmux }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "/usr/local/bin/hive-tmux", got)
+
+	got, err = r.Render("{{ agentSend }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "/usr/local/bin/agent-send", got)
+}
+
+func TestRenderer_ScriptPaths_FallbackToName(t *testing.T) {
+	r := New(Config{})
+
+	got, err := r.Render("{{ hiveTmux }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "hive-tmux", got)
+}
+
+func TestRenderer_SpawnCommand(t *testing.T) {
+	r := New(Config{
+		ScriptPaths: map[string]string{
+			"hive-tmux": "/bin/hive-tmux",
+		},
+		AgentCommand: "aider",
+		AgentWindow:  "aider",
+		AgentFlags:   "'--model' 'sonnet'",
+	})
+
+	tmplStr := `HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`
 	data := struct {
 		Name string
 		Path string
 	}{Name: "test-session", Path: "/tmp/work"}
 
-	got, err := Render(tmplStr, data)
+	got, err := r.Render(tmplStr, data)
 	require.NoError(t, err)
-	assert.Equal(t, "HIVE_AGENT_COMMAND='aider' HIVE_AGENT_WINDOW='aider' HIVE_AGENT_FLAGS='--model' 'sonnet' hive-tmux 'test-session' '/tmp/work'", got)
+	assert.Equal(t, "HIVE_AGENT_COMMAND='aider' HIVE_AGENT_WINDOW='aider' HIVE_AGENT_FLAGS='--model' 'sonnet' /bin/hive-tmux 'test-session' '/tmp/work'", got)
+}
+
+func TestNewValidation(t *testing.T) {
+	r := NewValidation()
+
+	// Functions that return placeholder values
+	for _, fn := range []string{"hiveTmux", "agentSend", "agentCommand", "agentWindow"} {
+		got, err := r.Render("{{ "+fn+" }}", nil)
+		require.NoError(t, err, "function %s failed", fn)
+		assert.NotEmpty(t, got, "function %s returned empty", fn)
+	}
+
+	// agentFlags is empty by default
+	got, err := r.Render("{{ agentFlags }}", nil)
+	require.NoError(t, err)
+	assert.Empty(t, got)
+}
+
+func TestRenderers_Isolated(t *testing.T) {
+	r1 := New(Config{AgentCommand: "claude"})
+	r2 := New(Config{AgentCommand: "aider"})
+
+	got1, err := r1.Render("{{ agentCommand }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "claude", got1)
+
+	got2, err := r2.Render("{{ agentCommand }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "aider", got2)
 }

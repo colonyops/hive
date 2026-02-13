@@ -114,9 +114,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			log.Logger = logger
 			logCloser = closer
 
-			// Register bundled script paths for template functions (before config load renders templates)
-			tmpl.SetScriptPaths(scripts.ScriptPaths(flags.DataDir))
-
 			// Extract bundled scripts (non-fatal on failure)
 			if err := scripts.EnsureExtracted(flags.DataDir, version); err != nil {
 				log.Warn().Err(err).Msg("failed to extract bundled scripts")
@@ -127,13 +124,14 @@ Run 'hive new' to create a new session from the current repository.`,
 				return ctx, fmt.Errorf("load config: %w", err)
 			}
 
-			// Register active agent profile for template functions
+			// Create template renderer
 			agentProfile := cfg.Agents.DefaultProfile()
-			tmpl.SetAgentConfig(
-				agentProfile.CommandOrDefault(cfg.Agents.Default),
-				cfg.Agents.Default,
-				agentProfile.ShellFlags(),
-			)
+			renderer := tmpl.New(tmpl.Config{
+				ScriptPaths:  scripts.ScriptPaths(flags.DataDir),
+				AgentCommand: agentProfile.CommandOrDefault(cfg.Agents.Default),
+				AgentWindow:  cfg.Agents.Default,
+				AgentFlags:   agentProfile.ShellFlags(),
+			})
 
 			// Apply configured theme (validation ensures name is valid)
 			palette, _ := styles.GetPalette(cfg.TUI.Theme)
@@ -166,7 +164,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, exec, svcLogger, os.Stdout, os.Stderr)
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, exec, renderer, svcLogger, os.Stdout, os.Stderr)
 
 			// Create plugin manager and register plugins
 			pluginMgr = plugins.NewManager(cfg.Plugins)
@@ -191,6 +189,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				nil, // terminal manager created in TUI command
 				pluginMgr,
 				database,
+				renderer,
 			)
 
 			return ctx, nil
