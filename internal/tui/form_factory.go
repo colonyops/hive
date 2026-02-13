@@ -22,7 +22,16 @@ func newFormDialog(
 		var comp form.Field
 		switch {
 		case f.Preset == config.FormPresetSessionSelector:
-			comp = form.NewSessionSelectorField(f.Label, sessions, f.Multi)
+			filtered := sessions
+			if f.Filter != config.FormFilterAll {
+				filtered = make([]session.Session, 0, len(sessions))
+				for _, s := range sessions {
+					if s.State == session.StateActive {
+						filtered = append(filtered, s)
+					}
+				}
+			}
+			comp = form.NewSessionSelectorField(f.Label, filtered, f.Multi)
 		case f.Preset == config.FormPresetProjectSelector:
 			formRepos := make([]form.Repo, len(repos))
 			for i, r := range repos {

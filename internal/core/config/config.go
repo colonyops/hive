@@ -63,6 +63,15 @@ const (
 	FormPresetProjectSelector = "ProjectSelector"
 )
 
+// Form filter constants for SessionSelector preset.
+const (
+	FormFilterActive = "active" // Only active sessions (default)
+	FormFilterAll    = "all"    // All sessions regardless of state
+)
+
+// ValidSessionFilters lists valid filter values for SessionSelector.
+var ValidSessionFilters = []string{FormFilterActive, FormFilterAll}
+
 // ValidFormTypes lists all valid form field types.
 var ValidFormTypes = []string{FormTypeText, FormTypeTextArea, FormTypeSelect, FormTypeMultiSelect}
 
@@ -79,6 +88,7 @@ type FormField struct {
 	Default     string   `yaml:"default,omitempty"`     // Default value (text/textarea/select)
 	Options     []string `yaml:"options,omitempty"`     // Static options for select/multi-select
 	Multi       bool     `yaml:"multi,omitempty"`       // For presets: enable multi-select
+	Filter      string   `yaml:"filter,omitempty"`      // For SessionSelector: "active" (default) or "all"
 }
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -148,7 +158,7 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "prev active session",
 		Silent: true,
 	},
-	"Broadcast": {
+	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
 {{ end }}`,
@@ -166,7 +176,7 @@ var defaultUserCommands = map[string]UserCommand{
 				Placeholder: "Type your message...",
 			},
 		},
-		Help:   "broadcast message to agents",
+		Help:   "send message to multiple agents",
 		Silent: true,
 	},
 }
@@ -670,6 +680,11 @@ func validateFormField(ff FormField) error {
 		extra = extra.Append("options", fmt.Errorf("required for %s type", ff.Type))
 	}
 
+	// Filter is only valid for SessionSelector preset
+	if ff.Filter != "" && ff.Preset != FormPresetSessionSelector {
+		extra = extra.Append("filter", fmt.Errorf("only valid for %s preset", FormPresetSessionSelector))
+	}
+
 	return criterio.ValidateStruct(
 		criterio.Run("variable", ff.Variable, criterio.Required[string], isValidIdentifier),
 		criterio.Run("type", ff.Type,
@@ -677,6 +692,9 @@ func validateFormField(ff FormField) error {
 		),
 		criterio.Run("preset", ff.Preset,
 			criterio.When(ff.Preset != "", criterio.StrOneOf(ValidFormPresets...)),
+		),
+		criterio.Run("filter", ff.Filter,
+			criterio.When(ff.Filter != "", criterio.StrOneOf(ValidSessionFilters...)),
 		),
 		extra.ToError(),
 	)

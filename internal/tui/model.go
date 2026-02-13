@@ -954,8 +954,7 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 
 	dialog, err := newFormDialog(name, cmd.Form, m.allSessions, m.discoveredRepos)
 	if err != nil {
-		m.err = fmt.Errorf("form error: %w", err)
-		return m, nil
+		return m, m.notifyError("form error: %v", err)
 	}
 
 	m.formDialog = dialog
@@ -1012,8 +1011,7 @@ func (m *Model) clearFormState() {
 func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if action.Err != nil {
 		m.state = stateNormal
-		m.err = action.Err
-		return m, nil
+		return m, m.notifyError("%v", action.Err)
 	}
 
 	if action.NeedsConfirm() {

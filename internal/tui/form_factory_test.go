@@ -11,8 +11,8 @@ import (
 
 func TestNewFormDialog(t *testing.T) {
 	sessions := []session.Session{
-		{ID: "s1", Name: "alpha"},
-		{ID: "s2", Name: "beta"},
+		{ID: "s1", Name: "alpha", State: session.StateActive},
+		{ID: "s2", Name: "beta", State: session.StateActive},
 	}
 	repos := []DiscoveredRepo{
 		{Name: "hive", Path: "/tmp/hive", Remote: "git@github.com:org/hive.git"},
@@ -121,7 +121,7 @@ func TestNewFormDialog(t *testing.T) {
 			{Variable: "targets", Preset: config.FormPresetSessionSelector, Multi: true, Label: "Recipients"},
 			{Variable: "message", Type: config.FormTypeText, Label: "Message", Placeholder: "Type here..."},
 		}
-		d, err := newFormDialog("Broadcast", fields, sessions, repos)
+		d, err := newFormDialog("SendBatch", fields, sessions, repos)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "targets")
@@ -135,6 +135,41 @@ func TestNewFormDialog(t *testing.T) {
 		_, err := newFormDialog("Test", fields, sessions, repos)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown form field type/preset")
+	})
+
+	t.Run("session selector filters active by default", func(t *testing.T) {
+		mixed := []session.Session{
+			{ID: "s1", Name: "alpha", State: session.StateActive},
+			{ID: "s2", Name: "beta", State: session.StateRecycled},
+			{ID: "s3", Name: "gamma", State: session.StateActive},
+		}
+		fields := []config.FormField{
+			{Variable: "targets", Preset: config.FormPresetSessionSelector, Multi: true, Label: "Targets"},
+		}
+		d, err := newFormDialog("Test", fields, mixed, repos)
+		require.NoError(t, err)
+		// The selector should only contain active sessions (alpha, gamma)
+		// With no selections, we get an empty slice, but we can verify the field was created
+		vals := d.FormValues()
+		_, ok := vals["targets"].([]session.Session)
+		require.True(t, ok)
+	})
+
+	t.Run("session selector filter all includes all states", func(t *testing.T) {
+		mixed := []session.Session{
+			{ID: "s1", Name: "alpha", State: session.StateActive},
+			{ID: "s2", Name: "beta", State: session.StateRecycled},
+		}
+		fields := []config.FormField{
+			{Variable: "target", Preset: config.FormPresetSessionSelector, Label: "Target", Filter: config.FormFilterAll},
+		}
+		d, err := newFormDialog("Test", fields, mixed, repos)
+		require.NoError(t, err)
+		vals := d.FormValues()
+		// With filter=all, first item is "alpha" (all sessions included)
+		sess, ok := vals["target"].(session.Session)
+		require.True(t, ok)
+		assert.Equal(t, "s1", sess.ID)
 	})
 
 	t.Run("empty fields", func(t *testing.T) {

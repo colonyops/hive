@@ -843,6 +843,28 @@ func TestValidateFormField(t *testing.T) {
 			wantErr: true,
 			errMsg:  "options",
 		},
+		{
+			name:    "valid session selector with filter active",
+			field:   FormField{Variable: "t", Preset: FormPresetSessionSelector, Label: "T", Filter: FormFilterActive},
+			wantErr: false,
+		},
+		{
+			name:    "valid session selector with filter all",
+			field:   FormField{Variable: "t", Preset: FormPresetSessionSelector, Label: "T", Filter: FormFilterAll},
+			wantErr: false,
+		},
+		{
+			name:    "filter on non-session preset",
+			field:   FormField{Variable: "t", Preset: FormPresetProjectSelector, Label: "T", Filter: FormFilterActive},
+			wantErr: true,
+			errMsg:  "only valid for SessionSelector",
+		},
+		{
+			name:    "invalid filter value",
+			field:   FormField{Variable: "t", Preset: FormPresetSessionSelector, Label: "T", Filter: "bogus"},
+			wantErr: true,
+			errMsg:  "must be one of",
+		},
 	}
 
 	for _, tt := range tests {
