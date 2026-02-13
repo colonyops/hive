@@ -146,4 +146,3 @@ func TestNotificationModal_formatNotification_levels(t *testing.T) {
 		})
 	}
 }
-
