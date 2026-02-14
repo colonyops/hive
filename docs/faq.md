@@ -19,7 +19,7 @@ Tmux Session "fix-bug"
 Agent (Claude) running in tmux window
 ```
 
-See [Getting Started](getting-started.md) for full terminology.
+See [Getting Started](getting-started/index.md) for full terminology.
 
 ### Can I run multiple agents in one session?
 
@@ -29,7 +29,7 @@ Yes. Each agent runs in its own tmux window within the session. Configure [agent
 
 The inbox belongs to the agent (AI tool), not the session (container). The `agent.` prefix supports future per-agent addressing using `agent.<session-id>.<agent-name>.inbox`.
 
-See [Messaging](messaging.md) for full details on inter-agent communication.
+See [Messaging](getting-started/messaging.md) for full details on inter-agent communication.
 
 ### What's a "recycled" session?
 

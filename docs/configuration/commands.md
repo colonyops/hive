@@ -9,11 +9,11 @@ User commands provide a vim-style command palette accessible by pressing `:` in 
 ```yaml
 usercommands:
   review:
-    sh: "{{ agentSend }} {{ .Name | shq }}:claude /review"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /review"
     help: "Send /review to Claude session"
     silent: true
   tidy:
-    sh: "{{ agentSend }} {{ .Name | shq }}:claude /tidy"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /tidy"
     help: "Send /tidy to Claude session"
     confirm: "Commit and push changes?"
   open:
@@ -36,7 +36,7 @@ usercommands:
 | Field     | Type           | Description                                                         |
 | --------- | -------------- | ------------------------------------------------------------------- |
 | `sh`      | string         | Shell command template (mutually exclusive with action)             |
-| `action`  | string         | Built-in action: `recycle` or `delete` (mutually exclusive with sh) |
+| `action`  | string         | Built-in action (e.g., `recycle`, `delete`, `new-session`, `doc-review`, `messages`; mutually exclusive with `sh`) |
 | `help`    | string         | Description shown in palette                                        |
 | `confirm` | string         | Confirmation prompt (empty = no confirmation)                       |
 | `silent`  | bool           | Skip loading popup for fast commands                                |
@@ -52,6 +52,8 @@ Hive provides built-in commands that can be overridden in usercommands:
 | `Recycle`   | action | Recycles the selected session                          |
 | `Delete`    | action | Deletes the selected session (or selected tmux window) |
 | `SendBatch` | form   | Send a message to multiple agents via `agent-send`     |
+
+Additional built-in actions are available (for example filtering, theme preview, and session navigation). Use `action` for built-in behavior or `sh` for custom shell commands.
 
 ## Using Arguments
 
@@ -105,7 +107,7 @@ usercommands:
   broadcast:
     sh: |
       {{ range .Form.targets }}
-      {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+      {{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} {{ $.Form.message | shq }}
       {{ end }}
     form:
       - variable: targets
@@ -133,7 +135,7 @@ usercommands:
   broadcast:
     sh: |
       {{ range .Form.targets }}
-      {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+      {{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} {{ $.Form.message | shq }}
       {{ end }}
     form:
       - variable: targets
@@ -176,11 +178,11 @@ usercommands:
     silent: true
     exit: "true"
   tidy:
-    sh: "{{ agentSend }} {{ .Name | shq }}:claude /tidy"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /tidy"
     help: "Send /tidy to agent"
     confirm: "Commit and push changes?"
   review:
-    sh: "{{ agentSend }} {{ .Name | shq }}:claude /review"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /review"
     help: "Send /review to agent"
     silent: true
 

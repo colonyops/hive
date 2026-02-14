@@ -73,10 +73,10 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 - [Configuration](https://colonyops.github.io/hive/configuration/) — Config file, rules, templates, options
 - [User Commands](https://colonyops.github.io/hive/configuration/commands/) — User commands and command palette
 - [Keybindings](https://colonyops.github.io/hive/configuration/keybindings/) — Key mappings and palette commands
-- [Messaging](https://colonyops.github.io/hive/messaging/) — Inter-agent pub/sub communication
-- [Plugins](https://colonyops.github.io/hive/plugins/) — Claude, tmux, and other plugins
-- [Themes](https://colonyops.github.io/hive/themes/) — Built-in themes and custom palettes
-- [Context & Review](https://colonyops.github.io/hive/context/) — Shared context directories and review tool
+- [Messaging](https://colonyops.github.io/hive/getting-started/messaging/) — Inter-agent pub/sub communication
+- [Plugins](https://colonyops.github.io/hive/configuration/plugins/) — Claude, tmux, and other plugins
+- [Themes](https://colonyops.github.io/hive/configuration/themes/) — Built-in themes and custom palettes
+- [Context & Review](https://colonyops.github.io/hive/getting-started/context/) — Shared context directories and review tool
 - [FAQ](https://colonyops.github.io/hive/faq/) — Common questions
 
 ## Dependencies

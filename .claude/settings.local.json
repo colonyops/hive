@@ -1,7 +1,9 @@
 {
   "permissions": {
     "allow": [
-      "Bash(sqlc generate:*)"
+      "Bash(sqlc generate:*)",
+      "Bash(zensical build:*)",
+      "Bash(task docs:build:*)"
     ]
   },
   "prompt": "Before starting any work, run 'bd onboard' to understand the current project state and available issues."

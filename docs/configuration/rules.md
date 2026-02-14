@@ -58,3 +58,6 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `join`      | Join string slice with separator              |
 | `hiveTmux`  | Path to bundled `hive-tmux` script            |
 | `agentSend` | Path to bundled `agent-send` script           |
+| `agentCommand` | Default agent command from `agents.default` profile |
+| `agentWindow`  | Default agent window/profile name (use for targets like `session:{{ agentWindow }}`) |
+| `agentFlags`   | Default agent flags from `agents.default` profile |
