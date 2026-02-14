@@ -1,5 +1,16 @@
 # Context & Review
 
+## The Workflow
+
+Hive's context directories and review tool support a structured workflow for developing code with AI agents:
+
+1. **Research** — Gather information, explore the codebase, and store findings in `.hive/research/`
+2. **Plan** — Write implementation plans in `.hive/plans/` that any agent can reference
+3. **Iterate** — Review and annotate plans with `hive review`, add comments, refine before coding
+4. **Build** — Execute the plan with confidence, referencing shared context across sessions
+
+Context directories make this possible by giving all sessions from the same repository access to the same documents. An agent working on authentication can read the plan written by the agent that did the initial research — no copy-pasting, no context loss between sessions.
+
 ## Context Directories
 
 Context directories provide shared storage for plans, research notes, and other artifacts across all sessions from the same repository. Documents stored in `.hive/` are accessible to all agents working on the repository.

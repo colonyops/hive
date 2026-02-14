@@ -15,7 +15,9 @@ nav = [
   ]},
   { "Configuration" = [
     "configuration/index.md",
+    "configuration/rules.md",
     "configuration/commands.md",
+    "configuration/keybindings.md",
     "configuration/plugins.md",
     "configuration/themes.md",
   ]},

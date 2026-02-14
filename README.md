@@ -71,7 +71,8 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 
 - [Getting Started](https://colonyops.github.io/hive/getting-started/) — Terminology, quick start, first session
 - [Configuration](https://colonyops.github.io/hive/configuration/) — Config file, rules, templates, options
-- [Commands & Keybindings](https://colonyops.github.io/hive/commands/) — User commands, palette, keybindings
+- [User Commands](https://colonyops.github.io/hive/configuration/commands/) — User commands and command palette
+- [Keybindings](https://colonyops.github.io/hive/configuration/keybindings/) — Key mappings and palette commands
 - [Messaging](https://colonyops.github.io/hive/messaging/) — Inter-agent pub/sub communication
 - [Plugins](https://colonyops.github.io/hive/plugins/) — Claude, tmux, and other plugins
 - [Themes](https://colonyops.github.io/hive/themes/) — Built-in themes and custom palettes

@@ -1,8 +1,38 @@
 # Getting Started
 
-## Quick Start
+## Installation
 
-**Prerequisites:** Git and tmux installed.
+### Prerequisites
+
+- **Git** — available in your PATH
+- **tmux** — required for session management and status monitoring
+
+### Install
+
+Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH:
+
+```bash
+# macOS (Apple Silicon)
+curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_arm64 -o /usr/local/bin/hive
+chmod +x /usr/local/bin/hive
+
+# macOS (Intel)
+curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_amd64 -o /usr/local/bin/hive
+chmod +x /usr/local/bin/hive
+
+# Linux (amd64)
+curl -L https://github.com/colonyops/hive/releases/latest/download/hive_linux_amd64 -o /usr/local/bin/hive
+chmod +x /usr/local/bin/hive
+```
+
+### Verify
+
+```bash
+hive --version
+hive doctor        # Check configuration and environment
+```
+
+## Quick Start
 
 ### 1. Set up a shell alias
 

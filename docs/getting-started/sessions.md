@@ -1,5 +1,32 @@
 # Sessions
 
+## How It Fits Together
+
+```
+┌─────────────────────────────────────────────────┐
+│  Project (git remote)                           │
+│  github.com/colonyops/hive                      │
+│                                                 │
+│  ┌──────────────────┐  ┌──────────────────┐     │
+│  │ Hive Session      │  │ Hive Session      │   │
+│  │ fix-auth (26kj0c) │  │ add-tests (x9m2p) │   │
+│  │                   │  │                   │    │
+│  │  ↓ spawns         │  │  ↓ spawns         │   │
+│  │                   │  │                   │    │
+│  │ Tmux Session      │  │ Tmux Session      │   │
+│  │ ┌──────────────┐  │  │ ┌──────────────┐  │   │
+│  │ │ window:claude │  │  │ │ window:claude │  │   │
+│  │ │ (AI agent)   │  │  │ │ (AI agent)   │  │   │
+│  │ ├──────────────┤  │  │ ├──────────────┤  │   │
+│  │ │ window:shell  │  │  │ │ window:shell  │  │   │
+│  │ │ (terminal)   │  │  │ │ (terminal)   │  │   │
+│  │ └──────────────┘  │  │ └──────────────┘  │   │
+│  └──────────────────┘  └──────────────────┘     │
+└─────────────────────────────────────────────────┘
+```
+
+Each **project** (git remote) can have multiple hive sessions. Each **hive session** is an isolated git clone that spawns a **tmux session** with windows for the AI agent and a shell.
+
 ## Hive Session
 
 An isolated git clone in a dedicated directory, running an AI agent in a terminal. Each session is a self-contained environment for working on a specific task or feature.

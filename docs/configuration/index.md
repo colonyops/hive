@@ -2,68 +2,43 @@
 
 Config file: `~/.config/hive/config.yaml`
 
-```yaml
-# Directories to scan for repositories (enables 'n' key in TUI)
-repo_dirs:
-  - ~/code/repos
+## Minimal Example
 
-# Terminal integration for real-time agent status (always enabled)
+```yaml
+repo_dirs:
+  - ~/projects
+
 tmux:
   poll_interval: 500ms
 
-# Rules for repository-specific setup
 rules:
-  # Default rule (empty pattern matches all)
   - pattern: ""
     max_recycled: 5
-    # spawn/batch_spawn default to bundled hive-tmux script if not set:
-    #   spawn: ['{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}']
-    #   batch_spawn: ['{{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}']
     commands:
       - hive ctx init
-
-  # Override spawn for work repos
-  - pattern: ".*/my-org/.*"
-    spawn:
-      - '{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}'
-    commands:
-      - npm install
-    copy:
-      - .envrc
 ```
 
-## Rules
+## Sections
 
-Rules match repositories by regex pattern against the remote URL. The first matching rule wins. An empty pattern (`""`) matches all repositories.
+### [Rules](rules.md)
 
-Each rule can configure:
+Repository-specific actions for spawn, recycle, setup commands, and file copying. Rules match repositories by regex pattern against the remote URL. See [Rules](rules.md) for template variables and functions.
 
-- **spawn** — Commands run after session creation (defaults to bundled `hive-tmux`)
-- **batch_spawn** — Commands run after batch session creation (defaults to bundled `hive-tmux -b`)
-- **recycle** — Commands run when recycling a session (defaults to git fetch/checkout/reset/clean)
-- **commands** — Setup commands run after clone
-- **copy** — Glob patterns for files to copy from the parent repo
-- **max_recycled** — Maximum recycled sessions to keep (0 = unlimited)
+### [User Commands](commands.md)
 
-## Template Variables
+Custom commands accessible via the vim-style command palette (`:` key). Commands can execute shell scripts, display interactive forms, and integrate with tmux to control agents. See [User Commands](commands.md).
 
-Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | shq }}` for shell-safe quoting.
+### [Keybindings](keybindings.md)
 
-| Context               | Variables                                                           |
-| --------------------- | ------------------------------------------------------------------- |
-| `rules[].spawn`       | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
-| `rules[].batch_spawn` | Same as spawn, plus `.Prompt`                                       |
-| `rules[].recycle`     | `.DefaultBranch`                                                    |
-| `usercommands.*.sh`   | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
+Map keys to user commands or built-in actions. See [Keybindings](keybindings.md) for defaults and configuration.
 
-### Template Functions
+### [Plugins](plugins.md)
 
-| Function    | Description                                   |
-| ----------- | --------------------------------------------- |
-| `shq`       | Shell-quote a string for safe use in commands |
-| `join`      | Join string slice with separator              |
-| `hiveTmux`  | Path to bundled `hive-tmux` script            |
-| `agentSend` | Path to bundled `agent-send` script           |
+External service integrations — tmux session management, Claude analytics, GitHub status, and Beads issue tracking. See [Plugins](plugins.md).
+
+### [Themes](themes.md)
+
+Built-in color palettes and custom theme creation. See [Themes](themes.md).
 
 ## Configuration Options
 
@@ -72,14 +47,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `repo_dirs`                       | `[]string`               | `[]`                                     | Directories to scan for repositories         |
 | `copy_command`                    | `string`                 | `pbcopy` (macOS)                         | Command to copy to clipboard                 |
 | `rules`                           | `[]Rule`                 | `[]`                                     | Repository-specific setup rules              |
-| `rules[].pattern`                 | `string`                 | `""`                                     | Regex pattern to match remote URL            |
-| `rules[].spawn`                   | `[]string`               | bundled `hive-tmux`                      | Commands after session creation              |
-| `rules[].batch_spawn`             | `[]string`               | bundled `hive-tmux -b`                   | Commands after batch session creation        |
-| `rules[].recycle`                 | `[]string`               | git fetch/checkout/reset/clean           | Commands when recycling a session            |
-| `rules[].commands`                | `[]string`               | `[]`                                     | Setup commands to run after clone            |
-| `rules[].copy`                    | `[]string`               | `[]`                                     | Glob patterns for files to copy              |
-| `rules[].max_recycled`            | `*int`                   | `5`                                      | Max recycled sessions (0 = unlimited)        |
-| `keybindings`                     | `map[string]Keybinding`  | See [commands](commands.md)              | TUI keybindings (reference usercommands)     |
+| `keybindings`                     | `map[string]Keybinding`  | See [keybindings](keybindings.md)        | TUI keybindings (reference usercommands)     |
 | `usercommands`                    | `map[string]UserCommand` | Recycle, Delete, NewSession (system)     | Named commands for palette and keybindings   |
 | `tui.theme`                       | `string`                 | `tokyo-night`                            | Built-in theme name                          |
 | `tui.refresh_interval`            | `duration`               | `15s`                                    | Auto-refresh interval (0 to disable)         |
@@ -98,6 +66,9 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `plugins.claude.yellow_threshold` | `int`                    | `60`                                     | Yellow warning threshold (%)                 |
 | `plugins.claude.red_threshold`    | `int`                    | `80`                                     | Red warning threshold (%)                    |
 | `plugins.claude.model_limit`      | `int`                    | `200000`                                 | Context token limit                          |
+| `plugins.lazygit.enabled`         | `*bool`                  | `nil` (auto-detect)                      | Enable/disable lazygit plugin                |
+| `plugins.neovim.enabled`          | `*bool`                  | `nil` (auto-detect)                      | Enable/disable neovim plugin                 |
+| `plugins.contextdir.enabled`      | `*bool`                  | `nil` (auto-detect)                      | Enable/disable context directory plugin      |
 
 ## Data Storage
 

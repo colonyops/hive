@@ -1,6 +1,6 @@
-# Commands & Keybindings
+# User Commands
 
-## User Commands & Command Palette
+## Command Palette
 
 User commands provide a vim-style command palette accessible by pressing `:` in the TUI. This allows you to define custom commands that can be executed on selected sessions with arguments.
 
@@ -12,7 +12,7 @@ User commands provide a vim-style command palette accessible by pressing `:` in 
 - **Tab completion** — Auto-fill selected command name
 - **Keyboard navigation** — `↑/k/ctrl+k`, `↓/j/ctrl+j`, `tab`, `enter`, `esc`
 
-### Defining Commands
+## Defining Commands
 
 ```yaml
 usercommands:
@@ -31,7 +31,7 @@ usercommands:
     exit: "true"
 ```
 
-### Command Options
+## Command Options
 
 | Field     | Type           | Description                                                         |
 | --------- | -------------- | ------------------------------------------------------------------- |
@@ -43,7 +43,7 @@ usercommands:
 | `exit`    | string         | Exit TUI after command (bool or `$ENV_VAR`)                         |
 | `form`    | `[]FormField`  | Interactive form fields collected before execution (see below)      |
 
-### System Default Commands
+## System Default Commands
 
 Hive provides built-in commands that can be overridden in usercommands:
 
@@ -53,7 +53,7 @@ Hive provides built-in commands that can be overridden in usercommands:
 | `Delete`    | action | Deletes the selected session (or selected tmux window) |
 | `SendBatch` | form   | Send a message to multiple agents via `agent-send`     |
 
-### Using Arguments
+## Using Arguments
 
 Arguments passed in the command palette are available via the `.Args` template variable:
 
@@ -67,7 +67,7 @@ usercommands:
 
 Usage: `:msg hello world` → sends "hello world" to the session inbox
 
-### Exit Conditions
+## Exit Conditions
 
 The `exit` field supports environment variables for conditional behavior:
 
@@ -80,7 +80,7 @@ usercommands:
 
 This is useful when running hive in a tmux popup vs a dedicated session.
 
-### Form Fields
+## Form Fields
 
 Commands with `form` fields display an interactive dialog before execution. Form values are available under `.Form.<variable>` in the shell template.
 
@@ -122,59 +122,86 @@ usercommands:
     silent: true
 ```
 
-## Keybindings
+## What You Can Build
 
-Keybindings map keys to user commands. All keybindings must reference a command via the `cmd` field.
+User commands combined with tmux integration and messaging create a powerful extensibility layer — like NeoVim's Lua config for AI agent management. Here are real-world patterns:
 
-### Keybinding Options
+### Batch Send to Multiple Agents
 
-| Field     | Type   | Description                                   |
-| --------- | ------ | --------------------------------------------- |
-| `cmd`     | string | Command name to execute (required)            |
-| `help`    | string | Override help text from the command           |
-| `confirm` | string | Override confirmation prompt from the command |
-
-### Example
+Send the same instruction to all active agents at once:
 
 ```yaml
-keybindings:
-  r:
-    cmd: Recycle # System default
-  d:
-    cmd: Delete # System default
-  o:
-    cmd: open # User-defined command
-  t:
-    cmd: tidy
-    confirm: "Run tidy on this session?" # Override command's confirm
+usercommands:
+  broadcast:
+    sh: |
+      {{ range .Form.targets }}
+      {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
+      {{ end }}
+    form:
+      - variable: targets
+        preset: SessionSelector
+        multi: true
+        label: "Select agents"
+      - variable: message
+        type: text
+        label: "Message"
+        placeholder: "run tests and report results"
+    help: "Send message to multiple agents"
+    silent: true
 ```
 
-### Default Keybindings
+### Code Review Agent
 
-| Key        | Command              | Description                          |
-| ---------- | -------------------- | ------------------------------------ |
-| `:`        | —                    | Open command palette                 |
-| `v`        | —                    | Toggle preview sidebar               |
-| `r`        | Recycle              | Recycle session                      |
-| `d`        | Delete               | Delete session (or tmux window)      |
-| `n`        | NewSession           | New session (when repos discovered)  |
-| `enter`    | TmuxOpen             | Open/attach tmux session             |
-| `ctrl+d`   | TmuxKill             | Kill tmux session                    |
-| `A`        | AgentSend            | Send Enter to agent                  |
-| `p`        | TmuxPopUp            | Popup tmux session                   |
-| `g`        | —                    | Refresh git statuses                 |
-| `tab`      | —                    | Switch views                         |
-| `q`        | —                    | Quit                                 |
+Spin up a dedicated reviewer that reviews your branch and sends feedback via inbox:
 
-### Built-in Palette Commands
+```yaml
+usercommands:
+  ReviewRequest:
+    sh: "~/.config/hive/scripts/request-review.sh {{ .Name }}"
+    help: "Request code review of current branch"
+  CheckInbox:
+    sh: "hive msg sub -t agent.{{ .ID }}.inbox --new"
+    help: "Check inbox for messages"
+```
 
-| Command          | Description                           |
-| ---------------- | ------------------------------------- |
-| `FilterAll`      | Show all sessions                     |
-| `FilterActive`   | Show sessions with active agents      |
-| `FilterApproval` | Show sessions needing approval        |
-| `FilterReady`    | Show sessions with idle agents        |
-| `Recycle`        | Recycle selected session              |
-| `Delete`         | Delete selected session               |
-| `NewSession`     | Create a new session                  |
-| `SendBatch`      | Send message to multiple agents       |
+See the [Inter-Agent Code Review](../recipes/inter-agent-code-review.md) recipe for the full setup.
+
+### Quick Actions
+
+Common operations bound to single keys:
+
+```yaml
+usercommands:
+  open:
+    sh: "open {{ .Path }}"
+    help: "Open in Finder"
+    silent: true
+    exit: "true"
+  tidy:
+    sh: "{{ agentSend }} {{ .Name | shq }}:claude /tidy"
+    help: "Send /tidy to agent"
+    confirm: "Commit and push changes?"
+  review:
+    sh: "{{ agentSend }} {{ .Name | shq }}:claude /review"
+    help: "Send /review to agent"
+    silent: true
+
+keybindings:
+  o:
+    cmd: open
+  t:
+    cmd: tidy
+  R:
+    cmd: review
+```
+
+### Conditional Exit
+
+Exit hive after opening a session — useful when running hive in a tmux popup:
+
+```yaml
+usercommands:
+  attach:
+    sh: "tmux attach -t {{ .Name }}"
+    exit: "$HIVE_POPUP" # Only exit if HIVE_POPUP=true
+```
