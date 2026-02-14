@@ -1,0 +1,12 @@
+{
+  "name": "hive",
+  "version": "0.4.0",
+  "description": "Inter-agent messaging, session management, and workflow coordination for hive CLI",
+  "author": {
+    "name": "hay-kot",
+    "url": "https://github.com/hay-kot"
+  },
+  "repository": "https://github.com/hay-kot/hive",
+  "license": "MIT",
+  "keywords": ["messaging", "agents", "sessions", "coordination", "multi-agent"]
+}

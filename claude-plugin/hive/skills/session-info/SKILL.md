@@ -1,50 +1,27 @@
 ---
 name: session-info
-description: Get your current session ID, inbox topic, and session information. Use when you need to know your agent identity for messaging coordination.
+description: This skill should be used when the user asks "what's my session ID?", "show my inbox topic", "get session info", "what session am I in?", "my agent ID", or needs to retrieve current hive session details for messaging coordination or debugging.
 compatibility: claude, opencode
 ---
 
-# Session Info - Get Your Session Details
+# Session Info - Get Current Session Details
 
-Display information about your current hive session, including session ID, inbox topic, and state.
+Display information about the current hive session, including session ID, inbox topic, and state.
 
 ## Terminology
 
-- **Session**: An isolated git clone + terminal environment managed by hive
-- **Session ID**: A unique 6-character identifier (e.g., `26kj0c`)
-- **Agent**: The AI tool (Claude, Aider, etc.) running within the session
-- **Inbox**: A message topic for receiving messages from other agents
-
-**Your inbox topic**: `agent.<session-id>.inbox`
-
-The `agent.` prefix refers to your AI agent, not the session itself.
+- **Session** - An isolated git clone + terminal environment managed by hive
+- **Session ID** - A unique 6-character identifier (e.g., `26kj0c`)
+- **Agent** - The AI tool (Claude, Aider, etc.) running within the session
+- **Inbox** - A message topic for receiving messages: `agent.<session-id>.inbox`
 
 ## When to Use
 
-Use this skill when:
-- You need to know your session ID
-- Another agent asks for your inbox topic
-- Debugging messaging issues
+- Need to know current session ID
+- Another agent asks for inbox topic
 - Setting up inter-agent coordination
-- Verifying you're in the correct session
-
-**Common triggers:**
-- "what's my session ID?"
-- "show my inbox topic"
-- "get session info"
-- "what session am I in?"
-- "my agent ID"
-
-## How It Works
-
-The `hive session info` command detects your current session based on your working directory and displays relevant information including:
-
-- **Session ID**: Unique identifier for this agent session
-- **Name**: Human-readable session name
-- **Repository**: Git repository name
-- **Inbox**: Your inbox topic for receiving messages
-- **Path**: Full path to session directory
-- **State**: Current session state (active, recycled, corrupted)
+- Debugging messaging issues
+- Verifying correct session context
 
 ## Commands
 
@@ -66,8 +43,6 @@ State:       active
 
 ### Get Session Info (JSON)
 
-For programmatic access or LLM parsing:
-
 ```bash
 hive session info --json
 ```
@@ -84,244 +59,65 @@ hive session info --json
 }
 ```
 
-## Session Detection
+## Output Fields
 
-The command automatically detects your session from the current working directory. Sessions are identified by:
-
-1. **Working directory path**: Must be within a hive session directory
-2. **Session directory pattern**: `$XDG_DATA_HOME/hive/repos/<repo>-<session-id>`
-3. **Session file**: `.hive-session` file in the directory
-
-If you're not in a hive session directory, the command will fail with an error.
+| Field | Description | Example |
+|-------|-------------|---------|
+| `id` | Unique 6-char session identifier | `26kj0c` |
+| `name` | Human-readable session name | `claude-plugin` |
+| `repository` | Git repository name | `hive` |
+| `inbox` | Full inbox topic | `agent.26kj0c.inbox` |
+| `path` | Absolute path to session directory | `/Users/...` |
+| `state` | Session state | `active`, `recycled`, `corrupted` |
 
 ## Session States
 
-### Active
-Normal, working session. The session is ready for use.
+- **active** - Normal, working session ready for use
+- **recycled** - Session has been stopped and cleared
+- **corrupted** - Session directory or files are damaged
 
-**Characteristics:**
-- Session directory exists
-- All required files present
-- Ready for commands and messaging
+## Common Workflows
 
-### Recycled
-Session has been recycled (stopped and cleared).
-
-**Characteristics:**
-- Session may still exist on disk
-- Not actively running
-- Can be restarted or removed
-
-### Corrupted
-Session directory or files are damaged or incomplete.
-
-**Characteristics:**
-- Missing required files
-- Inconsistent state
-- May need manual cleanup or recreation
-
-## Inbox Topic Format
-
-Your inbox topic follows the pattern: `agent.<session-id>.inbox`
-
-**Example:**
-- Session ID: `26kj0c`
-- Inbox: `agent.26kj0c.inbox`
-
-Other agents use this topic to send you direct messages:
+### Share Inbox with Another Agent
 
 ```bash
-# Another agent sends to you
-hive msg pub --topic agent.26kj0c.inbox "Message for you"
-
-# You receive it
-hive msg inbox
-```
-
-## Use Cases
-
-### Share Your Inbox with Another Agent
-
-```bash
-# Get your inbox topic
 hive session info --json | jq -r '.inbox'
 # Output: agent.26kj0c.inbox
+```
 
-# Tell another agent
-"Send messages to agent.26kj0c.inbox"
+### Extract Session ID for Scripting
+
+```bash
+SESSION_ID=$(hive session info --json | jq -r '.id')
+INBOX=$(hive session info --json | jq -r '.inbox')
 ```
 
 ### Verify Session Before Messaging
 
 ```bash
-# Check you're in the right session
+# Check session context is correct
 hive session info
 
 # Then check inbox
 hive msg inbox
 ```
 
-### Debug Messaging Issues
+## How Session Detection Works
 
-```bash
-# Get full session details
-hive session info
+The command detects the current session from the working directory. Sessions are identified by:
+1. Working directory path within a hive session directory
+2. Session directory pattern: `$XDG_DATA_HOME/hive/repos/<repo>-<session-id>`
+3. `.hive-session` file in the directory
 
-# Verify inbox topic matches expectations
-# Check state is "active"
-```
+If not in a hive session directory, the command fails with an error.
 
-### Script Session Information
+## Additional Resources
 
-```bash
-# Extract specific fields
-SESSION_ID=$(hive session info --json | jq -r '.id')
-INBOX=$(hive session info --json | jq -r '.inbox')
-
-echo "My session: $SESSION_ID"
-echo "Send messages to: $INBOX"
-```
-
-## Output Fields
-
-### id
-Short unique identifier for this session (e.g., `26kj0c`).
-
-Used in:
-- Inbox topic construction
-- Session directory naming
-- Message sender identification
-
-### name
-Human-readable name describing the session purpose (e.g., `claude-plugin`, `fix-auth-bug`).
-
-Helps identify what work this session is doing.
-
-### repository
-Git repository name this session is working on (e.g., `hive`, `myproject`).
-
-### inbox
-Full inbox topic for receiving messages: `agent.<session-id>.inbox`.
-
-Other agents publish to this topic to send you messages.
-
-### path
-Absolute path to the session directory on disk.
-
-Useful for:
-- Verifying session location
-- Debugging path issues
-- Scripting file operations
-
-### state
-Current session state: `active`, `recycled`, or `corrupted`.
-
-Indicates session health and readiness.
-
-## Examples
-
-### Basic Session Info
-
-```bash
-$ hive session info
-Session ID:  abc123
-Name:        implement-auth
-Repository:  backend
-Inbox:       agent.abc123.inbox
-Path:        /home/user/.local/share/hive/repos/backend-abc123
-State:       active
-```
-
-### JSON Output for Parsing
-
-```bash
-$ hive session info --json
-{
-  "id": "abc123",
-  "name": "implement-auth",
-  "repository": "backend",
-  "inbox": "agent.abc123.inbox",
-  "path": "/home/user/.local/share/hive/repos/backend-abc123",
-  "state": "active"
-}
-```
-
-### Extract Inbox Topic
-
-```bash
-$ hive session info --json | jq -r '.inbox'
-agent.abc123.inbox
-```
-
-### Share Your Info with Another Agent
-
-```bash
-# Agent A (you)
-$ hive session info --json
-{
-  "id": "abc123",
-  "inbox": "agent.abc123.inbox",
-  ...
-}
-
-# Send to Agent B
-$ hive msg pub --topic agent.xyz789.inbox "My inbox is agent.abc123.inbox. Send results there."
-
-# Agent B receives and replies
-$ hive msg pub --topic agent.abc123.inbox "Got it, will send results to you"
-```
-
-## Troubleshooting
-
-### Not in a Hive Session
-
-**Problem:** Command fails with "not in a hive session" error
-
-**Solutions:**
-- Verify working directory: `pwd`
-- Check if in hive session: Look for `.hive-session` file
-- List sessions: `hive session ls` (if available)
-- Change to correct directory
-
-### Session State is "corrupted"
-
-**Problem:** Session info shows state as "corrupted"
-
-**Solutions:**
-- Check session directory exists: Verify path from output
-- Look for missing files: `.hive-session`, tmux socket, etc.
-- Consider recreating session
-- Check disk space and permissions
-
-### Inbox Topic Not Working
-
-**Problem:** Messages sent to inbox don't appear
-
-**Solutions:**
-- Verify exact inbox topic: Copy from `hive session info` output
-- Check for typos: Topics are case-sensitive
-- Confirm messages exist: `hive msg sub --topic <your-inbox>`
-- Test with known-good message: Send to yourself
+For troubleshooting and advanced usage, see:
+- **`references/troubleshooting.md`** - Common issues and solutions
 
 ## Related Skills
 
-- `/hive:inbox` - Check your inbox for messages
+- `/hive:inbox` - Check inbox for messages
 - `/hive:publish` - Send messages to other agents' inboxes
-- `/hive:wait` - Wait for messages on your inbox
-
-## Tips
-
-**Be Explicit:**
-- Share exact inbox topic (don't paraphrase)
-- Use JSON output for programmatic access
-- Include session ID in coordination messages
-
-**Verify First:**
-- Check session info before setting up coordination
-- Confirm state is "active" before messaging
-- Validate inbox topic format matches pattern
-
-**Script Safely:**
-- Use JSON output for reliable parsing
-- Handle missing fields gracefully
-- Check exit codes for errors
+- `/hive:wait` - Wait for messages on inbox

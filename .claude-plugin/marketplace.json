@@ -5,16 +5,24 @@
     "email": ""
   },
   "metadata": {
-    "description": "Skills for managing AI coding agent sessions with hive CLI",
+    "description": "Inter-agent messaging, session management, and workflow coordination for hive CLI",
     "version": "0.4.0"
   },
   "plugins": [
     {
       "name": "hive",
-      "description": "Skills for using the hive CLI",
+      "description": "Inter-agent messaging, session management, and workflow coordination for hive CLI",
       "source": "./claude-plugin/hive",
       "strict": false,
-      "skills": ["./skills"]
+      "skills": ["./skills"],
+      "commands": ["./commands"]
+    },
+    {
+      "name": "hive-hooks",
+      "description": "Session automation hooks for hive - auto-checks inbox on session start",
+      "source": "./claude-plugin/hive-hooks",
+      "strict": false,
+      "hooks": "./hooks/hooks.json"
     }
   ]
 }
