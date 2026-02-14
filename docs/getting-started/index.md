@@ -20,19 +20,26 @@ Install hive, configure your environment, and launch your first AI agent session
 
 Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH:
 
-```bash
-# macOS (Apple Silicon)
-curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_arm64 -o /usr/local/bin/hive
-chmod +x /usr/local/bin/hive
+=== "macOS (Apple Silicon)"
 
-# macOS (Intel)
-curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_amd64 -o /usr/local/bin/hive
-chmod +x /usr/local/bin/hive
+    ```bash
+    curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_arm64 -o /usr/local/bin/hive
+    chmod +x /usr/local/bin/hive
+    ```
 
-# Linux (amd64)
-curl -L https://github.com/colonyops/hive/releases/latest/download/hive_linux_amd64 -o /usr/local/bin/hive
-chmod +x /usr/local/bin/hive
-```
+=== "macOS (Intel)"
+
+    ```bash
+    curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_amd64 -o /usr/local/bin/hive
+    chmod +x /usr/local/bin/hive
+    ```
+
+=== "Linux (amd64)"
+
+    ```bash
+    curl -L https://github.com/colonyops/hive/releases/latest/download/hive_linux_amd64 -o /usr/local/bin/hive
+    chmod +x /usr/local/bin/hive
+    ```
 
 ### Verify
 

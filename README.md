@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="docs/assets/favicon.svg" alt="Hive" width="80">
+
 # hive
 
 **The command center for your AI colony**
