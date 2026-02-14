@@ -35,7 +35,7 @@ usercommands:
 
 | Field     | Type           | Description                                                         |
 | --------- | -------------- | ------------------------------------------------------------------- |
-| `sh`      | string         | Shell command template (mutually exclusive with action)             |
+| `sh`      | string         | Shell command template (mutually exclusive with `action`)          |
 | `action`  | string         | Built-in action (e.g., `recycle`, `delete`, `new-session`, `doc-review`, `messages`; mutually exclusive with `sh`) |
 | `help`    | string         | Description shown in palette                                        |
 | `confirm` | string         | Confirmation prompt (empty = no confirmation)                       |
@@ -54,6 +54,9 @@ Hive provides built-in commands that can be overridden in usercommands:
 | `SendBatch` | form   | Send a message to multiple agents via `agent-send`     |
 
 Additional built-in actions are available (for example filtering, theme preview, and session navigation). Use `action` for built-in behavior or `sh` for custom shell commands.
+
+!!! warning
+    A command must use either `sh` or `action`, not both. If both are specified, validation will fail.
 
 ## Using Arguments
 
@@ -100,7 +103,8 @@ Commands with `form` fields display an interactive dialog before execution. Form
 
 Preset fields populate from runtime data. `SessionSelector` shows active sessions with running tmux sessions (grouped by project when multiple remotes exist). `ProjectSelector` shows discovered repositories.
 
-Form commands don't require a focused session — they collect their own targets.
+!!! info
+    Form commands don't require a focused session — they collect their own targets via preset fields like `SessionSelector` and `ProjectSelector`.
 
 ```yaml
 usercommands:

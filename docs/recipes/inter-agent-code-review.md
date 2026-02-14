@@ -6,6 +6,9 @@ icon: lucide/git-pull-request
 
 Orchestrate code reviews by spinning up a dedicated reviewer agent that receives context via inbox messaging, reviews your branch, and sends feedback back to you.
 
+!!! note "Requirements"
+    This recipe requires the `agent-send` bundled script (available via `{{ agentSend }}`) and the `/hive-msg` skill for inbox messaging. Both are available out of the box with the tmux plugin enabled.
+
 ## Config
 
 Add these user commands to your `~/.config/hive/config.yaml`:

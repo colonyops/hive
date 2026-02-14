@@ -27,6 +27,9 @@ rules:
       - .envrc
 ```
 
+!!! info "First match wins"
+    Rules are evaluated in order — the first rule whose `pattern` matches the repository remote URL is used. Place more specific patterns before general ones.
+
 ## Rule Fields
 
 | Field           | Type       | Default                        | Description                                       |
@@ -49,6 +52,9 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].batch_spawn` | Same as spawn, plus `.Prompt`                                       |
 | `rules[].recycle`     | `.DefaultBranch`                                                    |
 | `usercommands.*.sh`   | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
+
+!!! warning "Always use `shq` for shell quoting"
+    Template variables like `.Name` and `.Path` may contain spaces or special characters. Always pipe them through `shq` (e.g., `{{ .Name | shq }}`) to prevent shell injection and word-splitting issues.
 
 ## Template Functions
 

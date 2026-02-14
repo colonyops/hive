@@ -35,6 +35,9 @@ rules:
       - hive ctx init
 ```
 
+!!! tip
+    Run `hive doctor` to validate your configuration and check that all dependencies (git, tmux, plugins) are correctly set up.
+
 ## General Settings
 
 | Option                        | Type       | Default              | Description                                 |

@@ -74,6 +74,9 @@ Sessions move through a managed lifecycle:
 3. **Delete** — Permanently removes the session directory and all associated data.
 4. **Corrupted** — If hive detects an invalid state (e.g., missing directory, broken git repo), the session is marked corrupted and can only be deleted.
 
+!!! tip "Prefer recycling over deleting"
+    Recycled sessions are reused on the next `hive new`, skipping a fresh `git clone`. This saves time and disk I/O, especially for large repositories.
+
 ## Status Indicators
 
 The TUI shows real-time agent status:

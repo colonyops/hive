@@ -78,27 +78,20 @@ jobs:
     name: "Deploy Docs"
     needs:
       - goreleaser
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-
+      - uses: actions/configure-pages@v5
+      - uses: actions/checkout@v5
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-
-      - name: Install zensical
-        run: pip install zensical
-
-      - name: Install Task
-        uses: arduino/setup-task@v2
+          python-version: 3.x
+      - run: pip install zensical
+      - run: zensical build --clean
+      - uses: actions/upload-pages-artifact@v4
         with:
-          version: 3.x
-
-      - name: Build docs
-        run: task docs:build
-
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v4
-        with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./site
+          path: site
+      - uses: actions/deploy-pages@v4
+        id: deployment

@@ -4,6 +4,8 @@ icon: lucide/folder-symlink
 
 # Context & Review
 
+Context directories give all sessions from the same repository access to shared documents — plans, research notes, and other artifacts. The review tool lets you annotate these documents with inline comments.
+
 ## The Workflow
 
 Hive's context directories and review tool support a structured workflow for developing code with AI agents:
@@ -47,9 +49,13 @@ hive ctx init
 hive ctx ls
 ```
 
-**Important:** `.hive/` must ONLY be a symlink, never a regular directory. Always use `hive ctx init` to create it.
+!!! warning
+    `.hive/` must ONLY be a symlink, never a regular directory. Always use `hive ctx init` to create it. Creating a regular directory will break context sharing between sessions.
 
 ### Finding Documents
+
+!!! tip
+    Always use `hive ctx ls` to list context documents — standard `ls` and glob tools do not follow the `.hive` symlink reliably.
 
 To locate context documents for review:
 

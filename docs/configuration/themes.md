@@ -35,6 +35,9 @@ tui:
 | `Warning`    | Caution states (needs approval, dirty git)               |
 | `Error`      | Error states, destructive actions, search highlights     |
 
+!!! tip "Live preview"
+    Use the `:ThemePreview` command in the TUI to cycle through available themes and see them applied in real time.
+
 ## Adding a Theme
 
 Add a new palette to `internal/core/styles/themes.go`:

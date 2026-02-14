@@ -19,6 +19,9 @@ keybindings:
     confirm: "Run tidy on this session?" # Override command's confirm
 ```
 
+!!! info
+    Keybindings reference commands by name. Both system default commands (like `Recycle`) and user-defined commands can be bound. You can override the command's `help` and `confirm` fields per-binding.
+
 ## Keybinding Options
 
 | Field     | Type   | Description                                   |

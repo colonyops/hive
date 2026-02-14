@@ -4,6 +4,8 @@ icon: lucide/circle-help
 
 # FAQ
 
+Common questions about hive sessions, terminal integration, and agent management.
+
 ### What's the difference between a hive session and a tmux session?
 
 - **Hive session**: A git clone + terminal environment managed by hive
@@ -40,3 +42,6 @@ When you're done with a session, you can recycle it instead of deleting it. Recy
 3. Makes it available for reuse
 
 When you create a new session, hive will reuse a recycled session if available, avoiding a fresh clone and saving time.
+
+!!! tip
+    Use `max_recycled` in your [rules](configuration/rules.md) to control how many recycled sessions are kept per repository. Set to `0` for unlimited.

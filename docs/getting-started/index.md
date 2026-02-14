@@ -4,12 +4,17 @@ icon: lucide/rocket
 
 # Getting Started
 
+Install hive, configure your environment, and launch your first AI agent session in under five minutes.
+
 ## Installation
 
 ### Prerequisites
 
 - **Git** — available in your PATH
 - **tmux** — required for session management and status monitoring
+
+!!! note "tmux is required"
+    Hive uses tmux for session management, agent monitoring, and preview panes. Install it before proceeding — hive will not function without it.
 
 ### Install
 
@@ -42,13 +47,14 @@ hive doctor        # Check configuration and environment
 
 Hive works best when running inside tmux. When you create a session, hive spawns a tmux session for the agent — if hive itself is also a tmux session, you can seamlessly switch between hive and your agents without leaving tmux. Hive becomes your home base: open an agent, do some work, jump back to hive, spin up another.
 
-Add to your `.bashrc` / `.zshrc`:
+!!! tip "Recommended alias"
+    Add to your `.bashrc` / `.zshrc`:
 
-```bash
-alias hv='tmux new-session -As hive hive'
-```
+    ```bash
+    alias hv='tmux new-session -As hive hive'
+    ```
 
-This runs hive inside a dedicated tmux session called `hive`. If the session already exists, it reattaches.
+    This runs hive inside a dedicated tmux session called `hive`. If the session already exists, it reattaches.
 
 ### 2. Add a tmux keybinding to jump back
 
@@ -71,12 +77,13 @@ repo_dirs:
   - ~/work
 ```
 
-Without this, you can still create sessions from the CLI:
+!!! info
+    Without `repo_dirs`, you can still create sessions from the CLI by running `hive new` from within a git repository:
 
-```bash
-cd ~/projects/my-app
-hive new Fix Auth Bug
-```
+    ```bash
+    cd ~/projects/my-app
+    hive new Fix Auth Bug
+    ```
 
 ### 4. Launch
 

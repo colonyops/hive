@@ -4,17 +4,7 @@ icon: fontawesome/brands/hive
 
 # Hive
 
-**The command center for your AI colony**
-
-Manage multiple AI agent sessions in isolated git environments with real-time status monitoring.
-
----
-
-## Overview
-
-Hive manages isolated git sessions for running AI agents in parallel. Instead of manually managing git worktrees or directories, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool (Claude, Aider, Codex).
-
-Each hive session is a complete git clone in a dedicated directory with its own terminal environment. Sessions are tracked through a lifecycle (active → recycled → deleted) and can be reused, reducing clone time and disk usage.
+Hive manages isolated git sessions for running AI agents in parallel. Instead of manually managing git worktrees or directories, hive handles cloning, recycling, and spawning terminal sessions with your preferred AI tool (Claude, Aider, Codex). Each session is a complete git clone with its own terminal environment, tracked through a lifecycle (active → recycled → deleted) and reusable to save time and disk space.
 
 ## Key Features
 

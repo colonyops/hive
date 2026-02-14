@@ -21,7 +21,8 @@ You can find your current session ID and inbox with:
 hive session info
 ```
 
-**Note**: The `agent.` prefix refers to the AI agent running in the session, not the session itself. Sessions with multiple agents currently share a single inbox. Per-agent addressing (`agent.<session-id>.<agent-name>.inbox`) is reserved for future use.
+!!! info "Why `agent.` not `session.`?"
+    The `agent.` prefix refers to the AI agent running in the session, not the session itself. Sessions with multiple agents currently share a single inbox. Per-agent addressing (`agent.<session-id>.<agent-name>.inbox`) is reserved for future use.
 
 ## Example: Cross-Repository Collaboration
 
@@ -64,6 +65,9 @@ hive msg pub -t agent.x7k2 "User struct has: ID, Email, Name, CreatedAt"
 # Agent A receives the response
 hive msg sub -t agent.x7k2 --last 1
 ```
+
+!!! tip "Blocking vs polling"
+    Use `--wait` to block until a message arrives — useful for agents that need to synchronize. Use `--last N` to poll for the most recent messages without blocking.
 
 ## CLI Reference
 

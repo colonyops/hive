@@ -22,6 +22,9 @@ plugins:
     results_cache: 30s
 ```
 
+!!! info "Auto-detection"
+    Most plugins auto-detect their dependencies at startup. You only need to set `enabled: true` — if the required CLI tool isn't installed, the plugin silently deactivates. No errors, no configuration needed.
+
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.
@@ -71,7 +74,8 @@ Session names are colored based on context usage:
 - **Yellow** — 60-79% (approaching limit)
 - **Red** — 80%+ (at or near limit)
 
-The plugin detects active session IDs by scanning `~/.claude/projects/{project-dir}/` for recently modified UUID session files (within 5 minutes). No manual metadata configuration needed.
+!!! note
+    The plugin detects active session IDs by scanning `~/.claude/projects/{project-dir}/` for recently modified UUID session files (within 5 minutes). No manual metadata configuration needed.
 
 ### Usage
 
