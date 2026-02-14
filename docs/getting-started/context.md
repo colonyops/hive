@@ -103,6 +103,10 @@ hive review -f .hive/research/api-analysis.md
 
 Review and annotate markdown documents stored in context directories. Opens an interactive document picker when run without arguments, or directly reviews a specified file.
 
+<video autoplay loop muted playsinline loading="lazy" style="width: 100%; border-radius: 8px;">
+  <source src="https://github.com/user-attachments/assets/1bab8be5-c01e-441f-9dc2-4345737bec24" type="video/mp4">
+</video>
+
 ```bash
 hive review                          # Interactive picker
 hive review -f .hive/plans/auth.md   # Review specific file

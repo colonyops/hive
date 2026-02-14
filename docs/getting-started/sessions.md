@@ -13,7 +13,7 @@ colonyops/hive                          <-- project (git remote)
 ├── fix-auth (26kj0c)                   <-- hive session (isolated clone)
 │   └── tmux: fix-auth                  <-- tmux session (spawned by hive)
 │       ├── window: claude              <-- primary AI agent
-│       ├── window: aider              <-- secondary agent (optional)
+│       ├── window: aider               <-- secondary agent (optional)
 │       └── window: shell               <-- regular terminal
 ├── add-tests (x9m2p)
 │   └── tmux: add-tests

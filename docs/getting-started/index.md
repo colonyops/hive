@@ -16,7 +16,7 @@ Install hive, configure your environment, and launch your first AI agent session
 !!! note "tmux is required"
     Hive uses tmux for session management, agent monitoring, and preview panes. Install it before proceeding — hive will not function without it.
 
-### Install
+### GitHub Release
 
 Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH:
 
@@ -40,6 +40,14 @@ Download the latest binary from [GitHub Releases](https://github.com/colonyops/h
     curl -L https://github.com/colonyops/hive/releases/latest/download/hive_linux_amd64 -o /usr/local/bin/hive
     chmod +x /usr/local/bin/hive
     ```
+
+### Mise
+
+Install via [mise](https://mise.jdx.dev/) using the GitHub backend:
+
+```bash
+mise use -g github:colonyops/hive
+```
 
 ### Verify
 
