@@ -1,6 +1,13 @@
+---
+icon: lucide/git-pull-request
+---
+
 # Inter-Agent Code Review
 
 Orchestrate code reviews by spinning up a dedicated reviewer agent that receives context via inbox messaging, reviews your branch, and sends feedback back to you.
+
+!!! note "Requirements"
+    This recipe requires the `agent-send` bundled script (available via `{{ agentSend }}`) and the `/hive-msg` skill for inbox messaging. Both are available out of the box with the tmux plugin enabled.
 
 ## Config
 
@@ -9,7 +16,7 @@ Add these user commands to your `~/.config/hive/config.yaml`:
 ```yaml
 usercommands:
   ReviewRequest:
-    sh: "~/.config/hive/scripts/request-review.sh {{ .Name }}"
+    sh: "~/.config/hive/scripts/request-review.sh {{ .Name | shq }} {{ agentSend | shq }} {{ agentWindow | shq }}"
     help: "Request code review of current branch"
     silent: false
 
@@ -29,10 +36,12 @@ Save to `~/.config/hive/scripts/request-review.sh`:
 
 ```bash
 #!/bin/bash
-# Usage: request-review.sh <session-name>
+# Usage: request-review.sh <session-name> <agent-send-path> <agent-window>
 # Requests a code review of the current branch
 
 CURRENT_SESSION_NAME="${1:-}"
+AGENT_SEND="${2:-}"
+AGENT_WINDOW="${3:-claude}"
 CURRENT_REPO=$(git remote get-url origin 2>/dev/null)
 CURRENT_BRANCH=$(git branch --show-current)
 
@@ -43,6 +52,11 @@ fi
 
 if [ -z "$CURRENT_SESSION_NAME" ]; then
     echo "Error: Session name required"
+    exit 1
+fi
+
+if [ -z "$AGENT_SEND" ]; then
+    echo "Error: agent-send path required"
     exit 1
 fi
 
@@ -74,11 +88,11 @@ echo "✓ Reviewer inbox: agent.$NEW_SESSION.inbox"
 echo ""
 
 # Instruct current session to send review context via /hive-msg
-if command -v claude-send &> /dev/null; then
-    claude-send "$CURRENT_SESSION_NAME:claude" "/hive-msg a reviewer is waiting for a message from you at agent.$NEW_SESSION.inbox. Please send them context on the work you are doing and how they can access your branch and review the code. Wait up to 1 hour for a response"
+if [ -x "$AGENT_SEND" ]; then
+    "$AGENT_SEND" "$CURRENT_SESSION_NAME:$AGENT_WINDOW" "/hive-msg a reviewer is waiting for a message from you at agent.$NEW_SESSION.inbox. Please send them context on the work you are doing and how they can access your branch and review the code. Wait up to 1 hour for a response"
     echo "✓ Sent instructions to current session"
 else
-    echo "Note: claude-send not found, manually run:"
+    echo "Note: agent-send not found at: $AGENT_SEND"
     echo "  /hive-msg a reviewer is waiting at agent.$NEW_SESSION.inbox"
 fi
 ```
@@ -134,8 +148,7 @@ The reviewer will analyze your code and send feedback to your inbox.
 
 ## Requirements
 
-- `jq` - JSON processing
-- `claude-send` - Script to send text to tmux windows (optional, for automation)
+- `agent-send` - Bundled script (via `{{ agentSend }}` template variable) to send text to tmux windows
 - `/hive-msg` skill - Handles inbox messaging and context generation
 
 ## Customization

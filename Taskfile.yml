@@ -73,3 +73,19 @@ tasks:
       HIVE_CONFIG: "./config.invalid.yaml"
     cmds:
       - go run *.go config validate || true
+
+  docs:serve:
+    desc: Serves the documentation site locally
+    cmds:
+      - zensical serve
+
+  docs:llms:
+    desc: Generates llms.txt and llms-full.txt in site/
+    cmds:
+      - ./scripts/generate-llmstxt.sh
+
+  docs:build:
+    desc: Builds the documentation site with llms.txt
+    cmds:
+      - zensical build
+      - task: docs:llms
