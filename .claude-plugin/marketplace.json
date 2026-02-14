@@ -15,7 +15,13 @@
       "source": "./claude-plugin/hive",
       "strict": false,
       "skills": ["./skills"],
-      "commands": ["./commands"],
+      "commands": ["./commands"]
+    },
+    {
+      "name": "hive-hooks",
+      "description": "Session automation hooks for hive - auto-checks inbox on session start",
+      "source": "./claude-plugin/hive-hooks",
+      "strict": false,
       "hooks": "./hooks/hooks.json"
     }
   ]
