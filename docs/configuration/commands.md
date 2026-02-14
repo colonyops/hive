@@ -1,27 +1,19 @@
+---
+icon: lucide/terminal
+---
+
 # User Commands
 
-## Command Palette
-
-User commands provide a vim-style command palette accessible by pressing `:` in the TUI. This allows you to define custom commands that can be executed on selected sessions with arguments.
-
-**Command Palette Features:**
-
-- **Vim-style interface** — Press `:` to open the palette
-- **Fuzzy filtering** — Type to filter commands (prefix and substring matching)
-- **Arguments support** — Pass arguments to commands (e.g., `:review pr-123`)
-- **Tab completion** — Auto-fill selected command name
-- **Keyboard navigation** — `↑/k/ctrl+k`, `↓/j/ctrl+j`, `tab`, `enter`, `esc`
-
-## Defining Commands
+User commands provide a vim-style command palette accessible by pressing `:` in the TUI. Define custom commands that execute shell scripts, display interactive forms, and integrate with tmux to control agents.
 
 ```yaml
 usercommands:
   review:
-    sh: "send-claude {{ .Name }} /review"
+    sh: "{{ agentSend }} {{ .Name | shq }}:claude /review"
     help: "Send /review to Claude session"
     silent: true
   tidy:
-    sh: "send-claude {{ .Name }} /tidy"
+    sh: "{{ agentSend }} {{ .Name | shq }}:claude /tidy"
     help: "Send /tidy to Claude session"
     confirm: "Commit and push changes?"
   open:
@@ -30,6 +22,14 @@ usercommands:
     silent: true
     exit: "true"
 ```
+
+## Command Palette Features
+
+- **Vim-style interface** — Press `:` to open the palette
+- **Fuzzy filtering** — Type to filter commands (prefix and substring matching)
+- **Arguments support** — Pass arguments to commands (e.g., `:review pr-123`)
+- **Tab completion** — Auto-fill selected command name
+- **Keyboard navigation** — `↑/k/ctrl+k`, `↓/j/ctrl+j`, `tab`, `enter`, `esc`
 
 ## Command Options
 
@@ -99,8 +99,6 @@ Commands with `form` fields display an interactive dialog before execution. Form
 Preset fields populate from runtime data. `SessionSelector` shows active sessions with running tmux sessions (grouped by project when multiple remotes exist). `ProjectSelector` shows discovered repositories.
 
 Form commands don't require a focused session — they collect their own targets.
-
-**Example:**
 
 ```yaml
 usercommands:

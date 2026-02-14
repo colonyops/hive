@@ -1,15 +1,32 @@
+---
+icon: lucide/settings
+---
+
 # Configuration
 
 Config file: `~/.config/hive/config.yaml`
 
-## Minimal Example
+## Example
 
 ```yaml
 repo_dirs:
   - ~/projects
 
+agents:
+  default: claude
+  claude:
+    command: claude
+    flags: ["--model", "opus"]
+  aider:
+    command: /opt/bin/aider
+    flags: ["--model", "sonnet"]
+
 tmux:
-  poll_interval: 500ms
+  poll_interval: 1.5s
+  preview_window_matcher: ["claude", "aider"]
+
+tui:
+  theme: tokyo-night
 
 rules:
   - pattern: ""
@@ -18,57 +35,56 @@ rules:
       - hive ctx init
 ```
 
-## Sections
+## General Settings
 
-### [Rules](rules.md)
+| Option                        | Type       | Default              | Description                                 |
+| ----------------------------- | ---------- | -------------------- | ------------------------------------------- |
+| `repo_dirs`                   | `[]string` | `[]`                 | Directories to scan for repositories        |
+| `copy_command`                | `string`   | `pbcopy` (macOS)     | Command to copy to clipboard                |
+| `auto_delete_corrupted`       | `bool`     | `true`               | Auto-delete corrupted sessions on prune     |
+| `history.max_entries`         | `int`      | `100`                | Max command palette history entries         |
 
-Repository-specific actions for spawn, recycle, setup commands, and file copying. Rules match repositories by regex pattern against the remote URL. See [Rules](rules.md) for template variables and functions.
+## Agents
 
-### [User Commands](commands.md)
+Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session.
 
-Custom commands accessible via the vim-style command palette (`:` key). Commands can execute shell scripts, display interactive forms, and integrate with tmux to control agents. See [User Commands](commands.md).
+| Option                  | Type       | Default        | Description                                          |
+| ----------------------- | ---------- | -------------- | ---------------------------------------------------- |
+| `agents.default`        | `string`   | `"claude"`     | Profile name to use by default                       |
+| `agents.<name>.command` | `string`   | profile name   | CLI binary to run (defaults to profile name if empty)|
+| `agents.<name>.flags`   | `[]string` | `[]`           | Extra CLI args appended to the command on spawn      |
 
-### [Keybindings](keybindings.md)
+Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
 
-Map keys to user commands or built-in actions. See [Keybindings](keybindings.md) for defaults and configuration.
+## Tmux
 
-### [Plugins](plugins.md)
+| Option                        | Type       | Default                             | Description                           |
+| ----------------------------- | ---------- | ----------------------------------- | ------------------------------------- |
+| `tmux.poll_interval`          | `duration` | `1.5s`                              | Status check frequency                |
+| `tmux.preview_window_matcher` | `[]string` | `["claude", "aider", "codex", ...]` | Regex patterns for agent window names |
 
-External service integrations — tmux session management, Claude analytics, GitHub status, and Beads issue tracking. See [Plugins](plugins.md).
+## TUI
 
-### [Themes](themes.md)
+| Option                 | Type       | Default        | Description                                  |
+| ---------------------- | ---------- | -------------- | -------------------------------------------- |
+| `tui.theme`            | `string`   | `tokyo-night`  | Built-in theme name (see [Themes](themes.md))|
+| `tui.refresh_interval` | `duration` | `15s`          | Auto-refresh interval (0 to disable)         |
+| `tui.preview_enabled`  | `bool`     | `false`        | Enable tmux pane preview sidebar on startup  |
 
-Built-in color palettes and custom theme creation. See [Themes](themes.md).
+## Messaging
 
-## Configuration Options
+| Option                   | Type     | Default  | Description                  |
+| ------------------------ | -------- | -------- | ---------------------------- |
+| `messaging.topic_prefix` | `string` | `agent`  | Default prefix for topic IDs |
+| `context.symlink_name`   | `string` | `.hive`  | Symlink name for context dir |
 
-| Option                            | Type                     | Default                                  | Description                                  |
-| --------------------------------- | ------------------------ | ---------------------------------------- | -------------------------------------------- |
-| `repo_dirs`                       | `[]string`               | `[]`                                     | Directories to scan for repositories         |
-| `copy_command`                    | `string`                 | `pbcopy` (macOS)                         | Command to copy to clipboard                 |
-| `rules`                           | `[]Rule`                 | `[]`                                     | Repository-specific setup rules              |
-| `keybindings`                     | `map[string]Keybinding`  | See [keybindings](keybindings.md)        | TUI keybindings (reference usercommands)     |
-| `usercommands`                    | `map[string]UserCommand` | Recycle, Delete, NewSession (system)     | Named commands for palette and keybindings   |
-| `tui.theme`                       | `string`                 | `tokyo-night`                            | Built-in theme name                          |
-| `tui.refresh_interval`            | `duration`               | `15s`                                    | Auto-refresh interval (0 to disable)         |
-| `tui.preview_enabled`             | `bool`                   | `false`                                  | Enable tmux pane preview sidebar on startup  |
-| `tmux.poll_interval`              | `duration`               | `500ms`                                  | Status check frequency (tmux always enabled) |
-| `tmux.preview_window_matcher`     | `[]string`               | `["claude", "aider", "codex"]`           | Regex patterns for preferred window names    |
-| `messaging.topic_prefix`          | `string`                 | `agent`                                  | Default prefix for topic IDs                 |
-| `context.symlink_name`            | `string`                 | `.hive`                                  | Symlink name for context directories         |
-| `plugins.tmux.enabled`            | `*bool`                  | `true`                                   | Enable/disable tmux plugin                   |
-| `plugins.github.enabled`          | `*bool`                  | `nil` (auto-detect)                      | Enable/disable GitHub plugin                 |
-| `plugins.github.results_cache`    | `duration`               | `8m`                                     | GitHub status polling interval               |
-| `plugins.beads.enabled`           | `*bool`                  | `nil` (auto-detect)                      | Enable/disable Beads plugin                  |
-| `plugins.beads.results_cache`     | `duration`               | `30s`                                    | Beads status polling interval                |
-| `plugins.claude.enabled`          | `*bool`                  | `nil` (auto-detect)                      | Enable/disable Claude plugin                 |
-| `plugins.claude.cache_ttl`        | `duration`               | `30s`                                    | Status cache duration                        |
-| `plugins.claude.yellow_threshold` | `int`                    | `60`                                     | Yellow warning threshold (%)                 |
-| `plugins.claude.red_threshold`    | `int`                    | `80`                                     | Red warning threshold (%)                    |
-| `plugins.claude.model_limit`      | `int`                    | `200000`                                 | Context token limit                          |
-| `plugins.lazygit.enabled`         | `*bool`                  | `nil` (auto-detect)                      | Enable/disable lazygit plugin                |
-| `plugins.neovim.enabled`          | `*bool`                  | `nil` (auto-detect)                      | Enable/disable neovim plugin                 |
-| `plugins.contextdir.enabled`      | `*bool`                  | `nil` (auto-detect)                      | Enable/disable context directory plugin      |
+## More Configuration
+
+- **[Rules](rules.md)** — Repository-specific spawn, recycle, setup commands, and file copying
+- **[User Commands](commands.md)** — Custom commands for the vim-style command palette
+- **[Keybindings](keybindings.md)** — Map keys to user commands or built-in actions
+- **[Plugins](plugins.md)** — External service integrations (tmux, Claude, GitHub, Beads, etc.)
+- **[Themes](themes.md)** — Built-in color palettes and custom theme creation
 
 ## Data Storage
 
@@ -76,15 +92,13 @@ All data is stored at `~/.local/share/hive/`:
 
 ```
 ~/.local/share/hive/
-├── sessions.json              # Session state
+├── hive.db                    # SQLite database (sessions, messages)
 ├── bin/                       # Bundled scripts (auto-extracted)
 │   ├── hive-tmux              # Tmux session launcher
 │   └── agent-send             # Send text to agent in tmux
 ├── repos/                     # Cloned repositories
 │   └── myproject-feature1-abc123/
-├── context/                   # Per-repo context directories
-│   ├── {owner}/{repo}/        # Linked via .hive symlink
-│   └── shared/                # Shared context
-└── messages/
-    └── topics/                # Pub/sub message storage
+└── context/                   # Per-repo context directories
+    ├── {owner}/{repo}/        # Linked via .hive symlink
+    └── shared/                # Shared context
 ```

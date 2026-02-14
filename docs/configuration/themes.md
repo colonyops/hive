@@ -1,6 +1,17 @@
+---
+icon: lucide/palette
+---
+
 # Themes
 
-Hive ships with five built-in color themes:
+Hive ships with five built-in color themes. Each theme defines 9 semantic colors that drive all TUI styles.
+
+```yaml
+tui:
+  theme: catppuccin
+```
+
+## Available Themes
 
 | Theme         | Description                |
 | ------------- | -------------------------- |
@@ -10,16 +21,7 @@ Hive ships with five built-in color themes:
 | `kanagawa`    | Kanagawa Wave              |
 | `onedark`     | One Dark                   |
 
-Set a theme in your config:
-
-```yaml
-tui:
-  theme: catppuccin
-```
-
 ## Semantic Color Roles
-
-Each theme defines 9 semantic colors. All TUI styles derive from these values:
 
 | Role         | Usage                                                    |
 | ------------ | -------------------------------------------------------- |

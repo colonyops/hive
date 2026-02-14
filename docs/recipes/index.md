@@ -1,3 +1,7 @@
+---
+icon: lucide/book-open
+---
+
 # Recipes
 
 Practical guides for common hive workflows and integrations.

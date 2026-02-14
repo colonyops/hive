@@ -1,10 +1,36 @@
+---
+icon: lucide/puzzle
+---
+
 # Plugins
 
-Hive supports plugins that extend functionality with custom commands and status providers. Plugins auto-detect their dependencies at startup — if the required CLI tool is installed, the plugin activates automatically.
+Plugins extend hive with custom commands and status providers. Plugins auto-detect their dependencies at startup — if the required CLI tool is installed, the plugin activates automatically.
+
+```yaml
+plugins:
+  tmux:
+    enabled: true
+  claude:
+    enabled: true
+    yellow_threshold: 60
+    red_threshold: 80
+  github:
+    enabled: true
+    results_cache: 8m
+  beads:
+    enabled: true
+    results_cache: 30s
+```
 
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.
+
+```yaml
+plugins:
+  tmux:
+    enabled: true # true by default, set false to disable
+```
 
 ### Commands Provided
 
@@ -17,22 +43,19 @@ The tmux plugin provides default commands for session management using bundled s
 | `AgentSend`      | Send Enter to agent             | `A`         |
 | `AgentSendClear` | Send /clear to agent            | —           |
 
-### Configuration
+## Claude Plugin
+
+The Claude plugin provides integration with Claude Code sessions — forking sessions and monitoring context usage.
 
 ```yaml
 plugins:
-  tmux:
-    enabled: true # true by default, set false to disable
+  claude:
+    enabled: true        # auto-detected (requires `claude` CLI)
+    cache_ttl: 30s       # status cache duration
+    yellow_threshold: 60 # yellow warning above this % (default: 60)
+    red_threshold: 80    # red warning above this % (default: 80)
+    model_limit: 200000  # context token limit (default: 200000)
 ```
-
-## Claude Plugin
-
-The Claude plugin provides integration with Claude Code sessions.
-
-### Features
-
-- **ClaudeFork** — Fork the current Claude session in a new tmux window with conversation history
-- **Context Analytics** — Display context usage with color warnings in the session tree
 
 ### Commands Provided
 
@@ -50,18 +73,6 @@ Session names are colored based on context usage:
 
 The plugin detects active session IDs by scanning `~/.claude/projects/{project-dir}/` for recently modified UUID session files (within 5 minutes). No manual metadata configuration needed.
 
-### Configuration
-
-```yaml
-plugins:
-  claude:
-    enabled: true        # auto-detected (requires `claude` CLI)
-    cache_ttl: 30s       # status cache duration
-    yellow_threshold: 60 # yellow warning above this % (default: 60)
-    red_threshold: 80    # red warning above this % (default: 80)
-    model_limit: 200000  # context token limit (default: 200000)
-```
-
 ### Usage
 
 ```yaml
@@ -78,10 +89,12 @@ keybindings:
 
 The GitHub plugin provides PR status display and GitHub CLI commands. Auto-detected when `gh` CLI is installed.
 
-### Features
-
-- **PR Status** — Shows PR state (open, draft, merged, closed) next to session names in the tree view
-- **GitHub Commands** — Quick access to common `gh` operations via command palette
+```yaml
+plugins:
+  github:
+    enabled: true      # auto-detected (requires `gh` CLI)
+    results_cache: 8m  # how often to refresh PR status (default: 8m)
+```
 
 ### Commands Provided
 
@@ -103,24 +116,16 @@ Sessions with an associated PR show a status indicator:
 | `PR merged` | Primary | PR was merged    |
 | `PR closed` | Muted   | PR was closed    |
 
-### Configuration
-
-```yaml
-plugins:
-  github:
-    enabled: true      # auto-detected (requires `gh` CLI)
-    results_cache: 8m  # how often to refresh PR status (default: 8m)
-```
-
 ## Beads Plugin
 
 The Beads plugin provides issue tracking integration with the `bd` (beads) CLI. Auto-detected when `bd` CLI is installed.
 
-### Features
-
-- **Issue Progress** — Shows closed/total issue count next to session names
-- **Issue Commands** — Quick access to issue listing and ready work via command palette
-- **Perles TUI** — If the `perles` CLI is installed, provides a kanban board popup
+```yaml
+plugins:
+  beads:
+    enabled: true        # auto-detected (requires `bd` CLI)
+    results_cache: 30s   # how often to refresh issue counts (default: 30s)
+```
 
 ### Commands Provided
 
@@ -141,18 +146,15 @@ Sessions with a `.beads` directory show issue progress:
 | `BD 3/5` | Primary | 3 of 5 issues closed       |
 | `BD 5/5` | Green   | All issues closed          |
 
-### Configuration
-
-```yaml
-plugins:
-  beads:
-    enabled: true        # auto-detected (requires `bd` CLI)
-    results_cache: 30s   # how often to refresh issue counts (default: 30s)
-```
-
 ## LazyGit Plugin
 
 The lazygit plugin provides commands to open lazygit in a tmux popup. Auto-detected when `lazygit` is installed.
+
+```yaml
+plugins:
+  lazygit:
+    enabled: true  # auto-detected (requires `lazygit`)
+```
 
 ### Commands Provided
 
@@ -161,25 +163,9 @@ The lazygit plugin provides commands to open lazygit in a tmux popup. Auto-detec
 | `LazyGitOpen`    | Open lazygit (full popup)   | —           |
 | `LazyGitCommits` | Open lazygit commit log     | —           |
 
-### Configuration
-
-```yaml
-plugins:
-  lazygit:
-    enabled: true  # auto-detected (requires `lazygit`)
-```
-
 ## Neovim Plugin
 
 The neovim plugin provides a command to open neovim in the session's tmux session. Auto-detected when `nvim` is installed.
-
-### Commands Provided
-
-| Command      | Description                          | Default Key |
-| ------------ | ------------------------------------ | ----------- |
-| `NeovimOpen` | Open neovim in new tmux window       | —           |
-
-### Configuration
 
 ```yaml
 plugins:
@@ -187,9 +173,21 @@ plugins:
     enabled: true  # auto-detected (requires `nvim`)
 ```
 
+### Commands Provided
+
+| Command      | Description                          | Default Key |
+| ------------ | ------------------------------------ | ----------- |
+| `NeovimOpen` | Open neovim in new tmux window       | —           |
+
 ## Context Directory Plugin
 
 The context directory plugin provides commands to open context directories in the system file browser. Always available on macOS and Linux.
+
+```yaml
+plugins:
+  contextdir:
+    enabled: true  # always available on macOS/Linux
+```
 
 ### Commands Provided
 
@@ -197,11 +195,3 @@ The context directory plugin provides commands to open context directories in th
 | -------------------- | -------------------------------- | ----------- |
 | `ContextOpenSession` | Open session's `.hive` directory | —           |
 | `ContextOpenAll`     | Open all context directories     | —           |
-
-### Configuration
-
-```yaml
-plugins:
-  contextdir:
-    enabled: true  # always available on macOS/Linux
-```

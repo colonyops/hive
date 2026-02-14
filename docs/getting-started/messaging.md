@@ -1,3 +1,7 @@
+---
+icon: lucide/mail
+---
+
 # Inter-Agent Messaging
 
 Hive includes a lightweight pub/sub messaging system that enables agents to communicate across repositories. This is useful when work in one microservice depends on information from another.
@@ -17,7 +21,7 @@ You can find your current session ID and inbox with:
 hive session info
 ```
 
-**Note**: The `agent.` prefix refers to the AI agent running in the session, not the session itself. In the future when hive supports multiple agents per session, inbox addressing will use `agent.<session-id>.<agent-name>.inbox`.
+**Note**: The `agent.` prefix refers to the AI agent running in the session, not the session itself. Sessions with multiple agents currently share a single inbox. Per-agent addressing (`agent.<session-id>.<agent-name>.inbox`) is reserved for future use.
 
 ## Example: Cross-Repository Collaboration
 

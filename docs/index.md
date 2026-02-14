@@ -1,3 +1,7 @@
+---
+icon: fontawesome/brands/hive
+---
+
 # Hive
 
 **The command center for your AI colony**

@@ -1,16 +1,10 @@
+---
+icon: lucide/keyboard
+---
+
 # Keybindings
 
-Keybindings map keys to user commands. All keybindings must reference a command via the `cmd` field.
-
-## Keybinding Options
-
-| Field     | Type   | Description                                   |
-| --------- | ------ | --------------------------------------------- |
-| `cmd`     | string | Command name to execute (required)            |
-| `help`    | string | Override help text from the command           |
-| `confirm` | string | Override confirmation prompt from the command |
-
-## Example
+Keybindings map keys to user commands. All keybindings reference a command via the `cmd` field.
 
 ```yaml
 keybindings:
@@ -25,6 +19,14 @@ keybindings:
     confirm: "Run tidy on this session?" # Override command's confirm
 ```
 
+## Keybinding Options
+
+| Field     | Type   | Description                                   |
+| --------- | ------ | --------------------------------------------- |
+| `cmd`     | string | Command name to execute (required)            |
+| `help`    | string | Override help text from the command           |
+| `confirm` | string | Override confirmation prompt from the command |
+
 ## Default Keybindings
 
 | Key        | Command              | Description                          |
@@ -37,6 +39,9 @@ keybindings:
 | `enter`    | TmuxOpen             | Open/attach tmux session             |
 | `ctrl+d`   | TmuxKill             | Kill tmux session                    |
 | `A`        | AgentSend            | Send Enter to agent                  |
+| `R`        | RenameSession        | Rename session                       |
+| `J`        | NextActive           | Jump to next active session          |
+| `K`        | PrevActive           | Jump to previous active session      |
 | `p`        | TmuxPopUp            | Popup tmux session                   |
 | `g`        | —                    | Refresh git statuses                 |
 | `tab`      | —                    | Switch views                         |
@@ -52,7 +57,4 @@ These commands are available in the command palette (`:`) but have no default ke
 | `FilterActive`   | Show sessions with active agents      |
 | `FilterApproval` | Show sessions needing approval        |
 | `FilterReady`    | Show sessions with idle agents        |
-| `Recycle`        | Recycle selected session              |
-| `Delete`         | Delete selected session               |
-| `NewSession`     | Create a new session                  |
 | `SendBatch`      | Send message to multiple agents       |

@@ -1,22 +1,10 @@
+---
+icon: lucide/regex
+---
+
 # Rules
 
-Rules match repositories by regex pattern against the remote URL. The first matching rule wins. An empty pattern (`""`) matches all repositories.
-
-## Rule Fields
-
-Each rule can configure:
-
-| Field           | Type       | Default                        | Description                                       |
-| --------------- | ---------- | ------------------------------ | ------------------------------------------------- |
-| `pattern`       | string     | `""`                           | Regex pattern to match remote URL                 |
-| `spawn`         | []string   | bundled `hive-tmux`            | Commands run after session creation               |
-| `batch_spawn`   | []string   | bundled `hive-tmux -b`         | Commands run after batch session creation          |
-| `recycle`       | []string   | git fetch/checkout/reset/clean | Commands run when recycling a session             |
-| `commands`      | []string   | `[]`                           | Setup commands run after clone                    |
-| `copy`          | []string   | `[]`                           | Glob patterns for files to copy from parent repo  |
-| `max_recycled`  | *int       | `5`                            | Maximum recycled sessions to keep (0 = unlimited) |
-
-## Example
+Rules match repositories by regex pattern against the remote URL and configure how sessions are created, recycled, and set up. The first matching rule wins. An empty pattern (`""`) matches all repositories.
 
 ```yaml
 rules:
@@ -38,6 +26,18 @@ rules:
     copy:
       - .envrc
 ```
+
+## Rule Fields
+
+| Field           | Type       | Default                        | Description                                       |
+| --------------- | ---------- | ------------------------------ | ------------------------------------------------- |
+| `pattern`       | string     | `""`                           | Regex pattern to match remote URL                 |
+| `spawn`         | []string   | bundled `hive-tmux`            | Commands run after session creation               |
+| `batch_spawn`   | []string   | bundled `hive-tmux -b`         | Commands run after batch session creation          |
+| `recycle`       | []string   | git fetch/checkout/reset/clean | Commands run when recycling a session             |
+| `commands`      | []string   | `[]`                           | Setup commands run after clone                    |
+| `copy`          | []string   | `[]`                           | Glob patterns for files to copy from parent repo  |
+| `max_recycled`  | *int       | `5`                            | Maximum recycled sessions to keep (0 = unlimited) |
 
 ## Template Variables
 

@@ -1,3 +1,7 @@
+---
+icon: lucide/git-pull-request
+---
+
 # Inter-Agent Code Review
 
 Orchestrate code reviews by spinning up a dedicated reviewer agent that receives context via inbox messaging, reviews your branch, and sends feedback back to you.

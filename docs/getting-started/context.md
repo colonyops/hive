@@ -1,3 +1,7 @@
+---
+icon: lucide/folder-symlink
+---
+
 # Context & Review
 
 ## The Workflow

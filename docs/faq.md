@@ -1,3 +1,7 @@
+---
+icon: lucide/circle-help
+---
+
 # FAQ
 
 ### What's the difference between a hive session and a tmux session?
@@ -19,16 +23,11 @@ See [Getting Started](getting-started.md) for full terminology.
 
 ### Can I run multiple agents in one session?
 
-Not yet, but it's planned. Currently each session runs one agent. Future versions will support multiple agents per session (e.g., Claude + test runner).
-
-When multi-agent support is added, agents will have individual inboxes:
-
-- `agent.<session-id>.claude.inbox`
-- `agent.<session-id>.test-runner.inbox`
+Yes. Each agent runs in its own tmux window within the session. Configure [agent profiles](configuration/index.md#agents) to define which tools are available, and use `tmux.preview_window_matcher` to tell hive which windows to monitor. The TUI tracks each agent window independently with its own status indicator.
 
 ### Why is the inbox format `agent.<id>.inbox` not `session.<id>.inbox`?
 
-The inbox belongs to the agent (AI tool), not the session (container). When multi-agent support is added, you'll be able to send messages to specific agents within a session using `agent.<session-id>.<agent-name>.inbox`.
+The inbox belongs to the agent (AI tool), not the session (container). The `agent.` prefix supports future per-agent addressing using `agent.<session-id>.<agent-name>.inbox`.
 
 See [Messaging](messaging.md) for full details on inter-agent communication.
 
