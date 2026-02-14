@@ -55,6 +55,13 @@ Hive manages isolated git sessions for running AI agents in parallel. Instead of
 
 Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH.
 
+!!! tip "Claude Code Plugin"
+    Hive provides a [Claude Code plugin](https://github.com/colonyops/hive/tree/main/claude-plugin/hive) for inter-agent messaging, session management, and workflow coordination. Install it with:
+
+    ```bash
+    claude plugin add github:colonyops/hive/claude-plugin/hive
+    ```
+
 ## Status Indicators
 
 The TUI shows real-time agent status:

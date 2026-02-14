@@ -108,11 +108,6 @@ hv
 
 Hive auto-detects tmux, bundles its own session management scripts, and registers default keybindings — no other config needed. Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
-## Dependencies
-
-- Git (available in PATH or configured via `git_path`)
-- tmux (required — provides session management and status monitoring)
-
 ## Next Steps
 
 - [Sessions](sessions.md) — How sessions, agents, and lifecycle work

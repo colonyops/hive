@@ -13,6 +13,7 @@ nav = [
     "getting-started/sessions.md",
     "getting-started/context.md",
     "getting-started/messaging.md",
+    "getting-started/claude-plugin.md",
   ]},
   { "Configuration" = [
     "configuration/index.md",
