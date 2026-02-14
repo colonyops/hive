@@ -63,4 +63,4 @@ hive msg sub -t agent.x7k2 --last 1
 
 ## CLI Reference
 
-See the full [messaging CLI reference](../cli-reference.md#hive-msg) for all flags and options.
+Run `hive msg --help` for all flags and options.

@@ -42,7 +42,6 @@ The TUI shows real-time agent status:
 - [Getting Started](getting-started/) — Quick start and first session
 - [Sessions](getting-started/sessions.md) — How sessions, agents, and lifecycle work
 - [Configuration](configuration/) — Config file, rules, templates, and options
-- [CLI Reference](cli-reference.md) — All CLI commands and flags
 
 ---
 

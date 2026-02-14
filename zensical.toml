@@ -21,7 +21,6 @@ nav = [
     "configuration/plugins.md",
     "configuration/themes.md",
   ]},
-  { "CLI Reference" = "cli-reference.md" },
   { "Recipes" = [
     "recipes/index.md",
     "recipes/inter-agent-code-review.md",

@@ -26,7 +26,6 @@ NAV=(
   "Configuration|configuration/keybindings.md|Keybindings|Key mappings, default keys, and palette commands"
   "Configuration|configuration/plugins.md|Plugins|Tmux, Claude, GitHub, and Beads plugin configuration"
   "Configuration|configuration/themes.md|Themes|Built-in themes and custom color palettes"
-  "Reference|cli-reference.md|CLI Reference|All CLI commands and flags"
   "Recipes|recipes/inter-agent-code-review.md|Inter-Agent Code Review|Using messaging for collaborative code review"
   "FAQ|faq.md|FAQ|Common questions and answers"
 )

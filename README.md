@@ -11,7 +11,7 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/colonyops/hive)
 [![Release](https://img.shields.io/github/v/release/colonyops/hive?style=for-the-badge&color=e0af68&labelColor=1a1b26)](https://github.com/colonyops/hive/releases)
 
-[Documentation](https://colonyops.github.io/hive/) | [Getting Started](https://colonyops.github.io/hive/getting-started/) | [Configuration](https://colonyops.github.io/hive/configuration/) | [CLI Reference](https://colonyops.github.io/hive/cli-reference/)
+[Documentation](https://colonyops.github.io/hive/) | [Getting Started](https://colonyops.github.io/hive/getting-started/) | [Configuration](https://colonyops.github.io/hive/configuration/)
 
 </div>
 
@@ -77,7 +77,6 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 - [Plugins](https://colonyops.github.io/hive/plugins/) — Claude, tmux, and other plugins
 - [Themes](https://colonyops.github.io/hive/themes/) — Built-in themes and custom palettes
 - [Context & Review](https://colonyops.github.io/hive/context/) — Shared context directories and review tool
-- [CLI Reference](https://colonyops.github.io/hive/cli-reference/) — All commands and flags
 - [FAQ](https://colonyops.github.io/hive/faq/) — Common questions
 
 ## Dependencies

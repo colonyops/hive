@@ -79,11 +79,6 @@ tasks:
     cmds:
       - zensical serve
 
-  docs:cli-ref:
-    desc: Auto-generates CLI reference from command definitions
-    cmds:
-      - go run ./cmd/docgen/
-
   docs:llms:
     desc: Generates llms.txt and llms-full.txt in site/
     cmds:
@@ -92,6 +87,5 @@ tasks:
   docs:build:
     desc: Builds the documentation site with llms.txt
     cmds:
-      - task: docs:cli-ref
       - zensical build
       - task: docs:llms
