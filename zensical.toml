@@ -1,0 +1,59 @@
+[project]
+site_name = "Hive"
+site_url = "https://colonyops.github.io/hive/"
+site_description = "The command center for your AI colony — manage multiple AI agent sessions in isolated git environments"
+repo_url = "https://github.com/colonyops/hive"
+repo_name = "colonyops/hive"
+
+nav = [
+  { "Home" = "index.md" },
+  { "Getting Started" = [
+    "getting-started/index.md",
+    "getting-started/sessions.md",
+    "getting-started/context.md",
+    "getting-started/messaging.md",
+  ]},
+  { "Configuration" = [
+    "configuration/index.md",
+    "configuration/commands.md",
+    "configuration/plugins.md",
+    "configuration/themes.md",
+  ]},
+  { "CLI Reference" = "cli-reference.md" },
+  { "Recipes" = [
+    "recipes/index.md",
+    "recipes/inter-agent-code-review.md",
+  ]},
+  { "FAQ" = "faq.md" },
+]
+
+custom_dir = "overrides"
+
+[project.theme]
+variant = "modern"
+features = [
+  "navigation.instant",
+  "navigation.tabs",
+  "navigation.sections",
+  "navigation.top",
+  "toc.follow",
+]
+
+[project.theme.icon]
+logo = "fontawesome/brands/hive"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "amber"
+accent = "deep orange"
+toggle.icon = "lucide/sun"
+toggle.name = "Switch to dark mode"
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "amber"
+accent = "deep orange"
+toggle.icon = "lucide/moon"
+toggle.name = "Switch to light mode"
