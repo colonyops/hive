@@ -507,10 +507,6 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	// Publish startup warnings as toast notifications
-	for _, msg := range m.startupWarnings {
-		m.notifyBus.Warnf("%s", msg)
-	}
 	return tea.Batch(cmds...)
 }
 
@@ -606,6 +602,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Set review view size
 		if m.reviewView != nil {
 			m.reviewView.SetSize(msg.Width, contentHeight)
+		}
+
+		// Publish startup warnings on the first WindowSizeMsg so they flow
+		// through the Update loop with the render cycle already running.
+		if len(m.startupWarnings) > 0 {
+			for _, w := range m.startupWarnings {
+				m.notifyBus.Warnf("%s", w)
+			}
+			m.startupWarnings = nil
+			return m, m.ensureToastTick()
 		}
 		return m, nil
 
