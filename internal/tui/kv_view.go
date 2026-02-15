@@ -167,8 +167,8 @@ func (v *KVView) View() string {
 		return ""
 	}
 
-	// Layout: key list (30%) | divider (1) | preview (remaining)
-	listWidth := int(float64(v.width) * 0.30)
+	// Layout: key list (20%) | divider (1) | preview (remaining)
+	listWidth := int(float64(v.width) * 0.20)
 	if listWidth < 15 {
 		listWidth = 15
 	}
@@ -260,27 +260,34 @@ func (v *KVView) renderPreview(width, height int) []string {
 		return lines
 	}
 
-	// Line 1: key · created
-	line1 := fmt.Sprintf("  %s · %s", v.previewEntry.Key, v.previewEntry.CreatedAt.Format("2006-01-02 15:04"))
-	lines = append(lines, pad(styles.TextMutedStyle.Render(ansi.Truncate(line1, width, "…"))))
+	// Line 1: key name (prominent) · created date (muted)
+	line1 := "  " + styles.TextPrimaryBoldStyle.Render(v.previewEntry.Key) +
+		styles.TextMutedStyle.Render(" · "+v.previewEntry.CreatedAt.Format("2006-01-02 15:04"))
+	lines = append(lines, pad(ansi.Truncate(line1, width, "…")))
 
 	// Line 2: divider
 	lines = append(lines, muted("  "+strings.Repeat("─", max(width-2, 1))))
 
 	// Line 3: updated · expires (if applicable)
-	line3 := fmt.Sprintf("  updated %s", v.previewEntry.UpdatedAt.Format("2006-01-02 15:04"))
+	line3 := "  " + styles.TextMutedStyle.Render("updated ") +
+		styles.TextForegroundStyle.Render(v.previewEntry.UpdatedAt.Format("2006-01-02 15:04"))
 	if v.previewEntry.ExpiresAt != nil {
 		exp := *v.previewEntry.ExpiresAt
 		remaining := time.Until(exp)
 		var relStr string
+		var relRendered string
 		if remaining <= 0 {
 			relStr = "expired"
+			relRendered = styles.TextErrorStyle.Render(relStr)
 		} else {
 			relStr = formatDuration(remaining)
+			relRendered = styles.TextWarningStyle.Render(relStr)
 		}
-		line3 += fmt.Sprintf(" · expires %s (%s)", exp.Format("2006-01-02 15:04"), relStr)
+		line3 += styles.TextMutedStyle.Render(" · expires ") +
+			styles.TextForegroundStyle.Render(exp.Format("2006-01-02 15:04")) +
+			styles.TextMutedStyle.Render(" (") + relRendered + styles.TextMutedStyle.Render(")")
 	}
-	lines = append(lines, pad(styles.TextMutedStyle.Render(ansi.Truncate(line3, width, "…"))))
+	lines = append(lines, pad(ansi.Truncate(line3, width, "…")))
 
 	// Blank separator before JSON
 	lines = append(lines, emptyLine)
