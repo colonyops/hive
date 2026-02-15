@@ -179,11 +179,25 @@ Run 'hive new' to create a new session from the current repository.`,
 				plugintmux.New(cfg.Plugins.Tmux),
 			}
 
+			// Map plugin configs' Enabled field to detect explicitly disabled plugins.
+			// All plugin configs use *bool: nil=auto-detect, false=disabled.
+			enabledFlags := []*bool{
+				cfg.Plugins.GitHub.Enabled,
+				cfg.Plugins.Beads.Enabled,
+				cfg.Plugins.LazyGit.Enabled,
+				cfg.Plugins.Neovim.Enabled,
+				cfg.Plugins.ContextDir.Enabled,
+				cfg.Plugins.Claude.Enabled,
+				cfg.Plugins.Tmux.Enabled,
+			}
+
 			pluginInfos := make([]doctor.PluginInfo, len(allPlugins))
 			for i, p := range allPlugins {
+				disabled := enabledFlags[i] != nil && !*enabledFlags[i]
 				pluginInfos[i] = doctor.PluginInfo{
 					Name:      p.Name(),
 					Available: p.Available(),
+					Disabled:  disabled,
 				}
 			}
 

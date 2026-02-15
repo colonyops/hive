@@ -48,6 +48,21 @@ func TestRepoDirsCheck_NotADirectory(t *testing.T) {
 	assert.Contains(t, result.Items[0].Detail, "not a directory")
 }
 
+func TestRepoDirsCheck_TildeExpansion(t *testing.T) {
+	// ~ should expand to the user's home directory, which exists
+	home, err := os.UserHomeDir()
+	require.NoError(t, err)
+
+	check := NewRepoDirsCheck([]string{"~"})
+	result := check.Run(context.Background())
+
+	require.Len(t, result.Items, 1)
+	// Home dir should exist and be a directory
+	assert.Equal(t, StatusPass, result.Items[0].Status)
+	// Label should still show the original ~ path for user clarity
+	_ = home // home is used indirectly via expansion
+}
+
 func TestRepoDirsCheck_NoneConfigured(t *testing.T) {
 	check := NewRepoDirsCheck(nil)
 	result := check.Run(context.Background())

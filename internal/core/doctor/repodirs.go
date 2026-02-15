@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 )
 
 // RepoDirsCheck verifies that configured repo_dirs entries exist and are accessible.
@@ -33,6 +34,13 @@ func (c *RepoDirsCheck) Run(_ context.Context) Result {
 	}
 
 	for _, dir := range c.dirs {
+		// Expand ~ to match runtime behavior (see ScanRepoDirs)
+		if len(dir) > 0 && dir[0] == '~' {
+			if home, err := os.UserHomeDir(); err == nil {
+				dir = filepath.Join(home, dir[1:])
+			}
+		}
+
 		info, err := os.Stat(dir)
 		switch {
 		case os.IsNotExist(err):

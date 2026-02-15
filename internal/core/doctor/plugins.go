@@ -7,6 +7,7 @@ import "context"
 type PluginInfo struct {
 	Name      string
 	Available bool
+	Disabled  bool // explicitly disabled via config (enabled: false)
 }
 
 // PluginCheck reports each plugin's availability.
@@ -36,12 +37,19 @@ func (c *PluginCheck) Run(_ context.Context) Result {
 	}
 
 	for _, p := range c.plugins {
-		if p.Available {
+		switch {
+		case p.Available:
 			result.Items = append(result.Items, CheckItem{
 				Label:  p.Name,
 				Status: StatusPass,
 			})
-		} else {
+		case p.Disabled:
+			result.Items = append(result.Items, CheckItem{
+				Label:  p.Name,
+				Status: StatusPass,
+				Detail: "disabled",
+			})
+		default:
 			result.Items = append(result.Items, CheckItem{
 				Label:  p.Name,
 				Status: StatusWarn,
