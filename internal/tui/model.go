@@ -75,6 +75,7 @@ type Options struct {
 	PluginManager   *plugins.Manager     // Plugin manager (optional)
 	DB              *db.DB               // Database connection for stores
 	Renderer        *tmpl.Renderer       // Template renderer for shell commands
+	Warnings        []string             // Startup warnings to display as toasts
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -195,6 +196,9 @@ type Model struct {
 
 	// Template rendering
 	renderer *tmpl.Renderer
+
+	// Startup warnings to show as toasts after init
+	startupWarnings []string
 }
 
 // PendingCreate returns any pending session creation data.
@@ -430,6 +434,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		toastView:          toastView,
 		focusFilterInput:   focusInput,
 		renderer:           opts.Renderer,
+		startupWarnings:    opts.Warnings,
 	}
 }
 
@@ -501,6 +506,10 @@ func (m Model) Init() tea.Cmd {
 		if cmd := m.reviewView.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	}
+	// Publish startup warnings as toast notifications
+	for _, msg := range m.startupWarnings {
+		m.notifyBus.Warnf("%s", msg)
 	}
 	return tea.Batch(cmds...)
 }
