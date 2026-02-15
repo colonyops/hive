@@ -5,48 +5,72 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
-	"github.com/hay-kot/hive/internal/commands"
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/doctor"
-	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/internal/data/stores"
-	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/hive/plugins"
-	"github.com/hay-kot/hive/internal/hive/plugins/beads"
-	"github.com/hay-kot/hive/internal/hive/plugins/claude"
-	"github.com/hay-kot/hive/internal/hive/plugins/contextdir"
-	"github.com/hay-kot/hive/internal/hive/plugins/github"
-	"github.com/hay-kot/hive/internal/hive/plugins/lazygit"
-	"github.com/hay-kot/hive/internal/hive/plugins/neovim"
-	plugintmux "github.com/hay-kot/hive/internal/hive/plugins/tmux"
-	"github.com/hay-kot/hive/internal/hive/scripts"
-	"github.com/hay-kot/hive/internal/hive/sweep"
-	"github.com/hay-kot/hive/pkg/executil"
-	"github.com/hay-kot/hive/pkg/logutils"
-	"github.com/hay-kot/hive/pkg/tmpl"
+	"github.com/colonyops/hive/internal/commands"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/hive/plugins/beads"
+	"github.com/colonyops/hive/internal/hive/plugins/claude"
+	"github.com/colonyops/hive/internal/hive/plugins/contextdir"
+	"github.com/colonyops/hive/internal/hive/plugins/github"
+	"github.com/colonyops/hive/internal/hive/plugins/lazygit"
+	"github.com/colonyops/hive/internal/hive/plugins/neovim"
+	plugintmux "github.com/colonyops/hive/internal/hive/plugins/tmux"
+	"github.com/colonyops/hive/internal/hive/scripts"
+	"github.com/colonyops/hive/internal/hive/sweep"
+	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/logutils"
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 var (
 	// Build information. Populated at build-time via -ldflags flag.
+	// When installed via `go install module@version`, init() populates
+	// these from runtime/debug.BuildInfo instead.
 	version = "dev"
 	commit  = "HEAD"
 	date    = "now"
 )
 
 func build() string {
-	short := commit
-	if len(commit) > 7 {
-		short = commit[:7]
+	v, c, d := version, commit, date
+
+	// When installed via `go install module@version`, ldflags aren't set
+	// so version remains "dev". Fall back to runtime/debug.BuildInfo which
+	// Go populates automatically with the module version and VCS metadata.
+	if v == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			if mv := info.Main.Version; mv != "" && mv != "(devel)" {
+				v = mv
+			}
+			for _, s := range info.Settings {
+				switch s.Key {
+				case "vcs.revision":
+					c = s.Value
+				case "vcs.time":
+					d = s.Value
+				}
+			}
+		}
 	}
 
-	return fmt.Sprintf("%s (%s) %s", version, short, date)
+	short := c
+	if len(c) > 7 {
+		short = c[:7]
+	}
+
+	return fmt.Sprintf("%s (%s) %s", v, short, d)
 }
 
 func main() {

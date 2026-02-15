@@ -9,9 +9,9 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/internal/data/stores"
-	review "github.com/hay-kot/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
+	review "github.com/colonyops/hive/internal/tui/views/review"
 )
 
 // ReviewOnlyOptions configures the review-only TUI.

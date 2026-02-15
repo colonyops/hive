@@ -6,10 +6,10 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hay-kot/hive/internal/core/doctor"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/pkg/iojson"
+	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 

@@ -3,8 +3,8 @@ package tui
 import (
 	"sort"
 
-	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/session"
 )
 
 // RepoGroup represents a repository with its associated sessions.

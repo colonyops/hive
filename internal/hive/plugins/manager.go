@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/rs/zerolog/log"
 )
 

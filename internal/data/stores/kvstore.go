@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/kv"
-	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/data/db"
 )
 
 // KVStore implements kv.KV using SQLite.

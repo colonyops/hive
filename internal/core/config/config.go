@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/hay-kot/criterio"
-	"github.com/hay-kot/hive/internal/core/styles"
 	"gopkg.in/yaml.v3"
 )
 

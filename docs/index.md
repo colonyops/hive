@@ -57,6 +57,12 @@ Hive manages isolated git sessions for running AI agents in parallel. Instead of
 brew install colonyops/tap/hive
 ```
 
+Or install directly with Go:
+
+```bash
+go install github.com/colonyops/hive@latest
+```
+
 Pre-built binaries are also available on the [GitHub Releases](https://github.com/colonyops/hive/releases) page.
 
 !!! tip "Claude Code Plugin"

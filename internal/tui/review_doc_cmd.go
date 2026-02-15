@@ -4,8 +4,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/tui/views/review"
 )
 
 // HiveDocReviewCmd activates the review tab with optional document selection.

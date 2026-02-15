@@ -6,7 +6,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/hay-kot/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/data/stores"
 )
 
 // Start launches a background goroutine that periodically sweeps expired KV entries.

@@ -9,9 +9,9 @@ import (
 	"charm.land/bubbles/v2/key"
 	"github.com/rs/zerolog/log"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/pkg/tmpl"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // ActionType identifies the kind of action a keybinding triggers.

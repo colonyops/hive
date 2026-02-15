@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/git"
 	"github.com/rs/zerolog/log"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/hay-kot/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -3,7 +3,7 @@ package review
 import (
 	"testing"
 
-	"github.com/hay-kot/hive/internal/tui/testutil"
+	"github.com/colonyops/hive/internal/tui/testutil"
 )
 
 func TestSearchMode_View(t *testing.T) {

@@ -9,10 +9,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/pkg/iojson"
-	"github.com/hay-kot/hive/pkg/randid"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/pkg/iojson"
+	"github.com/colonyops/hive/pkg/randid"
 	"github.com/urfave/cli/v3"
 )
 

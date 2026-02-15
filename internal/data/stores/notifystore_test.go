@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/notify"
-	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/data/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

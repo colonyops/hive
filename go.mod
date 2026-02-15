@@ -1,4 +1,4 @@
-module github.com/hay-kot/hive
+module github.com/colonyops/hive
 
 go 1.25
 

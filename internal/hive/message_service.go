@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/pkg/randid"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/pkg/randid"
 )
 
 // MessageService wraps messaging.Store with domain logic.

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hay-kot/hive/internal/tui/testutil"
+	"github.com/colonyops/hive/internal/tui/testutil"
 )
 
 func TestCommentModal_View(t *testing.T) {

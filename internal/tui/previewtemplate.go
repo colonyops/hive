@@ -5,10 +5,10 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/hive/plugins"
-	"github.com/hay-kot/hive/pkg/kv"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/pkg/kv"
 )
 
 // PreviewIcons holds nerd font icons for templates.

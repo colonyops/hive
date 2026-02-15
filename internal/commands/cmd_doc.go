@@ -7,8 +7,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/hive"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 

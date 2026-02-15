@@ -12,12 +12,12 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/kv"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/hive/plugins"
-	"github.com/hay-kot/hive/internal/hive/plugins/pluglib"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/hive/plugins/pluglib"
 )
 
 // beadsInfo holds cached issue counts for a session.

@@ -3,9 +3,9 @@ package hive
 import (
 	"context"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/doctor"
-	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/core/session"
 )
 
 // DoctorService runs health checks on the hive setup.

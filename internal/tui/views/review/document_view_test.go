@@ -5,8 +5,8 @@ import (
 	"testing"
 	"time"
 
-	corereview "github.com/hay-kot/hive/internal/core/review"
-	"github.com/hay-kot/hive/internal/tui/testutil"
+	corereview "github.com/colonyops/hive/internal/core/review"
+	"github.com/colonyops/hive/internal/tui/testutil"
 )
 
 // createTestDocument creates a test document with known content.

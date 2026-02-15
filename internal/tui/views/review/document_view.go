@@ -6,8 +6,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
 
-	corereview "github.com/hay-kot/hive/internal/core/review"
-	"github.com/hay-kot/hive/internal/core/styles"
+	corereview "github.com/colonyops/hive/internal/core/review"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // DocumentView handles document rendering with line numbers, comments, and cursor highlighting.

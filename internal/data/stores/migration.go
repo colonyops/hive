@@ -8,9 +8,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/data/db"
 )
 
 // SessionFile is the root JSON structure for sessions.json

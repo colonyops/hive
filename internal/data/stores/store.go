@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/data/db"
 )
 
 // SessionStore implements session.Store using SQLite.

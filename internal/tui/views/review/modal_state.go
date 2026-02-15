@@ -4,8 +4,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/tui/components"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // ModalState coordinates modal lifecycle and rendering.

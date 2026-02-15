@@ -3,7 +3,7 @@ package pluglib
 import (
 	"fmt"
 
-	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/config"
 )
 
 // TmuxPopup creates a UserCommand that runs cmd in a tmux popup with less for scrolling.

@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hay-kot/hive/internal/tui/testutil"
+	"github.com/colonyops/hive/internal/tui/testutil"
 	"github.com/stretchr/testify/assert"
 )
 

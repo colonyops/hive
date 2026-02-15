@@ -7,8 +7,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
 // Plugin implements the context directory plugin for Hive.

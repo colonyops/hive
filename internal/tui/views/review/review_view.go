@@ -20,10 +20,10 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
-	corereview "github.com/hay-kot/hive/internal/core/review"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/data/stores"
-	"github.com/hay-kot/hive/internal/tui/components"
+	corereview "github.com/colonyops/hive/internal/core/review"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.
