@@ -1830,9 +1830,18 @@ func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 // openNewSessionForm initializes the new session form and transitions to the creating state.
 func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	preselectedRemote := m.localRemote
-	if selected := m.selectedSession(); selected != nil {
-		preselectedRemote = selected.Remote
+
+	item := m.list.SelectedItem()
+	if item != nil {
+		if treeItem, ok := item.(TreeItem); ok {
+			if treeItem.IsHeader && treeItem.RepoRemote != "" {
+				preselectedRemote = treeItem.RepoRemote
+			} else if selected := m.selectedSession(); selected != nil {
+				preselectedRemote = selected.Remote
+			}
+		}
 	}
+
 	existingNames := make(map[string]bool, len(m.allSessions))
 	for _, s := range m.allSessions {
 		existingNames[s.Name] = true
