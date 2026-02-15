@@ -499,6 +499,10 @@ func (m Model) Init() tea.Cmd {
 	if cmd := m.scheduleSessionRefresh(); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
+	// Start KV store polling if store view is enabled
+	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+		cmds = append(cmds, scheduleKVPollTick())
+	}
 	// Scan for repositories if configured
 	if len(m.repoDirs) > 0 {
 		cmds = append(cmds, m.scanRepoDirs())
@@ -691,6 +695,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Keep scheduling refresh ticks even if not actively refreshing
 		return m, m.scheduleSessionRefresh()
+
+	case kvPollTickMsg:
+		if m.isStoreFocused() && !m.isModalActive() {
+			return m, tea.Batch(
+				m.loadKVKeys(),
+				scheduleKVPollTick(),
+			)
+		}
+		return m, scheduleKVPollTick()
 
 	case toastTickMsg:
 		m.toastController.Tick()
@@ -1687,7 +1700,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 // Cycle: Sessions -> Messages -> Store -> [Review if visible] -> Sessions
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
-	showStoreTab := m.kvStore != nil
+	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
 
 	switch m.activeView {
 	case ViewSessions:
@@ -2739,7 +2752,7 @@ func (m Model) View() tea.View {
 func (m Model) renderTabView() string {
 	// Build tab bar with tabs on left and branding on right
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
-	showStoreTab := m.kvStore != nil
+	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
 
 	// Render each tab with appropriate style
 	renderTab := func(label string, view ViewType) string {

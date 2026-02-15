@@ -11,6 +11,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/kv"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/hive/plugins"
@@ -19,20 +20,16 @@ import (
 // Plugin implements Claude Code integration (fork + analytics).
 type Plugin struct {
 	cfg   config.ClaudePluginConfig
-	cache *Cache
+	cache *kv.TypedKV[SessionAnalytics]
 }
 
 // New creates a new claude plugin.
-func New(cfg config.ClaudePluginConfig) *Plugin {
-	cacheTTL := 30 * time.Second
-	if cfg.CacheTTL > 0 {
-		cacheTTL = cfg.CacheTTL
+func New(cfg config.ClaudePluginConfig, kvStore kv.KV) *Plugin {
+	p := &Plugin{cfg: cfg}
+	if kvStore != nil {
+		p.cache = kv.Scoped[SessionAnalytics](kvStore, "claude.analytics")
 	}
-
-	return &Plugin{
-		cfg:   cfg,
-		cache: NewCache(cacheTTL),
-	}
+	return p
 }
 
 func (p *Plugin) Name() string {
@@ -91,12 +88,13 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 		// If no metadata, try cache before expensive detection
 		if claudeSessionID == "" {
 			// Check if we have cached analytics - if so, session was detected before
-			if cached := p.cache.Get(sess.ID); cached != nil {
-				// Return cached status immediately without re-detection
-				mu.Lock()
-				results[sess.ID] = p.renderStatus(cached)
-				mu.Unlock()
-				continue
+			if p.cache != nil {
+				if cached, err := p.cache.Get(ctx, sess.ID); err == nil {
+					mu.Lock()
+					results[sess.ID] = p.renderStatus(&cached)
+					mu.Unlock()
+					continue
+				}
 			}
 
 			// No cache - do expensive detection
@@ -127,8 +125,10 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 
 func (p *Plugin) fetchAnalytics(ctx context.Context, s *session.Session, claudeSessionID string) plugins.Status {
 	// Check cache first
-	if cached := p.cache.Get(s.ID); cached != nil {
-		return p.renderStatus(cached)
+	if p.cache != nil {
+		if cached, err := p.cache.Get(ctx, s.ID); err == nil {
+			return p.renderStatus(&cached)
+		}
 	}
 
 	// Get JSONL path
@@ -144,7 +144,9 @@ func (p *Plugin) fetchAnalytics(ctx context.Context, s *session.Session, claudeS
 	}
 
 	// Cache result
-	p.cache.Set(s.ID, analytics)
+	if p.cache != nil {
+		_ = p.cache.SetTTL(ctx, s.ID, *analytics, p.StatusCacheDuration())
+	}
 
 	return p.renderStatus(analytics)
 }

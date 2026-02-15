@@ -11,55 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCache(t *testing.T) {
-	t.Run("Get returns nil for missing entry", func(t *testing.T) {
-		cache := NewCache(30 * time.Second)
-		result := cache.Get("nonexistent")
-		assert.Nil(t, result)
-	})
-
-	t.Run("Get returns cached value", func(t *testing.T) {
-		cache := NewCache(30 * time.Second)
-		analytics := &SessionAnalytics{
-			CurrentContextTokens: 1000,
-			InputTokens:          5000,
-			OutputTokens:         3000,
-		}
-		cache.Set("session1", analytics)
-
-		result := cache.Get("session1")
-		require.NotNil(t, result)
-		assert.Equal(t, 1000, result.CurrentContextTokens)
-		assert.Equal(t, 5000, result.InputTokens)
-		assert.Equal(t, 3000, result.OutputTokens)
-	})
-
-	t.Run("Get returns nil for expired entry", func(t *testing.T) {
-		cache := NewCache(100 * time.Millisecond)
-		analytics := &SessionAnalytics{
-			CurrentContextTokens: 1000,
-		}
-		cache.Set("session1", analytics)
-
-		// Wait for expiration
-		time.Sleep(150 * time.Millisecond)
-
-		result := cache.Get("session1")
-		assert.Nil(t, result)
-	})
-
-	t.Run("Clear removes all entries", func(t *testing.T) {
-		cache := NewCache(30 * time.Second)
-		cache.Set("session1", &SessionAnalytics{CurrentContextTokens: 1000})
-		cache.Set("session2", &SessionAnalytics{CurrentContextTokens: 2000})
-
-		cache.Clear()
-
-		assert.Nil(t, cache.Get("session1"))
-		assert.Nil(t, cache.Get("session2"))
-	})
-}
-
 func TestSessionAnalytics_ContextPercent(t *testing.T) {
 	t.Run("calculates percentage correctly", func(t *testing.T) {
 		analytics := &SessionAnalytics{
@@ -200,7 +151,7 @@ func TestParseSessionJSONL(t *testing.T) {
 
 func TestPlugin_renderStatus(t *testing.T) {
 	t.Run("returns percentage label for low usage", func(t *testing.T) {
-		plugin := New(config.ClaudePluginConfig{})
+		plugin := New(config.ClaudePluginConfig{}, nil)
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 100000, // 50%
 		}
@@ -211,7 +162,7 @@ func TestPlugin_renderStatus(t *testing.T) {
 	})
 
 	t.Run("returns yellow with percentage for 60-79% usage", func(t *testing.T) {
-		plugin := New(config.ClaudePluginConfig{})
+		plugin := New(config.ClaudePluginConfig{}, nil)
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 130000, // 65%
 		}
@@ -223,7 +174,7 @@ func TestPlugin_renderStatus(t *testing.T) {
 	})
 
 	t.Run("returns red with percentage for 80%+ usage", func(t *testing.T) {
-		plugin := New(config.ClaudePluginConfig{})
+		plugin := New(config.ClaudePluginConfig{}, nil)
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 170000, // 85%
 		}
@@ -238,7 +189,7 @@ func TestPlugin_renderStatus(t *testing.T) {
 		plugin := New(config.ClaudePluginConfig{
 			YellowThreshold: 50,
 			RedThreshold:    70,
-		})
+		}, nil)
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 110000, // 55%
 		}
@@ -250,7 +201,7 @@ func TestPlugin_renderStatus(t *testing.T) {
 	t.Run("respects custom model limit", func(t *testing.T) {
 		plugin := New(config.ClaudePluginConfig{
 			ModelLimit: 100000,
-		})
+		}, nil)
 		analytics := &SessionAnalytics{
 			CurrentContextTokens: 65000, // 65% of 100k
 		}
@@ -265,7 +216,7 @@ func TestPlugin_Available(t *testing.T) {
 		disabled := false
 		plugin := New(config.ClaudePluginConfig{
 			Enabled: &disabled,
-		})
+		}, nil)
 
 		// Should return false even if claude CLI exists
 		assert.False(t, plugin.Available())
@@ -275,7 +226,7 @@ func TestPlugin_Available(t *testing.T) {
 		enabled := true
 		plugin := New(config.ClaudePluginConfig{
 			Enabled: &enabled,
-		})
+		}, nil)
 
 		// Note: This will only pass if claude CLI is actually installed
 		// In CI, this might fail, which is expected
