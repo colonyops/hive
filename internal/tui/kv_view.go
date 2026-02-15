@@ -211,8 +211,7 @@ func (v *KVView) renderKeyList(width, height int) []string {
 		if v.filtering {
 			filterLine += styles.TextMutedStyle.Render("▎")
 		}
-		filterLine = truncateOrPad(filterLine, width)
-		lines = append(lines, filterLine)
+		lines = append(lines, truncateOrPad(filterLine, width))
 	}
 
 	listHeight := height - len(lines)
@@ -224,19 +223,22 @@ func (v *KVView) renderKeyList(width, height int) []string {
 	visible := v.filtered
 	for i := v.offset; i < len(visible) && i < v.offset+listHeight; i++ {
 		key := v.keys[visible[i]]
+		var line string
 		if i == v.cursor {
 			indicator := styles.TextPrimaryStyle.Render("┃ ")
 			name := styles.TextForegroundStyle.Render(ansi.Truncate(key, width-3, "…"))
-			lines = append(lines, indicator+name)
+			line = indicator + name
 		} else {
 			name := styles.TextMutedStyle.Render(ansi.Truncate(key, width-3, "…"))
-			lines = append(lines, "  "+name)
+			line = "  " + name
 		}
+		lines = append(lines, truncateOrPad(line, width))
 	}
 
 	// Pad to fill height
+	emptyLine := strings.Repeat(" ", width)
 	for len(lines) < height {
-		lines = append(lines, strings.Repeat(" ", width))
+		lines = append(lines, emptyLine)
 	}
 
 	return lines
@@ -244,6 +246,7 @@ func (v *KVView) renderKeyList(width, height int) []string {
 
 func (v *KVView) renderPreview(width, height int) []string {
 	lines := make([]string, 0, height)
+	emptyLine := strings.Repeat(" ", width)
 
 	// Header
 	var headerText string
@@ -252,8 +255,7 @@ func (v *KVView) renderPreview(width, height int) []string {
 	} else {
 		headerText = "  Preview"
 	}
-	header := styles.TextMutedStyle.Render(truncateOrPad(headerText, width))
-	lines = append(lines, header)
+	lines = append(lines, styles.TextMutedStyle.Render(truncateOrPad(headerText, width)))
 
 	previewHeight := height - 1
 	if previewHeight < 1 {
@@ -262,24 +264,13 @@ func (v *KVView) renderPreview(width, height int) []string {
 
 	switch {
 	case v.previewEntry == nil:
-		emptyMsg := styles.TextMutedStyle.Render("  No key selected")
-		lines = append(lines, emptyMsg)
+		lines = append(lines, truncateOrPad(styles.TextMutedStyle.Render("  No key selected"), width))
 	case len(v.previewLines) == 0:
-		emptyMsg := styles.TextMutedStyle.Render("  (empty)")
-		lines = append(lines, emptyMsg)
+		lines = append(lines, truncateOrPad(styles.TextMutedStyle.Render("  (empty)"), width))
 	default:
-		// Render visible lines from preview
 		for i := v.previewOffset; i < len(v.previewLines) && i < v.previewOffset+previewHeight; i++ {
 			line := "  " + v.previewLines[i]
-			lines = append(lines, line)
-		}
-
-		// Scroll indicator
-		if len(v.previewLines) > previewHeight {
-			scrollInfo := fmt.Sprintf(" %d/%d", v.previewOffset+1, len(v.previewLines))
-			if len(lines) > 1 {
-				lines[0] = header[:max(0, len(header)-len(scrollInfo))] + styles.TextMutedStyle.Render(scrollInfo)
-			}
+			lines = append(lines, truncateOrPad(line, width))
 		}
 	}
 
@@ -287,9 +278,8 @@ func (v *KVView) renderPreview(width, height int) []string {
 	if v.previewEntry != nil {
 		remaining := height - len(lines)
 		if remaining > 1 {
-			// Pad before metadata
 			for len(lines) < height-1 {
-				lines = append(lines, "")
+				lines = append(lines, emptyLine)
 			}
 			meta := fmt.Sprintf("  created: %s  updated: %s",
 				v.previewEntry.CreatedAt.Format("2006-01-02 15:04"),
@@ -298,13 +288,13 @@ func (v *KVView) renderPreview(width, height int) []string {
 			if v.previewEntry.ExpiresAt != nil {
 				meta += fmt.Sprintf("  expires: %s", v.previewEntry.ExpiresAt.Format("2006-01-02 15:04"))
 			}
-			lines = append(lines, styles.TextMutedStyle.Render(ansi.Truncate(meta, width, "…")))
+			lines = append(lines, truncateOrPad(styles.TextMutedStyle.Render(ansi.Truncate(meta, width, "…")), width))
 		}
 	}
 
 	// Pad to fill height
 	for len(lines) < height {
-		lines = append(lines, "")
+		lines = append(lines, emptyLine)
 	}
 
 	return lines
