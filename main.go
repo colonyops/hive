@@ -11,6 +11,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/commands"
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/doctor"
 	"github.com/hay-kot/hive/internal/core/git"
 	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/data/db"
@@ -166,15 +167,44 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, exec, renderer, svcLogger, os.Stdout, os.Stderr)
 
-			// Create plugin manager and register plugins
+			// Create all plugin instances, collect availability info for doctor,
+			// then register with the manager.
+			allPlugins := []plugins.Plugin{
+				github.New(cfg.Plugins.GitHub),
+				beads.New(cfg.Plugins.Beads),
+				lazygit.New(cfg.Plugins.LazyGit),
+				neovim.New(cfg.Plugins.Neovim),
+				contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir),
+				claude.New(cfg.Plugins.Claude),
+				plugintmux.New(cfg.Plugins.Tmux),
+			}
+
+			// Map plugin configs' Enabled field to detect explicitly disabled plugins.
+			// All plugin configs use *bool: nil=auto-detect, false=disabled.
+			enabledFlags := []*bool{
+				cfg.Plugins.GitHub.Enabled,
+				cfg.Plugins.Beads.Enabled,
+				cfg.Plugins.LazyGit.Enabled,
+				cfg.Plugins.Neovim.Enabled,
+				cfg.Plugins.ContextDir.Enabled,
+				cfg.Plugins.Claude.Enabled,
+				cfg.Plugins.Tmux.Enabled,
+			}
+
+			pluginInfos := make([]doctor.PluginInfo, len(allPlugins))
+			for i, p := range allPlugins {
+				disabled := enabledFlags[i] != nil && !*enabledFlags[i]
+				pluginInfos[i] = doctor.PluginInfo{
+					Name:      p.Name(),
+					Available: p.Available(),
+					Disabled:  disabled,
+				}
+			}
+
 			pluginMgr = plugins.NewManager(cfg.Plugins)
-			pluginMgr.Register(github.New(cfg.Plugins.GitHub))
-			pluginMgr.Register(beads.New(cfg.Plugins.Beads))
-			pluginMgr.Register(lazygit.New(cfg.Plugins.LazyGit))
-			pluginMgr.Register(neovim.New(cfg.Plugins.Neovim))
-			pluginMgr.Register(contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir))
-			pluginMgr.Register(claude.New(cfg.Plugins.Claude))
-			pluginMgr.Register(plugintmux.New(cfg.Plugins.Tmux))
+			for _, p := range allPlugins {
+				pluginMgr.Register(p)
+			}
 
 			// Initialize plugins (errors are logged but don't stop startup)
 			if err := pluginMgr.InitAll(ctx); err != nil {
@@ -190,6 +220,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				pluginMgr,
 				database,
 				renderer,
+				pluginInfos,
 			)
 
 			return ctx, nil

@@ -4,8 +4,10 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/hay-kot/hive/internal/core/doctor"
+	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/hive"
 	"github.com/hay-kot/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -80,38 +82,51 @@ type summaryJSON struct {
 
 func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) error {
 	w := os.Stderr
+	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 40))
+
+	_, _ = fmt.Fprintln(w)
+	_, _ = fmt.Fprintln(w, styles.TextPrimaryBoldStyle.Render("Hive Doctor"))
+	_, _ = fmt.Fprintln(w, divider)
 
 	for _, result := range results {
-		_, _ = fmt.Fprintf(w, "%s\n", result.Name)
+		_, _ = fmt.Fprintln(w, styles.TextForegroundBoldStyle.Render(result.Name))
 
 		for _, item := range result.Items {
-			detail := ""
+			var detail string
 			if item.Detail != "" {
-				detail = ": " + item.Detail
+				detail = " " + styles.TextMutedStyle.Render(item.Detail)
 			}
 
+			var icon string
 			switch item.Status {
 			case doctor.StatusPass:
-				_, _ = fmt.Fprintf(w, "  ✔ %s%s\n", item.Label, detail)
+				icon = styles.TextSuccessStyle.Render("✔")
 			case doctor.StatusWarn:
-				_, _ = fmt.Fprintf(w, "  • %s%s\n", item.Label, detail)
+				icon = styles.TextWarningStyle.Render("●")
 			case doctor.StatusFail:
-				_, _ = fmt.Fprintf(w, "  ✘ %s%s\n", item.Label, detail)
+				icon = styles.TextErrorStyle.Render("✘")
 			}
+
+			_, _ = fmt.Fprintf(w, "  %s %s%s\n", icon, item.Label, detail)
 		}
 
 		_, _ = fmt.Fprintln(w)
 	}
 
 	passed, warned, failed := doctor.Summary(results)
-	_, _ = fmt.Fprintf(w, "Summary: %d passed, %d warnings, %d failed\n", passed, warned, failed)
+	summary := fmt.Sprintf("%s  %s  %s",
+		styles.TextSuccessStyle.Render(fmt.Sprintf("%d passed", passed)),
+		styles.TextWarningStyle.Render(fmt.Sprintf("%d warnings", warned)),
+		styles.TextErrorStyle.Render(fmt.Sprintf("%d failed", failed)),
+	)
+	_, _ = fmt.Fprintln(w, summary)
 
-	// Show hint if there are fixable issues and autofix wasn't used
 	if !cmd.autofix {
 		fixable := doctor.CountFixable(results)
 		if fixable > 0 {
 			_, _ = fmt.Fprintln(w)
-			_, _ = fmt.Fprintf(w, "Run 'hive doctor --autofix' to fix %d issue(s)\n", fixable)
+			hint := styles.TextMutedStyle.Render(fmt.Sprintf("Run 'hive doctor --autofix' to fix %d issue(s)", fixable))
+			_, _ = fmt.Fprintln(w, hint)
 		}
 	}
 

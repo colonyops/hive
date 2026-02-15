@@ -75,6 +75,7 @@ type Options struct {
 	PluginManager   *plugins.Manager     // Plugin manager (optional)
 	DB              *db.DB               // Database connection for stores
 	Renderer        *tmpl.Renderer       // Template renderer for shell commands
+	Warnings        []string             // Startup warnings to display as toasts
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -195,6 +196,9 @@ type Model struct {
 
 	// Template rendering
 	renderer *tmpl.Renderer
+
+	// Startup warnings to show as toasts after init
+	startupWarnings []string
 }
 
 // PendingCreate returns any pending session creation data.
@@ -430,6 +434,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		toastView:          toastView,
 		focusFilterInput:   focusInput,
 		renderer:           opts.Renderer,
+		startupWarnings:    opts.Warnings,
 	}
 }
 
@@ -597,6 +602,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		// Set review view size
 		if m.reviewView != nil {
 			m.reviewView.SetSize(msg.Width, contentHeight)
+		}
+
+		// Publish startup warnings on the first WindowSizeMsg so they flow
+		// through the Update loop with the render cycle already running.
+		if len(m.startupWarnings) > 0 {
+			for _, w := range m.startupWarnings {
+				m.notifyBus.Warnf("%s", w)
+			}
+			m.startupWarnings = nil
+			return m, m.ensureToastTick()
 		}
 		return m, nil
 

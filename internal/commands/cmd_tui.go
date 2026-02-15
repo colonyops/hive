@@ -48,6 +48,11 @@ func (cmd *TuiCmd) Run(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
+	var warnings []string
+	if os.Getenv("TMUX") == "" {
+		warnings = append(warnings, "Not running inside tmux. Some features (preview, spawn) require tmux.")
+	}
+
 	// Start profiler server if enabled
 	if cmd.flags.ProfilerPort > 0 {
 		profServer := profiler.New(cmd.flags.ProfilerPort)
@@ -86,6 +91,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			PluginManager:   cmd.app.Plugins,
 			DB:              cmd.app.DB,
 			Renderer:        cmd.app.Renderer,
+			Warnings:        warnings,
 		}
 
 		m := tui.New(cmd.app.Sessions, cmd.app.Config, opts)
