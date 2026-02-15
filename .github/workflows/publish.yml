@@ -29,8 +29,6 @@ jobs:
     runs-on: ubuntu-latest
     needs:
       - backend-tests
-    outputs:
-      new_version: ${{ steps.bump-semver.outputs.new_version }}
     steps:
       - uses: actions/checkout@v4
 
@@ -68,29 +66,11 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - name: Fetch draft release notes
-        id: release-notes
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NEW_TAG: ${{ needs.tag.outputs.new_version }}
-        run: |
-          # Look for a draft release matching the tag being published
-          DRAFT_BODY=$(gh release list --json tagName,isDraft --jq \
-            ".[] | select(.isDraft) | select(.tagName == \"$NEW_TAG\") | .tagName" 2>/dev/null)
-          if [ -n "$DRAFT_BODY" ]; then
-            gh release view "$NEW_TAG" --json body --jq '.body' > release-notes.md
-            echo "found=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No draft release found for tag $NEW_TAG, goreleaser will create minimal notes"
-            echo "found=false" >> "$GITHUB_OUTPUT"
-          fi
       - uses: goreleaser/goreleaser-action@v6
         with:
           distribution: goreleaser
           version: latest
-          args: >-
-            release --clean
-            ${{ steps.release-notes.outputs.found == 'true' && '--release-notes release-notes.md' || '' }}
+          args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
