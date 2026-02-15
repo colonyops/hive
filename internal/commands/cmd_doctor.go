@@ -87,7 +87,6 @@ func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) err
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, styles.TextPrimaryBoldStyle.Render("Hive Doctor"))
 	_, _ = fmt.Fprintln(w, divider)
-	_, _ = fmt.Fprintln(w)
 
 	for _, result := range results {
 		_, _ = fmt.Fprintln(w, styles.TextForegroundBoldStyle.Render(result.Name))
