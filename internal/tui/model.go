@@ -844,6 +844,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reposDiscoveredMsg:
 		m.discoveredRepos = msg.repos
+		// Warn if no repositories were found but directories were configured
+		if len(msg.repos) == 0 && len(m.repoDirs) > 0 {
+			return m, m.notifyWarn("No repositories found in configured directories")
+		}
 		// Help keybindings remain minimal - full list shown via ? dialog
 		return m, nil
 
@@ -3223,6 +3227,11 @@ func (m *Model) ensureToastTick() tea.Cmd {
 // to start the toast tick timer if needed.
 func (m *Model) notifyError(format string, args ...any) tea.Cmd {
 	m.notifyBus.Errorf(format, args...)
+	return m.ensureToastTick()
+}
+
+func (m *Model) notifyWarn(format string, args ...any) tea.Cmd {
+	m.notifyBus.Warnf(format, args...)
 	return m.ensureToastTick()
 }
 
