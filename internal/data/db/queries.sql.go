@@ -437,11 +437,13 @@ func (q *Queries) KVHas(ctx context.Context, key string) (int64, error) {
 }
 
 const kVListKeys = `-- name: KVListKeys :many
-SELECT key FROM kv_store ORDER BY key ASC
+SELECT key FROM kv_store
+WHERE expires_at IS NULL OR expires_at >= ?
+ORDER BY key ASC
 `
 
-func (q *Queries) KVListKeys(ctx context.Context) ([]string, error) {
-	rows, err := q.db.QueryContext(ctx, kVListKeys)
+func (q *Queries) KVListKeys(ctx context.Context, expiresAt sql.NullInt64) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, kVListKeys, expiresAt)
 	if err != nil {
 		return nil, err
 	}

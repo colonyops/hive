@@ -171,7 +171,9 @@ DELETE FROM kv_store WHERE key = ?;
 SELECT COUNT(*) FROM kv_store WHERE key = ?;
 
 -- name: KVListKeys :many
-SELECT key FROM kv_store ORDER BY key ASC;
+SELECT key FROM kv_store
+WHERE expires_at IS NULL OR expires_at >= ?
+ORDER BY key ASC;
 
 -- name: KVGetRaw :one
 SELECT key, value, expires_at, created_at, updated_at FROM kv_store WHERE key = ?;

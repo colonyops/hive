@@ -76,7 +76,7 @@ func (s *KVStore) Has(ctx context.Context, key string) (bool, error) {
 	// Check expiry via lazy delete
 	row, err := s.db.Queries().KVGet(ctx, key)
 	if err != nil {
-		return false, nil
+		return false, fmt.Errorf("kv has %q get: %w", key, err)
 	}
 	if s.isExpired(row) {
 		_ = s.db.Queries().KVDelete(ctx, key)
@@ -88,7 +88,8 @@ func (s *KVStore) Has(ctx context.Context, key string) (bool, error) {
 
 // ListKeys returns all non-expired keys in sorted order.
 func (s *KVStore) ListKeys(ctx context.Context) ([]string, error) {
-	keys, err := s.db.Queries().KVListKeys(ctx)
+	now := sql.NullInt64{Int64: time.Now().UnixNano(), Valid: true}
+	keys, err := s.db.Queries().KVListKeys(ctx, now)
 	if err != nil {
 		return nil, fmt.Errorf("kv list keys: %w", err)
 	}

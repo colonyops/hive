@@ -662,6 +662,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if key := m.kvView.SelectedKey(); key != "" {
 			return m, m.loadKVEntry(key)
 		}
+		m.kvView.SetPreview(nil)
 		return m, nil
 
 	case kvEntryLoadedMsg:
@@ -1725,12 +1726,13 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 		m.activeView = ViewSessions
 	}
 
+	m.handler.SetActiveView(m.activeView)
+
 	// Load KV keys when switching to Store tab
 	if m.activeView == ViewStore {
 		return m, m.loadKVKeys()
 	}
 
-	m.handler.SetActiveView(m.activeView)
 	return m, nil
 }
 
