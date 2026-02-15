@@ -25,6 +25,12 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 brew install colonyops/tap/hive
 ```
 
+Or install directly with Go:
+
+```bash
+go install github.com/hay-kot/hive@latest
+```
+
 Pre-built binaries are also available on the [GitHub Releases](https://github.com/colonyops/hive/releases) page.
 
 ## Overview

@@ -26,6 +26,12 @@ brew install colonyops/tap/hive
 
 Pre-built binaries for macOS and Linux are available on the [GitHub Releases](https://github.com/colonyops/hive/releases) page. Download the appropriate archive for your platform, extract it, and place the binary on your PATH.
 
+### Go Install
+
+```bash
+go install github.com/hay-kot/hive@latest
+```
+
 ### Mise
 
 Install via [mise](https://mise.jdx.dev/) using the GitHub backend:
