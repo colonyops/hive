@@ -3,6 +3,7 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/charmbracelet/x/ansi"
 	"github.com/hay-kot/hive/internal/core/kv"
@@ -247,6 +248,8 @@ func (v *KVView) renderKeyList(width, height int) []string {
 func (v *KVView) renderPreview(width, height int) []string {
 	lines := make([]string, 0, height)
 	emptyLine := strings.Repeat(" ", width)
+	pad := func(s string) string { return truncateOrPad(s, width) }
+	muted := func(s string) string { return pad(styles.TextMutedStyle.Render(s)) }
 
 	// Header
 	var headerText string
@@ -257,38 +260,43 @@ func (v *KVView) renderPreview(width, height int) []string {
 	}
 	lines = append(lines, styles.TextMutedStyle.Render(truncateOrPad(headerText, width)))
 
-	previewHeight := height - 1
+	if v.previewEntry == nil {
+		lines = append(lines, muted("  No key selected"))
+		for len(lines) < height {
+			lines = append(lines, emptyLine)
+		}
+		return lines
+	}
+
+	// Metadata block right under header
+	now := time.Now()
+	lines = append(lines, muted(fmt.Sprintf("  created  %s", v.previewEntry.CreatedAt.Format("2006-01-02 15:04"))))
+	lines = append(lines, muted(fmt.Sprintf("  updated  %s", v.previewEntry.UpdatedAt.Format("2006-01-02 15:04"))))
+	if v.previewEntry.ExpiresAt != nil {
+		exp := *v.previewEntry.ExpiresAt
+		remaining := exp.Sub(now)
+		var relStr string
+		if remaining <= 0 {
+			relStr = "expired"
+		} else {
+			relStr = formatDuration(remaining)
+		}
+		lines = append(lines, muted(fmt.Sprintf("  expires  %s (%s)", exp.Format("2006-01-02 15:04"), relStr)))
+	}
+	lines = append(lines, emptyLine) // separator
+
+	// JSON content
+	previewHeight := height - len(lines)
 	if previewHeight < 1 {
 		previewHeight = 1
 	}
 
 	switch {
-	case v.previewEntry == nil:
-		lines = append(lines, truncateOrPad(styles.TextMutedStyle.Render("  No key selected"), width))
 	case len(v.previewLines) == 0:
-		lines = append(lines, truncateOrPad(styles.TextMutedStyle.Render("  (empty)"), width))
+		lines = append(lines, muted("  (empty)"))
 	default:
 		for i := v.previewOffset; i < len(v.previewLines) && i < v.previewOffset+previewHeight; i++ {
-			line := "  " + v.previewLines[i]
-			lines = append(lines, truncateOrPad(line, width))
-		}
-	}
-
-	// Metadata footer
-	if v.previewEntry != nil {
-		remaining := height - len(lines)
-		if remaining > 1 {
-			for len(lines) < height-1 {
-				lines = append(lines, emptyLine)
-			}
-			meta := fmt.Sprintf("  created: %s  updated: %s",
-				v.previewEntry.CreatedAt.Format("2006-01-02 15:04"),
-				v.previewEntry.UpdatedAt.Format("2006-01-02 15:04"),
-			)
-			if v.previewEntry.ExpiresAt != nil {
-				meta += fmt.Sprintf("  expires: %s", v.previewEntry.ExpiresAt.Format("2006-01-02 15:04"))
-			}
-			lines = append(lines, truncateOrPad(styles.TextMutedStyle.Render(ansi.Truncate(meta, width, "…")), width))
+			lines = append(lines, pad("  "+v.previewLines[i]))
 		}
 	}
 
@@ -381,6 +389,26 @@ func joinColumns(left, mid, right []string, height int) string {
 		}
 	}
 	return b.String()
+}
+
+// formatDuration returns a compact human-readable duration string.
+func formatDuration(d time.Duration) string {
+	switch {
+	case d < time.Minute:
+		return fmt.Sprintf("%ds", int(d.Seconds()))
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		h := int(d.Hours())
+		m := int(d.Minutes()) % 60
+		if m == 0 {
+			return fmt.Sprintf("%dh", h)
+		}
+		return fmt.Sprintf("%dh%dm", h, m)
+	default:
+		days := int(d.Hours()) / 24
+		return fmt.Sprintf("%dd", days)
+	}
 }
 
 func truncateOrPad(s string, width int) string {
