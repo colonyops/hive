@@ -21,7 +21,11 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 
 ## Installation
 
-Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH.
+```bash
+brew install colonyops/tap/hive
+```
+
+Pre-built binaries are also available on the [GitHub Releases](https://github.com/colonyops/hive/releases) page.
 
 ## Overview
 

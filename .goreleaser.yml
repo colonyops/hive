@@ -42,6 +42,15 @@ changelog:
       - "^docs:"
       - "^test:"
 
+brews:
+  - repository:
+      owner: colonyops
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
+    homepage: "https://github.com/colonyops/hive"
+    description: "CLI/TUI for managing multiple AI agent sessions in isolated git environments"
+    license: "MIT"
+
 
 
 
