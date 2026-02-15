@@ -3,7 +3,7 @@ package form
 import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // filterer is an optional interface for fields that support list filtering.

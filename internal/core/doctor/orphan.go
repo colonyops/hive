@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/session"
 )
 
 // OrphanCheck detects directories in the repos folder without session records.

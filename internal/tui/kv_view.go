@@ -6,9 +6,9 @@ import (
 	"time"
 
 	"github.com/charmbracelet/x/ansi"
-	"github.com/hay-kot/hive/internal/core/kv"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/tui/jsoncolor"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/jsoncolor"
 )
 
 // KVView is a two-column KV browser: searchable key list (left) + colorized JSON preview (right).

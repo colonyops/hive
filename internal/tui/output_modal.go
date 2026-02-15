@@ -5,7 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // Output modal layout constants.

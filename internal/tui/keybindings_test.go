@@ -3,9 +3,9 @@ package tui
 import (
 	"testing"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/pkg/tmpl"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

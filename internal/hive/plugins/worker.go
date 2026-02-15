@@ -1,6 +1,6 @@
 package plugins
 
-import "github.com/hay-kot/hive/internal/core/session"
+import "github.com/colonyops/hive/internal/core/session"
 
 // Job represents a single status fetch request for a plugin and session.
 type Job struct {

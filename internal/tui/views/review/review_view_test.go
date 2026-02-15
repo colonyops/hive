@@ -12,9 +12,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

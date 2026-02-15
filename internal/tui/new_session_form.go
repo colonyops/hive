@@ -4,7 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // NewSessionForm manages the new session creation form.

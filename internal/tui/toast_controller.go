@@ -3,7 +3,7 @@ package tui
 import (
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/core/notify"
 )
 
 const (

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/hay-kot/hive/pkg/executil"
-	"github.com/hay-kot/hive/pkg/tmpl"
+	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
 

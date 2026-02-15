@@ -5,9 +5,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/pkg/iojson"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/charmbracelet/glamour"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // DocumentType categorizes documents.

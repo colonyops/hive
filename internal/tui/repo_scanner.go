@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/git"
 )
 
 // DiscoveredRepo represents a git repository found during scanning.

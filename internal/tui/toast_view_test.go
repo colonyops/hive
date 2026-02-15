@@ -4,8 +4,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hay-kot/hive/internal/core/notify"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

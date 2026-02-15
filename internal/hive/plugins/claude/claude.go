@@ -10,11 +10,11 @@ import (
 	"time"
 
 	"charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/kv"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
 // Plugin implements Claude Code integration (fork + analytics).

@@ -3,11 +3,11 @@ package tui
 import (
 	"fmt"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/core/terminal"
-	"github.com/hay-kot/hive/internal/tui/components/form"
-	"github.com/hay-kot/hive/pkg/kv"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/tui/components/form"
+	"github.com/colonyops/hive/pkg/kv"
 )
 
 // newFormDialog creates a form.Dialog from config fields, injecting runtime data.

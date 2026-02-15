@@ -6,8 +6,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/hive"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/hive"
 )
 
 const messagesPollInterval = 500 * time.Millisecond

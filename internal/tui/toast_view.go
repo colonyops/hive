@@ -7,8 +7,8 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 
-	"github.com/hay-kot/hive/internal/core/notify"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 type toastTickMsg time.Time

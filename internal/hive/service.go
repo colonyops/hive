@@ -10,13 +10,13 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/git"
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/pkg/executil"
-	"github.com/hay-kot/hive/pkg/randid"
-	"github.com/hay-kot/hive/pkg/tmpl"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/randid"
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
 

@@ -29,7 +29,7 @@ Pre-built binaries for macOS and Linux are available on the [GitHub Releases](ht
 ### Go Install
 
 ```bash
-go install github.com/hay-kot/hive@latest
+go install github.com/colonyops/hive@latest
 ```
 
 ### Mise

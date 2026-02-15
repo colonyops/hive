@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/notify"
-	"github.com/hay-kot/hive/internal/core/styles"
-	tuinotify "github.com/hay-kot/hive/internal/tui/notify"
+	"github.com/colonyops/hive/internal/core/notify"
+	"github.com/colonyops/hive/internal/core/styles"
+	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

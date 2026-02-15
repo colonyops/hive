@@ -3,7 +3,7 @@ package components
 import (
 	tea "charm.land/bubbletea/v2"
 
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // ConfirmModal is a simple yes/no confirmation dialog.

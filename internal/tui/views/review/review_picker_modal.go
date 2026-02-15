@@ -10,8 +10,8 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/data/stores"
 )
 
 // DocumentPickerModal is a fuzzy search modal for selecting documents.

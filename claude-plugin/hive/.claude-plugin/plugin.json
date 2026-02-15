@@ -6,7 +6,7 @@
     "name": "hay-kot",
     "url": "https://github.com/hay-kot"
   },
-  "repository": "https://github.com/hay-kot/hive",
+  "repository": "https://github.com/colonyops/hive",
   "license": "MIT",
   "keywords": ["messaging", "agents", "sessions", "coordination", "multi-agent"]
 }

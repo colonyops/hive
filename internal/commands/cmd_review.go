@@ -7,9 +7,9 @@ import (
 	"path/filepath"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/tui"
-	review "github.com/hay-kot/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/tui"
+	review "github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/urfave/cli/v3"
 )
 

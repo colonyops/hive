@@ -6,8 +6,8 @@ import (
 	"time"
 
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // MessagesView is a custom compact renderer for messages.

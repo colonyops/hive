@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/hay-kot/criterio"
-	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"

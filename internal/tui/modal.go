@@ -2,7 +2,7 @@ package tui
 
 import (
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/styles"
 )
 
 // Modal represents a confirmation dialog.

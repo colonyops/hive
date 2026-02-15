@@ -8,12 +8,12 @@ import (
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/hay-kot/hive/internal/core/session"
-	"github.com/hay-kot/hive/internal/core/styles"
-	"github.com/hay-kot/hive/internal/core/terminal"
-	"github.com/hay-kot/hive/internal/hive/plugins"
-	"github.com/hay-kot/hive/internal/tui/components"
-	"github.com/hay-kot/hive/pkg/kv"
+	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/tui/components"
+	"github.com/colonyops/hive/pkg/kv"
 )
 
 // Tree characters for rendering the session tree.

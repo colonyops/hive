@@ -5,8 +5,8 @@ import (
 	"context"
 	"os/exec"
 
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
 // Plugin implements the neovim plugin for Hive.

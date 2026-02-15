@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hay-kot/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // Executor implements Git using the git command-line tool.

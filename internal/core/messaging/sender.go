@@ -34,7 +34,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/session"
 )
 
 // SessionDetector finds the current session from the working directory.

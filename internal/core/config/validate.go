@@ -6,8 +6,8 @@ import (
 	"os/exec"
 	"regexp"
 
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/hay-kot/criterio"
-	"github.com/hay-kot/hive/pkg/tmpl"
 )
 
 // SpawnTemplateData defines available fields for spawn command templates (hive new).

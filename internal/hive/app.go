@@ -1,14 +1,14 @@
 package hive
 
 import (
-	"github.com/hay-kot/hive/internal/core/config"
-	"github.com/hay-kot/hive/internal/core/doctor"
-	"github.com/hay-kot/hive/internal/core/kv"
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/core/terminal"
-	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/internal/hive/plugins"
-	"github.com/hay-kot/hive/pkg/tmpl"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // App is the central entry point for all hive operations.

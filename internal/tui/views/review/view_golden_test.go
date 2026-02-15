@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hay-kot/hive/internal/tui/testutil"
+	"github.com/colonyops/hive/internal/tui/testutil"
 )
 
 func TestView_ListMode(t *testing.T) {

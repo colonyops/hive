@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/kv"
-	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

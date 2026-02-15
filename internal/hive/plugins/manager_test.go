@@ -3,7 +3,7 @@ package plugins
 import (
 	"testing"
 
-	"github.com/hay-kot/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/stretchr/testify/assert"
 )
 

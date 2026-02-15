@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/hay-kot/hive/internal/core/messaging"
-	"github.com/hay-kot/hive/internal/data/db"
-	"github.com/hay-kot/hive/pkg/randid"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/pkg/randid"
 )
 
 // MessageStore implements messaging.Store using SQLite.

@@ -6,7 +6,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
-	"github.com/hay-kot/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/git"
 )
 
 const gitStatusTimeout = 5 * time.Second

@@ -6,8 +6,8 @@ import (
 
 	"github.com/charmbracelet/x/exp/golden"
 
-	corereview "github.com/hay-kot/hive/internal/core/review"
-	"github.com/hay-kot/hive/internal/core/terminal"
+	corereview "github.com/colonyops/hive/internal/core/review"
+	"github.com/colonyops/hive/internal/core/terminal"
 )
 
 // RequireGolden compares output with a golden file using golden.RequireEqual().

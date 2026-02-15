@@ -10,11 +10,11 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
-	"github.com/hay-kot/hive/internal/core/terminal"
-	"github.com/hay-kot/hive/internal/core/terminal/tmux"
-	"github.com/hay-kot/hive/internal/hive"
-	"github.com/hay-kot/hive/internal/tui"
-	"github.com/hay-kot/hive/pkg/profiler"
+	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/tmux"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/tui"
+	"github.com/colonyops/hive/pkg/profiler"
 )
 
 type TuiCmd struct {

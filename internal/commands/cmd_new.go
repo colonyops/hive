@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/hay-kot/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
 
