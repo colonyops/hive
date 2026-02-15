@@ -25,14 +25,9 @@ tasks:
       - sqlc generate
 
   test:
-    desc: Runs all go tests using gotestsum - supports passing gotestsum args
+    desc: Runs all go tests
     cmds:
-      - gotestsum {{ .CLI_ARGS }} ./...
-
-  test:watch:
-    desc: Runs all go tests using gotestsum in watch mode
-    cmds:
-      - gotestsum --watch -- -v ./...
+      - go test {{ .CLI_ARGS }} ./...
 
   coverage:
     desc: Runs all go tests with -race flag and generates a coverage report

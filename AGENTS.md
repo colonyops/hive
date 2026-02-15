@@ -76,8 +76,7 @@ internal/
 task run              # Run with dev config (supports CLI_ARGS)
 task run -- new       # Example: run 'hive new'
 task build            # Build with goreleaser
-task test             # Run tests with gotestsum
-task test:watch       # Watch mode
+task test             # Run tests with go test
 task lint             # Run golangci-lint
 task check            # tidy + lint + test (full validation)
 task coverage         # Generate coverage report

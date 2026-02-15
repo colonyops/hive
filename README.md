@@ -13,7 +13,7 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 [![Platform](https://img.shields.io/badge/Platform-macOS%20%7C%20Linux-7aa2f7?style=for-the-badge&labelColor=1a1b26)](https://github.com/colonyops/hive)
 [![Release](https://img.shields.io/github/v/release/colonyops/hive?style=for-the-badge&color=e0af68&labelColor=1a1b26)](https://github.com/colonyops/hive/releases)
 
-[Documentation](https://colonyops.github.io/hive/) | [Getting Started](https://colonyops.github.io/hive/getting-started/) | [Configuration](https://colonyops.github.io/hive/configuration/)
+[Documentation](https://colonyops.github.io/hive/) | [Getting Started](https://colonyops.github.io/hive/getting-started/) | [Configuration](https://colonyops.github.io/hive/configuration/) | [Contributing](#contributing)
 
 </div>
 
@@ -85,6 +85,66 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 
 - Git (available in PATH or configured via `git_path`)
 - tmux (required — provides session management and status monitoring)
+
+## Contributing
+
+### Prerequisites
+
+- Go `1.25+`
+- `git`
+- `tmux`
+- `task` (https://taskfile.dev)
+- `golangci-lint`
+
+### Local Dev Setup
+
+```bash
+git clone https://github.com/colonyops/hive.git
+cd hive
+task run
+```
+
+Use `task run` during development. It runs hive with project-local defaults from `Taskfile.yml`:
+
+- `HIVE_CONFIG=./config.dev.yaml`
+- `HIVE_DATA_DIR=./.data`
+- `HIVE_LOG_FILE=./dev.log`
+- `HIVE_LOG_LEVEL=debug`
+
+This isolates contributor testing from your personal/global hive sessions.
+
+### Dev Config vs Global Config
+
+| Mode   | Config Path                  | Data Directory        | Use Case                                |
+| ------ | ---------------------------- | --------------------- | --------------------------------------- |
+| Dev    | `./config.dev.yaml`          | `./.data`             | Contributing and testing changes safely |
+| Global | `~/.config/hive/config.yaml` | `~/.local/share/hive` | Day-to-day hive usage                   |
+
+Run with dev config:
+
+```bash
+task run
+task run -- new
+task run -- doctor
+```
+
+Run against your global config (compatibility checks):
+
+```bash
+go run *.go --config ~/.config/hive/config.yaml --data-dir ~/.local/share/hive
+```
+
+### Common Contributor Commands
+
+```bash
+task test
+task lint
+task check
+task build
+task validate
+```
+
+Before opening a PR, run `task check`. If you changed config behavior, also run `task validate` and `task run -- doctor`.
 
 ## Acknowledgments
 
