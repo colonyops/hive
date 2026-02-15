@@ -10,6 +10,7 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/kv"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/hive/plugins"
@@ -18,12 +19,18 @@ import (
 
 // Plugin implements the GitHub plugin for Hive.
 type Plugin struct {
-	cfg config.GitHubPluginConfig
+	cfg   config.GitHubPluginConfig
+	cache *kv.TypedKV[prInfo]
 }
 
 // New creates a new GitHub plugin.
-func New(cfg config.GitHubPluginConfig) *Plugin {
-	return &Plugin{cfg: cfg}
+// If kvStore is non-nil, PR status is cached in the persistent KV store.
+func New(cfg config.GitHubPluginConfig, kvStore kv.KV) *Plugin {
+	p := &Plugin{cfg: cfg}
+	if kvStore != nil {
+		p.cache = kv.Scoped[prInfo](kvStore, "github.pr")
+	}
+	return p
 }
 
 func (p *Plugin) Name() string { return "github" }
@@ -71,7 +78,8 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 		go func(s *session.Session) {
 			defer wg.Done()
 			pool.Run(func() {
-				status := p.fetchPRStatus(ctx, s.Path)
+				info := p.fetchPRInfo(ctx, s.ID, s.Path)
+				status := infoToStatus(info)
 				if status.Label != "" {
 					mu.Lock()
 					results[s.ID] = status
@@ -85,21 +93,47 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 	return results, nil
 }
 
-func (p *Plugin) fetchPRStatus(ctx context.Context, path string) plugins.Status {
+// fetchPRInfo returns PR info, checking the cache first.
+func (p *Plugin) fetchPRInfo(ctx context.Context, sessionID, path string) prInfo {
+	// Try cache first
+	if p.cache != nil {
+		if cached, err := p.cache.Get(ctx, sessionID); err == nil {
+			return cached
+		}
+	}
+
+	// Cache miss - fetch from gh CLI
+	info := p.fetchFromGH(ctx, path)
+
+	// Store in cache with TTL
+	if p.cache != nil && info.Number > 0 {
+		_ = p.cache.SetTTL(ctx, sessionID, info, p.StatusCacheDuration())
+	}
+
+	return info
+}
+
+func (p *Plugin) fetchFromGH(ctx context.Context, path string) prInfo {
 	cmd := exec.CommandContext(ctx, "gh", "pr", "view", "--json", "number,state,isDraft")
 	cmd.Dir = path
 	output, err := cmd.Output()
 	if err != nil {
-		// No PR for this branch - not an error, just empty status
-		return plugins.Status{}
+		return prInfo{}
 	}
 
 	var info prInfo
 	if err := json.Unmarshal(output, &info); err != nil {
+		return prInfo{}
+	}
+
+	return info
+}
+
+func infoToStatus(info prInfo) plugins.Status {
+	if info.Number == 0 {
 		return plugins.Status{}
 	}
 
-	// Build status display
 	var label string
 	var style lipgloss.Style
 

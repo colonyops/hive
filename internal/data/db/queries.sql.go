@@ -382,6 +382,124 @@ func (q *Queries) InsertNotification(ctx context.Context, arg InsertNotification
 	return id, err
 }
 
+const kVDelete = `-- name: KVDelete :exec
+DELETE FROM kv_store WHERE key = ?
+`
+
+func (q *Queries) KVDelete(ctx context.Context, key string) error {
+	_, err := q.db.ExecContext(ctx, kVDelete, key)
+	return err
+}
+
+const kVGet = `-- name: KVGet :one
+SELECT "key", value, expires_at, created_at, updated_at FROM kv_store WHERE key = ?
+`
+
+func (q *Queries) KVGet(ctx context.Context, key string) (KvStore, error) {
+	row := q.db.QueryRowContext(ctx, kVGet, key)
+	var i KvStore
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const kVGetRaw = `-- name: KVGetRaw :one
+SELECT key, value, expires_at, created_at, updated_at FROM kv_store WHERE key = ?
+`
+
+func (q *Queries) KVGetRaw(ctx context.Context, key string) (KvStore, error) {
+	row := q.db.QueryRowContext(ctx, kVGetRaw, key)
+	var i KvStore
+	err := row.Scan(
+		&i.Key,
+		&i.Value,
+		&i.ExpiresAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const kVHas = `-- name: KVHas :one
+SELECT COUNT(*) FROM kv_store WHERE key = ?
+`
+
+func (q *Queries) KVHas(ctx context.Context, key string) (int64, error) {
+	row := q.db.QueryRowContext(ctx, kVHas, key)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const kVListKeys = `-- name: KVListKeys :many
+SELECT key FROM kv_store ORDER BY key ASC
+`
+
+func (q *Queries) KVListKeys(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, kVListKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const kVSet = `-- name: KVSet :exec
+INSERT INTO kv_store (key, value, expires_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    expires_at = excluded.expires_at,
+    updated_at = excluded.updated_at
+`
+
+type KVSetParams struct {
+	Key       string        `json:"key"`
+	Value     []byte        `json:"value"`
+	ExpiresAt sql.NullInt64 `json:"expires_at"`
+	CreatedAt int64         `json:"created_at"`
+	UpdatedAt int64         `json:"updated_at"`
+}
+
+func (q *Queries) KVSet(ctx context.Context, arg KVSetParams) error {
+	_, err := q.db.ExecContext(ctx, kVSet,
+		arg.Key,
+		arg.Value,
+		arg.ExpiresAt,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+	)
+	return err
+}
+
+const kVSweepExpired = `-- name: KVSweepExpired :exec
+DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?
+`
+
+func (q *Queries) KVSweepExpired(ctx context.Context, expiresAt sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, kVSweepExpired, expiresAt)
+	return err
+}
+
 const listNotifications = `-- name: ListNotifications :many
 SELECT id, level, message, created_at FROM notifications
 ORDER BY created_at DESC

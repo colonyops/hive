@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version
-INSERT OR IGNORE INTO schema_version (version) VALUES (5);
+INSERT OR IGNORE INTO schema_version (version) VALUES (6);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
@@ -91,3 +91,15 @@ CREATE TABLE IF NOT EXISTS notifications (
 );
 
 CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at);
+
+-- KV store table
+CREATE TABLE IF NOT EXISTS kv_store (
+    key        TEXT PRIMARY KEY,
+    value      BLOB NOT NULL,       -- JSON bytes
+    expires_at INTEGER,             -- Unix nanos, NULL = never expires
+    created_at INTEGER NOT NULL,    -- Unix nanos
+    updated_at INTEGER NOT NULL     -- Unix nanos
+);
+
+CREATE INDEX IF NOT EXISTS idx_kv_expires
+    ON kv_store(expires_at) WHERE expires_at IS NOT NULL;

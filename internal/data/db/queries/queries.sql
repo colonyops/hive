@@ -152,3 +152,29 @@ DELETE FROM notifications;
 
 -- name: CountNotifications :one
 SELECT COUNT(*) FROM notifications;
+
+-- name: KVGet :one
+SELECT * FROM kv_store WHERE key = ?;
+
+-- name: KVSet :exec
+INSERT INTO kv_store (key, value, expires_at, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(key) DO UPDATE SET
+    value = excluded.value,
+    expires_at = excluded.expires_at,
+    updated_at = excluded.updated_at;
+
+-- name: KVDelete :exec
+DELETE FROM kv_store WHERE key = ?;
+
+-- name: KVHas :one
+SELECT COUNT(*) FROM kv_store WHERE key = ?;
+
+-- name: KVListKeys :many
+SELECT key FROM kv_store ORDER BY key ASC;
+
+-- name: KVGetRaw :one
+SELECT key, value, expires_at, created_at, updated_at FROM kv_store WHERE key = ?;
+
+-- name: KVSweepExpired :exec
+DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?;

@@ -492,7 +492,7 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 	}
 
 	t.Run("global command works in all views", func(t *testing.T) {
-		for _, view := range []ViewType{ViewSessions, ViewMessages, ViewReview} {
+		for _, view := range []ViewType{ViewSessions, ViewMessages, ViewReview, ViewStore} {
 			handler.SetActiveView(view)
 			action, ok := handler.Resolve("g", sess)
 			assert.True(t, ok, "global command should work in view %s", view.String())
