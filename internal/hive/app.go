@@ -2,6 +2,7 @@ package hive
 
 import (
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/doctor"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/data/db"
@@ -33,12 +34,13 @@ func NewApp(
 	pluginMgr *plugins.Manager,
 	database *db.DB,
 	renderer *tmpl.Renderer,
+	pluginInfos []doctor.PluginInfo,
 ) *App {
 	return &App{
 		Sessions: sessions,
 		Messages: NewMessageService(msgStore, cfg),
 		Context:  NewContextService(cfg, sessions.git),
-		Doctor:   NewDoctorService(sessions.sessions, cfg),
+		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
 		Terminal: termMgr,
 		Plugins:  pluginMgr,
 		Config:   cfg,

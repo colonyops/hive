@@ -48,6 +48,10 @@ func (cmd *TuiCmd) Run(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
+	if os.Getenv("TMUX") == "" {
+		fmt.Fprintln(os.Stderr, "Warning: hive works best inside a tmux session. Some features (preview, spawn) require tmux.")
+	}
+
 	// Start profiler server if enabled
 	if cmd.flags.ProfilerPort > 0 {
 		profServer := profiler.New(cmd.flags.ProfilerPort)

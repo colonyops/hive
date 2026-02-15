@@ -10,22 +10,27 @@ import (
 
 // DoctorService runs health checks on the hive setup.
 type DoctorService struct {
-	store  session.Store
-	config *config.Config
+	store       session.Store
+	config      *config.Config
+	pluginInfos []doctor.PluginInfo
 }
 
 // NewDoctorService creates a new DoctorService.
-func NewDoctorService(store session.Store, cfg *config.Config) *DoctorService {
+func NewDoctorService(store session.Store, cfg *config.Config, pluginInfos []doctor.PluginInfo) *DoctorService {
 	return &DoctorService{
-		store:  store,
-		config: cfg,
+		store:       store,
+		config:      cfg,
+		pluginInfos: pluginInfos,
 	}
 }
 
 // RunChecks executes all doctor checks and returns results.
 func (d *DoctorService) RunChecks(ctx context.Context, configPath string, autofix bool) []doctor.Result {
 	checks := []doctor.Check{
+		doctor.NewToolsCheck(),
+		doctor.NewPluginCheck(d.pluginInfos),
 		doctor.NewConfigCheck(d.config, configPath),
+		doctor.NewRepoDirsCheck(d.config.RepoDirs),
 		doctor.NewOrphanCheck(d.store, d.config.ReposDir(), autofix),
 	}
 	return doctor.RunAll(ctx, checks)
