@@ -16,30 +16,15 @@ Install hive, configure your environment, and launch your first AI agent session
 !!! note "tmux is required"
     Hive uses tmux for session management, agent monitoring, and preview panes. Install it before proceeding — hive will not function without it.
 
+### Homebrew
+
+```bash
+brew install colonyops/tap/hive
+```
+
 ### GitHub Release
 
-Download the latest binary from [GitHub Releases](https://github.com/colonyops/hive/releases) and place it on your PATH:
-
-=== "macOS (Apple Silicon)"
-
-    ```bash
-    curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_arm64 -o /usr/local/bin/hive
-    chmod +x /usr/local/bin/hive
-    ```
-
-=== "macOS (Intel)"
-
-    ```bash
-    curl -L https://github.com/colonyops/hive/releases/latest/download/hive_darwin_amd64 -o /usr/local/bin/hive
-    chmod +x /usr/local/bin/hive
-    ```
-
-=== "Linux (amd64)"
-
-    ```bash
-    curl -L https://github.com/colonyops/hive/releases/latest/download/hive_linux_amd64 -o /usr/local/bin/hive
-    chmod +x /usr/local/bin/hive
-    ```
+Pre-built binaries for macOS and Linux are available on the [GitHub Releases](https://github.com/colonyops/hive/releases) page. Download the appropriate archive for your platform, extract it, and place the binary on your PATH.
 
 ### Mise
 
