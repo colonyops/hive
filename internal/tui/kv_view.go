@@ -251,16 +251,8 @@ func (v *KVView) renderPreview(width, height int) []string {
 	pad := func(s string) string { return truncateOrPad(s, width) }
 	muted := func(s string) string { return pad(styles.TextMutedStyle.Render(s)) }
 
-	// Header
-	var headerText string
-	if v.previewEntry != nil {
-		headerText = fmt.Sprintf("  %s", v.previewEntry.Key)
-	} else {
-		headerText = "  Preview"
-	}
-	lines = append(lines, styles.TextMutedStyle.Render(truncateOrPad(headerText, width)))
-
 	if v.previewEntry == nil {
+		lines = append(lines, muted("  Preview"))
 		lines = append(lines, muted("  No key selected"))
 		for len(lines) < height {
 			lines = append(lines, emptyLine)
@@ -268,22 +260,30 @@ func (v *KVView) renderPreview(width, height int) []string {
 		return lines
 	}
 
-	// Metadata block right under header
-	now := time.Now()
-	lines = append(lines, muted(fmt.Sprintf("  created  %s", v.previewEntry.CreatedAt.Format("2006-01-02 15:04"))))
-	lines = append(lines, muted(fmt.Sprintf("  updated  %s", v.previewEntry.UpdatedAt.Format("2006-01-02 15:04"))))
+	// Line 1: key · created
+	line1 := fmt.Sprintf("  %s · %s", v.previewEntry.Key, v.previewEntry.CreatedAt.Format("2006-01-02 15:04"))
+	lines = append(lines, pad(styles.TextMutedStyle.Render(ansi.Truncate(line1, width, "…"))))
+
+	// Line 2: divider
+	lines = append(lines, muted("  "+strings.Repeat("─", max(width-2, 1))))
+
+	// Line 3: updated · expires (if applicable)
+	line3 := fmt.Sprintf("  updated %s", v.previewEntry.UpdatedAt.Format("2006-01-02 15:04"))
 	if v.previewEntry.ExpiresAt != nil {
 		exp := *v.previewEntry.ExpiresAt
-		remaining := exp.Sub(now)
+		remaining := time.Until(exp)
 		var relStr string
 		if remaining <= 0 {
 			relStr = "expired"
 		} else {
 			relStr = formatDuration(remaining)
 		}
-		lines = append(lines, muted(fmt.Sprintf("  expires  %s (%s)", exp.Format("2006-01-02 15:04"), relStr)))
+		line3 += fmt.Sprintf(" · expires %s (%s)", exp.Format("2006-01-02 15:04"), relStr)
 	}
-	lines = append(lines, emptyLine) // separator
+	lines = append(lines, pad(styles.TextMutedStyle.Render(ansi.Truncate(line3, width, "…"))))
+
+	// Blank separator before JSON
+	lines = append(lines, emptyLine)
 
 	// JSON content
 	previewHeight := height - len(lines)
