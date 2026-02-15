@@ -13,21 +13,33 @@ import (
 
 	"charm.land/lipgloss/v2"
 	"github.com/hay-kot/hive/internal/core/config"
+	"github.com/hay-kot/hive/internal/core/kv"
 	"github.com/hay-kot/hive/internal/core/session"
 	"github.com/hay-kot/hive/internal/core/styles"
 	"github.com/hay-kot/hive/internal/hive/plugins"
 	"github.com/hay-kot/hive/internal/hive/plugins/pluglib"
 )
 
+// beadsInfo holds cached issue counts for a session.
+type beadsInfo struct {
+	OpenCount   int `json:"openCount"`
+	ClosedCount int `json:"closedCount"`
+}
+
 // Plugin implements the Beads plugin for Hive.
 type Plugin struct {
 	cfg       config.BeadsPluginConfig
+	cache     *kv.TypedKV[beadsInfo]
 	hasPerles bool
 }
 
 // New creates a new Beads plugin.
-func New(cfg config.BeadsPluginConfig) *Plugin {
-	return &Plugin{cfg: cfg}
+func New(cfg config.BeadsPluginConfig, kvStore kv.KV) *Plugin {
+	p := &Plugin{cfg: cfg}
+	if kvStore != nil {
+		p.cache = kv.Scoped[beadsInfo](kvStore, "beads.status")
+	}
+	return p
 }
 
 func (p *Plugin) Name() string { return "beads" }
@@ -83,7 +95,7 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 		go func(s *session.Session) {
 			defer wg.Done()
 			pool.Run(func() {
-				status := p.fetchBeadsStatus(ctx, s.Path)
+				status := p.fetchBeadsStatus(ctx, s.ID, s.Path)
 				if status.Label != "" {
 					mu.Lock()
 					results[s.ID] = status
@@ -97,7 +109,14 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 	return results, nil
 }
 
-func (p *Plugin) fetchBeadsStatus(ctx context.Context, path string) plugins.Status {
+func (p *Plugin) fetchBeadsStatus(ctx context.Context, sessionID, path string) plugins.Status {
+	// Try cache first
+	if p.cache != nil {
+		if cached, err := p.cache.Get(ctx, sessionID); err == nil {
+			return p.renderStatus(cached)
+		}
+	}
+
 	// Check if .beads directory exists
 	beadsDir := filepath.Join(path, ".beads")
 	if _, err := os.Stat(beadsDir); os.IsNotExist(err) {
@@ -116,19 +135,29 @@ func (p *Plugin) fetchBeadsStatus(ctx context.Context, path string) plugins.Stat
 	closedOutput, _ := closedCmd.Output()
 	closedCount := countLines(closedOutput)
 
-	total := openCount + closedCount
+	info := beadsInfo{OpenCount: openCount, ClosedCount: closedCount}
+
+	// Cache result
+	if p.cache != nil {
+		_ = p.cache.SetTTL(ctx, sessionID, info, p.StatusCacheDuration())
+	}
+
+	return p.renderStatus(info)
+}
+
+func (p *Plugin) renderStatus(info beadsInfo) plugins.Status {
+	total := info.OpenCount + info.ClosedCount
 	if total == 0 {
 		return plugins.Status{}
 	}
 
-	// Show closed/total (progress format)
-	label := fmt.Sprintf("%d/%d", closedCount, total)
+	label := fmt.Sprintf("%d/%d", info.ClosedCount, total)
 
 	var style lipgloss.Style
 	switch {
-	case closedCount == total:
+	case info.ClosedCount == total:
 		style = lipgloss.NewStyle().Foreground(styles.ColorSuccess)
-	case openCount > 0:
+	case info.OpenCount > 0:
 		style = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 	default:
 		style = lipgloss.NewStyle().Foreground(styles.ColorMuted)

@@ -308,6 +308,13 @@ type TUIConfig struct {
 	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
 	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
 	Preview         PreviewConfig `yaml:"preview"`          // preview panel configuration
+	Views           ViewsConfig   `yaml:"views"`            // toggle optional TUI tabs
+}
+
+// ViewsConfig controls which optional TUI tabs are enabled.
+// All optional views default to disabled.
+type ViewsConfig struct {
+	Store bool `yaml:"store"` // KV store browser (default: false)
 }
 
 // ReviewConfig holds review-related configuration.

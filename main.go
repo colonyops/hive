@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
@@ -26,6 +27,7 @@ import (
 	"github.com/hay-kot/hive/internal/hive/plugins/neovim"
 	plugintmux "github.com/hay-kot/hive/internal/hive/plugins/tmux"
 	"github.com/hay-kot/hive/internal/hive/scripts"
+	"github.com/hay-kot/hive/internal/hive/sweep"
 	"github.com/hay-kot/hive/pkg/executil"
 	"github.com/hay-kot/hive/pkg/logutils"
 	"github.com/hay-kot/hive/pkg/tmpl"
@@ -51,10 +53,11 @@ func main() {
 	ctx := context.Background()
 
 	var (
-		logCloser func()
-		hiveApp   = &hive.App{}
-		database  *db.DB
-		pluginMgr *plugins.Manager
+		logCloser   func()
+		hiveApp     = &hive.App{}
+		database    *db.DB
+		pluginMgr   *plugins.Manager
+		sweepCancel context.CancelFunc
 	)
 
 	flags := &commands.Flags{}
@@ -157,6 +160,12 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Create stores
 			sessionStore := stores.NewSessionStore(database)
 			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
+			kvStore := stores.NewKVStore(database)
+
+			// Start background KV sweep goroutine
+			sweepCtx, cancel := context.WithCancel(context.Background())
+			sweepCancel = cancel
+			go sweep.Start(sweepCtx, kvStore, 5*time.Minute)
 
 			// Create service
 			var (
@@ -170,12 +179,12 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
 			allPlugins := []plugins.Plugin{
-				github.New(cfg.Plugins.GitHub),
-				beads.New(cfg.Plugins.Beads),
+				github.New(cfg.Plugins.GitHub, kvStore),
+				beads.New(cfg.Plugins.Beads, kvStore),
 				lazygit.New(cfg.Plugins.LazyGit),
 				neovim.New(cfg.Plugins.Neovim),
 				contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir),
-				claude.New(cfg.Plugins.Claude),
+				claude.New(cfg.Plugins.Claude, kvStore),
 				plugintmux.New(cfg.Plugins.Tmux),
 			}
 
@@ -219,6 +228,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				nil, // terminal manager created in TUI command
 				pluginMgr,
 				database,
+				kvStore,
 				renderer,
 				pluginInfos,
 			)
@@ -226,6 +236,11 @@ Run 'hive new' to create a new session from the current repository.`,
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
+			// Stop background sweep
+			if sweepCancel != nil {
+				sweepCancel()
+			}
+
 			// Close plugins
 			if pluginMgr != nil {
 				pluginMgr.CloseAll()

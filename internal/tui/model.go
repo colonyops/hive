@@ -19,6 +19,7 @@ import (
 
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/git"
+	corekv "github.com/hay-kot/hive/internal/core/kv"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/notify"
 	"github.com/hay-kot/hive/internal/core/session"
@@ -74,6 +75,7 @@ type Options struct {
 	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
 	PluginManager   *plugins.Manager     // Plugin manager (optional)
 	DB              *db.DB               // Database connection for stores
+	KVStore         corekv.KV            // Persistent KV store (optional)
 	Renderer        *tmpl.Renderer       // Template renderer for shell commands
 	Warnings        []string             // Startup warnings to display as toasts
 }
@@ -177,6 +179,10 @@ type Model struct {
 
 	// Review view
 	reviewView *review.View
+
+	// KV store browser
+	kvStore corekv.KV
+	kvView  *KVView
 
 	// Document picker (shown on Sessions view to start reviews)
 	docPickerModal *review.DocumentPickerModal
@@ -352,6 +358,9 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	// Create message view
 	msgView := NewMessagesView()
 
+	// Create KV browser view
+	kvView := NewKVView()
+
 	// Detect current tmux session to prevent recursive preview
 	currentTmux := detectCurrentTmuxSession()
 
@@ -429,6 +438,8 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		repoDirs:           cfg.RepoDirs,
 		mergedCommands:     mergedCommands,
 		reviewView:         &reviewView,
+		kvStore:            opts.KVStore,
+		kvView:             kvView,
 		notifyBus:          notifyBus,
 		toastController:    toastCtrl,
 		toastView:          toastView,
@@ -487,6 +498,10 @@ func (m Model) Init() tea.Cmd {
 	// Start session refresh timer
 	if cmd := m.scheduleSessionRefresh(); cmd != nil {
 		cmds = append(cmds, cmd)
+	}
+	// Start KV store polling if store view is enabled
+	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+		cmds = append(cmds, scheduleKVPollTick())
 	}
 	// Scan for repositories if configured
 	if len(m.repoDirs) > 0 {
@@ -604,6 +619,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.reviewView.SetSize(msg.Width, contentHeight)
 		}
 
+		// Set KV view size
+		m.kvView.SetSize(msg.Width, contentHeight)
+
 		// Publish startup warnings on the first WindowSizeMsg so they flow
 		// through the Update loop with the render cycle already running.
 		if len(m.startupWarnings) > 0 {
@@ -634,6 +652,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.lastPollTime = time.Now()
 		return m, nil
 
+	case kvKeysLoadedMsg:
+		if msg.err != nil {
+			log.Debug().Err(msg.err).Msg("failed to load kv keys")
+			return m, nil
+		}
+		m.kvView.SetKeys(msg.keys)
+		// Auto-load preview for the selected key
+		if key := m.kvView.SelectedKey(); key != "" {
+			return m, m.loadKVEntry(key)
+		}
+		m.kvView.SetPreview(nil)
+		return m, nil
+
+	case kvEntryLoadedMsg:
+		if msg.err != nil {
+			log.Debug().Err(msg.err).Msg("failed to load kv entry")
+			m.kvView.SetPreview(nil)
+			return m, nil
+		}
+		m.kvView.SetPreview(&msg.entry)
+		return m, nil
+
 	case pollTickMsg:
 		// Only poll if messages are visible
 		if m.shouldPollMessages() && m.msgStore != nil {
@@ -656,6 +696,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		// Keep scheduling refresh ticks even if not actively refreshing
 		return m, m.scheduleSessionRefresh()
+
+	case kvPollTickMsg:
+		if m.isStoreFocused() && !m.isModalActive() {
+			return m, tea.Batch(
+				m.loadKVKeys(),
+				scheduleKVPollTick(),
+			)
+		}
+		return m, scheduleKVPollTick()
 
 	case toastTickMsg:
 		m.toastController.Tick()
@@ -878,6 +927,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.list, cmd = m.list.Update(msg)
 	case ViewMessages:
 		// Messages view handles its own updates
+	case ViewStore:
+		// KV view handles its own updates via explicit method calls
 	case ViewReview:
 		if m.reviewView != nil {
 			*m.reviewView, cmd = m.reviewView.Update(msg)
@@ -920,7 +971,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// When filtering in either list, pass most keys except quit
-	if m.list.SettingFilter() || m.msgView.IsFiltering() || m.focusMode {
+	if m.list.SettingFilter() || m.msgView.IsFiltering() || m.kvView.IsFiltering() || m.focusMode {
 		return m.handleFilteringKey(msg, keyStr)
 	}
 
@@ -1506,6 +1557,30 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		return m, nil
 	}
 
+	// Handle KV view filtering
+	if m.kvView.IsFiltering() {
+		prevKey := m.kvView.SelectedKey()
+		switch keyStr {
+		case "esc":
+			m.kvView.CancelFilter()
+		case keyEnter:
+			m.kvView.ConfirmFilter()
+		case "backspace":
+			m.kvView.DeleteFilterRune()
+		default:
+			if text := msg.Key().Text; text != "" {
+				for _, r := range text {
+					m.kvView.AddFilterRune(r)
+				}
+			}
+		}
+		// Load preview if selected key changed
+		if newKey := m.kvView.SelectedKey(); newKey != prevKey && newKey != "" {
+			return m, m.loadKVEntry(newKey)
+		}
+		return m, nil
+	}
+
 	// Handle session list filtering
 	var cmd tea.Cmd
 	m.list, cmd = m.list.Update(msg)
@@ -1586,6 +1661,32 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m, nil
 	}
 
+	// Store view focused - handle KV navigation
+	if m.isStoreFocused() {
+		prevKey := m.kvView.SelectedKey()
+		switch keyStr {
+		case "up", "k":
+			m.kvView.MoveUp()
+		case "down", "j":
+			m.kvView.MoveDown()
+		case "shift+up", "K":
+			m.kvView.ScrollPreviewUp()
+			return m, nil
+		case "shift+down", "J":
+			m.kvView.ScrollPreviewDown()
+			return m, nil
+		case "/":
+			m.kvView.StartFilter()
+		case "r":
+			return m, m.loadKVKeys()
+		}
+		// Load preview if selected key changed
+		if newKey := m.kvView.SelectedKey(); newKey != prevKey && newKey != "" {
+			return m, m.loadKVEntry(newKey)
+		}
+		return m, nil
+	}
+
 	// Review view focused - forward keys to review view
 	if m.isReviewFocused() && m.reviewView != nil {
 		var cmd tea.Cmd
@@ -1597,27 +1698,41 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 }
 
 // handleTabKey handles tab key for switching views.
-// If Review tab is visible (has active session), it's included in cycling.
+// Cycle: Sessions -> Messages -> Store -> [Review if visible] -> Sessions
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
-	// Check if Review tab should be visible
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
+	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
 
 	switch m.activeView {
 	case ViewSessions:
 		m.activeView = ViewMessages
 	case ViewMessages:
-		if showReviewTab {
-			// If Review is visible, cycle to it
+		switch {
+		case showStoreTab:
+			m.activeView = ViewStore
+		case showReviewTab:
 			m.activeView = ViewReview
-		} else {
-			// Otherwise cycle back to Sessions
+		default:
+			m.activeView = ViewSessions
+		}
+	case ViewStore:
+		switch {
+		case showReviewTab:
+			m.activeView = ViewReview
+		default:
 			m.activeView = ViewSessions
 		}
 	case ViewReview:
-		// From Review, cycle back to Sessions
 		m.activeView = ViewSessions
 	}
+
 	m.handler.SetActiveView(m.activeView)
+
+	// Load KV keys when switching to Store tab
+	if m.activeView == ViewStore {
+		return m, m.loadKVKeys()
+	}
+
 	return m, nil
 }
 
@@ -2123,6 +2238,9 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		// MessagesView handles its own filtering internally, no Update method
 		// Key events are handled by specific methods called from handleNormalKey
 		return m, nil
+	case ViewStore:
+		// KV view handles its own updates via explicit method calls
+		return m, nil
 	case ViewReview:
 		if m.reviewView != nil {
 			*m.reviewView, cmd = m.reviewView.Update(msg)
@@ -2282,6 +2400,10 @@ func (m Model) isMessagesFocused() bool {
 // isReviewFocused returns true if the review view is active.
 func (m Model) isReviewFocused() bool {
 	return m.activeView == ViewReview
+}
+
+func (m Model) isStoreFocused() bool {
+	return m.activeView == ViewStore
 }
 
 // shouldPollMessages returns true if messages should be polled.
@@ -2631,37 +2753,30 @@ func (m Model) View() tea.View {
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
 	// Build tab bar with tabs on left and branding on right
-	var sessionsTab, messagesTab, reviewTab string
-
-	// Check if Review tab should be shown (only when there's an active review session)
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
+	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
 
-	switch m.activeView {
-	case ViewSessions:
-		sessionsTab = styles.ViewSelectedStyle.Render("Sessions")
-		messagesTab = styles.ViewNormalStyle.Render("Messages")
-		if showReviewTab {
-			reviewTab = styles.ViewNormalStyle.Render("Review")
+	// Render each tab with appropriate style
+	renderTab := func(label string, view ViewType) string {
+		if m.activeView == view {
+			return styles.ViewSelectedStyle.Render(label)
 		}
-	case ViewMessages:
-		sessionsTab = styles.ViewNormalStyle.Render("Sessions")
-		messagesTab = styles.ViewSelectedStyle.Render("Messages")
-		if showReviewTab {
-			reviewTab = styles.ViewNormalStyle.Render("Review")
-		}
-	case ViewReview:
-		sessionsTab = styles.ViewNormalStyle.Render("Sessions")
-		messagesTab = styles.ViewNormalStyle.Render("Messages")
-		reviewTab = styles.ViewSelectedStyle.Render("Review")
+		return styles.ViewNormalStyle.Render(label)
 	}
 
-	// Build tabs with conditional Review tab
-	var tabsLeft string
+	// Build tab list
+	tabs := []string{
+		renderTab("Sessions", ViewSessions),
+		renderTab("Messages", ViewMessages),
+	}
+	if showStoreTab || m.activeView == ViewStore {
+		tabs = append(tabs, renderTab("Store", ViewStore))
+	}
 	if showReviewTab || m.activeView == ViewReview {
-		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab, " | ", reviewTab)
-	} else {
-		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, sessionsTab, " | ", messagesTab)
+		tabs = append(tabs, renderTab("Review", ViewReview))
 	}
+
+	tabsLeft := strings.Join(tabs, " | ")
 
 	// Add filter indicator if active
 	if m.statusFilter != "" {
@@ -2720,6 +2835,9 @@ func (m Model) renderTabView() string {
 		}
 	case ViewMessages:
 		content = m.msgView.View()
+		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+	case ViewStore:
+		content = m.kvView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	case ViewReview:
 		if m.reviewView != nil {

@@ -9,6 +9,7 @@ const (
 	ViewSessions ViewType = iota
 	ViewMessages
 	ViewReview
+	ViewStore
 )
 
 // String returns the lowercase name of the view type for scope matching.
@@ -20,6 +21,8 @@ func (v ViewType) String() string {
 		return "messages"
 	case ViewReview:
 		return "review"
+	case ViewStore:
+		return "store"
 	default:
 		return unknownViewType
 	}

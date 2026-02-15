@@ -3,6 +3,7 @@ package hive
 import (
 	"github.com/hay-kot/hive/internal/core/config"
 	"github.com/hay-kot/hive/internal/core/doctor"
+	"github.com/hay-kot/hive/internal/core/kv"
 	"github.com/hay-kot/hive/internal/core/messaging"
 	"github.com/hay-kot/hive/internal/core/terminal"
 	"github.com/hay-kot/hive/internal/data/db"
@@ -22,6 +23,7 @@ type App struct {
 	Plugins  *plugins.Manager
 	Config   *config.Config
 	DB       *db.DB
+	KV       kv.KV
 	Renderer *tmpl.Renderer
 }
 
@@ -33,6 +35,7 @@ func NewApp(
 	termMgr *terminal.Manager,
 	pluginMgr *plugins.Manager,
 	database *db.DB,
+	kvStore kv.KV,
 	renderer *tmpl.Renderer,
 	pluginInfos []doctor.PluginInfo,
 ) *App {
@@ -45,6 +48,7 @@ func NewApp(
 		Plugins:  pluginMgr,
 		Config:   cfg,
 		DB:       database,
+		KV:       kvStore,
 		Renderer: renderer,
 	}
 }

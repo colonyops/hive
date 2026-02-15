@@ -8,6 +8,14 @@ import (
 	"database/sql"
 )
 
+type KvStore struct {
+	Key       string        `json:"key"`
+	Value     []byte        `json:"value"`
+	ExpiresAt sql.NullInt64 `json:"expires_at"`
+	CreatedAt int64         `json:"created_at"`
+	UpdatedAt int64         `json:"updated_at"`
+}
+
 type Message struct {
 	ID        string         `json:"id"`
 	Topic     string         `json:"topic"`
