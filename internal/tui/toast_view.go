@@ -77,7 +77,7 @@ func (v *ToastView) Overlay(background string, width, height int) string {
 	toastW := lipgloss.Width(toastContent)
 	toastH := lipgloss.Height(toastContent)
 
-	rightX := max(width-toastW, 0)
+	rightX := max(width-toastW-1, 0)
 	bottomY := max(height-toastH, 0)
 
 	toastLayer.X(rightX).Y(bottomY).Z(2)
