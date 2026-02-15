@@ -105,8 +105,8 @@ func (p *Plugin) fetchPRInfo(ctx context.Context, sessionID, path string) prInfo
 	// Cache miss - fetch from gh CLI
 	info := p.fetchFromGH(ctx, path)
 
-	// Store in cache with TTL
-	if p.cache != nil && info.Number > 0 {
+	// Store in cache with TTL (including empty results to avoid repeated gh calls)
+	if p.cache != nil {
 		_ = p.cache.SetTTL(ctx, sessionID, info, p.StatusCacheDuration())
 	}
 

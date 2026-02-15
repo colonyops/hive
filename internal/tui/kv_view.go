@@ -325,7 +325,7 @@ func (v *KVView) renderDivider(height int) []string {
 }
 
 func (v *KVView) renderHelp() string {
-	return styles.TextMutedStyle.Render(" up/down navigate . shift+up/down scroll preview . / filter . tab switch view")
+	return styles.MessagesHelpStyle.Render("↑/↓ navigate • shift+↑/↓ scroll preview • / filter • tab switch view")
 }
 
 func (v *KVView) previewHeight() int {
