@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime/debug"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -35,18 +36,41 @@ import (
 
 var (
 	// Build information. Populated at build-time via -ldflags flag.
+	// When installed via `go install module@version`, init() populates
+	// these from runtime/debug.BuildInfo instead.
 	version = "dev"
 	commit  = "HEAD"
 	date    = "now"
 )
 
 func build() string {
-	short := commit
-	if len(commit) > 7 {
-		short = commit[:7]
+	v, c, d := version, commit, date
+
+	// When installed via `go install module@version`, ldflags aren't set
+	// so version remains "dev". Fall back to runtime/debug.BuildInfo which
+	// Go populates automatically with the module version and VCS metadata.
+	if v == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			if mv := info.Main.Version; mv != "" && mv != "(devel)" {
+				v = mv
+			}
+			for _, s := range info.Settings {
+				switch s.Key {
+				case "vcs.revision":
+					c = s.Value
+				case "vcs.time":
+					d = s.Value
+				}
+			}
+		}
 	}
 
-	return fmt.Sprintf("%s (%s) %s", version, short, date)
+	short := c
+	if len(c) > 7 {
+		short = c[:7]
+	}
+
+	return fmt.Sprintf("%s (%s) %s", v, short, d)
 }
 
 func main() {
