@@ -90,7 +90,7 @@ func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) err
 	_, _ = fmt.Fprintln(w)
 
 	for _, result := range results {
-		_, _ = fmt.Fprintf(w, "  %s\n", styles.TextForegroundBoldStyle.Render(result.Name))
+		_, _ = fmt.Fprintln(w, styles.TextForegroundBoldStyle.Render(result.Name))
 
 		for _, item := range result.Items {
 			var detail string
@@ -108,13 +108,11 @@ func (cmd *DoctorCmd) outputText(_ context.Context, results []doctor.Result) err
 				icon = styles.TextErrorStyle.Render("✘")
 			}
 
-			_, _ = fmt.Fprintf(w, "    %s %s%s\n", icon, item.Label, detail)
+			_, _ = fmt.Fprintf(w, "  %s %s%s\n", icon, item.Label, detail)
 		}
 
 		_, _ = fmt.Fprintln(w)
 	}
-
-	_, _ = fmt.Fprintln(w, divider)
 
 	passed, warned, failed := doctor.Summary(results)
 	summary := fmt.Sprintf("%s  %s  %s",

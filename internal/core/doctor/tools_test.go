@@ -21,7 +21,7 @@ func TestToolsCheck_BothPresent(t *testing.T) {
 	check := NewToolsCheck()
 	result := check.Run(context.Background())
 
-	assert.Equal(t, "Tools", result.Name)
+	assert.Equal(t, "Dependencies", result.Name)
 	require.Len(t, result.Items, 2)
 
 	assert.Equal(t, "git", result.Items[0].Label)

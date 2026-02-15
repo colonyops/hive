@@ -18,7 +18,7 @@ func NewToolsCheck() *ToolsCheck {
 }
 
 func (c *ToolsCheck) Name() string {
-	return "Tools"
+	return "Dependencies"
 }
 
 func (c *ToolsCheck) Run(_ context.Context) Result {
