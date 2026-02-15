@@ -224,6 +224,11 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 		return fmt.Errorf("recycle session %s: %w", id, err)
 	}
 
+	// Kill associated tmux session (best-effort)
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Name); err != nil {
+		s.log.Debug().Err(err).Str("session", sess.Name).Msg("no tmux session to kill")
+	}
+
 	// Rename directory to recycled pattern immediately
 	repoName := git.ExtractRepoName(sess.Remote)
 	newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-recycle-%s", repoName, generateID()))
