@@ -419,6 +419,76 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	})
 }
 
+func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
+	commands := map[string]config.UserCommand{
+		"TmuxOpen":  {Action: config.ActionTmuxOpen, Help: "open"},
+		"TmuxStart": {Action: config.ActionTmuxStart, Help: "start"},
+	}
+	keybindings := map[string]config.Keybinding{
+		"enter": {Cmd: "TmuxOpen"},
+		"s":     {Cmd: "TmuxStart"},
+	}
+
+	sess := session.Session{
+		ID:    "test-id",
+		Path:  "/test/path",
+		State: session.StateActive,
+	}
+
+	t.Run("TmuxOpen consumes window override", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
+		handler.SetSelectedWindow("editor")
+
+		action, ok := handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Equal(t, ActionTypeTmuxOpen, action.Type)
+		assert.Equal(t, "editor", action.TmuxWindow)
+
+		// Override should be consumed — next resolve uses lookup
+		action, ok = handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Equal(t, "default-window", action.TmuxWindow)
+	})
+
+	t.Run("TmuxOpen without override uses lookup", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+		handler.SetTmuxWindowLookup(func(id string) string { return "agent" })
+
+		action, ok := handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Equal(t, "agent", action.TmuxWindow)
+	})
+
+	t.Run("TmuxOpen without override or lookup returns empty", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+
+		action, ok := handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Empty(t, action.TmuxWindow)
+	})
+
+	t.Run("TmuxStart also consumes window override", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+		handler.SetSelectedWindow("editor")
+
+		action, ok := handler.Resolve("s", sess)
+		require.True(t, ok)
+		assert.Equal(t, ActionTypeTmuxStart, action.Type)
+		assert.Equal(t, "editor", action.TmuxWindow)
+	})
+
+	t.Run("ResolveUserCommand TmuxOpen consumes override", func(t *testing.T) {
+		handler := NewKeybindingResolver(nil, nil, testRenderer)
+		handler.SetSelectedWindow("editor")
+
+		cmd := config.UserCommand{Action: config.ActionTmuxOpen, Help: "open"}
+		action := handler.ResolveUserCommand("TmuxOpen", cmd, sess, nil)
+		assert.Equal(t, ActionTypeTmuxOpen, action.Type)
+		assert.Equal(t, "editor", action.TmuxWindow)
+	})
+}
+
 func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 	handler := NewKeybindingResolver(nil, nil, testRenderer)
 

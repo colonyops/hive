@@ -66,6 +66,7 @@ type Action struct {
 	SessionName   string // Session display name (for tmux actions)
 	SessionPath   string
 	SessionRemote string // Session remote URL (for tmux actions)
+	TmuxWindow    string // Target tmux window name (for tmux actions)
 	Silent        bool   // Skip loading popup for fast commands
 	Exit          bool   // Exit hive after command completes
 	Err           error  // Non-nil if action resolution failed (e.g., template error)
@@ -129,10 +130,11 @@ func (s *Service) newTmuxExecutor(action Action, background bool) (Executor, err
 	}
 
 	return &TmuxExecutor{
-		builder:    s.tmux,
-		name:       action.SessionName,
-		workDir:    action.SessionPath,
-		windows:    windows,
-		background: background,
+		builder:      s.tmux,
+		name:         action.SessionName,
+		workDir:      action.SessionPath,
+		windows:      windows,
+		background:   background,
+		targetWindow: action.TmuxWindow,
 	}, nil
 }

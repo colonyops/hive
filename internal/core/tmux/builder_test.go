@@ -191,7 +191,7 @@ func TestBuilder_OpenSession(t *testing.T) {
 
 		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
-		}, false)
+		}, false, "")
 		require.NoError(t, err)
 
 		// has-session succeeds, so should attach
@@ -200,13 +200,33 @@ func TestBuilder_OpenSession(t *testing.T) {
 		assert.Equal(t, []string{"attach-session", "-t", "sess"}, rec.Commands[1].Args)
 	})
 
+	t.Run("session exists with target window", func(t *testing.T) {
+		orig := insideTmux
+		insideTmux = func() bool { return false }
+		defer func() { insideTmux = orig }()
+
+		rec := &executil.RecordingExecutor{}
+		b := NewBuilder(rec)
+
+		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Focus: true},
+		}, false, "editor")
+		require.NoError(t, err)
+
+		// has-session, select-window, attach
+		require.Len(t, rec.Commands, 3)
+		assert.Equal(t, []string{"has-session", "-t", "sess"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:editor"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"attach-session", "-t", "sess"}, rec.Commands[2].Args)
+	})
+
 	t.Run("session exists background is noop", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
 		b := NewBuilder(rec)
 
 		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
-		}, true)
+		}, true, "")
 		require.NoError(t, err)
 
 		// has-session only, no attach
@@ -224,7 +244,7 @@ func TestBuilder_OpenSession(t *testing.T) {
 		// the blanket error on "tmux". Test just the flow.
 		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
-		}, true)
+		}, true, "")
 		require.Error(t, err)
 
 		// First command should be has-session (fails), second should be new-session

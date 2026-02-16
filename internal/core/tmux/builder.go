@@ -109,10 +109,15 @@ func (b *Builder) AttachOrSwitch(ctx context.Context, name string) error {
 }
 
 // OpenSession creates a session if it doesn't exist, or attaches to it.
-func (b *Builder) OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool) error {
+// If targetWindow is non-empty and the session already exists, select that window before attaching.
+func (b *Builder) OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error {
 	if b.HasSession(ctx, name) {
 		if background {
 			return nil
+		}
+		if targetWindow != "" {
+			// Best-effort: window may not exist if config changed since session was created.
+			_, _ = b.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+targetWindow)
 		}
 		return b.AttachOrSwitch(ctx, name)
 	}

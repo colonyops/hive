@@ -608,6 +608,7 @@ func (m Model) executeAction(action Action) tea.Cmd {
 			SessionName:   action.SessionName,
 			SessionPath:   action.SessionPath,
 			SessionRemote: action.SessionRemote,
+			TmuxWindow:    action.TmuxWindow,
 			ShellCmd:      action.ShellCmd,
 		}
 
@@ -1158,6 +1159,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 			SessionName:   action.SessionName,
 			SessionPath:   action.SessionPath,
 			SessionRemote: action.SessionRemote,
+			TmuxWindow:    action.TmuxWindow,
 			ShellCmd:      action.ShellCmd,
 		}
 		exec, err := m.cmdService.CreateExecutor(cmdAction)
@@ -1518,6 +1520,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 				SessionName:   action.SessionName,
 				SessionPath:   action.SessionPath,
 				SessionRemote: action.SessionRemote,
+				TmuxWindow:    action.TmuxWindow,
 				ShellCmd:      action.ShellCmd,
 			}
 			exec, err := m.cmdService.CreateExecutor(cmdAction)
@@ -2033,6 +2036,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 				SessionName:   action.SessionName,
 				SessionPath:   action.SessionPath,
 				SessionRemote: action.SessionRemote,
+				TmuxWindow:    action.TmuxWindow,
 				ShellCmd:      action.ShellCmd,
 			}
 			exec, err := m.cmdService.CreateExecutor(cmdAction)
