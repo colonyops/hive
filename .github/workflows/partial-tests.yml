@@ -20,7 +20,7 @@ jobs:
 
       - name: Check generated files are up-to-date
         run: |
-          mise run generate --force
+          mise run --force generate
           git diff --exit-code -- '*.gen.go' || (echo "Generated files are out of date. Run 'mise run generate' and commit the result." && exit 1)
 
       - name: golangci-lint
