@@ -737,11 +737,8 @@ func (v View) SelectedDocument() *Document {
 	if item == nil {
 		return nil
 	}
-	if reviewItem, ok := item.(TreeItem); ok {
-		if reviewItem.IsHeader {
-			return nil
-		}
-		return &reviewItem.Document
+	if ti, ok := item.(TreeItem); ok && ti.IsDocument() {
+		return &ti.Document
 	}
 	return nil
 }
@@ -1545,14 +1542,12 @@ func (v *View) updateTreeItemCommentCount() {
 	}
 
 	// Find and update the tree item for the current document
-	for i, item := range items {
-		if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-			if treeItem.Document.Path == v.selectedDoc.Path {
-				treeItem.CommentCount = commentCount
-				items[i] = treeItem
-				v.list.SetItems(items)
-				return
-			}
+	for i, ti := range TreeItemsDocuments(items) {
+		if ti.Document.Path == v.selectedDoc.Path {
+			ti.CommentCount = commentCount
+			items[i] = ti
+			v.list.SetItems(items)
+			return
 		}
 	}
 }
@@ -1667,6 +1662,11 @@ type TreeItem struct {
 	IsLastInType     bool     // True if last document in this type group
 	CommentCount     int      // Number of comments on this document
 	HasActiveSession bool     // True if document has an active (non-finalized) review session
+}
+
+// IsDocument returns true when this item represents a document (not a header).
+func (i TreeItem) IsDocument() bool {
+	return !i.IsHeader
 }
 
 // FilterValue returns the value used for filtering.
@@ -1889,10 +1889,8 @@ func (v *View) SelectedDocPath() string {
 // GetAllDocuments returns all documents from the tree items.
 func (v *View) GetAllDocuments() []Document {
 	var docs []Document
-	for _, item := range v.list.Items() {
-		if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-			docs = append(docs, treeItem.Document)
-		}
+	for _, ti := range TreeItemsDocuments(v.list.Items()) {
+		docs = append(docs, ti.Document)
 	}
 	return docs
 }
@@ -1928,22 +1926,17 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 	return func() tea.Msg {
 		// Try to find document by matching path
 		var found *Document
-		for i := range v.list.Items() {
-			item, ok := v.list.Items()[i].(TreeItem)
-			if !ok || item.IsHeader {
-				continue
-			}
-
+		for _, ti := range TreeItemsDocuments(v.list.Items()) {
 			// Check if path matches (either full path or relative path)
-			if item.Document.Path == path || item.Document.RelPath == path {
-				doc := item.Document
+			if ti.Document.Path == path || ti.Document.RelPath == path {
+				doc := ti.Document
 				found = &doc
 				break
 			}
 
 			// Also check basename match
-			if filepath.Base(item.Document.Path) == filepath.Base(path) {
-				doc := item.Document
+			if filepath.Base(ti.Document.Path) == filepath.Base(path) {
+				doc := ti.Document
 				found = &doc
 				break
 			}

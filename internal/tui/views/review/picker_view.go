@@ -135,8 +135,8 @@ func (v PickerView) Update(msg tea.Msg) (PickerView, tea.Cmd) {
 	case keyEnter:
 		// Select current item (skip headers)
 		if item := v.list.SelectedItem(); item != nil {
-			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-				v.selectedDoc = &treeItem.Document
+			if ti, ok := item.(TreeItem); ok && ti.IsDocument() {
+				v.selectedDoc = &ti.Document
 			}
 		}
 		return v, nil
@@ -172,16 +172,8 @@ func (v *PickerView) updateFilter() {
 
 // selectFirstDocument selects the first non-header item in the list.
 func (v *PickerView) selectFirstDocument() {
-	items := v.list.Items()
-	if len(items) == 0 {
-		return
-	}
-
-	for i, item := range items {
-		if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-			v.list.Select(i)
-			break
-		}
+	if i := TreeItemsFirstDocument(v.list.Items()); i >= 0 {
+		v.list.Select(i)
 	}
 }
 

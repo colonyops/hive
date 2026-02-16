@@ -70,13 +70,8 @@ func NewDocumentPickerModal(documents []Document, width, height int, store *stor
 	modal.list = l
 
 	// Select first non-header item by default
-	if len(items) > 0 {
-		for i, item := range items {
-			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-				l.Select(i)
-				break
-			}
-		}
+	if i := TreeItemsFirstDocument(items); i >= 0 {
+		l.Select(i)
 	}
 
 	return modal
@@ -96,8 +91,8 @@ func (m *DocumentPickerModal) Update(msg tea.Msg) (*DocumentPickerModal, tea.Cmd
 	case "enter":
 		// Select current item (skip headers)
 		if item := m.list.SelectedItem(); item != nil {
-			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-				m.selectedDoc = &treeItem.Document
+			if ti, ok := item.(TreeItem); ok && ti.IsDocument() {
+				m.selectedDoc = &ti.Document
 			}
 		}
 		return m, nil
@@ -139,14 +134,8 @@ func (m *DocumentPickerModal) updateFilter() {
 	m.list.SetItems(items)
 
 	// Reset selection to first non-header item
-	if len(items) > 0 {
-		// Find first non-header item
-		for i, item := range items {
-			if treeItem, ok := item.(TreeItem); ok && !treeItem.IsHeader {
-				m.list.Select(i)
-				break
-			}
-		}
+	if i := TreeItemsFirstDocument(items); i >= 0 {
+		m.list.Select(i)
 	}
 }
 
@@ -170,20 +159,12 @@ func (m *DocumentPickerModal) buildTreeItemsWithSessions(documents []Document) [
 	}
 
 	// Mark items with active sessions using the pre-fetched map
-	for i, item := range items {
-		treeItem, ok := item.(TreeItem)
-		if !ok || treeItem.IsHeader {
-			continue
+	for i, ti := range TreeItemsDocuments(items) {
+		if sessionInfo, found := sessionMap[ti.Document.Path]; found {
+			ti.HasActiveSession = true
+			ti.CommentCount = sessionInfo.CommentCount
 		}
-
-		// Check if document has an active session in the map
-		if sessionInfo, found := sessionMap[treeItem.Document.Path]; found {
-			// Has active session - mark it
-			treeItem.HasActiveSession = true
-			treeItem.CommentCount = sessionInfo.CommentCount
-		}
-
-		items[i] = treeItem
+		items[i] = ti
 	}
 
 	return items

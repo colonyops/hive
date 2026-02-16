@@ -103,7 +103,7 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 - Go `1.25+`
 - `git`
 - `tmux`
-- `task` (https://taskfile.dev)
+- `mise` (https://mise.jdx.dev)
 - `golangci-lint`
 
 ### Local Dev Setup
@@ -111,10 +111,10 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 ```bash
 git clone https://github.com/colonyops/hive.git
 cd hive
-task run
+mise run dev
 ```
 
-Use `task run` during development. It runs hive with project-local defaults from `Taskfile.yml`:
+`mise run dev` runs hive with project-local defaults from `mise.toml`:
 
 - `HIVE_CONFIG=./config.dev.yaml`
 - `HIVE_DATA_DIR=./.data`
@@ -133,28 +133,29 @@ This isolates contributor testing from your personal/global hive sessions.
 Run with dev config:
 
 ```bash
-task run
-task run -- new
-task run -- doctor
+mise run dev
+mise run dev -- new
+mise run dev -- doctor
 ```
 
-Run against your global config (compatibility checks):
+Run against your global config:
 
 ```bash
-go run *.go --config ~/.config/hive/config.yaml --data-dir ~/.local/share/hive
+mise run start
+mise run start -- doctor
 ```
 
 ### Common Contributor Commands
 
 ```bash
-task test
-task lint
-task check
-task build
-task validate
+mise run test
+mise run lint
+mise run check
+mise run build
+mise run validate
 ```
 
-Before opening a PR, run `task check`. If you changed config behavior, also run `task validate` and `task run -- doctor`.
+Before opening a PR, run `mise run check`. If you changed config behavior, also run `mise run validate` and `mise run dev -- doctor`.
 
 ## Acknowledgments
 

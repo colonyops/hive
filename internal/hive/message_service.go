@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/pkg/randid"
 )
@@ -14,19 +15,32 @@ import (
 type MessageService struct {
 	store  messaging.Store
 	config *config.Config
+	bus    *eventbus.EventBus
 }
 
 // NewMessageService creates a new MessageService.
-func NewMessageService(store messaging.Store, cfg *config.Config) *MessageService {
+func NewMessageService(store messaging.Store, cfg *config.Config, bus *eventbus.EventBus) *MessageService {
 	return &MessageService{
 		store:  store,
 		config: cfg,
+		bus:    bus,
 	}
 }
 
 // Publish adds a message to multiple topics.
 func (m *MessageService) Publish(ctx context.Context, msg messaging.Message, topics []string) error {
-	return m.store.Publish(ctx, msg, topics)
+	if err := m.store.Publish(ctx, msg, topics); err != nil {
+		return err
+	}
+
+	for _, topic := range topics {
+		m.bus.PublishMessageReceived(eventbus.MessageReceivedPayload{
+			Topic:   topic,
+			Message: &msg,
+		})
+	}
+
+	return nil
 }
 
 // Subscribe returns all messages for a topic, optionally filtered by since timestamp.

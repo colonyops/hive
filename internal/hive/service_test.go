@@ -3,10 +3,14 @@ package hive
 import (
 	"context"
 	"io"
+	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -59,6 +63,23 @@ func (m *mockStore) FindRecyclable(_ context.Context, remote string) (session.Se
 	return session.Session{}, session.ErrNoRecyclable
 }
 
+// mockExec implements executil.Executor for testing.
+type mockExec struct{}
+
+func (m *mockExec) Run(context.Context, string, ...string) ([]byte, error) { return nil, nil }
+
+func (m *mockExec) RunDir(context.Context, string, string, ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (m *mockExec) RunStream(context.Context, io.Writer, io.Writer, string, ...string) error {
+	return nil
+}
+
+func (m *mockExec) RunDirStream(context.Context, string, io.Writer, io.Writer, string, ...string) error {
+	return nil
+}
+
 // mockGit implements git.Git for testing.
 type mockGit struct{}
 
@@ -77,6 +98,11 @@ func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { ret
 
 func newTestService(t *testing.T, store session.Store, cfg *config.Config) *SessionService {
 	t.Helper()
+	return newTestServiceWithBus(t, store, cfg, testbus.New(t).EventBus)
+}
+
+func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config, bus *eventbus.EventBus) *SessionService {
+	t.Helper()
 	if cfg == nil {
 		cfg = &config.Config{
 			DataDir: t.TempDir(),
@@ -85,7 +111,7 @@ func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Sess
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	return NewSessionService(store, &mockGit{}, cfg, nil, renderer, log, io.Discard, io.Discard)
+	return NewSessionService(store, &mockGit{}, cfg, bus, &mockExec{}, renderer, log, io.Discard, io.Discard)
 }
 
 func TestRenameSession(t *testing.T) {
@@ -442,6 +468,99 @@ func TestPrune(t *testing.T) {
 		}
 		assert.Equal(t, 1, strictCount, "strict repo should have 1 session")
 		assert.Equal(t, 3, normalCount, "normal repo should have 3 sessions")
+	})
+}
+
+func TestSessionService_Events(t *testing.T) {
+	t.Run("create emits session.created", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+		}
+		svc := newTestServiceWithBus(t, store, cfg, tb.EventBus)
+
+		sess, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "test-session",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[eventbus.SessionCreatedPayload](tb, t, eventbus.EventSessionCreated)
+		assert.Equal(t, sess.ID, p.Session.ID)
+		assert.Equal(t, "test-session", p.Session.Name)
+	})
+
+	t.Run("recycle emits session.recycled", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+		}
+		svc := newTestServiceWithBus(t, store, cfg, tb.EventBus)
+
+		sessDir := filepath.Join(cfg.ReposDir(), "repo-active-abc")
+		require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+		sess := session.Session{
+			ID:     "recycle1",
+			Name:   "to-recycle",
+			Slug:   "to-recycle",
+			State:  session.StateActive,
+			Path:   sessDir,
+			Remote: "https://github.com/example/repo.git",
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.RecycleSession(context.Background(), "recycle1", io.Discard)
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[eventbus.SessionRecycledPayload](tb, t, eventbus.EventSessionRecycled)
+		assert.Equal(t, "recycle1", p.Session.ID)
+		assert.Equal(t, session.StateRecycled, p.Session.State)
+	})
+
+	t.Run("rename emits session.renamed", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		svc := newTestServiceWithBus(t, store, nil, tb.EventBus)
+
+		sess := session.Session{
+			ID:    "test1",
+			Name:  "old-name",
+			Slug:  "old-name",
+			State: session.StateActive,
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.RenameSession(context.Background(), "test1", "new-name")
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[eventbus.SessionRenamedPayload](tb, t, eventbus.EventSessionRenamed)
+		assert.Equal(t, "old-name", p.OldName)
+		assert.Equal(t, "new-name", p.Session.Name)
+	})
+
+	t.Run("delete emits session.deleted", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		svc := newTestServiceWithBus(t, store, nil, tb.EventBus)
+
+		sess := session.Session{
+			ID:    "del1",
+			Name:  "to-delete",
+			State: session.StateRecycled,
+			Path:  t.TempDir(),
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.DeleteSession(context.Background(), "del1")
+		require.NoError(t, err)
+
+		p := testbus.FindPayload[eventbus.SessionDeletedPayload](tb, t, eventbus.EventSessionDeleted)
+		assert.Equal(t, "del1", p.SessionID)
 	})
 }
 
