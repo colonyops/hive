@@ -13,19 +13,17 @@ import (
 
 // Events defines all event types and their payload structs for code generation.
 var Events = map[string]any{
-	"session.created":   SessionCreatedPayload{},
-	"session.recycled":  SessionRecycledPayload{},
-	"session.deleted":   SessionDeletedPayload{},
-	"session.renamed":   SessionRenamedPayload{},
-	"session.corrupted": SessionCorruptedPayload{},
-
+	// Keep list sorted A-Z
 	"agent.status-changed": AgentStatusChangedPayload{},
-
-	"message.received": MessageReceivedPayload{},
-
-	"tui.started":     TUIStartedPayload{},
-	"tui.stopped":     TUIStoppedPayload{},
-	"config.reloaded": ConfigReloadedPayload{},
+	"config.reloaded":      ConfigReloadedPayload{},
+	"message.received":     MessageReceivedPayload{},
+	"session.corrupted":    SessionCorruptedPayload{},
+	"session.created":      SessionCreatedPayload{},
+	"session.deleted":      SessionDeletedPayload{},
+	"session.recycled":     SessionRecycledPayload{},
+	"session.renamed":      SessionRenamedPayload{},
+	"tui.started":          TUIStartedPayload{},
+	"tui.stopped":          TUIStoppedPayload{},
 }
 
 // SessionCreatedPayload is emitted when a new session is created.
