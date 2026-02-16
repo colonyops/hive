@@ -620,379 +620,76 @@ func (m Model) executeAction(a Action) tea.Cmd {
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	// Window
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		return m.handleWindowSize(msg)
 
-		// Account for: top divider (1) + header (1) + bottom divider (1) = 3 lines
-		contentHeight := msg.Height - 3
-		if contentHeight < 1 {
-			contentHeight = 1
-		}
-
-		// Set list size based on preview mode
-		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
-			// In dual-column mode, list takes 25% of width
-			listWidth := int(float64(m.width) * 0.25)
-			m.list.SetSize(listWidth, contentHeight)
-		} else {
-			// In single-column mode, list takes full width
-			m.list.SetSize(msg.Width, contentHeight)
-		}
-
-		// msgView gets -1 because we prepend a blank line for consistent spacing
-		m.msgView.SetSize(msg.Width, contentHeight-1)
-
-		// Set review view size
-		if m.reviewView != nil {
-			m.reviewView.SetSize(msg.Width, contentHeight)
-		}
-
-		// Set KV view size
-		m.kvView.SetSize(msg.Width, contentHeight)
-
-		// Publish startup warnings on the first WindowSizeMsg so they flow
-		// through the Update loop with the render cycle already running.
-		if len(m.startupWarnings) > 0 {
-			for _, w := range m.startupWarnings {
-				m.notifyBus.Warnf("%s", w)
-			}
-			m.startupWarnings = nil
-			return m, m.ensureToastTick()
-		}
-		return m, nil
-
+	// Data loaded
 	case messagesLoadedMsg:
-		if msg.err != nil {
-			// Silently ignore message loading errors
-			return m, nil
-		}
-		// Append new messages if any
-		if len(msg.messages) > 0 {
-			m.allMessages = append(m.allMessages, msg.messages...)
-			// Update message view with reversed order (newest first)
-			reversed := make([]messaging.Message, len(m.allMessages))
-			for i, message := range m.allMessages {
-				reversed[len(m.allMessages)-1-i] = message
-			}
-			m.msgView.SetMessages(reversed)
-		}
-		// Always update poll time so we don't re-fetch the same messages
-		m.lastPollTime = time.Now()
-		return m, nil
-
+		return m.handleMessagesLoaded(msg)
 	case kvKeysLoadedMsg:
-		if msg.err != nil {
-			log.Debug().Err(msg.err).Msg("failed to load kv keys")
-			return m, nil
-		}
-		m.kvView.SetKeys(msg.keys)
-		// Auto-load preview for the selected key
-		if key := m.kvView.SelectedKey(); key != "" {
-			return m, m.loadKVEntry(key)
-		}
-		m.kvView.SetPreview(nil)
-		return m, nil
-
+		return m.handleKVKeysLoaded(msg)
 	case kvEntryLoadedMsg:
-		if msg.err != nil {
-			log.Debug().Err(msg.err).Msg("failed to load kv entry")
-			m.kvView.SetPreview(nil)
-			return m, nil
-		}
-		m.kvView.SetPreview(&msg.entry)
-		return m, nil
-
-	case pollTickMsg:
-		// Only poll if messages are visible
-		if m.shouldPollMessages() && m.msgStore != nil {
-			return m, tea.Batch(
-				loadMessages(m.msgStore, m.topicFilter, m.lastPollTime),
-				schedulePollTick(),
-			)
-		}
-		// Keep scheduling poll ticks even if not actively polling
-		return m, schedulePollTick()
-
-	case sessionRefreshTickMsg:
-		// Refresh sessions when Sessions view is active and no modal open
-		if m.activeView == ViewSessions && !m.isModalActive() {
-			m.refreshing = true
-			return m, tea.Batch(
-				m.loadSessions(),
-				m.scheduleSessionRefresh(),
-			)
-		}
-		// Keep scheduling refresh ticks even if not actively refreshing
-		return m, m.scheduleSessionRefresh()
-
-	case kvPollTickMsg:
-		if m.isStoreFocused() && !m.isModalActive() {
-			return m, tea.Batch(
-				m.loadKVKeys(),
-				scheduleKVPollTick(),
-			)
-		}
-		return m, scheduleKVPollTick()
-
-	case toastTickMsg:
-		m.toastController.Tick()
-		if m.toastController.HasToasts() {
-			return m, scheduleToastTick()
-		}
-		return m, nil
-
-	case notificationMsg:
-		m.notifyBus.Publish(msg.notification)
-		return m, m.ensureToastTick()
-
+		return m.handleKVEntryLoaded(msg)
 	case sessionsLoadedMsg:
-		if msg.err != nil {
-			log.Error().Err(msg.err).Msg("failed to load sessions")
-			m.state = stateNormal
-			return m, m.notifyError("failed to load sessions: %v", msg.err)
-		}
-		// Store all sessions for filtering
-		m.allSessions = msg.sessions
-		// Apply filter and update list
-		filteredModel, cmd := m.applyFilter()
-		// Update plugin manager with new sessions (triggers background refresh)
-		if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
-			sessions := make([]*session.Session, len(m.allSessions))
-			for i := range m.allSessions {
-				sessions[i] = &m.allSessions[i]
-			}
-			m.pluginManager.UpdateSessions(sessions)
-			log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
-		}
-		return filteredModel, cmd
-
+		return m.handleSessionsLoaded(msg)
 	case gitStatusBatchCompleteMsg:
-		m.gitStatuses.SetBatch(msg.Results)
-		m.refreshing = false
-		return m, nil
-
-	case terminalPollTickMsg:
-		// Start next poll cycle
-		var cmds []tea.Cmd
-		sessions := make([]*session.Session, len(m.allSessions))
-		for i := range m.allSessions {
-			sessions[i] = &m.allSessions[i]
-		}
-		cmds = append(cmds, fetchTerminalStatusBatch(m.terminalManager, sessions, m.gitWorkers))
-		if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-			cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
-		}
-		return m, tea.Batch(cmds...)
-
+		return m.handleGitStatusComplete(msg)
 	case terminalStatusBatchCompleteMsg:
-		if m.terminalStatuses != nil {
-			if m.bus != nil {
-				for sessionID, newStatus := range msg.Results {
-					oldStatus, exists := m.terminalStatuses.Get(sessionID)
-					prevStatus := oldStatus.Status
-					if !exists {
-						// First observation has no prior state; treat as StatusMissing
-						// so the initial transition is always emitted.
-						prevStatus = terminal.StatusMissing
-					}
-					if prevStatus != newStatus.Status {
-						sess := m.findSessionByID(sessionID)
-						if sess == nil {
-							continue
-						}
-						m.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
-							Session:   sess,
-							OldStatus: prevStatus,
-							NewStatus: newStatus.Status,
-						})
-					}
-				}
-			}
-
-			m.terminalStatuses.SetBatch(msg.Results)
-			// Re-expand window items if multi-window sessions appeared or changed
-			m.rebuildWindowItems()
-		}
-		return m, nil
-
+		return m.handleTerminalStatusComplete(msg)
 	case pluginWorkerStartedMsg:
-		// Store the channel and start listening for results
-		m.pluginResultsChan = msg.resultsChan
-		log.Debug().Msg("plugin background worker started")
-		return m, listenForPluginResult(m.pluginResultsChan)
-
+		return m.handlePluginWorkerStarted(msg)
 	case pluginStatusUpdateMsg:
-		// Update the specific plugin's status store with the single result
-		if msg.Err == nil {
-			if store, ok := m.pluginStatuses[msg.PluginName]; ok {
-				store.Set(msg.SessionID, msg.Status)
-				log.Debug().
-					Str("plugin", msg.PluginName).
-					Str("session", msg.SessionID).
-					Str("label", msg.Status.Label).
-					Msg("plugin status updated")
-			}
-		}
-		// Update delegate's reference to plugin statuses
-		m.treeDelegate.PluginStatuses = m.pluginStatuses
-		// Force list to re-render with updated plugin status
-		m.list.SetDelegate(m.treeDelegate)
-		// Continue listening for more results
-		return m, listenForPluginResult(m.pluginResultsChan)
-
-	case animationTickMsg:
-		// Advance animation frame
-		m.animationFrame = (m.animationFrame + 1) % AnimationFrameCount
-		// Update the delegate with new frame
-		m.treeDelegate.AnimationFrame = m.animationFrame
-		m.list.SetDelegate(m.treeDelegate)
-		// Schedule next tick
-		return m, scheduleAnimationTick()
-
-	case renameCompleteMsg:
-		if msg.err != nil {
-			log.Error().Err(msg.err).Msg("rename failed")
-			m.state = stateNormal
-			return m, m.notifyError("rename failed: %v", msg.err)
-		}
-		return m, m.loadSessions()
-
-	case actionCompleteMsg:
-		if msg.err != nil {
-			log.Error().Err(msg.err).Msg("action failed")
-			m.state = stateNormal
-			m.pending = Action{}
-			return m, m.notifyError("action failed: %v", msg.err)
-		}
-		m.state = stateNormal
-		m.pending = Action{}
-		// Reload sessions after action
-		return m, m.loadSessions()
-
-	case recycleStartedMsg:
-		m.state = stateRunningRecycle
-		m.outputModal = NewOutputModal("Recycling session...")
-		m.recycleOutput = msg.output
-		m.recycleDone = msg.done
-		m.recycleCancel = msg.cancel
-		return m, tea.Batch(
-			listenForRecycleOutput(msg.output, msg.done),
-			m.outputModal.Spinner().Tick,
-		)
-
-	case recycleOutputMsg:
-		m.outputModal.AddLine(msg.line)
-		// Keep listening for more output
-		return m, listenForRecycleOutput(m.recycleOutput, m.recycleDone)
-
-	case recycleCompleteMsg:
-		m.outputModal.SetComplete(msg.err)
-		m.recycleOutput = nil
-		m.recycleDone = nil
-		m.recycleCancel = nil
-		// Stay in stateRunningRecycle until user dismisses
-		return m, nil
-
+		return m.handlePluginStatusUpdate(msg)
 	case reposDiscoveredMsg:
-		m.discoveredRepos = msg.repos
-		if len(m.discoveredRepos) == 0 {
-			m.toastController.Push(notify.Notification{
-				Level:   notify.LevelError,
-				Message: fmt.Sprintf("No repositories found in directories: %v", m.repoDirs),
-			})
-		}
-		// Help keybindings remain minimal - full list shown via ? dialog
-		return m, nil
+		return m.handleReposDiscovered(msg)
 
+	// Polling ticks
+	case pollTickMsg:
+		return m.handlePollTick(msg)
+	case sessionRefreshTickMsg:
+		return m.handleSessionRefreshTick(msg)
+	case kvPollTickMsg:
+		return m.handleKVPollTick(msg)
+	case terminalPollTickMsg:
+		return m.handleTerminalPollTick(msg)
+	case animationTickMsg:
+		return m.handleAnimationTick(msg)
+	case toastTickMsg:
+		return m.handleToastTick(msg)
+
+	// Action results
+	case renameCompleteMsg:
+		return m.handleRenameComplete(msg)
+	case actionCompleteMsg:
+		return m.handleActionComplete(msg)
+	case recycleStartedMsg:
+		return m.handleRecycleStarted(msg)
+	case recycleOutputMsg:
+		return m.handleRecycleOutput(msg)
+	case recycleCompleteMsg:
+		return m.handleRecycleComplete(msg)
+
+	// Review delegation
 	case review.DocumentChangeMsg:
-		// Forward to review view if it's active
-		if m.reviewView != nil {
-			*m.reviewView, _ = m.reviewView.Update(msg)
-		}
-		return m, nil
-
+		return m.handleReviewDocChange(msg)
 	case review.ReviewFinalizedMsg:
-		// Copy feedback to clipboard
-		if err := m.copyToClipboard(msg.Feedback); err != nil {
-			return m, m.notifyError("failed to copy feedback: %v", err)
-		}
-		return m, nil
-
+		return m.handleReviewFinalized(msg)
 	case review.OpenDocumentMsg:
-		// Handle document opening (from HiveDocReview command)
-		if msg.Err != nil {
-			return m, m.notifyError("open document: %v", msg.Err)
-		}
-		// Document path is provided, tell review view to load it
-		if m.reviewView != nil {
-			// Find and load the document
-			for _, item := range m.reviewView.List().Items() {
-				if treeItem, ok := item.(review.TreeItem); ok && !treeItem.IsHeader {
-					if treeItem.Document.Path == msg.Path {
-						m.reviewView.LoadDocument(&treeItem.Document)
-						break
-					}
-				}
-			}
-		}
-		return m, nil
+		return m.handleReviewOpenDoc(msg)
 
+	// Notifications
+	case notificationMsg:
+		return m.handleNotification(msg)
+
+	// Input
 	case tea.KeyMsg:
-		// Handle document picker modal if active (on Sessions view)
-		if m.docPickerModal != nil {
-			modal, cmd := m.docPickerModal.Update(msg)
-			m.docPickerModal = modal
-
-			if m.docPickerModal.SelectedDocument() != nil {
-				// User selected a document - switch to review view and load it
-				doc := m.docPickerModal.SelectedDocument()
-				m.docPickerModal = nil
-				m.activeView = ViewReview
-				m.handler.SetActiveView(ViewReview)
-				if m.reviewView != nil {
-					m.reviewView.LoadDocument(doc)
-				}
-				return m, cmd
-			}
-
-			if m.docPickerModal.Cancelled() {
-				// User cancelled picker
-				m.docPickerModal = nil
-				return m, cmd
-			}
-
-			return m, cmd
-		}
-
-		return m.handleKey(msg)
-
+		return m.handleKeyMsg(msg)
 	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		return m.handleSpinnerTick(msg)
 	}
 
-	// Route all other messages to the form when creating session
-	if m.state == stateCreatingSession && m.newSessionForm != nil {
-		return m.updateNewSessionForm(msg)
-	}
-
-	// Update the appropriate view based on active view
-	var cmd tea.Cmd
-	switch m.activeView {
-	case ViewSessions:
-		m.list, cmd = m.list.Update(msg)
-	case ViewMessages:
-		// Messages view handles its own updates
-	case ViewStore:
-		// KV view handles its own updates via explicit method calls
-	case ViewReview:
-		if m.reviewView != nil {
-			*m.reviewView, cmd = m.reviewView.Update(msg)
-		}
-	}
-	return m, cmd
+	return m.handleFallthrough(msg)
 }
 
 // handleKey processes key presses.
