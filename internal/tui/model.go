@@ -1868,14 +1868,11 @@ func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	preselectedRemote := m.localRemote
 
-	item := m.list.SelectedItem()
-	if item != nil {
-		if treeItem, ok := item.(TreeItem); ok {
-			if treeItem.IsHeader && treeItem.RepoRemote != "" {
-				preselectedRemote = treeItem.RepoRemote
-			} else if selected := m.selectedSession(); selected != nil {
-				preselectedRemote = selected.Remote
-			}
+	if treeItem := m.selectedTreeItem(); treeItem != nil {
+		if treeItem.IsHeader && treeItem.RepoRemote != "" {
+			preselectedRemote = treeItem.RepoRemote
+		} else if selected := m.selectedSession(); selected != nil {
+			preselectedRemote = selected.Remote
 		}
 	}
 
@@ -2490,22 +2487,14 @@ func (m *Model) updateFocusFilter(filter string) {
 	}
 
 	// Find first matching item
-	items := m.list.Items()
 	filterLower := strings.ToLower(filter)
 
-	for i, item := range items {
-		treeItem, ok := item.(TreeItem)
-		if !ok {
+	for i, ti := range TreeItemsAll(m.list.Items()) {
+		if ti.IsHeader {
 			continue
 		}
 
-		// Skip headers (FilterValue returns empty for headers)
-		if treeItem.IsHeader {
-			continue
-		}
-
-		// Check if filter value matches
-		filterValue := strings.ToLower(treeItem.FilterValue())
+		filterValue := strings.ToLower(ti.FilterValue())
 		if strings.Contains(filterValue, filterLower) {
 			m.list.Select(i)
 			return
@@ -2574,16 +2563,12 @@ func (m *Model) rebuildWindowItems() {
 	// so window renames trigger a rebuild.
 	current := make(map[string]struct{})
 	expected := make(map[string]struct{})
-	for _, item := range items {
-		ti, ok := item.(TreeItem)
-		if !ok {
-			continue
-		}
+	for _, ti := range TreeItemsAll(items) {
 		if ti.IsWindowItem {
 			current[ti.ParentSession.ID+"\x1f"+ti.WindowIndex+"\x1f"+ti.WindowName] = struct{}{}
 			continue
 		}
-		if ti.IsHeader || ti.IsRecycledPlaceholder {
+		if !ti.IsSession() {
 			continue
 		}
 		if ts, ok := m.terminalStatuses.Get(ti.Session.ID); ok && len(ts.Windows) > 1 {
@@ -2611,11 +2596,11 @@ func (m *Model) rebuildWindowItems() {
 
 	// Strip window items
 	stripped := make([]list.Item, 0, len(items))
-	for _, item := range items {
-		if ti, ok := item.(TreeItem); ok && ti.IsWindowItem {
+	for i, ti := range TreeItemsAll(items) {
+		if ti.IsWindowItem {
 			continue
 		}
-		stripped = append(stripped, item)
+		stripped = append(stripped, items[i])
 	}
 
 	// Re-expand
@@ -2636,7 +2621,7 @@ func (m Model) expandWindowItems(items []list.Item) []list.Item {
 		expanded = append(expanded, item)
 
 		treeItem, ok := item.(TreeItem)
-		if !ok || treeItem.IsHeader || treeItem.IsRecycledPlaceholder || treeItem.IsWindowItem {
+		if !ok || !treeItem.IsSession() {
 			continue
 		}
 
@@ -2668,15 +2653,9 @@ func (m Model) refreshGitStatuses() tea.Cmd {
 	items := m.list.Items()
 	paths := make([]string, 0, len(items))
 
-	for _, item := range items {
-		treeItem, ok := item.(TreeItem)
-		if !ok || treeItem.IsHeader || treeItem.IsWindowItem || treeItem.IsRecycledPlaceholder {
-			continue
-		}
-		path := treeItem.Session.Path
-		paths = append(paths, path)
-		// Mark as loading
-		m.gitStatuses.Set(path, GitStatus{IsLoading: true})
+	for _, ti := range TreeItemsSessions(items) {
+		paths = append(paths, ti.Session.Path)
+		m.gitStatuses.Set(ti.Session.Path, GitStatus{IsLoading: true})
 	}
 
 	if len(paths) == 0 {

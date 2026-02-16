@@ -73,8 +73,7 @@ func (s treeSelection) restore(items []TreeItem) int {
 	// 4. Session by ID
 	if s.sessionID != "" {
 		for i, ti := range items {
-			if !ti.IsHeader && !ti.IsRecycledPlaceholder && !ti.IsWindowItem &&
-				ti.Session.ID == s.sessionID {
+			if ti.IsSession() && ti.Session.ID == s.sessionID {
 				return i
 			}
 		}
