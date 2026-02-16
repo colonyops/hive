@@ -630,10 +630,10 @@ Aim for:
 
 ```bash
 # All tests
-task test
+mise run test
 
-# Watch mode
-task test:watch
+# Watch specific tasks
+mise watch test
 
 # Specific package
 go test ./internal/tui/diff
@@ -642,7 +642,7 @@ go test ./internal/tui/diff
 go test ./internal/tui/diff -run TestDiffViewerScrollDown
 
 # With coverage
-task coverage
+mise run coverage
 
 # Update golden files
 go test ./... -update

@@ -1,6 +1,6 @@
 module github.com/colonyops/hive
 
-go 1.25
+go 1.26
 
 require (
 	charm.land/bubbles/v2 v2.0.0-rc.1.0.20260109112849-ae99f46cec66
