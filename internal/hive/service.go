@@ -160,20 +160,24 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	// Spawn terminal
-	spawnCommands := s.config.GetSpawnCommands(remote, opts.UseBatchSpawn)
+	owner, repoName := git.ExtractOwnerRepo(remote)
+	data := SpawnData{
+		Path:       sess.Path,
+		Name:       sess.Name,
+		Prompt:     opts.Prompt,
+		Slug:       sess.Slug,
+		ContextDir: s.config.RepoContextDir(owner, repoName),
+		Owner:      owner,
+		Repo:       repoName,
+	}
 
-	if len(spawnCommands) > 0 {
-		owner, repoName := git.ExtractOwnerRepo(remote)
-		data := SpawnData{
-			Path:       sess.Path,
-			Name:       sess.Name,
-			Prompt:     opts.Prompt,
-			Slug:       sess.Slug,
-			ContextDir: s.config.RepoContextDir(owner, repoName),
-			Owner:      owner,
-			Repo:       repoName,
+	strategy := s.config.ResolveSpawn(remote, opts.UseBatchSpawn)
+	if strategy.IsWindows() {
+		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, false); err != nil {
+			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
-		if err := s.spawner.Spawn(ctx, spawnCommands, data); err != nil {
+	} else if len(strategy.Commands) > 0 {
+		if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
 	}

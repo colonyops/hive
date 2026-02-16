@@ -22,6 +22,8 @@ const (
 	ActionTypeRecycle
 	ActionTypeDelete
 	ActionTypeShell
+	ActionTypeTmuxOpen
+	ActionTypeTmuxStart
 	ActionTypeFilterAll
 	ActionTypeFilterActive
 	ActionTypeFilterApproval
@@ -38,16 +40,18 @@ const (
 
 // Action represents a resolved keybinding action ready for execution.
 type Action struct {
-	Type        ActionType
-	Key         string
-	Help        string
-	Confirm     string // Non-empty if confirmation required
-	ShellCmd    string // For shell actions, the rendered command
-	SessionID   string
-	SessionPath string
-	Silent      bool  // Skip loading popup for fast commands
-	Exit        bool  // Exit hive after command completes
-	Err         error // Non-nil if action resolution failed (e.g., template error)
+	Type          ActionType
+	Key           string
+	Help          string
+	Confirm       string // Non-empty if confirmation required
+	ShellCmd      string // For shell actions, the rendered command
+	SessionID     string
+	SessionName   string // Session display name (for tmux actions)
+	SessionPath   string
+	SessionRemote string // Session remote URL (for tmux actions)
+	Silent        bool   // Skip loading popup for fast commands
+	Exit          bool   // Exit hive after command completes
+	Err           error  // Non-nil if action resolution failed (e.g., template error)
 }
 
 // NeedsConfirm returns true if the action requires user confirmation.
@@ -185,13 +189,15 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 
 	// Build action from command, with keybinding overrides
 	action := Action{
-		Key:         key,
-		Help:        kb.Help,
-		Confirm:     kb.Confirm,
-		SessionID:   sess.ID,
-		SessionPath: sess.Path,
-		Silent:      cmd.Silent,
-		Exit:        cmd.ShouldExit(),
+		Key:           key,
+		Help:          kb.Help,
+		Confirm:       kb.Confirm,
+		SessionID:     sess.ID,
+		SessionName:   sess.Name,
+		SessionPath:   sess.Path,
+		SessionRemote: sess.Remote,
+		Silent:        cmd.Silent,
+		Exit:          cmd.ShouldExit(),
 	}
 
 	// Use command values if keybinding doesn't override
@@ -241,6 +247,10 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			action.Type = ActionTypeNextActive
 		case config.ActionPrevActive:
 			action.Type = ActionTypePrevActive
+		case config.ActionTmuxOpen:
+			action.Type = ActionTypeTmuxOpen
+		case config.ActionTmuxStart:
+			action.Type = ActionTypeTmuxStart
 		}
 		return action, true
 	}
@@ -354,13 +364,15 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 // Supports both action-based commands (recycle, delete) and shell commands.
 func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
 	action := Action{
-		Key:         ":" + name,
-		Help:        cmd.Help,
-		Confirm:     cmd.Confirm,
-		SessionID:   sess.ID,
-		SessionPath: sess.Path,
-		Silent:      cmd.Silent,
-		Exit:        cmd.ShouldExit(),
+		Key:           ":" + name,
+		Help:          cmd.Help,
+		Confirm:       cmd.Confirm,
+		SessionID:     sess.ID,
+		SessionName:   sess.Name,
+		SessionPath:   sess.Path,
+		SessionRemote: sess.Remote,
+		Silent:        cmd.Silent,
+		Exit:          cmd.ShouldExit(),
 	}
 
 	// Handle built-in actions
@@ -397,6 +409,10 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 			action.Type = ActionTypeNextActive
 		case config.ActionPrevActive:
 			action.Type = ActionTypePrevActive
+		case config.ActionTmuxOpen:
+			action.Type = ActionTypeTmuxOpen
+		case config.ActionTmuxStart:
+			action.Type = ActionTypeTmuxStart
 		}
 		return action
 	}

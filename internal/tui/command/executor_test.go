@@ -294,7 +294,7 @@ func TestChannelWriter_Write(t *testing.T) {
 // Service tests
 
 func TestService_CreateExecutor(t *testing.T) {
-	svc := NewService(&mockDeleter{}, &mockRecycler{})
+	svc := NewService(&mockDeleter{}, &mockRecycler{}, nil, nil, nil)
 
 	tests := []struct {
 		name    string

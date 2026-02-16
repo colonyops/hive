@@ -1167,3 +1167,294 @@ func TestApplyDefaults_AgentsPreserved(t *testing.T) {
 	assert.Equal(t, "/opt/bin/aider", cfg.Agents.Profiles["aider"].Command)
 	assert.NotContains(t, cfg.Agents.Profiles, "claude")
 }
+
+func TestDefaultWindows(t *testing.T) {
+	windows := DefaultWindows()
+	require.Len(t, windows, 2)
+
+	assert.Equal(t, "{{ agentWindow }}", windows[0].Name)
+	assert.Contains(t, windows[0].Command, "agentCommand")
+	assert.True(t, windows[0].Focus)
+
+	assert.Equal(t, "shell", windows[1].Name)
+	assert.Empty(t, windows[1].Command)
+	assert.False(t, windows[1].Focus)
+}
+
+func TestResolveSpawn(t *testing.T) {
+	tests := []struct {
+		name         string
+		rules        []Rule
+		remote       string
+		batch        bool
+		wantWindows  bool
+		wantCommands []string
+	}{
+		{
+			name:        "no rules returns default windows",
+			rules:       nil,
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+		},
+		{
+			name: "windows-only rule",
+			rules: []Rule{
+				{
+					Pattern: "",
+					Windows: []WindowConfig{
+						{Name: "editor", Command: "vim", Focus: true},
+						{Name: "shell"},
+					},
+				},
+			},
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+		},
+		{
+			name: "spawn-only rule returns commands",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}},
+			},
+			remote:       "https://github.com/foo/bar",
+			wantWindows:  false,
+			wantCommands: []string{"echo spawn"},
+		},
+		{
+			name: "batch_spawn returns batch commands",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}, BatchSpawn: []string{"echo batch"}},
+			},
+			remote:       "https://github.com/foo/bar",
+			batch:        true,
+			wantWindows:  false,
+			wantCommands: []string{"echo batch"},
+		},
+		{
+			name: "batch with no batch_spawn falls to default windows",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}},
+			},
+			remote:      "https://github.com/foo/bar",
+			batch:       true,
+			wantWindows: true,
+		},
+		{
+			name: "windows override spawn in later rule",
+			rules: []Rule{
+				{Pattern: "", Spawn: []string{"echo spawn"}},
+				{Pattern: "github.com/foo/.*", Windows: []WindowConfig{{Name: "agent", Focus: true}}},
+			},
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+		},
+		{
+			name: "spawn overrides windows in later rule",
+			rules: []Rule{
+				{Pattern: "", Windows: []WindowConfig{{Name: "agent"}}},
+				{Pattern: "github.com/foo/.*", Spawn: []string{"echo override"}},
+			},
+			remote:       "https://github.com/foo/bar",
+			wantWindows:  false,
+			wantCommands: []string{"echo override"},
+		},
+		{
+			name: "non-matching rule ignored",
+			rules: []Rule{
+				{Pattern: "", Windows: []WindowConfig{{Name: "agent"}}},
+				{Pattern: "github.com/other/.*", Spawn: []string{"echo other"}},
+			},
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+		},
+		{
+			name: "last matching rule wins",
+			rules: []Rule{
+				{Pattern: "", Windows: []WindowConfig{{Name: "default"}}},
+				{Pattern: "github.com/.*", Windows: []WindowConfig{{Name: "github"}}},
+				{Pattern: "github.com/foo/.*", Windows: []WindowConfig{{Name: "foo"}}},
+			},
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+		},
+		{
+			name: "catch-all pattern matches all",
+			rules: []Rule{
+				{Pattern: "", Windows: []WindowConfig{{Name: "catch-all", Focus: true}, {Name: "shell"}}},
+			},
+			remote:      "https://gitlab.com/some/repo",
+			wantWindows: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Rules = tt.rules
+
+			strategy := cfg.ResolveSpawn(tt.remote, tt.batch)
+			assert.Equal(t, tt.wantWindows, strategy.IsWindows(), "IsWindows mismatch")
+
+			if tt.wantCommands != nil {
+				assert.Equal(t, tt.wantCommands, strategy.Commands)
+			}
+		})
+	}
+}
+
+func TestValidate_WindowsMutualExclusive(t *testing.T) {
+	tests := []struct {
+		name    string
+		rule    Rule
+		wantErr string
+	}{
+		{
+			name: "windows and spawn",
+			rule: Rule{
+				Pattern: "",
+				Windows: []WindowConfig{{Name: "agent"}},
+				Spawn:   []string{"echo spawn"},
+			},
+			wantErr: "cannot have both windows and spawn",
+		},
+		{
+			name: "windows and batch_spawn",
+			rule: Rule{
+				Pattern:    "",
+				Windows:    []WindowConfig{{Name: "agent"}},
+				BatchSpawn: []string{"echo batch"},
+			},
+			wantErr: "cannot have both windows and batch_spawn",
+		},
+		{
+			name: "windows only is valid",
+			rule: Rule{
+				Pattern: "",
+				Windows: []WindowConfig{{Name: "agent"}},
+			},
+		},
+		{
+			name: "spawn only is valid",
+			rule: Rule{
+				Pattern: "",
+				Spawn:   []string{"echo spawn"},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Rules = []Rule{tt.rule}
+
+			err := cfg.Validate()
+			if tt.wantErr != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErr)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidate_WindowsNameRequired(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Rules = []Rule{
+		{
+			Pattern: "",
+			Windows: []WindowConfig{
+				{Name: "agent", Focus: true},
+				{Name: ""},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "windows[1].name")
+	assert.Contains(t, err.Error(), "is required")
+}
+
+func TestValidateDeep_WindowTemplates(t *testing.T) {
+	t.Run("valid templates", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Pattern: "",
+				Windows: []WindowConfig{
+					{Name: "claude", Command: "claude {{ .Name }}", Focus: true},
+					{Name: "shell", Dir: "{{ .Path }}"},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid name template", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Pattern: "",
+				Windows: []WindowConfig{
+					{Name: "{{ .Invalid }}", Focus: true},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "windows[0].name")
+	})
+
+	t.Run("invalid command template", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Pattern: "",
+				Windows: []WindowConfig{
+					{Name: "agent", Command: "{{ .Missing }}", Focus: true},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "windows[0].command")
+	})
+
+	t.Run("invalid dir template", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Pattern: "",
+				Windows: []WindowConfig{
+					{Name: "agent", Dir: "{{ .NoSuch }}", Focus: true},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "windows[0].dir")
+	})
+
+	t.Run("Prompt template valid in windows", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Pattern: "",
+				Windows: []WindowConfig{
+					{Name: "agent", Command: "claude {{ .Prompt }}", Focus: true},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		assert.NoError(t, err)
+	})
+}

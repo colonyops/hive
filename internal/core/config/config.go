@@ -47,6 +47,8 @@ const (
 	ActionRenameSession  = "rename-session" // Rename the selected session
 	ActionNextActive     = "next-active"    // Navigate to next active session
 	ActionPrevActive     = "prev-active"    // Navigate to previous active session
+	ActionTmuxOpen       = "tmux-open"      // Open/attach tmux session using window config
+	ActionTmuxStart      = "tmux-start"     // Start tmux session in background using window config
 )
 
 // Form field type constants.
@@ -418,6 +420,14 @@ type GitConfig struct {
 	StatusWorkers int `yaml:"status_workers"`
 }
 
+// WindowConfig defines a tmux window to create when spawning a session.
+type WindowConfig struct {
+	Name    string `yaml:"name"`              // Window name (template string, required)
+	Command string `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
+	Dir     string `yaml:"dir,omitempty"`     // Working directory override (template string)
+	Focus   bool   `yaml:"focus,omitempty"`   // Select this window after creation
+}
+
 // Rule defines actions to take for matching repositories.
 type Rule struct {
 	// Pattern matches against remote URL (regex). Empty = matches all.
@@ -429,6 +439,9 @@ type Rule struct {
 	// MaxRecycled sets the max recycled sessions for matching repos.
 	// nil = inherit from previous rule or default (5), 0 = unlimited, >0 = limit
 	MaxRecycled *int `yaml:"max_recycled,omitempty"`
+	// Windows defines tmux windows to create when spawning a session.
+	// Mutually exclusive with Spawn/BatchSpawn.
+	Windows []WindowConfig `yaml:"windows,omitempty"`
 	// Spawn commands to run when creating a new session (hive new).
 	Spawn []string `yaml:"spawn,omitempty"`
 	// BatchSpawn commands to run when creating a batch session (hive batch).
@@ -481,6 +494,19 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 	}
 	*u = UserCommand(alias)
 	return nil
+}
+
+// DefaultWindows returns the default window layout for new sessions.
+// Uses template strings rendered at spawn time from the active agent profile.
+func DefaultWindows() []WindowConfig {
+	return []WindowConfig{
+		{
+			Name:    "{{ agentWindow }}",
+			Command: `{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt }}{{ end }}`,
+			Focus:   true,
+		},
+		{Name: "shell"},
+	}
 }
 
 // DefaultSpawnCommands are the default commands run when spawning a new session.
@@ -683,6 +709,7 @@ func (c *Config) Validate() error {
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
 		c.validateAgents(),
+		c.validateWindowsBasic(),
 	)
 }
 
@@ -798,6 +825,32 @@ var isValidIdentifier criterio.Validator[string] = func(s string) error {
 		}
 	}
 	return nil
+}
+
+// validateWindowsBasic checks windows config for structural validity.
+func (c *Config) validateWindowsBasic() error {
+	var errs criterio.FieldErrorsBuilder
+	for i, rule := range c.Rules {
+		if len(rule.Windows) == 0 {
+			continue
+		}
+
+		// Windows and spawn/batch_spawn are mutually exclusive
+		if len(rule.Spawn) > 0 {
+			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and spawn"))
+		}
+		if len(rule.BatchSpawn) > 0 {
+			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and batch_spawn"))
+		}
+
+		// Each window must have a name
+		for j, w := range rule.Windows {
+			if w.Name == "" {
+				errs = errs.Append(fmt.Sprintf("rules[%d].windows[%d].name", i, j), fmt.Errorf("is required"))
+			}
+		}
+	}
+	return errs.ToError()
 }
 
 // validateMaxRecycled checks that max_recycled values are non-negative.
@@ -924,7 +977,7 @@ func (c *Config) BinDir() string {
 
 func isValidAction(action string) bool {
 	switch action {
-	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages, ActionRenameSession, ActionNextActive, ActionPrevActive:
+	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages, ActionRenameSession, ActionNextActive, ActionPrevActive, ActionTmuxOpen, ActionTmuxStart:
 		return true
 	default:
 		return false
@@ -977,6 +1030,41 @@ func (c *Config) GetMaxRecycled(remote string) int {
 	}
 
 	return DefaultMaxRecycled
+}
+
+// SpawnStrategy holds the resolved spawn method for a session.
+// Exactly one of Windows or Commands is populated.
+type SpawnStrategy struct {
+	Windows  []WindowConfig
+	Commands []string
+}
+
+// IsWindows returns true if the strategy uses declarative window config.
+func (s SpawnStrategy) IsWindows() bool { return len(s.Windows) > 0 }
+
+// ResolveSpawn determines the spawn strategy for the given remote URL.
+// Rules are evaluated in order (last-match-wins). If the last matching rule
+// has windows, those are used. If it has spawn/batch_spawn commands, those are used.
+// If nothing matches, DefaultWindows() is returned.
+func (c *Config) ResolveSpawn(remote string, batch bool) SpawnStrategy {
+	var strategy SpawnStrategy
+	for _, rule := range c.Rules {
+		if rule.Pattern != "" && !matchesPattern(rule.Pattern, remote) {
+			continue
+		}
+		switch {
+		case len(rule.Windows) > 0:
+			strategy = SpawnStrategy{Windows: rule.Windows}
+		case batch && len(rule.BatchSpawn) > 0:
+			strategy = SpawnStrategy{Commands: rule.BatchSpawn}
+		case !batch && len(rule.Spawn) > 0:
+			strategy = SpawnStrategy{Commands: rule.Spawn}
+		}
+	}
+	if !strategy.IsWindows() && len(strategy.Commands) == 0 {
+		return SpawnStrategy{Windows: DefaultWindows()}
+	}
+	return strategy
 }
 
 // GetSpawnCommands returns the spawn commands for the given remote URL.

@@ -26,6 +26,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	coretmux "github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
@@ -35,6 +36,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/colonyops/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/kv"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -345,7 +347,8 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		}
 		return ""
 	})
-	cmdService := command.NewService(service, service)
+	tmuxBuilder := coretmux.NewBuilder(&executil.RealExecutor{})
+	cmdService := command.NewService(service, service, cfg, opts.Renderer, tmuxBuilder)
 
 	// Add minimal keybindings to list help - just navigation and help trigger
 	l.AdditionalShortHelpKeys = func() []key.Binding {
@@ -600,9 +603,12 @@ func (m Model) loadSessions() tea.Cmd {
 func (m Model) executeAction(action Action) tea.Cmd {
 	return func() tea.Msg {
 		cmdAction := command.Action{
-			Type:      command.ActionType(action.Type),
-			SessionID: action.SessionID,
-			ShellCmd:  action.ShellCmd,
+			Type:          command.ActionType(action.Type),
+			SessionID:     action.SessionID,
+			SessionName:   action.SessionName,
+			SessionPath:   action.SessionPath,
+			SessionRemote: action.SessionRemote,
+			ShellCmd:      action.ShellCmd,
 		}
 
 		exec, err := m.cmdService.CreateExecutor(cmdAction)
@@ -1147,9 +1153,12 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 
 	if action.Exit {
 		cmdAction := command.Action{
-			Type:      command.ActionType(action.Type),
-			SessionID: action.SessionID,
-			ShellCmd:  action.ShellCmd,
+			Type:          command.ActionType(action.Type),
+			SessionID:     action.SessionID,
+			SessionName:   action.SessionName,
+			SessionPath:   action.SessionPath,
+			SessionRemote: action.SessionRemote,
+			ShellCmd:      action.ShellCmd,
 		}
 		exec, err := m.cmdService.CreateExecutor(cmdAction)
 		if err != nil {
@@ -1504,9 +1513,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Execute immediately if exit requested (synchronous to avoid race conditions)
 		if action.Exit {
 			cmdAction := command.Action{
-				Type:      command.ActionType(action.Type),
-				SessionID: action.SessionID,
-				ShellCmd:  action.ShellCmd,
+				Type:          command.ActionType(action.Type),
+				SessionID:     action.SessionID,
+				SessionName:   action.SessionName,
+				SessionPath:   action.SessionPath,
+				SessionRemote: action.SessionRemote,
+				ShellCmd:      action.ShellCmd,
 			}
 			exec, err := m.cmdService.CreateExecutor(cmdAction)
 			if err != nil {
@@ -2016,9 +2028,12 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
 		if action.Exit {
 			cmdAction := command.Action{
-				Type:      command.ActionType(action.Type),
-				SessionID: action.SessionID,
-				ShellCmd:  action.ShellCmd,
+				Type:          command.ActionType(action.Type),
+				SessionID:     action.SessionID,
+				SessionName:   action.SessionName,
+				SessionPath:   action.SessionPath,
+				SessionRemote: action.SessionRemote,
+				ShellCmd:      action.ShellCmd,
 			}
 			exec, err := m.cmdService.CreateExecutor(cmdAction)
 			if err != nil {
@@ -2076,8 +2091,11 @@ func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
 
 	if action.Exit {
 		cmdAction := command.Action{
-			Type:     command.ActionType(action.Type),
-			ShellCmd: action.ShellCmd,
+			Type:          command.ActionType(action.Type),
+			SessionName:   action.SessionName,
+			SessionPath:   action.SessionPath,
+			SessionRemote: action.SessionRemote,
+			ShellCmd:      action.ShellCmd,
 		}
 		exec, err := m.cmdService.CreateExecutor(cmdAction)
 		if err != nil {
@@ -2420,7 +2438,7 @@ func (m *Model) handleFilterAction(actionType ActionType) bool {
 	case ActionTypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme, ActionTypeMessages, ActionTypeRenameSession, ActionTypeNextActive, ActionTypePrevActive:
+	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeTmuxOpen, ActionTypeTmuxStart, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme, ActionTypeMessages, ActionTypeRenameSession, ActionTypeNextActive, ActionTypePrevActive:
 		return false
 	}
 	return false
