@@ -77,9 +77,13 @@ func TestDeleteExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 
-			require.Len(t, mock.deleted, 1, "Expected delete called with %q, got %v", tt.sessionID, mock.deleted)
+			require.Len(t, mock.deleted, 1)
 			assert.Equal(t, tt.sessionID, mock.deleted[0])
 		})
 	}
@@ -134,9 +138,13 @@ func TestRecycleExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 
-			require.Len(t, mock.recycled, 1, "Expected recycle called with %q, got %v", tt.sessionID, mock.recycled)
+			require.Len(t, mock.recycled, 1)
 			assert.Equal(t, tt.sessionID, mock.recycled[0])
 
 			// Check output was received
@@ -199,7 +207,11 @@ func TestShellExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
@@ -335,6 +347,16 @@ func TestService_CreateExecutor(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "tmux open action",
+			action:  Action{Type: action.TypeTmuxOpen, SessionName: "sess", SessionPath: "/work"},
+			wantErr: false,
+		},
+		{
+			name:    "tmux start action",
+			action:  Action{Type: action.TypeTmuxStart, SessionName: "sess", SessionPath: "/work"},
+			wantErr: false,
+		},
+		{
 			name:    "unsupported action",
 			action:  Action{Type: action.TypeNone},
 			wantErr: true,
@@ -345,9 +367,11 @@ func TestService_CreateExecutor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			exec, err := svc.CreateExecutor(tt.action)
 
-			assert.Equal(t, tt.wantErr, err != nil, "CreateExecutor() error = %v, wantErr %v", err, tt.wantErr)
-			if !tt.wantErr {
-				assert.NotNil(t, exec, "Expected executor but got nil")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, exec)
 			}
 		})
 	}
