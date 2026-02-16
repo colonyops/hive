@@ -506,6 +506,11 @@ func (m Model) Init() tea.Cmd {
 	// Scan for repositories if configured
 	if len(m.repoDirs) > 0 {
 		cmds = append(cmds, m.scanRepoDirs())
+	} else {
+		m.toastController.Push(notify.Notification{
+			Level:   notify.LevelInfo,
+			Message: "No directories have been added for project start",
+		})
 	}
 	// Start terminal status polling and animation if integration is enabled
 	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
@@ -844,6 +849,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case reposDiscoveredMsg:
 		m.discoveredRepos = msg.repos
+		if len(m.discoveredRepos) == 0 {
+			m.toastController.Push(notify.Notification{
+				Level:   notify.LevelError,
+				Message: fmt.Sprintf("No repositories found in directories: %v", m.repoDirs),
+			})
+		}
 		// Help keybindings remain minimal - full list shown via ? dialog
 		return m, nil
 
