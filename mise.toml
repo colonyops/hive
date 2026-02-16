@@ -1,2 +1,74 @@
 [tools]
 "github:hay-kot/gobusgen" = "v0.3.0"
+
+[env]
+HIVE_LOG_LEVEL = "debug"
+HIVE_LOG_FILE = "./dev.log"
+HIVE_CONFIG = "./config.dev.yaml"
+HIVE_DATA_DIR = "./.data"
+
+[tasks.run]
+description = "Run with dev config (supports CLI args)"
+run = "go run *.go"
+
+[tasks.build]
+description = "Build with goreleaser"
+run = "goreleaser build --snapshot --clean"
+
+[tasks.generate]
+description = "Run all code generators"
+run = "go generate ./..."
+
+[tasks.test]
+description = "Run all go tests"
+run = "go test ./..."
+
+[tasks.coverage]
+description = "Run tests with race detection and coverage"
+quiet = true
+run = "go test -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
+
+[tasks.tidy]
+description = "Run go mod tidy"
+run = "go mod tidy"
+
+[tasks.lint]
+description = "Run golangci-lint"
+run = "golangci-lint run ./..."
+
+[tasks.fmt]
+description = "Run golangci-lint fmt"
+run = "golangci-lint fmt ./..."
+
+[tasks.check]
+description = "Run tidy, lint, and test"
+run = [
+  { task = "tidy" },
+  { tasks = ["lint", "test"] },
+]
+
+[tasks.validate]
+description = "Run config validate command"
+run = "go run *.go config validate"
+
+[tasks."validate:invalid"]
+description = "Run config validate with intentionally invalid config"
+env = { HIVE_CONFIG = "./config.invalid.yaml" }
+run = "go run *.go config validate || true"
+
+[tasks."sqlc:generate"]
+description = "Generate Go code from SQL queries using sqlc"
+dir = "internal/store/sqlite"
+run = "sqlc generate"
+
+[tasks."docs:serve"]
+description = "Serve documentation site locally"
+run = "zensical serve"
+
+[tasks."docs:llms"]
+description = "Generate llms.txt and llms-full.txt"
+run = "./scripts/generate-llmstxt.sh"
+
+[tasks."docs:build"]
+description = "Build documentation site with llms.txt"
+run = ["zensical build", "./scripts/generate-llmstxt.sh"]
