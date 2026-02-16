@@ -7,6 +7,8 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -77,6 +79,11 @@ func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { ret
 
 func newTestService(t *testing.T, store session.Store, cfg *config.Config) *SessionService {
 	t.Helper()
+	return newTestServiceWithBus(t, store, cfg, testbus.New(t).EventBus)
+}
+
+func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config, bus *eventbus.EventBus) *SessionService {
+	t.Helper()
 	if cfg == nil {
 		cfg = &config.Config{
 			DataDir: t.TempDir(),
@@ -85,7 +92,7 @@ func newTestService(t *testing.T, store session.Store, cfg *config.Config) *Sess
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	return NewSessionService(store, &mockGit{}, cfg, nil, renderer, log, io.Discard, io.Discard)
+	return NewSessionService(store, &mockGit{}, cfg, bus, nil, renderer, log, io.Discard, io.Discard)
 }
 
 func TestRenameSession(t *testing.T) {
@@ -442,6 +449,69 @@ func TestPrune(t *testing.T) {
 		}
 		assert.Equal(t, 1, strictCount, "strict repo should have 1 session")
 		assert.Equal(t, 3, normalCount, "normal repo should have 3 sessions")
+	})
+}
+
+func TestSessionService_Events(t *testing.T) {
+	t.Run("rename emits session.renamed", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		svc := newTestServiceWithBus(t, store, nil, tb.EventBus)
+
+		sess := session.Session{
+			ID:    "test1",
+			Name:  "old-name",
+			Slug:  "old-name",
+			State: session.StateActive,
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.RenameSession(context.Background(), "test1", "new-name")
+		require.NoError(t, err)
+
+		tb.AssertPublished(t, eventbus.EventSessionRenamed)
+
+		events := tb.Events()
+		var found bool
+		for _, e := range events {
+			if e.Event == eventbus.EventSessionRenamed {
+				p := e.Payload.(eventbus.SessionRenamedPayload)
+				assert.Equal(t, "old-name", p.OldName)
+				assert.Equal(t, "new-name", p.Session.Name)
+				found = true
+			}
+		}
+		assert.True(t, found, "session.renamed event should have correct payload")
+	})
+
+	t.Run("delete emits session.deleted", func(t *testing.T) {
+		store := newMockStore()
+		tb := testbus.New(t)
+		svc := newTestServiceWithBus(t, store, nil, tb.EventBus)
+
+		sess := session.Session{
+			ID:    "del1",
+			Name:  "to-delete",
+			State: session.StateRecycled,
+			Path:  t.TempDir(),
+		}
+		require.NoError(t, store.Save(context.Background(), sess))
+
+		err := svc.DeleteSession(context.Background(), "del1")
+		require.NoError(t, err)
+
+		tb.AssertPublished(t, eventbus.EventSessionDeleted)
+
+		events := tb.Events()
+		var found bool
+		for _, e := range events {
+			if e.Event == eventbus.EventSessionDeleted {
+				p := e.Payload.(eventbus.SessionDeletedPayload)
+				assert.Equal(t, "del1", p.SessionID)
+				found = true
+			}
+		}
+		assert.True(t, found, "session.deleted event should have correct payload")
 	})
 }
 

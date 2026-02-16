@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/commands"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/data/db"
@@ -82,6 +83,7 @@ func main() {
 		database    *db.DB
 		pluginMgr   *plugins.Manager
 		sweepCancel context.CancelFunc
+		busCancel   context.CancelFunc
 	)
 
 	flags := &commands.Flags{}
@@ -191,6 +193,14 @@ Run 'hive new' to create a new session from the current repository.`,
 			sweepCancel = cancel
 			go sweep.Start(sweepCtx, kvStore, 5*time.Minute)
 
+			// Create event bus
+			bus := eventbus.New(64)
+			busCtx, cancel := context.WithCancel(context.Background())
+			busCancel = cancel
+			go bus.Start(busCtx)
+
+			eventbus.RegisterDebugLogger(bus, log.Logger)
+
 			// Create service
 			var (
 				exec      = &executil.RealExecutor{}
@@ -198,7 +208,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				svcLogger = log.With().Str("component", "hive").Logger()
 			)
 
-			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, exec, renderer, svcLogger, os.Stdout, os.Stderr)
+			sessionSvc := hive.NewSessionService(sessionStore, gitExec, cfg, bus, exec, renderer, svcLogger, os.Stdout, os.Stderr)
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
@@ -249,6 +259,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				sessionSvc,
 				msgStore,
 				cfg,
+				bus,
 				nil, // terminal manager created in TUI command
 				pluginMgr,
 				database,
@@ -260,6 +271,11 @@ Run 'hive new' to create a new session from the current repository.`,
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
+			// Stop event bus
+			if busCancel != nil {
+				busCancel()
+			}
+
 			// Stop background sweep
 			if sweepCancel != nil {
 				sweepCancel()

@@ -18,6 +18,11 @@ tasks:
     cmds:
       - goreleaser build --snapshot --clean
 
+  generate:
+    desc: Runs all code generators
+    cmds:
+      - go generate ./...
+
   sqlc:generate:
     desc: Generates Go code from SQL queries using sqlc
     dir: internal/store/sqlite

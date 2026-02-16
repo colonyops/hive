@@ -18,6 +18,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/messaging"
@@ -72,6 +73,7 @@ const (
 type Options struct {
 	LocalRemote     string               // Remote URL of current directory (empty if not in git repo)
 	MsgStore        *hive.MessageService // Message service for pub/sub events (optional)
+	Bus             *eventbus.EventBus   // Event bus for cross-component communication
 	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
 	PluginManager   *plugins.Manager     // Plugin manager (optional)
 	DB              *db.DB               // Database connection for stores
@@ -192,6 +194,9 @@ type Model struct {
 	toastController   *ToastController
 	toastView         *ToastView
 	notificationModal *NotificationModal
+
+	// Event bus
+	bus *eventbus.EventBus
 
 	// Form dialog (for user command forms)
 	formDialog      *form.Dialog
@@ -443,6 +448,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		notifyBus:          notifyBus,
 		toastController:    toastCtrl,
 		toastView:          toastView,
+		bus:                opts.Bus,
 		focusFilterInput:   focusInput,
 		renderer:           opts.Renderer,
 		startupWarnings:    opts.Warnings,
@@ -487,9 +493,32 @@ func (m Model) isCurrentTmuxSession(sess *session.Session) bool {
 	return false
 }
 
+// quit sets the quitting flag and emits tui.stopped.
+func (m Model) quit() (Model, tea.Cmd) {
+	m.quitting = true
+	if m.bus != nil {
+		m.bus.PublishTuiStopped(eventbus.TUIStoppedPayload{})
+	}
+	return m, tea.Quit
+}
+
+// findSessionByID returns a pointer to the session with the given ID, or nil if not found.
+func (m Model) findSessionByID(id string) *session.Session {
+	for i := range m.allSessions {
+		if m.allSessions[i].ID == id {
+			return &m.allSessions[i]
+		}
+	}
+	return nil
+}
+
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSessions(), m.spinner.Tick}
+	// Emit TUI started event
+	if m.bus != nil {
+		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
+	}
 	// Start message polling if we have a store
 	if m.msgStore != nil {
 		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
@@ -758,6 +787,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case terminalStatusBatchCompleteMsg:
 		if m.terminalStatuses != nil {
+			// Emit agent status change events for transitions
+			if m.bus != nil {
+				for sessionID, newStatus := range msg.Results {
+					oldStatus, exists := m.terminalStatuses.Get(sessionID)
+					if !exists || oldStatus.Status != newStatus.Status {
+						sess := m.findSessionByID(sessionID)
+						m.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
+							Session:   sess,
+							OldStatus: oldStatus.Status,
+							NewStatus: newStatus.Status,
+						})
+					}
+				}
+			}
+
 			m.terminalStatuses.SetBatch(msg.Results)
 			// Re-expand window items if multi-window sessions appeared or changed
 			m.rebuildWindowItems()
@@ -982,8 +1026,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 // handleNewSessionFormKey handles keys when new session form is shown.
 func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	// Pass all keys to the form (it handles esc internally)
@@ -1040,8 +1083,7 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 // handleFormDialogKey handles keys when the form dialog is shown.
 func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	var cmd tea.Cmd
@@ -1109,8 +1151,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
 			log.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
 		}
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	m.state = stateNormal
@@ -1129,8 +1170,7 @@ func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		if m.recycleCancel != nil {
 			m.recycleCancel()
 		}
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	case "esc":
 		if m.outputModal.IsRunning() && m.recycleCancel != nil {
 			m.recycleCancel()
@@ -1215,8 +1255,7 @@ func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (
 func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	case "esc", "?", "q":
 		m.state = stateNormal
 		m.helpDialog = nil
@@ -1228,8 +1267,7 @@ func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	case "esc", "q":
 		m.state = stateNormal
 		m.notificationModal = nil
@@ -1314,8 +1352,7 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 
 	switch keyStr {
 	case keyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	case "esc", keyEnter, "q":
 		m.state = stateNormal
 		return m, nil
@@ -1343,8 +1380,7 @@ func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, 
 // handleCommandPaletteKey handles keys when command palette is shown.
 func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	// Update the palette
@@ -1472,8 +1508,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
 				log.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
 			}
-			m.quitting = true
-			return m, tea.Quit
+			return m.quit()
 		}
 
 		// Store pending action for exit check after completion
@@ -1514,8 +1549,7 @@ func (m Model) copyToClipboard(text string) error {
 // handleFilteringKey handles keys when filter input is active.
 func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	// Handle focus mode filtering (sessions view)
@@ -1594,8 +1628,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		switch keyStr {
 		case keyCtrlC:
 			// Allow quitting even when typing
-			m.quitting = true
-			return m, tea.Quit
+			return m.quit()
 		case "esc":
 			// Allow canceling input - delegate to component
 			return m.delegateToComponent(msg)
@@ -1612,8 +1645,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 	// Global keys that work regardless of focus
 	switch keyStr {
 	case "q", keyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	case "esc":
 		if m.toastController.HasToasts() {
 			m.toastController.Dismiss()
@@ -1764,8 +1796,7 @@ func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
 func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyCtrlC:
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	case "esc":
 		m.state = stateNormal
 		m.renameSessionID = ""
@@ -1980,8 +2011,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
 				log.Error().Str("key", keyStr).Err(err).Msg("command failed before exit")
 			}
-			m.quitting = true
-			return m, tea.Quit
+			return m.quit()
 		}
 		// Store pending action for exit check after completion
 		m.pending = action
@@ -2040,8 +2070,7 @@ func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
 		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
 			log.Error().Err(err).Msg("repo open command failed")
 		}
-		m.quitting = true
-		return m, tea.Quit
+		return m.quit()
 	}
 
 	return m, m.executeAction(action)
