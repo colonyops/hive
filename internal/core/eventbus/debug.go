@@ -3,7 +3,8 @@ package eventbus
 import "github.com/rs/zerolog"
 
 // RegisterDebugLogger subscribes to all event types and logs them at debug level.
-// Zero-cost when zerolog level is above debug (short-circuits disabled levels).
+// Subscriber callbacks are always invoked; zerolog short-circuits disabled levels
+// before formatting fields, so the formatting overhead is minimal above debug.
 func RegisterDebugLogger(bus *EventBus, logger zerolog.Logger) {
 	bus.SubscribeSessionCreated(func(p SessionCreatedPayload) {
 		logger.Debug().
@@ -44,14 +45,12 @@ func RegisterDebugLogger(bus *EventBus, logger zerolog.Logger) {
 	})
 
 	bus.SubscribeAgentStatusChanged(func(p AgentStatusChangedPayload) {
-		evt := logger.Debug().
+		logger.Debug().
 			Str("event", string(EventAgentStatusChanged)).
+			Str("session_id", p.Session.ID).
 			Str("old_status", string(p.OldStatus)).
-			Str("new_status", string(p.NewStatus))
-		if p.Session != nil {
-			evt = evt.Str("session_id", p.Session.ID)
-		}
-		evt.Msg("event fired")
+			Str("new_status", string(p.NewStatus)).
+			Msg("event fired")
 	})
 
 	bus.SubscribeMessageReceived(func(p MessageReceivedPayload) {

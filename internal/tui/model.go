@@ -797,6 +797,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					}
 					if prevStatus != newStatus.Status {
 						sess := m.findSessionByID(sessionID)
+						if sess == nil {
+							continue
+						}
 						m.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
 							Session:   sess,
 							OldStatus: prevStatus,

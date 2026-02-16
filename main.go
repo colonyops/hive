@@ -197,7 +197,10 @@ Run 'hive new' to create a new session from the current repository.`,
 			bus := eventbus.New(64)
 			busCtx, cancel := context.WithCancel(context.Background())
 			busCancel = cancel
-			go bus.Start(busCtx)
+			go func() {
+				bus.Start(busCtx)
+				log.Debug().Msg("event bus stopped")
+			}()
 
 			eventbus.RegisterDebugLogger(bus, log.Logger)
 
