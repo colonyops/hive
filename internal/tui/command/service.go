@@ -4,7 +4,12 @@ import (
 	"context"
 	"fmt"
 	"io"
+
+	"github.com/colonyops/hive/internal/core/action"
 )
+
+// Action is an alias for the unified action type.
+type Action = action.Action
 
 // SessionDeleter is the interface for deleting sessions.
 type SessionDeleter interface {
@@ -16,68 +21,64 @@ type SessionRecycler interface {
 	RecycleSession(ctx context.Context, id string, w io.Writer) error
 }
 
+// TmuxOpener opens or creates tmux sessions for hive sessions.
+type TmuxOpener interface {
+	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error
+}
+
 // Service creates command executors based on action type.
 type Service struct {
-	deleter  SessionDeleter
-	recycler SessionRecycler
+	deleter    SessionDeleter
+	recycler   SessionRecycler
+	tmuxOpener TmuxOpener
 }
 
 // NewService creates a new command service with the given dependencies.
-func NewService(deleter SessionDeleter, recycler SessionRecycler) *Service {
+func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener) *Service {
 	return &Service{
-		deleter:  deleter,
-		recycler: recycler,
+		deleter:    deleter,
+		recycler:   recycler,
+		tmuxOpener: tmuxOpener,
 	}
-}
-
-// ActionType identifies the kind of action.
-type ActionType int
-
-const (
-	ActionTypeNone ActionType = iota
-	ActionTypeRecycle
-	ActionTypeDelete
-	ActionTypeShell
-)
-
-// Action represents a resolved command action ready for execution.
-type Action struct {
-	Type        ActionType
-	Key         string
-	Help        string
-	Confirm     string // Non-empty if confirmation required
-	ShellCmd    string // For shell actions, the rendered command
-	SessionID   string
-	SessionPath string
-	Silent      bool  // Skip loading popup for fast commands
-	Exit        bool  // Exit hive after command completes
-	Err         error // Non-nil if action resolution failed (e.g., template error)
-}
-
-// NeedsConfirm returns true if the action requires user confirmation.
-func (a Action) NeedsConfirm() bool {
-	return a.Confirm != ""
 }
 
 // CreateExecutor creates an executor for the given action.
 // Returns error if the action type is not supported.
-func (s *Service) CreateExecutor(action Action) (Executor, error) {
-	switch action.Type {
-	case ActionTypeDelete:
+func (s *Service) CreateExecutor(a Action) (Executor, error) {
+	switch a.Type {
+	case action.TypeDelete:
 		return &DeleteExecutor{
 			deleter:   s.deleter,
-			sessionID: action.SessionID,
+			sessionID: a.SessionID,
 		}, nil
-	case ActionTypeRecycle:
+	case action.TypeRecycle:
 		return &RecycleExecutor{
 			recycler:  s.recycler,
-			sessionID: action.SessionID,
+			sessionID: a.SessionID,
 		}, nil
-	case ActionTypeShell:
+	case action.TypeShell:
 		return &ShellExecutor{
-			cmd: action.ShellCmd,
+			cmd: a.ShellCmd,
+		}, nil
+	case action.TypeTmuxOpen:
+		return &TmuxExecutor{
+			opener:       s.tmuxOpener,
+			name:         a.SessionName,
+			path:         a.SessionPath,
+			remote:       a.SessionRemote,
+			targetWindow: a.TmuxWindow,
+			background:   false,
+		}, nil
+	case action.TypeTmuxStart:
+		return &TmuxExecutor{
+			opener:       s.tmuxOpener,
+			name:         a.SessionName,
+			path:         a.SessionPath,
+			remote:       a.SessionRemote,
+			targetWindow: a.TmuxWindow,
+			background:   true,
 		}, nil
 	default:
-		return nil, fmt.Errorf("unsupported action type: %d", action.Type)
+		return nil, fmt.Errorf("unsupported action type: %s", a.Type)
 	}
 }

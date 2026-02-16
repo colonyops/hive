@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -14,8 +15,8 @@ var testRenderer = tmpl.New(tmpl.Config{})
 
 func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 	commands := map[string]config.UserCommand{
-		"Delete":  {Action: config.ActionDelete, Help: "delete"},
-		"Recycle": {Action: config.ActionRecycle, Help: "recycle"},
+		"Delete":  {Action: act.TypeDelete, Help: "delete"},
+		"Recycle": {Action: act.TypeRecycle, Help: "recycle"},
 		"open":    {Sh: "code {{ .Path }}", Help: "open in vscode"},
 	}
 	keybindings := map[string]config.Keybinding{
@@ -43,35 +44,35 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 		key     string
 		sess    session.Session
 		wantOK  bool
-		wantTyp ActionType
+		wantTyp act.Type
 	}{
 		{
 			name:    "active session allows delete",
 			key:     "d",
 			sess:    activeSession,
 			wantOK:  true,
-			wantTyp: ActionTypeDelete,
+			wantTyp: act.TypeDelete,
 		},
 		{
 			name:    "active session allows recycle",
 			key:     "r",
 			sess:    activeSession,
 			wantOK:  true,
-			wantTyp: ActionTypeRecycle,
+			wantTyp: act.TypeRecycle,
 		},
 		{
 			name:    "active session allows shell command",
 			key:     "o",
 			sess:    activeSession,
 			wantOK:  true,
-			wantTyp: ActionTypeShell,
+			wantTyp: act.TypeShell,
 		},
 		{
 			name:    "recycled session allows delete",
 			key:     "d",
 			sess:    recycledSession,
 			wantOK:  true,
-			wantTyp: ActionTypeDelete,
+			wantTyp: act.TypeDelete,
 		},
 		{
 			name:   "recycled session blocks recycle",
@@ -122,7 +123,7 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 		wantKey     string
 		wantHelp    string
 		wantExit    bool
-		wantType    ActionType
+		wantType    act.Type
 		wantCmdPart string
 	}{
 		{
@@ -135,7 +136,7 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 			wantKey:  ":review",
 			wantHelp: "Send to Claude for review",
 			wantExit: false,
-			wantType: ActionTypeShell,
+			wantType: act.TypeShell,
 		},
 		{
 			name:    "shell command with exit",
@@ -146,7 +147,7 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 			},
 			wantKey:  ":open",
 			wantExit: true,
-			wantType: ActionTypeShell,
+			wantType: act.TypeShell,
 		},
 		{
 			name:    "shell command with args",
@@ -159,29 +160,29 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 			wantKey:     ":deploy",
 			wantHelp:    "Deploy to environment",
 			wantExit:    false,
-			wantType:    ActionTypeShell,
+			wantType:    act.TypeShell,
 			wantCmdPart: "deploy staging --force",
 		},
 		{
 			name:    "action-based recycle command",
 			cmdName: "Recycle",
 			cmd: config.UserCommand{
-				Action: config.ActionRecycle,
+				Action: act.TypeRecycle,
 				Help:   "custom recycle help",
 			},
 			wantKey:  ":Recycle",
 			wantHelp: "custom recycle help",
-			wantType: ActionTypeRecycle,
+			wantType: act.TypeRecycle,
 		},
 		{
 			name:    "action-based delete command",
 			cmdName: "Delete",
 			cmd: config.UserCommand{
-				Action: config.ActionDelete,
+				Action: act.TypeDelete,
 			},
 			wantKey:  ":Delete",
 			wantHelp: "delete", // default help for delete action
-			wantType: ActionTypeDelete,
+			wantType: act.TypeDelete,
 		},
 	}
 
@@ -203,7 +204,7 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Recycle": {
-			Action:  config.ActionRecycle,
+			Action:  act.TypeRecycle,
 			Help:    "command help",
 			Confirm: "command confirm",
 		},
@@ -298,8 +299,8 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 
 func TestKeybindingHandler_HelpEntries(t *testing.T) {
 	commands := map[string]config.UserCommand{
-		"Recycle": {Action: config.ActionRecycle, Help: "recycle session"},
-		"Delete":  {Action: config.ActionDelete}, // no help, should use action name
+		"Recycle": {Action: act.TypeRecycle, Help: "recycle session"},
+		"Delete":  {Action: act.TypeDelete}, // no help, should use action name
 		"open":    {Sh: "code {{ .Path }}", Help: "open in editor"},
 	}
 
@@ -419,6 +420,76 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	})
 }
 
+func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
+	commands := map[string]config.UserCommand{
+		"TmuxOpen":  {Action: act.TypeTmuxOpen, Help: "open"},
+		"TmuxStart": {Action: act.TypeTmuxStart, Help: "start"},
+	}
+	keybindings := map[string]config.Keybinding{
+		"enter": {Cmd: "TmuxOpen"},
+		"s":     {Cmd: "TmuxStart"},
+	}
+
+	sess := session.Session{
+		ID:    "test-id",
+		Path:  "/test/path",
+		State: session.StateActive,
+	}
+
+	t.Run("TmuxOpen consumes window override", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
+		handler.SetSelectedWindow("editor")
+
+		action, ok := handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Equal(t, act.TypeTmuxOpen, action.Type)
+		assert.Equal(t, "editor", action.TmuxWindow)
+
+		// Override should be consumed — next resolve uses lookup
+		action, ok = handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Equal(t, "default-window", action.TmuxWindow)
+	})
+
+	t.Run("TmuxOpen without override uses lookup", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+		handler.SetTmuxWindowLookup(func(id string) string { return "agent" })
+
+		action, ok := handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Equal(t, "agent", action.TmuxWindow)
+	})
+
+	t.Run("TmuxOpen without override or lookup returns empty", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+
+		action, ok := handler.Resolve("enter", sess)
+		require.True(t, ok)
+		assert.Empty(t, action.TmuxWindow)
+	})
+
+	t.Run("TmuxStart also consumes window override", func(t *testing.T) {
+		handler := NewKeybindingResolver(keybindings, commands, testRenderer)
+		handler.SetSelectedWindow("editor")
+
+		action, ok := handler.Resolve("s", sess)
+		require.True(t, ok)
+		assert.Equal(t, act.TypeTmuxStart, action.Type)
+		assert.Equal(t, "editor", action.TmuxWindow)
+	})
+
+	t.Run("ResolveUserCommand TmuxOpen consumes override", func(t *testing.T) {
+		handler := NewKeybindingResolver(nil, nil, testRenderer)
+		handler.SetSelectedWindow("editor")
+
+		cmd := config.UserCommand{Action: act.TypeTmuxOpen, Help: "open"}
+		action := handler.ResolveUserCommand("TmuxOpen", cmd, sess, nil)
+		assert.Equal(t, act.TypeTmuxOpen, action.Type)
+		assert.Equal(t, "editor", action.TmuxWindow)
+	})
+}
+
 func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 	handler := NewKeybindingResolver(nil, nil, testRenderer)
 
@@ -439,7 +510,7 @@ func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 		}
 
 		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
-		assert.Equal(t, ActionTypeShell, action.Type)
+		assert.Equal(t, act.TypeShell, action.Type)
 		assert.Equal(t, "echo hello world", action.ShellCmd)
 		assert.NoError(t, action.Err)
 	})
@@ -496,7 +567,7 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 			handler.SetActiveView(view)
 			action, ok := handler.Resolve("g", sess)
 			assert.True(t, ok, "global command should work in view %s", view.String())
-			assert.Equal(t, ActionTypeShell, action.Type)
+			assert.Equal(t, act.TypeShell, action.Type)
 		}
 	})
 
@@ -505,7 +576,7 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 		handler.SetActiveView(ViewReview)
 		action, ok := handler.Resolve("r", sess)
 		assert.True(t, ok, "review-cmd should work in review view")
-		assert.Equal(t, ActionTypeShell, action.Type)
+		assert.Equal(t, act.TypeShell, action.Type)
 
 		// Should not work in sessions view
 		handler.SetActiveView(ViewSessions)
@@ -523,13 +594,13 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 		handler.SetActiveView(ViewReview)
 		action, ok := handler.Resolve("m", sess)
 		assert.True(t, ok, "multi-cmd should work in review view")
-		assert.Equal(t, ActionTypeShell, action.Type)
+		assert.Equal(t, act.TypeShell, action.Type)
 
 		// Should work in messages view
 		handler.SetActiveView(ViewMessages)
 		action, ok = handler.Resolve("m", sess)
 		assert.True(t, ok, "multi-cmd should work in messages view")
-		assert.Equal(t, ActionTypeShell, action.Type)
+		assert.Equal(t, act.TypeShell, action.Type)
 
 		// Should not work in sessions view
 		handler.SetActiveView(ViewSessions)

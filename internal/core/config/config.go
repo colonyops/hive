@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
@@ -31,23 +32,6 @@ func ParseExitCondition(s string) bool {
 	result, _ := strconv.ParseBool(s)
 	return result
 }
-
-// Built-in action names for UserCommands.
-const (
-	ActionRecycle        = "recycle"
-	ActionDelete         = "delete"
-	ActionNewSession     = "new-session"
-	ActionFilterAll      = "filter-all"
-	ActionFilterActive   = "filter-active"
-	ActionFilterApproval = "filter-approval"
-	ActionFilterReady    = "filter-ready"
-	ActionDocReview      = "doc-review"     // Open review tab with document picker
-	ActionSetTheme       = "set-theme"      // Preview a built-in theme at runtime
-	ActionMessages       = "messages"       // Show notification history modal
-	ActionRenameSession  = "rename-session" // Rename the selected session
-	ActionNextActive     = "next-active"    // Navigate to next active session
-	ActionPrevActive     = "prev-active"    // Navigate to previous active session
-)
 
 // Form field type constants.
 const (
@@ -94,67 +78,67 @@ type FormField struct {
 // defaultUserCommands provides built-in commands that users can override.
 var defaultUserCommands = map[string]UserCommand{
 	"Recycle": {
-		Action:  ActionRecycle,
+		Action:  action.TypeRecycle,
 		Help:    "recycle",
 		Confirm: "Are you sure you want to recycle this session?",
 	},
 	"Delete": {
-		Action:  ActionDelete,
+		Action:  action.TypeDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
 	},
 	"NewSession": {
-		Action: ActionNewSession,
+		Action: action.TypeNewSession,
 		Help:   "new session",
 		Silent: true,
 	},
 	"DocReview": {
-		Action: ActionDocReview,
+		Action: action.TypeDocReview,
 		Help:   "review documents",
 		Silent: true,
 	},
 	"FilterAll": {
-		Action: ActionFilterAll,
+		Action: action.TypeFilterAll,
 		Help:   "show all sessions",
 		Silent: true,
 	},
 	"FilterActive": {
-		Action: ActionFilterActive,
+		Action: action.TypeFilterActive,
 		Help:   "show sessions with active agents",
 		Silent: true,
 	},
 	"FilterApproval": {
-		Action: ActionFilterApproval,
+		Action: action.TypeFilterApproval,
 		Help:   "show sessions needing approval",
 		Silent: true,
 	},
 	"FilterReady": {
-		Action: ActionFilterReady,
+		Action: action.TypeFilterReady,
 		Help:   "show sessions with idle agents",
 		Silent: true,
 	},
 	"ThemePreview": {
-		Action: ActionSetTheme,
+		Action: action.TypeSetTheme,
 		Help:   "preview theme (" + strings.Join(styles.ThemeNames(), ", ") + ")",
 		Silent: true,
 	},
 	"Messages": {
-		Action: ActionMessages,
+		Action: action.TypeMessages,
 		Help:   "show notification history",
 		Silent: true,
 	},
 	"RenameSession": {
-		Action: ActionRenameSession,
+		Action: action.TypeRenameSession,
 		Help:   "rename session",
 		Silent: true,
 	},
 	"NextActive": {
-		Action: ActionNextActive,
+		Action: action.TypeNextActive,
 		Help:   "next active session",
 		Silent: true,
 	},
 	"PrevActive": {
-		Action: ActionPrevActive,
+		Action: action.TypePrevActive,
 		Help:   "prev active session",
 		Silent: true,
 	},
@@ -418,6 +402,14 @@ type GitConfig struct {
 	StatusWorkers int `yaml:"status_workers"`
 }
 
+// WindowConfig defines a tmux window to create when spawning a session.
+type WindowConfig struct {
+	Name    string `yaml:"name"`              // Window name (template string, required)
+	Command string `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
+	Dir     string `yaml:"dir,omitempty"`     // Working directory override (template string)
+	Focus   bool   `yaml:"focus,omitempty"`   // Select this window after creation
+}
+
 // Rule defines actions to take for matching repositories.
 type Rule struct {
 	// Pattern matches against remote URL (regex). Empty = matches all.
@@ -429,6 +421,9 @@ type Rule struct {
 	// MaxRecycled sets the max recycled sessions for matching repos.
 	// nil = inherit from previous rule or default (5), 0 = unlimited, >0 = limit
 	MaxRecycled *int `yaml:"max_recycled,omitempty"`
+	// Windows defines tmux windows to create when spawning a session.
+	// Mutually exclusive with Spawn/BatchSpawn.
+	Windows []WindowConfig `yaml:"windows,omitempty"`
 	// Spawn commands to run when creating a new session (hive new).
 	Spawn []string `yaml:"spawn,omitempty"`
 	// BatchSpawn commands to run when creating a batch session (hive batch).
@@ -446,14 +441,14 @@ type Keybinding struct {
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  string      `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
-	Sh      string      `yaml:"sh"`              // shell command template - mutually exclusive with action
-	Form    []FormField `yaml:"form,omitempty"`  // interactive input fields collected before sh execution
-	Help    string      `yaml:"help"`            // description shown in palette/help
-	Confirm string      `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
-	Silent  bool        `yaml:"silent"`          // skip loading popup for fast commands
-	Exit    string      `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
-	Scope   []string    `yaml:"scope,omitempty"` // views where command is active (empty = global)
+	Action  action.Type `yaml:"action,omitempty"` // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
+	Sh      string      `yaml:"sh"`               // shell command template - mutually exclusive with action
+	Form    []FormField `yaml:"form,omitempty"`   // interactive input fields collected before sh execution
+	Help    string      `yaml:"help"`             // description shown in palette/help
+	Confirm string      `yaml:"confirm"`          // confirmation prompt (empty = no confirm)
+	Silent  bool        `yaml:"silent"`           // skip loading popup for fast commands
+	Exit    string      `yaml:"exit"`             // exit hive after command (bool or $ENV_VAR)
+	Scope   []string    `yaml:"scope,omitempty"`  // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
@@ -483,14 +478,17 @@ func (u *UserCommand) UnmarshalYAML(node *yaml.Node) error {
 	return nil
 }
 
-// DefaultSpawnCommands are the default commands run when spawning a new session.
-var DefaultSpawnCommands = []string{
-	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
-}
-
-// DefaultBatchSpawnCommands are the default commands run when spawning a batch session.
-var DefaultBatchSpawnCommands = []string{
-	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
+// DefaultWindows returns the default window layout for new sessions.
+// Uses template strings rendered at spawn time from the active agent profile.
+func DefaultWindows() []WindowConfig {
+	return []WindowConfig{
+		{
+			Name:    "{{ agentWindow }}",
+			Command: `{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt }}{{ end }}`,
+			Focus:   true,
+		},
+		{Name: "shell"},
+	}
 }
 
 // DefaultRecycleCommands are the default commands run when recycling a session.
@@ -683,6 +681,7 @@ func (c *Config) Validate() error {
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
 		c.validateAgents(),
+		c.validateWindowsBasic(),
 	)
 }
 
@@ -798,6 +797,32 @@ var isValidIdentifier criterio.Validator[string] = func(s string) error {
 		}
 	}
 	return nil
+}
+
+// validateWindowsBasic checks windows config for structural validity.
+func (c *Config) validateWindowsBasic() error {
+	var errs criterio.FieldErrorsBuilder
+	for i, rule := range c.Rules {
+		if len(rule.Windows) == 0 {
+			continue
+		}
+
+		// Windows and spawn/batch_spawn are mutually exclusive
+		if len(rule.Spawn) > 0 {
+			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and spawn"))
+		}
+		if len(rule.BatchSpawn) > 0 {
+			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and batch_spawn"))
+		}
+
+		// Each window must have a name
+		for j, w := range rule.Windows {
+			if w.Name == "" {
+				errs = errs.Append(fmt.Sprintf("rules[%d].windows[%d].name", i, j), fmt.Errorf("is required"))
+			}
+		}
+	}
+	return errs.ToError()
 }
 
 // validateMaxRecycled checks that max_recycled values are non-negative.
@@ -922,13 +947,8 @@ func (c *Config) BinDir() string {
 	return filepath.Join(c.DataDir, "bin")
 }
 
-func isValidAction(action string) bool {
-	switch action {
-	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages, ActionRenameSession, ActionNextActive, ActionPrevActive:
-		return true
-	default:
-		return false
-	}
+func isValidAction(t action.Type) bool {
+	return t.IsValid() && action.IsConfigAction(t)
 }
 
 // isValidScope checks if a scope value is valid.
@@ -979,28 +999,39 @@ func (c *Config) GetMaxRecycled(remote string) int {
 	return DefaultMaxRecycled
 }
 
-// GetSpawnCommands returns the spawn commands for the given remote URL.
-// If batch is true, returns BatchSpawn commands; otherwise returns Spawn commands.
-// Rules are evaluated in order; the last matching rule with spawn commands wins.
-// If no rules define spawn commands, returns DefaultSpawnCommands/DefaultBatchSpawnCommands.
-func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
-	var result []string
-	for _, rule := range c.Rules {
-		if rule.Pattern == "" || matchesPattern(rule.Pattern, remote) {
-			if batch && len(rule.BatchSpawn) > 0 {
-				result = rule.BatchSpawn
-			} else if !batch && len(rule.Spawn) > 0 {
-				result = rule.Spawn
-			}
+// SpawnStrategy holds the resolved spawn method for a session.
+// Exactly one of Windows or Commands is populated.
+type SpawnStrategy struct {
+	Windows  []WindowConfig
+	Commands []string
+}
+
+// IsWindows returns true if the strategy uses declarative window config.
+func (s SpawnStrategy) IsWindows() bool { return len(s.Windows) > 0 }
+
+// ResolveSpawn determines the spawn strategy for the given remote URL.
+// Rules are evaluated in order (last-match-wins). If the last matching rule
+// has windows, those are used. If it has spawn/batch_spawn commands, those are used.
+// If nothing matches, DefaultWindows() is returned.
+func ResolveSpawn(rules []Rule, remote string, batch bool) SpawnStrategy {
+	var strategy SpawnStrategy
+	for _, rule := range rules {
+		if !rule.Matches(remote) {
+			continue
+		}
+		switch {
+		case len(rule.Windows) > 0:
+			strategy = SpawnStrategy{Windows: rule.Windows}
+		case batch && len(rule.BatchSpawn) > 0:
+			strategy = SpawnStrategy{Commands: rule.BatchSpawn}
+		case !batch && len(rule.Spawn) > 0:
+			strategy = SpawnStrategy{Commands: rule.Spawn}
 		}
 	}
-	if len(result) == 0 {
-		if batch {
-			return DefaultBatchSpawnCommands
-		}
-		return DefaultSpawnCommands
+	if !strategy.IsWindows() && len(strategy.Commands) == 0 {
+		return SpawnStrategy{Windows: DefaultWindows()}
 	}
-	return result
+	return strategy
 }
 
 // GetRecycleCommands returns the recycle commands for the given remote URL.
@@ -1019,6 +1050,15 @@ func (c *Config) GetRecycleCommands(remote string) []string {
 		return DefaultRecycleCommands
 	}
 	return result
+}
+
+// Matches reports whether this rule matches the given remote URL.
+// An empty pattern matches everything.
+func (r Rule) Matches(remote string) bool {
+	if r.Pattern == "" {
+		return true
+	}
+	return matchesPattern(r.Pattern, remote)
 }
 
 // matchesPattern checks if remote matches the regex pattern.

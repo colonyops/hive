@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
+	coretmux "github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -63,7 +64,7 @@ func NewSessionService(
 		bus:        bus,
 		executor:   exec,
 		log:        log,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, stdout, stderr),
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), stdout, stderr),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), stdout),
@@ -160,22 +161,29 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	// Spawn terminal
-	spawnCommands := s.config.GetSpawnCommands(remote, opts.UseBatchSpawn)
+	owner, repoName := git.ExtractOwnerRepo(remote)
+	data := SpawnData{
+		Path:       sess.Path,
+		Name:       sess.Name,
+		Prompt:     opts.Prompt,
+		Slug:       sess.Slug,
+		ContextDir: s.config.RepoContextDir(owner, repoName),
+		Owner:      owner,
+		Repo:       repoName,
+	}
 
-	if len(spawnCommands) > 0 {
-		owner, repoName := git.ExtractOwnerRepo(remote)
-		data := SpawnData{
-			Path:       sess.Path,
-			Name:       sess.Name,
-			Prompt:     opts.Prompt,
-			Slug:       sess.Slug,
-			ContextDir: s.config.RepoContextDir(owner, repoName),
-			Owner:      owner,
-			Repo:       repoName,
-		}
-		if err := s.spawner.Spawn(ctx, spawnCommands, data); err != nil {
+	strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+	switch {
+	case strategy.IsWindows():
+		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
+	case len(strategy.Commands) > 0:
+		if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+			return nil, fmt.Errorf("spawn terminal: %w", err)
+		}
+	default:
+		return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
 	}
 
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
@@ -412,6 +420,27 @@ func (s *SessionService) DetectRemote(ctx context.Context, dir string) (string, 
 func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
 	detector := messaging.NewSessionDetector(s.sessions)
 	return detector.DetectSession(ctx)
+}
+
+// OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
+// It resolves the spawn strategy, renders window templates, and delegates to the spawner.
+func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error {
+	strategy := config.ResolveSpawn(s.config.Rules, remote, false)
+	if !strategy.IsWindows() {
+		return fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
+	}
+
+	owner, repo := git.ExtractOwnerRepo(remote)
+	data := SpawnData{
+		Path:       path,
+		Name:       name,
+		Slug:       session.Slugify(name),
+		ContextDir: s.config.RepoContextDir(owner, repo),
+		Owner:      owner,
+		Repo:       repo,
+	}
+
+	return s.spawner.OpenWindows(ctx, strategy.Windows, data, background, targetWindow)
 }
 
 // Git returns the git client for use in background operations.

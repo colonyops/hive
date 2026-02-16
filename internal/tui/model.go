@@ -17,6 +17,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
@@ -26,6 +27,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
@@ -35,6 +37,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/colonyops/hive/internal/tui/views/review"
+
 	"github.com/colonyops/hive/pkg/kv"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -345,7 +348,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		}
 		return ""
 	})
-	cmdService := command.NewService(service, service)
+	cmdService := command.NewService(service, service, service)
 
 	// Add minimal keybindings to list help - just navigation and help trigger
 	l.AdditionalShortHelpKeys = func() []key.Binding {
@@ -597,15 +600,9 @@ func (m Model) loadSessions() tea.Cmd {
 }
 
 // executeAction returns a command that executes the given action.
-func (m Model) executeAction(action Action) tea.Cmd {
+func (m Model) executeAction(a Action) tea.Cmd {
 	return func() tea.Msg {
-		cmdAction := command.Action{
-			Type:      command.ActionType(action.Type),
-			SessionID: action.SessionID,
-			ShellCmd:  action.ShellCmd,
-		}
-
-		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		exec, err := m.cmdService.CreateExecutor(a)
 		if err != nil {
 			return actionCompleteMsg{err: err}
 		}
@@ -1140,18 +1137,13 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if action.Type == ActionTypeRecycle {
+	if action.Type == act.TypeRecycle {
 		m.state = stateNormal
 		return m, m.startRecycle(action.SessionID)
 	}
 
 	if action.Exit {
-		cmdAction := command.Action{
-			Type:      command.ActionType(action.Type),
-			SessionID: action.SessionID,
-			ShellCmd:  action.ShellCmd,
-		}
-		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		exec, err := m.cmdService.CreateExecutor(action)
 		if err != nil {
 			log.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
 		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
@@ -1201,11 +1193,11 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		if m.modal.ConfirmSelected() {
 			action := m.pending
-			if action.Type == ActionTypeRecycle {
+			if action.Type == act.TypeRecycle {
 				return m, m.startRecycle(action.SessionID)
 			}
 			// Handle batch delete of recycled sessions
-			if action.Type == ActionTypeDeleteRecycledBatch {
+			if action.Type == act.TypeDeleteRecycledBatch {
 				sessions := m.pendingRecycledSessions
 				m.pending = Action{}
 				m.pendingRecycledSessions = nil
@@ -1238,7 +1230,7 @@ func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (
 	}
 
 	cmd, cmdExists := m.handler.commands[kb.Cmd]
-	if !cmdExists || cmd.Action != config.ActionDelete {
+	if !cmdExists || cmd.Action != act.TypeDelete {
 		return m, nil // Only delete is allowed on recycled placeholders
 	}
 
@@ -1246,7 +1238,7 @@ func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (
 	confirmMsg := fmt.Sprintf("Permanently delete %d recycled session(s)?", treeItem.RecycledCount)
 	m.state = stateConfirming
 	m.pending = Action{
-		Type:    ActionTypeDeleteRecycledBatch,
+		Type:    act.TypeDeleteRecycledBatch,
 		Key:     keyStr,
 		Help:    "delete recycled sessions",
 		Confirm: confirmMsg,
@@ -1398,21 +1390,21 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		selected := m.selectedSession()
 
 		// Check if this is a doc review action (doesn't require a session)
-		if entry.Command.Action == config.ActionDocReview {
+		if entry.Command.Action == act.TypeDocReview {
 			m.state = stateNormal
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
 		}
 
 		// Messages doesn't require a session
-		if entry.Command.Action == config.ActionMessages {
+		if entry.Command.Action == act.TypeMessages {
 			m.state = stateShowingNotifications
 			m.notificationModal = NewNotificationModal(m.notifyBus, m.width, m.height)
 			return m, nil
 		}
 
 		// NewSession doesn't require a selected session
-		if entry.Command.Action == config.ActionNewSession {
+		if entry.Command.Action == act.TypeNewSession {
 			m.state = stateNormal
 			if len(m.discoveredRepos) == 0 {
 				return m, nil
@@ -1421,7 +1413,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		}
 
 		// RenameSession requires a selected session
-		if entry.Command.Action == config.ActionRenameSession {
+		if entry.Command.Action == act.TypeRenameSession {
 			m.state = stateNormal
 			if selected == nil {
 				return m, nil
@@ -1430,7 +1422,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		}
 
 		// SetTheme doesn't require a session
-		if entry.Command.Action == config.ActionSetTheme {
+		if entry.Command.Action == act.TypeSetTheme {
 			m.state = stateNormal
 			if len(args) > 0 {
 				m.applyTheme(args[0])
@@ -1441,19 +1433,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Check if this is a filter action (doesn't require a session)
 		if isFilterAction(entry.Command.Action) {
 			m.state = stateNormal
-			// Resolve action type directly from command action
-			var actionType ActionType
-			switch entry.Command.Action {
-			case config.ActionFilterAll:
-				actionType = ActionTypeFilterAll
-			case config.ActionFilterActive:
-				actionType = ActionTypeFilterActive
-			case config.ActionFilterApproval:
-				actionType = ActionTypeFilterApproval
-			case config.ActionFilterReady:
-				actionType = ActionTypeFilterReady
-			}
-			m.handleFilterAction(actionType)
+			m.handleFilterAction(entry.Command.Action)
 			return m.applyFilter()
 		}
 
@@ -1503,12 +1483,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Execute immediately if exit requested (synchronous to avoid race conditions)
 		if action.Exit {
-			cmdAction := command.Action{
-				Type:      command.ActionType(action.Type),
-				SessionID: action.SessionID,
-				ShellCmd:  action.ShellCmd,
-			}
-			exec, err := m.cmdService.CreateExecutor(cmdAction)
+			exec, err := m.cmdService.CreateExecutor(action)
 			if err != nil {
 				log.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
 			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
@@ -1898,17 +1873,17 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 	}
 
 	// Handle navigation to next/prev active session (doesn't require selection)
-	if m.handler.IsAction(keyStr, config.ActionNextActive) {
+	if m.handler.IsAction(keyStr, act.TypeNextActive) {
 		m.navigateToNextActive(1)
 		return m, nil
 	}
-	if m.handler.IsAction(keyStr, config.ActionPrevActive) {
+	if m.handler.IsAction(keyStr, act.TypePrevActive) {
 		m.navigateToNextActive(-1)
 		return m, nil
 	}
 
 	// Handle new session action (only if repos are discovered)
-	if m.handler.IsAction(keyStr, config.ActionNewSession) && len(m.discoveredRepos) > 0 {
+	if m.handler.IsAction(keyStr, act.TypeNewSession) && len(m.discoveredRepos) > 0 {
 		return m.openNewSessionForm()
 	}
 
@@ -1989,20 +1964,20 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 			m.modal = NewModal("Confirm", action.Confirm)
 			return m, nil
 		}
-		if action.Type == ActionTypeRecycle {
+		if action.Type == act.TypeRecycle {
 			return m, m.startRecycle(action.SessionID)
 		}
 		// Handle doc review action
-		if action.Type == ActionTypeDocReview {
+		if action.Type == act.TypeDocReview {
 			cmd := HiveDocReviewCmd{Arg: ""}
 			return m, cmd.Execute(&m)
 		}
 		// Handle rename action
-		if action.Type == ActionTypeRenameSession {
+		if action.Type == act.TypeRenameSession {
 			return m.openRenameInput(selected)
 		}
 		// Handle set-theme action (requires args only available via command palette)
-		if action.Type == ActionTypeSetTheme {
+		if action.Type == act.TypeSetTheme {
 			return m, m.ensureToastTick()
 		}
 		// Handle filter actions
@@ -2012,12 +1987,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 		// If exit is requested, execute synchronously and quit immediately
 		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
 		if action.Exit {
-			cmdAction := command.Action{
-				Type:      command.ActionType(action.Type),
-				SessionID: action.SessionID,
-				ShellCmd:  action.ShellCmd,
-			}
-			exec, err := m.cmdService.CreateExecutor(cmdAction)
+			exec, err := m.cmdService.CreateExecutor(action)
 			if err != nil {
 				log.Error().Str("key", keyStr).Err(err).Msg("failed to create executor before exit")
 			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
@@ -2063,7 +2033,7 @@ func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
 	}
 
 	action := Action{
-		Type:     ActionTypeShell,
+		Type:     act.TypeShell,
 		Key:      "enter",
 		Help:     "open repo",
 		ShellCmd: shellCmd,
@@ -2072,11 +2042,7 @@ func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
 	}
 
 	if action.Exit {
-		cmdAction := command.Action{
-			Type:     command.ActionType(action.Type),
-			ShellCmd: action.ShellCmd,
-		}
-		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		exec, err := m.cmdService.CreateExecutor(action)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to create executor for repo open")
 		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
@@ -2153,7 +2119,7 @@ func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Acti
 	if treeItem == nil || !treeItem.IsWindowItem {
 		return action
 	}
-	if action.Type != ActionTypeDelete {
+	if action.Type != act.TypeDelete {
 		return action
 	}
 
@@ -2178,7 +2144,7 @@ func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Acti
 		return action
 	}
 
-	action.Type = ActionTypeShell
+	action.Type = act.TypeShell
 	action.ShellCmd = cmd
 	if treeItem.WindowName != "" {
 		action.Confirm = fmt.Sprintf("Kill tmux window %q?", treeItem.WindowName)
@@ -2391,36 +2357,36 @@ func listItemsToTreeItems(items []list.Item) []TreeItem {
 	return result
 }
 
-// isFilterAction returns true if the action string is a filter action.
-func isFilterAction(action string) bool {
-	switch action {
-	case config.ActionFilterAll, config.ActionFilterActive,
-		config.ActionFilterApproval, config.ActionFilterReady:
+// isFilterAction returns true if the action type is a filter action.
+func isFilterAction(t act.Type) bool {
+	switch t {
+	case act.TypeFilterAll, act.TypeFilterActive,
+		act.TypeFilterApproval, act.TypeFilterReady:
 		return true
+	default:
+		return false
 	}
-	return false
 }
 
 // handleFilterAction checks if the action is a filter action and updates the status filter.
 // Returns true if the action was a filter action (caller should call applyFilter).
-func (m *Model) handleFilterAction(actionType ActionType) bool {
+func (m *Model) handleFilterAction(actionType act.Type) bool {
 	switch actionType {
-	case ActionTypeFilterAll:
+	case act.TypeFilterAll:
 		m.statusFilter = ""
 		return true
-	case ActionTypeFilterActive:
+	case act.TypeFilterActive:
 		m.statusFilter = terminal.StatusActive
 		return true
-	case ActionTypeFilterApproval:
+	case act.TypeFilterApproval:
 		m.statusFilter = terminal.StatusApproval
 		return true
-	case ActionTypeFilterReady:
+	case act.TypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case ActionTypeNone, ActionTypeRecycle, ActionTypeDelete, ActionTypeDeleteRecycledBatch, ActionTypeShell, ActionTypeDocReview, ActionTypeNewSession, ActionTypeSetTheme, ActionTypeMessages, ActionTypeRenameSession, ActionTypeNextActive, ActionTypePrevActive:
+	default:
 		return false
 	}
-	return false
 }
 
 // selectedMessage returns the currently selected message, or nil if none.
@@ -3188,12 +3154,10 @@ func ensureExactHeight(content string, n int) string {
 // startRecycle returns a command that starts the recycle operation with streaming output.
 func (m Model) startRecycle(sessionID string) tea.Cmd {
 	return func() tea.Msg {
-		cmdAction := command.Action{
-			Type:      command.ActionTypeRecycle,
+		exec, err := m.cmdService.CreateExecutor(Action{
+			Type:      act.TypeRecycle,
 			SessionID: sessionID,
-		}
-
-		exec, err := m.cmdService.CreateExecutor(cmdAction)
+		})
 		if err != nil {
 			return recycleCompleteMsg{err: err}
 		}
@@ -3212,12 +3176,10 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 	return func() tea.Msg {
 		var lastErr error
 		for _, sess := range sessions {
-			cmdAction := command.Action{
-				Type:      command.ActionTypeDelete,
+			exec, err := m.cmdService.CreateExecutor(Action{
+				Type:      act.TypeDelete,
 				SessionID: sess.ID,
-			}
-
-			exec, err := m.cmdService.CreateExecutor(cmdAction)
+			})
 			if err != nil {
 				lastErr = err
 				continue

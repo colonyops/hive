@@ -27,8 +27,11 @@ version: 0.2.5
 
 rules:
   - pattern: ""  # Matches all repos
-    spawn:
-      - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
+    windows:
+      - name: claude
+        command: "claude"
+        focus: true
+      - name: shell
 ```
 
 ## Rules System
@@ -41,14 +44,28 @@ Rules match repository URLs with regex patterns and define behavior.
 rules:
   - pattern: ".*github\\.com/org-name/.*"  # Regex pattern
     max_recycled: 3                         # Max recycled sessions
-    spawn: []                               # Commands after creation
-    batch_spawn: []                         # Commands for batch creation
+    windows:                                # Declarative tmux windows (recommended)
+      - name: claude
+        command: "claude"
+        focus: true
+      - name: shell
     recycle: []                             # Commands when recycling
     commands: []                            # Setup commands after clone
     copy: []                                # Files to copy from original
 ```
 
-**Rule precedence:** First matching rule wins. Put specific patterns before general ones.
+**Rule precedence:** Last matching rule with spawn/windows config wins.
+
+### Window Config Fields
+
+| Field     | Type   | Required | Description                                    |
+|-----------|--------|----------|------------------------------------------------|
+| `name`    | string | yes      | Window name (supports templates)               |
+| `command` | string | no       | Command to run (empty = default shell)         |
+| `dir`     | string | no       | Working directory override                     |
+| `focus`   | bool   | no       | Select this window after creation              |
+
+`windows` is mutually exclusive with `spawn`/`batch_spawn`. If neither is set, the default layout (agent window + shell) is used.
 
 ### Pattern Examples
 
@@ -65,10 +82,10 @@ Commands support Go templates with `{{ .Variable }}` syntax.
 
 | Context | Variables |
 |---------|-----------|
-| `spawn`, `batch_spawn` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
-| `batch_spawn` (additional) | `.Prompt` |
+| `windows`, `spawn`, `batch_spawn` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
+| `batch_spawn`, `windows` (batch) | `.Prompt` |
 | `recycle` | `.DefaultBranch` |
-| `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.TmuxWindow`, `.Args` |
+| `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
 
 Use `{{ .Variable | shq }}` for safe shell quoting.
 
@@ -77,11 +94,9 @@ Use `{{ .Variable | shq }}` for safe shell quoting.
 ### Tmux
 
 ```yaml
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
-    preview_window_matcher: ["claude", "aider", "codex"]
+tmux:
+  poll_interval: 1.5s
+  preview_window_matcher: ["claude", "aider", "codex"]
 ```
 
 **Status indicators:**

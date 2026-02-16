@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -76,9 +77,13 @@ func TestDeleteExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 
-			require.Len(t, mock.deleted, 1, "Expected delete called with %q, got %v", tt.sessionID, mock.deleted)
+			require.Len(t, mock.deleted, 1)
 			assert.Equal(t, tt.sessionID, mock.deleted[0])
 		})
 	}
@@ -133,9 +138,13 @@ func TestRecycleExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 
-			require.Len(t, mock.recycled, 1, "Expected recycle called with %q, got %v", tt.sessionID, mock.recycled)
+			require.Len(t, mock.recycled, 1)
 			assert.Equal(t, tt.sessionID, mock.recycled[0])
 
 			// Check output was received
@@ -198,7 +207,11 @@ func TestShellExecutor_Execute(t *testing.T) {
 			// Wait for completion
 			err := <-done
 
-			assert.Equal(t, tt.wantErr, err != nil, "Execute() error = %v, wantErr %v", err, tt.wantErr)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
@@ -291,10 +304,27 @@ func TestChannelWriter_Write(t *testing.T) {
 	})
 }
 
+// Mock TmuxOpener
+
+type mockTmuxOpener struct {
+	openErr error
+	calls   []tmuxOpenCall
+}
+
+type tmuxOpenCall struct {
+	Name, Path, Remote, TargetWindow string
+	Background                       bool
+}
+
+func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, targetWindow string, background bool) error {
+	m.calls = append(m.calls, tmuxOpenCall{name, path, remote, targetWindow, background})
+	return m.openErr
+}
+
 // Service tests
 
 func TestService_CreateExecutor(t *testing.T) {
-	svc := NewService(&mockDeleter{}, &mockRecycler{})
+	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{})
 
 	tests := []struct {
 		name    string
@@ -303,22 +333,32 @@ func TestService_CreateExecutor(t *testing.T) {
 	}{
 		{
 			name:    "delete action",
-			action:  Action{Type: ActionTypeDelete, SessionID: "test-123"},
+			action:  Action{Type: action.TypeDelete, SessionID: "test-123"},
 			wantErr: false,
 		},
 		{
 			name:    "recycle action",
-			action:  Action{Type: ActionTypeRecycle, SessionID: "test-123"},
+			action:  Action{Type: action.TypeRecycle, SessionID: "test-123"},
 			wantErr: false,
 		},
 		{
 			name:    "shell action",
-			action:  Action{Type: ActionTypeShell, ShellCmd: "echo test"},
+			action:  Action{Type: action.TypeShell, ShellCmd: "echo test"},
+			wantErr: false,
+		},
+		{
+			name:    "tmux open action",
+			action:  Action{Type: action.TypeTmuxOpen, SessionName: "sess", SessionPath: "/work"},
+			wantErr: false,
+		},
+		{
+			name:    "tmux start action",
+			action:  Action{Type: action.TypeTmuxStart, SessionName: "sess", SessionPath: "/work"},
 			wantErr: false,
 		},
 		{
 			name:    "unsupported action",
-			action:  Action{Type: ActionTypeNone},
+			action:  Action{Type: action.TypeNone},
 			wantErr: true,
 		},
 	}
@@ -327,9 +367,11 @@ func TestService_CreateExecutor(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			exec, err := svc.CreateExecutor(tt.action)
 
-			assert.Equal(t, tt.wantErr, err != nil, "CreateExecutor() error = %v, wantErr %v", err, tt.wantErr)
-			if !tt.wantErr {
-				assert.NotNil(t, exec, "Expected executor but got nil")
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				assert.NotNil(t, exec)
 			}
 		})
 	}

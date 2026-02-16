@@ -11,10 +11,8 @@ repo_dirs:
   - ~/code/repos
   - ~/projects
 
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
+tmux:
+  poll_interval: 1.5s
 
 tui:
   refresh_interval: 10s
@@ -23,14 +21,22 @@ tui:
 rules:
   - pattern: ""
     max_recycled: 5
-    spawn:
-      - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}"
+    windows:
+      - name: "{{ agentWindow }}"
+        command: '{{ agentCommand }} {{ agentFlags }}'
+        focus: true
+      - name: shell
     commands:
       - hive ctx init
 
   - pattern: ".*github\\.com/my-org/.*"
-    spawn:
-      - 'wezterm cli spawn --cwd "{{ .Path }}" -- aider'
+    windows:
+      - name: claude
+        command: "claude --model opus"
+        focus: true
+      - name: tests
+        command: "npm run test:watch"
+      - name: shell
     commands:
       - npm install
     copy:
@@ -38,7 +44,7 @@ rules:
 
 usercommands:
   review:
-    sh: "send-claude {{ .Name }} /review"
+    sh: "{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /review"
     help: "Send /review to Claude"
     silent: true
 
@@ -56,8 +62,11 @@ keybindings:
 rules:
   # Work repos with setup script
   - pattern: ".*github\\.com/my-company/.*"
-    spawn:
-      - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
+    windows:
+      - name: claude
+        command: "claude"
+        focus: true
+      - name: shell
     commands:
       - hive ctx init
       - make dev-setup
@@ -67,8 +76,11 @@ rules:
 
   # Personal repos (simple)
   - pattern: ".*github\\.com/my-username/.*"
-    spawn:
-      - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
+    windows:
+      - name: claude
+        command: "claude"
+        focus: true
+      - name: shell
     commands:
       - hive ctx init
 ```
@@ -78,8 +90,11 @@ rules:
 ```yaml
 rules:
   - pattern: ""
-    spawn:
-      - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
+    windows:
+      - name: claude
+        command: "claude"
+        focus: true
+      - name: shell
     commands:
       - hive ctx init
       - bd init --stealth || true
@@ -177,6 +192,9 @@ commands:
 
 ### Key Changes in 0.2.5
 
+- **YAML window config:** New `windows` field on rules replaces shell-based `spawn` commands for tmux. Declarative window definitions with `name`, `command`, `dir`, and `focus` fields
+- **`TmuxOpen` / `TmuxStart` actions:** New built-in actions for opening (foreground) or starting (background) tmux sessions using window config
+- **Default spawn uses windows:** When no rule specifies `windows` or `spawn`, the default is now a declarative window layout (agent window + shell)
 - **Multi-window tree items:** Sessions with multiple agent windows now show each window as a selectable sub-item
 - **TmuxWindow template variable:** `{{ .TmuxWindow }}` available in user commands for window targeting
 

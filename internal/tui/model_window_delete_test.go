@@ -3,6 +3,7 @@ package tui
 import (
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/stretchr/testify/assert"
 )
@@ -11,24 +12,24 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	m := Model{renderer: testRenderer}
 
 	deleteAction := Action{
-		Type:      ActionTypeDelete,
+		Type:      action.TypeDelete,
 		SessionID: "sess-1",
 	}
 	shellAction := Action{
-		Type:      ActionTypeShell,
+		Type:      action.TypeShell,
 		SessionID: "sess-1",
 		ShellCmd:  "echo hello",
 	}
 
 	t.Run("nil treeItem returns action unchanged", func(t *testing.T) {
 		got := m.maybeOverrideWindowDelete(deleteAction, nil)
-		assert.Equal(t, ActionTypeDelete, got.Type)
+		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
 	t.Run("non-window item returns action unchanged", func(t *testing.T) {
 		ti := &TreeItem{IsWindowItem: false}
 		got := m.maybeOverrideWindowDelete(deleteAction, ti)
-		assert.Equal(t, ActionTypeDelete, got.Type)
+		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
 	t.Run("non-delete action on window returns action unchanged", func(t *testing.T) {
@@ -39,7 +40,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
 		got := m.maybeOverrideWindowDelete(shellAction, ti)
-		assert.Equal(t, ActionTypeShell, got.Type)
+		assert.Equal(t, action.TypeShell, got.Type)
 	})
 
 	t.Run("delete on window converts to tmux kill-window shell command", func(t *testing.T) {
@@ -50,7 +51,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
 		got := m.maybeOverrideWindowDelete(deleteAction, ti)
-		assert.Equal(t, ActionTypeShell, got.Type)
+		assert.Equal(t, action.TypeShell, got.Type)
 		assert.Contains(t, got.ShellCmd, "tmux kill-window")
 		assert.Contains(t, got.ShellCmd, "my-slug:2")
 		assert.Contains(t, got.Confirm, "aider")

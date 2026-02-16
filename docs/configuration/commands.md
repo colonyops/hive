@@ -36,24 +36,62 @@ usercommands:
 | Field     | Type           | Description                                                         |
 | --------- | -------------- | ------------------------------------------------------------------- |
 | `sh`      | string         | Shell command template (mutually exclusive with `action`)          |
-| `action`  | string         | Built-in action (e.g., `recycle`, `delete`, `new-session`, `doc-review`, `messages`; mutually exclusive with `sh`) |
+| `action`  | string         | Built-in action name (mutually exclusive with `sh`; see [Built-in Actions](#built-in-actions)) |
 | `help`    | string         | Description shown in palette                                        |
 | `confirm` | string         | Confirmation prompt (empty = no confirmation)                       |
 | `silent`  | bool           | Skip loading popup for fast commands                                |
 | `exit`    | string         | Exit TUI after command (bool or `$ENV_VAR`)                         |
 | `form`    | `[]FormField`  | Interactive form fields collected before execution (see below)      |
 
+## Built-in Actions
+
+Actions are built-in behaviors that can be assigned to user commands via the `action` field. Names are case-insensitive.
+
+### Session Management
+
+| Action          | Description                        |
+| --------------- | ---------------------------------- |
+| `Recycle`       | Recycle the selected session       |
+| `Delete`        | Delete the selected session        |
+| `NewSession`    | Create a new session               |
+| `RenameSession` | Rename the selected session        |
+
+### Tmux
+
+These actions are provided by the tmux plugin and require tmux to be available.
+
+| Action      | Description                             |
+| ----------- | --------------------------------------- |
+| `TmuxOpen`  | Open/attach the session's tmux session  |
+| `TmuxStart` | Start a tmux session in the background  |
+
+### Filtering
+
+| Action           | Description                          |
+| ---------------- | ------------------------------------ |
+| `FilterAll`      | Show all sessions                    |
+| `FilterActive`   | Show sessions with active agents     |
+| `FilterApproval` | Show sessions needing approval       |
+| `FilterReady`    | Show sessions with idle agents       |
+
+### Navigation
+
+| Action       | Description                    |
+| ------------ | ------------------------------ |
+| `NextActive` | Jump to next active session    |
+| `PrevActive` | Jump to previous active session |
+
+### Other
+
+| Action      | Description                  |
+| ----------- | ---------------------------- |
+| `DocReview` | Open the document review view |
+| `SetTheme`  | Preview and select a theme   |
+| `Messages`  | Show notification history    |
+
 ## System Default Commands
 
-Hive provides built-in commands that can be overridden in usercommands:
-
-| Name        | Type   | Description                                            |
-| ----------- | ------ | ------------------------------------------------------ |
-| `Recycle`   | action | Recycles the selected session                          |
-| `Delete`    | action | Deletes the selected session (or selected tmux window) |
-| `SendBatch` | form   | Send a message to multiple agents via `agent-send`     |
-
-Additional built-in actions are available (for example filtering, theme preview, and session navigation). Use `action` for built-in behavior or `sh` for custom shell commands.
+Hive registers several built-in actions as default commands that can be overridden in `usercommands`. Additionally, the `SendBatch` command provides a form-based workflow for messaging multiple agents at once.
 
 !!! warning
     A command must use either `sh` or `action`, not both. If both are specified, validation will fail.
