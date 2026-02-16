@@ -105,6 +105,28 @@ func (tb *Bus) has(event eventbus.Event) bool {
 	return false
 }
 
+// FindPayload waits for the given event type to be published, then returns
+// the first matching payload type-asserted to T. It fails the test if the
+// event is not found within 500ms or the payload type doesn't match.
+func FindPayload[T any](tb *Bus, t *testing.T, event eventbus.Event) T {
+	t.Helper()
+	if !tb.WaitFor(event, 500*time.Millisecond) {
+		t.Fatalf("expected event %q to be published, but it was not", event)
+	}
+	for _, e := range tb.Events() {
+		if e.Event == event {
+			p, ok := e.Payload.(T)
+			if !ok {
+				t.Fatalf("event %q payload: got %T, want %T", event, e.Payload, p)
+			}
+			return p
+		}
+	}
+	// unreachable after WaitFor succeeds, but the compiler needs it
+	var zero T
+	return zero
+}
+
 // AssertPublished asserts that an event of the given type was recorded.
 func (tb *Bus) AssertPublished(t *testing.T, event eventbus.Event) {
 	t.Helper()

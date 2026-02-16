@@ -469,19 +469,9 @@ func TestSessionService_Events(t *testing.T) {
 		err := svc.RenameSession(context.Background(), "test1", "new-name")
 		require.NoError(t, err)
 
-		tb.AssertPublished(t, eventbus.EventSessionRenamed)
-
-		events := tb.Events()
-		var found bool
-		for _, e := range events {
-			if e.Event == eventbus.EventSessionRenamed {
-				p := e.Payload.(eventbus.SessionRenamedPayload)
-				assert.Equal(t, "old-name", p.OldName)
-				assert.Equal(t, "new-name", p.Session.Name)
-				found = true
-			}
-		}
-		assert.True(t, found, "session.renamed event should have correct payload")
+		p := testbus.FindPayload[eventbus.SessionRenamedPayload](tb, t, eventbus.EventSessionRenamed)
+		assert.Equal(t, "old-name", p.OldName)
+		assert.Equal(t, "new-name", p.Session.Name)
 	})
 
 	t.Run("delete emits session.deleted", func(t *testing.T) {
@@ -500,18 +490,8 @@ func TestSessionService_Events(t *testing.T) {
 		err := svc.DeleteSession(context.Background(), "del1")
 		require.NoError(t, err)
 
-		tb.AssertPublished(t, eventbus.EventSessionDeleted)
-
-		events := tb.Events()
-		var found bool
-		for _, e := range events {
-			if e.Event == eventbus.EventSessionDeleted {
-				p := e.Payload.(eventbus.SessionDeletedPayload)
-				assert.Equal(t, "del1", p.SessionID)
-				found = true
-			}
-		}
-		assert.True(t, found, "session.deleted event should have correct payload")
+		p := testbus.FindPayload[eventbus.SessionDeletedPayload](tb, t, eventbus.EventSessionDeleted)
+		assert.Equal(t, "del1", p.SessionID)
 	})
 }
 
