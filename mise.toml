@@ -1,7 +1,7 @@
 [tools]
 "github:hay-kot/gobusgen" = "v0.3.0"
 "pipx:zensical" = "latest"
-golangci-lint = "latest"
+golangci-lint = "v2.9.0"
 "github:sqlc-dev/sqlc" = "v1.30.0"
 "go" = "1.26"
 
