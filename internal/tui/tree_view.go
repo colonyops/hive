@@ -151,6 +151,12 @@ type TreeItem struct {
 	IsLastWindow  bool            // For └─ vs ├─ rendering within the window group
 }
 
+// IsSession returns true when this item represents a regular session (not a
+// header, recycled placeholder, or window sub-item).
+func (i TreeItem) IsSession() bool {
+	return !i.IsHeader && !i.IsRecycledPlaceholder && !i.IsWindowItem
+}
+
 // FilterValue returns the value used for filtering.
 // Headers are not filterable (return empty).
 // Sessions return "repoName sessionName" to allow searching by either.

@@ -3,6 +3,7 @@ package hive
 import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
+	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/terminal"
@@ -19,6 +20,7 @@ type App struct {
 	Context  *ContextService
 	Doctor   *DoctorService
 
+	Bus      *eventbus.EventBus
 	Terminal *terminal.Manager
 	Plugins  *plugins.Manager
 	Config   *config.Config
@@ -32,6 +34,7 @@ func NewApp(
 	sessions *SessionService,
 	msgStore messaging.Store,
 	cfg *config.Config,
+	bus *eventbus.EventBus,
 	termMgr *terminal.Manager,
 	pluginMgr *plugins.Manager,
 	database *db.DB,
@@ -41,9 +44,10 @@ func NewApp(
 ) *App {
 	return &App{
 		Sessions: sessions,
-		Messages: NewMessageService(msgStore, cfg),
+		Messages: NewMessageService(msgStore, cfg, bus),
 		Context:  NewContextService(cfg, sessions.git),
 		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
+		Bus:      bus,
 		Terminal: termMgr,
 		Plugins:  pluginMgr,
 		Config:   cfg,

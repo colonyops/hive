@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
@@ -37,6 +38,7 @@ type SessionService struct {
 	config     *config.Config
 	executor   executil.Executor
 	log        zerolog.Logger
+	bus        *eventbus.EventBus
 	spawner    *Spawner
 	recycler   *Recycler
 	hookRunner *HookRunner
@@ -48,6 +50,7 @@ func NewSessionService(
 	sessions session.Store,
 	gitClient git.Git,
 	cfg *config.Config,
+	bus *eventbus.EventBus,
 	exec executil.Executor,
 	renderer *tmpl.Renderer,
 	log zerolog.Logger,
@@ -57,6 +60,7 @@ func NewSessionService(
 		sessions:   sessions,
 		git:        gitClient,
 		config:     cfg,
+		bus:        bus,
 		executor:   exec,
 		log:        log,
 		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, stdout, stderr),
@@ -176,6 +180,8 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
 
+	s.bus.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &sess})
+
 	return &sess, nil
 }
 
@@ -251,6 +257,8 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 
 	s.log.Info().Str("session_id", id).Str("path", newPath).Msg("session recycled")
 
+	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: &sess})
+
 	return nil
 }
 
@@ -271,6 +279,7 @@ func (s *SessionService) RenameSession(ctx context.Context, id, newName string) 
 		return fmt.Errorf("get session: %w", err)
 	}
 
+	oldName := sess.Name
 	sess.Name = newName
 	sess.Slug = slug
 	sess.UpdatedAt = time.Now()
@@ -278,6 +287,8 @@ func (s *SessionService) RenameSession(ctx context.Context, id, newName string) 
 	if err := s.sessions.Save(ctx, sess); err != nil {
 		return fmt.Errorf("save session: %w", err)
 	}
+
+	s.bus.PublishSessionRenamed(eventbus.SessionRenamedPayload{Session: &sess, OldName: oldName})
 
 	s.log.Info().Str("session_id", id).Str("new_name", newName).Msg("session renamed")
 	return nil
@@ -301,6 +312,8 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	if err := s.sessions.Delete(ctx, id); err != nil {
 		return fmt.Errorf("delete session: %w", err)
 	}
+
+	s.bus.PublishSessionDeleted(eventbus.SessionDeletedPayload{SessionID: id})
 
 	return nil
 }
@@ -444,6 +457,7 @@ func (s *SessionService) findValidRecyclable(ctx context.Context, remote string)
 // markCorrupted marks a session as corrupted and optionally deletes it.
 func (s *SessionService) markCorrupted(ctx context.Context, sess *session.Session) {
 	sess.MarkCorrupted(time.Now())
+	s.bus.PublishSessionCorrupted(eventbus.SessionCorruptedPayload{Session: sess})
 
 	if s.config.AutoDeleteCorrupted {
 		s.log.Info().Str("session_id", sess.ID).Msg("auto-deleting corrupted session")
