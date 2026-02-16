@@ -27,8 +27,8 @@ type Bus struct {
 }
 
 // New creates a test bus, starts it in a background goroutine, and
-// subscribes to all event types for recording. The bus is stopped
-// when the test completes.
+// records all published events via the OnPublish hook. The bus is
+// stopped when the test completes.
 func New(t *testing.T) *Bus {
 	t.Helper()
 
@@ -40,36 +40,8 @@ func New(t *testing.T) *Bus {
 		cancel:   cancel,
 	}
 
-	// Subscribe to all event types for recording.
-	bus.SubscribeSessionCreated(func(p eventbus.SessionCreatedPayload) {
-		tb.record(eventbus.EventSessionCreated, p)
-	})
-	bus.SubscribeSessionRecycled(func(p eventbus.SessionRecycledPayload) {
-		tb.record(eventbus.EventSessionRecycled, p)
-	})
-	bus.SubscribeSessionDeleted(func(p eventbus.SessionDeletedPayload) {
-		tb.record(eventbus.EventSessionDeleted, p)
-	})
-	bus.SubscribeSessionRenamed(func(p eventbus.SessionRenamedPayload) {
-		tb.record(eventbus.EventSessionRenamed, p)
-	})
-	bus.SubscribeSessionCorrupted(func(p eventbus.SessionCorruptedPayload) {
-		tb.record(eventbus.EventSessionCorrupted, p)
-	})
-	bus.SubscribeAgentStatusChanged(func(p eventbus.AgentStatusChangedPayload) {
-		tb.record(eventbus.EventAgentStatusChanged, p)
-	})
-	bus.SubscribeMessageReceived(func(p eventbus.MessageReceivedPayload) {
-		tb.record(eventbus.EventMessageReceived, p)
-	})
-	bus.SubscribeTuiStarted(func(p eventbus.TUIStartedPayload) {
-		tb.record(eventbus.EventTuiStarted, p)
-	})
-	bus.SubscribeTuiStopped(func(p eventbus.TUIStoppedPayload) {
-		tb.record(eventbus.EventTuiStopped, p)
-	})
-	bus.SubscribeConfigReloaded(func(p eventbus.ConfigReloadedPayload) {
-		tb.record(eventbus.EventConfigReloaded, p)
+	bus.OnPublish(func(event eventbus.Event, payload any) {
+		tb.record(event, payload)
 	})
 
 	go bus.Start(ctx)
