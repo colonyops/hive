@@ -173,7 +173,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	strategy := s.config.ResolveSpawn(remote, opts.UseBatchSpawn)
 	if strategy.IsWindows() {
-		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, false); err != nil {
+		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
 	} else if len(strategy.Commands) > 0 {

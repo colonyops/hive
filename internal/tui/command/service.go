@@ -6,6 +6,8 @@ import (
 	"io"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/session"
 	coretmux "github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -107,8 +109,9 @@ func (s *Service) newTmuxExecutor(action Action, background bool) (Executor, err
 		return nil, fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
 	}
 
-	// Render window templates
+	// Render window templates with full spawn data
 	windows := make([]coretmux.RenderedWindow, 0, len(strategy.Windows))
+	owner, repo := git.ExtractOwnerRepo(action.SessionRemote)
 	data := struct {
 		Path       string
 		Name       string
@@ -118,8 +121,12 @@ func (s *Service) newTmuxExecutor(action Action, background bool) (Executor, err
 		Owner      string
 		Repo       string
 	}{
-		Path: action.SessionPath,
-		Name: action.SessionName,
+		Path:       action.SessionPath,
+		Name:       action.SessionName,
+		Slug:       session.Slugify(action.SessionName),
+		ContextDir: s.cfg.RepoContextDir(owner, repo),
+		Owner:      owner,
+		Repo:       repo,
 	}
 
 	for _, w := range strategy.Windows {
