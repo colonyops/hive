@@ -19,10 +19,18 @@ type RenderedWindow struct {
 	Focus   bool   // Select this window after creation
 }
 
+// SessionClient is the interface used by consumers that create/open tmux sessions.
+type SessionClient interface {
+	CreateSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool) error
+	OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error
+}
+
 // Client creates and manages tmux sessions from window definitions.
 type Client struct {
 	exec executil.Executor
 }
+
+var _ SessionClient = (*Client)(nil)
 
 // New creates a Client with the given executor.
 func New(exec executil.Executor) *Client {

@@ -30,18 +30,18 @@ type Spawner struct {
 	log      zerolog.Logger
 	executor executil.Executor
 	renderer *tmpl.Renderer
-	tmux     *coretmux.Client
+	tmux     coretmux.SessionClient
 	stdout   io.Writer
 	stderr   io.Writer
 }
 
 // NewSpawner creates a new Spawner.
-func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, stdout, stderr io.Writer) *Spawner {
+func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, tmuxClient coretmux.SessionClient, stdout, stderr io.Writer) *Spawner {
 	return &Spawner{
 		log:      log,
 		executor: executor,
 		renderer: renderer,
-		tmux:     coretmux.New(executor),
+		tmux:     tmuxClient,
 		stdout:   stdout,
 		stderr:   stderr,
 	}

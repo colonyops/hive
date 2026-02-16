@@ -2387,10 +2387,9 @@ func (m *Model) handleFilterAction(actionType act.Type) bool {
 	case act.TypeFilterReady:
 		m.statusFilter = terminal.StatusReady
 		return true
-	case act.TypeNone, act.TypeRecycle, act.TypeDelete, act.TypeDeleteRecycledBatch, act.TypeShell, act.TypeTmuxOpen, act.TypeTmuxStart, act.TypeDocReview, act.TypeNewSession, act.TypeSetTheme, act.TypeMessages, act.TypeRenameSession, act.TypeNextActive, act.TypePrevActive:
+	default:
 		return false
 	}
-	return false
 }
 
 // selectedMessage returns the currently selected message, or nil if none.

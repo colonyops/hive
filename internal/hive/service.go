@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
+	coretmux "github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -63,7 +64,7 @@ func NewSessionService(
 		bus:        bus,
 		executor:   exec,
 		log:        log,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, stdout, stderr),
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), stdout, stderr),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), stdout),
@@ -171,7 +172,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		Repo:       repoName,
 	}
 
-	strategy := s.config.ResolveSpawn(remote, opts.UseBatchSpawn)
+	strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
 	switch {
 	case strategy.IsWindows():
 		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
@@ -424,7 +425,7 @@ func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
 func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error {
-	strategy := s.config.ResolveSpawn(remote, false)
+	strategy := config.ResolveSpawn(s.config.Rules, remote, false)
 	if !strategy.IsWindows() {
 		return fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
 	}

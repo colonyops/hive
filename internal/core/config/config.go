@@ -491,16 +491,6 @@ func DefaultWindows() []WindowConfig {
 	}
 }
 
-// DefaultSpawnCommands are the default commands run when spawning a new session.
-var DefaultSpawnCommands = []string{
-	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
-}
-
-// DefaultBatchSpawnCommands are the default commands run when spawning a batch session.
-var DefaultBatchSpawnCommands = []string{
-	`HIVE_AGENT_COMMAND={{ agentCommand | shq }} HIVE_AGENT_WINDOW={{ agentWindow | shq }} HIVE_AGENT_FLAGS={{ agentFlags | shq }} {{ hiveTmux }} -b {{ .Name | shq }} {{ .Path | shq }} {{ .Prompt | shq }}`,
-}
-
 // DefaultRecycleCommands are the default commands run when recycling a session.
 var DefaultRecycleCommands = []string{
 	"git fetch origin",
@@ -1023,10 +1013,10 @@ func (s SpawnStrategy) IsWindows() bool { return len(s.Windows) > 0 }
 // Rules are evaluated in order (last-match-wins). If the last matching rule
 // has windows, those are used. If it has spawn/batch_spawn commands, those are used.
 // If nothing matches, DefaultWindows() is returned.
-func (c *Config) ResolveSpawn(remote string, batch bool) SpawnStrategy {
+func ResolveSpawn(rules []Rule, remote string, batch bool) SpawnStrategy {
 	var strategy SpawnStrategy
-	for _, rule := range c.Rules {
-		if rule.Pattern != "" && !matchesPattern(rule.Pattern, remote) {
+	for _, rule := range rules {
+		if !rule.Matches(remote) {
 			continue
 		}
 		switch {
@@ -1042,30 +1032,6 @@ func (c *Config) ResolveSpawn(remote string, batch bool) SpawnStrategy {
 		return SpawnStrategy{Windows: DefaultWindows()}
 	}
 	return strategy
-}
-
-// GetSpawnCommands returns the spawn commands for the given remote URL.
-// If batch is true, returns BatchSpawn commands; otherwise returns Spawn commands.
-// Rules are evaluated in order; the last matching rule with spawn commands wins.
-// If no rules define spawn commands, returns DefaultSpawnCommands/DefaultBatchSpawnCommands.
-func (c *Config) GetSpawnCommands(remote string, batch bool) []string {
-	var result []string
-	for _, rule := range c.Rules {
-		if rule.Pattern == "" || matchesPattern(rule.Pattern, remote) {
-			if batch && len(rule.BatchSpawn) > 0 {
-				result = rule.BatchSpawn
-			} else if !batch && len(rule.Spawn) > 0 {
-				result = rule.Spawn
-			}
-		}
-	}
-	if len(result) == 0 {
-		if batch {
-			return DefaultBatchSpawnCommands
-		}
-		return DefaultSpawnCommands
-	}
-	return result
 }
 
 // GetRecycleCommands returns the recycle commands for the given remote URL.
@@ -1084,6 +1050,15 @@ func (c *Config) GetRecycleCommands(remote string) []string {
 		return DefaultRecycleCommands
 	}
 	return result
+}
+
+// Matches reports whether this rule matches the given remote URL.
+// An empty pattern matches everything.
+func (r Rule) Matches(remote string) bool {
+	if r.Pattern == "" {
+		return true
+	}
+	return matchesPattern(r.Pattern, remote)
 }
 
 // matchesPattern checks if remote matches the regex pattern.

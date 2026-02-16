@@ -431,106 +431,6 @@ func TestGetMaxRecycled(t *testing.T) {
 	}
 }
 
-func TestGetSpawnCommands(t *testing.T) {
-	tests := []struct {
-		name     string
-		rules    []Rule
-		remote   string
-		batch    bool
-		expected []string
-	}{
-		{
-			name:     "no rules returns defaults",
-			rules:    nil,
-			remote:   "https://github.com/foo/bar",
-			batch:    false,
-			expected: DefaultSpawnCommands,
-		},
-		{
-			name: "catch-all rule provides spawn",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}},
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    false,
-			expected: []string{"echo spawn"},
-		},
-		{
-			name: "batch_spawn returns batch commands",
-			rules: []Rule{
-				{
-					Pattern:    "",
-					Spawn:      []string{"echo spawn"},
-					BatchSpawn: []string{"echo batch"},
-				},
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    true,
-			expected: []string{"echo batch"},
-		},
-		{
-			name: "batch falls back to defaults when no batch_spawn",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo spawn"}},
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    true,
-			expected: DefaultBatchSpawnCommands,
-		},
-		{
-			name: "specific rule overrides catch-all",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo default"}},
-				{Pattern: "github.com/foo/.*", Spawn: []string{"echo foo"}},
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    false,
-			expected: []string{"echo foo"},
-		},
-		{
-			name: "non-matching rule uses catch-all",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo default"}},
-				{Pattern: "github.com/other/.*", Spawn: []string{"echo other"}},
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    false,
-			expected: []string{"echo default"},
-		},
-		{
-			name: "last matching rule wins",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo default"}},
-				{Pattern: "github.com/.*", Spawn: []string{"echo github"}},
-				{Pattern: "github.com/foo/.*", Spawn: []string{"echo foo"}},
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    false,
-			expected: []string{"echo foo"},
-		},
-		{
-			name: "rule without spawn inherits from previous",
-			rules: []Rule{
-				{Pattern: "", Spawn: []string{"echo default"}},
-				{Pattern: "github.com/foo/.*", Commands: []string{"setup"}}, // no spawn
-			},
-			remote:   "https://github.com/foo/bar",
-			batch:    false,
-			expected: []string{"echo default"},
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			cfg := validConfig(t)
-			cfg.Rules = tt.rules
-
-			result := cfg.GetSpawnCommands(tt.remote, tt.batch)
-			assert.Equal(t, tt.expected, result)
-		})
-	}
-}
-
 func TestGetRecycleCommands(t *testing.T) {
 	tests := []struct {
 		name     string
@@ -1292,7 +1192,7 @@ func TestResolveSpawn(t *testing.T) {
 			cfg := validConfig(t)
 			cfg.Rules = tt.rules
 
-			strategy := cfg.ResolveSpawn(tt.remote, tt.batch)
+			strategy := ResolveSpawn(cfg.Rules, tt.remote, tt.batch)
 			assert.Equal(t, tt.wantWindows, strategy.IsWindows(), "IsWindows mismatch")
 
 			if tt.wantCommands != nil {
