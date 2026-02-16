@@ -8,9 +8,19 @@ HIVE_LOG_FILE = "./dev.log"
 
 [tasks.generate]
 description = "Run all code generators"
-sources = ["internal/core/eventbus/events.go"]
-outputs = ["internal/core/eventbus/eventbus.gen.go"]
-run = "go generate ./..."
+sources = [
+  "internal/core/eventbus/events.go",
+  "internal/data/db/queries/queries.sql",
+  "internal/data/db/schema/schema.sql",
+  "sqlc.yaml",
+]
+outputs = [
+  "internal/core/eventbus/eventbus.gen.go",
+  "internal/data/db/db.go",
+  "internal/data/db/models.go",
+  "internal/data/db/queries.sql.go",
+]
+run = ["go generate ./...", "sqlc generate"]
 
 [tasks.start]
 alias = "default"
@@ -38,10 +48,6 @@ description = "Run tests with race detection and coverage"
 quiet = true
 run = "go test -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
 
-[tasks.tidy]
-description = "Run go mod tidy"
-run = "go mod tidy"
-
 [tasks.lint]
 description = "Run golangci-lint"
 run = "golangci-lint run ./..."
@@ -53,7 +59,7 @@ run = "golangci-lint fmt ./..."
 [tasks.check]
 description = "Run tidy, lint, and test"
 run = [
-  { task = "tidy" },
+  "go mod tidy",
   { tasks = ["lint", "test"] },
 ]
 
@@ -67,18 +73,9 @@ description = "Run doctor with intentionally invalid config"
 env = { HIVE_CONFIG = "./config.invalid.yaml" }
 run = "go run *.go doctor || true"
 
-[tasks."sqlc:generate"]
-description = "Generate Go code from SQL queries using sqlc"
-dir = "internal/store/sqlite"
-run = "sqlc generate"
-
 [tasks."docs:serve"]
 description = "Serve documentation site locally"
 run = "zensical serve"
-
-[tasks."docs:llms"]
-description = "Generate llms.txt and llms-full.txt"
-run = "./scripts/generate-llmstxt.sh"
 
 [tasks."docs:build"]
 description = "Build documentation site with llms.txt"
