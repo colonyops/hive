@@ -85,7 +85,7 @@ Commands support Go templates with `{{ .Variable }}` syntax.
 | `windows`, `spawn`, `batch_spawn` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo` |
 | `batch_spawn`, `windows` (batch) | `.Prompt` |
 | `recycle` | `.DefaultBranch` |
-| `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.TmuxWindow`, `.Args` |
+| `usercommands.*.sh` | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
 
 Use `{{ .Variable | shq }}` for safe shell quoting.
 
@@ -94,11 +94,9 @@ Use `{{ .Variable | shq }}` for safe shell quoting.
 ### Tmux
 
 ```yaml
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
-    preview_window_matcher: ["claude", "aider", "codex"]
+tmux:
+  poll_interval: 1.5s
+  preview_window_matcher: ["claude", "aider", "codex"]
 ```
 
 **Status indicators:**

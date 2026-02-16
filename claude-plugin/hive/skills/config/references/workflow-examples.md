@@ -11,10 +11,8 @@ repo_dirs:
   - ~/code/repos
   - ~/projects
 
-integrations:
-  terminal:
-    enabled: [tmux]
-    poll_interval: 500ms
+tmux:
+  poll_interval: 1.5s
 
 tui:
   refresh_interval: 10s
@@ -195,7 +193,7 @@ commands:
 ### Key Changes in 0.2.5
 
 - **YAML window config:** New `windows` field on rules replaces shell-based `spawn` commands for tmux. Declarative window definitions with `name`, `command`, `dir`, and `focus` fields
-- **`tmux-open` / `tmux-start` actions:** New built-in actions for opening (foreground) or starting (background) tmux sessions using window config
+- **`TmuxOpen` / `TmuxStart` actions:** New built-in actions for opening (foreground) or starting (background) tmux sessions using window config
 - **Default spawn uses windows:** When no rule specifies `windows` or `spawn`, the default is now a declarative window layout (agent window + shell)
 - **Multi-window tree items:** Sessions with multiple agent windows now show each window as a selectable sub-item
 - **TmuxWindow template variable:** `{{ .TmuxWindow }}` available in user commands for window targeting

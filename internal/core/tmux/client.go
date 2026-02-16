@@ -19,18 +19,10 @@ type RenderedWindow struct {
 	Focus   bool   // Select this window after creation
 }
 
-// SessionClient is the interface used by consumers that create/open tmux sessions.
-type SessionClient interface {
-	CreateSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool) error
-	OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error
-}
-
 // Client creates and manages tmux sessions from window definitions.
 type Client struct {
 	exec executil.Executor
 }
-
-var _ SessionClient = (*Client)(nil)
 
 // New creates a Client with the given executor.
 func New(exec executil.Executor) *Client {
@@ -65,7 +57,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		return fmt.Errorf("tmux new-session: %w", err)
 	}
 
-	// Create additional windows.
+	// Create additional windows. On failure, kill the partial session.
 	for _, w := range windows[1:] {
 		args := []string{"new-window", "-t", name, "-n", w.Name}
 		if dir := windowDir(w, workDir); dir != "" {
@@ -76,6 +68,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		}
 
 		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
 		}
 	}
@@ -125,6 +118,7 @@ func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows 
 		}
 		if targetWindow != "" {
 			// Best-effort: window may not exist if config changed since session was created.
+			// Failure is expected (e.g., window renamed/closed) — attach to current window instead.
 			_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+targetWindow)
 		}
 		return c.AttachOrSwitch(ctx, name)

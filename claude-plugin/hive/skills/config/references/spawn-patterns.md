@@ -109,7 +109,7 @@ batch_spawn:
 
 - **`.Path`** - Absolute path to session directory
 - **`.Name`** - Session name (repo-sessionid format)
-- **`.Slug`** - Repository slug (owner/repo)
+- **`.Slug`** - URL-safe session name (e.g., "my-session-name")
 - **`.ContextDir`** - Shared context directory path
 - **`.Owner`** - Repository owner
 - **`.Repo`** - Repository name

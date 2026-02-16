@@ -14,6 +14,12 @@ import (
 	"github.com/rs/zerolog"
 )
 
+// SessionClient is the interface used by consumers that create/open tmux sessions.
+type SessionClient interface {
+	CreateSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool) error
+	OpenSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool, targetWindow string) error
+}
+
 // SpawnData is the template context for spawn commands.
 type SpawnData struct {
 	Path       string // Absolute path to session directory
@@ -30,13 +36,13 @@ type Spawner struct {
 	log      zerolog.Logger
 	executor executil.Executor
 	renderer *tmpl.Renderer
-	tmux     coretmux.SessionClient
+	tmux     SessionClient
 	stdout   io.Writer
 	stderr   io.Writer
 }
 
 // NewSpawner creates a new Spawner.
-func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, tmuxClient coretmux.SessionClient, stdout, stderr io.Writer) *Spawner {
+func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, tmuxClient SessionClient, stdout, stderr io.Writer) *Spawner {
 	return &Spawner{
 		log:      log,
 		executor: executor,
