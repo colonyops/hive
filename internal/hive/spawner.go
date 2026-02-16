@@ -30,7 +30,7 @@ type Spawner struct {
 	log      zerolog.Logger
 	executor executil.Executor
 	renderer *tmpl.Renderer
-	tmux     *coretmux.Builder
+	tmux     *coretmux.Client
 	stdout   io.Writer
 	stderr   io.Writer
 }
@@ -41,7 +41,7 @@ func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.R
 		log:      log,
 		executor: executor,
 		renderer: renderer,
-		tmux:     coretmux.NewBuilder(executor),
+		tmux:     coretmux.New(executor),
 		stdout:   stdout,
 		stderr:   stderr,
 	}
@@ -83,8 +83,25 @@ func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfi
 	return nil
 }
 
+// OpenWindows renders window templates and opens (or creates) a tmux session.
+// If the session already exists, it attaches to it (optionally selecting targetWindow).
+func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string) error {
+	rendered, err := RenderWindows(s.renderer, windows, data)
+	if err != nil {
+		return err
+	}
+
+	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Str("targetWindow", targetWindow).Msg("opening tmux session")
+
+	if err := s.tmux.OpenSession(ctx, data.Name, data.Path, rendered, background, targetWindow); err != nil {
+		return fmt.Errorf("open tmux session: %w", err)
+	}
+
+	return nil
+}
+
 // RenderWindows renders a slice of WindowConfig templates against SpawnData,
-// producing fully-resolved RenderedWindow values ready for the tmux Builder.
+// producing fully-resolved RenderedWindow values ready for the tmux Client.
 func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data SpawnData) ([]coretmux.RenderedWindow, error) {
 	rendered := make([]coretmux.RenderedWindow, 0, len(windows))
 	for _, w := range windows {

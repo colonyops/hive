@@ -9,56 +9,14 @@ import (
 	"charm.land/bubbles/v2/key"
 	"github.com/rs/zerolog/log"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
-// ActionType identifies the kind of action a keybinding triggers.
-type ActionType int
-
-const (
-	ActionTypeNone ActionType = iota
-	ActionTypeRecycle
-	ActionTypeDelete
-	ActionTypeShell
-	ActionTypeTmuxOpen
-	ActionTypeTmuxStart
-	ActionTypeFilterAll
-	ActionTypeFilterActive
-	ActionTypeFilterApproval
-	ActionTypeFilterReady
-	ActionTypeDocReview
-	ActionTypeNewSession
-	ActionTypeSetTheme
-	ActionTypeMessages
-	ActionTypeRenameSession
-	ActionTypeNextActive
-	ActionTypePrevActive
-	ActionTypeDeleteRecycledBatch // Delete all recycled sessions at once (must stay at end to not shift command.ActionType values)
-)
-
-// Action represents a resolved keybinding action ready for execution.
-type Action struct {
-	Type          ActionType
-	Key           string
-	Help          string
-	Confirm       string // Non-empty if confirmation required
-	ShellCmd      string // For shell actions, the rendered command
-	SessionID     string
-	SessionName   string // Session display name (for tmux actions)
-	SessionPath   string
-	SessionRemote string // Session remote URL (for tmux actions)
-	TmuxWindow    string // Target tmux window name (for tmux actions)
-	Silent        bool   // Skip loading popup for fast commands
-	Exit          bool   // Exit hive after command completes
-	Err           error  // Non-nil if action resolution failed (e.g., template error)
-}
-
-// NeedsConfirm returns true if the action requires user confirmation.
-func (a Action) NeedsConfirm() bool {
-	return a.Confirm != ""
-}
+// Action is an alias for the unified action type.
+type Action = action.Action
 
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
@@ -143,13 +101,13 @@ func (h *KeybindingResolver) isCommandInScope(cmd config.UserCommand) bool {
 }
 
 // IsAction checks if a key maps to the given built-in action.
-func (h *KeybindingResolver) IsAction(key string, action string) bool {
+func (h *KeybindingResolver) IsAction(key string, t action.Type) bool {
 	kb, exists := h.keybindings[key]
 	if !exists {
 		return false
 	}
 	cmd, exists := h.commands[kb.Cmd]
-	return exists && cmd.Action == action
+	return exists && cmd.Action == t
 }
 
 // IsCommand checks if a key maps to the given command name.
@@ -184,12 +142,12 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	}
 
 	// Recycled sessions only allow delete - prevent accidental operations
-	if sess.State == session.StateRecycled && cmd.Action != config.ActionDelete {
+	if sess.State == session.StateRecycled && cmd.Action != action.TypeDelete {
 		return Action{}, false
 	}
 
 	// Build action from command, with keybinding overrides
-	action := Action{
+	a := Action{
 		Key:           key,
 		Help:          kb.Help,
 		Confirm:       kb.Confirm,
@@ -202,60 +160,28 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	}
 
 	// Use command values if keybinding doesn't override
-	if action.Help == "" {
-		action.Help = cmd.Help
+	if a.Help == "" {
+		a.Help = cmd.Help
 	}
-	if action.Confirm == "" {
-		action.Confirm = cmd.Confirm
+	if a.Confirm == "" {
+		a.Confirm = cmd.Confirm
 	}
 
 	// Resolve action type from command
 	if cmd.Action != "" {
-		switch cmd.Action {
-		case config.ActionRecycle:
-			action.Type = ActionTypeRecycle
-			if action.Help == "" {
-				action.Help = "recycle"
-			}
-		case config.ActionDelete:
-			action.Type = ActionTypeDelete
-			if action.Help == "" {
-				action.Help = "delete"
-			}
-		case config.ActionFilterAll:
-			action.Type = ActionTypeFilterAll
-		case config.ActionFilterActive:
-			action.Type = ActionTypeFilterActive
-		case config.ActionFilterApproval:
-			action.Type = ActionTypeFilterApproval
-		case config.ActionFilterReady:
-			action.Type = ActionTypeFilterReady
-		case config.ActionDocReview:
-			action.Type = ActionTypeDocReview
-			if action.Help == "" {
-				action.Help = "review document"
-			}
-		case config.ActionSetTheme:
-			action.Type = ActionTypeSetTheme
-		case config.ActionMessages:
-			action.Type = ActionTypeMessages
-		case config.ActionRenameSession:
-			action.Type = ActionTypeRenameSession
-			if action.Help == "" {
-				action.Help = "rename session"
-			}
-		case config.ActionNextActive:
-			action.Type = ActionTypeNextActive
-		case config.ActionPrevActive:
-			action.Type = ActionTypePrevActive
-		case config.ActionTmuxOpen:
-			action.Type = ActionTypeTmuxOpen
-			action.TmuxWindow = h.consumeWindowOverride(sess.ID)
-		case config.ActionTmuxStart:
-			action.Type = ActionTypeTmuxStart
-			action.TmuxWindow = h.consumeWindowOverride(sess.ID)
+		a.Type = cmd.Action
+
+		// Default help for actions that need it
+		if a.Help == "" {
+			a.Help = strings.ToLower(string(cmd.Action))
 		}
-		return action, true
+
+		// Tmux actions need window override
+		if cmd.Action == action.TypeTmuxOpen || cmd.Action == action.TypeTmuxStart {
+			a.TmuxWindow = h.consumeWindowOverride(sess.ID)
+		}
+
+		return a, true
 	}
 
 	// Shell command
@@ -272,15 +198,15 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 		rendered, err := h.renderer.Render(cmd.Sh, data)
 		if err != nil {
 			// Surface template error instead of masking it
-			action.Type = ActionTypeShell
-			action.Err = fmt.Errorf("template error in command %q: %w", kb.Cmd, err)
+			a.Type = action.TypeShell
+			a.Err = fmt.Errorf("template error in command %q: %w", kb.Cmd, err)
 			log.Warn().Str("key", key).Str("cmd", kb.Cmd).Err(err).Msg("template rendering failed")
-			return action, true
+			return a, true
 		}
 
-		action.Type = ActionTypeShell
-		action.ShellCmd = rendered
-		return action, true
+		a.Type = action.TypeShell
+		a.ShellCmd = rendered
+		return a, true
 	}
 
 	return Action{}, false
@@ -308,7 +234,7 @@ func (h *KeybindingResolver) HelpEntries() []string {
 		if help == "" {
 			help = cmd.Help
 			if help == "" && cmd.Action != "" {
-				help = cmd.Action
+				help = strings.ToLower(string(cmd.Action))
 			}
 		}
 		if help == "" {
@@ -346,7 +272,7 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 		if help == "" {
 			help = cmd.Help
 			if help == "" && cmd.Action != "" {
-				help = cmd.Action
+				help = strings.ToLower(string(cmd.Action))
 			}
 		}
 		if help == "" {
@@ -366,7 +292,7 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 // The name is used to display the command source (e.g., ":review").
 // Supports both action-based commands (recycle, delete) and shell commands.
 func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
-	action := Action{
+	a := Action{
 		Key:           ":" + name,
 		Help:          cmd.Help,
 		Confirm:       cmd.Confirm,
@@ -380,46 +306,17 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 
 	// Handle built-in actions
 	if cmd.Action != "" {
-		switch cmd.Action {
-		case config.ActionRecycle:
-			action.Type = ActionTypeRecycle
-			if action.Help == "" {
-				action.Help = "recycle"
-			}
-		case config.ActionDelete:
-			action.Type = ActionTypeDelete
-			if action.Help == "" {
-				action.Help = "delete"
-			}
-		case config.ActionFilterAll:
-			action.Type = ActionTypeFilterAll
-		case config.ActionFilterActive:
-			action.Type = ActionTypeFilterActive
-		case config.ActionFilterApproval:
-			action.Type = ActionTypeFilterApproval
-		case config.ActionFilterReady:
-			action.Type = ActionTypeFilterReady
-		case config.ActionSetTheme:
-			action.Type = ActionTypeSetTheme
-		case config.ActionMessages:
-			action.Type = ActionTypeMessages
-		case config.ActionRenameSession:
-			action.Type = ActionTypeRenameSession
-			if action.Help == "" {
-				action.Help = "rename session"
-			}
-		case config.ActionNextActive:
-			action.Type = ActionTypeNextActive
-		case config.ActionPrevActive:
-			action.Type = ActionTypePrevActive
-		case config.ActionTmuxOpen:
-			action.Type = ActionTypeTmuxOpen
-			action.TmuxWindow = h.consumeWindowOverride(sess.ID)
-		case config.ActionTmuxStart:
-			action.Type = ActionTypeTmuxStart
-			action.TmuxWindow = h.consumeWindowOverride(sess.ID)
+		a.Type = cmd.Action
+
+		if a.Help == "" {
+			a.Help = strings.ToLower(string(cmd.Action))
 		}
-		return action
+
+		if cmd.Action == action.TypeTmuxOpen || cmd.Action == action.TypeTmuxStart {
+			a.TmuxWindow = h.consumeWindowOverride(sess.ID)
+		}
+
+		return a
 	}
 
 	// Shell command
@@ -435,16 +332,15 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 
 	rendered, err := h.renderer.Render(cmd.Sh, data)
 	if err != nil {
-		// Surface template error instead of masking it
-		action.Type = ActionTypeShell
-		action.Err = fmt.Errorf("template error in command %q: %w", name, err)
+		a.Type = action.TypeShell
+		a.Err = fmt.Errorf("template error in command %q: %w", name, err)
 		log.Warn().Str("command", name).Err(err).Msg("template rendering failed")
-		return action
+		return a
 	}
 
-	action.Type = ActionTypeShell
-	action.ShellCmd = rendered
-	return action
+	a.Type = action.TypeShell
+	a.ShellCmd = rendered
+	return a
 }
 
 // RenderWithFormData resolves a user command with form data injected
@@ -456,7 +352,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 	args []string,
 	formData map[string]any,
 ) Action {
-	action := Action{
+	a := Action{
 		Key:           ":" + name,
 		Help:          cmd.Help,
 		Confirm:       cmd.Confirm,
@@ -481,14 +377,14 @@ func (h *KeybindingResolver) RenderWithFormData(
 
 	rendered, err := h.renderer.Render(cmd.Sh, data)
 	if err != nil {
-		action.Type = ActionTypeShell
-		action.Err = fmt.Errorf("template error in command %q: %w", name, err)
-		return action
+		a.Type = action.TypeShell
+		a.Err = fmt.Errorf("template error in command %q: %w", name, err)
+		return a
 	}
 
-	action.Type = ActionTypeShell
-	action.ShellCmd = rendered
-	return action
+	a.Type = action.TypeShell
+	a.ShellCmd = rendered
+	return a
 }
 
 // ResolveFormCommand checks if a key maps to a user command with form fields.

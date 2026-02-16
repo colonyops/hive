@@ -1,4 +1,4 @@
-// Package tmux provides a Go-native tmux session builder that creates sessions
+// Package tmux provides a Go-native tmux session client that creates sessions
 // from declarative window definitions.
 package tmux
 
@@ -19,26 +19,26 @@ type RenderedWindow struct {
 	Focus   bool   // Select this window after creation
 }
 
-// Builder creates and manages tmux sessions from window definitions.
-type Builder struct {
+// Client creates and manages tmux sessions from window definitions.
+type Client struct {
 	exec executil.Executor
 }
 
-// NewBuilder creates a Builder with the given executor.
-func NewBuilder(exec executil.Executor) *Builder {
-	return &Builder{exec: exec}
+// New creates a Client with the given executor.
+func New(exec executil.Executor) *Client {
+	return &Client{exec: exec}
 }
 
 // HasSession checks whether a tmux session with the given name exists.
-func (b *Builder) HasSession(ctx context.Context, name string) bool {
-	_, err := b.exec.Run(ctx, "tmux", "has-session", "-t", name)
+func (c *Client) HasSession(ctx context.Context, name string) bool {
+	_, err := c.exec.Run(ctx, "tmux", "has-session", "-t", name)
 	return err == nil
 }
 
 // CreateSession creates a tmux session with the given windows.
 // The first window is created via new-session; additional windows via new-window.
 // If background is true, the session is created detached.
-func (b *Builder) CreateSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool) error {
+func (c *Client) CreateSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool) error {
 	if len(windows) == 0 {
 		return fmt.Errorf("tmux: at least one window is required")
 	}
@@ -53,7 +53,7 @@ func (b *Builder) CreateSession(ctx context.Context, name, workDir string, windo
 		args = append(args, "--", "sh", "-c", first.Command)
 	}
 
-	if _, err := b.exec.Run(ctx, "tmux", args...); err != nil {
+	if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 		return fmt.Errorf("tmux new-session: %w", err)
 	}
 
@@ -67,7 +67,7 @@ func (b *Builder) CreateSession(ctx context.Context, name, workDir string, windo
 			args = append(args, "--", "sh", "-c", w.Command)
 		}
 
-		if _, err := b.exec.Run(ctx, "tmux", args...); err != nil {
+		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
 		}
 	}
@@ -80,28 +80,28 @@ func (b *Builder) CreateSession(ctx context.Context, name, workDir string, windo
 			break
 		}
 	}
-	if _, err := b.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+focusName); err != nil {
+	if _, err := c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+focusName); err != nil {
 		return fmt.Errorf("tmux select-window: %w", err)
 	}
 
 	if !background {
-		return b.AttachOrSwitch(ctx, name)
+		return c.AttachOrSwitch(ctx, name)
 	}
 	return nil
 }
 
 // AttachOrSwitch connects to an existing tmux session.
 // Inside tmux it uses switch-client; outside it uses attach-session.
-func (b *Builder) AttachOrSwitch(ctx context.Context, name string) error {
+func (c *Client) AttachOrSwitch(ctx context.Context, name string) error {
 	if insideTmux() {
-		_, err := b.exec.Run(ctx, "tmux", "switch-client", "-t", name)
+		_, err := c.exec.Run(ctx, "tmux", "switch-client", "-t", name)
 		if err != nil {
 			return fmt.Errorf("tmux switch-client: %w", err)
 		}
 		return nil
 	}
 
-	_, err := b.exec.Run(ctx, "tmux", "attach-session", "-t", name)
+	_, err := c.exec.Run(ctx, "tmux", "attach-session", "-t", name)
 	if err != nil {
 		return fmt.Errorf("tmux attach-session: %w", err)
 	}
@@ -110,18 +110,18 @@ func (b *Builder) AttachOrSwitch(ctx context.Context, name string) error {
 
 // OpenSession creates a session if it doesn't exist, or attaches to it.
 // If targetWindow is non-empty and the session already exists, select that window before attaching.
-func (b *Builder) OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error {
-	if b.HasSession(ctx, name) {
+func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error {
+	if c.HasSession(ctx, name) {
 		if background {
 			return nil
 		}
 		if targetWindow != "" {
 			// Best-effort: window may not exist if config changed since session was created.
-			_, _ = b.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+targetWindow)
+			_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+targetWindow)
 		}
-		return b.AttachOrSwitch(ctx, name)
+		return c.AttachOrSwitch(ctx, name)
 	}
-	return b.CreateSession(ctx, name, workDir, windows, background)
+	return c.CreateSession(ctx, name, workDir, windows, background)
 }
 
 // windowDir returns the working directory for a window, falling back to the session default.

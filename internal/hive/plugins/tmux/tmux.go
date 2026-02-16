@@ -5,6 +5,7 @@ import (
 	"context"
 	"os/exec"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/hive/plugins"
 )
@@ -35,13 +36,13 @@ func (p *Plugin) Close() error                 { return nil }
 func (p *Plugin) Commands() map[string]config.UserCommand {
 	return map[string]config.UserCommand{
 		"TmuxOpen": {
-			Action: config.ActionTmuxOpen,
+			Action: action.TypeTmuxOpen,
 			Help:   "open tmux session",
 			Exit:   "$HIVE_POPUP",
 			Silent: true,
 		},
 		"TmuxStart": {
-			Action: config.ActionTmuxStart,
+			Action: action.TypeTmuxStart,
 			Help:   "start tmux session (background)",
 			Silent: true,
 		},

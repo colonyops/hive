@@ -1,19 +1,15 @@
 package command
 
-import (
-	"context"
+import "context"
 
-	coretmux "github.com/colonyops/hive/internal/core/tmux"
-)
-
-// TmuxExecutor creates or attaches to a tmux session using window config.
+// TmuxExecutor opens or creates a tmux session via the TmuxOpener interface.
 type TmuxExecutor struct {
-	builder      *coretmux.Builder
+	opener       TmuxOpener
 	name         string
-	workDir      string
-	windows      []coretmux.RenderedWindow
+	path         string
+	remote       string
+	targetWindow string
 	background   bool
-	targetWindow string // specific window to select when opening an existing session
 }
 
 var _ Executor = (*TmuxExecutor)(nil)
@@ -24,7 +20,7 @@ func (e *TmuxExecutor) Execute(ctx context.Context) (output <-chan string, done 
 
 	go func() {
 		defer close(doneCh)
-		doneCh <- e.builder.OpenSession(ctx, e.name, e.workDir, e.windows, e.background, e.targetWindow)
+		doneCh <- e.opener.OpenTmuxSession(ctx, e.name, e.path, e.remote, e.targetWindow, e.background)
 	}()
 
 	return nil, doneCh, cancel

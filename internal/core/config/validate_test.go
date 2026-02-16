@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/hay-kot/criterio"
 	"github.com/stretchr/testify/assert"
@@ -182,7 +183,7 @@ func TestValidateDeep_KeybindingValidCmdReference(t *testing.T) {
 func TestValidateDeep_UserCommandBothActionAndSh(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
-		"bad": {Action: ActionRecycle, Sh: "echo test"},
+		"bad": {Action: action.TypeRecycle, Sh: "echo test"},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -210,8 +211,8 @@ func TestValidateDeep_UserCommandInvalidAction(t *testing.T) {
 func TestValidateDeep_UserCommandValidAction(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
-		"my-recycle": {Action: ActionRecycle, Help: "custom recycle"},
-		"my-delete":  {Action: ActionDelete, Help: "custom delete"},
+		"my-recycle": {Action: action.TypeRecycle, Help: "custom recycle"},
+		"my-delete":  {Action: action.TypeDelete, Help: "custom delete"},
 	}
 
 	err := cfg.ValidateDeep("")
@@ -889,7 +890,7 @@ func TestValidate_FormWithAction(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
 		"bad": {
-			Action: ActionRecycle,
+			Action: action.TypeRecycle,
 			Form:   []FormField{{Variable: "x", Type: FormTypeText, Label: "X"}},
 		},
 	}

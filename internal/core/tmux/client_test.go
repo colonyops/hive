@@ -10,12 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestBuilder_HasSession(t *testing.T) {
+func TestClient_HasSession(t *testing.T) {
 	t.Run("exists", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		assert.True(t, b.HasSession(context.Background(), "my-session"))
+		assert.True(t, c.HasSession(context.Background(), "my-session"))
 		require.Len(t, rec.Commands, 1)
 		assert.Equal(t, "tmux", rec.Commands[0].Cmd)
 		assert.Equal(t, []string{"has-session", "-t", "my-session"}, rec.Commands[0].Args)
@@ -25,18 +25,18 @@ func TestBuilder_HasSession(t *testing.T) {
 		rec := &executil.RecordingExecutor{
 			Errors: map[string]error{"tmux": fmt.Errorf("session not found")},
 		}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		assert.False(t, b.HasSession(context.Background(), "missing"))
+		assert.False(t, c.HasSession(context.Background(), "missing"))
 	})
 }
 
-func TestBuilder_CreateSession(t *testing.T) {
+func TestClient_CreateSession(t *testing.T) {
 	t.Run("single window", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Command: "claude", Focus: true},
 		}, true)
 		require.NoError(t, err)
@@ -48,9 +48,9 @@ func TestBuilder_CreateSession(t *testing.T) {
 
 	t.Run("two windows", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Command: "claude", Focus: true},
 			{Name: "shell"},
 		}, true)
@@ -64,9 +64,9 @@ func TestBuilder_CreateSession(t *testing.T) {
 
 	t.Run("three windows with dir override", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Command: "claude", Focus: true},
 			{Name: "shell"},
 			{Name: "logs", Command: "tail -f /var/log/app.log", Dir: "/var/log"},
@@ -80,9 +80,9 @@ func TestBuilder_CreateSession(t *testing.T) {
 
 	t.Run("focus second window", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "shell"},
 			{Name: "agent", Command: "claude", Focus: true},
 		}, true)
@@ -95,9 +95,9 @@ func TestBuilder_CreateSession(t *testing.T) {
 
 	t.Run("no focus defaults to first", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "first"},
 			{Name: "second"},
 		}, true)
@@ -109,18 +109,18 @@ func TestBuilder_CreateSession(t *testing.T) {
 
 	t.Run("no windows returns error", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", nil, true)
+		err := c.CreateSession(context.Background(), "sess", "/work", nil, true)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "at least one window")
 	})
 
 	t.Run("window without command gets no sh -c", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "shell"},
 		}, true)
 		require.NoError(t, err)
@@ -130,13 +130,13 @@ func TestBuilder_CreateSession(t *testing.T) {
 	})
 }
 
-func TestBuilder_CreateSession_Background(t *testing.T) {
+func TestClient_CreateSession_Background(t *testing.T) {
 	t.Setenv("TMUX", "")
 
 	rec := &executil.RecordingExecutor{}
-	b := NewBuilder(rec)
+	c := New(rec)
 
-	err := b.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+	err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 		{Name: "agent", Command: "claude", Focus: true},
 	}, true)
 	require.NoError(t, err)
@@ -148,16 +148,16 @@ func TestBuilder_CreateSession_Background(t *testing.T) {
 	}
 }
 
-func TestBuilder_AttachOrSwitch(t *testing.T) {
+func TestClient_AttachOrSwitch(t *testing.T) {
 	t.Run("inside tmux uses switch-client", func(t *testing.T) {
 		orig := insideTmux
 		insideTmux = func() bool { return true }
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.AttachOrSwitch(context.Background(), "sess")
+		err := c.AttachOrSwitch(context.Background(), "sess")
 		require.NoError(t, err)
 
 		require.Len(t, rec.Commands, 1)
@@ -170,9 +170,9 @@ func TestBuilder_AttachOrSwitch(t *testing.T) {
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.AttachOrSwitch(context.Background(), "sess")
+		err := c.AttachOrSwitch(context.Background(), "sess")
 		require.NoError(t, err)
 
 		require.Len(t, rec.Commands, 1)
@@ -180,16 +180,16 @@ func TestBuilder_AttachOrSwitch(t *testing.T) {
 	})
 }
 
-func TestBuilder_OpenSession(t *testing.T) {
+func TestClient_OpenSession(t *testing.T) {
 	t.Run("session exists attaches", func(t *testing.T) {
 		orig := insideTmux
 		insideTmux = func() bool { return false }
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
 		}, false, "")
 		require.NoError(t, err)
@@ -206,9 +206,9 @@ func TestBuilder_OpenSession(t *testing.T) {
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
 		}, false, "editor")
 		require.NoError(t, err)
@@ -222,9 +222,9 @@ func TestBuilder_OpenSession(t *testing.T) {
 
 	t.Run("session exists background is noop", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		b := NewBuilder(rec)
+		c := New(rec)
 
-		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
 		}, true, "")
 		require.NoError(t, err)
@@ -238,11 +238,11 @@ func TestBuilder_OpenSession(t *testing.T) {
 		rec := &executil.RecordingExecutor{
 			Errors: map[string]error{"tmux": fmt.Errorf("no session")},
 		}
-		b := NewBuilder(rec)
+		c := New(rec)
 
 		// HasSession will fail, then CreateSession calls will also fail due to
 		// the blanket error on "tmux". Test just the flow.
-		err := b.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
 		}, true, "")
 		require.Error(t, err)

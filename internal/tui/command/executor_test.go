@@ -6,6 +6,7 @@ import (
 	"io"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -291,10 +292,27 @@ func TestChannelWriter_Write(t *testing.T) {
 	})
 }
 
+// Mock TmuxOpener
+
+type mockTmuxOpener struct {
+	openErr error
+	calls   []tmuxOpenCall
+}
+
+type tmuxOpenCall struct {
+	Name, Path, Remote, TargetWindow string
+	Background                       bool
+}
+
+func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, targetWindow string, background bool) error {
+	m.calls = append(m.calls, tmuxOpenCall{name, path, remote, targetWindow, background})
+	return m.openErr
+}
+
 // Service tests
 
 func TestService_CreateExecutor(t *testing.T) {
-	svc := NewService(&mockDeleter{}, &mockRecycler{}, nil, nil, nil)
+	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{})
 
 	tests := []struct {
 		name    string
@@ -303,22 +321,22 @@ func TestService_CreateExecutor(t *testing.T) {
 	}{
 		{
 			name:    "delete action",
-			action:  Action{Type: ActionTypeDelete, SessionID: "test-123"},
+			action:  Action{Type: action.TypeDelete, SessionID: "test-123"},
 			wantErr: false,
 		},
 		{
 			name:    "recycle action",
-			action:  Action{Type: ActionTypeRecycle, SessionID: "test-123"},
+			action:  Action{Type: action.TypeRecycle, SessionID: "test-123"},
 			wantErr: false,
 		},
 		{
 			name:    "shell action",
-			action:  Action{Type: ActionTypeShell, ShellCmd: "echo test"},
+			action:  Action{Type: action.TypeShell, ShellCmd: "echo test"},
 			wantErr: false,
 		},
 		{
 			name:    "unsupported action",
-			action:  Action{Type: ActionTypeNone},
+			action:  Action{Type: action.TypeNone},
 			wantErr: true,
 		},
 	}

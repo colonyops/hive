@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
@@ -31,25 +32,6 @@ func ParseExitCondition(s string) bool {
 	result, _ := strconv.ParseBool(s)
 	return result
 }
-
-// Built-in action names for UserCommands.
-const (
-	ActionRecycle        = "recycle"
-	ActionDelete         = "delete"
-	ActionNewSession     = "new-session"
-	ActionFilterAll      = "filter-all"
-	ActionFilterActive   = "filter-active"
-	ActionFilterApproval = "filter-approval"
-	ActionFilterReady    = "filter-ready"
-	ActionDocReview      = "doc-review"     // Open review tab with document picker
-	ActionSetTheme       = "set-theme"      // Preview a built-in theme at runtime
-	ActionMessages       = "messages"       // Show notification history modal
-	ActionRenameSession  = "rename-session" // Rename the selected session
-	ActionNextActive     = "next-active"    // Navigate to next active session
-	ActionPrevActive     = "prev-active"    // Navigate to previous active session
-	ActionTmuxOpen       = "tmux-open"      // Open/attach tmux session using window config
-	ActionTmuxStart      = "tmux-start"     // Start tmux session in background using window config
-)
 
 // Form field type constants.
 const (
@@ -96,67 +78,67 @@ type FormField struct {
 // defaultUserCommands provides built-in commands that users can override.
 var defaultUserCommands = map[string]UserCommand{
 	"Recycle": {
-		Action:  ActionRecycle,
+		Action:  action.TypeRecycle,
 		Help:    "recycle",
 		Confirm: "Are you sure you want to recycle this session?",
 	},
 	"Delete": {
-		Action:  ActionDelete,
+		Action:  action.TypeDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
 	},
 	"NewSession": {
-		Action: ActionNewSession,
+		Action: action.TypeNewSession,
 		Help:   "new session",
 		Silent: true,
 	},
 	"DocReview": {
-		Action: ActionDocReview,
+		Action: action.TypeDocReview,
 		Help:   "review documents",
 		Silent: true,
 	},
 	"FilterAll": {
-		Action: ActionFilterAll,
+		Action: action.TypeFilterAll,
 		Help:   "show all sessions",
 		Silent: true,
 	},
 	"FilterActive": {
-		Action: ActionFilterActive,
+		Action: action.TypeFilterActive,
 		Help:   "show sessions with active agents",
 		Silent: true,
 	},
 	"FilterApproval": {
-		Action: ActionFilterApproval,
+		Action: action.TypeFilterApproval,
 		Help:   "show sessions needing approval",
 		Silent: true,
 	},
 	"FilterReady": {
-		Action: ActionFilterReady,
+		Action: action.TypeFilterReady,
 		Help:   "show sessions with idle agents",
 		Silent: true,
 	},
 	"ThemePreview": {
-		Action: ActionSetTheme,
+		Action: action.TypeSetTheme,
 		Help:   "preview theme (" + strings.Join(styles.ThemeNames(), ", ") + ")",
 		Silent: true,
 	},
 	"Messages": {
-		Action: ActionMessages,
+		Action: action.TypeMessages,
 		Help:   "show notification history",
 		Silent: true,
 	},
 	"RenameSession": {
-		Action: ActionRenameSession,
+		Action: action.TypeRenameSession,
 		Help:   "rename session",
 		Silent: true,
 	},
 	"NextActive": {
-		Action: ActionNextActive,
+		Action: action.TypeNextActive,
 		Help:   "next active session",
 		Silent: true,
 	},
 	"PrevActive": {
-		Action: ActionPrevActive,
+		Action: action.TypePrevActive,
 		Help:   "prev active session",
 		Silent: true,
 	},
@@ -459,14 +441,14 @@ type Keybinding struct {
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  string      `yaml:"action"`          // built-in action (recycle, delete) - mutually exclusive with sh
-	Sh      string      `yaml:"sh"`              // shell command template - mutually exclusive with action
-	Form    []FormField `yaml:"form,omitempty"`  // interactive input fields collected before sh execution
-	Help    string      `yaml:"help"`            // description shown in palette/help
-	Confirm string      `yaml:"confirm"`         // confirmation prompt (empty = no confirm)
-	Silent  bool        `yaml:"silent"`          // skip loading popup for fast commands
-	Exit    string      `yaml:"exit"`            // exit hive after command (bool or $ENV_VAR)
-	Scope   []string    `yaml:"scope,omitempty"` // views where command is active (empty = global)
+	Action  action.Type `yaml:"action,omitempty"` // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
+	Sh      string      `yaml:"sh"`               // shell command template - mutually exclusive with action
+	Form    []FormField `yaml:"form,omitempty"`   // interactive input fields collected before sh execution
+	Help    string      `yaml:"help"`             // description shown in palette/help
+	Confirm string      `yaml:"confirm"`          // confirmation prompt (empty = no confirm)
+	Silent  bool        `yaml:"silent"`           // skip loading popup for fast commands
+	Exit    string      `yaml:"exit"`             // exit hive after command (bool or $ENV_VAR)
+	Scope   []string    `yaml:"scope,omitempty"`  // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
@@ -975,13 +957,8 @@ func (c *Config) BinDir() string {
 	return filepath.Join(c.DataDir, "bin")
 }
 
-func isValidAction(action string) bool {
-	switch action {
-	case ActionRecycle, ActionDelete, ActionNewSession, ActionFilterAll, ActionFilterActive, ActionFilterApproval, ActionFilterReady, ActionDocReview, ActionSetTheme, ActionMessages, ActionRenameSession, ActionNextActive, ActionPrevActive, ActionTmuxOpen, ActionTmuxStart:
-		return true
-	default:
-		return false
-	}
+func isValidAction(t action.Type) bool {
+	return t.IsValid() && action.IsConfigAction(t)
 }
 
 // isValidScope checks if a scope value is valid.
