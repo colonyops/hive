@@ -1,6 +1,9 @@
 [tools]
 "github:hay-kot/gobusgen" = "v0.3.0"
 "pipx:zensical" = "latest"
+golangci-lint = "latest"
+"github:sqlc-dev/sqlc" = "v1.30.0"
+"go" = "1.26"
 
 [env]
 HIVE_LOG_LEVEL = "debug"
@@ -58,10 +61,7 @@ run = "golangci-lint fmt ./..."
 
 [tasks.check]
 description = "Run tidy, lint, and test"
-run = [
-  "go mod tidy",
-  { tasks = ["lint", "test"] },
-]
+run = ["go mod tidy", { tasks = ["lint", "test"] }]
 
 [tasks.validate]
 description = "Run doctor with dev config"
