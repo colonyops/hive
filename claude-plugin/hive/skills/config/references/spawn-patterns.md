@@ -1,67 +1,104 @@
-# Spawn Command Patterns
+# Spawn Patterns
 
-Terminal-specific spawn command examples for hive configuration.
+## Window Configuration (Recommended)
 
-## WezTerm
+The `windows` field defines tmux windows declaratively. Hive handles session creation, attach/switch, and window focus automatically.
+
+### Basic: Agent + Shell
+
+```yaml
+windows:
+  - name: "{{ agentWindow }}"
+    command: '{{ agentCommand }} {{ agentFlags }}'
+    focus: true
+  - name: shell
+```
+
+### Agent + Test Watcher + Shell
+
+```yaml
+windows:
+  - name: claude
+    command: "claude --model opus"
+    focus: true
+  - name: tests
+    command: "npm run test:watch"
+  - name: shell
+```
+
+### Multiple Agents
+
+```yaml
+windows:
+  - name: claude
+    command: "claude"
+    focus: true
+  - name: aider
+    command: "aider --model sonnet"
+  - name: shell
+```
+
+### Custom Working Directory
+
+```yaml
+windows:
+  - name: claude
+    command: "claude"
+    dir: "{{ .Path }}/frontend"
+    focus: true
+  - name: shell
+```
+
+### Batch Spawn with Prompt
+
+```yaml
+windows:
+  - name: "{{ agentWindow }}"
+    command: '{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt }}{{ end }}'
+    focus: true
+  - name: shell
+```
+
+## Legacy Spawn Commands
+
+For non-tmux terminals or advanced scripting, use `spawn`/`batch_spawn` with shell commands.
+
+### WezTerm
 
 ```yaml
 spawn:
   - 'wezterm cli spawn --cwd "{{ .Path }}" -- claude'
 ```
 
-## Tmux (New Session)
-
-```yaml
-spawn:
-  - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
-```
-
-## Tmux (Create or Switch)
-
-```yaml
-spawn:
-  - tmux has-session -t "{{ .Name }}" 2>/dev/null && tmux switch-client -t "{{ .Name }}" || tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
-```
-
-## Tmux with Multiple Panes
-
-```yaml
-spawn:
-  - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}"
-  - tmux split-window -h -t "{{ .Name }}" -c "{{ .Path }}"
-  - tmux send-keys -t "{{ .Name }}:0.0" "claude" Enter
-  - tmux send-keys -t "{{ .Name }}:0.1" "npm run dev" Enter
-```
-
-## Tmux with Custom Layout Script
-
-```yaml
-spawn:
-  - ~/.config/tmux/layouts/hive.sh {{ .Name | shq }} {{ .Path | shq }}
-```
-
-## Kitty
+### Kitty
 
 ```yaml
 spawn:
   - 'kitty @ launch --cwd "{{ .Path }}" --type tab claude'
 ```
 
-## Alacritty
+### Alacritty
 
 ```yaml
 spawn:
   - 'alacritty --working-directory "{{ .Path }}" -e claude &'
 ```
 
-## iTerm2 (macOS)
+### iTerm2 (macOS)
 
 ```yaml
 spawn:
   - osascript -e 'tell application "iTerm" to create window with default profile command "cd {{ .Path | shq }} && claude"'
 ```
 
-## Batch Spawn (Background Sessions)
+### Tmux (Shell Commands)
+
+```yaml
+spawn:
+  - tmux new-session -d -s "{{ .Name }}" -c "{{ .Path }}" claude
+```
+
+### Batch Spawn (Background Sessions)
 
 ```yaml
 batch_spawn:

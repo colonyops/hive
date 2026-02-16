@@ -61,3 +61,4 @@ These commands are available in the command palette (`:`) but have no default ke
 | `FilterApproval` | Show sessions needing approval        |
 | `FilterReady`    | Show sessions with idle agents        |
 | `SendBatch`      | Send message to multiple agents       |
+| `TmuxStart`      | Start tmux session in background      |

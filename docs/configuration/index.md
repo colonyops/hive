@@ -31,6 +31,11 @@ tui:
 rules:
   - pattern: ""
     max_recycled: 5
+    windows:
+      - name: "{{ agentWindow }}"
+        command: '{{ agentCommand }} {{ agentFlags }}'
+        focus: true
+      - name: shell
     commands:
       - hive ctx init
 ```

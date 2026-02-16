@@ -36,7 +36,7 @@ usercommands:
 | Field     | Type           | Description                                                         |
 | --------- | -------------- | ------------------------------------------------------------------- |
 | `sh`      | string         | Shell command template (mutually exclusive with `action`)          |
-| `action`  | string         | Built-in action (e.g., `recycle`, `delete`, `new-session`, `doc-review`, `messages`; mutually exclusive with `sh`) |
+| `action`  | string         | Built-in action (e.g., `recycle`, `delete`, `new-session`, `tmux-open`, `tmux-start`, `doc-review`, `messages`; mutually exclusive with `sh`) |
 | `help`    | string         | Description shown in palette                                        |
 | `confirm` | string         | Confirmation prompt (empty = no confirmation)                       |
 | `silent`  | bool           | Skip loading popup for fast commands                                |
