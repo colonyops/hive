@@ -1,5 +1,6 @@
 [tools]
 "github:hay-kot/gobusgen" = "v0.3.0"
+"pipx:zensical" = "latest"
 
 [env]
 HIVE_LOG_LEVEL = "debug"
@@ -57,14 +58,14 @@ run = [
 ]
 
 [tasks.validate]
-description = "Run config validate with dev config"
+description = "Run doctor with dev config"
 env = { HIVE_CONFIG = "./config.dev.yaml" }
-run = "go run *.go config validate"
+run = "go run *.go doctor"
 
 [tasks."validate:invalid"]
-description = "Run config validate with intentionally invalid config"
+description = "Run doctor with intentionally invalid config"
 env = { HIVE_CONFIG = "./config.invalid.yaml" }
-run = "go run *.go config validate || true"
+run = "go run *.go doctor || true"
 
 [tasks."sqlc:generate"]
 description = "Generate Go code from SQL queries using sqlc"
