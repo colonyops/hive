@@ -791,11 +791,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			if m.bus != nil {
 				for sessionID, newStatus := range msg.Results {
 					oldStatus, exists := m.terminalStatuses.Get(sessionID)
-					if !exists || oldStatus.Status != newStatus.Status {
+					prevStatus := oldStatus.Status
+					if !exists {
+						prevStatus = terminal.StatusMissing
+					}
+					if prevStatus != newStatus.Status {
 						sess := m.findSessionByID(sessionID)
 						m.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
 							Session:   sess,
-							OldStatus: oldStatus.Status,
+							OldStatus: prevStatus,
 							NewStatus: newStatus.Status,
 						})
 					}
