@@ -68,13 +68,9 @@ func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) 
 
 // SpawnWindows renders window templates and creates a tmux session.
 func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool) error {
-	rendered := make([]coretmux.RenderedWindow, 0, len(windows))
-	for _, w := range windows {
-		rw, err := s.renderWindow(w, data)
-		if err != nil {
-			return fmt.Errorf("render window %q: %w", w.Name, err)
-		}
-		rendered = append(rendered, rw)
+	rendered, err := RenderWindows(s.renderer, windows, data)
+	if err != nil {
+		return err
 	}
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Msg("spawning tmux session")
@@ -87,16 +83,30 @@ func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfi
 	return nil
 }
 
+// RenderWindows renders a slice of WindowConfig templates against SpawnData,
+// producing fully-resolved RenderedWindow values ready for the tmux Builder.
+func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data SpawnData) ([]coretmux.RenderedWindow, error) {
+	rendered := make([]coretmux.RenderedWindow, 0, len(windows))
+	for _, w := range windows {
+		rw, err := renderWindow(renderer, w, data)
+		if err != nil {
+			return nil, fmt.Errorf("render window %q: %w", w.Name, err)
+		}
+		rendered = append(rendered, rw)
+	}
+	return rendered, nil
+}
+
 // renderWindow renders a single WindowConfig's template fields against SpawnData.
-func (s *Spawner) renderWindow(w config.WindowConfig, data SpawnData) (coretmux.RenderedWindow, error) {
-	name, err := s.renderer.Render(w.Name, data)
+func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData) (coretmux.RenderedWindow, error) {
+	name, err := renderer.Render(w.Name, data)
 	if err != nil {
 		return coretmux.RenderedWindow{}, fmt.Errorf("name template: %w", err)
 	}
 
 	var command string
 	if w.Command != "" {
-		command, err = s.renderer.Render(w.Command, data)
+		command, err = renderer.Render(w.Command, data)
 		if err != nil {
 			return coretmux.RenderedWindow{}, fmt.Errorf("command template: %w", err)
 		}
@@ -105,7 +115,7 @@ func (s *Spawner) renderWindow(w config.WindowConfig, data SpawnData) (coretmux.
 
 	var dir string
 	if w.Dir != "" {
-		dir, err = s.renderer.Render(w.Dir, data)
+		dir, err = renderer.Render(w.Dir, data)
 		if err != nil {
 			return coretmux.RenderedWindow{}, fmt.Errorf("dir template: %w", err)
 		}

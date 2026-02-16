@@ -452,13 +452,15 @@ func (h *KeybindingResolver) RenderWithFormData(
 	formData map[string]any,
 ) Action {
 	action := Action{
-		Key:         ":" + name,
-		Help:        cmd.Help,
-		Confirm:     cmd.Confirm,
-		SessionID:   sess.ID,
-		SessionPath: sess.Path,
-		Silent:      cmd.Silent,
-		Exit:        cmd.ShouldExit(),
+		Key:           ":" + name,
+		Help:          cmd.Help,
+		Confirm:       cmd.Confirm,
+		SessionID:     sess.ID,
+		SessionName:   sess.Name,
+		SessionPath:   sess.Path,
+		SessionRemote: sess.Remote,
+		Silent:        cmd.Silent,
+		Exit:          cmd.ShouldExit(),
 	}
 
 	data := map[string]any{

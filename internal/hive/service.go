@@ -172,14 +172,17 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	strategy := s.config.ResolveSpawn(remote, opts.UseBatchSpawn)
-	if strategy.IsWindows() {
+	switch {
+	case strategy.IsWindows():
 		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
-	} else if len(strategy.Commands) > 0 {
+	case len(strategy.Commands) > 0:
 		if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
 			return nil, fmt.Errorf("spawn terminal: %w", err)
 		}
+	default:
+		return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
 	}
 
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")

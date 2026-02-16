@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
 	coretmux "github.com/colonyops/hive/internal/core/tmux"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -103,24 +104,17 @@ func (s *Service) CreateExecutor(action Action) (Executor, error) {
 }
 
 func (s *Service) newTmuxExecutor(action Action, background bool) (Executor, error) {
+	if s.cfg == nil || s.renderer == nil || s.tmux == nil {
+		return nil, fmt.Errorf("tmux executor requires config, renderer, and tmux builder")
+	}
+
 	strategy := s.cfg.ResolveSpawn(action.SessionRemote, false)
 	if !strategy.IsWindows() {
-		// Legacy: fall back to shell executor with hive-tmux script
 		return nil, fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
 	}
 
-	// Render window templates with full spawn data
-	windows := make([]coretmux.RenderedWindow, 0, len(strategy.Windows))
 	owner, repo := git.ExtractOwnerRepo(action.SessionRemote)
-	data := struct {
-		Path       string
-		Name       string
-		Prompt     string
-		Slug       string
-		ContextDir string
-		Owner      string
-		Repo       string
-	}{
+	data := hive.SpawnData{
 		Path:       action.SessionPath,
 		Name:       action.SessionName,
 		Slug:       session.Slugify(action.SessionName),
@@ -129,34 +123,9 @@ func (s *Service) newTmuxExecutor(action Action, background bool) (Executor, err
 		Repo:       repo,
 	}
 
-	for _, w := range strategy.Windows {
-		name, err := s.renderer.Render(w.Name, data)
-		if err != nil {
-			return nil, fmt.Errorf("render window name %q: %w", w.Name, err)
-		}
-
-		var cmd string
-		if w.Command != "" {
-			cmd, err = s.renderer.Render(w.Command, data)
-			if err != nil {
-				return nil, fmt.Errorf("render window command: %w", err)
-			}
-		}
-
-		var dir string
-		if w.Dir != "" {
-			dir, err = s.renderer.Render(w.Dir, data)
-			if err != nil {
-				return nil, fmt.Errorf("render window dir: %w", err)
-			}
-		}
-
-		windows = append(windows, coretmux.RenderedWindow{
-			Name:    name,
-			Command: cmd,
-			Dir:     dir,
-			Focus:   w.Focus,
-		})
+	windows, err := hive.RenderWindows(s.renderer, strategy.Windows, data)
+	if err != nil {
+		return nil, fmt.Errorf("render tmux windows: %w", err)
 	}
 
 	return &TmuxExecutor{
