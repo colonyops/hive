@@ -37,6 +37,7 @@ import (
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/colonyops/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 
 	"github.com/colonyops/hive/pkg/kv"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -105,16 +106,16 @@ type Model struct {
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
-	gitStatuses    *kv.Store[string, GitStatus]
+	gitStatuses    *kv.Store[string, sessions.GitStatus]
 	gitWorkers     int
-	columnWidths   *ColumnWidths
+	columnWidths   *sessions.ColumnWidths
 
 	// Terminal integration
 	terminalManager    *terminal.Manager
-	terminalStatuses   *kv.Store[string, TerminalStatus]
-	previewEnabled     bool              // toggle tmux pane preview sidebar
-	previewTemplates   *PreviewTemplates // parsed preview panel templates
-	currentTmuxSession string            // current tmux session name (to prevent recursive preview)
+	terminalStatuses   *kv.Store[string, sessions.TerminalStatus]
+	previewEnabled     bool                       // toggle tmux pane preview sidebar
+	previewTemplates   *sessions.PreviewTemplates // parsed preview panel templates
+	currentTmuxSession string                     // current tmux session name (to prevent recursive preview)
 
 	// Plugin integration
 	pluginManager      *plugins.Manager
@@ -124,7 +125,7 @@ type Model struct {
 
 	// Status animation
 	animationFrame int
-	treeDelegate   TreeDelegate // Keep reference to update animation frame
+	treeDelegate   sessions.TreeDelegate // Keep reference to update animation frame
 
 	// Filtering
 	localRemote  string            // Remote URL of current directory (for highlighting)
@@ -154,7 +155,7 @@ type Model struct {
 
 	// New session form
 	repoDirs        []string
-	discoveredRepos []DiscoveredRepo
+	discoveredRepos []sessions.DiscoveredRepo
 	newSessionForm  *NewSessionForm
 
 	// Command palette
@@ -241,7 +242,7 @@ type recycleCompleteMsg struct {
 
 // reposDiscoveredMsg is sent when repository scanning completes.
 type reposDiscoveredMsg struct {
-	repos []DiscoveredRepo
+	repos []sessions.DiscoveredRepo
 }
 
 // pluginStatusUpdateMsg is sent when a single plugin status result arrives.
@@ -264,9 +265,9 @@ type notificationMsg struct {
 
 // New creates a new TUI model.
 func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
-	gitStatuses := kv.New[string, GitStatus]()
-	terminalStatuses := kv.New[string, TerminalStatus]()
-	columnWidths := &ColumnWidths{}
+	gitStatuses := kv.New[string, sessions.GitStatus]()
+	terminalStatuses := kv.New[string, sessions.TerminalStatus]()
+	columnWidths := &sessions.ColumnWidths{}
 
 	// Initialize plugin status stores for each enabled plugin
 	var pluginStatuses map[string]*kv.Store[string, plugins.Status]
@@ -279,7 +280,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		}
 	}
 
-	delegate := NewTreeDelegate()
+	delegate := sessions.NewTreeDelegate()
 	delegate.GitStatuses = gitStatuses
 	delegate.TerminalStatuses = terminalStatuses
 	delegate.ColumnWidths = columnWidths
@@ -361,10 +362,10 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	kvView := NewKVView()
 
 	// Detect current tmux session to prevent recursive preview
-	currentTmux := detectCurrentTmuxSession()
+	currentTmux := sessions.DetectCurrentTmuxSession()
 
 	// Parse preview templates
-	previewTemplates := ParsePreviewTemplates(
+	previewTemplates := sessions.ParsePreviewTemplates(
 		cfg.TUI.Preview.TitleTemplate,
 		cfg.TUI.Preview.StatusTemplate,
 	)
@@ -447,16 +448,6 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	}
 }
 
-// detectCurrentTmuxSession returns the current tmux session name, or empty if not in tmux.
-func detectCurrentTmuxSession() string {
-	cmd := exec.Command("tmux", "display-message", "-p", "#S")
-	output, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(output))
-}
-
 // isCurrentTmuxSession returns true if the given session matches the current tmux session.
 // This prevents recursive preview when hive is previewing its own pane.
 func (m Model) isCurrentTmuxSession(sess *session.Session) bool {
@@ -535,7 +526,7 @@ func (m Model) Init() tea.Cmd {
 	}
 	// Start terminal status polling and animation if integration is enabled
 	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-		cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
+		cmds = append(cmds, sessions.StartTerminalPollTicker(m.cfg.Tmux.PollInterval))
 		cmds = append(cmds, scheduleAnimationTick())
 	}
 	// Start plugin background worker if plugins are enabled
@@ -582,7 +573,7 @@ func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
 // scanRepoDirs returns a command that scans configured directories for git repositories.
 func (m Model) scanRepoDirs() tea.Cmd {
 	return func() tea.Msg {
-		repos, _ := ScanRepoDirs(context.Background(), m.repoDirs, m.service.Git())
+		repos, _ := sessions.ScanRepoDirs(context.Background(), m.repoDirs, m.service.Git())
 		return reposDiscoveredMsg{repos: repos}
 	}
 }
@@ -622,9 +613,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleKVEntryLoaded(msg)
 	case sessionsLoadedMsg:
 		return m.handleSessionsLoaded(msg)
-	case gitStatusBatchCompleteMsg:
+	case sessions.GitStatusBatchCompleteMsg:
 		return m.handleGitStatusComplete(msg)
-	case terminalStatusBatchCompleteMsg:
+	case sessions.TerminalStatusBatchCompleteMsg:
 		return m.handleTerminalStatusComplete(msg)
 	case pluginWorkerStartedMsg:
 		return m.handlePluginWorkerStarted(msg)
@@ -638,7 +629,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleSessionRefreshTick(msg)
 	case kvPollTickMsg:
 		return m.handleKVPollTick(msg)
-	case terminalPollTickMsg:
+	case sessions.TerminalPollTickMsg:
 		return m.handleTerminalPollTick(msg)
 	case animationTickMsg:
 		return m.handleAnimationTick(msg)
@@ -914,7 +905,7 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 
 // handleRecycledPlaceholderKey handles keys when a recycled placeholder is selected.
 // Only allows delete action to permanently remove all recycled sessions.
-func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (tea.Model, tea.Cmd) {
+func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *sessions.TreeItem) (tea.Model, tea.Cmd) {
 	// Check if this key is bound to delete action
 	kb, exists := m.handler.keybindings[keyStr]
 	if !exists {
@@ -1648,7 +1639,7 @@ func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.
 }
 
 // openRepoHeader handles enter on a project header by opening the original repo directory.
-func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
+func (m Model) openRepoHeader(header *sessions.TreeItem) (tea.Model, tea.Cmd) {
 	// Find the original repo path from discovered repos
 	var repoPath string
 	for _, repo := range m.discoveredRepos {
@@ -1700,8 +1691,8 @@ func (m Model) selectedSession() *session.Session {
 	if item == nil {
 		return nil
 	}
-	// Handle TreeItem (tree view mode)
-	if treeItem, ok := item.(TreeItem); ok {
+	// Handle sessions.TreeItem (tree view mode)
+	if treeItem, ok := item.(sessions.TreeItem); ok {
 		if treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
 			return nil // Headers and recycled placeholders aren't sessions
 		}
@@ -1713,14 +1704,14 @@ func (m Model) selectedSession() *session.Session {
 	return nil
 }
 
-// selectedWindowStatus returns the WindowStatus for the currently selected window item,
+// selectedWindowStatus returns the sessions.WindowStatus for the currently selected window item,
 // or nil if a session (not a window) is selected.
-func (m Model) selectedWindowStatus() *WindowStatus {
+func (m Model) selectedWindowStatus() *sessions.WindowStatus {
 	item := m.list.SelectedItem()
 	if item == nil {
 		return nil
 	}
-	treeItem, ok := item.(TreeItem)
+	treeItem, ok := item.(sessions.TreeItem)
 	if !ok || !treeItem.IsWindowItem {
 		return nil
 	}
@@ -1740,12 +1731,12 @@ func (m Model) selectedWindowStatus() *WindowStatus {
 }
 
 // selectedTreeItem returns the currently selected tree item, or nil if none.
-func (m Model) selectedTreeItem() *TreeItem {
+func (m Model) selectedTreeItem() *sessions.TreeItem {
 	item := m.list.SelectedItem()
 	if item == nil {
 		return nil
 	}
-	if treeItem, ok := item.(TreeItem); ok {
+	if treeItem, ok := item.(sessions.TreeItem); ok {
 		return &treeItem
 	}
 	return nil
@@ -1753,7 +1744,7 @@ func (m Model) selectedTreeItem() *TreeItem {
 
 // maybeOverrideWindowDelete converts a delete action into a tmux window kill
 // when a window sub-item is selected. This keeps "d" context-aware.
-func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Action {
+func (m Model) maybeOverrideWindowDelete(action Action, treeItem *sessions.TreeItem) Action {
 	if treeItem == nil || !treeItem.IsWindowItem {
 		return action
 	}
@@ -1914,7 +1905,7 @@ func (m *Model) navigateToNextActive(direction int) {
 
 	for step := 1; step < n; step++ {
 		idx := (current + step*direction + n) % n
-		treeItem, ok := items[idx].(TreeItem)
+		treeItem, ok := items[idx].(sessions.TreeItem)
 		if !ok || treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
 			continue
 		}
@@ -1962,7 +1953,7 @@ func (m *Model) navigateSkippingHeaders(direction int) {
 		}
 
 		// Skip recycled placeholders, allow everything else (including headers)
-		if treeItem, ok := items[target].(TreeItem); ok && treeItem.IsRecycledPlaceholder {
+		if treeItem, ok := items[target].(sessions.TreeItem); ok && treeItem.IsRecycledPlaceholder {
 			continue
 		}
 		m.list.Select(target)
@@ -1971,28 +1962,14 @@ func (m *Model) navigateSkippingHeaders(direction int) {
 }
 
 // saveSelection snapshots the current selection for restore after a list rebuild.
-func (m *Model) saveSelection() treeSelection {
-	return saveTreeSelection(m.selectedTreeItem(), m.list.Index())
+func (m *Model) saveSelection() sessions.TreeSelection {
+	return sessions.SaveTreeSelection(m.selectedTreeItem(), m.list.Index())
 }
 
 // restoreSelection applies a saved selection to the current list items.
-func (m *Model) restoreSelection(sel treeSelection) {
-	treeItems := listItemsToTreeItems(m.list.Items())
-	m.list.Select(sel.restore(treeItems))
-}
-
-// listItemsToTreeItems extracts TreeItems from list items, preserving indices.
-// Non-TreeItem entries are marked as headers so restore skips them.
-func listItemsToTreeItems(items []list.Item) []TreeItem {
-	result := make([]TreeItem, len(items))
-	for i, item := range items {
-		if ti, ok := item.(TreeItem); ok {
-			result[i] = ti
-		} else {
-			result[i] = TreeItem{IsHeader: true}
-		}
-	}
-	return result
+func (m *Model) restoreSelection(sel sessions.TreeSelection) {
+	treeItems := sessions.ListItemsToTreeItems(m.list.Items())
+	m.list.Select(sel.Restore(treeItems))
 }
 
 // isFilterAction returns true if the action type is a filter action.
@@ -2083,7 +2060,7 @@ func (m *Model) updateFocusFilter(filter string) {
 	// Find first matching item
 	filterLower := strings.ToLower(filter)
 
-	for i, ti := range TreeItemsAll(m.list.Items()) {
+	for i, ti := range sessions.TreeItemsAll(m.list.Items()) {
 		if ti.IsHeader {
 			continue
 		}
@@ -2103,7 +2080,7 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 	sel := m.saveSelection()
 
 	// Filter sessions by terminal status if a filter is active
-	sessions := m.allSessions
+	filteredSess := m.allSessions
 	if m.statusFilter != "" && m.terminalStatuses != nil {
 		filtered := make([]session.Session, 0, len(m.allSessions))
 		for _, s := range m.allSessions {
@@ -2113,26 +2090,26 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 				}
 			}
 		}
-		sessions = filtered
+		filteredSess = filtered
 	}
 
 	// Group sessions by repository and build tree items
-	groups := GroupSessionsByRepo(sessions, m.localRemote)
-	items := BuildTreeItems(groups, m.localRemote)
+	groups := sessions.GroupSessionsByRepo(filteredSess, m.localRemote)
+	items := sessions.BuildTreeItems(groups, m.localRemote)
 
 	// Expand multi-window sessions into window sub-items
 	items = m.expandWindowItems(items)
 
 	// Calculate column widths across all sessions (use filtered set)
-	*m.columnWidths = CalculateColumnWidths(sessions, nil)
+	*m.columnWidths = sessions.CalculateColumnWidths(filteredSess, nil)
 
 	// Collect paths for git status fetching (use filtered sessions)
 	// During background refresh, keep existing statuses to avoid flashing
-	paths := make([]string, 0, len(sessions))
-	for _, s := range sessions {
+	paths := make([]string, 0, len(filteredSess))
+	for _, s := range filteredSess {
 		paths = append(paths, s.Path)
 		if !m.refreshing {
-			m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
+			m.gitStatuses.Set(s.Path, sessions.GitStatus{IsLoading: true})
 		}
 	}
 
@@ -2144,8 +2121,8 @@ func (m Model) applyFilter() (tea.Model, tea.Cmd) {
 		m.refreshing = false
 		return m, nil
 	}
-	// refreshing is cleared when gitStatusBatchCompleteMsg is received
-	return m, fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
+	// refreshing is cleared when sessions.GitStatusBatchCompleteMsg is received
+	return m, sessions.FetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
 }
 
 // rebuildWindowItems strips existing window sub-items from the list and re-expands
@@ -2157,7 +2134,7 @@ func (m *Model) rebuildWindowItems() {
 	// so window renames trigger a rebuild.
 	current := make(map[string]struct{})
 	expected := make(map[string]struct{})
-	for _, ti := range TreeItemsAll(items) {
+	for _, ti := range sessions.TreeItemsAll(items) {
 		if ti.IsWindowItem {
 			current[ti.ParentSession.ID+"\x1f"+ti.WindowIndex+"\x1f"+ti.WindowName] = struct{}{}
 			continue
@@ -2190,7 +2167,7 @@ func (m *Model) rebuildWindowItems() {
 
 	// Strip window items
 	stripped := make([]list.Item, 0, len(items))
-	for i, ti := range TreeItemsAll(items) {
+	for i, ti := range sessions.TreeItemsAll(items) {
 		if ti.IsWindowItem {
 			continue
 		}
@@ -2214,7 +2191,7 @@ func (m Model) expandWindowItems(items []list.Item) []list.Item {
 	for _, item := range items {
 		expanded = append(expanded, item)
 
-		treeItem, ok := item.(TreeItem)
+		treeItem, ok := item.(sessions.TreeItem)
 		if !ok || !treeItem.IsSession() {
 			continue
 		}
@@ -2226,7 +2203,7 @@ func (m Model) expandWindowItems(items []list.Item) []list.Item {
 
 		// Add a window sub-item for each window
 		for i, w := range ts.Windows {
-			windowItem := TreeItem{
+			windowItem := sessions.TreeItem{
 				IsWindowItem:  true,
 				WindowIndex:   w.WindowIndex,
 				WindowName:    w.WindowName,
@@ -2247,16 +2224,16 @@ func (m Model) refreshGitStatuses() tea.Cmd {
 	items := m.list.Items()
 	paths := make([]string, 0, len(items))
 
-	for _, ti := range TreeItemsSessions(items) {
+	for _, ti := range sessions.TreeItemsSessions(items) {
 		paths = append(paths, ti.Session.Path)
-		m.gitStatuses.Set(ti.Session.Path, GitStatus{IsLoading: true})
+		m.gitStatuses.Set(ti.Session.Path, sessions.GitStatus{IsLoading: true})
 	}
 
 	if len(paths) == 0 {
 		return nil
 	}
 
-	return fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
+	return sessions.FetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
 }
 
 // View renders the TUI.
@@ -2847,10 +2824,10 @@ func (m *Model) applyTheme(name string) {
 		return
 	}
 	styles.SetTheme(palette)
-	m.treeDelegate.Styles = DefaultTreeDelegateStyles()
+	m.treeDelegate.Styles = sessions.DefaultTreeDelegateStyles()
 	m.list.SetDelegate(m.treeDelegate)
 	// Clear cached animation colors so they regenerate from new theme
-	activeAnimationColors = nil
+	sessions.ClearAnimationColors()
 }
 
 // listenForRecycleOutput returns a command that waits for the next output or completion.

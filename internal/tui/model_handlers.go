@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 )
 
 // --- Window ---
@@ -105,13 +106,13 @@ func (m Model) handleSessionsLoaded(msg sessionsLoadedMsg) (tea.Model, tea.Cmd) 
 	return filteredModel, cmd
 }
 
-func (m Model) handleGitStatusComplete(msg gitStatusBatchCompleteMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleGitStatusComplete(msg sessions.GitStatusBatchCompleteMsg) (tea.Model, tea.Cmd) {
 	m.gitStatuses.SetBatch(msg.Results)
 	m.refreshing = false
 	return m, nil
 }
 
-func (m Model) handleTerminalStatusComplete(msg terminalStatusBatchCompleteMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleTerminalStatusComplete(msg sessions.TerminalStatusBatchCompleteMsg) (tea.Model, tea.Cmd) {
 	if m.terminalStatuses != nil {
 		if m.bus != nil {
 			for sessionID, newStatus := range msg.Results {
@@ -196,21 +197,21 @@ func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
 	return m, scheduleKVPollTick()
 }
 
-func (m Model) handleTerminalPollTick(_ terminalPollTickMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleTerminalPollTick(_ sessions.TerminalPollTickMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
-	sessions := make([]*session.Session, len(m.allSessions))
+	sessPtrs := make([]*session.Session, len(m.allSessions))
 	for i := range m.allSessions {
-		sessions[i] = &m.allSessions[i]
+		sessPtrs[i] = &m.allSessions[i]
 	}
-	cmds = append(cmds, fetchTerminalStatusBatch(m.terminalManager, sessions, m.gitWorkers))
+	cmds = append(cmds, sessions.FetchTerminalStatusBatch(m.terminalManager, sessPtrs, m.gitWorkers))
 	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-		cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
+		cmds = append(cmds, sessions.StartTerminalPollTicker(m.cfg.Tmux.PollInterval))
 	}
 	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleAnimationTick(_ animationTickMsg) (tea.Model, tea.Cmd) {
-	m.animationFrame = (m.animationFrame + 1) % AnimationFrameCount
+	m.animationFrame = (m.animationFrame + 1) % sessions.AnimationFrameCount
 	m.treeDelegate.AnimationFrame = m.animationFrame
 	m.list.SetDelegate(m.treeDelegate)
 	return m, scheduleAnimationTick()

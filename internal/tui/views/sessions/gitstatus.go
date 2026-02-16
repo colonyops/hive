@@ -1,4 +1,4 @@
-package tui
+package sessions
 
 import (
 	"context"
@@ -21,8 +21,8 @@ type GitStatus struct {
 	Error      error
 }
 
-// gitStatusBatchCompleteMsg is sent when all git status fetches complete.
-type gitStatusBatchCompleteMsg struct {
+// GitStatusBatchCompleteMsg is sent when all git status fetches complete.
+type GitStatusBatchCompleteMsg struct {
 	Results map[string]GitStatus
 }
 
@@ -58,9 +58,9 @@ func fetchGitStatusForPath(ctx context.Context, g git.Git, path string) GitStatu
 	return status
 }
 
-// fetchGitStatusBatch returns a command that fetches git status for multiple paths
+// FetchGitStatusBatch returns a command that fetches git status for multiple paths
 // using a bounded worker pool.
-func fetchGitStatusBatch(g git.Git, paths []string, workers int) tea.Cmd {
+func FetchGitStatusBatch(g git.Git, paths []string, workers int) tea.Cmd {
 	if len(paths) == 0 {
 		return nil
 	}
@@ -94,6 +94,6 @@ func fetchGitStatusBatch(g git.Git, paths []string, workers int) tea.Cmd {
 		}
 
 		wg.Wait()
-		return gitStatusBatchCompleteMsg{Results: results}
+		return GitStatusBatchCompleteMsg{Results: results}
 	}
 }

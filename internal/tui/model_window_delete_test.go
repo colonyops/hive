@@ -5,6 +5,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -27,13 +28,13 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("non-window item returns action unchanged", func(t *testing.T) {
-		ti := &TreeItem{IsWindowItem: false}
+		ti := &sessions.TreeItem{IsWindowItem: false}
 		got := m.maybeOverrideWindowDelete(deleteAction, ti)
 		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
 	t.Run("non-delete action on window returns action unchanged", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "1",
 			WindowName:    "claude",
@@ -44,7 +45,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("delete on window converts to tmux kill-window shell command", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "2",
 			WindowName:    "aider",
@@ -58,7 +59,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("uses MetaTmuxSession when available", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem: true,
 			WindowIndex:  "1",
 			WindowName:   "claude",
@@ -74,7 +75,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("falls back to Name when Slug empty", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "0",
 			WindowName:    "bash",
@@ -85,7 +86,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("errors when session and window index are empty", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "",
 			ParentSession: session.Session{},
@@ -95,7 +96,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("no window name uses generic confirm message", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "0",
 			WindowName:    "",

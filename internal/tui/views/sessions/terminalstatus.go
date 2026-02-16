@@ -1,4 +1,4 @@
-package tui
+package sessions
 
 import (
 	"context"
@@ -39,16 +39,16 @@ type allWindowsDiscoverer interface {
 	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error)
 }
 
-// terminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
-type terminalStatusBatchCompleteMsg struct {
+// TerminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
+type TerminalStatusBatchCompleteMsg struct {
 	Results map[string]TerminalStatus // sessionID -> status
 }
 
-// terminalPollTickMsg triggers a terminal status poll cycle.
-type terminalPollTickMsg struct{}
+// TerminalPollTickMsg triggers a terminal status poll cycle.
+type TerminalPollTickMsg struct{}
 
-// fetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
-func fetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
+// FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
+func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
 	if mgr == nil || len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
 		return nil
 	}
@@ -88,7 +88,7 @@ func fetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 		}
 
 		wg.Wait()
-		return terminalStatusBatchCompleteMsg{Results: results}
+		return TerminalStatusBatchCompleteMsg{Results: results}
 	}
 }
 
@@ -162,12 +162,12 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	return status
 }
 
-// startTerminalPollTicker returns a command that starts the terminal status poll ticker.
-func startTerminalPollTicker(interval time.Duration) tea.Cmd {
+// StartTerminalPollTicker returns a command that starts the terminal status poll ticker.
+func StartTerminalPollTicker(interval time.Duration) tea.Cmd {
 	if interval <= 0 {
 		return nil
 	}
 	return tea.Tick(interval, func(time.Time) tea.Msg {
-		return terminalPollTickMsg{}
+		return TerminalPollTickMsg{}
 	})
 }

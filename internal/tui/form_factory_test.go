@@ -6,17 +6,18 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/pkg/kv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestNewFormDialog(t *testing.T) {
-	sessions := []session.Session{
+	testSessions := []session.Session{
 		{ID: "s1", Name: "alpha", State: session.StateActive},
 		{ID: "s2", Name: "beta", State: session.StateActive},
 	}
-	repos := []DiscoveredRepo{
+	repos := []sessions.DiscoveredRepo{
 		{Name: "hive", Path: "/tmp/hive", Remote: "git@github.com:org/hive.git"},
 	}
 
@@ -24,7 +25,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "msg", Type: config.FormTypeText, Label: "Message", Placeholder: "enter text"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "msg")
@@ -35,7 +36,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "msg", Type: config.FormTypeText, Label: "Message", Default: "hello"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Equal(t, "hello", vals["msg"])
@@ -45,7 +46,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "body", Type: config.FormTypeTextArea, Label: "Body"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "body")
@@ -55,7 +56,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "env", Type: config.FormTypeSelect, Label: "Env", Options: []string{"dev", "prod"}},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		// First option is selected by default
@@ -66,7 +67,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "tags", Type: config.FormTypeMultiSelect, Label: "Tags", Options: []string{"a", "b", "c"}},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		selected, ok := vals["tags"].([]string)
@@ -78,7 +79,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "target", Preset: config.FormPresetSessionSelector, Label: "Target"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		sess, ok := vals["target"].(session.Session)
@@ -90,7 +91,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "targets", Preset: config.FormPresetSessionSelector, Multi: true, Label: "Targets"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		sessList, ok := vals["targets"].([]session.Session)
@@ -102,7 +103,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "repo", Preset: config.FormPresetProjectSelector, Label: "Repo"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "repo")
@@ -112,7 +113,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "repos", Preset: config.FormPresetProjectSelector, Multi: true, Label: "Repos"},
 		}
-		d, err := newFormDialog("Test", fields, sessions, repos, nil)
+		d, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "repos")
@@ -123,7 +124,7 @@ func TestNewFormDialog(t *testing.T) {
 			{Variable: "targets", Preset: config.FormPresetSessionSelector, Multi: true, Label: "Recipients"},
 			{Variable: "message", Type: config.FormTypeText, Label: "Message", Placeholder: "Type here..."},
 		}
-		d, err := newFormDialog("SendBatch", fields, sessions, repos, nil)
+		d, err := newFormDialog("SendBatch", fields, testSessions, repos, nil)
 		require.NoError(t, err)
 		vals := d.FormValues()
 		assert.Contains(t, vals, "targets")
@@ -134,7 +135,7 @@ func TestNewFormDialog(t *testing.T) {
 		fields := []config.FormField{
 			{Variable: "x", Type: "unknown", Label: "X"},
 		}
-		_, err := newFormDialog("Test", fields, sessions, repos, nil)
+		_, err := newFormDialog("Test", fields, testSessions, repos, nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unknown form field type/preset")
 	})
@@ -161,10 +162,10 @@ func TestNewFormDialog(t *testing.T) {
 			{ID: "s2", Name: "beta", State: session.StateActive},
 			{ID: "s3", Name: "gamma", State: session.StateActive},
 		}
-		ts := kv.New[string, TerminalStatus]()
-		ts.Set("s1", TerminalStatus{Status: terminal.StatusActive})
-		ts.Set("s2", TerminalStatus{Status: terminal.StatusMissing})
-		ts.Set("s3", TerminalStatus{Status: terminal.StatusReady})
+		ts := kv.New[string, sessions.TerminalStatus]()
+		ts.Set("s1", sessions.TerminalStatus{Status: terminal.StatusActive})
+		ts.Set("s2", sessions.TerminalStatus{Status: terminal.StatusMissing})
+		ts.Set("s3", sessions.TerminalStatus{Status: terminal.StatusReady})
 
 		fields := []config.FormField{
 			{Variable: "target", Preset: config.FormPresetSessionSelector, Label: "Target"},
@@ -197,7 +198,7 @@ func TestNewFormDialog(t *testing.T) {
 	})
 
 	t.Run("empty fields", func(t *testing.T) {
-		d, err := newFormDialog("Test", []config.FormField{}, sessions, repos, nil)
+		d, err := newFormDialog("Test", []config.FormField{}, testSessions, repos, nil)
 		require.NoError(t, err)
 		assert.Empty(t, d.FormValues())
 	})
