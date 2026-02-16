@@ -4,20 +4,29 @@
 [env]
 HIVE_LOG_LEVEL = "debug"
 HIVE_LOG_FILE = "./dev.log"
-HIVE_CONFIG = "./config.dev.yaml"
-HIVE_DATA_DIR = "./.data"
 
-[tasks.run]
-description = "Run with dev config (supports CLI args)"
+[tasks.generate]
+description = "Run all code generators"
+sources = ["internal/core/eventbus/events.go"]
+outputs = ["internal/core/eventbus/eventbus.gen.go"]
+run = "go generate ./..."
+
+[tasks.start]
+alias = "default"
+description = "Run hive with global config (supports CLI args)"
+depends = ["generate"]
+run = "go run *.go"
+
+[tasks.dev]
+description = "Run hive with dev config (supports CLI args)"
+depends = ["generate"]
+env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./config.dev.yaml", HIVE_DATA_DIR = "./.data" }
 run = "go run *.go"
 
 [tasks.build]
 description = "Build with goreleaser"
+depends = ["generate"]
 run = "goreleaser build --snapshot --clean"
-
-[tasks.generate]
-description = "Run all code generators"
-run = "go generate ./..."
 
 [tasks.test]
 description = "Run all go tests"
@@ -48,7 +57,8 @@ run = [
 ]
 
 [tasks.validate]
-description = "Run config validate command"
+description = "Run config validate with dev config"
+env = { HIVE_CONFIG = "./config.dev.yaml" }
 run = "go run *.go config validate"
 
 [tasks."validate:invalid"]

@@ -73,13 +73,14 @@ internal/
 ### Commands
 
 ```bash
-task run              # Run with dev config (supports CLI_ARGS)
-task run -- new       # Example: run 'hive new'
-task build            # Build with goreleaser
-task test             # Run tests with go test
-task lint             # Run golangci-lint
-task check            # tidy + lint + test (full validation)
-task coverage         # Generate coverage report
+mise run start            # Run with global config (supports CLI args)
+mise run dev              # Run with dev config (supports CLI args)
+mise run dev -- new       # Example: run 'hive new' with dev config
+mise run build            # Build with goreleaser
+mise run test             # Run tests with go test
+mise run lint             # Run golangci-lint
+mise run check            # tidy + lint + test (full validation)
+mise run coverage         # Generate coverage report
 ```
 
 ### Environment
