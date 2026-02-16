@@ -2,14 +2,12 @@ package tui
 
 import (
 	"fmt"
-	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
@@ -39,7 +37,9 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// msgView gets -1 because we prepend a blank line for consistent spacing
-	m.msgView.SetSize(msg.Width, contentHeight-1)
+	if m.msgView != nil {
+		m.msgView.SetSize(msg.Width, contentHeight-1)
+	}
 
 	// Set review view size
 	if m.reviewView != nil {
@@ -62,22 +62,6 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 }
 
 // --- Data loaded ---
-
-func (m Model) handleMessagesLoaded(msg messagesLoadedMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		return m, nil
-	}
-	if len(msg.messages) > 0 {
-		m.allMessages = append(m.allMessages, msg.messages...)
-		reversed := make([]messaging.Message, len(m.allMessages))
-		for i, message := range m.allMessages {
-			reversed[len(m.allMessages)-1-i] = message
-		}
-		m.msgView.SetMessages(reversed)
-	}
-	m.lastPollTime = time.Now()
-	return m, nil
-}
 
 func (m Model) handleKVKeysLoaded(msg kvKeysLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
@@ -190,16 +174,6 @@ func (m Model) handleReposDiscovered(msg reposDiscoveredMsg) (tea.Model, tea.Cmd
 }
 
 // --- Polling ticks ---
-
-func (m Model) handlePollTick(_ pollTickMsg) (tea.Model, tea.Cmd) {
-	if m.shouldPollMessages() && m.msgStore != nil {
-		return m, tea.Batch(
-			loadMessages(m.msgStore, m.topicFilter, m.lastPollTime),
-			schedulePollTick(),
-		)
-	}
-	return m, schedulePollTick()
-}
 
 func (m Model) handleSessionRefreshTick(_ sessionRefreshTickMsg) (tea.Model, tea.Cmd) {
 	if m.activeView == ViewSessions && !m.isModalActive() {
@@ -381,19 +355,36 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.updateNewSessionForm(msg)
 	}
 
+	// Always forward to messages view for its internal polling/loaded messages
+	var cmds []tea.Cmd
+	if m.msgView != nil {
+		var cmd tea.Cmd
+		*m.msgView, cmd = m.msgView.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
 	// Update the appropriate view based on active view
-	var cmd tea.Cmd
 	switch m.activeView {
 	case ViewSessions:
+		var cmd tea.Cmd
 		m.list, cmd = m.list.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	case ViewMessages:
-		// Messages view handles its own updates
+		// Handled above — messages view always receives fallthrough messages
 	case ViewStore:
 		// KV view handles its own updates via explicit method calls
 	case ViewReview:
 		if m.reviewView != nil {
+			var cmd tea.Cmd
 			*m.reviewView, cmd = m.reviewView.Update(msg)
+			if cmd != nil {
+				cmds = append(cmds, cmd)
+			}
 		}
 	}
-	return m, cmd
+	return m, tea.Batch(cmds...)
 }

@@ -22,7 +22,6 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	corekv "github.com/colonyops/hive/internal/core/kv"
-	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -36,6 +35,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
+	"github.com/colonyops/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/internal/tui/views/review"
 
 	"github.com/colonyops/hive/pkg/kv"
@@ -57,7 +57,6 @@ const (
 	stateConfirming
 	stateLoading
 	stateRunningRecycle
-	statePreviewingMessage
 	stateCreatingSession
 	stateCommandPalette
 	stateShowingHelp
@@ -147,15 +146,8 @@ type Model struct {
 	activeView ViewType // which view is shown
 	refreshing bool     // true during background session refresh
 
-	// Messages
-	msgStore     *hive.MessageService
-	msgView      *MessagesView
-	allMessages  []messaging.Message
-	lastPollTime time.Time
-	topicFilter  string
-
-	// Message preview
-	previewModal MessagePreviewModal
+	// Messages view (sub-model)
+	msgView *messages.View
 
 	// Clipboard
 	copyCommand string
@@ -362,8 +354,8 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	// Create message view
-	msgView := NewMessagesView()
+	// Create message view (sub-model)
+	msgView := messages.New(opts.MsgStore, "*", cfg.CopyCommand)
 
 	// Create KV browser view
 	kvView := NewKVView()
@@ -437,9 +429,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		pluginPollInterval: cfg.Plugins.GitHub.ResultsCache, // use GitHub cache duration as poll interval
 		treeDelegate:       delegate,
 		localRemote:        opts.LocalRemote,
-		msgStore:           opts.MsgStore,
-		msgView:            msgView,
-		topicFilter:        "*",
+		msgView:            &msgView,
 		activeView:         ViewSessions,
 		copyCommand:        cfg.CopyCommand,
 		repoDirs:           cfg.RepoDirs,
@@ -520,10 +510,11 @@ func (m Model) Init() tea.Cmd {
 	if m.bus != nil {
 		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
 	}
-	// Start message polling if we have a store
-	if m.msgStore != nil {
-		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
-		cmds = append(cmds, schedulePollTick())
+	// Start messages view
+	if m.msgView != nil {
+		if cmd := m.msgView.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
 	// Start session refresh timer
 	if cmd := m.scheduleSessionRefresh(); cmd != nil {
@@ -625,8 +616,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleWindowSize(msg)
 
 	// Data loaded
-	case messagesLoadedMsg:
-		return m.handleMessagesLoaded(msg)
 	case kvKeysLoadedMsg:
 		return m.handleKVKeysLoaded(msg)
 	case kvEntryLoadedMsg:
@@ -645,8 +634,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m.handleReposDiscovered(msg)
 
 	// Polling ticks
-	case pollTickMsg:
-		return m.handlePollTick(msg)
 	case sessionRefreshTickMsg:
 		return m.handleSessionRefreshTick(msg)
 	case kvPollTickMsg:
@@ -703,9 +690,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateCommandPalette {
 		return m.handleCommandPaletteKey(msg, keyStr)
 	}
-	if m.state == statePreviewingMessage {
-		return m.handlePreviewModalKey(msg, keyStr)
-	}
 	if m.state == stateShowingHelp {
 		return m.handleHelpDialogKey(keyStr)
 	}
@@ -726,7 +710,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// When filtering in either list, pass most keys except quit
-	if m.list.SettingFilter() || m.msgView.IsFiltering() || m.kvView.IsFiltering() || m.focusMode {
+	if m.list.SettingFilter() || m.kvView.IsFiltering() || m.focusMode {
 		return m.handleFilteringKey(msg, keyStr)
 	}
 
@@ -1051,38 +1035,6 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// handlePreviewModalKey handles keys when message preview modal is shown.
-func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
-	// Clear copy status on any key press
-	m.previewModal.ClearCopyStatus()
-
-	switch keyStr {
-	case keyCtrlC:
-		return m.quit()
-	case "esc", keyEnter, "q":
-		m.state = stateNormal
-		return m, nil
-	case "up", "k":
-		m.previewModal.ScrollUp()
-		return m, nil
-	case "down", "j":
-		m.previewModal.ScrollDown()
-		return m, nil
-	case "c", "y":
-		// Copy payload to clipboard
-		if err := m.copyToClipboard(m.previewModal.Payload()); err != nil {
-			m.previewModal.SetCopyStatus("Copy failed: " + err.Error())
-		} else {
-			m.previewModal.SetCopyStatus("Copied!")
-		}
-		return m, nil
-	default:
-		// Pass other messages to viewport for mouse wheel etc
-		m.previewModal.UpdateViewport(msg)
-		return m, nil
-	}
-}
-
 // handleCommandPaletteKey handles keys when command palette is shown.
 func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
@@ -1259,27 +1211,6 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		}
 	}
 
-	// Handle message view filtering
-	if m.msgView.IsFiltering() {
-		switch keyStr {
-		case "esc":
-			m.msgView.CancelFilter()
-		case keyEnter:
-			m.msgView.ConfirmFilter()
-		case "backspace":
-			m.msgView.DeleteFilterRune()
-		default:
-			// Add character to filter if it's a printable rune
-			// In bubbletea V2, msg.Runes is replaced with msg.Key().Text
-			if text := msg.Key().Text; text != "" {
-				for _, r := range text {
-					m.msgView.AddFilterRune(r)
-				}
-			}
-		}
-		return m, nil
-	}
-
 	// Handle KV view filtering
 	if m.kvView.IsFiltering() {
 		prevKey := m.kvView.SelectedKey()
@@ -1330,6 +1261,16 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		}
 	}
 
+	// Messages preview modal intercepts keys before global handlers
+	if m.isMessagesFocused() && m.msgView != nil && m.msgView.IsPreviewActive() {
+		if keyStr == keyCtrlC {
+			return m.quit()
+		}
+		var cmd tea.Cmd
+		*m.msgView, cmd = m.msgView.Update(msg)
+		return m, cmd
+	}
+
 	// Not in editor - handle core hardcoded keys
 	// Global keys that work regardless of focus
 	switch keyStr {
@@ -1361,25 +1302,11 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.handleSessionsKey(msg, keyStr)
 	}
 
-	// Handle keys based on active view
-	if m.isMessagesFocused() {
-		// Messages view focused - handle navigation
-		switch keyStr {
-		case keyEnter:
-			// Open message preview modal
-			selectedMsg := m.selectedMessage()
-			if selectedMsg != nil {
-				m.state = statePreviewingMessage
-				m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
-			}
-		case "up", "k":
-			m.msgView.MoveUp()
-		case "down", "j":
-			m.msgView.MoveDown()
-		case "/":
-			m.msgView.StartFilter()
-		}
-		return m, nil
+	// Messages view focused - delegate all keys to the sub-model
+	if m.isMessagesFocused() && m.msgView != nil {
+		var cmd tea.Cmd
+		*m.msgView, cmd = m.msgView.Update(msg)
+		return m, cmd
 	}
 
 	// Store view focused - handle KV navigation
@@ -1448,6 +1375,9 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	}
 
 	m.handler.SetActiveView(m.activeView)
+	if m.msgView != nil {
+		m.msgView.SetActive(m.activeView == ViewMessages)
+	}
 
 	// Load KV keys when switching to Store tab
 	if m.activeView == ViewStore {
@@ -1875,8 +1805,8 @@ func (m *Model) hasEditorFocus() bool {
 		return true
 	}
 
-	// Check message view filter
-	if m.msgView != nil && m.msgView.IsFiltering() {
+	// Check messages view filter or preview
+	if m.msgView != nil && m.msgView.HasEditorFocus() {
 		return true
 	}
 
@@ -1950,9 +1880,9 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		}
 		m.list, cmd = m.list.Update(msg)
 	case ViewMessages:
-		// MessagesView handles its own filtering internally, no Update method
-		// Key events are handled by specific methods called from handleNormalKey
-		return m, nil
+		if m.msgView != nil {
+			*m.msgView, cmd = m.msgView.Update(msg)
+		}
 	case ViewStore:
 		// KV view handles its own updates via explicit method calls
 		return m, nil
@@ -2097,11 +2027,6 @@ func (m *Model) handleFilterAction(actionType act.Type) bool {
 	}
 }
 
-// selectedMessage returns the currently selected message, or nil if none.
-func (m Model) selectedMessage() *messaging.Message {
-	return m.msgView.SelectedMessage()
-}
-
 // isSessionsFocused returns true if the sessions view is active.
 func (m Model) isSessionsFocused() bool {
 	return m.activeView == ViewSessions
@@ -2119,11 +2044,6 @@ func (m Model) isReviewFocused() bool {
 
 func (m Model) isStoreFocused() bool {
 	return m.activeView == ViewStore
-}
-
-// shouldPollMessages returns true if messages should be polled.
-func (m Model) shouldPollMessages() bool {
-	return m.activeView == ViewMessages
 }
 
 // isModalActive returns true if any modal is currently open.
@@ -2400,8 +2320,8 @@ func (m Model) View() tea.View {
 
 		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
 		content = compositor.Render()
-	case m.state == statePreviewingMessage:
-		content = m.previewModal.Overlay(mainView, w, h)
+	case m.msgView != nil && m.msgView.IsPreviewActive():
+		content = m.msgView.Overlay(mainView, w, h)
 	case m.state == stateLoading:
 		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, m.spinner.View(), " "+m.loadingMessage)
 		modal := NewModal("", loadingView)

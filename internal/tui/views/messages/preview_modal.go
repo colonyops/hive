@@ -1,4 +1,4 @@
-package tui
+package messages
 
 import (
 	"fmt"
@@ -12,27 +12,26 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
-const iconDot = "•"
-
-// Message preview modal layout constants.
 const (
-	previewModalMaxWidth  = 100 // maximum modal width in columns
-	previewModalMaxHeight = 30  // maximum modal height in rows
-	previewModalMargin    = 4   // margin from screen edges
-	previewModalChrome    = 8   // rows for title, metadata, help, and spacing
-	previewModalPadding   = 4   // padding inside content area
+	iconDot               = "•"
+	unknownSender         = "unknown"
+	previewModalMaxWidth  = 100
+	previewModalMaxHeight = 30
+	previewModalMargin    = 4
+	previewModalChrome    = 8
+	previewModalPadding   = 4
 )
 
-// MessagePreviewModal displays a message with markdown rendering.
-type MessagePreviewModal struct {
+// PreviewModal displays a message with markdown rendering.
+type PreviewModal struct {
 	message    messaging.Message
 	viewport   viewport.Model
 	ready      bool
-	copyStatus string // feedback message after copy ("Copied!" or error)
+	copyStatus string
 }
 
-// NewMessagePreviewModal creates a new preview modal for the given message.
-func NewMessagePreviewModal(msg messaging.Message, width, height int) MessagePreviewModal {
+// NewPreviewModal creates a new preview modal for the given message.
+func NewPreviewModal(msg messaging.Message, width, height int) PreviewModal {
 	modalWidth := min(width-previewModalMargin, previewModalMaxWidth)
 	modalHeight := min(height-previewModalMargin, previewModalMaxHeight)
 	contentHeight := modalHeight - previewModalChrome
@@ -42,21 +41,17 @@ func NewMessagePreviewModal(msg messaging.Message, width, height int) MessagePre
 		viewport.WithHeight(contentHeight),
 	)
 
-	m := MessagePreviewModal{
+	m := PreviewModal{
 		message:  msg,
 		viewport: vp,
 		ready:    false,
 	}
 
-	// Render markdown content
 	m.renderContent(modalWidth - previewModalPadding)
-
 	return m
 }
 
-// renderContent renders the message payload as markdown.
-func (m *MessagePreviewModal) renderContent(width int) {
-	// Use tokyo-night style but with no document margin
+func (m *PreviewModal) renderContent(width int) {
 	style := styles.GlamourStyle()
 	noMargin := uint(0)
 	style.Document.Margin = &noMargin
@@ -78,10 +73,7 @@ func (m *MessagePreviewModal) renderContent(width int) {
 		return
 	}
 
-	// Trim whitespace and glamour's decorative margins
 	content := strings.TrimSpace(rendered)
-	// Glamour adds a decorative rule at the start - strip lines that are only
-	// horizontal rules (accounting for ANSI escape codes)
 	content = stripLeadingDecorative(content)
 	content = stripTrailingDecorative(content)
 	m.viewport.SetContent(content)
@@ -89,69 +81,64 @@ func (m *MessagePreviewModal) renderContent(width int) {
 }
 
 // UpdateViewport updates the viewport with a message (for scrolling).
-func (m *MessagePreviewModal) UpdateViewport(msg any) {
+func (m *PreviewModal) UpdateViewport(msg any) {
 	m.viewport, _ = m.viewport.Update(msg)
 }
 
 // ScrollUp scrolls the viewport up.
-func (m *MessagePreviewModal) ScrollUp() {
+func (m *PreviewModal) ScrollUp() {
 	m.viewport.ScrollUp(1)
 }
 
 // ScrollDown scrolls the viewport down.
-func (m *MessagePreviewModal) ScrollDown() {
+func (m *PreviewModal) ScrollDown() {
 	m.viewport.ScrollDown(1)
 }
 
 // Payload returns the raw message payload for copying.
-func (m *MessagePreviewModal) Payload() string {
+func (m *PreviewModal) Payload() string {
 	return m.message.Payload
 }
 
 // SetCopyStatus sets the copy feedback message.
-func (m *MessagePreviewModal) SetCopyStatus(status string) {
+func (m *PreviewModal) SetCopyStatus(status string) {
 	m.copyStatus = status
 }
 
 // ClearCopyStatus clears the copy feedback message.
-func (m *MessagePreviewModal) ClearCopyStatus() {
+func (m *PreviewModal) ClearCopyStatus() {
 	m.copyStatus = ""
 }
 
 // Overlay renders the preview modal centered over the background.
-func (m MessagePreviewModal) Overlay(background string, width, height int) string {
+func (m PreviewModal) Overlay(background string, width, height int) string {
 	modalWidth := min(width-previewModalMargin, previewModalMaxWidth)
 	modalHeight := min(height-previewModalMargin, previewModalMaxHeight)
 
-	// Build metadata header
 	sender := m.message.Sender
 	if sender == "" {
-		sender = unknownViewType
+		sender = unknownSender
 	}
 	topicStr := styles.PreviewTopicStyle.Render(fmt.Sprintf("[%s]", m.message.Topic))
 	senderStr := styles.TextSuccessStyle.Render(sender)
 	timeStr := styles.TextMutedStyle.Render(m.message.CreatedAt.Format("2006-01-02 15:04:05"))
 	metadata := fmt.Sprintf("%s %s %s %s", topicStr, senderStr, iconDot, timeStr)
 
-	// Add session ID if present
 	if m.message.SessionID != "" {
 		sessionStr := styles.PreviewSessionStyle.Render(fmt.Sprintf("session: %s", m.message.SessionID))
 		metadata = fmt.Sprintf("%s\n%s", metadata, sessionStr)
 	}
 
-	// Build scroll indicator
 	scrollInfo := ""
 	if m.viewport.TotalLineCount() > m.viewport.VisibleLineCount() {
 		scrollInfo = styles.TextMutedStyle.Render(fmt.Sprintf(" (%.0f%%)", m.viewport.ScrollPercent()*100))
 	}
 
-	// Build help line with copy status
 	helpText := "[↑/↓/j/k] scroll  [c] copy  [enter/esc] close"
 	if m.copyStatus != "" {
 		helpText = styles.TextSuccessStyle.Render(m.copyStatus)
 	}
 
-	// Assemble modal content
 	divider := styles.TextSurfaceStyle.Render("────────────────────────────────────────")
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
@@ -168,11 +155,9 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 		Height(modalHeight).
 		Render(modalContent)
 
-	// Use Compositor/Layer for true overlay (background remains visible)
 	bgLayer := lipgloss.NewLayer(background)
 	modalLayer := lipgloss.NewLayer(modal)
 
-	// Center the modal
 	modalW := lipgloss.Width(modal)
 	modalH := lipgloss.Height(modal)
 	centerX := (width - modalW) / 2
@@ -183,18 +168,14 @@ func (m MessagePreviewModal) Overlay(background string, width, height int) strin
 	return compositor.Render()
 }
 
-// ansiPattern matches ANSI escape sequences.
 var ansiPattern = regexp.MustCompile(`\x1b\[[0-9;]*m`)
 
-// isDecorativeLine checks if a line contains only decorative characters
-// (horizontal rules, spaces) after stripping ANSI codes.
 func isDecorativeLine(line string) bool {
 	stripped := ansiPattern.ReplaceAllString(line, "")
 	stripped = strings.TrimSpace(stripped)
 	if stripped == "" {
 		return true
 	}
-	// Check if it's only horizontal rule characters
 	for _, r := range stripped {
 		if r != '─' && r != '━' && r != '-' && r != '=' {
 			return false
@@ -203,7 +184,6 @@ func isDecorativeLine(line string) bool {
 	return true
 }
 
-// stripLeadingDecorative removes leading decorative lines from content.
 func stripLeadingDecorative(content string) string {
 	lines := strings.Split(content, "\n")
 	start := 0
@@ -216,7 +196,6 @@ func stripLeadingDecorative(content string) string {
 	return content
 }
 
-// stripTrailingDecorative removes trailing decorative lines from content.
 func stripTrailingDecorative(content string) string {
 	lines := strings.Split(content, "\n")
 	end := len(lines)
