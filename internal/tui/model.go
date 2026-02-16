@@ -195,7 +195,6 @@ type Model struct {
 	toastView         *ToastView
 	notificationModal *NotificationModal
 
-	// Event bus
 	bus *eventbus.EventBus
 
 	// Form dialog (for user command forms)
@@ -515,7 +514,6 @@ func (m Model) findSessionByID(id string) *session.Session {
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.loadSessions(), m.spinner.Tick}
-	// Emit TUI started event
 	if m.bus != nil {
 		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
 	}
@@ -787,12 +785,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case terminalStatusBatchCompleteMsg:
 		if m.terminalStatuses != nil {
-			// Emit agent status change events for transitions
 			if m.bus != nil {
 				for sessionID, newStatus := range msg.Results {
 					oldStatus, exists := m.terminalStatuses.Get(sessionID)
 					prevStatus := oldStatus.Status
 					if !exists {
+						// First observation has no prior state; treat as StatusMissing
+						// so the initial transition is always emitted.
 						prevStatus = terminal.StatusMissing
 					}
 					if prevStatus != newStatus.Status {

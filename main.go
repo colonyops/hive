@@ -193,7 +193,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			sweepCancel = cancel
 			go sweep.Start(sweepCtx, kvStore, 5*time.Minute)
 
-			// Create event bus
 			bus := eventbus.New(64)
 			busCtx, cancel := context.WithCancel(context.Background())
 			busCancel = cancel
@@ -274,7 +273,6 @@ Run 'hive new' to create a new session from the current repository.`,
 			return ctx, nil
 		},
 		After: func(ctx context.Context, c *cli.Command) error {
-			// Stop event bus
 			if busCancel != nil {
 				busCancel()
 			}
