@@ -13,16 +13,13 @@
       "name": "hive",
       "description": "Inter-agent messaging, session management, and workflow coordination for hive CLI",
       "source": "./claude-plugin/hive",
-      "strict": false,
-      "skills": ["./skills"],
-      "commands": ["./commands"]
+      "strict": false
     },
     {
       "name": "hive-hooks",
       "description": "Session automation hooks for hive - auto-checks inbox on session start",
       "source": "./claude-plugin/hive-hooks",
-      "strict": false,
-      "hooks": "./hooks/hooks.json"
+      "strict": false
     }
   ]
 }
