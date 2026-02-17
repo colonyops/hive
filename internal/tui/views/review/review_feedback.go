@@ -32,8 +32,8 @@ func GenerateReviewFeedback(session *Session, docRelPath string) string {
 	var b strings.Builder
 
 	// Header
-	b.WriteString(fmt.Sprintf("Document: %s\n", docRelPath))
-	b.WriteString(fmt.Sprintf("Comments: %d\n\n", len(session.Comments)))
+	fmt.Fprintf(&b, "Document: %s\n", docRelPath)
+	fmt.Fprintf(&b, "Comments: %d\n\n", len(session.Comments))
 
 	// Sort comments by line number
 	sortedComments := make([]Comment, len(session.Comments))
@@ -50,16 +50,16 @@ func GenerateReviewFeedback(session *Session, docRelPath string) string {
 
 		// Line range
 		if comment.StartLine == comment.EndLine {
-			b.WriteString(fmt.Sprintf("Line %d:\n", comment.StartLine))
+			fmt.Fprintf(&b, "Line %d:\n", comment.StartLine)
 		} else {
-			b.WriteString(fmt.Sprintf("Lines %d-%d:\n", comment.StartLine, comment.EndLine))
+			fmt.Fprintf(&b, "Lines %d-%d:\n", comment.StartLine, comment.EndLine)
 		}
 
 		// Context (quoted) - strip ANSI codes for plain text
 		if comment.ContextText != "" {
 			cleanContext := ansiStripPattern.ReplaceAllString(comment.ContextText, "")
 			for line := range strings.SplitSeq(cleanContext, "\n") {
-				b.WriteString(fmt.Sprintf("> %s\n", line))
+				fmt.Fprintf(&b, "> %s\n", line)
 			}
 		}
 
