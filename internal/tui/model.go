@@ -56,17 +56,23 @@ const (
 	keyCtrlC = "ctrl+c"
 )
 
-// Options configures the TUI behavior.
-type Options struct {
-	LocalRemote     string               // Remote URL of current directory (empty if not in git repo)
-	MsgStore        *hive.MessageService // Message service for pub/sub events (optional)
-	Bus             *eventbus.EventBus   // Event bus for cross-component communication
-	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
-	PluginManager   *plugins.Manager     // Plugin manager (optional)
-	DB              *db.DB               // Database connection for stores
-	KVStore         corekv.KV            // Persistent KV store (optional)
-	Renderer        *tmpl.Renderer       // Template renderer for shell commands
-	Warnings        []string             // Startup warnings to display as toasts
+// Deps holds all external dependencies for the TUI Model.
+type Deps struct {
+	Config          *config.Config
+	Service         *hive.SessionService
+	MsgStore        *hive.MessageService
+	Bus             *eventbus.EventBus
+	TerminalManager *terminal.Manager
+	PluginManager   *plugins.Manager
+	DB              *db.DB
+	KVStore         corekv.KV
+	Renderer        *tmpl.Renderer
+}
+
+// Opts holds runtime options that are not service dependencies.
+type Opts struct {
+	LocalRemote string
+	Warnings    []string
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -160,16 +166,19 @@ type notificationMsg struct {
 }
 
 // New creates a new TUI model.
-func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
+func New(deps Deps, opts Opts) Model {
+	cfg := deps.Config
+	service := deps.Service
+
 	// Compute merged commands: system → plugins → user
 	var mergedCommands map[string]config.UserCommand
-	if opts.PluginManager != nil {
-		mergedCommands = opts.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
+	if deps.PluginManager != nil {
+		mergedCommands = deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 	} else {
 		mergedCommands = cfg.MergedUserCommands()
 	}
 
-	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, opts.Renderer)
+	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service)
 
 	// Create sessions view (sub-model) — owns all session-related state
@@ -177,12 +186,12 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		Cfg:             cfg,
 		Service:         service,
 		Handler:         handler,
-		TerminalManager: opts.TerminalManager,
-		PluginManager:   opts.PluginManager,
+		TerminalManager: deps.TerminalManager,
+		PluginManager:   deps.PluginManager,
 		LocalRemote:     opts.LocalRemote,
 		RepoDirs:        cfg.RepoDirs,
-		Renderer:        opts.Renderer,
-		Bus:             opts.Bus,
+		Renderer:        deps.Renderer,
+		Bus:             deps.Bus,
 	})
 
 	// Wire handler lookups through sessions view stores
@@ -204,7 +213,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	s.Style = styles.TextPrimaryStyle
 
 	// Create message view (sub-model)
-	msgView := messages.New(opts.MsgStore, "*", cfg.CopyCommand)
+	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand)
 
 	// Create KV browser view
 	kvView := NewKVView()
@@ -225,16 +234,16 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 	}
 
 	var reviewStore *stores.ReviewStore
-	if opts.DB != nil {
-		reviewStore = stores.NewReviewStore(opts.DB)
+	if deps.DB != nil {
+		reviewStore = stores.NewReviewStore(deps.DB)
 	}
 
 	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
 
 	// Initialize notification system
 	var notifyStore notify.Store
-	if opts.DB != nil {
-		notifyStore = stores.NewNotifyStore(opts.DB)
+	if deps.DB != nil {
+		notifyStore = stores.NewNotifyStore(deps.DB)
 	}
 	notifyBus := tuinotify.NewBus(notifyStore)
 	toastCtrl := NewToastController()
@@ -258,13 +267,13 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		copyCommand:     cfg.CopyCommand,
 		mergedCommands:  mergedCommands,
 		reviewView:      &reviewView,
-		kvStore:         opts.KVStore,
+		kvStore:         deps.KVStore,
 		kvView:          kvView,
 		notifyBus:       notifyBus,
 		toastController: toastCtrl,
 		toastView:       toastView,
-		bus:             opts.Bus,
-		renderer:        opts.Renderer,
+		bus:             deps.Bus,
+		renderer:        deps.Renderer,
 		startupWarnings: opts.Warnings,
 	}
 }

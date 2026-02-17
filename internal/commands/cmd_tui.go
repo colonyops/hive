@@ -84,8 +84,9 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	}
 
 	for {
-		opts := tui.Options{
-			LocalRemote:     localRemote,
+		deps := tui.Deps{
+			Config:          cmd.app.Config,
+			Service:         cmd.app.Sessions,
 			MsgStore:        cmd.app.Messages,
 			Bus:             cmd.app.Bus,
 			TerminalManager: termMgr,
@@ -93,10 +94,13 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			DB:              cmd.app.DB,
 			KVStore:         cmd.app.KV,
 			Renderer:        cmd.app.Renderer,
-			Warnings:        warnings,
+		}
+		opts := tui.Opts{
+			LocalRemote: localRemote,
+			Warnings:    warnings,
 		}
 
-		m := tui.New(cmd.app.Sessions, cmd.app.Config, opts)
+		m := tui.New(deps, opts)
 		p := tea.NewProgram(m)
 
 		finalModel, err := p.Run()
