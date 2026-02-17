@@ -65,7 +65,7 @@ func TestModel_hasEditorFocus(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			m := &Model{}
+			m := &Model{modals: NewModalCoordinator()}
 			tt.setupFunc(m)
 			got := m.hasEditorFocus()
 			assert.Equal(t, tt.want, got)
@@ -76,7 +76,8 @@ func TestModel_hasEditorFocus(t *testing.T) {
 func TestModel_hasEditorFocus_Integration(t *testing.T) {
 	t.Run("blocking keybindings when in command palette", func(t *testing.T) {
 		m := &Model{
-			state: stateCommandPalette,
+			state:  stateCommandPalette,
+			modals: NewModalCoordinator(),
 		}
 
 		// Should have editor focus
@@ -87,7 +88,8 @@ func TestModel_hasEditorFocus_Integration(t *testing.T) {
 
 	t.Run("blocking keybindings when creating session", func(t *testing.T) {
 		m := &Model{
-			state: stateCreatingSession,
+			state:  stateCreatingSession,
+			modals: NewModalCoordinator(),
 		}
 
 		// Should have editor focus
@@ -96,7 +98,8 @@ func TestModel_hasEditorFocus_Integration(t *testing.T) {
 
 	t.Run("allowing keybindings in normal state", func(t *testing.T) {
 		m := &Model{
-			state: stateNormal,
+			state:  stateNormal,
+			modals: NewModalCoordinator(),
 		}
 
 		// Should NOT have editor focus

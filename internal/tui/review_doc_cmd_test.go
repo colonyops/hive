@@ -24,6 +24,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 		activeView:      ViewSessions,
 		reviewView:      nil,
 		handler:         handler,
+		modals:          NewModalCoordinator(),
 		notifyBus:       bus,
 		toastController: NewToastController(),
 		width:           100,
@@ -60,6 +61,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		activeView: ViewSessions,
 		reviewView: &reviewView,
 		handler:    handler,
+		modals:     NewModalCoordinator(),
 		notifyBus:  tuinotify.NewBus(nil),
 		width:      100,
 		height:     40,
@@ -73,7 +75,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	assert.Equal(t, ViewSessions, m.activeView)
 
 	// Check that picker modal is shown on the Model (using fallback docs)
-	require.NotNil(t, m.docPickerModal, "Expected picker modal to be created on Model")
+	require.NotNil(t, m.modals.DocPicker, "Expected picker modal to be created on Model")
 }
 
 func TestOpenDocument(t *testing.T) {

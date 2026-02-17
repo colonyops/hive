@@ -27,6 +27,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		contentHeight = 1
 	}
 
+	m.modals.SetSize(msg.Width, msg.Height)
+
 	if m.sessionsView != nil {
 		m.sessionsView.SetSize(msg.Width, msg.Height)
 	}
@@ -133,7 +135,7 @@ func (m Model) handleSessionFormCommand(msg sessions.FormCommandRequestMsg) (tea
 }
 
 func (m Model) handleSessionCommandPalette(msg sessions.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
-	m.commandPalette = NewCommandPalette(m.mergedCommands, msg.Session, m.width, m.height, m.activeView)
+	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, msg.Session, m.width, m.height, m.activeView)
 	m.state = stateCommandPalette
 	return m, nil
 }
@@ -154,14 +156,14 @@ func (m Model) handleSessionDocReview() (tea.Model, tea.Cmd) {
 func (m Model) handleSessionRecycledDelete(msg sessions.RecycledDeleteRequestMsg) (tea.Model, tea.Cmd) {
 	confirmMsg := fmt.Sprintf("Permanently delete %d recycled session(s)?", len(msg.Sessions))
 	m.state = stateConfirming
-	m.pending = Action{
+	m.modals.Pending = Action{
 		Type:    act.TypeDeleteRecycledBatch,
 		Key:     "",
 		Help:    "delete recycled sessions",
 		Confirm: confirmMsg,
 	}
-	m.pendingRecycledSessions = msg.Sessions
-	m.modal = NewModal("Confirm", confirmMsg)
+	m.modals.PendingRecycledSessions = msg.Sessions
+	m.modals.Confirm = NewModal("Confirm", confirmMsg)
 	return m, nil
 }
 
@@ -185,37 +187,37 @@ func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) 
 	if msg.err != nil {
 		log.Error().Err(msg.err).Msg("action failed")
 		m.state = stateNormal
-		m.pending = Action{}
+		m.modals.Pending = Action{}
 		return m, m.notifyError("action failed: %v", msg.err)
 	}
 	m.state = stateNormal
-	m.pending = Action{}
+	m.modals.Pending = Action{}
 	// Trigger a session refresh in the sessions view
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
 func (m Model) handleRecycleStarted(msg recycleStartedMsg) (tea.Model, tea.Cmd) {
 	m.state = stateRunningRecycle
-	m.outputModal = NewOutputModal("Recycling session...")
-	m.recycleOutput = msg.output
-	m.recycleDone = msg.done
-	m.recycleCancel = msg.cancel
+	m.modals.ShowOutputModal("Recycling session...")
+	m.modals.RecycleOutput = msg.output
+	m.modals.RecycleDone = msg.done
+	m.modals.RecycleCancel = msg.cancel
 	return m, tea.Batch(
 		listenForRecycleOutput(msg.output, msg.done),
-		m.outputModal.Spinner().Tick,
+		m.modals.Output.Spinner().Tick,
 	)
 }
 
 func (m Model) handleRecycleOutput(msg recycleOutputMsg) (tea.Model, tea.Cmd) {
-	m.outputModal.AddLine(msg.line)
-	return m, listenForRecycleOutput(m.recycleOutput, m.recycleDone)
+	m.modals.Output.AddLine(msg.line)
+	return m, listenForRecycleOutput(m.modals.RecycleOutput, m.modals.RecycleDone)
 }
 
 func (m Model) handleRecycleComplete(msg recycleCompleteMsg) (tea.Model, tea.Cmd) {
-	m.outputModal.SetComplete(msg.err)
-	m.recycleOutput = nil
-	m.recycleDone = nil
-	m.recycleCancel = nil
+	m.modals.Output.SetComplete(msg.err)
+	m.modals.RecycleOutput = nil
+	m.modals.RecycleDone = nil
+	m.modals.RecycleCancel = nil
 	return m, nil
 }
 
@@ -263,13 +265,13 @@ func (m Model) handleNotification(msg notificationMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Handle document picker modal if active (on Sessions view)
-	if m.docPickerModal != nil {
-		modal, cmd := m.docPickerModal.Update(msg)
-		m.docPickerModal = modal
+	if m.modals.DocPicker != nil {
+		modal, cmd := m.modals.DocPicker.Update(msg)
+		m.modals.DocPicker = modal
 
-		if m.docPickerModal.SelectedDocument() != nil {
-			doc := m.docPickerModal.SelectedDocument()
-			m.docPickerModal = nil
+		if m.modals.DocPicker.SelectedDocument() != nil {
+			doc := m.modals.DocPicker.SelectedDocument()
+			m.modals.DocPicker = nil
 			m.activeView = ViewReview
 			m.handler.SetActiveView(ViewReview)
 			if m.reviewView != nil {
@@ -278,8 +280,8 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 
-		if m.docPickerModal.Cancelled() {
-			m.docPickerModal = nil
+		if m.modals.DocPicker.Cancelled() {
+			m.modals.DocPicker = nil
 			return m, cmd
 		}
 
@@ -299,7 +301,7 @@ func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 // This includes internal messages from sub-models (sessions, messages, review).
 func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Route all other messages to the form when creating session
-	if m.state == stateCreatingSession && m.newSessionForm != nil {
+	if m.state == stateCreatingSession && m.modals.NewSession != nil {
 		return m.updateNewSessionForm(msg)
 	}
 
@@ -390,21 +392,21 @@ func (m Model) refreshSessions() tea.Cmd {
 func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyCtrlC:
-		if m.recycleCancel != nil {
-			m.recycleCancel()
+		if m.modals.RecycleCancel != nil {
+			m.modals.RecycleCancel()
 		}
 		return m.quit()
 	case "esc":
-		if m.outputModal.IsRunning() && m.recycleCancel != nil {
-			m.recycleCancel()
+		if m.modals.Output.IsRunning() && m.modals.RecycleCancel != nil {
+			m.modals.RecycleCancel()
 		}
 		m.state = stateNormal
-		m.pending = Action{}
+		m.modals.Pending = Action{}
 		return m, m.refreshSessions()
 	case keyEnter:
-		if !m.outputModal.IsRunning() {
+		if !m.modals.Output.IsRunning() {
 			m.state = stateNormal
-			m.pending = Action{}
+			m.modals.Pending = Action{}
 			return m, m.refreshSessions()
 		}
 	}
@@ -416,29 +418,29 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyEnter:
 		m.state = stateNormal
-		if m.modal.ConfirmSelected() {
-			action := m.pending
+		if m.modals.Confirm.ConfirmSelected() {
+			action := m.modals.Pending
 			if action.Type == act.TypeRecycle {
 				return m, m.startRecycle(action.SessionID)
 			}
 			if action.Type == act.TypeDeleteRecycledBatch {
-				recycled := m.pendingRecycledSessions
-				m.pending = Action{}
-				m.pendingRecycledSessions = nil
+				recycled := m.modals.PendingRecycledSessions
+				m.modals.Pending = Action{}
+				m.modals.PendingRecycledSessions = nil
 				return m, m.deleteRecycledSessionsBatch(recycled)
 			}
 			return m, m.executeAction(action)
 		}
-		m.pending = Action{}
-		m.pendingRecycledSessions = nil
+		m.modals.Pending = Action{}
+		m.modals.PendingRecycledSessions = nil
 		return m, nil
 	case "esc":
 		m.state = stateNormal
-		m.pending = Action{}
-		m.pendingRecycledSessions = nil
+		m.modals.Pending = Action{}
+		m.modals.PendingRecycledSessions = nil
 		return m, nil
 	case "left", "right", "h", "l", "tab":
-		m.modal.ToggleSelection()
+		m.modals.Confirm.ToggleSelection()
 		return m, nil
 	}
 	return m, nil

@@ -19,97 +19,30 @@ func (m Model) View() tea.View {
 	// Build main view (header + content)
 	mainView := m.renderTabView()
 
-	// Ensure we have dimensions for modals
-	w, h := m.width, m.height
-	if w == 0 {
-		w = 80
-	}
-	if h == 0 {
-		h = 24
-	}
+	// Render modal overlay (single call replaces the 95-line switch block)
+	content := m.modals.Overlay(m.state, mainView, m.spinner, m.loadingMessage)
 
-	// Determine overlay content based on state
-	var content string
-	switch {
-	case m.state == stateRunningRecycle:
-		content = m.outputModal.Overlay(mainView, w, h)
-	case m.state == stateCreatingSession && m.newSessionForm != nil:
-		formContent := lipgloss.JoinVertical(
-			lipgloss.Left,
-			styles.ModalTitleStyle.Render("New Session"),
-			"",
-			m.newSessionForm.View(),
-		)
-		formOverlay := styles.ModalStyle.Render(formContent)
-
-		bgLayer := lipgloss.NewLayer(mainView)
-		formLayer := lipgloss.NewLayer(formOverlay)
-		formW := lipgloss.Width(formOverlay)
-		formH := lipgloss.Height(formOverlay)
-		centerX := (w - formW) / 2
-		centerY := (h - formH) / 2
-		formLayer.X(centerX).Y(centerY).Z(1)
-
-		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		content = compositor.Render()
-	case m.state == stateFormInput && m.formDialog != nil:
-		formContent := lipgloss.JoinVertical(
-			lipgloss.Left,
-			styles.ModalTitleStyle.Render(m.formDialog.Title),
-			"",
-			m.formDialog.View(),
-		)
-		formOverlay := styles.FormModalStyle.Render(formContent)
-
-		bgLayer := lipgloss.NewLayer(mainView)
-		formLayer := lipgloss.NewLayer(formOverlay)
-		formW := lipgloss.Width(formOverlay)
-		formH := lipgloss.Height(formOverlay)
-		centerX := (w - formW) / 2
-		centerY := (h - formH) / 2
-		formLayer.X(centerX).Y(centerY).Z(1)
-
-		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		content = compositor.Render()
-	case m.msgView != nil && m.msgView.IsPreviewActive():
+	// Messages preview overlay (not managed by ModalCoordinator)
+	if content == mainView && m.msgView != nil && m.msgView.IsPreviewActive() {
+		w, h := m.width, m.height
+		if w == 0 {
+			w = 80
+		}
+		if h == 0 {
+			h = 24
+		}
 		content = m.msgView.Overlay(mainView, w, h)
-	case m.state == stateLoading:
-		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, m.spinner.View(), " "+m.loadingMessage)
-		modal := NewModal("", loadingView)
-		content = modal.Overlay(mainView, w, h)
-	case m.state == stateConfirming:
-		content = m.modal.Overlay(mainView, w, h)
-	case m.state == stateCommandPalette && m.commandPalette != nil:
-		content = m.commandPalette.Overlay(mainView, w, h)
-	case m.state == stateShowingHelp && m.helpDialog != nil:
-		content = m.helpDialog.Overlay(mainView, w, h)
-	case m.state == stateShowingNotifications && m.notificationModal != nil:
-		content = m.notificationModal.Overlay(mainView, w, h)
-	case m.state == stateRenaming:
-		renameContent := lipgloss.JoinVertical(
-			lipgloss.Left,
-			styles.ModalTitleStyle.Render("Rename Session"),
-			"",
-			m.renameInput.View(),
-			"",
-			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel"),
-		)
-		renameOverlay := styles.ModalStyle.Width(50).Render(renameContent)
-		bgLayer := lipgloss.NewLayer(mainView)
-		renameLayer := lipgloss.NewLayer(renameOverlay)
-		rW := lipgloss.Width(renameOverlay)
-		rH := lipgloss.Height(renameOverlay)
-		renameLayer.X((w - rW) / 2).Y((h - rH) / 2).Z(1)
-		compositor := lipgloss.NewCompositor(bgLayer, renameLayer)
-		content = compositor.Render()
-	case m.docPickerModal != nil:
-		content = m.docPickerModal.Overlay(mainView, w, h)
-	default:
-		content = mainView
 	}
 
 	// Apply toast overlay on top of everything
 	if m.toastController.HasToasts() {
+		w, h := m.width, m.height
+		if w == 0 {
+			w = 80
+		}
+		if h == 0 {
+			h = 24
+		}
 		content = m.toastView.Overlay(content, w, h)
 	}
 

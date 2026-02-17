@@ -26,7 +26,6 @@ import (
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/colonyops/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/internal/tui/views/review"
@@ -83,22 +82,17 @@ type Model struct {
 	cmdService     *command.Service
 	handler        *KeybindingResolver
 	state          UIState
-	modal          Modal
-	pending        Action
 	width          int
 	height         int
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
 
+	// Modal coordinator — owns all modal components, pending state, recycle streaming
+	modals *ModalCoordinator
+
 	// Sessions view (sub-model) — owns all session-related state
 	sessionsView *sessions.View
-
-	// Recycle streaming state (remains on Model because recycle modal is Model-level)
-	outputModal   OutputModal
-	recycleOutput <-chan string
-	recycleDone   <-chan error
-	recycleCancel context.CancelFunc
 
 	// Layout
 	activeView ViewType
@@ -109,25 +103,8 @@ type Model struct {
 	// Clipboard
 	copyCommand string
 
-	// New session form
-	newSessionForm *NewSessionForm
-
-	// Command palette
-	commandPalette *CommandPalette
+	// Merged commands (system + plugins + user)
 	mergedCommands map[string]config.UserCommand
-
-	// Help dialog
-	helpDialog *components.HelpDialog
-
-	// Rename session
-	renameInput     textinput.Model
-	renameSessionID string
-
-	// Pending action for after TUI exits
-	pendingCreate *PendingCreate
-
-	// Pending recycled sessions for batch delete
-	pendingRecycledSessions []session.Session
 
 	// Review view
 	reviewView *review.View
@@ -136,23 +113,12 @@ type Model struct {
 	kvStore corekv.KV
 	kvView  *KVView
 
-	// Document picker (shown on Sessions view to start reviews)
-	docPickerModal *review.DocumentPickerModal
-
 	// Notifications
-	notifyBus         *tuinotify.Bus
-	toastController   *ToastController
-	toastView         *ToastView
-	notificationModal *NotificationModal
+	notifyBus       *tuinotify.Bus
+	toastController *ToastController
+	toastView       *ToastView
 
 	bus *eventbus.EventBus
-
-	// Form dialog (for user command forms)
-	formDialog      *form.Dialog
-	pendingFormCmd  config.UserCommand
-	pendingFormName string
-	pendingFormSess *session.Session
-	pendingFormArgs []string
 
 	// Template rendering
 	renderer *tmpl.Renderer
@@ -163,7 +129,7 @@ type Model struct {
 
 // PendingCreate returns any pending session creation data.
 func (m Model) PendingCreate() *PendingCreate {
-	return m.pendingCreate
+	return m.modals.PendingCreate
 }
 
 // actionCompleteMsg is sent when an action completes.
@@ -285,6 +251,7 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 		handler:         handler,
 		state:           stateNormal,
 		spinner:         s,
+		modals:          NewModalCoordinator(),
 		sessionsView:    sessionsView,
 		msgView:         &msgView,
 		activeView:      ViewSessions,
@@ -484,23 +451,23 @@ func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 // updateNewSessionForm routes any message to the form and handles state changes.
 func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	form, cmd := m.newSessionForm.Update(msg)
-	m.newSessionForm = &form
+	form, cmd := m.modals.NewSession.Update(msg)
+	m.modals.NewSession = &form
 
-	if m.newSessionForm.Submitted() {
-		result := m.newSessionForm.Result()
+	if m.modals.NewSession.Submitted() {
+		result := m.modals.NewSession.Result()
 		m.state = stateNormal
-		m.newSessionForm = nil
-		m.pendingCreate = &PendingCreate{
+		m.modals.NewSession = nil
+		m.modals.PendingCreate = &PendingCreate{
 			Remote: result.Repo.Remote,
 			Name:   result.SessionName,
 		}
 		return m, tea.Quit
 	}
 
-	if m.newSessionForm.Cancelled() {
+	if m.modals.NewSession.Cancelled() {
 		m.state = stateNormal
-		m.newSessionForm = nil
+		m.modals.NewSession = nil
 		return m, nil
 	}
 
@@ -520,11 +487,11 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 		return m, m.notifyError("form error: %v", err)
 	}
 
-	m.formDialog = dialog
-	m.pendingFormCmd = cmd
-	m.pendingFormName = name
-	m.pendingFormSess = &sess
-	m.pendingFormArgs = args
+	m.modals.FormDialog = dialog
+	m.modals.PendingFormCmd = cmd
+	m.modals.PendingFormName = name
+	m.modals.PendingFormSess = &sess
+	m.modals.PendingFormArgs = args
 	m.state = stateFormInput
 	return m, nil
 }
@@ -536,37 +503,28 @@ func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, te
 	}
 
 	var cmd tea.Cmd
-	m.formDialog, cmd = m.formDialog.Update(msg)
+	m.modals.FormDialog, cmd = m.modals.FormDialog.Update(msg)
 
-	if m.formDialog.Submitted() {
-		formValues := m.formDialog.FormValues()
+	if m.modals.FormDialog.Submitted() {
+		formValues := m.modals.FormDialog.FormValues()
 		action := m.handler.RenderWithFormData(
-			m.pendingFormName,
-			m.pendingFormCmd,
-			*m.pendingFormSess,
-			m.pendingFormArgs,
+			m.modals.PendingFormName,
+			m.modals.PendingFormCmd,
+			*m.modals.PendingFormSess,
+			m.modals.PendingFormArgs,
 			formValues,
 		)
-		m.clearFormState()
+		m.modals.ClearFormState()
 		return m.dispatchAction(action)
 	}
 
-	if m.formDialog.Cancelled() {
-		m.clearFormState()
+	if m.modals.FormDialog.Cancelled() {
+		m.modals.ClearFormState()
 		m.state = stateNormal
 		return m, nil
 	}
 
 	return m, cmd
-}
-
-// clearFormState resets all form dialog state.
-func (m *Model) clearFormState() {
-	m.formDialog = nil
-	m.pendingFormCmd = config.UserCommand{}
-	m.pendingFormName = ""
-	m.pendingFormSess = nil
-	m.pendingFormArgs = nil
 }
 
 // dispatchAction handles an action that may need confirmation or immediate execution.
@@ -578,8 +536,8 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 
 	if action.NeedsConfirm() {
 		m.state = stateConfirming
-		m.pending = action
-		m.modal = NewModal("Confirm", action.Confirm)
+		m.modals.Pending = action
+		m.modals.Confirm = NewModal("Confirm", action.Confirm)
 		return m, nil
 	}
 
@@ -599,7 +557,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	}
 
 	m.state = stateNormal
-	m.pending = action
+	m.modals.Pending = action
 	if !action.Silent {
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
@@ -614,7 +572,7 @@ func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "?", "q":
 		m.state = stateNormal
-		m.helpDialog = nil
+		m.modals.DismissHelp()
 		return m, nil
 	}
 	return m, nil
@@ -626,14 +584,14 @@ func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "q":
 		m.state = stateNormal
-		m.notificationModal = nil
+		m.modals.DismissNotifications()
 		return m, nil
 	case "j", "down":
-		m.notificationModal.ScrollDown()
+		m.modals.Notification.ScrollDown()
 	case "k", "up":
-		m.notificationModal.ScrollUp()
+		m.modals.Notification.ScrollUp()
 	case "D":
-		if err := m.notificationModal.Clear(); err != nil {
+		if err := m.modals.Notification.Clear(); err != nil {
 			return m, m.notifyError("failed to clear notifications: %v", err)
 		}
 		m.notifyBus.Infof("notifications cleared")
@@ -692,7 +650,7 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		Entries: navEntries,
 	})
 
-	m.helpDialog = components.NewHelpDialog("Keyboard Shortcuts", sections, m.width, m.height)
+	m.modals.ShowHelp("Keyboard Shortcuts", sections)
 	m.state = stateShowingHelp
 	return m, nil
 }
@@ -705,10 +663,10 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 	// Update the palette
 	var cmd tea.Cmd
-	m.commandPalette, cmd = m.commandPalette.Update(msg)
+	m.modals.CommandPalette, cmd = m.modals.CommandPalette.Update(msg)
 
 	// Check if user selected a command
-	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
+	if entry, args, ok := m.modals.CommandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 
 		// Check if this is a doc review action (doesn't require a session)
@@ -721,7 +679,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Messages doesn't require a session
 		if entry.Command.Action == act.TypeMessages {
 			m.state = stateShowingNotifications
-			m.notificationModal = NewNotificationModal(m.notifyBus, m.width, m.height)
+			m.modals.ShowNotifications(m.notifyBus)
 			return m, nil
 		}
 
@@ -798,8 +756,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Handle confirmation if needed
 		if action.NeedsConfirm() {
 			m.state = stateConfirming
-			m.pending = action
-			m.modal = NewModal("Confirm", action.Confirm)
+			m.modals.Pending = action
+			m.modals.Confirm = NewModal("Confirm", action.Confirm)
 			return m, nil
 		}
 
@@ -815,7 +773,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		}
 
 		// Store pending action for exit check after completion
-		m.pending = action
+		m.modals.Pending = action
 		if !action.Silent {
 			m.state = stateLoading
 			m.loadingMessage = "Processing..."
@@ -824,7 +782,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	}
 
 	// Check if user cancelled
-	if m.commandPalette.Cancelled() {
+	if m.modals.CommandPalette.Cancelled() {
 		m.state = stateNormal
 		return m, nil
 	}
@@ -1053,8 +1011,8 @@ func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	input.SetStyles(inputStyles)
 
-	m.renameInput = input
-	m.renameSessionID = sess.ID
+	m.modals.RenameInput = input
+	m.modals.RenameSessionID = sess.ID
 	m.state = stateRenaming
 	return m, nil
 }
@@ -1066,24 +1024,24 @@ func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.quit()
 	case "esc":
 		m.state = stateNormal
-		m.renameSessionID = ""
+		m.modals.RenameSessionID = ""
 		return m, nil
 	case keyEnter:
-		newName := strings.TrimSpace(m.renameInput.Value())
+		newName := strings.TrimSpace(m.modals.RenameInput.Value())
 		if newName == "" {
 			m.state = stateNormal
-			m.renameSessionID = ""
+			m.modals.RenameSessionID = ""
 			return m, nil
 		}
-		sessionID := m.renameSessionID
+		sessionID := m.modals.RenameSessionID
 		m.state = stateNormal
-		m.renameSessionID = ""
+		m.modals.RenameSessionID = ""
 		return m, m.executeRename(sessionID, newName)
 	}
 
 	// Forward to textinput
 	var cmd tea.Cmd
-	m.renameInput, cmd = m.renameInput.Update(msg)
+	m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
 	return m, cmd
 }
 
@@ -1142,9 +1100,9 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	for _, s := range allSessions {
 		existingNames[s.Name] = true
 	}
-	m.newSessionForm = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames)
+	m.modals.NewSession = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames)
 	m.state = stateCreatingSession
-	return m, m.newSessionForm.Init()
+	return m, m.modals.NewSession.Init()
 }
 
 // selectedTreeItem returns the currently selected tree item, or nil if none.
@@ -1173,27 +1131,8 @@ func (m *Model) hasEditorFocus() bool {
 		return true
 	}
 
-	// Check command palette
-	if m.state == stateCommandPalette {
-		return true
-	}
-
-	// Check new session form
-	if m.state == stateCreatingSession {
-		return true
-	}
-
-	// Check rename input
-	if m.state == stateRenaming {
-		return true
-	}
-
-	// Check form dialog
-	if m.state == stateFormInput {
-		return true
-	}
-
-	return false
+	// Check modal coordinator (command palette, new session, rename, form dialog)
+	return m.modals.HasEditorFocus(m.state)
 }
 
 // delegateToComponent forwards a key message to the appropriate component.
@@ -1204,21 +1143,21 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Route based on current state
 	switch m.state {
 	case stateCommandPalette:
-		if m.commandPalette != nil {
-			m.commandPalette, cmd = m.commandPalette.Update(msg)
+		if m.modals.CommandPalette != nil {
+			m.modals.CommandPalette, cmd = m.modals.CommandPalette.Update(msg)
 		}
 		return m, cmd
 	case stateCreatingSession:
-		if m.newSessionForm != nil {
-			*m.newSessionForm, cmd = m.newSessionForm.Update(msg)
+		if m.modals.NewSession != nil {
+			*m.modals.NewSession, cmd = m.modals.NewSession.Update(msg)
 		}
 		return m, cmd
 	case stateRenaming:
-		m.renameInput, cmd = m.renameInput.Update(msg)
+		m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
 		return m, cmd
 	case stateFormInput:
-		if m.formDialog != nil {
-			m.formDialog, cmd = m.formDialog.Update(msg)
+		if m.modals.FormDialog != nil {
+			m.modals.FormDialog, cmd = m.modals.FormDialog.Update(msg)
 		}
 		return m, cmd
 	default:
