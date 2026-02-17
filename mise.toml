@@ -4,7 +4,7 @@
 "github:sqlc-dev/sqlc" = "v1.30.0"
 "go" = "1.26"
 "pipx:zensical" = "latest"
-golangci-lint = "v2.9.0"
+golangci-lint = "v2.10.1"
 
 [env]
 HIVE_LOG_LEVEL = "debug"
