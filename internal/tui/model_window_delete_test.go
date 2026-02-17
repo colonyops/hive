@@ -10,8 +10,6 @@ import (
 )
 
 func TestMaybeOverrideWindowDelete(t *testing.T) {
-	m := Model{renderer: testRenderer}
-
 	deleteAction := Action{
 		Type:      action.TypeDelete,
 		SessionID: "sess-1",
@@ -23,13 +21,13 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	}
 
 	t.Run("nil treeItem returns action unchanged", func(t *testing.T) {
-		got := m.maybeOverrideWindowDelete(deleteAction, nil)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, nil, testRenderer)
 		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
 	t.Run("non-window item returns action unchanged", func(t *testing.T) {
 		ti := &sessions.TreeItem{IsWindowItem: false}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
@@ -40,7 +38,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			WindowName:    "claude",
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
-		got := m.maybeOverrideWindowDelete(shellAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(shellAction, ti, testRenderer)
 		assert.Equal(t, action.TypeShell, got.Type)
 	})
 
@@ -51,7 +49,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			WindowName:    "aider",
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Equal(t, action.TypeShell, got.Type)
 		assert.Contains(t, got.ShellCmd, "tmux kill-window")
 		assert.Contains(t, got.ShellCmd, "my-slug:2")
@@ -70,7 +68,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 				},
 			},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Contains(t, got.ShellCmd, "explicit-sess:1")
 	})
 
@@ -81,7 +79,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			WindowName:    "bash",
 			ParentSession: session.Session{Name: "my-name"},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Contains(t, got.ShellCmd, "my-name:0")
 	})
 
@@ -91,7 +89,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			WindowIndex:   "",
 			ParentSession: session.Session{},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Error(t, got.Err, "expected Err to be non-nil when session and window index are empty")
 	})
 
@@ -102,7 +100,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 			WindowName:    "",
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Equal(t, "Kill tmux window?", got.Confirm)
 	})
 }

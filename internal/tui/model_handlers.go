@@ -1,16 +1,17 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/core/eventbus"
-	"github.com/colonyops/hive/internal/core/notify"
+	act "github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
 )
@@ -21,20 +22,13 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	m.width = msg.Width
 	m.height = msg.Height
 
-	// Account for: top divider (1) + header (1) + bottom divider (1) = 3 lines
 	contentHeight := msg.Height - 3
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
 
-	// Set list size based on preview mode
-	if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
-		// In dual-column mode, list takes 25% of width
-		listWidth := int(float64(m.width) * 0.25)
-		m.list.SetSize(listWidth, contentHeight)
-	} else {
-		// In single-column mode, list takes full width
-		m.list.SetSize(msg.Width, contentHeight)
+	if m.sessionsView != nil {
+		m.sessionsView.SetSize(msg.Width, msg.Height)
 	}
 
 	// msgView gets -1 because we prepend a blank line for consistent spacing
@@ -42,16 +36,13 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.msgView.SetSize(msg.Width, contentHeight-1)
 	}
 
-	// Set review view size
 	if m.reviewView != nil {
 		m.reviewView.SetSize(msg.Width, contentHeight)
 	}
 
-	// Set KV view size
 	m.kvView.SetSize(msg.Width, contentHeight)
 
-	// Publish startup warnings on the first WindowSizeMsg so they flow
-	// through the Update loop with the render cycle already running.
+	// Publish startup warnings on the first WindowSizeMsg
 	if len(m.startupWarnings) > 0 {
 		for _, w := range m.startupWarnings {
 			m.notifyBus.Warnf("%s", w)
@@ -62,7 +53,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// --- Data loaded ---
+// --- KV data loaded ---
 
 func (m Model) handleKVKeysLoaded(msg kvKeysLoadedMsg) (tea.Model, tea.Cmd) {
 	if msg.err != nil {
@@ -87,105 +78,7 @@ func (m Model) handleKVEntryLoaded(msg kvEntryLoadedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-func (m Model) handleSessionsLoaded(msg sessionsLoadedMsg) (tea.Model, tea.Cmd) {
-	if msg.err != nil {
-		log.Error().Err(msg.err).Msg("failed to load sessions")
-		m.state = stateNormal
-		return m, m.notifyError("failed to load sessions: %v", msg.err)
-	}
-	m.allSessions = msg.sessions
-	filteredModel, cmd := m.applyFilter()
-	if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
-		sessions := make([]*session.Session, len(m.allSessions))
-		for i := range m.allSessions {
-			sessions[i] = &m.allSessions[i]
-		}
-		m.pluginManager.UpdateSessions(sessions)
-		log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
-	}
-	return filteredModel, cmd
-}
-
-func (m Model) handleGitStatusComplete(msg sessions.GitStatusBatchCompleteMsg) (tea.Model, tea.Cmd) {
-	m.gitStatuses.SetBatch(msg.Results)
-	m.refreshing = false
-	return m, nil
-}
-
-func (m Model) handleTerminalStatusComplete(msg sessions.TerminalStatusBatchCompleteMsg) (tea.Model, tea.Cmd) {
-	if m.terminalStatuses != nil {
-		if m.bus != nil {
-			for sessionID, newStatus := range msg.Results {
-				oldStatus, exists := m.terminalStatuses.Get(sessionID)
-				prevStatus := oldStatus.Status
-				if !exists {
-					prevStatus = terminal.StatusMissing
-				}
-				if prevStatus != newStatus.Status {
-					sess := m.findSessionByID(sessionID)
-					if sess == nil {
-						continue
-					}
-					m.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
-						Session:   sess,
-						OldStatus: prevStatus,
-						NewStatus: newStatus.Status,
-					})
-				}
-			}
-		}
-
-		m.terminalStatuses.SetBatch(msg.Results)
-		m.rebuildWindowItems()
-	}
-	return m, nil
-}
-
-func (m Model) handlePluginWorkerStarted(msg pluginWorkerStartedMsg) (tea.Model, tea.Cmd) {
-	m.pluginResultsChan = msg.resultsChan
-	log.Debug().Msg("plugin background worker started")
-	return m, listenForPluginResult(m.pluginResultsChan)
-}
-
-func (m Model) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) (tea.Model, tea.Cmd) {
-	if msg.Err == nil {
-		if store, ok := m.pluginStatuses[msg.PluginName]; ok {
-			store.Set(msg.SessionID, msg.Status)
-			log.Debug().
-				Str("plugin", msg.PluginName).
-				Str("session", msg.SessionID).
-				Str("label", msg.Status.Label).
-				Msg("plugin status updated")
-		}
-	}
-	m.treeDelegate.PluginStatuses = m.pluginStatuses
-	m.list.SetDelegate(m.treeDelegate)
-	return m, listenForPluginResult(m.pluginResultsChan)
-}
-
-func (m Model) handleReposDiscovered(msg reposDiscoveredMsg) (tea.Model, tea.Cmd) {
-	m.discoveredRepos = msg.repos
-	if len(m.discoveredRepos) == 0 {
-		m.toastController.Push(notify.Notification{
-			Level:   notify.LevelError,
-			Message: fmt.Sprintf("No repositories found in directories: %v", m.repoDirs),
-		})
-	}
-	return m, nil
-}
-
-// --- Polling ticks ---
-
-func (m Model) handleSessionRefreshTick(_ sessionRefreshTickMsg) (tea.Model, tea.Cmd) {
-	if m.activeView == ViewSessions && !m.isModalActive() {
-		m.refreshing = true
-		return m, tea.Batch(
-			m.loadSessions(),
-			m.scheduleSessionRefresh(),
-		)
-	}
-	return m, m.scheduleSessionRefresh()
-}
+// --- KV polling ---
 
 func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
 	if m.isStoreFocused() && !m.isModalActive() {
@@ -197,32 +90,83 @@ func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
 	return m, scheduleKVPollTick()
 }
 
-func (m Model) handleTerminalPollTick(_ sessions.TerminalPollTickMsg) (tea.Model, tea.Cmd) {
-	var cmds []tea.Cmd
-	sessPtrs := make([]*session.Session, len(m.allSessions))
-	for i := range m.allSessions {
-		sessPtrs[i] = &m.allSessions[i]
-	}
-	cmds = append(cmds, sessions.FetchTerminalStatusBatch(m.terminalManager, sessPtrs, m.gitWorkers))
-	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-		cmds = append(cmds, sessions.StartTerminalPollTicker(m.cfg.Tmux.PollInterval))
-	}
-	return m, tea.Batch(cmds...)
-}
-
-func (m Model) handleAnimationTick(_ animationTickMsg) (tea.Model, tea.Cmd) {
-	m.animationFrame = (m.animationFrame + 1) % sessions.AnimationFrameCount
-	m.treeDelegate.AnimationFrame = m.animationFrame
-	m.list.SetDelegate(m.treeDelegate)
-	return m, scheduleAnimationTick()
-}
-
 func (m Model) handleToastTick(_ toastTickMsg) (tea.Model, tea.Cmd) {
 	m.toastController.Tick()
 	if m.toastController.HasToasts() {
 		return m, scheduleToastTick()
 	}
 	return m, nil
+}
+
+// --- Outbound messages from sessions view ---
+
+func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, tea.Cmd) {
+	action := msg.Action
+	if action.Err != nil {
+		return m, m.notifyError("keybinding error: %v", action.Err)
+	}
+	// Handle special action types that need Model-level coordination
+	if action.Type == act.TypeDocReview {
+		cmd := HiveDocReviewCmd{Arg: ""}
+		return m, cmd.Execute(&m)
+	}
+	if action.Type == act.TypeRenameSession {
+		sess := m.sessionsView.SelectedSession()
+		if sess == nil {
+			return m, nil
+		}
+		return m.openRenameInput(sess)
+	}
+	if action.Type == act.TypeSetTheme {
+		return m, m.ensureToastTick()
+	}
+	if sessions.IsFilterAction(action.Type) {
+		// Tell sessionsView to apply the filter
+		m.sessionsView.ApplyStatusFilter(action.Type)
+		return m, nil
+	}
+	return m.dispatchAction(action)
+}
+
+func (m Model) handleSessionFormCommand(msg sessions.FormCommandRequestMsg) (tea.Model, tea.Cmd) {
+	return m.showFormOrExecute(msg.Name, msg.Cmd, msg.Session, nil)
+}
+
+func (m Model) handleSessionCommandPalette(msg sessions.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
+	m.commandPalette = NewCommandPalette(m.mergedCommands, msg.Session, m.width, m.height, m.activeView)
+	m.state = stateCommandPalette
+	return m, nil
+}
+
+func (m Model) handleSessionNewSession() (tea.Model, tea.Cmd) {
+	return m.openNewSessionForm()
+}
+
+func (m Model) handleSessionRename(msg sessions.RenameRequestMsg) (tea.Model, tea.Cmd) {
+	return m.openRenameInput(msg.Session)
+}
+
+func (m Model) handleSessionDocReview() (tea.Model, tea.Cmd) {
+	cmd := HiveDocReviewCmd{Arg: ""}
+	return m, cmd.Execute(&m)
+}
+
+func (m Model) handleSessionRecycledDelete(msg sessions.RecycledDeleteRequestMsg) (tea.Model, tea.Cmd) {
+	confirmMsg := fmt.Sprintf("Permanently delete %d recycled session(s)?", len(msg.Sessions))
+	m.state = stateConfirming
+	m.pending = Action{
+		Type:    act.TypeDeleteRecycledBatch,
+		Key:     "",
+		Help:    "delete recycled sessions",
+		Confirm: confirmMsg,
+	}
+	m.pendingRecycledSessions = msg.Sessions
+	m.modal = NewModal("Confirm", confirmMsg)
+	return m, nil
+}
+
+func (m Model) handleSessionOpenRepo(msg sessions.OpenRepoRequestMsg) (tea.Model, tea.Cmd) {
+	return m.openRepoHeaderByRemote(msg.Name, msg.Remote)
 }
 
 // --- Action results ---
@@ -233,7 +177,8 @@ func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) 
 		m.state = stateNormal
 		return m, m.notifyError("rename failed: %v", msg.err)
 	}
-	return m, m.loadSessions()
+	// Trigger a session refresh in the sessions view
+	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
 func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) {
@@ -245,7 +190,8 @@ func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) 
 	}
 	m.state = stateNormal
 	m.pending = Action{}
-	return m, m.loadSessions()
+	// Trigger a session refresh in the sessions view
+	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
 func (m Model) handleRecycleStarted(msg recycleStartedMsg) (tea.Model, tea.Cmd) {
@@ -350,14 +296,25 @@ func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleFallthrough routes messages that don't match any typed case.
+// This includes internal messages from sub-models (sessions, messages, review).
 func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Route all other messages to the form when creating session
 	if m.state == stateCreatingSession && m.newSessionForm != nil {
 		return m.updateNewSessionForm(msg)
 	}
 
-	// Always forward to messages view for its internal polling/loaded messages
 	var cmds []tea.Cmd
+
+	// Forward to sessions view (handles its internal messages: session loading,
+	// git/terminal/plugin status, polling ticks, animation, etc.)
+	if m.sessionsView != nil {
+		cmd := m.sessionsView.Update(msg)
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	// Forward to messages view for its internal polling/loaded messages
 	if m.msgView != nil {
 		var cmd tea.Cmd
 		*m.msgView, cmd = m.msgView.Update(msg)
@@ -366,26 +323,131 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Update the appropriate view based on active view
-	switch m.activeView {
-	case ViewSessions:
+	// Forward to review view
+	if m.activeView == ViewReview && m.reviewView != nil {
 		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
+		*m.reviewView, cmd = m.reviewView.Update(msg)
 		if cmd != nil {
 			cmds = append(cmds, cmd)
 		}
-	case ViewMessages:
-		// Handled above — messages view always receives fallthrough messages
-	case ViewStore:
-		// KV view handles its own updates via explicit method calls
-	case ViewReview:
-		if m.reviewView != nil {
-			var cmd tea.Cmd
-			*m.reviewView, cmd = m.reviewView.Update(msg)
-			if cmd != nil {
-				cmds = append(cmds, cmd)
-			}
+	}
+
+	return m, tea.Batch(cmds...)
+}
+
+// --- Helper for repo header opening ---
+
+func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) {
+	// Find the original repo path from discovered repos
+	var repoPath string
+	for _, repo := range m.sessionsView.DiscoveredRepos() {
+		if repo.Remote == remote {
+			repoPath = repo.Path
+			break
 		}
 	}
-	return m, tea.Batch(cmds...)
+	if repoPath == "" {
+		return m, m.notifyError("no local repository found for %s", name)
+	}
+
+	// Render the hive-tmux command to open at the repo directory
+	shellCmd, err := m.renderer.Render(
+		`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
+		struct{ Name, Path string }{Name: name, Path: repoPath},
+	)
+	if err != nil {
+		return m, m.notifyError("template error: %v", err)
+	}
+
+	action := Action{
+		Type:     act.TypeShell,
+		Key:      "enter",
+		Help:     "open repo",
+		ShellCmd: shellCmd,
+		Silent:   true,
+		Exit:     config.ParseExitCondition("$HIVE_POPUP"),
+	}
+
+	if action.Exit {
+		exec, err := m.cmdService.CreateExecutor(action)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create executor for repo open")
+		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
+			log.Error().Err(err).Msg("repo open command failed")
+		}
+		return m.quit()
+	}
+
+	return m, m.executeAction(action)
+}
+
+// refreshSessions returns a command that tells the sessions view to reload.
+func (m Model) refreshSessions() tea.Cmd {
+	return func() tea.Msg { return sessions.RefreshSessionsMsg{} }
+}
+
+// handleRecycleModalKey handles keys when recycle modal is shown.
+func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		if m.recycleCancel != nil {
+			m.recycleCancel()
+		}
+		return m.quit()
+	case "esc":
+		if m.outputModal.IsRunning() && m.recycleCancel != nil {
+			m.recycleCancel()
+		}
+		m.state = stateNormal
+		m.pending = Action{}
+		return m, m.refreshSessions()
+	case keyEnter:
+		if !m.outputModal.IsRunning() {
+			m.state = stateNormal
+			m.pending = Action{}
+			return m, m.refreshSessions()
+		}
+	}
+	return m, nil
+}
+
+// handleConfirmModalKey handles keys when confirmation modal is shown.
+func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyEnter:
+		m.state = stateNormal
+		if m.modal.ConfirmSelected() {
+			action := m.pending
+			if action.Type == act.TypeRecycle {
+				return m, m.startRecycle(action.SessionID)
+			}
+			if action.Type == act.TypeDeleteRecycledBatch {
+				recycled := m.pendingRecycledSessions
+				m.pending = Action{}
+				m.pendingRecycledSessions = nil
+				return m, m.deleteRecycledSessionsBatch(recycled)
+			}
+			return m, m.executeAction(action)
+		}
+		m.pending = Action{}
+		m.pendingRecycledSessions = nil
+		return m, nil
+	case "esc":
+		m.state = stateNormal
+		m.pending = Action{}
+		m.pendingRecycledSessions = nil
+		return m, nil
+	case "left", "right", "h", "l", "tab":
+		m.modal.ToggleSelection()
+		return m, nil
+	}
+	return m, nil
+}
+
+// selectedSession returns the session selected in the sessions view, or nil.
+func (m Model) selectedSession() *session.Session {
+	if m.sessionsView == nil {
+		return nil
+	}
+	return m.sessionsView.SelectedSession()
 }
