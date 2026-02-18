@@ -304,6 +304,12 @@ func (v *View) handleGitStatusComplete(msg GitStatusBatchCompleteMsg) tea.Cmd {
 
 func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) tea.Cmd {
 	if v.terminalStatuses != nil {
+		for sessionID, newStatus := range msg.Results {
+			if newStatus.Error != nil {
+				log.Debug().Err(newStatus.Error).Str("sessionID", sessionID).Msg("terminal status update contains error")
+			}
+		}
+
 		if v.bus != nil {
 			for sessionID, newStatus := range msg.Results {
 				oldStatus, exists := v.terminalStatuses.Get(sessionID)
@@ -1368,7 +1374,7 @@ func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
 	return func() tea.Msg {
 		result, ok := <-ch
 		if !ok {
-			// Channel closed, stop listening
+			log.Debug().Msg("plugin results channel closed")
 			return nil
 		}
 		return pluginStatusUpdateMsg{

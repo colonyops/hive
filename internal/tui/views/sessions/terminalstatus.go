@@ -111,6 +111,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	// Try to discover terminal session
 	info, integration, err := mgr.DiscoverSession(ctx, sess.Slug, metadata)
 	if err != nil {
+		log.Debug().Err(err).Str("session", sess.Slug).Msg("terminal session discovery failed")
 		status.Error = err
 		return status
 	}
@@ -122,6 +123,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	// Get status from integration
 	termStatus, err := integration.GetStatus(ctx, info)
 	if err != nil {
+		log.Debug().Err(err).Str("session", sess.Slug).Msg("terminal status lookup failed")
 		status.Error = err
 		return status
 	}

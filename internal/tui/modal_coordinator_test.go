@@ -1,7 +1,6 @@
 package tui
 
 import (
-	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/spinner"
@@ -79,5 +78,5 @@ func TestModalCoordinator_Overlay_LoadingState(t *testing.T) {
 	mc := NewModalCoordinator()
 	bg := testBackground
 	got := mc.Overlay(stateLoading, bg, noSpinner(), "Processing...")
-	assert.True(t, strings.Contains(got, "Processing...") || got != bg, "loading state should render loading message")
+	assert.Contains(t, got, "Processing...", "loading state should render loading message")
 }
