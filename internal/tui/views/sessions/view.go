@@ -53,7 +53,10 @@ type ViewOpts struct {
 
 // View is the Bubble Tea sub-model for the sessions tab.
 type View struct {
-	ctrl    *Controller
+	allSessions  []session.Session
+	statusFilter terminal.Status
+	localRemote  string
+
 	cfg     *config.Config
 	service *hive.SessionService
 	bus     *eventbus.EventBus
@@ -112,9 +115,6 @@ func New(opts ViewOpts) *View {
 		panic("sessions.New: Cfg, Service, Handler, TerminalManager, and PluginManager are required")
 	}
 	cfg := opts.Cfg
-
-	ctrl := NewController()
-	ctrl.SetLocalRemote(opts.LocalRemote)
 
 	gitStatuses := kv.New[string, GitStatus]()
 	terminalStatuses := kv.New[string, TerminalStatus]()
@@ -185,10 +185,10 @@ func New(opts ViewOpts) *View {
 	}
 
 	return &View{
-		ctrl:    ctrl,
-		cfg:     cfg,
-		service: opts.Service,
-		bus:     opts.Bus,
+		localRemote: opts.LocalRemote,
+		cfg:         cfg,
+		service:     opts.Service,
+		bus:         opts.Bus,
 
 		list:         l,
 		treeDelegate: delegate,
@@ -283,12 +283,12 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		log.Error().Err(msg.err).Msg("failed to load sessions")
 		return nil
 	}
-	v.ctrl.SetSessions(msg.sessions)
+	v.allSessions = msg.sessions
 	cmd := v.applyFilter()
 	if len(v.pluginStatuses) > 0 {
-		sessions := make([]*session.Session, len(v.ctrl.AllSessions()))
-		for i := range v.ctrl.AllSessions() {
-			sessions[i] = &v.ctrl.allSessions[i]
+		sessions := make([]*session.Session, len(v.allSessions))
+		for i := range v.allSessions {
+			sessions[i] = &v.allSessions[i]
 		}
 		v.pluginManager.UpdateSessions(sessions)
 		log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
@@ -312,7 +312,7 @@ func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) 
 					prevStatus = terminal.StatusMissing
 				}
 				if prevStatus != newStatus.Status {
-					sess := v.ctrl.FindByID(sessionID)
+					sess := v.findByID(sessionID)
 					if sess == nil {
 						continue
 					}
@@ -333,10 +333,10 @@ func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) 
 
 func (v *View) handleTerminalPollTick() tea.Cmd {
 	var cmds []tea.Cmd
-	allSess := v.ctrl.AllSessions()
+	allSess := v.allSessions
 	sessPtrs := make([]*session.Session, len(allSess))
 	for i := range allSess {
-		sessPtrs[i] = &v.ctrl.allSessions[i]
+		sessPtrs[i] = &v.allSessions[i]
 	}
 	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
 	if v.terminalManager.HasEnabledIntegrations() {
@@ -646,9 +646,9 @@ func (v *View) restoreSelection(sel TreeSelection) {
 func (v *View) applyFilter() tea.Cmd {
 	sel := v.saveSelection()
 
-	allSess := v.ctrl.AllSessions()
+	allSess := v.allSessions
 	filteredSess := allSess
-	statusFilter := v.ctrl.StatusFilter()
+	statusFilter := v.statusFilter
 	if statusFilter != "" && v.terminalStatuses != nil {
 		filtered := make([]session.Session, 0, len(allSess))
 		for _, s := range allSess {
@@ -661,7 +661,7 @@ func (v *View) applyFilter() tea.Cmd {
 		filteredSess = filtered
 	}
 
-	localRemote := v.ctrl.LocalRemote()
+	localRemote := v.localRemote
 
 	groups := GroupSessionsByRepo(filteredSess, localRemote)
 	items := BuildTreeItems(groups, localRemote)
@@ -1069,16 +1069,16 @@ func (v *View) isCurrentTmuxSession(sess *session.Session) bool {
 func (v *View) handleFilterAction(actionType act.Type) bool {
 	switch actionType {
 	case act.TypeFilterAll:
-		v.ctrl.SetStatusFilter("")
+		v.statusFilter = ""
 		return true
 	case act.TypeFilterActive:
-		v.ctrl.SetStatusFilter(terminal.StatusActive)
+		v.statusFilter = terminal.StatusActive
 		return true
 	case act.TypeFilterApproval:
-		v.ctrl.SetStatusFilter(terminal.StatusApproval)
+		v.statusFilter = terminal.StatusApproval
 		return true
 	case act.TypeFilterReady:
-		v.ctrl.SetStatusFilter(terminal.StatusReady)
+		v.statusFilter = terminal.StatusReady
 		return true
 	default:
 		return false
@@ -1256,9 +1256,9 @@ func (v *View) SelectedTreeItem() *TreeItem {
 	return &ti
 }
 
-// AllSessions returns all sessions from the controller.
+// AllSessions returns all sessions.
 func (v *View) AllSessions() []session.Session {
-	return v.ctrl.AllSessions()
+	return v.allSessions
 }
 
 // DiscoveredRepos returns the discovered repositories.
@@ -1298,7 +1298,17 @@ func (v *View) IsSettingFilter() bool {
 
 // StatusFilter returns the current terminal status filter.
 func (v *View) StatusFilter() terminal.Status {
-	return v.ctrl.StatusFilter()
+	return v.statusFilter
+}
+
+// findByID returns the session with the given ID, or nil if not found.
+func (v *View) findByID(id string) *session.Session {
+	for i := range v.allSessions {
+		if v.allSessions[i].ID == id {
+			return &v.allSessions[i]
+		}
+	}
+	return nil
 }
 
 // ApplyStatusFilter sets the filter based on the action type and rebuilds the view.
@@ -1326,7 +1336,7 @@ func (v *View) ApplyTheme() {
 
 // LocalRemote returns the local remote URL.
 func (v *View) LocalRemote() string {
-	return v.ctrl.LocalRemote()
+	return v.localRemote
 }
 
 // --- Package-level utility functions ---
