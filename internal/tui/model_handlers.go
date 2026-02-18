@@ -33,7 +33,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.sessionsView.SetSize(msg.Width, msg.Height)
 	}
 
-	// msgView gets -1 because we prepend a blank line for consistent spacing
+	// msgView gets contentHeight-1 so lipgloss.Height(contentHeight) in model_render.go
+	// adds one trailing blank line, matching the visual spacing of other views.
 	if m.msgView != nil {
 		m.msgView.SetSize(msg.Width, contentHeight-1)
 	}
@@ -301,8 +302,10 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	var cmds []tea.Cmd
 
-	// Forward to sessions view (handles its internal messages: session loading,
-	// git/terminal/plugin status, polling ticks, animation, etc.)
+	// sessions and messages views receive ALL fallthrough messages unconditionally —
+	// not gated on activeView — because both run background polling ticks
+	// (terminal status, git refresh, message polling) that must fire regardless
+	// of which tab is currently displayed.
 	if m.sessionsView != nil {
 		cmd := m.sessionsView.Update(msg)
 		if cmd != nil {
@@ -310,11 +313,8 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Forward to messages view for its internal polling/loaded messages
 	if m.msgView != nil {
-		var cmd tea.Cmd
-		*m.msgView, cmd = m.msgView.Update(msg)
-		if cmd != nil {
+		if cmd := m.msgView.Update(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}

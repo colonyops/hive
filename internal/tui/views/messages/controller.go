@@ -28,6 +28,9 @@ func NewController() *Controller {
 
 // Append adds new messages and rebuilds the displayed slice.
 func (c *Controller) Append(msgs []messaging.Message) {
+	if len(msgs) == 0 {
+		return
+	}
 	c.messages = append(c.messages, msgs...)
 	c.displayed = make([]messaging.Message, len(c.messages))
 	for i, msg := range c.messages {

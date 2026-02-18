@@ -40,8 +40,8 @@ type View struct {
 }
 
 // New creates a new messages View.
-func New(msgStore *hive.MessageService, topicFilter, copyCommand string) View {
-	return View{
+func New(msgStore *hive.MessageService, topicFilter, copyCommand string) *View {
+	return &View{
 		ctrl:        NewController(),
 		msgStore:    msgStore,
 		topicFilter: topicFilter,
@@ -50,7 +50,7 @@ func New(msgStore *hive.MessageService, topicFilter, copyCommand string) View {
 }
 
 // Init returns the initial commands for the messages view.
-func (v View) Init() tea.Cmd {
+func (v *View) Init() tea.Cmd {
 	if v.msgStore == nil {
 		return nil
 	}
@@ -61,7 +61,7 @@ func (v View) Init() tea.Cmd {
 }
 
 // Update handles messages for the messages view.
-func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
+func (v *View) Update(msg tea.Msg) tea.Cmd {
 	switch msg := msg.(type) {
 	case messagesLoadedMsg:
 		return v.handleMessagesLoaded(msg)
@@ -70,16 +70,16 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 	case tea.KeyMsg:
 		return v.handleKey(msg)
 	}
-	return v, nil
+	return nil
 }
 
 // View renders the messages view.
-func (v View) View() string {
+func (v *View) View() string {
 	return v.renderList()
 }
 
 // HasEditorFocus returns true if the filter input is active.
-func (v View) HasEditorFocus() bool {
+func (v *View) HasEditorFocus() bool {
 	return v.ctrl.IsFiltering()
 }
 
@@ -96,7 +96,7 @@ func (v *View) SetActive(active bool) {
 }
 
 // Overlay renders the preview modal over the given background, if active.
-func (v View) Overlay(background string, width, height int) string {
+func (v *View) Overlay(background string, width, height int) string {
 	if v.previewModal == nil {
 		return background
 	}
@@ -104,33 +104,33 @@ func (v View) Overlay(background string, width, height int) string {
 }
 
 // IsPreviewActive returns true when the preview modal is open.
-func (v View) IsPreviewActive() bool {
+func (v *View) IsPreviewActive() bool {
 	return v.previewModal != nil
 }
 
-func (v View) handleMessagesLoaded(msg messagesLoadedMsg) (View, tea.Cmd) {
+func (v *View) handleMessagesLoaded(msg messagesLoadedMsg) tea.Cmd {
 	if msg.err != nil {
-		log.Debug().Err(msg.err).Msg("failed to load messages")
-		return v, nil
+		log.Error().Err(msg.err).Msg("failed to load messages")
+		return nil
 	}
 	if len(msg.messages) > 0 {
 		v.ctrl.Append(msg.messages)
 	}
 	v.lastPollTime = time.Now()
-	return v, nil
+	return nil
 }
 
-func (v View) handlePollTick() (View, tea.Cmd) {
+func (v *View) handlePollTick() tea.Cmd {
 	if v.active && v.msgStore != nil {
-		return v, tea.Batch(
+		return tea.Batch(
 			loadMessages(v.msgStore, v.topicFilter, v.lastPollTime),
 			schedulePollTick(),
 		)
 	}
-	return v, schedulePollTick()
+	return schedulePollTick()
 }
 
-func (v View) handleKey(msg tea.KeyMsg) (View, tea.Cmd) {
+func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 	// Preview modal keys take priority
 	if v.previewModal != nil {
 		return v.handlePreviewKey(msg)
@@ -145,33 +145,29 @@ func (v View) handleKey(msg tea.KeyMsg) (View, tea.Cmd) {
 	return v.handleNormalKey(msg)
 }
 
-func (v View) handlePreviewKey(msg tea.KeyMsg) (View, tea.Cmd) {
+func (v *View) handlePreviewKey(msg tea.KeyMsg) tea.Cmd {
 	v.previewModal.ClearCopyStatus()
 
 	switch msg.String() {
 	case "esc", "enter", "q":
 		v.previewModal = nil
-		return v, nil
 	case "up", "k":
 		v.previewModal.ScrollUp()
-		return v, nil
 	case "down", "j":
 		v.previewModal.ScrollDown()
-		return v, nil
 	case "c", "y":
 		if err := v.copyToClipboard(v.previewModal.Payload()); err != nil {
 			v.previewModal.SetCopyStatus("Copy failed: " + err.Error())
 		} else {
 			v.previewModal.SetCopyStatus("Copied!")
 		}
-		return v, nil
 	default:
 		v.previewModal.UpdateViewport(msg)
-		return v, nil
 	}
+	return nil
 }
 
-func (v View) handleFilterKey(msg tea.KeyMsg) (View, tea.Cmd) {
+func (v *View) handleFilterKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.ctrl.CancelFilter()
@@ -186,10 +182,10 @@ func (v View) handleFilterKey(msg tea.KeyMsg) (View, tea.Cmd) {
 			}
 		}
 	}
-	return v, nil
+	return nil
 }
 
-func (v View) handleNormalKey(msg tea.KeyMsg) (View, tea.Cmd) {
+func (v *View) handleNormalKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "enter":
 		sel := v.ctrl.Selected()
@@ -204,10 +200,10 @@ func (v View) handleNormalKey(msg tea.KeyMsg) (View, tea.Cmd) {
 	case "/":
 		v.ctrl.StartFilter()
 	}
-	return v, nil
+	return nil
 }
 
-func (v View) copyToClipboard(text string) error {
+func (v *View) copyToClipboard(text string) error {
 	if v.copyCommand == "" {
 		return nil
 	}
@@ -220,7 +216,7 @@ func (v View) copyToClipboard(text string) error {
 	return cmd.Run()
 }
 
-func (v View) visibleLines() int {
+func (v *View) visibleLines() int {
 	reserved := 2
 	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
 		reserved++
@@ -232,7 +228,7 @@ func (v View) visibleLines() int {
 	return visible
 }
 
-func (v View) renderList() string {
+func (v *View) renderList() string {
 	var b strings.Builder
 
 	timeWidth := 8
