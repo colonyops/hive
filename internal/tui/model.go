@@ -256,7 +256,7 @@ func New(deps Deps, opts Opts) Model {
 		spinner:         s,
 		modals:          NewModalCoordinator(),
 		sessionsView:    sessionsView,
-		msgView:         &msgView,
+		msgView:         msgView,
 		activeView:      ViewSessions,
 		copyCommand:     cfg.CopyCommand,
 		mergedCommands:  mergedCommands,
@@ -381,6 +381,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleSessionRecycledDelete(msg)
 	case sessions.OpenRepoRequestMsg:
 		model, cmd = m.handleSessionOpenRepo(msg)
+	case sessions.ErrorMsg:
+		model, cmd = m, m.notifyError("%v", msg.Err)
 
 	// Action results
 	case renameCompleteMsg:
@@ -769,41 +771,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
 		action = sessions.MaybeOverrideWindowDelete(action, m.selectedTreeItem(), m.renderer)
 
-		// Check for resolution errors (e.g., template errors)
-		if action.Err != nil {
-			m.state = stateNormal
-			return m, m.notifyError("command error: %v", action.Err)
-		}
-
-		// Reset to normal state
 		m.state = stateNormal
-
-		// Handle confirmation if needed
-		if action.NeedsConfirm() {
-			m.state = stateConfirming
-			m.modals.Pending = action
-			m.modals.Confirm = NewModal("Confirm", action.Confirm)
-			return m, nil
-		}
-
-		// Execute immediately if exit requested (synchronous to avoid race conditions)
-		if action.Exit {
-			exec, err := m.cmdService.CreateExecutor(action)
-			if err != nil {
-				log.Error().Str("command", action.Key).Err(err).Msg("failed to create executor before exit")
-			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				log.Error().Str("command", action.Key).Err(err).Msg("command failed before exit")
-			}
-			return m.quit()
-		}
-
-		// Store pending action for exit check after completion
-		m.modals.Pending = action
-		if !action.Silent {
-			m.state = stateLoading
-			m.loadingMessage = "Processing..."
-		}
-		return m, m.executeAction(action)
+		return m.dispatchAction(action)
 	}
 
 	// Check if user cancelled
@@ -896,8 +865,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		if keyStr == keyCtrlC {
 			return m.quit()
 		}
-		var cmd tea.Cmd
-		*m.msgView, cmd = m.msgView.Update(msg)
+		cmd := m.msgView.Update(msg)
 		return m, cmd
 	}
 
@@ -935,8 +903,7 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 
 	// Messages view focused - delegate all keys to the sub-model
 	if m.isMessagesFocused() && m.msgView != nil {
-		var cmd tea.Cmd
-		*m.msgView, cmd = m.msgView.Update(msg)
+		cmd := m.msgView.Update(msg)
 		return m, cmd
 	}
 
@@ -1198,7 +1165,7 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case ViewMessages:
 		if m.msgView != nil {
-			*m.msgView, cmd = m.msgView.Update(msg)
+			cmd = m.msgView.Update(msg)
 		}
 	case ViewStore:
 		// KV view handles its own updates via explicit method calls

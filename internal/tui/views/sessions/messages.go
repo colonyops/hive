@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
@@ -51,6 +52,14 @@ type OpenRepoRequestMsg struct {
 // RefreshSessionsMsg requests a session list refresh.
 type RefreshSessionsMsg struct{}
 
+// ErrorMsg signals a non-fatal error to the parent model.
+type ErrorMsg struct{ Err error }
+
+// ErrorCmd returns a tea.Cmd that emits ErrorMsg.
+func ErrorCmd(err error) tea.Cmd {
+	return func() tea.Msg { return ErrorMsg{Err: err} }
+}
+
 // --- Internal messages (stay within sessions package) ---
 //
 // GitStatusBatchCompleteMsg    -> gitstatus.go
@@ -66,6 +75,7 @@ type sessionsLoadedMsg struct {
 // reposDiscoveredMsg is sent when repository scanning completes.
 type reposDiscoveredMsg struct {
 	repos []DiscoveredRepo
+	err   error
 }
 
 // pluginWorkerStartedMsg is sent when the plugin background worker starts.
