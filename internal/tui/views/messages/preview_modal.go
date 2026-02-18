@@ -8,6 +8,8 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
+	"github.com/rs/zerolog/log"
+
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/styles"
 )
@@ -26,7 +28,6 @@ const (
 type PreviewModal struct {
 	message    messaging.Message
 	viewport   viewport.Model
-	ready      bool
 	copyStatus string
 }
 
@@ -44,7 +45,6 @@ func NewPreviewModal(msg messaging.Message, width, height int) PreviewModal {
 	m := PreviewModal{
 		message:  msg,
 		viewport: vp,
-		ready:    false,
 	}
 
 	m.renderContent(modalWidth - previewModalPadding)
@@ -61,15 +61,15 @@ func (m *PreviewModal) renderContent(width int) {
 		glamour.WithWordWrap(width),
 	)
 	if err != nil {
+		log.Debug().Err(err).Msg("failed to create markdown renderer, showing raw content")
 		m.viewport.SetContent(m.message.Payload)
-		m.ready = true
 		return
 	}
 
 	rendered, err := renderer.Render(m.message.Payload)
 	if err != nil {
+		log.Debug().Err(err).Msg("failed to render markdown, showing raw content")
 		m.viewport.SetContent(m.message.Payload)
-		m.ready = true
 		return
 	}
 
@@ -77,7 +77,6 @@ func (m *PreviewModal) renderContent(width int) {
 	content = stripLeadingDecorative(content)
 	content = stripTrailingDecorative(content)
 	m.viewport.SetContent(content)
-	m.ready = true
 }
 
 // UpdateViewport updates the viewport with a message (for scrolling).

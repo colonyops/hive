@@ -10,18 +10,14 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/rs/zerolog/log"
+
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 )
 
 const pollInterval = 500 * time.Millisecond
-
-// CopyRequestMsg is emitted when the user copies from the preview modal.
-// The parent Model handles the clipboard operation.
-type CopyRequestMsg struct {
-	Text string
-}
 
 type messagesLoadedMsg struct {
 	messages []messaging.Message
@@ -114,6 +110,7 @@ func (v View) IsPreviewActive() bool {
 
 func (v View) handleMessagesLoaded(msg messagesLoadedMsg) (View, tea.Cmd) {
 	if msg.err != nil {
+		log.Debug().Err(msg.err).Msg("failed to load messages")
 		return v, nil
 	}
 	if len(msg.messages) > 0 {

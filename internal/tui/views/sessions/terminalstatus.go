@@ -49,7 +49,7 @@ type TerminalPollTickMsg struct{}
 
 // FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
 func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
-	if mgr == nil || len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
+	if len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
 		return nil
 	}
 

@@ -69,12 +69,12 @@ func (c *Controller) AddFilterRune(r rune) {
 
 // DeleteFilterRune removes the last rune from the filter.
 func (c *Controller) DeleteFilterRune() {
-	s := c.filterBuf.String()
-	if len(s) > 0 {
-		s = s[:len(s)-1]
+	runes := []rune(c.filterBuf.String())
+	if len(runes) > 0 {
+		runes = runes[:len(runes)-1]
 		c.filterBuf.Reset()
-		c.filterBuf.WriteString(s)
-		c.filter = s
+		c.filterBuf.WriteString(string(runes))
+		c.filter = string(runes)
 		c.applyFilter()
 	}
 }

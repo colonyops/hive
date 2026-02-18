@@ -119,9 +119,6 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		}
 		return m.openRenameInput(sess)
 	}
-	if action.Type == act.TypeSetTheme {
-		return m, m.ensureToastTick()
-	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter
 		m.sessionsView.ApplyStatusFilter(action.Type)
@@ -225,7 +222,9 @@ func (m Model) handleRecycleComplete(msg recycleCompleteMsg) (tea.Model, tea.Cmd
 
 func (m Model) handleReviewDocChange(msg review.DocumentChangeMsg) (tea.Model, tea.Cmd) {
 	if m.reviewView != nil {
-		*m.reviewView, _ = m.reviewView.Update(msg)
+		var cmd tea.Cmd
+		*m.reviewView, cmd = m.reviewView.Update(msg)
+		return m, cmd
 	}
 	return m, nil
 }

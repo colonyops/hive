@@ -19,7 +19,7 @@ func (m Model) View() tea.View {
 	// Build main view (header + content)
 	mainView := m.renderTabView()
 
-	// Render modal overlay (single call replaces the 95-line switch block)
+	// Render modal overlay if any modal is active
 	content := m.modals.Overlay(m.state, mainView, m.spinner, m.loadingMessage)
 
 	// Messages preview overlay (not managed by ModalCoordinator)

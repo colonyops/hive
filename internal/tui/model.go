@@ -2,6 +2,7 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"os/exec"
 	"strings"
 
@@ -58,15 +59,18 @@ const (
 
 // Deps holds all external dependencies for the TUI Model.
 type Deps struct {
+	// Required — nil causes a panic at construction time.
 	Config          *config.Config
 	Service         *hive.SessionService
-	MsgStore        *hive.MessageService
-	Bus             *eventbus.EventBus
+	Renderer        *tmpl.Renderer
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
-	DB              *db.DB
-	KVStore         corekv.KV
-	Renderer        *tmpl.Renderer
+
+	// Optional — nil disables the corresponding feature.
+	MsgStore *hive.MessageService
+	Bus      *eventbus.EventBus
+	DB       *db.DB
+	KVStore  corekv.KV
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -165,18 +169,16 @@ type notificationMsg struct {
 	notification notify.Notification
 }
 
-// New creates a new TUI model.
+// New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, and PluginManager are required")
+	}
 	cfg := deps.Config
 	service := deps.Service
 
 	// Compute merged commands: system → plugins → user
-	var mergedCommands map[string]config.UserCommand
-	if deps.PluginManager != nil {
-		mergedCommands = deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
-	} else {
-		mergedCommands = cfg.MergedUserCommands()
-	}
+	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
 	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service)
@@ -252,6 +254,9 @@ func New(deps Deps, opts Opts) Model {
 	notifyBus.Subscribe(func(n notify.Notification) {
 		toastCtrl.Push(n)
 	})
+
+	// Sessions tab is active by default
+	sessionsView.SetActive(true)
 
 	return Model{
 		cfg:             cfg,
@@ -338,75 +343,97 @@ func (m Model) executeAction(a Action) tea.Cmd {
 	}
 }
 
+// syncModalState notifies the sessions view whether a modal is currently open.
+// This gates periodic session refresh so it doesn't fire while modals are shown.
+func (m *Model) syncModalState() {
+	if m.sessionsView != nil {
+		m.sessionsView.SetModalActive(m.isModalActive())
+	}
+}
+
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var (
+		model tea.Model
+		cmd   tea.Cmd
+	)
+
 	switch msg := msg.(type) {
 	// Window
 	case tea.WindowSizeMsg:
-		return m.handleWindowSize(msg)
+		model, cmd = m.handleWindowSize(msg)
 
 	// KV data loaded
 	case kvKeysLoadedMsg:
-		return m.handleKVKeysLoaded(msg)
+		model, cmd = m.handleKVKeysLoaded(msg)
 	case kvEntryLoadedMsg:
-		return m.handleKVEntryLoaded(msg)
+		model, cmd = m.handleKVEntryLoaded(msg)
 
 	// Polling ticks (KV only — session polling is handled by sessionsView)
 	case kvPollTickMsg:
-		return m.handleKVPollTick(msg)
+		model, cmd = m.handleKVPollTick(msg)
 	case toastTickMsg:
-		return m.handleToastTick(msg)
+		model, cmd = m.handleToastTick(msg)
 
 	// Outbound messages from sessions view
 	case sessions.ActionRequestMsg:
-		return m.handleSessionAction(msg)
+		model, cmd = m.handleSessionAction(msg)
 	case sessions.FormCommandRequestMsg:
-		return m.handleSessionFormCommand(msg)
+		model, cmd = m.handleSessionFormCommand(msg)
 	case sessions.CommandPaletteRequestMsg:
-		return m.handleSessionCommandPalette(msg)
+		model, cmd = m.handleSessionCommandPalette(msg)
 	case sessions.NewSessionRequestMsg:
-		return m.handleSessionNewSession()
+		model, cmd = m.handleSessionNewSession()
 	case sessions.RenameRequestMsg:
-		return m.handleSessionRename(msg)
+		model, cmd = m.handleSessionRename(msg)
 	case sessions.DocReviewRequestMsg:
-		return m.handleSessionDocReview()
+		model, cmd = m.handleSessionDocReview()
 	case sessions.RecycledDeleteRequestMsg:
-		return m.handleSessionRecycledDelete(msg)
+		model, cmd = m.handleSessionRecycledDelete(msg)
 	case sessions.OpenRepoRequestMsg:
-		return m.handleSessionOpenRepo(msg)
+		model, cmd = m.handleSessionOpenRepo(msg)
 
 	// Action results
 	case renameCompleteMsg:
-		return m.handleRenameComplete(msg)
+		model, cmd = m.handleRenameComplete(msg)
 	case actionCompleteMsg:
-		return m.handleActionComplete(msg)
+		model, cmd = m.handleActionComplete(msg)
 	case recycleStartedMsg:
-		return m.handleRecycleStarted(msg)
+		model, cmd = m.handleRecycleStarted(msg)
 	case recycleOutputMsg:
-		return m.handleRecycleOutput(msg)
+		model, cmd = m.handleRecycleOutput(msg)
 	case recycleCompleteMsg:
-		return m.handleRecycleComplete(msg)
+		model, cmd = m.handleRecycleComplete(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:
-		return m.handleReviewDocChange(msg)
+		model, cmd = m.handleReviewDocChange(msg)
 	case review.ReviewFinalizedMsg:
-		return m.handleReviewFinalized(msg)
+		model, cmd = m.handleReviewFinalized(msg)
 	case review.OpenDocumentMsg:
-		return m.handleReviewOpenDoc(msg)
+		model, cmd = m.handleReviewOpenDoc(msg)
 
 	// Notifications
 	case notificationMsg:
-		return m.handleNotification(msg)
+		model, cmd = m.handleNotification(msg)
 
 	// Input
 	case tea.KeyMsg:
-		return m.handleKeyMsg(msg)
+		model, cmd = m.handleKeyMsg(msg)
 	case spinner.TickMsg:
-		return m.handleSpinnerTick(msg)
+		model, cmd = m.handleSpinnerTick(msg)
+
+	default:
+		model, cmd = m.handleFallthrough(msg)
 	}
 
-	return m.handleFallthrough(msg)
+	// Sync modal state to sessions view after every update so periodic
+	// refresh is paused while modals are open.
+	if mdl, ok := model.(Model); ok {
+		mdl.syncModalState()
+		return mdl, cmd
+	}
+	return model, cmd
 }
 
 // handleKey processes key presses.
@@ -824,8 +851,8 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 
 	// Delegate session focus mode / list filter to sessionsView
 	if m.sessionsView.FocusMode() || m.sessionsView.IsSettingFilter() {
-		m.sessionsView.Update(msg)
-		return m, nil
+		cmd := m.sessionsView.Update(msg)
+		return m, cmd
 	}
 
 	// Handle KV view filtering
@@ -913,8 +940,8 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 			m.sessionsView.TogglePreview()
 			return m, nil
 		}
-		m.sessionsView.Update(msg)
-		return m, nil
+		cmd := m.sessionsView.Update(msg)
+		return m, cmd
 	}
 
 	// Messages view focused - delegate all keys to the sub-model
@@ -990,6 +1017,7 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	}
 
 	m.handler.SetActiveView(m.activeView)
+	m.sessionsView.SetActive(m.activeView == ViewSessions)
 	if m.msgView != nil {
 		m.msgView.SetActive(m.activeView == ViewMessages)
 	}
@@ -1177,8 +1205,8 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Route to active view
 	switch m.activeView {
 	case ViewSessions:
-		m.sessionsView.Update(msg)
-		return m, nil
+		cmd = m.sessionsView.Update(msg)
+		return m, cmd
 	case ViewMessages:
 		if m.msgView != nil {
 			*m.msgView, cmd = m.msgView.Update(msg)
@@ -1242,22 +1270,24 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 // deleteRecycledSessionsBatch returns a command that deletes multiple recycled sessions.
 func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 	return func() tea.Msg {
-		var lastErr error
+		var errs []error
 		for _, sess := range sessions {
 			exec, err := m.cmdService.CreateExecutor(Action{
 				Type:      act.TypeDelete,
 				SessionID: sess.ID,
 			})
 			if err != nil {
-				lastErr = err
+				log.Error().Err(err).Str("session", sess.ID).Msg("failed to create delete executor")
+				errs = append(errs, err)
 				continue
 			}
 
 			if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				lastErr = err
+				log.Error().Err(err).Str("session", sess.ID).Msg("failed to delete recycled session")
+				errs = append(errs, err)
 			}
 		}
-		return actionCompleteMsg{err: lastErr}
+		return actionCompleteMsg{err: errors.Join(errs...)}
 	}
 }
 

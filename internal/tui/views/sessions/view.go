@@ -37,15 +37,18 @@ var builderPool = sync.Pool{
 
 // ViewOpts configures a new sessions View.
 type ViewOpts struct {
+	// Required — nil causes a panic at construction time.
 	Cfg             *config.Config
 	Service         *hive.SessionService
 	Handler         KeyResolver
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
-	LocalRemote     string
-	RepoDirs        []string
-	Renderer        *tmpl.Renderer
-	Bus             *eventbus.EventBus
+
+	// Optional — nil disables the corresponding feature.
+	LocalRemote string
+	RepoDirs    []string
+	Renderer    *tmpl.Renderer
+	Bus         *eventbus.EventBus
 }
 
 // View is the Bubble Tea sub-model for the sessions tab.
@@ -105,6 +108,9 @@ type View struct {
 // initialized here so the parent Model can pass them through ViewOpts without
 // constructing them itself.
 func New(opts ViewOpts) *View {
+	if opts.Cfg == nil || opts.Service == nil || opts.Handler == nil || opts.TerminalManager == nil || opts.PluginManager == nil {
+		panic("sessions.New: Cfg, Service, Handler, TerminalManager, and PluginManager are required")
+	}
 	cfg := opts.Cfg
 
 	ctrl := NewController()
@@ -116,11 +122,9 @@ func New(opts ViewOpts) *View {
 
 	// Initialize plugin status stores for each enabled plugin
 	pluginStatuses := make(map[string]*kv.Store[string, plugins.Status])
-	if opts.PluginManager != nil {
-		for _, p := range opts.PluginManager.EnabledPlugins() {
-			if p.StatusProvider() != nil {
-				pluginStatuses[p.Name()] = kv.New[string, plugins.Status]()
-			}
+	for _, p := range opts.PluginManager.EnabledPlugins() {
+		if p.StatusProvider() != nil {
+			pluginStatuses[p.Name()] = kv.New[string, plugins.Status]()
 		}
 	}
 
@@ -229,13 +233,13 @@ func (v *View) Init() tea.Cmd {
 	}
 
 	// Start terminal status polling and animation if integration is enabled
-	if v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations() {
+	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 		cmds = append(cmds, scheduleAnimationTick())
 	}
 
 	// Start plugin background worker if plugins are enabled
-	if v.pluginManager != nil && len(v.pluginStatuses) > 0 {
+	if len(v.pluginStatuses) > 0 {
 		cmds = append(cmds, v.startPluginWorker())
 	}
 
@@ -291,7 +295,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	}
 	v.ctrl.SetSessions(msg.sessions)
 	cmd := v.applyFilter()
-	if v.pluginManager != nil && len(v.pluginStatuses) > 0 {
+	if len(v.pluginStatuses) > 0 {
 		sessions := make([]*session.Session, len(v.ctrl.AllSessions()))
 		for i := range v.ctrl.AllSessions() {
 			sessions[i] = &v.ctrl.allSessions[i]
@@ -345,7 +349,7 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 		sessPtrs[i] = &v.ctrl.allSessions[i]
 	}
 	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
-	if v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations() {
+	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}
 	return tea.Batch(cmds...)
@@ -358,15 +362,19 @@ func (v *View) handlePluginWorkerStarted(msg pluginWorkerStartedMsg) tea.Cmd {
 }
 
 func (v *View) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) tea.Cmd {
-	if msg.Err == nil {
-		if store, ok := v.pluginStatuses[msg.PluginName]; ok {
-			store.Set(msg.SessionID, msg.Status)
-			log.Debug().
-				Str("plugin", msg.PluginName).
-				Str("session", msg.SessionID).
-				Str("label", msg.Status.Label).
-				Msg("plugin status updated")
-		}
+	if msg.Err != nil {
+		log.Debug().
+			Err(msg.Err).
+			Str("plugin", msg.PluginName).
+			Str("session", msg.SessionID).
+			Msg("plugin status update failed")
+	} else if store, ok := v.pluginStatuses[msg.PluginName]; ok {
+		store.Set(msg.SessionID, msg.Status)
+		log.Debug().
+			Str("plugin", msg.PluginName).
+			Str("session", msg.SessionID).
+			Str("label", msg.Status.Label).
+			Msg("plugin status updated")
 	}
 	v.treeDelegate.PluginStatuses = v.pluginStatuses
 	v.list.SetDelegate(v.treeDelegate)
@@ -421,10 +429,10 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 	// Handle navigation keys - skip over headers
 	switch keyStr {
 	case "up", "k":
-		v.navigateSkippingHeaders(-1)
+		v.navigateSkippingPlaceholders(-1)
 		return v, nil
 	case "down", "j":
-		v.navigateSkippingHeaders(1)
+		v.navigateSkippingPlaceholders(1)
 		return v, nil
 	}
 
@@ -540,6 +548,9 @@ func (v *View) handleFilterKey(msg tea.KeyMsg, keyStr string) (*View, tea.Cmd) {
 }
 
 func (v *View) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (*View, tea.Cmd) {
+	if !v.handler.IsAction(keyStr, act.TypeDelete) {
+		return v, nil
+	}
 	recycledSessions := treeItem.RecycledSessions
 	return v, func() tea.Msg {
 		return RecycledDeleteRequestMsg{Sessions: recycledSessions}
@@ -611,9 +622,9 @@ func (v *View) navigateToNextActive(direction int) {
 	}
 }
 
-// navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down).
-// Headers are selectable (enter opens original repo). Only recycled placeholders are skipped.
-func (v *View) navigateSkippingHeaders(direction int) {
+// navigateSkippingPlaceholders moves the selection by direction (-1 for up, 1 for down).
+// Recycled placeholders are skipped; all other items (including headers) are selectable.
+func (v *View) navigateSkippingPlaceholders(direction int) {
 	items := v.list.Items()
 	if len(items) == 0 {
 		return
@@ -1159,7 +1170,10 @@ func (v *View) loadSessions() tea.Cmd {
 // scanRepoDirs returns a command that scans configured directories for git repositories.
 func (v *View) scanRepoDirs() tea.Cmd {
 	return func() tea.Msg {
-		repos, _ := ScanRepoDirs(context.Background(), v.repoDirs, v.service.Git())
+		repos, err := ScanRepoDirs(context.Background(), v.repoDirs, v.service.Git())
+		if err != nil {
+			log.Debug().Err(err).Msg("repo directory scan encountered errors")
+		}
 		return reposDiscoveredMsg{repos: repos}
 	}
 }
@@ -1341,7 +1355,7 @@ func (v *View) ApplyStatusFilter(actionType act.Type) {
 
 // HasTerminalIntegration returns true if a terminal manager is configured with enabled integrations.
 func (v *View) HasTerminalIntegration() bool {
-	return v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations()
+	return v.terminalManager.HasEnabledIntegrations()
 }
 
 // TogglePreview toggles the preview sidebar on/off.
@@ -1368,8 +1382,8 @@ func isActiveStatus(s terminal.Status) bool {
 	return s != terminal.StatusMissing && s != ""
 }
 
-// isFilterAction returns true if the action type is a filter action.
-func isFilterAction(t act.Type) bool {
+// IsFilterAction returns true if the action type is a filter action.
+func IsFilterAction(t act.Type) bool {
 	switch t {
 	case act.TypeFilterAll, act.TypeFilterActive,
 		act.TypeFilterApproval, act.TypeFilterReady:
@@ -1377,11 +1391,6 @@ func isFilterAction(t act.Type) bool {
 	default:
 		return false
 	}
-}
-
-// IsFilterAction returns true if the action type is a filter action (exported).
-func IsFilterAction(t act.Type) bool {
-	return isFilterAction(t)
 }
 
 // listenForPluginResult returns a command that waits for the next plugin result.
