@@ -7,6 +7,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/colonyops/hive/internal/core/git"
+	"github.com/rs/zerolog/log"
 )
 
 const gitStatusTimeout = 5 * time.Second
@@ -33,6 +34,7 @@ func fetchGitStatusForPath(ctx context.Context, g git.Git, path string) GitStatu
 	// Get branch name
 	branch, err := g.Branch(ctx, path)
 	if err != nil {
+		log.Debug().Err(err).Str("path", path).Msg("git branch lookup failed")
 		status.Error = err
 		return status
 	}
@@ -41,6 +43,7 @@ func fetchGitStatusForPath(ctx context.Context, g git.Git, path string) GitStatu
 	// Get diff stats
 	additions, deletions, err := g.DiffStats(ctx, path)
 	if err != nil {
+		log.Debug().Err(err).Str("path", path).Msg("git diff stats lookup failed")
 		status.Error = err
 		return status
 	}
@@ -50,6 +53,7 @@ func fetchGitStatusForPath(ctx context.Context, g git.Git, path string) GitStatu
 	// Check if clean
 	isClean, err := g.IsClean(ctx, path)
 	if err != nil {
+		log.Debug().Err(err).Str("path", path).Msg("git clean check failed")
 		status.Error = err
 		return status
 	}

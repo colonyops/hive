@@ -20,7 +20,9 @@ func (m Model) View() tea.View {
 
 	content := m.modals.Overlay(m.state, mainView, m.spinner, m.loadingMessage)
 
-	// Messages preview overlay (not managed by ModalCoordinator)
+	// Messages preview overlay is applied here rather than inside ModalCoordinator
+	// because the preview state is owned by messages.View, not by the parent model.
+	// ModalCoordinator only manages modals whose lifecycle is driven by parent-model state.
 	if content == mainView && m.msgView != nil && m.msgView.IsPreviewActive() {
 		w, h := m.width, m.height
 		if w == 0 {

@@ -281,7 +281,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	if msg.err != nil {
 		log.Error().Err(msg.err).Msg("failed to load sessions")
-		return nil
+		return ErrorCmd(fmt.Errorf("failed to load sessions: %w", msg.err))
 	}
 	v.allSessions = msg.sessions
 	cmd := v.applyFilter()
@@ -304,6 +304,12 @@ func (v *View) handleGitStatusComplete(msg GitStatusBatchCompleteMsg) tea.Cmd {
 
 func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) tea.Cmd {
 	if v.terminalStatuses != nil {
+		for sessionID, newStatus := range msg.Results {
+			if newStatus.Error != nil {
+				log.Debug().Err(newStatus.Error).Str("sessionID", sessionID).Msg("terminal status update contains error")
+			}
+		}
+
 		if v.bus != nil {
 			for sessionID, newStatus := range msg.Results {
 				oldStatus, exists := v.terminalStatuses.Get(sessionID)
@@ -353,7 +359,7 @@ func (v *View) handlePluginWorkerStarted(msg pluginWorkerStartedMsg) tea.Cmd {
 
 func (v *View) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) tea.Cmd {
 	if msg.Err != nil {
-		log.Debug().
+		log.Warn().
 			Err(msg.Err).
 			Str("plugin", msg.PluginName).
 			Str("session", msg.SessionID).
@@ -373,6 +379,9 @@ func (v *View) handlePluginStatusUpdate(msg pluginStatusUpdateMsg) tea.Cmd {
 
 func (v *View) handleReposDiscovered(msg reposDiscoveredMsg) tea.Cmd {
 	v.discoveredRepos = msg.repos
+	if msg.err != nil {
+		return ErrorCmd(fmt.Errorf("repo scan error: %w", msg.err))
+	}
 	return nil
 }
 
@@ -1126,9 +1135,9 @@ func (v *View) scanRepoDirs() tea.Cmd {
 	return func() tea.Msg {
 		repos, err := ScanRepoDirs(context.Background(), v.repoDirs, v.service.Git())
 		if err != nil {
-			log.Debug().Err(err).Msg("repo directory scan encountered errors")
+			log.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}
-		return reposDiscoveredMsg{repos: repos}
+		return reposDiscoveredMsg{repos: repos, err: err}
 	}
 }
 
@@ -1365,7 +1374,7 @@ func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
 	return func() tea.Msg {
 		result, ok := <-ch
 		if !ok {
-			// Channel closed, stop listening
+			log.Debug().Msg("plugin results channel closed")
 			return nil
 		}
 		return pluginStatusUpdateMsg{
