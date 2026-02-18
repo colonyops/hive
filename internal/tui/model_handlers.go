@@ -107,7 +107,6 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	if action.Err != nil {
 		return m, m.notifyError("keybinding error: %v", action.Err)
 	}
-	// Handle special action types that need Model-level coordination
 	if action.Type == act.TypeDocReview {
 		cmd := HiveDocReviewCmd{Arg: ""}
 		return m, cmd.Execute(&m)
@@ -176,7 +175,6 @@ func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) 
 		m.state = stateNormal
 		return m, m.notifyError("rename failed: %v", msg.err)
 	}
-	// Trigger a session refresh in the sessions view
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
@@ -189,7 +187,6 @@ func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) 
 	}
 	m.state = stateNormal
 	m.modals.Pending = Action{}
-	// Trigger a session refresh in the sessions view
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
@@ -263,7 +260,6 @@ func (m Model) handleNotification(msg notificationMsg) (tea.Model, tea.Cmd) {
 // --- Input ---
 
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
-	// Handle document picker modal if active (on Sessions view)
 	if m.modals.DocPicker != nil {
 		modal, cmd := m.modals.DocPicker.Update(msg)
 		m.modals.DocPicker = modal
@@ -299,7 +295,6 @@ func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 // handleFallthrough routes messages that don't match any typed case.
 // This includes internal messages from sub-models (sessions, messages, review).
 func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
-	// Route all other messages to the form when creating session
 	if m.state == stateCreatingSession && m.modals.NewSession != nil {
 		return m.updateNewSessionForm(msg)
 	}
@@ -339,7 +334,6 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 // --- Helper for repo header opening ---
 
 func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) {
-	// Find the original repo path from discovered repos
 	var repoPath string
 	for _, repo := range m.sessionsView.DiscoveredRepos() {
 		if repo.Remote == remote {
@@ -351,7 +345,6 @@ func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) 
 		return m, m.notifyError("no local repository found for %s", name)
 	}
 
-	// Render the hive-tmux command to open at the repo directory
 	shellCmd, err := m.renderer.Render(
 		`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
 		struct{ Name, Path string }{Name: name, Path: repoPath},

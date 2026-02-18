@@ -120,7 +120,6 @@ func New(opts ViewOpts) *View {
 	terminalStatuses := kv.New[string, TerminalStatus]()
 	columnWidths := &ColumnWidths{}
 
-	// Initialize plugin status stores for each enabled plugin
 	pluginStatuses := make(map[string]*kv.Store[string, plugins.Status])
 	for _, p := range opts.PluginManager.EnabledPlugins() {
 		if p.StatusProvider() != nil {
@@ -141,7 +140,6 @@ func New(opts ViewOpts) *View {
 	l.SetShowTitle(false)
 	l.SetShowFilter(false)
 
-	// Style filter input
 	l.FilterInput.Prompt = "Filter: "
 	filterStyles := textinput.DefaultStyles(true)
 	filterStyles.Focused.Prompt = styles.ListFilterPromptStyle
@@ -159,7 +157,6 @@ func New(opts ViewOpts) *View {
 	l.Help.ShortSeparator = " • "
 	l.Styles.HelpStyle = styles.ListHelpContainerStyle
 
-	// Minimal help keybindings
 	l.AdditionalShortHelpKeys = func() []key.Binding {
 		return []key.Binding{
 			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "navigate")),
@@ -167,7 +164,6 @@ func New(opts ViewOpts) *View {
 		}
 	}
 
-	// Create dedicated focus filter input
 	focusInput := textinput.New()
 	focusInput.Prompt = "/"
 	focusInputStyles := textinput.DefaultStyles(true)
@@ -178,13 +174,11 @@ func New(opts ViewOpts) *View {
 	// Detect current tmux session to prevent recursive preview
 	currentTmux := DetectCurrentTmuxSession()
 
-	// Parse preview templates
 	previewTemplates := ParsePreviewTemplates(
 		cfg.TUI.Preview.TitleTemplate,
 		cfg.TUI.Preview.StatusTemplate,
 	)
 
-	// Determine plugin poll interval
 	pluginPollInterval := 5 * time.Second
 	if cfg.Plugins.GitHub.ResultsCache > 0 {
 		pluginPollInterval = cfg.Plugins.GitHub.ResultsCache
@@ -227,23 +221,19 @@ func New(opts ViewOpts) *View {
 func (v *View) Init() tea.Cmd {
 	cmds := []tea.Cmd{v.loadSessions()}
 
-	// Scan for repositories if configured
 	if len(v.repoDirs) > 0 {
 		cmds = append(cmds, v.scanRepoDirs())
 	}
 
-	// Start terminal status polling and animation if integration is enabled
 	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 		cmds = append(cmds, scheduleAnimationTick())
 	}
 
-	// Start plugin background worker if plugins are enabled
 	if len(v.pluginStatuses) > 0 {
 		cmds = append(cmds, v.startPluginWorker())
 	}
 
-	// Start session refresh timer
 	if cmd := v.scheduleSessionRefresh(); cmd != nil {
 		cmds = append(cmds, cmd)
 	}
@@ -426,7 +416,6 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 		return v, cmd
 	}
 
-	// Handle navigation keys - skip over headers
 	switch keyStr {
 	case "up", "k":
 		v.navigateSkippingPlaceholders(-1)
@@ -436,7 +425,6 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 		return v, nil
 	}
 
-	// Handle navigation to next/prev active session
 	if v.handler.IsAction(keyStr, act.TypeNextActive) {
 		v.navigateToNextActive(1)
 		return v, nil
@@ -446,19 +434,16 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 		return v, nil
 	}
 
-	// Handle new session action (only if repos are discovered)
 	if v.handler.IsAction(keyStr, act.TypeNewSession) && len(v.discoveredRepos) > 0 {
 		return v, func() tea.Msg { return NewSessionRequestMsg{} }
 	}
 
-	// Handle '/' for focus mode filter
 	if keyStr == "/" {
 		v.focusMode = true
 		v.focusFilter = ""
 		v.focusFilterInput.Reset()
 		v.focusFilterInput.SetValue("")
 
-		// Hide list help and reduce list size to make room for search input
 		contentHeight := v.height - 3
 		if contentHeight < 2 {
 			contentHeight = 2
@@ -477,19 +462,16 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 		return v, v.focusFilterInput.Focus()
 	}
 
-	// Handle ':' for command palette
 	if keyStr == ":" {
 		sess := v.SelectedSession()
 		return v, func() tea.Msg { return CommandPaletteRequestMsg{Session: sess} }
 	}
 
-	// Check for recycled placeholder selection - allow delete action
 	treeItem := v.SelectedTreeItem()
 	if treeItem != nil && treeItem.IsRecycledPlaceholder {
 		return v.handleRecycledPlaceholderKey(keyStr, treeItem)
 	}
 
-	// Handle enter on project headers - open original repo directory
 	if treeItem != nil && treeItem.IsHeader && v.handler.IsCommand(keyStr, "TmuxOpen") {
 		return v.handleRepoHeaderKey(treeItem)
 	}
@@ -501,14 +483,12 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 		return v, cmd
 	}
 
-	// If a window sub-item is selected, override TmuxWindow for template rendering
 	if treeItem != nil && treeItem.IsWindowItem {
 		v.handler.SetSelectedWindow(treeItem.WindowIndex)
 	} else {
 		v.handler.SetSelectedWindow("")
 	}
 
-	// Check if this key maps to a form command
 	if cmdName, cmd, hasForm := v.handler.ResolveFormCommand(keyStr, *selected); hasForm {
 		return v, func() tea.Msg {
 			return FormCommandRequestMsg{
@@ -636,7 +616,6 @@ func (v *View) navigateSkippingPlaceholders(direction int) {
 	for {
 		target += direction
 
-		// Check bounds
 		if target < 0 || target >= len(items) {
 			return // Can't move further, stay at current position
 		}
@@ -667,7 +646,6 @@ func (v *View) restoreSelection(sel TreeSelection) {
 func (v *View) applyFilter() tea.Cmd {
 	sel := v.saveSelection()
 
-	// Filter sessions by terminal status if a filter is active
 	allSess := v.ctrl.AllSessions()
 	filteredSess := allSess
 	statusFilter := v.ctrl.StatusFilter()
@@ -685,14 +663,9 @@ func (v *View) applyFilter() tea.Cmd {
 
 	localRemote := v.ctrl.LocalRemote()
 
-	// Group sessions by repository and build tree items
 	groups := GroupSessionsByRepo(filteredSess, localRemote)
 	items := BuildTreeItems(groups, localRemote)
-
-	// Expand multi-window sessions into window sub-items
 	items = v.expandWindowItems(items)
-
-	// Calculate column widths across all sessions (use filtered set)
 	*v.columnWidths = CalculateColumnWidths(filteredSess, nil)
 
 	// Collect paths for git status fetching (use filtered sessions)
@@ -740,7 +713,6 @@ func (v *View) rebuildWindowItems() {
 		}
 	}
 
-	// Only rebuild if the window sets actually differ.
 	if len(current) == len(expected) {
 		same := true
 		for k := range current {
@@ -756,7 +728,6 @@ func (v *View) rebuildWindowItems() {
 
 	sel := v.saveSelection()
 
-	// Strip window items
 	stripped := make([]list.Item, 0, len(items))
 	for i, ti := range TreeItemsAll(items) {
 		if ti.IsWindowItem {
@@ -765,7 +736,6 @@ func (v *View) rebuildWindowItems() {
 		stripped = append(stripped, items[i])
 	}
 
-	// Re-expand
 	expanded := v.expandWindowItems(stripped)
 	v.list.SetItems(expanded)
 	v.restoreSelection(sel)
@@ -792,7 +762,6 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 			continue
 		}
 
-		// Add a window sub-item for each window
 		for i, w := range ts.Windows {
 			windowItem := TreeItem{
 				IsWindowItem:  true,
@@ -817,7 +786,6 @@ func (v *View) stopFocusMode() {
 	v.focusMode = false
 	v.focusFilter = ""
 
-	// Restore list size and show help
 	contentHeight := v.height - 3
 	if contentHeight < 1 {
 		contentHeight = 1
@@ -841,7 +809,6 @@ func (v *View) updateFocusFilter(filter string) {
 		return // no navigation with empty filter
 	}
 
-	// Find first matching item
 	filterLower := strings.ToLower(filter)
 
 	for i, ti := range TreeItemsAll(v.list.Items()) {
@@ -866,7 +833,6 @@ func (v *View) View() string {
 	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
 	contentHeight := max(v.height-3, 1)
 
-	// Check if preview should be shown
 	if v.previewEnabled && v.width >= 80 {
 		return v.renderDualColumnLayout(contentHeight)
 	}
@@ -890,7 +856,6 @@ func (v *View) View() string {
 
 // renderDualColumnLayout renders sessions list and preview side by side.
 func (v *View) renderDualColumnLayout(contentHeight int) string {
-	// Update delegate to show minimal info in preview mode
 	v.treeDelegate.PreviewMode = true
 	v.list.SetDelegate(v.treeDelegate)
 
@@ -904,7 +869,6 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 	dividerWidth := 1
 	previewWidth := v.width - listWidth - dividerWidth
 
-	// Get selected session and its terminal status
 	selected := v.SelectedSession()
 	var previewContent string
 
@@ -929,14 +893,10 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 			// Account for padding: 2 chars on each side = 4 total
 			usableWidth := previewWidth - 4
 
-			// Build header
 			header := v.renderPreviewHeader(selected, usableWidth)
 			headerHeight := strings.Count(header, "\n") + 1
 
-			// Calculate available lines for content
 			outputHeight := max(contentHeight-headerHeight, 1)
-
-			// Get content and truncate to width
 			content := tailLines(paneContent, outputHeight)
 			content = truncateLines(content, usableWidth)
 
@@ -948,7 +908,6 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		previewContent = "No session selected"
 	}
 
-	// Render list
 	listView := v.list.View()
 	if v.focusMode {
 		listView = lipgloss.JoinVertical(lipgloss.Left, listView, v.focusFilterInput.View())
@@ -956,14 +915,12 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		listView = lipgloss.JoinVertical(lipgloss.Left, v.list.FilterInput.View(), listView)
 	}
 
-	// Apply exact height to both panels
 	listView = ensureExactHeight(listView, contentHeight)
 	previewContent = ensureExactHeight(previewContent, contentHeight)
 
 	// Apply exact width to list view to prevent bleeding into preview
 	listView = ensureExactWidth(listView, listWidth)
 
-	// Apply padding and exact width to preview content
 	previewLines := strings.Split(previewContent, "\n")
 	for i, line := range previewLines {
 		previewLines[i] = "  " + line + "  "
@@ -972,7 +929,6 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 	previewContent = ensureExactWidth(previewContent, previewWidth)
 	previewContent = styles.TextForegroundStyle.Render(previewContent)
 
-	// Create vertical divider between list and preview
 	dividerLines := make([]string, contentHeight)
 	for i := range dividerLines {
 		dividerLines[i] = styles.TextMutedStyle.Render("│")
@@ -1087,7 +1043,6 @@ func (v *View) isCurrentTmuxSession(sess *session.Session) bool {
 		return false
 	}
 
-	// Check exact match with slug
 	if v.currentTmuxSession == sess.Slug {
 		return true
 	}
@@ -1098,7 +1053,6 @@ func (v *View) isCurrentTmuxSession(sess *session.Session) bool {
 		return true
 	}
 
-	// Check metadata for explicit tmux session name
 	if tmuxSession := sess.Metadata[session.MetaTmuxSession]; tmuxSession != "" {
 		if v.currentTmuxSession == tmuxSession {
 			return true

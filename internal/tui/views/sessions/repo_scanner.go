@@ -25,7 +25,6 @@ func ScanRepoDirs(ctx context.Context, dirs []string, gitExec git.Git) ([]Discov
 	var repos []DiscoveredRepo
 
 	for _, dir := range dirs {
-		// Expand home directory
 		if len(dir) > 0 && dir[0] == '~' {
 			home, err := os.UserHomeDir()
 			if err != nil {

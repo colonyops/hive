@@ -16,10 +16,8 @@ func (m Model) View() tea.View {
 		return tea.NewView("")
 	}
 
-	// Build main view (header + content)
 	mainView := m.renderTabView()
 
-	// Render modal overlay if any modal is active
 	content := m.modals.Overlay(m.state, mainView, m.spinner, m.loadingMessage)
 
 	// Messages preview overlay (not managed by ModalCoordinator)
@@ -34,7 +32,6 @@ func (m Model) View() tea.View {
 		content = m.msgView.Overlay(mainView, w, h)
 	}
 
-	// Apply toast overlay on top of everything
 	if m.toastController.HasToasts() {
 		w, h := m.width, m.height
 		if w == 0 {
@@ -53,7 +50,6 @@ func (m Model) View() tea.View {
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
-	// Build tab bar with tabs on left and branding on right
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
 

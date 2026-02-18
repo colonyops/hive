@@ -32,7 +32,6 @@ type NewSessionFormResult struct {
 // If preselectedRemote is non-empty, the matching repo will be pre-selected.
 // existingNames is used to validate that the session name is unique.
 func NewNewSessionForm(repos []sessions.DiscoveredRepo, preselectedRemote string, existingNames map[string]bool) *NewSessionForm {
-	// Find preselected index
 	selectedIdx := 0
 	for i, r := range repos {
 		if r.Remote == preselectedRemote {
@@ -41,7 +40,6 @@ func NewNewSessionForm(repos []sessions.DiscoveredRepo, preselectedRemote string
 		}
 	}
 
-	// Build select items
 	items := make([]SelectItem, len(repos))
 	for i, r := range repos {
 		items[i] = SelectItem{
@@ -50,19 +48,16 @@ func NewNewSessionForm(repos []sessions.DiscoveredRepo, preselectedRemote string
 		}
 	}
 
-	// Create select field
 	repoSelect := NewSelectField("Repository", items, selectedIdx)
 	repoSelect.Focus()
 
-	// Create text input for session name
 	nameInput := textinput.New()
 	nameInput.Placeholder = "my-feature-branch"
 	nameInput.CharLimit = 64
-	nameInput.Prompt = "" // No prompt prefix
+	nameInput.Prompt = ""
 	nameInput.SetWidth(40)
 	nameInput.KeyMap.Paste.SetEnabled(true)
 
-	// Style the input
 	inputStyles := textinput.DefaultStyles(true)
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	inputStyles.Focused.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
@@ -85,12 +80,10 @@ func (f *NewSessionForm) Init() tea.Cmd {
 
 // Update handles messages for the form.
 func (f *NewSessionForm) Update(msg tea.Msg) (NewSessionForm, tea.Cmd) {
-	// Handle key messages for navigation and submission
 	if keyMsg, ok := msg.(tea.KeyMsg); ok {
 		return f.handleKey(keyMsg)
 	}
 
-	// Route other messages to focused field
 	return f.updateFocusedField(msg)
 }
 
@@ -100,7 +93,6 @@ func (f *NewSessionForm) handleKey(msg tea.KeyMsg) (NewSessionForm, tea.Cmd) {
 
 	switch key {
 	case "tab", "shift+tab":
-		// Toggle focus between fields
 		if f.focusedField == 0 {
 			f.focusedField = 1
 			f.repoSelect.Blur()
@@ -151,8 +143,6 @@ func (f *NewSessionForm) updateFocusedField(msg tea.Msg) (NewSessionForm, tea.Cm
 // validateAndSubmit validates the form and submits if valid.
 func (f *NewSessionForm) validateAndSubmit() (NewSessionForm, tea.Cmd) {
 	name := f.nameInput.Value()
-
-	// Validate name
 	if name == "" {
 		f.nameError = "Session name is required"
 		return *f, nil

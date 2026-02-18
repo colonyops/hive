@@ -104,33 +104,27 @@ type Model struct {
 	// Sessions view (sub-model) — owns all session-related state
 	sessionsView *sessions.View
 
-	// Layout
 	activeView ViewType
 
 	// Messages view (sub-model)
 	msgView *messages.View
 
-	// Clipboard
 	copyCommand string
 
 	// Merged commands (system + plugins + user)
 	mergedCommands map[string]config.UserCommand
 
-	// Review view
 	reviewView *review.View
 
-	// KV store browser
 	kvStore corekv.KV
 	kvView  *KVView
 
-	// Notifications
 	notifyBus       *tuinotify.Bus
 	toastController *ToastController
 	toastView       *ToastView
 
 	bus *eventbus.EventBus
 
-	// Template rendering
 	renderer *tmpl.Renderer
 
 	// Startup warnings to show as toasts after init
@@ -183,7 +177,6 @@ func New(deps Deps, opts Opts) Model {
 	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service)
 
-	// Create sessions view (sub-model) — owns all session-related state
 	sessionsView := sessions.New(sessions.ViewOpts{
 		Cfg:             cfg,
 		Service:         service,
@@ -214,13 +207,10 @@ func New(deps Deps, opts Opts) Model {
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	// Create message view (sub-model)
 	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand)
 
-	// Create KV browser view
 	kvView := NewKVView()
 
-	// Initialize review view with document discovery
 	var contextDir string
 	var docs []review.Document
 	if opts.LocalRemote != "" {
@@ -242,7 +232,6 @@ func New(deps Deps, opts Opts) Model {
 
 	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
 
-	// Initialize notification system
 	var notifyStore notify.Store
 	if deps.DB != nil {
 		notifyStore = stores.NewNotifyStore(deps.DB)

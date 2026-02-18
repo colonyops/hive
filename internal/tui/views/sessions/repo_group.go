@@ -82,7 +82,6 @@ func extractGroupName(remote string) string {
 }
 
 // sortSessions sorts sessions alphabetically by name.
-// Note: Recycled sessions are now separated and counted, not included in this slice.
 func sortSessions(sessions []session.Session) {
 	sort.Slice(sessions, func(i, j int) bool {
 		return sessions[i].Name < sessions[j].Name
@@ -95,12 +94,9 @@ func sortRepoGroups(groups []RepoGroup, localRemote string) {
 		iLocal := groups[i].Remote == localRemote
 		jLocal := groups[j].Remote == localRemote
 
-		// Local repo always comes first
 		if iLocal != jLocal {
 			return iLocal
 		}
-
-		// Otherwise sort alphabetically by name
 		return groups[i].Name < groups[j].Name
 	})
 }

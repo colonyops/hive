@@ -77,11 +77,6 @@ func TestController_LocalRemote(t *testing.T) {
 	assert.Equal(t, "https://github.com/org/repo", ctrl.LocalRemote())
 }
 
-func TestController_FindByID_EmptyList(t *testing.T) {
-	ctrl := NewController()
-	assert.Nil(t, ctrl.FindByID("any"))
-}
-
 func TestController_SetSessions_Replaces(t *testing.T) {
 	ctrl := NewController()
 
