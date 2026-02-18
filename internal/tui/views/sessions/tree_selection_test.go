@@ -1,4 +1,4 @@
-package tui
+package sessions
 
 import (
 	"testing"
@@ -140,14 +140,14 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			sel := saveTreeSelection(&items[tt.selIdx], tt.selIdx)
+			sel := SaveTreeSelection(&items[tt.selIdx], tt.selIdx)
 
 			target := items
 			if tt.newItems != nil {
 				target = tt.newItems
 			}
 
-			got := sel.restore(target)
+			got := sel.Restore(target)
 			assert.Equal(t, tt.wantIdx, got, "restore() = %d, want %d (%s)", got, tt.wantIdx, tt.wantMatch)
 		})
 	}
@@ -159,13 +159,13 @@ func TestTreeSelection_NilItem(t *testing.T) {
 		{Session: session.Session{ID: "aaa"}, RepoPrefix: "repo1"},
 	}
 
-	sel := saveTreeSelection(nil, 1)
-	got := sel.restore(items)
+	sel := SaveTreeSelection(nil, 1)
+	got := sel.Restore(items)
 	assert.Equal(t, 1, got, "nil item should fall back to original index, got %d", got)
 }
 
 func TestTreeSelection_EmptyItems(t *testing.T) {
-	sel := saveTreeSelection(nil, 5)
-	got := sel.restore(nil)
+	sel := SaveTreeSelection(nil, 5)
+	got := sel.Restore(nil)
 	assert.Equal(t, 0, got, "empty items should return 0, got %d", got)
 }

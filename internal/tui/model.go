@@ -2,19 +2,13 @@ package tui
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"os/exec"
 	"strings"
-	"sync"
-	"time"
 
-	"charm.land/bubbles/v2/key"
-	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
-	lipgloss "charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/internal/core/action"
@@ -22,7 +16,6 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	corekv "github.com/colonyops/hive/internal/core/kv"
-	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -34,20 +27,13 @@ import (
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/components"
-	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
+	"github.com/colonyops/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/internal/tui/views/review"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 
-	"github.com/colonyops/hive/pkg/kv"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
-
-// Buffer pools for reducing allocations in rendering.
-var builderPool = sync.Pool{
-	New: func() any {
-		return &strings.Builder{}
-	},
-}
 
 // UIState represents the current state of the TUI.
 type UIState int
@@ -57,7 +43,6 @@ const (
 	stateConfirming
 	stateLoading
 	stateRunningRecycle
-	statePreviewingMessage
 	stateCreatingSession
 	stateCommandPalette
 	stateShowingHelp
@@ -72,17 +57,26 @@ const (
 	keyCtrlC = "ctrl+c"
 )
 
-// Options configures the TUI behavior.
-type Options struct {
-	LocalRemote     string               // Remote URL of current directory (empty if not in git repo)
-	MsgStore        *hive.MessageService // Message service for pub/sub events (optional)
-	Bus             *eventbus.EventBus   // Event bus for cross-component communication
-	TerminalManager *terminal.Manager    // Terminal integration manager (optional)
-	PluginManager   *plugins.Manager     // Plugin manager (optional)
-	DB              *db.DB               // Database connection for stores
-	KVStore         corekv.KV            // Persistent KV store (optional)
-	Renderer        *tmpl.Renderer       // Template renderer for shell commands
-	Warnings        []string             // Startup warnings to display as toasts
+// Deps holds all external dependencies for the TUI Model.
+type Deps struct {
+	// Required — nil causes a panic at construction time.
+	Config          *config.Config
+	Service         *hive.SessionService
+	Renderer        *tmpl.Renderer
+	TerminalManager *terminal.Manager
+	PluginManager   *plugins.Manager
+
+	// Optional — nil disables the corresponding feature.
+	MsgStore *hive.MessageService
+	Bus      *eventbus.EventBus
+	DB       *db.DB
+	KVStore  corekv.KV
+}
+
+// Opts holds runtime options that are not service dependencies.
+type Opts struct {
+	LocalRemote string
+	Warnings    []string
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -96,118 +90,41 @@ type Model struct {
 	cfg            *config.Config
 	service        *hive.SessionService
 	cmdService     *command.Service
-	list           list.Model
 	handler        *KeybindingResolver
 	state          UIState
-	modal          Modal
-	pending        Action
 	width          int
 	height         int
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
-	gitStatuses    *kv.Store[string, GitStatus]
-	gitWorkers     int
-	columnWidths   *ColumnWidths
 
-	// Terminal integration
-	terminalManager    *terminal.Manager
-	terminalStatuses   *kv.Store[string, TerminalStatus]
-	previewEnabled     bool              // toggle tmux pane preview sidebar
-	previewTemplates   *PreviewTemplates // parsed preview panel templates
-	currentTmuxSession string            // current tmux session name (to prevent recursive preview)
+	// Modal coordinator — owns all modal components, pending state, recycle streaming
+	modals *ModalCoordinator
 
-	// Plugin integration
-	pluginManager      *plugins.Manager
-	pluginStatuses     map[string]*kv.Store[string, plugins.Status] // plugin name -> session ID -> status
-	pluginResultsChan  <-chan plugins.Result                        // from background worker
-	pluginPollInterval time.Duration                                // interval for background polling
+	// Sessions view (sub-model) — owns all session-related state
+	sessionsView *sessions.View
 
-	// Status animation
-	animationFrame int
-	treeDelegate   TreeDelegate // Keep reference to update animation frame
+	activeView ViewType
 
-	// Filtering
-	localRemote  string            // Remote URL of current directory (for highlighting)
-	allSessions  []session.Session // All sessions (unfiltered)
-	statusFilter terminal.Status   // Filter by terminal status (empty = show all)
+	// Messages view (sub-model)
+	msgView *messages.View
 
-	// Focus mode filtering (sessions tree only)
-	focusMode        bool            // true when focus mode filter is active
-	focusFilter      string          // current focus filter text
-	focusFilterInput textinput.Model // dedicated input for focus mode
-
-	// Recycle streaming state
-	outputModal   OutputModal
-	recycleOutput <-chan string
-	recycleDone   <-chan error
-	recycleCancel context.CancelFunc
-
-	// Layout
-	activeView ViewType // which view is shown
-	refreshing bool     // true during background session refresh
-
-	// Messages
-	msgStore     *hive.MessageService
-	msgView      *MessagesView
-	allMessages  []messaging.Message
-	lastPollTime time.Time
-	topicFilter  string
-
-	// Message preview
-	previewModal MessagePreviewModal
-
-	// Clipboard
 	copyCommand string
 
-	// New session form
-	repoDirs        []string
-	discoveredRepos []DiscoveredRepo
-	newSessionForm  *NewSessionForm
+	// Merged commands (system + plugins + user)
+	mergedCommands map[string]config.UserCommand
 
-	// Command palette
-	commandPalette *CommandPalette
-	mergedCommands map[string]config.UserCommand // system + plugin + user commands
-
-	// Help dialog
-	helpDialog *components.HelpDialog
-
-	// Rename session
-	renameInput     textinput.Model
-	renameSessionID string
-
-	// Pending action for after TUI exits
-	pendingCreate *PendingCreate
-
-	// Pending recycled sessions for batch delete
-	pendingRecycledSessions []session.Session
-
-	// Review view
 	reviewView *review.View
 
-	// KV store browser
 	kvStore corekv.KV
 	kvView  *KVView
 
-	// Document picker (shown on Sessions view to start reviews)
-	docPickerModal *review.DocumentPickerModal
-
-	// Notifications
-	notifyBus         *tuinotify.Bus
-	toastController   *ToastController
-	toastView         *ToastView
-	notificationModal *NotificationModal
+	notifyBus       *tuinotify.Bus
+	toastController *ToastController
+	toastView       *ToastView
 
 	bus *eventbus.EventBus
 
-	// Form dialog (for user command forms)
-	formDialog      *form.Dialog
-	pendingFormCmd  config.UserCommand
-	pendingFormName string
-	pendingFormSess *session.Session
-	pendingFormArgs []string
-
-	// Template rendering
 	renderer *tmpl.Renderer
 
 	// Startup warnings to show as toasts after init
@@ -216,13 +133,7 @@ type Model struct {
 
 // PendingCreate returns any pending session creation data.
 func (m Model) PendingCreate() *PendingCreate {
-	return m.pendingCreate
-}
-
-// sessionsLoadedMsg is sent when sessions are loaded.
-type sessionsLoadedMsg struct {
-	sessions []session.Session
-	err      error
+	return m.modals.PendingCreate
 }
 
 // actionCompleteMsg is sent when an action completes.
@@ -247,138 +158,59 @@ type recycleCompleteMsg struct {
 	err error
 }
 
-// reposDiscoveredMsg is sent when repository scanning completes.
-type reposDiscoveredMsg struct {
-	repos []DiscoveredRepo
-}
-
-// pluginStatusUpdateMsg is sent when a single plugin status result arrives.
-type pluginStatusUpdateMsg struct {
-	PluginName string
-	SessionID  string
-	Status     plugins.Status
-	Err        error
-}
-
-// pluginWorkerStartedMsg is sent when the background plugin worker starts.
-type pluginWorkerStartedMsg struct {
-	resultsChan <-chan plugins.Result
-}
-
 // notificationMsg carries a notification from an async tea.Cmd into the Update loop.
 type notificationMsg struct {
 	notification notify.Notification
 }
 
-// New creates a new TUI model.
-func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
-	gitStatuses := kv.New[string, GitStatus]()
-	terminalStatuses := kv.New[string, TerminalStatus]()
-	columnWidths := &ColumnWidths{}
-
-	// Initialize plugin status stores for each enabled plugin
-	var pluginStatuses map[string]*kv.Store[string, plugins.Status]
-	if opts.PluginManager != nil {
-		pluginStatuses = make(map[string]*kv.Store[string, plugins.Status])
-		for _, p := range opts.PluginManager.EnabledPlugins() {
-			if p.StatusProvider() != nil {
-				pluginStatuses[p.Name()] = kv.New[string, plugins.Status]()
-			}
-		}
+// New creates a new TUI model. Panics if required Deps fields are nil.
+func New(deps Deps, opts Opts) Model {
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, and PluginManager are required")
 	}
-
-	delegate := NewTreeDelegate()
-	delegate.GitStatuses = gitStatuses
-	delegate.TerminalStatuses = terminalStatuses
-	delegate.ColumnWidths = columnWidths
-	delegate.PluginStatuses = pluginStatuses
-	delegate.IconsEnabled = cfg.TUI.IconsEnabled()
-
-	l := list.New([]list.Item{}, delegate, 0, 0)
-	l.SetShowStatusBar(false)
-	l.SetFilteringEnabled(true)
-	l.SetShowTitle(false)  // Title shown in tab bar instead
-	l.SetShowFilter(false) // Don't reserve space for filter bar until filtering
-	l.Styles.TitleBar = lipgloss.NewStyle()
-	l.Styles.Title = lipgloss.NewStyle()
-	// Configure filter input styles for bubbles v2
-	l.FilterInput.Prompt = "Filter: "
-	filterStyles := textinput.DefaultStyles(true) // dark mode
-	filterStyles.Focused.Prompt = styles.ListFilterPromptStyle
-	filterStyles.Cursor.Color = styles.ColorPrimary
-	l.FilterInput.SetStyles(filterStyles)
-
-	// Create dedicated focus filter input (matches list filter styling)
-	focusInput := textinput.New()
-	focusInput.Prompt = "/"
-	focusInputStyles := textinput.DefaultStyles(true)
-	focusInputStyles.Focused.Prompt = styles.ListFilterPromptStyle
-	focusInputStyles.Cursor.Color = styles.ColorPrimary
-	focusInput.SetStyles(focusInputStyles)
-
-	// Style help to match messages view (consistent gray, bullet separators, left padding)
-	helpStyle := styles.TextMutedStyle
-	l.Help.Styles.ShortKey = helpStyle
-	l.Help.Styles.ShortDesc = helpStyle
-	l.Help.Styles.ShortSeparator = helpStyle
-	l.Help.Styles.FullKey = helpStyle
-	l.Help.Styles.FullDesc = helpStyle
-	l.Help.Styles.FullSeparator = helpStyle
-	l.Help.ShortSeparator = " • "
-	l.Styles.HelpStyle = styles.ListHelpContainerStyle
+	cfg := deps.Config
+	service := deps.Service
 
 	// Compute merged commands: system → plugins → user
-	var mergedCommands map[string]config.UserCommand
-	if opts.PluginManager != nil {
-		mergedCommands = opts.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
-	} else {
-		mergedCommands = cfg.MergedUserCommands()
-	}
+	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
-	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, opts.Renderer)
+	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
+	cmdService := command.NewService(service, service, service)
+
+	sessionsView := sessions.New(sessions.ViewOpts{
+		Cfg:             cfg,
+		Service:         service,
+		Handler:         handler,
+		TerminalManager: deps.TerminalManager,
+		PluginManager:   deps.PluginManager,
+		LocalRemote:     opts.LocalRemote,
+		RepoDirs:        cfg.RepoDirs,
+		Renderer:        deps.Renderer,
+		Bus:             deps.Bus,
+	})
+
+	// Wire handler lookups through sessions view stores
 	handler.SetTmuxWindowLookup(func(sessionID string) string {
-		if status, ok := terminalStatuses.Get(sessionID); ok {
+		if status, ok := sessionsView.TerminalStatuses().Get(sessionID); ok {
 			return status.WindowName
 		}
 		return ""
 	})
 	handler.SetToolLookup(func(sessionID string) string {
-		if status, ok := terminalStatuses.Get(sessionID); ok {
+		if status, ok := sessionsView.TerminalStatuses().Get(sessionID); ok {
 			return status.Tool
 		}
 		return ""
 	})
-	cmdService := command.NewService(service, service, service)
-
-	// Add minimal keybindings to list help - just navigation and help trigger
-	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{
-			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "navigate")),
-			key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		}
-	}
 
 	s := spinner.New()
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	// Create message view
-	msgView := NewMessagesView()
+	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand)
 
-	// Create KV browser view
 	kvView := NewKVView()
 
-	// Detect current tmux session to prevent recursive preview
-	currentTmux := detectCurrentTmuxSession()
-
-	// Parse preview templates
-	previewTemplates := ParsePreviewTemplates(
-		cfg.TUI.Preview.TitleTemplate,
-		cfg.TUI.Preview.StatusTemplate,
-	)
-
-	// Initialize review view with document discovery
-	// Use repo-specific context directory if we have a local remote, otherwise shared
 	var contextDir string
 	var docs []review.Document
 	if opts.LocalRemote != "" {
@@ -388,111 +220,56 @@ func New(service *hive.SessionService, cfg *config.Config, opts Options) Model {
 			docs, _ = review.DiscoverDocuments(contextDir)
 		}
 	}
-	// Fallback to shared if no repo context
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
 	}
 
-	// Create review store if database is available
 	var reviewStore *stores.ReviewStore
-	if opts.DB != nil {
-		reviewStore = stores.NewReviewStore(opts.DB)
+	if deps.DB != nil {
+		reviewStore = stores.NewReviewStore(deps.DB)
 	}
 
 	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
 
-	// Initialize notification system
 	var notifyStore notify.Store
-	if opts.DB != nil {
-		notifyStore = stores.NewNotifyStore(opts.DB)
+	if deps.DB != nil {
+		notifyStore = stores.NewNotifyStore(deps.DB)
 	}
 	notifyBus := tuinotify.NewBus(notifyStore)
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
 
-	// Wire bus -> toast controller
 	notifyBus.Subscribe(func(n notify.Notification) {
 		toastCtrl.Push(n)
 	})
 
+	// Sessions tab is active by default
+	sessionsView.SetActive(true)
+
 	return Model{
-		cfg:                cfg,
-		service:            service,
-		cmdService:         cmdService,
-		list:               l,
-		handler:            handler,
-		state:              stateNormal,
-		spinner:            s,
-		gitStatuses:        gitStatuses,
-		gitWorkers:         cfg.Git.StatusWorkers,
-		columnWidths:       columnWidths,
-		terminalManager:    opts.TerminalManager,
-		terminalStatuses:   terminalStatuses,
-		previewEnabled:     cfg.TUI.PreviewEnabled,
-		previewTemplates:   previewTemplates,
-		currentTmuxSession: currentTmux,
-		pluginManager:      opts.PluginManager,
-		pluginStatuses:     pluginStatuses,
-		pluginPollInterval: cfg.Plugins.GitHub.ResultsCache, // use GitHub cache duration as poll interval
-		treeDelegate:       delegate,
-		localRemote:        opts.LocalRemote,
-		msgStore:           opts.MsgStore,
-		msgView:            msgView,
-		topicFilter:        "*",
-		activeView:         ViewSessions,
-		copyCommand:        cfg.CopyCommand,
-		repoDirs:           cfg.RepoDirs,
-		mergedCommands:     mergedCommands,
-		reviewView:         &reviewView,
-		kvStore:            opts.KVStore,
-		kvView:             kvView,
-		notifyBus:          notifyBus,
-		toastController:    toastCtrl,
-		toastView:          toastView,
-		bus:                opts.Bus,
-		focusFilterInput:   focusInput,
-		renderer:           opts.Renderer,
-		startupWarnings:    opts.Warnings,
+		cfg:             cfg,
+		service:         service,
+		cmdService:      cmdService,
+		handler:         handler,
+		state:           stateNormal,
+		spinner:         s,
+		modals:          NewModalCoordinator(),
+		sessionsView:    sessionsView,
+		msgView:         &msgView,
+		activeView:      ViewSessions,
+		copyCommand:     cfg.CopyCommand,
+		mergedCommands:  mergedCommands,
+		reviewView:      &reviewView,
+		kvStore:         deps.KVStore,
+		kvView:          kvView,
+		notifyBus:       notifyBus,
+		toastController: toastCtrl,
+		toastView:       toastView,
+		bus:             deps.Bus,
+		renderer:        deps.Renderer,
+		startupWarnings: opts.Warnings,
 	}
-}
-
-// detectCurrentTmuxSession returns the current tmux session name, or empty if not in tmux.
-func detectCurrentTmuxSession() string {
-	cmd := exec.Command("tmux", "display-message", "-p", "#S")
-	output, err := cmd.Output()
-	if err != nil {
-		return ""
-	}
-	return strings.TrimSpace(string(output))
-}
-
-// isCurrentTmuxSession returns true if the given session matches the current tmux session.
-// This prevents recursive preview when hive is previewing its own pane.
-func (m Model) isCurrentTmuxSession(sess *session.Session) bool {
-	if m.currentTmuxSession == "" {
-		return false
-	}
-
-	// Check exact match with slug
-	if m.currentTmuxSession == sess.Slug {
-		return true
-	}
-
-	// Check prefix match (tmux session might be slug_suffix or slug-suffix)
-	if strings.HasPrefix(m.currentTmuxSession, sess.Slug+"_") ||
-		strings.HasPrefix(m.currentTmuxSession, sess.Slug+"-") {
-		return true
-	}
-
-	// Check metadata for explicit tmux session name
-	if tmuxSession := sess.Metadata[session.MetaTmuxSession]; tmuxSession != "" {
-		if m.currentTmuxSession == tmuxSession {
-			return true
-		}
-	}
-
-	return false
 }
 
 // quit sets the quitting flag and emits tui.stopped.
@@ -504,52 +281,34 @@ func (m Model) quit() (Model, tea.Cmd) {
 	return m, tea.Quit
 }
 
-// findSessionByID returns a pointer to the session with the given ID, or nil if not found.
-func (m Model) findSessionByID(id string) *session.Session {
-	for i := range m.allSessions {
-		if m.allSessions[i].ID == id {
-			return &m.allSessions[i]
-		}
-	}
-	return nil
-}
-
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.loadSessions(), m.spinner.Tick}
+	cmds := []tea.Cmd{m.spinner.Tick}
 	if m.bus != nil {
 		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
 	}
-	// Start message polling if we have a store
-	if m.msgStore != nil {
-		cmds = append(cmds, loadMessages(m.msgStore, m.topicFilter, time.Time{}))
-		cmds = append(cmds, schedulePollTick())
+	// Start sessions view (handles session loading, polling, terminal, plugins, animation)
+	if m.sessionsView != nil {
+		if cmd := m.sessionsView.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
-	// Start session refresh timer
-	if cmd := m.scheduleSessionRefresh(); cmd != nil {
-		cmds = append(cmds, cmd)
-	}
-	// Start KV store polling if store view is enabled
-	if m.kvStore != nil && m.cfg.TUI.Views.Store {
-		cmds = append(cmds, scheduleKVPollTick())
-	}
-	// Scan for repositories if configured
-	if len(m.repoDirs) > 0 {
-		cmds = append(cmds, m.scanRepoDirs())
-	} else {
+	// Show toast if no repo dirs configured
+	if len(m.cfg.RepoDirs) == 0 {
 		m.toastController.Push(notify.Notification{
 			Level:   notify.LevelInfo,
 			Message: "No directories have been added for project start",
 		})
 	}
-	// Start terminal status polling and animation if integration is enabled
-	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-		cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
-		cmds = append(cmds, scheduleAnimationTick())
+	// Start messages view
+	if m.msgView != nil {
+		if cmd := m.msgView.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
-	// Start plugin background worker if plugins are enabled
-	if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
-		cmds = append(cmds, m.startPluginWorker())
+	// Start KV store polling if store view is enabled
+	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+		cmds = append(cmds, scheduleKVPollTick())
 	}
 	// Start review view file watcher
 	if m.reviewView != nil {
@@ -558,50 +317,6 @@ func (m Model) Init() tea.Cmd {
 		}
 	}
 	return tea.Batch(cmds...)
-}
-
-// startPluginWorker returns a command that starts the background plugin worker.
-func (m Model) startPluginWorker() tea.Cmd {
-	return func() tea.Msg {
-		resultsChan := m.pluginManager.StartBackgroundWorker(context.Background(), m.pluginPollInterval)
-		return pluginWorkerStartedMsg{resultsChan: resultsChan}
-	}
-}
-
-// listenForPluginResult returns a command that waits for the next plugin result.
-func listenForPluginResult(ch <-chan plugins.Result) tea.Cmd {
-	if ch == nil {
-		return nil
-	}
-	return func() tea.Msg {
-		result, ok := <-ch
-		if !ok {
-			// Channel closed, stop listening
-			return nil
-		}
-		return pluginStatusUpdateMsg{
-			PluginName: result.PluginName,
-			SessionID:  result.SessionID,
-			Status:     result.Status,
-			Err:        result.Err,
-		}
-	}
-}
-
-// scanRepoDirs returns a command that scans configured directories for git repositories.
-func (m Model) scanRepoDirs() tea.Cmd {
-	return func() tea.Msg {
-		repos, _ := ScanRepoDirs(context.Background(), m.repoDirs, m.service.Git())
-		return reposDiscoveredMsg{repos: repos}
-	}
-}
-
-// loadSessions returns a command that loads sessions from the service.
-func (m Model) loadSessions() tea.Cmd {
-	return func() tea.Msg {
-		sessions, err := m.service.ListSessions(context.Background())
-		return sessionsLoadedMsg{sessions: sessions, err: err}
-	}
 }
 
 // executeAction returns a command that executes the given action.
@@ -617,382 +332,97 @@ func (m Model) executeAction(a Action) tea.Cmd {
 	}
 }
 
+// syncModalState notifies the sessions view whether a modal is currently open.
+// This gates periodic session refresh so it doesn't fire while modals are shown.
+func (m *Model) syncModalState() {
+	if m.sessionsView != nil {
+		m.sessionsView.SetModalActive(m.isModalActive())
+	}
+}
+
 // Update handles messages.
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	var (
+		model tea.Model
+		cmd   tea.Cmd
+	)
+
 	switch msg := msg.(type) {
+	// Window
 	case tea.WindowSizeMsg:
-		m.width = msg.Width
-		m.height = msg.Height
+		model, cmd = m.handleWindowSize(msg)
 
-		// Account for: top divider (1) + header (1) + bottom divider (1) = 3 lines
-		contentHeight := msg.Height - 3
-		if contentHeight < 1 {
-			contentHeight = 1
-		}
-
-		// Set list size based on preview mode
-		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
-			// In dual-column mode, list takes 25% of width
-			listWidth := int(float64(m.width) * 0.25)
-			m.list.SetSize(listWidth, contentHeight)
-		} else {
-			// In single-column mode, list takes full width
-			m.list.SetSize(msg.Width, contentHeight)
-		}
-
-		// msgView gets -1 because we prepend a blank line for consistent spacing
-		m.msgView.SetSize(msg.Width, contentHeight-1)
-
-		// Set review view size
-		if m.reviewView != nil {
-			m.reviewView.SetSize(msg.Width, contentHeight)
-		}
-
-		// Set KV view size
-		m.kvView.SetSize(msg.Width, contentHeight)
-
-		// Publish startup warnings on the first WindowSizeMsg so they flow
-		// through the Update loop with the render cycle already running.
-		if len(m.startupWarnings) > 0 {
-			for _, w := range m.startupWarnings {
-				m.notifyBus.Warnf("%s", w)
-			}
-			m.startupWarnings = nil
-			return m, m.ensureToastTick()
-		}
-		return m, nil
-
-	case messagesLoadedMsg:
-		if msg.err != nil {
-			// Silently ignore message loading errors
-			return m, nil
-		}
-		// Append new messages if any
-		if len(msg.messages) > 0 {
-			m.allMessages = append(m.allMessages, msg.messages...)
-			// Update message view with reversed order (newest first)
-			reversed := make([]messaging.Message, len(m.allMessages))
-			for i, message := range m.allMessages {
-				reversed[len(m.allMessages)-1-i] = message
-			}
-			m.msgView.SetMessages(reversed)
-		}
-		// Always update poll time so we don't re-fetch the same messages
-		m.lastPollTime = time.Now()
-		return m, nil
-
+	// KV data loaded
 	case kvKeysLoadedMsg:
-		if msg.err != nil {
-			log.Debug().Err(msg.err).Msg("failed to load kv keys")
-			return m, nil
-		}
-		m.kvView.SetKeys(msg.keys)
-		// Auto-load preview for the selected key
-		if key := m.kvView.SelectedKey(); key != "" {
-			return m, m.loadKVEntry(key)
-		}
-		m.kvView.SetPreview(nil)
-		return m, nil
-
+		model, cmd = m.handleKVKeysLoaded(msg)
 	case kvEntryLoadedMsg:
-		if msg.err != nil {
-			log.Debug().Err(msg.err).Msg("failed to load kv entry")
-			m.kvView.SetPreview(nil)
-			return m, nil
-		}
-		m.kvView.SetPreview(&msg.entry)
-		return m, nil
+		model, cmd = m.handleKVEntryLoaded(msg)
 
-	case pollTickMsg:
-		// Only poll if messages are visible
-		if m.shouldPollMessages() && m.msgStore != nil {
-			return m, tea.Batch(
-				loadMessages(m.msgStore, m.topicFilter, m.lastPollTime),
-				schedulePollTick(),
-			)
-		}
-		// Keep scheduling poll ticks even if not actively polling
-		return m, schedulePollTick()
-
-	case sessionRefreshTickMsg:
-		// Refresh sessions when Sessions view is active and no modal open
-		if m.activeView == ViewSessions && !m.isModalActive() {
-			m.refreshing = true
-			return m, tea.Batch(
-				m.loadSessions(),
-				m.scheduleSessionRefresh(),
-			)
-		}
-		// Keep scheduling refresh ticks even if not actively refreshing
-		return m, m.scheduleSessionRefresh()
-
+	// Polling ticks (KV only — session polling is handled by sessionsView)
 	case kvPollTickMsg:
-		if m.isStoreFocused() && !m.isModalActive() {
-			return m, tea.Batch(
-				m.loadKVKeys(),
-				scheduleKVPollTick(),
-			)
-		}
-		return m, scheduleKVPollTick()
-
+		model, cmd = m.handleKVPollTick(msg)
 	case toastTickMsg:
-		m.toastController.Tick()
-		if m.toastController.HasToasts() {
-			return m, scheduleToastTick()
-		}
-		return m, nil
+		model, cmd = m.handleToastTick(msg)
 
-	case notificationMsg:
-		m.notifyBus.Publish(msg.notification)
-		return m, m.ensureToastTick()
+	// Outbound messages from sessions view
+	case sessions.ActionRequestMsg:
+		model, cmd = m.handleSessionAction(msg)
+	case sessions.FormCommandRequestMsg:
+		model, cmd = m.handleSessionFormCommand(msg)
+	case sessions.CommandPaletteRequestMsg:
+		model, cmd = m.handleSessionCommandPalette(msg)
+	case sessions.NewSessionRequestMsg:
+		model, cmd = m.handleSessionNewSession()
+	case sessions.RenameRequestMsg:
+		model, cmd = m.handleSessionRename(msg)
+	case sessions.DocReviewRequestMsg:
+		model, cmd = m.handleSessionDocReview()
+	case sessions.RecycledDeleteRequestMsg:
+		model, cmd = m.handleSessionRecycledDelete(msg)
+	case sessions.OpenRepoRequestMsg:
+		model, cmd = m.handleSessionOpenRepo(msg)
 
-	case sessionsLoadedMsg:
-		if msg.err != nil {
-			log.Error().Err(msg.err).Msg("failed to load sessions")
-			m.state = stateNormal
-			return m, m.notifyError("failed to load sessions: %v", msg.err)
-		}
-		// Store all sessions for filtering
-		m.allSessions = msg.sessions
-		// Apply filter and update list
-		filteredModel, cmd := m.applyFilter()
-		// Update plugin manager with new sessions (triggers background refresh)
-		if m.pluginManager != nil && len(m.pluginStatuses) > 0 {
-			sessions := make([]*session.Session, len(m.allSessions))
-			for i := range m.allSessions {
-				sessions[i] = &m.allSessions[i]
-			}
-			m.pluginManager.UpdateSessions(sessions)
-			log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
-		}
-		return filteredModel, cmd
-
-	case gitStatusBatchCompleteMsg:
-		m.gitStatuses.SetBatch(msg.Results)
-		m.refreshing = false
-		return m, nil
-
-	case terminalPollTickMsg:
-		// Start next poll cycle
-		var cmds []tea.Cmd
-		sessions := make([]*session.Session, len(m.allSessions))
-		for i := range m.allSessions {
-			sessions[i] = &m.allSessions[i]
-		}
-		cmds = append(cmds, fetchTerminalStatusBatch(m.terminalManager, sessions, m.gitWorkers))
-		if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-			cmds = append(cmds, startTerminalPollTicker(m.cfg.Tmux.PollInterval))
-		}
-		return m, tea.Batch(cmds...)
-
-	case terminalStatusBatchCompleteMsg:
-		if m.terminalStatuses != nil {
-			if m.bus != nil {
-				for sessionID, newStatus := range msg.Results {
-					oldStatus, exists := m.terminalStatuses.Get(sessionID)
-					prevStatus := oldStatus.Status
-					if !exists {
-						// First observation has no prior state; treat as StatusMissing
-						// so the initial transition is always emitted.
-						prevStatus = terminal.StatusMissing
-					}
-					if prevStatus != newStatus.Status {
-						sess := m.findSessionByID(sessionID)
-						if sess == nil {
-							continue
-						}
-						m.bus.PublishAgentStatusChanged(eventbus.AgentStatusChangedPayload{
-							Session:   sess,
-							OldStatus: prevStatus,
-							NewStatus: newStatus.Status,
-						})
-					}
-				}
-			}
-
-			m.terminalStatuses.SetBatch(msg.Results)
-			// Re-expand window items if multi-window sessions appeared or changed
-			m.rebuildWindowItems()
-		}
-		return m, nil
-
-	case pluginWorkerStartedMsg:
-		// Store the channel and start listening for results
-		m.pluginResultsChan = msg.resultsChan
-		log.Debug().Msg("plugin background worker started")
-		return m, listenForPluginResult(m.pluginResultsChan)
-
-	case pluginStatusUpdateMsg:
-		// Update the specific plugin's status store with the single result
-		if msg.Err == nil {
-			if store, ok := m.pluginStatuses[msg.PluginName]; ok {
-				store.Set(msg.SessionID, msg.Status)
-				log.Debug().
-					Str("plugin", msg.PluginName).
-					Str("session", msg.SessionID).
-					Str("label", msg.Status.Label).
-					Msg("plugin status updated")
-			}
-		}
-		// Update delegate's reference to plugin statuses
-		m.treeDelegate.PluginStatuses = m.pluginStatuses
-		// Force list to re-render with updated plugin status
-		m.list.SetDelegate(m.treeDelegate)
-		// Continue listening for more results
-		return m, listenForPluginResult(m.pluginResultsChan)
-
-	case animationTickMsg:
-		// Advance animation frame
-		m.animationFrame = (m.animationFrame + 1) % AnimationFrameCount
-		// Update the delegate with new frame
-		m.treeDelegate.AnimationFrame = m.animationFrame
-		m.list.SetDelegate(m.treeDelegate)
-		// Schedule next tick
-		return m, scheduleAnimationTick()
-
+	// Action results
 	case renameCompleteMsg:
-		if msg.err != nil {
-			log.Error().Err(msg.err).Msg("rename failed")
-			m.state = stateNormal
-			return m, m.notifyError("rename failed: %v", msg.err)
-		}
-		return m, m.loadSessions()
-
+		model, cmd = m.handleRenameComplete(msg)
 	case actionCompleteMsg:
-		if msg.err != nil {
-			log.Error().Err(msg.err).Msg("action failed")
-			m.state = stateNormal
-			m.pending = Action{}
-			return m, m.notifyError("action failed: %v", msg.err)
-		}
-		m.state = stateNormal
-		m.pending = Action{}
-		// Reload sessions after action
-		return m, m.loadSessions()
-
+		model, cmd = m.handleActionComplete(msg)
 	case recycleStartedMsg:
-		m.state = stateRunningRecycle
-		m.outputModal = NewOutputModal("Recycling session...")
-		m.recycleOutput = msg.output
-		m.recycleDone = msg.done
-		m.recycleCancel = msg.cancel
-		return m, tea.Batch(
-			listenForRecycleOutput(msg.output, msg.done),
-			m.outputModal.Spinner().Tick,
-		)
-
+		model, cmd = m.handleRecycleStarted(msg)
 	case recycleOutputMsg:
-		m.outputModal.AddLine(msg.line)
-		// Keep listening for more output
-		return m, listenForRecycleOutput(m.recycleOutput, m.recycleDone)
-
+		model, cmd = m.handleRecycleOutput(msg)
 	case recycleCompleteMsg:
-		m.outputModal.SetComplete(msg.err)
-		m.recycleOutput = nil
-		m.recycleDone = nil
-		m.recycleCancel = nil
-		// Stay in stateRunningRecycle until user dismisses
-		return m, nil
+		model, cmd = m.handleRecycleComplete(msg)
 
-	case reposDiscoveredMsg:
-		m.discoveredRepos = msg.repos
-		if len(m.discoveredRepos) == 0 {
-			m.toastController.Push(notify.Notification{
-				Level:   notify.LevelError,
-				Message: fmt.Sprintf("No repositories found in directories: %v", m.repoDirs),
-			})
-		}
-		// Help keybindings remain minimal - full list shown via ? dialog
-		return m, nil
-
+	// Review delegation
 	case review.DocumentChangeMsg:
-		// Forward to review view if it's active
-		if m.reviewView != nil {
-			*m.reviewView, _ = m.reviewView.Update(msg)
-		}
-		return m, nil
-
+		model, cmd = m.handleReviewDocChange(msg)
 	case review.ReviewFinalizedMsg:
-		// Copy feedback to clipboard
-		if err := m.copyToClipboard(msg.Feedback); err != nil {
-			return m, m.notifyError("failed to copy feedback: %v", err)
-		}
-		return m, nil
-
+		model, cmd = m.handleReviewFinalized(msg)
 	case review.OpenDocumentMsg:
-		// Handle document opening (from HiveDocReview command)
-		if msg.Err != nil {
-			return m, m.notifyError("open document: %v", msg.Err)
-		}
-		// Document path is provided, tell review view to load it
-		if m.reviewView != nil {
-			// Find and load the document
-			for _, item := range m.reviewView.List().Items() {
-				if treeItem, ok := item.(review.TreeItem); ok && !treeItem.IsHeader {
-					if treeItem.Document.Path == msg.Path {
-						m.reviewView.LoadDocument(&treeItem.Document)
-						break
-					}
-				}
-			}
-		}
-		return m, nil
+		model, cmd = m.handleReviewOpenDoc(msg)
 
+	// Notifications
+	case notificationMsg:
+		model, cmd = m.handleNotification(msg)
+
+	// Input
 	case tea.KeyMsg:
-		// Handle document picker modal if active (on Sessions view)
-		if m.docPickerModal != nil {
-			modal, cmd := m.docPickerModal.Update(msg)
-			m.docPickerModal = modal
-
-			if m.docPickerModal.SelectedDocument() != nil {
-				// User selected a document - switch to review view and load it
-				doc := m.docPickerModal.SelectedDocument()
-				m.docPickerModal = nil
-				m.activeView = ViewReview
-				m.handler.SetActiveView(ViewReview)
-				if m.reviewView != nil {
-					m.reviewView.LoadDocument(doc)
-				}
-				return m, cmd
-			}
-
-			if m.docPickerModal.Cancelled() {
-				// User cancelled picker
-				m.docPickerModal = nil
-				return m, cmd
-			}
-
-			return m, cmd
-		}
-
-		return m.handleKey(msg)
-
+		model, cmd = m.handleKeyMsg(msg)
 	case spinner.TickMsg:
-		var cmd tea.Cmd
-		m.spinner, cmd = m.spinner.Update(msg)
-		return m, cmd
+		model, cmd = m.handleSpinnerTick(msg)
+
+	default:
+		model, cmd = m.handleFallthrough(msg)
 	}
 
-	// Route all other messages to the form when creating session
-	if m.state == stateCreatingSession && m.newSessionForm != nil {
-		return m.updateNewSessionForm(msg)
+	// Sync modal state to sessions view after every update so periodic
+	// refresh is paused while modals are open.
+	if mdl, ok := model.(Model); ok {
+		mdl.syncModalState()
+		return mdl, cmd
 	}
-
-	// Update the appropriate view based on active view
-	var cmd tea.Cmd
-	switch m.activeView {
-	case ViewSessions:
-		m.list, cmd = m.list.Update(msg)
-	case ViewMessages:
-		// Messages view handles its own updates
-	case ViewStore:
-		// KV view handles its own updates via explicit method calls
-	case ViewReview:
-		if m.reviewView != nil {
-			*m.reviewView, cmd = m.reviewView.Update(msg)
-		}
-	}
-	return m, cmd
+	return model, cmd
 }
 
 // handleKey processes key presses.
@@ -1005,9 +435,6 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateCommandPalette {
 		return m.handleCommandPaletteKey(msg, keyStr)
-	}
-	if m.state == statePreviewingMessage {
-		return m.handlePreviewModalKey(msg, keyStr)
 	}
 	if m.state == stateShowingHelp {
 		return m.handleHelpDialogKey(keyStr)
@@ -1029,7 +456,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	// When filtering in either list, pass most keys except quit
-	if m.list.SettingFilter() || m.msgView.IsFiltering() || m.kvView.IsFiltering() || m.focusMode {
+	if m.sessionsView.IsSettingFilter() || m.kvView.IsFiltering() || m.sessionsView.FocusMode() {
 		return m.handleFilteringKey(msg, keyStr)
 	}
 
@@ -1049,23 +476,23 @@ func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 // updateNewSessionForm routes any message to the form and handles state changes.
 func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
-	form, cmd := m.newSessionForm.Update(msg)
-	m.newSessionForm = &form
+	form, cmd := m.modals.NewSession.Update(msg)
+	m.modals.NewSession = &form
 
-	if m.newSessionForm.Submitted() {
-		result := m.newSessionForm.Result()
+	if m.modals.NewSession.Submitted() {
+		result := m.modals.NewSession.Result()
 		m.state = stateNormal
-		m.newSessionForm = nil
-		m.pendingCreate = &PendingCreate{
+		m.modals.NewSession = nil
+		m.modals.PendingCreate = &PendingCreate{
 			Remote: result.Repo.Remote,
 			Name:   result.SessionName,
 		}
 		return m, tea.Quit
 	}
 
-	if m.newSessionForm.Cancelled() {
+	if m.modals.NewSession.Cancelled() {
 		m.state = stateNormal
-		m.newSessionForm = nil
+		m.modals.NewSession = nil
 		return m, nil
 	}
 
@@ -1080,16 +507,16 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 		return m.dispatchAction(action)
 	}
 
-	dialog, err := newFormDialog(name, cmd.Form, m.allSessions, m.discoveredRepos, m.terminalStatuses)
+	dialog, err := newFormDialog(name, cmd.Form, m.sessionsView.AllSessions(), m.sessionsView.DiscoveredRepos(), m.sessionsView.TerminalStatuses())
 	if err != nil {
 		return m, m.notifyError("form error: %v", err)
 	}
 
-	m.formDialog = dialog
-	m.pendingFormCmd = cmd
-	m.pendingFormName = name
-	m.pendingFormSess = &sess
-	m.pendingFormArgs = args
+	m.modals.FormDialog = dialog
+	m.modals.PendingFormCmd = cmd
+	m.modals.PendingFormName = name
+	m.modals.PendingFormSess = &sess
+	m.modals.PendingFormArgs = args
 	m.state = stateFormInput
 	return m, nil
 }
@@ -1101,37 +528,28 @@ func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, te
 	}
 
 	var cmd tea.Cmd
-	m.formDialog, cmd = m.formDialog.Update(msg)
+	m.modals.FormDialog, cmd = m.modals.FormDialog.Update(msg)
 
-	if m.formDialog.Submitted() {
-		formValues := m.formDialog.FormValues()
+	if m.modals.FormDialog.Submitted() {
+		formValues := m.modals.FormDialog.FormValues()
 		action := m.handler.RenderWithFormData(
-			m.pendingFormName,
-			m.pendingFormCmd,
-			*m.pendingFormSess,
-			m.pendingFormArgs,
+			m.modals.PendingFormName,
+			m.modals.PendingFormCmd,
+			*m.modals.PendingFormSess,
+			m.modals.PendingFormArgs,
 			formValues,
 		)
-		m.clearFormState()
+		m.modals.ClearFormState()
 		return m.dispatchAction(action)
 	}
 
-	if m.formDialog.Cancelled() {
-		m.clearFormState()
+	if m.modals.FormDialog.Cancelled() {
+		m.modals.ClearFormState()
 		m.state = stateNormal
 		return m, nil
 	}
 
 	return m, cmd
-}
-
-// clearFormState resets all form dialog state.
-func (m *Model) clearFormState() {
-	m.formDialog = nil
-	m.pendingFormCmd = config.UserCommand{}
-	m.pendingFormName = ""
-	m.pendingFormSess = nil
-	m.pendingFormArgs = nil
 }
 
 // dispatchAction handles an action that may need confirmation or immediate execution.
@@ -1143,8 +561,8 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 
 	if action.NeedsConfirm() {
 		m.state = stateConfirming
-		m.pending = action
-		m.modal = NewModal("Confirm", action.Confirm)
+		m.modals.Pending = action
+		m.modals.Confirm = NewModal("Confirm", action.Confirm)
 		return m, nil
 	}
 
@@ -1164,100 +582,12 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	}
 
 	m.state = stateNormal
-	m.pending = action
+	m.modals.Pending = action
 	if !action.Silent {
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
 	}
 	return m, m.executeAction(action)
-}
-
-// handleRecycleModalKey handles keys when recycle modal is shown.
-func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
-	switch keyStr {
-	case keyCtrlC:
-		if m.recycleCancel != nil {
-			m.recycleCancel()
-		}
-		return m.quit()
-	case "esc":
-		if m.outputModal.IsRunning() && m.recycleCancel != nil {
-			m.recycleCancel()
-		}
-		m.state = stateNormal
-		m.pending = Action{}
-		return m, m.loadSessions()
-	case keyEnter:
-		if !m.outputModal.IsRunning() {
-			m.state = stateNormal
-			m.pending = Action{}
-			return m, m.loadSessions()
-		}
-	}
-	return m, nil
-}
-
-// handleConfirmModalKey handles keys when confirmation modal is shown.
-func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
-	switch keyStr {
-	case keyEnter:
-		m.state = stateNormal
-		if m.modal.ConfirmSelected() {
-			action := m.pending
-			if action.Type == act.TypeRecycle {
-				return m, m.startRecycle(action.SessionID)
-			}
-			// Handle batch delete of recycled sessions
-			if action.Type == act.TypeDeleteRecycledBatch {
-				sessions := m.pendingRecycledSessions
-				m.pending = Action{}
-				m.pendingRecycledSessions = nil
-				return m, m.deleteRecycledSessionsBatch(sessions)
-			}
-			return m, m.executeAction(action)
-		}
-		m.pending = Action{}
-		m.pendingRecycledSessions = nil
-		return m, nil
-	case "esc":
-		m.state = stateNormal
-		m.pending = Action{}
-		m.pendingRecycledSessions = nil
-		return m, nil
-	case "left", "right", "h", "l", "tab":
-		m.modal.ToggleSelection()
-		return m, nil
-	}
-	return m, nil
-}
-
-// handleRecycledPlaceholderKey handles keys when a recycled placeholder is selected.
-// Only allows delete action to permanently remove all recycled sessions.
-func (m Model) handleRecycledPlaceholderKey(keyStr string, treeItem *TreeItem) (tea.Model, tea.Cmd) {
-	// Check if this key is bound to delete action
-	kb, exists := m.handler.keybindings[keyStr]
-	if !exists {
-		return m, nil
-	}
-
-	cmd, cmdExists := m.handler.commands[kb.Cmd]
-	if !cmdExists || cmd.Action != act.TypeDelete {
-		return m, nil // Only delete is allowed on recycled placeholders
-	}
-
-	// Show confirmation modal for deleting all recycled sessions
-	confirmMsg := fmt.Sprintf("Permanently delete %d recycled session(s)?", treeItem.RecycledCount)
-	m.state = stateConfirming
-	m.pending = Action{
-		Type:    act.TypeDeleteRecycledBatch,
-		Key:     keyStr,
-		Help:    "delete recycled sessions",
-		Confirm: confirmMsg,
-	}
-	// Store recycled sessions in pending action for later deletion
-	m.pendingRecycledSessions = treeItem.RecycledSessions
-	m.modal = NewModal("Confirm", confirmMsg)
-	return m, nil
 }
 
 // handleHelpDialogKey handles keys when help dialog is shown.
@@ -1267,7 +597,7 @@ func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "?", "q":
 		m.state = stateNormal
-		m.helpDialog = nil
+		m.modals.DismissHelp()
 		return m, nil
 	}
 	return m, nil
@@ -1279,14 +609,14 @@ func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "q":
 		m.state = stateNormal
-		m.notificationModal = nil
+		m.modals.DismissNotifications()
 		return m, nil
 	case "j", "down":
-		m.notificationModal.ScrollDown()
+		m.modals.Notification.ScrollDown()
 	case "k", "up":
-		m.notificationModal.ScrollUp()
+		m.modals.Notification.ScrollUp()
 	case "D":
-		if err := m.notificationModal.Clear(); err != nil {
+		if err := m.modals.Notification.Clear(); err != nil {
 			return m, m.notifyError("failed to clear notifications: %v", err)
 		}
 		m.notifyBus.Infof("notifications cleared")
@@ -1299,12 +629,10 @@ func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	var sections []components.HelpDialogSection
 
-	// Add user-configured keybindings section
 	userEntries := m.handler.HelpEntries()
 	if len(userEntries) > 0 {
 		entries := make([]components.HelpEntry, 0, len(userEntries))
 		for _, e := range userEntries {
-			// Parse "[key] description" format
 			if len(e) > 2 && e[0] == '[' {
 				endBracket := strings.Index(e, "]")
 				if endBracket > 0 {
@@ -1322,7 +650,6 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	// Add navigation section
 	navEntries := []components.HelpEntry{
 		{Key: "↑/k", Desc: "move up"},
 		{Key: "↓/j", Desc: "move down"},
@@ -1334,8 +661,7 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		{Key: "g", Desc: "refresh git status"},
 	}
 
-	// Add preview toggle if terminal integration enabled
-	if m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
+	if m.sessionsView != nil && m.sessionsView.PreviewEnabled() {
 		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
 	}
 
@@ -1349,41 +675,9 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		Entries: navEntries,
 	})
 
-	m.helpDialog = components.NewHelpDialog("Keyboard Shortcuts", sections, m.width, m.height)
+	m.modals.ShowHelp("Keyboard Shortcuts", sections)
 	m.state = stateShowingHelp
 	return m, nil
-}
-
-// handlePreviewModalKey handles keys when message preview modal is shown.
-func (m Model) handlePreviewModalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
-	// Clear copy status on any key press
-	m.previewModal.ClearCopyStatus()
-
-	switch keyStr {
-	case keyCtrlC:
-		return m.quit()
-	case "esc", keyEnter, "q":
-		m.state = stateNormal
-		return m, nil
-	case "up", "k":
-		m.previewModal.ScrollUp()
-		return m, nil
-	case "down", "j":
-		m.previewModal.ScrollDown()
-		return m, nil
-	case "c", "y":
-		// Copy payload to clipboard
-		if err := m.copyToClipboard(m.previewModal.Payload()); err != nil {
-			m.previewModal.SetCopyStatus("Copy failed: " + err.Error())
-		} else {
-			m.previewModal.SetCopyStatus("Copied!")
-		}
-		return m, nil
-	default:
-		// Pass other messages to viewport for mouse wheel etc
-		m.previewModal.UpdateViewport(msg)
-		return m, nil
-	}
 }
 
 // handleCommandPaletteKey handles keys when command palette is shown.
@@ -1394,10 +688,10 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 	// Update the palette
 	var cmd tea.Cmd
-	m.commandPalette, cmd = m.commandPalette.Update(msg)
+	m.modals.CommandPalette, cmd = m.modals.CommandPalette.Update(msg)
 
 	// Check if user selected a command
-	if entry, args, ok := m.commandPalette.SelectedCommand(); ok {
+	if entry, args, ok := m.modals.CommandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 
 		// Check if this is a doc review action (doesn't require a session)
@@ -1410,14 +704,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Messages doesn't require a session
 		if entry.Command.Action == act.TypeMessages {
 			m.state = stateShowingNotifications
-			m.notificationModal = NewNotificationModal(m.notifyBus, m.width, m.height)
+			m.modals.ShowNotifications(m.notifyBus)
 			return m, nil
 		}
 
 		// NewSession doesn't require a selected session
 		if entry.Command.Action == act.TypeNewSession {
 			m.state = stateNormal
-			if len(m.discoveredRepos) == 0 {
+			if len(m.sessionsView.DiscoveredRepos()) == 0 {
 				return m, nil
 			}
 			return m.openNewSessionForm()
@@ -1442,10 +736,10 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		}
 
 		// Check if this is a filter action (doesn't require a session)
-		if isFilterAction(entry.Command.Action) {
+		if sessions.IsFilterAction(entry.Command.Action) {
 			m.state = stateNormal
-			m.handleFilterAction(entry.Command.Action)
-			return m.applyFilter()
+			m.sessionsView.ApplyStatusFilter(entry.Command.Action)
+			return m, nil
 		}
 
 		// Form commands don't require a selected session (they collect their own input)
@@ -1473,7 +767,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// Resolve the user command to an Action
 		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
-		action = m.maybeOverrideWindowDelete(action, m.selectedTreeItem())
+		action = sessions.MaybeOverrideWindowDelete(action, m.selectedTreeItem(), m.renderer)
 
 		// Check for resolution errors (e.g., template errors)
 		if action.Err != nil {
@@ -1487,8 +781,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// Handle confirmation if needed
 		if action.NeedsConfirm() {
 			m.state = stateConfirming
-			m.pending = action
-			m.modal = NewModal("Confirm", action.Confirm)
+			m.modals.Pending = action
+			m.modals.Confirm = NewModal("Confirm", action.Confirm)
 			return m, nil
 		}
 
@@ -1504,7 +798,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		}
 
 		// Store pending action for exit check after completion
-		m.pending = action
+		m.modals.Pending = action
 		if !action.Silent {
 			m.state = stateLoading
 			m.loadingMessage = "Processing..."
@@ -1513,7 +807,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 	}
 
 	// Check if user cancelled
-	if m.commandPalette.Cancelled() {
+	if m.modals.CommandPalette.Cancelled() {
 		m.state = stateNormal
 		return m, nil
 	}
@@ -1544,43 +838,10 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		return m.quit()
 	}
 
-	// Handle focus mode filtering (sessions view)
-	if m.focusMode {
-		switch keyStr {
-		case "esc":
-			m.stopFocusMode()
-			return m, nil
-		case keyEnter:
-			m.stopFocusMode()
-			return m, nil
-		default:
-			var cmd tea.Cmd
-			m.focusFilterInput, cmd = m.focusFilterInput.Update(msg)
-			// Update filter and navigate on every keystroke
-			m.updateFocusFilter(m.focusFilterInput.Value())
-			return m, cmd
-		}
-	}
-
-	// Handle message view filtering
-	if m.msgView.IsFiltering() {
-		switch keyStr {
-		case "esc":
-			m.msgView.CancelFilter()
-		case keyEnter:
-			m.msgView.ConfirmFilter()
-		case "backspace":
-			m.msgView.DeleteFilterRune()
-		default:
-			// Add character to filter if it's a printable rune
-			// In bubbletea V2, msg.Runes is replaced with msg.Key().Text
-			if text := msg.Key().Text; text != "" {
-				for _, r := range text {
-					m.msgView.AddFilterRune(r)
-				}
-			}
-		}
-		return m, nil
+	// Delegate session focus mode / list filter to sessionsView
+	if m.sessionsView.FocusMode() || m.sessionsView.IsSettingFilter() {
+		cmd := m.sessionsView.Update(msg)
+		return m, cmd
 	}
 
 	// Handle KV view filtering
@@ -1607,10 +868,7 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		return m, nil
 	}
 
-	// Handle session list filtering
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
+	return m, nil
 }
 
 // handleNormalKey handles keys in normal state.
@@ -1631,6 +889,16 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 			// Everything else goes directly to the component for typing
 			return m.delegateToComponent(msg)
 		}
+	}
+
+	// Messages preview modal intercepts keys before global handlers
+	if m.isMessagesFocused() && m.msgView != nil && m.msgView.IsPreviewActive() {
+		if keyStr == keyCtrlC {
+			return m.quit()
+		}
+		var cmd tea.Cmd
+		*m.msgView, cmd = m.msgView.Update(msg)
+		return m, cmd
 	}
 
 	// Not in editor - handle core hardcoded keys
@@ -1655,34 +923,21 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 	// Session-specific keys only when sessions focused
 	if m.isSessionsFocused() {
 		if keyStr == "g" {
-			return m, m.refreshGitStatuses()
+			return m, m.sessionsView.RefreshGitStatuses()
 		}
-		if keyStr == "v" && m.terminalManager != nil && m.terminalManager.HasEnabledIntegrations() {
-			m.previewEnabled = !m.previewEnabled
+		if keyStr == "v" && m.sessionsView.HasTerminalIntegration() {
+			m.sessionsView.TogglePreview()
 			return m, nil
 		}
-		return m.handleSessionsKey(msg, keyStr)
+		cmd := m.sessionsView.Update(msg)
+		return m, cmd
 	}
 
-	// Handle keys based on active view
-	if m.isMessagesFocused() {
-		// Messages view focused - handle navigation
-		switch keyStr {
-		case keyEnter:
-			// Open message preview modal
-			selectedMsg := m.selectedMessage()
-			if selectedMsg != nil {
-				m.state = statePreviewingMessage
-				m.previewModal = NewMessagePreviewModal(*selectedMsg, m.width, m.height)
-			}
-		case "up", "k":
-			m.msgView.MoveUp()
-		case "down", "j":
-			m.msgView.MoveDown()
-		case "/":
-			m.msgView.StartFilter()
-		}
-		return m, nil
+	// Messages view focused - delegate all keys to the sub-model
+	if m.isMessagesFocused() && m.msgView != nil {
+		var cmd tea.Cmd
+		*m.msgView, cmd = m.msgView.Update(msg)
+		return m, cmd
 	}
 
 	// Store view focused - handle KV navigation
@@ -1751,6 +1006,10 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	}
 
 	m.handler.SetActiveView(m.activeView)
+	m.sessionsView.SetActive(m.activeView == ViewSessions)
+	if m.msgView != nil {
+		m.msgView.SetActive(m.activeView == ViewMessages)
+	}
 
 	// Load KV keys when switching to Store tab
 	if m.activeView == ViewStore {
@@ -1778,8 +1037,8 @@ func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	input.SetStyles(inputStyles)
 
-	m.renameInput = input
-	m.renameSessionID = sess.ID
+	m.modals.RenameInput = input
+	m.modals.RenameSessionID = sess.ID
 	m.state = stateRenaming
 	return m, nil
 }
@@ -1791,24 +1050,24 @@ func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		return m.quit()
 	case "esc":
 		m.state = stateNormal
-		m.renameSessionID = ""
+		m.modals.RenameSessionID = ""
 		return m, nil
 	case keyEnter:
-		newName := strings.TrimSpace(m.renameInput.Value())
+		newName := strings.TrimSpace(m.modals.RenameInput.Value())
 		if newName == "" {
 			m.state = stateNormal
-			m.renameSessionID = ""
+			m.modals.RenameSessionID = ""
 			return m, nil
 		}
-		sessionID := m.renameSessionID
+		sessionID := m.modals.RenameSessionID
 		m.state = stateNormal
-		m.renameSessionID = ""
+		m.modals.RenameSessionID = ""
 		return m, m.executeRename(sessionID, newName)
 	}
 
 	// Forward to textinput
 	var cmd tea.Cmd
-	m.renameInput, cmd = m.renameInput.Update(msg)
+	m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
 	return m, cmd
 }
 
@@ -1852,7 +1111,7 @@ func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 
 // openNewSessionForm initializes the new session form and transitions to the creating state.
 func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
-	preselectedRemote := m.localRemote
+	preselectedRemote := m.sessionsView.LocalRemote()
 
 	if treeItem := m.selectedTreeItem(); treeItem != nil {
 		if treeItem.IsHeader && treeItem.RepoRemote != "" {
@@ -1862,324 +1121,34 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	existingNames := make(map[string]bool, len(m.allSessions))
-	for _, s := range m.allSessions {
+	allSessions := m.sessionsView.AllSessions()
+	existingNames := make(map[string]bool, len(allSessions))
+	for _, s := range allSessions {
 		existingNames[s.Name] = true
 	}
-	m.newSessionForm = NewNewSessionForm(m.discoveredRepos, preselectedRemote, existingNames)
+	m.modals.NewSession = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames)
 	m.state = stateCreatingSession
-	return m, m.newSessionForm.Init()
-}
-
-// handleSessionsKey handles keys when sessions pane is focused.
-func (m Model) handleSessionsKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
-	// Handle navigation keys - skip over headers
-	switch keyStr {
-	case "up", "k":
-		m.navigateSkippingHeaders(-1)
-		return m, nil
-	case "down", "j":
-		m.navigateSkippingHeaders(1)
-		return m, nil
-	}
-
-	// Handle navigation to next/prev active session (doesn't require selection)
-	if m.handler.IsAction(keyStr, act.TypeNextActive) {
-		m.navigateToNextActive(1)
-		return m, nil
-	}
-	if m.handler.IsAction(keyStr, act.TypePrevActive) {
-		m.navigateToNextActive(-1)
-		return m, nil
-	}
-
-	// Handle new session action (only if repos are discovered)
-	if m.handler.IsAction(keyStr, act.TypeNewSession) && len(m.discoveredRepos) > 0 {
-		return m.openNewSessionForm()
-	}
-
-	// Handle '/' for focus mode filter
-	if keyStr == "/" {
-		m.focusMode = true
-		m.focusFilter = ""
-		m.focusFilterInput.Reset()
-		m.focusFilterInput.SetValue("")
-
-		// Hide list help and reduce list size to make room for search input
-		contentHeight := m.height - 3
-		if contentHeight < 2 {
-			contentHeight = 2
-		}
-
-		var listWidth int
-		if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
-			listWidth = int(float64(m.width) * 0.25)
-		} else {
-			listWidth = m.width
-		}
-
-		m.list.SetShowHelp(false)
-		m.list.SetSize(listWidth, contentHeight-1) // Make room for search input
-
-		return m, m.focusFilterInput.Focus()
-	}
-
-	// Handle ':' for command palette (allow even without selection for filter commands)
-	if keyStr == ":" {
-		m.commandPalette = NewCommandPalette(m.mergedCommands, m.selectedSession(), m.width, m.height, m.activeView)
-		m.state = stateCommandPalette
-		return m, nil
-	}
-
-	// Check for recycled placeholder selection - allow delete action
-	treeItem := m.selectedTreeItem()
-	if treeItem != nil && treeItem.IsRecycledPlaceholder {
-		return m.handleRecycledPlaceholderKey(keyStr, treeItem)
-	}
-
-	// Handle enter on project headers - open original repo directory
-	if treeItem != nil && treeItem.IsHeader && m.handler.IsCommand(keyStr, "TmuxOpen") {
-		return m.openRepoHeader(treeItem)
-	}
-
-	selected := m.selectedSession()
-	if selected == nil {
-		var cmd tea.Cmd
-		m.list, cmd = m.list.Update(msg)
-		return m, cmd
-	}
-
-	// If a window sub-item is selected, override TmuxWindow for template rendering
-	if treeItem != nil && treeItem.IsWindowItem {
-		m.handler.SetSelectedWindow(treeItem.WindowIndex)
-	} else {
-		m.handler.SetSelectedWindow("")
-	}
-
-	// Check if this key maps to a form command (intercept before Resolve to
-	// avoid template errors from missing .Form data)
-	if cmdName, cmd, hasForm := m.handler.ResolveFormCommand(keyStr, *selected); hasForm {
-		return m.showFormOrExecute(cmdName, cmd, *selected, nil)
-	}
-
-	action, ok := m.handler.Resolve(keyStr, *selected)
-	action = m.maybeOverrideWindowDelete(action, treeItem)
-	if ok {
-		// Check for resolution errors (e.g., template errors)
-		if action.Err != nil {
-			return m, m.notifyError("keybinding error: %v", action.Err)
-		}
-		if action.NeedsConfirm() {
-			m.state = stateConfirming
-			m.pending = action
-			m.modal = NewModal("Confirm", action.Confirm)
-			return m, nil
-		}
-		if action.Type == act.TypeRecycle {
-			return m, m.startRecycle(action.SessionID)
-		}
-		// Handle doc review action
-		if action.Type == act.TypeDocReview {
-			cmd := HiveDocReviewCmd{Arg: ""}
-			return m, cmd.Execute(&m)
-		}
-		// Handle rename action
-		if action.Type == act.TypeRenameSession {
-			return m.openRenameInput(selected)
-		}
-		// Handle set-theme action (requires args only available via command palette)
-		if action.Type == act.TypeSetTheme {
-			return m, m.ensureToastTick()
-		}
-		// Handle filter actions
-		if m.handleFilterAction(action.Type) {
-			return m.applyFilter()
-		}
-		// If exit is requested, execute synchronously and quit immediately
-		// This avoids async message flow issues in some terminal contexts (e.g., tmux popups)
-		if action.Exit {
-			exec, err := m.cmdService.CreateExecutor(action)
-			if err != nil {
-				log.Error().Str("key", keyStr).Err(err).Msg("failed to create executor before exit")
-			} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				log.Error().Str("key", keyStr).Err(err).Msg("command failed before exit")
-			}
-			return m.quit()
-		}
-		// Store pending action for exit check after completion
-		m.pending = action
-		if !action.Silent {
-			m.state = stateLoading
-			m.loadingMessage = "Processing..."
-		}
-		return m, m.executeAction(action)
-	}
-
-	var cmd tea.Cmd
-	m.list, cmd = m.list.Update(msg)
-	return m, cmd
-}
-
-// openRepoHeader handles enter on a project header by opening the original repo directory.
-func (m Model) openRepoHeader(header *TreeItem) (tea.Model, tea.Cmd) {
-	// Find the original repo path from discovered repos
-	var repoPath string
-	for _, repo := range m.discoveredRepos {
-		if repo.Remote == header.RepoRemote {
-			repoPath = repo.Path
-			break
-		}
-	}
-	if repoPath == "" {
-		return m, m.notifyError("no local repository found for %s", header.RepoName)
-	}
-
-	// Render the hive-tmux command to open at the repo directory
-	shellCmd, err := m.renderer.Render(
-		`{{ hiveTmux }} {{ .Name | shq }} {{ .Path | shq }}`,
-		struct{ Name, Path string }{Name: header.RepoName, Path: repoPath},
-	)
-	if err != nil {
-		return m, m.notifyError("template error: %v", err)
-	}
-
-	action := Action{
-		Type:     act.TypeShell,
-		Key:      "enter",
-		Help:     "open repo",
-		ShellCmd: shellCmd,
-		Silent:   true,
-		Exit:     config.ParseExitCondition("$HIVE_POPUP"),
-	}
-
-	if action.Exit {
-		exec, err := m.cmdService.CreateExecutor(action)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to create executor for repo open")
-		} else if err := command.ExecuteSync(context.Background(), exec); err != nil {
-			log.Error().Err(err).Msg("repo open command failed")
-		}
-		return m.quit()
-	}
-
-	return m, m.executeAction(action)
-}
-
-// selectedSession returns the currently selected session, or nil if none.
-// Returns nil for headers and recycled placeholders.
-// For window sub-items, returns the parent session.
-func (m Model) selectedSession() *session.Session {
-	item := m.list.SelectedItem()
-	if item == nil {
-		return nil
-	}
-	// Handle TreeItem (tree view mode)
-	if treeItem, ok := item.(TreeItem); ok {
-		if treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
-			return nil // Headers and recycled placeholders aren't sessions
-		}
-		if treeItem.IsWindowItem {
-			return &treeItem.ParentSession
-		}
-		return &treeItem.Session
-	}
-	return nil
-}
-
-// selectedWindowStatus returns the WindowStatus for the currently selected window item,
-// or nil if a session (not a window) is selected.
-func (m Model) selectedWindowStatus() *WindowStatus {
-	item := m.list.SelectedItem()
-	if item == nil {
-		return nil
-	}
-	treeItem, ok := item.(TreeItem)
-	if !ok || !treeItem.IsWindowItem {
-		return nil
-	}
-	if m.terminalStatuses == nil {
-		return nil
-	}
-	ts, ok := m.terminalStatuses.Get(treeItem.ParentSession.ID)
-	if !ok {
-		return nil
-	}
-	for i := range ts.Windows {
-		if ts.Windows[i].WindowIndex == treeItem.WindowIndex {
-			return &ts.Windows[i]
-		}
-	}
-	return nil
+	return m, m.modals.NewSession.Init()
 }
 
 // selectedTreeItem returns the currently selected tree item, or nil if none.
-func (m Model) selectedTreeItem() *TreeItem {
-	item := m.list.SelectedItem()
-	if item == nil {
+func (m Model) selectedTreeItem() *sessions.TreeItem {
+	if m.sessionsView == nil {
 		return nil
 	}
-	if treeItem, ok := item.(TreeItem); ok {
-		return &treeItem
-	}
-	return nil
-}
-
-// maybeOverrideWindowDelete converts a delete action into a tmux window kill
-// when a window sub-item is selected. This keeps "d" context-aware.
-func (m Model) maybeOverrideWindowDelete(action Action, treeItem *TreeItem) Action {
-	if treeItem == nil || !treeItem.IsWindowItem {
-		return action
-	}
-	if action.Type != act.TypeDelete {
-		return action
-	}
-
-	tmuxSession := treeItem.ParentSession.GetMeta(session.MetaTmuxSession)
-	if tmuxSession == "" {
-		tmuxSession = treeItem.ParentSession.Slug
-	}
-	if tmuxSession == "" {
-		tmuxSession = treeItem.ParentSession.Name
-	}
-	if tmuxSession == "" || treeItem.WindowIndex == "" {
-		action.Err = fmt.Errorf("unable to resolve tmux window target")
-		return action
-	}
-
-	target := tmuxSession + ":" + treeItem.WindowIndex
-	cmd, err := m.renderer.Render("tmux kill-window -t {{ .Target | shq }}", map[string]string{
-		"Target": target,
-	})
-	if err != nil {
-		action.Err = err
-		return action
-	}
-
-	action.Type = act.TypeShell
-	action.ShellCmd = cmd
-	if treeItem.WindowName != "" {
-		action.Confirm = fmt.Sprintf("Kill tmux window %q?", treeItem.WindowName)
-	} else {
-		action.Confirm = "Kill tmux window?"
-	}
-	return action
+	return m.sessionsView.SelectedTreeItem()
 }
 
 // hasEditorFocus returns true if any text input currently has focus.
 // When an editor has focus, most keybindings should be blocked to allow normal typing.
 func (m *Model) hasEditorFocus() bool {
-	// Check session list filter (built-in bubbles filter)
-	if m.list.SettingFilter() {
+	// Check sessions view (list filter or focus mode)
+	if m.sessionsView != nil && m.sessionsView.HasEditorFocus() {
 		return true
 	}
 
-	// Check focus mode filter
-	if m.focusMode {
-		return true
-	}
-
-	// Check message view filter
-	if m.msgView != nil && m.msgView.IsFiltering() {
+	// Check messages view filter or preview
+	if m.msgView != nil && m.msgView.HasEditorFocus() {
 		return true
 	}
 
@@ -2188,27 +1157,8 @@ func (m *Model) hasEditorFocus() bool {
 		return true
 	}
 
-	// Check command palette
-	if m.state == stateCommandPalette {
-		return true
-	}
-
-	// Check new session form
-	if m.state == stateCreatingSession {
-		return true
-	}
-
-	// Check rename input
-	if m.state == stateRenaming {
-		return true
-	}
-
-	// Check form dialog
-	if m.state == stateFormInput {
-		return true
-	}
-
-	return false
+	// Check modal coordinator (command palette, new session, rename, form dialog)
+	return m.modals.HasEditorFocus(m.state)
 }
 
 // delegateToComponent forwards a key message to the appropriate component.
@@ -2219,21 +1169,21 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Route based on current state
 	switch m.state {
 	case stateCommandPalette:
-		if m.commandPalette != nil {
-			m.commandPalette, cmd = m.commandPalette.Update(msg)
+		if m.modals.CommandPalette != nil {
+			m.modals.CommandPalette, cmd = m.modals.CommandPalette.Update(msg)
 		}
 		return m, cmd
 	case stateCreatingSession:
-		if m.newSessionForm != nil {
-			*m.newSessionForm, cmd = m.newSessionForm.Update(msg)
+		if m.modals.NewSession != nil {
+			*m.modals.NewSession, cmd = m.modals.NewSession.Update(msg)
 		}
 		return m, cmd
 	case stateRenaming:
-		m.renameInput, cmd = m.renameInput.Update(msg)
+		m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
 		return m, cmd
 	case stateFormInput:
-		if m.formDialog != nil {
-			m.formDialog, cmd = m.formDialog.Update(msg)
+		if m.modals.FormDialog != nil {
+			m.modals.FormDialog, cmd = m.modals.FormDialog.Update(msg)
 		}
 		return m, cmd
 	default:
@@ -2244,18 +1194,12 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	// Route to active view
 	switch m.activeView {
 	case ViewSessions:
-		if m.focusMode {
-			// Route to focus filter input
-			var cmd tea.Cmd
-			m.focusFilterInput, cmd = m.focusFilterInput.Update(msg)
-			m.updateFocusFilter(m.focusFilterInput.Value())
-			return m, cmd
-		}
-		m.list, cmd = m.list.Update(msg)
+		cmd = m.sessionsView.Update(msg)
+		return m, cmd
 	case ViewMessages:
-		// MessagesView handles its own filtering internally, no Update method
-		// Key events are handled by specific methods called from handleNormalKey
-		return m, nil
+		if m.msgView != nil {
+			*m.msgView, cmd = m.msgView.Update(msg)
+		}
 	case ViewStore:
 		// KV view handles its own updates via explicit method calls
 		return m, nil
@@ -2266,143 +1210,6 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
-}
-
-// isActiveStatus returns true for any session with a live terminal (not missing).
-func isActiveStatus(s terminal.Status) bool {
-	return s != terminal.StatusMissing && s != ""
-}
-
-// navigateToNextActive moves the cursor to the next session with active terminal status.
-// Wraps around to the beginning if no match is found after the current position.
-// For multi-window sessions, also checks per-window statuses.
-func (m *Model) navigateToNextActive(direction int) {
-	items := m.list.Items()
-	if len(items) == 0 || m.terminalStatuses == nil {
-		return
-	}
-
-	current := m.list.Index()
-	n := len(items)
-
-	for step := 1; step < n; step++ {
-		idx := (current + step*direction + n) % n
-		treeItem, ok := items[idx].(TreeItem)
-		if !ok || treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
-			continue
-		}
-
-		if treeItem.IsWindowItem {
-			// Check per-window status
-			if ts, ok := m.terminalStatuses.Get(treeItem.ParentSession.ID); ok {
-				for i := range ts.Windows {
-					if ts.Windows[i].WindowIndex == treeItem.WindowIndex && isActiveStatus(ts.Windows[i].Status) {
-						m.list.Select(idx)
-						return
-					}
-				}
-			}
-			continue
-		}
-
-		// Check top-level session status
-		if ts, ok := m.terminalStatuses.Get(treeItem.Session.ID); ok {
-			if isActiveStatus(ts.Status) {
-				m.list.Select(idx)
-				return
-			}
-		}
-	}
-}
-
-// navigateSkippingHeaders moves the selection by direction (-1 for up, 1 for down).
-// Headers are selectable (enter opens original repo). Only recycled placeholders are skipped.
-func (m *Model) navigateSkippingHeaders(direction int) {
-	items := m.list.Items()
-	if len(items) == 0 {
-		return
-	}
-
-	current := m.list.Index()
-	target := current
-
-	for {
-		target += direction
-
-		// Check bounds
-		if target < 0 || target >= len(items) {
-			return // Can't move further, stay at current position
-		}
-
-		// Skip recycled placeholders, allow everything else (including headers)
-		if treeItem, ok := items[target].(TreeItem); ok && treeItem.IsRecycledPlaceholder {
-			continue
-		}
-		m.list.Select(target)
-		return
-	}
-}
-
-// saveSelection snapshots the current selection for restore after a list rebuild.
-func (m *Model) saveSelection() treeSelection {
-	return saveTreeSelection(m.selectedTreeItem(), m.list.Index())
-}
-
-// restoreSelection applies a saved selection to the current list items.
-func (m *Model) restoreSelection(sel treeSelection) {
-	treeItems := listItemsToTreeItems(m.list.Items())
-	m.list.Select(sel.restore(treeItems))
-}
-
-// listItemsToTreeItems extracts TreeItems from list items, preserving indices.
-// Non-TreeItem entries are marked as headers so restore skips them.
-func listItemsToTreeItems(items []list.Item) []TreeItem {
-	result := make([]TreeItem, len(items))
-	for i, item := range items {
-		if ti, ok := item.(TreeItem); ok {
-			result[i] = ti
-		} else {
-			result[i] = TreeItem{IsHeader: true}
-		}
-	}
-	return result
-}
-
-// isFilterAction returns true if the action type is a filter action.
-func isFilterAction(t act.Type) bool {
-	switch t {
-	case act.TypeFilterAll, act.TypeFilterActive,
-		act.TypeFilterApproval, act.TypeFilterReady:
-		return true
-	default:
-		return false
-	}
-}
-
-// handleFilterAction checks if the action is a filter action and updates the status filter.
-// Returns true if the action was a filter action (caller should call applyFilter).
-func (m *Model) handleFilterAction(actionType act.Type) bool {
-	switch actionType {
-	case act.TypeFilterAll:
-		m.statusFilter = ""
-		return true
-	case act.TypeFilterActive:
-		m.statusFilter = terminal.StatusActive
-		return true
-	case act.TypeFilterApproval:
-		m.statusFilter = terminal.StatusApproval
-		return true
-	case act.TypeFilterReady:
-		m.statusFilter = terminal.StatusReady
-		return true
-	default:
-		return false
-	}
-}
-
-// selectedMessage returns the currently selected message, or nil if none.
-func (m Model) selectedMessage() *messaging.Message {
-	return m.msgView.SelectedMessage()
 }
 
 // isSessionsFocused returns true if the sessions view is active.
@@ -2424,742 +1231,9 @@ func (m Model) isStoreFocused() bool {
 	return m.activeView == ViewStore
 }
 
-// shouldPollMessages returns true if messages should be polled.
-func (m Model) shouldPollMessages() bool {
-	return m.activeView == ViewMessages
-}
-
 // isModalActive returns true if any modal is currently open.
 func (m Model) isModalActive() bool {
 	return m.state != stateNormal
-}
-
-// stopFocusMode deactivates focus mode filtering.
-func (m *Model) stopFocusMode() {
-	m.focusMode = false
-	m.focusFilter = ""
-
-	// Restore list size and show help
-	contentHeight := m.height - 3
-	if contentHeight < 1 {
-		contentHeight = 1
-	}
-
-	var listWidth int
-	if m.previewEnabled && m.width >= 80 && m.activeView == ViewSessions {
-		listWidth = int(float64(m.width) * 0.25)
-	} else {
-		listWidth = m.width
-	}
-
-	m.list.SetSize(listWidth, contentHeight)
-	m.list.SetShowHelp(true)
-}
-
-// updateFocusFilter updates the filter and navigates to first match.
-func (m *Model) updateFocusFilter(filter string) {
-	m.focusFilter = filter
-	if filter == "" {
-		return // no navigation with empty filter
-	}
-
-	// Find first matching item
-	filterLower := strings.ToLower(filter)
-
-	for i, ti := range TreeItemsAll(m.list.Items()) {
-		if ti.IsHeader {
-			continue
-		}
-
-		filterValue := strings.ToLower(ti.FilterValue())
-		if strings.Contains(filterValue, filterLower) {
-			m.list.Select(i)
-			return
-		}
-	}
-
-	// No match found - cursor stays at current position
-}
-
-// applyFilter rebuilds the tree view from all sessions.
-func (m Model) applyFilter() (tea.Model, tea.Cmd) {
-	sel := m.saveSelection()
-
-	// Filter sessions by terminal status if a filter is active
-	sessions := m.allSessions
-	if m.statusFilter != "" && m.terminalStatuses != nil {
-		filtered := make([]session.Session, 0, len(m.allSessions))
-		for _, s := range m.allSessions {
-			if status, ok := m.terminalStatuses.Get(s.ID); ok {
-				if status.Status == m.statusFilter {
-					filtered = append(filtered, s)
-				}
-			}
-		}
-		sessions = filtered
-	}
-
-	// Group sessions by repository and build tree items
-	groups := GroupSessionsByRepo(sessions, m.localRemote)
-	items := BuildTreeItems(groups, m.localRemote)
-
-	// Expand multi-window sessions into window sub-items
-	items = m.expandWindowItems(items)
-
-	// Calculate column widths across all sessions (use filtered set)
-	*m.columnWidths = CalculateColumnWidths(sessions, nil)
-
-	// Collect paths for git status fetching (use filtered sessions)
-	// During background refresh, keep existing statuses to avoid flashing
-	paths := make([]string, 0, len(sessions))
-	for _, s := range sessions {
-		paths = append(paths, s.Path)
-		if !m.refreshing {
-			m.gitStatuses.Set(s.Path, GitStatus{IsLoading: true})
-		}
-	}
-
-	m.list.SetItems(items)
-	m.restoreSelection(sel)
-	m.state = stateNormal
-
-	if len(paths) == 0 {
-		m.refreshing = false
-		return m, nil
-	}
-	// refreshing is cleared when gitStatusBatchCompleteMsg is received
-	return m, fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
-}
-
-// rebuildWindowItems strips existing window sub-items from the list and re-expands
-// based on current terminal statuses. Preserves the current selection.
-func (m *Model) rebuildWindowItems() {
-	items := m.list.Items()
-
-	// Build sets of current and expected windows keyed by "sessionID:windowIndex:windowName"
-	// so window renames trigger a rebuild.
-	current := make(map[string]struct{})
-	expected := make(map[string]struct{})
-	for _, ti := range TreeItemsAll(items) {
-		if ti.IsWindowItem {
-			current[ti.ParentSession.ID+"\x1f"+ti.WindowIndex+"\x1f"+ti.WindowName] = struct{}{}
-			continue
-		}
-		if !ti.IsSession() {
-			continue
-		}
-		if ts, ok := m.terminalStatuses.Get(ti.Session.ID); ok && len(ts.Windows) > 1 {
-			for _, w := range ts.Windows {
-				expected[ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
-			}
-		}
-	}
-
-	// Only rebuild if the window sets actually differ.
-	if len(current) == len(expected) {
-		same := true
-		for k := range current {
-			if _, ok := expected[k]; !ok {
-				same = false
-				break
-			}
-		}
-		if same {
-			return
-		}
-	}
-
-	sel := m.saveSelection()
-
-	// Strip window items
-	stripped := make([]list.Item, 0, len(items))
-	for i, ti := range TreeItemsAll(items) {
-		if ti.IsWindowItem {
-			continue
-		}
-		stripped = append(stripped, items[i])
-	}
-
-	// Re-expand
-	expanded := m.expandWindowItems(stripped)
-	m.list.SetItems(expanded)
-	m.restoreSelection(sel)
-}
-
-// expandWindowItems inserts window sub-items after each session that has multiple
-// terminal windows. Single-window sessions are left unchanged.
-func (m Model) expandWindowItems(items []list.Item) []list.Item {
-	if m.terminalStatuses == nil {
-		return items
-	}
-
-	expanded := make([]list.Item, 0, len(items))
-	for _, item := range items {
-		expanded = append(expanded, item)
-
-		treeItem, ok := item.(TreeItem)
-		if !ok || !treeItem.IsSession() {
-			continue
-		}
-
-		ts, ok := m.terminalStatuses.Get(treeItem.Session.ID)
-		if !ok || len(ts.Windows) <= 1 {
-			continue
-		}
-
-		// Add a window sub-item for each window
-		for i, w := range ts.Windows {
-			windowItem := TreeItem{
-				IsWindowItem:  true,
-				WindowIndex:   w.WindowIndex,
-				WindowName:    w.WindowName,
-				ParentSession: treeItem.Session,
-				IsLastWindow:  i == len(ts.Windows)-1,
-				IsLastInRepo:  treeItem.IsLastInRepo,
-				RepoPrefix:    treeItem.RepoPrefix,
-			}
-			expanded = append(expanded, windowItem)
-		}
-	}
-
-	return expanded
-}
-
-// refreshGitStatuses returns a command that refreshes git status for all sessions.
-func (m Model) refreshGitStatuses() tea.Cmd {
-	items := m.list.Items()
-	paths := make([]string, 0, len(items))
-
-	for _, ti := range TreeItemsSessions(items) {
-		paths = append(paths, ti.Session.Path)
-		m.gitStatuses.Set(ti.Session.Path, GitStatus{IsLoading: true})
-	}
-
-	if len(paths) == 0 {
-		return nil
-	}
-
-	return fetchGitStatusBatch(m.service.Git(), paths, m.gitWorkers)
-}
-
-// View renders the TUI.
-func (m Model) View() tea.View {
-	if m.quitting {
-		return tea.NewView("")
-	}
-
-	// Build main view (header + content)
-	mainView := m.renderTabView()
-
-	// Ensure we have dimensions for modals
-	w, h := m.width, m.height
-	if w == 0 {
-		w = 80
-	}
-	if h == 0 {
-		h = 24
-	}
-
-	// Determine overlay content based on state
-	var content string
-	switch {
-	case m.state == stateRunningRecycle:
-		content = m.outputModal.Overlay(mainView, w, h)
-	case m.state == stateCreatingSession && m.newSessionForm != nil:
-		formContent := lipgloss.JoinVertical(
-			lipgloss.Left,
-			styles.ModalTitleStyle.Render("New Session"),
-			"",
-			m.newSessionForm.View(),
-		)
-		formOverlay := styles.ModalStyle.Render(formContent)
-
-		bgLayer := lipgloss.NewLayer(mainView)
-		formLayer := lipgloss.NewLayer(formOverlay)
-		formW := lipgloss.Width(formOverlay)
-		formH := lipgloss.Height(formOverlay)
-		centerX := (w - formW) / 2
-		centerY := (h - formH) / 2
-		formLayer.X(centerX).Y(centerY).Z(1)
-
-		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		content = compositor.Render()
-	case m.state == stateFormInput && m.formDialog != nil:
-		formContent := lipgloss.JoinVertical(
-			lipgloss.Left,
-			styles.ModalTitleStyle.Render(m.formDialog.Title),
-			"",
-			m.formDialog.View(),
-		)
-		formOverlay := styles.FormModalStyle.Render(formContent)
-
-		bgLayer := lipgloss.NewLayer(mainView)
-		formLayer := lipgloss.NewLayer(formOverlay)
-		formW := lipgloss.Width(formOverlay)
-		formH := lipgloss.Height(formOverlay)
-		centerX := (w - formW) / 2
-		centerY := (h - formH) / 2
-		formLayer.X(centerX).Y(centerY).Z(1)
-
-		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		content = compositor.Render()
-	case m.state == statePreviewingMessage:
-		content = m.previewModal.Overlay(mainView, w, h)
-	case m.state == stateLoading:
-		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, m.spinner.View(), " "+m.loadingMessage)
-		modal := NewModal("", loadingView)
-		content = modal.Overlay(mainView, w, h)
-	case m.state == stateConfirming:
-		content = m.modal.Overlay(mainView, w, h)
-	case m.state == stateCommandPalette && m.commandPalette != nil:
-		content = m.commandPalette.Overlay(mainView, w, h)
-	case m.state == stateShowingHelp && m.helpDialog != nil:
-		content = m.helpDialog.Overlay(mainView, w, h)
-	case m.state == stateShowingNotifications && m.notificationModal != nil:
-		content = m.notificationModal.Overlay(mainView, w, h)
-	case m.state == stateRenaming:
-		renameContent := lipgloss.JoinVertical(
-			lipgloss.Left,
-			styles.ModalTitleStyle.Render("Rename Session"),
-			"",
-			m.renameInput.View(),
-			"",
-			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel"),
-		)
-		renameOverlay := styles.ModalStyle.Width(50).Render(renameContent)
-		bgLayer := lipgloss.NewLayer(mainView)
-		renameLayer := lipgloss.NewLayer(renameOverlay)
-		rW := lipgloss.Width(renameOverlay)
-		rH := lipgloss.Height(renameOverlay)
-		renameLayer.X((w - rW) / 2).Y((h - rH) / 2).Z(1)
-		compositor := lipgloss.NewCompositor(bgLayer, renameLayer)
-		content = compositor.Render()
-	case m.docPickerModal != nil:
-		content = m.docPickerModal.Overlay(mainView, w, h)
-	default:
-		content = mainView
-	}
-
-	// Apply toast overlay on top of everything
-	if m.toastController.HasToasts() {
-		content = m.toastView.Overlay(content, w, h)
-	}
-
-	v := tea.NewView(content)
-	v.AltScreen = true
-	return v
-}
-
-// renderTabView renders the tab-based view layout.
-func (m Model) renderTabView() string {
-	// Build tab bar with tabs on left and branding on right
-	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
-	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
-
-	// Render each tab with appropriate style
-	renderTab := func(label string, view ViewType) string {
-		if m.activeView == view {
-			return styles.ViewSelectedStyle.Render(label)
-		}
-		return styles.ViewNormalStyle.Render(label)
-	}
-
-	// Build tab list
-	tabs := []string{
-		renderTab("Sessions", ViewSessions),
-		renderTab("Messages", ViewMessages),
-	}
-	if showStoreTab || m.activeView == ViewStore {
-		tabs = append(tabs, renderTab("Store", ViewStore))
-	}
-	if showReviewTab || m.activeView == ViewReview {
-		tabs = append(tabs, renderTab("Review", ViewReview))
-	}
-
-	tabsLeft := strings.Join(tabs, " | ")
-
-	// Add filter indicator if active
-	if m.statusFilter != "" {
-		filterLabel := string(m.statusFilter)
-		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
-	}
-
-	// Branding on right with background
-	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
-
-	// Calculate spacing to push branding to right edge with even margins
-	// Layout: [margin] tabs [spacer] branding [margin]
-	margin := 1
-	tabsWidth := lipgloss.Width(tabsLeft)
-	brandingWidth := lipgloss.Width(branding)
-	spacerWidth := max(m.width-tabsWidth-brandingWidth-(margin*2), 1)
-	leftMargin := components.Pad(margin)
-	spacer := components.Pad(spacerWidth)
-	rightMargin := components.Pad(margin)
-
-	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
-
-	// Horizontal dividers above and below header
-	dividerWidth := m.width
-	if dividerWidth < 1 {
-		dividerWidth = 80 // default width before WindowSizeMsg
-	}
-	topDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
-	headerDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
-
-	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
-	contentHeight := max(m.height-3, 1)
-
-	// Build content with fixed height to prevent layout shift
-	var content string
-	switch m.activeView {
-	case ViewSessions:
-		// Check if preview should be shown
-		if m.previewEnabled && m.width >= 80 {
-			content = m.renderDualColumnLayout(contentHeight)
-		} else {
-			// Reset delegate to show full info when not in preview mode
-			m.treeDelegate.PreviewMode = false
-			m.list.SetDelegate(m.treeDelegate)
-			content = m.list.View()
-
-			// Show focus mode filter input if active (at bottom to avoid layout shift)
-			if m.focusMode {
-				content = lipgloss.JoinVertical(lipgloss.Left, content, m.focusFilterInput.View())
-			} else if m.list.SettingFilter() {
-				// Fallback: show bubbles built-in filter if somehow active
-				content = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), content)
-			}
-
-			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-		}
-	case ViewMessages:
-		content = m.msgView.View()
-		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-	case ViewStore:
-		content = m.kvView.View()
-		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-	case ViewReview:
-		if m.reviewView != nil {
-			content = m.reviewView.View()
-			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-		}
-	}
-
-	return lipgloss.JoinVertical(lipgloss.Left, topDivider, header, headerDivider, content)
-}
-
-// renderDualColumnLayout renders sessions list and preview side by side.
-func (m Model) renderDualColumnLayout(contentHeight int) string {
-	// Update delegate to show minimal info in preview mode
-	m.treeDelegate.PreviewMode = true
-	m.list.SetDelegate(m.treeDelegate)
-
-	// Calculate widths (25% list, 1 char divider, remaining for preview)
-	listWidth := int(float64(m.width) * 0.25)
-	if listWidth < 20 {
-		listWidth = 20
-	}
-
-	// Account for divider (1 char) between list and preview
-	dividerWidth := 1
-	previewWidth := m.width - listWidth - dividerWidth
-
-	// Get selected session and its terminal status
-	selected := m.selectedSession()
-	var previewContent string
-
-	if selected != nil {
-		// Check if this is the current session (would cause recursive preview)
-		isSelf := m.isCurrentTmuxSession(selected)
-
-		// Determine pane content: use per-window content if a window item is selected,
-		// otherwise fall back to session-level content.
-		var paneContent string
-		if ws := m.selectedWindowStatus(); ws != nil {
-			paneContent = ws.PaneContent
-		} else if status, ok := m.terminalStatuses.Get(selected.ID); ok {
-			paneContent = status.PaneContent
-		}
-
-		switch {
-		case isSelf:
-			// Show placeholder instead of recursive preview
-			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\n(current session, preventing recursive view)"
-		case paneContent != "":
-			// Account for padding: 2 chars on each side = 4 total
-			usableWidth := previewWidth - 4
-
-			// Build header
-			header := m.renderPreviewHeader(selected, usableWidth)
-			headerHeight := strings.Count(header, "\n") + 1
-
-			// Calculate available lines for content
-			outputHeight := max(contentHeight-headerHeight, 1)
-
-			// Get content and truncate to width
-			content := tailLines(paneContent, outputHeight)
-			content = truncateLines(content, usableWidth)
-
-			previewContent = header + "\n" + content
-		default:
-			previewContent = m.renderPreviewHeader(selected, previewWidth-4) + "\n\nNo pane content available"
-		}
-	} else {
-		previewContent = "No session selected"
-	}
-
-	// Render list
-	listView := m.list.View()
-	if m.focusMode {
-		listView = lipgloss.JoinVertical(lipgloss.Left, listView, m.focusFilterInput.View())
-	} else if m.list.SettingFilter() {
-		listView = lipgloss.JoinVertical(lipgloss.Left, m.list.FilterInput.View(), listView)
-	}
-
-	// Apply exact height to both panels
-	listView = ensureExactHeight(listView, contentHeight)
-	previewContent = ensureExactHeight(previewContent, contentHeight)
-
-	// Apply exact width to list view to prevent bleeding into preview
-	// The bubble tea list should already render at listWidth from SetSize,
-	// but we enforce it here to ensure clean horizontal joining
-	listView = ensureExactWidth(listView, listWidth)
-
-	// Apply padding and exact width to preview content
-	previewLines := strings.Split(previewContent, "\n")
-	for i, line := range previewLines {
-		previewLines[i] = "  " + line + "  "
-	}
-	previewContent = strings.Join(previewLines, "\n")
-	previewContent = ensureExactWidth(previewContent, previewWidth)
-	previewContent = styles.TextForegroundStyle.Render(previewContent)
-
-	// Create vertical divider between list and preview
-	dividerLines := make([]string, contentHeight)
-	for i := range dividerLines {
-		dividerLines[i] = styles.TextMutedStyle.Render("│")
-	}
-	divider := strings.Join(dividerLines, "\n")
-
-	// Join horizontally - all three panels have exact matching heights
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewContent)
-}
-
-// renderPreviewHeader renders the preview header section with session metadata.
-func (m Model) renderPreviewHeader(sess *session.Session, maxWidth int) string {
-	iconsEnabled := m.cfg.TUI.IconsEnabled()
-
-	// Styles
-	nameStyle := styles.PreviewHeaderNameStyle
-	separatorStyle := styles.TextMutedStyle
-	idStyle := styles.TextSecondaryStyle
-	branchStyle := styles.TextSecondaryStyle
-	addStyle := styles.TextSuccessStyle
-	delStyle := styles.TextErrorStyle
-	dirtyStyle := styles.TextWarningStyle
-	dividerStyle := styles.TextMutedStyle
-
-	divider := strings.Repeat("─", maxWidth)
-
-	// Build title line: "SessionName [window] • #abcd"
-	shortID := sess.ID
-	if len(shortID) > 4 {
-		shortID = shortID[len(shortID)-4:]
-	}
-	title := nameStyle.Render(sess.Name)
-	// Show window name if a specific window is selected
-	if ws := m.selectedWindowStatus(); ws != nil {
-		title += " " + styles.TextSecondaryStyle.Render("["+ws.WindowName+"]")
-	}
-	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
-
-	// Build status line with colors
-	var statusParts []string
-
-	// Git status
-	if m.gitStatuses != nil {
-		if status, ok := m.gitStatuses.Get(sess.Path); ok && !status.IsLoading && status.Error == nil {
-			gitPart := branchStyle.Render("(")
-			if iconsEnabled {
-				gitPart += branchStyle.Render(styles.IconGitBranch + " ")
-			}
-			gitPart += branchStyle.Render(status.Branch + ")")
-			gitPart += " " + addStyle.Render("+"+itoa(status.Additions))
-			gitPart += " " + delStyle.Render("-"+itoa(status.Deletions))
-			if status.HasChanges && iconsEnabled {
-				gitPart += " " + dirtyStyle.Render(styles.IconGit)
-			}
-			statusParts = append(statusParts, gitPart)
-		}
-	}
-
-	// Plugin statuses (neutral color)
-	if m.pluginStatuses != nil {
-		pluginOrder := []string{pluginGitHub, pluginBeads, pluginClaude}
-		for _, name := range pluginOrder {
-			store, ok := m.pluginStatuses[name]
-			if !ok || store == nil {
-				continue
-			}
-			status, ok := store.Get(sess.ID)
-			if !ok || status.Label == "" {
-				continue
-			}
-
-			var icon string
-			if iconsEnabled {
-				switch name {
-				case pluginGitHub:
-					icon = styles.IconGithub
-				case pluginBeads:
-					icon = styles.IconCheckList
-				case pluginClaude:
-					icon = styles.IconBrain
-				}
-			} else {
-				icon = status.Icon
-			}
-
-			// Icon unstyled, only the label gets neutral color
-			pluginPart := icon + separatorStyle.Render(status.Label)
-			statusParts = append(statusParts, pluginPart)
-		}
-	}
-
-	status := strings.Join(statusParts, separatorStyle.Render(" • "))
-
-	// Build header
-	var parts []string
-	parts = append(parts, title)
-	parts = append(parts, dividerStyle.Render(divider))
-	if status != "" {
-		parts = append(parts, status)
-	}
-	parts = append(parts, "")
-	parts = append(parts, styles.TextMutedStyle.Render("Output"))
-	parts = append(parts, dividerStyle.Render(divider))
-
-	return strings.Join(parts, "\n")
-}
-
-// itoa converts an int to a string without importing strconv.
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	if n < 0 {
-		return "-" + itoa(-n)
-	}
-	var digits []byte
-	for n > 0 {
-		digits = append([]byte{byte('0' + n%10)}, digits...)
-		n /= 10
-	}
-	return string(digits)
-}
-
-// tailLines returns the last n lines from the input string.
-func tailLines(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	lines := strings.Split(s, "\n")
-	if len(lines) <= n {
-		return s
-	}
-	return strings.Join(lines[len(lines)-n:], "\n")
-}
-
-// truncateLines truncates each line to fit within maxWidth visual characters.
-// Uses wcwidth-based truncation to properly handle ANSI codes and multi-byte characters.
-func truncateLines(s string, maxWidth int) string {
-	if maxWidth <= 0 {
-		return s
-	}
-
-	lines := strings.Split(s, "\n")
-	sb := builderPool.Get().(*strings.Builder)
-	defer func() {
-		sb.Reset()
-		builderPool.Put(sb)
-	}()
-
-	for i, line := range lines {
-		if i > 0 {
-			sb.WriteByte('\n')
-		}
-		if ansi.StringWidth(line) > maxWidth {
-			sb.WriteString(ansi.TruncateWc(line, maxWidth, ""))
-		} else {
-			sb.WriteString(line)
-		}
-	}
-
-	return sb.String()
-}
-
-// ensureExactWidth ensures all lines in content have exactly the specified width
-// by padding short lines with spaces or truncating long lines at the boundary.
-// This is critical for lipgloss.JoinHorizontal to work correctly.
-func ensureExactWidth(content string, width int) string {
-	if width <= 0 {
-		return content
-	}
-
-	lines := strings.Split(content, "\n")
-	sb := builderPool.Get().(*strings.Builder)
-	defer func() {
-		sb.Reset()
-		builderPool.Put(sb)
-	}()
-
-	for i, line := range lines {
-		if i > 0 {
-			sb.WriteByte('\n')
-		}
-
-		displayWidth := ansi.StringWidth(line)
-
-		switch {
-		case displayWidth == width:
-			sb.WriteString(line)
-		case displayWidth < width:
-			// Pad with spaces to reach target width using cached padding
-			sb.WriteString(line)
-			sb.WriteString(components.Pad(width - displayWidth))
-		default:
-			// Line too wide - truncate at width boundary
-			truncated := ansi.TruncateWc(line, width, "")
-			sb.WriteString(truncated)
-			// Pad if truncation made it shorter than width
-			truncWidth := ansi.StringWidth(truncated)
-			if truncWidth < width {
-				sb.WriteString(components.Pad(width - truncWidth))
-			}
-		}
-	}
-
-	return sb.String()
-}
-
-// ensureExactHeight ensures content has exactly n lines by truncating or padding.
-func ensureExactHeight(content string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-
-	lines := strings.Split(content, "\n")
-
-	if len(lines) > n {
-		lines = lines[:n]
-	} else {
-		for len(lines) < n {
-			lines = append(lines, "")
-		}
-	}
-
-	return strings.Join(lines, "\n")
 }
 
 // startRecycle returns a command that starts the recycle operation with streaming output.
@@ -3185,22 +1259,24 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 // deleteRecycledSessionsBatch returns a command that deletes multiple recycled sessions.
 func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 	return func() tea.Msg {
-		var lastErr error
+		var errs []error
 		for _, sess := range sessions {
 			exec, err := m.cmdService.CreateExecutor(Action{
 				Type:      act.TypeDelete,
 				SessionID: sess.ID,
 			})
 			if err != nil {
-				lastErr = err
+				log.Error().Err(err).Str("session", sess.ID).Msg("failed to create delete executor")
+				errs = append(errs, err)
 				continue
 			}
 
 			if err := command.ExecuteSync(context.Background(), exec); err != nil {
-				lastErr = err
+				log.Error().Err(err).Str("session", sess.ID).Msg("failed to delete recycled session")
+				errs = append(errs, err)
 			}
 		}
-		return actionCompleteMsg{err: lastErr}
+		return actionCompleteMsg{err: errors.Join(errs...)}
 	}
 }
 
@@ -3230,10 +1306,7 @@ func (m *Model) applyTheme(name string) {
 		return
 	}
 	styles.SetTheme(palette)
-	m.treeDelegate.Styles = DefaultTreeDelegateStyles()
-	m.list.SetDelegate(m.treeDelegate)
-	// Clear cached animation colors so they regenerate from new theme
-	activeAnimationColors = nil
+	m.sessionsView.ApplyTheme()
 }
 
 // listenForRecycleOutput returns a command that waits for the next output or completion.

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -14,7 +15,7 @@ func keyPress(code rune) tea.KeyPressMsg {
 }
 
 func TestNewNewSessionForm(t *testing.T) {
-	repos := []DiscoveredRepo{
+	repos := []sessions.DiscoveredRepo{
 		{Path: "/code/alpha", Name: "alpha", Remote: "git@github.com:user/alpha.git"},
 		{Path: "/code/beta", Name: "beta", Remote: "git@github.com:user/beta.git"},
 		{Path: "/code/gamma", Name: "gamma", Remote: "git@github.com:user/gamma.git"},
@@ -103,7 +104,7 @@ func TestNewNewSessionForm(t *testing.T) {
 	})
 
 	t.Run("Result returns zero value for empty repos", func(t *testing.T) {
-		form := NewNewSessionForm([]DiscoveredRepo{}, "", nil)
+		form := NewNewSessionForm([]sessions.DiscoveredRepo{}, "", nil)
 		result := form.Result()
 		assert.Empty(t, result.Repo.Name)
 		assert.Empty(t, result.Repo.Remote)

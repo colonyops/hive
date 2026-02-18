@@ -56,6 +56,6 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 
 	// Show document picker modal on current view (Sessions)
 	// Don't switch to Review until document is selected
-	m.docPickerModal = review.NewDocumentPickerModal(docs, m.width, m.height, m.reviewView.Store())
+	m.modals.DocPicker = review.NewDocumentPickerModal(docs, m.width, m.height, m.reviewView.Store())
 	return nil
 }

@@ -1,4 +1,4 @@
-package tui
+package sessions
 
 import (
 	"fmt"
@@ -42,6 +42,12 @@ var (
 	activeAnimationColors []color.Color
 	activeAnimationSeed   uint32 // R channel of seed color, used to detect theme changes
 )
+
+// ClearAnimationColors resets the cached animation colors so they regenerate
+// from the current theme on next render. Call after a theme change.
+func ClearAnimationColors() {
+	activeAnimationColors = nil
+}
 
 // generatePulseColors creates a symmetric fade animation from a seed color.
 // It dims the color to minBrightness (0.0–1.0) at the midpoint and returns to full brightness.
@@ -508,7 +514,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Apply Claude plugin style (context usage color) if present
 	if d.PluginStatuses != nil {
-		if claudeStore, ok := d.PluginStatuses[pluginClaude]; ok {
+		if claudeStore, ok := d.PluginStatuses[PluginClaude]; ok {
 			if status, ok := claudeStore.Get(item.Session.ID); ok {
 				// Claude plugin returns style (color) but no label/icon
 				// Use Inherit to merge the color while preserving selection state
@@ -681,7 +687,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	neutralStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 
 	var parts []string
-	pluginOrder := []string{pluginGitHub, pluginBeads, pluginClaude}
+	pluginOrder := []string{PluginGitHub, PluginBeads, PluginClaude}
 	for _, name := range pluginOrder {
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
@@ -695,11 +701,11 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 		var icon string
 		if d.IconsEnabled {
 			switch name {
-			case pluginGitHub:
+			case PluginGitHub:
 				icon = styles.IconGithub
-			case pluginBeads:
+			case PluginBeads:
 				icon = styles.IconCheckList
-			case pluginClaude:
+			case PluginClaude:
 				icon = styles.IconBrain
 			default:
 				icon = status.Icon

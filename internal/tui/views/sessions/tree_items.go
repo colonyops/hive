@@ -1,4 +1,4 @@
-package tui
+package sessions
 
 import (
 	"iter"
@@ -36,4 +36,18 @@ func TreeItemsSessions(items []list.Item) iter.Seq2[int, TreeItem] {
 			}
 		}
 	}
+}
+
+// ListItemsToTreeItems extracts TreeItems from list items, preserving indices.
+// Non-TreeItem entries are marked as headers so restore skips them.
+func ListItemsToTreeItems(items []list.Item) []TreeItem {
+	result := make([]TreeItem, len(items))
+	for i, item := range items {
+		if ti, ok := item.(TreeItem); ok {
+			result[i] = ti
+		} else {
+			result[i] = TreeItem{IsHeader: true}
+		}
+	}
+	return result
 }

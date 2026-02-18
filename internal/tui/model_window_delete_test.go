@@ -5,12 +5,11 @@ import (
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestMaybeOverrideWindowDelete(t *testing.T) {
-	m := Model{renderer: testRenderer}
-
 	deleteAction := Action{
 		Type:      action.TypeDelete,
 		SessionID: "sess-1",
@@ -22,35 +21,35 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	}
 
 	t.Run("nil treeItem returns action unchanged", func(t *testing.T) {
-		got := m.maybeOverrideWindowDelete(deleteAction, nil)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, nil, testRenderer)
 		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
 	t.Run("non-window item returns action unchanged", func(t *testing.T) {
-		ti := &TreeItem{IsWindowItem: false}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		ti := &sessions.TreeItem{IsWindowItem: false}
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Equal(t, action.TypeDelete, got.Type)
 	})
 
 	t.Run("non-delete action on window returns action unchanged", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "1",
 			WindowName:    "claude",
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
-		got := m.maybeOverrideWindowDelete(shellAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(shellAction, ti, testRenderer)
 		assert.Equal(t, action.TypeShell, got.Type)
 	})
 
 	t.Run("delete on window converts to tmux kill-window shell command", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "2",
 			WindowName:    "aider",
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Equal(t, action.TypeShell, got.Type)
 		assert.Contains(t, got.ShellCmd, "tmux kill-window")
 		assert.Contains(t, got.ShellCmd, "my-slug:2")
@@ -58,7 +57,7 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 	})
 
 	t.Run("uses MetaTmuxSession when available", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem: true,
 			WindowIndex:  "1",
 			WindowName:   "claude",
@@ -69,39 +68,39 @@ func TestMaybeOverrideWindowDelete(t *testing.T) {
 				},
 			},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Contains(t, got.ShellCmd, "explicit-sess:1")
 	})
 
 	t.Run("falls back to Name when Slug empty", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "0",
 			WindowName:    "bash",
 			ParentSession: session.Session{Name: "my-name"},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Contains(t, got.ShellCmd, "my-name:0")
 	})
 
 	t.Run("errors when session and window index are empty", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "",
 			ParentSession: session.Session{},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Error(t, got.Err, "expected Err to be non-nil when session and window index are empty")
 	})
 
 	t.Run("no window name uses generic confirm message", func(t *testing.T) {
-		ti := &TreeItem{
+		ti := &sessions.TreeItem{
 			IsWindowItem:  true,
 			WindowIndex:   "0",
 			WindowName:    "",
 			ParentSession: session.Session{Slug: "my-slug"},
 		}
-		got := m.maybeOverrideWindowDelete(deleteAction, ti)
+		got := sessions.MaybeOverrideWindowDelete(deleteAction, ti, testRenderer)
 		assert.Equal(t, "Kill tmux window?", got.Confirm)
 	})
 }

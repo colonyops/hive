@@ -1,10 +1,12 @@
-package tui
+package sessions
 
 import (
 	"context"
 	"os"
 	"path/filepath"
 	"sort"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/git"
 )
@@ -23,10 +25,10 @@ func ScanRepoDirs(ctx context.Context, dirs []string, gitExec git.Git) ([]Discov
 	var repos []DiscoveredRepo
 
 	for _, dir := range dirs {
-		// Expand home directory
 		if len(dir) > 0 && dir[0] == '~' {
 			home, err := os.UserHomeDir()
 			if err != nil {
+				log.Debug().Err(err).Str("dir", dir).Msg("failed to resolve home directory, skipping")
 				continue
 			}
 			dir = filepath.Join(home, dir[1:])
@@ -34,6 +36,7 @@ func ScanRepoDirs(ctx context.Context, dirs []string, gitExec git.Git) ([]Discov
 
 		entries, err := os.ReadDir(dir)
 		if err != nil {
+			log.Debug().Err(err).Str("dir", dir).Msg("failed to read repo directory, skipping")
 			continue
 		}
 

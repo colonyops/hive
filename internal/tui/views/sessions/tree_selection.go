@@ -1,9 +1,9 @@
-package tui
+package sessions
 
-// treeSelection captures the identity of a selected tree item and can find
+// TreeSelection captures the identity of a selected tree item and can find
 // the best matching item after a list rebuild. Operates purely on TreeItem
 // slices so it can be tested without the full TUI model.
-type treeSelection struct {
+type TreeSelection struct {
 	sessionID    string // session ID (or parent session ID for window items)
 	windowName   string // non-empty for window sub-items
 	windowIndex  string // fallback for window sub-items
@@ -11,10 +11,10 @@ type treeSelection struct {
 	index        int    // raw list index as last-resort fallback
 }
 
-// saveTreeSelection captures the identity of the selected item at the given index.
+// SaveTreeSelection captures the identity of the selected item at the given index.
 // Pass nil if nothing is selected.
-func saveTreeSelection(item *TreeItem, index int) treeSelection {
-	sel := treeSelection{index: index}
+func SaveTreeSelection(item *TreeItem, index int) TreeSelection {
+	sel := TreeSelection{index: index}
 	if item == nil {
 		return sel
 	}
@@ -40,7 +40,7 @@ func saveTreeSelection(item *TreeItem, index int) treeSelection {
 //  4. Session by ID
 //  5. Original index (clamped to bounds)
 //  6. First non-header item
-func (s treeSelection) restore(items []TreeItem) int {
+func (s TreeSelection) Restore(items []TreeItem) int {
 	// 1. Window by index
 	if s.windowIndex != "" {
 		for i, ti := range items {
