@@ -91,6 +91,30 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 	return nil
 }
 
+// AddWindows adds windows to an existing tmux session.
+// If any window has Focus set, that window is selected after all windows are created.
+func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows []RenderedWindow) error {
+	for _, w := range windows {
+		args := []string{"new-window", "-t", name, "-n", w.Name}
+		if dir := windowDir(w, workDir); dir != "" {
+			args = append(args, "-c", dir)
+		}
+		if w.Command != "" {
+			args = append(args, "--", "sh", "-c", w.Command)
+		}
+		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
+		}
+	}
+	for _, w := range windows {
+		if w.Focus {
+			_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+w.Name)
+			break
+		}
+	}
+	return nil
+}
+
 // AttachOrSwitch connects to an existing tmux session.
 // Inside tmux it uses switch-client; outside it uses attach-session.
 func (c *Client) AttachOrSwitch(ctx context.Context, name string) error {

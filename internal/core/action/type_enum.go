@@ -47,6 +47,8 @@ const (
 	TypePrevActive Type = "PrevActive"
 	// TypeDeleteRecycledBatch is a Type of type DeleteRecycledBatch.
 	TypeDeleteRecycledBatch Type = "DeleteRecycledBatch"
+	// TypeSpawnWindows is a Type of type SpawnWindows.
+	TypeSpawnWindows Type = "SpawnWindows"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -70,6 +72,7 @@ var _TypeNames = []string{
 	string(TypeNextActive),
 	string(TypePrevActive),
 	string(TypeDeleteRecycledBatch),
+	string(TypeSpawnWindows),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -128,6 +131,8 @@ var _TypeValue = map[string]Type{
 	"prevactive":          TypePrevActive,
 	"DeleteRecycledBatch": TypeDeleteRecycledBatch,
 	"deleterecycledbatch": TypeDeleteRecycledBatch,
+	"SpawnWindows":        TypeSpawnWindows,
+	"spawnwindows":        TypeSpawnWindows,
 }
 
 // ParseType attempts to convert a string to a Type.

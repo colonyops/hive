@@ -11,6 +11,7 @@ import (
 // ShellExecutor executes a shell command.
 type ShellExecutor struct {
 	cmd string
+	dir string // working directory; empty means inherit hive process cwd
 }
 
 // Execute runs the shell command asynchronously.
@@ -23,6 +24,9 @@ func (e *ShellExecutor) Execute(ctx context.Context) (output <-chan string, done
 		defer close(doneCh)
 
 		c := exec.CommandContext(ctx, "sh", "-c", e.cmd)
+		if e.dir != "" {
+			c.Dir = e.dir
+		}
 		var stderr bytes.Buffer
 		c.Stderr = &stderr
 

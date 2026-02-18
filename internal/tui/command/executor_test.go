@@ -321,10 +321,20 @@ func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, 
 	return m.openErr
 }
 
+type mockWindowSpawner struct{}
+
+func (m *mockWindowSpawner) AddWindowsToTmuxSession(_ context.Context, _, _ string, _ []action.WindowSpec, _ bool) error {
+	return nil
+}
+
+func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, _ action.NewSessionRequest, _ []action.WindowSpec, _ bool) error {
+	return nil
+}
+
 // Service tests
 
 func TestService_CreateExecutor(t *testing.T) {
-	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{})
+	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{}, &mockWindowSpawner{})
 
 	tests := []struct {
 		name    string
@@ -355,6 +365,19 @@ func TestService_CreateExecutor(t *testing.T) {
 			name:    "tmux start action",
 			action:  Action{Type: action.TypeTmuxStart, SessionName: "sess", SessionPath: "/work"},
 			wantErr: false,
+		},
+		{
+			name: "spawn windows action",
+			action: Action{Type: action.TypeSpawnWindows, SpawnWindows: &action.SpawnWindowsPayload{
+				TmuxTarget: "sess",
+				Windows:    []action.WindowSpec{{Name: "w1"}},
+			}},
+			wantErr: false,
+		},
+		{
+			name:    "spawn windows missing payload",
+			action:  Action{Type: action.TypeSpawnWindows},
+			wantErr: true,
 		},
 		{
 			name:    "unsupported action",

@@ -253,3 +253,48 @@ func TestClient_OpenSession(t *testing.T) {
 		assert.Contains(t, rec.Commands[1].Args, "new-session")
 	})
 }
+
+func TestClient_AddWindows(t *testing.T) {
+	t.Run("adds windows without focus", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.AddWindows(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "w1", Command: "claude"},
+			{Name: "w2"},
+		})
+		require.NoError(t, err)
+
+		require.Len(t, rec.Commands, 2)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w1", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-c", "/work"}, rec.Commands[1].Args)
+	})
+
+	t.Run("selects focused window", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.AddWindows(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "w1"},
+			{Name: "w2", Focus: true},
+		})
+		require.NoError(t, err)
+
+		// 2 new-window + 1 select-window
+		require.Len(t, rec.Commands, 3)
+		assert.Equal(t, []string{"select-window", "-t", "sess:w2"}, rec.Commands[2].Args)
+	})
+
+	t.Run("window dir overrides session dir", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.AddWindows(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "w1", Dir: "/custom"},
+		})
+		require.NoError(t, err)
+
+		require.Len(t, rec.Commands, 1)
+		assert.Contains(t, rec.Commands[0].Args, "/custom")
+	})
+}

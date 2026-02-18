@@ -406,6 +406,7 @@ type GitConfig struct {
 type WindowConfig struct {
 	Name    string `yaml:"name"`              // Window name (template string, required)
 	Command string `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
+	Prompt  string `yaml:"prompt,omitempty"`  // Text passed to the agent command; composed into Command at render time
 	Dir     string `yaml:"dir,omitempty"`     // Working directory override (template string)
 	Focus   bool   `yaml:"focus,omitempty"`   // Select this window after creation
 }
@@ -439,16 +440,30 @@ type Keybinding struct {
 	Confirm string `yaml:"confirm"` // optional override for confirmation prompt
 }
 
+// UserCommandOptions controls execution behaviour for UserCommands with windows.
+type UserCommandOptions struct {
+	// SessionName is a template string. When non-empty, a new Hive session is created
+	// with this name before sh: runs and windows are opened.
+	SessionName string `yaml:"session_name,omitempty"`
+	// Remote overrides the remote URL for new session creation.
+	// Only valid when SessionName is also set.
+	Remote string `yaml:"remote,omitempty"`
+	// Background creates windows without attaching or switching to the tmux session.
+	Background bool `yaml:"background,omitempty"`
+}
+
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  action.Type `yaml:"action,omitempty"` // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
-	Sh      string      `yaml:"sh"`               // shell command template - mutually exclusive with action
-	Form    []FormField `yaml:"form,omitempty"`   // interactive input fields collected before sh execution
-	Help    string      `yaml:"help"`             // description shown in palette/help
-	Confirm string      `yaml:"confirm"`          // confirmation prompt (empty = no confirm)
-	Silent  bool        `yaml:"silent"`           // skip loading popup for fast commands
-	Exit    string      `yaml:"exit"`             // exit hive after command (bool or $ENV_VAR)
-	Scope   []string    `yaml:"scope,omitempty"`  // views where command is active (empty = global)
+	Action  action.Type        `yaml:"action,omitempty"`  // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
+	Sh      string             `yaml:"sh"`                // shell command template - mutually exclusive with action
+	Windows []WindowConfig     `yaml:"windows,omitempty"` // Tmux windows to open after sh: completes
+	Options UserCommandOptions `yaml:"options,omitempty"` // Execution options for window-based commands
+	Form    []FormField        `yaml:"form,omitempty"`    // interactive input fields collected before sh execution
+	Help    string             `yaml:"help"`              // description shown in palette/help
+	Confirm string             `yaml:"confirm"`           // confirmation prompt (empty = no confirm)
+	Silent  bool               `yaml:"silent"`            // skip loading popup for fast commands
+	Exit    string             `yaml:"exit"`              // exit hive after command (bool or $ENV_VAR)
+	Scope   []string           `yaml:"scope,omitempty"`   // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
@@ -701,17 +716,38 @@ func (c *Config) validateUserCommandsBasic() error {
 			continue
 		}
 
-		// Must have exactly one of action or sh
-		if cmd.Action == "" && cmd.Sh == "" {
-			errs = errs.Append(field, fmt.Errorf("must have either action or sh"))
+		// Must have at least one of: action, sh, windows
+		hasAction := cmd.Action != ""
+		hasSh := cmd.Sh != ""
+		hasWindows := len(cmd.Windows) > 0
+
+		if !hasAction && !hasSh && !hasWindows {
+			errs = errs.Append(field, fmt.Errorf("must have at least one of: action, sh, windows"))
 			continue
 		}
-		if cmd.Action != "" && cmd.Sh != "" {
-			errs = errs.Append(field, fmt.Errorf("cannot have both action and sh"))
+		if hasAction && (hasSh || hasWindows) {
+			errs = errs.Append(field, fmt.Errorf("action is mutually exclusive with sh and windows"))
 			continue
 		}
-		if cmd.Action != "" && !isValidAction(cmd.Action) {
+		if hasAction && !isValidAction(cmd.Action) {
 			errs = errs.Append(field, fmt.Errorf("invalid action %q", cmd.Action))
+		}
+
+		// Validate windows entries
+		for i, w := range cmd.Windows {
+			wfield := fmt.Sprintf("%s.windows[%d]", field, i)
+			if w.Name == "" {
+				errs = errs.Append(wfield, fmt.Errorf("name is required"))
+			}
+		}
+
+		// options.remote requires options.session_name
+		if cmd.Options.Remote != "" && cmd.Options.SessionName == "" {
+			errs = errs.Append(field+".options.remote", fmt.Errorf("remote requires session_name to be set"))
+		}
+		// options.background only meaningful when windows are present
+		if cmd.Options.Background && !hasWindows {
+			errs = errs.Append(field+".options.background", fmt.Errorf("background only applies when windows are defined"))
 		}
 
 		// Validate scope values

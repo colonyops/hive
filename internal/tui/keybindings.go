@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -119,6 +120,77 @@ func (h *KeybindingResolver) IsCommand(key string, cmdName string) bool {
 	return kb.Cmd == cmdName
 }
 
+// renderUserCommandWindows renders a slice of WindowConfig templates against a UserCommand
+// data map, returning pre-rendered WindowSpec values for use in a SpawnWindows action.
+func renderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data map[string]any) ([]action.WindowSpec, error) {
+	rws, err := hive.RenderUserCommandWindows(renderer, windows, data)
+	if err != nil {
+		return nil, err
+	}
+	specs := make([]action.WindowSpec, len(rws))
+	for i, rw := range rws {
+		specs[i] = action.WindowSpec{Name: rw.Name, Command: rw.Command, Dir: rw.Dir, Focus: rw.Focus}
+	}
+	return specs, nil
+}
+
+// resolveWindowsAction builds a TypeSpawnWindows action from a UserCommand with windows.
+// It routes sh: to the appropriate location depending on whether options.session_name is set.
+func (h *KeybindingResolver) resolveWindowsAction(a Action, cmd config.UserCommand, sess session.Session, data map[string]any) Action {
+	a.Type = action.TypeSpawnWindows
+
+	windows, err := renderUserCommandWindows(h.renderer, cmd.Windows, data)
+	if err != nil {
+		a.Err = fmt.Errorf("template error in windows: %w", err)
+		return a
+	}
+
+	// Build new-session request if options.session_name is set.
+	var newSess *action.NewSessionRequest
+	if cmd.Options.SessionName != "" {
+		sessionName, err := h.renderer.Render(cmd.Options.SessionName, data)
+		if err != nil {
+			a.Err = fmt.Errorf("template error in options.session_name: %w", err)
+			return a
+		}
+		remote, err := h.renderer.Render(cmd.Options.Remote, data)
+		if err != nil {
+			a.Err = fmt.Errorf("template error in options.remote: %w", err)
+			return a
+		}
+		newSess = &action.NewSessionRequest{Name: sessionName, Remote: remote}
+	}
+
+	// Render sh: and route it to the right location.
+	var shCmd, shDir string
+	if cmd.Sh != "" {
+		rendered, err := h.renderer.Render(cmd.Sh, data)
+		if err != nil {
+			a.Err = fmt.Errorf("template error in sh: %w", err)
+			return a
+		}
+		if newSess != nil {
+			// new-session mode: sh: runs after the git clone in the new session's path
+			newSess.ShCmd = rendered
+		} else {
+			// same-session mode: sh: runs in the selected session's path
+			shCmd = rendered
+			shDir = sess.Path
+		}
+	}
+
+	a.SpawnWindows = &action.SpawnWindowsPayload{
+		ShCmd:      shCmd,
+		ShDir:      shDir,
+		Windows:    windows,
+		TmuxTarget: sess.Name,
+		SessionDir: sess.Path,
+		Background: cmd.Options.Background,
+		NewSession: newSess,
+	}
+	return a
+}
+
 // Resolve attempts to resolve a key press to an action for the given session.
 // Recycled sessions only allow delete actions to prevent accidental operations.
 func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, bool) {
@@ -184,8 +256,8 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 		return a, true
 	}
 
-	// Shell command
-	if cmd.Sh != "" {
+	// Shell command or windows
+	if cmd.Sh != "" || len(cmd.Windows) > 0 {
 		data := map[string]any{
 			"Path":       sess.Path,
 			"Remote":     sess.Remote,
@@ -193,6 +265,10 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			"Name":       sess.Name,
 			"Tool":       h.toolForSession(sess.ID),
 			"TmuxWindow": h.consumeWindowOverride(sess.ID),
+		}
+
+		if len(cmd.Windows) > 0 {
+			return h.resolveWindowsAction(a, cmd, sess, data), true
 		}
 
 		rendered, err := h.renderer.Render(cmd.Sh, data)
@@ -206,6 +282,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 
 		a.Type = action.TypeShell
 		a.ShellCmd = rendered
+		a.ShellDir = sess.Path
 		return a, true
 	}
 
@@ -319,7 +396,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		return a
 	}
 
-	// Shell command
+	// Shell command or windows
 	data := map[string]any{
 		"Path":       sess.Path,
 		"Remote":     sess.Remote,
@@ -328,6 +405,10 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		"Tool":       h.toolForSession(sess.ID),
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
+	}
+
+	if len(cmd.Windows) > 0 {
+		return h.resolveWindowsAction(a, cmd, sess, data)
 	}
 
 	rendered, err := h.renderer.Render(cmd.Sh, data)
@@ -340,6 +421,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 
 	a.Type = action.TypeShell
 	a.ShellCmd = rendered
+	a.ShellDir = sess.Path
 	return a
 }
 
@@ -375,6 +457,10 @@ func (h *KeybindingResolver) RenderWithFormData(
 		"Form":       formData,
 	}
 
+	if len(cmd.Windows) > 0 {
+		return h.resolveWindowsAction(a, cmd, sess, data)
+	}
+
 	rendered, err := h.renderer.Render(cmd.Sh, data)
 	if err != nil {
 		a.Type = action.TypeShell
@@ -384,6 +470,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 
 	a.Type = action.TypeShell
 	a.ShellCmd = rendered
+	a.ShellDir = sess.Path
 	return a
 }
 

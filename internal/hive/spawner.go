@@ -18,6 +18,8 @@ import (
 type SessionClient interface {
 	CreateSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool) error
 	OpenSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool, targetWindow string) error
+	AddWindows(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow) error
+	AttachOrSwitch(ctx context.Context, name string) error
 }
 
 // SpawnData is the template context for spawn commands.
@@ -120,34 +122,97 @@ func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data 
 	return rendered, nil
 }
 
-// renderWindow renders a single WindowConfig's template fields against SpawnData.
-func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData) (coretmux.RenderedWindow, error) {
-	name, err := renderer.Render(w.Name, data)
+// posixQuote wraps s in POSIX single quotes, escaping any embedded single quotes.
+func posixQuote(s string) string {
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
+}
+
+// renderWindowCommon is the shared rendering core used by renderWindow and renderWindowMap.
+// render is a closure that evaluates a single template string against the caller's data context.
+func renderWindowCommon(w config.WindowConfig, render func(string) (string, error)) (coretmux.RenderedWindow, error) {
+	name, err := render(w.Name)
 	if err != nil {
 		return coretmux.RenderedWindow{}, fmt.Errorf("name template: %w", err)
 	}
 
 	var command string
 	if w.Command != "" {
-		command, err = renderer.Render(w.Command, data)
+		command, err = render(w.Command)
 		if err != nil {
 			return coretmux.RenderedWindow{}, fmt.Errorf("command template: %w", err)
 		}
 		command = strings.TrimSpace(command)
 	}
 
+	// Compose Prompt into Command when set.
+	if w.Prompt != "" {
+		prompt, err := render(w.Prompt)
+		if err != nil {
+			return coretmux.RenderedWindow{}, fmt.Errorf("prompt template: %w", err)
+		}
+		prompt = strings.TrimSpace(prompt)
+		if prompt != "" {
+			if command == "" {
+				agentCmd, err := render("{{ agentCommand }}")
+				if err != nil {
+					return coretmux.RenderedWindow{}, fmt.Errorf("agentCommand template: %w", err)
+				}
+				command = strings.TrimSpace(agentCmd)
+			}
+			command = command + " " + posixQuote(prompt)
+		}
+	}
+
 	var dir string
 	if w.Dir != "" {
-		dir, err = renderer.Render(w.Dir, data)
+		dir, err = render(w.Dir)
 		if err != nil {
 			return coretmux.RenderedWindow{}, fmt.Errorf("dir template: %w", err)
 		}
 	}
 
-	return coretmux.RenderedWindow{
-		Name:    name,
-		Command: command,
-		Dir:     dir,
-		Focus:   w.Focus,
-	}, nil
+	return coretmux.RenderedWindow{Name: name, Command: command, Dir: dir, Focus: w.Focus}, nil
+}
+
+// renderWindow renders a single WindowConfig against SpawnData.
+func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData) (coretmux.RenderedWindow, error) {
+	return renderWindowCommon(w, func(tmplStr string) (string, error) {
+		return renderer.Render(tmplStr, data)
+	})
+}
+
+// renderWindowMap renders a single WindowConfig against a map[string]any data context.
+// Used for UserCommand windows, which carry .Form and session variables as a map.
+func renderWindowMap(renderer *tmpl.Renderer, w config.WindowConfig, data map[string]any) (coretmux.RenderedWindow, error) {
+	return renderWindowCommon(w, func(tmplStr string) (string, error) {
+		return renderer.Render(tmplStr, data)
+	})
+}
+
+// RenderUserCommandWindows renders windows from a UserCommand using the provided template data map.
+// Unlike RenderWindows, it accepts map[string]any to include .Form and session variables.
+func RenderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data map[string]any) ([]coretmux.RenderedWindow, error) {
+	rendered := make([]coretmux.RenderedWindow, 0, len(windows))
+	for _, w := range windows {
+		rw, err := renderWindowMap(renderer, w, data)
+		if err != nil {
+			return nil, fmt.Errorf("render window %q: %w", w.Name, err)
+		}
+		rendered = append(rendered, rw)
+	}
+	return rendered, nil
+}
+
+// AddWindowsToTmuxSession adds pre-rendered windows to an existing tmux session.
+// If background is false, switches to the session after adding windows.
+func (s *Spawner) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []coretmux.RenderedWindow, background bool) error {
+	if err := s.tmux.AddWindows(ctx, tmuxName, workDir, windows); err != nil {
+		return fmt.Errorf("add windows to %q: %w", tmuxName, err)
+	}
+	if !background {
+		if err := s.tmux.AttachOrSwitch(ctx, tmuxName); err != nil {
+			s.log.Warn().Str("session", tmuxName).Err(err).Msg("failed to switch to session after adding windows")
+		}
+	}
+	return nil
 }

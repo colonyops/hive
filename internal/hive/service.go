@@ -1,15 +1,18 @@
 package hive
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
@@ -30,6 +33,7 @@ type CreateOptions struct {
 	Remote        string // Git remote URL to clone (auto-detected if empty)
 	Source        string // Source directory for file copying
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
+	SkipSpawn     bool   // Skip the normal spawn strategy (caller handles terminal launch)
 }
 
 // SessionService orchestrates hive session operations.
@@ -164,18 +168,20 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		Repo:       repoName,
 	}
 
-	strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
-	switch {
-	case strategy.IsWindows():
-		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
-			return nil, fmt.Errorf("spawn terminal: %w", err)
+	if !opts.SkipSpawn {
+		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		switch {
+		case strategy.IsWindows():
+			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
+				return nil, fmt.Errorf("spawn terminal: %w", err)
+			}
+		case len(strategy.Commands) > 0:
+			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+				return nil, fmt.Errorf("spawn terminal: %w", err)
+			}
+		default:
+			return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
 		}
-	case len(strategy.Commands) > 0:
-		if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
-			return nil, fmt.Errorf("spawn terminal: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
 	}
 
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
@@ -566,4 +572,48 @@ func (s *SessionService) enforceMaxRecycled(ctx context.Context, remote string) 
 	}
 
 	return nil
+}
+
+// AddWindowsToTmuxSession adds windows to an existing tmux session, converting action.WindowSpec
+// to coretmux.RenderedWindow. Satisfies the command.WindowSpawner interface.
+func (s *SessionService) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error {
+	rendered := make([]coretmux.RenderedWindow, len(windows))
+	for i, w := range windows {
+		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
+	}
+	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, rendered, background)
+}
+
+// CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
+// then opens tmux windows in it. Non-zero shCmd exit aborts window creation.
+// Satisfies the command.WindowSpawner interface.
+func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req action.NewSessionRequest, windows []action.WindowSpec, background bool) error {
+	sess, err := s.CreateSession(ctx, CreateOptions{
+		Name:      req.Name,
+		Remote:    req.Remote,
+		SkipSpawn: true,
+	})
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+
+	if req.ShCmd != "" {
+		c := exec.CommandContext(ctx, "sh", "-c", req.ShCmd)
+		c.Dir = sess.Path
+		var stderr bytes.Buffer
+		c.Stderr = &stderr
+		if err := c.Run(); err != nil {
+			msg := strings.TrimSpace(stderr.String())
+			if msg != "" {
+				return fmt.Errorf("sh: %s", msg)
+			}
+			return fmt.Errorf("sh: %w", err)
+		}
+	}
+
+	rendered := make([]coretmux.RenderedWindow, len(windows))
+	for i, w := range windows {
+		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
+	}
+	return s.spawner.tmux.CreateSession(ctx, sess.Name, sess.Path, rendered, background)
 }
