@@ -163,66 +163,62 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "send message to multiple agents",
 		Silent: true,
 	},
-	"PRReview": {
-		Help: "multi-agent PR review (leader + analyst + security)",
-		Options: UserCommandOptions{
-			SessionName: "pr-review-{{ .Form.pr }}",
-		},
-		Form: []FormField{
-			{
-				Variable:    "pr",
-				Type:        FormTypeText,
-				Label:       "PR Number",
-				Placeholder: "123",
-			},
-		},
+	"CodeReview": {
+		Help:   "multi-agent code review of branch and unstaged changes (claude + codex + cursor)",
+		Silent: true,
 		Windows: []WindowConfig{
 			{
 				Name: "leader",
-				Command: `{{ agentCommand }} {{ agentFlags }} 'You are coordinating a PR review for #{{ .Form.pr }}.
+				Command: `{{ agentCommand }} {{ agentFlags }} 'You are coordinating a code review of the current branch changes.
 
 Two specialist agents are running in parallel in this session:
-- analyst  publishes to topic: pr-{{ .Form.pr }}.analyst
-- security publishes to topic: pr-{{ .Form.pr }}.security
+- codex  publishes findings to: review-{{ .Name }}.codex
+- cursor publishes findings to: review-{{ .Name }}.cursor
 
 Your workflow:
-1. Run: gh pr view {{ .Form.pr }} --json title,body,files to understand the PR.
-2. Wait for both agents to finish their first pass:
-   hive msg sub --topic pr-{{ .Form.pr }}.analyst --wait
-   hive msg sub --topic pr-{{ .Form.pr }}.security --wait
-3. Read their findings and identify gaps, contradictions, or areas needing deeper investigation.
-4. Post targeted follow-up questions or requests for each agent:
-   hive msg pub --topic pr-{{ .Form.pr }}.feedback "your questions"
-5. Wait for updated responses and repeat step 2-4 until you are satisfied.
-6. Produce a final written summary of all findings. Do NOT post the review -- output it here.'`,
+1. Understand the changes under review:
+   git diff main...HEAD   (branch commits)
+   git diff               (unstaged changes)
+2. Wait for both agents to complete their first pass:
+   hive msg sub --topic review-{{ .Name }}.codex --wait
+   hive msg sub --topic review-{{ .Name }}.cursor --wait
+3. Read their findings. Identify gaps, contradictions, and areas needing deeper investigation.
+4. Send targeted follow-up questions to each agent:
+   hive msg pub --topic review-{{ .Name }}.feedback "your questions"
+5. Wait for updated responses and repeat steps 2-4 until satisfied.
+6. Produce a final written summary of all findings.'`,
 				Focus: true,
 			},
 			{
-				Name: "analyst",
-				Command: `{{ agentCommand }} {{ agentFlags }} 'You are reviewing code quality for PR #{{ .Form.pr }}.
+				Name:    "codex",
+				Command: `codex 'You are reviewing code changes for correctness and quality.
 
 Your workflow:
-1. Run: gh pr diff {{ .Form.pr }} to read all changes.
-2. Analyse for logic correctness, maintainability, naming, test coverage, and API design.
+1. Read all changes under review:
+   git diff main...HEAD   (branch commits)
+   git diff               (unstaged changes)
+2. Analyse for logic correctness, error handling, naming, test coverage, and API design.
 3. Publish your findings:
-   hive msg pub --topic pr-{{ .Form.pr }}.analyst "your findings"
+   hive msg pub --topic review-{{ .Name }}.codex "your findings"
 4. Wait for follow-up from the leader:
-   hive msg sub --topic pr-{{ .Form.pr }}.feedback --wait
-5. Address the follow-up, then publish an updated report to the same topic and wait again.
+   hive msg sub --topic review-{{ .Name }}.feedback --wait
+5. Address the follow-up, publish an updated report to the same topic, then wait again.
 Repeat steps 4-5 until no further feedback arrives.'`,
 			},
 			{
-				Name: "security",
-				Command: `{{ agentCommand }} {{ agentFlags }} 'You are reviewing PR #{{ .Form.pr }} for security issues.
+				Name:    "cursor",
+				Command: `agent 'You are reviewing code changes for security and architecture.
 
 Your workflow:
-1. Run: gh pr diff {{ .Form.pr }} to read all changes.
-2. Analyse for input validation, authentication/authorization flaws, injection vectors, sensitive data exposure, and dependency risks.
+1. Read all changes under review:
+   git diff main...HEAD   (branch commits)
+   git diff               (unstaged changes)
+2. Analyse for security issues, architectural concerns, dependency risks, and design patterns.
 3. Publish your findings:
-   hive msg pub --topic pr-{{ .Form.pr }}.security "your findings"
+   hive msg pub --topic review-{{ .Name }}.cursor "your findings"
 4. Wait for follow-up from the leader:
-   hive msg sub --topic pr-{{ .Form.pr }}.feedback --wait
-5. Address the follow-up, then publish an updated report to the same topic and wait again.
+   hive msg sub --topic review-{{ .Name }}.feedback --wait
+5. Address the follow-up, publish an updated report to the same topic, then wait again.
 Repeat steps 4-5 until no further feedback arrives.'`,
 			},
 		},
