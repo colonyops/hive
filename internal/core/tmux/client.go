@@ -108,7 +108,9 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 	}
 	for _, w := range windows {
 		if w.Focus {
-			_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+w.Name)
+			if _, err := c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+w.Name); err != nil {
+				return fmt.Errorf("tmux select-window %q: %w", w.Name, err)
+			}
 			break
 		}
 	}

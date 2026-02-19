@@ -1,15 +1,14 @@
 package hive
 
 import (
-	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/action"
@@ -33,15 +32,37 @@ type CreateOptions struct {
 	Remote        string // Git remote URL to clone (auto-detected if empty)
 	Source        string // Source directory for file copying
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
-	SkipSpawn     bool   // Skip the normal spawn strategy (caller handles terminal launch)
+	// SkipSpawn skips the configured spawn strategy (spawn: / batch_spawn: / windows:).
+	// The caller is responsible for launching any terminal or tmux session. Use this
+	// when the session directory is needed but terminal management happens elsewhere
+	// (e.g. CreateSessionWithWindows, which creates the tmux session itself).
+	SkipSpawn bool
 }
 
 // switchWriter is an io.Writer whose target can be swapped at runtime.
 // All sub-components share a pointer to the same switchWriter, so redirecting
 // it once (e.g. to io.Discard) silences all of them.
-type switchWriter struct{ w io.Writer }
+// The mutex guards concurrent reads in Write against swaps in set.
+type switchWriter struct {
+	mu sync.RWMutex
+	w  io.Writer
+}
 
-func (s *switchWriter) Write(p []byte) (int, error) { return s.w.Write(p) }
+func (s *switchWriter) Write(p []byte) (int, error) {
+	s.mu.RLock()
+	w := s.w
+	s.mu.RUnlock()
+	return w.Write(p)
+}
+
+// set atomically replaces the target writer and returns the previous one.
+func (s *switchWriter) set(w io.Writer) io.Writer {
+	s.mu.Lock()
+	prev := s.w
+	s.w = w
+	s.mu.Unlock()
+	return prev
+}
 
 // SessionService orchestrates hive session operations.
 type SessionService struct {
@@ -92,12 +113,11 @@ func NewSessionService(
 // function that reverts to the previous writers. Call before starting the TUI
 // to prevent hook and spawn output from corrupting the terminal display.
 func (s *SessionService) SilenceOutput() (restore func()) {
-	prevOut, prevErr := s.out.w, s.err.w
-	s.out.w = io.Discard
-	s.err.w = io.Discard
+	prevOut := s.out.set(io.Discard)
+	prevErr := s.err.set(io.Discard)
 	return func() {
-		s.out.w = prevOut
-		s.err.w = prevErr
+		s.out.set(prevOut)
+		s.err.set(prevErr)
 	}
 }
 
@@ -624,16 +644,7 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 	}
 
 	if req.ShCmd != "" {
-		c := exec.CommandContext(ctx, "sh", "-c", req.ShCmd)
-		c.Dir = sess.Path
-		var stderr bytes.Buffer
-		c.Stdout = io.Discard
-		c.Stderr = &stderr
-		if err := c.Run(); err != nil {
-			msg := strings.TrimSpace(stderr.String())
-			if msg != "" {
-				return fmt.Errorf("sh: %s", msg)
-			}
+		if err := executil.RunSh(ctx, sess.Path, req.ShCmd); err != nil {
 			return fmt.Errorf("sh: %w", err)
 		}
 	}

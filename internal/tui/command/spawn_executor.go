@@ -1,14 +1,11 @@
 package command
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"os/exec"
-	"strings"
 
 	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // SpawnWindowsExecutor executes a TypeSpawnWindows action.
@@ -39,18 +36,7 @@ func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 
 	// Same-session mode: optionally run sh: in the selected session's path, then add windows.
 	if p.ShCmd != "" {
-		c := exec.CommandContext(ctx, "sh", "-c", p.ShCmd)
-		if p.ShDir != "" {
-			c.Dir = p.ShDir
-		}
-		var stderr bytes.Buffer
-		c.Stdout = io.Discard
-		c.Stderr = &stderr
-		if err := c.Run(); err != nil {
-			msg := strings.TrimSpace(stderr.String())
-			if msg != "" {
-				return fmt.Errorf("sh: %s", msg)
-			}
+		if err := executil.RunSh(ctx, p.ShDir, p.ShCmd); err != nil {
 			return fmt.Errorf("sh: %w", err)
 		}
 	}

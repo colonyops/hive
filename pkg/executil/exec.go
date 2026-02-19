@@ -2,11 +2,40 @@
 package executil
 
 import (
+	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 )
+
+const maxStderrLen = 500
+
+// RunSh executes a shell command in the given directory (empty means inherit cwd).
+// On failure, stderr is returned as the error message, capped at 500 bytes to
+// prevent large or ANSI-polluted output from corrupting logs or TUI display.
+func RunSh(ctx context.Context, dir, cmd string) error {
+	c := exec.CommandContext(ctx, "sh", "-c", cmd)
+	if dir != "" {
+		c.Dir = dir
+	}
+	var stderr bytes.Buffer
+	c.Stdout = io.Discard
+	c.Stderr = &stderr
+	if err := c.Run(); err != nil {
+		msg := strings.TrimSpace(stderr.String())
+		if len(msg) > maxStderrLen {
+			msg = msg[:maxStderrLen] + "..."
+		}
+		if msg != "" {
+			return errors.New(msg)
+		}
+		return err
+	}
+	return nil
+}
 
 // Executor runs shell commands.
 type Executor interface {

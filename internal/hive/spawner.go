@@ -187,7 +187,7 @@ func (s *Spawner) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir
 	}
 	if !background {
 		if err := s.tmux.AttachOrSwitch(ctx, tmuxName); err != nil {
-			s.log.Warn().Str("session", tmuxName).Err(err).Msg("failed to switch to session after adding windows")
+			return fmt.Errorf("switch to session %q: %w", tmuxName, err)
 		}
 	}
 	return nil

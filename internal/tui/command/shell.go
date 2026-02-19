@@ -1,12 +1,10 @@
 package command
 
 import (
-	"bytes"
 	"context"
 	"fmt"
-	"io"
-	"os/exec"
-	"strings"
+
+	"github.com/colonyops/hive/pkg/executil"
 )
 
 // ShellExecutor executes a shell command.
@@ -23,21 +21,7 @@ func (e *ShellExecutor) Execute(ctx context.Context) (output <-chan string, done
 
 	go func() {
 		defer close(doneCh)
-
-		c := exec.CommandContext(ctx, "sh", "-c", e.cmd)
-		if e.dir != "" {
-			c.Dir = e.dir
-		}
-		var stderr bytes.Buffer
-		c.Stdout = io.Discard
-		c.Stderr = &stderr
-
-		if err := c.Run(); err != nil {
-			errMsg := strings.TrimSpace(stderr.String())
-			if errMsg != "" {
-				doneCh <- fmt.Errorf("command failed: %s", errMsg)
-				return
-			}
+		if err := executil.RunSh(ctx, e.dir, e.cmd); err != nil {
 			doneCh <- fmt.Errorf("command failed: %w", err)
 			return
 		}

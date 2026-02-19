@@ -190,7 +190,7 @@ Your workflow:
 				Focus: true,
 			},
 			{
-				Name:    "codex",
+				Name: "codex",
 				Command: `codex 'You are reviewing code changes for correctness and quality.
 
 Your workflow:
@@ -206,7 +206,7 @@ Your workflow:
 Repeat steps 4-5 until no further feedback arrives.'`,
 			},
 			{
-				Name:    "cursor",
+				Name: "cursor",
 				Command: `agent 'You are reviewing code changes for security and architecture.
 
 Your workflow:
