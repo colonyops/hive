@@ -9,36 +9,12 @@ A coordinator agent (claude) directs two specialist agents (codex and cursor) th
 ## How it works
 
 ```mermaid
-sequenceDiagram
-    participant L  as leader (claude)
-    participant Co as codex
-    participant Cu as cursor
-
-    par Parallel first pass
-        Co->>Co: Read diff
-        Co->>L: Publish findings
-        Note over Co,L: review-{id}.codex
-    and
-        Cu->>Cu: Read diff
-        Cu->>L: Publish findings
-        Note over Cu,L: review-{id}.cursor
-    end
-
-    L-->>Co: Wait for review-{id}.codex
-    L-->>Cu: Wait for review-{id}.cursor
-    L->>L: Identify gaps & contradictions
-
-    loop Until satisfied
-        L->>Co: Publish follow-up
-        L->>Cu: Publish follow-up
-        Note over L,Co: review-{id}.feedback
-
-        Co-->>L: Updated report (review-{id}.codex)
-        Cu-->>L: Updated report (review-{id}.cursor)
-        L->>L: Re-evaluate
-    end
-
-    L->>L: Write final summary
+flowchart LR
+    Co[codex] -->|"review-{id}.codex"| L[leader]
+    Cu[cursor] -->|"review-{id}.cursor"| L
+    L -->|"review-{id}.feedback"| Co
+    L -->|"review-{id}.feedback"| Cu
+    L --> S[final summary]
 ```
 
 **Key characteristics:**

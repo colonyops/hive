@@ -25,7 +25,8 @@ nav = [
   ]},
   { "Recipes" = [
     "recipes/index.md",
-    "recipes/inter-agent-code-review.md",
+    "recipes/sequential-chain-review.md",
+    "recipes/parallel-code-review.md",
   ]},
   { "FAQ" = "faq.md" },
 ]

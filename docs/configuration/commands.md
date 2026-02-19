@@ -33,15 +33,17 @@ usercommands:
 
 ## Command Options
 
-| Field     | Type           | Description                                                         |
-| --------- | -------------- | ------------------------------------------------------------------- |
-| `sh`      | string         | Shell command template (mutually exclusive with `action`)          |
-| `action`  | string         | Built-in action name (mutually exclusive with `sh`; see [Built-in Actions](#built-in-actions)) |
-| `help`    | string         | Description shown in palette                                        |
-| `confirm` | string         | Confirmation prompt (empty = no confirmation)                       |
-| `silent`  | bool           | Skip loading popup for fast commands                                |
-| `exit`    | string         | Exit TUI after command (bool or `$ENV_VAR`)                         |
-| `form`    | `[]FormField`  | Interactive form fields collected before execution (see below)      |
+| Field     | Type                  | Description                                                         |
+| --------- | --------------------- | ------------------------------------------------------------------- |
+| `sh`      | string                | Shell command template (mutually exclusive with `action`)           |
+| `action`  | string                | Built-in action name (mutually exclusive with `sh` and `windows`; see [Built-in Actions](#built-in-actions)) |
+| `windows` | `[]WindowConfig`      | Tmux windows to open after `sh` completes (see [Multi-agent Workflows](#multi-agent-workflows)) |
+| `options` | `UserCommandOptions`  | Execution options for window-based commands (see below)             |
+| `help`    | string                | Description shown in palette                                        |
+| `confirm` | string                | Confirmation prompt (empty = no confirmation)                       |
+| `silent`  | bool                  | Skip loading popup for fast commands                                |
+| `exit`    | string                | Exit TUI after command (bool or `$ENV_VAR`)                         |
+| `form`    | `[]FormField`         | Interactive form fields collected before execution (see below)      |
 
 ## Built-in Actions
 
@@ -94,7 +96,47 @@ These actions are provided by the tmux plugin and require tmux to be available.
 Hive registers several built-in actions as default commands that can be overridden in `usercommands`. Additionally, the `SendBatch` command provides a form-based workflow for messaging multiple agents at once.
 
 !!! warning
-    A command must use either `sh` or `action`, not both. If both are specified, validation will fail.
+    `action` is mutually exclusive with `sh` and `windows`. A command must have at least one of `action`, `sh`, or `windows`.
+
+## Multi-agent Workflows
+
+The `windows` field opens one or more tmux windows in the current session after `sh` completes. Each window runs an independent agent or process, enabling parallel multi-agent workflows from a single command.
+
+### Window Fields
+
+| Field     | Type   | Description                                             |
+| --------- | ------ | ------------------------------------------------------- |
+| `name`    | string | Window name (required, template string)                 |
+| `command` | string | Command to run in the window (template string)          |
+| `dir`     | string | Working directory override (template string)            |
+| `focus`   | bool   | Select this window after creation                       |
+
+### Options Fields
+
+The `options` block controls how window-based commands execute:
+
+| Field          | Type   | Description                                                              |
+| -------------- | ------ | ------------------------------------------------------------------------ |
+| `session_name` | string | Template string — when set, creates a new hive session before opening windows |
+| `remote`       | string | Remote URL override for new session creation (requires `session_name`)   |
+| `background`   | bool   | Open windows without attaching to the tmux session                       |
+
+```yaml
+usercommands:
+  CodeReview:
+    help: "parallel review: two specialists coordinated by a leader"
+    silent: true
+    windows:
+      - name: leader
+        focus: true
+        command: claude 'coordinate a review...'
+      - name: specialist-a
+        command: codex 'review for correctness...'
+      - name: specialist-b
+        command: cursor 'review for security...'
+```
+
+See the [Recipes](../recipes/index.md) for full multi-agent workflow examples.
 
 ## Using Arguments
 
@@ -206,7 +248,7 @@ usercommands:
     help: "Check inbox for messages"
 ```
 
-See the [Inter-Agent Code Review](../recipes/inter-agent-code-review.md) recipe for the full setup.
+See the [Recipes](../recipes/index.md) for full multi-agent workflow examples.
 
 ### Quick Actions
 
