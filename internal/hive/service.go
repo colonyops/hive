@@ -36,6 +36,13 @@ type CreateOptions struct {
 	SkipSpawn     bool   // Skip the normal spawn strategy (caller handles terminal launch)
 }
 
+// switchWriter is an io.Writer whose target can be swapped at runtime.
+// All sub-components share a pointer to the same switchWriter, so redirecting
+// it once (e.g. to io.Discard) silences all of them.
+type switchWriter struct{ w io.Writer }
+
+func (s *switchWriter) Write(p []byte) (int, error) { return s.w.Write(p) }
+
 // SessionService orchestrates hive session operations.
 type SessionService struct {
 	sessions   session.Store
@@ -48,6 +55,8 @@ type SessionService struct {
 	recycler   *Recycler
 	hookRunner *HookRunner
 	fileCopier *FileCopier
+	out        *switchWriter
+	err        *switchWriter
 }
 
 // NewSessionService creates a new SessionService.
@@ -61,6 +70,8 @@ func NewSessionService(
 	log zerolog.Logger,
 	stdout, stderr io.Writer,
 ) *SessionService {
+	out := &switchWriter{w: stdout}
+	err := &switchWriter{w: stderr}
 	return &SessionService{
 		sessions:   sessions,
 		git:        gitClient,
@@ -68,10 +79,25 @@ func NewSessionService(
 		bus:        bus,
 		executor:   exec,
 		log:        log,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), stdout, stderr),
+		out:        out,
+		err:        err,
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), out, err),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
-		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
-		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), stdout),
+		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, out, err),
+		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
+	}
+}
+
+// SilenceOutput redirects all output to io.Discard and returns a restore
+// function that reverts to the previous writers. Call before starting the TUI
+// to prevent hook and spawn output from corrupting the terminal display.
+func (s *SessionService) SilenceOutput() (restore func()) {
+	prevOut, prevErr := s.out.w, s.err.w
+	s.out.w = io.Discard
+	s.err.w = io.Discard
+	return func() {
+		s.out.w = prevOut
+		s.err.w = prevErr
 	}
 }
 
@@ -601,6 +627,7 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 		c := exec.CommandContext(ctx, "sh", "-c", req.ShCmd)
 		c.Dir = sess.Path
 		var stderr bytes.Buffer
+		c.Stdout = io.Discard
 		c.Stderr = &stderr
 		if err := c.Run(); err != nil {
 			msg := strings.TrimSpace(stderr.String())

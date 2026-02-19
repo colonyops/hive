@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 )
@@ -28,6 +29,7 @@ func (e *ShellExecutor) Execute(ctx context.Context) (output <-chan string, done
 			c.Dir = e.dir
 		}
 		var stderr bytes.Buffer
+		c.Stdout = io.Discard
 		c.Stderr = &stderr
 
 		if err := c.Run(); err != nil {

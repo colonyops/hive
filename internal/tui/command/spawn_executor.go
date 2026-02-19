@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"strings"
 
@@ -43,6 +44,7 @@ func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 			c.Dir = p.ShDir
 		}
 		var stderr bytes.Buffer
+		c.Stdout = io.Discard
 		c.Stderr = &stderr
 		if err := c.Run(); err != nil {
 			msg := strings.TrimSpace(stderr.String())
