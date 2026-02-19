@@ -178,7 +178,7 @@ Your workflow:
 2. Analyse thoroughly for: logic correctness, error handling, edge cases, naming clarity,
    test coverage, API design, and any potential bugs.
 3. Publish your complete findings:
-   hive msg pub --topic review-{{ .Name }}.codex "your detailed findings"
+   hive msg pub --topic review-{{ .ID }}.codex "your detailed findings"
 
 Be thorough. The next reviewer will read your report and challenge it.'`,
 			},
@@ -188,7 +188,7 @@ Be thorough. The next reviewer will read your report and challenge it.'`,
 
 Your workflow:
 1. Wait for the first reviewer (codex) to finish:
-   hive msg sub --topic review-{{ .Name }}.codex --wait --timeout 2h
+   hive msg sub --topic review-{{ .ID }}.codex --wait --timeout 2h
 2. Read all changes under review:
    git diff main...HEAD   (branch commits)
    git diff               (unstaged changes)
@@ -197,7 +197,7 @@ Your workflow:
    dependency risks, concurrency issues, and anything codex may have missed or misjudged.
 5. For each of codex'"'"'s findings: agree, refute, or deepen it with evidence from the diff.
 6. Publish your combined analysis:
-   hive msg pub --topic review-{{ .Name }}.agent "your analysis including critique of codex findings"
+   hive msg pub --topic review-{{ .ID }}.agent "your analysis including critique of codex findings"
 
 Be critical. Do not simply restate what codex said.'`,
 			},
@@ -207,9 +207,9 @@ Be critical. Do not simply restate what codex said.'`,
 
 Your workflow:
 1. Wait for the second reviewer (agent) to finish:
-   hive msg sub --topic review-{{ .Name }}.agent --wait --timeout 2h
+   hive msg sub --topic review-{{ .ID }}.agent --wait --timeout 2h
 2. Read codex'"'"'s findings:
-   hive msg sub --topic review-{{ .Name }}.codex
+   hive msg sub --topic review-{{ .ID }}.codex
 3. Read agent'"'"'s findings from step 1.
 4. Read all changes under review:
    git diff main...HEAD   (branch commits)
@@ -235,19 +235,19 @@ Be adversarial. Assume the previous reviewers missed things. The bar is producti
 				Command: `{{ agentCommand }} {{ agentFlags }} 'You are coordinating a code review of the current branch changes.
 
 Two specialist agents are running in parallel in this session:
-- codex  publishes findings to: review-{{ .Name }}.codex
-- cursor publishes findings to: review-{{ .Name }}.cursor
+- codex  publishes findings to: review-{{ .ID }}.codex
+- cursor publishes findings to: review-{{ .ID }}.cursor
 
 Your workflow:
 1. Understand the changes under review:
    git diff main...HEAD   (branch commits)
    git diff               (unstaged changes)
 2. Wait for both agents to complete their first pass:
-   hive msg sub --topic review-{{ .Name }}.codex --wait
-   hive msg sub --topic review-{{ .Name }}.cursor --wait
+   hive msg sub --topic review-{{ .ID }}.codex --wait
+   hive msg sub --topic review-{{ .ID }}.cursor --wait
 3. Read their findings. Identify gaps, contradictions, and areas needing deeper investigation.
 4. Send targeted follow-up questions to each agent:
-   hive msg pub --topic review-{{ .Name }}.feedback "your questions"
+   hive msg pub --topic review-{{ .ID }}.feedback "your questions"
 5. Wait for updated responses and repeat steps 2-4 until satisfied.
 6. Produce a final written summary of all findings.'`,
 				Focus: true,
@@ -262,9 +262,9 @@ Your workflow:
    git diff               (unstaged changes)
 2. Analyse for logic correctness, error handling, naming, test coverage, and API design.
 3. Publish your findings:
-   hive msg pub --topic review-{{ .Name }}.codex "your findings"
+   hive msg pub --topic review-{{ .ID }}.codex "your findings"
 4. Wait for follow-up from the leader:
-   hive msg sub --topic review-{{ .Name }}.feedback --wait
+   hive msg sub --topic review-{{ .ID }}.feedback --wait
 5. Address the follow-up, publish an updated report to the same topic, then wait again.
 Repeat steps 4-5 until no further feedback arrives.'`,
 			},
@@ -278,9 +278,9 @@ Your workflow:
    git diff               (unstaged changes)
 2. Analyse for security issues, architectural concerns, dependency risks, and design patterns.
 3. Publish your findings:
-   hive msg pub --topic review-{{ .Name }}.cursor "your findings"
+   hive msg pub --topic review-{{ .ID }}.cursor "your findings"
 4. Wait for follow-up from the leader:
-   hive msg sub --topic review-{{ .Name }}.feedback --wait
+   hive msg sub --topic review-{{ .ID }}.feedback --wait
 5. Address the follow-up, publish an updated report to the same topic, then wait again.
 Repeat steps 4-5 until no further feedback arrives.'`,
 			},
@@ -870,6 +870,10 @@ func (c *Config) validateUserCommandsBasic() error {
 		// options.background only meaningful when windows are present
 		if cmd.Options.Background && !hasWindows {
 			errs = errs.Append(field+".options.background", fmt.Errorf("background only applies when windows are defined"))
+		}
+		// options.session_name only applies when windows are defined
+		if cmd.Options.SessionName != "" && !hasWindows {
+			errs = errs.Append(field+".options.session_name", fmt.Errorf("session_name only applies when windows are defined"))
 		}
 
 		// Validate scope values

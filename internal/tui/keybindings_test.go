@@ -626,6 +626,43 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 	})
 }
 
+func TestKeybindingResolver_ShellDirIsSessionPath(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{})
+	commands := map[string]config.UserCommand{
+		"run": {Sh: "echo hello", Help: "run something"},
+	}
+	keybindings := map[string]config.Keybinding{
+		"r": {Cmd: "run"},
+	}
+	handler := NewKeybindingResolver(keybindings, commands, renderer)
+	sess := session.Session{
+		ID:    "abc123",
+		Path:  "/repos/my-repo",
+		State: session.StateActive,
+	}
+
+	t.Run("Resolve sets ShellDir to sess.Path", func(t *testing.T) {
+		a, ok := handler.Resolve("r", sess)
+		require.True(t, ok)
+		assert.Equal(t, act.TypeShell, a.Type)
+		assert.Equal(t, sess.Path, a.ShellDir)
+	})
+
+	t.Run("ResolveUserCommand sets ShellDir to sess.Path", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: "echo hello", Help: "run"}
+		a := handler.ResolveUserCommand("run", cmd, sess, nil)
+		assert.Equal(t, act.TypeShell, a.Type)
+		assert.Equal(t, sess.Path, a.ShellDir)
+	})
+
+	t.Run("RenderWithFormData sets ShellDir to sess.Path", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: "echo {{ .Form.msg }}", Help: "run"}
+		a := handler.RenderWithFormData("run", cmd, sess, nil, map[string]any{"msg": "hello"})
+		assert.Equal(t, act.TypeShell, a.Type)
+		assert.Equal(t, sess.Path, a.ShellDir)
+	})
+}
+
 func testSession() session.Session {
 	return session.Session{
 		ID:     "sess-abc",

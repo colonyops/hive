@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
@@ -650,6 +651,29 @@ func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
 	assert.Equal(t, recycledPath, sess.Path, "path must not change on reactivation")
 	assert.Equal(t, "new-name", sess.Name)
 	assert.Equal(t, session.StateActive, sess.State)
+}
+
+func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	req := action.NewSessionRequest{
+		Name:   "test-session",
+		Remote: "https://github.com/test/repo",
+		ShCmd:  "exit 1", // fails: directory won't exist since mockGit.Clone is a no-op
+	}
+
+	err := svc.CreateSessionWithWindows(context.Background(), req, nil, false)
+	require.Error(t, err)
+
+	// Session must be cleaned up from the store after RunSh failure.
+	sessions, listErr := store.List(context.Background())
+	require.NoError(t, listErr)
+	assert.Empty(t, sessions, "session should not remain in store after RunSh failure")
 }
 
 // Ensure the mock implements the interface at compile time.

@@ -3,11 +3,54 @@ package executil
 import (
 	"context"
 	"errors"
+	"fmt"
+	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestRunSh_StderrCappedAtMaxLen(t *testing.T) {
+	ctx := context.Background()
+
+	// Write twice the cap to stderr; only the first maxStderrLen bytes should appear in the error.
+	longStderr := strings.Repeat("A", maxStderrLen*2)
+	cmd := fmt.Sprintf("printf '%%s' '%s' >&2; exit 1", longStderr)
+
+	err := RunSh(ctx, "", cmd)
+	require.Error(t, err)
+
+	errMsg := err.Error()
+	// Error format: "<stderr prefix>: exit status 1"
+	// The stderr portion must not exceed maxStderrLen bytes.
+	assert.LessOrEqual(t, len(errMsg), maxStderrLen+20, "error message should be capped")
+	assert.Equal(t, strings.Repeat("A", maxStderrLen), errMsg[:maxStderrLen], "first %d bytes should be the capped stderr", maxStderrLen)
+}
+
+func TestRunSh_PreservesExitError(t *testing.T) {
+	ctx := context.Background()
+
+	// Command that writes to stderr and exits non-zero.
+	err := RunSh(ctx, "", "echo 'error message' >&2; exit 1")
+	require.Error(t, err)
+
+	var exitErr *exec.ExitError
+	assert.ErrorAs(t, err, &exitErr, "original ExitError should be preserved via wrapping")
+}
+
+func TestRunSh_NoStderrReturnsExitError(t *testing.T) {
+	ctx := context.Background()
+
+	// Command that exits non-zero with no stderr output.
+	err := RunSh(ctx, "", "exit 2")
+	require.Error(t, err)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, err, &exitErr)
+	assert.Equal(t, 2, exitErr.ExitCode())
+}
 
 func TestRealExecutor_Run(t *testing.T) {
 	exec := &RealExecutor{}

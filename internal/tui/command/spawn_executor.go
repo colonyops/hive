@@ -28,6 +28,12 @@ func (e *SpawnWindowsExecutor) Execute(ctx context.Context) (<-chan string, <-ch
 func (e *SpawnWindowsExecutor) run(ctx context.Context) error {
 	p := e.payload
 
+	if p.NewSession != nil && p.ShCmd != "" {
+		// Invariant: sh: is routed to NewSession.ShCmd by resolveWindowsAction.
+		// A non-empty top-level ShCmd with NewSession set would be silently ignored.
+		return fmt.Errorf("internal error: SpawnWindowsPayload.ShCmd must be empty when NewSession is set")
+	}
+
 	// New-session mode: create Hive session first.
 	// sh: (if any) runs inside CreateSessionWithWindows after the git clone.
 	if p.NewSession != nil {

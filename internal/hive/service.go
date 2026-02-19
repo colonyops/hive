@@ -643,8 +643,15 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 		return fmt.Errorf("create session: %w", err)
 	}
 
+	cleanup := func() {
+		if err := s.DeleteSession(ctx, sess.ID); err != nil {
+			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to clean up session after spawn failure")
+		}
+	}
+
 	if req.ShCmd != "" {
 		if err := executil.RunSh(ctx, sess.Path, req.ShCmd); err != nil {
+			cleanup()
 			return fmt.Errorf("sh: %w", err)
 		}
 	}
@@ -653,5 +660,9 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 	for i, w := range windows {
 		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
 	}
-	return s.spawner.tmux.CreateSession(ctx, sess.Name, sess.Path, rendered, background)
+	if err := s.spawner.tmux.CreateSession(ctx, sess.Name, sess.Path, rendered, background); err != nil {
+		cleanup()
+		return fmt.Errorf("create tmux session: %w", err)
+	}
+	return nil
 }

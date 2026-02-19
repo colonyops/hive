@@ -579,6 +579,19 @@ func TestValidate_UserCommandOptionsRemoteRequiresSessionName(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "remote requires session_name to be set")
 }
 
+func TestValidate_UserCommandOptionsSessionNameRequiresWindows(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"cmd": {Sh: "echo hi", Options: UserCommandOptions{SessionName: "my-session"}},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "options.session_name")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "session_name only applies when windows are defined")
+}
+
 func TestValidate_UserCommandOptionsBackgroundRequiresWindows(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
