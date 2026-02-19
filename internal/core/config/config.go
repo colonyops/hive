@@ -163,6 +163,69 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "send message to multiple agents",
 		Silent: true,
 	},
+	"ReviewCodeSync": {
+		Help:   "sequential chain review: codex → agent → claude, each critiquing the previous",
+		Silent: true,
+		Windows: []WindowConfig{
+			{
+				Name: "codex",
+				Command: `codex 'You are the first reviewer in a sequential code review chain.
+
+Your workflow:
+1. Read all changes under review:
+   git diff main...HEAD   (branch commits)
+   git diff               (unstaged changes)
+2. Analyse thoroughly for: logic correctness, error handling, edge cases, naming clarity,
+   test coverage, API design, and any potential bugs.
+3. Publish your complete findings:
+   hive msg pub --topic review-{{ .Name }}.codex "your detailed findings"
+
+Be thorough. The next reviewer will read your report and challenge it.'`,
+			},
+			{
+				Name: "agent",
+				Command: `agent 'You are the second reviewer in a sequential code review chain.
+
+Your workflow:
+1. Wait for the first reviewer (codex) to finish:
+   hive msg sub --topic review-{{ .Name }}.codex --wait --timeout 2h
+2. Read all changes under review:
+   git diff main...HEAD   (branch commits)
+   git diff               (unstaged changes)
+3. Read codex'"'"'s findings from step 1.
+4. Analyse for: security vulnerabilities, architectural concerns, design pattern misuse,
+   dependency risks, concurrency issues, and anything codex may have missed or misjudged.
+5. For each of codex'"'"'s findings: agree, refute, or deepen it with evidence from the diff.
+6. Publish your combined analysis:
+   hive msg pub --topic review-{{ .Name }}.agent "your analysis including critique of codex findings"
+
+Be critical. Do not simply restate what codex said.'`,
+			},
+			{
+				Name: "claude",
+				Command: `{{ agentCommand }} {{ agentFlags }} 'You are the final reviewer in a sequential code review chain. Your job is to be ruthlessly critical.
+
+Your workflow:
+1. Wait for the second reviewer (agent) to finish:
+   hive msg sub --topic review-{{ .Name }}.agent --wait --timeout 2h
+2. Read codex'"'"'s findings:
+   hive msg sub --topic review-{{ .Name }}.codex
+3. Read agent'"'"'s findings from step 1.
+4. Read all changes under review:
+   git diff main...HEAD   (branch commits)
+   git diff               (unstaged changes)
+5. Produce the final verdict. You must:
+   - Challenge every finding from both reviewers: demand evidence, reject vague claims
+   - Identify issues NEITHER reviewer caught
+   - Call out where the two reviewers contradict each other and resolve the contradiction
+   - Rank all issues by severity (critical / major / minor)
+   - Give a clear ship / do not ship recommendation with specific conditions
+
+Be adversarial. Assume the previous reviewers missed things. The bar is production quality.'`,
+				Focus: true,
+			},
+		},
+	},
 	"CodeReview": {
 		Help:   "multi-agent code review of branch and unstaged changes (claude + codex + cursor)",
 		Silent: true,
