@@ -163,6 +163,35 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "send message to multiple agents",
 		Silent: true,
 	},
+	"PRReview": {
+		Help: "multi-agent PR review (leader + analyst + security)",
+		Options: UserCommandOptions{
+			SessionName: "pr-review-{{ .Form.pr }}",
+		},
+		Form: []FormField{
+			{
+				Variable:    "pr",
+				Type:        FormTypeText,
+				Label:       "PR Number",
+				Placeholder: "123",
+			},
+		},
+		Windows: []WindowConfig{
+			{
+				Name:   "leader",
+				Prompt: "Coordinate a PR review for #{{ .Form.pr }}. Use `gh pr view {{ .Form.pr }} --json title,body,files,reviews` to get context. Two other agents are open in this session: 'analyst' (code quality) and 'security' (vulnerabilities). Synthesize their findings into a final review comment posted with `gh pr review`.",
+				Focus:  true,
+			},
+			{
+				Name:   "analyst",
+				Prompt: "Review code quality for PR #{{ .Form.pr }}. Run `gh pr diff {{ .Form.pr }}` to see the changes. Focus on logic correctness, maintainability, naming, and test coverage. Report your findings clearly.",
+			},
+			{
+				Name:   "security",
+				Prompt: "Review PR #{{ .Form.pr }} for security issues. Run `gh pr diff {{ .Form.pr }}` to see the changes. Focus on input validation, authentication, authorization, injection vulnerabilities, and sensitive data handling. Report your findings clearly.",
+			},
+		},
+	},
 }
 
 // defaultKeybindings provides built-in keybindings that users can override.
