@@ -106,28 +106,20 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	if recyclable != nil {
-		// Rename directory to new session name pattern
-		repoName := git.ExtractRepoName(remote)
-		newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s-%s", repoName, slug, recyclable.ID))
-
-		if err := os.Rename(recyclable.Path, newPath); err != nil {
-			return nil, fmt.Errorf("rename recycled directory: %w", err)
-		}
-
 		sess = *recyclable
 		sess.Name = opts.Name
 		sess.Slug = slug
-		sess.Path = newPath
 		sess.State = session.StateActive
 		sess.UpdatedAt = time.Now()
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
-		id := opts.SessionID
-		if id == "" {
-			id = generateID()
+		sessID := opts.SessionID
+		if sessID == "" {
+			sessID = generateID()
 		}
+		dirID := generateID()
 		repoName := git.ExtractRepoName(remote)
-		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s-%s", repoName, slug, id))
+		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s", repoName, dirID))
 
 		s.log.Info().Str("remote", remote).Str("dest", path).Msg("cloning repository")
 
@@ -139,7 +131,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 		now := time.Now()
 		sess = session.Session{
-			ID:        id,
+			ID:        sessID,
 			Name:      opts.Name,
 			Slug:      slug,
 			Path:      path,
@@ -204,7 +196,7 @@ func (s *SessionService) GetSession(ctx context.Context, id string) (session.Ses
 }
 
 // RecycleSession marks a session for recycling and runs recycle commands.
-// The directory is renamed to a recycled name pattern immediately.
+// The session directory is not moved; only the DB record state changes.
 // Output is written to w. If w is nil, output is discarded.
 func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Writer) error {
 	sess, err := s.sessions.Get(ctx, id)
@@ -243,15 +235,6 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 		s.log.Debug().Err(err).Str("session", sess.Name).Msg("no tmux session to kill")
 	}
 
-	// Rename directory to recycled pattern immediately
-	repoName := git.ExtractRepoName(sess.Remote)
-	newPath := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-recycle-%s", repoName, generateID()))
-
-	if err := os.Rename(sess.Path, newPath); err != nil {
-		return fmt.Errorf("rename session directory: %w", err)
-	}
-
-	sess.Path = newPath
 	sess.MarkRecycled(time.Now())
 
 	if err := s.sessions.Save(ctx, sess); err != nil {
@@ -263,7 +246,7 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 		s.log.Warn().Err(err).Str("remote", sess.Remote).Msg("failed to enforce max recycled limit")
 	}
 
-	s.log.Info().Str("session_id", id).Str("path", newPath).Msg("session recycled")
+	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("session recycled")
 
 	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: &sess})
 
