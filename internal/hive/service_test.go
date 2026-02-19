@@ -2,6 +2,7 @@ package hive
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -520,6 +521,7 @@ func TestSessionService_Events(t *testing.T) {
 		p := testbus.FindPayload[eventbus.SessionRecycledPayload](tb, t, eventbus.EventSessionRecycled)
 		assert.Equal(t, "recycle1", p.Session.ID)
 		assert.Equal(t, session.StateRecycled, p.Session.State)
+		assert.Equal(t, sessDir, p.Session.Path, "recycled session path must not change")
 	})
 
 	t.Run("rename emits session.renamed", func(t *testing.T) {
@@ -562,6 +564,92 @@ func TestSessionService_Events(t *testing.T) {
 		p := testbus.FindPayload[eventbus.SessionDeletedPayload](tb, t, eventbus.EventSessionDeleted)
 		assert.Equal(t, "del1", p.SessionID)
 	})
+}
+
+func TestCreateSession_PathFormat(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "my-feature",
+		Remote: "https://github.com/example/myrepo.git",
+	})
+	require.NoError(t, err)
+
+	base := filepath.Base(sess.Path)
+
+	assert.Regexp(t, `^myrepo-[a-z0-9]{6}$`, base,
+		"directory name must be {repoName}-{6charID}")
+	assert.NotContains(t, base, "my-feature",
+		"directory name must not contain the session slug")
+	assert.NotEqual(t, fmt.Sprintf("myrepo-%s", sess.ID), base,
+		"directory name must not use Session.ID")
+}
+
+func TestRecycleSession_PathUnchanged(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sessDir := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+	sess := session.Session{
+		ID:     "abc123",
+		Name:   "my-session",
+		Slug:   "my-session",
+		State:  session.StateActive,
+		Path:   sessDir,
+		Remote: "https://github.com/example/repo.git",
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RecycleSession(context.Background(), "abc123", io.Discard)
+	require.NoError(t, err)
+
+	recycled, err := store.Get(context.Background(), "abc123")
+	require.NoError(t, err)
+	assert.Equal(t, sessDir, recycled.Path, "directory must not be renamed on recycle")
+	assert.Equal(t, session.StateRecycled, recycled.State)
+}
+
+func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	recycledPath := filepath.Join(cfg.ReposDir(), "repo-x7k2qp")
+
+	recycled := session.Session{
+		ID:     "abc123",
+		Name:   "old-name",
+		Slug:   "old-name",
+		State:  session.StateRecycled,
+		Path:   recycledPath,
+		Remote: "https://github.com/example/repo.git",
+	}
+	require.NoError(t, store.Save(context.Background(), recycled))
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "new-name",
+		Remote: "https://github.com/example/repo.git",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "abc123", sess.ID, "should reuse the recycled session record")
+	assert.Equal(t, recycledPath, sess.Path, "path must not change on reactivation")
+	assert.Equal(t, "new-name", sess.Name)
+	assert.Equal(t, session.StateActive, sess.State)
 }
 
 // Ensure the mock implements the interface at compile time.
