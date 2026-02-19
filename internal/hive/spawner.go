@@ -122,11 +122,6 @@ func RenderWindows(renderer *tmpl.Renderer, windows []config.WindowConfig, data 
 	return rendered, nil
 }
 
-// posixQuote wraps s in POSIX single quotes, escaping any embedded single quotes.
-func posixQuote(s string) string {
-	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
-}
-
 // renderWindowCommon is the shared rendering core used by renderWindow and renderWindowMap.
 // render is a closure that evaluates a single template string against the caller's data context.
 func renderWindowCommon(w config.WindowConfig, render func(string) (string, error)) (coretmux.RenderedWindow, error) {
@@ -142,25 +137,6 @@ func renderWindowCommon(w config.WindowConfig, render func(string) (string, erro
 			return coretmux.RenderedWindow{}, fmt.Errorf("command template: %w", err)
 		}
 		command = strings.TrimSpace(command)
-	}
-
-	// Compose Prompt into Command when set.
-	if w.Prompt != "" {
-		prompt, err := render(w.Prompt)
-		if err != nil {
-			return coretmux.RenderedWindow{}, fmt.Errorf("prompt template: %w", err)
-		}
-		prompt = strings.TrimSpace(prompt)
-		if prompt != "" {
-			if command == "" {
-				agentCmd, err := render("{{ agentCommand }}")
-				if err != nil {
-					return coretmux.RenderedWindow{}, fmt.Errorf("agentCommand template: %w", err)
-				}
-				command = strings.TrimSpace(agentCmd)
-			}
-			command = command + " " + posixQuote(prompt)
-		}
 	}
 
 	var dir string

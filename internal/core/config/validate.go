@@ -159,7 +159,7 @@ func (c *Config) validateRules() error {
 				errs = errs.Append(fmt.Sprintf("rules[%d].recycle[%d]", i, j), fmt.Errorf("template error: %w", err))
 			}
 		}
-		// Validate window templates (use BatchSpawnTemplateData as the superset with .Prompt)
+		// Validate window templates
 		for j, w := range rule.Windows {
 			prefix := fmt.Sprintf("rules[%d].windows[%d]", i, j)
 			if err := validateTemplate(w.Name, BatchSpawnTemplateData{}); err != nil {
@@ -212,7 +212,6 @@ func (c *Config) validateUserCommandTemplates() error {
 			for tname, tmplStr := range map[string]string{
 				".name":    w.Name,
 				".command": w.Command,
-				".prompt":  w.Prompt,
 				".dir":     w.Dir,
 			} {
 				if tmplStr == "" {

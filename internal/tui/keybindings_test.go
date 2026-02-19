@@ -642,7 +642,7 @@ func TestResolveWindowsAction_SameSession(t *testing.T) {
 		"Spawn": {
 			Help: "spawn windows",
 			Windows: []config.WindowConfig{
-				{Name: "agent", Prompt: "Do work in {{ .Path }}", Focus: true},
+				{Name: "agent", Command: "claude 'Do work in {{ .Path }}'", Focus: true},
 			},
 		},
 	}
@@ -746,7 +746,7 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Spawn": {
 			Windows: []config.WindowConfig{
-				{Name: "agent", Prompt: "Review PR {{ .Form.pr }} in {{ .Path }}"},
+				{Name: "agent", Command: "claude 'Review PR {{ .Form.pr }} in {{ .Path }}'"},
 			},
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
 		},

@@ -179,11 +179,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Windows: []WindowConfig{
 			{
 				Name: "leader",
-				Prompt: `You are coordinating a PR review for #{{ .Form.pr }}.
+				Command: `{{ agentCommand }} {{ agentFlags }} 'You are coordinating a PR review for #{{ .Form.pr }}.
 
 Two specialist agents are running in parallel in this session:
-- analyst  → publishes to topic: pr-{{ .Form.pr }}.analyst
-- security → publishes to topic: pr-{{ .Form.pr }}.security
+- analyst  publishes to topic: pr-{{ .Form.pr }}.analyst
+- security publishes to topic: pr-{{ .Form.pr }}.security
 
 Your workflow:
 1. Run: gh pr view {{ .Form.pr }} --json title,body,files to understand the PR.
@@ -192,38 +192,38 @@ Your workflow:
    hive msg sub --topic pr-{{ .Form.pr }}.security --wait
 3. Read their findings and identify gaps, contradictions, or areas needing deeper investigation.
 4. Post targeted follow-up questions or requests for each agent:
-   hive msg pub --topic pr-{{ .Form.pr }}.feedback "<your questions>"
-5. Wait for updated responses and repeat step 2–4 until you are satisfied.
-6. Produce a final written summary of all findings. Do NOT post the review — output it here.`,
+   hive msg pub --topic pr-{{ .Form.pr }}.feedback "your questions"
+5. Wait for updated responses and repeat step 2-4 until you are satisfied.
+6. Produce a final written summary of all findings. Do NOT post the review -- output it here.'`,
 				Focus: true,
 			},
 			{
 				Name: "analyst",
-				Prompt: `You are reviewing code quality for PR #{{ .Form.pr }}.
+				Command: `{{ agentCommand }} {{ agentFlags }} 'You are reviewing code quality for PR #{{ .Form.pr }}.
 
 Your workflow:
 1. Run: gh pr diff {{ .Form.pr }} to read all changes.
 2. Analyse for logic correctness, maintainability, naming, test coverage, and API design.
 3. Publish your findings:
-   hive msg pub --topic pr-{{ .Form.pr }}.analyst "<your findings>"
+   hive msg pub --topic pr-{{ .Form.pr }}.analyst "your findings"
 4. Wait for follow-up from the leader:
    hive msg sub --topic pr-{{ .Form.pr }}.feedback --wait
 5. Address the follow-up, then publish an updated report to the same topic and wait again.
-Repeat steps 4–5 until no further feedback arrives.`,
+Repeat steps 4-5 until no further feedback arrives.'`,
 			},
 			{
 				Name: "security",
-				Prompt: `You are reviewing PR #{{ .Form.pr }} for security issues.
+				Command: `{{ agentCommand }} {{ agentFlags }} 'You are reviewing PR #{{ .Form.pr }} for security issues.
 
 Your workflow:
 1. Run: gh pr diff {{ .Form.pr }} to read all changes.
 2. Analyse for input validation, authentication/authorization flaws, injection vectors, sensitive data exposure, and dependency risks.
 3. Publish your findings:
-   hive msg pub --topic pr-{{ .Form.pr }}.security "<your findings>"
+   hive msg pub --topic pr-{{ .Form.pr }}.security "your findings"
 4. Wait for follow-up from the leader:
    hive msg sub --topic pr-{{ .Form.pr }}.feedback --wait
 5. Address the follow-up, then publish an updated report to the same topic and wait again.
-Repeat steps 4–5 until no further feedback arrives.`,
+Repeat steps 4-5 until no further feedback arrives.'`,
 			},
 		},
 	},
@@ -470,7 +470,6 @@ type GitConfig struct {
 type WindowConfig struct {
 	Name    string `yaml:"name"`              // Window name (template string, required)
 	Command string `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
-	Prompt  string `yaml:"prompt,omitempty"`  // Text passed to the agent command; composed into Command at render time
 	Dir     string `yaml:"dir,omitempty"`     // Working directory override (template string)
 	Focus   bool   `yaml:"focus,omitempty"`   // Select this window after creation
 }

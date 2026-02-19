@@ -598,7 +598,7 @@ func TestValidateDeep_UserCommandWindowTemplates(t *testing.T) {
 		cfg.UserCommands = map[string]UserCommand{
 			"spawn": {
 				Windows: []WindowConfig{
-					{Name: "{{ .Name }}-agent", Command: "claude --session {{ .ID }}", Prompt: "Review {{ .Path }}"},
+					{Name: "{{ .Name }}-agent", Command: "claude --session {{ .ID }}"},
 				},
 			},
 		}
