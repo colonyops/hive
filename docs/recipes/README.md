@@ -18,7 +18,7 @@ Recipes for creating custom TUI commands.
 
 Recipes for automating workflows and session management.
 
-<!-- Add automation recipes here -->
+- [**Ralph Loop**](./ralph-loop.md) - Work through a beads backlog autonomously by running a fresh Claude process per task until quality gates pass.
 
 ## Contributing Recipes
 
