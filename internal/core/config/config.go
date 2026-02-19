@@ -527,12 +527,29 @@ func DefaultConfig() Config {
 
 // Load reads configuration from the given path and sets the data directory.
 // If configPath is empty or doesn't exist, returns defaults with the provided dataDir.
+// Also checks for .yml extension if .yaml file doesn't exist.
+// Emits a warning via fmt.Println when no config file is found.
 func Load(configPath, dataDir string) (*Config, error) {
 	cfg := DefaultConfig()
 	cfg.DataDir = dataDir
 
 	if configPath != "" {
-		if _, err := os.Stat(configPath); err == nil {
+		// Check if the file exists
+		configFound := false
+		if _, err := os.Stat(configPath); os.IsNotExist(err) {
+			// Try alternate extension (.yml <-> .yaml)
+			altPath := tryAlternateExtension(configPath)
+			if altPath != configPath {
+				if _, altErr := os.Stat(altPath); altErr == nil {
+					configPath = altPath
+					configFound = true
+				}
+			}
+		} else if err == nil {
+			configFound = true
+		}
+
+		if configFound {
 			data, err := os.ReadFile(configPath)
 			if err != nil {
 				return nil, fmt.Errorf("read config file: %w", err)
@@ -544,6 +561,10 @@ func Load(configPath, dataDir string) (*Config, error) {
 
 			// Re-set dataDir since Unmarshal may have cleared it
 			cfg.DataDir = dataDir
+		} else {
+			// No config file found - emit warning
+			fmt.Printf("Warning: No config file found at %s\n", configPath)
+			fmt.Println("Using default configuration. Run 'hive doc config' to see configuration options.")
 		}
 	}
 
@@ -564,6 +585,18 @@ func Load(configPath, dataDir string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// tryAlternateExtension swaps .yaml <-> .yml extension.
+// Returns the original path if it doesn't have a .yaml or .yml extension.
+func tryAlternateExtension(path string) string {
+	if strings.HasSuffix(path, ".yaml") {
+		return strings.TrimSuffix(path, ".yaml") + ".yml"
+	}
+	if strings.HasSuffix(path, ".yml") {
+		return strings.TrimSuffix(path, ".yml") + ".yaml"
+	}
+	return path
 }
 
 // applyDefaults sets default values for any unset configuration options.
