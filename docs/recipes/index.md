@@ -17,3 +17,9 @@ Serial — each agent reads and challenges the previous. Best for thorough adver
 ### [Parallel Code Review](parallel-code-review.md)
 
 Parallel specialists plus a coordinator. Best for fast feedback with active coordination: both specialists run simultaneously and the leader drives targeted follow-up rounds.
+
+## Automation
+
+### [Ralph Loop](ralph-loop.md)
+
+Work through a beads backlog autonomously — runs a fresh Claude process per task, retrying until quality gates pass before moving on.
