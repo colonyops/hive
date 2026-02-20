@@ -39,13 +39,18 @@ usercommands:
         type: text
         label: "Max retries per task"
         placeholder: "3"
-    sh: |
-      tmux new-window -t {{ .Name | shq }} -n "ralph" -- \
-        bash -c 'bash ~/.config/hive/scripts/ralph-loop.sh \
-          {{ .Path | shq }} \
-          {{ .Form.check_cmd | shq }} \
-          {{ .Form.max_retries | shq }}; exec bash'
+    windows:
+      - name: ralph
+        focus: true
+        command: >-
+          bash ~/.config/hive/scripts/ralph-loop.sh
+          {{ .Path | shq }}
+          {{ .Form.check_cmd | shq }}
+          {{ .Form.max_retries | shq }}
 ```
+
+The `windows` field opens a tmux window named `ralph` in the current session.
+See [User Commands — Multi-agent Workflows](../configuration/commands.md#multi-agent-workflows) for details on the `windows` field.
 
 ## Script
 
