@@ -189,6 +189,8 @@ type Config struct {
 	CopyCommand         string                 `yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
 	Git                 GitConfig              `yaml:"git"`
 	GitPath             string                 `yaml:"git_path"`
+	Vars                map[string]any         `yaml:"vars"`       // user-defined template variables
+	VarsFiles           []string               `yaml:"vars_files"` // YAML files that provide template variables
 	Keybindings         map[string]Keybinding  `yaml:"keybindings"`
 	UserCommands        map[string]UserCommand `yaml:"usercommands"`
 	Rules               []Rule                 `yaml:"rules"`
@@ -559,6 +561,18 @@ func Load(configPath, dataDir string) (*Config, error) {
 			// Re-set dataDir since Unmarshal may have cleared it
 			cfg.DataDir = dataDir
 		}
+	}
+
+	// Load and merge vars from files before any template-driven validation.
+	if len(cfg.VarsFiles) > 0 {
+		configDir := filepath.Dir(configPath)
+		fileVars, err := loadVarsFiles(configDir, cfg.VarsFiles)
+		if err != nil {
+			return nil, fmt.Errorf("load vars: %w", err)
+		}
+		// Inline vars override file vars.
+		mergeMaps(fileVars, cfg.Vars)
+		cfg.Vars = fileVars
 	}
 
 	// Validate user keybindings before merging defaults (defaults may reference

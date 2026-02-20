@@ -212,6 +212,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		ContextDir: s.config.RepoContextDir(owner, repoName),
 		Owner:      owner,
 		Repo:       repoName,
+		Vars:       s.config.Vars,
 	}
 
 	if !opts.SkipSpawn {
@@ -276,6 +277,7 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 
 	data := RecycleData{
 		DefaultBranch: defaultBranch,
+		Vars:          s.config.Vars,
 	}
 
 	if err := s.recycler.Recycle(ctx, sess.Path, s.config.GetRecycleCommands(sess.Remote), data, w); err != nil {
@@ -473,6 +475,7 @@ func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote
 		ContextDir: s.config.RepoContextDir(owner, repo),
 		Owner:      owner,
 		Repo:       repo,
+		Vars:       s.config.Vars,
 	}
 
 	return s.spawner.OpenWindows(ctx, strategy.Windows, data, background, targetWindow)

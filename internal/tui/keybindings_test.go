@@ -201,6 +201,22 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 	}
 }
 
+func TestKeybindingHandler_ResolveUserCommand_WithVars(t *testing.T) {
+	handler := NewKeybindingResolver(nil, nil, testRenderer, map[string]any{"editor": "nvim"})
+	sess := session.Session{
+		ID:   "test-id",
+		Path: "/test/path",
+		Name: "test-name",
+	}
+
+	cmd := config.UserCommand{Sh: "echo {{ .Vars.editor }} {{ .Name }}"}
+	action := handler.ResolveUserCommand("vars", cmd, sess, nil)
+
+	require.NoError(t, action.Err)
+	assert.Equal(t, act.TypeShell, action.Type)
+	assert.Equal(t, "echo nvim test-name", action.ShellCmd)
+}
+
 func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Recycle": {
