@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	notifyModalWidthPct  = 85
+	notifyModalWidthPct  = 65
 	notifyModalMinWidth  = 80
 	notifyModalMaxHeight = 30
 	notifyModalMargin    = 4
