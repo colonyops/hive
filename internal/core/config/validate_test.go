@@ -1196,6 +1196,7 @@ func TestDefaultWindows(t *testing.T) {
 
 	assert.Equal(t, "{{ agentWindow }}", windows[0].Name)
 	assert.Contains(t, windows[0].Command, "agentCommand")
+	assert.Contains(t, windows[0].Command, "shq")
 	assert.True(t, windows[0].Focus)
 
 	assert.Equal(t, "shell", windows[1].Name)

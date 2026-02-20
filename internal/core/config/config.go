@@ -508,7 +508,7 @@ func DefaultWindows() []WindowConfig {
 	return []WindowConfig{
 		{
 			Name:    "{{ agentWindow }}",
-			Command: `{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt }}{{ end }}`,
+			Command: `{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}`,
 			Focus:   true,
 		},
 		{Name: "shell"},
