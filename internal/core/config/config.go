@@ -198,6 +198,7 @@ type Config struct {
 	Context             ContextConfig          `yaml:"context"`
 	TUI                 TUIConfig              `yaml:"tui"`
 	Review              ReviewConfig           `yaml:"review"`
+	Todo                TodoConfig             `yaml:"todo"`
 	Messaging           MessagingConfig        `yaml:"messaging"`
 	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
@@ -323,6 +324,42 @@ func (t TUIConfig) IconsEnabled() bool {
 type PreviewConfig struct {
 	TitleTemplate  string `yaml:"title_template"`  // Go template for panel title (e.g., "{{ .Name }} • #{{ .ShortID }}")
 	StatusTemplate string `yaml:"status_template"` // Go template for status line (e.g., "{{ .Icon.GitBranch }} {{ .Branch }}")
+}
+
+// TodoConfig holds TODO item configuration.
+type TodoConfig struct {
+	Enabled       *bool            `yaml:"enabled"`    // nil = true by default
+	RateLimit     int              `yaml:"rate_limit"` // max custom items per session per hour (default: 20, 0 = unlimited)
+	Notifications TodoNotifyConfig `yaml:"notifications"`
+}
+
+// IsEnabled returns true if TODO tracking is enabled (default: true).
+func (t TodoConfig) IsEnabled() bool {
+	return t.Enabled == nil || *t.Enabled
+}
+
+// RateLimitOrDefault returns the configured rate limit or 20 if not set.
+func (t TodoConfig) RateLimitOrDefault() int {
+	if t.RateLimit <= 0 {
+		return 20
+	}
+	return t.RateLimit
+}
+
+// TodoNotifyConfig controls TODO notification delivery.
+type TodoNotifyConfig struct {
+	Toast    *bool `yaml:"toast"`    // nil = true by default
+	Terminal *bool `yaml:"terminal"` // nil = true by default (OSC 9/777)
+}
+
+// ToastEnabled returns true if toast notifications are enabled (default: true).
+func (n TodoNotifyConfig) ToastEnabled() bool {
+	return n.Toast == nil || *n.Toast
+}
+
+// TerminalEnabled returns true if terminal notifications are enabled (default: true).
+func (n TodoNotifyConfig) TerminalEnabled() bool {
+	return n.Terminal == nil || *n.Terminal
 }
 
 // MessagingConfig holds messaging-related configuration.

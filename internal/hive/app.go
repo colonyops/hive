@@ -51,7 +51,7 @@ func NewApp(
 		Messages: NewMessageService(msgStore, cfg, bus),
 		Context:  NewContextService(cfg, sessions.git),
 		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
-		Todos:    NewTodoService(todoStore, bus, log.Logger),
+		Todos:    NewTodoService(todoStore, cfg.Todo, bus, log.Logger),
 		Bus:      bus,
 		Terminal: termMgr,
 		Plugins:  pluginMgr,

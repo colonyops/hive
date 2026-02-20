@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/core/todo"
@@ -28,7 +29,7 @@ func newTestTodoService(t *testing.T) (*TodoService, *testbus.Bus) {
 	tb := testbus.New(t)
 	log := zerolog.Nop()
 
-	svc := NewTodoService(store, tb.EventBus, log)
+	svc := NewTodoService(store, config.TodoConfig{}, tb.EventBus, log)
 	return svc, tb
 }
 

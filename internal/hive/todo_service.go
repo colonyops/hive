@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/rs/zerolog"
@@ -24,12 +25,12 @@ type TodoService struct {
 }
 
 // NewTodoService creates a new TodoService.
-func NewTodoService(store todo.Store, bus *eventbus.EventBus, log zerolog.Logger) *TodoService {
+func NewTodoService(store todo.Store, cfg config.TodoConfig, bus *eventbus.EventBus, log zerolog.Logger) *TodoService {
 	return &TodoService{
 		store:        store,
 		bus:          bus,
 		log:          log.With().Str("component", "todo-service").Logger(),
-		rateLimit:    20,
+		rateLimit:    cfg.RateLimitOrDefault(),
 		rateDuration: time.Hour,
 	}
 }
