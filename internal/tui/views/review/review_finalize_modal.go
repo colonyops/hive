@@ -36,13 +36,22 @@ type finalizationOption struct {
 }
 
 // NewFinalizationModal creates a modal for choosing finalization action.
-func NewFinalizationModal(feedback string, width, height int) FinalizationModal {
+// If canSendToAgent is true, a "Send to agent" option is included.
+func NewFinalizationModal(feedback string, width, height int, canSendToAgent bool) FinalizationModal {
 	options := []finalizationOption{
 		{
 			label:       "Copy to clipboard",
 			description: "Copy review feedback to system clipboard",
 			action:      FinalizationActionClipboard,
 		},
+	}
+
+	if canSendToAgent {
+		options = append(options, finalizationOption{
+			label:       "Send to agent",
+			description: "Publish feedback to the source agent's inbox",
+			action:      FinalizationActionSendToAgent,
+		})
 	}
 
 	return FinalizationModal{

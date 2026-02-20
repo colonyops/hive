@@ -11,7 +11,7 @@ const testFeedback = "Test feedback"
 
 func TestFinalizationModal_Creation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40, false)
 
 	assert.Len(t, modal.options, 1, "Expected 1 option, got %d", len(modal.options))
 	assert.Equal(t, FinalizationActionClipboard, modal.options[0].action)
@@ -19,7 +19,7 @@ func TestFinalizationModal_Creation(t *testing.T) {
 
 func TestFinalizationModal_Navigation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40, false)
 
 	// Initial selection should be 0
 	assert.Equal(t, 0, modal.selectedIdx, "Initial selection should be 0, got %d", modal.selectedIdx)
@@ -31,7 +31,7 @@ func TestFinalizationModal_Navigation(t *testing.T) {
 
 func TestFinalizationModal_Confirmation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40, false)
 
 	// Set confirmed flag
 	modal.confirmed = true
@@ -43,7 +43,7 @@ func TestFinalizationModal_Confirmation(t *testing.T) {
 
 func TestFinalizationModal_Cancellation(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40, false)
 
 	// Set cancelled flag
 	modal.cancelled = true
@@ -52,7 +52,7 @@ func TestFinalizationModal_Cancellation(t *testing.T) {
 
 func TestFinalizationModal_View(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40, false)
 
 	view := modal.View()
 	assert.NotEmpty(t, view, "View should not be empty")
@@ -78,7 +78,7 @@ func stringContains(s, substr string) bool {
 
 func TestFinalizationModal_KeyHandling(t *testing.T) {
 	feedback := testFeedback
-	modal := NewFinalizationModal(feedback, 100, 40)
+	modal := NewFinalizationModal(feedback, 100, 40, false)
 
 	// With single option, j/k don't change selectedIdx
 	keyMsg := tea.KeyPressMsg(tea.Key{Text: "j", Code: 'j'})
@@ -91,7 +91,7 @@ func TestFinalizationModal_KeyHandling(t *testing.T) {
 	assert.True(t, updatedModal.Confirmed(), "After pressing 'enter', modal should be confirmed")
 
 	// Test 'esc' key - should cancel
-	modal = NewFinalizationModal(feedback, 100, 40)
+	modal = NewFinalizationModal(feedback, 100, 40, false)
 	keyMsg = tea.KeyPressMsg(tea.Key{Code: tea.KeyEsc})
 	updatedModal, _ = modal.Update(keyMsg)
 	assert.True(t, updatedModal.Cancelled(), "After pressing 'esc', modal should be cancelled")

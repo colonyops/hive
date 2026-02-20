@@ -1016,7 +1016,7 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 	// Manually set up the finalization modal state (simulating pressing 'f')
 	v.fullScreen = true
 	v.selectedDoc = &docs[0]
-	modal := NewFinalizationModal("test feedback", 100, 40)
+	modal := NewFinalizationModal("test feedback", 100, 40, false)
 	v.finalizationModal = &modal
 
 	// Verify initial state

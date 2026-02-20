@@ -130,6 +130,9 @@ type Model struct {
 
 	renderer *tmpl.Renderer
 
+	// Messaging
+	msgService *hive.MessageService
+
 	// TODO tracking
 	todoWatcher      *hive.TodoWatcher
 	todoService      *hive.TodoService
@@ -294,6 +297,7 @@ func New(deps Deps, opts Opts) Model {
 		toastView:       toastView,
 		bus:             deps.Bus,
 		renderer:        deps.Renderer,
+		msgService:      deps.MsgStore,
 		todoWatcher:     todoWatcher,
 		todoService:     deps.TodoService,
 		todoContextDir:  contextDir,

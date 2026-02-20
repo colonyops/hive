@@ -10,6 +10,8 @@ import (
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/hive"
@@ -232,7 +234,31 @@ func (m Model) handleReviewDocChange(msg review.DocumentChangeMsg) (tea.Model, t
 func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	if err := m.copyToClipboard(msg.Feedback); err != nil {
+	// Send to agent inbox if requested, otherwise copy to clipboard
+	if msg.SendToAgent != "" && m.msgService != nil {
+		svc := m.msgService
+		sessionID := msg.SendToAgent
+		feedback := msg.Feedback
+		cmds = append(cmds, func() tea.Msg {
+			inboxTopic := "agent." + sessionID + ".inbox"
+			pubMsg := messaging.Message{
+				Topic:   inboxTopic,
+				Payload: feedback,
+				Sender:  "operator",
+			}
+			if err := svc.Publish(context.Background(), pubMsg, []string{inboxTopic}); err != nil {
+				log.Error().Err(err).Str("topic", inboxTopic).Msg("failed to send feedback to agent")
+				return notificationMsg{notification: notify.Notification{
+					Level:   notify.LevelError,
+					Message: fmt.Sprintf("failed to send feedback: %v", err),
+				}}
+			}
+			return notificationMsg{notification: notify.Notification{
+				Level:   notify.LevelInfo,
+				Message: "feedback sent to agent inbox",
+			}}
+		})
+	} else if err := m.copyToClipboard(msg.Feedback); err != nil {
 		cmds = append(cmds, m.notifyError("failed to copy feedback: %v", err))
 	}
 
@@ -486,6 +512,8 @@ func (m Model) handleTodoPanelKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 		case TodoPanelSelect:
 			// Open the file in review tab if it has a file path
 			if result.Item.FilePath != "" && m.reviewView != nil {
+				// Set source session so "Send to agent" option is available
+				m.reviewView.SetSourceSession(result.Item.SessionID)
 				m.activeView = ViewReview
 				m.handler.SetActiveView(ViewReview)
 				m.sessionsView.SetActive(false)

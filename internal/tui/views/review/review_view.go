@@ -30,6 +30,7 @@ import (
 type ReviewFinalizedMsg struct {
 	Feedback     string
 	DocumentPath string // absolute path of the finalized document
+	SendToAgent  string // session ID of the agent to send feedback to (empty = clipboard only)
 }
 
 // reviewDiscardedMsg is sent when review is discarded (internal only).
@@ -66,6 +67,9 @@ type View struct {
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
 	commentLineWidth  int                      // Max width for comment modal (from config, default: 80)
+
+	// Source session for feedback delivery
+	sourceSessionID string // hive session ID that originated this review
 
 	// Phase 1 refactor: extracted components
 	documentView        DocumentView // Document rendering and navigation
@@ -266,8 +270,21 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					return v, func() tea.Msg {
 						return ReviewFinalizedMsg{Feedback: v.feedbackGenerated, DocumentPath: docPath}
 					}
-				case FinalizationActionNone, FinalizationActionSendToAgent:
-					// User cancelled or unsupported action, do nothing
+				case FinalizationActionSendToAgent:
+					docPath := ""
+					if v.selectedDoc != nil {
+						docPath = v.selectedDoc.Path
+					}
+					sessionID := v.sourceSessionID
+					return v, func() tea.Msg {
+						return ReviewFinalizedMsg{
+							Feedback:     v.feedbackGenerated,
+							DocumentPath: docPath,
+							SendToAgent:  sessionID,
+						}
+					}
+				case FinalizationActionNone:
+					// User cancelled, do nothing
 				}
 
 				return v, cmd
@@ -428,7 +445,8 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 					// Generate feedback now so we can pass it to the modal
 					feedback := GenerateReviewFeedback(v.activeSession, v.selectedDoc.RelPath)
-					modal := NewFinalizationModal(feedback, v.width, v.height)
+					canSend := v.sourceSessionID != ""
+					modal := NewFinalizationModal(feedback, v.width, v.height, canSend)
 					v.finalizationModal = &modal
 					v.feedbackGenerated = feedback
 					return v, nil
@@ -1914,6 +1932,12 @@ func (v *View) ShowDocumentPicker() tea.Cmd {
 // LoadDocument loads and renders a document for preview.
 func (v *View) LoadDocument(doc *Document) {
 	v.loadDocument(doc)
+}
+
+// SetSourceSession sets the hive session ID for feedback delivery.
+// When set, the "Send to agent" option is enabled in finalization.
+func (v *View) SetSourceSession(sessionID string) {
+	v.sourceSessionID = sessionID
 }
 
 // CanShowInTabBar returns true if the review view should be shown in tab bar.
