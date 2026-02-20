@@ -37,8 +37,8 @@ func NewTodoService(store todo.Store, cfg config.TodoConfig, bus *eventbus.Event
 
 // HandleFileEvent processes a file change event from a context directory.
 // It reads the file's frontmatter for session attribution and creates a TODO item.
-// Duplicate pending items for the same file path are silently ignored.
-func (s *TodoService) HandleFileEvent(ctx context.Context, filePath string, repoRemote string) error {
+// Returns the newly created item, or nil if a duplicate already exists.
+func (s *TodoService) HandleFileEvent(ctx context.Context, filePath string, repoRemote string) (*todo.Item, error) {
 	fm := s.readFrontmatter(filePath)
 
 	title := fm.Title
@@ -57,14 +57,14 @@ func (s *TodoService) HandleFileEvent(ctx context.Context, filePath string, repo
 	if err := s.store.Create(ctx, item); err != nil {
 		if errors.Is(err, todo.ErrDuplicate) {
 			s.log.Debug().Str("path", filePath).Msg("duplicate pending todo, skipping")
-			return nil
+			return nil, nil
 		}
-		return fmt.Errorf("create todo for file event: %w", err)
+		return nil, fmt.Errorf("create todo for file event: %w", err)
 	}
 
 	s.bus.PublishTodoCreated(eventbus.TodoCreatedPayload{Item: &item})
 
-	return nil
+	return &item, nil
 }
 
 // HandleFileDelete dismisses all pending TODO items for a deleted file.

@@ -574,15 +574,34 @@ func (m Model) handleTodoFileChange(msg hive.TodoFileChangeMsg) (tea.Model, tea.
 	var cmds []tea.Cmd
 
 	ctx := context.Background()
+	var newItems []todo.Item
 	for _, path := range msg.Changed {
-		if err := m.todoService.HandleFileEvent(ctx, path, m.todoRepoRemote); err != nil {
+		item, err := m.todoService.HandleFileEvent(ctx, path, m.todoRepoRemote)
+		if err != nil {
 			log.Error().Err(err).Str("path", path).Msg("todo: handle file event")
+			continue
+		}
+		if item != nil {
+			newItems = append(newItems, *item)
 		}
 	}
 	for _, path := range msg.Deleted {
 		if err := m.todoService.HandleFileDelete(ctx, path); err != nil {
 			log.Error().Err(err).Str("path", path).Msg("todo: handle file delete")
 		}
+	}
+
+	// Notify for new items
+	for _, item := range newItems {
+		if m.cfg.Todo.Notifications.ToastEnabled() {
+			m.notifyBus.Infof("New todo: %s", item.Title)
+		}
+		if m.cfg.Todo.Notifications.TerminalEnabled() {
+			cmds = append(cmds, sendTerminalNotification(item))
+		}
+	}
+	if len(newItems) > 0 && m.cfg.Todo.Notifications.ToastEnabled() {
+		cmds = append(cmds, m.ensureToastTick())
 	}
 
 	// Refresh count and re-subscribe to watcher

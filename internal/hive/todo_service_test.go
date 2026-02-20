@@ -45,7 +45,10 @@ func TestTodoService_HandleFileEvent(t *testing.T) {
 		err := os.WriteFile(filePath, []byte("---\nsession_id: sess-1\ntitle: My Plan\n---\n# Content\n"), 0o644)
 		require.NoError(t, err)
 
-		require.NoError(t, svc.HandleFileEvent(ctx, filePath, "https://github.com/org/repo"))
+		item, err := svc.HandleFileEvent(ctx, filePath, "https://github.com/org/repo")
+		require.NoError(t, err)
+		require.NotNil(t, item)
+		assert.Equal(t, "My Plan", item.Title)
 
 		items, err := svc.ListPending(ctx, todo.ListFilter{})
 		require.NoError(t, err)
@@ -66,7 +69,9 @@ func TestTodoService_HandleFileEvent(t *testing.T) {
 		err := os.WriteFile(filePath, []byte("# Just notes\n"), 0o644)
 		require.NoError(t, err)
 
-		require.NoError(t, svc.HandleFileEvent(ctx, filePath, "repo"))
+		item, err := svc.HandleFileEvent(ctx, filePath, "repo")
+		require.NoError(t, err)
+		require.NotNil(t, item)
 
 		items, err := svc.ListPending(ctx, todo.ListFilter{})
 		require.NoError(t, err)
@@ -82,8 +87,13 @@ func TestTodoService_HandleFileEvent(t *testing.T) {
 		filePath := filepath.Join(dir, "plan.md")
 		require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
 
-		require.NoError(t, svc.HandleFileEvent(ctx, filePath, "repo"))
-		require.NoError(t, svc.HandleFileEvent(ctx, filePath, "repo"))
+		item, err := svc.HandleFileEvent(ctx, filePath, "repo")
+		require.NoError(t, err)
+		require.NotNil(t, item)
+
+		dup, err := svc.HandleFileEvent(ctx, filePath, "repo")
+		require.NoError(t, err)
+		assert.Nil(t, dup, "duplicate should return nil item")
 
 		items, err := svc.ListPending(ctx, todo.ListFilter{})
 		require.NoError(t, err)
@@ -93,7 +103,9 @@ func TestTodoService_HandleFileEvent(t *testing.T) {
 	t.Run("handles missing file gracefully", func(t *testing.T) {
 		svc, _ := newTestTodoService(t)
 
-		require.NoError(t, svc.HandleFileEvent(ctx, "/nonexistent/file.md", "repo"))
+		item, err := svc.HandleFileEvent(ctx, "/nonexistent/file.md", "repo")
+		require.NoError(t, err)
+		require.NotNil(t, item)
 
 		items, err := svc.ListPending(ctx, todo.ListFilter{})
 		require.NoError(t, err)
@@ -109,7 +121,9 @@ func TestTodoService_HandleFileDelete(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "plan.md")
 	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
-	require.NoError(t, svc.HandleFileEvent(ctx, filePath, "repo"))
+
+	_, err := svc.HandleFileEvent(ctx, filePath, "repo")
+	require.NoError(t, err)
 
 	require.NoError(t, svc.HandleFileDelete(ctx, filePath))
 
@@ -186,7 +200,9 @@ func TestTodoService_DismissAndComplete(t *testing.T) {
 	dir := t.TempDir()
 	filePath := filepath.Join(dir, "plan.md")
 	require.NoError(t, os.WriteFile(filePath, []byte("content"), 0o644))
-	require.NoError(t, svc.HandleFileEvent(ctx, filePath, "repo"))
+
+	_, err := svc.HandleFileEvent(ctx, filePath, "repo")
+	require.NoError(t, err)
 
 	items, err := svc.ListPending(ctx, todo.ListFilter{})
 	require.NoError(t, err)
@@ -202,7 +218,9 @@ func TestTodoService_DismissAndComplete(t *testing.T) {
 	// Create another and complete it
 	filePath2 := filepath.Join(dir, "plan2.md")
 	require.NoError(t, os.WriteFile(filePath2, []byte("content"), 0o644))
-	require.NoError(t, svc.HandleFileEvent(ctx, filePath2, "repo"))
+
+	_, err = svc.HandleFileEvent(ctx, filePath2, "repo")
+	require.NoError(t, err)
 
 	items, err = svc.ListPending(ctx, todo.ListFilter{})
 	require.NoError(t, err)
@@ -225,8 +243,10 @@ func TestTodoService_CompleteByPath(t *testing.T) {
 	require.NoError(t, os.WriteFile(path1, []byte("a"), 0o644))
 	require.NoError(t, os.WriteFile(path2, []byte("b"), 0o644))
 
-	require.NoError(t, svc.HandleFileEvent(ctx, path1, "repo"))
-	require.NoError(t, svc.HandleFileEvent(ctx, path2, "repo"))
+	_, err := svc.HandleFileEvent(ctx, path1, "repo")
+	require.NoError(t, err)
+	_, err = svc.HandleFileEvent(ctx, path2, "repo")
+	require.NoError(t, err)
 
 	require.NoError(t, svc.CompleteByPath(ctx, path1))
 
@@ -248,7 +268,8 @@ func TestTodoService_CountPending(t *testing.T) {
 	for _, name := range []string{"a.md", "b.md"} {
 		p := filepath.Join(dir, name)
 		require.NoError(t, os.WriteFile(p, []byte("---\nsession_id: s1\n---\n"), 0o644))
-		require.NoError(t, svc.HandleFileEvent(ctx, p, "repo"))
+		_, err = svc.HandleFileEvent(ctx, p, "repo")
+		require.NoError(t, err)
 	}
 
 	count, err = svc.CountPending(ctx)
