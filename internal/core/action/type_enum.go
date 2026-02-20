@@ -37,8 +37,8 @@ const (
 	TypeNewSession Type = "NewSession"
 	// TypeSetTheme is a Type of type SetTheme.
 	TypeSetTheme Type = "SetTheme"
-	// TypeMessages is a Type of type Messages.
-	TypeMessages Type = "Messages"
+	// TypeNotifications is a Type of type Notifications.
+	TypeNotifications Type = "Notifications"
 	// TypeRenameSession is a Type of type RenameSession.
 	TypeRenameSession Type = "RenameSession"
 	// TypeNextActive is a Type of type NextActive.
@@ -67,7 +67,7 @@ var _TypeNames = []string{
 	string(TypeDocReview),
 	string(TypeNewSession),
 	string(TypeSetTheme),
-	string(TypeMessages),
+	string(TypeNotifications),
 	string(TypeRenameSession),
 	string(TypeNextActive),
 	string(TypePrevActive),
@@ -121,8 +121,8 @@ var _TypeValue = map[string]Type{
 	"newsession":          TypeNewSession,
 	"SetTheme":            TypeSetTheme,
 	"settheme":            TypeSetTheme,
-	"Messages":            TypeMessages,
-	"messages":            TypeMessages,
+	"Notifications":       TypeNotifications,
+	"notifications":       TypeNotifications,
 	"RenameSession":       TypeRenameSession,
 	"renamesession":       TypeRenameSession,
 	"NextActive":          TypeNextActive,

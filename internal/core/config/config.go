@@ -122,8 +122,8 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "preview theme (" + strings.Join(styles.ThemeNames(), ", ") + ")",
 		Silent: true,
 	},
-	"Messages": {
-		Action: action.TypeMessages,
+	"Notifications": {
+		Action: action.TypeNotifications,
 		Help:   "show notification history",
 		Silent: true,
 	},
