@@ -94,10 +94,17 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			DB:              cmd.app.DB,
 			KVStore:         cmd.app.KV,
 			Renderer:        cmd.app.Renderer,
+			BuildInfo: tui.BuildInfo{
+				Version: cmd.app.Build.Version,
+				Commit:  cmd.app.Build.Commit,
+				Date:    cmd.app.Build.Date,
+			},
+			DoctorService: cmd.app.Doctor,
 		}
 		opts := tui.Opts{
 			LocalRemote: localRemote,
 			Warnings:    warnings,
+			ConfigPath:  cmd.flags.ConfigPath,
 		}
 
 		restoreOutput := cmd.app.Sessions.SilenceOutput()

@@ -23,6 +23,8 @@ package action
 //	PrevActive
 //	DeleteRecycledBatch
 //	SpawnWindows
+//	HiveInfo
+//	HiveDoctor
 //
 // )
 type Type string

@@ -12,6 +12,13 @@ import (
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
+// BuildInfo holds build-time metadata set by the main package.
+type BuildInfo struct {
+	Version string
+	Commit  string
+	Date    string
+}
+
 // App is the central entry point for all hive operations.
 // Commands and TUI consume App instead of cherry-picking raw dependencies.
 type App struct {
@@ -27,6 +34,7 @@ type App struct {
 	DB       *db.DB
 	KV       kv.KV
 	Renderer *tmpl.Renderer
+	Build    BuildInfo
 }
 
 // NewApp constructs an App from explicit dependencies.

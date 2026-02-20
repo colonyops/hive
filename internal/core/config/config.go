@@ -142,6 +142,16 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "prev active session",
 		Silent: true,
 	},
+	"HiveInfo": {
+		Action: action.TypeHiveInfo,
+		Help:   "show build and config info",
+		Silent: true,
+	},
+	"HiveDoctor": {
+		Action: action.TypeHiveDoctor,
+		Help:   "run health checks",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}

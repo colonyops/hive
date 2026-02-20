@@ -269,6 +269,11 @@ Run 'hive new' to create a new session from the current repository.`,
 				renderer,
 				pluginInfos,
 			)
+			hiveApp.Build = hive.BuildInfo{
+				Version: version,
+				Commit:  commit,
+				Date:    date,
+			}
 
 			return ctx, nil
 		},

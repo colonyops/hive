@@ -26,6 +26,7 @@ type ModalCoordinator struct {
 	CommandPalette  *CommandPalette
 	Help            *components.HelpDialog
 	Notification    *NotificationModal
+	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
 	DocPicker       *review.DocumentPickerModal
 	RenameInput     textinput.Model
@@ -119,6 +120,9 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 	case state == stateShowingNotifications && mc.Notification != nil:
 		return mc.Notification.Overlay(bg, w, h)
 
+	case state == stateShowingInfo && mc.InfoDialog != nil:
+		return mc.InfoDialog.Overlay(bg, w, h)
+
 	case state == stateRenaming:
 		renameContent := lipgloss.JoinVertical(
 			lipgloss.Left,
@@ -166,6 +170,16 @@ func (mc *ModalCoordinator) DismissHelp() {
 // DismissNotifications closes the notification modal.
 func (mc *ModalCoordinator) DismissNotifications() {
 	mc.Notification = nil
+}
+
+// ShowInfo creates and displays the info dialog.
+func (mc *ModalCoordinator) ShowInfo(title string, sections []components.InfoSection, footer, helpText string) {
+	mc.InfoDialog = components.NewInfoDialog(title, sections, footer, helpText, mc.width, mc.height)
+}
+
+// DismissInfo closes the info dialog.
+func (mc *ModalCoordinator) DismissInfo() {
+	mc.InfoDialog = nil
 }
 
 // DismissConfirm resets the confirm modal to zero value.

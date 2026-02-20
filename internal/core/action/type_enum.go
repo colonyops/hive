@@ -49,6 +49,10 @@ const (
 	TypeDeleteRecycledBatch Type = "DeleteRecycledBatch"
 	// TypeSpawnWindows is a Type of type SpawnWindows.
 	TypeSpawnWindows Type = "SpawnWindows"
+	// TypeHiveInfo is a Type of type HiveInfo.
+	TypeHiveInfo Type = "HiveInfo"
+	// TypeHiveDoctor is a Type of type HiveDoctor.
+	TypeHiveDoctor Type = "HiveDoctor"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -73,6 +77,8 @@ var _TypeNames = []string{
 	string(TypePrevActive),
 	string(TypeDeleteRecycledBatch),
 	string(TypeSpawnWindows),
+	string(TypeHiveInfo),
+	string(TypeHiveDoctor),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -133,6 +139,10 @@ var _TypeValue = map[string]Type{
 	"deleterecycledbatch": TypeDeleteRecycledBatch,
 	"SpawnWindows":        TypeSpawnWindows,
 	"spawnwindows":        TypeSpawnWindows,
+	"HiveInfo":            TypeHiveInfo,
+	"hiveinfo":            TypeHiveInfo,
+	"HiveDoctor":          TypeHiveDoctor,
+	"hivedoctor":          TypeHiveDoctor,
 }
 
 // ParseType attempts to convert a string to a Type.

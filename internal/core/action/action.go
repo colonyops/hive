@@ -80,6 +80,8 @@ var configActions = map[Type]bool{
 	TypeRenameSession:  true,
 	TypeNextActive:     true,
 	TypePrevActive:     true,
+	TypeHiveInfo:       true,
+	TypeHiveDoctor:     true,
 }
 
 // IsConfigAction reports whether t is a valid action for use in YAML config.
