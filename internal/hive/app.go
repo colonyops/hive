@@ -7,9 +7,11 @@ import (
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"
+	"github.com/rs/zerolog/log"
 )
 
 // App is the central entry point for all hive operations.
@@ -19,6 +21,7 @@ type App struct {
 	Messages *MessageService
 	Context  *ContextService
 	Doctor   *DoctorService
+	Todos    *TodoService
 
 	Bus      *eventbus.EventBus
 	Terminal *terminal.Manager
@@ -33,6 +36,7 @@ type App struct {
 func NewApp(
 	sessions *SessionService,
 	msgStore messaging.Store,
+	todoStore todo.Store,
 	cfg *config.Config,
 	bus *eventbus.EventBus,
 	termMgr *terminal.Manager,
@@ -47,6 +51,7 @@ func NewApp(
 		Messages: NewMessageService(msgStore, cfg, bus),
 		Context:  NewContextService(cfg, sessions.git),
 		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
+		Todos:    NewTodoService(todoStore, bus, log.Logger),
 		Bus:      bus,
 		Terminal: termMgr,
 		Plugins:  pluginMgr,
