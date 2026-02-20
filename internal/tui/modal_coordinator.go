@@ -10,6 +10,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
@@ -28,6 +29,7 @@ type ModalCoordinator struct {
 	Notification    *NotificationModal
 	FormDialog      *form.Dialog
 	DocPicker       *review.DocumentPickerModal
+	TodoPanel       *TodoActionPanel
 	RenameInput     textinput.Model
 	RenameSessionID string
 
@@ -130,6 +132,9 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(renameContent), w, h)
 
+	case mc.TodoPanel != nil:
+		return mc.TodoPanel.Overlay(bg, w, h)
+
 	case mc.DocPicker != nil:
 		return mc.DocPicker.Overlay(bg, w, h)
 
@@ -180,6 +185,16 @@ func (mc *ModalCoordinator) ClearFormState() {
 	mc.PendingFormName = ""
 	mc.PendingFormSess = nil
 	mc.PendingFormArgs = nil
+}
+
+// ShowTodoPanel creates and displays the TODO action panel.
+func (mc *ModalCoordinator) ShowTodoPanel(items []todo.Item) {
+	mc.TodoPanel = NewTodoActionPanel(items, mc.width, mc.height)
+}
+
+// DismissTodoPanel closes the TODO action panel.
+func (mc *ModalCoordinator) DismissTodoPanel() {
+	mc.TodoPanel = nil
 }
 
 // HasEditorFocus returns true if a modal with text input is active.
