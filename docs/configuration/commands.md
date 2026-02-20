@@ -89,7 +89,7 @@ These actions are provided by the tmux plugin and require tmux to be available.
 | ----------- | ---------------------------- |
 | `DocReview` | Open the document review view |
 | `SetTheme`  | Preview and select a theme   |
-| `Messages`  | Show notification history    |
+| `Notifications`  | Show notification history    |
 
 ## System Default Commands
 

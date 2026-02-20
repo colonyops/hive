@@ -17,7 +17,7 @@ package action
 //	DocReview
 //	NewSession
 //	SetTheme
-//	Messages
+//	Notifications
 //	RenameSession
 //	NextActive
 //	PrevActive

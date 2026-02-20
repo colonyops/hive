@@ -14,7 +14,8 @@ import (
 )
 
 const (
-	notifyModalMaxWidth  = 80
+	notifyModalWidthPct  = 65
+	notifyModalMinWidth  = 80
 	notifyModalMaxHeight = 30
 	notifyModalMargin    = 4
 	notifyModalChrome    = 6 // title + divider + help + spacing
@@ -30,7 +31,7 @@ type NotificationModal struct {
 
 // NewNotificationModal creates a modal showing notification history.
 func NewNotificationModal(bus *tuinotify.Bus, width, height int) *NotificationModal {
-	modalWidth := min(width-notifyModalMargin, notifyModalMaxWidth)
+	modalWidth := calcNotificationModalWidth(width)
 	modalHeight := min(height-notifyModalMargin, notifyModalMaxHeight)
 	contentHeight := modalHeight - notifyModalChrome
 
@@ -115,7 +116,7 @@ func (m *NotificationModal) Clear() error {
 
 // Overlay renders the notification modal centered over the background.
 func (m *NotificationModal) Overlay(background string, width, height int) string {
-	modalWidth := min(width-notifyModalMargin, notifyModalMaxWidth)
+	modalWidth := calcNotificationModalWidth(width)
 	modalHeight := min(height-notifyModalMargin, notifyModalMaxHeight)
 
 	scrollInfo := ""
@@ -150,4 +151,10 @@ func (m *NotificationModal) Overlay(background string, width, height int) string
 
 	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
 	return compositor.Render()
+}
+
+func calcNotificationModalWidth(termWidth int) int {
+	available := max(termWidth-notifyModalMargin, 1)
+	target := termWidth * notifyModalWidthPct / 100
+	return min(max(target, notifyModalMinWidth), available)
 }

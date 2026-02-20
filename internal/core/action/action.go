@@ -76,7 +76,7 @@ var configActions = map[Type]bool{
 	TypeDocReview:      true,
 	TypeNewSession:     true,
 	TypeSetTheme:       true,
-	TypeMessages:       true,
+	TypeNotifications:  true,
 	TypeRenameSession:  true,
 	TypeNextActive:     true,
 	TypePrevActive:     true,

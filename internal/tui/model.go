@@ -703,8 +703,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m, cmd.Execute(&m)
 		}
 
-		// Messages doesn't require a session
-		if entry.Command.Action == act.TypeMessages {
+		// Notifications doesn't require a session
+		if entry.Command.Action == act.TypeNotifications {
 			m.state = stateShowingNotifications
 			m.modals.ShowNotifications(m.notifyBus)
 			return m, nil
