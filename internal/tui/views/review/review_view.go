@@ -28,7 +28,8 @@ import (
 
 // ReviewFinalizedMsg is sent when review is finalized and copied to clipboard.
 type ReviewFinalizedMsg struct {
-	Feedback string
+	Feedback     string
+	DocumentPath string // absolute path of the finalized document
 }
 
 // reviewDiscardedMsg is sent when review is discarded (internal only).
@@ -258,8 +259,12 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// Execute selected action
 				switch action {
 				case FinalizationActionClipboard:
+					docPath := ""
+					if v.selectedDoc != nil {
+						docPath = v.selectedDoc.Path
+					}
 					return v, func() tea.Msg {
-						return ReviewFinalizedMsg{Feedback: v.feedbackGenerated}
+						return ReviewFinalizedMsg{Feedback: v.feedbackGenerated, DocumentPath: docPath}
 					}
 				case FinalizationActionNone, FinalizationActionSendToAgent:
 					// User cancelled or unsupported action, do nothing
@@ -317,8 +322,12 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// Reload document without comments
 				v.loadDocument(v.selectedDoc)
 				// Return message to trigger clipboard copy
+				docPath := ""
+				if v.selectedDoc != nil {
+					docPath = v.selectedDoc.Path
+				}
 				return v, func() tea.Msg {
-					return ReviewFinalizedMsg{Feedback: feedback}
+					return ReviewFinalizedMsg{Feedback: feedback, DocumentPath: docPath}
 				}
 			}
 

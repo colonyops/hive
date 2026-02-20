@@ -11,6 +11,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
@@ -229,10 +230,26 @@ func (m Model) handleReviewDocChange(msg review.DocumentChangeMsg) (tea.Model, t
 }
 
 func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	if err := m.copyToClipboard(msg.Feedback); err != nil {
-		return m, m.notifyError("failed to copy feedback: %v", err)
+		cmds = append(cmds, m.notifyError("failed to copy feedback: %v", err))
 	}
-	return m, nil
+
+	// Auto-complete TODO items associated with the finalized document
+	if msg.DocumentPath != "" && m.todoService != nil {
+		svc := m.todoService
+		docPath := msg.DocumentPath
+		cmds = append(cmds, func() tea.Msg {
+			if err := svc.CompleteByPath(context.Background(), docPath); err != nil {
+				log.Error().Err(err).Str("path", docPath).Msg("todo: auto-complete by path failed")
+			}
+			count, _ := svc.CountPending(context.Background())
+			return todoCountUpdatedMsg{count: count}
+		})
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleReviewOpenDoc(msg review.OpenDocumentMsg) (tea.Model, tea.Cmd) {
@@ -439,6 +456,90 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// --- TODO panel ---
+
+func (m Model) handleTodoPanelKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	if keyStr == keyCtrlC {
+		return m.quit()
+	}
+
+	panel := m.modals.TodoPanel
+	if panel == nil {
+		m.state = stateNormal
+		return m, nil
+	}
+
+	panel, _ = panel.Update(msg)
+	m.modals.TodoPanel = panel
+
+	if panel.Cancelled() {
+		m.state = stateNormal
+		m.modals.DismissTodoPanel()
+		return m, nil
+	}
+
+	if result := panel.Result(); result != nil {
+		m.state = stateNormal
+		m.modals.DismissTodoPanel()
+
+		switch result.Action { //nolint:exhaustive // TodoPanelNone is a no-op
+		case TodoPanelSelect:
+			// Open the file in review tab if it has a file path
+			if result.Item.FilePath != "" && m.reviewView != nil {
+				m.activeView = ViewReview
+				m.handler.SetActiveView(ViewReview)
+				m.sessionsView.SetActive(false)
+				return m, m.reviewView.OpenDocumentByPath(result.Item.FilePath)
+			}
+		case TodoPanelDismiss:
+			return m, m.dismissTodoItem(result.Item.ID)
+		case TodoPanelComplete:
+			return m, m.completeTodoItem(result.Item.ID)
+		}
+	}
+
+	return m, nil
+}
+
+func (m Model) openTodoPanel() (tea.Model, tea.Cmd) {
+	return m, m.loadTodosAndShowPanel()
+}
+
+func (m Model) loadTodosAndShowPanel() tea.Cmd {
+	svc := m.todoService
+	return func() tea.Msg {
+		items, err := svc.ListPending(context.Background(), todo.ListFilter{})
+		if err != nil {
+			log.Error().Err(err).Msg("todo: list pending for panel")
+			return todoPanelLoadedMsg{items: nil}
+		}
+		return todoPanelLoadedMsg{items: items}
+	}
+}
+
+func (m Model) dismissTodoItem(id string) tea.Cmd {
+	svc := m.todoService
+	return func() tea.Msg {
+		if err := svc.Dismiss(context.Background(), id); err != nil {
+			log.Error().Err(err).Str("id", id).Msg("todo: dismiss failed")
+		}
+		// Refresh count
+		count, _ := svc.CountPending(context.Background())
+		return todoCountUpdatedMsg{count: count}
+	}
+}
+
+func (m Model) completeTodoItem(id string) tea.Cmd {
+	svc := m.todoService
+	return func() tea.Msg {
+		if err := svc.Complete(context.Background(), id); err != nil {
+			log.Error().Err(err).Str("id", id).Msg("todo: complete failed")
+		}
+		count, _ := svc.CountPending(context.Background())
+		return todoCountUpdatedMsg{count: count}
+	}
+}
+
 // --- TODO tracking ---
 
 func (m Model) handleTodoFileChange(msg hive.TodoFileChangeMsg) (tea.Model, tea.Cmd) {
@@ -466,6 +567,15 @@ func (m Model) handleTodoFileChange(msg hive.TodoFileChangeMsg) (tea.Model, tea.
 
 func (m Model) handleTodoCountUpdated(msg todoCountUpdatedMsg) (tea.Model, tea.Cmd) {
 	m.todoPendingCount = msg.count
+	return m, nil
+}
+
+func (m Model) handleTodoPanelLoaded(msg todoPanelLoadedMsg) (tea.Model, tea.Cmd) {
+	if len(msg.items) == 0 {
+		return m, m.notifyError("no pending TODO items")
+	}
+	m.modals.ShowTodoPanel(msg.items)
+	m.state = stateShowingTodoPanel
 	return m, nil
 }
 

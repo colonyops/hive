@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/todo"
 
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -49,6 +50,7 @@ const (
 	stateShowingNotifications
 	stateRenaming
 	stateFormInput
+	stateShowingTodoPanel
 )
 
 // Key constants for event handling.
@@ -174,6 +176,11 @@ type notificationMsg struct {
 // todoCountUpdatedMsg carries an updated pending TODO count.
 type todoCountUpdatedMsg struct {
 	count int64
+}
+
+// todoPanelLoadedMsg carries items loaded for the TODO action panel.
+type todoPanelLoadedMsg struct {
+	items []todo.Item
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -432,6 +439,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleTodoFileChange(msg)
 	case todoCountUpdatedMsg:
 		model, cmd = m.handleTodoCountUpdated(msg)
+	case todoPanelLoadedMsg:
+		model, cmd = m.handleTodoPanelLoaded(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -492,6 +501,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
+	}
+	if m.state == stateShowingTodoPanel {
+		return m.handleTodoPanelKey(msg, keyStr)
 	}
 
 	// When filtering in either list, pass most keys except quit
@@ -698,6 +710,10 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		{Key: "tab", Desc: "switch view"},
 		{Key: ":", Desc: "command palette"},
 		{Key: "g", Desc: "refresh git status"},
+	}
+
+	if m.todoService != nil && m.cfg.Todo.IsEnabled() {
+		navEntries = append(navEntries, components.HelpEntry{Key: "t", Desc: "TODO items"})
 	}
 
 	if m.sessionsView != nil && m.sessionsView.PreviewEnabled() {
@@ -918,6 +934,10 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		}
 	case "tab":
 		return m.handleTabKey()
+	case "t":
+		if m.todoService != nil && m.cfg.Todo.IsEnabled() {
+			return m.openTodoPanel()
+		}
 	case "?":
 		// Don't show help dialog when in review view - let review view handle keys
 		if !m.isReviewFocused() {

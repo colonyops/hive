@@ -132,7 +132,7 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(renameContent), w, h)
 
-	case mc.TodoPanel != nil:
+	case state == stateShowingTodoPanel && mc.TodoPanel != nil:
 		return mc.TodoPanel.Overlay(bg, w, h)
 
 	case mc.DocPicker != nil:
