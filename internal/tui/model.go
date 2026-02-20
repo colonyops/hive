@@ -3,7 +3,10 @@ package tui
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os/exec"
+	"runtime"
+	"strconv"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -13,6 +16,7 @@ import (
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
 	corekv "github.com/colonyops/hive/internal/core/kv"
@@ -47,6 +51,7 @@ const (
 	stateCommandPalette
 	stateShowingHelp
 	stateShowingNotifications
+	stateShowingInfo
 	stateRenaming
 	stateFormInput
 )
@@ -67,16 +72,19 @@ type Deps struct {
 	PluginManager   *plugins.Manager
 
 	// Optional — nil disables the corresponding feature.
-	MsgStore *hive.MessageService
-	Bus      *eventbus.EventBus
-	DB       *db.DB
-	KVStore  corekv.KV
+	MsgStore      *hive.MessageService
+	Bus           *eventbus.EventBus
+	DB            *db.DB
+	KVStore       corekv.KV
+	BuildInfo     BuildInfo
+	DoctorService *hive.DoctorService
 }
 
 // Opts holds runtime options that are not service dependencies.
 type Opts struct {
 	LocalRemote string
 	Warnings    []string
+	ConfigPath  string
 }
 
 // PendingCreate holds data for a session to create after TUI exits.
@@ -125,7 +133,10 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
-	renderer *tmpl.Renderer
+	renderer      *tmpl.Renderer
+	buildInfo     BuildInfo
+	doctorService *hive.DoctorService
+	configPath    string
 
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
@@ -161,6 +172,10 @@ type recycleCompleteMsg struct {
 // notificationMsg carries a notification from an async tea.Cmd into the Update loop.
 type notificationMsg struct {
 	notification notify.Notification
+}
+
+type doctorResultsMsg struct {
+	results []doctor.Result
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -268,6 +283,9 @@ func New(deps Deps, opts Opts) Model {
 		toastView:       toastView,
 		bus:             deps.Bus,
 		renderer:        deps.Renderer,
+		buildInfo:       deps.BuildInfo,
+		doctorService:   deps.DoctorService,
+		configPath:      opts.ConfigPath,
 		startupWarnings: opts.Warnings,
 	}
 }
@@ -389,6 +407,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleRenameComplete(msg)
 	case actionCompleteMsg:
 		model, cmd = m.handleActionComplete(msg)
+	case doctorResultsMsg:
+		model, cmd = m.handleDoctorResults(msg)
 	case recycleStartedMsg:
 		model, cmd = m.handleRecycleStarted(msg)
 	case recycleOutputMsg:
@@ -443,6 +463,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateShowingNotifications {
 		return m.handleNotificationModalKey(keyStr)
+	}
+	if m.state == stateShowingInfo {
+		return m.handleInfoDialogKey(keyStr)
 	}
 	if m.state == stateRenaming {
 		return m.handleRenameKey(msg, keyStr)
@@ -627,6 +650,22 @@ func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) handleInfoDialogKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		return m.quit()
+	case "esc", "q":
+		m.state = stateNormal
+		m.modals.DismissInfo()
+		return m, nil
+	case "j", "down":
+		m.modals.InfoDialog.ScrollDown()
+	case "k", "up":
+		m.modals.InfoDialog.ScrollUp()
+	}
+	return m, nil
+}
+
 // showHelpDialog creates and displays the help dialog.
 func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	var sections []components.HelpDialogSection
@@ -682,6 +721,99 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+func (m Model) showHiveInfo() (tea.Model, tea.Cmd) {
+	commit := m.buildInfo.Commit
+	if len(commit) > 7 {
+		commit = commit[:7]
+	}
+
+	sections := []components.InfoSection{
+		{
+			Title: "Build",
+			Items: []components.InfoItem{
+				{Label: "Version", Value: m.buildInfo.Version},
+				{Label: "Commit", Value: commit},
+				{Label: "Built", Value: m.buildInfo.Date},
+				{Label: "Go", Value: runtime.Version()},
+				{Label: "OS/Arch", Value: runtime.GOOS + "/" + runtime.GOARCH},
+			},
+		},
+		{
+			Title: "Configuration",
+			Items: []components.InfoItem{
+				{Label: "Config file", Value: m.configPath},
+				{Label: "Config version", Value: m.cfg.Version},
+				{Label: "Data directory", Value: m.cfg.DataDir},
+				{Label: "Repos directory", Value: m.cfg.ReposDir()},
+				{Label: "Theme", Value: m.cfg.TUI.Theme},
+				{Label: "Sessions", Value: strconv.Itoa(len(m.sessionsView.AllSessions()))},
+			},
+		},
+	}
+
+	m.modals.ShowInfo("Hive Info", sections, "", "[j/k] scroll  [esc] close")
+	m.state = stateShowingInfo
+	return m, nil
+}
+
+func (m Model) showHiveDoctor() (tea.Model, tea.Cmd) {
+	if m.doctorService == nil {
+		return m, m.notifyError("doctor service not available")
+	}
+
+	m.state = stateLoading
+	m.loadingMessage = "Running health checks..."
+
+	return m, func() tea.Msg {
+		results := m.doctorService.RunChecks(context.Background(), m.configPath, false)
+		return doctorResultsMsg{results: results}
+	}
+}
+
+func (m Model) handleDoctorResults(msg doctorResultsMsg) (tea.Model, tea.Cmd) {
+	sections, footer := buildDoctorDialogContent(msg.results)
+	m.modals.ShowInfo("Hive Doctor", sections, footer, "[j/k] scroll  [esc] close")
+	m.state = stateShowingInfo
+	return m, nil
+}
+
+func buildDoctorDialogContent(results []doctor.Result) ([]components.InfoSection, string) {
+	sections := make([]components.InfoSection, 0, len(results))
+	for _, result := range results {
+		items := make([]components.InfoItem, 0, len(result.Items))
+		for _, item := range result.Items {
+			status := components.InfoStatusNone
+			switch item.Status {
+			case doctor.StatusPass:
+				status = components.InfoStatusPass
+			case doctor.StatusWarn:
+				status = components.InfoStatusWarn
+			case doctor.StatusFail:
+				status = components.InfoStatusFail
+			}
+
+			items = append(items, components.InfoItem{
+				Label:  item.Label,
+				Value:  item.Detail,
+				Status: status,
+			})
+		}
+		sections = append(sections, components.InfoSection{
+			Title: result.Name,
+			Items: items,
+		})
+	}
+
+	passed, warned, failed := doctor.Summary(results)
+	footer := fmt.Sprintf("%s  %s  %s",
+		styles.TextSuccessStyle.Render(fmt.Sprintf("%d passed", passed)),
+		styles.TextWarningStyle.Render(fmt.Sprintf("%d warnings", warned)),
+		styles.TextErrorStyle.Render(fmt.Sprintf("%d failed", failed)),
+	)
+
+	return sections, footer
+}
+
 // handleCommandPaletteKey handles keys when command palette is shown.
 func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
@@ -735,6 +867,16 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 				m.applyTheme(args[0])
 			}
 			return m, m.ensureToastTick()
+		}
+
+		if entry.Command.Action == act.TypeHiveInfo {
+			m.state = stateNormal
+			return m.showHiveInfo()
+		}
+
+		if entry.Command.Action == act.TypeHiveDoctor {
+			m.state = stateNormal
+			return m.showHiveDoctor()
 		}
 
 		// Check if this is a filter action (doesn't require a session)
