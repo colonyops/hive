@@ -14,7 +14,7 @@ import (
 )
 
 const (
-	notifyModalMaxWidth  = 80
+	notifyModalMaxWidth  = 96
 	notifyModalMaxHeight = 30
 	notifyModalMargin    = 4
 	notifyModalChrome    = 6 // title + divider + help + spacing
