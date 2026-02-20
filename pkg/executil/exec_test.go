@@ -40,6 +40,18 @@ func TestRunSh_PreservesExitError(t *testing.T) {
 	assert.ErrorAs(t, err, &exitErr, "original ExitError should be preserved via wrapping")
 }
 
+func TestRunSh_LargeStderrDoesNotFailSuccessfulCommand(t *testing.T) {
+	ctx := context.Background()
+
+	// Command that writes >500 bytes to stderr but exits 0.
+	// Before the fix, limitedWriter returned a short byte count causing io.ErrShortWrite.
+	longStderr := strings.Repeat("W", maxStderrLen*2)
+	cmd := fmt.Sprintf("printf '%%s' '%s' >&2; exit 0", longStderr)
+
+	err := RunSh(ctx, "", cmd)
+	assert.NoError(t, err, "successful command with large stderr should not fail")
+}
+
 func TestRunSh_NoStderrReturnsExitError(t *testing.T) {
 	ctx := context.Background()
 

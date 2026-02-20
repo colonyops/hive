@@ -754,6 +754,56 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 	assert.Empty(t, a.SpawnWindows.ShCmd)
 }
 
+func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"NewWin": {
+			Options: config.UserCommandOptions{
+				SessionName: "new-sess",
+				// Remote intentionally omitted — should inherit from selected session.
+			},
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude"},
+			},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["NewWin"]
+	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil)
+
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.NotNil(t, a.SpawnWindows)
+	require.NotNil(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, sess.Remote, a.SpawnWindows.NewSession.Remote,
+		"new session should inherit selected session's remote when options.remote is omitted")
+}
+
+func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"NewWin": {
+			Options: config.UserCommandOptions{
+				SessionName: "new-sess",
+				Remote:      "https://github.com/other/repo",
+			},
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude"},
+			},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["NewWin"]
+	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil)
+
+	require.NotNil(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSession.Remote,
+		"explicit options.remote should override session remote")
+}
+
 func TestResolveWindowsAction_TemplateError(t *testing.T) {
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
 	commands := map[string]config.UserCommand{

@@ -25,12 +25,16 @@ func (w *limitedWriter) Write(p []byte) (int, error) {
 		return len(p), nil
 	}
 	remaining := w.max - w.n
-	if int64(len(p)) > remaining {
+	origLen := len(p)
+	if int64(origLen) > remaining {
 		p = p[:remaining]
 	}
 	n, err := w.buf.Write(p)
 	w.n += int64(n)
-	return n, err
+	if err != nil {
+		return n, err
+	}
+	return origLen, nil
 }
 
 // RunSh executes a shell command in the given directory (empty means inherit cwd).

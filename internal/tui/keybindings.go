@@ -153,10 +153,14 @@ func (h *KeybindingResolver) resolveWindowsAction(a Action, cmd config.UserComma
 			a.Err = fmt.Errorf("template error in options.session_name: %w", err)
 			return a
 		}
-		remote, err := h.renderer.Render(cmd.Options.Remote, data)
-		if err != nil {
-			a.Err = fmt.Errorf("template error in options.remote: %w", err)
-			return a
+		remote := sess.Remote
+		if cmd.Options.Remote != "" {
+			rendered, err := h.renderer.Render(cmd.Options.Remote, data)
+			if err != nil {
+				a.Err = fmt.Errorf("template error in options.remote: %w", err)
+				return a
+			}
+			remote = rendered
 		}
 		newSess = &action.NewSessionRequest{Name: sessionName, Remote: remote}
 	}
