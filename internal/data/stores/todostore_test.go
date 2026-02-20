@@ -36,7 +36,7 @@ func TestTodoStore(t *testing.T) {
 			UpdatedAt:   now,
 		}
 
-		require.NoError(t, store.Create(ctx, item))
+		require.NoError(t, store.Create(ctx, &item))
 
 		got, err := store.Get(ctx, "test-id-1")
 		require.NoError(t, err)
@@ -63,7 +63,7 @@ func TestTodoStore(t *testing.T) {
 			RepoRemote: "https://github.com/org/repo",
 		}
 
-		require.NoError(t, store.Create(ctx, item))
+		require.NoError(t, store.Create(ctx, &item))
 
 		// Verify by listing all
 		items, err := store.List(ctx, todo.ListFilter{})
@@ -106,7 +106,7 @@ func TestTodoStore(t *testing.T) {
 
 		base := time.Now()
 		for i, status := range []todo.Status{todo.StatusPending, todo.StatusCompleted, todo.StatusPending} {
-			require.NoError(t, store.Create(ctx, todo.Item{
+			require.NoError(t, store.Create(ctx, &todo.Item{
 				ID:         fmt.Sprintf("item-%d", i),
 				Type:       todo.ItemTypeCustom,
 				Status:     status,
@@ -134,12 +134,12 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		now := time.Now()
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "s1", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "From session A", SessionID: "sess-a", RepoRemote: "repo",
 			CreatedAt: now, UpdatedAt: now,
 		}))
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "s2", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "From session B", SessionID: "sess-b", RepoRemote: "repo",
 			CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second),
@@ -159,12 +159,12 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		now := time.Now()
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "r1", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "Repo A item", RepoRemote: "repo-a",
 			CreatedAt: now, UpdatedAt: now,
 		}))
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "r2", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "Repo B item", RepoRemote: "repo-b",
 			CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second),
@@ -184,7 +184,7 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		now := time.Now()
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "upd-1", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "Pending task", RepoRemote: "repo",
 			CreatedAt: now, UpdatedAt: now,
@@ -217,12 +217,12 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		now := time.Now()
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "d1", Type: todo.ItemTypeFileChange, Status: todo.StatusPending,
 			Title: "File changed", FilePath: "/repo/plan.md", RepoRemote: "repo",
 			CreatedAt: now, UpdatedAt: now,
 		}))
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "d2", Type: todo.ItemTypeFileChange, Status: todo.StatusPending,
 			Title: "Other file", FilePath: "/repo/other.md", RepoRemote: "repo",
 			CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second),
@@ -248,14 +248,14 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		now := time.Now()
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "dup1", Type: todo.ItemTypeFileChange, Status: todo.StatusPending,
 			Title: "First", FilePath: "/repo/plan.md", RepoRemote: "repo",
 			CreatedAt: now, UpdatedAt: now,
 		}))
 
 		// Second pending item for same path should fail
-		err = store.Create(ctx, todo.Item{
+		err = store.Create(ctx, &todo.Item{
 			ID: "dup2", Type: todo.ItemTypeFileChange, Status: todo.StatusPending,
 			Title: "Second", FilePath: "/repo/plan.md", RepoRemote: "repo",
 			CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second),
@@ -265,7 +265,7 @@ func TestTodoStore(t *testing.T) {
 		// After dismissing, a new pending item for the same path should succeed
 		require.NoError(t, store.DismissByPath(ctx, "/repo/plan.md"))
 
-		err = store.Create(ctx, todo.Item{
+		err = store.Create(ctx, &todo.Item{
 			ID: "dup3", Type: todo.ItemTypeFileChange, Status: todo.StatusPending,
 			Title: "Third", FilePath: "/repo/plan.md", RepoRemote: "repo",
 			CreatedAt: now.Add(2 * time.Second), UpdatedAt: now.Add(2 * time.Second),
@@ -286,7 +286,7 @@ func TestTodoStore(t *testing.T) {
 
 		now := time.Now()
 		for i := range 3 {
-			require.NoError(t, store.Create(ctx, todo.Item{
+			require.NoError(t, store.Create(ctx, &todo.Item{
 				ID: fmt.Sprintf("cp-%d", i), Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 				Title: "Task", RepoRemote: "repo",
 				CreatedAt: now.Add(time.Duration(i) * time.Millisecond),
@@ -314,17 +314,17 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		now := time.Now()
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "cps1", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "A", SessionID: "sess-x", RepoRemote: "repo",
 			CreatedAt: now, UpdatedAt: now,
 		}))
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "cps2", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "B", SessionID: "sess-x", RepoRemote: "repo",
 			CreatedAt: now.Add(time.Second), UpdatedAt: now.Add(time.Second),
 		}))
-		require.NoError(t, store.Create(ctx, todo.Item{
+		require.NoError(t, store.Create(ctx, &todo.Item{
 			ID: "cps3", Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 			Title: "C", SessionID: "sess-y", RepoRemote: "repo",
 			CreatedAt: now.Add(2 * time.Second), UpdatedAt: now.Add(2 * time.Second),
@@ -349,7 +349,7 @@ func TestTodoStore(t *testing.T) {
 		base := time.Now()
 		// Create 3 custom items at base, base+1h, base+2h
 		for i := range 3 {
-			require.NoError(t, store.Create(ctx, todo.Item{
+			require.NoError(t, store.Create(ctx, &todo.Item{
 				ID: fmt.Sprintf("rate-%d", i), Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 				Title: "Rate limited", SessionID: "agent-1", RepoRemote: "repo",
 				CreatedAt: base.Add(time.Duration(i) * time.Hour),
@@ -377,7 +377,7 @@ func TestTodoStore(t *testing.T) {
 
 		base := time.Now()
 		for i, title := range []string{"first", "second", "third"} {
-			require.NoError(t, store.Create(ctx, todo.Item{
+			require.NoError(t, store.Create(ctx, &todo.Item{
 				ID: fmt.Sprintf("ord-%d", i), Type: todo.ItemTypeCustom, Status: todo.StatusPending,
 				Title: title, RepoRemote: "repo",
 				CreatedAt: base.Add(time.Duration(i) * time.Second),

@@ -116,6 +116,12 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		cmd := HiveDocReviewCmd{Arg: ""}
 		return m, cmd.Execute(&m)
 	}
+	if action.Type == act.TypeTodoPanel {
+		if m.todoService != nil && m.cfg.Todo.IsEnabled() {
+			return m.openTodoPanel()
+		}
+		return m, nil
+	}
 	if action.Type == act.TypeRenameSession {
 		sess := m.sessionsView.SelectedSession()
 		if sess == nil {
@@ -270,7 +276,10 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 			if err := svc.CompleteByPath(context.Background(), docPath); err != nil {
 				log.Error().Err(err).Str("path", docPath).Msg("todo: auto-complete by path failed")
 			}
-			count, _ := svc.CountPending(context.Background())
+			count, err := svc.CountPending(context.Background())
+			if err != nil {
+				log.Error().Err(err).Msg("todo: count pending after auto-complete")
+			}
 			return todoCountUpdatedMsg{count: count}
 		})
 	}
@@ -539,7 +548,7 @@ func (m Model) loadTodosAndShowPanel() tea.Cmd {
 		items, err := svc.ListPending(context.Background(), todo.ListFilter{})
 		if err != nil {
 			log.Error().Err(err).Msg("todo: list pending for panel")
-			return todoPanelLoadedMsg{items: nil}
+			return todoPanelLoadedMsg{err: err}
 		}
 		return todoPanelLoadedMsg{items: items}
 	}
@@ -550,9 +559,15 @@ func (m Model) dismissTodoItem(id string) tea.Cmd {
 	return func() tea.Msg {
 		if err := svc.Dismiss(context.Background(), id); err != nil {
 			log.Error().Err(err).Str("id", id).Msg("todo: dismiss failed")
+			return notificationMsg{notification: notify.Notification{
+				Level:   notify.LevelError,
+				Message: fmt.Sprintf("dismiss failed: %v", err),
+			}}
 		}
-		// Refresh count
-		count, _ := svc.CountPending(context.Background())
+		count, err := svc.CountPending(context.Background())
+		if err != nil {
+			log.Error().Err(err).Msg("todo: count pending after dismiss")
+		}
 		return todoCountUpdatedMsg{count: count}
 	}
 }
@@ -562,37 +577,63 @@ func (m Model) completeTodoItem(id string) tea.Cmd {
 	return func() tea.Msg {
 		if err := svc.Complete(context.Background(), id); err != nil {
 			log.Error().Err(err).Str("id", id).Msg("todo: complete failed")
+			return notificationMsg{notification: notify.Notification{
+				Level:   notify.LevelError,
+				Message: fmt.Sprintf("complete failed: %v", err),
+			}}
 		}
-		count, _ := svc.CountPending(context.Background())
+		count, err := svc.CountPending(context.Background())
+		if err != nil {
+			log.Error().Err(err).Msg("todo: count pending after complete")
+		}
 		return todoCountUpdatedMsg{count: count}
 	}
 }
 
 // --- TODO tracking ---
 
+// todoFileChangeResultMsg carries the results of async file change processing.
+type todoFileChangeResultMsg struct {
+	newItems []todo.Item
+}
+
 func (m Model) handleTodoFileChange(msg hive.TodoFileChangeMsg) (tea.Model, tea.Cmd) {
+	svc := m.todoService
+	remote := m.todoRepoRemote
+
+	processCmd := func() tea.Msg {
+		ctx := context.Background()
+		var newItems []todo.Item
+		for _, path := range msg.Changed {
+			item, err := svc.HandleFileEvent(ctx, path, remote)
+			if err != nil {
+				log.Error().Err(err).Str("path", path).Msg("todo: handle file event")
+				continue
+			}
+			if item != nil {
+				newItems = append(newItems, *item)
+			}
+		}
+		for _, path := range msg.Deleted {
+			if err := svc.HandleFileDelete(ctx, path); err != nil {
+				log.Error().Err(err).Str("path", path).Msg("todo: handle file delete")
+			}
+		}
+		return todoFileChangeResultMsg{newItems: newItems}
+	}
+
+	var cmds []tea.Cmd
+	cmds = append(cmds, processCmd)
+	if m.todoWatcher != nil {
+		cmds = append(cmds, m.todoWatcher.Start())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleTodoFileChangeResult(msg todoFileChangeResultMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
-	ctx := context.Background()
-	var newItems []todo.Item
-	for _, path := range msg.Changed {
-		item, err := m.todoService.HandleFileEvent(ctx, path, m.todoRepoRemote)
-		if err != nil {
-			log.Error().Err(err).Str("path", path).Msg("todo: handle file event")
-			continue
-		}
-		if item != nil {
-			newItems = append(newItems, *item)
-		}
-	}
-	for _, path := range msg.Deleted {
-		if err := m.todoService.HandleFileDelete(ctx, path); err != nil {
-			log.Error().Err(err).Str("path", path).Msg("todo: handle file delete")
-		}
-	}
-
-	// Notify for new items
-	for _, item := range newItems {
+	for _, item := range msg.newItems {
 		if m.cfg.Todo.Notifications.ToastEnabled() {
 			m.notifyBus.Infof("New todo: %s", item.Title)
 		}
@@ -600,15 +641,11 @@ func (m Model) handleTodoFileChange(msg hive.TodoFileChangeMsg) (tea.Model, tea.
 			cmds = append(cmds, sendTerminalNotification(item))
 		}
 	}
-	if len(newItems) > 0 && m.cfg.Todo.Notifications.ToastEnabled() {
+	if len(msg.newItems) > 0 && m.cfg.Todo.Notifications.ToastEnabled() {
 		cmds = append(cmds, m.ensureToastTick())
 	}
 
-	// Refresh count and re-subscribe to watcher
 	cmds = append(cmds, m.loadTodoCount())
-	if m.todoWatcher != nil {
-		cmds = append(cmds, m.todoWatcher.Start())
-	}
 	return m, tea.Batch(cmds...)
 }
 
@@ -618,6 +655,9 @@ func (m Model) handleTodoCountUpdated(msg todoCountUpdatedMsg) (tea.Model, tea.C
 }
 
 func (m Model) handleTodoPanelLoaded(msg todoPanelLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		return m, m.notifyError("failed to load TODO items: %v", msg.err)
+	}
 	if len(msg.items) == 0 {
 		return m, m.notifyError("no pending TODO items")
 	}

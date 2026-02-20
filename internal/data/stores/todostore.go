@@ -2,13 +2,15 @@ package stores
 
 import (
 	"context"
+	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/pkg/randid"
+	"modernc.org/sqlite"
+	sqlite3 "modernc.org/sqlite/lib"
 )
 
 // TodoStore implements todo.Store using SQLite.
@@ -26,7 +28,7 @@ func NewTodoStore(db *db.DB) *TodoStore {
 // Create persists a new TODO item.
 // Generates an ID if not set. Returns ErrDuplicate if a pending item already
 // exists for the same file path (enforced by partial unique index).
-func (s *TodoStore) Create(ctx context.Context, item todo.Item) error {
+func (s *TodoStore) Create(ctx context.Context, item *todo.Item) error {
 	if item.ID == "" {
 		item.ID = randid.Generate(8)
 	}
@@ -155,6 +157,19 @@ func (s *TodoStore) DismissByPath(ctx context.Context, filePath string) error {
 	return nil
 }
 
+// CompleteByPath completes all pending items matching the given file path.
+func (s *TodoStore) CompleteByPath(ctx context.Context, filePath string) error {
+	err := s.db.Queries().CompleteTodoItemsByPath(ctx, db.CompleteTodoItemsByPathParams{
+		UpdatedAt: time.Now().UnixNano(),
+		FilePath:  toNullString(filePath),
+	})
+	if err != nil {
+		return fmt.Errorf("complete todo items by path: %w", err)
+	}
+
+	return nil
+}
+
 // CountPending returns the total number of pending items.
 func (s *TodoStore) CountPending(ctx context.Context) (int64, error) {
 	count, err := s.db.Queries().CountPendingTodoItems(ctx)
@@ -202,5 +217,9 @@ func rowToTodoItem(row db.TodoItem) todo.Item {
 
 // isUniqueConstraintError checks if the error is a SQLite UNIQUE constraint violation.
 func isUniqueConstraintError(err error) bool {
-	return err != nil && strings.Contains(err.Error(), "UNIQUE constraint failed")
+	var sqliteErr *sqlite.Error
+	if errors.As(err, &sqliteErr) {
+		return sqliteErr.Code() == sqlite3.SQLITE_CONSTRAINT_UNIQUE
+	}
+	return false
 }

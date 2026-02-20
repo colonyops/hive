@@ -142,6 +142,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "prev active session",
 		Silent: true,
 	},
+	"TodoPanel": {
+		Action: action.TypeTodoPanel,
+		Help:   "TODO items",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
@@ -177,6 +182,7 @@ var defaultKeybindings = map[string]Keybinding{
 	"R":      {Cmd: "RenameSession"},
 	"J":      {Cmd: "NextActive"},
 	"K":      {Cmd: "PrevActive"},
+	"t":      {Cmd: "TodoPanel"},
 }
 
 // CurrentConfigVersion is the latest config schema version.
@@ -329,7 +335,7 @@ type PreviewConfig struct {
 // TodoConfig holds TODO item configuration.
 type TodoConfig struct {
 	Enabled       *bool            `yaml:"enabled"`    // nil = true by default
-	RateLimit     int              `yaml:"rate_limit"` // max custom items per session per hour (default: 20, 0 = unlimited)
+	RateLimit     *int             `yaml:"rate_limit"` // max custom items per session per hour (nil = 20, 0 = unlimited)
 	Notifications TodoNotifyConfig `yaml:"notifications"`
 }
 
@@ -338,12 +344,13 @@ func (t TodoConfig) IsEnabled() bool {
 	return t.Enabled == nil || *t.Enabled
 }
 
-// RateLimitOrDefault returns the configured rate limit or 20 if not set.
+// RateLimitOrDefault returns the configured rate limit.
+// Nil defaults to 20. Zero means unlimited (no rate limiting).
 func (t TodoConfig) RateLimitOrDefault() int {
-	if t.RateLimit <= 0 {
+	if t.RateLimit == nil {
 		return 20
 	}
-	return t.RateLimit
+	return *t.RateLimit
 }
 
 // TodoNotifyConfig controls TODO notification delivery.

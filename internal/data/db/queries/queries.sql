@@ -230,6 +230,11 @@ UPDATE todo_items
 SET status = 'dismissed', updated_at = ?
 WHERE file_path = ? AND status = 'pending';
 
+-- name: CompleteTodoItemsByPath :exec
+UPDATE todo_items
+SET status = 'completed', updated_at = ?
+WHERE file_path = ? AND status = 'pending';
+
 -- name: CountPendingTodoItems :one
 SELECT COUNT(*) FROM todo_items
 WHERE status = 'pending';

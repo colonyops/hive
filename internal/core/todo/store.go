@@ -25,8 +25,9 @@ type ListFilter struct {
 // Store defines the interface for TODO item persistence.
 type Store interface {
 	// Create persists a new TODO item.
+	// The store populates ID, Status, CreatedAt, and UpdatedAt if not already set.
 	// Returns ErrDuplicate if a pending item already exists for the same file path.
-	Create(ctx context.Context, item Item) error
+	Create(ctx context.Context, item *Item) error
 
 	// Get returns a single TODO item by ID.
 	// Returns ErrNotFound if the item does not exist.
@@ -41,6 +42,9 @@ type Store interface {
 
 	// DismissByPath dismisses all pending items matching the given file path.
 	DismissByPath(ctx context.Context, filePath string) error
+
+	// CompleteByPath completes all pending items matching the given file path.
+	CompleteByPath(ctx context.Context, filePath string) error
 
 	// CountPending returns the total number of pending items.
 	CountPending(ctx context.Context) (int64, error)

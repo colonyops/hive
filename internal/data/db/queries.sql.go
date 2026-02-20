@@ -28,6 +28,22 @@ func (q *Queries) AcknowledgeMessages(ctx context.Context, arg AcknowledgeMessag
 	return err
 }
 
+const completeTodoItemsByPath = `-- name: CompleteTodoItemsByPath :exec
+UPDATE todo_items
+SET status = 'completed', updated_at = ?
+WHERE file_path = ? AND status = 'pending'
+`
+
+type CompleteTodoItemsByPathParams struct {
+	UpdatedAt int64          `json:"updated_at"`
+	FilePath  sql.NullString `json:"file_path"`
+}
+
+func (q *Queries) CompleteTodoItemsByPath(ctx context.Context, arg CompleteTodoItemsByPathParams) error {
+	_, err := q.db.ExecContext(ctx, completeTodoItemsByPath, arg.UpdatedAt, arg.FilePath)
+	return err
+}
+
 const countCustomTodoItemsBySessionSince = `-- name: CountCustomTodoItemsBySessionSince :one
 SELECT COUNT(*) FROM todo_items
 WHERE type = 'custom' AND session_id = ? AND created_at >= ?

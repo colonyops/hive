@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
+	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -117,7 +118,7 @@ Examples:
 			&cli.StringFlag{
 				Name:        "repo",
 				Aliases:     []string{"r"},
-				Usage:       "repository remote URL (auto-detected if omitted)",
+				Usage:       "repository remote URL (defaults to \"unknown\" if omitted)",
 				Destination: &cmd.createRepo,
 			},
 		},
@@ -155,7 +156,11 @@ func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
 	filter := todo.ListFilter{}
 
 	if cmd.listStatus != "" {
-		filter.Status = todo.Status(cmd.listStatus)
+		status := todo.Status(cmd.listStatus)
+		if !status.IsValid() {
+			return fmt.Errorf("invalid status %q: must be one of pending, completed, dismissed", cmd.listStatus)
+		}
+		filter.Status = status
 	} else {
 		filter.Status = todo.StatusPending
 	}
@@ -175,7 +180,10 @@ func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *TodoCmd) runCreate(ctx context.Context, c *cli.Command) error {
-	sessionID, _ := cmd.app.Sessions.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
+	if err != nil {
+		log.Debug().Err(err).Msg("todo: detect session for create")
+	}
 
 	repoRemote := cmd.createRepo
 	if repoRemote == "" {

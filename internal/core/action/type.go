@@ -23,6 +23,7 @@ package action
 //	PrevActive
 //	DeleteRecycledBatch
 //	SpawnWindows
+//	TodoPanel
 //
 // )
 type Type string

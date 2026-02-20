@@ -54,7 +54,7 @@ func (s *TodoService) HandleFileEvent(ctx context.Context, filePath string, repo
 		RepoRemote: repoRemote,
 	}
 
-	if err := s.store.Create(ctx, item); err != nil {
+	if err := s.store.Create(ctx, &item); err != nil {
 		if errors.Is(err, todo.ErrDuplicate) {
 			s.log.Debug().Str("path", filePath).Msg("duplicate pending todo, skipping")
 			return nil, nil
@@ -90,7 +90,7 @@ func (s *TodoService) CreateCustom(ctx context.Context, item todo.Item) error {
 		}
 	}
 
-	if err := s.store.Create(ctx, item); err != nil {
+	if err := s.store.Create(ctx, &item); err != nil {
 		return fmt.Errorf("create custom todo: %w", err)
 	}
 
@@ -101,9 +101,14 @@ func (s *TodoService) CreateCustom(ctx context.Context, item todo.Item) error {
 
 // Dismiss marks a TODO item as dismissed.
 func (s *TodoService) Dismiss(ctx context.Context, id string) error {
+	item, err := s.store.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("dismiss todo: %w", err)
+	}
 	if err := s.store.UpdateStatus(ctx, id, todo.StatusDismissed); err != nil {
 		return fmt.Errorf("dismiss todo: %w", err)
 	}
+	s.bus.PublishTodoDismissed(eventbus.TodoDismissedPayload{Item: &item})
 	return nil
 }
 
@@ -123,19 +128,9 @@ func (s *TodoService) Complete(ctx context.Context, id string) error {
 // CompleteByPath completes all pending items matching the given file path.
 // This is used when a review is finalized for a specific document.
 func (s *TodoService) CompleteByPath(ctx context.Context, filePath string) error {
-	items, err := s.store.List(ctx, todo.ListFilter{Status: todo.StatusPending})
-	if err != nil {
-		return fmt.Errorf("list pending for complete by path: %w", err)
+	if err := s.store.CompleteByPath(ctx, filePath); err != nil {
+		return fmt.Errorf("complete by path: %w", err)
 	}
-
-	for _, item := range items {
-		if item.FilePath == filePath {
-			if err := s.store.UpdateStatus(ctx, item.ID, todo.StatusCompleted); err != nil {
-				return fmt.Errorf("complete todo %s: %w", item.ID, err)
-			}
-		}
-	}
-
 	return nil
 }
 

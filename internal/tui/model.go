@@ -184,6 +184,7 @@ type todoCountUpdatedMsg struct {
 // todoPanelLoadedMsg carries items loaded for the TODO action panel.
 type todoPanelLoadedMsg struct {
 	items []todo.Item
+	err   error
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -306,9 +307,12 @@ func New(deps Deps, opts Opts) Model {
 	}
 }
 
-// quit sets the quitting flag and emits tui.stopped.
+// quit sets the quitting flag, cleans up resources, and emits tui.stopped.
 func (m Model) quit() (Model, tea.Cmd) {
 	m.quitting = true
+	if m.todoWatcher != nil {
+		_ = m.todoWatcher.Close()
+	}
 	if m.bus != nil {
 		m.bus.PublishTuiStopped(eventbus.TUIStoppedPayload{})
 	}
@@ -441,6 +445,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// TODO tracking
 	case hive.TodoFileChangeMsg:
 		model, cmd = m.handleTodoFileChange(msg)
+	case todoFileChangeResultMsg:
+		model, cmd = m.handleTodoFileChangeResult(msg)
 	case todoCountUpdatedMsg:
 		model, cmd = m.handleTodoCountUpdated(msg)
 	case todoPanelLoadedMsg:
@@ -938,15 +944,17 @@ func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cm
 		}
 	case "tab":
 		return m.handleTabKey()
-	case "t":
-		if m.todoService != nil && m.cfg.Todo.IsEnabled() {
-			return m.openTodoPanel()
-		}
 	case "?":
 		// Don't show help dialog when in review view - let review view handle keys
 		if !m.isReviewFocused() {
 			return m.showHelpDialog()
 		}
+	}
+
+	// Global action keybindings (e.g., TodoPanel) resolved through keybinding system.
+	// These fire from any view, unlike session-specific actions below.
+	if resolved, ok := m.resolveGlobalAction(keyStr); ok {
+		return m.handleGlobalAction(resolved)
 	}
 
 	// Session-specific keys only when sessions focused
@@ -1044,6 +1052,31 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 		return m, m.loadKVKeys()
 	}
 
+	return m, nil
+}
+
+// globalActionTypes are actions that fire from any focused view via the keybinding system.
+var globalActionTypes = map[act.Type]bool{
+	act.TypeTodoPanel: true,
+}
+
+// resolveGlobalAction checks if the key maps to a global action via the keybinding resolver.
+func (m Model) resolveGlobalAction(key string) (Action, bool) {
+	action, ok := m.handler.Resolve(key, session.Session{})
+	if !ok {
+		return Action{}, false
+	}
+	if !globalActionTypes[action.Type] {
+		return Action{}, false
+	}
+	return action, true
+}
+
+// handleGlobalAction dispatches a globally-resolved action.
+func (m Model) handleGlobalAction(action Action) (tea.Model, tea.Cmd) {
+	if action.Type == act.TypeTodoPanel && m.todoService != nil && m.cfg.Todo.IsEnabled() {
+		return m.openTodoPanel()
+	}
 	return m, nil
 }
 

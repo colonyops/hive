@@ -88,8 +88,8 @@ func (w *TodoWatcher) Start() tea.Cmd {
 					}
 				}
 
-				// Debounce: wait for changes to settle
-				time.Sleep(w.debounceDur)
+				// Debounce: wait for changes to settle using a timer
+				debounce := time.NewTimer(w.debounceDur)
 
 				// Collect all events during debounce window
 				changed := map[string]bool{}
@@ -97,16 +97,20 @@ func (w *TodoWatcher) Start() tea.Cmd {
 
 				w.classifyEvent(event, changed, deleted)
 
-				// Drain queued events
-				draining := true
-				for draining {
+				// Drain queued events until debounce timer fires
+			debounceLoop:
+				for {
 					select {
 					case e := <-w.watcher.Events:
 						if !w.shouldIgnore(e.Name) {
 							w.classifyEvent(e, changed, deleted)
 						}
-					default:
-						draining = false
+						if !debounce.Stop() {
+							<-debounce.C
+						}
+						debounce.Reset(w.debounceDur)
+					case <-debounce.C:
+						break debounceLoop
 					}
 				}
 
@@ -152,6 +156,7 @@ func (w *TodoWatcher) classifyEvent(event fsnotify.Event, changed, deleted map[s
 func (w *TodoWatcher) addRecursive(path string) error {
 	return filepath.WalkDir(path, func(p string, d os.DirEntry, err error) error {
 		if err != nil {
+			w.log.Debug().Err(err).Str("path", p).Msg("skipping path during walk")
 			return nil
 		}
 		if d.IsDir() {

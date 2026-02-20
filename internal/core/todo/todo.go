@@ -22,6 +22,16 @@ const (
 	StatusDismissed Status = "dismissed"
 )
 
+// IsValid returns true if the status is a known value.
+func (s Status) IsValid() bool {
+	switch s {
+	case StatusPending, StatusCompleted, StatusDismissed:
+		return true
+	default:
+		return false
+	}
+}
+
 // Item represents a single actionable TODO for the operator.
 type Item struct {
 	ID          string    `json:"id"`
