@@ -67,10 +67,11 @@ type Deps struct {
 	PluginManager   *plugins.Manager
 
 	// Optional — nil disables the corresponding feature.
-	MsgStore *hive.MessageService
-	Bus      *eventbus.EventBus
-	DB       *db.DB
-	KVStore  corekv.KV
+	MsgStore    *hive.MessageService
+	TodoService *hive.TodoService
+	Bus         *eventbus.EventBus
+	DB          *db.DB
+	KVStore     corekv.KV
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -127,6 +128,13 @@ type Model struct {
 
 	renderer *tmpl.Renderer
 
+	// TODO tracking
+	todoWatcher      *hive.TodoWatcher
+	todoService      *hive.TodoService
+	todoPendingCount int64
+	todoContextDir   string
+	todoRepoRemote   string
+
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
 }
@@ -161,6 +169,11 @@ type recycleCompleteMsg struct {
 // notificationMsg carries a notification from an async tea.Cmd into the Update loop.
 type notificationMsg struct {
 	notification notify.Notification
+}
+
+// todoCountUpdatedMsg carries an updated pending TODO count.
+type todoCountUpdatedMsg struct {
+	count int64
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -232,6 +245,12 @@ func New(deps Deps, opts Opts) Model {
 
 	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
 
+	// Create TODO watcher if enabled and service is available
+	var todoWatcher *hive.TodoWatcher
+	if deps.TodoService != nil && cfg.Todo.IsEnabled() {
+		todoWatcher = hive.NewTodoWatcher([]string{contextDir}, log.Logger)
+	}
+
 	var notifyStore notify.Store
 	if deps.DB != nil {
 		notifyStore = stores.NewNotifyStore(deps.DB)
@@ -268,6 +287,10 @@ func New(deps Deps, opts Opts) Model {
 		toastView:       toastView,
 		bus:             deps.Bus,
 		renderer:        deps.Renderer,
+		todoWatcher:     todoWatcher,
+		todoService:     deps.TodoService,
+		todoContextDir:  contextDir,
+		todoRepoRemote:  opts.LocalRemote,
 		startupWarnings: opts.Warnings,
 	}
 }
@@ -315,6 +338,14 @@ func (m Model) Init() tea.Cmd {
 		if cmd := m.reviewView.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	}
+	// Start TODO watcher
+	if m.todoWatcher != nil {
+		cmds = append(cmds, m.todoWatcher.Start())
+	}
+	// Load initial TODO count
+	if m.todoService != nil {
+		cmds = append(cmds, m.loadTodoCount())
 	}
 	return tea.Batch(cmds...)
 }
@@ -395,6 +426,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleRecycleOutput(msg)
 	case recycleCompleteMsg:
 		model, cmd = m.handleRecycleComplete(msg)
+
+	// TODO tracking
+	case hive.TodoFileChangeMsg:
+		model, cmd = m.handleTodoFileChange(msg)
+	case todoCountUpdatedMsg:
+		model, cmd = m.handleTodoCountUpdated(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:

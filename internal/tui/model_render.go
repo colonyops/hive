@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -81,6 +82,12 @@ func (m Model) renderTabView() string {
 	if statusFilter := m.sessionsView.StatusFilter(); statusFilter != "" {
 		filterLabel := string(statusFilter)
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
+	}
+
+	// Add TODO count indicator
+	if m.todoPendingCount > 0 {
+		label := fmt.Sprintf("[%d todo]", m.todoPendingCount)
+		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextWarningStyle.Render(label))
 	}
 
 	// Branding on right with background

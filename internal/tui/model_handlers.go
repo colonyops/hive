@@ -11,6 +11,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
@@ -436,6 +437,48 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// --- TODO tracking ---
+
+func (m Model) handleTodoFileChange(msg hive.TodoFileChangeMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
+	ctx := context.Background()
+	for _, path := range msg.Changed {
+		if err := m.todoService.HandleFileEvent(ctx, path, m.todoRepoRemote); err != nil {
+			log.Error().Err(err).Str("path", path).Msg("todo: handle file event")
+		}
+	}
+	for _, path := range msg.Deleted {
+		if err := m.todoService.HandleFileDelete(ctx, path); err != nil {
+			log.Error().Err(err).Str("path", path).Msg("todo: handle file delete")
+		}
+	}
+
+	// Refresh count and re-subscribe to watcher
+	cmds = append(cmds, m.loadTodoCount())
+	if m.todoWatcher != nil {
+		cmds = append(cmds, m.todoWatcher.Start())
+	}
+	return m, tea.Batch(cmds...)
+}
+
+func (m Model) handleTodoCountUpdated(msg todoCountUpdatedMsg) (tea.Model, tea.Cmd) {
+	m.todoPendingCount = msg.count
+	return m, nil
+}
+
+func (m Model) loadTodoCount() tea.Cmd {
+	svc := m.todoService
+	return func() tea.Msg {
+		count, err := svc.CountPending(context.Background())
+		if err != nil {
+			log.Error().Err(err).Msg("todo: count pending")
+			return todoCountUpdatedMsg{count: 0}
+		}
+		return todoCountUpdatedMsg{count: count}
+	}
 }
 
 // selectedSession returns the session selected in the sessions view, or nil.
