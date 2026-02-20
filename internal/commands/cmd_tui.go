@@ -100,10 +100,13 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			Warnings:    warnings,
 		}
 
+		restoreOutput := cmd.app.Sessions.SilenceOutput()
+
 		m := tui.New(deps, opts)
 		p := tea.NewProgram(m)
 
 		finalModel, err := p.Run()
+		restoreOutput()
 		if err != nil {
 			return fmt.Errorf("run tui: %w", err)
 		}

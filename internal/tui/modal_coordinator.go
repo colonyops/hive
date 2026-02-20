@@ -60,6 +60,16 @@ func (mc *ModalCoordinator) SetSize(w, h int) {
 	mc.height = h
 }
 
+// centeredOverlay composites a pre-rendered overlay string centered over bg.
+func centeredOverlay(bg, overlay string, w, h int) string {
+	overlayW := lipgloss.Width(overlay)
+	overlayH := lipgloss.Height(overlay)
+	bgLayer := lipgloss.NewLayer(bg)
+	overlayLayer := lipgloss.NewLayer(overlay)
+	overlayLayer.X((w - overlayW) / 2).Y((h - overlayH) / 2).Z(1)
+	return lipgloss.NewCompositor(bgLayer, overlayLayer).Render()
+}
+
 // Overlay renders the appropriate modal overlay based on the current UI state.
 // It returns the background string unchanged if no modal is active.
 func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, loadingMsg string) string {
@@ -82,18 +92,7 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 			"",
 			mc.NewSession.View(),
 		)
-		formOverlay := styles.ModalStyle.Render(formContent)
-
-		bgLayer := lipgloss.NewLayer(bg)
-		formLayer := lipgloss.NewLayer(formOverlay)
-		formW := lipgloss.Width(formOverlay)
-		formH := lipgloss.Height(formOverlay)
-		centerX := (w - formW) / 2
-		centerY := (h - formH) / 2
-		formLayer.X(centerX).Y(centerY).Z(1)
-
-		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		return compositor.Render()
+		return centeredOverlay(bg, styles.ModalStyle.Render(formContent), w, h)
 
 	case state == stateFormInput && mc.FormDialog != nil:
 		formContent := lipgloss.JoinVertical(
@@ -102,23 +101,11 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 			"",
 			mc.FormDialog.View(),
 		)
-		formOverlay := styles.FormModalStyle.Render(formContent)
-
-		bgLayer := lipgloss.NewLayer(bg)
-		formLayer := lipgloss.NewLayer(formOverlay)
-		formW := lipgloss.Width(formOverlay)
-		formH := lipgloss.Height(formOverlay)
-		centerX := (w - formW) / 2
-		centerY := (h - formH) / 2
-		formLayer.X(centerX).Y(centerY).Z(1)
-
-		compositor := lipgloss.NewCompositor(bgLayer, formLayer)
-		return compositor.Render()
+		return centeredOverlay(bg, styles.FormModalStyle.Render(formContent), w, h)
 
 	case state == stateLoading:
 		loadingView := lipgloss.JoinHorizontal(lipgloss.Left, s.View(), " "+loadingMsg)
-		modal := NewModal("", loadingView)
-		return modal.Overlay(bg, w, h)
+		return centeredOverlay(bg, styles.ModalStyle.Render(loadingView), w, h)
 
 	case state == stateConfirming:
 		return mc.Confirm.Overlay(bg, w, h)
@@ -141,14 +128,7 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 			"",
 			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel"),
 		)
-		renameOverlay := styles.ModalStyle.Width(50).Render(renameContent)
-		bgLayer := lipgloss.NewLayer(bg)
-		renameLayer := lipgloss.NewLayer(renameOverlay)
-		rW := lipgloss.Width(renameOverlay)
-		rH := lipgloss.Height(renameOverlay)
-		renameLayer.X((w - rW) / 2).Y((h - rH) / 2).Z(1)
-		compositor := lipgloss.NewCompositor(bgLayer, renameLayer)
-		return compositor.Render()
+		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(renameContent), w, h)
 
 	case mc.DocPicker != nil:
 		return mc.DocPicker.Overlay(bg, w, h)

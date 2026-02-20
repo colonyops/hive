@@ -175,7 +175,7 @@ func New(deps Deps, opts Opts) Model {
 	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
 	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
-	cmdService := command.NewService(service, service, service)
+	cmdService := command.NewService(service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
 		Cfg:             cfg,

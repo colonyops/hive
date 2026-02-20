@@ -22,6 +22,7 @@ package action
 //	NextActive
 //	PrevActive
 //	DeleteRecycledBatch
+//	SpawnWindows
 //
 // )
 type Type string

@@ -26,19 +26,30 @@ type TmuxOpener interface {
 	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error
 }
 
+// WindowSpawner handles window operations for SpawnWindows actions.
+type WindowSpawner interface {
+	// AddWindowsToTmuxSession adds windows to an existing tmux session.
+	AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error
+	// CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
+	// then opens windows in it. Non-zero shCmd exit aborts window creation.
+	CreateSessionWithWindows(ctx context.Context, req action.NewSessionRequest, windows []action.WindowSpec, background bool) error
+}
+
 // Service creates command executors based on action type.
 type Service struct {
-	deleter    SessionDeleter
-	recycler   SessionRecycler
-	tmuxOpener TmuxOpener
+	deleter       SessionDeleter
+	recycler      SessionRecycler
+	tmuxOpener    TmuxOpener
+	windowSpawner WindowSpawner
 }
 
 // NewService creates a new command service with the given dependencies.
-func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener) *Service {
+func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener, windowSpawner WindowSpawner) *Service {
 	return &Service{
-		deleter:    deleter,
-		recycler:   recycler,
-		tmuxOpener: tmuxOpener,
+		deleter:       deleter,
+		recycler:      recycler,
+		tmuxOpener:    tmuxOpener,
+		windowSpawner: windowSpawner,
 	}
 }
 
@@ -59,6 +70,15 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 	case action.TypeShell:
 		return &ShellExecutor{
 			cmd: a.ShellCmd,
+			dir: a.ShellDir,
+		}, nil
+	case action.TypeSpawnWindows:
+		if a.SpawnWindows == nil {
+			return nil, fmt.Errorf("SpawnWindows action missing payload")
+		}
+		return &SpawnWindowsExecutor{
+			payload: a.SpawnWindows,
+			spawner: s.windowSpawner,
 		}, nil
 	case action.TypeTmuxOpen:
 		return &TmuxExecutor{

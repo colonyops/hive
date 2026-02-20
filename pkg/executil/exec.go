@@ -2,11 +2,63 @@
 package executil
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 )
+
+const maxStderrLen = 500
+
+// limitedWriter caps writes to a bytes.Buffer at a maximum byte count.
+// Bytes beyond the limit are silently discarded.
+type limitedWriter struct {
+	buf *bytes.Buffer
+	n   int64
+	max int64
+}
+
+func (w *limitedWriter) Write(p []byte) (int, error) {
+	if w.n >= w.max {
+		return len(p), nil
+	}
+	remaining := w.max - w.n
+	origLen := len(p)
+	if int64(origLen) > remaining {
+		p = p[:remaining]
+	}
+	n, err := w.buf.Write(p)
+	w.n += int64(n)
+	if err != nil {
+		return n, err
+	}
+	return origLen, nil
+}
+
+// RunSh executes a shell command in the given directory (empty means inherit cwd).
+// On failure, stderr is returned as the error message, capped at 500 bytes to
+// prevent large or ANSI-polluted output from corrupting logs or TUI display.
+// The original *exec.ExitError is preserved via wrapping so callers can inspect
+// exit codes with errors.As.
+func RunSh(ctx context.Context, dir, cmd string) error {
+	c := exec.CommandContext(ctx, "sh", "-c", cmd)
+	if dir != "" {
+		c.Dir = dir
+	}
+	var buf bytes.Buffer
+	c.Stdout = io.Discard
+	c.Stderr = &limitedWriter{buf: &buf, max: maxStderrLen}
+	if err := c.Run(); err != nil {
+		msg := strings.TrimSpace(buf.String())
+		if msg != "" {
+			return fmt.Errorf("%s: %w", msg, err)
+		}
+		return err
+	}
+	return nil
+}
 
 // Executor runs shell commands.
 type Executor interface {

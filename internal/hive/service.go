@@ -8,8 +8,10 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
@@ -30,6 +32,36 @@ type CreateOptions struct {
 	Remote        string // Git remote URL to clone (auto-detected if empty)
 	Source        string // Source directory for file copying
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
+	// SkipSpawn skips the configured spawn strategy (spawn: / batch_spawn: / windows:).
+	// The caller is responsible for launching any terminal or tmux session. Use this
+	// when the session directory is needed but terminal management happens elsewhere
+	// (e.g. CreateSessionWithWindows, which creates the tmux session itself).
+	SkipSpawn bool
+}
+
+// switchWriter is an io.Writer whose target can be swapped at runtime.
+// All sub-components share a pointer to the same switchWriter, so redirecting
+// it once (e.g. to io.Discard) silences all of them.
+// The mutex guards concurrent reads in Write against swaps in set.
+type switchWriter struct {
+	mu sync.RWMutex
+	w  io.Writer
+}
+
+func (s *switchWriter) Write(p []byte) (int, error) {
+	s.mu.RLock()
+	w := s.w
+	s.mu.RUnlock()
+	return w.Write(p)
+}
+
+// set atomically replaces the target writer and returns the previous one.
+func (s *switchWriter) set(w io.Writer) io.Writer {
+	s.mu.Lock()
+	prev := s.w
+	s.w = w
+	s.mu.Unlock()
+	return prev
 }
 
 // SessionService orchestrates hive session operations.
@@ -44,6 +76,8 @@ type SessionService struct {
 	recycler   *Recycler
 	hookRunner *HookRunner
 	fileCopier *FileCopier
+	out        *switchWriter
+	err        *switchWriter
 }
 
 // NewSessionService creates a new SessionService.
@@ -57,6 +91,8 @@ func NewSessionService(
 	log zerolog.Logger,
 	stdout, stderr io.Writer,
 ) *SessionService {
+	out := &switchWriter{w: stdout}
+	err := &switchWriter{w: stderr}
 	return &SessionService{
 		sessions:   sessions,
 		git:        gitClient,
@@ -64,10 +100,24 @@ func NewSessionService(
 		bus:        bus,
 		executor:   exec,
 		log:        log,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), stdout, stderr),
+		out:        out,
+		err:        err,
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), out, err),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
-		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, stdout, stderr),
-		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), stdout),
+		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, out, err),
+		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
+	}
+}
+
+// SilenceOutput redirects all output to io.Discard and returns a restore
+// function that reverts to the previous writers. Call before starting the TUI
+// to prevent hook and spawn output from corrupting the terminal display.
+func (s *SessionService) SilenceOutput() (restore func()) {
+	prevOut := s.out.set(io.Discard)
+	prevErr := s.err.set(io.Discard)
+	return func() {
+		s.out.set(prevOut)
+		s.err.set(prevErr)
 	}
 }
 
@@ -164,18 +214,20 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		Repo:       repoName,
 	}
 
-	strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
-	switch {
-	case strategy.IsWindows():
-		if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
-			return nil, fmt.Errorf("spawn terminal: %w", err)
+	if !opts.SkipSpawn {
+		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		switch {
+		case strategy.IsWindows():
+			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
+				return nil, fmt.Errorf("spawn terminal: %w", err)
+			}
+		case len(strategy.Commands) > 0:
+			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+				return nil, fmt.Errorf("spawn terminal: %w", err)
+			}
+		default:
+			return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
 		}
-	case len(strategy.Commands) > 0:
-		if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
-			return nil, fmt.Errorf("spawn terminal: %w", err)
-		}
-	default:
-		return nil, fmt.Errorf("spawn terminal: no spawn strategy resolved for remote %q", remote)
 	}
 
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
@@ -565,5 +617,52 @@ func (s *SessionService) enforceMaxRecycled(ctx context.Context, remote string) 
 		}
 	}
 
+	return nil
+}
+
+// AddWindowsToTmuxSession adds windows to an existing tmux session, converting action.WindowSpec
+// to coretmux.RenderedWindow. Satisfies the command.WindowSpawner interface.
+func (s *SessionService) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error {
+	rendered := make([]coretmux.RenderedWindow, len(windows))
+	for i, w := range windows {
+		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
+	}
+	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, rendered, background)
+}
+
+// CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
+// then opens tmux windows in it. Non-zero shCmd exit aborts window creation.
+// Satisfies the command.WindowSpawner interface.
+func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req action.NewSessionRequest, windows []action.WindowSpec, background bool) error {
+	sess, err := s.CreateSession(ctx, CreateOptions{
+		Name:      req.Name,
+		Remote:    req.Remote,
+		SkipSpawn: true,
+	})
+	if err != nil {
+		return fmt.Errorf("create session: %w", err)
+	}
+
+	cleanup := func() {
+		if err := s.DeleteSession(ctx, sess.ID); err != nil {
+			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to clean up session after spawn failure")
+		}
+	}
+
+	if req.ShCmd != "" {
+		if err := executil.RunSh(ctx, sess.Path, req.ShCmd); err != nil {
+			cleanup()
+			return fmt.Errorf("sh: %w", err)
+		}
+	}
+
+	rendered := make([]coretmux.RenderedWindow, len(windows))
+	for i, w := range windows {
+		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
+	}
+	if err := s.spawner.tmux.CreateSession(ctx, sess.Name, sess.Path, rendered, background); err != nil {
+		cleanup()
+		return fmt.Errorf("create tmux session: %w", err)
+	}
 	return nil
 }

@@ -625,3 +625,228 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 		assert.Len(t, entries, 2, "expected 2 entries in messages view, got %d", len(entries))
 	})
 }
+
+func TestKeybindingResolver_ShellDirIsSessionPath(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{})
+	commands := map[string]config.UserCommand{
+		"run": {Sh: "echo hello", Help: "run something"},
+	}
+	keybindings := map[string]config.Keybinding{
+		"r": {Cmd: "run"},
+	}
+	handler := NewKeybindingResolver(keybindings, commands, renderer)
+	sess := session.Session{
+		ID:    "abc123",
+		Path:  "/repos/my-repo",
+		State: session.StateActive,
+	}
+
+	t.Run("Resolve sets ShellDir to sess.Path", func(t *testing.T) {
+		a, ok := handler.Resolve("r", sess)
+		require.True(t, ok)
+		assert.Equal(t, act.TypeShell, a.Type)
+		assert.Equal(t, sess.Path, a.ShellDir)
+	})
+
+	t.Run("ResolveUserCommand sets ShellDir to sess.Path", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: "echo hello", Help: "run"}
+		a := handler.ResolveUserCommand("run", cmd, sess, nil)
+		assert.Equal(t, act.TypeShell, a.Type)
+		assert.Equal(t, sess.Path, a.ShellDir)
+	})
+
+	t.Run("RenderWithFormData sets ShellDir to sess.Path", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: "echo {{ .Form.msg }}", Help: "run"}
+		a := handler.RenderWithFormData("run", cmd, sess, nil, map[string]any{"msg": "hello"})
+		assert.Equal(t, act.TypeShell, a.Type)
+		assert.Equal(t, sess.Path, a.ShellDir)
+	})
+}
+
+func testSession() session.Session {
+	return session.Session{
+		ID:     "sess-abc",
+		Name:   "my-session",
+		Path:   "/repos/my-repo",
+		Remote: "https://github.com/org/repo",
+		State:  session.StateActive,
+	}
+}
+
+func TestResolveWindowsAction_SameSession(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"Spawn": {
+			Help: "spawn windows",
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude 'Do work in {{ .Path }}'", Focus: true},
+			},
+		},
+	}
+	keybindings := map[string]config.Keybinding{
+		"s": {Cmd: "Spawn"},
+	}
+
+	handler := NewKeybindingResolver(keybindings, commands, renderer)
+	sess := testSession()
+
+	a, ok := handler.Resolve("s", sess)
+	require.True(t, ok)
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.NotNil(t, a.SpawnWindows)
+	assert.Nil(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, sess.Name, a.SpawnWindows.TmuxTarget)
+	assert.Equal(t, sess.Path, a.SpawnWindows.SessionDir)
+	require.Len(t, a.SpawnWindows.Windows, 1)
+	assert.Equal(t, "agent", a.SpawnWindows.Windows[0].Name)
+	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "Do work in /repos/my-repo")
+}
+
+func TestResolveWindowsAction_SameSessionWithSh(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"Review": {
+			Sh: "git fetch",
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude"},
+			},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{"r": {Cmd: "Review"}}, commands, renderer)
+	sess := testSession()
+
+	a, ok := handler.Resolve("r", sess)
+	require.True(t, ok)
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.NotNil(t, a.SpawnWindows)
+	// Same-session: sh: goes to top-level ShCmd, not NewSession
+	assert.Equal(t, "git fetch", a.SpawnWindows.ShCmd)
+	assert.Equal(t, sess.Path, a.SpawnWindows.ShDir)
+	assert.Nil(t, a.SpawnWindows.NewSession)
+}
+
+func TestResolveWindowsAction_NewSession(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"PRReview": {
+			Sh: "gh pr view {{ .Form.pr }}",
+			Options: config.UserCommandOptions{
+				SessionName: "pr-{{ .Form.pr }}",
+			},
+			Windows: []config.WindowConfig{
+				{Name: "leader", Command: "claude"},
+			},
+			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["PRReview"]
+	a := handler.RenderWithFormData("PRReview", cmd, sess, nil, map[string]any{"pr": "123"})
+
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.NotNil(t, a.SpawnWindows)
+	require.NotNil(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "pr-123", a.SpawnWindows.NewSession.Name)
+	// sh: should be routed to NewSession.ShCmd in new-session mode
+	assert.Equal(t, "gh pr view 123", a.SpawnWindows.NewSession.ShCmd)
+	assert.Empty(t, a.SpawnWindows.ShCmd)
+}
+
+func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"NewWin": {
+			Options: config.UserCommandOptions{
+				SessionName: "new-sess",
+				// Remote intentionally omitted — should inherit from selected session.
+			},
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude"},
+			},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["NewWin"]
+	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil)
+
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.NotNil(t, a.SpawnWindows)
+	require.NotNil(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, sess.Remote, a.SpawnWindows.NewSession.Remote,
+		"new session should inherit selected session's remote when options.remote is omitted")
+}
+
+func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"NewWin": {
+			Options: config.UserCommandOptions{
+				SessionName: "new-sess",
+				Remote:      "https://github.com/other/repo",
+			},
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude"},
+			},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["NewWin"]
+	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil)
+
+	require.NotNil(t, a.SpawnWindows.NewSession)
+	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSession.Remote,
+		"explicit options.remote should override session remote")
+}
+
+func TestResolveWindowsAction_TemplateError(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"Bad": {
+			Options: config.UserCommandOptions{
+				SessionName: "{{ .Invalid }}",
+			},
+			Windows: []config.WindowConfig{
+				{Name: "agent"},
+			},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["Bad"]
+	a := handler.ResolveUserCommand("Bad", cmd, sess, nil)
+
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.Error(t, a.Err)
+	assert.Contains(t, a.Err.Error(), "options.session_name")
+	assert.Nil(t, a.SpawnWindows)
+}
+
+func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
+	commands := map[string]config.UserCommand{
+		"Spawn": {
+			Windows: []config.WindowConfig{
+				{Name: "agent", Command: "claude 'Review PR {{ .Form.pr }} in {{ .Path }}'"},
+			},
+			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
+		},
+	}
+	handler := NewKeybindingResolver(map[string]config.Keybinding{}, commands, renderer)
+	sess := testSession()
+
+	cmd := commands["Spawn"]
+	a := handler.RenderWithFormData("Spawn", cmd, sess, nil, map[string]any{"pr": "456"})
+
+	assert.Equal(t, act.TypeSpawnWindows, a.Type)
+	require.NotNil(t, a.SpawnWindows)
+	require.Len(t, a.SpawnWindows.Windows, 1)
+	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "Review PR 456")
+	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "/repos/my-repo")
+}

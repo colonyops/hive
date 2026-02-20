@@ -191,7 +191,7 @@ func TestValidateDeep_UserCommandBothActionAndSh(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "cannot have both")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "action is mutually exclusive with sh and windows")
 }
 
 func TestValidateDeep_UserCommandInvalidAction(t *testing.T) {
@@ -528,7 +528,128 @@ func TestValidate_UserCommandNeitherActionNorSh(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "must have either action or sh")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "must have at least one of: action, sh, windows")
+}
+
+func TestValidate_UserCommandWindowsOnly(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"spawn": {
+			Help: "spawn windows",
+			Windows: []WindowConfig{
+				{Name: "agent", Command: "claude", Focus: true},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	assert.NoError(t, err)
+}
+
+func TestValidate_UserCommandWindowsMissingName(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"spawn": {
+			Windows: []WindowConfig{
+				{Command: "claude"},
+			},
+		},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "windows[0]")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "name is required")
+}
+
+func TestValidate_UserCommandOptionsRemoteRequiresSessionName(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"spawn": {
+			Windows: []WindowConfig{{Name: "agent"}},
+			Options: UserCommandOptions{Remote: "https://github.com/org/repo"},
+		},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "options.remote")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "remote requires session_name to be set")
+}
+
+func TestValidate_UserCommandOptionsSessionNameRequiresWindows(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"cmd": {Sh: "echo hi", Options: UserCommandOptions{SessionName: "my-session"}},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "options.session_name")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "session_name only applies when windows are defined")
+}
+
+func TestValidate_UserCommandOptionsBackgroundRequiresWindows(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"cmd": {Sh: "echo hi", Options: UserCommandOptions{Background: true}},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "options.background")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "background only applies when windows are defined")
+}
+
+func TestValidateDeep_UserCommandWindowTemplates(t *testing.T) {
+	t.Run("valid window templates", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.UserCommands = map[string]UserCommand{
+			"spawn": {
+				Windows: []WindowConfig{
+					{Name: "{{ .Name }}-agent", Command: "claude --session {{ .ID }}"},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		assert.NoError(t, err)
+	})
+
+	t.Run("invalid name template", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.UserCommands = map[string]UserCommand{
+			"spawn": {
+				Windows: []WindowConfig{
+					{Name: "{{ .Invalid }}"},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "windows[0].name")
+	})
+
+	t.Run("invalid options.session_name template", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.UserCommands = map[string]UserCommand{
+			"spawn": {
+				Windows: []WindowConfig{{Name: "agent"}},
+				Options: UserCommandOptions{SessionName: "{{ .Invalid }}"},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "options.session_name")
+	})
 }
 
 func TestValidateDeep_UserCommandInvalidShTemplate(t *testing.T) {
