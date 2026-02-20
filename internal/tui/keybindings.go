@@ -25,6 +25,7 @@ type KeybindingResolver struct {
 	keybindings            map[string]config.Keybinding
 	commands               map[string]config.UserCommand
 	renderer               *tmpl.Renderer
+	vars                   map[string]any                // user-defined template variables (.Vars)
 	activeView             ViewType                      // current active view for scope checking
 	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
 	toolLookup             func(sessionID string) string // optional: returns detected tool name for a session
@@ -33,11 +34,22 @@ type KeybindingResolver struct {
 
 // NewKeybindingResolver creates a new resolver with the given config.
 // Commands should be the merged user commands (user config + system defaults).
-func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand, renderer *tmpl.Renderer) *KeybindingResolver {
+func NewKeybindingResolver(
+	keybindings map[string]config.Keybinding,
+	commands map[string]config.UserCommand,
+	renderer *tmpl.Renderer,
+	vars ...map[string]any,
+) *KeybindingResolver {
+	var configuredVars map[string]any
+	if len(vars) > 0 {
+		configuredVars = vars[0]
+	}
+
 	return &KeybindingResolver{
 		keybindings: keybindings,
 		commands:    commands,
 		renderer:    renderer,
+		vars:        configuredVars,
 		activeView:  ViewSessions, // default to sessions view
 	}
 }
@@ -269,6 +281,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			"Name":       sess.Name,
 			"Tool":       h.toolForSession(sess.ID),
 			"TmuxWindow": h.consumeWindowOverride(sess.ID),
+			"Vars":       h.vars,
 		}
 
 		if len(cmd.Windows) > 0 {
@@ -409,6 +422,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		"Tool":       h.toolForSession(sess.ID),
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
+		"Vars":       h.vars,
 	}
 
 	if len(cmd.Windows) > 0 {
@@ -459,6 +473,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
 		"Form":       formData,
+		"Vars":       h.vars,
 	}
 
 	if len(cmd.Windows) > 0 {

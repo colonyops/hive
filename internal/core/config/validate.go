@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -18,6 +19,7 @@ type SpawnTemplateData struct {
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
 	Repo       string // Repository name
+	Vars       map[string]any
 }
 
 // BatchSpawnTemplateData defines available fields for batch_spawn command templates (hive batch).
@@ -29,11 +31,13 @@ type BatchSpawnTemplateData struct {
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
 	Repo       string // Repository name
+	Vars       map[string]any
 }
 
 // RecycleTemplateData defines available fields for recycle command templates.
 type RecycleTemplateData struct {
 	DefaultBranch string // Default branch name (e.g., "main" or "master")
+	Vars          map[string]any
 }
 
 // ValidationWarning represents a non-fatal configuration issue.
@@ -54,6 +58,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
+		c.validateVarsFiles(configPath),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
 	)
@@ -132,6 +137,28 @@ func isDirectoryOrNotExist(path string) error {
 	return nil
 }
 
+func (c *Config) validateVarsFiles(configPath string) error {
+	if len(c.VarsFiles) == 0 {
+		return nil
+	}
+
+	configDir := filepath.Dir(configPath)
+	var errs criterio.FieldErrorsBuilder
+
+	for i, file := range c.VarsFiles {
+		path := file
+		if !filepath.IsAbs(path) {
+			path = filepath.Join(configDir, path)
+		}
+
+		if _, err := os.Stat(path); err != nil {
+			errs = errs.Append(fmt.Sprintf("vars_files[%d]", i), fmt.Errorf("file not found: %s", file))
+		}
+	}
+
+	return errs.ToError()
+}
+
 // validateRules checks rule patterns are valid regex and command templates are valid.
 func (c *Config) validateRules() error {
 	var errs criterio.FieldErrorsBuilder
@@ -144,34 +171,34 @@ func (c *Config) validateRules() error {
 
 		// Validate spawn templates
 		for j, cmd := range rule.Spawn {
-			if err := validateTemplate(cmd, SpawnTemplateData{}); err != nil {
+			if err := validateTemplate(cmd, SpawnTemplateData{Vars: c.Vars}); err != nil {
 				errs = errs.Append(fmt.Sprintf("rules[%d].spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
 			}
 		}
 		for j, cmd := range rule.BatchSpawn {
-			if err := validateTemplate(cmd, BatchSpawnTemplateData{}); err != nil {
+			if err := validateTemplate(cmd, BatchSpawnTemplateData{Vars: c.Vars}); err != nil {
 				errs = errs.Append(fmt.Sprintf("rules[%d].batch_spawn[%d]", i, j), fmt.Errorf("template error: %w", err))
 			}
 		}
 		// Validate recycle templates
 		for j, cmd := range rule.Recycle {
-			if err := validateTemplate(cmd, RecycleTemplateData{}); err != nil {
+			if err := validateTemplate(cmd, RecycleTemplateData{Vars: c.Vars}); err != nil {
 				errs = errs.Append(fmt.Sprintf("rules[%d].recycle[%d]", i, j), fmt.Errorf("template error: %w", err))
 			}
 		}
 		// Validate window templates
 		for j, w := range rule.Windows {
 			prefix := fmt.Sprintf("rules[%d].windows[%d]", i, j)
-			if err := validateTemplate(w.Name, BatchSpawnTemplateData{}); err != nil {
+			if err := validateTemplate(w.Name, BatchSpawnTemplateData{Vars: c.Vars}); err != nil {
 				errs = errs.Append(prefix+".name", fmt.Errorf("template error: %w", err))
 			}
 			if w.Command != "" {
-				if err := validateTemplate(w.Command, BatchSpawnTemplateData{}); err != nil {
+				if err := validateTemplate(w.Command, BatchSpawnTemplateData{Vars: c.Vars}); err != nil {
 					errs = errs.Append(prefix+".command", fmt.Errorf("template error: %w", err))
 				}
 			}
 			if w.Dir != "" {
-				if err := validateTemplate(w.Dir, BatchSpawnTemplateData{}); err != nil {
+				if err := validateTemplate(w.Dir, BatchSpawnTemplateData{Vars: c.Vars}); err != nil {
 					errs = errs.Append(prefix+".dir", fmt.Errorf("template error: %w", err))
 				}
 			}
@@ -186,7 +213,7 @@ func (c *Config) validateUserCommandTemplates() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
-		testData := buildValidationData(cmd.Form)
+		testData := buildValidationData(cmd.Form, c.Vars)
 
 		if cmd.Sh != "" {
 			if err := validateTemplate(cmd.Sh, testData); err != nil {
@@ -228,7 +255,7 @@ func (c *Config) validateUserCommandTemplates() error {
 
 // buildValidationData constructs test data for template validation.
 // Fixed fields are always present; form fields are added under the Form key.
-func buildValidationData(formFields []FormField) map[string]any {
+func buildValidationData(formFields []FormField, vars map[string]any) map[string]any {
 	data := map[string]any{
 		"Path":       "/tmp/test",
 		"Remote":     "https://github.com/test/repo",
@@ -237,6 +264,7 @@ func buildValidationData(formFields []FormField) map[string]any {
 		"Tool":       "claude",
 		"TmuxWindow": "main",
 		"Args":       []string{"arg1", "arg2"},
+		"Vars":       vars,
 	}
 
 	if len(formFields) > 0 {

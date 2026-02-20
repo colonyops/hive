@@ -24,13 +24,14 @@ type SessionClient interface {
 
 // SpawnData is the template context for spawn commands.
 type SpawnData struct {
-	Path       string // Absolute path to session directory
-	Name       string // Session name (display name)
-	Prompt     string // User-provided prompt (batch only)
-	Slug       string // Session slug (URL-safe version of name)
-	ContextDir string // Path to context directory
-	Owner      string // Repository owner
-	Repo       string // Repository name
+	Path       string         // Absolute path to session directory
+	Name       string         // Session name (display name)
+	Prompt     string         // User-provided prompt (batch only)
+	Slug       string         // Session slug (URL-safe version of name)
+	ContextDir string         // Path to context directory
+	Owner      string         // Repository owner
+	Repo       string         // Repository name
+	Vars       map[string]any // User-defined template variables
 }
 
 // Spawner handles terminal spawning with template rendering.

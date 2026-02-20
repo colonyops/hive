@@ -126,6 +126,46 @@ func TestValidateDeep_InvalidRulePattern(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "invalid regex")
 }
 
+func TestValidateDeep_VarsFiles_NotFound(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.VarsFiles = []string{"missing-vars.yaml"}
+
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	err := cfg.ValidateDeep(configPath)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "vars_files[0]")
+	assert.Contains(t, err.Error(), "file not found")
+}
+
+func TestValidateDeep_VarsInTemplates(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Vars = map[string]any{"editor": "nvim"}
+	cfg.Rules = []Rule{
+		{
+			Spawn: []string{"echo {{ .Vars.editor }}"},
+		},
+	}
+
+	err := cfg.ValidateDeep("")
+	assert.NoError(t, err)
+}
+
+func TestValidateDeep_VarsInTemplates_MissingKey(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Vars = map[string]any{"editor": "nvim"}
+	cfg.Rules = []Rule{
+		{
+			Spawn: []string{"echo {{ .Vars.missing }}"},
+		},
+	}
+
+	err := cfg.ValidateDeep("")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rules[0].spawn[0]")
+	assert.Contains(t, err.Error(), "map has no entry for key")
+}
+
 func TestValidateDeep_KeybindingMissingCmd(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Keybindings = map[string]Keybinding{
@@ -956,7 +996,7 @@ func TestValidate_FormValidConfig(t *testing.T) {
 
 func TestBuildValidationData(t *testing.T) {
 	t.Run("no form fields returns base data", func(t *testing.T) {
-		data := buildValidationData(nil)
+		data := buildValidationData(nil, nil)
 		assert.NotEmpty(t, data["Path"])
 		assert.NotEmpty(t, data["Name"])
 		assert.NotEmpty(t, data["ID"])
@@ -966,7 +1006,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("text field produces string", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "msg", Type: FormTypeText},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		assert.IsType(t, "", form["msg"])
 	})
@@ -974,7 +1014,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("multi-select produces string slice", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "tags", Type: FormTypeMultiSelect},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		assert.IsType(t, []string{}, form["tags"])
 	})
@@ -982,7 +1022,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("preset single produces map", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "target", Preset: FormPresetSessionSelector},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		item, ok := form["target"].(map[string]any)
 		require.True(t, ok)
@@ -992,7 +1032,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("preset multi produces slice of maps", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "targets", Preset: FormPresetSessionSelector, Multi: true},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		items, ok := form["targets"].([]map[string]any)
 		require.True(t, ok)

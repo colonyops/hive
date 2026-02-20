@@ -13,6 +13,7 @@ import (
 // RecycleData contains template data for recycle commands.
 type RecycleData struct {
 	DefaultBranch string
+	Vars          map[string]any
 }
 
 // Recycler handles resetting a session environment for reuse.

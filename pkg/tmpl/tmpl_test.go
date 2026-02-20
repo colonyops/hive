@@ -192,6 +192,22 @@ func TestRenderer_SpawnCommand(t *testing.T) {
 	assert.Equal(t, "HIVE_AGENT_COMMAND='aider' HIVE_AGENT_WINDOW='aider' HIVE_AGENT_FLAGS='--model sonnet' /bin/hive-tmux 'test-session' '/tmp/work'", got)
 }
 
+func TestRender_WithVars(t *testing.T) {
+	r := New(Config{})
+
+	data := struct {
+		Name string
+		Vars map[string]any
+	}{
+		Name: "test-session",
+		Vars: map[string]any{"editor": "nvim"},
+	}
+
+	got, err := r.Render("{{ .Name }} {{ .Vars.editor }}", data)
+	require.NoError(t, err)
+	assert.Equal(t, "test-session nvim", got)
+}
+
 func TestNewValidation(t *testing.T) {
 	r := NewValidation()
 
