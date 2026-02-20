@@ -24,6 +24,7 @@ type SessionClient interface {
 
 // SpawnData is the template context for spawn commands.
 type SpawnData struct {
+	ID         string // Session ID (unique 6-character identifier)
 	Path       string // Absolute path to session directory
 	Name       string // Session name (display name)
 	Prompt     string // User-provided prompt (batch only)

@@ -205,6 +205,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	// Spawn terminal
 	owner, repoName := git.ExtractOwnerRepo(remote)
 	data := SpawnData{
+		ID:         sess.ID,
 		Path:       sess.Path,
 		Name:       sess.Name,
 		Prompt:     opts.Prompt,

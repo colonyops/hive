@@ -12,6 +12,7 @@ import (
 
 // SpawnTemplateData defines available fields for spawn command templates (hive new).
 type SpawnTemplateData struct {
+	ID         string // Session ID (unique 6-character identifier)
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
 	Slug       string // Session slug (URL-safe version of name)
@@ -22,6 +23,7 @@ type SpawnTemplateData struct {
 
 // BatchSpawnTemplateData defines available fields for batch_spawn command templates (hive batch).
 type BatchSpawnTemplateData struct {
+	ID         string // Session ID (unique 6-character identifier)
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
 	Prompt     string // User-provided prompt (batch only)
