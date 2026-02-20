@@ -18,6 +18,8 @@ const (
 	EventSessionDeleted     Event = "session.deleted"
 	EventSessionRecycled    Event = "session.recycled"
 	EventSessionRenamed     Event = "session.renamed"
+	EventTodoCreated        Event = "todo.created"
+	EventTodoDismissed      Event = "todo.dismissed"
 	EventTuiStarted         Event = "tui.started"
 	EventTuiStopped         Event = "tui.stopped"
 )
@@ -62,6 +64,8 @@ func newSubscribersMap() map[Event][]any {
 		EventSessionDeleted:     {},
 		EventSessionRecycled:    {},
 		EventSessionRenamed:     {},
+		EventTodoCreated:        {},
+		EventTodoDismissed:      {},
 		EventTuiStarted:         {},
 		EventTuiStopped:         {},
 	}
@@ -285,6 +289,54 @@ func (bus *EventBus) SubscribeSessionRenamed(fn func(SessionRenamedPayload)) {
 	})
 	bus.mu.Unlock()
 	bus.runOnSubscribe(EventSessionRenamed)
+}
+
+// PublishTodoCreated publishes a todo.created event.
+func (bus *EventBus) PublishTodoCreated(payload TodoCreatedPayload) {
+	select {
+	case bus.ch <- envelope{event: EventTodoCreated, payload: payload}:
+		bus.runOnPublish(EventTodoCreated, payload)
+	default:
+		bus.runOnDrop(EventTodoCreated, payload)
+	}
+}
+
+// SubscribeTodoCreated registers a handler for todo.created events.
+func (bus *EventBus) SubscribeTodoCreated(fn func(TodoCreatedPayload)) {
+	bus.mu.Lock()
+	bus.subscribers[EventTodoCreated] = append(bus.subscribers[EventTodoCreated], func(v any) {
+		payload, ok := v.(TodoCreatedPayload)
+		if !ok {
+			return
+		}
+		fn(payload)
+	})
+	bus.mu.Unlock()
+	bus.runOnSubscribe(EventTodoCreated)
+}
+
+// PublishTodoDismissed publishes a todo.dismissed event.
+func (bus *EventBus) PublishTodoDismissed(payload TodoDismissedPayload) {
+	select {
+	case bus.ch <- envelope{event: EventTodoDismissed, payload: payload}:
+		bus.runOnPublish(EventTodoDismissed, payload)
+	default:
+		bus.runOnDrop(EventTodoDismissed, payload)
+	}
+}
+
+// SubscribeTodoDismissed registers a handler for todo.dismissed events.
+func (bus *EventBus) SubscribeTodoDismissed(fn func(TodoDismissedPayload)) {
+	bus.mu.Lock()
+	bus.subscribers[EventTodoDismissed] = append(bus.subscribers[EventTodoDismissed], func(v any) {
+		payload, ok := v.(TodoDismissedPayload)
+		if !ok {
+			return
+		}
+		fn(payload)
+	})
+	bus.mu.Unlock()
+	bus.runOnSubscribe(EventTodoDismissed)
 }
 
 // PublishTuiStarted publishes a tui.started event.

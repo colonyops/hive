@@ -28,6 +28,23 @@ func (q *Queries) AcknowledgeMessages(ctx context.Context, arg AcknowledgeMessag
 	return err
 }
 
+const countCustomTodoItemsBySessionSince = `-- name: CountCustomTodoItemsBySessionSince :one
+SELECT COUNT(*) FROM todo_items
+WHERE type = 'custom' AND session_id = ? AND created_at >= ?
+`
+
+type CountCustomTodoItemsBySessionSinceParams struct {
+	SessionID sql.NullString `json:"session_id"`
+	CreatedAt int64          `json:"created_at"`
+}
+
+func (q *Queries) CountCustomTodoItemsBySessionSince(ctx context.Context, arg CountCustomTodoItemsBySessionSinceParams) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countCustomTodoItemsBySessionSince, arg.SessionID, arg.CreatedAt)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countMessagesInTopic = `-- name: CountMessagesInTopic :one
 SELECT COUNT(*) FROM messages
 WHERE topic = ?
@@ -46,6 +63,30 @@ SELECT COUNT(*) FROM notifications
 
 func (q *Queries) CountNotifications(ctx context.Context) (int64, error) {
 	row := q.db.QueryRowContext(ctx, countNotifications)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPendingTodoItems = `-- name: CountPendingTodoItems :one
+SELECT COUNT(*) FROM todo_items
+WHERE status = 'pending'
+`
+
+func (q *Queries) CountPendingTodoItems(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPendingTodoItems)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
+const countPendingTodoItemsBySession = `-- name: CountPendingTodoItemsBySession :one
+SELECT COUNT(*) FROM todo_items
+WHERE status = 'pending' AND session_id = ?
+`
+
+func (q *Queries) CountPendingTodoItemsBySession(ctx context.Context, sessionID sql.NullString) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countPendingTodoItemsBySession, sessionID)
 	var count int64
 	err := row.Scan(&count)
 	return count, err
@@ -84,6 +125,42 @@ func (q *Queries) CreateReviewSession(ctx context.Context, arg CreateReviewSessi
 		arg.ContentHash,
 		arg.CreatedAt,
 		arg.FinalizedAt,
+	)
+	return err
+}
+
+const createTodoItem = `-- name: CreateTodoItem :exec
+INSERT INTO todo_items (
+    id, type, status, title, description, file_path, session_id, repo_remote,
+    created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type CreateTodoItemParams struct {
+	ID          string         `json:"id"`
+	Type        string         `json:"type"`
+	Status      string         `json:"status"`
+	Title       string         `json:"title"`
+	Description sql.NullString `json:"description"`
+	FilePath    sql.NullString `json:"file_path"`
+	SessionID   sql.NullString `json:"session_id"`
+	RepoRemote  string         `json:"repo_remote"`
+	CreatedAt   int64          `json:"created_at"`
+	UpdatedAt   int64          `json:"updated_at"`
+}
+
+func (q *Queries) CreateTodoItem(ctx context.Context, arg CreateTodoItemParams) error {
+	_, err := q.db.ExecContext(ctx, createTodoItem,
+		arg.ID,
+		arg.Type,
+		arg.Status,
+		arg.Title,
+		arg.Description,
+		arg.FilePath,
+		arg.SessionID,
+		arg.RepoRemote,
+		arg.CreatedAt,
+		arg.UpdatedAt,
 	)
 	return err
 }
@@ -158,6 +235,22 @@ DELETE FROM sessions WHERE id = ?
 
 func (q *Queries) DeleteSession(ctx context.Context, id string) error {
 	_, err := q.db.ExecContext(ctx, deleteSession, id)
+	return err
+}
+
+const dismissTodoItemsByPath = `-- name: DismissTodoItemsByPath :exec
+UPDATE todo_items
+SET status = 'dismissed', updated_at = ?
+WHERE file_path = ? AND status = 'pending'
+`
+
+type DismissTodoItemsByPathParams struct {
+	UpdatedAt int64          `json:"updated_at"`
+	FilePath  sql.NullString `json:"file_path"`
+}
+
+func (q *Queries) DismissTodoItemsByPath(ctx context.Context, arg DismissTodoItemsByPathParams) error {
+	_, err := q.db.ExecContext(ctx, dismissTodoItemsByPath, arg.UpdatedAt, arg.FilePath)
 	return err
 }
 
@@ -313,6 +406,29 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.Remote,
 		&i.State,
 		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const getTodoItem = `-- name: GetTodoItem :one
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+WHERE id = ?
+`
+
+func (q *Queries) GetTodoItem(ctx context.Context, id string) (TodoItem, error) {
+	row := q.db.QueryRowContext(ctx, getTodoItem, id)
+	var i TodoItem
+	err := row.Scan(
+		&i.ID,
+		&i.Type,
+		&i.Status,
+		&i.Title,
+		&i.Description,
+		&i.FilePath,
+		&i.SessionID,
+		&i.RepoRemote,
 		&i.CreatedAt,
 		&i.UpdatedAt,
 	)
@@ -610,6 +726,255 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 	return items, nil
 }
 
+const listTodoItems = `-- name: ListTodoItems :many
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListTodoItems(ctx context.Context) ([]TodoItem, error) {
+	rows, err := q.db.QueryContext(ctx, listTodoItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodoItem{}
+	for rows.Next() {
+		var i TodoItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.FilePath,
+			&i.SessionID,
+			&i.RepoRemote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTodoItemsByRepo = `-- name: ListTodoItemsByRepo :many
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+WHERE repo_remote = ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListTodoItemsByRepo(ctx context.Context, repoRemote string) ([]TodoItem, error) {
+	rows, err := q.db.QueryContext(ctx, listTodoItemsByRepo, repoRemote)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodoItem{}
+	for rows.Next() {
+		var i TodoItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.FilePath,
+			&i.SessionID,
+			&i.RepoRemote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTodoItemsBySession = `-- name: ListTodoItemsBySession :many
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+WHERE session_id = ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListTodoItemsBySession(ctx context.Context, sessionID sql.NullString) ([]TodoItem, error) {
+	rows, err := q.db.QueryContext(ctx, listTodoItemsBySession, sessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodoItem{}
+	for rows.Next() {
+		var i TodoItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.FilePath,
+			&i.SessionID,
+			&i.RepoRemote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTodoItemsByStatus = `-- name: ListTodoItemsByStatus :many
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+WHERE status = ?
+ORDER BY created_at DESC
+`
+
+func (q *Queries) ListTodoItemsByStatus(ctx context.Context, status string) ([]TodoItem, error) {
+	rows, err := q.db.QueryContext(ctx, listTodoItemsByStatus, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodoItem{}
+	for rows.Next() {
+		var i TodoItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.FilePath,
+			&i.SessionID,
+			&i.RepoRemote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTodoItemsByStatusAndRepo = `-- name: ListTodoItemsByStatusAndRepo :many
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+WHERE status = ? AND repo_remote = ?
+ORDER BY created_at DESC
+`
+
+type ListTodoItemsByStatusAndRepoParams struct {
+	Status     string `json:"status"`
+	RepoRemote string `json:"repo_remote"`
+}
+
+func (q *Queries) ListTodoItemsByStatusAndRepo(ctx context.Context, arg ListTodoItemsByStatusAndRepoParams) ([]TodoItem, error) {
+	rows, err := q.db.QueryContext(ctx, listTodoItemsByStatusAndRepo, arg.Status, arg.RepoRemote)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodoItem{}
+	for rows.Next() {
+		var i TodoItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.FilePath,
+			&i.SessionID,
+			&i.RepoRemote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listTodoItemsByStatusAndSession = `-- name: ListTodoItemsByStatusAndSession :many
+SELECT id, type, status, title, description, file_path, session_id, repo_remote, created_at, updated_at FROM todo_items
+WHERE status = ? AND session_id = ?
+ORDER BY created_at DESC
+`
+
+type ListTodoItemsByStatusAndSessionParams struct {
+	Status    string         `json:"status"`
+	SessionID sql.NullString `json:"session_id"`
+}
+
+func (q *Queries) ListTodoItemsByStatusAndSession(ctx context.Context, arg ListTodoItemsByStatusAndSessionParams) ([]TodoItem, error) {
+	rows, err := q.db.QueryContext(ctx, listTodoItemsByStatusAndSession, arg.Status, arg.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []TodoItem{}
+	for rows.Next() {
+		var i TodoItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.Type,
+			&i.Status,
+			&i.Title,
+			&i.Description,
+			&i.FilePath,
+			&i.SessionID,
+			&i.RepoRemote,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listTopics = `-- name: ListTopics :many
 SELECT name FROM topics
 ORDER BY name ASC
@@ -800,5 +1165,22 @@ type UpdateReviewCommentParams struct {
 
 func (q *Queries) UpdateReviewComment(ctx context.Context, arg UpdateReviewCommentParams) error {
 	_, err := q.db.ExecContext(ctx, updateReviewComment, arg.CommentText, arg.ID)
+	return err
+}
+
+const updateTodoItemStatus = `-- name: UpdateTodoItemStatus :exec
+UPDATE todo_items
+SET status = ?, updated_at = ?
+WHERE id = ?
+`
+
+type UpdateTodoItemStatusParams struct {
+	Status    string `json:"status"`
+	UpdatedAt int64  `json:"updated_at"`
+	ID        string `json:"id"`
+}
+
+func (q *Queries) UpdateTodoItemStatus(ctx context.Context, arg UpdateTodoItemStatusParams) error {
+	_, err := q.db.ExecContext(ctx, updateTodoItemStatus, arg.Status, arg.UpdatedAt, arg.ID)
 	return err
 }

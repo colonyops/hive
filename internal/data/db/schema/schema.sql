@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS schema_version (
 );
 
 -- Initialize schema version
-INSERT OR IGNORE INTO schema_version (version) VALUES (6);
+INSERT OR IGNORE INTO schema_version (version) VALUES (7);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
@@ -103,3 +103,29 @@ CREATE TABLE IF NOT EXISTS kv_store (
 
 CREATE INDEX IF NOT EXISTS idx_kv_expires
     ON kv_store(expires_at) WHERE expires_at IS NOT NULL;
+
+-- TODO items table
+CREATE TABLE IF NOT EXISTS todo_items (
+    id TEXT PRIMARY KEY,
+    type TEXT NOT NULL CHECK(type IN ('file_change', 'custom')),
+    status TEXT NOT NULL CHECK(status IN ('pending', 'completed', 'dismissed')),
+    title TEXT NOT NULL,
+    description TEXT,
+    file_path TEXT,
+    session_id TEXT,
+    repo_remote TEXT NOT NULL,
+    created_at INTEGER NOT NULL, -- Unix timestamp in nanoseconds
+    updated_at INTEGER NOT NULL  -- Unix timestamp in nanoseconds
+);
+
+-- Only one pending item per file path (deduplication)
+CREATE UNIQUE INDEX IF NOT EXISTS idx_todo_items_pending_file
+    ON todo_items(file_path) WHERE status = 'pending' AND file_path IS NOT NULL;
+
+-- List by status, ordered by created_at
+CREATE INDEX IF NOT EXISTS idx_todo_items_status
+    ON todo_items(status, created_at);
+
+-- Count by session
+CREATE INDEX IF NOT EXISTS idx_todo_items_session
+    ON todo_items(session_id) WHERE session_id IS NOT NULL;

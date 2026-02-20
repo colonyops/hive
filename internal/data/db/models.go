@@ -72,6 +72,19 @@ type Session struct {
 	UpdatedAt int64          `json:"updated_at"`
 }
 
+type TodoItem struct {
+	ID          string         `json:"id"`
+	Type        string         `json:"type"`
+	Status      string         `json:"status"`
+	Title       string         `json:"title"`
+	Description sql.NullString `json:"description"`
+	FilePath    sql.NullString `json:"file_path"`
+	SessionID   sql.NullString `json:"session_id"`
+	RepoRemote  string         `json:"repo_remote"`
+	CreatedAt   int64          `json:"created_at"`
+	UpdatedAt   int64          `json:"updated_at"`
+}
+
 type Topic struct {
 	Name      string      `json:"name"`
 	UpdatedAt interface{} `json:"updated_at"`

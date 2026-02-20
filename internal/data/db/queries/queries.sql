@@ -180,3 +180,64 @@ SELECT key, value, expires_at, created_at, updated_at FROM kv_store WHERE key = 
 
 -- name: KVSweepExpired :exec
 DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?;
+
+-- name: CreateTodoItem :exec
+INSERT INTO todo_items (
+    id, type, status, title, description, file_path, session_id, repo_remote,
+    created_at, updated_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetTodoItem :one
+SELECT * FROM todo_items
+WHERE id = ?;
+
+-- name: ListTodoItems :many
+SELECT * FROM todo_items
+ORDER BY created_at DESC;
+
+-- name: ListTodoItemsByStatus :many
+SELECT * FROM todo_items
+WHERE status = ?
+ORDER BY created_at DESC;
+
+-- name: ListTodoItemsBySession :many
+SELECT * FROM todo_items
+WHERE session_id = ?
+ORDER BY created_at DESC;
+
+-- name: ListTodoItemsByStatusAndSession :many
+SELECT * FROM todo_items
+WHERE status = ? AND session_id = ?
+ORDER BY created_at DESC;
+
+-- name: ListTodoItemsByRepo :many
+SELECT * FROM todo_items
+WHERE repo_remote = ?
+ORDER BY created_at DESC;
+
+-- name: ListTodoItemsByStatusAndRepo :many
+SELECT * FROM todo_items
+WHERE status = ? AND repo_remote = ?
+ORDER BY created_at DESC;
+
+-- name: UpdateTodoItemStatus :exec
+UPDATE todo_items
+SET status = ?, updated_at = ?
+WHERE id = ?;
+
+-- name: DismissTodoItemsByPath :exec
+UPDATE todo_items
+SET status = 'dismissed', updated_at = ?
+WHERE file_path = ? AND status = 'pending';
+
+-- name: CountPendingTodoItems :one
+SELECT COUNT(*) FROM todo_items
+WHERE status = 'pending';
+
+-- name: CountPendingTodoItemsBySession :one
+SELECT COUNT(*) FROM todo_items
+WHERE status = 'pending' AND session_id = ?;
+
+-- name: CountCustomTodoItemsBySessionSince :one
+SELECT COUNT(*) FROM todo_items
+WHERE type = 'custom' AND session_id = ? AND created_at >= ?;
