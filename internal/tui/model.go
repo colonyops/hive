@@ -632,6 +632,14 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 		return m, m.startRecycle(action.SessionID)
 	}
 
+	// UI-only actions handled inline — no executor needed.
+	if action.Type == act.TypeTodoPanel {
+		if m.todoService != nil && m.cfg.Todo.IsEnabled() {
+			return m, m.loadTodosAndShowPanel()
+		}
+		return m, nil
+	}
+
 	if action.Exit {
 		exec, err := m.cmdService.CreateExecutor(action)
 		if err != nil {
