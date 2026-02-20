@@ -28,6 +28,29 @@ func TestRenderWindowCommon(t *testing.T) {
 	assert.True(t, rw.Focus)
 }
 
+func TestRenderWindowCommon_Panes(t *testing.T) {
+	r := testRenderer()
+	w := config.WindowConfig{
+		Name:    "agent",
+		Command: "claude",
+		Panes: []config.PaneConfig{
+			{Command: "tail -f {{ .Name }}.log", Horizontal: true},
+			{Dir: "/logs/{{ .Name }}"},
+		},
+	}
+
+	rw, err := renderWindow(r, w, SpawnData{Name: "my-sess", Path: "/tmp/test"})
+	require.NoError(t, err)
+
+	require.Len(t, rw.Panes, 2)
+
+	assert.Equal(t, "tail -f my-sess.log", rw.Panes[0].Command)
+	assert.True(t, rw.Panes[0].Horizontal)
+
+	assert.Empty(t, rw.Panes[1].Command)
+	assert.Equal(t, "/logs/my-sess", rw.Panes[1].Dir)
+}
+
 func TestRenderUserCommandWindows(t *testing.T) {
 	r := testRenderer()
 	windows := []config.WindowConfig{

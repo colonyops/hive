@@ -11,12 +11,21 @@ import (
 	"github.com/colonyops/hive/pkg/executil"
 )
 
+// RenderedPane is a fully-resolved tmux pane definition (no templates).
+type RenderedPane struct {
+	Command    string // Command to run (empty = default shell)
+	Dir        string // Working directory (empty = window default)
+	Focus      bool   // Select this pane after creation
+	Horizontal bool   // true = left/right split (-h), false = top/bottom
+}
+
 // RenderedWindow is a fully-resolved tmux window definition (no templates).
 type RenderedWindow struct {
-	Name    string // Window name
-	Command string // Command to run (empty = default shell)
-	Dir     string // Working directory (empty = session default)
-	Focus   bool   // Select this window after creation
+	Name    string         // Window name
+	Command string         // Command to run (empty = default shell)
+	Dir     string         // Working directory (empty = session default)
+	Focus   bool           // Select this window after creation
+	Panes   []RenderedPane // Additional pane splits within this window
 }
 
 // Client creates and manages tmux sessions from window definitions.
@@ -57,6 +66,13 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		return fmt.Errorf("tmux new-session: %w", err)
 	}
 
+	if len(first.Panes) > 0 {
+		if err := c.addPanes(ctx, name, first.Name, workDir, first.Panes); err != nil {
+			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
+			return err
+		}
+	}
+
 	// Create additional windows. On failure, kill the partial session.
 	for _, w := range windows[1:] {
 		args := []string{"new-window", "-t", name, "-n", w.Name}
@@ -70,6 +86,13 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
+		}
+
+		if len(w.Panes) > 0 {
+			if err := c.addPanes(ctx, name, w.Name, workDir, w.Panes); err != nil {
+				_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
+				return fmt.Errorf("add panes to window %q: %w", w.Name, err)
+			}
 		}
 	}
 
@@ -105,6 +128,11 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
 		}
+		if len(w.Panes) > 0 {
+			if err := c.addPanes(ctx, name, w.Name, workDir, w.Panes); err != nil {
+				return fmt.Errorf("add panes to window %q: %w", w.Name, err)
+			}
+		}
 	}
 	for _, w := range windows {
 		if w.Focus {
@@ -114,6 +142,45 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 			break
 		}
 	}
+	return nil
+}
+
+// addPanes runs split-window for each pane in the window, then selects the focused
+// pane if any. windowTarget is the tmux target for the window (e.g., "sess:agent").
+func (c *Client) addPanes(ctx context.Context, sessionName, windowName, workDir string, panes []RenderedPane) error {
+	windowTarget := sessionName + ":" + windowName
+	focusedIdx := -1
+
+	for i, p := range panes {
+		args := []string{"split-window", "-t", windowTarget}
+		if p.Horizontal {
+			args = append(args, "-h")
+		}
+		dir := p.Dir
+		if dir == "" {
+			dir = workDir
+		}
+		if dir != "" {
+			args = append(args, "-c", dir)
+		}
+		if p.Command != "" {
+			args = append(args, "--", "sh", "-c", p.Command)
+		}
+		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+			return fmt.Errorf("tmux split-window pane %d: %w", i+1, err)
+		}
+		if p.Focus {
+			focusedIdx = i + 1 // pane 0 is the window's initial process; companion panes are 1-based
+		}
+	}
+
+	if focusedIdx >= 0 {
+		paneTarget := fmt.Sprintf("%s.%d", windowTarget, focusedIdx)
+		if _, err := c.exec.Run(ctx, "tmux", "select-pane", "-t", paneTarget); err != nil {
+			return fmt.Errorf("tmux select-pane: %w", err)
+		}
+	}
+
 	return nil
 }
 

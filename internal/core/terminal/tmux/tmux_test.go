@@ -147,7 +147,7 @@ func TestSessionInfoFromWindow(t *testing.T) {
 		sc := &sessionCache{}
 		info := integ.sessionInfoFromWindow("mysess", sc, nil)
 		assert.Equal(t, "mysess", info.Name)
-		assert.Empty(t, info.Pane)
+		assert.Empty(t, info.WindowIndex)
 		assert.Empty(t, info.WindowName)
 	})
 
@@ -156,7 +156,7 @@ func TestSessionInfoFromWindow(t *testing.T) {
 		sc := &sessionCache{agentWindows: []*agentWindow{w}}
 		info := integ.sessionInfoFromWindow("mysess", sc, w)
 		assert.Equal(t, "mysess", info.Name)
-		assert.Equal(t, "2", info.Pane)
+		assert.Equal(t, "2", info.WindowIndex)
 		assert.Equal(t, "claude", info.WindowName)
 	})
 
@@ -166,7 +166,7 @@ func TestSessionInfoFromWindow(t *testing.T) {
 		sc := &sessionCache{agentWindows: []*agentWindow{w1, w2}}
 		info := integ.sessionInfoFromWindow("mysess", sc, w2)
 		assert.Equal(t, "mysess", info.Name)
-		assert.Equal(t, "1", info.Pane)
+		assert.Equal(t, "1", info.WindowIndex)
 		assert.Equal(t, "aider", info.WindowName)
 	})
 }
@@ -193,7 +193,7 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 		})
 		require.NoError(t, err)
 		require.NotNil(t, info, "expected info")
-		assert.Equal(t, "1", info.Pane)
+		assert.Equal(t, "1", info.WindowIndex)
 		assert.Equal(t, "claude", info.WindowName)
 	})
 
@@ -208,7 +208,7 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, info, "expected info")
 		// No path match, no name match for slug "my-session" in window names — should pick highest activity
-		assert.Equal(t, "0", info.Pane)
+		assert.Equal(t, "0", info.WindowIndex)
 	})
 }
 
@@ -260,9 +260,9 @@ func TestDiscoverAllWindows(t *testing.T) {
 		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
 		require.NoError(t, err)
 		require.Len(t, infos, 2, "expected 2 windows, got %d", len(infos))
-		assert.Equal(t, "0", infos[0].Pane)
+		assert.Equal(t, "0", infos[0].WindowIndex)
 		assert.Equal(t, "claude", infos[0].WindowName)
-		assert.Equal(t, "1", infos[1].Pane)
+		assert.Equal(t, "1", infos[1].WindowIndex)
 		assert.Equal(t, "aider", infos[1].WindowName)
 	})
 
@@ -270,7 +270,7 @@ func TestDiscoverAllWindows(t *testing.T) {
 		infos, err := integ.DiscoverAllWindows(ctx, "single-sess", nil)
 		require.NoError(t, err)
 		require.Len(t, infos, 1, "expected 1 window, got %d", len(infos))
-		assert.Equal(t, "0", infos[0].Pane)
+		assert.Equal(t, "0", infos[0].WindowIndex)
 	})
 
 	t.Run("returns nil for unknown session", func(t *testing.T) {

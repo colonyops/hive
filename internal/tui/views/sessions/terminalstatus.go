@@ -144,11 +144,11 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 				// Get per-window status and content
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
-					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.Pane).Msg("per-window status failed, marking missing")
+					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.WindowIndex).Msg("per-window status failed, marking missing")
 					wStatus = terminal.StatusMissing
 				}
 				windows = append(windows, WindowStatus{
-					WindowIndex: wi.Pane,
+					WindowIndex: wi.WindowIndex,
 					WindowName:  wi.WindowName,
 					Status:      wStatus,
 					Tool:        wi.DetectedTool,

@@ -71,6 +71,27 @@ func (c *Config) Warnings() []ValidationWarning {
 				Message:  "rule has neither commands nor copy defined",
 			})
 		}
+		for j, w := range rule.Windows {
+			if len(w.Panes) > 0 && w.Command == "" {
+				warnings = append(warnings, ValidationWarning{
+					Category: "Rules",
+					Item:     fmt.Sprintf("rule %d window %d (%s)", i, j, w.Name),
+					Message:  "window has panes but no command; agent will not be in pane 0",
+				})
+			}
+		}
+	}
+
+	for name, cmd := range c.UserCommands {
+		for j, w := range cmd.Windows {
+			if len(w.Panes) > 0 && w.Command == "" {
+				warnings = append(warnings, ValidationWarning{
+					Category: "UserCommands",
+					Item:     fmt.Sprintf("%s window %d (%s)", name, j, w.Name),
+					Message:  "window has panes but no command; agent will not be in pane 0",
+				})
+			}
+		}
 	}
 
 	return warnings

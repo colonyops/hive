@@ -254,6 +254,85 @@ func TestClient_OpenSession(t *testing.T) {
 	})
 }
 
+func TestClient_AddPanes(t *testing.T) {
+	t.Run("vertical pane", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Command: "claude", Panes: []RenderedPane{
+				{Command: "tail -f dev.log"},
+			}},
+		}, true)
+		require.NoError(t, err)
+
+		// new-session, split-window, select-window
+		require.Len(t, rec.Commands, 3)
+		splitArgs := rec.Commands[1].Args
+		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-c", "/work", "--", "sh", "-c", "tail -f dev.log"}, splitArgs)
+	})
+
+	t.Run("horizontal pane", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Command: "claude", Panes: []RenderedPane{
+				{Command: "watch git status", Horizontal: true},
+			}},
+		}, true)
+		require.NoError(t, err)
+
+		splitArgs := rec.Commands[1].Args
+		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-h", "-c", "/work", "--", "sh", "-c", "watch git status"}, splitArgs)
+	})
+
+	t.Run("focused pane calls select-pane", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Command: "claude", Panes: []RenderedPane{
+				{Command: "tail -f dev.log", Focus: true},
+			}},
+		}, true)
+		require.NoError(t, err)
+
+		// new-session, split-window, select-pane, select-window
+		require.Len(t, rec.Commands, 4)
+		assert.Equal(t, []string{"select-pane", "-t", "sess:agent.1"}, rec.Commands[2].Args)
+	})
+
+	t.Run("pane dir overrides window dir", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Command: "claude", Panes: []RenderedPane{
+				{Command: "ls", Dir: "/custom"},
+			}},
+		}, true)
+		require.NoError(t, err)
+
+		splitArgs := rec.Commands[1].Args
+		assert.Contains(t, splitArgs, "/custom")
+	})
+
+	t.Run("no panes produces no split-window", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec)
+
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Command: "claude"},
+		}, true)
+		require.NoError(t, err)
+
+		for _, cmd := range rec.Commands {
+			assert.NotContains(t, cmd.Args, "split-window")
+		}
+	})
+}
+
 func TestClient_AddWindows(t *testing.T) {
 	t.Run("adds windows without focus", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}

@@ -412,12 +412,23 @@ type GitConfig struct {
 	StatusWorkers int `yaml:"status_workers"`
 }
 
+// PaneConfig defines an additional tmux pane (split) within a window.
+// Panes are created after the parent window's command and are always companion
+// tools — the agent occupies pane 0 (the window's initial process).
+type PaneConfig struct {
+	Command    string `yaml:"command,omitempty"`    // Command to run (template string, empty = shell)
+	Dir        string `yaml:"dir,omitempty"`        // Working directory override (template string)
+	Focus      bool   `yaml:"focus,omitempty"`      // Select this pane after creation
+	Horizontal bool   `yaml:"horizontal,omitempty"` // true = left/right split, false = top/bottom
+}
+
 // WindowConfig defines a tmux window to create when spawning a session.
 type WindowConfig struct {
-	Name    string `yaml:"name"`              // Window name (template string, required)
-	Command string `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
-	Dir     string `yaml:"dir,omitempty"`     // Working directory override (template string)
-	Focus   bool   `yaml:"focus,omitempty"`   // Select this window after creation
+	Name    string       `yaml:"name"`              // Window name (template string, required)
+	Command string       `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
+	Dir     string       `yaml:"dir,omitempty"`     // Working directory override (template string)
+	Focus   bool         `yaml:"focus,omitempty"`   // Select this window after creation
+	Panes   []PaneConfig `yaml:"panes,omitempty"`   // additional pane splits within this window
 }
 
 // Rule defines actions to take for matching repositories.
