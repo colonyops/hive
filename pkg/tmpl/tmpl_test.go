@@ -95,6 +95,12 @@ func TestRenderer_Render(t *testing.T) {
 			data: map[string]string{"Prompt": "$(whoami) && rm -rf /"},
 			want: "echo '$(whoami) && rm -rf /'",
 		},
+		{
+			name: "shq function with multiline prompt",
+			tmpl: "echo {{ .Prompt | shq }}",
+			data: map[string]string{"Prompt": "line one\nline two\nline three"},
+			want: "echo 'line one\nline two\nline three'",
+		},
 	}
 
 	for _, tt := range tests {
