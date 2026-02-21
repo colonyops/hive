@@ -10,6 +10,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func newModelWithBuffer(ctrl *ToastController) Model {
+	return Model{
+		toastController: ctrl,
+		notifyBuffer:    NewNotificationBuffer(),
+	}
+}
+
 // TestToastUpdateLoop_tick_chain_expires_at_TTL simulates the Bubbletea update
 // loop by sending toastTickMsg messages and verifying the toast is removed after
 // the expected number of ticks.
@@ -41,21 +48,14 @@ func TestToastUpdateLoop_tick_chain_expires_at_TTL(t *testing.T) {
 	assert.False(t, ctrl.HasToasts())
 }
 
-// TestToastUpdateLoop_notificationMsg_starts_tick starts from a notificationMsg
+// TestToastUpdateLoop_drainNotifications_starts_tick starts from a drain signal
 // and verifies the full chain through Update.
-func TestToastUpdateLoop_notificationMsg_starts_tick(t *testing.T) {
+func TestToastUpdateLoop_drainNotifications_starts_tick(t *testing.T) {
 	ctrl := NewToastController()
+	m := newModelWithBuffer(ctrl)
 
-	m := Model{
-		toastController: ctrl,
-	}
-
-	_, cmd := m.Update(notificationMsg{
-		notification: notify.Notification{
-			Level:   notify.LevelError,
-			Message: "something broke",
-		},
-	})
+	m.notifyBuffer.Push(notify.Notification{Level: notify.LevelError, Message: "something broke"})
+	_, cmd := m.Update(drainNotificationsMsg{})
 
 	require.True(t, ctrl.HasToasts(), "toast should be pushed")
 	assert.Equal(t, "something broke", ctrl.Toasts()[0].notification.Message)
@@ -66,18 +66,11 @@ func TestToastUpdateLoop_notificationMsg_starts_tick(t *testing.T) {
 // end-to-end through the Model Update loop.
 func TestToastUpdateLoop_full_lifecycle(t *testing.T) {
 	ctrl, now := newTestController()
+	m := newModelWithBuffer(ctrl)
 
-	m := Model{
-		toastController: ctrl,
-	}
-
-	// Step 1: Push notification
-	result, cmd := m.Update(notificationMsg{
-		notification: notify.Notification{
-			Level:   notify.LevelInfo,
-			Message: "hello",
-		},
-	})
+	// Step 1: Push notification and drain buffer
+	m.notifyBuffer.Push(notify.Notification{Level: notify.LevelInfo, Message: "hello"})
+	result, cmd := m.Update(drainNotificationsMsg{})
 	m = result.(Model)
 	require.NotNil(t, cmd, "notification should start tick chain")
 	require.True(t, ctrl.HasToasts())
@@ -107,14 +100,11 @@ func TestToastUpdateLoop_full_lifecycle(t *testing.T) {
 func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 	ctrl, now := newTestController()
 
-	m := Model{
-		toastController: ctrl,
-	}
+	m := newModelWithBuffer(ctrl)
 
 	// Push first notification
-	result, _ := m.Update(notificationMsg{
-		notification: notify.Notification{Level: notify.LevelInfo, Message: "first"},
-	})
+	m.notifyBuffer.Push(notify.Notification{Level: notify.LevelInfo, Message: "first"})
+	result, _ := m.Update(drainNotificationsMsg{})
 	m = result.(Model)
 
 	// Run 25 ticks (2.5s into the first toast's 5s TTL)
@@ -126,16 +116,15 @@ func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 	}
 
 	// Push second notification (TTL starts now, expires at T+7.5s)
-	result, cmd = m.Update(notificationMsg{
-		notification: notify.Notification{Level: notify.LevelInfo, Message: "second"},
-	})
+	m.notifyBuffer.Push(notify.Notification{Level: notify.LevelInfo, Message: "second"})
+	result, cmd = m.Update(drainNotificationsMsg{})
 	m = result.(Model)
 	require.Len(t, ctrl.Toasts(), 2, "should have 2 toasts")
 
-	// notificationMsg always returns a tick cmd when toasts exist.
+	// drainNotifications always returns a tick cmd when toasts exist.
 	// This ensures the chain continues even if the previous tick's cmd
 	// hasn't fired yet.
-	require.NotNil(t, cmd, "notificationMsg should always return tick cmd when toasts exist")
+	require.NotNil(t, cmd, "drainNotifications should always return tick cmd when toasts exist")
 
 	// Run ticks until all expire
 	tickCount := 25 // already did 25
@@ -157,19 +146,15 @@ func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 	assert.Equal(t, 75, tickCount)
 }
 
-// TestToastUpdateLoop_new_toast_after_chain_stops verifies that ensureToastTick
-// restarts the chain after all toasts have expired.
+// TestToastUpdateLoop_new_toast_after_chain_stops verifies that draining a
+// newly buffered notification restarts the chain after all toasts expire.
 func TestToastUpdateLoop_new_toast_after_chain_stops(t *testing.T) {
 	ctrl, now := newTestController()
-
-	m := Model{
-		toastController: ctrl,
-	}
+	m := newModelWithBuffer(ctrl)
 
 	// Push and expire first toast
-	result, cmd := m.Update(notificationMsg{
-		notification: notify.Notification{Level: notify.LevelInfo, Message: "first"},
-	})
+	m.notifyBuffer.Push(notify.Notification{Level: notify.LevelInfo, Message: "first"})
+	result, cmd := m.Update(drainNotificationsMsg{})
 	m = result.(Model)
 	for cmd != nil {
 		*now = now.Add(toastTickInterval)
@@ -178,10 +163,9 @@ func TestToastUpdateLoop_new_toast_after_chain_stops(t *testing.T) {
 	}
 	require.False(t, ctrl.HasToasts())
 
-	// Push second toast — ensureToastTick should start a new chain
-	_, cmd = m.Update(notificationMsg{
-		notification: notify.Notification{Level: notify.LevelInfo, Message: "second"},
-	})
+	// Push second toast and drain buffer to start a new chain
+	m.notifyBuffer.Push(notify.Notification{Level: notify.LevelInfo, Message: "second"})
+	_, cmd = m.Update(drainNotificationsMsg{})
 
 	assert.True(t, ctrl.HasToasts(), "second toast should exist")
 	assert.NotNil(t, cmd, "should return tick cmd")
