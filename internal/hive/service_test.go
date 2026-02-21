@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -680,8 +681,269 @@ func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 	assert.Empty(t, sessions, "session should not remain in store after RunSh failure")
 }
 
+// recordingGit wraps mockGit and records method calls.
+type recordingGit struct {
+	mockGit
+	calls []string
+}
+
+func (r *recordingGit) Clone(_ context.Context, url, dest string) error {
+	r.calls = append(r.calls, "Clone:"+url+"→"+dest)
+	return nil
+}
+
+func (r *recordingGit) CloneBare(_ context.Context, url, dest string) error {
+	r.calls = append(r.calls, "CloneBare:"+url)
+	// Create the directory so ensureBareClone's os.Stat succeeds on subsequent calls
+	_ = os.MkdirAll(dest, 0o755)
+	return nil
+}
+
+func (r *recordingGit) WorktreeAdd(_ context.Context, _, worktreePath, branch string) error {
+	r.calls = append(r.calls, "WorktreeAdd:"+branch)
+	_ = os.MkdirAll(worktreePath, 0o755)
+	return nil
+}
+
+func (r *recordingGit) WorktreeRemove(_ context.Context, _, worktreePath, branch string) error {
+	r.calls = append(r.calls, "WorktreeRemove:"+branch)
+	return nil
+}
+
+func (r *recordingGit) Fetch(_ context.Context, dir string) error {
+	r.calls = append(r.calls, "Fetch:"+dir)
+	return nil
+}
+
+func (r *recordingGit) hasCalled(method string) bool {
+	for _, c := range r.calls {
+		if strings.HasPrefix(c, method+":") {
+			return true
+		}
+	}
+	return false
+}
+
+func newTestServiceWithGit(t *testing.T, store session.Store, cfg *config.Config, g git.Git) *SessionService {
+	t.Helper()
+	if cfg == nil {
+		cfg = &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+		}
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	bus := testbus.New(t).EventBus
+	return NewSessionService(store, g, cfg, bus, &mockExec{}, renderer, log, io.Discard, io.Discard)
+}
+
+func TestCreateSession_WorktreeStrategy(t *testing.T) {
+	store := newMockStore()
+	g := &recordingGit{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:          "wt-feature",
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, config.CloneStrategyWorktree, sess.CloneStrategy)
+	assert.Contains(t, sess.Path, "-wt-")
+	assert.NotEmpty(t, sess.GetMeta(session.MetaWorktreeBranch))
+	assert.True(t, g.hasCalled("CloneBare"))
+	assert.True(t, g.hasCalled("WorktreeAdd"))
+	assert.False(t, g.hasCalled("Clone"))
+}
+
+func TestCreateSession_WorktreeReusesRecycled(t *testing.T) {
+	store := newMockStore()
+	g := &recordingGit{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	remote := "https://github.com/example/repo.git"
+	// Seed bare dir so ensureBareClone finds it and does Fetch
+	bareDir := filepath.Join(cfg.ReposDir(), ".bare", "example", "repo")
+	require.NoError(t, os.MkdirAll(bareDir, 0o755))
+
+	recycled := session.Session{
+		ID:            "recy1",
+		Name:          "old",
+		Slug:          "old",
+		State:         session.StateRecycled,
+		Path:          filepath.Join(cfg.ReposDir(), "repo-wt-abc123"),
+		Remote:        remote,
+		CloneStrategy: config.CloneStrategyWorktree,
+	}
+	require.NoError(t, store.Save(context.Background(), recycled))
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:          "new-feature",
+		Remote:        remote,
+		CloneStrategy: config.CloneStrategyWorktree,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "recy1", sess.ID, "should reuse recycled session")
+	assert.Equal(t, "new-feature", sess.Name)
+	assert.Equal(t, session.StateActive, sess.State)
+	assert.NotEmpty(t, sess.GetMeta(session.MetaWorktreeBranch))
+	// Should fetch, not bare-clone
+	assert.True(t, g.hasCalled("Fetch"))
+	assert.True(t, g.hasCalled("WorktreeAdd"))
+	assert.False(t, g.hasCalled("CloneBare"))
+}
+
+func TestFindValidRecyclable_FiltersByStrategy(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	remote := "https://github.com/example/repo.git"
+	store.sessions["full1"] = session.Session{
+		ID:            "full1",
+		Remote:        remote,
+		State:         session.StateRecycled,
+		CloneStrategy: config.CloneStrategyFull,
+		Path:          t.TempDir(),
+	}
+	store.sessions["wt1"] = session.Session{
+		ID:            "wt1",
+		Remote:        remote,
+		State:         session.StateRecycled,
+		CloneStrategy: config.CloneStrategyWorktree,
+		Path:          "/does/not/exist",
+	}
+
+	// Request full → should find full1
+	found := svc.findValidRecyclable(context.Background(), remote, config.CloneStrategyFull)
+	require.NotNil(t, found)
+	assert.Equal(t, "full1", found.ID)
+
+	// Request worktree → should find wt1 (skips repo validation)
+	found = svc.findValidRecyclable(context.Background(), remote, config.CloneStrategyWorktree)
+	require.NotNil(t, found)
+	assert.Equal(t, "wt1", found.ID)
+}
+
+func TestRecycleSession_WorktreeCallsRemove(t *testing.T) {
+	store := newMockStore()
+	g := &recordingGit{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	sess := session.Session{
+		ID:            "wt-recycle",
+		Name:          "wt-session",
+		Slug:          "wt-session",
+		State:         session.StateActive,
+		Path:          t.TempDir(),
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+	}
+	sess.SetMeta(session.MetaWorktreeBranch, "hive/wt-session-wt-recycle")
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RecycleSession(context.Background(), "wt-recycle", io.Discard)
+	require.NoError(t, err)
+
+	assert.True(t, g.hasCalled("WorktreeRemove"))
+
+	recycled, err := store.Get(context.Background(), "wt-recycle")
+	require.NoError(t, err)
+	assert.Equal(t, session.StateRecycled, recycled.State)
+}
+
+func TestDeleteSession_WorktreeCallsRemove(t *testing.T) {
+	store := newMockStore()
+	g := &recordingGit{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	sessDir := t.TempDir()
+	sess := session.Session{
+		ID:            "wt-del",
+		Name:          "wt-del-session",
+		Slug:          "wt-del-session",
+		State:         session.StateActive,
+		Path:          sessDir,
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+	}
+	sess.SetMeta(session.MetaWorktreeBranch, "hive/wt-del-session-wt-del")
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.DeleteSession(context.Background(), "wt-del")
+	require.NoError(t, err)
+
+	assert.True(t, g.hasCalled("WorktreeRemove"))
+	_, err = store.Get(context.Background(), "wt-del")
+	assert.ErrorIs(t, err, session.ErrNotFound)
+}
+
+func TestCreateSession_CLIOverridesConfig(t *testing.T) {
+	store := newMockStore()
+	g := &recordingGit{}
+	cfg := &config.Config{
+		DataDir:       t.TempDir(),
+		GitPath:       "git",
+		CloneStrategy: config.CloneStrategyFull, // config says full
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:          "override-test",
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree, // CLI says worktree
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, config.CloneStrategyWorktree, sess.CloneStrategy)
+	assert.True(t, g.hasCalled("CloneBare"))
+}
+
+func TestCreateSession_DefaultsToFullClone(t *testing.T) {
+	store := newMockStore()
+	g := &recordingGit{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "full-default",
+		Remote: "https://github.com/example/repo.git",
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, config.CloneStrategyFull, sess.CloneStrategy)
+	assert.True(t, g.hasCalled("Clone"))
+	assert.False(t, g.hasCalled("CloneBare"))
+}
+
 // Ensure the mock implements the interface at compile time.
 var (
 	_ git.Git       = (*mockGit)(nil)
+	_ git.Git       = (*recordingGit)(nil)
 	_ session.Store = (*mockStore)(nil)
 )
