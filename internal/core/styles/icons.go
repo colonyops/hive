@@ -10,7 +10,7 @@ var (
 	IconMail      = "\ueb1c"     //
 	IconBee       = "\U000F0FA1" // 󰾡
 	IconHive      = "\U000F10CE" // 󱃎
-	IconBrain     = "\uea8c "
+	IconBrain     = "󰧑 "
 	IconComment   = "\uf41f "
 
 	IconNotifyError   = "\uf06a" //
