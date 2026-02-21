@@ -15,4 +15,6 @@ RUN chmod +x /usr/local/bin/hive
 
 WORKDIR /workspace
 
+RUN git clone https://github.com/colonyops/hive.git .
+
 CMD ["bash"]

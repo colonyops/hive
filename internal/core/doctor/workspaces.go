@@ -7,26 +7,26 @@ import (
 	"path/filepath"
 )
 
-// RepoDirsCheck verifies that configured repo_dirs entries exist and are accessible.
-type RepoDirsCheck struct {
+// WorkspacesCheck verifies that configured workspaces entries exist and are accessible.
+type WorkspacesCheck struct {
 	dirs []string
 }
 
-// NewRepoDirsCheck creates a new repo directories check.
-func NewRepoDirsCheck(dirs []string) *RepoDirsCheck {
-	return &RepoDirsCheck{dirs: dirs}
+// NewWorkspacesCheck creates a new workspaces check.
+func NewWorkspacesCheck(dirs []string) *WorkspacesCheck {
+	return &WorkspacesCheck{dirs: dirs}
 }
 
-func (c *RepoDirsCheck) Name() string {
-	return "Repository Directories"
+func (c *WorkspacesCheck) Name() string {
+	return "Workspaces"
 }
 
-func (c *RepoDirsCheck) Run(_ context.Context) Result {
+func (c *WorkspacesCheck) Run(_ context.Context) Result {
 	result := Result{Name: c.Name()}
 
 	if len(c.dirs) == 0 {
 		result.Items = append(result.Items, CheckItem{
-			Label:  "repo_dirs",
+			Label:  "workspaces",
 			Status: StatusPass,
 			Detail: "none configured",
 		})
@@ -34,7 +34,7 @@ func (c *RepoDirsCheck) Run(_ context.Context) Result {
 	}
 
 	for _, dir := range c.dirs {
-		// Expand ~ to match runtime behavior (see ScanRepoDirs)
+		// Expand ~ to match runtime behavior (see ScanWorkspaces)
 		if len(dir) > 0 && dir[0] == '~' {
 			if home, err := os.UserHomeDir(); err == nil {
 				dir = filepath.Join(home, dir[1:])

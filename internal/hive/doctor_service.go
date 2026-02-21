@@ -30,7 +30,7 @@ func (d *DoctorService) RunChecks(ctx context.Context, configPath string, autofi
 		doctor.NewToolsCheck(),
 		doctor.NewPluginCheck(d.pluginInfos),
 		doctor.NewConfigCheck(d.config, configPath),
-		doctor.NewRepoDirsCheck(d.config.RepoDirs),
+		doctor.NewWorkspacesCheck(d.config.Workspaces),
 		doctor.NewOrphanCheck(d.store, d.config.ReposDir(), autofix),
 	}
 	return doctor.RunAll(ctx, checks)

@@ -30,7 +30,7 @@ func (m *mockGit) RemoteURL(_ context.Context, dir string) (string, error) {
 	return "", os.ErrNotExist
 }
 
-func TestScanRepoDirs(t *testing.T) {
+func TestScanWorkspaces(t *testing.T) {
 	// Create temp directory structure
 	tmpDir := t.TempDir()
 
@@ -59,7 +59,7 @@ func TestScanRepoDirs(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join(tmpDir, "somefile.txt"), []byte("test"), 0o644))
 
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, []string{tmpDir}, gitMock)
+	discovered, err := ScanWorkspaces(ctx, []string{tmpDir}, gitMock)
 	require.NoError(t, err)
 
 	assert.Len(t, discovered, 3)
@@ -75,21 +75,21 @@ func TestScanRepoDirs(t *testing.T) {
 	assert.Equal(t, "https://github.com/user/zebra.git", discovered[2].Remote)
 }
 
-func TestScanRepoDirs_EmptyDirs(t *testing.T) {
+func TestScanWorkspaces_EmptyDirs(t *testing.T) {
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, nil, &mockGit{})
+	discovered, err := ScanWorkspaces(ctx, nil, &mockGit{})
 	require.NoError(t, err)
 	assert.Empty(t, discovered)
 }
 
-func TestScanRepoDirs_NonexistentDir(t *testing.T) {
+func TestScanWorkspaces_NonexistentDir(t *testing.T) {
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, []string{"/nonexistent/path"}, &mockGit{})
+	discovered, err := ScanWorkspaces(ctx, []string{"/nonexistent/path"}, &mockGit{})
 	require.NoError(t, err)
 	assert.Empty(t, discovered)
 }
 
-func TestScanRepoDirs_MultipleDirs(t *testing.T) {
+func TestScanWorkspaces_MultipleDirs(t *testing.T) {
 	tmpDir1 := t.TempDir()
 	tmpDir2 := t.TempDir()
 
@@ -106,7 +106,7 @@ func TestScanRepoDirs_MultipleDirs(t *testing.T) {
 	gitMock.remotes[repo2] = "git@github.com:user/repo2.git"
 
 	ctx := context.Background()
-	discovered, err := ScanRepoDirs(ctx, []string{tmpDir1, tmpDir2}, gitMock)
+	discovered, err := ScanWorkspaces(ctx, []string{tmpDir1, tmpDir2}, gitMock)
 	require.NoError(t, err)
 
 	assert.Len(t, discovered, 2)

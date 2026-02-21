@@ -9,7 +9,7 @@ Config file: `~/.config/hive/config.yaml`
 ## Example
 
 ```yaml
-repo_dirs:
+workspaces:
   - ~/projects
 
 agents:
@@ -47,7 +47,7 @@ rules:
 
 | Option                        | Type       | Default              | Description                                 |
 | ----------------------------- | ---------- | -------------------- | ------------------------------------------- |
-| `repo_dirs`                   | `[]string` | `[]`                 | Directories to scan for repositories        |
+| `workspaces`                  | `[]string` | `[]`                 | Directories to scan for repositories        |
 | `copy_command`                | `string`   | `pbcopy` (macOS)     | Command to copy to clipboard                |
 | `auto_delete_corrupted`       | `bool`     | `true`               | Auto-delete corrupted sessions on prune     |
 | `history.max_entries`         | `int`      | `100`                | Max command palette history entries         |

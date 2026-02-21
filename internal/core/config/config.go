@@ -212,7 +212,7 @@ type Config struct {
 	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
-	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
+	Workspaces          []string               `yaml:"workspaces"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
 

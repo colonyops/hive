@@ -73,19 +73,19 @@ bind l switch-client -t hive
 
 Now `<prefix> l` returns you to hive from any agent session.
 
-### 3. Configure repo directories (optional)
+### 3. Configure workspaces (optional)
 
 To create sessions from the TUI with `n`, tell hive where your repos live:
 
 ```yaml
 # ~/.config/hive/config.yaml
-repo_dirs:
+workspaces:
   - ~/projects
   - ~/work
 ```
 
 !!! info
-    Without `repo_dirs`, you can still create sessions from the CLI by running `hive new` from within a git repository:
+    Without `workspaces`, you can still create sessions from the CLI by running `hive new` from within a git repository:
 
     ```bash
     cd ~/projects/my-app
