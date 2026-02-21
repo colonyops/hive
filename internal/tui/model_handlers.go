@@ -6,14 +6,15 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/tui/command"
@@ -54,7 +55,7 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	// Publish startup warnings on the first WindowSizeMsg
 	if len(m.startupWarnings) > 0 {
 		for _, w := range m.startupWarnings {
-			m.notifyBus.Warnf("%s", w)
+			m.publishNotificationf(notify.LevelWarning, "%s", w)
 		}
 		m.startupWarnings = nil
 		return m, m.ensureToastTick()
@@ -341,8 +342,30 @@ func (m Model) handleReviewOpenDoc(msg review.OpenDocumentMsg) (tea.Model, tea.C
 // --- Notifications ---
 
 func (m Model) handleNotification(msg notificationMsg) (tea.Model, tea.Cmd) {
-	m.notifyBus.Publish(msg.notification)
-	return m, m.ensureToastTick()
+	n := msg.notification
+	if n.CreatedAt.IsZero() {
+		n.CreatedAt = time.Now()
+	}
+
+	// Persist to store
+	if m.notifyStore != nil {
+		if _, err := m.notifyStore.Save(context.Background(), n); err != nil {
+			log.Error().Err(err).Str("message", n.Message).Msg("failed to persist notification")
+		}
+	}
+
+	// Push to toast controller
+	m.toastController.Push(n)
+
+	// Re-subscribe for the next notification
+	var cmds []tea.Cmd
+	if msg.ch != nil {
+		cmds = append(cmds, m.waitForNotification(msg.ch))
+	}
+	if tickCmd := m.ensureToastTick(); tickCmd != nil {
+		cmds = append(cmds, tickCmd)
+	}
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd) {

@@ -5,6 +5,7 @@ package eventbus
 import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/todo"
@@ -15,17 +16,18 @@ import (
 // Events defines all event types and their payload structs for code generation.
 var Events = map[string]any{
 	// Keep list sorted A-Z
-	"agent.status-changed": AgentStatusChangedPayload{},
-	"config.reloaded":      ConfigReloadedPayload{},
-	"message.received":     MessageReceivedPayload{},
-	"session.corrupted":    SessionCorruptedPayload{},
-	"session.created":      SessionCreatedPayload{},
-	"session.deleted":      SessionDeletedPayload{},
-	"session.recycled":     SessionRecycledPayload{},
-	"session.renamed":      SessionRenamedPayload{},
-	"todo.created":         TodoCreatedPayload{},
-	"tui.started":          TUIStartedPayload{},
-	"tui.stopped":          TUIStoppedPayload{},
+	"agent.status-changed":   AgentStatusChangedPayload{},
+	"config.reloaded":        ConfigReloadedPayload{},
+	"message.received":       MessageReceivedPayload{},
+	"notification.published": NotificationPublishedPayload{},
+	"session.corrupted":      SessionCorruptedPayload{},
+	"session.created":        SessionCreatedPayload{},
+	"session.deleted":        SessionDeletedPayload{},
+	"session.recycled":       SessionRecycledPayload{},
+	"session.renamed":        SessionRenamedPayload{},
+	"todo.created":           TodoCreatedPayload{},
+	"tui.started":            TUIStartedPayload{},
+	"tui.stopped":            TUIStoppedPayload{},
 }
 
 // SessionCreatedPayload is emitted when a new session is created.
@@ -72,6 +74,12 @@ type TUIStartedPayload struct{}
 
 // TUIStoppedPayload is emitted when the TUI stops.
 type TUIStoppedPayload struct{}
+
+// NotificationPublishedPayload is emitted when a user-facing notification is published.
+type NotificationPublishedPayload struct {
+	Level   notify.Level
+	Message string
+}
 
 // TodoCreatedPayload is emitted when a new todo item is created.
 type TodoCreatedPayload struct {

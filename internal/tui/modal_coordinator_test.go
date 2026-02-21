@@ -5,7 +5,6 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	"github.com/colonyops/hive/internal/tui/components"
-	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -52,8 +51,7 @@ func TestModalCoordinator_Overlay_HelpDialog(t *testing.T) {
 
 func TestModalCoordinator_Overlay_NotificationModal(t *testing.T) {
 	mc := NewModalCoordinator()
-	bus := tuinotify.NewBus(nil)
-	mc.Notification = NewNotificationModal(bus, 80, 24)
+	mc.Notification = NewNotificationModal(nil, 80, 24)
 	bg := testBackground
 	got := mc.Overlay(stateShowingNotifications, bg, noSpinner(), "")
 	assert.NotEqual(t, bg, got, "notification modal should modify background")

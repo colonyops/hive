@@ -5,6 +5,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/tui/views/review"
 )
 
@@ -17,7 +18,7 @@ type HiveDocReviewCmd struct {
 // When invoked without an argument, it scopes to the selected session's repository context.
 func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	if m.reviewView == nil {
-		m.notifyBus.Warnf("review view is not available")
+		m.publishNotificationf(notify.LevelWarning, "review view is not available")
 		return m.ensureToastTick()
 	}
 
@@ -50,7 +51,7 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	}
 
 	if len(docs) == 0 {
-		m.notifyBus.Errorf("no documents found for review")
+		m.publishNotificationf(notify.LevelError, "no documents found for review")
 		return m.ensureToastTick()
 	}
 

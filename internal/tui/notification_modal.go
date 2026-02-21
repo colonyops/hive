@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -10,7 +11,6 @@ import (
 
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/styles"
-	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 )
 
 const (
@@ -23,14 +23,14 @@ const (
 
 // NotificationModal displays a scrollable history of notifications.
 type NotificationModal struct {
-	bus      *tuinotify.Bus
+	store    notify.Store
 	viewport viewport.Model
 	width    int
 	height   int
 }
 
 // NewNotificationModal creates a modal showing notification history.
-func NewNotificationModal(bus *tuinotify.Bus, width, height int) *NotificationModal {
+func NewNotificationModal(store notify.Store, width, height int) *NotificationModal {
 	modalWidth := calcNotificationModalWidth(width)
 	modalHeight := min(height-notifyModalMargin, notifyModalMaxHeight)
 	contentHeight := modalHeight - notifyModalChrome
@@ -41,7 +41,7 @@ func NewNotificationModal(bus *tuinotify.Bus, width, height int) *NotificationMo
 	)
 
 	m := &NotificationModal{
-		bus:      bus,
+		store:    store,
 		viewport: vp,
 		width:    width,
 		height:   height,
@@ -52,7 +52,12 @@ func NewNotificationModal(bus *tuinotify.Bus, width, height int) *NotificationMo
 }
 
 func (m *NotificationModal) refreshContent() {
-	history, err := m.bus.History()
+	if m.store == nil {
+		m.viewport.SetContent(styles.TextMutedStyle.Render("No notifications"))
+		return
+	}
+
+	history, err := m.store.List(context.Background())
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load notification history")
 		m.viewport.SetContent(styles.TextErrorStyle.Render(fmt.Sprintf("failed to load notifications: %v", err)))
@@ -107,7 +112,10 @@ func (m *NotificationModal) ScrollDown() {
 
 // Clear deletes all notifications and refreshes the view.
 func (m *NotificationModal) Clear() error {
-	if err := m.bus.Clear(); err != nil {
+	if m.store == nil {
+		return nil
+	}
+	if err := m.store.Clear(context.Background()); err != nil {
 		return err
 	}
 	m.refreshContent()
