@@ -17,8 +17,6 @@
 # Dependency directories (remove the comment below to include it)
 # vendor/
 
-# binary
-hive
 
 # Go workspace file
 go.work
@@ -28,3 +26,5 @@ dist/
 agent-deck/
 diffnav
 site/
+# binary
+hive
