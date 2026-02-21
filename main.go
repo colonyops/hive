@@ -99,7 +99,33 @@ spawning terminal sessions with your preferred AI tool.
 
 Run 'hive' with no arguments to open the interactive session manager.
 Run 'hive new' to create a new session from the current repository.`,
-		Version: build(),
+		Version:               build(),
+		EnableShellCompletion: true,
+		ConfigureShellCompletionCommand: func(cc *cli.Command) {
+			cc.Hidden = false
+			cc.Usage = "Generate shell completion scripts"
+			cc.Description = `Generate shell completion scripts for bash, zsh, fish, or powershell.
+
+To load completions:
+
+Bash:
+  source <(hive completion bash)
+
+  # To load completions for each session, add to ~/.bashrc:
+  source <(hive completion bash)
+
+Zsh:
+  source <(hive completion zsh)
+
+  # Or generate a file:
+  hive completion zsh > "${fpath[1]}/_hive"
+
+Fish:
+  hive completion fish > ~/.config/fish/completions/hive.fish
+
+PowerShell:
+  hive completion pwsh > hive.ps1 && . ./hive.ps1`
+		},
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "log-level",
