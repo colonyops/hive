@@ -3,8 +3,9 @@ CREATE TABLE IF NOT EXISTS schema_version (
     version INTEGER PRIMARY KEY
 );
 
--- Initialize schema version
-INSERT OR IGNORE INTO schema_version (version) VALUES (7);
+-- Initialize schema version (no-op if any row already exists from a previous version)
+INSERT OR IGNORE INTO schema_version (version)
+SELECT 7 WHERE NOT EXISTS (SELECT 1 FROM schema_version);
 
 -- Sessions table
 CREATE TABLE IF NOT EXISTS sessions (
