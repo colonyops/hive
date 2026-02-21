@@ -265,6 +265,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 	case animationTickMsg:
 		return v.handleAnimationTick()
 	case RefreshSessionsMsg:
+		v.refreshing = true
 		return v.loadSessions()
 	case tea.KeyMsg:
 		return v.handleKeyMsg(msg)
