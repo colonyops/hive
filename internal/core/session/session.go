@@ -29,8 +29,9 @@ const (
 
 // Metadata keys for terminal integration.
 const (
-	MetaTmuxSession = "tmux_session" // tmux session name
-	MetaTmuxPane    = "tmux_pane"    // tmux pane identifier
+	MetaTmuxSession    = "tmux_session"    // tmux session name
+	MetaTmuxPane       = "tmux_pane"       // tmux pane identifier
+	MetaWorktreeBranch = "worktree_branch" // git branch used for worktree sessions
 )
 
 // Session represents an isolated git environment for an AI agent.

@@ -11,10 +11,11 @@ import (
 )
 
 type NewCmd struct {
-	flags  *Flags
-	app    *hive.App
-	remote string
-	source string
+	flags         *Flags
+	app           *hive.App
+	remote        string
+	source        string
+	cloneStrategy string
 }
 
 // NewNewCmd creates a new new command
@@ -52,6 +53,11 @@ Example:
 				Usage:       "source directory for file copying (defaults to current directory)",
 				Destination: &cmd.source,
 			},
+			&cli.StringFlag{
+				Name:        "clone-strategy",
+				Usage:       `clone strategy: "full" or "worktree" (defaults to config)`,
+				Destination: &cmd.cloneStrategy,
+			},
 		},
 		Action: cmd.run,
 	})
@@ -76,9 +82,10 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 	}
 
 	opts := hive.CreateOptions{
-		Name:   name,
-		Remote: cmd.remote,
-		Source: source,
+		Name:          name,
+		Remote:        cmd.remote,
+		Source:        source,
+		CloneStrategy: cmd.cloneStrategy,
 	}
 
 	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)

@@ -31,6 +31,7 @@ type CreateOptions struct {
 	Prompt        string // Prompt to pass to spawned terminal (batch only)
 	Remote        string // Git remote URL to clone (auto-detected if empty)
 	Source        string // Source directory for file copying
+	CloneStrategy string // "full" or "worktree" (empty = resolve from config)
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
 	// SkipSpawn skips the configured spawn strategy (spawn: / batch_spawn: / windows:).
 	// The caller is responsible for launching any terminal or tmux session. Use this
@@ -135,60 +136,68 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		s.log.Debug().Str("remote", remote).Msg("detected remote")
 	}
 
+	// Resolve clone strategy: CLI override > config
+	strategy := opts.CloneStrategy
+	if strategy == "" {
+		strategy = s.config.GetCloneStrategy(remote)
+	}
+
 	var sess session.Session
 	slug := session.Slugify(opts.Name)
 
-	// Try to find and validate a recyclable session
-	recyclable := s.findValidRecyclable(ctx, remote)
+	// Try to find and validate a recyclable session with matching strategy
+	recyclable := s.findValidRecyclable(ctx, remote, strategy)
 
-	if recyclable != nil {
-		// Reuse existing recycled session (already cleaned up when marked for recycle)
-		s.log.Debug().Str("session_id", recyclable.ID).Msg("found valid recyclable session")
+	if recyclable != nil && strategy == config.CloneStrategyWorktree {
+		// Reuse recycled worktree: ensure bare clone is current, add fresh worktree
+		s.log.Debug().Str("session_id", recyclable.ID).Msg("reusing recycled worktree session")
 
-		// Pull latest changes before running hooks
-		s.log.Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
-		if err := s.git.Pull(ctx, recyclable.Path); err != nil {
-			// Pull failed - mark as corrupted and fall through to clone
-			s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("pull failed, marking corrupted")
+		bareDir := s.bareDirForRemote(remote)
+		if err := s.ensureBareClone(ctx, remote, bareDir); err != nil {
+			s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("bare clone failed, marking corrupted")
 			s.markCorrupted(ctx, recyclable)
 			recyclable = nil
+		} else {
+			sessID := recyclable.ID
+			branch := fmt.Sprintf("hive/%s-%s", slug, sessID)
+			if err := s.git.WorktreeAdd(ctx, bareDir, recyclable.Path, branch); err != nil {
+				s.log.Warn().Err(err).Str("session_id", sessID).Msg("worktree add failed, marking corrupted")
+				s.markCorrupted(ctx, recyclable)
+				recyclable = nil
+			} else {
+				sess = *recyclable
+				sess.Name = opts.Name
+				sess.Slug = slug
+				sess.State = session.StateActive
+				sess.UpdatedAt = time.Now()
+				sess.SetMeta(session.MetaWorktreeBranch, branch)
+			}
 		}
 	}
 
-	if recyclable != nil {
-		sess = *recyclable
-		sess.Name = opts.Name
-		sess.Slug = slug
-		sess.State = session.StateActive
-		sess.UpdatedAt = time.Now()
-	} else {
-		// Create new session (either no recyclable found or it was corrupted)
-		sessID := opts.SessionID
-		if sessID == "" {
-			sessID = generateID()
+	if recyclable != nil && strategy == config.CloneStrategyFull {
+		// Reuse existing recycled full-clone session
+		s.log.Debug().Str("session_id", recyclable.ID).Msg("found valid recyclable session")
+
+		s.log.Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
+		if err := s.git.Pull(ctx, recyclable.Path); err != nil {
+			s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("pull failed, marking corrupted")
+			s.markCorrupted(ctx, recyclable)
+			recyclable = nil
+		} else {
+			sess = *recyclable
+			sess.Name = opts.Name
+			sess.Slug = slug
+			sess.State = session.StateActive
+			sess.UpdatedAt = time.Now()
 		}
-		dirID := generateID()
-		repoName := git.ExtractRepoName(remote)
-		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s", repoName, dirID))
+	}
 
-		s.log.Info().Str("remote", remote).Str("dest", path).Msg("cloning repository")
-
-		if err := s.git.Clone(ctx, remote, path); err != nil {
-			return nil, fmt.Errorf("clone repository: %w", err)
-		}
-
-		s.log.Debug().Msg("clone complete")
-
-		now := time.Now()
-		sess = session.Session{
-			ID:        sessID,
-			Name:      opts.Name,
-			Slug:      slug,
-			Path:      path,
-			Remote:    remote,
-			State:     session.StateActive,
-			CreatedAt: now,
-			UpdatedAt: now,
+	if recyclable == nil {
+		var err error
+		sess, err = s.createFreshSession(ctx, opts, remote, strategy, slug)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -215,14 +224,14 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	if !opts.SkipSpawn {
-		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		spawnStrategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
 		switch {
-		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
+		case spawnStrategy.IsWindows():
+			if err := s.spawner.SpawnWindows(ctx, spawnStrategy.Windows, data, opts.UseBatchSpawn); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
-		case len(strategy.Commands) > 0:
-			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+		case len(spawnStrategy.Commands) > 0:
+			if err := s.spawner.Spawn(ctx, spawnStrategy.Commands, data); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		default:
@@ -235,6 +244,60 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	s.bus.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &sess})
 
 	return &sess, nil
+}
+
+// createFreshSession creates a brand new session (no recyclable found).
+func (s *SessionService) createFreshSession(ctx context.Context, opts CreateOptions, remote, strategy, slug string) (session.Session, error) {
+	sessID := opts.SessionID
+	if sessID == "" {
+		sessID = generateID()
+	}
+	dirID := generateID()
+	repoName := git.ExtractRepoName(remote)
+
+	now := time.Now()
+	sess := session.Session{
+		ID:            sessID,
+		Name:          opts.Name,
+		Slug:          slug,
+		Remote:        remote,
+		State:         session.StateActive,
+		CloneStrategy: strategy,
+		CreatedAt:     now,
+		UpdatedAt:     now,
+	}
+
+	if strategy == config.CloneStrategyWorktree {
+		bareDir := s.bareDirForRemote(remote)
+		if err := s.ensureBareClone(ctx, remote, bareDir); err != nil {
+			return session.Session{}, fmt.Errorf("ensure bare clone: %w", err)
+		}
+
+		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-wt-%s", repoName, dirID))
+		branch := fmt.Sprintf("hive/%s-%s", slug, sessID)
+
+		s.log.Info().Str("bare", bareDir).Str("worktree", path).Str("branch", branch).Msg("adding worktree")
+
+		if err := s.git.WorktreeAdd(ctx, bareDir, path, branch); err != nil {
+			return session.Session{}, fmt.Errorf("add worktree: %w", err)
+		}
+
+		sess.Path = path
+		sess.SetMeta(session.MetaWorktreeBranch, branch)
+	} else {
+		path := filepath.Join(s.config.ReposDir(), fmt.Sprintf("%s-%s", repoName, dirID))
+
+		s.log.Info().Str("remote", remote).Str("dest", path).Msg("cloning repository")
+
+		if err := s.git.Clone(ctx, remote, path); err != nil {
+			return session.Session{}, fmt.Errorf("clone repository: %w", err)
+		}
+
+		s.log.Debug().Msg("clone complete")
+		sess.Path = path
+	}
+
+	return sess, nil
 }
 
 // ListSessions returns all sessions.
@@ -260,48 +323,77 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 		return fmt.Errorf("session %s cannot be recycled (state: %s)", id, sess.State)
 	}
 
-	// Validate repository before recycling
-	if err := s.git.IsValidRepo(ctx, sess.Path); err != nil {
-		s.log.Warn().Err(err).Str("session_id", id).Msg("session has corrupted repository")
-		s.markCorrupted(ctx, &sess)
-		return fmt.Errorf("session %s has corrupted repository: %w", id, err)
+	if sess.CloneStrategy == config.CloneStrategyWorktree {
+		return s.recycleWorktreeSession(ctx, &sess)
 	}
 
-	// Get default branch for template
+	return s.recycleFullSession(ctx, &sess, w)
+}
+
+// recycleFullSession handles recycling for full-clone sessions.
+func (s *SessionService) recycleFullSession(ctx context.Context, sess *session.Session, w io.Writer) error {
+	if err := s.git.IsValidRepo(ctx, sess.Path); err != nil {
+		s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("session has corrupted repository")
+		s.markCorrupted(ctx, sess)
+		return fmt.Errorf("session %s has corrupted repository: %w", sess.ID, err)
+	}
+
 	defaultBranch, err := s.git.DefaultBranch(ctx, sess.Path)
 	if err != nil {
 		s.log.Warn().Err(err).Msg("failed to get default branch, using 'main'")
 		defaultBranch = "main"
 	}
 
-	data := RecycleData{
-		DefaultBranch: defaultBranch,
-	}
-
+	data := RecycleData{DefaultBranch: defaultBranch}
 	if err := s.recycler.Recycle(ctx, sess.Path, s.config.GetRecycleCommands(sess.Remote), data, w); err != nil {
-		return fmt.Errorf("recycle session %s: %w", id, err)
+		return fmt.Errorf("recycle session %s: %w", sess.ID, err)
 	}
 
-	// Kill associated tmux session (best-effort)
 	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Name); err != nil {
 		s.log.Debug().Err(err).Str("session", sess.Name).Msg("no tmux session to kill")
 	}
 
 	sess.MarkRecycled(time.Now())
-
-	if err := s.sessions.Save(ctx, sess); err != nil {
+	if err := s.sessions.Save(ctx, *sess); err != nil {
 		return fmt.Errorf("save session: %w", err)
 	}
 
-	// Enforce max recycled limit
 	if err := s.enforceMaxRecycled(ctx, sess.Remote); err != nil {
 		s.log.Warn().Err(err).Str("remote", sess.Remote).Msg("failed to enforce max recycled limit")
 	}
 
-	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("session recycled")
+	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session recycled")
+	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: sess})
+	return nil
+}
 
-	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: &sess})
+// recycleWorktreeSession handles recycling for worktree sessions.
+// Removes the worktree and branch, then marks the session as recycled.
+func (s *SessionService) recycleWorktreeSession(ctx context.Context, sess *session.Session) error {
+	bareDir := s.bareDirForRemote(sess.Remote)
+	branch := sess.GetMeta(session.MetaWorktreeBranch)
 
+	if branch != "" {
+		if err := s.git.WorktreeRemove(ctx, bareDir, sess.Path, branch); err != nil {
+			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("worktree remove failed")
+		}
+	}
+
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Name); err != nil {
+		s.log.Debug().Err(err).Str("session", sess.Name).Msg("no tmux session to kill")
+	}
+
+	sess.MarkRecycled(time.Now())
+	if err := s.sessions.Save(ctx, *sess); err != nil {
+		return fmt.Errorf("save session: %w", err)
+	}
+
+	if err := s.enforceMaxRecycled(ctx, sess.Remote); err != nil {
+		s.log.Warn().Err(err).Str("remote", sess.Remote).Msg("failed to enforce max recycled limit")
+	}
+
+	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("worktree session recycled")
+	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: sess})
 	return nil
 }
 
@@ -345,6 +437,17 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	}
 
 	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("deleting session")
+
+	// For worktree sessions, remove worktree + branch via git before removing the directory
+	if sess.CloneStrategy == config.CloneStrategyWorktree {
+		bareDir := s.bareDirForRemote(sess.Remote)
+		branch := sess.GetMeta(session.MetaWorktreeBranch)
+		if branch != "" {
+			if err := s.git.WorktreeRemove(ctx, bareDir, sess.Path, branch); err != nil {
+				s.log.Warn().Err(err).Str("session_id", id).Msg("worktree remove failed, proceeding with directory cleanup")
+			}
+		}
+	}
 
 	// Remove directory
 	if err := os.RemoveAll(sess.Path); err != nil {
@@ -488,24 +591,43 @@ func generateID() string {
 	return randid.Generate(6)
 }
 
-// findValidRecyclable finds a recyclable session and validates it.
+// findValidRecyclable finds a recyclable session matching the given strategy.
 // Returns nil if none found or all candidates are corrupted.
-func (s *SessionService) findValidRecyclable(ctx context.Context, remote string) *session.Session {
+func (s *SessionService) findValidRecyclable(ctx context.Context, remote, strategy string) *session.Session {
 	sessions, err := s.sessions.List(ctx)
 	if err != nil {
 		s.log.Warn().Err(err).Msg("failed to list sessions")
 		return nil
 	}
 
+	// Normalize: empty clone_strategy on old sessions means "full"
+	matchStrategy := strategy
+	if matchStrategy == "" {
+		matchStrategy = config.CloneStrategyFull
+	}
+
 	for i := range sessions {
 		sess := &sessions[i]
 
-		// Skip non-recyclable sessions
 		if sess.State != session.StateRecycled || sess.Remote != remote {
 			continue
 		}
 
-		// Validate the repository
+		// Filter by matching clone strategy (empty = "full" for legacy sessions)
+		sessStrategy := sess.CloneStrategy
+		if sessStrategy == "" {
+			sessStrategy = config.CloneStrategyFull
+		}
+		if sessStrategy != matchStrategy {
+			continue
+		}
+
+		// Worktree sessions: directory is intentionally removed on recycle, skip repo validation
+		if sessStrategy == config.CloneStrategyWorktree {
+			return sess
+		}
+
+		// Full-clone sessions: validate the repository
 		if err := s.git.IsValidRepo(ctx, sess.Path); err != nil {
 			s.log.Warn().Err(err).Str("session_id", sess.ID).Str("path", sess.Path).Msg("corrupted session found")
 			s.markCorrupted(ctx, sess)
@@ -665,4 +787,27 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 		return fmt.Errorf("create tmux session: %w", err)
 	}
 	return nil
+}
+
+// bareDirForRemote returns the bare clone directory for a given remote URL.
+// Layout: <reposDir>/.bare/<owner>/<repo>/
+func (s *SessionService) bareDirForRemote(remote string) string {
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner == "" || repo == "" {
+		// Fallback for unparseable remotes
+		repo = git.ExtractRepoName(remote)
+		owner = "_"
+	}
+	return filepath.Join(s.config.ReposDir(), ".bare", owner, repo)
+}
+
+// ensureBareClone creates a bare clone if it doesn't exist, or fetches if it does.
+func (s *SessionService) ensureBareClone(ctx context.Context, remote, bareDir string) error {
+	if _, err := os.Stat(bareDir); os.IsNotExist(err) {
+		s.log.Info().Str("remote", remote).Str("bare", bareDir).Msg("creating bare clone")
+		return s.git.CloneBare(ctx, remote, bareDir)
+	}
+
+	s.log.Debug().Str("bare", bareDir).Msg("fetching into existing bare clone")
+	return s.git.Fetch(ctx, bareDir)
 }
