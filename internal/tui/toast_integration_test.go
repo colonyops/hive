@@ -6,7 +6,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 
 	"github.com/colonyops/hive/internal/core/notify"
-	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -46,14 +45,9 @@ func TestToastUpdateLoop_tick_chain_expires_at_TTL(t *testing.T) {
 // and verifies the full chain through Update.
 func TestToastUpdateLoop_notificationMsg_starts_tick(t *testing.T) {
 	ctrl := NewToastController()
-	bus := tuinotify.NewBus(nil)
-	bus.Subscribe(func(n notify.Notification) {
-		ctrl.Push(n)
-	})
 
 	m := Model{
 		toastController: ctrl,
-		notifyBus:       bus,
 	}
 
 	_, cmd := m.Update(notificationMsg{
@@ -72,14 +66,9 @@ func TestToastUpdateLoop_notificationMsg_starts_tick(t *testing.T) {
 // end-to-end through the Model Update loop.
 func TestToastUpdateLoop_full_lifecycle(t *testing.T) {
 	ctrl, now := newTestController()
-	bus := tuinotify.NewBus(nil)
-	bus.Subscribe(func(n notify.Notification) {
-		ctrl.Push(n)
-	})
 
 	m := Model{
 		toastController: ctrl,
-		notifyBus:       bus,
 	}
 
 	// Step 1: Push notification
@@ -117,14 +106,9 @@ func TestToastUpdateLoop_full_lifecycle(t *testing.T) {
 // ensuring the chain continues even if the original chain's cmd is in-flight.
 func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 	ctrl, now := newTestController()
-	bus := tuinotify.NewBus(nil)
-	bus.Subscribe(func(n notify.Notification) {
-		ctrl.Push(n)
-	})
 
 	m := Model{
 		toastController: ctrl,
-		notifyBus:       bus,
 	}
 
 	// Push first notification
@@ -177,14 +161,9 @@ func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 // restarts the chain after all toasts have expired.
 func TestToastUpdateLoop_new_toast_after_chain_stops(t *testing.T) {
 	ctrl, now := newTestController()
-	bus := tuinotify.NewBus(nil)
-	bus.Subscribe(func(n notify.Notification) {
-		ctrl.Push(n)
-	})
 
 	m := Model{
 		toastController: ctrl,
-		notifyBus:       bus,
 	}
 
 	// Push and expire first toast

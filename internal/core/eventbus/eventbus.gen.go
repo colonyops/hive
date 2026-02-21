@@ -10,16 +10,17 @@ import (
 type Event string
 
 const (
-	EventAgentStatusChanged Event = "agent.status-changed"
-	EventConfigReloaded     Event = "config.reloaded"
-	EventMessageReceived    Event = "message.received"
-	EventSessionCorrupted   Event = "session.corrupted"
-	EventSessionCreated     Event = "session.created"
-	EventSessionDeleted     Event = "session.deleted"
-	EventSessionRecycled    Event = "session.recycled"
-	EventSessionRenamed     Event = "session.renamed"
-	EventTuiStarted         Event = "tui.started"
-	EventTuiStopped         Event = "tui.stopped"
+	EventAgentStatusChanged    Event = "agent.status-changed"
+	EventConfigReloaded        Event = "config.reloaded"
+	EventMessageReceived       Event = "message.received"
+	EventNotificationPublished Event = "notification.published"
+	EventSessionCorrupted      Event = "session.corrupted"
+	EventSessionCreated        Event = "session.created"
+	EventSessionDeleted        Event = "session.deleted"
+	EventSessionRecycled       Event = "session.recycled"
+	EventSessionRenamed        Event = "session.renamed"
+	EventTuiStarted            Event = "tui.started"
+	EventTuiStopped            Event = "tui.stopped"
 )
 
 // EventBus provides type-safe publish/subscribe for in-process events.
@@ -27,12 +28,7 @@ type EventBus struct {
 	mu          sync.RWMutex
 	subscribers map[Event][]any
 	ch          chan envelope
-
-	hookMu      sync.RWMutex
-	onPublish   []func(Event, any)
-	onDrop      []func(Event, any)
-	onSubscribe []func(Event)
-	onPanic     []func(Event, any, any)
+	hooks       hooks
 }
 
 type envelope struct {
@@ -54,16 +50,17 @@ func New(size int) *EventBus {
 
 func newSubscribersMap() map[Event][]any {
 	return map[Event][]any{
-		EventAgentStatusChanged: {},
-		EventConfigReloaded:     {},
-		EventMessageReceived:    {},
-		EventSessionCorrupted:   {},
-		EventSessionCreated:     {},
-		EventSessionDeleted:     {},
-		EventSessionRecycled:    {},
-		EventSessionRenamed:     {},
-		EventTuiStarted:         {},
-		EventTuiStopped:         {},
+		EventAgentStatusChanged:    {},
+		EventConfigReloaded:        {},
+		EventMessageReceived:       {},
+		EventNotificationPublished: {},
+		EventSessionCorrupted:      {},
+		EventSessionCreated:        {},
+		EventSessionDeleted:        {},
+		EventSessionRecycled:       {},
+		EventSessionRenamed:        {},
+		EventTuiStarted:            {},
+		EventTuiStopped:            {},
 	}
 }
 
@@ -97,17 +94,14 @@ func (bus *EventBus) Start(ctx context.Context) {
 
 // PublishAgentStatusChanged publishes a agent.status-changed event.
 func (bus *EventBus) PublishAgentStatusChanged(payload AgentStatusChangedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventAgentStatusChanged, payload: payload}:
-		bus.runOnPublish(EventAgentStatusChanged, payload)
-	default:
-		bus.runOnDrop(EventAgentStatusChanged, payload)
-	}
+	bus.send(EventAgentStatusChanged, payload)
 }
 
 // SubscribeAgentStatusChanged registers a handler for agent.status-changed events.
 func (bus *EventBus) SubscribeAgentStatusChanged(fn func(AgentStatusChangedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventAgentStatusChanged] = append(bus.subscribers[EventAgentStatusChanged], func(v any) {
 		payload, ok := v.(AgentStatusChangedPayload)
 		if !ok {
@@ -115,23 +109,18 @@ func (bus *EventBus) SubscribeAgentStatusChanged(fn func(AgentStatusChangedPaylo
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventAgentStatusChanged)
 }
 
 // PublishConfigReloaded publishes a config.reloaded event.
 func (bus *EventBus) PublishConfigReloaded(payload ConfigReloadedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventConfigReloaded, payload: payload}:
-		bus.runOnPublish(EventConfigReloaded, payload)
-	default:
-		bus.runOnDrop(EventConfigReloaded, payload)
-	}
+	bus.send(EventConfigReloaded, payload)
 }
 
 // SubscribeConfigReloaded registers a handler for config.reloaded events.
 func (bus *EventBus) SubscribeConfigReloaded(fn func(ConfigReloadedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventConfigReloaded] = append(bus.subscribers[EventConfigReloaded], func(v any) {
 		payload, ok := v.(ConfigReloadedPayload)
 		if !ok {
@@ -139,23 +128,18 @@ func (bus *EventBus) SubscribeConfigReloaded(fn func(ConfigReloadedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventConfigReloaded)
 }
 
 // PublishMessageReceived publishes a message.received event.
 func (bus *EventBus) PublishMessageReceived(payload MessageReceivedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventMessageReceived, payload: payload}:
-		bus.runOnPublish(EventMessageReceived, payload)
-	default:
-		bus.runOnDrop(EventMessageReceived, payload)
-	}
+	bus.send(EventMessageReceived, payload)
 }
 
 // SubscribeMessageReceived registers a handler for message.received events.
 func (bus *EventBus) SubscribeMessageReceived(fn func(MessageReceivedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventMessageReceived] = append(bus.subscribers[EventMessageReceived], func(v any) {
 		payload, ok := v.(MessageReceivedPayload)
 		if !ok {
@@ -163,23 +147,37 @@ func (bus *EventBus) SubscribeMessageReceived(fn func(MessageReceivedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventMessageReceived)
+}
+
+// PublishNotificationPublished publishes a notification.published event.
+func (bus *EventBus) PublishNotificationPublished(payload NotificationPublishedPayload) {
+	bus.send(EventNotificationPublished, payload)
+}
+
+// SubscribeNotificationPublished registers a handler for notification.published events.
+func (bus *EventBus) SubscribeNotificationPublished(fn func(NotificationPublishedPayload)) {
+	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
+	bus.subscribers[EventNotificationPublished] = append(bus.subscribers[EventNotificationPublished], func(v any) {
+		payload, ok := v.(NotificationPublishedPayload)
+		if !ok {
+			return
+		}
+		fn(payload)
+	})
 }
 
 // PublishSessionCorrupted publishes a session.corrupted event.
 func (bus *EventBus) PublishSessionCorrupted(payload SessionCorruptedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventSessionCorrupted, payload: payload}:
-		bus.runOnPublish(EventSessionCorrupted, payload)
-	default:
-		bus.runOnDrop(EventSessionCorrupted, payload)
-	}
+	bus.send(EventSessionCorrupted, payload)
 }
 
 // SubscribeSessionCorrupted registers a handler for session.corrupted events.
 func (bus *EventBus) SubscribeSessionCorrupted(fn func(SessionCorruptedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventSessionCorrupted] = append(bus.subscribers[EventSessionCorrupted], func(v any) {
 		payload, ok := v.(SessionCorruptedPayload)
 		if !ok {
@@ -187,23 +185,18 @@ func (bus *EventBus) SubscribeSessionCorrupted(fn func(SessionCorruptedPayload))
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventSessionCorrupted)
 }
 
 // PublishSessionCreated publishes a session.created event.
 func (bus *EventBus) PublishSessionCreated(payload SessionCreatedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventSessionCreated, payload: payload}:
-		bus.runOnPublish(EventSessionCreated, payload)
-	default:
-		bus.runOnDrop(EventSessionCreated, payload)
-	}
+	bus.send(EventSessionCreated, payload)
 }
 
 // SubscribeSessionCreated registers a handler for session.created events.
 func (bus *EventBus) SubscribeSessionCreated(fn func(SessionCreatedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventSessionCreated] = append(bus.subscribers[EventSessionCreated], func(v any) {
 		payload, ok := v.(SessionCreatedPayload)
 		if !ok {
@@ -211,23 +204,18 @@ func (bus *EventBus) SubscribeSessionCreated(fn func(SessionCreatedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventSessionCreated)
 }
 
 // PublishSessionDeleted publishes a session.deleted event.
 func (bus *EventBus) PublishSessionDeleted(payload SessionDeletedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventSessionDeleted, payload: payload}:
-		bus.runOnPublish(EventSessionDeleted, payload)
-	default:
-		bus.runOnDrop(EventSessionDeleted, payload)
-	}
+	bus.send(EventSessionDeleted, payload)
 }
 
 // SubscribeSessionDeleted registers a handler for session.deleted events.
 func (bus *EventBus) SubscribeSessionDeleted(fn func(SessionDeletedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventSessionDeleted] = append(bus.subscribers[EventSessionDeleted], func(v any) {
 		payload, ok := v.(SessionDeletedPayload)
 		if !ok {
@@ -235,23 +223,18 @@ func (bus *EventBus) SubscribeSessionDeleted(fn func(SessionDeletedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventSessionDeleted)
 }
 
 // PublishSessionRecycled publishes a session.recycled event.
 func (bus *EventBus) PublishSessionRecycled(payload SessionRecycledPayload) {
-	select {
-	case bus.ch <- envelope{event: EventSessionRecycled, payload: payload}:
-		bus.runOnPublish(EventSessionRecycled, payload)
-	default:
-		bus.runOnDrop(EventSessionRecycled, payload)
-	}
+	bus.send(EventSessionRecycled, payload)
 }
 
 // SubscribeSessionRecycled registers a handler for session.recycled events.
 func (bus *EventBus) SubscribeSessionRecycled(fn func(SessionRecycledPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventSessionRecycled] = append(bus.subscribers[EventSessionRecycled], func(v any) {
 		payload, ok := v.(SessionRecycledPayload)
 		if !ok {
@@ -259,23 +242,18 @@ func (bus *EventBus) SubscribeSessionRecycled(fn func(SessionRecycledPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventSessionRecycled)
 }
 
 // PublishSessionRenamed publishes a session.renamed event.
 func (bus *EventBus) PublishSessionRenamed(payload SessionRenamedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventSessionRenamed, payload: payload}:
-		bus.runOnPublish(EventSessionRenamed, payload)
-	default:
-		bus.runOnDrop(EventSessionRenamed, payload)
-	}
+	bus.send(EventSessionRenamed, payload)
 }
 
 // SubscribeSessionRenamed registers a handler for session.renamed events.
 func (bus *EventBus) SubscribeSessionRenamed(fn func(SessionRenamedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventSessionRenamed] = append(bus.subscribers[EventSessionRenamed], func(v any) {
 		payload, ok := v.(SessionRenamedPayload)
 		if !ok {
@@ -283,23 +261,18 @@ func (bus *EventBus) SubscribeSessionRenamed(fn func(SessionRenamedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventSessionRenamed)
 }
 
 // PublishTuiStarted publishes a tui.started event.
 func (bus *EventBus) PublishTuiStarted(payload TUIStartedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventTuiStarted, payload: payload}:
-		bus.runOnPublish(EventTuiStarted, payload)
-	default:
-		bus.runOnDrop(EventTuiStarted, payload)
-	}
+	bus.send(EventTuiStarted, payload)
 }
 
 // SubscribeTuiStarted registers a handler for tui.started events.
 func (bus *EventBus) SubscribeTuiStarted(fn func(TUIStartedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventTuiStarted] = append(bus.subscribers[EventTuiStarted], func(v any) {
 		payload, ok := v.(TUIStartedPayload)
 		if !ok {
@@ -307,23 +280,18 @@ func (bus *EventBus) SubscribeTuiStarted(fn func(TUIStartedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventTuiStarted)
 }
 
 // PublishTuiStopped publishes a tui.stopped event.
 func (bus *EventBus) PublishTuiStopped(payload TUIStoppedPayload) {
-	select {
-	case bus.ch <- envelope{event: EventTuiStopped, payload: payload}:
-		bus.runOnPublish(EventTuiStopped, payload)
-	default:
-		bus.runOnDrop(EventTuiStopped, payload)
-	}
+	bus.send(EventTuiStopped, payload)
 }
 
 // SubscribeTuiStopped registers a handler for tui.stopped events.
 func (bus *EventBus) SubscribeTuiStopped(fn func(TUIStoppedPayload)) {
 	bus.mu.Lock()
+	defer bus.mu.Unlock()
+
 	bus.subscribers[EventTuiStopped] = append(bus.subscribers[EventTuiStopped], func(v any) {
 		payload, ok := v.(TUIStoppedPayload)
 		if !ok {
@@ -331,79 +299,6 @@ func (bus *EventBus) SubscribeTuiStopped(fn func(TUIStoppedPayload)) {
 		}
 		fn(payload)
 	})
-	bus.mu.Unlock()
-	bus.runOnSubscribe(EventTuiStopped)
-}
-
-// OnPublish registers a hook that fires after an event is successfully enqueued.
-func (bus *EventBus) OnPublish(fn func(Event, any)) {
-	bus.hookMu.Lock()
-	bus.onPublish = append(bus.onPublish, fn)
-	bus.hookMu.Unlock()
-}
-
-// OnDrop registers a hook that fires when an event is dropped due to a full buffer.
-func (bus *EventBus) OnDrop(fn func(Event, any)) {
-	bus.hookMu.Lock()
-	bus.onDrop = append(bus.onDrop, fn)
-	bus.hookMu.Unlock()
-}
-
-// OnSubscribe registers a hook that fires after a subscriber is registered.
-func (bus *EventBus) OnSubscribe(fn func(Event)) {
-	bus.hookMu.Lock()
-	bus.onSubscribe = append(bus.onSubscribe, fn)
-	bus.hookMu.Unlock()
-}
-
-// OnPanic registers a hook that fires when a subscriber panics.
-func (bus *EventBus) OnPanic(fn func(Event, any, any)) {
-	bus.hookMu.Lock()
-	bus.onPanic = append(bus.onPanic, fn)
-	bus.hookMu.Unlock()
-}
-
-func (bus *EventBus) runOnPublish(event Event, payload any) {
-	bus.hookMu.RLock()
-	hooks := make([]func(Event, any), len(bus.onPublish))
-	copy(hooks, bus.onPublish)
-	bus.hookMu.RUnlock()
-	for _, fn := range hooks {
-		fn(event, payload)
-	}
-}
-
-func (bus *EventBus) runOnDrop(event Event, payload any) {
-	bus.hookMu.RLock()
-	hooks := make([]func(Event, any), len(bus.onDrop))
-	copy(hooks, bus.onDrop)
-	bus.hookMu.RUnlock()
-	for _, fn := range hooks {
-		fn(event, payload)
-	}
-}
-
-func (bus *EventBus) runOnSubscribe(event Event) {
-	bus.hookMu.RLock()
-	hooks := make([]func(Event), len(bus.onSubscribe))
-	copy(hooks, bus.onSubscribe)
-	bus.hookMu.RUnlock()
-	for _, fn := range hooks {
-		fn(event)
-	}
-}
-
-func (bus *EventBus) runOnPanic(event Event, payload any, recovered any) {
-	bus.hookMu.RLock()
-	hooks := make([]func(Event, any, any), len(bus.onPanic))
-	copy(hooks, bus.onPanic)
-	bus.hookMu.RUnlock()
-	for _, fn := range hooks {
-		func() {
-			defer func() { recover() }()
-			fn(event, payload, recovered)
-		}()
-	}
 }
 
 // Reference the source variable to suppress unused-variable lint.
