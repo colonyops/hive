@@ -72,16 +72,22 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
+	cloneStrategy := sess.CloneStrategy
+	if cloneStrategy == "" {
+		cloneStrategy = "full"
+	}
+
 	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
-		ID:        sess.ID,
-		Name:      sess.Name,
-		Slug:      sess.Slug,
-		Path:      sess.Path,
-		Remote:    sess.Remote,
-		State:     string(sess.State),
-		Metadata:  metadataJSON,
-		CreatedAt: sess.CreatedAt.UnixNano(),
-		UpdatedAt: sess.UpdatedAt.UnixNano(),
+		ID:            sess.ID,
+		Name:          sess.Name,
+		Slug:          sess.Slug,
+		Path:          sess.Path,
+		Remote:        sess.Remote,
+		State:         string(sess.State),
+		CloneStrategy: cloneStrategy,
+		Metadata:      metadataJSON,
+		CreatedAt:     sess.CreatedAt.UnixNano(),
+		UpdatedAt:     sess.UpdatedAt.UnixNano(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save session: %w", err)
@@ -138,15 +144,21 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
+	cloneStrategy := row.CloneStrategy
+	if cloneStrategy == "" {
+		cloneStrategy = "full"
+	}
+
 	return session.Session{
-		ID:        row.ID,
-		Name:      row.Name,
-		Slug:      row.Slug,
-		Path:      row.Path,
-		Remote:    row.Remote,
-		State:     session.State(row.State),
-		Metadata:  metadata,
-		CreatedAt: time.Unix(0, row.CreatedAt),
-		UpdatedAt: time.Unix(0, row.UpdatedAt),
+		ID:            row.ID,
+		Name:          row.Name,
+		Slug:          row.Slug,
+		Path:          row.Path,
+		Remote:        row.Remote,
+		State:         session.State(row.State),
+		CloneStrategy: cloneStrategy,
+		Metadata:      metadata,
+		CreatedAt:     time.Unix(0, row.CreatedAt),
+		UpdatedAt:     time.Unix(0, row.UpdatedAt),
 	}, nil
 }
