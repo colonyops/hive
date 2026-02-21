@@ -141,6 +141,9 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	if strategy == "" {
 		strategy = s.config.GetCloneStrategy(remote)
 	}
+	if strategy != config.CloneStrategyFull && strategy != config.CloneStrategyWorktree {
+		return nil, fmt.Errorf("invalid clone strategy %q: must be %q or %q", strategy, config.CloneStrategyFull, config.CloneStrategyWorktree)
+	}
 
 	var sess session.Session
 	slug := session.Slugify(opts.Name)
@@ -375,7 +378,9 @@ func (s *SessionService) recycleWorktreeSession(ctx context.Context, sess *sessi
 
 	if branch != "" {
 		if err := s.git.WorktreeRemove(ctx, bareDir, sess.Path, branch); err != nil {
-			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("worktree remove failed")
+			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("worktree remove failed, marking corrupted")
+			s.markCorrupted(ctx, sess)
+			return fmt.Errorf("recycle worktree session %s: worktree remove failed: %w", sess.ID, err)
 		}
 	}
 

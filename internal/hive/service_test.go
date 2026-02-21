@@ -941,9 +941,72 @@ func TestCreateSession_DefaultsToFullClone(t *testing.T) {
 	assert.False(t, g.hasCalled("CloneBare"))
 }
 
+// failingWorktreeGit is a recordingGit that fails on WorktreeRemove.
+type failingWorktreeGit struct {
+	recordingGit
+}
+
+func (f *failingWorktreeGit) WorktreeRemove(_ context.Context, _, _, branch string) error {
+	f.calls = append(f.calls, "WorktreeRemove:"+branch)
+	return fmt.Errorf("worktree remove: directory not empty")
+}
+
+func TestCreateSession_InvalidStrategyReturnsError(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:          "bad-strategy",
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: "worktre", // typo
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid clone strategy")
+}
+
+func TestRecycleWorktreeSession_FailsOnRemoveError(t *testing.T) {
+	store := newMockStore()
+	g := &failingWorktreeGit{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestServiceWithGit(t, store, cfg, g)
+
+	sess := session.Session{
+		ID:            "wt-fail",
+		Name:          "wt-fail-session",
+		Slug:          "wt-fail-session",
+		State:         session.StateActive,
+		Path:          t.TempDir(),
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+	}
+	sess.SetMeta(session.MetaWorktreeBranch, "hive/wt-fail-session-wt-fail")
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RecycleSession(context.Background(), "wt-fail", io.Discard)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "worktree remove failed")
+
+	// Session should NOT be recycled — it should be deleted (auto_delete_corrupted)
+	// or marked corrupted
+	updated, getErr := store.Get(context.Background(), "wt-fail")
+	if getErr == nil {
+		assert.Equal(t, session.StateCorrupted, updated.State,
+			"session should be corrupted, not recycled")
+	}
+	// If auto-deleted, ErrNotFound is also acceptable
+}
+
 // Ensure the mock implements the interface at compile time.
 var (
 	_ git.Git       = (*mockGit)(nil)
 	_ git.Git       = (*recordingGit)(nil)
+	_ git.Git       = (*failingWorktreeGit)(nil)
 	_ session.Store = (*mockStore)(nil)
 )
