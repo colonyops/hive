@@ -14,8 +14,8 @@ import (
 // RenderedPane is a fully-resolved tmux pane definition (no templates).
 type RenderedPane struct {
 	Command    string // Command to run (empty = default shell)
-	Dir        string // Working directory (empty = window default)
-	Focus      bool   // Select this pane after creation
+	Dir        string // Working directory (empty = inherits window effective dir)
+	Focus      bool   // Select this pane after creation (at most one pane per window)
 	Horizontal bool   // true = left/right split (-h), false = top/bottom
 }
 
@@ -67,7 +67,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 	}
 
 	if len(first.Panes) > 0 {
-		if err := c.addPanes(ctx, name, first.Name, workDir, first.Panes); err != nil {
+		if err := c.addPanes(ctx, name, first.Name, windowDir(first, workDir), first.Panes); err != nil {
 			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
 			return err
 		}
@@ -89,7 +89,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		}
 
 		if len(w.Panes) > 0 {
-			if err := c.addPanes(ctx, name, w.Name, workDir, w.Panes); err != nil {
+			if err := c.addPanes(ctx, name, w.Name, windowDir(w, workDir), w.Panes); err != nil {
 				_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
 				return fmt.Errorf("add panes to window %q: %w", w.Name, err)
 			}
@@ -129,7 +129,7 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
 		}
 		if len(w.Panes) > 0 {
-			if err := c.addPanes(ctx, name, w.Name, workDir, w.Panes); err != nil {
+			if err := c.addPanes(ctx, name, w.Name, windowDir(w, workDir), w.Panes); err != nil {
 				return fmt.Errorf("add panes to window %q: %w", w.Name, err)
 			}
 		}
@@ -147,7 +147,9 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 
 // addPanes runs split-window for each pane in the window, then selects the focused
 // pane if any. windowTarget is the tmux target for the window (e.g., "sess:agent").
-func (c *Client) addPanes(ctx context.Context, sessionName, windowName, workDir string, panes []RenderedPane) error {
+// effectiveDir is the resolved working directory for the window (already accounting
+// for the window's Dir override vs the session workDir).
+func (c *Client) addPanes(ctx context.Context, sessionName, windowName, effectiveDir string, panes []RenderedPane) error {
 	windowTarget := sessionName + ":" + windowName
 	focusedIdx := -1
 
@@ -158,7 +160,7 @@ func (c *Client) addPanes(ctx context.Context, sessionName, windowName, workDir 
 		}
 		dir := p.Dir
 		if dir == "" {
-			dir = workDir
+			dir = effectiveDir
 		}
 		if dir != "" {
 			args = append(args, "-c", dir)

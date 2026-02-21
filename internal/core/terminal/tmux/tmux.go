@@ -450,6 +450,8 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 // Always targets pane 0: hive creates agent commands via new-window which places
 // the process in pane 0. Additional panes (companion tools) are appended after,
 // so pane 0 is always the agent pane.
+// Assumes pane-base-index=0 (tmux default); non-default configurations will target
+// the wrong pane and may cause status detection to return StatusMissing.
 func (t *Integration) captureWindow(_ context.Context, sessionName, windowIndex string) (string, error) {
 	target := sessionName
 	if windowIndex != "" {

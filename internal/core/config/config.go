@@ -418,7 +418,7 @@ type GitConfig struct {
 type PaneConfig struct {
 	Command    string `yaml:"command,omitempty"`    // Command to run (template string, empty = shell)
 	Dir        string `yaml:"dir,omitempty"`        // Working directory override (template string)
-	Focus      bool   `yaml:"focus,omitempty"`      // Select this pane after creation
+	Focus      bool   `yaml:"focus,omitempty"`      // Select this pane after creation (at most one per window)
 	Horizontal bool   `yaml:"horizontal,omitempty"` // true = left/right split, false = top/bottom
 }
 
