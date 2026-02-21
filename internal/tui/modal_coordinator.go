@@ -8,11 +8,11 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
-	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/colonyops/hive/internal/tui/views/review"
 )
 
@@ -148,8 +148,8 @@ func (mc *ModalCoordinator) ShowHelp(title string, sections []components.HelpDia
 }
 
 // ShowNotifications creates and displays the notification modal.
-func (mc *ModalCoordinator) ShowNotifications(bus *tuinotify.Bus) {
-	mc.Notification = NewNotificationModal(bus, mc.width, mc.height)
+func (mc *ModalCoordinator) ShowNotifications(store notify.Store) {
+	mc.Notification = NewNotificationModal(store, mc.width, mc.height)
 }
 
 // ShowConfirm creates and displays the confirmation modal.

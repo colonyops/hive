@@ -8,7 +8,6 @@ import (
 
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/styles"
-	tuinotify "github.com/colonyops/hive/internal/tui/notify"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -51,13 +50,16 @@ func (s *stubStore) Count(_ context.Context) (int64, error) {
 	return int64(len(s.items)), nil
 }
 
-func newTestBus(store notify.Store) *tuinotify.Bus {
-	return tuinotify.NewBus(store)
+func saveNotification(store *stubStore, level notify.Level, message string) {
+	store.Save(context.Background(), notify.Notification{ //nolint:errcheck
+		Level:   level,
+		Message: message,
+	})
 }
 
 func TestNotificationModal_empty_history(t *testing.T) {
-	bus := newTestBus(&stubStore{})
-	m := NewNotificationModal(bus, 100, 40)
+	store := &stubStore{}
+	m := NewNotificationModal(store, 100, 40)
 
 	content := m.viewport.View()
 	assert.Contains(t, content, "No notifications")
@@ -65,13 +67,12 @@ func TestNotificationModal_empty_history(t *testing.T) {
 
 func TestNotificationModal_populated_history(t *testing.T) {
 	store := &stubStore{}
-	bus := newTestBus(store)
 
-	bus.Infof("first message")
-	bus.Errorf("second message")
-	bus.Warnf("third message")
+	saveNotification(store, notify.LevelInfo, "first message")
+	saveNotification(store, notify.LevelError, "second message")
+	saveNotification(store, notify.LevelWarning, "third message")
 
-	m := NewNotificationModal(bus, 100, 40)
+	m := NewNotificationModal(store, 100, 40)
 	content := m.viewport.View()
 
 	assert.Contains(t, content, "first message")
@@ -83,9 +84,8 @@ func TestNotificationModal_history_error(t *testing.T) {
 	store := &stubStore{
 		listErr: errors.New("db connection failed"),
 	}
-	bus := newTestBus(store)
 
-	m := NewNotificationModal(bus, 100, 40)
+	m := NewNotificationModal(store, 100, 40)
 	content := m.viewport.View()
 
 	assert.Contains(t, content, "failed to load notifications")
@@ -94,11 +94,10 @@ func TestNotificationModal_history_error(t *testing.T) {
 
 func TestNotificationModal_Clear_removes_notifications(t *testing.T) {
 	store := &stubStore{}
-	bus := newTestBus(store)
 
-	bus.Infof("will be cleared")
+	saveNotification(store, notify.LevelInfo, "will be cleared")
 
-	m := NewNotificationModal(bus, 100, 40)
+	m := NewNotificationModal(store, 100, 40)
 	require.Contains(t, m.viewport.View(), "will be cleared")
 
 	err := m.Clear()
@@ -111,13 +110,21 @@ func TestNotificationModal_Clear_returns_store_error(t *testing.T) {
 	store := &stubStore{
 		clearErr: errors.New("clear failed"),
 	}
-	bus := newTestBus(store)
 
-	m := NewNotificationModal(bus, 100, 40)
+	m := NewNotificationModal(store, 100, 40)
 	err := m.Clear()
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "clear failed")
+}
+
+func TestNotificationModal_nil_store(t *testing.T) {
+	m := NewNotificationModal(nil, 100, 40)
+
+	content := m.viewport.View()
+	assert.Contains(t, content, "No notifications")
+
+	assert.NoError(t, m.Clear())
 }
 
 func TestNotificationModal_formatNotification_levels(t *testing.T) {

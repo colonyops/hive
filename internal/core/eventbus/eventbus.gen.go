@@ -10,16 +10,17 @@ import (
 type Event string
 
 const (
-	EventAgentStatusChanged Event = "agent.status-changed"
-	EventConfigReloaded     Event = "config.reloaded"
-	EventMessageReceived    Event = "message.received"
-	EventSessionCorrupted   Event = "session.corrupted"
-	EventSessionCreated     Event = "session.created"
-	EventSessionDeleted     Event = "session.deleted"
-	EventSessionRecycled    Event = "session.recycled"
-	EventSessionRenamed     Event = "session.renamed"
-	EventTuiStarted         Event = "tui.started"
-	EventTuiStopped         Event = "tui.stopped"
+	EventAgentStatusChanged    Event = "agent.status-changed"
+	EventConfigReloaded        Event = "config.reloaded"
+	EventMessageReceived       Event = "message.received"
+	EventNotificationPublished Event = "notification.published"
+	EventSessionCorrupted      Event = "session.corrupted"
+	EventSessionCreated        Event = "session.created"
+	EventSessionDeleted        Event = "session.deleted"
+	EventSessionRecycled       Event = "session.recycled"
+	EventSessionRenamed        Event = "session.renamed"
+	EventTuiStarted            Event = "tui.started"
+	EventTuiStopped            Event = "tui.stopped"
 )
 
 // EventBus provides type-safe publish/subscribe for in-process events.
@@ -54,16 +55,17 @@ func New(size int) *EventBus {
 
 func newSubscribersMap() map[Event][]any {
 	return map[Event][]any{
-		EventAgentStatusChanged: {},
-		EventConfigReloaded:     {},
-		EventMessageReceived:    {},
-		EventSessionCorrupted:   {},
-		EventSessionCreated:     {},
-		EventSessionDeleted:     {},
-		EventSessionRecycled:    {},
-		EventSessionRenamed:     {},
-		EventTuiStarted:         {},
-		EventTuiStopped:         {},
+		EventAgentStatusChanged:    {},
+		EventConfigReloaded:        {},
+		EventMessageReceived:       {},
+		EventNotificationPublished: {},
+		EventSessionCorrupted:      {},
+		EventSessionCreated:        {},
+		EventSessionDeleted:        {},
+		EventSessionRecycled:       {},
+		EventSessionRenamed:        {},
+		EventTuiStarted:            {},
+		EventTuiStopped:            {},
 	}
 }
 
@@ -165,6 +167,30 @@ func (bus *EventBus) SubscribeMessageReceived(fn func(MessageReceivedPayload)) {
 	})
 	bus.mu.Unlock()
 	bus.runOnSubscribe(EventMessageReceived)
+}
+
+// PublishNotificationPublished publishes a notification.published event.
+func (bus *EventBus) PublishNotificationPublished(payload NotificationPublishedPayload) {
+	select {
+	case bus.ch <- envelope{event: EventNotificationPublished, payload: payload}:
+		bus.runOnPublish(EventNotificationPublished, payload)
+	default:
+		bus.runOnDrop(EventNotificationPublished, payload)
+	}
+}
+
+// SubscribeNotificationPublished registers a handler for notification.published events.
+func (bus *EventBus) SubscribeNotificationPublished(fn func(NotificationPublishedPayload)) {
+	bus.mu.Lock()
+	bus.subscribers[EventNotificationPublished] = append(bus.subscribers[EventNotificationPublished], func(v any) {
+		payload, ok := v.(NotificationPublishedPayload)
+		if !ok {
+			return
+		}
+		fn(payload)
+	})
+	bus.mu.Unlock()
+	bus.runOnSubscribe(EventNotificationPublished)
 }
 
 // PublishSessionCorrupted publishes a session.corrupted event.

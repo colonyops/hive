@@ -1,22 +1,23 @@
 package tui
 
 import (
+	"sync/atomic"
 	"testing"
 
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/notify"
-	tuinotify "github.com/colonyops/hive/internal/tui/notify"
+	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
-	bus := tuinotify.NewBus(nil)
+	tb := testbus.New(t)
 
-	var received int
-	bus.Subscribe(func(_ notify.Notification) {
-		received++
+	var received atomic.Int32
+	tb.SubscribeNotificationPublished(func(_ eventbus.NotificationPublishedPayload) {
+		received.Add(1)
 	})
 
 	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
@@ -25,7 +26,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 		reviewView:      nil,
 		handler:         handler,
 		modals:          NewModalCoordinator(),
-		notifyBus:       bus,
+		bus:             tb.EventBus,
 		toastController: NewToastController(),
 		width:           100,
 		height:          40,
@@ -34,7 +35,8 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 	cmd := HiveDocReviewCmd{Arg: ""}
 	_ = cmd.Execute(m)
 
-	assert.Equal(t, 1, received, "expected a warning notification to be published")
+	tb.AssertPublished(t, eventbus.EventNotificationPublished)
+	assert.Equal(t, int32(1), received.Load(), "expected a warning notification to be published")
 }
 
 func TestHiveDocReviewCmd_Execute(t *testing.T) {
@@ -62,7 +64,6 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		reviewView: &reviewView,
 		handler:    handler,
 		modals:     NewModalCoordinator(),
-		notifyBus:  tuinotify.NewBus(nil),
 		width:      100,
 		height:     40,
 	}
