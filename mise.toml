@@ -5,6 +5,8 @@
 "go" = "1.26"
 "pipx:zensical" = "latest"
 golangci-lint = "v2.10.1"
+uv = "latest"
+"goreleaser" = "latest"
 
 [env]
 HIVE_LOG_LEVEL = "debug"
@@ -88,3 +90,8 @@ run = "zensical serve"
 [tasks."docs:build"]
 description = "Build documentation site with llms.txt"
 run = ["zensical build", "./scripts/generate-llmstxt.sh"]
+
+[tasks."container"]
+description = "Build Docker image and run ephemeral container"
+depends = ["build"]
+run = "docker run --rm -it $(docker build -q .)"
