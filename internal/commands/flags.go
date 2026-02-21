@@ -15,8 +15,7 @@ type Flags struct {
 
 var configNames = []string{"config.yaml", "config.yml", "hive.yaml", "hive.yml"}
 
-// DefaultConfigDir returns the default config directory using XDG_CONFIG_HOME.
-func DefaultConfigDir() string {
+func defaultConfigDir() string {
 	configHome := os.Getenv("XDG_CONFIG_HOME")
 	if configHome == "" {
 		home, _ := os.UserHomeDir()
@@ -29,7 +28,7 @@ func DefaultConfigDir() string {
 // (config.yaml, config.yml, hive.yaml, hive.yml) and returns the first
 // match. Returns empty string when no file is found.
 func DefaultConfigPath() string {
-	dir := DefaultConfigDir()
+	dir := defaultConfigDir()
 	for _, name := range configNames {
 		path := filepath.Join(dir, name)
 		if _, err := os.Stat(path); err == nil {

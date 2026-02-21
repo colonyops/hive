@@ -53,7 +53,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		warnings = append(warnings, "Not running inside tmux. Some features (preview, spawn) require tmux.")
 	}
 	if _, err := os.Stat(cmd.flags.ConfigPath); cmd.flags.ConfigPath == "" || os.IsNotExist(err) {
-		warnings = append(warnings, "No config file found. Expected location: "+DefaultConfigDir())
+		warnings = append(warnings, "No config file found. Expected location: "+defaultConfigDir())
 	}
 
 	// Start profiler server if enabled
