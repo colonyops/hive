@@ -360,9 +360,13 @@ func (m *Manager) processJob(ctx context.Context, job Job) {
 		}
 
 		if err == nil {
-			if status, ok := statuses[job.SessionID]; ok {
-				result.Status = status
+			status, ok := statuses[job.SessionID]
+			if !ok {
+				// Plugin returned no status for this session.
+				// Don't send a result — preserve any existing cached status.
+				return
 			}
+			result.Status = status
 		}
 
 		// Send result (non-blocking with select)
