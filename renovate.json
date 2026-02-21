@@ -1,9 +1,35 @@
 {
     "$schema": "https://docs.renovatebot.com/renovate-schema.json",
     "extends": [
-        "config:base"
+        "config:recommended",
+        ":semanticCommits",
+        ":separateMultipleMajorReleases"
     ],
     "postUpdateOptions": [
         "gomodTidy"
+    ],
+    "schedule": [
+        "before 7am on monday"
+    ],
+    "packageRules": [
+        {
+            "description": "Group all non-major Go dependencies",
+            "matchManagers": ["gomod"],
+            "matchUpdateTypes": ["minor", "patch", "digest"],
+            "groupName": "go dependencies (non-major)",
+            "automerge": true
+        },
+        {
+            "description": "Group all Go major updates separately",
+            "matchManagers": ["gomod"],
+            "matchUpdateTypes": ["major"],
+            "dependencyDashboardApproval": true
+        },
+        {
+            "description": "Group GitHub Actions updates",
+            "matchManagers": ["github-actions"],
+            "groupName": "github actions",
+            "automerge": true
+        }
     ]
 }
