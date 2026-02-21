@@ -5,6 +5,7 @@
 "go" = "1.26"
 "pipx:zensical" = "latest"
 golangci-lint = "v2.10.1"
+uv = "latest"
 
 [env]
 HIVE_LOG_LEVEL = "debug"
