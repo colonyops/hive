@@ -13,14 +13,30 @@ type Flags struct {
 	ProfilerPort int
 }
 
-// DefaultConfigPath returns the default config file path using XDG_CONFIG_HOME.
-func DefaultConfigPath() string {
+var configNames = []string{"config.yaml", "config.yml", "hive.yaml", "hive.yml"}
+
+// DefaultConfigDir returns the default config directory using XDG_CONFIG_HOME.
+func DefaultConfigDir() string {
 	configHome := os.Getenv("XDG_CONFIG_HOME")
 	if configHome == "" {
 		home, _ := os.UserHomeDir()
 		configHome = filepath.Join(home, ".config")
 	}
-	return filepath.Join(configHome, "hive", "config.yaml")
+	return filepath.Join(configHome, "hive")
+}
+
+// DefaultConfigPath probes for config files with supported extensions
+// (config.yaml, config.yml, hive.yaml, hive.yml) and returns the first
+// match. Returns empty string when no file is found.
+func DefaultConfigPath() string {
+	dir := DefaultConfigDir()
+	for _, name := range configNames {
+		path := filepath.Join(dir, name)
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
 }
 
 // DefaultDataDir returns the default data directory using XDG_DATA_HOME.
