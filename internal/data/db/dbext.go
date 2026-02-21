@@ -87,6 +87,14 @@ func Open(dataDir string, opts OpenOptions) (*DB, error) {
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
 
+	// Run migrations for existing databases
+	if err := db.runMigrations(context.Background()); err != nil {
+		if closeErr := conn.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to run migrations: %w (close also failed: %w)", err, closeErr)
+		}
+		return nil, fmt.Errorf("failed to run migrations: %w", err)
+	}
+
 	return db, nil
 }
 
@@ -130,4 +138,50 @@ func (db *DB) initSchema(ctx context.Context) error {
 		return fmt.Errorf("failed to execute schema: %w", err)
 	}
 	return nil
+}
+
+// runMigrations applies incremental schema migrations for existing databases.
+func (db *DB) runMigrations(ctx context.Context) error {
+	// Use MAX(version) for deterministic reads — the table may contain multiple
+	// rows from previous schema versions (each version was inserted as a new row).
+	var version int
+	err := db.conn.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_version").Scan(&version)
+	if err != nil {
+		return fmt.Errorf("failed to read schema version: %w", err)
+	}
+
+	if version < 7 {
+		if err := db.migrateV6ToV7(ctx); err != nil {
+			return fmt.Errorf("migration v6→v7: %w", err)
+		}
+	}
+
+	return nil
+}
+
+// migrateV6ToV7 adds clone_strategy column to sessions table.
+func (db *DB) migrateV6ToV7(ctx context.Context) error {
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	// Check if column already exists (idempotent)
+	var count int
+	err = tx.QueryRowContext(ctx, "SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'").Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check column existence: %w", err)
+	}
+	if count == 0 {
+		if _, err := tx.ExecContext(ctx, "ALTER TABLE sessions ADD COLUMN clone_strategy TEXT NOT NULL DEFAULT 'full'"); err != nil {
+			return fmt.Errorf("add column: %w", err)
+		}
+	}
+
+	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO schema_version (version) VALUES (7)"); err != nil {
+		return fmt.Errorf("update version: %w", err)
+	}
+
+	return tx.Commit()
 }

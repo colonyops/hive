@@ -55,7 +55,7 @@ func TestOrphanCheck_NoOrphans(t *testing.T) {
 	check := NewOrphanCheck(store, tmpDir, false)
 	result := check.Run(context.Background())
 
-	assert.Equal(t, "Orphan Worktrees", result.Name)
+	assert.Equal(t, "Orphan Sessions", result.Name)
 	require.Len(t, result.Items, 1)
 	assert.Equal(t, StatusPass, result.Items[0].Status)
 	assert.Equal(t, "No orphans", result.Items[0].Label)
@@ -80,7 +80,7 @@ func TestOrphanCheck_WithOrphans(t *testing.T) {
 	check := NewOrphanCheck(store, tmpDir, false)
 	result := check.Run(context.Background())
 
-	assert.Equal(t, "Orphan Worktrees", result.Name)
+	assert.Equal(t, "Orphan Sessions", result.Name)
 	require.Len(t, result.Items, 1)
 	assert.Equal(t, StatusWarn, result.Items[0].Status)
 	assert.Equal(t, "repo-orphan-xyz789", result.Items[0].Label)
@@ -92,7 +92,7 @@ func TestOrphanCheck_NonexistentReposDir(t *testing.T) {
 	check := NewOrphanCheck(store, "/nonexistent/path", false)
 	result := check.Run(context.Background())
 
-	assert.Equal(t, "Orphan Worktrees", result.Name)
+	assert.Equal(t, "Orphan Sessions", result.Name)
 	require.Len(t, result.Items, 1)
 	assert.Equal(t, StatusPass, result.Items[0].Status)
 	assert.Equal(t, "Repos directory", result.Items[0].Label)
@@ -139,6 +139,29 @@ func TestOrphanCheck_FixDeletesOrphans(t *testing.T) {
 	// Directory should actually be deleted
 	_, err := os.Stat(orphanDir)
 	assert.True(t, os.IsNotExist(err), "orphan directory should be deleted")
+}
+
+func TestOrphanCheck_SkipsBareDirectory(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create .bare directory (should be skipped) and an orphan directory
+	require.NoError(t, os.MkdirAll(filepath.Join(tmpDir, ".bare", "owner", "repo"), 0o755))
+	trackedDir := filepath.Join(tmpDir, "repo-tracked")
+	require.NoError(t, os.MkdirAll(trackedDir, 0o755))
+
+	store := &mockStore{
+		sessions: []session.Session{
+			{ID: "abc123", Path: trackedDir},
+		},
+	}
+
+	check := NewOrphanCheck(store, tmpDir, false)
+	result := check.Run(context.Background())
+
+	// .bare should not appear as orphan — only "No orphans" pass
+	require.Len(t, result.Items, 1)
+	assert.Equal(t, StatusPass, result.Items[0].Status)
+	assert.Equal(t, "No orphans", result.Items[0].Label)
 }
 
 func TestOrphanCheck_FixPreservesTracked(t *testing.T) {

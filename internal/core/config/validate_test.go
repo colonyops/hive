@@ -431,6 +431,144 @@ func TestGetMaxRecycled(t *testing.T) {
 	}
 }
 
+func TestGetCloneStrategy(t *testing.T) {
+	tests := []struct {
+		name     string
+		global   string
+		rules    []Rule
+		remote   string
+		expected string
+	}{
+		{
+			name:     "default when no config",
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+		{
+			name:     "global worktree",
+			global:   CloneStrategyWorktree,
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+		{
+			name:     "global full explicit",
+			global:   CloneStrategyFull,
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+		{
+			name:   "per-rule override takes precedence",
+			global: CloneStrategyFull,
+			rules: []Rule{
+				{Pattern: "github.com/foo/.*", CloneStrategy: CloneStrategyWorktree},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+		{
+			name:   "non-matching rule does not apply",
+			global: CloneStrategyFull,
+			rules: []Rule{
+				{Pattern: "github.com/other/.*", CloneStrategy: CloneStrategyWorktree},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+		{
+			name: "last matching rule wins",
+			rules: []Rule{
+				{Pattern: "github.com/.*", CloneStrategy: CloneStrategyWorktree},
+				{Pattern: "github.com/foo/.*", CloneStrategy: CloneStrategyFull},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+		{
+			name: "catch-all rule applies",
+			rules: []Rule{
+				{Pattern: "", CloneStrategy: CloneStrategyWorktree},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+		{
+			name:   "rule without clone_strategy inherits global",
+			global: CloneStrategyWorktree,
+			rules: []Rule{
+				{Pattern: "github.com/foo/.*", Commands: []string{"echo test"}},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.CloneStrategy = tt.global
+			cfg.Rules = tt.rules
+
+			result := cfg.GetCloneStrategy(tt.remote)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestValidateCloneStrategy(t *testing.T) {
+	tests := []struct {
+		name    string
+		global  string
+		rules   []Rule
+		wantErr bool
+	}{
+		{
+			name:   "empty is valid",
+			global: "",
+		},
+		{
+			name:   "full is valid",
+			global: CloneStrategyFull,
+		},
+		{
+			name:   "worktree is valid",
+			global: CloneStrategyWorktree,
+		},
+		{
+			name:    "invalid global value",
+			global:  "invalid",
+			wantErr: true,
+		},
+		{
+			name: "valid rule value",
+			rules: []Rule{
+				{Pattern: "", CloneStrategy: CloneStrategyWorktree},
+			},
+		},
+		{
+			name: "invalid rule value",
+			rules: []Rule{
+				{Pattern: "", CloneStrategy: "bogus"},
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.CloneStrategy = tt.global
+			cfg.Rules = tt.rules
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
 func TestGetRecycleCommands(t *testing.T) {
 	tests := []struct {
 		name     string
