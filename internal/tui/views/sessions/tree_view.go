@@ -513,9 +513,10 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	}
 
 	// Apply Claude plugin style (context usage color) if present.
-	// Must use Foreground() directly since Inherit() won't override
-	// the existing foreground color on nameStyle.
-	if d.PluginStatuses != nil {
+	// Only show when the session has a live terminal session — context
+	// data is stale for sessions without an active tmux pane.
+	hasTerminal := termStatus != nil && termStatus.Status != terminal.StatusMissing
+	if hasTerminal && d.PluginStatuses != nil {
 		if claudeStore, ok := d.PluginStatuses[PluginClaude]; ok {
 			if status, ok := claudeStore.Get(item.Session.ID); ok {
 				if fg := status.Style.GetForeground(); fg != (lipgloss.NoColor{}) {
@@ -559,7 +560,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Full mode: show ID, git status, and plugin statuses
 	gitInfo := d.renderGitStatus(item.Session.Path)
-	pluginInfo := d.renderPluginStatuses(item.Session.ID)
+	pluginInfo := d.renderPluginStatuses(item.Session.ID, hasTerminal)
 
 	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
 }
@@ -679,8 +680,9 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 }
 
 // renderPluginStatuses returns formatted plugin status indicators for a session.
-// Uses neutral gray color for all plugin text.
-func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
+// hasTerminal controls whether the Claude context plugin is included — context
+// data is stale for sessions without a live terminal pane.
+func (d TreeDelegate) renderPluginStatuses(sessionID string, hasTerminal bool) string {
 	if len(d.PluginStatuses) == 0 {
 		return ""
 	}
@@ -691,6 +693,9 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	var parts []string
 	pluginOrder := []string{PluginGitHub, PluginBeads, PluginClaude}
 	for _, name := range pluginOrder {
+		if name == PluginClaude && !hasTerminal {
+			continue
+		}
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
 			continue
