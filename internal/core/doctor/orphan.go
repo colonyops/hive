@@ -16,7 +16,7 @@ type OrphanCheck struct {
 	fix      bool
 }
 
-// NewOrphanCheck creates a new orphan worktree check.
+// NewOrphanCheck creates a new orphan session directory check.
 // If fix is true, orphaned directories will be deleted.
 func NewOrphanCheck(sessions session.Store, reposDir string, fix bool) *OrphanCheck {
 	return &OrphanCheck{
@@ -27,7 +27,7 @@ func NewOrphanCheck(sessions session.Store, reposDir string, fix bool) *OrphanCh
 }
 
 func (c *OrphanCheck) Name() string {
-	return "Orphan Worktrees"
+	return "Orphan Sessions"
 }
 
 func (c *OrphanCheck) Run(ctx context.Context) Result {
@@ -75,6 +75,10 @@ func (c *OrphanCheck) Run(ctx context.Context) Result {
 		if !entry.IsDir() {
 			continue
 		}
+		// Skip the .bare directory used for worktree bare clones
+		if entry.Name() == ".bare" {
+			continue
+		}
 
 		dirPath := filepath.Join(c.reposDir, entry.Name())
 		if !knownPaths[dirPath] {
@@ -86,7 +90,7 @@ func (c *OrphanCheck) Run(ctx context.Context) Result {
 		result.Items = append(result.Items, CheckItem{
 			Label:  "No orphans",
 			Status: StatusPass,
-			Detail: "all worktrees have session records",
+			Detail: "all session directories have records",
 		})
 		return result
 	}
@@ -106,14 +110,14 @@ func (c *OrphanCheck) Run(ctx context.Context) Result {
 				result.Items = append(result.Items, CheckItem{
 					Label:  name,
 					Status: StatusPass,
-					Detail: "deleted orphaned worktree",
+					Detail: "deleted orphaned session directory",
 				})
 			}
 		} else {
 			result.Items = append(result.Items, CheckItem{
 				Label:   name,
 				Status:  StatusWarn,
-				Detail:  "orphaned worktree (no session record)",
+				Detail:  "orphaned session directory (no session record)",
 				Fixable: true,
 			})
 		}
