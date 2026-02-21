@@ -52,6 +52,34 @@ func TestSession_InboxTopic(t *testing.T) {
 	assert.Equal(t, "agent.abc123.inbox", s.InboxTopic())
 }
 
+func TestSession_GroupAccessors(t *testing.T) {
+	t.Run("empty by default", func(t *testing.T) {
+		s := Session{}
+		assert.Empty(t, s.Group())
+	})
+
+	t.Run("set and get", func(t *testing.T) {
+		s := Session{}
+		s.SetGroup("backend")
+		assert.Equal(t, "backend", s.Group())
+	})
+
+	t.Run("clear with empty string", func(t *testing.T) {
+		s := Session{}
+		s.SetGroup("backend")
+		s.SetGroup("")
+		assert.Empty(t, s.Group())
+		_, exists := s.Metadata[MetaGroup]
+		assert.False(t, exists, "group key should be removed from metadata")
+	})
+
+	t.Run("clear on nil metadata is safe", func(t *testing.T) {
+		s := Session{}
+		s.SetGroup("")
+		assert.Empty(t, s.Group())
+	})
+}
+
 func TestSlugify(t *testing.T) {
 	tests := []struct {
 		name string

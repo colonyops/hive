@@ -31,6 +31,8 @@ type ModalCoordinator struct {
 	DocPicker       *review.DocumentPickerModal
 	RenameInput     textinput.Model
 	RenameSessionID string
+	GroupInput      textinput.Model
+	GroupSessionID  string
 
 	// Pending action state
 	Pending                 Action
@@ -134,6 +136,17 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(renameContent), w, h)
 
+	case state == stateSettingGroup:
+		groupContent := lipgloss.JoinVertical(
+			lipgloss.Left,
+			styles.ModalTitleStyle.Render("Set Group"),
+			"",
+			mc.GroupInput.View(),
+			"",
+			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel • empty: clear group"),
+		)
+		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(groupContent), w, h)
+
 	case mc.DocPicker != nil:
 		return mc.DocPicker.Overlay(bg, w, h)
 
@@ -199,7 +212,7 @@ func (mc *ModalCoordinator) ClearFormState() {
 // HasEditorFocus returns true if a modal with text input is active.
 func (mc *ModalCoordinator) HasEditorFocus(state UIState) bool {
 	switch state { //nolint:exhaustive // only editor-bearing states return true
-	case stateCommandPalette, stateCreatingSession, stateRenaming, stateFormInput:
+	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateFormInput:
 		return true
 	}
 	return false

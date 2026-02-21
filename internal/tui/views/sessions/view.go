@@ -55,6 +55,7 @@ type ViewOpts struct {
 type View struct {
 	allSessions  []session.Session
 	statusFilter terminal.Status
+	groupBy      string // "repo" or "group", runtime-togglable
 	localRemote  string
 
 	cfg     *config.Config
@@ -186,6 +187,7 @@ func New(opts ViewOpts) *View {
 
 	return &View{
 		localRemote: opts.LocalRemote,
+		groupBy:     cfg.TUI.GroupBy,
 		cfg:         cfg,
 		service:     opts.Service,
 		bus:         opts.Bus,
@@ -487,6 +489,20 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 	}
 
 	selected := v.SelectedSession()
+
+	// Resolve keybinding actions before the nil-session guard so that
+	// session-independent actions (GroupToggle, filters, etc.) work even
+	// when the cursor is on a header row.
+	resolveTarget := session.Session{}
+	if selected != nil {
+		resolveTarget = *selected
+	}
+	action, actionOK := v.handler.Resolve(keyStr, resolveTarget)
+	action = MaybeOverrideWindowDelete(action, treeItem, v.renderer)
+	if actionOK {
+		return v, func() tea.Msg { return ActionRequestMsg{Action: action} }
+	}
+
 	if selected == nil {
 		var cmd tea.Cmd
 		v.list, cmd = v.list.Update(msg)
@@ -507,12 +523,6 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 				Session: *selected,
 			}
 		}
-	}
-
-	action, ok := v.handler.Resolve(keyStr, *selected)
-	action = MaybeOverrideWindowDelete(action, treeItem, v.renderer)
-	if ok {
-		return v, func() tea.Msg { return ActionRequestMsg{Action: action} }
 	}
 
 	var cmd tea.Cmd
@@ -673,7 +683,12 @@ func (v *View) applyFilter() tea.Cmd {
 
 	localRemote := v.localRemote
 
-	groups := GroupSessionsByRepo(filteredSess, localRemote)
+	var groups []RepoGroup
+	if v.groupBy == config.GroupByGroup {
+		groups = GroupSessionsByTag(filteredSess)
+	} else {
+		groups = GroupSessionsByRepo(filteredSess, localRemote)
+	}
 	items := BuildTreeItems(groups, localRemote)
 	items = v.expandWindowItems(items)
 	*v.columnWidths = CalculateColumnWidths(filteredSess, nil)
@@ -1334,6 +1349,21 @@ func (v *View) HasTerminalIntegration() bool {
 // TogglePreview toggles the preview sidebar on/off.
 func (v *View) TogglePreview() {
 	v.previewEnabled = !v.previewEnabled
+}
+
+// ToggleGroupBy switches between repo and group tree view modes and rebuilds the tree.
+func (v *View) ToggleGroupBy() tea.Cmd {
+	if v.groupBy == config.GroupByGroup {
+		v.groupBy = config.GroupByRepo
+	} else {
+		v.groupBy = config.GroupByGroup
+	}
+	return v.applyFilter()
+}
+
+// GroupBy returns the current tree view grouping mode.
+func (v *View) GroupBy() string {
+	return v.groupBy
 }
 
 // ApplyTheme resets delegate styles and clears cached animation colors for a theme change.

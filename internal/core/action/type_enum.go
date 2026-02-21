@@ -53,6 +53,10 @@ const (
 	TypeHiveInfo Type = "HiveInfo"
 	// TypeHiveDoctor is a Type of type HiveDoctor.
 	TypeHiveDoctor Type = "HiveDoctor"
+	// TypeGroupSet is a Type of type GroupSet.
+	TypeGroupSet Type = "GroupSet"
+	// TypeGroupToggle is a Type of type GroupToggle.
+	TypeGroupToggle Type = "GroupToggle"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -79,6 +83,8 @@ var _TypeNames = []string{
 	string(TypeSpawnWindows),
 	string(TypeHiveInfo),
 	string(TypeHiveDoctor),
+	string(TypeGroupSet),
+	string(TypeGroupToggle),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -143,6 +149,10 @@ var _TypeValue = map[string]Type{
 	"hiveinfo":            TypeHiveInfo,
 	"HiveDoctor":          TypeHiveDoctor,
 	"hivedoctor":          TypeHiveDoctor,
+	"GroupSet":            TypeGroupSet,
+	"groupset":            TypeGroupSet,
+	"GroupToggle":         TypeGroupToggle,
+	"grouptoggle":         TypeGroupToggle,
 }
 
 // ParseType attempts to convert a string to a Type.

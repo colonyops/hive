@@ -53,6 +53,7 @@ const (
 	stateShowingNotifications
 	stateShowingInfo
 	stateRenaming
+	stateSettingGroup
 	stateFormInput
 )
 
@@ -405,6 +406,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Action results
 	case renameCompleteMsg:
 		model, cmd = m.handleRenameComplete(msg)
+	case setGroupCompleteMsg:
+		model, cmd = m.handleSetGroupComplete(msg)
 	case actionCompleteMsg:
 		model, cmd = m.handleActionComplete(msg)
 	case doctorResultsMsg:
@@ -469,6 +472,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateRenaming {
 		return m.handleRenameKey(msg, keyStr)
+	}
+	if m.state == stateSettingGroup {
+		return m.handleGroupKey(msg, keyStr)
 	}
 	if m.state == stateRunningRecycle {
 		return m.handleRecycleModalKey(keyStr)
@@ -860,6 +866,22 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m.openRenameInput(selected)
 		}
 
+		// GroupToggle doesn't require a session
+		if entry.Command.Action == act.TypeGroupToggle {
+			m.state = stateNormal
+			cmd := m.sessionsView.ToggleGroupBy()
+			return m, cmd
+		}
+
+		// GroupSet requires a selected session
+		if entry.Command.Action == act.TypeGroupSet {
+			m.state = stateNormal
+			if selected == nil {
+				return m, nil
+			}
+			return m.openGroupInput(selected)
+		}
+
 		// SetTheme doesn't require a session
 		if entry.Command.Action == act.TypeSetTheme {
 			m.state = stateNormal
@@ -1133,6 +1155,11 @@ type renameCompleteMsg struct {
 	err error
 }
 
+// setGroupCompleteMsg is sent when a set-group operation completes.
+type setGroupCompleteMsg struct {
+	err error
+}
+
 // openRenameInput initializes the rename text input with the current session name.
 func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
 	input := textinput.New()
@@ -1218,6 +1245,59 @@ func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 	}
 }
 
+// openGroupInput initializes the group text input with the current session group.
+func (m Model) openGroupInput(sess *session.Session) (tea.Model, tea.Cmd) {
+	input := textinput.New()
+	input.SetValue(sess.Group())
+	input.Focus()
+	input.CharLimit = 64
+	input.Prompt = ""
+	input.SetWidth(40)
+	input.KeyMap.Paste.SetEnabled(true)
+	inputStyles := textinput.DefaultStyles(true)
+	inputStyles.Cursor.Color = styles.ColorPrimary
+	input.SetStyles(inputStyles)
+
+	m.modals.GroupInput = input
+	m.modals.GroupSessionID = sess.ID
+	m.state = stateSettingGroup
+	return m, nil
+}
+
+// handleGroupKey handles keys when the group input is active.
+func (m Model) handleGroupKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		return m.quit()
+	case "esc":
+		m.state = stateNormal
+		m.modals.GroupSessionID = ""
+		return m, nil
+	case keyEnter:
+		group := strings.TrimSpace(m.modals.GroupInput.Value())
+		sessionID := m.modals.GroupSessionID
+		m.state = stateNormal
+		m.modals.GroupSessionID = ""
+		return m, m.executeSetGroup(sessionID, group)
+	}
+
+	// Forward to textinput
+	var cmd tea.Cmd
+	m.modals.GroupInput, cmd = m.modals.GroupInput.Update(msg)
+	return m, cmd
+}
+
+// executeSetGroup returns a command that sets a session's group.
+func (m Model) executeSetGroup(sessionID, group string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		if err := m.service.SetSessionGroup(ctx, sessionID, group); err != nil {
+			return setGroupCompleteMsg{err: err}
+		}
+		return setGroupCompleteMsg{err: nil}
+	}
+}
+
 // openNewSessionForm initializes the new session form and transitions to the creating state.
 func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	preselectedRemote := m.sessionsView.LocalRemote()
@@ -1289,6 +1369,9 @@ func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m, cmd
 	case stateRenaming:
 		m.modals.RenameInput, cmd = m.modals.RenameInput.Update(msg)
+		return m, cmd
+	case stateSettingGroup:
+		m.modals.GroupInput, cmd = m.modals.GroupInput.Update(msg)
 		return m, cmd
 	case stateFormInput:
 		if m.modals.FormDialog != nil {

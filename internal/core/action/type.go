@@ -25,6 +25,8 @@ package action
 //	SpawnWindows
 //	HiveInfo
 //	HiveDoctor
+//	GroupSet
+//	GroupToggle
 //
 // )
 type Type string

@@ -33,6 +33,11 @@ const (
 	MetaTmuxPane    = "tmux_pane"    // tmux pane identifier
 )
 
+// Metadata keys for session organization.
+const (
+	MetaGroup = "group" // user-assigned group for tree view grouping
+)
+
 // Session represents an isolated git environment for an AI agent.
 //
 // Terminology:
@@ -100,4 +105,21 @@ func (s *Session) SetMeta(key, value string) {
 		s.Metadata = make(map[string]string)
 	}
 	s.Metadata[key] = value
+}
+
+// Group returns the user-assigned group for tree view organization, or empty string if unset.
+func (s *Session) Group() string {
+	return s.GetMeta(MetaGroup)
+}
+
+// SetGroup sets the user-assigned group for tree view organization.
+// An empty value clears the group assignment.
+func (s *Session) SetGroup(group string) {
+	if group == "" {
+		if s.Metadata != nil {
+			delete(s.Metadata, MetaGroup)
+		}
+		return
+	}
+	s.SetMeta(MetaGroup, group)
 }

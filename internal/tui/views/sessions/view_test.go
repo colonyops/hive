@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/list"
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/hive"
@@ -164,11 +165,13 @@ func newFilterTestView(sessions []session.Session, statusFilter terminal.Status,
 		list:             l,
 		allSessions:      sessions,
 		statusFilter:     statusFilter,
+		groupBy:          config.GroupByRepo,
 		terminalStatuses: ts,
 		gitStatuses:      gitStatuses,
 		columnWidths:     columnWidths,
 		service:          new(hive.SessionService),
 		gitWorkers:       1,
+		cfg:              &config.Config{TUI: config.TUIConfig{GroupBy: config.GroupByRepo}},
 	}
 }
 
@@ -275,4 +278,32 @@ func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
 		}
 	}
 	assert.Empty(t, sessionIDs, "sessions without terminal status are excluded from status filter")
+}
+
+func TestApplyFilter_GroupByGroup(t *testing.T) {
+	sessions := []session.Session{
+		{ID: "s1", Name: "alpha", Metadata: map[string]string{"group": "backend"}},
+		{ID: "s2", Name: "beta", Metadata: map[string]string{"group": "frontend"}},
+		{ID: "s3", Name: "gamma"}, // ungrouped
+	}
+	v := newFilterTestView(sessions, "", nil)
+	v.groupBy = config.GroupByGroup
+	v.applyFilter()
+
+	var headers []string
+	var sessionIDs []string
+	for _, item := range v.list.Items() {
+		ti, ok := item.(TreeItem)
+		if !ok {
+			continue
+		}
+		if ti.IsHeader {
+			headers = append(headers, ti.RepoName)
+		}
+		if ti.IsSession() {
+			sessionIDs = append(sessionIDs, ti.Session.ID)
+		}
+	}
+	assert.Equal(t, []string{"backend", "frontend", "(ungrouped)"}, headers, "groups sorted alphabetically with ungrouped last")
+	assert.Equal(t, []string{"s1", "s2", "s3"}, sessionIDs, "all sessions present")
 }

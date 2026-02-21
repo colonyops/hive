@@ -21,7 +21,7 @@ func validConfig(t *testing.T) *Config {
 		GitPath: "git",
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
-		TUI:     TUIConfig{Theme: styles.DefaultTheme},
+		TUI:     TUIConfig{Theme: styles.DefaultTheme, GroupBy: GroupByRepo},
 		Agents: AgentsConfig{
 			Default:  "claude",
 			Profiles: map[string]AgentProfile{"claude": {}},
@@ -1480,4 +1480,25 @@ func TestValidateDeep_WindowTemplates(t *testing.T) {
 		err := cfg.ValidateDeep("")
 		assert.NoError(t, err)
 	})
+}
+
+func TestValidate_GroupByInvalid(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.TUI.GroupBy = "invalid"
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "tui.group_by")
+}
+
+func TestValidate_GroupByValidModes(t *testing.T) {
+	for _, mode := range ValidGroupByModes {
+		t.Run(mode, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.TUI.GroupBy = mode
+
+			err := cfg.Validate()
+			assert.NoError(t, err)
+		})
+	}
 }

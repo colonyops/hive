@@ -43,6 +43,7 @@ keybindings:
 | `ctrl+d`   | TmuxKill             | Kill tmux session                    |
 | `A`        | AgentSend            | Send Enter to agent                  |
 | `R`        | RenameSession        | Rename session                       |
+| `G`        | GroupSet             | Set session group                    |
 | `J`        | NextActive           | Jump to next active session          |
 | `K`        | PrevActive           | Jump to previous active session      |
 | `p`        | TmuxPopUp            | Popup tmux session                   |
@@ -60,5 +61,6 @@ These commands are available in the command palette (`:`) but have no default ke
 | `FilterActive`   | Show sessions with active agents      |
 | `FilterApproval` | Show sessions needing approval        |
 | `FilterReady`    | Show sessions with idle agents        |
+| `GroupToggle`    | Toggle between repo/group tree view   |
 | `SendBatch`      | Send message to multiple agents       |
 | `TmuxStart`      | Start tmux session in background      |
