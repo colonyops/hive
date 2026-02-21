@@ -106,7 +106,13 @@ func (d *Dialog) advanceFocus() (*Dialog, tea.Cmd) {
 
 	next := d.focusedField + 1
 	if next >= len(d.fields) {
-		// Past the last field — submit
+		// Past the last field — validate and submit
+		if firstInvalid := d.validateAll(); firstInvalid >= 0 {
+			d.fields[d.focusedField].Blur()
+			d.focusedField = firstInvalid
+			cmd := d.fields[d.focusedField].Focus()
+			return d, cmd
+		}
 		d.submitted = true
 		return d, nil
 	}
@@ -115,6 +121,18 @@ func (d *Dialog) advanceFocus() (*Dialog, tea.Cmd) {
 	d.focusedField = next
 	cmd := d.fields[d.focusedField].Focus()
 	return d, cmd
+}
+
+// validateAll runs Validate on every field. Returns the index of the first
+// field with a validation error, or -1 if all fields are valid.
+func (d *Dialog) validateAll() int {
+	firstInvalid := -1
+	for i, field := range d.fields {
+		if errMsg := field.Validate(); errMsg != "" && firstInvalid < 0 {
+			firstInvalid = i
+		}
+	}
+	return firstInvalid
 }
 
 func (d *Dialog) retreatFocus() (*Dialog, tea.Cmd) {

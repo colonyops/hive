@@ -12,11 +12,13 @@ import (
 
 // MultiSelectField is a multi-select form field with checkbox toggles.
 type MultiSelectField struct {
-	list    list.Model
-	options []string
-	checked map[int]bool
-	label_  string
-	focused bool
+	list       list.Model
+	options    []string
+	checked    map[int]bool
+	label_     string
+	focused    bool
+	validation FieldValidation
+	errMsg     string
 }
 
 // multiSelectDelegate renders items with checkbox state.
@@ -112,16 +114,15 @@ func (f *MultiSelectField) View() string {
 	}
 	title := titleStyle.Render(f.label_)
 
-	var content string
+	parts := []string{title}
 	if f.list.SettingFilter() {
-		content = lipgloss.JoinVertical(lipgloss.Left,
-			title,
-			f.list.FilterInput.View(),
-			f.list.View(),
-		)
-	} else {
-		content = lipgloss.JoinVertical(lipgloss.Left, title, f.list.View())
+		parts = append(parts, f.list.FilterInput.View())
 	}
+	parts = append(parts, f.list.View())
+	if f.errMsg != "" {
+		parts = append(parts, styles.FormErrorStyle.Render(f.errMsg))
+	}
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	borderStyle := styles.FormFieldStyle
 	if f.focused {
@@ -142,6 +143,12 @@ func (f *MultiSelectField) Blur() {
 
 func (f *MultiSelectField) Focused() bool { return f.focused }
 func (f *MultiSelectField) Label() string { return f.label_ }
+
+func (f *MultiSelectField) Validate() string {
+	count := len(f.SelectedIndices())
+	f.errMsg = f.validation.ValidateSelection(count)
+	return f.errMsg
+}
 
 // Value returns the selected options as []string.
 func (f *MultiSelectField) Value() any {

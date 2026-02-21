@@ -73,6 +73,12 @@ type FormField struct {
 	Options     []string `yaml:"options,omitempty"`     // Static options for select/multi-select
 	Multi       bool     `yaml:"multi,omitempty"`       // For presets: enable multi-select
 	Filter      string   `yaml:"filter,omitempty"`      // For SessionSelector: "active" (default) or "all"
+	Required    bool     `yaml:"required,omitempty"`    // Reject empty input
+	MinLength   int      `yaml:"min_length,omitempty"`  // Minimum character count (text/textarea)
+	MaxLength   int      `yaml:"max_length,omitempty"`  // Maximum character count (text/textarea)
+	Pattern     string   `yaml:"pattern,omitempty"`     // Regex pattern match (text/textarea)
+	Min         int      `yaml:"min,omitempty"`         // Minimum selections (select/multi-select presets)
+	Max         int      `yaml:"max,omitempty"`         // Maximum selections (select/multi-select presets)
 }
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -817,6 +823,33 @@ func validateFormField(ff FormField) error {
 	// Filter is only valid for SessionSelector preset
 	if ff.Filter != "" && ff.Preset != FormPresetSessionSelector {
 		extra = extra.Append("filter", fmt.Errorf("only valid for %s preset", FormPresetSessionSelector))
+	}
+
+	// min_length/max_length/pattern only valid for text/textarea
+	isTextType := ff.Type == FormTypeText || ff.Type == FormTypeTextArea
+	if ff.MinLength > 0 && !isTextType {
+		extra = extra.Append("min_length", fmt.Errorf("only valid for text/textarea types"))
+	}
+	if ff.MaxLength > 0 && !isTextType {
+		extra = extra.Append("max_length", fmt.Errorf("only valid for text/textarea types"))
+	}
+	if ff.Pattern != "" && !isTextType {
+		extra = extra.Append("pattern", fmt.Errorf("only valid for text/textarea types"))
+	}
+	if ff.MinLength > 0 && ff.MaxLength > 0 && ff.MinLength > ff.MaxLength {
+		extra = extra.Append("min_length", fmt.Errorf("must be <= max_length (%d)", ff.MaxLength))
+	}
+
+	// min/max only valid for multi-select or multi presets
+	isMultiSelect := ff.Type == FormTypeMultiSelect || (ff.Preset != "" && ff.Multi)
+	if ff.Min > 0 && !isMultiSelect {
+		extra = extra.Append("min", fmt.Errorf("only valid for multi-select types"))
+	}
+	if ff.Max > 0 && !isMultiSelect {
+		extra = extra.Append("max", fmt.Errorf("only valid for multi-select types"))
+	}
+	if ff.Min > 0 && ff.Max > 0 && ff.Min > ff.Max {
+		extra = extra.Append("min", fmt.Errorf("must be <= max (%d)", ff.Max))
 	}
 
 	return criterio.ValidateStruct(

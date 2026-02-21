@@ -9,13 +9,15 @@ import (
 
 // TextField is a single-line text input form field.
 type TextField struct {
-	input   textinput.Model
-	label   string
-	focused bool
+	input      textinput.Model
+	label      string
+	focused    bool
+	validation FieldValidation
+	errMsg     string
 }
 
 // NewTextField creates a new single-line text input field.
-func NewTextField(label, placeholder, defaultVal string) *TextField {
+func NewTextField(label, placeholder, defaultVal string, opts ...FieldValidation) *TextField {
 	ti := textinput.New()
 	ti.Placeholder = placeholder
 	ti.Prompt = ""
@@ -31,10 +33,14 @@ func NewTextField(label, placeholder, defaultVal string) *TextField {
 	inputStyles.Blurred.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	ti.SetStyles(inputStyles)
 
-	return &TextField{
+	f := &TextField{
 		input: ti,
 		label: label,
 	}
+	if len(opts) > 0 {
+		f.validation = opts[0]
+	}
+	return f
 }
 
 func (f *TextField) Update(msg tea.Msg) (Field, tea.Cmd) {
@@ -54,7 +60,11 @@ func (f *TextField) View() string {
 	}
 	title := titleStyle.Render(f.label)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, title, f.input.View())
+	parts := []string{title, f.input.View()}
+	if f.errMsg != "" {
+		parts = append(parts, styles.FormErrorStyle.Render(f.errMsg))
+	}
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	borderStyle := styles.FormFieldStyle
 	if f.focused {
@@ -77,3 +87,8 @@ func (f *TextField) Blur() {
 func (f *TextField) Focused() bool { return f.focused }
 func (f *TextField) Value() any    { return f.input.Value() }
 func (f *TextField) Label() string { return f.label }
+
+func (f *TextField) Validate() string {
+	f.errMsg = f.validation.ValidateText(f.input.Value())
+	return f.errMsg
+}

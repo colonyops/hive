@@ -9,6 +9,7 @@ type Field interface {
 	Focus() tea.Cmd
 	Blur()
 	Focused() bool
-	Value() any    // string for text/textarea/select, []string for multi-select, domain types for presets
-	Label() string // Display label for the field
+	Value() any       // string for text/textarea/select, []string for multi-select, domain types for presets
+	Label() string    // Display label for the field
+	Validate() string // Returns error message or "" if valid
 }

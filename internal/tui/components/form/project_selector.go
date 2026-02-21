@@ -49,11 +49,12 @@ func (f *ProjectSelectorField) Update(msg tea.Msg) (Field, tea.Cmd) {
 	return f, cmd
 }
 
-func (f *ProjectSelectorField) View() string   { return f.inner.View() }
-func (f *ProjectSelectorField) Focus() tea.Cmd { return f.inner.Focus() }
-func (f *ProjectSelectorField) Blur()          { f.inner.Blur() }
-func (f *ProjectSelectorField) Focused() bool  { return f.inner.Focused() }
-func (f *ProjectSelectorField) Label() string  { return f.label_ }
+func (f *ProjectSelectorField) View() string     { return f.inner.View() }
+func (f *ProjectSelectorField) Focus() tea.Cmd   { return f.inner.Focus() }
+func (f *ProjectSelectorField) Blur()            { f.inner.Blur() }
+func (f *ProjectSelectorField) Focused() bool    { return f.inner.Focused() }
+func (f *ProjectSelectorField) Label() string    { return f.label_ }
+func (f *ProjectSelectorField) Validate() string { return f.inner.Validate() }
 
 // Value returns Repo for single-select or []Repo for multi-select.
 func (f *ProjectSelectorField) Value() any {
