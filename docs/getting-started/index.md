@@ -50,18 +50,31 @@ hive doctor        # Check configuration and environment
 
 ## Quick Start
 
-### 1. Set up a shell alias
+### 1. Run the setup wizard
 
-Hive works best when running inside tmux. When you create a session, hive spawns a tmux session for the agent — if hive itself is also a tmux session, you can seamlessly switch between hive and your agents without leaving tmux. Hive becomes your home base: open an agent, do some work, jump back to hive, spin up another.
+The easiest way to get started is to run the interactive setup wizard:
 
-!!! tip "Recommended alias"
-    Add to your `.bashrc` / `.zshrc`:
+```bash
+hive install
+```
+
+This will:
+
+- Add the `hv` shell alias to your shell config
+- Verify your AI agent tools (claude, codex) are available in PATH
+
+After running install, source your shell config or restart your terminal.
+
+??? info "Manual setup"
+    If you prefer to set things up manually, add this alias to your `.bashrc` / `.zshrc`:
 
     ```bash
     alias hv='tmux new-session -As hive hive'
     ```
 
     This runs hive inside a dedicated tmux session called `hive`. If the session already exists, it reattaches.
+
+Hive works best when running inside tmux. When you create a session, hive spawns a tmux session for the agent — if hive itself is also a tmux session, you can seamlessly switch between hive and your agents without leaving tmux. Hive becomes your home base: open an agent, do some work, jump back to hive, spin up another.
 
 ### 2. Add a tmux keybinding to jump back
 

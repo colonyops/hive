@@ -52,7 +52,7 @@ func NewNewSessionForm(repos []sessions.DiscoveredRepo, preselectedRemote string
 	repoSelect.Focus()
 
 	nameInput := textinput.New()
-	nameInput.Placeholder = "my-feature-branch"
+	nameInput.Placeholder = "<session-name>"
 	nameInput.CharLimit = 64
 	nameInput.Prompt = ""
 	nameInput.SetWidth(40)

@@ -5,6 +5,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os/exec"
 	"strings"
 
 	"github.com/colonyops/hive/internal/core/config"
@@ -81,6 +82,15 @@ func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfi
 		return err
 	}
 
+	// Check that window commands exist before spawning
+	for _, w := range rendered {
+		if w.Command != "" {
+			if err := checkCommandExists(w.Command); err != nil {
+				return fmt.Errorf("window %q: %w", w.Name, err)
+			}
+		}
+	}
+
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Msg("spawning tmux session")
 
 	if err := s.tmux.CreateSession(ctx, data.Name, data.Path, rendered, background); err != nil {
@@ -97,6 +107,15 @@ func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig
 	rendered, err := RenderWindows(s.renderer, windows, data)
 	if err != nil {
 		return err
+	}
+
+	// Check that window commands exist before spawning
+	for _, w := range rendered {
+		if w.Command != "" {
+			if err := checkCommandExists(w.Command); err != nil {
+				return fmt.Errorf("window %q: %w", w.Name, err)
+			}
+		}
 	}
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Str("targetWindow", targetWindow).Msg("opening tmux session")
@@ -177,6 +196,22 @@ func RenderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowCo
 		rendered = append(rendered, rw)
 	}
 	return rendered, nil
+}
+
+// checkCommandExists verifies that the first word of a command exists in PATH.
+// Returns an error with a helpful message if the command is not found.
+func checkCommandExists(command string) error {
+	// Extract the first word (the actual command)
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return nil
+	}
+
+	cmd := parts[0]
+	if _, err := exec.LookPath(cmd); err != nil {
+		return fmt.Errorf("command %q not found in PATH - install it or check your PATH", cmd)
+	}
+	return nil
 }
 
 // AddWindowsToTmuxSession adds pre-rendered windows to an existing tmux session.

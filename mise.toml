@@ -44,7 +44,7 @@ run = "go run *.go"
 [tasks.dev]
 description = "Run hive with dev config (supports CLI args)"
 depends = ["generate"]
-env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./config.dev.yaml", HIVE_DATA_DIR = "./.data" }
+env = { HIVE_LOG_LEVEL = "debug", HIVE_LOG_FILE = "./dev.log", HIVE_CONFIG = "./dev/config.dev.yaml", HIVE_DATA_DIR = "./.data" }
 run = "go run *.go"
 
 [tasks.build]
@@ -75,12 +75,12 @@ run = ["go mod tidy", { tasks = ["lint", "test"] }]
 
 [tasks.validate]
 description = "Run doctor with dev config"
-env = { HIVE_CONFIG = "./config.dev.yaml" }
+env = { HIVE_CONFIG = "./dev/config.dev.yaml" }
 run = "go run *.go doctor"
 
 [tasks."validate:invalid"]
 description = "Run doctor with intentionally invalid config"
-env = { HIVE_CONFIG = "./config.invalid.yaml" }
+env = { HIVE_CONFIG = "./dev/config.invalid.yaml" }
 run = "go run *.go doctor || true"
 
 [tasks."docs:serve"]
@@ -94,4 +94,4 @@ run = ["zensical build", "./scripts/generate-llmstxt.sh"]
 [tasks."container"]
 description = "Build Docker image and run ephemeral container"
 depends = ["build"]
-run = "docker run --rm -it $(docker build -q .)"
+run = "docker run --rm -it -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q .)"

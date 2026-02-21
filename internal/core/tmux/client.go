@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/pkg/executil"
+	"github.com/rs/zerolog/log"
 )
 
 // RenderedWindow is a fully-resolved tmux window definition (no templates).
@@ -53,6 +54,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		args = append(args, "--", "sh", "-c", first.Command)
 	}
 
+	log.Debug().Strs("args", args).Msg("executing tmux new-session")
 	if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 		return fmt.Errorf("tmux new-session: %w", err)
 	}
@@ -67,6 +69,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 			args = append(args, "--", "sh", "-c", w.Command)
 		}
 
+		log.Debug().Strs("args", args).Msg("executing tmux new-window")
 		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
@@ -102,12 +105,14 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 		if w.Command != "" {
 			args = append(args, "--", "sh", "-c", w.Command)
 		}
+		log.Debug().Strs("args", args).Msg("executing tmux new-window")
 		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
 		}
 	}
 	for _, w := range windows {
 		if w.Focus {
+			log.Debug().Str("target", name+":"+w.Name).Msg("executing tmux select-window")
 			if _, err := c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+w.Name); err != nil {
 				return fmt.Errorf("tmux select-window %q: %w", w.Name, err)
 			}

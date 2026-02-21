@@ -54,15 +54,17 @@ Each hive session is a complete git clone in a dedicated directory with its own 
 **Prerequisites:** Git and tmux installed.
 
 ```bash
-# Add alias to .bashrc/.zshrc
-alias hv='tmux new-session -As hive hive'
+# Run the interactive setup wizard
+hive install
 
-# Add to ~/.tmux.conf to jump back to hive
-# bind l switch-client -t hive
+# Or manually add alias to .bashrc/.zshrc
+alias hv='tmux new-session -As hive hive'
 
 # Launch
 hv
 ```
+
+The `hive install` wizard will configure shell aliases and verify your AI agent tools are available.
 
 Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
@@ -117,7 +119,7 @@ mise run dev
 
 `mise run dev` runs hive with project-local defaults from `mise.toml`:
 
-- `HIVE_CONFIG=./config.dev.yaml`
+- `HIVE_CONFIG=./dev/config.dev.yaml`
 - `HIVE_DATA_DIR=./.data`
 - `HIVE_LOG_FILE=./dev.log`
 - `HIVE_LOG_LEVEL=debug`
@@ -128,7 +130,7 @@ This isolates contributor testing from your personal/global hive sessions.
 
 | Mode   | Config Path                  | Data Directory        | Use Case                                |
 | ------ | ---------------------------- | --------------------- | --------------------------------------- |
-| Dev    | `./config.dev.yaml`          | `./.data`             | Contributing and testing changes safely |
+| Dev    | `./dev/config.dev.yaml`      | `./.data`             | Contributing and testing changes safely |
 | Global | `~/.config/hive/config.yaml` | `~/.local/share/hive` | Day-to-day hive usage                   |
 
 Run with dev config:
@@ -155,6 +157,20 @@ mise run check
 mise run build
 mise run validate
 ```
+
+### Docker Container
+
+Run hive in a Docker container for testing:
+
+```bash
+# Export Claude credentials from macOS Keychain
+export CLAUDE_CREDENTIALS=$(security find-generic-password -s "Claude Code-credentials" -w)
+
+# Build and run container
+mise run container
+```
+
+The container includes Claude Code, tmux, and a clone of the hive repo for testing.
 
 Before opening a PR, run `mise run check`. If you changed config behavior, also run `mise run validate` and `mise run dev -- doctor`.
 

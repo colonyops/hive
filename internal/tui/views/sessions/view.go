@@ -843,6 +843,14 @@ func (v *View) View() string {
 	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
 	contentHeight := max(v.height-3, 1)
 
+	// Show custom empty state when no sessions
+	if len(v.list.Items()) == 0 {
+		emptyMsg := styles.TextWarningStyle.Render("No sessions")
+		hint := styles.TextMutedStyle.Render("Press 'n' to create one")
+		content := lipgloss.JoinVertical(lipgloss.Left, "", emptyMsg, hint)
+		return lipgloss.NewStyle().Height(contentHeight).Render(content)
+	}
+
 	if v.previewEnabled && v.width >= 80 {
 		return v.renderDualColumnLayout(contentHeight)
 	}

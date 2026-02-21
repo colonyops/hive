@@ -169,3 +169,10 @@ func (f *MultiSelectField) SelectedIndices() []int {
 func (f *MultiSelectField) IsFiltering() bool {
 	return f.list.SettingFilter()
 }
+
+// SelectAll marks all options as selected.
+func (f *MultiSelectField) SelectAll() {
+	for i := range f.options {
+		f.checked[i] = true
+	}
+}
