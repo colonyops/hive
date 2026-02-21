@@ -29,6 +29,7 @@ import (
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/hive/updatecheck"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/components"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
@@ -136,6 +137,7 @@ type Model struct {
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
+	updateInfo    *updatecheck.Result
 	doctorService *hive.DoctorService
 	configPath    string
 
@@ -335,6 +337,9 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
+	if m.kvStore != nil && m.buildInfo.Version != "" {
+		cmds = append(cmds, checkForUpdate(m.kvStore, m.buildInfo.Version))
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -430,6 +435,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Notifications
 	case notificationMsg:
 		model, cmd = m.handleNotification(msg)
+	case updateAvailableMsg:
+		model, cmd = m.handleUpdateAvailable(msg)
 
 	// Input
 	case tea.KeyMsg:
