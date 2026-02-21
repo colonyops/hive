@@ -488,6 +488,20 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 	}
 
 	selected := v.SelectedSession()
+
+	// Resolve keybinding actions before the nil-session guard so that
+	// session-independent actions (GroupToggle, filters, etc.) work even
+	// when the cursor is on a header row.
+	resolveTarget := session.Session{}
+	if selected != nil {
+		resolveTarget = *selected
+	}
+	action, actionOK := v.handler.Resolve(keyStr, resolveTarget)
+	action = MaybeOverrideWindowDelete(action, treeItem, v.renderer)
+	if actionOK {
+		return v, func() tea.Msg { return ActionRequestMsg{Action: action} }
+	}
+
 	if selected == nil {
 		var cmd tea.Cmd
 		v.list, cmd = v.list.Update(msg)
@@ -508,12 +522,6 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 				Session: *selected,
 			}
 		}
-	}
-
-	action, ok := v.handler.Resolve(keyStr, *selected)
-	action = MaybeOverrideWindowDelete(action, treeItem, v.renderer)
-	if ok {
-		return v, func() tea.Msg { return ActionRequestMsg{Action: action} }
 	}
 
 	var cmd tea.Cmd
