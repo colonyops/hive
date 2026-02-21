@@ -39,7 +39,7 @@ func (cmd *DoctorCmd) Register(app *cli.Command) *cli.Command {
 			},
 			&cli.BoolFlag{
 				Name:        "autofix",
-				Usage:       "automatically fix issues (e.g., delete orphaned worktrees)",
+				Usage:       "automatically fix issues (e.g., delete orphaned session directories)",
 				Destination: &cmd.autofix,
 			},
 		},
