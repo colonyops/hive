@@ -97,6 +97,10 @@ func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 }
 func (m *mockGit) DiffStats(_ context.Context, _ string) (int, int, error) { return 0, 0, nil }
 func (m *mockGit) IsValidRepo(_ context.Context, _ string) error           { return nil }
+func (m *mockGit) CloneBare(_ context.Context, _, _ string) error          { return nil }
+func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error     { return nil }
+func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error  { return nil }
+func (m *mockGit) Fetch(_ context.Context, _ string) error                 { return nil }
 
 func newTestService(t *testing.T, store session.Store, cfg *config.Config) *SessionService {
 	t.Helper()

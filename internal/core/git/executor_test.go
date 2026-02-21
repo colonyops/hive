@@ -83,10 +83,14 @@ func TestParseDiffStats(t *testing.T) {
 
 // mockExecutor is a simple mock for testing git executor methods.
 type mockExecutor struct {
+	runFunc    func(ctx context.Context, cmd string, args ...string) ([]byte, error)
 	runDirFunc func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error)
 }
 
 func (m *mockExecutor) Run(ctx context.Context, cmd string, args ...string) ([]byte, error) {
+	if m.runFunc != nil {
+		return m.runFunc(ctx, cmd, args...)
+	}
 	return nil, nil
 }
 
@@ -249,6 +253,215 @@ func TestExecutor_DiffStats(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, tt.wantAdd, add)
 			assert.Equal(t, tt.wantDel, del)
+		})
+	}
+}
+
+func TestExecutor_CloneBare(t *testing.T) {
+	tests := []struct {
+		name    string
+		url     string
+		dest    string
+		runErr  error
+		wantErr bool
+	}{
+		{
+			name: "success",
+			url:  "git@github.com:user/repo.git",
+			dest: "/tmp/bare/repo",
+		},
+		{
+			name:    "error propagated",
+			url:     "git@github.com:user/repo.git",
+			dest:    "/tmp/bare/repo",
+			runErr:  assert.AnError,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotArgs []string
+			mock := &mockExecutor{
+				runFunc: func(_ context.Context, cmd string, args ...string) ([]byte, error) {
+					gotArgs = append([]string{cmd}, args...)
+					return nil, tt.runErr
+				},
+			}
+
+			e := NewExecutor("git", mock)
+			err := e.CloneBare(context.Background(), tt.url, tt.dest)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, []string{"git", "clone", "--bare", tt.url, tt.dest}, gotArgs)
+		})
+	}
+}
+
+func TestExecutor_WorktreeAdd(t *testing.T) {
+	tests := []struct {
+		name         string
+		repoDir      string
+		worktreePath string
+		branch       string
+		runErr       error
+		wantErr      bool
+	}{
+		{
+			name:         "success",
+			repoDir:      "/bare/repo",
+			worktreePath: "/worktrees/my-wt",
+			branch:       "hive/my-session-abc123",
+		},
+		{
+			name:         "error propagated",
+			repoDir:      "/bare/repo",
+			worktreePath: "/worktrees/my-wt",
+			branch:       "hive/my-session-abc123",
+			runErr:       assert.AnError,
+			wantErr:      true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotDir string
+			var gotArgs []string
+			mock := &mockExecutor{
+				runDirFunc: func(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
+					gotDir = dir
+					gotArgs = append([]string{cmd}, args...)
+					return nil, tt.runErr
+				},
+			}
+
+			e := NewExecutor("git", mock)
+			err := e.WorktreeAdd(context.Background(), tt.repoDir, tt.worktreePath, tt.branch)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.repoDir, gotDir)
+			assert.Equal(t, []string{"git", "worktree", "add", "-b", tt.branch, tt.worktreePath}, gotArgs)
+		})
+	}
+}
+
+func TestExecutor_WorktreeRemove(t *testing.T) {
+	tests := []struct {
+		name          string
+		repoDir       string
+		worktreePath  string
+		branch        string
+		removeErr     error
+		branchErr     error
+		wantErr       bool
+		wantErrSubstr string
+	}{
+		{
+			name:         "success",
+			repoDir:      "/bare/repo",
+			worktreePath: "/worktrees/my-wt",
+			branch:       "hive/my-session-abc123",
+		},
+		{
+			name:          "worktree remove fails",
+			repoDir:       "/bare/repo",
+			worktreePath:  "/worktrees/my-wt",
+			branch:        "hive/my-session-abc123",
+			removeErr:     assert.AnError,
+			wantErr:       true,
+			wantErrSubstr: "worktree remove",
+		},
+		{
+			name:          "branch delete fails",
+			repoDir:       "/bare/repo",
+			worktreePath:  "/worktrees/my-wt",
+			branch:        "hive/my-session-abc123",
+			branchErr:     assert.AnError,
+			wantErr:       true,
+			wantErrSubstr: "branch -D",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			var calls [][]string
+			mock := &mockExecutor{
+				runDirFunc: func(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
+					callCount++
+					calls = append(calls, append([]string{cmd}, args...))
+					if callCount == 1 {
+						return nil, tt.removeErr
+					}
+					return nil, tt.branchErr
+				},
+			}
+
+			e := NewExecutor("git", mock)
+			err := e.WorktreeRemove(context.Background(), tt.repoDir, tt.worktreePath, tt.branch)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErrSubstr)
+				return
+			}
+			require.NoError(t, err)
+			require.Len(t, calls, 2)
+			assert.Equal(t, []string{"git", "worktree", "remove", "--force", tt.worktreePath}, calls[0])
+			assert.Equal(t, []string{"git", "branch", "-D", tt.branch}, calls[1])
+		})
+	}
+}
+
+func TestExecutor_Fetch(t *testing.T) {
+	tests := []struct {
+		name    string
+		dir     string
+		runErr  error
+		wantErr bool
+	}{
+		{
+			name: "success",
+			dir:  "/bare/repo",
+		},
+		{
+			name:    "error propagated",
+			dir:     "/bare/repo",
+			runErr:  assert.AnError,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var gotDir string
+			var gotArgs []string
+			mock := &mockExecutor{
+				runDirFunc: func(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
+					gotDir = dir
+					gotArgs = append([]string{cmd}, args...)
+					return nil, tt.runErr
+				},
+			}
+
+			e := NewExecutor("git", mock)
+			err := e.Fetch(context.Background(), tt.dir)
+
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.dir, gotDir)
+			assert.Equal(t, []string{"git", "fetch", "origin"}, gotArgs)
 		})
 	}
 }
