@@ -127,6 +127,7 @@ type Model struct {
 	kvView  *KVView
 
 	notifyStore     notify.Store
+	notifyBuffer    *NotificationBuffer
 	toastController *ToastController
 	toastView       *ToastView
 
@@ -168,11 +169,8 @@ type recycleCompleteMsg struct {
 	err error
 }
 
-// notificationMsg carries a notification from an async tea.Cmd into the Update loop.
-type notificationMsg struct {
-	notification notify.Notification
-	ch           <-chan eventbus.NotificationPublishedPayload
-}
+// drainNotificationsMsg signals that buffered notifications should be drained.
+type drainNotificationsMsg struct{}
 
 type doctorResultsMsg struct {
 	results []doctor.Result
@@ -253,6 +251,15 @@ func New(deps Deps, opts Opts) Model {
 	}
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
+	notifyBuffer := NewNotificationBuffer()
+	if deps.Bus != nil {
+		deps.Bus.SubscribeNotificationPublished(func(p eventbus.NotificationPublishedPayload) {
+			notifyBuffer.Push(notify.Notification{
+				Level:   p.Level,
+				Message: p.Message,
+			})
+		})
+	}
 
 	// Sessions tab is active by default
 	sessionsView.SetActive(true)
@@ -274,6 +281,7 @@ func New(deps Deps, opts Opts) Model {
 		kvStore:         deps.KVStore,
 		kvView:          kvView,
 		notifyStore:     notifyStore,
+		notifyBuffer:    notifyBuffer,
 		toastController: toastCtrl,
 		toastView:       toastView,
 		bus:             deps.Bus,
@@ -294,41 +302,14 @@ func (m Model) quit() (Model, tea.Cmd) {
 	return m, tea.Quit
 }
 
-// listenForNotifications returns a tea.Cmd that blocks on the EventBus
-// subscriber channel and delivers notification events into the Bubble Tea
-// update loop as notificationMsg values.
-func (m Model) listenForNotifications() tea.Cmd {
-	if m.bus == nil {
-		return nil
-	}
-	ch := make(chan eventbus.NotificationPublishedPayload, 1)
-	m.bus.SubscribeNotificationPublished(func(p eventbus.NotificationPublishedPayload) {
-		ch <- p
-	})
-	return m.waitForNotification(ch)
-}
-
-// waitForNotification returns a tea.Cmd that reads one notification from ch
-// and re-subscribes for the next.
-func (m Model) waitForNotification(ch <-chan eventbus.NotificationPublishedPayload) tea.Cmd {
-	return func() tea.Msg {
-		p := <-ch
-		return notificationMsg{
-			notification: notify.Notification{
-				Level:   p.Level,
-				Message: p.Message,
-			},
-			ch: ch,
-		}
-	}
-}
-
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
 	cmds := []tea.Cmd{m.spinner.Tick}
 	if m.bus != nil {
 		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
-		cmds = append(cmds, m.listenForNotifications())
+	}
+	if m.notifyBuffer != nil {
+		cmds = append(cmds, m.notifyBuffer.WaitForSignal())
 	}
 	// Start sessions view (handles session loading, polling, terminal, plugins, animation)
 	if m.sessionsView != nil {
@@ -425,7 +406,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessions.OpenRepoRequestMsg:
 		model, cmd = m.handleSessionOpenRepo(msg)
 	case sessions.ErrorMsg:
-		model, cmd = m, m.notifyError("%v", msg.Err)
+		m.notifyErrorf("%v", msg.Err)
+		model, cmd = m, nil
 
 	// Action results
 	case renameCompleteMsg:
@@ -450,8 +432,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleReviewOpenDoc(msg)
 
 	// Notifications
-	case notificationMsg:
-		model, cmd = m.handleNotification(msg)
+	case drainNotificationsMsg:
+		model, cmd = m.handleDrainNotifications(msg)
 
 	// Input
 	case tea.KeyMsg:
@@ -559,7 +541,8 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 
 	dialog, err := newFormDialog(name, cmd.Form, m.sessionsView.AllSessions(), m.sessionsView.DiscoveredRepos(), m.sessionsView.TerminalStatuses())
 	if err != nil {
-		return m, m.notifyError("form error: %v", err)
+		m.notifyErrorf("form error: %v", err)
+		return m, nil
 	}
 
 	m.modals.FormDialog = dialog
@@ -606,7 +589,8 @@ func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, te
 func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if action.Err != nil {
 		m.state = stateNormal
-		return m, m.notifyError("%v", action.Err)
+		m.notifyErrorf("%v", action.Err)
+		return m, nil
 	}
 
 	if action.NeedsConfirm() {
@@ -667,10 +651,11 @@ func (m Model) handleNotificationModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.modals.Notification.ScrollUp()
 	case "D":
 		if err := m.modals.Notification.Clear(); err != nil {
-			return m, m.notifyError("failed to clear notifications: %v", err)
+			m.notifyErrorf("failed to clear notifications: %v", err)
+			return m, nil
 		}
 		m.publishNotificationf(notify.LevelInfo, "notifications cleared")
-		return m, m.ensureToastTick()
+		return m, nil
 	}
 	return m, nil
 }
@@ -783,7 +768,8 @@ func (m Model) showHiveInfo() (tea.Model, tea.Cmd) {
 
 func (m Model) showHiveDoctor() (tea.Model, tea.Cmd) {
 	if m.doctorService == nil {
-		return m, m.notifyError("doctor service not available")
+		m.notifyErrorf("doctor service not available")
+		return m, nil
 	}
 
 	m.state = stateLoading
@@ -891,7 +877,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			if len(args) > 0 {
 				m.applyTheme(args[0])
 			}
-			return m, m.ensureToastTick()
+			return m, nil
 		}
 
 		if entry.Command.Action == act.TypeHiveInfo {
@@ -1414,32 +1400,24 @@ func (m Model) deleteRecycledSessionsBatch(sessions []session.Session) tea.Cmd {
 	}
 }
 
-// ensureToastTick returns a tick command when there are active toasts.
-// Multiple concurrent tick chains are harmless — Tick() uses absolute time
-// and is idempotent, so extra ticks just no-op. Chains naturally stop when
-// all toasts expire.
-func (m *Model) ensureToastTick() tea.Cmd {
-	if m.toastController.HasToasts() {
-		return scheduleToastTick()
-	}
-	return nil
-}
-
 // publishNotificationf publishes a notification via the EventBus.
 func (m *Model) publishNotificationf(level notify.Level, format string, args ...any) {
+	message := fmt.Sprintf(format, args...)
 	if m.bus != nil {
 		m.bus.PublishNotificationPublished(eventbus.NotificationPublishedPayload{
 			Level:   level,
-			Message: fmt.Sprintf(format, args...),
+			Message: message,
 		})
+		return
+	}
+	if m.notifyBuffer != nil {
+		m.notifyBuffer.Push(notify.Notification{Level: level, Message: message})
 	}
 }
 
-// notifyError publishes an error-level notification and returns a command
-// to start the toast tick timer if needed.
-func (m *Model) notifyError(format string, args ...any) tea.Cmd {
+// notifyErrorf publishes an error-level notification.
+func (m *Model) notifyErrorf(format string, args ...any) {
 	m.publishNotificationf(notify.LevelError, format, args...)
-	return m.ensureToastTick()
 }
 
 // applyTheme switches the active theme at runtime.

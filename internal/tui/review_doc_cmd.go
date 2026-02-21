@@ -19,7 +19,7 @@ type HiveDocReviewCmd struct {
 func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 	if m.reviewView == nil {
 		m.publishNotificationf(notify.LevelWarning, "review view is not available")
-		return m.ensureToastTick()
+		return nil
 	}
 
 	// If argument provided, open document directly and switch to review view
@@ -52,7 +52,7 @@ func (c HiveDocReviewCmd) Execute(m *Model) tea.Cmd {
 
 	if len(docs) == 0 {
 		m.publishNotificationf(notify.LevelError, "no documents found for review")
-		return m.ensureToastTick()
+		return nil
 	}
 
 	// Show document picker modal on current view (Sessions)

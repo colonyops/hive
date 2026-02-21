@@ -239,6 +239,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}()
 
 			eventbus.RegisterDebugLogger(bus, log.Logger)
+			eventbus.NewNotificationRouter(bus).Register()
 
 			// Create service
 			var (
