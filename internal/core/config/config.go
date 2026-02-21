@@ -152,6 +152,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "run health checks",
 		Silent: true,
 	},
+	"SetGroup": {
+		Action: action.TypeSetGroup,
+		Help:   "set session group",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
@@ -185,6 +190,7 @@ var defaultKeybindings = map[string]Keybinding{
 	"A":      {Cmd: "AgentSend"},
 	"p":      {Cmd: "TmuxPopUp"},
 	"R":      {Cmd: "RenameSession"},
+	"G":      {Cmd: "SetGroup"},
 	"J":      {Cmd: "NextActive"},
 	"K":      {Cmd: "PrevActive"},
 }
@@ -295,12 +301,22 @@ type ContextConfig struct {
 	SymlinkName string `yaml:"symlink_name"` // default: ".hive"
 }
 
+// Group-by mode constants for tree view grouping.
+const (
+	GroupByRepo  = "repo"  // Group sessions by repository (default)
+	GroupByGroup = "group" // Group sessions by user-assigned group
+)
+
+// ValidGroupByModes lists all valid group_by values.
+var ValidGroupByModes = []string{GroupByRepo, GroupByGroup}
+
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
 	Theme           string        `yaml:"theme"`            // built-in theme name (default: "tokyo-night")
 	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
 	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
 	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
+	GroupBy         string        `yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
 	Preview         PreviewConfig `yaml:"preview"`          // preview panel configuration
 	Views           ViewsConfig   `yaml:"views"`            // toggle optional TUI tabs
 }
@@ -605,6 +621,9 @@ func (c *Config) applyDefaults() {
 	if c.TUI.Theme == "" {
 		c.TUI.Theme = styles.DefaultTheme
 	}
+	if c.TUI.GroupBy == "" {
+		c.TUI.GroupBy = GroupByRepo
+	}
 	if c.CopyCommand == "" {
 		c.CopyCommand = defaultCopyCommand()
 	}
@@ -701,6 +720,7 @@ func (c *Config) Validate() error {
 		criterio.Run("database.max_idle_conns", c.Database.MaxIdleConns, criterio.Min(1)),
 		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
 		c.validateTheme(),
+		c.validateGroupBy(),
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
@@ -901,6 +921,11 @@ func (c *Config) validateTheme() error {
 		return fmt.Errorf("tui.theme: unknown theme %q, available themes: %v", c.TUI.Theme, styles.ThemeNames())
 	}
 	return nil
+}
+
+// validateGroupBy checks that the configured group_by value is valid.
+func (c *Config) validateGroupBy() error {
+	return criterio.Run("tui.group_by", c.TUI.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.

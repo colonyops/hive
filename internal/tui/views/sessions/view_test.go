@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"charm.land/bubbles/v2/list"
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/hive"
@@ -169,6 +170,7 @@ func newFilterTestView(sessions []session.Session, statusFilter terminal.Status,
 		columnWidths:     columnWidths,
 		service:          new(hive.SessionService),
 		gitWorkers:       1,
+		cfg:              &config.Config{TUI: config.TUIConfig{GroupBy: config.GroupByRepo}},
 	}
 }
 

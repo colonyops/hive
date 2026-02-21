@@ -337,6 +337,27 @@ func (s *SessionService) RenameSession(ctx context.Context, id, newName string) 
 	return nil
 }
 
+// SetSessionGroup sets or clears the user-assigned group for a session.
+// An empty group clears the assignment.
+func (s *SessionService) SetSessionGroup(ctx context.Context, id, group string) error {
+	group = strings.TrimSpace(group)
+
+	sess, err := s.sessions.Get(ctx, id)
+	if err != nil {
+		return fmt.Errorf("get session: %w", err)
+	}
+
+	sess.SetGroup(group)
+	sess.UpdatedAt = time.Now()
+
+	if err := s.sessions.Save(ctx, sess); err != nil {
+		return fmt.Errorf("save session: %w", err)
+	}
+
+	s.log.Info().Str("session_id", id).Str("group", group).Msg("session group updated")
+	return nil
+}
+
 // DeleteSession removes a session and its directory.
 func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	sess, err := s.sessions.Get(ctx, id)

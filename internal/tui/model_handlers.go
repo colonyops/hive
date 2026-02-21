@@ -119,6 +119,13 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		}
 		return m.openRenameInput(sess)
 	}
+	if action.Type == act.TypeSetGroup {
+		sess := m.sessionsView.SelectedSession()
+		if sess == nil {
+			return m, nil
+		}
+		return m.openGroupInput(sess)
+	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter
 		m.sessionsView.ApplyStatusFilter(action.Type)
@@ -175,6 +182,15 @@ func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) 
 		log.Error().Err(msg.err).Msg("rename failed")
 		m.state = stateNormal
 		return m, m.notifyError("rename failed: %v", msg.err)
+	}
+	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
+}
+
+func (m Model) handleSetGroupComplete(msg setGroupCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		log.Error().Err(msg.err).Msg("set group failed")
+		m.state = stateNormal
+		return m, m.notifyError("set group failed: %v", msg.err)
 	}
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }

@@ -172,6 +172,109 @@ func TestGroupSessionsByRepo_RecycledCount(t *testing.T) {
 	}
 }
 
+func TestGroupSessionsByTag(t *testing.T) {
+	tests := []struct {
+		name       string
+		sessions   []session.Session
+		wantGroups []struct {
+			name     string
+			sessions []string
+		}
+	}{
+		{
+			name:     "empty sessions returns nil",
+			sessions: nil,
+			wantGroups: []struct {
+				name     string
+				sessions []string
+			}{},
+		},
+		{
+			name: "sessions grouped by tag",
+			sessions: []session.Session{
+				{Name: "s1", Remote: "r1", Metadata: map[string]string{"group": "backend"}},
+				{Name: "s2", Remote: "r2", Metadata: map[string]string{"group": "frontend"}},
+				{Name: "s3", Remote: "r3", Metadata: map[string]string{"group": "backend"}},
+			},
+			wantGroups: []struct {
+				name     string
+				sessions []string
+			}{
+				{name: "backend", sessions: []string{"s1", "s3"}},
+				{name: "frontend", sessions: []string{"s2"}},
+			},
+		},
+		{
+			name: "ungrouped sessions go to ungrouped last",
+			sessions: []session.Session{
+				{Name: "s1", Remote: "r1"},
+				{Name: "s2", Remote: "r2", Metadata: map[string]string{"group": "backend"}},
+				{Name: "s3", Remote: "r3"},
+			},
+			wantGroups: []struct {
+				name     string
+				sessions []string
+			}{
+				{name: "backend", sessions: []string{"s2"}},
+				{name: "(ungrouped)", sessions: []string{"s1", "s3"}},
+			},
+		},
+		{
+			name: "groups sorted alphabetically",
+			sessions: []session.Session{
+				{Name: "s1", Remote: "r1", Metadata: map[string]string{"group": "zebra"}},
+				{Name: "s2", Remote: "r2", Metadata: map[string]string{"group": "alpha"}},
+				{Name: "s3", Remote: "r3", Metadata: map[string]string{"group": "middle"}},
+			},
+			wantGroups: []struct {
+				name     string
+				sessions []string
+			}{
+				{name: "alpha", sessions: []string{"s2"}},
+				{name: "middle", sessions: []string{"s3"}},
+				{name: "zebra", sessions: []string{"s1"}},
+			},
+		},
+		{
+			name: "recycled sessions separated",
+			sessions: []session.Session{
+				{Name: "active", Remote: "r1", State: session.StateActive, Metadata: map[string]string{"group": "backend"}},
+				{Name: "recycled", Remote: "r2", State: session.StateRecycled, Metadata: map[string]string{"group": "backend"}},
+			},
+			wantGroups: []struct {
+				name     string
+				sessions []string
+			}{
+				{name: "backend", sessions: []string{"active"}},
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			groups := GroupSessionsByTag(tt.sessions)
+
+			if len(tt.wantGroups) == 0 {
+				assert.Empty(t, groups)
+				return
+			}
+
+			require.Len(t, groups, len(tt.wantGroups))
+
+			for i, want := range tt.wantGroups {
+				got := groups[i]
+				assert.Equal(t, want.name, got.Name, "group %d name mismatch", i)
+
+				gotNames := make([]string, len(got.Sessions))
+				for j, s := range got.Sessions {
+					gotNames[j] = s.Name
+				}
+				assert.Equal(t, want.sessions, gotNames, "group %d sessions mismatch", i)
+			}
+		})
+	}
+}
+
 func TestExtractGroupName(t *testing.T) {
 	tests := []struct {
 		remote string

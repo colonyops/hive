@@ -100,3 +100,66 @@ func sortRepoGroups(groups []RepoGroup, localRemote string) {
 		return groups[i].Name < groups[j].Name
 	})
 }
+
+// GroupSessionsByTag groups sessions by their user-assigned group metadata.
+// Sessions without a group are placed in an "(ungrouped)" group.
+// Returns groups sorted alphabetically by name.
+//
+// Within each group, sessions are sorted by name.
+func GroupSessionsByTag(sessions []session.Session) []RepoGroup {
+	if len(sessions) == 0 {
+		return nil
+	}
+
+	const ungrouped = "(ungrouped)"
+
+	groups := make(map[string]*RepoGroup)
+	for _, s := range sessions {
+		groupName := s.Group()
+		if groupName == "" {
+			groupName = ungrouped
+		}
+
+		group, exists := groups[groupName]
+		if !exists {
+			group = &RepoGroup{
+				Name:     groupName,
+				Sessions: make([]session.Session, 0, 4),
+			}
+			groups[groupName] = group
+		}
+		group.Sessions = append(group.Sessions, s)
+	}
+
+	// Convert to slice, separate recycled sessions, and sort active sessions
+	result := make([]RepoGroup, 0, len(groups))
+	for _, group := range groups {
+		activeSessions := make([]session.Session, 0, len(group.Sessions))
+		recycledSessions := make([]session.Session, 0)
+		for _, s := range group.Sessions {
+			if s.State == session.StateRecycled {
+				recycledSessions = append(recycledSessions, s)
+			} else {
+				activeSessions = append(activeSessions, s)
+			}
+		}
+		group.Sessions = activeSessions
+		group.RecycledSessions = recycledSessions
+		group.RecycledCount = len(recycledSessions)
+		sortSessions(group.Sessions)
+		result = append(result, *group)
+	}
+
+	// Sort groups alphabetically, with "(ungrouped)" last
+	sort.Slice(result, func(i, j int) bool {
+		if result[i].Name == ungrouped {
+			return false
+		}
+		if result[j].Name == ungrouped {
+			return true
+		}
+		return result[i].Name < result[j].Name
+	})
+
+	return result
+}

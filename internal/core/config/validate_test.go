@@ -21,7 +21,7 @@ func validConfig(t *testing.T) *Config {
 		GitPath: "git",
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
-		TUI:     TUIConfig{Theme: styles.DefaultTheme},
+		TUI:     TUIConfig{Theme: styles.DefaultTheme, GroupBy: GroupByRepo},
 		Agents: AgentsConfig{
 			Default:  "claude",
 			Profiles: map[string]AgentProfile{"claude": {}},

@@ -672,7 +672,12 @@ func (v *View) applyFilter() tea.Cmd {
 
 	localRemote := v.localRemote
 
-	groups := GroupSessionsByRepo(filteredSess, localRemote)
+	var groups []RepoGroup
+	if v.cfg.TUI.GroupBy == config.GroupByGroup {
+		groups = GroupSessionsByTag(filteredSess)
+	} else {
+		groups = GroupSessionsByRepo(filteredSess, localRemote)
+	}
 	items := BuildTreeItems(groups, localRemote)
 	items = v.expandWindowItems(items)
 	*v.columnWidths = CalculateColumnWidths(filteredSess, nil)
