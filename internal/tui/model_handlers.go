@@ -119,12 +119,16 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		}
 		return m.openRenameInput(sess)
 	}
-	if action.Type == act.TypeSetGroup {
+	if action.Type == act.TypeGroupSet {
 		sess := m.sessionsView.SelectedSession()
 		if sess == nil {
 			return m, nil
 		}
 		return m.openGroupInput(sess)
+	}
+	if action.Type == act.TypeGroupToggle {
+		m.sessionsView.ToggleGroupBy()
+		return m, nil
 	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter

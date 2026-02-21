@@ -55,6 +55,7 @@ type ViewOpts struct {
 type View struct {
 	allSessions  []session.Session
 	statusFilter terminal.Status
+	groupBy      string // "repo" or "group", runtime-togglable
 	localRemote  string
 
 	cfg     *config.Config
@@ -186,6 +187,7 @@ func New(opts ViewOpts) *View {
 
 	return &View{
 		localRemote: opts.LocalRemote,
+		groupBy:     cfg.TUI.GroupBy,
 		cfg:         cfg,
 		service:     opts.Service,
 		bus:         opts.Bus,
@@ -673,7 +675,7 @@ func (v *View) applyFilter() tea.Cmd {
 	localRemote := v.localRemote
 
 	var groups []RepoGroup
-	if v.cfg.TUI.GroupBy == config.GroupByGroup {
+	if v.groupBy == config.GroupByGroup {
 		groups = GroupSessionsByTag(filteredSess)
 	} else {
 		groups = GroupSessionsByRepo(filteredSess, localRemote)
@@ -1339,6 +1341,21 @@ func (v *View) HasTerminalIntegration() bool {
 // TogglePreview toggles the preview sidebar on/off.
 func (v *View) TogglePreview() {
 	v.previewEnabled = !v.previewEnabled
+}
+
+// ToggleGroupBy switches between repo and group tree view modes and rebuilds the tree.
+func (v *View) ToggleGroupBy() {
+	if v.groupBy == config.GroupByGroup {
+		v.groupBy = config.GroupByRepo
+	} else {
+		v.groupBy = config.GroupByGroup
+	}
+	v.applyFilter()
+}
+
+// GroupBy returns the current tree view grouping mode.
+func (v *View) GroupBy() string {
+	return v.groupBy
 }
 
 // ApplyTheme resets delegate styles and clears cached animation colors for a theme change.

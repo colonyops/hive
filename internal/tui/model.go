@@ -866,8 +866,15 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			return m.openRenameInput(selected)
 		}
 
-		// SetGroup requires a selected session
-		if entry.Command.Action == act.TypeSetGroup {
+		// GroupToggle doesn't require a session
+		if entry.Command.Action == act.TypeGroupToggle {
+			m.state = stateNormal
+			m.sessionsView.ToggleGroupBy()
+			return m, nil
+		}
+
+		// GroupSet requires a selected session
+		if entry.Command.Action == act.TypeGroupSet {
 			m.state = stateNormal
 			if selected == nil {
 				return m, nil

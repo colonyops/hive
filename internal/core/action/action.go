@@ -82,7 +82,8 @@ var configActions = map[Type]bool{
 	TypePrevActive:     true,
 	TypeHiveInfo:       true,
 	TypeHiveDoctor:     true,
-	TypeSetGroup:       true,
+	TypeGroupSet:       true,
+	TypeGroupToggle:    true,
 }
 
 // IsConfigAction reports whether t is a valid action for use in YAML config.

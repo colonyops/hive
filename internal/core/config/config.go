@@ -152,9 +152,14 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "run health checks",
 		Silent: true,
 	},
-	"SetGroup": {
-		Action: action.TypeSetGroup,
+	"GroupSet": {
+		Action: action.TypeGroupSet,
 		Help:   "set session group",
+		Silent: true,
+	},
+	"GroupToggle": {
+		Action: action.TypeGroupToggle,
+		Help:   "toggle group/repo view",
 		Silent: true,
 	},
 	"SendBatch": {
@@ -190,7 +195,7 @@ var defaultKeybindings = map[string]Keybinding{
 	"A":      {Cmd: "AgentSend"},
 	"p":      {Cmd: "TmuxPopUp"},
 	"R":      {Cmd: "RenameSession"},
-	"G":      {Cmd: "SetGroup"},
+	"G":      {Cmd: "GroupSet"},
 	"J":      {Cmd: "NextActive"},
 	"K":      {Cmd: "PrevActive"},
 }
