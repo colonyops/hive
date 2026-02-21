@@ -62,6 +62,13 @@ homebrew_casks:
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
     homepage: "https://github.com/colonyops/hive"
     description: "CLI/TUI for managing multiple AI agent sessions in isolated git environments"
+    hooks:
+      post:
+        install: |
+          if OS.mac?
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/hive"]
+          end
+    caveats: "This binary is not signed or notarized. The installer removes the macOS quarantine attribute automatically.\n\nRequires tmux and git to be installed."
 
 
 
