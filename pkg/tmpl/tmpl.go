@@ -64,6 +64,21 @@ func New(cfg Config) *Renderer {
 	}
 }
 
+// WithAgent returns a new Renderer whose agent template functions are
+// overridden with the provided values.
+func (r *Renderer) WithAgent(command, window, flags string) *Renderer {
+	merged := make(template.FuncMap, len(r.funcs))
+	for k, v := range r.funcs {
+		merged[k] = v
+	}
+
+	merged["agentCommand"] = func() string { return stringOrDefault(command, "claude") }
+	merged["agentWindow"] = func() string { return stringOrDefault(window, "claude") }
+	merged["agentFlags"] = func() string { return flags }
+
+	return &Renderer{funcs: merged}
+}
+
 // NewValidation creates a Renderer with safe defaults for template syntax checking.
 // Template functions return placeholder values — output is discarded, only parse errors matter.
 func NewValidation() *Renderer {

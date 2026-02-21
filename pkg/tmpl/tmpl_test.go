@@ -226,3 +226,40 @@ func TestRenderers_Isolated(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "aider", got2)
 }
+
+func TestRenderer_WithAgent(t *testing.T) {
+	base := New(Config{AgentCommand: "claude", AgentWindow: "claude"})
+	override := base.WithAgent("aider", "aider", "--model sonnet")
+
+	got, err := override.Render("{{ agentCommand }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "aider", got)
+
+	got, err = override.Render("{{ agentWindow }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "aider", got)
+
+	got, err = override.Render("{{ agentFlags }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "--model sonnet", got)
+
+	got, err = base.Render("{{ agentCommand }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "claude", got)
+}
+
+func TestRenderer_WithAgent_PreservesOtherFuncs(t *testing.T) {
+	base := New(Config{
+		ScriptPaths:  map[string]string{"hive-tmux": "/bin/hive-tmux"},
+		AgentCommand: "claude",
+	})
+	override := base.WithAgent("aider", "aider", "")
+
+	got, err := override.Render("{{ hiveTmux }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "/bin/hive-tmux", got)
+
+	got, err = override.Render("{{ agentCommand | shq }}", nil)
+	require.NoError(t, err)
+	assert.Equal(t, "'aider'", got)
+}

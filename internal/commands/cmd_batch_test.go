@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -101,6 +102,45 @@ func TestBatchInput_Validate(t *testing.T) {
 	}
 }
 
+func TestBatchInput_ValidateWithProfiles(t *testing.T) {
+	profiles := map[string]config.AgentProfile{
+		"claude": {},
+		"aider":  {},
+	}
+
+	tests := []struct {
+		name    string
+		input   BatchInput
+		wantErr string
+	}{
+		{
+			name: "valid session agent",
+			input: BatchInput{Sessions: []BatchSession{
+				{Name: "task1", Agent: "claude"},
+			}},
+		},
+		{
+			name: "invalid session agent",
+			input: BatchInput{Sessions: []BatchSession{
+				{Name: "task1", Agent: "unknown"},
+			}},
+			wantErr: "agent",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := tt.input.ValidateWithProfiles(profiles)
+			if tt.wantErr == "" {
+				require.NoError(t, err)
+				return
+			}
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.wantErr)
+		})
+	}
+}
+
 func TestBatchInput_JSON(t *testing.T) {
 	jsonInput := `{
 		"sessions": [
@@ -116,6 +156,13 @@ func TestBatchInput_JSON(t *testing.T) {
 	assert.Equal(t, "task1", input.Sessions[0].Name)
 	assert.Equal(t, "abc123", input.Sessions[0].SessionID)
 	assert.Equal(t, "https://github.com/org/repo", input.Sessions[1].Remote)
+}
+
+func TestBatchCmd_resolveAgent(t *testing.T) {
+	cmd := &BatchCmd{agent: "aider"}
+
+	assert.Equal(t, "claude", cmd.resolveAgent(BatchSession{Name: "task", Agent: "claude"}))
+	assert.Equal(t, "aider", cmd.resolveAgent(BatchSession{Name: "task"}))
 }
 
 func TestBatchOutput_JSON(t *testing.T) {

@@ -31,6 +31,7 @@ type CreateOptions struct {
 	Prompt        string // Prompt to pass to spawned terminal (batch only)
 	Remote        string // Git remote URL to clone (auto-detected if empty)
 	Source        string // Source directory for file copying
+	Agent         string // Agent profile override (empty = config default)
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
 	// SkipSpawn skips the configured spawn strategy (spawn: / batch_spawn: / windows:).
 	// The caller is responsible for launching any terminal or tmux session. Use this
@@ -72,6 +73,7 @@ type SessionService struct {
 	executor   executil.Executor
 	log        zerolog.Logger
 	bus        *eventbus.EventBus
+	renderer   *tmpl.Renderer
 	spawner    *Spawner
 	recycler   *Recycler
 	hookRunner *HookRunner
@@ -102,6 +104,7 @@ func NewSessionService(
 		log:        log,
 		out:        out,
 		err:        err,
+		renderer:   renderer,
 		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), out, err),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, out, err),
@@ -215,14 +218,24 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	if !opts.SkipSpawn {
+		renderer, err := s.resolveRenderer(opts.Agent)
+		if err != nil {
+			return nil, err
+		}
+
+		spawner := s.spawner
+		if renderer != s.renderer {
+			spawner = s.spawner.withRenderer(renderer)
+		}
+
 		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
 		switch {
 		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
+			if err := spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		case len(strategy.Commands) > 0:
-			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+			if err := spawner.Spawn(ctx, strategy.Commands, data); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		default:
@@ -235,6 +248,23 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	s.bus.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &sess})
 
 	return &sess, nil
+}
+
+func (s *SessionService) resolveRenderer(agent string) (*tmpl.Renderer, error) {
+	if agent == "" {
+		return s.renderer, nil
+	}
+
+	profile, ok := s.config.Agents.Profiles[agent]
+	if !ok {
+		return nil, fmt.Errorf("agent profile %q not found in config", agent)
+	}
+
+	return s.renderer.WithAgent(
+		profile.CommandOrDefault(agent),
+		agent,
+		profile.ShellFlags(),
+	), nil
 }
 
 // ListSessions returns all sessions.
