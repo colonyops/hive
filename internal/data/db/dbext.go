@@ -139,8 +139,10 @@ func (db *DB) initSchema(ctx context.Context) error {
 
 // runMigrations applies incremental schema migrations for existing databases.
 func (db *DB) runMigrations(ctx context.Context) error {
+	// Use MAX(version) for deterministic reads — the table may contain multiple
+	// rows from previous schema versions (each version was inserted as a new row).
 	var version int
-	err := db.conn.QueryRowContext(ctx, "SELECT version FROM schema_version").Scan(&version)
+	err := db.conn.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_version").Scan(&version)
 	if err != nil {
 		return fmt.Errorf("failed to read schema version: %w", err)
 	}
@@ -174,7 +176,7 @@ func (db *DB) migrateV6ToV7(ctx context.Context) error {
 		}
 	}
 
-	if _, err := tx.ExecContext(ctx, "UPDATE schema_version SET version = 7"); err != nil {
+	if _, err := tx.ExecContext(ctx, "INSERT OR REPLACE INTO schema_version (version) VALUES (7)"); err != nil {
 		return fmt.Errorf("update version: %w", err)
 	}
 
