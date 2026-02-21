@@ -15,6 +15,7 @@ type NewCmd struct {
 	app    *hive.App
 	remote string
 	source string
+	agent  string
 }
 
 // NewNewCmd creates a new new command
@@ -40,6 +41,12 @@ Example:
   hive new Fix Auth Bug
   hive new bugfix --source /some/path`,
 		Flags: []cli.Flag{
+			&cli.StringFlag{
+				Name:        "agent",
+				Aliases:     []string{"a"},
+				Usage:       "agent profile to use (from config agents section)",
+				Destination: &cmd.agent,
+			},
 			&cli.StringFlag{
 				Name:        "remote",
 				Aliases:     []string{"r"},
@@ -75,10 +82,17 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		}
 	}
 
+	if cmd.agent != "" {
+		if _, ok := cmd.app.Config.Agents.Profiles[cmd.agent]; !ok {
+			return fmt.Errorf("unknown agent profile %q (available: %s)", cmd.agent, strings.Join(agentProfileNames(cmd.app.Config), ", "))
+		}
+	}
+
 	opts := hive.CreateOptions{
 		Name:   name,
 		Remote: cmd.remote,
 		Source: source,
+		Agent:  cmd.agent,
 	}
 
 	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)

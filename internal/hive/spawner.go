@@ -55,6 +55,12 @@ func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.R
 	}
 }
 
+func (s *Spawner) withRenderer(renderer *tmpl.Renderer) *Spawner {
+	clone := *s
+	clone.renderer = renderer
+	return &clone
+}
+
 // Spawn executes spawn commands sequentially with template rendering.
 func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) error {
 	for _, cmdTmpl := range commands {

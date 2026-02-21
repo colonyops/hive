@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/validate"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -19,6 +21,7 @@ type BatchCmd struct {
 	flags *Flags
 	app   *hive.App
 	fr    *iojson.FileReader[BatchInput]
+	agent string
 }
 
 func NewBatchCmd(flags *Flags, app *hive.App) *BatchCmd {
@@ -56,7 +59,8 @@ Input JSON schema:
         "session_id": "optional-id",
         "prompt": "optional task prompt",
         "remote": "optional-url",
-        "source": "optional-path"
+        "source": "optional-path",
+        "agent": "optional-profile"
       }
     ]
   }
@@ -67,6 +71,7 @@ Fields:
   prompt     - Optional. Task prompt passed to batch_spawn via {{.Prompt}} template.
   remote     - Optional. Git remote URL (auto-detected from current dir if empty).
   source     - Optional. Directory to copy files from (per copy rules in config).
+  agent      - Optional. Agent profile name (overrides --agent default for that session).
 
 Config example (in ~/.config/hive/config.yaml):
   commands:
@@ -76,7 +81,15 @@ Config example (in ~/.config/hive/config.yaml):
       - "wezterm cli spawn --cwd {{.Path}} -- claude --prompt '{{.Prompt}}'"
 
 Output is JSON with a batch ID, log file path, and results for each session.`,
-		Flags:  []cli.Flag{cmd.fr.Flag()},
+		Flags: []cli.Flag{
+			cmd.fr.Flag(),
+			&cli.StringFlag{
+				Name:        "agent",
+				Aliases:     []string{"a"},
+				Usage:       "default agent profile for all sessions",
+				Destination: &cmd.agent,
+			},
+		},
 		Action: cmd.run,
 	})
 
@@ -103,7 +116,13 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 		return iojson.WriteError(fmt.Sprintf("read input: %s", err), nil)
 	}
 
-	if err := input.Validate(); err != nil {
+	if cmd.agent != "" {
+		if _, ok := cmd.app.Config.Agents.Profiles[cmd.agent]; !ok {
+			return iojson.WriteError(fmt.Sprintf("unknown agent profile %q (available: %s)", cmd.agent, strings.Join(agentProfileNames(cmd.app.Config), ", ")), nil)
+		}
+	}
+
+	if err := input.ValidateWithProfiles(cmd.app.Config.Agents.Profiles); err != nil {
 		logger.Error().Err(err).Msg("input validation failed")
 		return iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
 	}
@@ -170,6 +189,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Prompt:        sess.Prompt,
 		Remote:        sess.Remote,
 		Source:        source,
+		Agent:         cmd.resolveAgent(sess),
 		UseBatchSpawn: true,
 	}
 
@@ -204,6 +224,12 @@ type BatchInput struct {
 
 // Validate checks the batch input for errors using criterio.
 func (b BatchInput) Validate() error {
+	return b.ValidateWithProfiles(nil)
+}
+
+// ValidateWithProfiles checks the batch input and optionally validates
+// session agent profile names against known profiles.
+func (b BatchInput) ValidateWithProfiles(profiles map[string]config.AgentProfile) error {
 	if len(b.Sessions) == 0 {
 		return criterio.NewFieldErrors("sessions", fmt.Errorf("array is empty"))
 	}
@@ -240,6 +266,12 @@ func (b BatchInput) Validate() error {
 			}
 			seenIDs[sess.SessionID] = true
 		}
+
+		if sess.Agent != "" && profiles != nil {
+			if _, ok := profiles[sess.Agent]; !ok {
+				errs = errs.Append(field+".agent", fmt.Errorf("unknown agent profile %q", sess.Agent))
+			}
+		}
 	}
 
 	return errs.ToError()
@@ -252,6 +284,14 @@ type BatchSession struct {
 	Prompt    string `json:"prompt,omitempty"`
 	Remote    string `json:"remote,omitempty"`
 	Source    string `json:"source,omitempty"`
+	Agent     string `json:"agent,omitempty"`
+}
+
+func (cmd *BatchCmd) resolveAgent(sess BatchSession) string {
+	if sess.Agent != "" {
+		return sess.Agent
+	}
+	return cmd.agent
 }
 
 // BatchResult is the output for a single session creation attempt.
