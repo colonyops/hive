@@ -33,6 +33,12 @@ func ParseExitCondition(s string) bool {
 	return result
 }
 
+// Clone strategy constants.
+const (
+	CloneStrategyFull     = "full"
+	CloneStrategyWorktree = "worktree"
+)
+
 // Form field type constants.
 const (
 	FormTypeText        = "text"
@@ -230,8 +236,9 @@ type Config struct {
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
 	Todos               TodosConfig            `yaml:"todos"`
-	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
-	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
+	CloneStrategy       string                 `yaml:"clone_strategy"` // "full" or "worktree", default "full"
+	RepoDirs            []string               `yaml:"repo_dirs"`      // directories containing git repositories for new session dialog
+	DataDir             string                 `yaml:"-"`              // set by caller, not from config file
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -459,6 +466,8 @@ type Rule struct {
 	BatchSpawn []string `yaml:"batch_spawn,omitempty"`
 	// Recycle commands to run when recycling a session.
 	Recycle []string `yaml:"recycle,omitempty"`
+	// CloneStrategy overrides the global clone strategy for matching repos.
+	CloneStrategy string `yaml:"clone_strategy,omitempty"`
 }
 
 // Keybinding defines a TUI keybinding that references a UserCommand.
@@ -737,6 +746,7 @@ func (c *Config) Validate() error {
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
+		c.validateCloneStrategy(),
 		c.validateAgents(),
 		c.validateWindowsBasic(),
 		c.validateTodos(),
@@ -905,6 +915,23 @@ func (c *Config) validateWindowsBasic() error {
 			}
 		}
 	}
+	return errs.ToError()
+}
+
+// validateCloneStrategy checks that clone_strategy values are valid.
+func (c *Config) validateCloneStrategy() error {
+	var errs criterio.FieldErrorsBuilder
+
+	if c.CloneStrategy != "" && c.CloneStrategy != CloneStrategyFull && c.CloneStrategy != CloneStrategyWorktree {
+		errs = errs.Append("clone_strategy", fmt.Errorf("must be %q or %q, got %q", CloneStrategyFull, CloneStrategyWorktree, c.CloneStrategy))
+	}
+
+	for i, rule := range c.Rules {
+		if rule.CloneStrategy != "" && rule.CloneStrategy != CloneStrategyFull && rule.CloneStrategy != CloneStrategyWorktree {
+			errs = errs.Append(fmt.Sprintf("rules[%d].clone_strategy", i), fmt.Errorf("must be %q or %q, got %q", CloneStrategyFull, CloneStrategyWorktree, rule.CloneStrategy))
+		}
+	}
+
 	return errs.ToError()
 }
 
@@ -1080,6 +1107,22 @@ func (c *Config) GetMaxRecycled(remote string) int {
 	}
 
 	return DefaultMaxRecycled
+}
+
+// GetCloneStrategy returns the clone strategy for the given remote URL.
+// Rules are evaluated in order; the last matching rule with clone_strategy set wins.
+// Returns CloneStrategyFull if nothing is configured.
+func (c *Config) GetCloneStrategy(remote string) string {
+	strategy := c.CloneStrategy
+	for _, rule := range c.Rules {
+		if rule.CloneStrategy != "" && rule.Matches(remote) {
+			strategy = rule.CloneStrategy
+		}
+	}
+	if strategy == "" {
+		return CloneStrategyFull
+	}
+	return strategy
 }
 
 // SpawnStrategy holds the resolved spawn method for a session.
