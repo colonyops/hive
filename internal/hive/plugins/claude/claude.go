@@ -97,7 +97,9 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 				}
 			}
 
-			// No cache - do expensive detection
+			// No cache - detect session ID.
+			// Use relaxed detection (no freshness cutoff) since even idle
+			// Claude sessions have valid analytics worth displaying.
 			claudeSessionID = DetectClaudeSessionID(sess.Path)
 			if claudeSessionID == "" {
 				continue
