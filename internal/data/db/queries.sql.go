@@ -178,7 +178,7 @@ func (q *Queries) FinalizeReviewSession(ctx context.Context, arg FinalizeReviewS
 }
 
 const findRecyclableSession = `-- name: FindRecyclableSession :one
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at FROM sessions
+SELECT id, name, slug, path, remote, state, clone_strategy, metadata, created_at, updated_at FROM sessions
 WHERE state = 'recycled' AND remote = ?
 ORDER BY updated_at ASC
 LIMIT 1
@@ -194,6 +194,7 @@ func (q *Queries) FindRecyclableSession(ctx context.Context, remote string) (Ses
 		&i.Path,
 		&i.Remote,
 		&i.State,
+		&i.CloneStrategy,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -298,7 +299,7 @@ func (q *Queries) GetReviewSessionByDocPathAndHash(ctx context.Context, arg GetR
 }
 
 const getSession = `-- name: GetSession :one
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at FROM sessions
+SELECT id, name, slug, path, remote, state, clone_strategy, metadata, created_at, updated_at FROM sessions
 WHERE id = ?
 `
 
@@ -312,6 +313,7 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 		&i.Path,
 		&i.Remote,
 		&i.State,
+		&i.CloneStrategy,
 		&i.Metadata,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -573,7 +575,7 @@ func (q *Queries) ListReviewComments(ctx context.Context, sessionID string) ([]R
 }
 
 const listSessions = `-- name: ListSessions :many
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at FROM sessions
+SELECT id, name, slug, path, remote, state, clone_strategy, metadata, created_at, updated_at FROM sessions
 ORDER BY created_at DESC
 `
 
@@ -593,6 +595,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 			&i.Path,
 			&i.Remote,
 			&i.State,
+			&i.CloneStrategy,
 			&i.Metadata,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -706,29 +709,31 @@ func (q *Queries) SaveReviewComment(ctx context.Context, arg SaveReviewCommentPa
 
 const saveSession = `-- name: SaveSession :exec
 INSERT INTO sessions (
-    id, name, slug, path, remote, state, metadata,
+    id, name, slug, path, remote, state, clone_strategy, metadata,
     created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     slug = excluded.slug,
     path = excluded.path,
     remote = excluded.remote,
     state = excluded.state,
+    clone_strategy = excluded.clone_strategy,
     metadata = excluded.metadata,
     updated_at = excluded.updated_at
 `
 
 type SaveSessionParams struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Slug      string         `json:"slug"`
-	Path      string         `json:"path"`
-	Remote    string         `json:"remote"`
-	State     string         `json:"state"`
-	Metadata  sql.NullString `json:"metadata"`
-	CreatedAt int64          `json:"created_at"`
-	UpdatedAt int64          `json:"updated_at"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	Path          string         `json:"path"`
+	Remote        string         `json:"remote"`
+	State         string         `json:"state"`
+	CloneStrategy string         `json:"clone_strategy"`
+	Metadata      sql.NullString `json:"metadata"`
+	CreatedAt     int64          `json:"created_at"`
+	UpdatedAt     int64          `json:"updated_at"`
 }
 
 func (q *Queries) SaveSession(ctx context.Context, arg SaveSessionParams) error {
@@ -739,6 +744,7 @@ func (q *Queries) SaveSession(ctx context.Context, arg SaveSessionParams) error 
 		arg.Path,
 		arg.Remote,
 		arg.State,
+		arg.CloneStrategy,
 		arg.Metadata,
 		arg.CreatedAt,
 		arg.UpdatedAt,

@@ -61,15 +61,16 @@ type SchemaVersion struct {
 }
 
 type Session struct {
-	ID        string         `json:"id"`
-	Name      string         `json:"name"`
-	Slug      string         `json:"slug"`
-	Path      string         `json:"path"`
-	Remote    string         `json:"remote"`
-	State     string         `json:"state"`
-	Metadata  sql.NullString `json:"metadata"`
-	CreatedAt int64          `json:"created_at"`
-	UpdatedAt int64          `json:"updated_at"`
+	ID            string         `json:"id"`
+	Name          string         `json:"name"`
+	Slug          string         `json:"slug"`
+	Path          string         `json:"path"`
+	Remote        string         `json:"remote"`
+	State         string         `json:"state"`
+	CloneStrategy string         `json:"clone_strategy"`
+	Metadata      sql.NullString `json:"metadata"`
+	CreatedAt     int64          `json:"created_at"`
+	UpdatedAt     int64          `json:"updated_at"`
 }
 
 type Topic struct {

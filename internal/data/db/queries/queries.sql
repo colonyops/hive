@@ -8,15 +8,16 @@ WHERE id = ?;
 
 -- name: SaveSession :exec
 INSERT INTO sessions (
-    id, name, slug, path, remote, state, metadata,
+    id, name, slug, path, remote, state, clone_strategy, metadata,
     created_at, updated_at
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(id) DO UPDATE SET
     name = excluded.name,
     slug = excluded.slug,
     path = excluded.path,
     remote = excluded.remote,
     state = excluded.state,
+    clone_strategy = excluded.clone_strategy,
     metadata = excluded.metadata,
     updated_at = excluded.updated_at;
 
