@@ -71,9 +71,55 @@ func (c *Config) Warnings() []ValidationWarning {
 				Message:  "rule has neither commands nor copy defined",
 			})
 		}
+		for j, w := range rule.Windows {
+			if len(w.Panes) > 0 && w.Command == "" {
+				warnings = append(warnings, ValidationWarning{
+					Category: "Rules",
+					Item:     fmt.Sprintf("rule %d window %d (%s)", i, j, w.Name),
+					Message:  "window has panes but no command; agent will not be in pane 0",
+				})
+			}
+			if focusCount := countFocusedPanes(w.Panes); focusCount > 1 {
+				warnings = append(warnings, ValidationWarning{
+					Category: "Rules",
+					Item:     fmt.Sprintf("rule %d window %d (%s)", i, j, w.Name),
+					Message:  fmt.Sprintf("window has %d panes with focus:true; only the last will be selected", focusCount),
+				})
+			}
+		}
+	}
+
+	for name, cmd := range c.UserCommands {
+		for j, w := range cmd.Windows {
+			if len(w.Panes) > 0 && w.Command == "" {
+				warnings = append(warnings, ValidationWarning{
+					Category: "UserCommands",
+					Item:     fmt.Sprintf("%s window %d (%s)", name, j, w.Name),
+					Message:  "window has panes but no command; agent will not be in pane 0",
+				})
+			}
+			if focusCount := countFocusedPanes(w.Panes); focusCount > 1 {
+				warnings = append(warnings, ValidationWarning{
+					Category: "UserCommands",
+					Item:     fmt.Sprintf("%s window %d (%s)", name, j, w.Name),
+					Message:  fmt.Sprintf("window has %d panes with focus:true; only the last will be selected", focusCount),
+				})
+			}
+		}
 	}
 
 	return warnings
+}
+
+// countFocusedPanes returns the number of panes with Focus set to true.
+func countFocusedPanes(panes []PaneConfig) int {
+	count := 0
+	for _, p := range panes {
+		if p.Focus {
+			count++
+		}
+	}
+	return count
 }
 
 // validateFileAccess checks config file, data directory, and git executable.
@@ -175,6 +221,19 @@ func (c *Config) validateRules() error {
 					errs = errs.Append(prefix+".dir", fmt.Errorf("template error: %w", err))
 				}
 			}
+			for k, p := range w.Panes {
+				pprefix := fmt.Sprintf("%s.panes[%d]", prefix, k)
+				if p.Command != "" {
+					if err := validateTemplate(p.Command, BatchSpawnTemplateData{}); err != nil {
+						errs = errs.Append(pprefix+".command", fmt.Errorf("template error: %w", err))
+					}
+				}
+				if p.Dir != "" {
+					if err := validateTemplate(p.Dir, BatchSpawnTemplateData{}); err != nil {
+						errs = errs.Append(pprefix+".dir", fmt.Errorf("template error: %w", err))
+					}
+				}
+			}
 		}
 	}
 	return errs.ToError()
@@ -219,6 +278,20 @@ func (c *Config) validateUserCommandTemplates() error {
 				}
 				if err := validateTemplate(tmplStr, testData); err != nil {
 					errs = errs.Append(wfield+tname, err)
+				}
+			}
+			for j, p := range w.Panes {
+				pfield := fmt.Sprintf("%s.panes[%d]", wfield, j)
+				for tname, tmplStr := range map[string]string{
+					".command": p.Command,
+					".dir":     p.Dir,
+				} {
+					if tmplStr == "" {
+						continue
+					}
+					if err := validateTemplate(tmplStr, testData); err != nil {
+						errs = errs.Append(pfield+tname, err)
+					}
 				}
 			}
 		}

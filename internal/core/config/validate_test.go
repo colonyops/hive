@@ -299,6 +299,65 @@ func TestWarnings_EmptyRule(t *testing.T) {
 	assert.True(t, hasWarning, "expected warning about empty rule")
 }
 
+func TestWarnings_PanesWithoutCommand(t *testing.T) {
+	t.Run("rule window with panes but no command warns", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Windows: []WindowConfig{
+					{Name: "agent", Panes: []PaneConfig{{Command: "tail -f dev.log"}}},
+				},
+			},
+		}
+
+		warnings := cfg.Warnings()
+		found := false
+		for _, w := range warnings {
+			if w.Category == "Rules" && strings.Contains(w.Message, "panes but no command") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "expected warning for rule window with panes but no command")
+	})
+
+	t.Run("rule window with panes and command does not warn", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Windows: []WindowConfig{
+					{Name: "agent", Command: "claude", Panes: []PaneConfig{{Command: "tail -f dev.log"}}},
+				},
+			},
+		}
+
+		for _, w := range cfg.Warnings() {
+			assert.NotContains(t, w.Message, "panes but no command")
+		}
+	})
+
+	t.Run("usercommand window with panes but no command warns", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.UserCommands = map[string]UserCommand{
+			"DevSetup": {
+				Windows: []WindowConfig{
+					{Name: "agent", Panes: []PaneConfig{{Command: "tail -f dev.log"}}},
+				},
+			},
+		}
+
+		warnings := cfg.Warnings()
+		found := false
+		for _, w := range warnings {
+			if w.Category == "UserCommands" && strings.Contains(w.Message, "panes but no command") {
+				found = true
+				break
+			}
+		}
+		assert.True(t, found, "expected warning for usercommand window with panes but no command")
+	})
+}
+
 func TestValidateDeep_ValidRulesWithCopy(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Rules = []Rule{

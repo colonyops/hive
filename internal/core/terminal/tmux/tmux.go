@@ -269,11 +269,11 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 		return nil, nil
 	}
 
-	// If explicit pane given, use it directly
-	if pane := metadata[session.MetaTmuxPane]; pane != "" {
-		w := sc.findWindow(pane)
+	// If explicit window index given, use it directly
+	if windowIndex := metadata[session.MetaTmuxWindow]; windowIndex != "" {
+		w := sc.findWindow(windowIndex)
 		if w == nil {
-			log.Debug().Str("session", sessionName).Str("pane", pane).Msg("explicit pane not found, falling back to best window")
+			log.Debug().Str("session", sessionName).Str("window", windowIndex).Msg("explicit window not found, falling back to best window")
 			w = sc.bestWindow()
 		}
 		return t.sessionInfoFromWindow(sessionName, sc, w), nil
@@ -326,9 +326,9 @@ func (t *Integration) sessionInfoFromWindow(sessionName string, _ *sessionCache,
 		return &terminal.SessionInfo{Name: sessionName}
 	}
 	return &terminal.SessionInfo{
-		Name:       sessionName,
-		Pane:       w.windowIndex,
-		WindowName: w.windowName,
+		Name:        sessionName,
+		WindowIndex: w.windowIndex,
+		WindowName:  w.windowName,
 	}
 }
 
@@ -347,9 +347,9 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return terminal.StatusMissing, nil
 	}
 
-	w := sc.findWindow(info.Pane)
+	w := sc.findWindow(info.WindowIndex)
 	if w == nil {
-		log.Debug().Str("session", info.Name).Str("pane", info.Pane).Msg("window not found in cache, falling back to best window")
+		log.Debug().Str("session", info.Name).Str("window", info.WindowIndex).Msg("window not found in cache, falling back to best window")
 		w = sc.bestWindow()
 	}
 	if w == nil {
@@ -387,7 +387,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	default:
 		// Activity changed and rate limit allows, capture fresh
 		var err error
-		content, err = t.capturePane(ctx, info.Name, windowIndex)
+		content, err = t.captureWindow(ctx, info.Name, windowIndex)
 		if err != nil {
 			return terminal.StatusMissing, err
 		}
@@ -446,11 +446,16 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	return status, nil
 }
 
-// capturePane captures the content of a tmux pane.
-func (t *Integration) capturePane(_ context.Context, sessionName, pane string) (string, error) {
+// captureWindow captures the content of a tmux window.
+// Always targets pane 0: hive creates agent commands via new-window which places
+// the process in pane 0. Additional panes (companion tools) are appended after,
+// so pane 0 is always the agent pane.
+// Assumes pane-base-index=0 (tmux default); non-default configurations will target
+// the wrong pane and may cause status detection to return StatusMissing.
+func (t *Integration) captureWindow(_ context.Context, sessionName, windowIndex string) (string, error) {
 	target := sessionName
-	if pane != "" {
-		target = sessionName + ":" + pane
+	if windowIndex != "" {
+		target = sessionName + ":" + windowIndex + ".0"
 	}
 
 	// -p: print to stdout
@@ -484,9 +489,9 @@ func (t *Integration) DiscoverAllWindows(_ context.Context, slug string, metadat
 	infos := make([]*terminal.SessionInfo, 0, len(sc.agentWindows))
 	for _, w := range sc.agentWindows {
 		infos = append(infos, &terminal.SessionInfo{
-			Name:       sessionName,
-			Pane:       w.windowIndex,
-			WindowName: w.windowName,
+			Name:        sessionName,
+			WindowIndex: w.windowIndex,
+			WindowName:  w.windowName,
 		})
 	}
 	return infos, nil

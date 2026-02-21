@@ -30,7 +30,7 @@ const (
 // Metadata keys for terminal integration.
 const (
 	MetaTmuxSession = "tmux_session" // tmux session name
-	MetaTmuxPane    = "tmux_pane"    // tmux pane identifier
+	MetaTmuxWindow  = "tmux_window"  // tmux window index
 )
 
 // Session represents an isolated git environment for an AI agent.

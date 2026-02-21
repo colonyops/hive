@@ -147,7 +147,32 @@ func renderWindowCommon(w config.WindowConfig, render func(string) (string, erro
 		}
 	}
 
-	return coretmux.RenderedWindow{Name: name, Command: command, Dir: dir, Focus: w.Focus}, nil
+	panes := make([]coretmux.RenderedPane, 0, len(w.Panes))
+	for i, p := range w.Panes {
+		var paneCmd string
+		if p.Command != "" {
+			paneCmd, err = render(p.Command)
+			if err != nil {
+				return coretmux.RenderedWindow{}, fmt.Errorf("pane %d command template: %w", i, err)
+			}
+			paneCmd = strings.TrimSpace(paneCmd)
+		}
+		var paneDir string
+		if p.Dir != "" {
+			paneDir, err = render(p.Dir)
+			if err != nil {
+				return coretmux.RenderedWindow{}, fmt.Errorf("pane %d dir template: %w", i, err)
+			}
+		}
+		panes = append(panes, coretmux.RenderedPane{
+			Command:    paneCmd,
+			Dir:        paneDir,
+			Focus:      p.Focus,
+			Horizontal: p.Horizontal,
+		})
+	}
+
+	return coretmux.RenderedWindow{Name: name, Command: command, Dir: dir, Focus: w.Focus, Panes: panes}, nil
 }
 
 // renderWindow renders a single WindowConfig against SpawnData.
