@@ -58,10 +58,21 @@ func getClaudeConfigDir() string {
 	return filepath.Join(home, ".claude")
 }
 
-// DetectClaudeSessionID attempts to find the ACTIVE session ID for a project.
-// It looks for the most recently modified UUID-named session file (within 5 minutes).
-// Returns empty string if no active session found.
+// DetectClaudeSessionID attempts to find the most recent session ID for a project.
+// Returns empty string if no session found.
 func DetectClaudeSessionID(projectPath string) string {
+	return detectClaudeSessionID(projectPath, 0)
+}
+
+// DetectActiveClaudeSessionID finds a session modified within maxAge.
+// Use this for initial discovery where freshness matters.
+func DetectActiveClaudeSessionID(projectPath string, maxAge time.Duration) string {
+	return detectClaudeSessionID(projectPath, maxAge)
+}
+
+// detectClaudeSessionID finds the most recently modified UUID-named session file.
+// If maxAge > 0, only returns sessions modified within that duration.
+func detectClaudeSessionID(projectPath string, maxAge time.Duration) string {
 	configDir := getClaudeConfigDir()
 
 	// Resolve symlinks (macOS /tmp -> /private/tmp)
@@ -82,8 +93,6 @@ func DetectClaudeSessionID(projectPath string) string {
 	if err != nil || len(files) == 0 {
 		return ""
 	}
-
-	// Use pre-compiled regex for UUID matching (performance optimization)
 
 	var mostRecent string
 	var mostRecentTime time.Time
@@ -113,12 +122,16 @@ func DetectClaudeSessionID(projectPath string) string {
 		}
 	}
 
-	// Only return if modified within last 5 minutes (actively used)
-	if mostRecent != "" && time.Since(mostRecentTime) < 5*time.Minute {
-		return mostRecent
+	if mostRecent == "" {
+		return ""
 	}
 
-	return ""
+	// Apply freshness cutoff if requested
+	if maxAge > 0 && time.Since(mostRecentTime) >= maxAge {
+		return ""
+	}
+
+	return mostRecent
 }
 
 // GetClaudeJSONLPath resolves the JSONL file path for a Claude session.

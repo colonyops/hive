@@ -239,8 +239,64 @@ func TestGetClaudeJSONLPath(t *testing.T) {
 		path := GetClaudeJSONLPath("/nonexistent/path", "session-id")
 		assert.Empty(t, path)
 	})
+}
 
-	// Note: Testing the actual path resolution would require creating
-	// the full ~/.config/claude/projects directory structure,
-	// which is environment-specific and not suitable for unit tests
+func TestDetectClaudeSessionID(t *testing.T) {
+	// Setup: create a fake Claude config dir with a project session file.
+	// Uses a real temp directory as the "project path" so EvalSymlinks succeeds.
+	setupFakeClaudeDir := func(t *testing.T, modTime time.Time) (projectPath string) {
+		t.Helper()
+		configDir := t.TempDir()
+		t.Setenv("CLAUDE_CONFIG_DIR", configDir)
+
+		// Use another real temp dir as the project path so EvalSymlinks works
+		projectPath = t.TempDir()
+		resolvedPath, err := filepath.EvalSymlinks(projectPath)
+		require.NoError(t, err)
+
+		projectDir := convertToClaudeDirName(resolvedPath)
+		projectConfigDir := filepath.Join(configDir, "projects", projectDir)
+		require.NoError(t, os.MkdirAll(projectConfigDir, 0o755))
+
+		sessionFile := filepath.Join(projectConfigDir, "a1b2c3d4-e5f6-7890-abcd-ef1234567890.jsonl")
+		require.NoError(t, os.WriteFile(sessionFile, []byte(`{"type":"assistant"}`), 0o644))
+		require.NoError(t, os.Chtimes(sessionFile, modTime, modTime))
+
+		return projectPath
+	}
+
+	t.Run("returns session for recent file", func(t *testing.T) {
+		projectPath := setupFakeClaudeDir(t, time.Now())
+
+		result := DetectClaudeSessionID(projectPath)
+		assert.Equal(t, "a1b2c3d4-e5f6-7890-abcd-ef1234567890", result)
+	})
+
+	t.Run("returns session for old file (no freshness cutoff)", func(t *testing.T) {
+		projectPath := setupFakeClaudeDir(t, time.Now().Add(-1*time.Hour))
+
+		result := DetectClaudeSessionID(projectPath)
+		assert.Equal(t, "a1b2c3d4-e5f6-7890-abcd-ef1234567890", result)
+	})
+
+	t.Run("DetectActive returns empty for old file", func(t *testing.T) {
+		projectPath := setupFakeClaudeDir(t, time.Now().Add(-10*time.Minute))
+
+		result := DetectActiveClaudeSessionID(projectPath, 5*time.Minute)
+		assert.Empty(t, result)
+	})
+
+	t.Run("DetectActive returns session for recent file", func(t *testing.T) {
+		projectPath := setupFakeClaudeDir(t, time.Now().Add(-2*time.Minute))
+
+		result := DetectActiveClaudeSessionID(projectPath, 5*time.Minute)
+		assert.Equal(t, "a1b2c3d4-e5f6-7890-abcd-ef1234567890", result)
+	})
+
+	t.Run("returns empty for non-existent project", func(t *testing.T) {
+		t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
+
+		result := DetectClaudeSessionID("/nonexistent/path")
+		assert.Empty(t, result)
+	})
 }

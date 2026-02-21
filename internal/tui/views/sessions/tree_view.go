@@ -512,13 +512,15 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		matchStyle = d.Styles.SelectedMatch
 	}
 
-	// Apply Claude plugin style (context usage color) if present
+	// Apply Claude plugin style (context usage color) if present.
+	// Must use Foreground() directly since Inherit() won't override
+	// the existing foreground color on nameStyle.
 	if d.PluginStatuses != nil {
 		if claudeStore, ok := d.PluginStatuses[PluginClaude]; ok {
 			if status, ok := claudeStore.Get(item.Session.ID); ok {
-				// Claude plugin returns style (color) but no label/icon
-				// Use Inherit to merge the color while preserving selection state
-				nameStyle = nameStyle.Inherit(status.Style)
+				if fg := status.Style.GetForeground(); fg != (lipgloss.NoColor{}) {
+					nameStyle = nameStyle.Foreground(fg)
+				}
 			}
 		}
 	}
@@ -714,8 +716,12 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 			icon = status.Icon
 		}
 
-		// Icon unstyled, only the label gets neutral color
-		parts = append(parts, icon+neutralStyle.Render(status.Label))
+		// Use plugin's own style for the label if it has a foreground color
+		labelStyle := neutralStyle
+		if fg := status.Style.GetForeground(); fg != (lipgloss.NoColor{}) {
+			labelStyle = lipgloss.NewStyle().Foreground(fg)
+		}
+		parts = append(parts, icon+labelStyle.Render(status.Label))
 	}
 
 	if len(parts) == 0 {
