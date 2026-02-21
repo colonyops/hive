@@ -74,6 +74,33 @@ func build() string {
 	return fmt.Sprintf("%s (%s) %s", v, short, d)
 }
 
+// isShellCompletion reports whether the process was invoked for shell
+// completion. It mirrors urfave/cli's own detection: --generate-shell-completion
+// must be the last argument with no "--" preceding it. Also matches the
+// "completion" subcommand used to generate static completion scripts.
+func isShellCompletion(args []string) bool {
+	if len(args) < 2 {
+		return false
+	}
+
+	// Static script generation: `hive completion bash`
+	if args[1] == "completion" {
+		return true
+	}
+
+	// Dynamic completion: last arg is the flag, and no "--" precedes it
+	last := args[len(args)-1]
+	if last != "--generate-shell-completion" {
+		return false
+	}
+	for _, arg := range args[1 : len(args)-1] {
+		if arg == "--" {
+			return false
+		}
+	}
+	return true
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -99,7 +126,10 @@ spawning terminal sessions with your preferred AI tool.
 
 Run 'hive' with no arguments to open the interactive session manager.
 Run 'hive new' to create a new session from the current repository.`,
-		Version: build(),
+		Version:               build(),
+		EnableShellCompletion: true,
+
+		ConfigureShellCompletionCommand: commands.ConfigureCompletionCommand,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "log-level",
@@ -131,6 +161,13 @@ Run 'hive new' to create a new session from the current repository.`,
 			},
 		},
 		Before: func(ctx context.Context, c *cli.Command) (context.Context, error) {
+			// Skip heavy initialization during shell completion. The
+			// completion handler only needs the command tree (already
+			// registered) to suggest subcommands and flags.
+			if isShellCompletion(os.Args) {
+				return ctx, nil
+			}
+
 			// Always log to a file; use explicit path or default to <datadir>/hive.log
 			logFile := flags.LogFile
 			if logFile == "" {
