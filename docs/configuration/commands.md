@@ -76,6 +76,13 @@ These actions are provided by the tmux plugin and require tmux to be available.
 | `FilterApproval` | Show sessions needing approval       |
 | `FilterReady`    | Show sessions with idle agents       |
 
+### Grouping
+
+| Action        | Description                                |
+| ------------- | ------------------------------------------ |
+| `GroupSet`    | Set/clear the selected session's group     |
+| `GroupToggle` | Toggle between repo and group tree view    |
+
 ### Navigation
 
 | Action       | Description                    |

@@ -78,6 +78,7 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | `tui.theme`            | `string`   | `tokyo-night`  | Built-in theme name (see [Themes](themes.md))|
 | `tui.refresh_interval` | `duration` | `15s`          | Auto-refresh interval (0 to disable)         |
 | `tui.preview_enabled`  | `bool`     | `true`         | Enable tmux pane preview sidebar on startup  |
+| `tui.group_by`         | `string`   | `repo`         | Tree view grouping: `repo` or `group`        |
 
 ## Messaging
 
