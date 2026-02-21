@@ -4,7 +4,6 @@ import (
 	"context"
 
 	tea "charm.land/bubbletea/v2"
-	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/hive/updatecheck"
 	"github.com/rs/zerolog/log"
 )
@@ -13,9 +12,12 @@ type updateAvailableMsg struct {
 	result *updatecheck.Result
 }
 
-func checkForUpdate(kvStore corekv.KV, currentVersion string) tea.Cmd {
+func checkForUpdate(checker *updatecheck.Checker, currentVersion string) tea.Cmd {
 	return func() tea.Msg {
-		result, err := updatecheck.Check(context.Background(), kvStore, currentVersion)
+		if checker == nil {
+			return nil
+		}
+		result, err := checker.Check(context.Background(), currentVersion)
 		if err != nil {
 			log.Debug().Err(err).Msg("update check failed")
 			return nil

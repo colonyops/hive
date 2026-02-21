@@ -137,6 +137,7 @@ type Model struct {
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
+	updateChecker *updatecheck.Checker
 	updateInfo    *updatecheck.Result
 	doctorService *hive.DoctorService
 	configPath    string
@@ -265,6 +266,8 @@ func New(deps Deps, opts Opts) Model {
 	// Sessions tab is active by default
 	sessionsView.SetActive(true)
 
+	updateChecker := updatecheck.New(deps.KVStore, nil)
+
 	return Model{
 		cfg:             cfg,
 		service:         service,
@@ -287,6 +290,7 @@ func New(deps Deps, opts Opts) Model {
 		bus:             deps.Bus,
 		renderer:        deps.Renderer,
 		buildInfo:       deps.BuildInfo,
+		updateChecker:   updateChecker,
 		doctorService:   deps.DoctorService,
 		configPath:      opts.ConfigPath,
 		startupWarnings: opts.Warnings,
@@ -337,8 +341,8 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	if m.kvStore != nil && m.buildInfo.Version != "" {
-		cmds = append(cmds, checkForUpdate(m.kvStore, m.buildInfo.Version))
+	if m.cfg.TUI.UpdateCheckerEnabled() && m.updateChecker != nil && m.buildInfo.Version != "" {
+		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
 	return tea.Batch(cmds...)
 }
