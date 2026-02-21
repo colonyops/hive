@@ -24,7 +24,7 @@ depends = ["generate:enums"]
 sources = [
   "internal/core/eventbus/events.go",
   "internal/data/db/queries/queries.sql",
-  "internal/data/db/schema/schema.sql",
+  "internal/data/db/migrations/*.up.sql",
   "sqlc.yaml",
 ]
 outputs = [

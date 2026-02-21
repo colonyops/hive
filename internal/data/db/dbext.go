@@ -3,15 +3,11 @@ package db
 import (
 	"context"
 	"database/sql"
-	_ "embed"
 	"fmt"
 	"path/filepath"
 
 	_ "modernc.org/sqlite"
 )
-
-//go:embed schema/schema.sql
-var schemaSQL string
 
 // OpenOptions configures database connection settings.
 type OpenOptions struct {
@@ -95,6 +91,11 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
+// Conn returns the underlying *sql.DB connection.
+func (db *DB) Conn() *sql.DB {
+	return db.conn
+}
+
 // Queries returns the sqlc queries interface.
 func (db *DB) Queries() *Queries {
 	return db.queries
@@ -123,11 +124,7 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 	return nil
 }
 
-// initSchema creates the database schema if it doesn't exist.
+// initSchema runs all pending up migrations.
 func (db *DB) initSchema(ctx context.Context) error {
-	_, err := db.conn.ExecContext(ctx, schemaSQL)
-	if err != nil {
-		return fmt.Errorf("failed to execute schema: %w", err)
-	}
-	return nil
+	return migrateUp(ctx, db.conn)
 }

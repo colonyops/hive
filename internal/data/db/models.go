@@ -56,10 +56,6 @@ type ReviewSession struct {
 	FinalizedAt  sql.NullInt64 `json:"finalized_at"`
 }
 
-type SchemaVersion struct {
-	Version int64 `json:"version"`
-}
-
 type Session struct {
 	ID        string         `json:"id"`
 	Name      string         `json:"name"`
