@@ -1481,3 +1481,131 @@ func TestValidateDeep_WindowTemplates(t *testing.T) {
 		assert.NoError(t, err)
 	})
 }
+
+func TestValidateFormField_ValidationConstraints(t *testing.T) {
+	tests := []struct {
+		name    string
+		field   FormField
+		wantErr bool
+		errMsg  string
+	}{
+		{
+			name:    "valid required text",
+			field:   FormField{Variable: "msg", Type: FormTypeText, Label: "Msg", Required: true},
+			wantErr: false,
+		},
+		{
+			name:    "valid min/max length on text",
+			field:   FormField{Variable: "msg", Type: FormTypeText, Label: "Msg", MinLength: 1, MaxLength: 100},
+			wantErr: false,
+		},
+		{
+			name:    "valid pattern on textarea",
+			field:   FormField{Variable: "msg", Type: FormTypeTextArea, Label: "Msg", Pattern: `^\w+$`},
+			wantErr: false,
+		},
+		{
+			name:    "min_length on select rejected",
+			field:   FormField{Variable: "x", Type: FormTypeSelect, Label: "X", Options: []string{"a"}, MinLength: 1},
+			wantErr: true,
+			errMsg:  "min_length",
+		},
+		{
+			name:    "max_length on preset rejected",
+			field:   FormField{Variable: "x", Preset: FormPresetSessionSelector, Label: "X", MaxLength: 10},
+			wantErr: true,
+			errMsg:  "max_length",
+		},
+		{
+			name:    "pattern on select rejected",
+			field:   FormField{Variable: "x", Type: FormTypeSelect, Label: "X", Options: []string{"a"}, Pattern: `\d+`},
+			wantErr: true,
+			errMsg:  "pattern",
+		},
+		{
+			name:    "min_length > max_length rejected",
+			field:   FormField{Variable: "msg", Type: FormTypeText, Label: "Msg", MinLength: 10, MaxLength: 5},
+			wantErr: true,
+			errMsg:  "min_length",
+		},
+		{
+			name:    "valid min/max on multi-select",
+			field:   FormField{Variable: "tags", Type: FormTypeMultiSelect, Label: "Tags", Options: []string{"a", "b"}, Min: 1, Max: 2},
+			wantErr: false,
+		},
+		{
+			name:    "valid min on multi preset",
+			field:   FormField{Variable: "t", Preset: FormPresetSessionSelector, Label: "T", Multi: true, Min: 1},
+			wantErr: false,
+		},
+		{
+			name:    "min on single select rejected",
+			field:   FormField{Variable: "x", Type: FormTypeSelect, Label: "X", Options: []string{"a"}, Min: 1},
+			wantErr: true,
+			errMsg:  "min",
+		},
+		{
+			name:    "max on text rejected",
+			field:   FormField{Variable: "x", Type: FormTypeText, Label: "X", Max: 1},
+			wantErr: true,
+			errMsg:  "max",
+		},
+		{
+			name:    "min > max rejected",
+			field:   FormField{Variable: "tags", Type: FormTypeMultiSelect, Label: "Tags", Options: []string{"a", "b"}, Min: 3, Max: 1},
+			wantErr: true,
+			errMsg:  "min",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateFormField(tt.field)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				assert.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateDeep_FormFieldInvalidPattern(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"cmd": {
+			Sh: "echo {{ .Form.msg }}",
+			Form: []FormField{
+				{Variable: "msg", Type: FormTypeText, Label: "Msg", Pattern: "[invalid"},
+			},
+		},
+	}
+
+	err := cfg.ValidateDeep("")
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	found := false
+	for _, fe := range fieldErrs {
+		if strings.Contains(fe.Field, "pattern") {
+			found = true
+			assert.Contains(t, fe.Err.Error(), "invalid regex")
+		}
+	}
+	assert.True(t, found, "expected pattern validation error")
+}
+
+func TestValidateDeep_FormFieldValidPattern(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"cmd": {
+			Sh: "echo {{ .Form.msg }}",
+			Form: []FormField{
+				{Variable: "msg", Type: FormTypeText, Label: "Msg", Pattern: `^[a-zA-Z]\w+$`},
+			},
+		},
+	}
+
+	err := cfg.ValidateDeep("")
+	assert.NoError(t, err)
+}

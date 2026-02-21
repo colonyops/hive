@@ -9,13 +9,15 @@ import (
 
 // TextAreaField is a multi-line text input form field.
 type TextAreaField struct {
-	input   textarea.Model
-	label   string
-	focused bool
+	input      textarea.Model
+	label      string
+	focused    bool
+	validation FieldValidation
+	errMsg     string
 }
 
 // NewTextAreaField creates a new multi-line text input field.
-func NewTextAreaField(label, placeholder, defaultVal string) *TextAreaField {
+func NewTextAreaField(label, placeholder, defaultVal string, opts ...FieldValidation) *TextAreaField {
 	ta := textarea.New()
 	ta.Placeholder = placeholder
 	ta.SetHeight(4)
@@ -25,10 +27,14 @@ func NewTextAreaField(label, placeholder, defaultVal string) *TextAreaField {
 		ta.SetValue(defaultVal)
 	}
 
-	return &TextAreaField{
+	f := &TextAreaField{
 		input: ta,
 		label: label,
 	}
+	if len(opts) > 0 {
+		f.validation = opts[0]
+	}
+	return f
 }
 
 func (f *TextAreaField) Update(msg tea.Msg) (Field, tea.Cmd) {
@@ -48,7 +54,11 @@ func (f *TextAreaField) View() string {
 	}
 	title := titleStyle.Render(f.label)
 
-	content := lipgloss.JoinVertical(lipgloss.Left, title, f.input.View())
+	parts := []string{title, f.input.View()}
+	if f.errMsg != "" {
+		parts = append(parts, styles.FormErrorStyle.Render(f.errMsg))
+	}
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	borderStyle := styles.FormFieldStyle
 	if f.focused {
@@ -71,3 +81,8 @@ func (f *TextAreaField) Blur() {
 func (f *TextAreaField) Focused() bool { return f.focused }
 func (f *TextAreaField) Value() any    { return f.input.Value() }
 func (f *TextAreaField) Label() string { return f.label }
+
+func (f *TextAreaField) Validate() string {
+	f.errMsg = f.validation.ValidateText(f.input.Value())
+	return f.errMsg
+}

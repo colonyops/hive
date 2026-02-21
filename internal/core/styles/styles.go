@@ -52,6 +52,7 @@ var (
 	FormTitleStyle        lipgloss.Style
 	FormFieldStyle        lipgloss.Style
 	FormFieldFocusedStyle lipgloss.Style
+	FormErrorStyle        lipgloss.Style
 
 	// Help dialog styles.
 	HelpDialogSectionStyle lipgloss.Style
@@ -202,6 +203,8 @@ func SetTheme(p Palette) {
 		Border(lipgloss.ThickBorder(), false, false, false, true).
 		BorderForeground(ColorPrimary).
 		PaddingLeft(1)
+	FormErrorStyle = lipgloss.NewStyle().
+		Foreground(ColorError)
 
 	HelpDialogSectionStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).

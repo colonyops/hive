@@ -80,6 +80,8 @@ func (f *SessionSelectorField) Blur()          { f.inner.Blur() }
 func (f *SessionSelectorField) Focused() bool  { return f.inner.Focused() }
 func (f *SessionSelectorField) Label() string  { return f.label_ }
 
+func (f *SessionSelectorField) Validate() string { return f.inner.Validate() }
+
 // Value returns session.Session for single-select or []session.Session for multi-select.
 func (f *SessionSelectorField) Value() any {
 	labelToIdx := make(map[string]int, len(f.labels))

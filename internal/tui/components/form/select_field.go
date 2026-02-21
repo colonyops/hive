@@ -12,10 +12,12 @@ import (
 
 // SelectFormField is a single-select form field wrapping list.Model.
 type SelectFormField struct {
-	list    list.Model
-	options []string
-	label_  string
-	focused bool
+	list       list.Model
+	options    []string
+	label_     string
+	focused    bool
+	validation FieldValidation
+	errMsg     string
 }
 
 // selectDelegate renders items in a single-select list.
@@ -103,16 +105,15 @@ func (f *SelectFormField) View() string {
 	}
 	title := titleStyle.Render(f.label_)
 
-	var content string
+	parts := []string{title}
 	if f.list.SettingFilter() {
-		content = lipgloss.JoinVertical(lipgloss.Left,
-			title,
-			f.list.FilterInput.View(),
-			f.list.View(),
-		)
-	} else {
-		content = lipgloss.JoinVertical(lipgloss.Left, title, f.list.View())
+		parts = append(parts, f.list.FilterInput.View())
 	}
+	parts = append(parts, f.list.View())
+	if f.errMsg != "" {
+		parts = append(parts, styles.FormErrorStyle.Render(f.errMsg))
+	}
+	content := lipgloss.JoinVertical(lipgloss.Left, parts...)
 
 	borderStyle := styles.FormFieldStyle
 	if f.focused {
@@ -145,6 +146,16 @@ func (f *SelectFormField) Value() any {
 }
 
 func (f *SelectFormField) Label() string { return f.label_ }
+
+func (f *SelectFormField) Validate() string {
+	selected := f.list.SelectedItem()
+	count := 0
+	if selected != nil {
+		count = 1
+	}
+	f.errMsg = f.validation.ValidateSelection(count)
+	return f.errMsg
+}
 
 // IsFiltering returns whether the list is currently filtering.
 func (f *SelectFormField) IsFiltering() bool {

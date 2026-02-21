@@ -222,6 +222,18 @@ func (c *Config) validateUserCommandTemplates() error {
 				}
 			}
 		}
+
+		// Validate form field regex patterns
+		for i, ff := range cmd.Form {
+			if ff.Pattern != "" {
+				if _, err := regexp.Compile(ff.Pattern); err != nil {
+					errs = errs.Append(
+						fmt.Sprintf("%s.form[%d].pattern", field, i),
+						fmt.Errorf("invalid regex %q: %w", ff.Pattern, err),
+					)
+				}
+			}
+		}
 	}
 	return errs.ToError()
 }

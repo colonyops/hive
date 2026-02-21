@@ -2,6 +2,7 @@ package tui
 
 import (
 	"fmt"
+	"regexp"
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
@@ -24,6 +25,7 @@ func newFormDialog(
 	variables := make([]string, 0, len(fields))
 
 	for _, f := range fields {
+		v := buildFieldValidation(f)
 		var comp form.Field
 		switch {
 		case f.Preset == config.FormPresetSessionSelector:
@@ -39,9 +41,9 @@ func newFormDialog(
 			}
 			comp = form.NewProjectSelectorField(f.Label, formRepos, f.Multi)
 		case f.Type == config.FormTypeText:
-			comp = form.NewTextField(f.Label, f.Placeholder, f.Default)
+			comp = form.NewTextField(f.Label, f.Placeholder, f.Default, v)
 		case f.Type == config.FormTypeTextArea:
-			comp = form.NewTextAreaField(f.Label, f.Placeholder, f.Default)
+			comp = form.NewTextAreaField(f.Label, f.Placeholder, f.Default, v)
 		case f.Type == config.FormTypeSelect:
 			comp = form.NewSelectFormField(f.Label, f.Options, f.Default)
 		case f.Type == config.FormTypeMultiSelect:
@@ -54,6 +56,23 @@ func newFormDialog(
 	}
 
 	return form.NewDialog(title, components, variables), nil
+}
+
+// buildFieldValidation converts config validation rules into a form.FieldValidation.
+func buildFieldValidation(f config.FormField) form.FieldValidation {
+	v := form.FieldValidation{
+		Required:  f.Required,
+		MinLength: f.MinLength,
+		MaxLength: f.MaxLength,
+		Min:       f.Min,
+		Max:       f.Max,
+	}
+	if f.Pattern != "" {
+		// Pattern was already validated at config load time (ValidateDeep),
+		// so compilation errors here are not expected.
+		v.Pattern, _ = regexp.Compile(f.Pattern)
+	}
+	return v
 }
 
 // filterActiveSessions returns sessions that are active and have a non-missing
