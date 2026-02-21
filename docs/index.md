@@ -54,6 +54,7 @@ Hive manages isolated git sessions for running AI agents in parallel. Instead of
 ## Installation
 
 ```bash
+brew install tmux
 brew install colonyops/tap/hive
 ```
 

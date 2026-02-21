@@ -22,6 +22,7 @@ Manage multiple AI agent sessions in isolated git environments with real-time st
 ## Installation
 
 ```bash
+brew install tmux
 brew install colonyops/tap/hive
 ```
 

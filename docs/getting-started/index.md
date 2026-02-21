@@ -19,6 +19,7 @@ Install hive, configure your environment, and launch your first AI agent session
 ### Homebrew
 
 ```bash
+brew install tmux
 brew install colonyops/tap/hive
 ```
 
