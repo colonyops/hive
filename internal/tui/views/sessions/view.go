@@ -1024,13 +1024,7 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 				icon = status.Icon
 			}
 
-			// Use plugin's own style for the label if it has a foreground color,
-			// otherwise fall back to neutral separator style.
-			labelStyle := separatorStyle
-			if fg := status.Style.GetForeground(); fg != (lipgloss.NoColor{}) {
-				labelStyle = lipgloss.NewStyle().Foreground(fg)
-			}
-			pluginPart := icon + labelStyle.Render(status.Label)
+			pluginPart := icon + separatorStyle.Render(status.Label)
 			statusParts = append(statusParts, pluginPart)
 		}
 	}

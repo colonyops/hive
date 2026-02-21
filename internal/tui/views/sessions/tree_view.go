@@ -716,12 +716,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 			icon = status.Icon
 		}
 
-		// Use plugin's own style for the label if it has a foreground color
-		labelStyle := neutralStyle
-		if fg := status.Style.GetForeground(); fg != (lipgloss.NoColor{}) {
-			labelStyle = lipgloss.NewStyle().Foreground(fg)
-		}
-		parts = append(parts, icon+labelStyle.Render(status.Label))
+		parts = append(parts, icon+neutralStyle.Render(status.Label))
 	}
 
 	if len(parts) == 0 {
