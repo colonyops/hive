@@ -170,6 +170,37 @@ func parseInt(s string) (int, error) {
 	return n, nil
 }
 
+func (e *Executor) CloneBare(ctx context.Context, url, dest string) error {
+	if _, err := e.exec.Run(ctx, e.gitPath, "clone", "--bare", url, dest); err != nil {
+		return fmt.Errorf("git clone --bare: %w", err)
+	}
+	return nil
+}
+
+func (e *Executor) WorktreeAdd(ctx context.Context, repoDir, worktreePath, branch string) error {
+	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "add", "-b", branch, worktreePath); err != nil {
+		return fmt.Errorf("git worktree add: %w", err)
+	}
+	return nil
+}
+
+func (e *Executor) WorktreeRemove(ctx context.Context, repoDir, worktreePath, branch string) error {
+	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "remove", "--force", worktreePath); err != nil {
+		return fmt.Errorf("git worktree remove: %w", err)
+	}
+	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "branch", "-D", branch); err != nil {
+		return fmt.Errorf("git branch -D: %w", err)
+	}
+	return nil
+}
+
+func (e *Executor) Fetch(ctx context.Context, dir string) error {
+	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w", err)
+	}
+	return nil
+}
+
 func (e *Executor) IsValidRepo(ctx context.Context, dir string) error {
 	gitDir := filepath.Join(dir, ".git")
 	if _, err := os.Stat(gitDir); os.IsNotExist(err) {
