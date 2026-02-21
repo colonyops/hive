@@ -1344,13 +1344,13 @@ func (v *View) TogglePreview() {
 }
 
 // ToggleGroupBy switches between repo and group tree view modes and rebuilds the tree.
-func (v *View) ToggleGroupBy() {
+func (v *View) ToggleGroupBy() tea.Cmd {
 	if v.groupBy == config.GroupByGroup {
 		v.groupBy = config.GroupByRepo
 	} else {
 		v.groupBy = config.GroupByGroup
 	}
-	v.applyFilter()
+	return v.applyFilter()
 }
 
 // GroupBy returns the current tree view grouping mode.

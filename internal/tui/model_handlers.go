@@ -127,8 +127,8 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		return m.openGroupInput(sess)
 	}
 	if action.Type == act.TypeGroupToggle {
-		m.sessionsView.ToggleGroupBy()
-		return m, nil
+		cmd := m.sessionsView.ToggleGroupBy()
+		return m, cmd
 	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter

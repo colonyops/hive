@@ -279,3 +279,31 @@ func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
 	}
 	assert.Empty(t, sessionIDs, "sessions without terminal status are excluded from status filter")
 }
+
+func TestApplyFilter_GroupByGroup(t *testing.T) {
+	sessions := []session.Session{
+		{ID: "s1", Name: "alpha", Metadata: map[string]string{"group": "backend"}},
+		{ID: "s2", Name: "beta", Metadata: map[string]string{"group": "frontend"}},
+		{ID: "s3", Name: "gamma"}, // ungrouped
+	}
+	v := newFilterTestView(sessions, "", nil)
+	v.groupBy = config.GroupByGroup
+	v.applyFilter()
+
+	var headers []string
+	var sessionIDs []string
+	for _, item := range v.list.Items() {
+		ti, ok := item.(TreeItem)
+		if !ok {
+			continue
+		}
+		if ti.IsHeader {
+			headers = append(headers, ti.RepoName)
+		}
+		if ti.IsSession() {
+			sessionIDs = append(sessionIDs, ti.Session.ID)
+		}
+	}
+	assert.Equal(t, []string{"backend", "frontend", "(ungrouped)"}, headers, "groups sorted alphabetically with ungrouped last")
+	assert.Equal(t, []string{"s1", "s2", "s3"}, sessionIDs, "all sessions present")
+}

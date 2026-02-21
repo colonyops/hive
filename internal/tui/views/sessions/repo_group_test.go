@@ -275,6 +275,26 @@ func TestGroupSessionsByTag(t *testing.T) {
 	}
 }
 
+func TestGroupSessionsByTag_RecycledCount(t *testing.T) {
+	sessions := []session.Session{
+		{Name: "active1", Remote: "r1", State: session.StateActive, Metadata: map[string]string{"group": "backend"}},
+		{Name: "active2", Remote: "r2", State: session.StateActive, Metadata: map[string]string{"group": "backend"}},
+		{Name: "recycled1", Remote: "r3", State: session.StateRecycled, Metadata: map[string]string{"group": "backend"}},
+		{Name: "recycled2", Remote: "r4", State: session.StateRecycled, Metadata: map[string]string{"group": "backend"}},
+	}
+
+	groups := GroupSessionsByTag(sessions)
+	require.Len(t, groups, 1)
+
+	group := groups[0]
+	assert.Equal(t, "backend", group.Name)
+	assert.Len(t, group.Sessions, 2, "should only contain active sessions")
+	assert.Equal(t, 2, group.RecycledCount, "should count recycled sessions")
+	require.Len(t, group.RecycledSessions, 2)
+	assert.Equal(t, "recycled1", group.RecycledSessions[0].Name)
+	assert.Equal(t, "recycled2", group.RecycledSessions[1].Name)
+}
+
 func TestExtractGroupName(t *testing.T) {
 	tests := []struct {
 		remote string

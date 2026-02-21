@@ -676,6 +676,76 @@ func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 	assert.Empty(t, sessions, "session should not remain in store after RunSh failure")
 }
 
+func TestSetSessionGroup(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	past := time.Now().Add(-1 * time.Hour)
+	sess := session.Session{
+		ID:        "test1",
+		Name:      "my-session",
+		State:     session.StateActive,
+		CreatedAt: past,
+		UpdatedAt: past,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.SetSessionGroup(context.Background(), "test1", "backend")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "backend", updated.Group())
+	assert.True(t, updated.UpdatedAt.After(past))
+}
+
+func TestSetSessionGroup_NotFound(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	err := svc.SetSessionGroup(context.Background(), "nonexistent", "backend")
+	assert.Error(t, err)
+}
+
+func TestSetSessionGroup_ClearGroup(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	sess := session.Session{
+		ID:       "test1",
+		Name:     "my-session",
+		State:    session.StateActive,
+		Metadata: map[string]string{"group": "backend"},
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.SetSessionGroup(context.Background(), "test1", "")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Empty(t, updated.Group())
+}
+
+func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
+	store := newMockStore()
+	svc := newTestService(t, store, nil)
+
+	sess := session.Session{
+		ID:    "test1",
+		Name:  "my-session",
+		State: session.StateActive,
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.SetSessionGroup(context.Background(), "test1", "  backend  ")
+	require.NoError(t, err)
+
+	updated, err := store.Get(context.Background(), "test1")
+	require.NoError(t, err)
+	assert.Equal(t, "backend", updated.Group())
+}
+
 // Ensure the mock implements the interface at compile time.
 var (
 	_ git.Git       = (*mockGit)(nil)

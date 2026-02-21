@@ -869,8 +869,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		// GroupToggle doesn't require a session
 		if entry.Command.Action == act.TypeGroupToggle {
 			m.state = stateNormal
-			m.sessionsView.ToggleGroupBy()
-			return m, nil
+			cmd := m.sessionsView.ToggleGroupBy()
+			return m, cmd
 		}
 
 		// GroupSet requires a selected session
