@@ -235,6 +235,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			sessionStore := stores.NewSessionStore(database)
 			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
 			kvStore := stores.NewKVStore(database)
+			todoStore := stores.NewTodoStore(database)
 
 			// Start background KV sweep goroutine
 			sweepCtx, cancel := context.WithCancel(context.Background())
@@ -308,6 +309,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			*hiveApp = *hive.NewApp(
 				sessionSvc,
 				msgStore,
+				todoStore,
 				cfg,
 				bus,
 				nil, // terminal manager created in TUI command
@@ -316,6 +318,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				kvStore,
 				renderer,
 				pluginInfos,
+				svcLogger,
 			)
 			resolvedVersion, resolvedCommit, resolvedDate := resolvedBuildInfo()
 			hiveApp.Build = hive.BuildInfo{
@@ -369,6 +372,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewDocCmd(flags, hiveApp).Register(app)
 	app = commands.NewSessionCmd(flags, hiveApp).Register(app)
 	app = commands.NewReviewCmd(flags, hiveApp).Register(app)
+	app = commands.NewTodoCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)
