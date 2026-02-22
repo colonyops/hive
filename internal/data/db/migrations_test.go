@@ -105,6 +105,27 @@ func TestMigrateUp_LegacyBootstrap(t *testing.T) {
 	}
 }
 
+func TestMigrateUp_LegacyBootstrap_EmptySchemaVersion(t *testing.T) {
+	conn := openRawConn(t)
+	ctx := context.Background()
+
+	// Create legacy schema_version table but leave it empty.
+	_, err := conn.ExecContext(ctx, `CREATE TABLE IF NOT EXISTS schema_version (version INTEGER PRIMARY KEY)`)
+	require.NoError(t, err)
+
+	// migrateUp should handle NULL MAX(version) without error.
+	err = migrateUp(ctx, conn)
+	require.NoError(t, err, "migrateUp with empty schema_version table")
+
+	// All migrations should be applied normally (bootstrap was a no-op).
+	migrations, err := loadMigrations()
+	require.NoError(t, err)
+
+	applied, err := appliedVersions(ctx, conn)
+	require.NoError(t, err)
+	assert.Len(t, applied, len(migrations))
+}
+
 func TestMigrateDown(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()

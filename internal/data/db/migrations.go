@@ -78,6 +78,9 @@ func loadMigrations() ([]Migration, error) {
 		if !ok {
 			return nil, fmt.Errorf("migration %04d has up file but no down file", version)
 		}
+		if up.name != down.name {
+			return nil, fmt.Errorf("migration %04d name mismatch: up=%q down=%q", version, up.name, down.name)
+		}
 		migrations = append(migrations, Migration{
 			Version: version,
 			Name:    up.name,
@@ -248,16 +251,21 @@ func bootstrapFromLegacy(ctx context.Context, conn *sql.DB, migrations []Migrati
 		return fmt.Errorf("checking for legacy schema_version table: %w", err)
 	}
 
-	// Read the legacy version.
-	var legacyVersion int
+	// Read the legacy version. MAX returns NULL if the table is empty.
+	var legacyVersion sql.NullInt64
 	err = conn.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_version").Scan(&legacyVersion)
 	if err != nil {
 		return fmt.Errorf("reading legacy schema_version: %w", err)
 	}
+	if !legacyVersion.Valid {
+		// schema_version table exists but is empty — nothing to bootstrap.
+		return nil
+	}
 
-	slog.Info("bootstrapping from legacy schema_version", "legacy_version", legacyVersion)
+	maxVersion := int(legacyVersion.Int64)
+	slog.Info("bootstrapping from legacy schema_version", "legacy_version", maxVersion)
 
-	// Mark all migrations up to legacyVersion as applied.
+	// Mark all migrations up to maxVersion as applied.
 	now := time.Now().UnixNano()
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -266,7 +274,7 @@ func bootstrapFromLegacy(ctx context.Context, conn *sql.DB, migrations []Migrati
 	defer func() { _ = tx.Rollback() }()
 
 	for _, m := range migrations {
-		if m.Version > legacyVersion {
+		if m.Version > maxVersion {
 			break
 		}
 		_, err := tx.ExecContext(ctx,
