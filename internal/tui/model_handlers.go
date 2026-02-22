@@ -357,10 +357,8 @@ func (m Model) handleDrainNotifications(_ drainNotificationsMsg) (tea.Model, tea
 			n.CreatedAt = time.Now()
 		}
 
-		if m.notifyStore != nil {
-			if _, err := m.notifyStore.Save(context.Background(), n); err != nil {
-				log.Error().Err(err).Str("message", n.Message).Msg("failed to persist notification")
-			}
+		if _, err := m.notifyStore.Save(context.Background(), n); err != nil {
+			log.Error().Err(err).Str("message", n.Message).Msg("failed to persist notification")
 		}
 
 		m.toastController.Push(n)

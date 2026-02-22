@@ -118,13 +118,10 @@ func TestNotificationModal_Clear_returns_store_error(t *testing.T) {
 	assert.Contains(t, err.Error(), "clear failed")
 }
 
-func TestNotificationModal_nil_store(t *testing.T) {
-	m := NewNotificationModal(nil, 100, 40)
-
-	content := m.viewport.View()
-	assert.Contains(t, content, "No notifications")
-
-	assert.NoError(t, m.Clear())
+func TestNotificationModal_nil_store_panics(t *testing.T) {
+	assert.Panics(t, func() {
+		_ = NewNotificationModal(nil, 100, 40)
+	})
 }
 
 func TestNotificationModal_formatNotification_levels(t *testing.T) {

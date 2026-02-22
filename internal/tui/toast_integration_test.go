@@ -14,6 +14,7 @@ func newModelWithBuffer(ctrl *ToastController) Model {
 	return Model{
 		toastController: ctrl,
 		notifyBuffer:    NewNotificationBuffer(),
+		notifyStore:     &stubStore{},
 	}
 }
 

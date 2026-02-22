@@ -31,6 +31,10 @@ type NotificationModal struct {
 
 // NewNotificationModal creates a modal showing notification history.
 func NewNotificationModal(store notify.Store, width, height int) *NotificationModal {
+	if store == nil {
+		panic("tui.NewNotificationModal: store is required")
+	}
+
 	modalWidth := calcNotificationModalWidth(width)
 	modalHeight := min(height-notifyModalMargin, notifyModalMaxHeight)
 	contentHeight := modalHeight - notifyModalChrome
@@ -52,11 +56,6 @@ func NewNotificationModal(store notify.Store, width, height int) *NotificationMo
 }
 
 func (m *NotificationModal) refreshContent() {
-	if m.store == nil {
-		m.viewport.SetContent(styles.TextMutedStyle.Render("No notifications"))
-		return
-	}
-
 	history, err := m.store.List(context.Background())
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load notification history")
@@ -112,9 +111,6 @@ func (m *NotificationModal) ScrollDown() {
 
 // Clear deletes all notifications and refreshes the view.
 func (m *NotificationModal) Clear() error {
-	if m.store == nil {
-		return nil
-	}
 	if err := m.store.Clear(context.Background()); err != nil {
 		return err
 	}

@@ -51,7 +51,7 @@ func TestModalCoordinator_Overlay_HelpDialog(t *testing.T) {
 
 func TestModalCoordinator_Overlay_NotificationModal(t *testing.T) {
 	mc := NewModalCoordinator()
-	mc.Notification = NewNotificationModal(nil, 80, 24)
+	mc.Notification = NewNotificationModal(&stubStore{}, 80, 24)
 	bg := testBackground
 	got := mc.Overlay(stateShowingNotifications, bg, noSpinner(), "")
 	assert.NotEqual(t, bg, got, "notification modal should modify background")

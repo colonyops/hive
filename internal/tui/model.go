@@ -73,11 +73,11 @@ type Deps struct {
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
 	TodoService     *hive.TodoService
+	DB              *db.DB
 
 	// Optional — nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
 	Bus           *eventbus.EventBus
-	DB            *db.DB
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
 	DoctorService *hive.DoctorService
@@ -208,8 +208,8 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.TodoService == nil {
-		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, and TodoService are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.TodoService == nil || deps.DB == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, TodoService, and DB are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
@@ -275,10 +275,7 @@ func New(deps Deps, opts Opts) Model {
 
 	reviewView := review.New(docs, contextDir, reviewStore)
 
-	var notifyStore notify.Store
-	if deps.DB != nil {
-		notifyStore = stores.NewNotifyStore(deps.DB)
-	}
+	notifyStore := stores.NewNotifyStore(deps.DB)
 	toastCtrl := NewToastController()
 	toastView := NewToastView(toastCtrl)
 	notifyBuffer := NewNotificationBuffer()
