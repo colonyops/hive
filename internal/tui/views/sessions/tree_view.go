@@ -278,60 +278,6 @@ func DefaultTreeDelegateStyles() TreeDelegateStyles {
 	}
 }
 
-// RenderRepoHeader renders a repository header line.
-func RenderRepoHeader(item TreeItem, isSelected bool, styles TreeDelegateStyles) string {
-	// Repo name
-	nameStyle := styles.HeaderNormal
-	if isSelected {
-		nameStyle = styles.HeaderSelected
-	}
-	result := nameStyle.Render(item.RepoName)
-
-	// Append indicator for current repo
-	if item.IsCurrentRepo {
-		result += " " + styles.HeaderStar.Render(currentRepoIndicator)
-	}
-
-	return result
-}
-
-// RenderSessionLine renders a session entry with tree prefix.
-func RenderSessionLine(item TreeItem, isSelected bool, gitBranch string, termStatus *TerminalStatus, styles TreeDelegateStyles, animFrame int) string {
-	// Tree prefix
-	var prefix string
-	if item.IsLastInRepo {
-		prefix = treeLast
-	} else {
-		prefix = treeBranch
-	}
-	prefixStyled := styles.TreeLine.Render(prefix)
-
-	// Status indicator - use terminal status for active sessions
-	statusStr := renderStatusIndicator(item.Session.State, termStatus, styles, animFrame)
-
-	// Session name
-	nameStyle := styles.SessionName
-	if isSelected {
-		nameStyle = styles.Selected
-	}
-	name := nameStyle.Render(item.Session.Name)
-
-	// Branch (from git status or fallback)
-	branch := ""
-	if gitBranch != "" {
-		branch = styles.SessionBranch.Render(" (" + gitBranch + ")")
-	}
-
-	// Short ID (last 4 chars of session ID)
-	shortID := item.Session.ID
-	if len(shortID) > 4 {
-		shortID = shortID[len(shortID)-4:]
-	}
-	id := styles.SessionID.Render(" #" + shortID)
-
-	return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, branch, id)
-}
-
 // ColumnWidths holds the calculated widths for aligned columns.
 type ColumnWidths struct {
 	Name   int
@@ -363,14 +309,6 @@ func CalculateColumnWidths(sessions []session.Session, gitBranches map[string]st
 	}
 
 	return widths
-}
-
-// PadRight pads a string to the right with spaces to reach the desired width.
-func PadRight(s string, width int) string {
-	if len(s) >= width {
-		return s
-	}
-	return s + components.Pad(width-len(s))
 }
 
 // TreeDelegate handles rendering of tree items in the list.

@@ -4,7 +4,6 @@ import (
 	"strings"
 
 	"charm.land/bubbles/v2/viewport"
-	lipgloss "charm.land/lipgloss/v2"
 
 	corereview "github.com/colonyops/hive/internal/core/review"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -325,125 +324,6 @@ func (dv *DocumentView) insertCommentsInline(content string, comments []corerevi
 	return strings.Join(lines, "\n"), lineMapping
 }
 
-// highlightSelection applies background color to cursor and selected lines.
-// Also highlights line numbers of commented lines.
-// lineMapping maps document line numbers to display line numbers (nil if no comments inserted).
-//
-//nolint:unused // Will be integrated in task 8
-func (dv *DocumentView) highlightSelection(content string, commentedLines map[int]bool, lineMapping map[int]int) string {
-	lines := strings.Split(content, "\n")
-
-	// Build reverse lookup map once for O(1) lookups
-	displayToDoc := buildDisplayToDocMap(lineMapping)
-
-	// Create map of search matches for quick lookup (in display coordinates)
-	searchMatchLines := make(map[int]bool)
-	for _, docLineNum := range dv.searchMatches {
-		displayLineNum := dv.mapDocToDisplay(docLineNum, lineMapping)
-		searchMatchLines[displayLineNum] = true
-	}
-
-	// Styles for cursor and selection (no explicit width)
-	selectionStyle := styles.ReviewSelectionStyle
-	cursorStyle := styles.ReviewCursorStyle
-	searchMatchStyle := styles.ReviewSearchMatchStyle               // Subtle highlight for other matches
-	currentSearchMatchStyle := styles.ReviewCurrentSearchMatchStyle // Bright for current match
-
-	// Style for commented line numbers
-	commentedLineNumStyle := styles.ReviewCommentedLineNumStyle
-
-	// Calculate selection range if in visual mode (map to display coordinates)
-	var start, end int
-	if dv.selectionStart > 0 {
-		docStart := min(dv.selectionStart, dv.cursorLine)
-		docEnd := max(dv.selectionStart, dv.cursorLine)
-		start = dv.mapDocToDisplay(docStart, lineMapping)
-		end = dv.mapDocToDisplay(docEnd, lineMapping)
-	}
-
-	// Determine current search match line number (map to display coordinates)
-	var currentSearchLine int
-	if len(dv.searchMatches) > 0 && dv.searchIndex >= 0 && dv.searchIndex < len(dv.searchMatches) {
-		docLine := dv.searchMatches[dv.searchIndex]
-		currentSearchLine = dv.mapDocToDisplay(docLine, lineMapping)
-	}
-
-	// Map cursor line to display coordinates
-	displayCursorLine := dv.mapDocToDisplay(dv.cursorLine, lineMapping)
-
-	// Apply highlighting (priority: current search > cursor > visual selection > other search > comments > normal)
-	for i := range lines {
-		displayLineNum := i + 1
-		line := lines[i]
-
-		// Map back to document line number for comment checking
-		var docLineNum int
-		if displayToDoc != nil {
-			if doc, ok := displayToDoc[displayLineNum]; ok {
-				docLineNum = doc
-			} else {
-				// Comment line - not a document line
-				docLineNum = 0
-			}
-		} else {
-			docLineNum = displayLineNum
-		}
-
-		// Check if line will be highlighted with cursor/selection/search
-		willBeHighlighted := displayLineNum == currentSearchLine ||
-			displayLineNum == displayCursorLine ||
-			(dv.selectionStart > 0 && displayLineNum >= start && displayLineNum <= end) ||
-			searchMatchLines[displayLineNum]
-
-		// Only highlight line number for comments if line won't be highlighted otherwise
-		if commentedLines[docLineNum] && !willBeHighlighted {
-			line = dv.highlightLineNumber(line, commentedLineNumStyle)
-		}
-
-		// Apply highlighting based on priority
-		switch {
-		case displayLineNum == currentSearchLine:
-			// Current search match (highest priority)
-			lines[i] = currentSearchMatchStyle.Render(line)
-		case displayLineNum == displayCursorLine:
-			// Cursor highlight
-			lines[i] = cursorStyle.Render(line)
-		case dv.selectionStart > 0 && displayLineNum >= start && displayLineNum <= end:
-			// Visual selection highlight
-			lines[i] = selectionStyle.Render(line)
-		case searchMatchLines[displayLineNum]:
-			// Other search matches (subtle)
-			lines[i] = searchMatchStyle.Render(line)
-		default:
-			lines[i] = line
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// highlightLineNumber applies a style to the line number and separator of a rendered line.
-// Assumes format: " <number>  <content>" (space, number, two spaces, content)
-//
-//nolint:unused // Will be integrated in task 8
-func (dv *DocumentView) highlightLineNumber(line string, style lipgloss.Style) string {
-	// Find the separator " │ "
-	sepIdx := strings.Index(line, " │ ")
-	if sepIdx == -1 {
-		return line // No line number found
-	}
-
-	// Extract parts
-	lineNum := line[:sepIdx]
-	separator := " │ "
-	content := line[sepIdx+len(separator):]
-
-	// Style the line number + separator together (entire gutter)
-	gutter := lineNum + separator
-	styledGutter := style.Render(gutter)
-	return styledGutter + content
-}
-
 // mapDocToDisplay maps a document line number to a display line number.
 // If lineMapping is nil (no comments inserted), returns the same line number.
 func (dv *DocumentView) mapDocToDisplay(docLine int, lineMapping map[int]int) int {
@@ -454,23 +334,4 @@ func (dv *DocumentView) mapDocToDisplay(docLine int, lineMapping map[int]int) in
 		return displayLine
 	}
 	return docLine // fallback to same line if not in mapping
-}
-
-// mapDisplayToDoc maps a display line number back to a document line number.
-// If lineMapping is nil (no comments inserted), returns the same line number.
-//
-//nolint:unused // Will be integrated in task 8
-func (dv *DocumentView) mapDisplayToDoc(displayLine int, lineMapping map[int]int) int {
-	if lineMapping == nil {
-		return displayLine
-	}
-	// Reverse lookup: find document line that maps to this display line
-	for docLine, dispLine := range lineMapping {
-		if dispLine == displayLine {
-			return docLine
-		}
-	}
-	// If display line is a comment line (not found in mapping), return 0 or -1
-	// to indicate it's not a document line
-	return 0
 }

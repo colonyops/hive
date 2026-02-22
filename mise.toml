@@ -1,12 +1,16 @@
 [tools]
+# Go Tools
+"go" = "1.26"
+"go:golang.org/x/tools/cmd/deadcode" = "latest"
 "go:github.com/abice/go-enum" = "v0.9.2"
 "github:hay-kot/gobusgen" = "v0.3.0"
 "github:sqlc-dev/sqlc" = "v1.30.0"
-"go" = "1.26"
-"pipx:zensical" = "latest"
 golangci-lint = "v2.10.1"
-uv = "latest"
 "goreleaser" = "latest"
+
+# Docs Site Tools
+uv = "latest"
+"pipx:zensical" = "latest"
 
 [env]
 HIVE_LOG_LEVEL = "debug"
@@ -69,9 +73,13 @@ run = "golangci-lint run ./..."
 description = "Run golangci-lint fmt"
 run = "golangci-lint fmt ./..."
 
+[tasks.deadcode]
+description = "Check for unreachable code"
+run = "deadcode -test ./..."
+
 [tasks.check]
-description = "Run tidy, lint, and test"
-run = ["go mod tidy", { tasks = ["lint", "test"] }]
+description = "Run tidy, lint, test, and deadcode"
+run = ["go mod tidy", { tasks = ["lint", "test", "deadcode"] }]
 
 [tasks.validate]
 description = "Run doctor with dev config"

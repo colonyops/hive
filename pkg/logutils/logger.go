@@ -2,14 +2,18 @@ package logutils
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog"
 )
 
-// New returns a new logger that writes JSON to the specified file.
-// If file is empty, logs are written to stdout.
+// New returns a new logger.
+//
+// If file is set, logs are written to that file in console format.
+// If file is empty, logs are written to stdout in JSON format.
 //
 // The level parameter can be one of: debug, info, warn, error, fatal.
 func New(level string, file string) (zerolog.Logger, func(), error) {
@@ -20,8 +24,7 @@ func New(level string, file string) (zerolog.Logger, func(), error) {
 		return zerolog.Logger{}, closer, err
 	}
 
-	// File Setup
-	writer := os.Stdout
+	var writer io.Writer = os.Stdout
 	if file != "" {
 		logsDir := filepath.Dir(file)
 		if err := os.MkdirAll(logsDir, 0o755); err != nil {
@@ -33,7 +36,11 @@ func New(level string, file string) (zerolog.Logger, func(), error) {
 			return zerolog.Logger{}, closer, err
 		}
 		closer = func() { _ = osFile.Close() }
-		writer = osFile
+		writer = zerolog.ConsoleWriter{
+			Out:        osFile,
+			NoColor:    true,
+			TimeFormat: time.RFC3339,
+		}
 	}
 
 	l := zerolog.New(writer).

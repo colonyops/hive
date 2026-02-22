@@ -24,26 +24,6 @@ func TestIsDocument(t *testing.T) {
 	}
 }
 
-func TestTreeItemsAll(t *testing.T) {
-	items := []list.Item{
-		TreeItem{IsHeader: true, HeaderName: "Plans"},
-		TreeItem{Document: Document{RelPath: "a.md"}},
-		TreeItem{Document: Document{RelPath: "b.md"}},
-	}
-
-	var got []TreeItem
-	for _, ti := range TreeItemsAll(items) {
-		got = append(got, ti)
-	}
-
-	if len(got) != 3 {
-		t.Fatalf("TreeItemsAll yielded %d items, want 3", len(got))
-	}
-	if !got[0].IsHeader {
-		t.Error("first item should be header")
-	}
-}
-
 func TestTreeItemsDocuments(t *testing.T) {
 	items := []list.Item{
 		TreeItem{IsHeader: true, HeaderName: "Plans"},

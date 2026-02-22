@@ -279,20 +279,6 @@ func TestDetectClaudeSessionID(t *testing.T) {
 		assert.Equal(t, "a1b2c3d4-e5f6-7890-abcd-ef1234567890", result)
 	})
 
-	t.Run("DetectActive returns empty for old file", func(t *testing.T) {
-		projectPath := setupFakeClaudeDir(t, time.Now().Add(-10*time.Minute))
-
-		result := DetectActiveClaudeSessionID(projectPath, 5*time.Minute)
-		assert.Empty(t, result)
-	})
-
-	t.Run("DetectActive returns session for recent file", func(t *testing.T) {
-		projectPath := setupFakeClaudeDir(t, time.Now().Add(-2*time.Minute))
-
-		result := DetectActiveClaudeSessionID(projectPath, 5*time.Minute)
-		assert.Equal(t, "a1b2c3d4-e5f6-7890-abcd-ef1234567890", result)
-	})
-
 	t.Run("returns empty for non-existent project", func(t *testing.T) {
 		t.Setenv("CLAUDE_CONFIG_DIR", t.TempDir())
 

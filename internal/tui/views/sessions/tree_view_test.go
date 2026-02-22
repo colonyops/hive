@@ -179,26 +179,6 @@ func TestTreeItem_FilterValue(t *testing.T) {
 	}
 }
 
-func TestPadRight(t *testing.T) {
-	tests := []struct {
-		input string
-		width int
-		want  string
-	}{
-		{"abc", 5, "abc  "},
-		{"abcde", 5, "abcde"},
-		{"abcdef", 5, "abcdef"},
-		{"", 3, "   "},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.input, func(t *testing.T) {
-			got := PadRight(tt.input, tt.width)
-			assert.Equal(t, tt.want, got)
-		})
-	}
-}
-
 func TestCalculateColumnWidths(t *testing.T) {
 	sessions := []session.Session{
 		{ID: "abcd1234", Name: "short", Path: "/path1"},
