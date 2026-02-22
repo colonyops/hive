@@ -1,7 +1,6 @@
 package review
 
 import (
-	"strings"
 	"time"
 )
 
@@ -20,34 +19,6 @@ func NewPickerController(documents []Document) PickerController {
 	}
 }
 
-// Filter returns documents that match the query string.
-// Performs case-insensitive fuzzy substring matching on Name (RelPath) and Path.
-func (pc PickerController) Filter(query string) []Document {
-	if query == "" {
-		return pc.documents
-	}
-
-	query = strings.ToLower(query)
-	var filtered []Document
-
-	for _, doc := range pc.documents {
-		// Check both RelPath and Path for matches
-		relPathLower := strings.ToLower(doc.RelPath)
-		pathLower := strings.ToLower(doc.Path)
-
-		if strings.Contains(relPathLower, query) || strings.Contains(pathLower, query) {
-			filtered = append(filtered, doc)
-		}
-	}
-
-	return filtered
-}
-
-// IsRecent returns true if the document's modification time is within the recent threshold.
-func (pc PickerController) IsRecent(doc Document) bool {
-	return time.Since(doc.ModTime) <= pc.recentThreshold
-}
-
 // GetLatest returns the document with the most recent modification time.
 // Returns nil if there are no documents.
 func (pc PickerController) GetLatest() *Document {
@@ -63,22 +34,4 @@ func (pc PickerController) GetLatest() *Document {
 	}
 
 	return latest
-}
-
-// SortByModTime returns a copy of the documents sorted by modification time (newest first).
-func (pc PickerController) SortByModTime() []Document {
-	// Create a copy
-	sorted := make([]Document, len(pc.documents))
-	copy(sorted, pc.documents)
-
-	// Simple bubble sort for small collections
-	for i := range sorted {
-		for j := i + 1; j < len(sorted); j++ {
-			if sorted[i].ModTime.Before(sorted[j].ModTime) {
-				sorted[i], sorted[j] = sorted[j], sorted[i]
-			}
-		}
-	}
-
-	return sorted
 }

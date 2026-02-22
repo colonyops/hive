@@ -68,13 +68,6 @@ func (tb *Bus) Events() []RecordedEvent {
 	return out
 }
 
-// Reset clears all recorded events.
-func (tb *Bus) Reset() {
-	tb.mu.Lock()
-	defer tb.mu.Unlock()
-	tb.events = nil
-}
-
 // WaitFor blocks until an event of the given type is recorded or the timeout expires.
 // Returns true if the event was found.
 func (tb *Bus) WaitFor(event eventbus.Event, timeout time.Duration) bool {
@@ -132,15 +125,5 @@ func (tb *Bus) AssertPublished(t *testing.T, event eventbus.Event) {
 	t.Helper()
 	if !tb.WaitFor(event, 500*time.Millisecond) {
 		t.Errorf("expected event %q to be published, but it was not", event)
-	}
-}
-
-// AssertNotPublished asserts that an event of the given type was NOT recorded
-// within the given wait period.
-func (tb *Bus) AssertNotPublished(t *testing.T, event eventbus.Event, wait time.Duration) {
-	t.Helper()
-	time.Sleep(wait)
-	if tb.has(event) {
-		t.Errorf("expected event %q to NOT be published, but it was", event)
 	}
 }

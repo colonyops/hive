@@ -4,11 +4,6 @@ import (
 	"bytes"
 	"strings"
 	"text/template"
-
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/styles"
-	"github.com/colonyops/hive/internal/hive/plugins"
-	"github.com/colonyops/hive/pkg/kv"
 )
 
 // PreviewIcons holds nerd font icons for templates.
@@ -20,24 +15,6 @@ type PreviewIcons struct {
 	Bee       string
 	Hive      string
 	Claude    string
-}
-
-// DefaultPreviewIcons returns the default nerd font icons from styles package.
-func DefaultPreviewIcons() PreviewIcons {
-	return PreviewIcons{
-		Git:       styles.IconGit,
-		GitBranch: styles.IconGitBranch,
-		Github:    styles.IconGithub,
-		CheckList: styles.IconCheckList,
-		Bee:       styles.IconBee,
-		Hive:      styles.IconHive,
-		Claude:    "󰧑", // Nerd font icon for AI/Claude
-	}
-}
-
-// EmptyPreviewIcons returns empty strings for all icons (when icons disabled).
-func EmptyPreviewIcons() PreviewIcons {
-	return PreviewIcons{}
 }
 
 // PreviewGitData holds git status data for templates.
@@ -75,77 +52,6 @@ type PreviewTemplateData struct {
 
 	// Icons
 	Icon PreviewIcons
-}
-
-// BuildPreviewTemplateData constructs template data from session and status stores.
-func BuildPreviewTemplateData(
-	sess *session.Session,
-	gitStatuses *kv.Store[string, GitStatus],
-	pluginStatuses map[string]*kv.Store[string, plugins.Status],
-	terminalStatuses *kv.Store[string, TerminalStatus],
-	iconsEnabled bool,
-) PreviewTemplateData {
-	icons := DefaultPreviewIcons()
-	if !iconsEnabled {
-		icons = EmptyPreviewIcons()
-	}
-
-	data := PreviewTemplateData{
-		Name:    sess.Name,
-		ID:      sess.ID,
-		ShortID: shortID(sess.ID),
-		Path:    sess.Path,
-		Icon:    icons,
-	}
-
-	// Git status
-	if gitStatuses != nil {
-		if status, ok := gitStatuses.Get(sess.Path); ok && !status.IsLoading && status.Error == nil {
-			data.GitStatus = PreviewGitData{
-				Branch:     status.Branch,
-				Additions:  status.Additions,
-				Deletions:  status.Deletions,
-				HasChanges: status.HasChanges,
-			}
-			data.Branch = status.Branch
-		}
-	}
-
-	// Plugin statuses
-	if pluginStatuses != nil {
-		if store, ok := pluginStatuses["github"]; ok && store != nil {
-			if status, ok := store.Get(sess.ID); ok && status.Label != "" {
-				data.Plugin.Github = status.Label
-			}
-		}
-		if store, ok := pluginStatuses["beads"]; ok && store != nil {
-			if status, ok := store.Get(sess.ID); ok && status.Label != "" {
-				data.Plugin.Beads = status.Label
-			}
-		}
-		if store, ok := pluginStatuses["claude"]; ok && store != nil {
-			if status, ok := store.Get(sess.ID); ok && status.Label != "" {
-				data.Plugin.Claude = status.Label
-			}
-		}
-	}
-
-	// Terminal status
-	if terminalStatuses != nil {
-		if status, ok := terminalStatuses.Get(sess.ID); ok {
-			data.TerminalStatus = string(status.Status)
-		}
-	}
-
-	return data
-}
-
-// shortID returns the last 4 characters of an ID.
-func shortID(id string) string {
-	if len(id) > 4 {
-		return id[len(id)-4:]
-	}
-	return id
 }
 
 // PreviewTemplates holds parsed templates for preview rendering.

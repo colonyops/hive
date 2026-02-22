@@ -64,12 +64,6 @@ func DetectClaudeSessionID(projectPath string) string {
 	return detectClaudeSessionID(projectPath, 0)
 }
 
-// DetectActiveClaudeSessionID finds a session modified within maxAge.
-// Use this for initial discovery where freshness matters.
-func DetectActiveClaudeSessionID(projectPath string, maxAge time.Duration) string {
-	return detectClaudeSessionID(projectPath, maxAge)
-}
-
 // detectClaudeSessionID finds the most recently modified UUID-named session file.
 // If maxAge > 0, only returns sessions modified within that duration.
 func detectClaudeSessionID(projectPath string, maxAge time.Duration) string {

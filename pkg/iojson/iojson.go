@@ -17,13 +17,6 @@ type Options struct {
 // Option is a functional option for configuring JSON output.
 type Option func(*Options)
 
-// WithIndent sets whether to indent JSON output (default: true).
-func WithIndent(indent bool) Option {
-	return func(o *Options) {
-		o.Indent = indent
-	}
-}
-
 func defaultOptions() Options {
 	return Options{Indent: true}
 }
