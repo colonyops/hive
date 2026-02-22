@@ -41,10 +41,10 @@ type Todo struct {
 	ID          string    `json:"id"`
 	SessionID   string    `json:"session_id"`
 	Source      Source    `json:"source"`
-	Category    Category `json:"category"`
-	Title       string   `json:"title"`
-	Ref         string   `json:"ref"`
-	Status      Status   `json:"status"`
+	Category    Category  `json:"category"`
+	Title       string    `json:"title"`
+	Ref         string    `json:"ref"`
+	Status      Status    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	CompletedAt time.Time `json:"completed_at,omitzero"`

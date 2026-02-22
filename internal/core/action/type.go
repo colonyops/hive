@@ -27,6 +27,7 @@ package action
 //	HiveDoctor
 //	GroupSet
 //	GroupToggle
+//	TodoPanel
 //
 // )
 type Type string

@@ -91,6 +91,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 			Config:          cmd.app.Config,
 			Service:         cmd.app.Sessions,
 			MsgStore:        cmd.app.Messages,
+			TodoService:     cmd.app.Todos,
 			Bus:             cmd.app.Bus,
 			TerminalManager: termMgr,
 			PluginManager:   cmd.app.Plugins,

@@ -56,6 +56,7 @@ const (
 	stateRenaming
 	stateSettingGroup
 	stateFormInput
+	stateShowingTodos
 )
 
 // Key constants for event handling.
@@ -75,6 +76,7 @@ type Deps struct {
 
 	// Optional — nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
+	TodoService   *hive.TodoService
 	Bus           *eventbus.EventBus
 	DB            *db.DB
 	KVStore       corekv.KV
@@ -135,6 +137,10 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
+	todoService      *hive.TodoService
+	todoPendingCount int
+	todoCh           <-chan eventbus.TodoCreatedPayload
+
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
 	updateChecker *updatecheck.Checker
@@ -180,6 +186,14 @@ type notificationMsg struct {
 
 type doctorResultsMsg struct {
 	results []doctor.Result
+}
+
+type todoCountUpdatedMsg struct {
+	count int
+}
+
+type todoCreatedMsg struct {
+	payload eventbus.TodoCreatedPayload
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -263,6 +277,20 @@ func New(deps Deps, opts Opts) Model {
 		toastCtrl.Push(n)
 	})
 
+	// Subscribe to todo events if enabled
+	var todoCh <-chan eventbus.TodoCreatedPayload
+	if deps.TodoService != nil && deps.Bus != nil && cfg.Todos.Notifications.Toast {
+		ch := make(chan eventbus.TodoCreatedPayload, 16)
+		deps.Bus.SubscribeTodoCreated(func(payload eventbus.TodoCreatedPayload) {
+			select {
+			case ch <- payload:
+			default:
+				// Drop if buffer full to avoid blocking
+			}
+		})
+		todoCh = ch
+	}
+
 	// Sessions tab is active by default
 	sessionsView.SetActive(true)
 
@@ -288,6 +316,8 @@ func New(deps Deps, opts Opts) Model {
 		toastController: toastCtrl,
 		toastView:       toastView,
 		bus:             deps.Bus,
+		todoService:     deps.TodoService,
+		todoCh:          todoCh,
 		renderer:        deps.Renderer,
 		buildInfo:       deps.BuildInfo,
 		updateChecker:   updateChecker,
@@ -344,6 +374,13 @@ func (m Model) Init() tea.Cmd {
 	if m.cfg.TUI.UpdateChecker && m.updateChecker != nil && m.buildInfo.Version != "" {
 		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
+	// Load initial pending todo count and start listening for todo events
+	if m.todoService != nil {
+		cmds = append(cmds, m.loadTodoPendingCount())
+		if m.todoCh != nil {
+			cmds = append(cmds, m.listenForTodoCreated())
+		}
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -357,6 +394,29 @@ func (m Model) executeAction(a Action) tea.Cmd {
 
 		err = command.ExecuteSync(context.Background(), exec)
 		return actionCompleteMsg{err: err}
+	}
+}
+
+// listenForTodoCreated returns a command that listens for todo creation events.
+func (m Model) listenForTodoCreated() tea.Cmd {
+	return func() tea.Msg {
+		payload, ok := <-m.todoCh
+		if !ok {
+			return nil
+		}
+		return todoCreatedMsg{payload: payload}
+	}
+}
+
+// loadTodoPendingCount returns a command that loads the pending todo count.
+func (m Model) loadTodoPendingCount() tea.Cmd {
+	return func() tea.Msg {
+		count, err := m.todoService.CountPending(context.Background())
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to load todo pending count")
+			return todoCountUpdatedMsg{count: 0}
+		}
+		return todoCountUpdatedMsg{count: count}
 	}
 }
 
@@ -442,6 +502,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateAvailableMsg:
 		model, cmd = m.handleUpdateAvailable(msg)
 
+	// Todos
+	case todoCountUpdatedMsg:
+		m.todoPendingCount = msg.count
+		model, cmd = m, nil
+	case todoCreatedMsg:
+		m.notifyBus.Infof("New %s: %s", msg.payload.Todo.Category, msg.payload.Todo.Title)
+		model, cmd = m, tea.Batch(m.loadTodoPendingCount(), m.listenForTodoCreated(), m.ensureToastTick())
+
 	// Input
 	case tea.KeyMsg:
 		model, cmd = m.handleKeyMsg(msg)
@@ -492,6 +560,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateConfirming {
 		return m.handleConfirmModalKey(keyStr)
+	}
+	if m.state == stateShowingTodos {
+		return m.handleTodoPanelKey(keyStr)
 	}
 	if m.state == stateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
@@ -856,6 +927,17 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		if entry.Command.Action == act.TypeNotifications {
 			m.state = stateShowingNotifications
 			m.modals.ShowNotifications(m.notifyBus)
+			return m, nil
+		}
+
+		// TodoPanel doesn't require a session
+		if entry.Command.Action == act.TypeTodoPanel {
+			if m.todoService == nil {
+				m.state = stateNormal
+				return m, nil
+			}
+			m.state = stateShowingTodos
+			m.modals.ShowTodoPanel(m.todoService)
 			return m, nil
 		}
 

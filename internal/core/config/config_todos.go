@@ -9,7 +9,7 @@ import (
 
 // TodosConfig holds configuration for the human todo system.
 type TodosConfig struct {
-	Mode          string             `yaml:"mode"`          // "internal" (default) or "export-only"
+	Mode          string             `yaml:"mode"` // "internal" (default) or "export-only"
 	Limiter       TodosLimiterConfig `yaml:"limiter"`
 	Export        TodosExportConfig  `yaml:"export"`
 	Notifications TodosNotifyConfig  `yaml:"notifications"`

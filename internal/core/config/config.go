@@ -162,6 +162,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "toggle group/repo view",
 		Silent: true,
 	},
+	"TodoPanel": {
+		Action: action.TypeTodoPanel,
+		Help:   "open todo panel",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
@@ -198,6 +203,7 @@ var defaultKeybindings = map[string]Keybinding{
 	"G":      {Cmd: "GroupSet"},
 	"J":      {Cmd: "NextActive"},
 	"K":      {Cmd: "PrevActive"},
+	"t":      {Cmd: "TodoPanel"},
 }
 
 // CurrentConfigVersion is the latest config schema version.

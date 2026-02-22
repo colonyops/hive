@@ -13,6 +13,8 @@ var (
 	IconBrain     = "󰧑 "
 	IconComment   = "\uf41f "
 
+	IconTodo = "\uf4a0 " // checklist
+
 	IconNotifyError   = "\uf06a" //
 	IconNotifyWarning = "\uf071" //
 	IconNotifyInfo    = "\uf05a" //

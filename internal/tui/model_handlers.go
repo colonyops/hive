@@ -112,6 +112,14 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		cmd := HiveDocReviewCmd{Arg: ""}
 		return m, cmd.Execute(&m)
 	}
+	if action.Type == act.TypeTodoPanel {
+		if m.todoService == nil {
+			return m, nil
+		}
+		m.state = stateShowingTodos
+		m.modals.ShowTodoPanel(m.todoService)
+		return m, nil
+	}
 	if action.Type == act.TypeRenameSession {
 		sess := m.sessionsView.SelectedSession()
 		if sess == nil {
@@ -286,6 +294,37 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 	m.updateInfo = msg.result
 	m.notifyBus.Infof("Update available: %s -> %s", msg.result.Current, msg.result.Latest)
 	return m, m.ensureToastTick()
+}
+
+// --- Todo Panel ---
+
+func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		return m.quit()
+	case "esc", "q":
+		m.state = stateNormal
+		m.todoPendingCount = m.modals.TodoPanel.PendingCount()
+		m.modals.DismissTodoPanel()
+		return m, nil
+	case "j", "down":
+		m.modals.TodoPanel.MoveDown()
+	case "k", "up":
+		m.modals.TodoPanel.MoveUp()
+	case "c":
+		if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
+			return m, m.notifyError("complete todo: %v", err)
+		}
+	case "a":
+		if err := m.modals.TodoPanel.AcknowledgeCurrent(); err != nil {
+			return m, m.notifyError("acknowledge todo: %v", err)
+		}
+	case "d":
+		if err := m.modals.TodoPanel.DismissCurrent(); err != nil {
+			return m, m.notifyError("dismiss todo: %v", err)
+		}
+	}
+	return m, nil
 }
 
 // --- Input ---
