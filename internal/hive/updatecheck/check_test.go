@@ -21,10 +21,10 @@ func newTestKVStore(t *testing.T) kv.KV {
 	return stores.NewKVStore(database)
 }
 
-func cacheRelease(t *testing.T, store kv.KV, tag string) {
+func cacheRelease(t *testing.T, store kv.KV, checker *Checker, tag string) {
 	t.Helper()
-	cache := kv.Scoped[ReleaseInfo](store, cacheNamespace)
-	err := cache.SetTTL(context.Background(), cacheKey, ReleaseInfo{TagName: tag}, cacheTTL)
+	cache := kv.Scoped[ReleaseInfo](store, "update-check")
+	err := cache.SetTTL(context.Background(), checker.cacheKey, ReleaseInfo{TagName: tag}, checker.cacheTTL)
 	require.NoError(t, err)
 }
 
@@ -56,7 +56,7 @@ func TestCheckerCheck(t *testing.T) {
 			checker := New(store, nil)
 
 			if tt.cachedTag != "" {
-				cacheRelease(t, store, tt.cachedTag)
+				cacheRelease(t, store, checker, tt.cachedTag)
 			}
 
 			fetchCalls := 0
@@ -95,8 +95,8 @@ func TestCheckerCheck_CacheEntryExpires(t *testing.T) {
 	store := newTestKVStore(t)
 	checker := New(store, nil)
 
-	cache := kv.Scoped[ReleaseInfo](store, cacheNamespace)
-	err := cache.SetTTL(context.Background(), cacheKey, ReleaseInfo{TagName: "v1.0.0"}, time.Millisecond)
+	cache := kv.Scoped[ReleaseInfo](store, "update-check")
+	err := cache.SetTTL(context.Background(), checker.cacheKey, ReleaseInfo{TagName: "v1.0.0"}, time.Millisecond)
 	require.NoError(t, err)
 	time.Sleep(5 * time.Millisecond)
 

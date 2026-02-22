@@ -13,14 +13,6 @@ import (
 	"golang.org/x/mod/semver"
 )
 
-const (
-	cacheTTL       = 24 * time.Hour
-	cacheNamespace = "update-check"
-	cacheKey       = "latest"
-	releaseAPIURL  = "https://api.github.com/repos/colonyops/hive/releases/latest"
-	defaultTimeout = 5 * time.Second
-)
-
 // ReleaseInfo holds cached release data returned by GitHub.
 type ReleaseInfo struct {
 	TagName     string `json:"tag_name"`
@@ -37,18 +29,28 @@ type Result struct {
 type Checker struct {
 	cache                  *kv.TypedKV[ReleaseInfo]
 	client                 *http.Client
+	cacheTTL               time.Duration
+	cacheKey               string
 	releaseAPIURL          string
 	fetchLatestReleaseJSON func(context.Context) ([]byte, error)
 }
 
 // New creates a new update checker bound to a KV store.
 func New(kvStore kv.KV, client *http.Client) *Checker {
+	cacheTTL := 24 * time.Hour
+	cacheNamespace := "update-check"
+	cacheKey := "latest"
+	releaseAPIURL := "https://api.github.com/repos/colonyops/hive/releases/latest"
+	defaultTimeout := 5 * time.Second
+
 	if client == nil {
 		client = &http.Client{Timeout: defaultTimeout}
 	}
 
 	c := &Checker{
 		client:        client,
+		cacheTTL:      cacheTTL,
+		cacheKey:      cacheKey,
 		releaseAPIURL: releaseAPIURL,
 	}
 	if kvStore != nil {
@@ -92,7 +94,7 @@ func (c *Checker) Check(ctx context.Context, currentVersion string) (*Result, er
 }
 
 func (c *Checker) getLatestRelease(ctx context.Context) (ReleaseInfo, error) {
-	if cached, err := c.cache.Get(ctx, cacheKey); err == nil {
+	if cached, err := c.cache.Get(ctx, c.cacheKey); err == nil {
 		return cached, nil
 	}
 
@@ -101,7 +103,7 @@ func (c *Checker) getLatestRelease(ctx context.Context) (ReleaseInfo, error) {
 		return ReleaseInfo{}, err
 	}
 
-	if err := c.cache.SetTTL(ctx, cacheKey, info, cacheTTL); err != nil {
+	if err := c.cache.SetTTL(ctx, c.cacheKey, info, c.cacheTTL); err != nil {
 		log.Debug().Err(err).Msg("update check: failed to cache release")
 	}
 

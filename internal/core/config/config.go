@@ -321,7 +321,7 @@ type TUIConfig struct {
 	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
 	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
 	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
-	UpdateChecker   *bool         `yaml:"update_checker"`   // enable startup update checker (nil = true)
+	UpdateChecker   bool          `yaml:"update_checker"`   // enable startup update checker (default: true)
 	GroupBy         string        `yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
 	Preview         PreviewConfig `yaml:"preview"`          // preview panel configuration
 	Views           ViewsConfig   `yaml:"views"`            // toggle optional TUI tabs
@@ -349,11 +349,6 @@ func (r ReviewConfig) CommentLineWidthOrDefault() int {
 // IconsEnabled returns true if nerd font icons should be shown.
 func (t TUIConfig) IconsEnabled() bool {
 	return t.Icons == nil || *t.Icons
-}
-
-// UpdateCheckerEnabled returns true when startup update checks should run.
-func (t TUIConfig) UpdateCheckerEnabled() bool {
-	return t.UpdateChecker == nil || *t.UpdateChecker
 }
 
 // PreviewConfig holds preview panel template configuration.
@@ -568,6 +563,7 @@ func DefaultConfig() Config {
 		TUI: TUIConfig{
 			RefreshInterval: 15 * time.Second,
 			PreviewEnabled:  true,
+			UpdateChecker:   true,
 		},
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
@@ -990,11 +986,6 @@ func (c *Config) validateUserKeybindings() error {
 // ReposDir returns the path where cloned repositories are stored.
 func (c *Config) ReposDir() string {
 	return filepath.Join(c.DataDir, "repos")
-}
-
-// SessionsFile returns the path to the sessions JSON file.
-func (c *Config) SessionsFile() string {
-	return filepath.Join(c.DataDir, "sessions.json")
 }
 
 // HistoryFile returns the path to the command history JSON file.

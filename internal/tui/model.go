@@ -341,7 +341,7 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	if m.cfg.TUI.UpdateCheckerEnabled() && m.updateChecker != nil && m.buildInfo.Version != "" {
+	if m.cfg.TUI.UpdateChecker && m.updateChecker != nil && m.buildInfo.Version != "" {
 		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
 	return tea.Batch(cmds...)
