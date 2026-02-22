@@ -490,6 +490,14 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 
 	selected := v.SelectedSession()
 
+	// Set window override before Resolve so TmuxOpen/TmuxStart actions
+	// target the selected window sub-item instead of the default.
+	if treeItem != nil && treeItem.IsWindowItem {
+		v.handler.SetSelectedWindow(treeItem.WindowIndex)
+	} else {
+		v.handler.SetSelectedWindow("")
+	}
+
 	// Resolve keybinding actions before the nil-session guard so that
 	// session-independent actions (GroupToggle, filters, etc.) work even
 	// when the cursor is on a header row.
@@ -507,12 +515,6 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 		var cmd tea.Cmd
 		v.list, cmd = v.list.Update(msg)
 		return v, cmd
-	}
-
-	if treeItem != nil && treeItem.IsWindowItem {
-		v.handler.SetSelectedWindow(treeItem.WindowIndex)
-	} else {
-		v.handler.SetSelectedWindow("")
 	}
 
 	if cmdName, cmd, hasForm := v.handler.ResolveFormCommand(keyStr, *selected); hasForm {
