@@ -16,12 +16,11 @@ import (
 
 // ReviewOnlyOptions configures the review-only TUI.
 type ReviewOnlyOptions struct {
-	Documents        []review.Document
-	InitialDoc       *review.Document
-	ContextDir       string // Directory for saving feedback files (e.g., context directory)
-	DB               *db.DB
-	CommentLineWidth int
-	CopyCommand      string // Shell command for copying to clipboard (e.g., "pbcopy" on macOS)
+	Documents   []review.Document
+	InitialDoc  *review.Document
+	ContextDir  string // Directory for saving feedback files (e.g., context directory)
+	DB          *db.DB
+	CopyCommand string // Shell command for copying to clipboard (e.g., "pbcopy" on macOS)
 }
 
 // ReviewOnlyModel is a minimal TUI for reviewing context documents.
@@ -42,7 +41,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	store := stores.NewReviewStore(opts.DB)
 
 	// Create review view
-	reviewView := review.New(opts.Documents, opts.ContextDir, store, opts.CommentLineWidth)
+	reviewView := review.New(opts.Documents, opts.ContextDir, store)
 
 	return ReviewOnlyModel{
 		reviewView:  reviewView,

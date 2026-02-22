@@ -31,12 +31,11 @@ func TestReviewOnly_QKeyWithActiveEditor(t *testing.T) {
 
 	// Create review-only model
 	m := NewReviewOnly(ReviewOnlyOptions{
-		Documents:        []review.Document{doc},
-		InitialDoc:       nil,
-		ContextDir:       "",
-		DB:               dbConn,
-		CommentLineWidth: 80,
-		CopyCommand:      "", // Not testing clipboard in unit tests
+		Documents:   []review.Document{doc},
+		InitialDoc:  nil,
+		ContextDir:  "",
+		DB:          dbConn,
+		CopyCommand: "", // Not testing clipboard in unit tests
 	})
 
 	// Initialize and resize to simulate real usage
@@ -88,12 +87,11 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 
 	// Create review-only model
 	m := NewReviewOnly(ReviewOnlyOptions{
-		Documents:        []review.Document{doc},
-		InitialDoc:       nil,
-		ContextDir:       "",
-		DB:               dbConn,
-		CommentLineWidth: 80,
-		CopyCommand:      "", // Not testing clipboard in unit tests
+		Documents:   []review.Document{doc},
+		InitialDoc:  nil,
+		ContextDir:  "",
+		DB:          dbConn,
+		CopyCommand: "", // Not testing clipboard in unit tests
 	})
 
 	// Initialize and resize
@@ -118,7 +116,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 // TestReviewView_HasActiveEditor verifies the HasActiveEditor method.
 func TestReviewView_HasActiveEditor(t *testing.T) {
 	// Create minimal view without database (not needed for this test)
-	v := review.New([]review.Document{}, "", nil, 80)
+	v := review.New([]review.Document{}, "", nil)
 
 	// Initially no active editor
 	assert.False(t, v.HasActiveEditor(), "Should have no active editor initially")

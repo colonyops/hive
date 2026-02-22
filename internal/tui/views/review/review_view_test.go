@@ -111,7 +111,7 @@ func TestNew(t *testing.T) {
 		},
 	}
 
-	view := New(docs, "", nil, 0)
+	view := New(docs, "", nil)
 
 	// Should not panic and should have a list
 	require.NotNil(t, view.list.Items(), "expected list items to be initialized")
@@ -125,7 +125,7 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create review view with watcher
-	view := New([]Document{}, tmpDir, nil, 0)
+	view := New([]Document{}, tmpDir, nil)
 
 	// View should have a watcher
 	require.NotNil(t, view.watcher, "expected watcher to be initialized")
@@ -144,7 +144,7 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -196,7 +196,7 @@ func TestCommentDeletionCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -245,7 +245,7 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -312,7 +312,7 @@ func TestReviewDiscardCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -359,7 +359,7 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -389,7 +389,7 @@ func TestCommentVisualStyling(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.selectedDoc = &doc
 
@@ -414,7 +414,7 @@ func TestCommentVisualStyling(t *testing.T) {
 
 	// Render the document with comments
 	content := "Line 1\nLine 2\nLine 3"
-	rendered, _ := view.insertCommentsInline(content)
+	rendered, _ := view.insertCommentsInline(content, 120)
 
 	// Check that the rendered output contains the comment icon
 	assert.Contains(t, rendered, styles.IconComment, "expected rendered output to contain '%s' icon", styles.IconComment)
@@ -447,7 +447,7 @@ func TestLineMappingWithComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.selectedDoc = &doc
 
 	// Create a session with comments on lines 2 and 4
@@ -480,7 +480,7 @@ func TestLineMappingWithComments(t *testing.T) {
 
 	// Insert comments and get line mapping
 	content := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
-	_, lineMapping := view.insertCommentsInline(content)
+	_, lineMapping := view.insertCommentsInline(content, 120)
 
 	// Verify line mapping
 	// Expected mapping:
@@ -533,7 +533,7 @@ func TestView_WithPickerModal(t *testing.T) {
 		{RelPath: "doc1.md", Type: DocTypePlan},
 	}
 
-	reviewView := New(docs, "/test", nil, 0)
+	reviewView := New(docs, "/test", nil)
 	reviewView.SetSize(100, 40)
 
 	// Show picker
@@ -546,7 +546,7 @@ func TestView_WithPickerModal(t *testing.T) {
 }
 
 func TestView_HasPickerModalField(t *testing.T) {
-	reviewView := New(nil, "", nil, 0)
+	reviewView := New(nil, "", nil)
 
 	// Access the field to ensure it exists
 	_ = reviewView.pickerModal
@@ -573,7 +573,7 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -608,7 +608,7 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 
 	// Build line mapping by rendering with comments
 	rendered := content
-	rendered, lineMapping := view.insertCommentsInline(rendered)
+	rendered, lineMapping := view.insertCommentsInline(rendered, 120)
 	view.lineMapping = lineMapping
 	view.viewport.SetContent(rendered)
 
@@ -655,7 +655,7 @@ func TestJumpToMatchWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 10)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -690,7 +690,7 @@ func TestJumpToMatchWithComments(t *testing.T) {
 
 	// Build line mapping
 	rendered := content
-	rendered, lineMapping := view.insertCommentsInline(rendered)
+	rendered, lineMapping := view.insertCommentsInline(rendered, 120)
 	view.lineMapping = lineMapping
 	view.viewport.SetContent(rendered)
 
@@ -769,7 +769,7 @@ func TestReverseMappingCorrectness(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.selectedDoc = &doc
 
 	// Create session with comments
@@ -802,7 +802,7 @@ func TestReverseMappingCorrectness(t *testing.T) {
 
 	// Build line mapping
 	content := "Line 1\nLine 2\nLine 3\nLine 4\nLine 5"
-	_, lineMapping := view.insertCommentsInline(content)
+	_, lineMapping := view.insertCommentsInline(content, 120)
 
 	// Build reverse map
 	displayToDoc := buildDisplayToDocMap(lineMapping)
@@ -870,7 +870,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	}
 
 	// Create review view with the store
-	view := New([]Document{doc}, tmpDir, store, 0)
+	view := New([]Document{doc}, tmpDir, store)
 	view.SetSize(80, 24)
 
 	// Load document and create a session with a comment
@@ -919,7 +919,7 @@ func TestCtrlDUWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -963,7 +963,7 @@ func TestCtrlDUWithComments(t *testing.T) {
 
 	// Build line mapping by rendering with comments
 	rendered := content
-	rendered, lineMapping := view.insertCommentsInline(rendered)
+	rendered, lineMapping := view.insertCommentsInline(rendered, 120)
 	view.lineMapping = lineMapping
 	view.viewport.SetContent(rendered)
 
@@ -1010,7 +1010,7 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 			Type:    DocTypePlan,
 		},
 	}
-	v := New(docs, "/test", nil, 0)
+	v := New(docs, "/test", nil)
 	v.SetSize(100, 40)
 
 	// Manually set up the finalization modal state (simulating pressing 'f')
@@ -1046,7 +1046,7 @@ func TestHasActiveEditor(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil, 0)
+	view := New([]Document{doc}, "", nil)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -1063,7 +1063,7 @@ func TestHasActiveEditor(t *testing.T) {
 	assert.False(t, view.HasActiveEditor(), "expected HasActiveEditor to be false after disabling search mode")
 
 	// Open comment modal - should have active editor
-	modal := NewCommentModal(1, 2, "context", 80, 24, 80)
+	modal := NewCommentModal(1, 2, "context", 80, 24)
 	view.commentModal = &modal
 	assert.True(t, view.HasActiveEditor(), "expected HasActiveEditor to be true when comment modal is active")
 

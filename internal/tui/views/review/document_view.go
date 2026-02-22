@@ -12,38 +12,31 @@ import (
 
 // DocumentView handles document rendering with line numbers, comments, and cursor highlighting.
 type DocumentView struct {
-	viewport         viewport.Model
-	document         *Document   // Currently loaded document
-	cursorLine       int         // 1-indexed cursor position
-	selectionStart   int         // 1-indexed selection anchor (0 if none)
-	lineMapping      map[int]int // Maps document line numbers to display line numbers (nil when no comments)
-	searchMatches    []int       // Line numbers of search matches (1-indexed, in document coordinates)
-	searchIndex      int         // Current match index in searchMatches
-	width            int         // Viewport width
-	height           int         // Viewport height
-	commentLineWidth int         // Configured max width for comment wrapping (from config, default: 80)
+	viewport       viewport.Model
+	document       *Document   // Currently loaded document
+	cursorLine     int         // 1-indexed cursor position
+	selectionStart int         // 1-indexed selection anchor (0 if none)
+	lineMapping    map[int]int // Maps document line numbers to display line numbers (nil when no comments)
+	searchMatches  []int       // Line numbers of search matches (1-indexed, in document coordinates)
+	searchIndex    int         // Current match index in searchMatches
+	width          int         // Viewport width
+	height         int         // Viewport height
 }
 
 // NewDocumentView creates a new DocumentView instance.
-// commentLineWidth sets the max width for comment wrapping (0 = default 80).
-func NewDocumentView(doc *Document, commentLineWidth int) DocumentView {
+func NewDocumentView(doc *Document) DocumentView {
 	vp := viewport.New()
 
-	if commentLineWidth <= 0 {
-		commentLineWidth = 80
-	}
-
 	return DocumentView{
-		viewport:         vp,
-		document:         doc,
-		cursorLine:       1,
-		selectionStart:   0,
-		lineMapping:      nil,
-		searchMatches:    nil,
-		searchIndex:      0,
-		width:            80,
-		height:           24,
-		commentLineWidth: commentLineWidth,
+		viewport:       vp,
+		document:       doc,
+		cursorLine:     1,
+		selectionStart: 0,
+		lineMapping:    nil,
+		searchMatches:  nil,
+		searchIndex:    0,
+		width:          80,
+		height:         24,
 	}
 }
 
@@ -196,15 +189,11 @@ func (dv *DocumentView) ensureCursorVisible() {
 	}
 }
 
-// wrapComment wraps comment text to fit within configured width.
-// Uses commentLineWidth as the target width, adjusting based on viewport width.
+// wrapComment wraps comment text to fit within the content width.
 // indent specifies number of spaces to add at the start of the first line.
 // Continuation lines get 2 additional spaces of indentation.
 func (dv *DocumentView) wrapComment(text string, indent int) []string {
-	// Use configured comment line width
-	minWidth := dv.commentLineWidth
-	// Reserve 15 chars for line numbers and padding
-	maxWidth := max(minWidth, dv.width-15)
+	maxWidth := contentWrapWidth(dv.width)
 
 	// Split text into words
 	words := strings.Fields(text)
