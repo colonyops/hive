@@ -29,6 +29,7 @@ import (
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/hive/updatecheck"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/components"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
@@ -136,6 +137,8 @@ type Model struct {
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
+	updateChecker *updatecheck.Checker
+	updateInfo    *updatecheck.Result
 	doctorService *hive.DoctorService
 	configPath    string
 
@@ -263,6 +266,8 @@ func New(deps Deps, opts Opts) Model {
 	// Sessions tab is active by default
 	sessionsView.SetActive(true)
 
+	updateChecker := updatecheck.New(deps.KVStore, nil)
+
 	return Model{
 		cfg:             cfg,
 		service:         service,
@@ -285,6 +290,7 @@ func New(deps Deps, opts Opts) Model {
 		bus:             deps.Bus,
 		renderer:        deps.Renderer,
 		buildInfo:       deps.BuildInfo,
+		updateChecker:   updateChecker,
 		doctorService:   deps.DoctorService,
 		configPath:      opts.ConfigPath,
 		startupWarnings: opts.Warnings,
@@ -334,6 +340,9 @@ func (m Model) Init() tea.Cmd {
 		if cmd := m.reviewView.Init(); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
+	}
+	if m.cfg.TUI.UpdateCheckerEnabled() && m.updateChecker != nil && m.buildInfo.Version != "" {
+		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
 	return tea.Batch(cmds...)
 }
@@ -430,6 +439,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Notifications
 	case notificationMsg:
 		model, cmd = m.handleNotification(msg)
+	case updateAvailableMsg:
+		model, cmd = m.handleUpdateAvailable(msg)
 
 	// Input
 	case tea.KeyMsg:

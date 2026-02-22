@@ -278,6 +278,16 @@ func (m Model) handleNotification(msg notificationMsg) (tea.Model, tea.Cmd) {
 	return m, m.ensureToastTick()
 }
 
+func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd) {
+	if msg.result == nil {
+		return m, nil
+	}
+
+	m.updateInfo = msg.result
+	m.notifyBus.Infof("Update available: %s -> %s", msg.result.Current, msg.result.Latest)
+	return m, m.ensureToastTick()
+}
+
 // --- Input ---
 
 func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {

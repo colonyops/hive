@@ -45,26 +45,7 @@ var (
 )
 
 func build() string {
-	v, c, d := version, commit, date
-
-	// When installed via `go install module@version`, ldflags aren't set
-	// so version remains "dev". Fall back to runtime/debug.BuildInfo which
-	// Go populates automatically with the module version and VCS metadata.
-	if v == "dev" {
-		if info, ok := debug.ReadBuildInfo(); ok {
-			if mv := info.Main.Version; mv != "" && mv != "(devel)" {
-				v = mv
-			}
-			for _, s := range info.Settings {
-				switch s.Key {
-				case "vcs.revision":
-					c = s.Value
-				case "vcs.time":
-					d = s.Value
-				}
-			}
-		}
-	}
+	v, c, d := resolvedBuildInfo()
 
 	short := c
 	if len(c) > 7 {
@@ -72,6 +53,36 @@ func build() string {
 	}
 
 	return fmt.Sprintf("%s (%s) %s", v, short, d)
+}
+
+func resolvedBuildInfo() (string, string, string) {
+	v, c, d := version, commit, date
+
+	// When installed via `go install module@version`, ldflags aren't set
+	// so version remains "dev". Fall back to runtime/debug.BuildInfo which
+	// Go populates automatically with the module version and VCS metadata.
+	if v != "dev" {
+		return v, c, d
+	}
+
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		return v, c, d
+	}
+
+	if mv := info.Main.Version; mv != "" && mv != "(devel)" {
+		v = mv
+	}
+	for _, s := range info.Settings {
+		switch s.Key {
+		case "vcs.revision":
+			c = s.Value
+		case "vcs.time":
+			d = s.Value
+		}
+	}
+
+	return v, c, d
 }
 
 // isShellCompletion reports whether the process was invoked for shell
@@ -306,10 +317,11 @@ Run 'hive new' to create a new session from the current repository.`,
 				renderer,
 				pluginInfos,
 			)
+			resolvedVersion, resolvedCommit, resolvedDate := resolvedBuildInfo()
 			hiveApp.Build = hive.BuildInfo{
-				Version: version,
-				Commit:  commit,
-				Date:    date,
+				Version: resolvedVersion,
+				Commit:  resolvedCommit,
+				Date:    resolvedDate,
 			}
 
 			return ctx, nil
