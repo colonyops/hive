@@ -223,6 +223,7 @@ type Config struct {
 	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
+	Todos               TodosConfig            `yaml:"todos"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
@@ -559,6 +560,16 @@ func DefaultConfig() Config {
 			TopicPrefix: "agent",
 			MaxMessages: 100,
 		},
+		Todos: TodosConfig{
+			Mode: "internal",
+			Limiter: TodosLimiterConfig{
+				MaxPending:          100,
+				RateLimitPerSession: 15 * time.Second,
+			},
+			Notifications: TodosNotifyConfig{
+				Toast: true,
+			},
+		},
 	}
 }
 
@@ -648,6 +659,9 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.Beads.ResultsCache == 0 {
 		c.Plugins.Beads.ResultsCache = 30 * time.Second
 	}
+	if c.Todos.Mode == "" {
+		c.Todos.Mode = defaults.Todos.Mode
+	}
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -723,6 +737,7 @@ func (c *Config) Validate() error {
 		c.validateMaxRecycled(),
 		c.validateAgents(),
 		c.validateWindowsBasic(),
+		c.validateTodos(),
 	)
 }
 
@@ -1020,7 +1035,7 @@ func isValidAction(t action.Type) bool {
 // isValidScope checks if a scope value is valid.
 func isValidScope(scope string) bool {
 	switch scope {
-	case "global", "sessions", "messages", "review":
+	case "global", "sessions", "messages", "review", "todos":
 		return true
 	default:
 		return false

@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/todo"
 )
 
 //go:generate gobusgen generate -p .Events
@@ -22,6 +23,7 @@ var Events = map[string]any{
 	"session.deleted":      SessionDeletedPayload{},
 	"session.recycled":     SessionRecycledPayload{},
 	"session.renamed":      SessionRenamedPayload{},
+	"todo.created":         TodoCreatedPayload{},
 	"tui.started":          TUIStartedPayload{},
 	"tui.stopped":          TUIStoppedPayload{},
 }
@@ -70,6 +72,11 @@ type TUIStartedPayload struct{}
 
 // TUIStoppedPayload is emitted when the TUI stops.
 type TUIStoppedPayload struct{}
+
+// TodoCreatedPayload is emitted when a new todo item is created.
+type TodoCreatedPayload struct {
+	Todo todo.Todo
+}
 
 // ConfigReloadedPayload is emitted when configuration is reloaded.
 type ConfigReloadedPayload struct {
