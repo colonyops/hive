@@ -11,6 +11,19 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
+const (
+	// maxContentWidth is the maximum line width for content wrapping (markdown and comments).
+	maxContentWidth = 120
+	// lineNumberReserved is the space reserved for line numbers and separators.
+	lineNumberReserved = 6
+)
+
+// contentWrapWidth computes the wrap width for a given viewport width.
+// Used by both markdown rendering and comment wrapping to ensure consistent line lengths.
+func contentWrapWidth(viewportWidth int) int {
+	return max(min(viewportWidth-lineNumberReserved, maxContentWidth), 20)
+}
+
 // DocumentType categorizes documents.
 type DocumentType int
 
@@ -197,9 +210,7 @@ func (d *Document) Render(width int) (string, error) {
 	}
 
 	// Create glamour renderer with Tokyo Night theme
-	// Account for line numbers (4 chars) + separator (2 chars)
-	// Ensure minimum reasonable width of 20 characters, maximum of 120 for readability
-	wrapWidth := max(min(width-6, 120), 20)
+	wrapWidth := contentWrapWidth(width)
 	r, err := glamour.NewTermRenderer(
 		glamour.WithStyles(styles.GlamourStyle()),
 		glamour.WithWordWrap(wrapWidth),

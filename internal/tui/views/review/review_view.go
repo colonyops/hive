@@ -64,7 +64,6 @@ type View struct {
 	pendingDiscard    bool                     // True when waiting for discard confirmation
 	editingCommentID  string                   // ID of comment being edited (empty if creating new)
 	lineMapping       map[int]int              // Maps document line numbers to display line numbers (nil when no comments)
-	commentLineWidth  int                      // Max width for comment modal (from config, default: 80)
 
 	// Phase 1 refactor: extracted components
 	documentView        DocumentView // Document rendering and navigation
@@ -75,8 +74,7 @@ type View struct {
 // New creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
 // If store is non-nil, comments will be persisted to the database.
-// commentLineWidth sets the max width for the comment modal (0 = default 80).
-func New(documents []Document, contextDir string, store *stores.ReviewStore, commentLineWidth int) View {
+func New(documents []Document, contextDir string, store *stores.ReviewStore) View {
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -118,27 +116,21 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore, com
 	// Enable paste
 	ti.KeyMap.Paste.SetEnabled(true)
 
-	// Apply default comment line width if not set
-	if commentLineWidth <= 0 {
-		commentLineWidth = 80
-	}
-
 	// Initialize Phase 1 components
-	documentView := NewDocumentView(nil, commentLineWidth) // Will be populated when document is loaded
+	documentView := NewDocumentView(nil)
 	searchModeComponent := NewSearchMode()
 	modalState := NewModalState()
 
 	return View{
-		list:             l,
-		viewport:         vp,
-		watcher:          watcher,
-		contextDir:       contextDir,
-		store:            store,
-		previewMode:      false,
-		fullScreen:       false,
-		cursorLine:       1,
-		searchInput:      ti,
-		commentLineWidth: commentLineWidth,
+		list:        l,
+		viewport:    vp,
+		watcher:     watcher,
+		contextDir:  contextDir,
+		store:       store,
+		previewMode: false,
+		fullScreen:  false,
+		cursorLine:  1,
+		searchInput: ti,
 		// Phase 1 components
 		documentView:        documentView,
 		searchModeComponent: searchModeComponent,
@@ -431,7 +423,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					// Calculate selection range from anchor to cursor
 					start := min(v.selectionStart, v.cursorLine)
 					end := max(v.selectionStart, v.cursorLine)
-					modal := NewCommentModal(start, end, contextText, v.width, v.height, v.commentLineWidth)
+					modal := NewCommentModal(start, end, contextText, v.width, v.height)
 					v.commentModal = &modal
 					return v, nil
 				}
@@ -448,7 +440,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 								comment.ContextText,
 								v.width,
 								v.height,
-								v.commentLineWidth,
 							)
 							modal.SetExistingComment(comment.CommentText)
 							v.commentModal = &modal
@@ -920,7 +911,7 @@ func (v *View) renderSelection() {
 	// Insert comments inline if session exists and build line mapping
 	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 		var mappedContent string
-		mappedContent, v.lineMapping = v.insertCommentsInline(rendered)
+		mappedContent, v.lineMapping = v.insertCommentsInline(rendered, previewWidth)
 		rendered = mappedContent
 	} else {
 		// Clear line mapping when no comments
@@ -1552,10 +1543,13 @@ func (v *View) updateTreeItemCommentCount() {
 	}
 }
 
-// formatCommentLines formats comment text with proper indentation.
-// Preserves explicit newlines and aligns continuation lines.
-// The first line includes the icon and base indent, subsequent lines align with text after icon.
-func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
+// formatCommentLines formats comment text with proper indentation and word wrapping.
+// Preserves explicit newlines, wraps long lines to fit the content width,
+// and aligns continuation lines with text after the icon.
+// contentWidth should match the preview width passed to Document.Render.
+func (v *View) formatCommentLines(icon, text string, baseIndent, contentWidth int) []string {
+	maxWidth := contentWrapWidth(contentWidth)
+
 	// Split by explicit newlines first (preserve user's line breaks)
 	inputLines := strings.Split(text, "\n")
 
@@ -1564,16 +1558,52 @@ func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
 	// Continuation lines use baseIndent + 3 spaces for visual separation
 	// (icon is 1 char + 1 space = 2 chars, but we add 3 for better readability)
 	continuationIndentStr := baseIndentStr + "   "
+	continuationIndentLen := baseIndent + 3
 
 	for i, line := range inputLines {
-		line = strings.TrimRight(line, " \t") // Remove trailing whitespace
+		line = strings.TrimRight(line, " \t")
+		words := strings.Fields(line)
 
+		var prefix string
 		if i == 0 {
-			// First line: add icon
-			result = append(result, baseIndentStr+icon+" "+line)
+			prefix = baseIndentStr + icon + " "
 		} else {
-			// Subsequent lines: align with first line's text
-			result = append(result, continuationIndentStr+line)
+			prefix = continuationIndentStr
+		}
+
+		if len(words) == 0 {
+			result = append(result, prefix)
+			continue
+		}
+
+		var currentLine strings.Builder
+		currentLine.WriteString(prefix)
+		currentLineLen := continuationIndentLen // both prefixes have same display width
+
+		for j, word := range words {
+			wordLen := len(word)
+			spaceLen := 0
+			if j > 0 {
+				spaceLen = 1
+			}
+
+			if currentLineLen+spaceLen+wordLen > maxWidth && currentLineLen > continuationIndentLen {
+				result = append(result, currentLine.String())
+				currentLine.Reset()
+				currentLine.WriteString(continuationIndentStr)
+				currentLine.WriteString(word)
+				currentLineLen = continuationIndentLen + wordLen
+			} else {
+				if j > 0 {
+					currentLine.WriteString(" ")
+				}
+				currentLine.WriteString(word)
+				currentLineLen += spaceLen + wordLen
+			}
+		}
+
+		if currentLine.Len() > 0 {
+			result = append(result, currentLine.String())
 		}
 	}
 
@@ -1582,7 +1612,7 @@ func (v *View) formatCommentLines(icon, text string, baseIndent int) []string {
 
 // insertCommentsInline inserts comments after their referenced lines.
 // Returns the rendered content and a mapping from document line numbers to display line numbers.
-func (v *View) insertCommentsInline(content string) (string, map[int]int) {
+func (v *View) insertCommentsInline(content string, contentWidth int) (string, map[int]int) {
 	lines := strings.Split(content, "\n")
 	originalLineCount := len(lines)
 
@@ -1625,7 +1655,7 @@ func (v *View) insertCommentsInline(content string) (string, map[int]int) {
 		for _, comment := range comments {
 			icon := styles.IconComment
 			// Format with proper indentation, preserving explicit newlines
-			formattedLines := v.formatCommentLines(icon, comment.CommentText, 6)
+			formattedLines := v.formatCommentLines(icon, comment.CommentText, 7, contentWidth)
 			// Apply styling to each formatted line
 			for _, formattedLine := range formattedLines {
 				styledLine := commentStyle.Render(formattedLine)

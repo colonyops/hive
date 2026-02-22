@@ -246,7 +246,7 @@ func New(deps Deps, opts Opts) Model {
 		reviewStore = stores.NewReviewStore(deps.DB)
 	}
 
-	reviewView := review.New(docs, contextDir, reviewStore, cfg.Review.CommentLineWidthOrDefault())
+	reviewView := review.New(docs, contextDir, reviewStore)
 
 	var notifyStore notify.Store
 	if deps.DB != nil {

@@ -166,12 +166,11 @@ func (cmd *ReviewCmd) runWithContextDir(ctx context.Context, c *cli.Command) err
 func (cmd *ReviewCmd) launchReviewTUI(ctx context.Context, documents []review.Document, initialDoc *review.Document, contextDir string) error {
 	// Create review-only options
 	opts := tui.ReviewOnlyOptions{
-		Documents:        documents,
-		InitialDoc:       initialDoc,
-		ContextDir:       contextDir,
-		DB:               cmd.app.DB,
-		CommentLineWidth: cmd.app.Config.Review.CommentLineWidthOrDefault(),
-		CopyCommand:      cmd.app.Config.CopyCommand,
+		Documents:   documents,
+		InitialDoc:  initialDoc,
+		ContextDir:  contextDir,
+		DB:          cmd.app.DB,
+		CopyCommand: cmd.app.Config.CopyCommand,
 	}
 
 	// Create review-only model
