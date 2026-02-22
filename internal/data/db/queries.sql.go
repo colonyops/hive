@@ -51,6 +51,17 @@ func (q *Queries) CountNotifications(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countOpenTodoItems = `-- name: CountOpenTodoItems :one
+SELECT COUNT(*) FROM todo_items WHERE status IN ('pending', 'acknowledged')
+`
+
+func (q *Queries) CountOpenTodoItems(ctx context.Context) (int64, error) {
+	row := q.db.QueryRowContext(ctx, countOpenTodoItems)
+	var count int64
+	err := row.Scan(&count)
+	return count, err
+}
+
 const countPendingTodoItems = `-- name: CountPendingTodoItems :one
 SELECT COUNT(*) FROM todo_items WHERE status = 'pending'
 `

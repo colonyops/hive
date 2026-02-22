@@ -123,6 +123,11 @@ func (s *TodoService) CountPending(ctx context.Context) (int, error) {
 	return s.store.CountPending(ctx)
 }
 
+// CountOpen returns the number of open (pending + acknowledged) todo items.
+func (s *TodoService) CountOpen(ctx context.Context) (int, error) {
+	return s.store.CountOpen(ctx)
+}
+
 // Mode returns the configured todo mode ("internal" or "export-only").
 func (s *TodoService) Mode() string {
 	return s.mode

@@ -168,13 +168,19 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	// Auto-detect session ID (best-effort)
 	sessionID, _ := cmd.app.Sessions.DetectSession(ctx)
 
+	// Auto-set ref to session ID for "done" category if not explicitly provided
+	ref := cmd.addRef
+	if ref == "" && cat == todo.CategoryDone && sessionID != "" {
+		ref = sessionID
+	}
+
 	td := todo.Todo{
 		ID:        randid.Generate(8),
 		SessionID: sessionID,
 		Source:    src,
 		Category:  cat,
 		Title:     cmd.addTitle,
-		Ref:       cmd.addRef,
+		Ref:       ref,
 	}
 
 	if err := cmd.app.Todos.Add(ctx, td); err != nil {

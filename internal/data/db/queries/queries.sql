@@ -202,6 +202,9 @@ SELECT * FROM todo_items WHERE status = ? ORDER BY created_at DESC;
 -- name: CountPendingTodoItems :one
 SELECT COUNT(*) FROM todo_items WHERE status = 'pending';
 
+-- name: CountOpenTodoItems :one
+SELECT COUNT(*) FROM todo_items WHERE status IN ('pending', 'acknowledged');
+
 -- name: CountRecentTodoItemsBySession :one
 SELECT COUNT(*) FROM todo_items WHERE session_id = ? AND created_at > ?;
 

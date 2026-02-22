@@ -137,9 +137,10 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
-	todoService      *hive.TodoService
-	todoPendingCount int
-	todoCh           <-chan eventbus.TodoCreatedPayload
+	todoService     *hive.TodoService
+	todoUnseenCount int
+	todoOpenCount   int
+	todoCh          <-chan eventbus.TodoCreatedPayload
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
@@ -189,7 +190,8 @@ type doctorResultsMsg struct {
 }
 
 type todoCountUpdatedMsg struct {
-	count int
+	unseenCount int
+	openCount   int
 }
 
 type todoCreatedMsg struct {
@@ -374,9 +376,9 @@ func (m Model) Init() tea.Cmd {
 	if m.cfg.TUI.UpdateChecker && m.updateChecker != nil && m.buildInfo.Version != "" {
 		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
-	// Load initial pending todo count and start listening for todo events
+	// Load initial todo counts and start polling + event listening
 	if m.todoService != nil {
-		cmds = append(cmds, m.loadTodoPendingCount())
+		cmds = append(cmds, m.loadTodoCounts(), scheduleTodoPollTick())
 		if m.todoCh != nil {
 			cmds = append(cmds, m.listenForTodoCreated())
 		}
@@ -408,15 +410,21 @@ func (m Model) listenForTodoCreated() tea.Cmd {
 	}
 }
 
-// loadTodoPendingCount returns a command that loads the pending todo count.
-func (m Model) loadTodoPendingCount() tea.Cmd {
+// loadTodoCounts returns a command that loads both unseen and open todo counts.
+func (m Model) loadTodoCounts() tea.Cmd {
 	return func() tea.Msg {
-		count, err := m.todoService.CountPending(context.Background())
+		ctx := context.Background()
+		unseen, err := m.todoService.CountPending(ctx)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to load todo pending count")
-			return todoCountUpdatedMsg{count: 0}
+			unseen = 0
 		}
-		return todoCountUpdatedMsg{count: count}
+		open, err := m.todoService.CountOpen(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to load todo open count")
+			open = 0
+		}
+		return todoCountUpdatedMsg{unseenCount: unseen, openCount: open}
 	}
 }
 
@@ -446,9 +454,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case kvEntryLoadedMsg:
 		model, cmd = m.handleKVEntryLoaded(msg)
 
-	// Polling ticks (KV only — session polling is handled by sessionsView)
+	// Polling ticks
 	case kvPollTickMsg:
 		model, cmd = m.handleKVPollTick(msg)
+	case todoPollTickMsg:
+		model, cmd = m.handleTodoPollTick()
 	case toastTickMsg:
 		model, cmd = m.handleToastTick(msg)
 
@@ -504,11 +514,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Todos
 	case todoCountUpdatedMsg:
-		m.todoPendingCount = msg.count
+		m.todoUnseenCount = msg.unseenCount
+		m.todoOpenCount = msg.openCount
 		model, cmd = m, nil
 	case todoCreatedMsg:
 		m.notifyBus.Infof("New %s: %s", msg.payload.Todo.Category, msg.payload.Todo.Title)
-		model, cmd = m, tea.Batch(m.loadTodoPendingCount(), m.listenForTodoCreated(), m.ensureToastTick())
+		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated(), m.ensureToastTick())
 
 	// Input
 	case tea.KeyMsg:

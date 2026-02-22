@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -11,6 +12,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
@@ -91,6 +93,13 @@ func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
 		)
 	}
 	return m, scheduleKVPollTick()
+}
+
+func (m Model) handleTodoPollTick() (tea.Model, tea.Cmd) {
+	if m.todoService == nil {
+		return m, nil
+	}
+	return m, tea.Batch(m.loadTodoCounts(), scheduleTodoPollTick())
 }
 
 func (m Model) handleToastTick(_ toastTickMsg) (tea.Model, tea.Cmd) {
@@ -259,6 +268,12 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 	if err := m.copyToClipboard(msg.Feedback); err != nil {
 		return m, m.notifyError("failed to copy feedback: %v", err)
 	}
+
+	// Auto-complete todos whose ref matches the finalized document
+	if m.todoService != nil && (msg.DocumentPath != "" || msg.DocumentRel != "") {
+		return m, m.completeTodosMatchingRef(msg.DocumentPath, msg.DocumentRel)
+	}
+
 	return m, nil
 }
 
@@ -304,20 +319,47 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "q":
 		m.state = stateNormal
-		m.todoPendingCount = m.modals.TodoPanel.PendingCount()
+		m.todoUnseenCount = 0
+		m.todoOpenCount = m.modals.TodoPanel.OpenCount()
 		m.modals.DismissTodoPanel()
 		return m, nil
 	case "j", "down":
 		m.modals.TodoPanel.MoveDown()
 	case "k", "up":
 		m.modals.TodoPanel.MoveUp()
+	case keyEnter:
+		item := m.modals.TodoPanel.CurrentItem()
+		if item == nil {
+			return m, nil
+		}
+		if item.Ref == "" {
+			m.notifyBus.Infof("no document ref on this todo")
+			return m, m.ensureToastTick()
+		}
+
+		// "done" category todos complete on open — viewing the session is the action
+		if item.Category == todo.CategoryDone {
+			if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
+				return m, m.notifyError("complete todo: %v", err)
+			}
+			return m, nil
+		}
+
+		// Review/code-review todos open in review mode (completion on finalize)
+		if m.reviewView != nil {
+			m.state = stateNormal
+			m.todoUnseenCount = 0
+			m.todoOpenCount = m.modals.TodoPanel.OpenCount()
+			m.modals.DismissTodoPanel()
+			m.activeView = ViewReview
+			m.handler.SetActiveView(ViewReview)
+			return m, m.reviewView.OpenDocumentByPath(item.Ref)
+		}
+	case "tab":
+		m.modals.TodoPanel.CycleFilter()
 	case "c":
 		if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
 			return m, m.notifyError("complete todo: %v", err)
-		}
-	case "a":
-		if err := m.modals.TodoPanel.AcknowledgeCurrent(); err != nil {
-			return m, m.notifyError("acknowledge todo: %v", err)
 		}
 	case "d":
 		if err := m.modals.TodoPanel.DismissCurrent(); err != nil {
@@ -325,6 +367,35 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// completeTodosMatchingRef completes all open todos whose ref matches any of the given paths.
+func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		items, err := m.todoService.List(ctx, todo.ListFilter{})
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to list todos for auto-complete")
+			return m.loadTodoCounts()()
+		}
+		for _, item := range items {
+			if item.Status != todo.StatusPending && item.Status != todo.StatusAcknowledged {
+				continue
+			}
+			if item.Ref == "" {
+				continue
+			}
+			for _, p := range paths {
+				if p != "" && (item.Ref == p || strings.HasSuffix(p, "/"+item.Ref) || strings.HasSuffix(item.Ref, "/"+p)) {
+					if err := m.todoService.Complete(ctx, item.ID); err != nil {
+						log.Debug().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
+					}
+					break
+				}
+			}
+		}
+		return m.loadTodoCounts()()
+	}
 }
 
 // --- Input ---

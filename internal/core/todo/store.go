@@ -12,6 +12,7 @@ type Store interface {
 	Update(ctx context.Context, id string, status Status) error
 	List(ctx context.Context, filter ListFilter) ([]Todo, error)
 	CountPending(ctx context.Context) (int, error)
+	CountOpen(ctx context.Context) (int, error)
 	CountRecentBySession(ctx context.Context, sessionID string, since time.Time) (int, error)
 	Delete(ctx context.Context, id string) error
 }

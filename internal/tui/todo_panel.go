@@ -23,12 +23,27 @@ const (
 	todoPanelChrome    = 6 // title + divider + help + spacing
 )
 
+// todoFilter controls which items are visible in the panel.
+type todoFilter int
+
+const (
+	todoFilterOpen todoFilter = iota
+	todoFilterAll
+)
+
+var todoFilterLabels = [...]string{
+	todoFilterOpen: "Open",
+	todoFilterAll:  "All",
+}
+
 // TodoPanel displays an interactive list of todo items.
 type TodoPanel struct {
 	service  *hive.TodoService
 	viewport viewport.Model
-	items    []todo.Todo
+	allItems []todo.Todo // unfiltered list from store
+	items    []todo.Todo // filtered view
 	cursor   int
+	filter   todoFilter
 	width    int
 	height   int
 }
@@ -52,6 +67,7 @@ func NewTodoPanel(service *hive.TodoService, width, height int) *TodoPanel {
 	}
 
 	p.loadItems()
+	p.acknowledgeAll()
 	return p
 }
 
@@ -59,23 +75,40 @@ func (p *TodoPanel) loadItems() {
 	items, err := p.service.List(context.Background(), todo.ListFilter{})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to load todo items")
+		p.allItems = nil
 		p.items = nil
 		p.viewport.SetContent(styles.TextErrorStyle.Render(fmt.Sprintf("failed to load todos: %v", err)))
 		return
 	}
 
-	// Sort: pending first, then acknowledged, then completed/dismissed
-	pending := make([]todo.Todo, 0, len(items))
-	other := make([]todo.Todo, 0, len(items))
+	// Sort: open first, then completed/dismissed
+	p.allItems = make([]todo.Todo, 0, len(items))
+	closed := make([]todo.Todo, 0, len(items))
 	for _, item := range items {
 		if item.Status == todo.StatusPending || item.Status == todo.StatusAcknowledged {
-			pending = append(pending, item)
+			p.allItems = append(p.allItems, item)
 		} else {
-			other = append(other, item)
+			closed = append(closed, item)
 		}
 	}
-	pending = append(pending, other...)
-	p.items = pending
+	p.allItems = append(p.allItems, closed...)
+
+	p.applyFilter()
+}
+
+func (p *TodoPanel) applyFilter() {
+	switch p.filter {
+	case todoFilterOpen:
+		filtered := make([]todo.Todo, 0, len(p.allItems))
+		for _, item := range p.allItems {
+			if item.Status == todo.StatusPending || item.Status == todo.StatusAcknowledged {
+				filtered = append(filtered, item)
+			}
+		}
+		p.items = filtered
+	default:
+		p.items = p.allItems
+	}
 
 	if p.cursor >= len(p.items) {
 		p.cursor = max(len(p.items)-1, 0)
@@ -233,15 +266,54 @@ func (p *TodoPanel) DismissCurrent() error {
 	return nil
 }
 
-// PendingCount returns the number of pending items in the loaded list.
+// CycleFilter advances to the next filter tab.
+func (p *TodoPanel) CycleFilter() {
+	p.filter = (p.filter + 1) % todoFilter(len(todoFilterLabels))
+	p.cursor = 0
+	p.applyFilter()
+}
+
+// acknowledgeAll marks all pending items as acknowledged.
+func (p *TodoPanel) acknowledgeAll() {
+	for _, item := range p.allItems {
+		if item.Status == todo.StatusPending {
+			if err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
+				log.Error().Err(err).Str("id", item.ID).Msg("failed to auto-acknowledge todo")
+			}
+		}
+	}
+	p.loadItems()
+}
+
+// PendingCount returns the number of pending items across all items.
 func (p *TodoPanel) PendingCount() int {
 	count := 0
-	for _, item := range p.items {
+	for _, item := range p.allItems {
 		if item.Status == todo.StatusPending {
 			count++
 		}
 	}
 	return count
+}
+
+// OpenCount returns the number of open (pending + acknowledged) items across all items.
+func (p *TodoPanel) OpenCount() int {
+	count := 0
+	for _, item := range p.allItems {
+		if item.Status == todo.StatusPending || item.Status == todo.StatusAcknowledged {
+			count++
+		}
+	}
+	return count
+}
+
+// CurrentItem returns the todo item under the cursor, or nil if empty.
+func (p *TodoPanel) CurrentItem() *todo.Todo {
+	if p.cursor >= len(p.items) || len(p.items) == 0 {
+		return nil
+	}
+	item := p.items[p.cursor]
+	return &item
 }
 
 // Overlay renders the todo panel centered over the background.
@@ -256,19 +328,30 @@ func (p *TodoPanel) Overlay(background string, width, height int) string {
 		)
 	}
 
-	pendingCount := p.PendingCount()
-	titleSuffix := ""
-	if pendingCount > 0 {
-		titleSuffix = styles.TextWarningStyle.Render(fmt.Sprintf(" (%d pending)", pendingCount))
+	// Build filter tabs (left side of title bar)
+	var tabs []string
+	for i, label := range todoFilterLabels {
+		if todoFilter(i) == p.filter {
+			tabs = append(tabs, styles.TextPrimaryBoldStyle.Render(label))
+		} else {
+			tabs = append(tabs, styles.TextMutedStyle.Render(label))
+		}
 	}
+	filterBar := strings.Join(tabs, styles.TextMutedStyle.Render(" | "))
 
-	divider := styles.TextSurfaceStyle.Render(strings.Repeat("─", max(modalWidth-6, 1)))
+	// Title on right side of title bar
+	title := styles.ModalTitleStyle.Render(styles.IconTodo + " Todos" + scrollInfo)
+	contentWidth := modalWidth - 6
+	titleBarGap := max(contentWidth-lipgloss.Width(filterBar)-lipgloss.Width(title), 1)
+	titleBar := filterBar + strings.Repeat(" ", titleBarGap) + title
+
+	divider := styles.TextSurfaceStyle.Render(strings.Repeat("─", max(contentWidth, 1)))
 	modalContent := lipgloss.JoinVertical(
 		lipgloss.Left,
-		styles.ModalTitleStyle.Render(styles.IconTodo+"Todos"+titleSuffix+scrollInfo),
+		titleBar,
 		divider,
 		p.viewport.View(),
-		styles.ModalHelpStyle.Render("[j/k] navigate  [c] complete  [a] ack  [d] dismiss  [esc] close"),
+		styles.ModalHelpStyle.Render("[j/k] navigate  [tab] filter  [enter] open  [c] complete  [d] dismiss  [esc] close"),
 	)
 
 	modal := styles.ModalStyle.

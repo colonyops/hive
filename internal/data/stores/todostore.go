@@ -120,6 +120,15 @@ func (s *TodoStore) CountPending(ctx context.Context) (int, error) {
 	return int(count), nil
 }
 
+// CountOpen returns the number of open (pending + acknowledged) todo items.
+func (s *TodoStore) CountOpen(ctx context.Context) (int, error) {
+	count, err := s.db.Queries().CountOpenTodoItems(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("count open todo items: %w", err)
+	}
+	return int(count), nil
+}
+
 // CountRecentBySession returns the number of todo items created by a session since the given time.
 func (s *TodoStore) CountRecentBySession(ctx context.Context, sessionID string, since time.Time) (int, error) {
 	count, err := s.db.Queries().CountRecentTodoItemsBySession(ctx, db.CountRecentTodoItemsBySessionParams{
