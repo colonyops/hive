@@ -64,9 +64,8 @@ func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
 	if s.exporter != nil {
 		if err := s.exporter.Export([]todo.Todo{t}); err != nil {
 			s.logger.Warn().Err(err).Str("id", t.ID).Msg("failed to export todo")
-			// In export-only mode, leave as pending so operator can retry
 			if s.mode == "export-only" {
-				return nil
+				return fmt.Errorf("export todo: %w", err)
 			}
 		} else if s.mode == "export-only" {
 			// Auto-finalize after successful export

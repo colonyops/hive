@@ -284,6 +284,32 @@ func TestTodoService(t *testing.T) {
 		assert.Equal(t, 1, count)
 	})
 
+	t.Run("export-only mode returns error on export failure", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		t.Cleanup(func() { _ = database.Close() })
+
+		store := stores.NewTodoStore(database)
+		bus := newTestBus(t)
+		cfg := newTestCfg()
+		cfg.Todos.Mode = "export-only"
+		cfg.Todos.Export.Enabled = true
+		cfg.Todos.Export.Path = "/nonexistent/path/todos.md"
+		cfg.Todos.Export.Markers = config.TodosExportMarkers{
+			Start: "<!-- start -->",
+			End:   "<!-- end -->",
+		}
+		logger := zerolog.Nop()
+
+		svc := NewTodoService(store, bus, cfg, logger)
+
+		err = svc.Add(ctx, todo.Todo{
+			ID: "export-fail", Source: todo.SourceAgent, Category: todo.CategoryReview, Title: "Fail",
+		})
+		require.Error(t, err, "export-only mode should return error when export fails")
+		assert.Contains(t, err.Error(), "export todo")
+	})
+
 	t.Run("list with filter", func(t *testing.T) {
 		svc, _ := newTestTodoService(t)
 

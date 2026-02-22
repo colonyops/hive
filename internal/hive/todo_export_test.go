@@ -139,6 +139,42 @@ func TestTodoExporter_CustomTemplate(t *testing.T) {
 	assert.Contains(t, string(data), "## Review API research (review)")
 }
 
+func TestTodoExporter_MarkerMode_EndMarkerSubstring(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "todos.md")
+
+	startMarker := "<!-- hive:todos:start -->"
+	endMarker := "<!-- hive:todos:end -->"
+
+	// File has an unrelated section before our markers that contains similar
+	// marker-like text. The end marker search must start after the matched
+	// start marker to avoid false positives.
+	initial := "<!-- hive:todos:end --><!-- not ours -->\n\n" +
+		startMarker + "\n- old item\n" + endMarker + "\n\n# Other Stuff\n"
+	require.NoError(t, os.WriteFile(path, []byte(initial), 0o644))
+
+	exp, err := NewTodoExporter(config.TodosExportConfig{
+		Enabled: true,
+		Path:    path,
+		Markers: config.TodosExportMarkers{
+			Start: startMarker,
+			End:   endMarker,
+		},
+	}, zerolog.Nop())
+	require.NoError(t, err)
+
+	err = exp.Export([]todo.Todo{testTodo()})
+	require.NoError(t, err)
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	content := string(data)
+
+	assert.Contains(t, content, "Review API research")
+	assert.NotContains(t, content, "old item")
+	assert.Contains(t, content, "# Other Stuff")
+}
+
 func TestTodoExporter_NoRef(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "todos.md")

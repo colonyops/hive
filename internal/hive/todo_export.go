@@ -106,17 +106,18 @@ func (e *TodoExporter) writeMarkerBounded(content string) error {
 
 	text := string(existing)
 	startIdx := strings.Index(text, e.cfg.Markers.Start)
-	endIdx := strings.Index(text, e.cfg.Markers.End)
-
 	if startIdx == -1 {
 		return fmt.Errorf("start marker %q not found in %s", e.cfg.Markers.Start, e.cfg.Path)
 	}
-	if endIdx == -1 {
-		return fmt.Errorf("end marker %q not found in %s", e.cfg.Markers.End, e.cfg.Path)
+
+	// Search for end marker only after the start marker to handle files with
+	// multiple marker-like sections.
+	afterStart := startIdx + len(e.cfg.Markers.Start)
+	endRel := strings.Index(text[afterStart:], e.cfg.Markers.End)
+	if endRel == -1 {
+		return fmt.Errorf("end marker %q not found after start marker in %s", e.cfg.Markers.End, e.cfg.Path)
 	}
-	if endIdx <= startIdx {
-		return fmt.Errorf("end marker appears before start marker in %s", e.cfg.Path)
-	}
+	endIdx := afterStart + endRel
 
 	// Replace content between markers (after start marker line, before end marker)
 	before := text[:startIdx+len(e.cfg.Markers.Start)]

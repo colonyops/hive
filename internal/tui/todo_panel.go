@@ -7,6 +7,7 @@ import (
 
 	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/styles"
@@ -150,9 +151,9 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 		line += " " + styles.TextMutedStyle.Render(ref)
 	}
 
-	// Truncate to max width
+	// Truncate to max width using ANSI-aware truncation
 	if lipgloss.Width(line) > maxWidth {
-		line = line[:maxWidth]
+		line = ansi.Truncate(line, maxWidth, "")
 	}
 
 	return line
