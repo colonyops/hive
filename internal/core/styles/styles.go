@@ -111,6 +111,7 @@ var (
 	ListFilterPromptStyle  lipgloss.Style
 	ListHelpContainerStyle lipgloss.Style
 	TabBrandingStyle       lipgloss.Style
+	TabUpdateBadgeStyle    lipgloss.Style
 	PreviewHeaderNameStyle lipgloss.Style
 	PreviewTopicStyle      lipgloss.Style
 	PreviewSessionStyle    lipgloss.Style
@@ -348,6 +349,9 @@ func SetTheme(p Palette) {
 		Background(ColorSurface).
 		Foreground(ColorForeground).
 		Padding(0, 1)
+	TabUpdateBadgeStyle = lipgloss.NewStyle().
+		Foreground(ColorSecondary).
+		Bold(true)
 	PreviewHeaderNameStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorPrimary)

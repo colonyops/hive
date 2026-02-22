@@ -85,6 +85,10 @@ func (m Model) renderTabView() string {
 
 	// Branding on right with background
 	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
+	if m.updateInfo != nil {
+		badge := styles.TabUpdateBadgeStyle.Render("Update Available")
+		branding = lipgloss.JoinHorizontal(lipgloss.Left, badge, " ", branding)
+	}
 
 	// Calculate spacing to push branding to right edge with even margins
 	// Layout: [margin] tabs [spacer] branding [margin]
