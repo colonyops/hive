@@ -99,9 +99,6 @@ func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleTodoPollTick() (tea.Model, tea.Cmd) {
-	if m.todoService == nil {
-		return m, nil
-	}
 	return m, tea.Batch(m.loadTodoCounts(), scheduleTodoPollTick())
 }
 
@@ -125,9 +122,6 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		return m, cmd.Execute(&m)
 	}
 	if action.Type == act.TypeTodoPanel {
-		if m.todoService == nil {
-			return m, nil
-		}
 		m.state = stateShowingTodos
 		m.modals.ShowTodoPanel(m.todoService)
 		return m, nil
@@ -273,7 +267,7 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 	}
 
 	// Auto-complete todos whose ref matches the finalized document
-	if m.todoService != nil && (msg.DocumentPath != "" || msg.DocumentRel != "") {
+	if msg.DocumentPath != "" || msg.DocumentRel != "" {
 		return m, m.completeTodosMatchingRef(msg.DocumentPath, msg.DocumentRel)
 	}
 

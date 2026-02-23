@@ -281,7 +281,7 @@ func New(deps Deps, opts Opts) Model {
 
 	// Subscribe to todo events if enabled
 	var todoCh <-chan eventbus.TodoCreatedPayload
-	if deps.TodoService != nil && deps.Bus != nil && cfg.Todos.Notifications.Toast {
+	if deps.Bus != nil && cfg.Todos.Notifications.Toast {
 		ch := make(chan eventbus.TodoCreatedPayload, 16)
 		deps.Bus.SubscribeTodoCreated(func(payload eventbus.TodoCreatedPayload) {
 			select {
@@ -377,11 +377,9 @@ func (m Model) Init() tea.Cmd {
 		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
 	// Load initial todo counts and start polling + event listening
-	if m.todoService != nil {
-		cmds = append(cmds, m.loadTodoCounts(), scheduleTodoPollTick())
-		if m.todoCh != nil {
-			cmds = append(cmds, m.listenForTodoCreated())
-		}
+	cmds = append(cmds, m.loadTodoCounts(), scheduleTodoPollTick())
+	if m.todoCh != nil {
+		cmds = append(cmds, m.listenForTodoCreated())
 	}
 	return tea.Batch(cmds...)
 }
@@ -527,17 +525,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated(), m.ensureToastTick())
 
 	case actionResultMsg:
-		switch {
-		case msg.Err != nil:
+		if msg.Err != nil {
 			m.notifyBus.Errorf("Action failed: %v", msg.Err)
-		case m.todoService != nil:
-			if err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
-				log.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
-				m.notifyBus.Warnf("Action opened but todo not completed: %v", err)
-			} else {
-				m.notifyBus.Infof("Action completed")
-			}
-		default:
+		} else if err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
+			log.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
+			m.notifyBus.Warnf("Action opened but todo not completed: %v", err)
+		} else {
 			m.notifyBus.Infof("Action completed")
 		}
 		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.ensureToastTick())
@@ -964,10 +957,6 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 
 		// TodoPanel doesn't require a session
 		if entry.Command.Action == act.TypeTodoPanel {
-			if m.todoService == nil {
-				m.state = stateNormal
-				return m, nil
-			}
 			m.state = stateShowingTodos
 			m.modals.ShowTodoPanel(m.todoService)
 			return m, nil

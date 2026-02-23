@@ -568,8 +568,8 @@ func DefaultConfig() Config {
 		},
 		Todos: TodosConfig{
 			Limiter: TodosLimiterConfig{
-				MaxPending:          100,
-				RateLimitPerSession: 15 * time.Second,
+				MaxPending:          0,
+				RateLimitPerSession: 0,
 			},
 			Notifications: TodosNotifyConfig{
 				Toast: true,
