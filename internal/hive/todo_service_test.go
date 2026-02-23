@@ -86,6 +86,7 @@ func TestTodoLimiter(t *testing.T) {
 				ID:        id,
 				SessionID: "sess-1",
 				Source:    todo.SourceAgent,
+				Title:     "test",
 				URI:       todo.MustParseRef("review://test.md"),
 				Status:    todo.StatusPending,
 				CreatedAt: now.Add(time.Duration(i) * time.Second),
@@ -116,6 +117,7 @@ func TestTodoLimiter(t *testing.T) {
 			ID:        "t1",
 			SessionID: "sess-1",
 			Source:    todo.SourceAgent,
+			Title:     "test",
 			URI:       todo.MustParseRef("review://test.md"),
 			Status:    todo.StatusPending,
 			CreatedAt: now,
@@ -145,6 +147,7 @@ func TestTodoLimiter(t *testing.T) {
 			ID:        "t1",
 			SessionID: "sess-1",
 			Source:    todo.SourceAgent,
+			Title:     "test",
 			URI:       todo.MustParseRef("review://test.md"),
 			Status:    todo.StatusPending,
 			CreatedAt: now,
@@ -159,12 +162,14 @@ func TestTodoLimiter(t *testing.T) {
 
 func TestTodoService(t *testing.T) {
 	ctx := context.Background()
+	const testSessionID = "sess-1"
 
 	t.Run("add creates todo and publishes event", func(t *testing.T) {
 		svc, store := newTestTodoService(t)
 
 		td, err := todo.NewTodo("t1", "Review something", todo.SourceAgent, todo.MustParseRef("review://test.md"))
 		require.NoError(t, err)
+		td.SessionID = testSessionID
 
 		require.NoError(t, svc.Add(ctx, td))
 
@@ -196,10 +201,12 @@ func TestTodoService(t *testing.T) {
 
 		td1, err := todo.NewTodo("t1", "First", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
+		td1.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td1))
 
 		td2, err := todo.NewTodo("t2", "Second", todo.SourceAgent, todo.MustParseRef("review://doc2.md"))
 		require.NoError(t, err)
+		td2.SessionID = testSessionID
 		err = svc.Add(ctx, td2)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "rejected")
@@ -210,6 +217,7 @@ func TestTodoService(t *testing.T) {
 
 		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
+		td.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td))
 
 		require.NoError(t, svc.Acknowledge(ctx, "t1"))
@@ -224,6 +232,7 @@ func TestTodoService(t *testing.T) {
 
 		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
+		td.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td))
 
 		require.NoError(t, svc.Complete(ctx, "t1"))
@@ -239,6 +248,7 @@ func TestTodoService(t *testing.T) {
 
 		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
+		td.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td))
 
 		require.NoError(t, svc.Dismiss(ctx, "t1"))
@@ -257,6 +267,7 @@ func TestTodoService(t *testing.T) {
 
 		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
+		td.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td))
 
 		count, err = svc.CountPending(ctx)
@@ -271,15 +282,44 @@ func TestTodoService(t *testing.T) {
 
 		td1, err := todo.NewTodo("t1", "First", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
+		td1.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td1))
 
 		td2, err := todo.NewTodo("t2", "Second", todo.SourceAgent, todo.MustParseRef("session://sess-1"))
 		require.NoError(t, err)
+		td2.SessionID = testSessionID
 		require.NoError(t, svc.Add(ctx, td2))
 
 		items, err := svc.List(ctx, todo.ListFilter{Scheme: "review"})
 		require.NoError(t, err)
 		require.Len(t, items, 1)
 		assert.Equal(t, "t1", items[0].ID)
+	})
+
+	t.Run("rejects invalid status transitions", func(t *testing.T) {
+		svc, _ := newTestTodoService(t)
+
+		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
+		require.NoError(t, err)
+		td.SessionID = testSessionID
+		require.NoError(t, svc.Add(ctx, td))
+
+		require.NoError(t, svc.Complete(ctx, "t1"))
+
+		err = svc.Acknowledge(ctx, "t1")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid transition")
+		assert.Contains(t, err.Error(), "t1")
+	})
+
+	t.Run("add rejects agent todo without session ID", func(t *testing.T) {
+		svc, _ := newTestTodoService(t)
+
+		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
+		require.NoError(t, err)
+
+		err = svc.Add(ctx, td)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "session ID is required")
 	})
 }

@@ -42,6 +42,7 @@ type TodoPanel struct {
 	viewport viewport.Model
 	allItems []todo.Todo // unfiltered list from store
 	items    []todo.Todo // filtered view
+	ackErrs  int
 	cursor   int
 	filter   todoFilter
 	width    int
@@ -278,14 +279,21 @@ func (p *TodoPanel) CycleFilter() {
 
 // acknowledgeAll marks all pending items as acknowledged.
 func (p *TodoPanel) acknowledgeAll() {
+	p.ackErrs = 0
 	for _, item := range p.allItems {
 		if item.Status == todo.StatusPending {
 			if err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
-				log.Error().Err(err).Str("id", item.ID).Msg("failed to auto-acknowledge todo")
+				p.ackErrs++
+				log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-acknowledge todo")
 			}
 		}
 	}
 	p.loadItems()
+}
+
+// AcknowledgeErrorCount returns the number of auto-acknowledge failures during panel open.
+func (p *TodoPanel) AcknowledgeErrorCount() int {
+	return p.ackErrs
 }
 
 // PendingCount returns the number of pending items across all items.

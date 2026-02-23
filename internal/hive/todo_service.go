@@ -31,6 +31,13 @@ func NewTodoService(store todo.Store, bus *eventbus.EventBus, cfg *config.Config
 // Add creates a new todo item after passing limiter checks.
 // The Todo must be created via todo.NewTodo to guarantee valid fields.
 func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
+	if err := t.Validate(); err != nil {
+		return fmt.Errorf("invalid todo %q: %w", t.ID, err)
+	}
+	if t.Source == todo.SourceAgent && t.SessionID == "" {
+		return fmt.Errorf("invalid todo %q: session ID is required for agent-created todos", t.ID)
+	}
+
 	if err := s.limiter.Check(ctx, t); err != nil {
 		return fmt.Errorf("todo rejected: %w", err)
 	}
@@ -66,49 +73,33 @@ func validateTransition(from, to todo.Status) error {
 	return fmt.Errorf("invalid transition from %q to %q", from, to)
 }
 
-// Acknowledge updates a todo's status to acknowledged.
-func (s *TodoService) Acknowledge(ctx context.Context, id string) error {
+func (s *TodoService) transition(ctx context.Context, id string, to todo.Status, op string) error {
 	current, err := s.store.Get(ctx, id)
 	if err != nil {
-		return fmt.Errorf("get todo for acknowledge: %w", err)
+		return fmt.Errorf("get todo %q for %s: %w", id, op, err)
 	}
-	if err := validateTransition(current.Status, todo.StatusAcknowledged); err != nil {
-		return err
+	if err := validateTransition(current.Status, to); err != nil {
+		return fmt.Errorf("%s todo %q: %w", op, id, err)
 	}
-	if err := s.store.Update(ctx, id, todo.StatusAcknowledged); err != nil {
-		return fmt.Errorf("acknowledge todo: %w", err)
+	if err := s.store.Update(ctx, id, to); err != nil {
+		return fmt.Errorf("%s todo %q: %w", op, id, err)
 	}
 	return nil
+}
+
+// Acknowledge updates a todo's status to acknowledged.
+func (s *TodoService) Acknowledge(ctx context.Context, id string) error {
+	return s.transition(ctx, id, todo.StatusAcknowledged, "acknowledge")
 }
 
 // Complete updates a todo's status to completed.
 func (s *TodoService) Complete(ctx context.Context, id string) error {
-	current, err := s.store.Get(ctx, id)
-	if err != nil {
-		return fmt.Errorf("get todo for complete: %w", err)
-	}
-	if err := validateTransition(current.Status, todo.StatusCompleted); err != nil {
-		return err
-	}
-	if err := s.store.Update(ctx, id, todo.StatusCompleted); err != nil {
-		return fmt.Errorf("complete todo: %w", err)
-	}
-	return nil
+	return s.transition(ctx, id, todo.StatusCompleted, "complete")
 }
 
 // Dismiss updates a todo's status to dismissed.
 func (s *TodoService) Dismiss(ctx context.Context, id string) error {
-	current, err := s.store.Get(ctx, id)
-	if err != nil {
-		return fmt.Errorf("get todo for dismiss: %w", err)
-	}
-	if err := validateTransition(current.Status, todo.StatusDismissed); err != nil {
-		return err
-	}
-	if err := s.store.Update(ctx, id, todo.StatusDismissed); err != nil {
-		return fmt.Errorf("dismiss todo: %w", err)
-	}
-	return nil
+	return s.transition(ctx, id, todo.StatusDismissed, "dismiss")
 }
 
 // List returns todo items matching the given filter.

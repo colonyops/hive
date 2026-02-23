@@ -41,25 +41,32 @@ type Todo struct {
 	CompletedAt time.Time `json:"completed_at,omitzero"`
 }
 
+// Validate checks that a Todo has internally consistent required fields.
+func (t Todo) Validate() error {
+	if t.ID == "" {
+		return fmt.Errorf("todo ID is required")
+	}
+	if t.Title == "" {
+		return fmt.Errorf("todo title is required")
+	}
+	if !t.Source.IsValid() {
+		return fmt.Errorf("invalid source %q", t.Source)
+	}
+	if !t.Status.IsValid() {
+		return fmt.Errorf("invalid status %q", t.Status)
+	}
+	if !t.URI.IsEmpty() && !t.URI.Valid() {
+		return fmt.Errorf("invalid URI %q: must use scheme://value format", t.URI.String())
+	}
+	return nil
+}
+
 // NewTodo creates a validated Todo with defaults for status and timestamps.
 // ID and title are required. Source must be a valid enum value.
-// If uri is non-empty, it must have a scheme.
+// If Ref is non-empty, it must have a scheme.
 func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
-	if id == "" {
-		return Todo{}, fmt.Errorf("todo ID is required")
-	}
-	if title == "" {
-		return Todo{}, fmt.Errorf("todo title is required")
-	}
-	if !source.IsValid() {
-		return Todo{}, fmt.Errorf("invalid source %q", source)
-	}
-	if !uri.IsEmpty() && !uri.Valid() {
-		return Todo{}, fmt.Errorf("invalid URI %q: must use scheme://value format", uri.String())
-	}
-
 	now := time.Now()
-	return Todo{
+	t := Todo{
 		ID:        id,
 		Source:    source,
 		Title:     title,
@@ -67,5 +74,9 @@ func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
 		Status:    StatusPending,
 		CreatedAt: now,
 		UpdatedAt: now,
-	}, nil
+	}
+	if err := t.Validate(); err != nil {
+		return Todo{}, err
+	}
+	return t, nil
 }

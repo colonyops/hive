@@ -23,8 +23,11 @@ func NewTodoStore(db *db.DB) *TodoStore {
 }
 
 // Create persists a new todo item.
-// Callers must use todo.NewTodo to guarantee valid enum fields.
 func (s *TodoStore) Create(ctx context.Context, t todo.Todo) error {
+	if err := t.Validate(); err != nil {
+		return fmt.Errorf("validate todo %q: %w", t.ID, err)
+	}
+
 	err := s.db.Queries().CreateTodoItem(ctx, db.CreateTodoItemParams{
 		ID:        t.ID,
 		SessionID: t.SessionID,
@@ -145,13 +148,26 @@ func rowToTodo(row db.TodoItem) todo.Todo {
 	if err != nil {
 		log.Debug().Err(err).Str("id", row.ID).Str("uri", row.Uri).Msg("invalid URI in stored todo")
 	}
+
+	source, err := todo.ParseSource(row.Source)
+	if err != nil {
+		log.Warn().Err(err).Str("id", row.ID).Str("source", row.Source).Msg("invalid source in stored todo, defaulting to system")
+		source = todo.SourceSystem
+	}
+
+	status, err := todo.ParseStatus(row.Status)
+	if err != nil {
+		log.Warn().Err(err).Str("id", row.ID).Str("status", row.Status).Msg("invalid status in stored todo, defaulting to pending")
+		status = todo.StatusPending
+	}
+
 	t := todo.Todo{
 		ID:        row.ID,
 		SessionID: row.SessionID,
-		Source:    todo.Source(row.Source),
+		Source:    source,
 		Title:     row.Title,
 		URI:       uri,
-		Status:    todo.Status(row.Status),
+		Status:    status,
 		CreatedAt: time.Unix(0, row.CreatedAt),
 		UpdatedAt: time.Unix(0, row.UpdatedAt),
 	}

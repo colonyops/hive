@@ -84,11 +84,17 @@ func (m Model) renderTabView() string {
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
 	}
 
-	// Todo indicator: right-aligned, warning when unseen, muted when all acknowledged
+	// Todo indicator: right-aligned, warning when pending or counts are degraded.
 	todoIndicator := ""
-	if m.todoOpenCount > 0 {
+	if m.todoCountsDegraded {
+		if m.todoOpenCount > 0 {
+			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s%d~ ", styles.IconTodo, m.todoOpenCount))
+		} else {
+			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s? ", styles.IconTodo))
+		}
+	} else if m.todoOpenCount > 0 {
 		label := fmt.Sprintf("%s%d ", styles.IconTodo, m.todoOpenCount)
-		if m.todoUnseenCount > 0 {
+		if m.todoPendingCount > 0 {
 			todoIndicator = styles.TextWarningStyle.Render(label)
 		} else {
 			todoIndicator = styles.TextMutedStyle.Render(label)

@@ -21,5 +21,5 @@ type Store interface {
 type ListFilter struct {
 	Status    *Status
 	SessionID string
-	Scheme    string // filter by URI scheme; applied in Go post-fetch
+	Scheme    string // filter by URI scheme
 }

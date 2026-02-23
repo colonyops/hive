@@ -9,6 +9,7 @@ import (
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/internal/core/action"
@@ -124,6 +125,9 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	if action.Type == act.TypeTodoPanel {
 		m.state = stateShowingTodos
 		m.modals.ShowTodoPanel(m.todoService)
+		if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
+			return m, m.notifyError("failed to acknowledge %d todo(s)", failures)
+		}
 		return m, nil
 	}
 	if action.Type == act.TypeRenameSession {
@@ -316,7 +320,7 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "q":
 		m.state = stateNormal
-		m.todoUnseenCount = 0
+		m.todoPendingCount = 0
 		m.todoOpenCount = m.modals.TodoPanel.OpenCount()
 		m.modals.DismissTodoPanel()
 		return m, nil
@@ -342,13 +346,14 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		case "review":
 			if m.reviewView != nil {
 				m.state = stateNormal
-				m.todoUnseenCount = 0
+				m.todoPendingCount = 0
 				m.todoOpenCount = m.modals.TodoPanel.OpenCount()
 				m.modals.DismissTodoPanel()
 				m.activeView = ViewReview
 				m.handler.SetActiveView(ViewReview)
 				return m, m.reviewView.OpenDocumentByPath(item.URI.Value())
 			}
+			return m, m.notifyError("review view unavailable")
 		case "http", "https":
 			return m, launchAction(item.ID, osOpenCmd(item.URI.String()))
 		default:
@@ -387,8 +392,9 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		items, err := m.todoService.List(ctx, todo.ListFilter{})
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to list todos for auto-complete")
-			return nil
+			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete failed: unable to list todos"}}
 		}
+		failed := 0
 		for _, item := range items {
 			if item.Status != todo.StatusPending && item.Status != todo.StatusAcknowledged {
 				continue
@@ -399,7 +405,8 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 			for _, p := range paths {
 				if p != "" && (item.URI.Value() == p || strings.HasSuffix(p, "/"+item.URI.Value()) || strings.HasSuffix(item.URI.Value(), "/"+p)) {
 					if err := m.todoService.Complete(ctx, item.ID); err != nil {
-						log.Debug().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
+						failed++
+						log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
 					}
 					break
 				}
@@ -407,17 +414,17 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		}
 
 		// Inline count refresh instead of calling loadTodoCounts()()
-		unseen, err := m.todoService.CountPending(ctx)
+		pending, err := m.todoService.CountPending(ctx)
 		if err != nil {
-			log.Debug().Err(err).Msg("failed to load todo pending count after auto-complete")
-			return nil
+			log.Warn().Err(err).Msg("failed to load todo pending count after auto-complete")
+			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
-			log.Debug().Err(err).Msg("failed to load todo open count after auto-complete")
-			return nil
+			log.Warn().Err(err).Msg("failed to load todo open count after auto-complete")
+			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
 		}
-		return todoCountUpdatedMsg{unseenCount: unseen, openCount: open}
+		return todoAutoCompleteResultMsg{pendingCount: pending, openCount: open, failed: failed}
 	}
 }
 
@@ -633,16 +640,9 @@ func osOpenCmd(uri string) *exec.Cmd {
 	}
 }
 
-// ActionTemplateData provides template variables for custom action templates.
-type ActionTemplateData struct {
-	Scheme string
-	Value  string
-	URI    string
-}
-
 func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
 	renderer := tmpl.New(tmpl.Config{})
-	rendered, err := renderer.Render(tmplStr, ActionTemplateData{
+	rendered, err := renderer.Render(tmplStr, config.ActionTemplateData{
 		Scheme: ref.Scheme(),
 		Value:  ref.Value(),
 		URI:    ref.String(),

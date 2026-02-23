@@ -73,10 +73,10 @@ type Deps struct {
 	Renderer        *tmpl.Renderer
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
+	TodoService     *hive.TodoService
 
 	// Optional — nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
-	TodoService   *hive.TodoService
 	Bus           *eventbus.EventBus
 	DB            *db.DB
 	KVStore       corekv.KV
@@ -137,10 +137,11 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
-	todoService     *hive.TodoService
-	todoUnseenCount int
-	todoOpenCount   int
-	todoCh          <-chan eventbus.TodoCreatedPayload
+	todoService        *hive.TodoService
+	todoPendingCount   int
+	todoOpenCount      int
+	todoCountsDegraded bool
+	todoCh             <-chan eventbus.TodoCreatedPayload
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
@@ -190,8 +191,16 @@ type doctorResultsMsg struct {
 }
 
 type todoCountUpdatedMsg struct {
-	unseenCount int
-	openCount   int
+	pendingCount int
+	openCount    int
+}
+
+type todoCountLoadFailedMsg struct{}
+
+type todoAutoCompleteResultMsg struct {
+	pendingCount int
+	openCount    int
+	failed       int
 }
 
 type todoCreatedMsg struct {
@@ -200,8 +209,8 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil {
-		panic("tui.New: Config, Service, Renderer, TerminalManager, and PluginManager are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.TodoService == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, and TodoService are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
@@ -408,22 +417,22 @@ func (m Model) listenForTodoCreated() tea.Cmd {
 	}
 }
 
-// loadTodoCounts returns a command that loads both unseen and open todo counts.
-// On error, returns nil to preserve the previous counts in the model.
+// loadTodoCounts returns a command that loads both pending and open todo counts.
+// On error, it preserves previous counts and marks counts as degraded.
 func (m Model) loadTodoCounts() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
-		unseen, err := m.todoService.CountPending(ctx)
+		pending, err := m.todoService.CountPending(ctx)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to load todo pending count")
-			return nil
+			return todoCountLoadFailedMsg{}
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to load todo open count")
-			return nil
+			return todoCountLoadFailedMsg{}
 		}
-		return todoCountUpdatedMsg{unseenCount: unseen, openCount: open}
+		return todoCountUpdatedMsg{pendingCount: pending, openCount: open}
 	}
 }
 
@@ -513,9 +522,23 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Todos
 	case todoCountUpdatedMsg:
-		m.todoUnseenCount = msg.unseenCount
+		m.todoPendingCount = msg.pendingCount
 		m.todoOpenCount = msg.openCount
+		m.todoCountsDegraded = false
 		model, cmd = m, nil
+	case todoCountLoadFailedMsg:
+		m.todoCountsDegraded = true
+		model, cmd = m, nil
+	case todoAutoCompleteResultMsg:
+		m.todoPendingCount = msg.pendingCount
+		m.todoOpenCount = msg.openCount
+		m.todoCountsDegraded = false
+		if msg.failed > 0 {
+			m.notifyBus.Warnf("Failed to auto-complete %d todo(s)", msg.failed)
+			model, cmd = m, m.ensureToastTick()
+		} else {
+			model, cmd = m, nil
+		}
 	case todoCreatedMsg:
 		scheme := msg.payload.Todo.URI.Scheme()
 		if scheme == "" {
@@ -959,6 +982,9 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		if entry.Command.Action == act.TypeTodoPanel {
 			m.state = stateShowingTodos
 			m.modals.ShowTodoPanel(m.todoService)
+			if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
+				return m, m.notifyError("failed to acknowledge %d todo(s)", failures)
+			}
 			return m, nil
 		}
 
