@@ -64,6 +64,35 @@ Sources:
 - `human`
 - `system`
 
+## Instructing Agents to Create Todos
+
+Todo creation is an instruction policy, not an automatic hook.
+
+- Define the behavior in your agent instruction file (for example, `AGENTS.md`) and in any shared skills that run work.
+- Put the requirement at the end of the workflow as a final step.
+- Use exactly one todo when human follow-up is needed, and avoid duplicate todos for the same request.
+
+Recommended final-step template for skills:
+
+```text
+Last step (required):
+If work is complete and needs human follow-up (or is blocked on human input), create one todo before your final response:
+hive todo add --title "<actionable human task>" --uri "review://<path>"
+```
+
+Recommended URI choices:
+
+- `review://.hive/...` for plans/research/docs that should be reviewed
+- `https://...` for external links
+- `session://<id>` only for generic session follow-up when no better URI exists
+
+Example skill footer:
+
+```bash
+# Final step: request human follow-up when needed
+hive todo add --title "Review auth rollout plan" --uri "review://.hive/plans/auth-rollout.md"
+```
+
 ## List Todos
 
 List all todos or filter by status:

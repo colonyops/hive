@@ -73,6 +73,14 @@ When a todo panel item is activated with `enter`:
 
 For external actions, Hive auto-completes the todo only after a successful command exit.
 
+## Where Todo Creation Is Defined
+
+Hive does not auto-create todos when an agent finishes work.
+
+- Define todo-creation behavior in your instruction layer (`AGENTS.md`, tool prompts, and reusable skills).
+- Use `hive todo add` in that instruction text as a required final step when human action is needed.
+- Keep `todos.*` config focused on execution behavior (actions, limits, notifications), not creation policy.
+
 ## Related Docs
 
 - [Todos (Experimental)](../getting-started/todos.md)
