@@ -209,6 +209,27 @@ func TestTodoStore(t *testing.T) {
 		assert.Equal(t, 1, count)
 	})
 
+	t.Run("count open returns pending plus acknowledged", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		store := NewTodoStore(database)
+
+		// Create one todo in each status
+		for _, id := range []string{"t1", "t2", "t3", "t4"} {
+			require.NoError(t, store.Create(ctx, newTestTodo(id)))
+		}
+		require.NoError(t, store.Update(ctx, "t2", todo.StatusAcknowledged))
+		require.NoError(t, store.Update(ctx, "t3", todo.StatusCompleted))
+		require.NoError(t, store.Update(ctx, "t4", todo.StatusDismissed))
+
+		// t1=pending, t2=acknowledged, t3=completed, t4=dismissed
+		count, err := store.CountOpen(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count) // pending + acknowledged
+	})
+
 	t.Run("count recent by session", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		require.NoError(t, err)
