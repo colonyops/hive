@@ -46,10 +46,13 @@ keybindings:
 | `G`        | GroupSet             | Set session group                    |
 | `J`        | NextActive           | Jump to next active session          |
 | `K`        | PrevActive           | Jump to previous active session      |
+| `t`        | TodoPanel            | Open todo panel                      |
 | `p`        | TmuxPopUp            | Popup tmux session                   |
 | `g`        | —                    | Refresh git statuses                 |
 | `tab`      | —                    | Switch views                         |
 | `q`        | —                    | Quit                                 |
+
+For todo panel interaction keys (`enter`, `c`, `d`, `tab`, etc.), see [Todos (Experimental)](../getting-started/todos.md).
 
 ## Built-in Palette Commands
 

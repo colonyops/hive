@@ -13,7 +13,16 @@ var (
 	IconBrain     = "󰧑 "
 	IconComment   = "\uf41f "
 
+	IconTodo = "\uf4a0 " // checklist
+
 	IconNotifyError   = "\uf06a" //
 	IconNotifyWarning = "\uf071" //
 	IconNotifyInfo    = "\uf05a" //
+
+	IconSelector = "󰅂"
+
+	IconTodoPending      = "󰄱 "
+	IconTodoAcknowledged = IconTodoPending // From a user perspective, acknowledged is only different from pending in that a UI notification was shown
+	IconTodoCompleted    = "󰄵 "
+	IconTodoDismissed    = "󱋭 "
 )

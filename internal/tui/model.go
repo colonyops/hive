@@ -56,6 +56,7 @@ const (
 	stateRenaming
 	stateSettingGroup
 	stateFormInput
+	stateShowingTodos
 )
 
 // Key constants for event handling.
@@ -72,6 +73,7 @@ type Deps struct {
 	Renderer        *tmpl.Renderer
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
+	TodoService     *hive.TodoService
 
 	// Optional — nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
@@ -135,6 +137,10 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
+	todoService *hive.TodoService
+	todoBadge   todoBadgeState
+	todoCh      <-chan eventbus.TodoCreatedPayload
+
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
 	updateChecker *updatecheck.Checker
@@ -182,10 +188,27 @@ type doctorResultsMsg struct {
 	results []doctor.Result
 }
 
+type todoCountUpdatedMsg struct {
+	pendingCount int
+	openCount    int
+}
+
+type todoCountLoadFailedMsg struct{}
+
+type todoAutoCompleteResultMsg struct {
+	pendingCount int
+	openCount    int
+	failed       int
+}
+
+type todoCreatedMsg struct {
+	payload eventbus.TodoCreatedPayload
+}
+
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil {
-		panic("tui.New: Config, Service, Renderer, TerminalManager, and PluginManager are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.TodoService == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, and TodoService are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
@@ -263,6 +286,20 @@ func New(deps Deps, opts Opts) Model {
 		toastCtrl.Push(n)
 	})
 
+	// Subscribe to todo events if enabled
+	var todoCh <-chan eventbus.TodoCreatedPayload
+	if deps.Bus != nil && cfg.Todos.Notifications.Toast {
+		ch := make(chan eventbus.TodoCreatedPayload, 16)
+		deps.Bus.SubscribeTodoCreated(func(payload eventbus.TodoCreatedPayload) {
+			select {
+			case ch <- payload:
+			default:
+				log.Debug().Str("todo_id", payload.Todo.ID).Msg("todo event dropped: channel buffer full")
+			}
+		})
+		todoCh = ch
+	}
+
 	// Sessions tab is active by default
 	sessionsView.SetActive(true)
 
@@ -288,6 +325,8 @@ func New(deps Deps, opts Opts) Model {
 		toastController: toastCtrl,
 		toastView:       toastView,
 		bus:             deps.Bus,
+		todoService:     deps.TodoService,
+		todoCh:          todoCh,
 		renderer:        deps.Renderer,
 		buildInfo:       deps.BuildInfo,
 		updateChecker:   updateChecker,
@@ -344,6 +383,11 @@ func (m Model) Init() tea.Cmd {
 	if m.cfg.TUI.UpdateChecker && m.updateChecker != nil && m.buildInfo.Version != "" {
 		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
+	// Load initial todo counts and start polling + event listening
+	cmds = append(cmds, m.loadTodoCounts(), scheduleTodoPollTick())
+	if m.todoCh != nil {
+		cmds = append(cmds, m.listenForTodoCreated())
+	}
 	return tea.Batch(cmds...)
 }
 
@@ -357,6 +401,36 @@ func (m Model) executeAction(a Action) tea.Cmd {
 
 		err = command.ExecuteSync(context.Background(), exec)
 		return actionCompleteMsg{err: err}
+	}
+}
+
+// listenForTodoCreated returns a command that listens for todo creation events.
+func (m Model) listenForTodoCreated() tea.Cmd {
+	return func() tea.Msg {
+		payload, ok := <-m.todoCh
+		if !ok {
+			return nil
+		}
+		return todoCreatedMsg{payload: payload}
+	}
+}
+
+// loadTodoCounts returns a command that loads both pending and open todo counts.
+// On error, it preserves previous counts and marks counts as degraded.
+func (m Model) loadTodoCounts() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		pending, err := m.todoService.CountPending(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to load todo pending count")
+			return todoCountLoadFailedMsg{}
+		}
+		open, err := m.todoService.CountOpen(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to load todo open count")
+			return todoCountLoadFailedMsg{}
+		}
+		return todoCountUpdatedMsg{pendingCount: pending, openCount: open}
 	}
 }
 
@@ -386,9 +460,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case kvEntryLoadedMsg:
 		model, cmd = m.handleKVEntryLoaded(msg)
 
-	// Polling ticks (KV only — session polling is handled by sessionsView)
+	// Polling ticks
 	case kvPollTickMsg:
 		model, cmd = m.handleKVPollTick(msg)
+	case todoPollTickMsg:
+		model, cmd = m.handleTodoPollTick()
 	case toastTickMsg:
 		model, cmd = m.handleToastTick(msg)
 
@@ -442,6 +518,40 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case updateAvailableMsg:
 		model, cmd = m.handleUpdateAvailable(msg)
 
+	// Todos
+	case todoCountUpdatedMsg:
+		m.todoBadge.updateCounts(msg.pendingCount, msg.openCount)
+		model, cmd = m, nil
+	case todoCountLoadFailedMsg:
+		m.todoBadge.markDegraded()
+		model, cmd = m, nil
+	case todoAutoCompleteResultMsg:
+		m.todoBadge.updateCounts(msg.pendingCount, msg.openCount)
+		if msg.failed > 0 {
+			m.notifyBus.Warnf("Failed to auto-complete %d todo(s)", msg.failed)
+			model, cmd = m, m.ensureToastTick()
+		} else {
+			model, cmd = m, nil
+		}
+	case todoCreatedMsg:
+		scheme := msg.payload.Todo.URI.Scheme()
+		if scheme == "" {
+			scheme = "todo"
+		}
+		m.notifyBus.Infof("New %s: %s", scheme, msg.payload.Todo.Title)
+		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated(), m.ensureToastTick())
+
+	case actionResultMsg:
+		if msg.Err != nil {
+			m.notifyBus.Errorf("Action failed: %v", msg.Err)
+		} else if _, err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
+			log.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
+			m.notifyBus.Warnf("Action opened but todo not completed: %v", err)
+		} else {
+			m.notifyBus.Infof("Action completed")
+		}
+		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.ensureToastTick())
+
 	// Input
 	case tea.KeyMsg:
 		model, cmd = m.handleKeyMsg(msg)
@@ -492,6 +602,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateConfirming {
 		return m.handleConfirmModalKey(keyStr)
+	}
+	if m.state == stateShowingTodos {
+		return m.handleTodoPanelKey(keyStr)
 	}
 	if m.state == stateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
@@ -856,6 +969,16 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 		if entry.Command.Action == act.TypeNotifications {
 			m.state = stateShowingNotifications
 			m.modals.ShowNotifications(m.notifyBus)
+			return m, nil
+		}
+
+		// TodoPanel doesn't require a session
+		if entry.Command.Action == act.TypeTodoPanel {
+			m.state = stateShowingTodos
+			m.modals.ShowTodoPanel(m.todoService)
+			if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
+				return m, m.notifyError("failed to acknowledge %d todo(s)", failures)
+			}
 			return m, nil
 		}
 

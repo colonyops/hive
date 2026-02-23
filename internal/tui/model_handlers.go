@@ -3,17 +3,23 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
+	"strings"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // --- Window ---
@@ -93,6 +99,10 @@ func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
 	return m, scheduleKVPollTick()
 }
 
+func (m Model) handleTodoPollTick() (tea.Model, tea.Cmd) {
+	return m, tea.Batch(m.loadTodoCounts(), scheduleTodoPollTick())
+}
+
 func (m Model) handleToastTick(_ toastTickMsg) (tea.Model, tea.Cmd) {
 	m.toastController.Tick()
 	if m.toastController.HasToasts() {
@@ -111,6 +121,14 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	if action.Type == act.TypeDocReview {
 		cmd := HiveDocReviewCmd{Arg: ""}
 		return m, cmd.Execute(&m)
+	}
+	if action.Type == act.TypeTodoPanel {
+		m.state = stateShowingTodos
+		m.modals.ShowTodoPanel(m.todoService)
+		if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
+			return m, m.notifyError("failed to acknowledge %d todo(s)", failures)
+		}
+		return m, nil
 	}
 	if action.Type == act.TypeRenameSession {
 		sess := m.sessionsView.SelectedSession()
@@ -251,6 +269,12 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 	if err := m.copyToClipboard(msg.Feedback); err != nil {
 		return m, m.notifyError("failed to copy feedback: %v", err)
 	}
+
+	// Auto-complete todos whose ref matches the finalized document
+	if msg.DocumentPath != "" || msg.DocumentRel != "" {
+		return m, m.completeTodosMatchingRef(msg.DocumentPath, msg.DocumentRel)
+	}
+
 	return m, nil
 }
 
@@ -286,6 +310,141 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 	m.updateInfo = msg.result
 	m.notifyBus.Infof("Update available: %s -> %s", msg.result.Current, msg.result.Latest)
 	return m, m.ensureToastTick()
+}
+
+// --- Todo Panel ---
+
+func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		return m.quit()
+	case "esc", "q":
+		m.state = stateNormal
+		m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
+		m.modals.DismissTodoPanel()
+		return m, nil
+	case "j", "down":
+		m.modals.TodoPanel.MoveDown()
+	case "k", "up":
+		m.modals.TodoPanel.MoveUp()
+	case keyEnter:
+		item := m.modals.TodoPanel.CurrentItem()
+		if item == nil {
+			return m, nil
+		}
+		if item.Status == todo.StatusCompleted {
+			return m, nil
+		}
+		if item.URI.IsEmpty() {
+			m.notifyBus.Infof("no URI on this todo")
+			return m, m.ensureToastTick()
+		}
+		switch item.URI.Scheme() {
+		case "session":
+			sessionID := item.URI.Value()
+			var found *session.Session
+			for _, s := range m.sessionsView.AllSessions() {
+				if s.ID == sessionID {
+					found = &s
+					break
+				}
+			}
+			if found == nil {
+				return m, m.notifyError("session %q not found", sessionID)
+			}
+			if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
+				return m, m.notifyError("complete todo: %v", err)
+			}
+			m.state = stateNormal
+			m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
+			m.modals.DismissTodoPanel()
+			return m, m.executeAction(act.Action{
+				Type:        act.TypeTmuxOpen,
+				SessionName: found.Name,
+				SessionPath: found.Path,
+			})
+		case "review":
+			if m.reviewView != nil {
+				m.state = stateNormal
+				m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
+				m.modals.DismissTodoPanel()
+				m.activeView = ViewReview
+				m.handler.SetActiveView(ViewReview)
+				return m, m.reviewView.OpenDocumentByPath(item.URI.Value())
+			}
+			return m, m.notifyError("review view unavailable")
+		case "http", "https":
+			return m, launchAction(item.ID, osOpenCmd(item.URI.String()))
+		default:
+			var actionCmd *exec.Cmd
+			if action, ok := m.cfg.Todos.Actions[item.URI.Scheme()]; ok {
+				var err error
+				actionCmd, err = renderCustomAction(action, item.URI)
+				if err != nil {
+					log.Warn().Err(err).Str("scheme", item.URI.Scheme()).Msg("failed to render custom action")
+					return m, m.notifyError("render action: %v", err)
+				}
+			} else {
+				actionCmd = osOpenCmd(item.URI.String())
+			}
+			return m, launchAction(item.ID, actionCmd)
+		}
+	case "tab":
+		m.modals.TodoPanel.CycleFilter()
+	case "c":
+		if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
+			return m, m.notifyError("complete todo: %v", err)
+		}
+	case "d":
+		if err := m.modals.TodoPanel.DismissCurrent(); err != nil {
+			return m, m.notifyError("dismiss todo: %v", err)
+		}
+	}
+	return m, nil
+}
+
+// completeTodosMatchingRef completes all open review todos whose URI value matches any of the given paths,
+// then returns updated todo counts directly (avoiding a double loadTodoCounts invocation).
+func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		items, err := m.todoService.List(ctx, todo.ListFilter{})
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to list todos for auto-complete")
+			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete failed: unable to list todos"}}
+		}
+		failed := 0
+		for _, item := range items {
+			if item.Status != todo.StatusPending && item.Status != todo.StatusAcknowledged {
+				continue
+			}
+			if item.URI.Scheme() != "review" {
+				continue
+			}
+			for _, p := range paths {
+				if p != "" && (item.URI.Value() == p || strings.HasSuffix(p, "/"+item.URI.Value()) || strings.HasSuffix(item.URI.Value(), "/"+p)) {
+					if _, err := m.todoService.Complete(ctx, item.ID); err != nil {
+						failed++
+						log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
+					}
+					break
+				}
+			}
+		}
+
+		// Inline count refresh instead of calling loadTodoCounts()()
+		pending, err := m.todoService.CountPending(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to load todo pending count after auto-complete")
+			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
+		}
+		open, err := m.todoService.CountOpen(ctx)
+		if err != nil {
+			log.Warn().Err(err).Msg("failed to load todo open count after auto-complete")
+			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
+		}
+		return todoAutoCompleteResultMsg{pendingCount: pending, openCount: open, failed: failed}
+	}
 }
 
 // --- Input ---
@@ -474,4 +633,41 @@ func (m Model) selectedSession() *session.Session {
 		return nil
 	}
 	return m.sessionsView.SelectedSession()
+}
+
+// --- Todo action helpers ---
+
+// actionResultMsg is returned when an external todo action completes.
+type actionResultMsg struct {
+	TodoID string
+	Err    error
+}
+
+func launchAction(todoID string, cmd *exec.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		err := cmd.Run()
+		return actionResultMsg{TodoID: todoID, Err: err}
+	}
+}
+
+func osOpenCmd(uri string) *exec.Cmd {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", uri)
+	default:
+		return exec.Command("xdg-open", uri)
+	}
+}
+
+func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
+	renderer := tmpl.New(tmpl.Config{})
+	rendered, err := renderer.Render(tmplStr, config.ActionTemplateData{
+		Scheme: ref.Scheme(),
+		Value:  ref.Value(),
+		URI:    ref.String(),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("render action template: %w", err)
+	}
+	return exec.Command("sh", "-c", rendered), nil
 }

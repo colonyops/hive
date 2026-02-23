@@ -10,6 +10,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
 	tuinotify "github.com/colonyops/hive/internal/tui/notify"
@@ -29,6 +30,7 @@ type ModalCoordinator struct {
 	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
 	DocPicker       *review.DocumentPickerModal
+	TodoPanel       *TodoPanel
 	RenameInput     textinput.Model
 	RenameSessionID string
 	GroupInput      textinput.Model
@@ -147,6 +149,9 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(groupContent), w, h)
 
+	case state == stateShowingTodos && mc.TodoPanel != nil:
+		return mc.TodoPanel.Overlay(bg, w, h)
+
 	case mc.DocPicker != nil:
 		return mc.DocPicker.Overlay(bg, w, h)
 
@@ -193,6 +198,16 @@ func (mc *ModalCoordinator) ShowInfo(title string, sections []components.InfoSec
 // DismissInfo closes the info dialog.
 func (mc *ModalCoordinator) DismissInfo() {
 	mc.InfoDialog = nil
+}
+
+// ShowTodoPanel creates and displays the todo action panel.
+func (mc *ModalCoordinator) ShowTodoPanel(service *hive.TodoService) {
+	mc.TodoPanel = NewTodoPanel(service, mc.width, mc.height)
+}
+
+// DismissTodoPanel closes the todo panel.
+func (mc *ModalCoordinator) DismissTodoPanel() {
+	mc.TodoPanel = nil
 }
 
 // DismissConfirm resets the confirm modal to zero value.

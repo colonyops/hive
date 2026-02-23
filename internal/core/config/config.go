@@ -162,6 +162,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "toggle group/repo view",
 		Silent: true,
 	},
+	"TodoPanel": {
+		Action: action.TypeTodoPanel,
+		Help:   "open todo panel",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
@@ -198,6 +203,7 @@ var defaultKeybindings = map[string]Keybinding{
 	"G":      {Cmd: "GroupSet"},
 	"J":      {Cmd: "NextActive"},
 	"K":      {Cmd: "PrevActive"},
+	"t":      {Cmd: "TodoPanel"},
 }
 
 // CurrentConfigVersion is the latest config schema version.
@@ -223,6 +229,7 @@ type Config struct {
 	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
+	Todos               TodosConfig            `yaml:"todos"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
@@ -559,6 +566,15 @@ func DefaultConfig() Config {
 			TopicPrefix: "agent",
 			MaxMessages: 100,
 		},
+		Todos: TodosConfig{
+			Limiter: TodosLimiterConfig{
+				MaxPending:          0,
+				RateLimitPerSession: 0,
+			},
+			Notifications: TodosNotifyConfig{
+				Toast: true,
+			},
+		},
 	}
 }
 
@@ -723,6 +739,7 @@ func (c *Config) Validate() error {
 		c.validateMaxRecycled(),
 		c.validateAgents(),
 		c.validateWindowsBasic(),
+		c.validateTodos(),
 	)
 }
 
@@ -1020,7 +1037,7 @@ func isValidAction(t action.Type) bool {
 // isValidScope checks if a scope value is valid.
 func isValidScope(scope string) bool {
 	switch scope {
-	case "global", "sessions", "messages", "review":
+	case "global", "sessions", "messages", "review", "todos":
 		return true
 	default:
 		return false

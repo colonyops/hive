@@ -57,6 +57,8 @@ const (
 	TypeGroupSet Type = "GroupSet"
 	// TypeGroupToggle is a Type of type GroupToggle.
 	TypeGroupToggle Type = "GroupToggle"
+	// TypeTodoPanel is a Type of type TodoPanel.
+	TypeTodoPanel Type = "TodoPanel"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -85,6 +87,7 @@ var _TypeNames = []string{
 	string(TypeHiveDoctor),
 	string(TypeGroupSet),
 	string(TypeGroupToggle),
+	string(TypeTodoPanel),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -153,6 +156,8 @@ var _TypeValue = map[string]Type{
 	"groupset":            TypeGroupSet,
 	"GroupToggle":         TypeGroupToggle,
 	"grouptoggle":         TypeGroupToggle,
+	"TodoPanel":           TypeTodoPanel,
+	"todopanel":           TypeTodoPanel,
 }
 
 // ParseType attempts to convert a string to a Type.

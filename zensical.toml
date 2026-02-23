@@ -13,6 +13,7 @@ nav = [
     "getting-started/sessions.md",
     "getting-started/context.md",
     "getting-started/messaging.md",
+    "getting-started/todos.md",
     "getting-started/claude-plugin.md",
   ]},
   { "Configuration" = [
@@ -20,6 +21,7 @@ nav = [
     "configuration/rules.md",
     "configuration/commands.md",
     "configuration/keybindings.md",
+    "configuration/todos.md",
     "configuration/plugins.md",
     "configuration/themes.md",
   ]},
@@ -27,6 +29,8 @@ nav = [
     "recipes/index.md",
     "recipes/sequential-chain-review.md",
     "recipes/parallel-code-review.md",
+    "recipes/inter-agent-code-review.md",
+    "recipes/ralph-loop.md",
   ]},
   { "FAQ" = "faq.md" },
 ]

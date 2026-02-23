@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -83,6 +84,23 @@ func (m Model) renderTabView() string {
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
 	}
 
+	// Todo indicator: right-aligned, warning when pending or counts are degraded.
+	todoIndicator := ""
+	if m.todoBadge.degraded {
+		if m.todoBadge.open > 0 {
+			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s%d~ ", styles.IconTodo, m.todoBadge.open))
+		} else {
+			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s? ", styles.IconTodo))
+		}
+	} else if m.todoBadge.open > 0 {
+		label := fmt.Sprintf("%s%d ", styles.IconTodo, m.todoBadge.open)
+		if m.todoBadge.pending > 0 {
+			todoIndicator = styles.TextWarningStyle.Render(label)
+		} else {
+			todoIndicator = styles.TextMutedStyle.Render(label)
+		}
+	}
+
 	// Branding on right with background
 	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
 	if m.updateInfo != nil {
@@ -90,17 +108,18 @@ func (m Model) renderTabView() string {
 		branding = lipgloss.JoinHorizontal(lipgloss.Left, badge, " ", branding)
 	}
 
-	// Calculate spacing to push branding to right edge with even margins
-	// Layout: [margin] tabs [spacer] branding [margin]
+	// Calculate spacing to push right-side elements to right edge
+	// Layout: [margin] tabs [spacer] todoIndicator branding [margin]
 	margin := 1
 	tabsWidth := lipgloss.Width(tabsLeft)
 	brandingWidth := lipgloss.Width(branding)
-	spacerWidth := max(m.width-tabsWidth-brandingWidth-(margin*2), 1)
+	todoWidth := lipgloss.Width(todoIndicator)
+	spacerWidth := max(m.width-tabsWidth-todoWidth-brandingWidth-(margin*2), 1)
 	leftMargin := components.Pad(margin)
 	spacer := components.Pad(spacerWidth)
 	rightMargin := components.Pad(margin)
 
-	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, branding, rightMargin)
+	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, todoIndicator, branding, rightMargin)
 
 	// Horizontal dividers above and below header
 	dividerWidth := m.width
