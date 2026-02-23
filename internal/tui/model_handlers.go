@@ -333,7 +333,7 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 			m.notifyBus.Infof("no URI on this todo")
 			return m, m.ensureToastTick()
 		}
-		switch item.URI.Scheme {
+		switch item.URI.Scheme() {
 		case "session":
 			if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
 				return m, m.notifyError("complete todo: %v", err)
@@ -347,17 +347,17 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 				m.modals.DismissTodoPanel()
 				m.activeView = ViewReview
 				m.handler.SetActiveView(ViewReview)
-				return m, m.reviewView.OpenDocumentByPath(item.URI.Value)
+				return m, m.reviewView.OpenDocumentByPath(item.URI.Value())
 			}
 		case "http", "https":
 			return m, launchAction(item.ID, osOpenCmd(item.URI.String()))
 		default:
 			var actionCmd *exec.Cmd
-			if action, ok := m.cfg.Todos.Actions[item.URI.Scheme]; ok {
+			if action, ok := m.cfg.Todos.Actions[item.URI.Scheme()]; ok {
 				var err error
 				actionCmd, err = renderCustomAction(action, item.URI)
 				if err != nil {
-					log.Warn().Err(err).Str("scheme", item.URI.Scheme).Msg("failed to render custom action")
+					log.Warn().Err(err).Str("scheme", item.URI.Scheme()).Msg("failed to render custom action")
 					return m, m.notifyError("render action: %v", err)
 				}
 			} else {
@@ -393,11 +393,11 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 			if item.Status != todo.StatusPending && item.Status != todo.StatusAcknowledged {
 				continue
 			}
-			if item.URI.Scheme != "review" {
+			if item.URI.Scheme() != "review" {
 				continue
 			}
 			for _, p := range paths {
-				if p != "" && (item.URI.Value == p || strings.HasSuffix(p, "/"+item.URI.Value) || strings.HasSuffix(item.URI.Value, "/"+p)) {
+				if p != "" && (item.URI.Value() == p || strings.HasSuffix(p, "/"+item.URI.Value()) || strings.HasSuffix(item.URI.Value(), "/"+p)) {
 					if err := m.todoService.Complete(ctx, item.ID); err != nil {
 						log.Debug().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
 					}
@@ -643,8 +643,8 @@ type ActionTemplateData struct {
 func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
 	renderer := tmpl.New(tmpl.Config{})
 	rendered, err := renderer.Render(tmplStr, ActionTemplateData{
-		Scheme: ref.Scheme,
-		Value:  ref.Value,
+		Scheme: ref.Scheme(),
+		Value:  ref.Value(),
 		URI:    ref.String(),
 	})
 	if err != nil {

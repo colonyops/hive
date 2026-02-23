@@ -86,7 +86,7 @@ func TestTodoLimiter(t *testing.T) {
 				ID:        id,
 				SessionID: "sess-1",
 				Source:    todo.SourceAgent,
-				URI:       todo.ParseRef("review://test.md"),
+				URI:       todo.MustParseRef("review://test.md"),
 				Status:    todo.StatusPending,
 				CreatedAt: now.Add(time.Duration(i) * time.Second),
 				UpdatedAt: now.Add(time.Duration(i) * time.Second),
@@ -116,7 +116,7 @@ func TestTodoLimiter(t *testing.T) {
 			ID:        "t1",
 			SessionID: "sess-1",
 			Source:    todo.SourceAgent,
-			URI:       todo.ParseRef("review://test.md"),
+			URI:       todo.MustParseRef("review://test.md"),
 			Status:    todo.StatusPending,
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -145,7 +145,7 @@ func TestTodoLimiter(t *testing.T) {
 			ID:        "t1",
 			SessionID: "sess-1",
 			Source:    todo.SourceAgent,
-			URI:       todo.ParseRef("review://test.md"),
+			URI:       todo.MustParseRef("review://test.md"),
 			Status:    todo.StatusPending,
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -163,7 +163,7 @@ func TestTodoService(t *testing.T) {
 	t.Run("add creates todo and publishes event", func(t *testing.T) {
 		svc, store := newTestTodoService(t)
 
-		td, err := todo.NewTodo("t1", "Review something", todo.SourceAgent, todo.ParseRef("review://test.md"))
+		td, err := todo.NewTodo("t1", "Review something", todo.SourceAgent, todo.MustParseRef("review://test.md"))
 		require.NoError(t, err)
 
 		require.NoError(t, svc.Add(ctx, td))
@@ -175,8 +175,8 @@ func TestTodoService(t *testing.T) {
 		assert.Equal(t, "Review something", got.Title)
 	})
 
-	t.Run("NewTodo rejects invalid URI", func(t *testing.T) {
-		_, err := todo.NewTodo("t1", "Bad URI", todo.SourceAgent, todo.ParseRef("bare-string"))
+	t.Run("ParseRef rejects bare string", func(t *testing.T) {
+		_, err := todo.ParseRef("bare-string")
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid URI")
 	})
@@ -194,11 +194,11 @@ func TestTodoService(t *testing.T) {
 
 		svc := NewTodoService(store, bus, cfg, zerolog.Nop())
 
-		td1, err := todo.NewTodo("t1", "First", todo.SourceAgent, todo.ParseRef("review://doc.md"))
+		td1, err := todo.NewTodo("t1", "First", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td1))
 
-		td2, err := todo.NewTodo("t2", "Second", todo.SourceAgent, todo.ParseRef("review://doc2.md"))
+		td2, err := todo.NewTodo("t2", "Second", todo.SourceAgent, todo.MustParseRef("review://doc2.md"))
 		require.NoError(t, err)
 		err = svc.Add(ctx, td2)
 		require.Error(t, err)
@@ -208,7 +208,7 @@ func TestTodoService(t *testing.T) {
 	t.Run("acknowledge updates status", func(t *testing.T) {
 		svc, store := newTestTodoService(t)
 
-		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.ParseRef("review://doc.md"))
+		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td))
 
@@ -222,7 +222,7 @@ func TestTodoService(t *testing.T) {
 	t.Run("complete updates status", func(t *testing.T) {
 		svc, store := newTestTodoService(t)
 
-		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.ParseRef("review://doc.md"))
+		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td))
 
@@ -237,7 +237,7 @@ func TestTodoService(t *testing.T) {
 	t.Run("dismiss updates status", func(t *testing.T) {
 		svc, store := newTestTodoService(t)
 
-		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.ParseRef("review://doc.md"))
+		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td))
 
@@ -255,7 +255,7 @@ func TestTodoService(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, 0, count)
 
-		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.ParseRef("review://doc.md"))
+		td, err := todo.NewTodo("t1", "Test", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td))
 
@@ -269,11 +269,11 @@ func TestTodoService(t *testing.T) {
 
 		svc.limiter.rateLimitDur = 0
 
-		td1, err := todo.NewTodo("t1", "First", todo.SourceAgent, todo.ParseRef("review://doc.md"))
+		td1, err := todo.NewTodo("t1", "First", todo.SourceAgent, todo.MustParseRef("review://doc.md"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td1))
 
-		td2, err := todo.NewTodo("t2", "Second", todo.SourceAgent, todo.ParseRef("session://sess-1"))
+		td2, err := todo.NewTodo("t2", "Second", todo.SourceAgent, todo.MustParseRef("session://sess-1"))
 		require.NoError(t, err)
 		require.NoError(t, svc.Add(ctx, td2))
 

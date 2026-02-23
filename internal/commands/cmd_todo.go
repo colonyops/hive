@@ -165,9 +165,10 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 
 	var ref todo.Ref
 	if uri != "" {
-		ref = todo.ParseRef(uri)
-		if !ref.Valid() {
-			return fmt.Errorf("invalid URI %q: must use scheme://value format", uri)
+		var parseErr error
+		ref, parseErr = todo.ParseRef(uri)
+		if parseErr != nil {
+			return fmt.Errorf("invalid URI %q: %w", uri, parseErr)
 		}
 	}
 

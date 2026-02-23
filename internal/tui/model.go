@@ -517,7 +517,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.todoOpenCount = msg.openCount
 		model, cmd = m, nil
 	case todoCreatedMsg:
-		scheme := msg.payload.Todo.URI.Scheme
+		scheme := msg.payload.Todo.URI.Scheme()
 		if scheme == "" {
 			scheme = "todo"
 		}

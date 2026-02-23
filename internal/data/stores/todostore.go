@@ -7,6 +7,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/rs/zerolog/log"
 )
 
 // TodoStore implements todo.Store using SQLite.
@@ -91,7 +92,7 @@ func (s *TodoStore) List(ctx context.Context, filter todo.ListFilter) ([]todo.To
 		if filter.SessionID != "" && t.SessionID != filter.SessionID {
 			continue
 		}
-		if filter.Scheme != "" && t.URI.Scheme != filter.Scheme {
+		if filter.Scheme != "" && t.URI.Scheme() != filter.Scheme {
 			continue
 		}
 
@@ -140,12 +141,16 @@ func (s *TodoStore) Delete(ctx context.Context, id string) error {
 }
 
 func rowToTodo(row db.TodoItem) todo.Todo {
+	uri, err := todo.ParseRef(row.Uri)
+	if err != nil {
+		log.Debug().Err(err).Str("id", row.ID).Str("uri", row.Uri).Msg("invalid URI in stored todo")
+	}
 	t := todo.Todo{
 		ID:        row.ID,
 		SessionID: row.SessionID,
 		Source:    todo.Source(row.Source),
 		Title:     row.Title,
-		URI:       todo.ParseRef(row.Uri),
+		URI:       uri,
 		Status:    todo.Status(row.Status),
 		CreatedAt: time.Unix(0, row.CreatedAt),
 		UpdatedAt: time.Unix(0, row.UpdatedAt),

@@ -161,7 +161,7 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 	// Scheme tag
 	scheme := ""
 	if !item.URI.IsEmpty() {
-		scheme = styles.TextMutedStyle.Render("[" + item.URI.Scheme + "]")
+		scheme = styles.TextMutedStyle.Render("[" + item.URI.Scheme() + "]")
 	}
 
 	// Title
@@ -179,8 +179,8 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 	line := fmt.Sprintf("%s%s %s %s", cursor, statusIcon, scheme, title)
 
 	// Add URI value if present (truncated)
-	if !item.URI.IsEmpty() && item.URI.Value != "" {
-		val := item.URI.Value
+	if !item.URI.IsEmpty() && item.URI.Value() != "" {
+		val := item.URI.Value()
 		if len(val) > 40 {
 			val = val[:37] + "..."
 		}

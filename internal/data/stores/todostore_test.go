@@ -18,7 +18,7 @@ func newTestTodo(id string) todo.Todo {
 		SessionID: "sess-1",
 		Source:    todo.SourceAgent,
 		Title:     "Test todo " + id,
-		URI:       todo.ParseRef("review://test.md"),
+		URI:       todo.MustParseRef("review://test.md"),
 		Status:    todo.StatusPending,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -44,7 +44,7 @@ func TestTodoStore(t *testing.T) {
 		assert.Equal(t, "sess-1", got.SessionID)
 		assert.Equal(t, todo.SourceAgent, got.Source)
 		assert.Equal(t, "Test todo t1", got.Title)
-		assert.Equal(t, todo.ParseRef("review://test.md"), got.URI)
+		assert.Equal(t, todo.MustParseRef("review://test.md"), got.URI)
 		assert.Equal(t, todo.StatusPending, got.Status)
 		assert.True(t, got.CompletedAt.IsZero())
 	})
@@ -173,9 +173,9 @@ func TestTodoStore(t *testing.T) {
 		store := NewTodoStore(database)
 
 		td1 := newTestTodo("t1")
-		td1.URI = todo.ParseRef("review://doc.md")
+		td1.URI = todo.MustParseRef("review://doc.md")
 		td2 := newTestTodo("t2")
-		td2.URI = todo.ParseRef("session://sess-1")
+		td2.URI = todo.MustParseRef("session://sess-1")
 		require.NoError(t, store.Create(ctx, td1))
 		require.NoError(t, store.Create(ctx, td2))
 
