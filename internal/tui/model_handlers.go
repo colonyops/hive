@@ -332,16 +332,37 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		if item == nil {
 			return m, nil
 		}
+		if item.Status == todo.StatusCompleted {
+			return m, nil
+		}
 		if item.URI.IsEmpty() {
 			m.notifyBus.Infof("no URI on this todo")
 			return m, m.ensureToastTick()
 		}
 		switch item.URI.Scheme() {
 		case "session":
+			sessionID := item.URI.Value()
+			var found *session.Session
+			for _, s := range m.sessionsView.AllSessions() {
+				if s.ID == sessionID {
+					found = &s
+					break
+				}
+			}
+			if found == nil {
+				return m, m.notifyError("session %q not found", sessionID)
+			}
 			if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
 				return m, m.notifyError("complete todo: %v", err)
 			}
-			return m, nil
+			m.state = stateNormal
+			m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
+			m.modals.DismissTodoPanel()
+			return m, m.executeAction(act.Action{
+				Type:        act.TypeTmuxOpen,
+				SessionName: found.Name,
+				SessionPath: found.Path,
+			})
 		case "review":
 			if m.reviewView != nil {
 				m.state = stateNormal

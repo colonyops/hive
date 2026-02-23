@@ -118,6 +118,8 @@ func (p *TodoPanel) applyFilter() {
 	p.refreshContent()
 }
 
+const linesPerTodoItem = 2
+
 func (p *TodoPanel) refreshContent() {
 	if len(p.items) == 0 {
 		p.viewport.SetContent(styles.TextMutedStyle.Render("No todo items"))
@@ -137,11 +139,12 @@ func (p *TodoPanel) refreshContent() {
 
 	p.viewport.SetContent(b.String())
 
-	// Ensure cursor is visible
-	if p.cursor < p.viewport.YOffset() {
-		p.viewport.SetYOffset(p.cursor)
-	} else if p.cursor >= p.viewport.YOffset()+p.viewport.VisibleLineCount() {
-		p.viewport.SetYOffset(p.cursor - p.viewport.VisibleLineCount() + 1)
+	// Ensure cursor is visible (each item is linesPerTodoItem lines)
+	cursorLine := p.cursor * linesPerTodoItem
+	if cursorLine < p.viewport.YOffset() {
+		p.viewport.SetYOffset(cursorLine)
+	} else if cursorLine+linesPerTodoItem > p.viewport.YOffset()+p.viewport.VisibleLineCount() {
+		p.viewport.SetYOffset(cursorLine + linesPerTodoItem - p.viewport.VisibleLineCount())
 	}
 }
 
@@ -150,19 +153,19 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 	var statusIcon string
 	switch item.Status {
 	case todo.StatusPending:
-		statusIcon = styles.TextWarningStyle.Render("○")
+		statusIcon = styles.TextWarningStyle.Render(styles.IconTodoPending)
 	case todo.StatusAcknowledged:
-		statusIcon = styles.TextPrimaryStyle.Render("◐")
+		statusIcon = styles.TextPrimaryStyle.Render(styles.IconTodoAcknowledged)
 	case todo.StatusCompleted:
-		statusIcon = styles.TextSuccessStyle.Render("●")
+		statusIcon = styles.TextSuccessStyle.Render(styles.IconTodoCompleted)
 	case todo.StatusDismissed:
-		statusIcon = styles.TextMutedStyle.Render("⊘")
+		statusIcon = styles.TextMutedStyle.Render(styles.IconTodoDismissed)
 	}
 
-	// Scheme tag
-	scheme := ""
-	if !item.URI.IsEmpty() {
-		scheme = styles.TextMutedStyle.Render("[" + item.URI.Scheme() + "]")
+	// Cursor
+	cursor := "  "
+	if selected {
+		cursor = styles.TextPrimaryStyle.Render(styles.IconSelector + " ")
 	}
 
 	// Title
@@ -171,29 +174,37 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 		title = styles.TextPrimaryBoldStyle.Render(title)
 	}
 
-	// Cursor
-	cursor := "  "
-	if selected {
-		cursor = styles.TextPrimaryStyle.Render("▸ ")
+	// Source tag right-aligned: [agent], [human], [system]
+	tag := styles.TextMutedStyle.Render("[" + string(item.Source) + "]")
+	tagWidth := lipgloss.Width(tag)
+
+	// Row 1: cursor + icon + title ... [source]
+	prefix := fmt.Sprintf("%s%s %s", cursor, statusIcon, title)
+	prefixWidth := lipgloss.Width(prefix)
+	gap := max(maxWidth-prefixWidth-tagWidth, 1)
+	row1 := prefix + strings.Repeat(" ", gap) + tag
+
+	if lipgloss.Width(row1) > maxWidth {
+		// Truncate title portion, preserving the tag
+		available := maxWidth - tagWidth - 1
+		row1 = ansi.Truncate(prefix, available, "…") + " " + tag
 	}
 
-	line := fmt.Sprintf("%s%s %s %s", cursor, statusIcon, scheme, title)
-
-	// Add URI value if present (truncated)
-	if !item.URI.IsEmpty() && item.URI.Value() != "" {
-		val := item.URI.Value()
-		if len(val) > 40 {
-			val = val[:37] + "..."
+	// Row 2: indented URI in muted style
+	indent := "     " // align under title text
+	var row2 string
+	if !item.URI.IsEmpty() {
+		uri := item.URI.String()
+		maxURI := maxWidth - len(indent)
+		if len(uri) > maxURI {
+			uri = uri[:max(maxURI-3, 0)] + "..."
 		}
-		line += " " + styles.TextMutedStyle.Render(val)
+		row2 = indent + styles.TextMutedStyle.Render(uri)
+	} else {
+		row2 = indent + styles.TextMutedStyle.Render("no uri")
 	}
 
-	// Truncate to max width using ANSI-aware truncation
-	if lipgloss.Width(line) > maxWidth {
-		line = ansi.Truncate(line, maxWidth, "")
-	}
-
-	return line
+	return row1 + "\n" + row2
 }
 
 // MoveUp moves the cursor up.

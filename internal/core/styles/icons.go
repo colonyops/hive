@@ -18,4 +18,11 @@ var (
 	IconNotifyError   = "\uf06a" //
 	IconNotifyWarning = "\uf071" //
 	IconNotifyInfo    = "\uf05a" //
+
+	IconSelector = "󰅂"
+
+	IconTodoPending      = "󰄱 "
+	IconTodoAcknowledged = IconTodoPending // From a user perspecitve Acknowledged is only Different from Pending in that you see a UI notification
+	IconTodoCompleted    = "󰄵 "
+	IconTodoDismissed    = "󱋭 "
 )
