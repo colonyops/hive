@@ -56,6 +56,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 		c.validateFileAccess(configPath),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
+		c.validateTodos(),
 	)
 }
 
