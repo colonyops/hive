@@ -162,6 +162,11 @@ var defaultUserCommands = map[string]UserCommand{
 		Help:   "toggle group/repo view",
 		Silent: true,
 	},
+	"Todos": {
+		Action: action.TypeTodos,
+		Help:   "show todo items",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}

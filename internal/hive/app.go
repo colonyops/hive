@@ -56,7 +56,7 @@ func NewApp(
 	logger zerolog.Logger,
 ) *App {
 	limiter := NewTodoLimiter(todoStore, cfg.Todos.Limiter)
-	todos := NewTodoService(todoStore, limiter, logger.With().Str("service", "todos").Logger())
+	todos := NewTodoService(todoStore, limiter, bus, logger.With().Str("service", "todos").Logger())
 
 	return &App{
 		Sessions: sessions,

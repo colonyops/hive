@@ -16,4 +16,11 @@ var (
 	IconNotifyError   = "\uf06a" //
 	IconNotifyWarning = "\uf071" //
 	IconNotifyInfo    = "\uf05a" //
+
+	// Todo panel icons.
+	IconTodoPending      = "○"
+	IconTodoAcknowledged = "◐"
+	IconTodoCompleted    = "●"
+	IconTodoDismissed    = "⊘"
+	IconTodoCursor       = "▸ "
 )

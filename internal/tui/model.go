@@ -56,6 +56,7 @@ const (
 	stateRenaming
 	stateSettingGroup
 	stateFormInput
+	stateShowingTodos
 )
 
 // Key constants for event handling.
@@ -75,6 +76,7 @@ type Deps struct {
 
 	// Optional — nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
+	TodoService   *hive.TodoService
 	Bus           *eventbus.EventBus
 	DB            *db.DB
 	KVStore       corekv.KV
@@ -135,6 +137,12 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
+	todoService     *hive.TodoService
+	todoPanel       *components.TodoPanel
+	todoCh          <-chan eventbus.TodoCreatedPayload
+	todoUnseenCount int
+	todoOpenCount   int
+
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
 	updateChecker *updatecheck.Checker
@@ -180,6 +188,17 @@ type notificationMsg struct {
 
 type doctorResultsMsg struct {
 	results []doctor.Result
+}
+
+// todoCreatedMsg is sent when the event bus receives a todo.created event.
+type todoCreatedMsg struct {
+	payload eventbus.TodoCreatedPayload
+}
+
+// todoCountUpdatedMsg carries refreshed todo counts.
+type todoCountUpdatedMsg struct {
+	unseen int
+	open   int
 }
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
@@ -268,6 +287,19 @@ func New(deps Deps, opts Opts) Model {
 
 	updateChecker := updatecheck.New(deps.KVStore, nil)
 
+	// Set up todo event bus channel for real-time notifications.
+	var todoCh <-chan eventbus.TodoCreatedPayload
+	if deps.TodoService != nil && deps.Bus != nil && cfg.Todos.Notifications.Toast {
+		ch := make(chan eventbus.TodoCreatedPayload, 16)
+		deps.Bus.SubscribeTodoCreated(func(p eventbus.TodoCreatedPayload) {
+			select {
+			case ch <- p:
+			default:
+			}
+		})
+		todoCh = ch
+	}
+
 	return Model{
 		cfg:             cfg,
 		service:         service,
@@ -288,6 +320,8 @@ func New(deps Deps, opts Opts) Model {
 		toastController: toastCtrl,
 		toastView:       toastView,
 		bus:             deps.Bus,
+		todoService:     deps.TodoService,
+		todoCh:          todoCh,
 		renderer:        deps.Renderer,
 		buildInfo:       deps.BuildInfo,
 		updateChecker:   updateChecker,
@@ -341,6 +375,13 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
+	// Start todo polling and event listening
+	if m.todoService != nil {
+		cmds = append(cmds, m.loadTodoCounts(), scheduleTodoPollTick())
+	}
+	if m.todoCh != nil {
+		cmds = append(cmds, m.listenForTodoCreated())
+	}
 	if m.cfg.TUI.UpdateChecker && m.updateChecker != nil && m.buildInfo.Version != "" {
 		cmds = append(cmds, checkForUpdate(m.updateChecker, m.buildInfo.Version))
 	}
@@ -386,9 +427,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case kvEntryLoadedMsg:
 		model, cmd = m.handleKVEntryLoaded(msg)
 
-	// Polling ticks (KV only — session polling is handled by sessionsView)
+	// Polling ticks
 	case kvPollTickMsg:
 		model, cmd = m.handleKVPollTick(msg)
+	case todoPollTickMsg:
+		model, cmd = m.handleTodoPollTick()
 	case toastTickMsg:
 		model, cmd = m.handleToastTick(msg)
 
@@ -435,6 +478,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleReviewFinalized(msg)
 	case review.OpenDocumentMsg:
 		model, cmd = m.handleReviewOpenDoc(msg)
+
+	// Todo events
+	case todoCreatedMsg:
+		model, cmd = m.handleTodoCreated(msg)
+	case todoCountUpdatedMsg:
+		model, cmd = m.handleTodoCountUpdated(msg)
 
 	// Notifications
 	case notificationMsg:
@@ -495,6 +544,9 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
+	}
+	if m.state == stateShowingTodos {
+		return m.handleTodoPanelKey(keyStr)
 	}
 
 	// When filtering in either list, pass most keys except quit
@@ -857,6 +909,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model
 			m.state = stateShowingNotifications
 			m.modals.ShowNotifications(m.notifyBus)
 			return m, nil
+		}
+
+		// Todos doesn't require a session
+		if entry.Command.Action == act.TypeTodos {
+			m.state = stateNormal
+			return m.showTodoPanel()
 		}
 
 		// NewSession doesn't require a selected session
@@ -1510,6 +1568,52 @@ func (m *Model) applyTheme(name string) {
 	}
 	styles.SetTheme(palette)
 	m.sessionsView.ApplyTheme()
+}
+
+// loadTodoCounts returns a command that fetches pending and open counts.
+func (m Model) loadTodoCounts() tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		unseen, _ := m.todoService.CountPending(ctx)
+		open, _ := m.todoService.CountOpen(ctx)
+		return todoCountUpdatedMsg{unseen: unseen, open: open}
+	}
+}
+
+// listenForTodoCreated returns a command that blocks on the todo event channel.
+func (m Model) listenForTodoCreated() tea.Cmd {
+	ch := m.todoCh
+	return func() tea.Msg {
+		payload := <-ch
+		return todoCreatedMsg{payload: payload}
+	}
+}
+
+// showTodoPanel creates and shows the todo panel modal.
+func (m Model) showTodoPanel() (Model, tea.Cmd) {
+	if m.todoService == nil {
+		return m, nil
+	}
+	w, h := m.width, m.height
+	if w == 0 {
+		w = 80
+	}
+	if h == 0 {
+		h = 24
+	}
+	m.todoPanel = components.NewTodoPanel(m.todoService, w, h)
+	m.state = stateShowingTodos
+	return m, nil
+}
+
+// dismissTodoPanel closes the panel and resets unseen count.
+func (m *Model) dismissTodoPanel() {
+	if m.todoPanel != nil {
+		m.todoOpenCount = m.todoPanel.OpenCount()
+	}
+	m.todoUnseenCount = 0
+	m.todoPanel = nil
+	m.state = stateNormal
 }
 
 // listenForRecycleOutput returns a command that waits for the next output or completion.

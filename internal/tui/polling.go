@@ -6,7 +6,10 @@ import (
 	tea "charm.land/bubbletea/v2"
 )
 
-const kvPollInterval = 10 * time.Second
+const (
+	kvPollInterval   = 10 * time.Second
+	todoPollInterval = 5 * time.Second
+)
 
 // kvPollTickMsg is sent to trigger KV store refresh.
 type kvPollTickMsg struct{}
@@ -15,5 +18,15 @@ type kvPollTickMsg struct{}
 func scheduleKVPollTick() tea.Cmd {
 	return tea.Tick(kvPollInterval, func(time.Time) tea.Msg {
 		return kvPollTickMsg{}
+	})
+}
+
+// todoPollTickMsg is sent to trigger todo count refresh.
+type todoPollTickMsg struct{}
+
+// scheduleTodoPollTick returns a command that schedules the next todo poll tick.
+func scheduleTodoPollTick() tea.Cmd {
+	return tea.Tick(todoPollInterval, func(time.Time) tea.Msg {
+		return todoPollTickMsg{}
 	})
 }

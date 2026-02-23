@@ -81,6 +81,46 @@ func (m Model) handleKVEntryLoaded(msg kvEntryLoadedMsg) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
+// --- Todo ---
+
+func (m Model) handleTodoPollTick() (tea.Model, tea.Cmd) {
+	if m.todoService == nil {
+		return m, scheduleTodoPollTick()
+	}
+	return m, tea.Batch(m.loadTodoCounts(), scheduleTodoPollTick())
+}
+
+func (m Model) handleTodoCreated(msg todoCreatedMsg) (tea.Model, tea.Cmd) {
+	scheme := msg.payload.Scheme
+	if scheme == "" {
+		scheme = "todo"
+	}
+	toast := fmt.Sprintf("New [%s]: %s", scheme, msg.payload.Title)
+	m.notifyBus.Infof("%s", toast)
+	return m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated(), m.ensureToastTick())
+}
+
+func (m Model) handleTodoCountUpdated(msg todoCountUpdatedMsg) (tea.Model, tea.Cmd) {
+	m.todoUnseenCount = msg.unseen
+	m.todoOpenCount = msg.open
+	return m, nil
+}
+
+func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
+	if keyStr == keyCtrlC {
+		return m.quit()
+	}
+	if m.todoPanel == nil {
+		m.state = stateNormal
+		return m, nil
+	}
+	if m.todoPanel.HandleKey(keyStr) {
+		m.dismissTodoPanel()
+		return m, m.loadTodoCounts()
+	}
+	return m, nil
+}
+
 // --- KV polling ---
 
 func (m Model) handleKVPollTick(_ kvPollTickMsg) (tea.Model, tea.Cmd) {
@@ -129,6 +169,9 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	if action.Type == act.TypeGroupToggle {
 		cmd := m.sessionsView.ToggleGroupBy()
 		return m, cmd
+	}
+	if action.Type == act.TypeTodos {
+		return m.showTodoPanel()
 	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter

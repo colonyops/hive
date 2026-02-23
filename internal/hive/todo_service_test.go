@@ -18,7 +18,7 @@ func newTestTodoService(t *testing.T) *TodoService {
 		MaxPending:          100,
 		RateLimitPerSession: 0, // disable rate limit for tests
 	})
-	return NewTodoService(store, limiter, zerolog.Nop())
+	return NewTodoService(store, limiter, nil, zerolog.Nop())
 }
 
 func TestTodoService_Add(t *testing.T) {
@@ -113,7 +113,7 @@ func TestTodoService_Add_RateLimited(t *testing.T) {
 		MaxPending:          100,
 		RateLimitPerSession: 15_000_000_000, // 15s as Duration
 	})
-	svc := NewTodoService(store, limiter, zerolog.Nop())
+	svc := NewTodoService(store, limiter, nil, zerolog.Nop())
 
 	require.NoError(t, svc.Add(ctx, todo.Todo{
 		ID: "t1", SessionID: "sess-1", Source: todo.SourceAgent, Title: "first",

@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"fmt"
 	"strings"
 
 	tea "charm.land/bubbletea/v2"
@@ -19,6 +20,18 @@ func (m Model) View() tea.View {
 	mainView := m.renderTabView()
 
 	content := m.modals.Overlay(m.state, mainView, m.spinner, m.loadingMessage)
+
+	// Todo panel overlay
+	if content == mainView && m.state == stateShowingTodos && m.todoPanel != nil {
+		w, h := m.width, m.height
+		if w == 0 {
+			w = 80
+		}
+		if h == 0 {
+			h = 24
+		}
+		content = m.todoPanel.Overlay(mainView, w, h)
+	}
 
 	// Messages preview overlay is applied here rather than inside ModalCoordinator
 	// because the preview state is owned by messages.View, not by the parent model.
@@ -83,11 +96,25 @@ func (m Model) renderTabView() string {
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
 	}
 
+	// Todo indicator (right-aligned, before branding)
+	todoIndicator := ""
+	if m.todoOpenCount > 0 {
+		indicator := fmt.Sprintf("%s%d ", styles.IconCheckList, m.todoOpenCount)
+		if m.todoUnseenCount > 0 {
+			todoIndicator = styles.TextWarningStyle.Render(indicator)
+		} else {
+			todoIndicator = styles.TextMutedStyle.Render(indicator)
+		}
+	}
+
 	// Branding on right with background
 	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Hive")
 	if m.updateInfo != nil {
 		badge := styles.TabUpdateBadgeStyle.Render("Update Available")
 		branding = lipgloss.JoinHorizontal(lipgloss.Left, badge, " ", branding)
+	}
+	if todoIndicator != "" {
+		branding = lipgloss.JoinHorizontal(lipgloss.Left, todoIndicator, branding)
 	}
 
 	// Calculate spacing to push branding to right edge with even margins

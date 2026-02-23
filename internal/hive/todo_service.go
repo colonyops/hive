@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/rs/zerolog"
 )
@@ -13,14 +14,16 @@ import (
 type TodoService struct {
 	store   todo.Store
 	limiter *TodoLimiter
+	bus     *eventbus.EventBus
 	logger  zerolog.Logger
 }
 
 // NewTodoService creates a new TodoService.
-func NewTodoService(store todo.Store, limiter *TodoLimiter, logger zerolog.Logger) *TodoService {
+func NewTodoService(store todo.Store, limiter *TodoLimiter, bus *eventbus.EventBus, logger zerolog.Logger) *TodoService {
 	return &TodoService{
 		store:   store,
 		limiter: limiter,
+		bus:     bus,
 		logger:  logger,
 	}
 }
@@ -49,6 +52,13 @@ func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
 		Str("title", t.Title).
 		Str("uri", t.URI.String()).
 		Msg("todo created")
+
+	if s.bus != nil {
+		s.bus.PublishTodoCreated(eventbus.TodoCreatedPayload{
+			Scheme: t.URI.Scheme,
+			Title:  t.Title,
+		})
+	}
 
 	return nil
 }
