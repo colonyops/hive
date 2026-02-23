@@ -231,7 +231,7 @@ func (p *TodoPanel) CompleteCurrent() error {
 	if item.Status == todo.StatusCompleted || item.Status == todo.StatusDismissed {
 		return nil
 	}
-	if err := p.service.Complete(context.Background(), item.ID); err != nil {
+	if _, err := p.service.Complete(context.Background(), item.ID); err != nil {
 		return err
 	}
 	p.loadItems()
@@ -247,7 +247,7 @@ func (p *TodoPanel) AcknowledgeCurrent() error {
 	if item.Status != todo.StatusPending {
 		return nil
 	}
-	if err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
+	if _, err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
 		return err
 	}
 	p.loadItems()
@@ -263,7 +263,7 @@ func (p *TodoPanel) DismissCurrent() error {
 	if item.Status == todo.StatusCompleted || item.Status == todo.StatusDismissed {
 		return nil
 	}
-	if err := p.service.Dismiss(context.Background(), item.ID); err != nil {
+	if _, err := p.service.Dismiss(context.Background(), item.ID); err != nil {
 		return err
 	}
 	p.loadItems()
@@ -282,7 +282,7 @@ func (p *TodoPanel) acknowledgeAll() {
 	p.ackErrs = 0
 	for _, item := range p.allItems {
 		if item.Status == todo.StatusPending {
-			if err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
+			if _, err := p.service.Acknowledge(context.Background(), item.ID); err != nil {
 				p.ackErrs++
 				log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-acknowledge todo")
 			}

@@ -55,6 +55,12 @@ func (t Todo) Validate() error {
 	if !t.Status.IsValid() {
 		return fmt.Errorf("invalid status %q", t.Status)
 	}
+	if t.Source == SourceAgent && t.SessionID == "" {
+		return fmt.Errorf("session ID is required for agent-created todos")
+	}
+	if t.Source != SourceAgent && t.SessionID != "" {
+		return fmt.Errorf("session ID is only valid for agent-created todos")
+	}
 	if !t.URI.IsEmpty() && !t.URI.Valid() {
 		return fmt.Errorf("invalid URI %q: must use scheme://value format", t.URI.String())
 	}
@@ -95,18 +101,4 @@ func NewHumanTodo(id, title string, uri Ref) (Todo, error) {
 // NewSystemTodo creates a system-sourced todo.
 func NewSystemTodo(id, title string, uri Ref) (Todo, error) {
 	return newTodoWithSession(id, title, SourceSystem, "", uri)
-}
-
-// NewTodo creates a validated Todo with defaults for status and timestamps.
-// ID and title are required. Source must be a valid enum value.
-// If Ref is non-empty, it must have a scheme.
-func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
-	switch source {
-	case SourceAgent:
-		return newTodoWithSession(id, title, source, "", uri)
-	case SourceHuman, SourceSystem:
-		return newTodoWithSession(id, title, source, "", uri)
-	default:
-		return Todo{}, fmt.Errorf("invalid source %q", source)
-	}
 }

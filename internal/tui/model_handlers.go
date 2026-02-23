@@ -402,7 +402,7 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 			}
 			for _, p := range paths {
 				if p != "" && (item.URI.Value() == p || strings.HasSuffix(p, "/"+item.URI.Value()) || strings.HasSuffix(item.URI.Value(), "/"+p)) {
-					if err := m.todoService.Complete(ctx, item.ID); err != nil {
+					if _, err := m.todoService.Complete(ctx, item.ID); err != nil {
 						failed++
 						log.Warn().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
 					}

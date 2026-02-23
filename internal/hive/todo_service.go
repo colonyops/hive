@@ -3,6 +3,7 @@ package hive
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
@@ -29,20 +30,17 @@ func NewTodoService(store todo.Store, bus *eventbus.EventBus, cfg *config.Config
 }
 
 // Add creates a new todo item after passing validation and limiter checks.
-func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
+func (s *TodoService) Add(ctx context.Context, t todo.Todo) (todo.Todo, error) {
 	if err := t.Validate(); err != nil {
-		return fmt.Errorf("invalid todo %q: %w", t.ID, err)
-	}
-	if t.Source == todo.SourceAgent && t.SessionID == "" {
-		return fmt.Errorf("invalid todo %q: session ID is required for agent-created todos", t.ID)
+		return todo.Todo{}, fmt.Errorf("invalid todo %q: %w", t.ID, err)
 	}
 
 	if err := s.limiter.Check(ctx, t); err != nil {
-		return fmt.Errorf("todo rejected: %w", err)
+		return todo.Todo{}, fmt.Errorf("todo rejected: %w", err)
 	}
 
 	if err := s.store.Create(ctx, t); err != nil {
-		return fmt.Errorf("create todo: %w", err)
+		return todo.Todo{}, fmt.Errorf("create todo: %w", err)
 	}
 
 	s.bus.PublishTodoCreated(eventbus.TodoCreatedPayload{Todo: t})
@@ -53,51 +51,44 @@ func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
 		Str("session_id", t.SessionID).
 		Msg("todo created")
 
-	return nil
+	return t, nil
 }
 
-// validTransitions defines allowed status transitions.
-var validTransitions = map[todo.Status][]todo.Status{
-	todo.StatusPending:      {todo.StatusAcknowledged, todo.StatusCompleted, todo.StatusDismissed},
-	todo.StatusAcknowledged: {todo.StatusCompleted, todo.StatusDismissed},
-}
-
-func validateTransition(from, to todo.Status) error {
-	allowed := validTransitions[from]
-	for _, s := range allowed {
-		if s == to {
-			return nil
-		}
-	}
-	return fmt.Errorf("invalid transition from %q to %q", from, to)
-}
-
-func (s *TodoService) transition(ctx context.Context, id string, to todo.Status, op string) error {
+func (s *TodoService) transition(ctx context.Context, id string, to todo.Status, op string) (todo.Todo, error) {
 	current, err := s.store.Get(ctx, id)
 	if err != nil {
-		return fmt.Errorf("get todo %q for %s: %w", id, op, err)
+		return todo.Todo{}, fmt.Errorf("get todo %q for %s: %w", id, op, err)
 	}
-	if err := validateTransition(current.Status, to); err != nil {
-		return fmt.Errorf("%s todo %q: %w", op, id, err)
+	if err := todo.ValidateTransition(current.Status, to); err != nil {
+		return todo.Todo{}, fmt.Errorf("%s todo %q: %w", op, id, err)
 	}
+
+	now := time.Now()
 	if err := s.store.Update(ctx, id, to); err != nil {
-		return fmt.Errorf("%s todo %q: %w", op, id, err)
+		return todo.Todo{}, fmt.Errorf("%s todo %q: %w", op, id, err)
 	}
-	return nil
+
+	current.Status = to
+	current.UpdatedAt = now
+	if to == todo.StatusCompleted || to == todo.StatusDismissed {
+		current.CompletedAt = now
+	}
+
+	return current, nil
 }
 
 // Acknowledge updates a todo's status to acknowledged.
-func (s *TodoService) Acknowledge(ctx context.Context, id string) error {
+func (s *TodoService) Acknowledge(ctx context.Context, id string) (todo.Todo, error) {
 	return s.transition(ctx, id, todo.StatusAcknowledged, "acknowledge")
 }
 
 // Complete updates a todo's status to completed.
-func (s *TodoService) Complete(ctx context.Context, id string) error {
+func (s *TodoService) Complete(ctx context.Context, id string) (todo.Todo, error) {
 	return s.transition(ctx, id, todo.StatusCompleted, "complete")
 }
 
 // Dismiss updates a todo's status to dismissed.
-func (s *TodoService) Dismiss(ctx context.Context, id string) error {
+func (s *TodoService) Dismiss(ctx context.Context, id string) (todo.Todo, error) {
 	return s.transition(ctx, id, todo.StatusDismissed, "dismiss")
 }
 

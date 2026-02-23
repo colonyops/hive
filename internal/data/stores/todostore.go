@@ -10,6 +10,11 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	fallbackSource = todo.SourceSystem
+	fallbackStatus = todo.StatusPending
+)
+
 // TodoStore implements todo.Store using SQLite.
 type TodoStore struct {
 	db *db.DB
@@ -76,14 +81,7 @@ func (s *TodoStore) Update(ctx context.Context, id string, status todo.Status) e
 
 // List returns todo items matching the given filter.
 func (s *TodoStore) List(ctx context.Context, filter todo.ListFilter) ([]todo.Todo, error) {
-	var rows []db.TodoItem
-	var err error
-
-	if filter.Status != nil {
-		rows, err = s.db.Queries().ListTodoItemsByStatus(ctx, string(*filter.Status))
-	} else {
-		rows, err = s.db.Queries().ListTodoItems(ctx)
-	}
+	rows, err := s.listRows(ctx, filter)
 	if err != nil {
 		return nil, fmt.Errorf("list todo items: %w", err)
 	}
@@ -91,18 +89,30 @@ func (s *TodoStore) List(ctx context.Context, filter todo.ListFilter) ([]todo.To
 	result := make([]todo.Todo, 0, len(rows))
 	for _, row := range rows {
 		t := rowToTodo(row)
-
-		if filter.SessionID != "" && t.SessionID != filter.SessionID {
+		if !matchesListFilter(t, filter) {
 			continue
 		}
-		if filter.Scheme != "" && t.URI.Scheme() != filter.Scheme {
-			continue
-		}
-
 		result = append(result, t)
 	}
 
 	return result, nil
+}
+
+func (s *TodoStore) listRows(ctx context.Context, filter todo.ListFilter) ([]db.TodoItem, error) {
+	if filter.Status != nil {
+		return s.db.Queries().ListTodoItemsByStatus(ctx, string(*filter.Status))
+	}
+	return s.db.Queries().ListTodoItems(ctx)
+}
+
+func matchesListFilter(item todo.Todo, filter todo.ListFilter) bool {
+	if filter.SessionID != "" && item.SessionID != filter.SessionID {
+		return false
+	}
+	if filter.Scheme != "" && item.URI.Scheme() != filter.Scheme {
+		return false
+	}
+	return true
 }
 
 // CountPending returns the number of pending todo items.
@@ -144,22 +154,9 @@ func (s *TodoStore) Delete(ctx context.Context, id string) error {
 }
 
 func rowToTodo(row db.TodoItem) todo.Todo {
-	uri, err := todo.ParseRef(row.Uri)
-	if err != nil {
-		log.Debug().Err(err).Str("id", row.ID).Str("uri", row.Uri).Msg("invalid URI in stored todo")
-	}
-
-	source, err := todo.ParseSource(row.Source)
-	if err != nil {
-		log.Warn().Err(err).Str("id", row.ID).Str("source", row.Source).Msg("invalid source in stored todo, defaulting to system")
-		source = todo.SourceSystem
-	}
-
-	status, err := todo.ParseStatus(row.Status)
-	if err != nil {
-		log.Warn().Err(err).Str("id", row.ID).Str("status", row.Status).Msg("invalid status in stored todo, defaulting to pending")
-		status = todo.StatusPending
-	}
+	uri := parseStoredRef(row)
+	source := parseStoredSource(row)
+	status := parseStoredStatus(row)
 
 	t := todo.Todo{
 		ID:        row.ID,
@@ -175,4 +172,31 @@ func rowToTodo(row db.TodoItem) todo.Todo {
 		t.CompletedAt = time.Unix(0, row.CompletedAt)
 	}
 	return t
+}
+
+func parseStoredRef(row db.TodoItem) todo.Ref {
+	ref, err := todo.ParseRef(row.Uri)
+	if err != nil {
+		log.Debug().Err(err).Str("id", row.ID).Str("uri", row.Uri).Msg("invalid URI in stored todo")
+		return todo.Ref{}
+	}
+	return ref
+}
+
+func parseStoredSource(row db.TodoItem) todo.Source {
+	source, err := todo.ParseSource(row.Source)
+	if err != nil {
+		log.Warn().Err(err).Str("id", row.ID).Str("source", row.Source).Msg("invalid source in stored todo, defaulting to system")
+		return fallbackSource
+	}
+	return source
+}
+
+func parseStoredStatus(row db.TodoItem) todo.Status {
+	status, err := todo.ParseStatus(row.Status)
+	if err != nil {
+		log.Warn().Err(err).Str("id", row.ID).Str("status", row.Status).Msg("invalid status in stored todo, defaulting to pending")
+		return fallbackStatus
+	}
+	return status
 }

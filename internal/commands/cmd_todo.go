@@ -188,14 +188,9 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 		return err
 	}
 
-	if err := cmd.app.Todos.Add(ctx, td); err != nil {
-		return err
-	}
-
-	// Re-fetch to get populated timestamps
-	created, err := cmd.app.Todos.Get(ctx, td.ID)
+	created, err := cmd.app.Todos.Add(ctx, td)
 	if err != nil {
-		return fmt.Errorf("get created todo: %w", err)
+		return err
 	}
 
 	return iojson.WriteLine(c.Root().Writer, created)
@@ -237,13 +232,14 @@ func (cmd *TodoCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("invalid status %q: valid values are pending, acknowledged, completed, dismissed", cmd.updateStatus)
 	}
 
+	var updated todo.Todo
 	switch status {
 	case todo.StatusAcknowledged:
-		err = cmd.app.Todos.Acknowledge(ctx, id)
+		updated, err = cmd.app.Todos.Acknowledge(ctx, id)
 	case todo.StatusCompleted:
-		err = cmd.app.Todos.Complete(ctx, id)
+		updated, err = cmd.app.Todos.Complete(ctx, id)
 	case todo.StatusDismissed:
-		err = cmd.app.Todos.Dismiss(ctx, id)
+		updated, err = cmd.app.Todos.Dismiss(ctx, id)
 	case todo.StatusPending:
 		return fmt.Errorf("cannot set status back to pending")
 	default:
@@ -252,11 +248,6 @@ func (cmd *TodoCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 
 	if err != nil {
 		return err
-	}
-
-	updated, err := cmd.app.Todos.Get(ctx, id)
-	if err != nil {
-		return fmt.Errorf("get updated todo: %w", err)
 	}
 
 	return iojson.WriteLine(c.Root().Writer, updated)

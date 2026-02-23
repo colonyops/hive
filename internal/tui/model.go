@@ -544,7 +544,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case actionResultMsg:
 		if msg.Err != nil {
 			m.notifyBus.Errorf("Action failed: %v", msg.Err)
-		} else if err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
+		} else if _, err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
 			log.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
 			m.notifyBus.Warnf("Action opened but todo not completed: %v", err)
 		} else {

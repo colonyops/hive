@@ -184,6 +184,65 @@ func TestTodoStore(t *testing.T) {
 		assert.Equal(t, "t1", items[0].ID)
 	})
 
+	t.Run("list combines status query with session and scheme filters", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		store := NewTodoStore(database)
+
+		t1 := newTestTodo("t1")
+		t1.SessionID = "sess-a"
+		t1.URI = todo.MustParseRef("review://doc-1.md")
+		t2 := newTestTodo("t2")
+		t2.SessionID = "sess-b"
+		t2.URI = todo.MustParseRef("review://doc-2.md")
+		t3 := newTestTodo("t3")
+		t3.SessionID = "sess-a"
+		t3.URI = todo.MustParseRef("session://sess-a")
+		t4 := newTestTodo("t4")
+		t4.SessionID = "sess-a"
+		t4.URI = todo.MustParseRef("review://doc-4.md")
+
+		require.NoError(t, store.Create(ctx, t1))
+		require.NoError(t, store.Create(ctx, t2))
+		require.NoError(t, store.Create(ctx, t3))
+		require.NoError(t, store.Create(ctx, t4))
+		require.NoError(t, store.Update(ctx, "t4", todo.StatusCompleted))
+
+		status := todo.StatusPending
+		items, err := store.List(ctx, todo.ListFilter{Status: &status, SessionID: "sess-a", Scheme: "review"})
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		assert.Equal(t, "t1", items[0].ID)
+	})
+
+	t.Run("decode falls back for invalid stored source status and uri", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		now := time.Now().UnixNano()
+		err = database.Queries().CreateTodoItem(ctx, db.CreateTodoItemParams{
+			ID:        "t-invalid",
+			SessionID: "",
+			Source:    "invalid-source",
+			Title:     "Invalid row",
+			Uri:       "not-a-uri",
+			Status:    "invalid-status",
+			CreatedAt: now,
+			UpdatedAt: now,
+		})
+		require.NoError(t, err)
+
+		store := NewTodoStore(database)
+		item, err := store.Get(ctx, "t-invalid")
+		require.NoError(t, err)
+		assert.Equal(t, todo.SourceSystem, item.Source)
+		assert.Equal(t, todo.StatusPending, item.Status)
+		assert.True(t, item.URI.IsEmpty())
+	})
+
 	t.Run("count pending", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		require.NoError(t, err)

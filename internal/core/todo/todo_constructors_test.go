@@ -34,4 +34,18 @@ func TestTodoConstructors(t *testing.T) {
 		assert.Equal(t, SourceSystem, td.Source)
 		assert.Empty(t, td.SessionID)
 	})
+
+	t.Run("validate rejects non-agent todo with session ID", func(t *testing.T) {
+		td := Todo{
+			ID:        "t1",
+			Source:    SourceHuman,
+			SessionID: "sess-1",
+			Title:     "test",
+			Status:    StatusPending,
+		}
+
+		err := td.Validate()
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "session ID is only valid")
+	})
 }
