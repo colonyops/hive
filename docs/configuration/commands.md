@@ -95,6 +95,7 @@ These actions are provided by the tmux plugin and require tmux to be available.
 | Action      | Description                  |
 | ----------- | ---------------------------- |
 | `DocReview` | Open the document review view |
+| `TodoPanel` | Open the todo panel modal    |
 | `SetTheme`  | Preview and select a theme   |
 | `Notifications`  | Show notification history    |
 

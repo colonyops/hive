@@ -9,6 +9,47 @@ Hive includes an experimental todo workflow for tracking operator actions reques
 !!! warning "Experimental"
     Todo behavior and command output are experimental and may change in future releases.
 
+## Open the Todo Panel
+
+In the TUI, press `t` to open the todo panel (or run `:TodoPanel` from the command palette).
+
+When the panel opens:
+
+- all `pending` items are auto-acknowledged to `acknowledged`
+- the default filter is `Open` (pending + acknowledged)
+- items are sorted with open items first, then completed/dismissed
+
+## Todo Panel Keybindings
+
+| Key | Action |
+| --- | --- |
+| `j` / `down` | Move down |
+| `k` / `up` | Move up |
+| `tab` | Toggle filter (`Open` / `All`) |
+| `enter` | Run action for selected todo URI |
+| `c` | Mark selected item completed |
+| `d` | Mark selected item dismissed |
+| `esc` / `q` | Close panel |
+
+## What Enter Does
+
+`enter` behavior depends on URI scheme:
+
+| Scheme | Behavior |
+| --- | --- |
+| `session://...` | Marks todo completed immediately |
+| `review://...` | Opens the Review view for the document path |
+| `http://...`, `https://...` | Opens in your OS browser/app (`open` on macOS, `xdg-open` elsewhere) |
+| custom scheme with `todos.actions` | Runs configured shell template |
+| custom scheme without `todos.actions` | Falls back to OS open on the full URI |
+
+Additional behavior:
+
+- if URI is empty, Hive shows `no URI on this todo` and does not update status
+- external actions complete the todo only when command execution succeeds
+- failed external actions keep todo open and show a warning
+- `review://...` todos are auto-completed when review is finalized for the matched document
+
 ## Create Todos
 
 Use `hive todo add` to create a todo item:
@@ -45,6 +86,8 @@ hive todo update <id> --status acknowledged
 hive todo update <id> --status completed
 ```
 
+You cannot set status back to `pending` from CLI update.
+
 ## Status Lifecycle
 
 Allowed transitions are enforced by the todo domain model:
@@ -56,3 +99,24 @@ Allowed transitions are enforced by the todo domain model:
 - `acknowledged -> dismissed`
 
 Transitions from `completed` or `dismissed` are rejected.
+
+## Override Enter Actions
+
+Use `todos.actions` to define handlers for custom URI schemes:
+
+```yaml
+todos:
+  actions:
+    jira: "open https://jira.example.com/browse/{{ .Value | shq }}"
+    notion: "open {{ .URI | shq }}"
+```
+
+Template variables:
+
+- `.Scheme` - URI scheme (`jira`)
+- `.Value` - URI value (`PROJ-123` from `jira://PROJ-123`)
+- `.URI` - full URI (`jira://PROJ-123`)
+
+Built-in schemes cannot be overridden: `session`, `review`, `http`, `https`.
+
+See [Todo Configuration](../configuration/todos.md) for full settings (actions, limiter, notifications).

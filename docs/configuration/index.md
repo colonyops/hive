@@ -87,11 +87,21 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | `messaging.topic_prefix` | `string` | `agent`  | Default prefix for topic IDs |
 | `context.symlink_name`   | `string` | `.hive`  | Symlink name for context dir |
 
+## Todos (Experimental)
+
+| Option                               | Type                | Default | Description |
+| ------------------------------------ | ------------------- | ------- | ----------- |
+| `todos.actions`                      | `map[string]string` | `{}`    | Custom enter handlers for URI schemes |
+| `todos.limiter.max_pending`          | `int`               | `0`     | Global pending-todo cap (`0` disables) |
+| `todos.limiter.rate_limit_per_session` | `duration`        | `0`     | Per-session add cooldown (`0` disables) |
+| `todos.notifications.toast`          | `bool`              | `true`  | Show toast on todo creation |
+
 ## More Configuration
 
 - **[Rules](rules.md)** — Repository-specific spawn, recycle, setup commands, and file copying
 - **[User Commands](commands.md)** — Custom commands for the vim-style command palette
 - **[Keybindings](keybindings.md)** — Map keys to user commands or built-in actions
+- **[Todo Configuration (Experimental)](todos.md)** — Todo actions, limiter, notifications, and enter behavior
 - **[Plugins](plugins.md)** — External service integrations (tmux, Claude, GitHub, Beads, etc.)
 - **[Themes](themes.md)** — Built-in color palettes and custom theme creation
 

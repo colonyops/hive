@@ -18,6 +18,10 @@ Serial — each agent reads and challenges the previous. Best for thorough adver
 
 Parallel specialists plus a coordinator. Best for fast feedback with active coordination: both specialists run simultaneously and the leader drives targeted follow-up rounds.
 
+### [Inter-Agent Code Review](inter-agent-code-review.md)
+
+Spin up a dedicated reviewer agent via inbox messaging. Your session sends context, the reviewer analyzes the branch, and feedback comes back through pub/sub — no manual coordination needed.
+
 ## Automation
 
 ### [Ralph Loop](ralph-loop.md)
