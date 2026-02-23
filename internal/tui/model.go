@@ -137,11 +137,9 @@ type Model struct {
 
 	bus *eventbus.EventBus
 
-	todoService        *hive.TodoService
-	todoPendingCount   int
-	todoOpenCount      int
-	todoCountsDegraded bool
-	todoCh             <-chan eventbus.TodoCreatedPayload
+	todoService *hive.TodoService
+	todoBadge   todoBadgeState
+	todoCh      <-chan eventbus.TodoCreatedPayload
 
 	renderer      *tmpl.Renderer
 	buildInfo     BuildInfo
@@ -522,17 +520,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Todos
 	case todoCountUpdatedMsg:
-		m.todoPendingCount = msg.pendingCount
-		m.todoOpenCount = msg.openCount
-		m.todoCountsDegraded = false
+		m.todoBadge.updateCounts(msg.pendingCount, msg.openCount)
 		model, cmd = m, nil
 	case todoCountLoadFailedMsg:
-		m.todoCountsDegraded = true
+		m.todoBadge.markDegraded()
 		model, cmd = m, nil
 	case todoAutoCompleteResultMsg:
-		m.todoPendingCount = msg.pendingCount
-		m.todoOpenCount = msg.openCount
-		m.todoCountsDegraded = false
+		m.todoBadge.updateCounts(msg.pendingCount, msg.openCount)
 		if msg.failed > 0 {
 			m.notifyBus.Warnf("Failed to auto-complete %d todo(s)", msg.failed)
 			model, cmd = m, m.ensureToastTick()

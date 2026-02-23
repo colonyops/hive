@@ -28,8 +28,7 @@ func NewTodoService(store todo.Store, bus *eventbus.EventBus, cfg *config.Config
 	}
 }
 
-// Add creates a new todo item after passing limiter checks.
-// The Todo must be created via todo.NewTodo to guarantee valid fields.
+// Add creates a new todo item after passing validation and limiter checks.
 func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
 	if err := t.Validate(); err != nil {
 		return fmt.Errorf("invalid todo %q: %w", t.ID, err)

@@ -61,13 +61,11 @@ func (t Todo) Validate() error {
 	return nil
 }
 
-// NewTodo creates a validated Todo with defaults for status and timestamps.
-// ID and title are required. Source must be a valid enum value.
-// If Ref is non-empty, it must have a scheme.
-func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
+func newTodoWithSession(id, title string, source Source, sessionID string, uri Ref) (Todo, error) {
 	now := time.Now()
 	t := Todo{
 		ID:        id,
+		SessionID: sessionID,
 		Source:    source,
 		Title:     title,
 		URI:       uri,
@@ -79,4 +77,36 @@ func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
 		return Todo{}, err
 	}
 	return t, nil
+}
+
+// NewAgentTodo creates an agent-sourced todo and requires SessionID.
+func NewAgentTodo(id, title, sessionID string, uri Ref) (Todo, error) {
+	if sessionID == "" {
+		return Todo{}, fmt.Errorf("session ID is required for agent-created todos")
+	}
+	return newTodoWithSession(id, title, SourceAgent, sessionID, uri)
+}
+
+// NewHumanTodo creates a human-sourced todo.
+func NewHumanTodo(id, title string, uri Ref) (Todo, error) {
+	return newTodoWithSession(id, title, SourceHuman, "", uri)
+}
+
+// NewSystemTodo creates a system-sourced todo.
+func NewSystemTodo(id, title string, uri Ref) (Todo, error) {
+	return newTodoWithSession(id, title, SourceSystem, "", uri)
+}
+
+// NewTodo creates a validated Todo with defaults for status and timestamps.
+// ID and title are required. Source must be a valid enum value.
+// If Ref is non-empty, it must have a scheme.
+func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
+	switch source {
+	case SourceAgent:
+		return newTodoWithSession(id, title, source, "", uri)
+	case SourceHuman, SourceSystem:
+		return newTodoWithSession(id, title, source, "", uri)
+	default:
+		return Todo{}, fmt.Errorf("invalid source %q", source)
+	}
 }

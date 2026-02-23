@@ -320,8 +320,7 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m.quit()
 	case "esc", "q":
 		m.state = stateNormal
-		m.todoPendingCount = 0
-		m.todoOpenCount = m.modals.TodoPanel.OpenCount()
+		m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
 		m.modals.DismissTodoPanel()
 		return m, nil
 	case "j", "down":
@@ -346,8 +345,7 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		case "review":
 			if m.reviewView != nil {
 				m.state = stateNormal
-				m.todoPendingCount = 0
-				m.todoOpenCount = m.modals.TodoPanel.OpenCount()
+				m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
 				m.modals.DismissTodoPanel()
 				m.activeView = ViewReview
 				m.handler.SetActiveView(ViewReview)

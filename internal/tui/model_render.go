@@ -86,15 +86,15 @@ func (m Model) renderTabView() string {
 
 	// Todo indicator: right-aligned, warning when pending or counts are degraded.
 	todoIndicator := ""
-	if m.todoCountsDegraded {
-		if m.todoOpenCount > 0 {
-			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s%d~ ", styles.IconTodo, m.todoOpenCount))
+	if m.todoBadge.degraded {
+		if m.todoBadge.open > 0 {
+			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s%d~ ", styles.IconTodo, m.todoBadge.open))
 		} else {
 			todoIndicator = styles.TextWarningStyle.Render(fmt.Sprintf("%s? ", styles.IconTodo))
 		}
-	} else if m.todoOpenCount > 0 {
-		label := fmt.Sprintf("%s%d ", styles.IconTodo, m.todoOpenCount)
-		if m.todoPendingCount > 0 {
+	} else if m.todoBadge.open > 0 {
+		label := fmt.Sprintf("%s%d ", styles.IconTodo, m.todoBadge.open)
+		if m.todoBadge.pending > 0 {
 			todoIndicator = styles.TextWarningStyle.Render(label)
 		} else {
 			todoIndicator = styles.TextMutedStyle.Render(label)

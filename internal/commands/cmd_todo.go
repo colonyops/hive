@@ -172,11 +172,21 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 		}
 	}
 
-	td, err := todo.NewTodo(randid.Generate(8), cmd.addTitle, src, ref)
+	todoID := randid.Generate(8)
+	var td todo.Todo
+	switch src {
+	case todo.SourceAgent:
+		td, err = todo.NewAgentTodo(todoID, cmd.addTitle, sessionID, ref)
+	case todo.SourceHuman:
+		td, err = todo.NewHumanTodo(todoID, cmd.addTitle, ref)
+	case todo.SourceSystem:
+		td, err = todo.NewSystemTodo(todoID, cmd.addTitle, ref)
+	default:
+		err = fmt.Errorf("invalid source %q", src)
+	}
 	if err != nil {
 		return err
 	}
-	td.SessionID = sessionID
 
 	if err := cmd.app.Todos.Add(ctx, td); err != nil {
 		return err
