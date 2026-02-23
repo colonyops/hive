@@ -223,6 +223,7 @@ type Config struct {
 	Tmux                TmuxConfig             `yaml:"tmux"`
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
+	Todos               TodosConfig            `yaml:"todos"`
 	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
 	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
 }
@@ -558,6 +559,15 @@ func DefaultConfig() Config {
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
 			MaxMessages: 100,
+		},
+		Todos: TodosConfig{
+			Limiter: TodosLimiterConfig{
+				MaxPending:          100,
+				RateLimitPerSession: 15 * time.Second,
+			},
+			Notifications: TodosNotifyConfig{
+				Toast: true,
+			},
 		},
 	}
 }
