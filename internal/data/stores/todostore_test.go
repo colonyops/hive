@@ -49,18 +49,19 @@ func TestTodoStore(t *testing.T) {
 		assert.True(t, got.CompletedAt.IsZero())
 	})
 
-	t.Run("create rejects invalid source", func(t *testing.T) {
+	t.Run("create persists raw source value", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		require.NoError(t, err)
 		defer func() { _ = database.Close() }()
 
 		store := NewTodoStore(database)
 		td := newTestTodo("t1")
-		td.Source = "invalid"
+		td.Source = "custom"
 
-		err = store.Create(ctx, td)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid source")
+		require.NoError(t, store.Create(ctx, td))
+		got, err := store.Get(ctx, "t1")
+		require.NoError(t, err)
+		assert.Equal(t, todo.Source("custom"), got.Source)
 	})
 
 	t.Run("update status to completed", func(t *testing.T) {

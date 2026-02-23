@@ -42,11 +42,18 @@ var builtinSchemes = map[string]bool{
 
 // validateTodos checks that the todo configuration is valid.
 func (c *Config) validateTodos() error {
-	if len(c.Todos.Actions) == 0 {
-		return nil
+	var errs criterio.FieldErrorsBuilder
+
+	if c.Todos.Limiter.MaxPending < 0 {
+		errs = errs.Append("todos.limiter.max_pending", fmt.Errorf("must be >= 0"))
+	}
+	if c.Todos.Limiter.RateLimitPerSession < 0 {
+		errs = errs.Append("todos.limiter.rate_limit_per_session", fmt.Errorf("must be >= 0"))
 	}
 
-	var errs criterio.FieldErrorsBuilder
+	if len(c.Todos.Actions) == 0 {
+		return errs.ToError()
+	}
 	for scheme, tmplStr := range c.Todos.Actions {
 		field := fmt.Sprintf("todos.actions[%q]", scheme)
 		normalized := strings.ToLower(scheme)

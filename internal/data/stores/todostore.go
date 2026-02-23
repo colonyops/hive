@@ -21,15 +21,9 @@ func NewTodoStore(db *db.DB) *TodoStore {
 	return &TodoStore{db: db}
 }
 
-// Create persists a new todo item after validating enum fields.
+// Create persists a new todo item.
+// Callers must use todo.NewTodo to guarantee valid enum fields.
 func (s *TodoStore) Create(ctx context.Context, t todo.Todo) error {
-	if _, err := todo.ParseSource(string(t.Source)); err != nil {
-		return fmt.Errorf("invalid source %q: %w", t.Source, err)
-	}
-	if _, err := todo.ParseStatus(string(t.Status)); err != nil {
-		return fmt.Errorf("invalid status %q: %w", t.Status, err)
-	}
-
 	err := s.db.Queries().CreateTodoItem(ctx, db.CreateTodoItemParams{
 		ID:        t.ID,
 		SessionID: t.SessionID,

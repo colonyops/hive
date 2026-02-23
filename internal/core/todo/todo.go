@@ -1,6 +1,9 @@
 package todo
 
-import "time"
+import (
+	"fmt"
+	"time"
+)
 
 // Source identifies who created the todo.
 //
@@ -36,4 +39,33 @@ type Todo struct {
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
 	CompletedAt time.Time `json:"completed_at,omitzero"`
+}
+
+// NewTodo creates a validated Todo with defaults for status and timestamps.
+// ID and title are required. Source must be a valid enum value.
+// If uri is non-empty, it must have a scheme.
+func NewTodo(id, title string, source Source, uri Ref) (Todo, error) {
+	if id == "" {
+		return Todo{}, fmt.Errorf("todo ID is required")
+	}
+	if title == "" {
+		return Todo{}, fmt.Errorf("todo title is required")
+	}
+	if !source.IsValid() {
+		return Todo{}, fmt.Errorf("invalid source %q", source)
+	}
+	if !uri.IsEmpty() && !uri.Valid() {
+		return Todo{}, fmt.Errorf("invalid URI %q: must use scheme://value format", uri.String())
+	}
+
+	now := time.Now()
+	return Todo{
+		ID:        id,
+		Source:    source,
+		Title:     title,
+		URI:       uri,
+		Status:    StatusPending,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}, nil
 }
