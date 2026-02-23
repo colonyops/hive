@@ -68,6 +68,18 @@ type Session struct {
 	UpdatedAt int64          `json:"updated_at"`
 }
 
+type TodoItem struct {
+	ID          string `json:"id"`
+	SessionID   string `json:"session_id"`
+	Source      string `json:"source"`
+	Title       string `json:"title"`
+	Uri         string `json:"uri"`
+	Status      string `json:"status"`
+	CreatedAt   int64  `json:"created_at"`
+	UpdatedAt   int64  `json:"updated_at"`
+	CompletedAt int64  `json:"completed_at"`
+}
+
 type Topic struct {
 	Name      string      `json:"name"`
 	UpdatedAt interface{} `json:"updated_at"`

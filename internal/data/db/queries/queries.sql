@@ -180,3 +180,31 @@ SELECT key, value, expires_at, created_at, updated_at FROM kv_store WHERE key = 
 
 -- name: KVSweepExpired :exec
 DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?;
+
+-- name: CreateTodoItem :exec
+INSERT INTO todo_items (id, session_id, source, title, uri, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: GetTodoItem :one
+SELECT * FROM todo_items WHERE id = ?;
+
+-- name: UpdateTodoItemStatus :exec
+UPDATE todo_items SET status = ?, updated_at = ?, completed_at = ? WHERE id = ?;
+
+-- name: ListTodoItems :many
+SELECT * FROM todo_items ORDER BY created_at DESC;
+
+-- name: ListTodoItemsByStatus :many
+SELECT * FROM todo_items WHERE status = ? ORDER BY created_at DESC;
+
+-- name: CountPendingTodoItems :one
+SELECT COUNT(*) FROM todo_items WHERE status = 'pending';
+
+-- name: CountOpenTodoItems :one
+SELECT COUNT(*) FROM todo_items WHERE status IN ('pending', 'acknowledged');
+
+-- name: CountRecentTodoItemsBySession :one
+SELECT COUNT(*) FROM todo_items WHERE session_id = ? AND created_at > ?;
+
+-- name: DeleteTodoItem :exec
+DELETE FROM todo_items WHERE id = ?;

@@ -138,13 +138,13 @@ func TestMigrateDown(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Revert the last migration (kv_store).
+	// Revert the last migration (todo_items).
 	err = MigrateDown(ctx, conn, 1)
 	require.NoError(t, err)
 
-	// kv_store table should be gone.
-	_, err = conn.ExecContext(ctx, "SELECT 1 FROM kv_store LIMIT 0")
-	require.Error(t, err, "kv_store should not exist after down migration")
+	// todo_items table should be gone.
+	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
+	require.Error(t, err, "todo_items should not exist after down migration")
 
 	// sessions table should still exist.
 	var count int

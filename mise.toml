@@ -18,9 +18,12 @@ HIVE_LOG_FILE = "./dev.log"
 
 [tasks."generate:enums"]
 description = "Generate enum methods using go-enum"
-sources = ["internal/core/action/type.go"]
-outputs = ["internal/core/action/type_enum.go"]
-run = "go-enum --nocase --names --marshal -f internal/core/action/type.go"
+sources = ["internal/core/action/type.go", "internal/core/todo/todo.go"]
+outputs = ["internal/core/action/type_enum.go", "internal/core/todo/todo_enum.go"]
+run = [
+  "go-enum --nocase --names --marshal -f internal/core/action/type.go",
+  "go-enum --nocase --names --marshal -f internal/core/todo/todo.go",
+]
 
 [tasks.generate]
 description = "Run all code generators"
