@@ -11,43 +11,6 @@ import (
 )
 
 const (
-	// CategoryReview is a Category of type review.
-	CategoryReview Category = "review"
-	// CategoryCodeReview is a Category of type code-review.
-	CategoryCodeReview Category = "code-review"
-	// CategoryDone is a Category of type done.
-	CategoryDone Category = "done"
-)
-
-var ErrInvalidCategory = errors.New("not a valid Category")
-
-// String implements the Stringer interface.
-func (x Category) String() string {
-	return string(x)
-}
-
-// IsValid provides a quick way to determine if the typed value is
-// part of the allowed enumerated values
-func (x Category) IsValid() bool {
-	_, err := ParseCategory(string(x))
-	return err == nil
-}
-
-var _CategoryValue = map[string]Category{
-	"review":      CategoryReview,
-	"code-review": CategoryCodeReview,
-	"done":        CategoryDone,
-}
-
-// ParseCategory attempts to convert a string to a Category.
-func ParseCategory(name string) (Category, error) {
-	if x, ok := _CategoryValue[name]; ok {
-		return x, nil
-	}
-	return Category(""), fmt.Errorf("%s is %w", name, ErrInvalidCategory)
-}
-
-const (
 	// SourceAgent is a Source of type agent.
 	SourceAgent Source = "agent"
 	// SourceHuman is a Source of type human.

@@ -17,10 +17,9 @@ type TodoCmd struct {
 	app   *hive.App
 
 	// add flags
-	addCategory string
-	addTitle    string
-	addRef      string
-	addSource   string
+	addTitle  string
+	addURI    string
+	addSource string
 
 	// update flags
 	updateStatus string
@@ -59,26 +58,19 @@ func (cmd *TodoCmd) addCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "add",
 		Usage:     "Create a new todo item",
-		UsageText: "hive todo add --category <category> --title <title> [--ref <ref>] [--source <source>]",
+		UsageText: "hive todo add --title <title> [--uri <uri>] [--source <source>]",
 		Description: `Creates a new todo item for operator attention.
 
-Categories:
-  review       - Document or artifact needs review
-  code-review  - Code changes need review
-  done         - Agent has finished work
+URI format: scheme://value (e.g., review://doc.md, session://abc123, https://example.com)
+
+If no --uri is provided and a session is detected, auto-generates session://<id>.
 
 Examples:
-  hive todo add --category review --title "Review API research" --ref ".hive/research/api.md"
-  hive todo add --category code-review --title "Review auth changes"
-  hive todo add --category done --title "Completed database migration"`,
+  hive todo add --title "Review API research" --uri "review://.hive/research/api.md"
+  hive todo add --title "Review auth changes" --uri "code-review://pr/123"
+  hive todo add --title "Check docs" --uri "https://example.com/docs"
+  hive todo add --title "Completed migration"`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "category",
-				Aliases:     []string{"c"},
-				Usage:       "todo category (review, code-review, done)",
-				Required:    true,
-				Destination: &cmd.addCategory,
-			},
 			&cli.StringFlag{
 				Name:        "title",
 				Aliases:     []string{"t"},
@@ -87,10 +79,10 @@ Examples:
 				Destination: &cmd.addTitle,
 			},
 			&cli.StringFlag{
-				Name:        "ref",
-				Aliases:     []string{"r"},
-				Usage:       "reference path or URI",
-				Destination: &cmd.addRef,
+				Name:        "uri",
+				Aliases:     []string{"u"},
+				Usage:       "URI in scheme://value format",
+				Destination: &cmd.addURI,
 			},
 			&cli.StringFlag{
 				Name:        "source",
@@ -153,13 +145,6 @@ Examples:
 }
 
 func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
-	// Validate category
-	cat, err := todo.ParseCategory(cmd.addCategory)
-	if err != nil {
-		return fmt.Errorf("invalid category %q: valid values are review, code-review, done", cmd.addCategory)
-	}
-
-	// Validate source
 	src, err := todo.ParseSource(cmd.addSource)
 	if err != nil {
 		return fmt.Errorf("invalid source %q: valid values are agent, human, system", cmd.addSource)
@@ -168,19 +153,26 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	// Auto-detect session ID (best-effort)
 	sessionID, _ := cmd.app.Sessions.DetectSession(ctx)
 
-	// Auto-set ref to session ID for "done" category if not explicitly provided
-	ref := cmd.addRef
-	if ref == "" && cat == todo.CategoryDone && sessionID != "" {
-		ref = sessionID
+	// Determine URI
+	uri := cmd.addURI
+	if uri == "" && sessionID != "" {
+		uri = "session://" + sessionID
+	}
+
+	var ref todo.Ref
+	if uri != "" {
+		ref = todo.ParseRef(uri)
+		if !ref.Valid() {
+			return fmt.Errorf("invalid URI %q: must use scheme://value format", uri)
+		}
 	}
 
 	td := todo.Todo{
 		ID:        randid.Generate(8),
 		SessionID: sessionID,
 		Source:    src,
-		Category:  cat,
 		Title:     cmd.addTitle,
-		Ref:       ref,
+		URI:       ref,
 	}
 
 	if err := cmd.app.Todos.Add(ctx, td); err != nil {

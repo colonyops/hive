@@ -518,8 +518,28 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.todoOpenCount = msg.openCount
 		model, cmd = m, nil
 	case todoCreatedMsg:
-		m.notifyBus.Infof("New %s: %s", msg.payload.Todo.Category, msg.payload.Todo.Title)
+		scheme := msg.payload.Todo.URI.Scheme
+		if scheme == "" {
+			scheme = "todo"
+		}
+		m.notifyBus.Infof("New %s: %s", scheme, msg.payload.Todo.Title)
 		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated(), m.ensureToastTick())
+
+	case actionResultMsg:
+		switch {
+		case msg.Err != nil:
+			m.notifyBus.Errorf("Action failed: %v", msg.Err)
+		case m.todoService != nil:
+			if err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
+				log.Debug().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
+				m.notifyBus.Warnf("Action opened but todo not completed: %v", err)
+			} else {
+				m.notifyBus.Infof("Action completed")
+			}
+		default:
+			m.notifyBus.Infof("Action completed")
+		}
+		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.ensureToastTick())
 
 	// Input
 	case tea.KeyMsg:

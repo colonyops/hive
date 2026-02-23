@@ -567,7 +567,6 @@ func DefaultConfig() Config {
 			MaxMessages: 100,
 		},
 		Todos: TodosConfig{
-			Mode: "internal",
 			Limiter: TodosLimiterConfig{
 				MaxPending:          100,
 				RateLimitPerSession: 15 * time.Second,
@@ -664,9 +663,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Plugins.Beads.ResultsCache == 0 {
 		c.Plugins.Beads.ResultsCache = 30 * time.Second
-	}
-	if c.Todos.Mode == "" {
-		c.Todos.Mode = defaults.Todos.Mode
 	}
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{

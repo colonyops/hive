@@ -128,17 +128,16 @@ func (q *Queries) CreateReviewSession(ctx context.Context, arg CreateReviewSessi
 
 const createTodoItem = `-- name: CreateTodoItem :exec
 
-INSERT INTO todo_items (id, session_id, source, category, title, ref, status, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO todo_items (id, session_id, source, title, uri, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 `
 
 type CreateTodoItemParams struct {
 	ID        string `json:"id"`
 	SessionID string `json:"session_id"`
 	Source    string `json:"source"`
-	Category  string `json:"category"`
 	Title     string `json:"title"`
-	Ref       string `json:"ref"`
+	Uri       string `json:"uri"`
 	Status    string `json:"status"`
 	CreatedAt int64  `json:"created_at"`
 	UpdatedAt int64  `json:"updated_at"`
@@ -150,9 +149,8 @@ func (q *Queries) CreateTodoItem(ctx context.Context, arg CreateTodoItemParams) 
 		arg.ID,
 		arg.SessionID,
 		arg.Source,
-		arg.Category,
 		arg.Title,
-		arg.Ref,
+		arg.Uri,
 		arg.Status,
 		arg.CreatedAt,
 		arg.UpdatedAt,
@@ -401,7 +399,7 @@ func (q *Queries) GetSession(ctx context.Context, id string) (Session, error) {
 }
 
 const getTodoItem = `-- name: GetTodoItem :one
-SELECT id, session_id, source, category, title, ref, status, created_at, updated_at, completed_at FROM todo_items WHERE id = ?
+SELECT id, session_id, source, title, uri, status, created_at, updated_at, completed_at FROM todo_items WHERE id = ?
 `
 
 func (q *Queries) GetTodoItem(ctx context.Context, id string) (TodoItem, error) {
@@ -411,9 +409,8 @@ func (q *Queries) GetTodoItem(ctx context.Context, id string) (TodoItem, error) 
 		&i.ID,
 		&i.SessionID,
 		&i.Source,
-		&i.Category,
 		&i.Title,
-		&i.Ref,
+		&i.Uri,
 		&i.Status,
 		&i.CreatedAt,
 		&i.UpdatedAt,
@@ -714,7 +711,7 @@ func (q *Queries) ListSessions(ctx context.Context) ([]Session, error) {
 }
 
 const listTodoItems = `-- name: ListTodoItems :many
-SELECT id, session_id, source, category, title, ref, status, created_at, updated_at, completed_at FROM todo_items ORDER BY created_at DESC
+SELECT id, session_id, source, title, uri, status, created_at, updated_at, completed_at FROM todo_items ORDER BY created_at DESC
 `
 
 func (q *Queries) ListTodoItems(ctx context.Context) ([]TodoItem, error) {
@@ -730,9 +727,8 @@ func (q *Queries) ListTodoItems(ctx context.Context) ([]TodoItem, error) {
 			&i.ID,
 			&i.SessionID,
 			&i.Source,
-			&i.Category,
 			&i.Title,
-			&i.Ref,
+			&i.Uri,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,
@@ -752,7 +748,7 @@ func (q *Queries) ListTodoItems(ctx context.Context) ([]TodoItem, error) {
 }
 
 const listTodoItemsByStatus = `-- name: ListTodoItemsByStatus :many
-SELECT id, session_id, source, category, title, ref, status, created_at, updated_at, completed_at FROM todo_items WHERE status = ? ORDER BY created_at DESC
+SELECT id, session_id, source, title, uri, status, created_at, updated_at, completed_at FROM todo_items WHERE status = ? ORDER BY created_at DESC
 `
 
 func (q *Queries) ListTodoItemsByStatus(ctx context.Context, status string) ([]TodoItem, error) {
@@ -768,9 +764,8 @@ func (q *Queries) ListTodoItemsByStatus(ctx context.Context, status string) ([]T
 			&i.ID,
 			&i.SessionID,
 			&i.Source,
-			&i.Category,
 			&i.Title,
-			&i.Ref,
+			&i.Uri,
 			&i.Status,
 			&i.CreatedAt,
 			&i.UpdatedAt,

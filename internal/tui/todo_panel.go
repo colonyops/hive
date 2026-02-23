@@ -158,8 +158,11 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 		statusIcon = styles.TextMutedStyle.Render("⊘")
 	}
 
-	// Category tag
-	cat := styles.TextMutedStyle.Render("[" + string(item.Category) + "]")
+	// Scheme tag
+	scheme := ""
+	if !item.URI.IsEmpty() {
+		scheme = styles.TextMutedStyle.Render("[" + item.URI.Scheme + "]")
+	}
 
 	// Title
 	title := item.Title
@@ -173,15 +176,15 @@ func (p *TodoPanel) formatItem(item todo.Todo, selected bool, maxWidth int) stri
 		cursor = styles.TextPrimaryStyle.Render("▸ ")
 	}
 
-	line := fmt.Sprintf("%s%s %s %s", cursor, statusIcon, cat, title)
+	line := fmt.Sprintf("%s%s %s %s", cursor, statusIcon, scheme, title)
 
-	// Add ref if present (truncated)
-	if item.Ref != "" {
-		ref := item.Ref
-		if len(ref) > 40 {
-			ref = ref[:37] + "..."
+	// Add URI value if present (truncated)
+	if !item.URI.IsEmpty() && item.URI.Value != "" {
+		val := item.URI.Value
+		if len(val) > 40 {
+			val = val[:37] + "..."
 		}
-		line += " " + styles.TextMutedStyle.Render(ref)
+		line += " " + styles.TextMutedStyle.Render(val)
 	}
 
 	// Truncate to max width using ANSI-aware truncation

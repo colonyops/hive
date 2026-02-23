@@ -2,6 +2,7 @@ package config
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/hay-kot/criterio"
@@ -9,51 +10,53 @@ import (
 
 // TodosConfig holds configuration for the human todo system.
 type TodosConfig struct {
-	Mode          string             `yaml:"mode"` // "internal" (default) or "export-only"
+	Actions       map[string]string  `yaml:"actions"` // scheme -> command template
 	Limiter       TodosLimiterConfig `yaml:"limiter"`
-	Export        TodosExportConfig  `yaml:"export"`
 	Notifications TodosNotifyConfig  `yaml:"notifications"`
 }
 
 // TodosLimiterConfig holds rate limiting settings for todo creation.
 type TodosLimiterConfig struct {
-	MaxPending          int           `yaml:"max_pending"`            // default: 100
-	RateLimitPerSession time.Duration `yaml:"rate_limit_per_session"` // default: 15s
-}
-
-// TodosExportConfig holds markdown export settings.
-type TodosExportConfig struct {
-	Enabled  bool               `yaml:"enabled"`
-	Path     string             `yaml:"path"`     // file path for markdown export
-	Markers  TodosExportMarkers `yaml:"markers"`  // optional bounded section markers
-	Template string             `yaml:"template"` // optional Go template file path
-}
-
-// TodosExportMarkers defines the start and end markers for bounded section replacement.
-type TodosExportMarkers struct {
-	Start string `yaml:"start"` // e.g., "<!-- hive:todos:start -->"
-	End   string `yaml:"end"`   // e.g., "<!-- hive:todos:end -->"
+	MaxPending          int           `yaml:"max_pending"`
+	RateLimitPerSession time.Duration `yaml:"rate_limit_per_session"`
 }
 
 // TodosNotifyConfig holds notification settings for the todo system.
 type TodosNotifyConfig struct {
-	Toast bool `yaml:"toast"` // default: true
+	Toast bool `yaml:"toast"`
+}
+
+// ActionTemplateData provides template variables for custom action templates.
+type ActionTemplateData struct {
+	Scheme string
+	Value  string
+	URI    string
+}
+
+var builtinSchemes = map[string]bool{
+	"session": true,
+	"review":  true,
+	"http":    true,
+	"https":   true,
 }
 
 // validateTodos checks that the todo configuration is valid.
 func (c *Config) validateTodos() error {
-	return criterio.ValidateStruct(
-		criterio.Run("todos.mode", c.Todos.Mode, criterio.StrOneOf("internal", "export-only")),
-		c.validateTodosExport(),
-	)
-}
-
-func (c *Config) validateTodosExport() error {
-	if c.Todos.Mode == "export-only" && !c.Todos.Export.Enabled {
-		return criterio.NewFieldErrors("todos.mode", fmt.Errorf("export-only mode requires export to be enabled"))
-	}
-	if !c.Todos.Export.Enabled {
+	if len(c.Todos.Actions) == 0 {
 		return nil
 	}
-	return criterio.Run("todos.export.path", c.Todos.Export.Path, criterio.Required[string])
+
+	var errs criterio.FieldErrorsBuilder
+	for scheme, tmplStr := range c.Todos.Actions {
+		field := fmt.Sprintf("todos.actions[%q]", scheme)
+		normalized := strings.ToLower(scheme)
+		if builtinSchemes[normalized] {
+			errs = errs.Append(field, fmt.Errorf("cannot override built-in scheme %q", normalized))
+			continue
+		}
+		if err := validateTemplate(tmplStr, ActionTemplateData{}); err != nil {
+			errs = errs.Append(field, fmt.Errorf("invalid template: %w", err))
+		}
+	}
+	return errs.ToError()
 }

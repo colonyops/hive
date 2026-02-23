@@ -184,8 +184,8 @@ DELETE FROM kv_store WHERE expires_at IS NOT NULL AND expires_at < ?;
 -- Todo Items
 
 -- name: CreateTodoItem :exec
-INSERT INTO todo_items (id, session_id, source, category, title, ref, status, created_at, updated_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+INSERT INTO todo_items (id, session_id, source, title, uri, status, created_at, updated_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?);
 
 -- name: GetTodoItem :one
 SELECT * FROM todo_items WHERE id = ?;

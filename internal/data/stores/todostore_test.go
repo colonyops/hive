@@ -17,9 +17,8 @@ func newTestTodo(id string) todo.Todo {
 		ID:        id,
 		SessionID: "sess-1",
 		Source:    todo.SourceAgent,
-		Category:  todo.CategoryReview,
 		Title:     "Test todo " + id,
-		Ref:       "test.md",
+		URI:       todo.ParseRef("review://test.md"),
 		Status:    todo.StatusPending,
 		CreatedAt: now,
 		UpdatedAt: now,
@@ -44,9 +43,8 @@ func TestTodoStore(t *testing.T) {
 		assert.Equal(t, "t1", got.ID)
 		assert.Equal(t, "sess-1", got.SessionID)
 		assert.Equal(t, todo.SourceAgent, got.Source)
-		assert.Equal(t, todo.CategoryReview, got.Category)
 		assert.Equal(t, "Test todo t1", got.Title)
-		assert.Equal(t, "test.md", got.Ref)
+		assert.Equal(t, todo.ParseRef("review://test.md"), got.URI)
 		assert.Equal(t, todo.StatusPending, got.Status)
 		assert.True(t, got.CompletedAt.IsZero())
 	})
@@ -63,20 +61,6 @@ func TestTodoStore(t *testing.T) {
 		err = store.Create(ctx, td)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid source")
-	})
-
-	t.Run("create rejects invalid category", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err)
-		defer func() { _ = database.Close() }()
-
-		store := NewTodoStore(database)
-		td := newTestTodo("t1")
-		td.Category = "invalid"
-
-		err = store.Create(ctx, td)
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid category")
 	})
 
 	t.Run("update status to completed", func(t *testing.T) {
@@ -175,6 +159,26 @@ func TestTodoStore(t *testing.T) {
 		require.NoError(t, store.Create(ctx, td2))
 
 		items, err := store.List(ctx, todo.ListFilter{SessionID: "sess-a"})
+		require.NoError(t, err)
+		require.Len(t, items, 1)
+		assert.Equal(t, "t1", items[0].ID)
+	})
+
+	t.Run("list by scheme", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		store := NewTodoStore(database)
+
+		td1 := newTestTodo("t1")
+		td1.URI = todo.ParseRef("review://doc.md")
+		td2 := newTestTodo("t2")
+		td2.URI = todo.ParseRef("session://sess-1")
+		require.NoError(t, store.Create(ctx, td1))
+		require.NoError(t, store.Create(ctx, td2))
+
+		items, err := store.List(ctx, todo.ListFilter{Scheme: "review"})
 		require.NoError(t, err)
 		require.Len(t, items, 1)
 		assert.Equal(t, "t1", items[0].ID)

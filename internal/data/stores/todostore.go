@@ -26,9 +26,6 @@ func (s *TodoStore) Create(ctx context.Context, t todo.Todo) error {
 	if _, err := todo.ParseSource(string(t.Source)); err != nil {
 		return fmt.Errorf("invalid source %q: %w", t.Source, err)
 	}
-	if _, err := todo.ParseCategory(string(t.Category)); err != nil {
-		return fmt.Errorf("invalid category %q: %w", t.Category, err)
-	}
 	if _, err := todo.ParseStatus(string(t.Status)); err != nil {
 		return fmt.Errorf("invalid status %q: %w", t.Status, err)
 	}
@@ -37,9 +34,8 @@ func (s *TodoStore) Create(ctx context.Context, t todo.Todo) error {
 		ID:        t.ID,
 		SessionID: t.SessionID,
 		Source:    string(t.Source),
-		Category:  string(t.Category),
 		Title:     t.Title,
-		Ref:       t.Ref,
+		Uri:       t.URI.String(),
 		Status:    string(t.Status),
 		CreatedAt: t.CreatedAt.UnixNano(),
 		UpdatedAt: t.UpdatedAt.UnixNano(),
@@ -101,7 +97,7 @@ func (s *TodoStore) List(ctx context.Context, filter todo.ListFilter) ([]todo.To
 		if filter.SessionID != "" && t.SessionID != filter.SessionID {
 			continue
 		}
-		if filter.Category != nil && t.Category != *filter.Category {
+		if filter.Scheme != "" && t.URI.Scheme != filter.Scheme {
 			continue
 		}
 
@@ -154,9 +150,8 @@ func rowToTodo(row db.TodoItem) todo.Todo {
 		ID:        row.ID,
 		SessionID: row.SessionID,
 		Source:    todo.Source(row.Source),
-		Category:  todo.Category(row.Category),
 		Title:     row.Title,
-		Ref:       row.Ref,
+		URI:       todo.ParseRef(row.Uri),
 		Status:    todo.Status(row.Status),
 		CreatedAt: time.Unix(0, row.CreatedAt),
 		UpdatedAt: time.Unix(0, row.UpdatedAt),

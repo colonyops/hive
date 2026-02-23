@@ -13,40 +13,30 @@ import (
 
 // TodoService orchestrates todo operations with rate limiting and event publishing.
 type TodoService struct {
-	store    todo.Store
-	limiter  *TodoLimiter
-	bus      *eventbus.EventBus
-	exporter *TodoExporter
-	mode     string
-	logger   zerolog.Logger
+	store   todo.Store
+	limiter *TodoLimiter
+	bus     *eventbus.EventBus
+	logger  zerolog.Logger
 }
 
 // NewTodoService creates a new TodoService.
 func NewTodoService(store todo.Store, bus *eventbus.EventBus, cfg *config.Config, logger zerolog.Logger) *TodoService {
-	svc := &TodoService{
+	return &TodoService{
 		store:   store,
 		limiter: NewTodoLimiter(store, cfg.Todos.Limiter),
 		bus:     bus,
-		mode:    cfg.Todos.Mode,
 		logger:  logger.With().Str("component", "todo").Logger(),
 	}
-
-	if cfg.Todos.Export.Enabled {
-		exp, err := NewTodoExporter(cfg.Todos.Export, logger)
-		if err != nil {
-			logger.Warn().Err(err).Msg("failed to initialize todo exporter, export disabled")
-		} else {
-			svc.exporter = exp
-		}
-	}
-
-	return svc
 }
 
 // Add creates a new todo item after passing limiter checks.
 func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
 	if err := s.limiter.Check(ctx, t); err != nil {
 		return fmt.Errorf("todo rejected: %w", err)
+	}
+
+	if !t.URI.IsEmpty() && !t.URI.Valid() {
+		return fmt.Errorf("invalid URI %q: must use scheme://value format", t.URI.String())
 	}
 
 	now := time.Now()
@@ -60,24 +50,9 @@ func (s *TodoService) Add(ctx context.Context, t todo.Todo) error {
 
 	s.bus.PublishTodoCreated(eventbus.TodoCreatedPayload{Todo: t})
 
-	// Export if enabled
-	if s.exporter != nil {
-		if err := s.exporter.Export([]todo.Todo{t}); err != nil {
-			s.logger.Warn().Err(err).Str("id", t.ID).Msg("failed to export todo")
-			if s.mode == "export-only" {
-				return fmt.Errorf("export todo: %w", err)
-			}
-		} else if s.mode == "export-only" {
-			// Auto-finalize after successful export
-			if err := s.store.Update(ctx, t.ID, todo.StatusCompleted); err != nil {
-				s.logger.Warn().Err(err).Str("id", t.ID).Msg("failed to auto-finalize exported todo")
-			}
-		}
-	}
-
 	s.logger.Info().
 		Str("id", t.ID).
-		Str("category", string(t.Category)).
+		Str("uri", t.URI.String()).
 		Str("session_id", t.SessionID).
 		Msg("todo created")
 
@@ -126,9 +101,4 @@ func (s *TodoService) CountPending(ctx context.Context) (int, error) {
 // CountOpen returns the number of open (pending + acknowledged) todo items.
 func (s *TodoService) CountOpen(ctx context.Context) (int, error) {
 	return s.store.CountOpen(ctx)
-}
-
-// Mode returns the configured todo mode ("internal" or "export-only").
-func (s *TodoService) Mode() string {
-	return s.mode
 }

@@ -3,6 +3,8 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	"charm.land/bubbles/v2/spinner"
@@ -16,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
+	"github.com/colonyops/hive/pkg/tmpl"
 )
 
 // --- Window ---
@@ -332,28 +335,36 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		if item == nil {
 			return m, nil
 		}
-		if item.Ref == "" {
-			m.notifyBus.Infof("no document ref on this todo")
+		if item.URI.IsEmpty() {
+			m.notifyBus.Infof("no URI on this todo")
 			return m, m.ensureToastTick()
 		}
-
-		// "done" category todos complete on open — viewing the session is the action
-		if item.Category == todo.CategoryDone {
+		switch item.URI.Scheme {
+		case "session":
 			if err := m.modals.TodoPanel.CompleteCurrent(); err != nil {
 				return m, m.notifyError("complete todo: %v", err)
 			}
 			return m, nil
-		}
-
-		// Review/code-review todos open in review mode (completion on finalize)
-		if m.reviewView != nil {
-			m.state = stateNormal
-			m.todoUnseenCount = 0
-			m.todoOpenCount = m.modals.TodoPanel.OpenCount()
-			m.modals.DismissTodoPanel()
-			m.activeView = ViewReview
-			m.handler.SetActiveView(ViewReview)
-			return m, m.reviewView.OpenDocumentByPath(item.Ref)
+		case "review":
+			if m.reviewView != nil {
+				m.state = stateNormal
+				m.todoUnseenCount = 0
+				m.todoOpenCount = m.modals.TodoPanel.OpenCount()
+				m.modals.DismissTodoPanel()
+				m.activeView = ViewReview
+				m.handler.SetActiveView(ViewReview)
+				return m, m.reviewView.OpenDocumentByPath(item.URI.Value)
+			}
+		case "http", "https":
+			return m, launchAction(item.ID, osOpenCmd(item.URI.String()))
+		default:
+			var actionCmd *exec.Cmd
+			if action, ok := m.cfg.Todos.Actions[item.URI.Scheme]; ok {
+				actionCmd = renderCustomAction(action, item.URI)
+			} else {
+				actionCmd = osOpenCmd(item.URI.String())
+			}
+			return m, launchAction(item.ID, actionCmd)
 		}
 	case "tab":
 		m.modals.TodoPanel.CycleFilter()
@@ -369,7 +380,7 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// completeTodosMatchingRef completes all open todos whose ref matches any of the given paths.
+// completeTodosMatchingRef completes all open review todos whose URI value matches any of the given paths.
 func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
@@ -382,11 +393,11 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 			if item.Status != todo.StatusPending && item.Status != todo.StatusAcknowledged {
 				continue
 			}
-			if item.Ref == "" {
+			if item.URI.Scheme != "review" {
 				continue
 			}
 			for _, p := range paths {
-				if p != "" && (item.Ref == p || strings.HasSuffix(p, "/"+item.Ref) || strings.HasSuffix(item.Ref, "/"+p)) {
+				if p != "" && (item.URI.Value == p || strings.HasSuffix(p, "/"+item.URI.Value) || strings.HasSuffix(item.URI.Value, "/"+p)) {
 					if err := m.todoService.Complete(ctx, item.ID); err != nil {
 						log.Debug().Err(err).Str("id", item.ID).Msg("failed to auto-complete todo")
 					}
@@ -584,4 +595,48 @@ func (m Model) selectedSession() *session.Session {
 		return nil
 	}
 	return m.sessionsView.SelectedSession()
+}
+
+// --- Todo action helpers ---
+
+// actionResultMsg is returned when an external todo action completes.
+type actionResultMsg struct {
+	TodoID string
+	Err    error
+}
+
+func launchAction(todoID string, cmd *exec.Cmd) tea.Cmd {
+	return func() tea.Msg {
+		err := cmd.Run()
+		return actionResultMsg{TodoID: todoID, Err: err}
+	}
+}
+
+func osOpenCmd(uri string) *exec.Cmd {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", uri)
+	default:
+		return exec.Command("xdg-open", uri)
+	}
+}
+
+// ActionTemplateData provides template variables for custom action templates.
+type ActionTemplateData struct {
+	Scheme string
+	Value  string
+	URI    string
+}
+
+func renderCustomAction(tmplStr string, ref todo.Ref) *exec.Cmd {
+	renderer := tmpl.New(tmpl.Config{})
+	rendered, err := renderer.Render(tmplStr, ActionTemplateData{
+		Scheme: ref.Scheme,
+		Value:  ref.Value,
+		URI:    ref.String(),
+	})
+	if err != nil {
+		return exec.Command("false")
+	}
+	return exec.Command("sh", "-c", rendered)
 }

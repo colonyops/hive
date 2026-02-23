@@ -31,9 +31,7 @@ func validConfig(t *testing.T) *Config {
 			MaxIdleConns: 2,
 			BusyTimeout:  5000,
 		},
-		Todos: TodosConfig{
-			Mode: "internal",
-		},
+		Todos: TodosConfig{},
 	}
 }
 

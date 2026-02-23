@@ -13,17 +13,6 @@ import "time"
 // )
 type Source string
 
-// Category defines the type of operator action needed.
-//
-// ENUM(
-//
-//	review
-//	code-review
-//	done
-//
-// )
-type Category string
-
 // Status tracks the lifecycle of a todo item.
 //
 // ENUM(
@@ -41,9 +30,8 @@ type Todo struct {
 	ID          string    `json:"id"`
 	SessionID   string    `json:"session_id"`
 	Source      Source    `json:"source"`
-	Category    Category  `json:"category"`
 	Title       string    `json:"title"`
-	Ref         string    `json:"ref"`
+	URI         Ref       `json:"uri"`
 	Status      Status    `json:"status"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
