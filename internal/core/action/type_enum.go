@@ -6,8 +6,8 @@
 package action
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -61,7 +61,41 @@ const (
 	TypeTodos Type = "Todos"
 )
 
-var ErrInvalidType = errors.New("not a valid Type")
+var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
+
+var _TypeNames = []string{
+	string(TypeNone),
+	string(TypeRecycle),
+	string(TypeDelete),
+	string(TypeShell),
+	string(TypeTmuxOpen),
+	string(TypeTmuxStart),
+	string(TypeFilterAll),
+	string(TypeFilterActive),
+	string(TypeFilterApproval),
+	string(TypeFilterReady),
+	string(TypeDocReview),
+	string(TypeNewSession),
+	string(TypeSetTheme),
+	string(TypeNotifications),
+	string(TypeRenameSession),
+	string(TypeNextActive),
+	string(TypePrevActive),
+	string(TypeDeleteRecycledBatch),
+	string(TypeSpawnWindows),
+	string(TypeHiveInfo),
+	string(TypeHiveDoctor),
+	string(TypeGroupSet),
+	string(TypeGroupToggle),
+	string(TypeTodos),
+}
+
+// TypeNames returns a list of possible string values of Type.
+func TypeNames() []string {
+	tmp := make([]string, len(_TypeNames))
+	copy(tmp, _TypeNames)
+	return tmp
+}
 
 // String implements the Stringer interface.
 func (x Type) String() string {
@@ -77,29 +111,53 @@ func (x Type) IsValid() bool {
 
 var _TypeValue = map[string]Type{
 	"None":                TypeNone,
+	"none":                TypeNone,
 	"Recycle":             TypeRecycle,
+	"recycle":             TypeRecycle,
 	"Delete":              TypeDelete,
+	"delete":              TypeDelete,
 	"Shell":               TypeShell,
+	"shell":               TypeShell,
 	"TmuxOpen":            TypeTmuxOpen,
+	"tmuxopen":            TypeTmuxOpen,
 	"TmuxStart":           TypeTmuxStart,
+	"tmuxstart":           TypeTmuxStart,
 	"FilterAll":           TypeFilterAll,
+	"filterall":           TypeFilterAll,
 	"FilterActive":        TypeFilterActive,
+	"filteractive":        TypeFilterActive,
 	"FilterApproval":      TypeFilterApproval,
+	"filterapproval":      TypeFilterApproval,
 	"FilterReady":         TypeFilterReady,
+	"filterready":         TypeFilterReady,
 	"DocReview":           TypeDocReview,
+	"docreview":           TypeDocReview,
 	"NewSession":          TypeNewSession,
+	"newsession":          TypeNewSession,
 	"SetTheme":            TypeSetTheme,
+	"settheme":            TypeSetTheme,
 	"Notifications":       TypeNotifications,
+	"notifications":       TypeNotifications,
 	"RenameSession":       TypeRenameSession,
+	"renamesession":       TypeRenameSession,
 	"NextActive":          TypeNextActive,
+	"nextactive":          TypeNextActive,
 	"PrevActive":          TypePrevActive,
+	"prevactive":          TypePrevActive,
 	"DeleteRecycledBatch": TypeDeleteRecycledBatch,
+	"deleterecycledbatch": TypeDeleteRecycledBatch,
 	"SpawnWindows":        TypeSpawnWindows,
+	"spawnwindows":        TypeSpawnWindows,
 	"HiveInfo":            TypeHiveInfo,
+	"hiveinfo":            TypeHiveInfo,
 	"HiveDoctor":          TypeHiveDoctor,
+	"hivedoctor":          TypeHiveDoctor,
 	"GroupSet":            TypeGroupSet,
+	"groupset":            TypeGroupSet,
 	"GroupToggle":         TypeGroupToggle,
+	"grouptoggle":         TypeGroupToggle,
 	"Todos":               TypeTodos,
+	"todos":               TypeTodos,
 }
 
 // ParseType attempts to convert a string to a Type.
@@ -107,5 +165,32 @@ func ParseType(name string) (Type, error) {
 	if x, ok := _TypeValue[name]; ok {
 		return x, nil
 	}
+	// Case insensitive parse, do a separate lookup to prevent unnecessary cost of lowercasing a string if we don't need to.
+	if x, ok := _TypeValue[strings.ToLower(name)]; ok {
+		return x, nil
+	}
 	return Type(""), fmt.Errorf("%s is %w", name, ErrInvalidType)
+}
+
+// MarshalText implements the text marshaller method.
+func (x Type) MarshalText() ([]byte, error) {
+	return []byte(string(x)), nil
+}
+
+// UnmarshalText implements the text unmarshaller method.
+func (x *Type) UnmarshalText(text []byte) error {
+	tmp, err := ParseType(string(text))
+	if err != nil {
+		return err
+	}
+	*x = tmp
+	return nil
+}
+
+// AppendText appends the textual representation of itself to the end of b
+// (allocating a larger slice if necessary) and returns the updated slice.
+//
+// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+func (x *Type) AppendText(b []byte) ([]byte, error) {
+	return append(b, x.String()...), nil
 }

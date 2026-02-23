@@ -131,6 +131,18 @@ func TestValidateTodos_AllTemplateVars(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestValidateTodos_RejectsDuplicateAfterNormalization(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Todos.Actions = map[string]string{
+		"JIRA": `open-jira {{ .Value | shq }}`,
+		"jira": `open-jira {{ .Value | shq }}`,
+	}
+
+	err := cfg.validateTodos()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "duplicate scheme")
+}
+
 func TestValidateDeep_IncludesTodosValidation(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Todos.Actions = map[string]string{

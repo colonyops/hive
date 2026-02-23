@@ -60,6 +60,11 @@ func (c *Config) validateTodos() error {
 			continue
 		}
 
+		if _, exists := normalized[lower]; exists {
+			errs = errs.Append(field, fmt.Errorf("duplicate scheme %q after case normalization", lower))
+			continue
+		}
+
 		normalized[lower] = tmplStr
 	}
 
