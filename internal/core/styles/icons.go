@@ -22,7 +22,7 @@ var (
 	IconSelector = "󰅂"
 
 	IconTodoPending      = "󰄱 "
-	IconTodoAcknowledged = IconTodoPending // From a user perspecitve Acknowledged is only Different from Pending in that you see a UI notification
+	IconTodoAcknowledged = IconTodoPending // From a user perspective, acknowledged is only different from pending in that a UI notification was shown
 	IconTodoCompleted    = "󰄵 "
 	IconTodoDismissed    = "󱋭 "
 )
