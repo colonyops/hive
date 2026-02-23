@@ -287,7 +287,7 @@ func New(deps Deps, opts Opts) Model {
 			select {
 			case ch <- payload:
 			default:
-				// Drop if buffer full to avoid blocking
+				log.Debug().Str("todo_id", payload.Todo.ID).Msg("todo event dropped: channel buffer full")
 			}
 		})
 		todoCh = ch
@@ -411,18 +411,19 @@ func (m Model) listenForTodoCreated() tea.Cmd {
 }
 
 // loadTodoCounts returns a command that loads both unseen and open todo counts.
+// On error, returns nil to preserve the previous counts in the model.
 func (m Model) loadTodoCounts() tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		unseen, err := m.todoService.CountPending(ctx)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to load todo pending count")
-			unseen = 0
+			return nil
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
 			log.Debug().Err(err).Msg("failed to load todo open count")
-			open = 0
+			return nil
 		}
 		return todoCountUpdatedMsg{unseenCount: unseen, openCount: open}
 	}
@@ -531,7 +532,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.notifyBus.Errorf("Action failed: %v", msg.Err)
 		case m.todoService != nil:
 			if err := m.todoService.Complete(context.Background(), msg.TodoID); err != nil {
-				log.Debug().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
+				log.Warn().Err(err).Str("id", msg.TodoID).Msg("failed to complete todo after action")
 				m.notifyBus.Warnf("Action opened but todo not completed: %v", err)
 			} else {
 				m.notifyBus.Infof("Action completed")

@@ -8,6 +8,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
+	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -151,7 +152,10 @@ func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	}
 
 	// Auto-detect session ID (best-effort)
-	sessionID, _ := cmd.app.Sessions.DetectSession(ctx)
+	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
+	if err != nil {
+		log.Debug().Err(err).Msg("failed to detect session for todo")
+	}
 
 	// Determine URI
 	uri := cmd.addURI

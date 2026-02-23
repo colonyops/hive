@@ -360,7 +360,12 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		default:
 			var actionCmd *exec.Cmd
 			if action, ok := m.cfg.Todos.Actions[item.URI.Scheme]; ok {
-				actionCmd = renderCustomAction(action, item.URI)
+				var err error
+				actionCmd, err = renderCustomAction(action, item.URI)
+				if err != nil {
+					log.Warn().Err(err).Str("scheme", item.URI.Scheme).Msg("failed to render custom action")
+					return m, m.notifyError("render action: %v", err)
+				}
 			} else {
 				actionCmd = osOpenCmd(item.URI.String())
 			}
@@ -380,14 +385,15 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 	return m, nil
 }
 
-// completeTodosMatchingRef completes all open review todos whose URI value matches any of the given paths.
+// completeTodosMatchingRef completes all open review todos whose URI value matches any of the given paths,
+// then returns updated todo counts directly (avoiding a double loadTodoCounts invocation).
 func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 	return func() tea.Msg {
 		ctx := context.Background()
 		items, err := m.todoService.List(ctx, todo.ListFilter{})
 		if err != nil {
-			log.Debug().Err(err).Msg("failed to list todos for auto-complete")
-			return m.loadTodoCounts()()
+			log.Warn().Err(err).Msg("failed to list todos for auto-complete")
+			return nil
 		}
 		for _, item := range items {
 			if item.Status != todo.StatusPending && item.Status != todo.StatusAcknowledged {
@@ -405,7 +411,19 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 				}
 			}
 		}
-		return m.loadTodoCounts()()
+
+		// Inline count refresh instead of calling loadTodoCounts()()
+		unseen, err := m.todoService.CountPending(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to load todo pending count after auto-complete")
+			return nil
+		}
+		open, err := m.todoService.CountOpen(ctx)
+		if err != nil {
+			log.Debug().Err(err).Msg("failed to load todo open count after auto-complete")
+			return nil
+		}
+		return todoCountUpdatedMsg{unseenCount: unseen, openCount: open}
 	}
 }
 
@@ -628,7 +646,7 @@ type ActionTemplateData struct {
 	URI    string
 }
 
-func renderCustomAction(tmplStr string, ref todo.Ref) *exec.Cmd {
+func renderCustomAction(tmplStr string, ref todo.Ref) (*exec.Cmd, error) {
 	renderer := tmpl.New(tmpl.Config{})
 	rendered, err := renderer.Render(tmplStr, ActionTemplateData{
 		Scheme: ref.Scheme,
@@ -636,7 +654,7 @@ func renderCustomAction(tmplStr string, ref todo.Ref) *exec.Cmd {
 		URI:    ref.String(),
 	})
 	if err != nil {
-		return exec.Command("false")
+		return nil, fmt.Errorf("render action template: %w", err)
 	}
-	return exec.Command("sh", "-c", rendered)
+	return exec.Command("sh", "-c", rendered), nil
 }
