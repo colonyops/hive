@@ -1976,6 +1976,15 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 				break
 			}
 
+			// Check suffix match to handle stored paths that include a leading
+			// symlink component (e.g. ".hive/plans/doc.md" vs RelPath "plans/doc.md").
+			if strings.HasSuffix(ti.Document.Path, "/"+path) ||
+				strings.HasSuffix(path, "/"+ti.Document.RelPath) {
+				doc := ti.Document
+				found = &doc
+				break
+			}
+
 			// Also check basename match
 			if filepath.Base(ti.Document.Path) == filepath.Base(path) {
 				doc := ti.Document
