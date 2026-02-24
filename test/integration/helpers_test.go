@@ -57,16 +57,21 @@ func parseJSONLines(data string) ([]map[string]any, error) {
 // pollFor retries fn until it returns nil or the timeout is reached.
 func pollFor(t *testing.T, timeout time.Duration, interval time.Duration, fn func() error) {
 	t.Helper()
-	deadline := time.Now().Add(timeout)
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	deadline := time.After(timeout)
 	var lastErr error
-	for time.Now().Before(deadline) {
+	for {
 		lastErr = fn()
 		if lastErr == nil {
 			return
 		}
-		time.Sleep(interval)
+		select {
+		case <-deadline:
+			t.Fatalf("pollFor timed out after %v: %v", timeout, lastErr)
+		case <-ticker.C:
+		}
 	}
-	t.Fatalf("pollFor timed out after %v: %v", timeout, lastErr)
 }
 
 // cleanupTmuxSession registers a t.Cleanup to kill a named tmux session.

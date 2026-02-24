@@ -21,7 +21,8 @@ func TestTodoCRUD(t *testing.T) {
 	require.NoError(t, err, "parse todo add output: %s", addOut)
 	require.Len(t, lines, 1)
 
-	todoID := lines[0]["id"].(string)
+	todoID, ok := lines[0]["id"].(string)
+	require.True(t, ok, "todo missing 'id' string field: %v", lines[0])
 	assert.Equal(t, "Review docs", lines[0]["title"])
 	assert.Equal(t, "pending", lines[0]["status"])
 

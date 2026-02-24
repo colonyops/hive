@@ -3,18 +3,24 @@
 package integration
 
 import (
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"testing"
+	"time"
 )
+
+const commandTimeout = 30 * time.Second
 
 // Harness wraps hive binary invocations with isolated environment per test.
 type Harness struct {
-	t         *testing.T
-	dataDir   string
-	homeDir   string
+	t          *testing.T
+	dataDir    string
+	homeDir    string
 	configPath string
 }
 
@@ -64,6 +70,12 @@ func (h *Harness) RunStdout(args ...string) (string, error) {
 	h.t.Helper()
 	cmd := h.command(args...)
 	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			h.t.Logf("stderr from hive %v: %s", args, exitErr.Stderr)
+		}
+	}
 	return string(out), err
 }
 
@@ -73,6 +85,27 @@ func (h *Harness) RunStdoutInDir(dir string, args ...string) (string, error) {
 	cmd := h.command(args...)
 	cmd.Dir = dir
 	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			h.t.Logf("stderr from hive %v: %s", args, exitErr.Stderr)
+		}
+	}
+	return string(out), err
+}
+
+// RunWithStdin executes hive with stdin input and returns only stdout.
+func (h *Harness) RunWithStdin(input string, args ...string) (string, error) {
+	h.t.Helper()
+	cmd := h.command(args...)
+	cmd.Stdin = strings.NewReader(input)
+	out, err := cmd.Output()
+	if err != nil {
+		var exitErr *exec.ExitError
+		if errors.As(err, &exitErr) && len(exitErr.Stderr) > 0 {
+			h.t.Logf("stderr from hive %v: %s", args, exitErr.Stderr)
+		}
+	}
 	return string(out), err
 }
 
@@ -83,15 +116,25 @@ func (h *Harness) DataDir() string { return h.dataDir }
 func (h *Harness) HomeDir() string { return h.homeDir }
 
 func (h *Harness) command(args ...string) *exec.Cmd {
-	cmd := exec.Command(hiveBin, args...)
-	cmd.Env = append(os.Environ(),
-		"HIVE_DATA_DIR="+h.dataDir,
-		"HOME="+h.homeDir,
-		"HIVE_CONFIG="+h.configPath,
+	ctx, cancel := context.WithTimeout(context.Background(), commandTimeout)
+	h.t.Cleanup(cancel)
+
+	cmd := exec.CommandContext(ctx, hiveBin, args...)
+	cmd.Env = []string{
+		"PATH=" + os.Getenv("PATH"),
+		"TMPDIR=" + os.Getenv("TMPDIR"),
+		"TERM=" + os.Getenv("TERM"),
+		"HIVE_DATA_DIR=" + h.dataDir,
+		"HOME=" + h.homeDir,
+		"HIVE_CONFIG=" + h.configPath,
 		"HIVE_LOG_LEVEL=debug",
-		"HIVE_LOG_FILE="+filepath.Join(h.dataDir, "hive.log"),
+		"HIVE_LOG_FILE=" + filepath.Join(h.dataDir, "hive.log"),
 		"NO_COLOR=1",
-	)
+	}
+	// Propagate tmux socket isolation if set
+	if tmuxDir := os.Getenv("TMUX_TMPDIR"); tmuxDir != "" {
+		cmd.Env = append(cmd.Env, "TMUX_TMPDIR="+tmuxDir)
+	}
 	return cmd
 }
 

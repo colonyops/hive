@@ -14,8 +14,10 @@ func TestDoctorJSON(t *testing.T) {
 	h := NewHarness(t)
 
 	out, err := h.RunStdout("doctor", "--format", "json")
-	// Doctor may exit non-zero if checks fail; we still want to parse output
-	_ = err
+	// Doctor may exit non-zero when checks fail, but must still produce valid JSON
+	if err != nil {
+		t.Logf("doctor exited with error (may be expected): %v", err)
+	}
 
 	var result map[string]any
 	require.NoError(t, json.Unmarshal([]byte(out), &result), "parse doctor JSON: %s", out)
@@ -28,8 +30,10 @@ func TestDoctorText(t *testing.T) {
 	h := NewHarness(t)
 
 	out, err := h.Run("doctor")
-	// Doctor may exit non-zero; just verify it produces output
-	_ = err
+	// Doctor may exit non-zero when checks fail
+	if err != nil {
+		t.Logf("doctor exited with error (may be expected): %v", err)
+	}
 
 	assert.Contains(t, out, "Doctor")
 }

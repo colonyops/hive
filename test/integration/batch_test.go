@@ -4,7 +4,6 @@ package integration
 
 import (
 	"encoding/json"
-	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -15,26 +14,38 @@ func TestBatchCreate(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "batch-repo")
 
-	input := `{"sessions":[{"name":"batch-one","remote":"` + repo + `"},{"name":"batch-two","remote":"` + repo + `"}]}`
+	type batchSession struct {
+		Name   string `json:"name"`
+		Remote string `json:"remote"`
+	}
+	type batchInput struct {
+		Sessions []batchSession `json:"sessions"`
+	}
 
-	// Run batch via stdin (use Output to avoid stderr migration logs)
-	cmd := h.command("batch")
-	cmd.Stdin = strings.NewReader(input)
-	out, err := cmd.Output()
+	inputData := batchInput{Sessions: []batchSession{
+		{Name: "batch-one", Remote: repo},
+		{Name: "batch-two", Remote: repo},
+	}}
+	inputBytes, err := json.Marshal(inputData)
+	require.NoError(t, err)
+
+	out, err := h.RunWithStdin(string(inputBytes), "batch")
 	require.NoError(t, err, "hive batch: %s", out)
 
 	// Parse JSON output
 	var result map[string]any
-	require.NoError(t, json.Unmarshal(out, &result), "parse batch output: %s", out)
+	require.NoError(t, json.Unmarshal([]byte(out), &result), "parse batch output: %s", out)
 
 	assert.Contains(t, result, "batch_id")
 	assert.Contains(t, result, "results")
 
-	results := result["results"].([]any)
-	require.Len(t, results, 2)
+	resultsRaw, ok := result["results"].([]any)
+	require.True(t, ok, "results should be an array, got: %T", result["results"])
+	require.Len(t, resultsRaw, 2)
 
-	for _, r := range results {
-		entry := r.(map[string]any)
+	for _, r := range resultsRaw {
+		entry, ok := r.(map[string]any)
+		require.True(t, ok, "batch result entry should be an object, got: %T", r)
 		assert.Equal(t, "created", entry["status"], "session %s should be created", entry["name"])
 		assert.NotEmpty(t, entry["session_id"])
 	}

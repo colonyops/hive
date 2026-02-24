@@ -42,7 +42,9 @@ func TestMsgList(t *testing.T) {
 
 	names := make([]string, len(lines))
 	for i, l := range lines {
-		names[i] = l["name"].(string)
+		name, ok := l["name"].(string)
+		require.True(t, ok, "msg list entry missing 'name' string field: %v", l)
+		names[i] = name
 	}
 	assert.Contains(t, names, "test.list-a")
 	assert.Contains(t, names, "test.list-b")
@@ -80,7 +82,8 @@ func TestMsgInbox(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
 
-	inboxTopic := lines[0]["inbox"].(string)
+	inboxTopic, ok := lines[0]["inbox"].(string)
+	require.True(t, ok, "session missing 'inbox' string field: %v", lines[0])
 	require.NotEmpty(t, inboxTopic)
 
 	_, err = h.Run("msg", "pub", "--topic", inboxTopic, "--sender", "test", "inbox message")
