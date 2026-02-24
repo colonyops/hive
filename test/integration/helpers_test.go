@@ -88,6 +88,17 @@ func assertTmuxHasWindows(t *testing.T, session string) {
 	}, 5*time.Second, 200*time.Millisecond)
 }
 
+// assertTmuxWindowNames waits for the named tmux session to have exactly the expected window names in order.
+func assertTmuxWindowNames(t *testing.T, session string, wantNames []string) {
+	t.Helper()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := exec.Command("tmux", "list-windows", "-t", session, "-F", "#{window_name}").CombinedOutput()
+		assert.NoError(c, err, "tmux list-windows: %s", out)
+		got := strings.Split(strings.TrimSpace(string(out)), "\n")
+		assert.Equal(c, wantNames, got)
+	}, 5*time.Second, 200*time.Millisecond)
+}
+
 // cleanupTmuxSession registers a t.Cleanup to kill a named tmux session.
 func cleanupTmuxSession(t *testing.T, name string) {
 	t.Helper()

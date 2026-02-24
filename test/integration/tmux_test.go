@@ -46,6 +46,134 @@ func TestTmuxCapture(t *testing.T) {
 	require.NoError(t, err, "tmux capture-pane: %s", out)
 }
 
+func TestSpawnConfigs(t *testing.T) {
+	type spawnConfigCase struct {
+		name        string
+		config      string
+		wantSession string
+		wantWindows []string // nil = skip window name assertion
+	}
+
+	cases := []spawnConfigCase{
+		{
+			name: "spawn commands",
+			config: `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - spawn:
+      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+    batch_spawn:
+      - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
+`,
+			wantSession: "spawn-cmd",
+			wantWindows: nil, // spawn manages tmux directly; window name is unpredictable
+		},
+		{
+			name: "declarative windows",
+			config: `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - windows:
+      - name: agent
+        command: bash
+      - name: shell
+`,
+			wantSession: "decl-win",
+			wantWindows: []string{"agent", "shell"},
+		},
+		{
+			name: "default no rules",
+			config: `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules: []
+`,
+			wantSession: "def-norule",
+			wantWindows: []string{"testbash", "shell"},
+		},
+		{
+			name: "pattern no match falls through to defaults",
+			config: `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - pattern: "^https://github\\.com/never-match/"
+    windows:
+      - name: custom
+        command: bash
+`,
+			wantSession: "pat-nomatch",
+			wantWindows: []string{"testbash", "shell"},
+		},
+		{
+			name: "windows with focus",
+			config: `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - windows:
+      - name: code
+        command: bash
+      - name: runner
+        command: bash
+        focus: true
+`,
+			wantSession: "win-focus",
+			wantWindows: []string{"code", "runner"},
+		},
+		{
+			name: "windows single command only",
+			config: `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - windows:
+      - name: work
+        command: bash
+`,
+			wantSession: "win-single",
+			wantWindows: []string{"work"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := NewHarness(t).WithConfig(tc.config)
+			repo := createBareRepo(t, "spawn-cfg-"+tc.wantSession)
+			cleanupTmuxSession(t, tc.wantSession)
+
+			_, err := h.Run("new", "--remote", repo, tc.wantSession)
+			require.NoError(t, err)
+
+			assertTmuxSessionExists(t, tc.wantSession)
+
+			if tc.wantWindows != nil {
+				assertTmuxWindowNames(t, tc.wantSession, tc.wantWindows)
+			}
+		})
+	}
+}
+
 func TestTmuxListAll(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "tmux-list-repo")

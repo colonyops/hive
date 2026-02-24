@@ -151,6 +151,17 @@ func (h *Harness) RunJSONWithStdin(input string, args ...string) (map[string]any
 	return result, nil
 }
 
+// WithConfig writes custom YAML config to the harness temp dir and updates the config path.
+func (h *Harness) WithConfig(yaml string) *Harness {
+	h.t.Helper()
+	configPath := filepath.Join(h.dataDir, "config.yaml")
+	if err := os.WriteFile(configPath, []byte(yaml), 0o644); err != nil {
+		h.t.Fatalf("writing test config: %v", err)
+	}
+	h.configPath = configPath
+	return h
+}
+
 // DataDir returns the isolated data directory path.
 func (h *Harness) DataDir() string { return h.dataDir }
 
