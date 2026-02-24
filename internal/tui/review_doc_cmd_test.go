@@ -137,6 +137,69 @@ func TestOpenDocument(t *testing.T) {
 	}
 }
 
+// TestOpenDocument_SuffixMatch covers the production mismatch where DiscoverDocuments
+// produces RelPath relative to the context dir (e.g. "plans/doc.md"), but todos store
+// URIs relative to the repo root (e.g. "review://.hive/plans/doc.md").
+func TestOpenDocument_SuffixMatch(t *testing.T) {
+	// Simulate docs as produced by DiscoverDocuments: RelPath has no ".hive/" prefix.
+	docs := []review.Document{
+		{
+			Path:    "/real/context/owner/repo/plans/doc1.md",
+			RelPath: "plans/doc1.md",
+			Type:    review.DocTypePlan,
+		},
+		{
+			Path:    "/real/context/owner/repo/research/doc2.md",
+			RelPath: "research/doc2.md",
+			Type:    review.DocTypeResearch,
+		},
+	}
+	reviewView := review.New(docs, "/real/context/owner/repo", nil)
+	reviewView.SetSize(100, 40)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantErr bool
+	}{
+		{
+			name:    "repo-root-relative path matches context-dir-relative relpath",
+			path:    ".hive/plans/doc1.md",
+			wantErr: false,
+		},
+		{
+			name:    "exact relpath still works",
+			path:    "plans/doc1.md",
+			wantErr: false,
+		},
+		{
+			name:    "absolute path still works",
+			path:    "/real/context/owner/repo/research/doc2.md",
+			wantErr: false,
+		},
+		{
+			name:    "not found",
+			path:    ".hive/plans/nonexistent.md",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cmd := reviewView.OpenDocumentByPath(tt.path)
+			msg := cmd()
+
+			openMsg, ok := msg.(review.OpenDocumentMsg)
+			require.True(t, ok, "Expected OpenDocumentMsg, got %T", msg)
+			if tt.wantErr {
+				assert.Error(t, openMsg.Err, "Expected error but got none")
+			} else {
+				assert.NoError(t, openMsg.Err, "Expected no error but got: %v", openMsg.Err)
+			}
+		})
+	}
+}
+
 func TestGetAllDocuments(t *testing.T) {
 	docs := []review.Document{
 		{RelPath: "doc1.md", Type: review.DocTypePlan},
