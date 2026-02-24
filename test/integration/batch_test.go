@@ -17,10 +17,10 @@ func TestBatchCreate(t *testing.T) {
 
 	input := `{"sessions":[{"name":"batch-one","remote":"` + repo + `"},{"name":"batch-two","remote":"` + repo + `"}]}`
 
-	// Run batch via stdin
+	// Run batch via stdin (use Output to avoid stderr migration logs)
 	cmd := h.command("batch")
 	cmd.Stdin = strings.NewReader(input)
-	out, err := cmd.CombinedOutput()
+	out, err := cmd.Output()
 	require.NoError(t, err, "hive batch: %s", out)
 
 	// Parse JSON output

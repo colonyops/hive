@@ -13,7 +13,7 @@ import (
 func TestDoctorJSON(t *testing.T) {
 	h := NewHarness(t)
 
-	out, err := h.Run("doctor", "--format", "json")
+	out, err := h.RunStdout("doctor", "--format", "json")
 	// Doctor may exit non-zero if checks fail; we still want to parse output
 	_ = err
 

@@ -57,6 +57,25 @@ func (h *Harness) RunInDir(dir string, args ...string) (string, error) {
 	return string(out), err
 }
 
+// RunStdout executes hive and returns only stdout (ignoring stderr).
+// Use this for commands that produce structured output (JSON) where
+// stderr noise (migration logs, etc.) would break parsing.
+func (h *Harness) RunStdout(args ...string) (string, error) {
+	h.t.Helper()
+	cmd := h.command(args...)
+	out, err := cmd.Output()
+	return string(out), err
+}
+
+// RunStdoutInDir executes hive with a specific working directory, returning only stdout.
+func (h *Harness) RunStdoutInDir(dir string, args ...string) (string, error) {
+	h.t.Helper()
+	cmd := h.command(args...)
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	return string(out), err
+}
+
 // DataDir returns the isolated data directory path.
 func (h *Harness) DataDir() string { return h.dataDir }
 
@@ -70,6 +89,7 @@ func (h *Harness) command(args ...string) *exec.Cmd {
 		"HOME="+h.homeDir,
 		"HIVE_CONFIG="+h.configPath,
 		"HIVE_LOG_LEVEL=debug",
+		"HIVE_LOG_FILE="+filepath.Join(h.dataDir, "hive.log"),
 		"NO_COLOR=1",
 	)
 	return cmd

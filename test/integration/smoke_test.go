@@ -9,9 +9,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSmokeVersion(t *testing.T) {
+func TestSmokeHelp(t *testing.T) {
 	h := NewHarness(t)
-	out, err := h.Run("version")
-	require.NoError(t, err, "hive version should succeed")
-	assert.NotEmpty(t, out, "version output should not be empty")
+	out, err := h.Run("help")
+	require.NoError(t, err, "hive help should succeed: %s", out)
+	assert.Contains(t, out, "hive", "help output should mention hive")
 }

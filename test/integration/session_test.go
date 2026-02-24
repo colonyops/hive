@@ -58,7 +58,7 @@ func TestSessionLsJSON(t *testing.T) {
 	_, err := h.Run("new", "--remote", repo, "json-test")
 	require.NoError(t, err)
 
-	out, err := h.Run("ls", "--json")
+	out, err := h.RunStdout("ls", "--json")
 	require.NoError(t, err, "hive ls --json: %s", out)
 
 	lines, err := parseJSONLines(strings.TrimSpace(out))

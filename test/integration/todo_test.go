@@ -14,11 +14,11 @@ func TestTodoCRUD(t *testing.T) {
 	h := NewHarness(t)
 
 	// Add a todo
-	addOut, err := h.Run("todo", "add", "--title", "Review docs", "--source", "human")
+	addOut, err := h.RunStdout("todo", "add", "--title", "Review docs", "--source", "human")
 	require.NoError(t, err, "todo add: %s", addOut)
 
 	lines, err := parseJSONLines(strings.TrimSpace(addOut))
-	require.NoError(t, err)
+	require.NoError(t, err, "parse todo add output: %s", addOut)
 	require.Len(t, lines, 1)
 
 	todoID := lines[0]["id"].(string)
@@ -26,7 +26,7 @@ func TestTodoCRUD(t *testing.T) {
 	assert.Equal(t, "pending", lines[0]["status"])
 
 	// List all todos
-	listOut, err := h.Run("todo", "list")
+	listOut, err := h.RunStdout("todo", "list")
 	require.NoError(t, err, "todo list: %s", listOut)
 
 	listLines, err := parseJSONLines(strings.TrimSpace(listOut))
@@ -34,7 +34,7 @@ func TestTodoCRUD(t *testing.T) {
 	require.GreaterOrEqual(t, len(listLines), 1)
 
 	// Update status to completed
-	updateOut, err := h.Run("todo", "update", todoID, "--status", "completed")
+	updateOut, err := h.RunStdout("todo", "update", todoID, "--status", "completed")
 	require.NoError(t, err, "todo update: %s", updateOut)
 
 	updateLines, err := parseJSONLines(strings.TrimSpace(updateOut))
@@ -43,7 +43,7 @@ func TestTodoCRUD(t *testing.T) {
 	assert.Equal(t, "completed", updateLines[0]["status"])
 
 	// List with status filter
-	filterOut, err := h.Run("todo", "list", "--status", "completed")
+	filterOut, err := h.RunStdout("todo", "list", "--status", "completed")
 	require.NoError(t, err, "todo list filtered: %s", filterOut)
 
 	filterLines, err := parseJSONLines(strings.TrimSpace(filterOut))
