@@ -11,10 +11,11 @@ import (
 )
 
 type NewCmd struct {
-	flags  *Flags
-	app    *hive.App
-	remote string
-	source string
+	flags      *Flags
+	app        *hive.App
+	remote     string
+	source     string
+	background bool
 }
 
 // NewNewCmd creates a new new command
@@ -52,6 +53,12 @@ Example:
 				Usage:       "source directory for file copying (defaults to current directory)",
 				Destination: &cmd.source,
 			},
+			&cli.BoolFlag{
+				Name:        "background",
+				Aliases:     []string{"bg"},
+				Usage:       "create session without attaching to tmux",
+				Destination: &cmd.background,
+			},
 		},
 		Action: cmd.run,
 	})
@@ -76,9 +83,10 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 	}
 
 	opts := hive.CreateOptions{
-		Name:   name,
-		Remote: cmd.remote,
-		Source: source,
+		Name:       name,
+		Remote:     cmd.remote,
+		Source:     source,
+		Background: cmd.background,
 	}
 
 	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)

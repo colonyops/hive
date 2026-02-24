@@ -3,7 +3,9 @@
 package integration
 
 import (
+	"os"
 	"os/exec"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -162,8 +164,12 @@ rules:
 			repo := createBareRepo(t, "spawn-cfg-"+tc.wantSession)
 			cleanupTmuxSession(t, tc.wantSession)
 
-			_, err := h.Run("new", "--remote", repo, tc.wantSession)
-			require.NoError(t, err)
+			out, err := h.Run("new", "--background", "--remote", repo, tc.wantSession)
+			if err != nil {
+				logPath := filepath.Join(h.DataDir(), "hive.log")
+				logData, _ := os.ReadFile(logPath)
+				t.Fatalf("hive new failed: %v\noutput: %s\nlog: %s", err, out, logData)
+			}
 
 			assertTmuxSessionExists(t, tc.wantSession)
 

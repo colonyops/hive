@@ -32,6 +32,7 @@ type CreateOptions struct {
 	Remote        string // Git remote URL to clone (auto-detected if empty)
 	Source        string // Source directory for file copying
 	UseBatchSpawn bool   // Use batch_spawn commands instead of spawn
+	Background    bool   // Create session without attaching to tmux
 	// SkipSpawn skips the configured spawn strategy (spawn: / batch_spawn: / windows:).
 	// The caller is responsible for launching any terminal or tmux session. Use this
 	// when the session directory is needed but terminal management happens elsewhere
@@ -218,7 +219,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
 		switch {
 		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn); err != nil {
+			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		case len(strategy.Commands) > 0:
