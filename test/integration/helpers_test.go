@@ -3,18 +3,31 @@
 package integration
 
 import (
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	_ "modernc.org/sqlite"
 )
+
+var createdSessionPathPattern = regexp.MustCompile(`(?ms)Session created\s+(/\S+)`)
+
+type sessionRow struct {
+	ID            string
+	Name          string
+	Path          string
+	State         string
+	CloneStrategy string
+}
 
 // createBareRepo creates a local bare git repository with a seeded initial commit.
 // Returns the path to the bare repo.
@@ -106,6 +119,64 @@ func cleanupTmuxSession(t *testing.T, name string) {
 	t.Cleanup(func() {
 		_ = exec.Command("tmux", "kill-session", "-t", name).Run()
 	})
+}
+
+func parseCreatedSessionPath(out string) (string, error) {
+	matches := createdSessionPathPattern.FindStringSubmatch(out)
+	if len(matches) != 2 {
+		return "", fmt.Errorf("extract session path from output %q", out)
+	}
+	return strings.TrimSpace(matches[1]), nil
+}
+
+func assertWorktreeLayout(t *testing.T, sessionPath string) {
+	t.Helper()
+	gitPath := filepath.Join(sessionPath, ".git")
+	info, err := os.Stat(gitPath)
+	require.NoError(t, err)
+	require.False(t, info.IsDir(), ".git should be a file for worktree sessions")
+
+	data, err := os.ReadFile(gitPath)
+	require.NoError(t, err)
+	content := string(data)
+	assert.Contains(t, content, "gitdir:")
+	assert.Contains(t, content, ".bare")
+}
+
+func assertFullCloneLayout(t *testing.T, sessionPath string) {
+	t.Helper()
+	gitPath := filepath.Join(sessionPath, ".git")
+	info, err := os.Stat(gitPath)
+	require.NoError(t, err)
+	assert.True(t, info.IsDir(), ".git should be a directory for full clone sessions")
+}
+
+func readSessionRowByName(t *testing.T, h *Harness, name string) sessionRow {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", filepath.Join(h.DataDir(), "hive.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	row := db.QueryRow(
+		`SELECT id, name, path, state, clone_strategy FROM sessions WHERE name = ? ORDER BY created_at DESC LIMIT 1`,
+		name,
+	)
+
+	var result sessionRow
+	require.NoError(t, row.Scan(&result.ID, &result.Name, &result.Path, &result.State, &result.CloneStrategy))
+	return result
+}
+
+func updateSessionState(t *testing.T, h *Harness, id, state string) {
+	t.Helper()
+
+	db, err := sql.Open("sqlite", filepath.Join(h.DataDir(), "hive.db"))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = db.Close() })
+
+	_, err = db.Exec(`UPDATE sessions SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, state, id)
+	require.NoError(t, err)
 }
 
 func run(t *testing.T, name string, args ...string) string {
