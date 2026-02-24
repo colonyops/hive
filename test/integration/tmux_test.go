@@ -3,11 +3,8 @@
 package integration
 
 import (
-	"fmt"
 	"os/exec"
-	"strings"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -21,16 +18,7 @@ func TestTmuxSessionCreated(t *testing.T) {
 	_, err := h.Run("new", "--remote", repo, "tmux-test")
 	require.NoError(t, err)
 
-	pollFor(t, 5*time.Second, 200*time.Millisecond, func() error {
-		out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("tmux list-sessions: %w: %s", err, out)
-		}
-		if !strings.Contains(string(out), "tmux-test") {
-			return fmt.Errorf("tmux session 'tmux-test' not found in: %s", out)
-		}
-		return nil
-	})
+	assertTmuxSessionExists(t, "tmux-test")
 }
 
 func TestTmuxWindows(t *testing.T) {
@@ -41,16 +29,7 @@ func TestTmuxWindows(t *testing.T) {
 	_, err := h.Run("new", "--remote", repo, "tmux-win-test")
 	require.NoError(t, err)
 
-	pollFor(t, 5*time.Second, 200*time.Millisecond, func() error {
-		out, err := exec.Command("tmux", "list-windows", "-t", "tmux-win-test", "-F", "#{window_name}").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("tmux list-windows: %w: %s", err, out)
-		}
-		if strings.TrimSpace(string(out)) == "" {
-			return fmt.Errorf("no windows found")
-		}
-		return nil
-	})
+	assertTmuxHasWindows(t, "tmux-win-test")
 }
 
 func TestTmuxCapture(t *testing.T) {
@@ -61,16 +40,7 @@ func TestTmuxCapture(t *testing.T) {
 	_, err := h.Run("new", "--remote", repo, "tmux-cap-test")
 	require.NoError(t, err)
 
-	pollFor(t, 5*time.Second, 200*time.Millisecond, func() error {
-		out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("tmux: %w: %s", err, out)
-		}
-		if !strings.Contains(string(out), "tmux-cap-test") {
-			return fmt.Errorf("session not found")
-		}
-		return nil
-	})
+	assertTmuxSessionExists(t, "tmux-cap-test")
 
 	out, err := exec.Command("tmux", "capture-pane", "-t", "tmux-cap-test", "-p").CombinedOutput()
 	require.NoError(t, err, "tmux capture-pane: %s", out)
@@ -87,20 +57,7 @@ func TestTmuxListAll(t *testing.T) {
 	_, err = h.Run("new", "--remote", repo, "tmux-list-b")
 	require.NoError(t, err)
 
-	pollFor(t, 5*time.Second, 200*time.Millisecond, func() error {
-		out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
-		if err != nil {
-			return fmt.Errorf("tmux: %w: %s", err, out)
-		}
-		output := string(out)
-		if !strings.Contains(output, "tmux-list-a") {
-			return fmt.Errorf("session a not found")
-		}
-		if !strings.Contains(output, "tmux-list-b") {
-			return fmt.Errorf("session b not found")
-		}
-		return nil
-	})
+	assertTmuxSessionExists(t, "tmux-list-a", "tmux-list-b")
 
 	lsOut, err := h.Run("ls")
 	require.NoError(t, err)

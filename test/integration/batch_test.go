@@ -29,12 +29,8 @@ func TestBatchCreate(t *testing.T) {
 	inputBytes, err := json.Marshal(inputData)
 	require.NoError(t, err)
 
-	out, err := h.RunWithStdin(string(inputBytes), "batch")
-	require.NoError(t, err, "hive batch: %s", out)
-
-	// Parse JSON output
-	var result map[string]any
-	require.NoError(t, json.Unmarshal([]byte(out), &result), "parse batch output: %s", out)
+	result, err := h.RunJSONWithStdin(string(inputBytes), "batch")
+	require.NoError(t, err)
 
 	assert.Contains(t, result, "batch_id")
 	assert.Contains(t, result, "results")

@@ -3,7 +3,6 @@
 package integration
 
 import (
-	"encoding/json"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,14 +12,15 @@ import (
 func TestDoctorJSON(t *testing.T) {
 	h := NewHarness(t)
 
+	// Doctor may exit non-zero when checks fail, so use RunStdout + manual parse
+	// rather than RunJSON which would treat a non-zero exit as an error.
 	out, err := h.RunStdout("doctor", "--format", "json")
-	// Doctor may exit non-zero when checks fail, but must still produce valid JSON
 	if err != nil {
 		t.Logf("doctor exited with error (may be expected): %v", err)
 	}
 
-	var result map[string]any
-	require.NoError(t, json.Unmarshal([]byte(out), &result), "parse doctor JSON: %s", out)
+	result, err := parseJSON(out)
+	require.NoError(t, err, "parse doctor JSON: %s", out)
 	assert.Contains(t, result, "healthy")
 	assert.Contains(t, result, "summary")
 	assert.Contains(t, result, "checks")

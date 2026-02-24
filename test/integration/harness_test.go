@@ -4,7 +4,9 @@ package integration
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -107,6 +109,46 @@ func (h *Harness) RunWithStdin(input string, args ...string) (string, error) {
 		}
 	}
 	return string(out), err
+}
+
+// RunJSONLines executes hive and parses stdout as newline-delimited JSON objects.
+// Use for commands that stream JSONL output (ls --json, todo list, msg sub, etc.).
+func (h *Harness) RunJSONLines(args ...string) ([]map[string]any, error) {
+	h.t.Helper()
+	out, err := h.RunStdout(args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseJSONLines(strings.TrimSpace(out))
+}
+
+// RunJSON executes hive and parses stdout as a single JSON object.
+// Use for commands that return one structured result (batch, doctor --format json).
+func (h *Harness) RunJSON(args ...string) (map[string]any, error) {
+	h.t.Helper()
+	out, err := h.RunStdout(args...)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		return nil, fmt.Errorf("parsing JSON from hive %v: %w\noutput: %s", args, err, out)
+	}
+	return result, nil
+}
+
+// RunJSONWithStdin executes hive with stdin input and parses stdout as a single JSON object.
+func (h *Harness) RunJSONWithStdin(input string, args ...string) (map[string]any, error) {
+	h.t.Helper()
+	out, err := h.RunWithStdin(input, args...)
+	if err != nil {
+		return nil, err
+	}
+	var result map[string]any
+	if err := json.Unmarshal([]byte(out), &result); err != nil {
+		return nil, fmt.Errorf("parsing JSON from hive %v: %w\noutput: %s", args, err, out)
+	}
+	return result, nil
 }
 
 // DataDir returns the isolated data directory path.

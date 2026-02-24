@@ -11,6 +11,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // createBareRepo creates a local bare git repository with a seeded initial commit.
@@ -40,6 +43,15 @@ func createBareRepo(t *testing.T, name string) string {
 	return bareDir
 }
 
+// parseJSON parses a JSON string into a map.
+func parseJSON(data string) (map[string]any, error) {
+	var result map[string]any
+	if err := json.Unmarshal([]byte(data), &result); err != nil {
+		return nil, fmt.Errorf("parsing JSON: %w", err)
+	}
+	return result, nil
+}
+
 // parseJSONLines parses newline-delimited JSON into a slice of maps.
 func parseJSONLines(data string) ([]map[string]any, error) {
 	var results []map[string]any
@@ -54,24 +66,26 @@ func parseJSONLines(data string) ([]map[string]any, error) {
 	return results, nil
 }
 
-// pollFor retries fn until it returns nil or the timeout is reached.
-func pollFor(t *testing.T, timeout time.Duration, interval time.Duration, fn func() error) {
+// assertTmuxSessionExists waits for all named tmux sessions to appear.
+func assertTmuxSessionExists(t *testing.T, names ...string) {
 	t.Helper()
-	ticker := time.NewTicker(interval)
-	defer ticker.Stop()
-	deadline := time.After(timeout)
-	var lastErr error
-	for {
-		lastErr = fn()
-		if lastErr == nil {
-			return
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
+		assert.NoError(c, err, "tmux list-sessions: %s", out)
+		for _, name := range names {
+			assert.Contains(c, string(out), name)
 		}
-		select {
-		case <-deadline:
-			t.Fatalf("pollFor timed out after %v: %v", timeout, lastErr)
-		case <-ticker.C:
-		}
-	}
+	}, 5*time.Second, 200*time.Millisecond)
+}
+
+// assertTmuxHasWindows waits for the named tmux session to have at least one window.
+func assertTmuxHasWindows(t *testing.T, session string) {
+	t.Helper()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := exec.Command("tmux", "list-windows", "-t", session, "-F", "#{window_name}").CombinedOutput()
+		assert.NoError(c, err, "tmux list-windows: %s", out)
+		assert.NotEmpty(c, strings.TrimSpace(string(out)), "no windows found")
+	}, 5*time.Second, 200*time.Millisecond)
 }
 
 // cleanupTmuxSession registers a t.Cleanup to kill a named tmux session.
