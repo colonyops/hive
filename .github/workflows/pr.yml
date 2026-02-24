@@ -12,3 +12,7 @@ jobs:
   backend-tests:
     name: "Go Build/Test"
     uses: ./.github/workflows/partial-tests.yml
+
+  integration-tests:
+    name: "Integration Tests"
+    uses: ./.github/workflows/partial-integration-tests.yml

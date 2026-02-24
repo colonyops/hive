@@ -1,0 +1,28 @@
+name: Integration Tests
+
+on:
+  workflow_call:
+
+jobs:
+  integration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up mise
+        uses: jdx/mise-action@v3
+
+      - name: Build binary
+        run: mise run build
+
+      - name: Build test image
+        run: docker build -f Dockerfile.test -t hive-integration-test .
+
+      - name: Run integration tests
+        run: docker run --rm hive-integration-test
