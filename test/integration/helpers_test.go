@@ -69,6 +69,14 @@ func pollFor(t *testing.T, timeout time.Duration, interval time.Duration, fn fun
 	t.Fatalf("pollFor timed out after %v: %v", timeout, lastErr)
 }
 
+// cleanupTmuxSession registers a t.Cleanup to kill a named tmux session.
+func cleanupTmuxSession(t *testing.T, name string) {
+	t.Helper()
+	t.Cleanup(func() {
+		_ = exec.Command("tmux", "kill-session", "-t", name).Run()
+	})
+}
+
 func run(t *testing.T, name string, args ...string) string {
 	t.Helper()
 	cmd := exec.Command(name, args...)
