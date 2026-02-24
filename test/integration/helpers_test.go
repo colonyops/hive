@@ -72,8 +72,9 @@ func assertTmuxSessionExists(t *testing.T, names ...string) {
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		out, err := exec.Command("tmux", "list-sessions", "-F", "#{session_name}").CombinedOutput()
 		assert.NoError(c, err, "tmux list-sessions: %s", out)
+		sessions := strings.Split(strings.TrimSpace(string(out)), "\n")
 		for _, name := range names {
-			assert.Contains(c, string(out), name)
+			assert.Contains(c, sessions, name)
 		}
 	}, 5*time.Second, 200*time.Millisecond)
 }

@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -44,8 +45,15 @@ func TestTmuxCapture(t *testing.T) {
 
 	assertTmuxSessionExists(t, "tmux-cap-test")
 
-	out, err := exec.Command("tmux", "capture-pane", "-t", "tmux-cap-test", "-p").CombinedOutput()
-	require.NoError(t, err, "tmux capture-pane: %s", out)
+	// Send a known command and verify it appears in the captured pane output.
+	_, err = exec.Command("tmux", "send-keys", "-t", "tmux-cap-test", "echo hive-capture-test", "Enter").CombinedOutput()
+	require.NoError(t, err)
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := exec.Command("tmux", "capture-pane", "-t", "tmux-cap-test", "-p").CombinedOutput()
+		assert.NoError(c, err, "tmux capture-pane: %s", out)
+		assert.Contains(c, string(out), "hive-capture-test")
+	}, 5*time.Second, 200*time.Millisecond)
 }
 
 func TestSpawnConfigs(t *testing.T) {
