@@ -1,0 +1,30 @@
+FROM golang:1.26-bookworm AS gobase
+
+FROM debian:bookworm-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tmux \
+    git \
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Go toolchain
+COPY --from=gobase /usr/local/go /usr/local/go
+ENV PATH="/usr/local/go/bin:${PATH}"
+ENV GOPATH="/go"
+ENV PATH="${GOPATH}/bin:${PATH}"
+
+# Copy built hive binary
+COPY dist/hive_linux_amd64_v1/hive /usr/local/bin/hive
+RUN chmod +x /usr/local/bin/hive
+
+WORKDIR /app
+
+# Copy Go module files and download dependencies
+COPY go.mod go.sum ./
+RUN go mod download
+
+# Copy integration test files
+COPY test/integration/ ./test/integration/
+
+CMD ["go", "test", "-v", "-tags", "integration", "-count=1", "./test/integration/..."]

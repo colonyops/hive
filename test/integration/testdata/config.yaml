@@ -1,0 +1,7 @@
+version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  profiles:
+    testbash:
+      command: bash

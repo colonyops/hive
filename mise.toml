@@ -99,6 +99,11 @@ run = "zensical serve"
 description = "Build documentation site with llms.txt"
 run = ["zensical build", "./scripts/generate-llmstxt.sh"]
 
+[tasks.integration]
+description = "Run Docker-based integration tests"
+depends = ["build"]
+run = "docker build -f Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
+
 [tasks."container"]
 description = "Build Docker image and run ephemeral container"
 depends = ["build"]
