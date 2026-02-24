@@ -14,9 +14,9 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 ENV GOPATH="/go"
 ENV PATH="${GOPATH}/bin:${PATH}"
 
-# Copy built hive binary (supports amd64 and arm64 via build arg)
+# Copy built hive binary (supports multiple TARGETARCH values)
 ARG TARGETARCH=amd64
-COPY dist/hive_linux_${TARGETARCH}*/hive /usr/local/bin/hive
+COPY dist/hive_linux_${TARGETARCH}_*/hive /usr/local/bin/hive
 RUN chmod +x /usr/local/bin/hive
 
 # Signal to tests that they're running inside the integration container
