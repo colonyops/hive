@@ -56,6 +56,12 @@ const (
 // ValidSessionFilters lists valid filter values for SessionSelector.
 var ValidSessionFilters = []string{FormFilterActive, FormFilterAll}
 
+// Clone strategy constants.
+const (
+	CloneStrategyFull     = "full"
+	CloneStrategyWorktree = "worktree"
+)
+
 // ValidFormTypes lists all valid form field types.
 var ValidFormTypes = []string{FormTypeText, FormTypeTextArea, FormTypeSelect, FormTypeMultiSelect}
 
@@ -230,8 +236,9 @@ type Config struct {
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
 	Todos               TodosConfig            `yaml:"todos"`
-	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
-	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
+	RepoDirs            []string               `yaml:"repo_dirs"`                // directories containing git repositories for new session dialog
+	CloneStrategy       string                 `yaml:"clone_strategy,omitempty"` // default clone strategy: "full" (default) or "worktree"
+	DataDir             string                 `yaml:"-"`                        // set by caller, not from config file
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -459,6 +466,8 @@ type Rule struct {
 	BatchSpawn []string `yaml:"batch_spawn,omitempty"`
 	// Recycle commands to run when recycling a session.
 	Recycle []string `yaml:"recycle,omitempty"`
+	// CloneStrategy overrides the clone strategy for matching repos ("full" or "worktree").
+	CloneStrategy string `yaml:"clone_strategy,omitempty"`
 }
 
 // Keybinding defines a TUI keybinding that references a UserCommand.
@@ -740,7 +749,22 @@ func (c *Config) Validate() error {
 		c.validateAgents(),
 		c.validateWindowsBasic(),
 		c.validateTodos(),
+		c.validateCloneStrategies(),
 	)
+}
+
+// validateCloneStrategies checks clone_strategy on the global config and each rule.
+func (c *Config) validateCloneStrategies() error {
+	var errs criterio.FieldErrorsBuilder
+	if err := ValidateCloneStrategy(c.CloneStrategy); err != nil {
+		errs = errs.Append("clone_strategy", err)
+	}
+	for i, rule := range c.Rules {
+		if err := ValidateCloneStrategy(rule.CloneStrategy); err != nil {
+			errs = errs.Append(fmt.Sprintf("rules[%d].clone_strategy", i), err)
+		}
+	}
+	return errs.ToError()
 }
 
 // validateUserCommandsBasic performs basic usercommand validation for the Validate() method.
@@ -1068,6 +1092,32 @@ func (c *Config) GetMaxRecycled(remote string) int {
 	}
 
 	return DefaultMaxRecycled
+}
+
+// GetCloneStrategy returns the effective clone strategy for the given remote.
+// Resolution order: last matching rule with a clone_strategy set wins,
+// then falls back to the global config CloneStrategy, then "full".
+func (c *Config) GetCloneStrategy(remote string) string {
+	strategy := c.CloneStrategy
+	for _, rule := range c.Rules {
+		if rule.Matches(remote) && rule.CloneStrategy != "" {
+			strategy = rule.CloneStrategy
+		}
+	}
+	if strategy == "" {
+		strategy = CloneStrategyFull
+	}
+	return strategy
+}
+
+// ValidateCloneStrategy returns an error if s is not a valid clone strategy value.
+func ValidateCloneStrategy(s string) error {
+	switch s {
+	case "", CloneStrategyFull, CloneStrategyWorktree:
+		return nil
+	default:
+		return fmt.Errorf("invalid clone_strategy %q: must be %q or %q", s, CloneStrategyFull, CloneStrategyWorktree)
+	}
 }
 
 // SpawnStrategy holds the resolved spawn method for a session.

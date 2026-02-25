@@ -171,6 +171,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Remote:        sess.Remote,
 		Source:        source,
 		UseBatchSpawn: true,
+		CloneStrategy: sess.CloneStrategy,
 	}
 
 	created, err := cmd.app.Sessions.CreateSession(ctx, opts)
@@ -247,11 +248,12 @@ func (b BatchInput) Validate() error {
 
 // BatchSession defines a single session to create.
 type BatchSession struct {
-	Name      string `json:"name"`
-	SessionID string `json:"session_id,omitempty"`
-	Prompt    string `json:"prompt,omitempty"`
-	Remote    string `json:"remote,omitempty"`
-	Source    string `json:"source,omitempty"`
+	Name          string `json:"name"`
+	SessionID     string `json:"session_id,omitempty"`
+	Prompt        string `json:"prompt,omitempty"`
+	Remote        string `json:"remote,omitempty"`
+	Source        string `json:"source,omitempty"`
+	CloneStrategy string `json:"clone_strategy,omitempty"`
 }
 
 // BatchResult is the output for a single session creation attempt.

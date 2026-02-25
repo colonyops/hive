@@ -72,16 +72,22 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
+	strategy := sess.CloneStrategy
+	if strategy == "" {
+		strategy = "full"
+	}
+
 	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
-		ID:        sess.ID,
-		Name:      sess.Name,
-		Slug:      sess.Slug,
-		Path:      sess.Path,
-		Remote:    sess.Remote,
-		State:     string(sess.State),
-		Metadata:  metadataJSON,
-		CreatedAt: sess.CreatedAt.UnixNano(),
-		UpdatedAt: sess.UpdatedAt.UnixNano(),
+		ID:            sess.ID,
+		Name:          sess.Name,
+		Slug:          sess.Slug,
+		Path:          sess.Path,
+		Remote:        sess.Remote,
+		State:         string(sess.State),
+		CloneStrategy: strategy,
+		Metadata:      metadataJSON,
+		CreatedAt:     sess.CreatedAt.UnixNano(),
+		UpdatedAt:     sess.UpdatedAt.UnixNano(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save session: %w", err)
@@ -109,10 +115,16 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// FindRecyclable returns a recyclable session for the given remote.
+// FindRecyclable returns a recyclable session for the given remote and clone strategy.
 // Returns ErrNoRecyclable if none available.
-func (s *SessionStore) FindRecyclable(ctx context.Context, remote string) (session.Session, error) {
-	row, err := s.db.Queries().FindRecyclableSession(ctx, remote)
+func (s *SessionStore) FindRecyclable(ctx context.Context, remote, cloneStrategy string) (session.Session, error) {
+	if cloneStrategy == "" {
+		cloneStrategy = "full"
+	}
+	row, err := s.db.Queries().FindRecyclableSession(ctx, db.FindRecyclableSessionParams{
+		Remote:        remote,
+		CloneStrategy: cloneStrategy,
+	})
 	if IsNotFoundError(err) {
 		return session.Session{}, session.ErrNoRecyclable
 	}
@@ -138,15 +150,21 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
+	strategy := row.CloneStrategy
+	if strategy == "" {
+		strategy = "full"
+	}
+
 	return session.Session{
-		ID:        row.ID,
-		Name:      row.Name,
-		Slug:      row.Slug,
-		Path:      row.Path,
-		Remote:    row.Remote,
-		State:     session.State(row.State),
-		Metadata:  metadata,
-		CreatedAt: time.Unix(0, row.CreatedAt),
-		UpdatedAt: time.Unix(0, row.UpdatedAt),
+		ID:            row.ID,
+		Name:          row.Name,
+		Slug:          row.Slug,
+		Path:          row.Path,
+		Remote:        row.Remote,
+		State:         session.State(row.State),
+		CloneStrategy: strategy,
+		Metadata:      metadata,
+		CreatedAt:     time.Unix(0, row.CreatedAt),
+		UpdatedAt:     time.Unix(0, row.UpdatedAt),
 	}, nil
 }

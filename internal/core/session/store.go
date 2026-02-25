@@ -21,7 +21,7 @@ type Store interface {
 	Save(ctx context.Context, s Session) error
 	// Delete removes a session by ID. Returns ErrNotFound if not found.
 	Delete(ctx context.Context, id string) error
-	// FindRecyclable returns a recyclable session for the given remote.
+	// FindRecyclable returns a recyclable session for the given remote and clone strategy.
 	// Returns ErrNoRecyclable if none available.
-	FindRecyclable(ctx context.Context, remote string) (Session, error)
+	FindRecyclable(ctx context.Context, remote, cloneStrategy string) (Session, error)
 }

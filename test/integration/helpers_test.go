@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 	"time"
@@ -15,6 +16,51 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+var createdSessionPathPattern = regexp.MustCompile(`(?ms)Session created\s+(/\S+)`)
+
+// parseCreatedSessionPath extracts the session path from `hive new` combined output.
+func parseCreatedSessionPath(t *testing.T, out string) string {
+	t.Helper()
+	m := createdSessionPathPattern.FindStringSubmatch(out)
+	require.GreaterOrEqual(t, len(m), 2, "session path not found in output:\n%s", out)
+	return m[1]
+}
+
+// assertWorktreeLayout verifies sessionPath has a .git file (gitdir) not a .git directory.
+func assertWorktreeLayout(t *testing.T, sessionPath string) {
+	t.Helper()
+	gitPath := filepath.Join(sessionPath, ".git")
+	info, err := os.Stat(gitPath)
+	require.NoError(t, err, ".git must exist at %s", gitPath)
+	require.False(t, info.IsDir(), ".git must be a file (gitdir), not a directory, at %s", gitPath)
+
+	content, err := os.ReadFile(gitPath)
+	require.NoError(t, err)
+	require.True(t, strings.HasPrefix(string(content), "gitdir:"), ".git file must start with 'gitdir:'")
+}
+
+// assertFullCloneLayout verifies sessionPath has a .git directory (full clone).
+func assertFullCloneLayout(t *testing.T, sessionPath string) {
+	t.Helper()
+	gitPath := filepath.Join(sessionPath, ".git")
+	info, err := os.Stat(gitPath)
+	require.NoError(t, err, ".git must exist at %s", gitPath)
+	require.True(t, info.IsDir(), ".git must be a directory for full clone at %s", gitPath)
+}
+
+// worktreeBareDir reads the .git file in sessionPath and returns the bare root.
+// Format: "gitdir: /path/to/.bare/.../worktrees/<branch>"
+func worktreeBareDir(t *testing.T, sessionPath string) string {
+	t.Helper()
+	content, err := os.ReadFile(filepath.Join(sessionPath, ".git"))
+	require.NoError(t, err)
+	line := strings.TrimSpace(string(content))
+	_, gitdir, ok := strings.Cut(line, "gitdir: ")
+	require.True(t, ok, "expected 'gitdir: ' prefix in .git file, got: %s", line)
+	// Walk up two levels: worktrees/<branch> -> bare root
+	return filepath.Dir(filepath.Dir(gitdir))
+}
 
 // createBareRepo creates a local bare git repository with a seeded initial commit.
 // Returns the path to the bare repo.

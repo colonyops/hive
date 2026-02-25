@@ -35,7 +35,7 @@ func (m *mockSessionStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockSessionStore) FindRecyclable(_ context.Context, _ string) (session.Session, error) {
+func (m *mockSessionStore) FindRecyclable(_ context.Context, _, _ string) (session.Session, error) {
 	return session.Session{}, session.ErrNoRecyclable
 }
 

@@ -137,7 +137,7 @@ func TestStore(t *testing.T) {
 		remote := "https://github.com/test/repo"
 
 		// No recyclable sessions
-		_, err = store.FindRecyclable(ctx, remote)
+		_, err = store.FindRecyclable(ctx, remote, "full")
 		require.ErrorIs(t, err, session.ErrNoRecyclable, "empty store: got %v, want ErrNoRecyclable", err)
 
 		// Active session with matching remote - not recyclable
@@ -147,7 +147,7 @@ func TestStore(t *testing.T) {
 			State:  session.StateActive,
 		}), "Save")
 
-		_, err = store.FindRecyclable(ctx, remote)
+		_, err = store.FindRecyclable(ctx, remote, "full")
 		require.ErrorIs(t, err, session.ErrNoRecyclable, "active session: got %v, want ErrNoRecyclable", err)
 
 		// Recycled session with different remote - not found
@@ -157,7 +157,7 @@ func TestStore(t *testing.T) {
 			State:  session.StateRecycled,
 		}), "Save")
 
-		_, err = store.FindRecyclable(ctx, remote)
+		_, err = store.FindRecyclable(ctx, remote, "full")
 		require.ErrorIs(t, err, session.ErrNoRecyclable, "different remote: got %v, want ErrNoRecyclable", err)
 
 		// Recycled session with matching remote - found
@@ -167,7 +167,7 @@ func TestStore(t *testing.T) {
 			State:  session.StateRecycled,
 		}), "Save")
 
-		got, err := store.FindRecyclable(ctx, remote)
+		got, err := store.FindRecyclable(ctx, remote, "full")
 		require.NoError(t, err, "FindRecyclable")
 		assert.Equal(t, "recycled", got.ID)
 	})

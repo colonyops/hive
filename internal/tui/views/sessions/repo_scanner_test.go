@@ -14,15 +14,19 @@ type mockGit struct {
 	remotes map[string]string // path -> remote URL
 }
 
-func (m *mockGit) Clone(context.Context, string, string) error           { return nil }
-func (m *mockGit) Checkout(context.Context, string, string) error        { return nil }
-func (m *mockGit) Pull(context.Context, string) error                    { return nil }
-func (m *mockGit) ResetHard(context.Context, string) error               { return nil }
-func (m *mockGit) IsClean(context.Context, string) (bool, error)         { return true, nil }
-func (m *mockGit) Branch(context.Context, string) (string, error)        { return "main", nil }
-func (m *mockGit) DefaultBranch(context.Context, string) (string, error) { return "main", nil }
-func (m *mockGit) DiffStats(context.Context, string) (int, int, error)   { return 0, 0, nil }
-func (m *mockGit) IsValidRepo(context.Context, string) error             { return nil }
+func (m *mockGit) Clone(context.Context, string, string) error                  { return nil }
+func (m *mockGit) Checkout(context.Context, string, string) error               { return nil }
+func (m *mockGit) Pull(context.Context, string) error                           { return nil }
+func (m *mockGit) ResetHard(context.Context, string) error                      { return nil }
+func (m *mockGit) IsClean(context.Context, string) (bool, error)                { return true, nil }
+func (m *mockGit) Branch(context.Context, string) (string, error)               { return "main", nil }
+func (m *mockGit) DefaultBranch(context.Context, string) (string, error)        { return "main", nil }
+func (m *mockGit) DiffStats(context.Context, string) (int, int, error)          { return 0, 0, nil }
+func (m *mockGit) IsValidRepo(context.Context, string) error                    { return nil }
+func (m *mockGit) CloneBare(context.Context, string, string) error              { return nil }
+func (m *mockGit) WorktreeAdd(context.Context, string, string, string) error    { return nil }
+func (m *mockGit) WorktreeRemove(context.Context, string, string, string) error { return nil }
+func (m *mockGit) Fetch(context.Context, string) error                          { return nil }
 func (m *mockGit) RemoteURL(_ context.Context, dir string) (string, error) {
 	if remote, ok := m.remotes[dir]; ok {
 		return remote, nil
