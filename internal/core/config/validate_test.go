@@ -141,10 +141,10 @@ func TestValidateDeep_KeybindingMissingCmd(t *testing.T) {
 	assert.Contains(t, fieldErrs[0].Err.Error(), "cmd is required")
 }
 
-func TestValidateUserKeybindings_InvalidCmdReference(t *testing.T) {
+func TestValidateUserKeybindings_EmptyCmd(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Keybindings = map[string]Keybinding{
-		"x": {Cmd: "NonExistentCommand"},
+		"x": {Help: "does nothing"},
 	}
 
 	err := cfg.validateUserKeybindings()
@@ -152,14 +152,18 @@ func TestValidateUserKeybindings_InvalidCmdReference(t *testing.T) {
 	var fieldErrs criterio.FieldErrors
 	require.ErrorAs(t, err, &fieldErrs)
 	assert.Len(t, fieldErrs, 1)
-	assert.Contains(t, fieldErrs[0].Err.Error(), "does not reference a valid user command")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "cmd is required")
 }
 
-func TestValidateUserKeybindings_PluginCommandFromDefaults(t *testing.T) {
+func TestValidateUserKeybindings_PluginCommandAllowed(t *testing.T) {
 	cfg := validConfig(t)
-	// TmuxOpen is a plugin command referenced by defaultKeybindings — should be valid
+	// Plugin commands (registered at runtime) must be allowed at config-load time.
+	// Both commands in default keybindings and arbitrary plugin commands should pass.
 	cfg.Keybindings = map[string]Keybinding{
-		"x": {Cmd: "TmuxOpen"},
+		"t": {Cmd: "TmuxOpen"},        // in default keybindings
+		"g": {Cmd: "GithubOpenPR"},    // plugin command not in defaults
+		"l": {Cmd: "LazyGitOpen"},     // plugin command not in defaults
+		"u": {Cmd: "UnknownFuturCmd"}, // unknown — allowed, caught at invocation time
 	}
 
 	err := cfg.validateUserKeybindings()

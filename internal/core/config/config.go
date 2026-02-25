@@ -960,30 +960,18 @@ func (c *Config) validateKeybindingsBasic() error {
 	return errs.ToError()
 }
 
-// validateUserKeybindings validates user-defined keybindings reference valid commands.
-// Called before merging with defaults so only user-provided keybindings are checked.
+// validateUserKeybindings validates user-defined keybindings before merging with defaults.
+// Only structural validity (non-empty cmd) is checked here because plugin commands are
+// registered at runtime and are not known at config-load time. Command existence is
+// validated at the point of invocation.
 func (c *Config) validateUserKeybindings() error {
 	var errs criterio.FieldErrorsBuilder
-
-	allCommands := c.MergedUserCommands()
-
-	// Commands referenced by default keybindings are valid targets for user rebinding.
-	// This includes plugin commands (TmuxOpen, etc.) not yet registered at config-load time.
-	defaultBindingCmds := make(map[string]bool, len(defaultKeybindings))
-	for _, kb := range defaultKeybindings {
-		defaultBindingCmds[kb.Cmd] = true
-	}
 
 	for key, kb := range c.Keybindings {
 		field := fmt.Sprintf("keybindings[%q]", key)
 
 		if kb.Cmd == "" {
 			errs = errs.Append(field, fmt.Errorf("cmd is required"))
-			continue
-		}
-
-		if _, exists := allCommands[kb.Cmd]; !exists && !defaultBindingCmds[kb.Cmd] {
-			errs = errs.Append(field, fmt.Errorf("cmd %q does not reference a valid user command", kb.Cmd))
 		}
 	}
 
