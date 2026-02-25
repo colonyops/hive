@@ -4,7 +4,9 @@ icon: lucide/layers
 
 # Sessions
 
-A hive session is an isolated git clone paired with a terminal environment for running AI agents. Instead of working directly in your main repository — where multiple agents would step on each other's changes — hive creates separate clones so each agent gets its own workspace. When you create a session, hive clones the repository (or reuses a recycled clone), then spawns a tmux session with windows for your AI tools.
+A hive session is an isolated git workspace paired with a terminal environment for running AI agents. Instead of working directly in your main repository — where multiple agents would step on each other's changes — hive creates separate workspaces so each agent gets its own copy. When you create a session, hive clones the repository (or reuses a recycled session), then spawns a tmux session with windows for your AI tools.
+
+Hive supports two clone strategies: **full** (default, a complete independent clone) and **worktree** (git worktrees sharing a single bare clone). See [Clone Strategies](../configuration/index.md#clone-strategies) for details.
 
 Each project (git remote) can have multiple sessions running in parallel, each working on a different task. Sessions can run multiple agents in separate tmux windows — for example, a primary Claude agent alongside a test runner.
 
@@ -43,7 +45,7 @@ An isolated git clone in a dedicated directory with its own terminal environment
 
 - Unique 6-character ID (e.g., `26kj0c`)
 - Display name (e.g., `fix-auth-bug`)
-- Isolated git clone at a specific path
+- Isolated git workspace at a specific path (full clone or worktree)
 - One or more agent windows (configured via [agent profiles](../configuration/index.md#agents))
 - Lifecycle: `active` → `recycled` → `deleted`
 
@@ -75,7 +77,7 @@ Sessions move through a managed lifecycle:
 4. **Corrupted** — If hive detects an invalid state (e.g., missing directory, broken git repo), the session is marked corrupted and can only be deleted.
 
 !!! tip "Prefer recycling over deleting"
-    Recycled sessions are reused on the next `hive new`, skipping a fresh `git clone`. This saves time and disk I/O, especially for large repositories.
+    Recycled sessions are reused on the next `hive new`, skipping a fresh `git clone`. This saves time and disk I/O, especially for large repositories. For worktree sessions, recycling removes the worktree (not the shared bare clone), so the next session can reuse the same path without re-downloading repository history.
 
 ## Status Indicators
 

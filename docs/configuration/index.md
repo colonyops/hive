@@ -51,6 +51,7 @@ rules:
 | `copy_command`                | `string`   | `pbcopy` (macOS)     | Command to copy to clipboard                |
 | `auto_delete_corrupted`       | `bool`     | `true`               | Auto-delete corrupted sessions on prune     |
 | `history.max_entries`         | `int`      | `100`                | Max command palette history entries         |
+| `clone_strategy`              | `string`   | `"full"`             | Default clone strategy: `"full"` or `"worktree"` (see [Clone Strategies](#clone-strategies)) |
 
 ## Agents
 
@@ -96,6 +97,65 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | `todos.limiter.rate_limit_per_session` | `duration`        | `0`     | Per-session add cooldown (`0` disables) |
 | `todos.notifications.toast`          | `bool`              | `true`  | Show toast on todo creation |
 
+## Clone Strategies
+
+Hive supports two strategies for isolating session repositories:
+
+### `full` (default)
+
+Each session gets a complete `git clone` of the remote. This is the simplest approach and works with any workflow.
+
+```
+~/.local/share/hive/repos/
+└── myproject-abc123/          ← full clone (independent .git directory)
+    ├── .git/
+    └── src/
+```
+
+### `worktree`
+
+All sessions for the same remote share a single bare clone (`repos/.bare/<owner>/<repo>/`). Each session is a [git worktree](https://git-scm.com/docs/git-worktree) pointing into the shared bare clone. This avoids re-downloading repository history for each session and makes fetches faster.
+
+```
+~/.local/share/hive/repos/
+├── .bare/
+│   └── acme/myproject/        ← shared bare clone (fetch target)
+├── myproject-wt-abc123/       ← session worktree (.git is a file)
+│   ├── .git                   ← gitdir: .../.bare/.../worktrees/...
+│   └── src/
+└── myproject-wt-def456/       ← another session worktree
+    ├── .git
+    └── src/
+```
+
+**When to use worktree:**
+
+- Large repositories where cloning takes a long time
+- Many parallel sessions for the same repository
+- Teams or workflows requiring fast session recycling
+
+**Set globally** in `config.yaml`:
+
+```yaml
+clone_strategy: worktree
+```
+
+**Override per rule** (see [Rules](rules.md#rule-fields)):
+
+```yaml
+rules:
+  - pattern: ".*github.com/acme/.*"
+    clone_strategy: worktree
+```
+
+**Override per session** with the CLI flag:
+
+```bash
+hive new --remote git@github.com:acme/myproject.git --clone-strategy worktree my-task
+```
+
+Priority: CLI flag > rule override > global `clone_strategy`.
+
 ## More Configuration
 
 - **[Rules](rules.md)** — Repository-specific spawn, recycle, setup commands, and file copying
@@ -116,7 +176,11 @@ All data is stored at `~/.local/share/hive/`:
 │   ├── hive-tmux              # Tmux session launcher
 │   └── agent-send             # Send text to agent in tmux
 ├── repos/                     # Cloned repositories
-│   └── myproject-feature1-abc123/
+│   ├── myproject-feature1-abc123/      # full-clone session
+│   ├── .bare/                          # worktree sessions share bare clones
+│   │   └── owner/myproject/            # bare clone (shared fetch target)
+│   ├── myproject-wt-abc123/            # worktree session
+│   └── myproject-wt-def456/            # another worktree session
 └── context/                   # Per-repo context directories
     ├── {owner}/{repo}/        # Linked via .hive symlink
     └── shared/                # Shared context
