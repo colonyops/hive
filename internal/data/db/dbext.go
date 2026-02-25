@@ -3,6 +3,7 @@ package db
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -139,10 +140,23 @@ func (db *DB) initSchema(ctx context.Context) error {
 
 // runMigrations applies incremental schema migrations for existing databases.
 func (db *DB) runMigrations(ctx context.Context) error {
+	// Check if the legacy schema_version table exists. Fresh databases will not
+	// have it; all their schema is handled by initSchema via the migration files.
+	var tableName string
+	err := db.conn.QueryRowContext(ctx,
+		"SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'",
+	).Scan(&tableName)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("failed to check schema_version table: %w", err)
+	}
+
 	// Use MAX(version) for deterministic reads — the table may contain multiple
 	// rows from previous schema versions (each version was inserted as a new row).
 	var version int
-	err := db.conn.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_version").Scan(&version)
+	err = db.conn.QueryRowContext(ctx, "SELECT MAX(version) FROM schema_version").Scan(&version)
 	if err != nil {
 		return fmt.Errorf("failed to read schema version: %w", err)
 	}

@@ -175,7 +175,8 @@ func updateSessionState(t *testing.T, h *Harness, id, state string) {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	_, err = db.Exec(`UPDATE sessions SET state = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?`, state, id)
+	// updated_at is stored as Unix nanoseconds (INTEGER), not a text timestamp.
+	_, err = db.Exec(`UPDATE sessions SET state = ?, updated_at = ? WHERE id = ?`, state, time.Now().UnixNano(), id)
 	require.NoError(t, err)
 }
 

@@ -6,6 +6,7 @@ CREATE TABLE IF NOT EXISTS sessions (
     path TEXT NOT NULL,
     remote TEXT NOT NULL,
     state TEXT NOT NULL CHECK(state IN ('active', 'recycled', 'corrupted')),
+    clone_strategy TEXT NOT NULL DEFAULT 'full',
     metadata TEXT, -- JSON blob for map[string]string
     created_at INTEGER NOT NULL, -- Unix timestamp in nanoseconds
     updated_at INTEGER NOT NULL -- Unix timestamp in nanoseconds
