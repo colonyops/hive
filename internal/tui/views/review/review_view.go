@@ -1962,15 +1962,26 @@ type OpenDocumentMsg struct {
 }
 
 // OpenDocumentByPath attempts to open a specific document by path.
-// Path can be absolute or relative to context directory.
+// Path can be absolute, relative to context directory, or prefixed with ".hive/"
+// (the symlink name agents use to reference context files from the repo root).
 // Returns a command that sends an OpenDocumentMsg.
 func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 	return func() tea.Msg {
-		// Try to find document by matching path
+		// Resolve .hive/ prefix: the .hive symlink in the repo root points to contextDir,
+		// so ".hive/foo" is equivalent to contextDir/foo. Agents use .hive/-prefixed paths
+		// in URIs, but DiscoverDocuments stores RelPath relative to contextDir (no prefix).
+		absPath := path
+		relPath := path
+		if v.contextDir != "" && strings.HasPrefix(path, ".hive/") {
+			rel := strings.TrimPrefix(path, ".hive/")
+			absPath = filepath.Join(v.contextDir, rel)
+			relPath = rel
+		}
+
 		var found *Document
 		for _, ti := range TreeItemsDocuments(v.list.Items()) {
-			// Check if path matches (either full path or relative path)
-			if ti.Document.Path == path || ti.Document.RelPath == path {
+			if ti.Document.Path == path || ti.Document.RelPath == path ||
+				ti.Document.Path == absPath || ti.Document.RelPath == relPath {
 				doc := ti.Document
 				found = &doc
 				break
@@ -1985,7 +1996,7 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 				break
 			}
 
-			// Also check basename match
+			// Basename fallback for legacy URIs or short references
 			if filepath.Base(ti.Document.Path) == filepath.Base(path) {
 				doc := ti.Document
 				found = &doc
@@ -1993,12 +2004,24 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 			}
 		}
 
-		if found == nil {
-			// Return error message that will be handled by model
-			return OpenDocumentMsg{Path: path, Err: fmt.Errorf("document not found")}
+		// If not in the indexed list, try loading directly from disk.
+		// This handles newly created files that the watcher hasn't indexed yet.
+		if found == nil && absPath != path {
+			if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
+				doc := Document{
+					Path:    absPath,
+					RelPath: relPath,
+					Type:    inferDocumentType(relPath),
+					ModTime: info.ModTime(),
+				}
+				found = &doc
+			}
 		}
 
-		// Return success message with path
+		if found == nil {
+			return OpenDocumentMsg{Path: path, Err: fmt.Errorf("document not found: %s", path)}
+		}
+
 		return OpenDocumentMsg{Path: found.Path}
 	}
 }

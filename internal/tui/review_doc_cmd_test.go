@@ -41,13 +41,13 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	// Create a mock model with review view
 	docs := []review.Document{
 		{
-			Path:    "/test/doc1.md",
-			RelPath: ".hive/plans/doc1.md",
+			Path:    "/test/plans/doc1.md",
+			RelPath: "plans/doc1.md",
 			Type:    review.DocTypePlan,
 		},
 		{
-			Path:    "/test/doc2.md",
-			RelPath: ".hive/research/doc2.md",
+			Path:    "/test/research/doc2.md",
+			RelPath: "research/doc2.md",
 			Type:    review.DocTypeResearch,
 		},
 	}
@@ -79,15 +79,17 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 }
 
 func TestOpenDocument(t *testing.T) {
+	// Documents as DiscoverDocuments produces them: RelPath is relative to contextDir,
+	// without any ".hive/" prefix. The contextDir is "/test" here.
 	docs := []review.Document{
 		{
-			Path:    "/test/doc1.md",
-			RelPath: ".hive/plans/doc1.md",
+			Path:    "/test/plans/doc1.md",
+			RelPath: "plans/doc1.md",
 			Type:    review.DocTypePlan,
 		},
 		{
-			Path:    "/test/doc2.md",
-			RelPath: ".hive/research/doc2.md",
+			Path:    "/test/research/doc2.md",
+			RelPath: "research/doc2.md",
 			Type:    review.DocTypeResearch,
 		},
 	}
@@ -101,11 +103,16 @@ func TestOpenDocument(t *testing.T) {
 	}{
 		{
 			name:    "find by full path",
-			path:    "/test/doc1.md",
+			path:    "/test/plans/doc1.md",
 			wantErr: false,
 		},
 		{
-			name:    "find by relative path",
+			name:    "find by relative path (contextDir-relative, no .hive/ prefix)",
+			path:    "plans/doc1.md",
+			wantErr: false,
+		},
+		{
+			name:    "find by .hive/ prefix path (as agents write URIs)",
 			path:    ".hive/plans/doc1.md",
 			wantErr: false,
 		},
