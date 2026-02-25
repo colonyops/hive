@@ -132,6 +132,33 @@ func parseFilename(filename string) (int, string, string, error) {
 	return version, parts[1], direction, nil
 }
 
+// goMigration is a function-based migration for operations that cannot be
+// expressed purely in SQL (e.g. SQLite ALTER TABLE which lacks IF NOT EXISTS).
+type goMigration func(ctx context.Context, tx *sql.Tx) error
+
+// goMigrations maps migration versions to Go functions. When present, the Go
+// function is called instead of executing the .up.sql content directly.
+var goMigrations = map[int]goMigration{
+	8: addCloneStrategyColumn,
+}
+
+// addCloneStrategyColumn adds clone_strategy to the sessions table if missing.
+// SQLite does not support ALTER TABLE … ADD COLUMN IF NOT EXISTS, so we check
+// pragma_table_info first to keep the migration idempotent.
+func addCloneStrategyColumn(ctx context.Context, tx *sql.Tx) error {
+	var count int
+	if err := tx.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
+	).Scan(&count); err != nil {
+		return fmt.Errorf("checking for clone_strategy column: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+	_, err := tx.ExecContext(ctx, "ALTER TABLE sessions ADD COLUMN clone_strategy TEXT NOT NULL DEFAULT 'full'")
+	return err
+}
+
 // migrateUp applies all pending up migrations in version order.
 // Creates the schema_migrations table if needed and bootstraps from legacy schema_version.
 func migrateUp(ctx context.Context, conn *sql.DB) error {
@@ -159,8 +186,14 @@ func migrateUp(ctx context.Context, conn *sql.DB) error {
 		}
 
 		slog.Info("applying migration", "version", m.Version, "name", m.Name)
-		if err := applyMigration(ctx, conn, m.Version, m.Name, m.UpSQL); err != nil {
-			return fmt.Errorf("migration %04d (%s): %w", m.Version, m.Name, err)
+		if fn, ok := goMigrations[m.Version]; ok {
+			if err := applyGoMigration(ctx, conn, m.Version, m.Name, fn); err != nil {
+				return fmt.Errorf("migration %04d (%s): %w", m.Version, m.Name, err)
+			}
+		} else {
+			if err := applyMigration(ctx, conn, m.Version, m.Name, m.UpSQL); err != nil {
+				return fmt.Errorf("migration %04d (%s): %w", m.Version, m.Name, err)
+			}
 		}
 	}
 
@@ -322,6 +355,29 @@ func applyMigration(ctx context.Context, conn *sql.DB, version int, name, sqlStr
 
 	if _, err := tx.ExecContext(ctx, sqlStr); err != nil {
 		return fmt.Errorf("executing SQL: %w", err)
+	}
+
+	_, err = tx.ExecContext(ctx,
+		"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+		version, name, time.Now().UnixNano(),
+	)
+	if err != nil {
+		return fmt.Errorf("recording migration: %w", err)
+	}
+
+	return tx.Commit()
+}
+
+// applyGoMigration calls fn inside a transaction and records the version on success.
+func applyGoMigration(ctx context.Context, conn *sql.DB, version int, name string, fn goMigration) error {
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if err := fn(ctx, tx); err != nil {
+		return fmt.Errorf("executing migration: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx,

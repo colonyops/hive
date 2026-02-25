@@ -138,15 +138,23 @@ func TestMigrateDown(t *testing.T) {
 	`)
 	require.NoError(t, err)
 
-	// Revert the last migration (todo_items).
+	// Revert the last migration (add_clone_strategy).
 	err = MigrateDown(ctx, conn, 1)
 	require.NoError(t, err)
 
-	// todo_items table should be gone.
-	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
-	require.Error(t, err, "todo_items should not exist after down migration")
+	// clone_strategy column should be gone.
+	var colCount int
+	err = conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
+	).Scan(&colCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, colCount, "clone_strategy column should not exist after down migration")
 
-	// sessions table should still exist.
+	// todo_items table should still exist.
+	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
+	require.NoError(t, err, "todo_items should still exist")
+
+	// sessions table should still exist with the row.
 	var count int
 	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM sessions").Scan(&count)
 	require.NoError(t, err)
