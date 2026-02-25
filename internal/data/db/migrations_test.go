@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -131,26 +132,89 @@ func TestMigrateDown(t *testing.T) {
 	ctx := context.Background()
 	conn := database.Conn()
 
-	// Insert a session row so we can verify the table still works.
+	// Insert a session row (clone_strategy defaults to 'full').
 	_, err := conn.ExecContext(ctx, `
 		INSERT INTO sessions (id, name, slug, path, remote, state, created_at, updated_at)
 		VALUES ('test-1', 'Test', 'test', '/tmp/test', 'https://example.com', 'active', 1, 1)
 	`)
 	require.NoError(t, err)
 
-	// Revert the last migration (todo_items).
+	// Revert the last migration (add_clone_strategy).
 	err = MigrateDown(ctx, conn, 1)
 	require.NoError(t, err)
 
-	// todo_items table should be gone.
-	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
-	require.Error(t, err, "todo_items should not exist after down migration")
+	// clone_strategy column should be gone.
+	var colCount int
+	err = conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
+	).Scan(&colCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, colCount, "clone_strategy column should not exist after down migration")
 
-	// sessions table should still exist.
+	// todo_items table should still exist (only migration 8 was reverted).
+	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
+	require.NoError(t, err, "todo_items should still exist")
+
+	// sessions table should still have the row.
 	var count int
 	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM sessions").Scan(&count)
 	require.NoError(t, err)
 	assert.Equal(t, 1, count, "session row should be preserved")
+}
+
+func TestGoMigration_CloneStrategyIdempotent(t *testing.T) {
+	conn := openRawConn(t)
+	ctx := context.Background()
+
+	migrations, err := loadMigrations()
+	require.NoError(t, err)
+
+	// Apply migrations 1-7 using their SQL directly (simulating a pre-0008 database).
+	for _, m := range migrations {
+		if m.Version >= 8 {
+			break
+		}
+		_, err := conn.ExecContext(ctx, m.UpSQL)
+		require.NoError(t, err, "applying migration %d SQL", m.Version)
+	}
+
+	// Manually add clone_strategy to sessions, simulating a database where the
+	// old migration 0001 had the column baked in.
+	_, err = conn.ExecContext(ctx,
+		"ALTER TABLE sessions ADD COLUMN clone_strategy TEXT NOT NULL DEFAULT 'full'",
+	)
+	require.NoError(t, err, "adding clone_strategy manually")
+
+	// Set up schema_migrations to reflect versions 1-7 as applied.
+	require.NoError(t, ensureMigrationsTable(ctx, conn))
+	now := time.Now().UnixNano()
+	for _, m := range migrations {
+		if m.Version >= 8 {
+			break
+		}
+		_, err := conn.ExecContext(ctx,
+			"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
+			m.Version, m.Name, now,
+		)
+		require.NoError(t, err)
+	}
+
+	// Run migrateUp — migration 8 must succeed even though clone_strategy already exists.
+	err = migrateUp(ctx, conn)
+	require.NoError(t, err, "migrateUp must be idempotent when clone_strategy column already exists")
+
+	// Migration 8 should be recorded as applied.
+	applied, err := appliedVersions(ctx, conn)
+	require.NoError(t, err)
+	assert.True(t, applied[8], "migration 8 should be marked as applied")
+
+	// clone_strategy column should still exist and be queryable.
+	var colCount int
+	err = conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
+	).Scan(&colCount)
+	require.NoError(t, err)
+	assert.Equal(t, 1, colCount, "clone_strategy column should exist")
 }
 
 func TestMigrateDown_InvalidN(t *testing.T) {
@@ -204,7 +268,7 @@ func TestParseFilename(t *testing.T) {
 	}{
 		{"0001_initial.up.sql", 1, "initial", "up", false},
 		{"0001_initial.down.sql", 1, "initial", "down", false},
-		{"0007_add_clone_strategy.up.sql", 7, "add_clone_strategy", "up", false},
+		{"0008_add_clone_strategy.up.sql", 8, "add_clone_strategy", "up", false},
 		{"0100_big_version.down.sql", 100, "big_version", "down", false},
 		{"bad.sql", 0, "", "", true},
 		{"0001_initial.sql", 0, "", "", true},
