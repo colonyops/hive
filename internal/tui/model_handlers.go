@@ -378,8 +378,8 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 	}
 
 	m.updateInfo = msg.result
-	m.notifyBus.Infof("Update available: %s -> %s", msg.result.Current, msg.result.Latest)
-	return m, m.ensureToastTick()
+	m.publishNotificationf(notify.LevelInfo, "Update available: %s -> %s", msg.result.Current, msg.result.Latest)
+	return m, nil
 }
 
 // --- Todo Panel ---
@@ -406,8 +406,8 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if item.URI.IsEmpty() {
-			m.notifyBus.Infof("no URI on this todo")
-			return m, m.ensureToastTick()
+			m.publishNotificationf(notify.LevelInfo, "no URI on this todo")
+			return m, nil
 		}
 		switch item.URI.Scheme() {
 		case "session":
@@ -481,7 +481,7 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		items, err := m.todoService.List(ctx, todo.ListFilter{})
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to list todos for auto-complete")
-			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete failed: unable to list todos"}}
+			return todoAutoCompleteResultMsg{failed: -1}
 		}
 		failed := 0
 		for _, item := range items {
@@ -506,12 +506,12 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		pending, err := m.todoService.CountPending(ctx)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to load todo pending count after auto-complete")
-			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
+			return todoAutoCompleteResultMsg{failed: failed}
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to load todo open count after auto-complete")
-			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
+			return todoAutoCompleteResultMsg{failed: failed}
 		}
 		return todoAutoCompleteResultMsg{pendingCount: pending, openCount: open, failed: failed}
 	}

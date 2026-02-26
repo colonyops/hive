@@ -535,7 +535,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.todoBadge.updateCounts(msg.pendingCount, msg.openCount)
 		if msg.failed > 0 {
 			m.publishNotificationf(notify.LevelWarning, "Failed to auto-complete %d todo(s)", msg.failed)
-			model, cmd = m, m.ensureToastTick()
+			model, cmd = m, nil
 		} else {
 			model, cmd = m, nil
 		}
@@ -545,7 +545,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			scheme = "todo"
 		}
 		m.publishNotificationf(notify.LevelInfo, "New %s: %s", scheme, msg.payload.Todo.Title)
-		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated(), m.ensureToastTick())
+		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.listenForTodoCreated())
 
 	case actionResultMsg:
 		if msg.Err != nil {
@@ -556,7 +556,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		} else {
 			m.publishNotificationf(notify.LevelInfo, "Action completed")
 		}
-		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.ensureToastTick())
+		model, cmd = m, m.loadTodoCounts()
 
 	// Input
 	case tea.KeyPressMsg:
@@ -982,7 +982,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			m.state = stateShowingTodos
 			m.modals.ShowTodoPanel(m.todoService)
 			if failures := m.modals.TodoPanel.AcknowledgeErrorCount(); failures > 0 {
-				return m, m.notifyError("failed to acknowledge %d todo(s)", failures)
+				m.notifyErrorf("failed to acknowledge %d todo(s)", failures)
+				return m, nil
 			}
 			return m, nil
 		}
@@ -1672,6 +1673,13 @@ func (m *Model) publishNotificationf(level notify.Level, format string, args ...
 // notifyErrorf publishes an error-level notification.
 func (m *Model) notifyErrorf(format string, args ...any) {
 	m.publishNotificationf(notify.LevelError, format, args...)
+}
+
+// notifyError publishes an error-level notification and returns nil.
+// This is a convenience wrapper for use in (Model, tea.Cmd) return patterns.
+func (m *Model) notifyError(format string, args ...any) tea.Cmd {
+	m.notifyErrorf(format, args...)
+	return nil
 }
 
 // applyTheme switches the active theme at runtime.
