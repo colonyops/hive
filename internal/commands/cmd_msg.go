@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/messaging"
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
@@ -25,21 +26,27 @@ type MsgCmd struct {
 	app   *hive.App
 
 	// pub flags
-	pubTopics []string
-	pubFile   string
-	pubSender string
+	pubTopics  []string
+	pubFile    string
+	pubSender  string
+	pubMessage string
 
 	// sub flags
 	subTopic   string
 	subTimeout string
-	subLast    int
+	subTail    int
 	subListen  bool
 	subWait    bool
-	subPeek    bool
+	subAck     bool
 
 	// inbox flags
-	inboxAll  bool
-	inboxPeek bool
+	inboxAll     bool
+	inboxAck     bool
+	inboxSession string
+	inboxListen  bool
+	inboxWait    bool
+	inboxTimeout string
+	inboxTail    int
 
 	// topic flags
 	topicNew    bool
@@ -58,10 +65,13 @@ func (cmd *MsgCmd) Register(app *cli.Command) *cli.Command {
 		Usage: "Publish and subscribe to inter-agent messages",
 		Description: `Message commands for inter-agent communication.
 
-Messages are stored in topic-based JSON files at $XDG_DATA_HOME/hive/messages/topics/.
-Each topic is a separate file, allowing agents to communicate via named channels.
+Messages are stored in a SQLite database at $XDG_DATA_HOME/hive/.
+Each topic is a named channel, allowing agents to communicate via pub/sub.
 
-The sender is auto-detected from the current working directory's hive session.`,
+The sender is auto-detected from the current working directory's hive session.
+
+Output format: All commands produce JSON Lines (one JSON object per line) on stdout.
+Warnings and errors are written to stderr.`,
 		Commands: []*cli.Command{
 			cmd.pubCmd(),
 			cmd.subCmd(),
@@ -78,21 +88,26 @@ func (cmd *MsgCmd) pubCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "pub",
 		Usage:     "Publish a message to topic(s)",
-		UsageText: "hive msg pub --topic <topic> [--topic <topic2>] [message]",
+		UsageText: "hive msg pub --topic <topic> [--topic <topic2>] [-m message | message | -f file | stdin]",
 		Description: `Publishes a message to the specified topic(s).
 
 The message can be provided as:
-- A command-line argument
+- Inline with -m/--message flag (recommended)
+- A positional command-line argument
 - From a file with -f/--file
-- From stdin if no argument is provided
+- From stdin if no other source is provided
+
+Only one message source may be used. An error is returned if multiple are provided.
 
 The sender is auto-detected from the current hive session, or can be overridden with --sender.
 Topic supports wildcards for publishing to multiple topics (e.g., agent.*.inbox).
 
+Output: JSON confirmation line with status, resolved topics, and sender.
+
 Examples:
-  hive msg pub --topic build.started "Build starting"
-  hive msg pub -t agent.abc.inbox -t agent.xyz.inbox "Hello all"
-  hive msg pub -t "agent.*.inbox" "Broadcast message"
+  hive msg pub --topic build.started -m "Build starting"
+  hive msg pub -t agent.abc.inbox -t agent.xyz.inbox -m "Hello all"
+  hive msg pub -t "agent.*.inbox" -m "Broadcast message"
   echo "Hello" | hive msg pub --topic greetings
   hive msg pub --topic logs -f build.log`,
 		Flags: []cli.Flag{
@@ -102,6 +117,12 @@ Examples:
 				Usage:       "topic(s) to publish to (supports wildcards, repeatable)",
 				Required:    true,
 				Destination: &cmd.pubTopics,
+			},
+			&cli.StringFlag{
+				Name:        "message",
+				Aliases:     []string{"m"},
+				Usage:       "inline message content",
+				Destination: &cmd.pubMessage,
 			},
 			&cli.StringFlag{
 				Name:        "file",
@@ -124,14 +145,12 @@ func (cmd *MsgCmd) subCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "sub",
 		Usage:     "Read messages from a topic",
-		UsageText: "hive msg sub [--topic <pattern>] [--last N] [--listen]",
+		UsageText: "hive msg sub [--topic <pattern>] [--tail N] [--listen] [--ack]",
 		Description: `Reads messages from topics, optionally filtering by topic pattern.
 
-By default, returns all messages as JSON and exits. Use --listen to poll for new messages,
+By default, returns all messages as JSON Lines and exits without acknowledging.
+Use --ack to mark messages as read. Use --listen to poll for new messages,
 or --wait to block until a single message arrives (useful for inter-agent handoff).
-
-Messages are automatically acknowledged when read (if in a hive session).
-Use --peek to read without acknowledging.
 
 For unread inbox messages, use "hive msg inbox" instead.
 
@@ -140,14 +159,17 @@ Topic patterns:
 - "exact.topic": exact topic match
 - "prefix.*": wildcard match for topics starting with "prefix."
 
+Output: One JSON object per line (JSON Lines format).
+On timeout (--listen/--wait), prints a JSON status line to stdout and exits with code 1.
+
 Examples:
   hive msg sub                       # all messages as JSON
   hive msg sub --topic agent.build   # specific topic
   hive msg sub --topic agent.*       # wildcard pattern
-  hive msg sub --last 10             # last 10 messages
+  hive msg sub --tail 10             # last 10 messages
   hive msg sub --listen              # poll for new messages
   hive msg sub --wait --topic handoff # wait for single message
-  hive msg sub --peek                # read without acknowledging`,
+  hive msg sub --ack                 # read and acknowledge`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "topic",
@@ -156,10 +178,10 @@ Examples:
 				Destination: &cmd.subTopic,
 			},
 			&cli.IntFlag{
-				Name:        "last",
-				Aliases:     []string{"n"},
+				Name:        "tail",
+				Aliases:     []string{"n", "last"},
 				Usage:       "return only last N messages",
-				Destination: &cmd.subLast,
+				Destination: &cmd.subTail,
 			},
 			&cli.BoolFlag{
 				Name:        "listen",
@@ -174,9 +196,9 @@ Examples:
 				Destination: &cmd.subWait,
 			},
 			&cli.BoolFlag{
-				Name:        "peek",
-				Usage:       "read without acknowledging messages",
-				Destination: &cmd.subPeek,
+				Name:        "ack",
+				Usage:       "acknowledge (mark as read) messages after reading",
+				Destination: &cmd.subAck,
 			},
 			&cli.StringFlag{
 				Name:        "timeout",
@@ -185,16 +207,22 @@ Examples:
 				Destination: &cmd.subTimeout,
 			},
 		},
-		Action: cmd.runSub,
+		Action: func(ctx context.Context, c *cli.Command) error {
+			return cmd.runSub(ctx, c)
+		},
 	}
 }
 
 func (cmd *MsgCmd) listCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "list",
-		Usage:     "List all topics",
+		Usage:     "List all topics with activity info",
 		UsageText: "hive msg list",
-		Description: `Lists all topics with their message counts as JSON.
+		Description: `Lists all topics with message counts, activity timestamps, and unread counts.
+
+Output: One JSON object per line (JSON Lines format).
+Fields: name, message_count, unread_count, last_activity, last_sender.
+unread_count is included when running from a hive session directory.
 
 Examples:
   hive msg list`,
@@ -212,6 +240,8 @@ func (cmd *MsgCmd) topicCmd() *cli.Command {
 The generated topic ID follows the format "<prefix>.<4-char-alphanumeric>".
 The prefix defaults to "agent" but can be configured via messaging.topic_prefix
 in your config file, or overridden with --prefix.
+
+Output: Plain text topic ID.
 
 Examples:
   hive msg topic              # outputs: agent.x7k2 (using config prefix)
@@ -263,24 +293,10 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("at least one topic required")
 	}
 
-	// Determine message content
-	var payload string
-	switch {
-	case c.NArg() >= 1:
-		payload = c.Args().Get(0)
-	case cmd.pubFile != "":
-		data, err := os.ReadFile(cmd.pubFile)
-		if err != nil {
-			return fmt.Errorf("read file: %w", err)
-		}
-		payload = string(data)
-	default:
-		// Read from stdin
-		data, err := io.ReadAll(os.Stdin)
-		if err != nil {
-			return fmt.Errorf("read stdin: %w", err)
-		}
-		payload = string(data)
+	// Determine message content — exactly one source allowed
+	payload, err := cmd.resolvePayload(c)
+	if err != nil {
+		return err
 	}
 
 	// Auto-detect session and set sender
@@ -296,11 +312,61 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 		SessionID: sessionID,
 	}
 
-	if err := msgs.Publish(ctx, msg, topics); err != nil {
+	result, err := msgs.Publish(ctx, msg, topics)
+	if err != nil {
 		return fmt.Errorf("publish message: %w", err)
 	}
 
-	return nil
+	// Print confirmation
+	type pubConfirmation struct {
+		Status string   `json:"status"`
+		Topics []string `json:"topics"`
+		Sender string   `json:"sender,omitempty"`
+	}
+	confirmation := pubConfirmation{
+		Status: "ok",
+		Topics: result.Topics,
+		Sender: sender,
+	}
+	return iojson.WriteLine(c.Root().Writer, confirmation)
+}
+
+// resolvePayload determines the message content from exactly one source.
+func (cmd *MsgCmd) resolvePayload(c *cli.Command) (string, error) {
+	sources := 0
+	if cmd.pubMessage != "" {
+		sources++
+	}
+	if c.NArg() >= 1 {
+		sources++
+	}
+	if cmd.pubFile != "" {
+		sources++
+	}
+
+	if sources > 1 {
+		return "", fmt.Errorf("multiple message sources provided; use only one of: -m flag, positional argument, -f file, or stdin")
+	}
+
+	switch {
+	case cmd.pubMessage != "":
+		return cmd.pubMessage, nil
+	case c.NArg() >= 1:
+		return c.Args().Get(0), nil
+	case cmd.pubFile != "":
+		data, err := os.ReadFile(cmd.pubFile)
+		if err != nil {
+			return "", fmt.Errorf("read file: %w", err)
+		}
+		return string(data), nil
+	default:
+		// Read from stdin
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("read stdin: %w", err)
+		}
+		return string(data), nil
+	}
 }
 
 func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
@@ -313,12 +379,12 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 
 	// Wait mode: wait for a single message and exit
 	if cmd.subWait {
-		return cmd.waitForMessage(ctx, c, msgs, topic)
+		return cmd.waitForMessage(ctx, c, msgs, topic, cmd.subAck)
 	}
 
 	// Listen mode: poll for new messages
 	if cmd.subListen {
-		return cmd.listenForMessages(ctx, c, msgs, topic)
+		return cmd.listenForMessages(ctx, c, msgs, topic, cmd.subAck)
 	}
 
 	// Default: return messages immediately
@@ -330,24 +396,24 @@ func (cmd *MsgCmd) runSub(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("subscribe: %w", err)
 	}
 
-	// Apply --last N limit if specified
-	if cmd.subLast > 0 && len(messages) > cmd.subLast {
-		messages = messages[len(messages)-cmd.subLast:]
+	// Apply --tail N limit if specified
+	if cmd.subTail > 0 && len(messages) > cmd.subTail {
+		messages = messages[len(messages)-cmd.subTail:]
 	}
 
 	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
 		return err
 	}
 
-	// Auto-acknowledge unless peeking
-	if !cmd.subPeek && len(messages) > 0 {
+	// Acknowledge only when --ack is set
+	if cmd.subAck && len(messages) > 0 {
 		cmd.acknowledgeMessages(ctx, msgs, messages)
 	}
 
 	return nil
 }
 
-func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string) error {
+func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string, ack bool) error {
 	timeout, err := time.ParseDuration(cmd.subTimeout)
 	if err != nil {
 		return fmt.Errorf("invalid timeout: %w", err)
@@ -364,7 +430,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				return nil // Timeout reached, exit silently
+				return cmd.handleTimeout(c, topic, timeout)
 			}
 
 			messages, err := msgs.Subscribe(ctx, topic, since)
@@ -378,8 +444,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *
 				}
 				since = messages[len(messages)-1].CreatedAt
 
-				// Auto-acknowledge unless peeking
-				if !cmd.subPeek {
+				if ack {
 					cmd.acknowledgeMessages(ctx, msgs, messages)
 				}
 			}
@@ -387,7 +452,7 @@ func (cmd *MsgCmd) listenForMessages(ctx context.Context, c *cli.Command, msgs *
 	}
 }
 
-func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string) error {
+func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *hive.MessageService, topic string, ack bool) error {
 	// Use 24h default for --wait mode (essentially forever for handoff scenarios)
 	timeout := 24 * time.Hour
 	if cmd.subTimeout != "30s" { // User explicitly set a timeout
@@ -409,7 +474,7 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *hiv
 			return ctx.Err()
 		case <-ticker.C:
 			if time.Now().After(deadline) {
-				return fmt.Errorf("timeout waiting for message on topic %q", topic)
+				return cmd.handleTimeout(c, topic, timeout)
 			}
 
 			messages, err := msgs.Subscribe(ctx, topic, since)
@@ -424,14 +489,28 @@ func (cmd *MsgCmd) waitForMessage(ctx context.Context, c *cli.Command, msgs *hiv
 					return err
 				}
 
-				// Auto-acknowledge unless peeking
-				if !cmd.subPeek {
+				if ack {
 					cmd.acknowledgeMessages(ctx, msgs, firstMsg)
 				}
 				return nil
 			}
 		}
 	}
+}
+
+// handleTimeout prints a JSON status line and returns a non-zero exit.
+func (cmd *MsgCmd) handleTimeout(c *cli.Command, topic string, duration time.Duration) error {
+	type timeoutStatus struct {
+		Status   string `json:"status"`
+		Topic    string `json:"topic"`
+		Duration string `json:"duration"`
+	}
+	_ = iojson.WriteLine(c.Root().Writer, timeoutStatus{
+		Status:   "timeout",
+		Topic:    topic,
+		Duration: duration.String(),
+	})
+	return cli.Exit("", 1)
 }
 
 func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
@@ -446,19 +525,41 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 		return nil // No topics, no output
 	}
 
-	// Get message counts for each topic
+	// Try to detect session for unread counts (best-effort)
+	sessionID, _ := cmd.detectSessionID(ctx)
+
 	type topicInfo struct {
 		Name         string `json:"name"`
 		MessageCount int    `json:"message_count"`
+		UnreadCount  int    `json:"unread_count"`
+		LastActivity string `json:"last_activity,omitempty"`
+		LastSender   string `json:"last_sender,omitempty"`
 	}
 
 	var infos []topicInfo
 	for _, t := range topics {
+		info := topicInfo{Name: t}
+
 		messages, err := msgs.Subscribe(ctx, t, time.Time{})
 		if err != nil && !errors.Is(err, messaging.ErrTopicNotFound) {
 			return fmt.Errorf("get messages for topic %s: %w", t, err)
 		}
-		infos = append(infos, topicInfo{Name: t, MessageCount: len(messages)})
+		info.MessageCount = len(messages)
+
+		if len(messages) > 0 {
+			last := messages[len(messages)-1]
+			info.LastActivity = last.CreatedAt.UTC().Format(time.RFC3339)
+			info.LastSender = last.Sender
+		}
+
+		if sessionID != "" {
+			unread, err := msgs.GetUnread(ctx, sessionID, t)
+			if err == nil {
+				info.UnreadCount = len(unread)
+			}
+		}
+
+		infos = append(infos, info)
 	}
 
 	for _, info := range infos {
@@ -471,6 +572,32 @@ func (cmd *MsgCmd) runList(ctx context.Context, c *cli.Command) error {
 
 func (cmd *MsgCmd) detectSessionID(ctx context.Context) (string, error) {
 	return cmd.app.Sessions.DetectSession(ctx)
+}
+
+// resolveSessionID resolves a session from a --session flag value (ID or name).
+// Returns the session ID if found, or an error.
+func (cmd *MsgCmd) resolveSessionID(ctx context.Context, sessionRef string) (string, error) {
+	// Try direct ID lookup first
+	sess, err := cmd.app.Sessions.GetSession(ctx, sessionRef)
+	if err == nil {
+		return sess.ID, nil
+	}
+
+	// Fall back to name match
+	sessions, err := cmd.app.Sessions.ListSessions(ctx)
+	if err != nil {
+		return "", fmt.Errorf("list sessions: %w", err)
+	}
+	for _, s := range sessions {
+		if s.State != session.StateActive {
+			continue
+		}
+		if s.Name == sessionRef || s.Slug == sessionRef {
+			return s.ID, nil
+		}
+	}
+
+	return "", fmt.Errorf("session not found: %s", sessionRef)
 }
 
 func (cmd *MsgCmd) printMessages(w io.Writer, messages []messaging.Message) error {
@@ -508,12 +635,23 @@ func (cmd *MsgCmd) inboxCmd() *cli.Command {
 		Name:  "inbox",
 		Usage: "Read messages from your session's inbox",
 		Description: `Auto-resolves inbox topic (agent.<id>.inbox).
-Shows unread messages and marks as read by default.
+Shows unread messages by default (without acknowledging).
+Use --ack to mark messages as read, or --all to see all messages.
+
+The session is auto-detected from the working directory, or can be specified
+with --session <id|name> to avoid detection issues.
+
+Output: One JSON object per line (JSON Lines format).
+On timeout (--listen/--wait), prints a JSON status line and exits with code 1.
 
 Examples:
-  hive msg inbox           # unread, mark as read
-  hive msg inbox --peek    # unread, don't mark
-  hive msg inbox --all     # all messages`,
+  hive msg inbox                         # unread, don't mark
+  hive msg inbox --ack                   # unread, mark as read
+  hive msg inbox --all                   # all messages
+  hive msg inbox --session my-session    # specify session explicitly
+  hive msg inbox --listen --timeout 30s  # poll for new messages
+  hive msg inbox --wait                  # wait for single message
+  hive msg inbox --tail 5               # last 5 unread messages`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:        "all",
@@ -521,9 +659,38 @@ Examples:
 				Destination: &cmd.inboxAll,
 			},
 			&cli.BoolFlag{
-				Name:        "peek",
-				Usage:       "don't mark messages as read",
-				Destination: &cmd.inboxPeek,
+				Name:        "ack",
+				Usage:       "acknowledge (mark as read) messages after reading",
+				Destination: &cmd.inboxAck,
+			},
+			&cli.StringFlag{
+				Name:        "session",
+				Usage:       "session ID or name (overrides auto-detection from working directory)",
+				Destination: &cmd.inboxSession,
+			},
+			&cli.BoolFlag{
+				Name:        "listen",
+				Aliases:     []string{"l"},
+				Usage:       "poll for new messages instead of returning immediately",
+				Destination: &cmd.inboxListen,
+			},
+			&cli.BoolFlag{
+				Name:        "wait",
+				Aliases:     []string{"w"},
+				Usage:       "wait for a single message and exit",
+				Destination: &cmd.inboxWait,
+			},
+			&cli.StringFlag{
+				Name:        "timeout",
+				Usage:       "timeout for --listen/--wait mode (e.g., 30s, 5m, 24h)",
+				Value:       "30s",
+				Destination: &cmd.inboxTimeout,
+			},
+			&cli.IntFlag{
+				Name:        "tail",
+				Aliases:     []string{"n"},
+				Usage:       "return only last N messages",
+				Destination: &cmd.inboxTail,
 			},
 		},
 		Action: cmd.runInbox,
@@ -533,15 +700,23 @@ Examples:
 func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 	msgs := cmd.messages()
 
-	sessionID, err := cmd.detectSessionID(ctx)
+	sessionID, err := cmd.resolveInboxSession(ctx)
 	if err != nil {
-		return fmt.Errorf("detect session: %w", err)
-	}
-	if sessionID == "" {
-		return fmt.Errorf("not in a hive session (run from session working directory)")
+		return err
 	}
 
 	inboxTopic := "agent." + sessionID + ".inbox"
+
+	// Delegate to listen/wait modes if requested
+	if cmd.inboxWait {
+		// Override sub fields for shared logic
+		cmd.subTimeout = cmd.inboxTimeout
+		return cmd.waitForMessage(ctx, c, msgs, inboxTopic, cmd.inboxAck)
+	}
+	if cmd.inboxListen {
+		cmd.subTimeout = cmd.inboxTimeout
+		return cmd.listenForMessages(ctx, c, msgs, inboxTopic, cmd.inboxAck)
+	}
 
 	var messages []messaging.Message
 	var msgErr error
@@ -556,14 +731,47 @@ func (cmd *MsgCmd) runInbox(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("get inbox: %w", msgErr)
 	}
 
+	// Apply --tail N limit
+	if cmd.inboxTail > 0 && len(messages) > cmd.inboxTail {
+		messages = messages[len(messages)-cmd.inboxTail:]
+	}
+
 	if err := cmd.printMessages(c.Root().Writer, messages); err != nil {
 		return err
 	}
 
-	// Auto-acknowledge unless peeking
-	if !cmd.inboxPeek && len(messages) > 0 {
+	// Acknowledge only when --ack is set
+	if cmd.inboxAck && len(messages) > 0 {
 		cmd.acknowledgeMessages(ctx, msgs, messages)
 	}
 
 	return nil
+}
+
+// resolveInboxSession resolves the session ID for inbox operations.
+// Uses --session flag if provided, otherwise falls back to CWD detection.
+func (cmd *MsgCmd) resolveInboxSession(ctx context.Context) (string, error) {
+	if cmd.inboxSession != "" {
+		resolvedID, err := cmd.resolveSessionID(ctx, cmd.inboxSession)
+		if err != nil {
+			return "", fmt.Errorf("resolve --session %q: %w", cmd.inboxSession, err)
+		}
+
+		// Warn if CWD detection returns a different session
+		if detected, _ := cmd.detectSessionID(ctx); detected != "" && detected != resolvedID {
+			log.Printf("warning: --session %s overrides detected session %s", cmd.inboxSession, detected)
+		}
+
+		return resolvedID, nil
+	}
+
+	sessionID, err := cmd.detectSessionID(ctx)
+	if err != nil {
+		return "", fmt.Errorf("detect session: %w", err)
+	}
+	if sessionID == "" {
+		return "", fmt.Errorf("could not detect session from working directory; use --session <id> or run 'hive session info' to check")
+	}
+
+	return sessionID, nil
 }

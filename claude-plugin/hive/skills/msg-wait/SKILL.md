@@ -19,9 +19,9 @@ Wait for messages on specific topics, enabling synchronization between agents an
 
 The `hive msg sub --wait` command polls the specified topic every 500ms until:
 - A message arrives (success, exit 0)
-- The timeout is reached (failure, exit 1)
+- The timeout is reached (prints JSON status, exit 1)
 
-Default timeout is 30 seconds. Messages are automatically acknowledged unless `--peek` is used.
+Default timeout is 24h for `--wait` mode. Messages are NOT acknowledged unless `--ack` is used.
 
 ## Commands
 
@@ -33,14 +33,11 @@ hive msg sub --wait --topic <topic>
 
 **Examples:**
 ```bash
-# Wait for handoff message (30s timeout)
+# Wait for handoff message (24h default timeout)
 hive msg sub --wait --topic agent.abc.inbox
 
 # Wait for build completion
 hive msg sub --wait --topic build.main.status
-
-# Wait for acknowledgment
-hive msg sub --wait --topic agent.xyz.inbox.ack
 ```
 
 ### Wait with Custom Timeout
@@ -62,13 +59,13 @@ hive msg sub --wait --topic agent.abc.inbox --timeout 2m
 hive msg sub --wait --topic build.production --timeout 10m
 ```
 
-### Wait Without Acknowledging
+### Wait and Acknowledge
 
 ```bash
-hive msg sub --wait --topic <topic> --peek
+hive msg sub --wait --topic <topic> --ack
 ```
 
-Monitor without consuming messages. Useful when another agent is the primary handler.
+Mark the received message as read so it won't appear in unread queries.
 
 ### Wait with Wildcard Topics
 
@@ -90,6 +87,23 @@ hive msg sub --listen --topic notifications --timeout 1h
 
 **Key difference:** `--wait` returns after ONE message. `--listen` continues polling and outputs ALL messages.
 
+### Inbox Wait Shorthand
+
+```bash
+hive msg inbox --wait
+hive msg inbox --wait --timeout 2m --ack
+```
+
+Equivalent to `hive msg sub --wait --topic agent.<id>.inbox` but auto-detects the inbox topic.
+
+## Output Format
+
+All output is JSON Lines on stdout. On timeout, a JSON status line is printed:
+```json
+{"status":"timeout","topic":"agent.abc.inbox","duration":"30s"}
+```
+Exit code is 1 on timeout.
+
 ## Timeout Guidelines
 
 | Duration | Use Case |
@@ -105,7 +119,7 @@ hive msg sub --listen --topic notifications --timeout 1h
 
 ```bash
 # Complete work, notify, and wait for acknowledgment
-hive msg pub --topic agent.bob.inbox "Feature X ready. Branch: feat/x"
+hive msg pub --topic agent.bob.inbox -m "Feature X ready. Branch: feat/x"
 hive msg sub --wait --topic agent.bob.inbox.ack --timeout 2m
 ```
 
@@ -113,7 +127,7 @@ hive msg sub --wait --topic agent.bob.inbox.ack --timeout 2m
 
 ```bash
 # Send request
-hive msg pub --topic coordinator.requests "Need assignment: task-type-X"
+hive msg pub --topic coordinator.requests -m "Need assignment: task-type-X"
 
 # Wait for response
 hive msg sub --wait --topic agent.myself.inbox --timeout 1m

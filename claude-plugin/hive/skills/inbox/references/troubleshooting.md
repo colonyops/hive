@@ -10,14 +10,13 @@
 - Check if messages exist: `hive msg inbox --all`
 - Ensure the sender used the correct topic
 
-## Messages Not Marked as Read
+## Messages Keep Reappearing
 
-**Problem:** Messages keep showing as unread
+**Problem:** Same messages show up every time
 
 **Solutions:**
-- Ensure NOT using `--peek` or `--all` flags (these don't mark as read)
-- Use default command: `hive msg inbox`
-- Check message file permissions in `$XDG_DATA_HOME/hive/messages/topics/`
+- Use `--ack` to mark messages as read: `hive msg inbox --ack`
+- Without `--ack`, messages remain unread by design
 
 ## Can't Find Specific Message
 
@@ -28,11 +27,11 @@
 - Search with grep: `hive msg inbox --all | grep "keyword"`
 - Pipe to grep for specific senders: `hive msg inbox --all | grep "agent-123"`
 
-## Acknowledgment Not Received
+## Session Not Detected
 
-**Problem:** Sender doesn't receive acknowledgment after message is read
+**Problem:** "could not detect session from working directory" error
 
 **Solutions:**
-- Verify sender is subscribed to `<topic>.ack`
-- Ensure recipient read with `hive msg inbox` (not `--peek` or `--all`)
-- Check acknowledgment topic exists
+- Verify you're in a hive session directory: `pwd`
+- Use `--session` flag explicitly: `hive msg inbox --session <id|name>`
+- List sessions to find correct ID: `hive ls`

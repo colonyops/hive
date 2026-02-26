@@ -54,20 +54,23 @@ This example is simple, but I've used this system at work to debug complex issue
 hive msg topic                    # outputs: agent.x7k2
 
 # Agent A publishes a question
-hive msg pub -t agent.x7k2 "What fields are in the User struct?"
+hive msg pub -t agent.x7k2 -m "What fields are in the User struct?"
 
 # Agent B subscribes and waits for messages
 hive msg sub -t agent.x7k2 --wait
 
 # Agent B responds
-hive msg pub -t agent.x7k2 "User struct has: ID, Email, Name, CreatedAt"
+hive msg pub -t agent.x7k2 -m "User struct has: ID, Email, Name, CreatedAt"
 
 # Agent A receives the response
-hive msg sub -t agent.x7k2 --last 1
+hive msg sub -t agent.x7k2 --tail 1
 ```
 
 !!! tip "Blocking vs polling"
-    Use `--wait` to block until a message arrives — useful for agents that need to synchronize. Use `--last N` to poll for the most recent messages without blocking.
+    Use `--wait` to block until a message arrives — useful for agents that need to synchronize. Use `--tail N` to poll for the most recent messages without blocking.
+
+!!! tip "Acknowledgment"
+    Messages are **not** acknowledged by default. Use `--ack` on `sub` or `inbox` to mark messages as read. This prevents accidentally consuming messages before processing them.
 
 ## CLI Reference
 

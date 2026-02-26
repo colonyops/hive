@@ -28,7 +28,7 @@ Skills are loaded automatically when the agent detects relevant context — no s
 | Skill | What it teaches the agent |
 | --- | --- |
 | `config` | How to configure hive (rules, spawn commands, keybindings, user commands) |
-| `inbox` | Reading messages, peeking without marking as read, viewing history |
+| `inbox` | Reading messages, acknowledging, waiting, viewing history |
 | `publish` | Sending messages to specific agents, broadcasting, topic naming conventions |
 | `wait` | Blocking until a message arrives, timeouts, synchronization patterns |
 | `session-info` | Retrieving current session ID, inbox topic, and session state |

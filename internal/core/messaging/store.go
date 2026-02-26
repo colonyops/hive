@@ -8,11 +8,18 @@ import (
 
 var ErrTopicNotFound = errors.New("topic not found")
 
+// PublishResult contains information about a successful publish operation.
+type PublishResult struct {
+	// Topics is the list of topics the message was actually published to
+	// (after wildcard expansion and deduplication).
+	Topics []string
+}
+
 // Store defines the interface for message persistence.
 type Store interface {
 	// Publish adds a message to multiple topics.
 	// Wildcards are expanded before publishing.
-	Publish(ctx context.Context, msg Message, topics []string) error
+	Publish(ctx context.Context, msg Message, topics []string) (PublishResult, error)
 
 	// Subscribe returns all messages for a topic, optionally filtered by since timestamp.
 	// Returns ErrTopicNotFound if the topic doesn't exist.

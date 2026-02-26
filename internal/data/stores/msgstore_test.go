@@ -26,7 +26,7 @@ func TestMsgStore_PublishAndSubscribe(t *testing.T) {
 		Sender:  "test-sender",
 	}
 
-	err = store.Publish(ctx, msg, []string{"test.topic"})
+	_, err = store.Publish(ctx, msg, []string{"test.topic"})
 	require.NoError(t, err, "Publish failed")
 
 	messages, err := store.Subscribe(ctx, "test.topic", time.Time{})
@@ -59,7 +59,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish first message
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "first"}, []string{"events"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "first"}, []string{"events"})
 	time.Sleep(10 * time.Millisecond)
 
 	// Record time between messages
@@ -67,7 +67,7 @@ func TestMsgStore_SubscribeSince(t *testing.T) {
 	time.Sleep(10 * time.Millisecond)
 
 	// Publish second message
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "second"}, []string{"events"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "second"}, []string{"events"})
 
 	// Subscribe since midpoint
 	messages, err := store.Subscribe(ctx, "events", midpoint)
@@ -85,9 +85,9 @@ func TestMsgStore_SubscribeWildcard(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish to multiple topics
-	_ = store.Publish(ctx, messaging.Message{Topic: "agent.build", Payload: "build started"}, []string{"agent.build"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "agent.test", Payload: "tests running"}, []string{"agent.test"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "other.topic", Payload: "unrelated"}, []string{"other.topic"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "agent.build", Payload: "build started"}, []string{"agent.build"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "agent.test", Payload: "tests running"}, []string{"agent.test"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "other.topic", Payload: "unrelated"}, []string{"other.topic"})
 
 	// Subscribe with wildcard
 	messages, err := store.Subscribe(ctx, "agent.*", time.Time{})
@@ -111,8 +111,8 @@ func TestMsgStore_SubscribeAll(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish to multiple topics
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic1", Payload: "msg1"}, []string{"topic1"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic2", Payload: "msg2"}, []string{"topic2"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "topic1", Payload: "msg1"}, []string{"topic1"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "topic2", Payload: "msg2"}, []string{"topic2"})
 
 	// Subscribe to all with empty pattern
 	messages, err := store.Subscribe(ctx, "", time.Time{})
@@ -133,8 +133,8 @@ func TestMsgStore_List(t *testing.T) {
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic.a", Payload: "a"}, []string{"topic.a"})
-	_ = store.Publish(ctx, messaging.Message{Topic: "topic.b", Payload: "b"}, []string{"topic.b"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "topic.a", Payload: "a"}, []string{"topic.a"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "topic.b", Payload: "b"}, []string{"topic.b"})
 
 	topics, err := store.List(ctx)
 	require.NoError(t, err, "List failed")
@@ -167,7 +167,7 @@ func TestMsgStore_Retention(t *testing.T) {
 
 	// Publish 5 messages
 	for i := range 5 {
-		err := store.Publish(ctx, messaging.Message{
+		_, err := store.Publish(ctx, messaging.Message{
 			Topic:   "test",
 			Payload: fmt.Sprintf("msg%d", i),
 		}, []string{"test"})
@@ -193,7 +193,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 
 		// Publish exactly 3 messages
 		for i := range 3 {
-			err := store.Publish(ctx, messaging.Message{
+			_, err := store.Publish(ctx, messaging.Message{
 				Topic:   "test",
 				Payload: fmt.Sprintf("msg%d", i),
 			}, []string{"test"})
@@ -214,7 +214,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 
 		// Publish 3 messages
 		for i := range 3 {
-			err := store.Publish(ctx, messaging.Message{
+			_, err := store.Publish(ctx, messaging.Message{
 				Topic:   "test",
 				Payload: fmt.Sprintf("msg%d", i),
 			}, []string{"test"})
@@ -236,7 +236,7 @@ func TestMsgStore_RetentionBoundaries(t *testing.T) {
 
 		// Publish 100 messages
 		for i := range 100 {
-			err := store.Publish(ctx, messaging.Message{
+			_, err := store.Publish(ctx, messaging.Message{
 				Topic:   "test",
 				Payload: fmt.Sprintf("msg%d", i),
 			}, []string{"test"})
@@ -258,9 +258,9 @@ func TestMsgStore_Prune(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish messages
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "old"}, []string{"events"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "old"}, []string{"events"})
 	time.Sleep(50 * time.Millisecond)
-	_ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "new"}, []string{"events"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "new"}, []string{"events"})
 
 	// Prune messages older than 25ms
 	removed, err := store.Prune(ctx, 25*time.Millisecond)
@@ -282,7 +282,7 @@ func TestMsgStore_MessageOrdering(t *testing.T) {
 
 	// Publish messages with slight delays to ensure different timestamps
 	for i := range 5 {
-		_ = store.Publish(ctx, messaging.Message{
+		_, _ = store.Publish(ctx, messaging.Message{
 			Topic:   "ordered",
 			Payload: fmt.Sprintf("msg%d", i),
 		}, []string{"ordered"})
@@ -306,11 +306,11 @@ func TestMsgStore_WildcardOrdering(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish messages across topics with explicit ordering via delays
-	_ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "first"}, []string{"ns.a"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "first"}, []string{"ns.a"})
 	time.Sleep(5 * time.Millisecond)
-	_ = store.Publish(ctx, messaging.Message{Topic: "ns.b", Payload: "second"}, []string{"ns.b"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "ns.b", Payload: "second"}, []string{"ns.b"})
 	time.Sleep(5 * time.Millisecond)
-	_ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "third"}, []string{"ns.a"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "ns.a", Payload: "third"}, []string{"ns.a"})
 
 	messages, _ := store.Subscribe(ctx, "ns.*", time.Time{})
 
@@ -334,8 +334,8 @@ func TestMsgStore_Acknowledge(t *testing.T) {
 	// Publish messages
 	msg1 := messaging.Message{Topic: "test.topic", Payload: "msg1"}
 	msg2 := messaging.Message{Topic: "test.topic", Payload: "msg2"}
-	_ = store.Publish(ctx, msg1, []string{"test.topic"})
-	_ = store.Publish(ctx, msg2, []string{"test.topic"})
+	_, _ = store.Publish(ctx, msg1, []string{"test.topic"})
+	_, _ = store.Publish(ctx, msg2, []string{"test.topic"})
 
 	// Get messages to retrieve their IDs
 	messages, _ := store.Subscribe(ctx, "test.topic", time.Time{})
@@ -390,9 +390,9 @@ func TestMsgStore_GetUnread_Wildcard(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish to multiple topics
-	_ = store.Publish(ctx, messaging.Message{Payload: "inbox1"}, []string{"agent.a.inbox"})
-	_ = store.Publish(ctx, messaging.Message{Payload: "inbox2"}, []string{"agent.b.inbox"})
-	_ = store.Publish(ctx, messaging.Message{Payload: "other"}, []string{"other.topic"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "inbox1"}, []string{"agent.a.inbox"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "inbox2"}, []string{"agent.b.inbox"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "other"}, []string{"other.topic"})
 
 	// Get unread with wildcard pattern
 	unread, err := store.GetUnread(ctx, "consumer-1", "agent.*.inbox")
@@ -432,7 +432,7 @@ func TestMsgStore_PublishMultipleTopics(t *testing.T) {
 
 	// Publish to multiple topics at once
 	msg := messaging.Message{Payload: "broadcast"}
-	err = store.Publish(ctx, msg, []string{"topic.a", "topic.b", "topic.c"})
+	_, err = store.Publish(ctx, msg, []string{"topic.a", "topic.b", "topic.c"})
 	require.NoError(t, err, "Publish failed")
 
 	// Verify message exists in all topics
@@ -456,13 +456,13 @@ func TestMsgStore_PublishWildcardExpansion(t *testing.T) {
 	ctx := context.Background()
 
 	// First, create some inbox topics
-	_ = store.Publish(ctx, messaging.Message{Payload: "setup1"}, []string{"agent.a.inbox"})
-	_ = store.Publish(ctx, messaging.Message{Payload: "setup2"}, []string{"agent.b.inbox"})
-	_ = store.Publish(ctx, messaging.Message{Payload: "other"}, []string{"other.topic"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "setup1"}, []string{"agent.a.inbox"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "setup2"}, []string{"agent.b.inbox"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "other"}, []string{"other.topic"})
 
 	// Publish with wildcard pattern
 	msg := messaging.Message{Payload: "broadcast to inboxes"}
-	err = store.Publish(ctx, msg, []string{"agent.*.inbox"})
+	_, err = store.Publish(ctx, msg, []string{"agent.*.inbox"})
 	require.NoError(t, err, "Publish with wildcard failed")
 
 	// Verify broadcast reached both inboxes
@@ -496,7 +496,7 @@ func TestMsgStore_AcknowledgeIdempotent(t *testing.T) {
 	ctx := context.Background()
 
 	// Publish a message
-	_ = store.Publish(ctx, messaging.Message{Payload: "test"}, []string{"test.topic"})
+	_, _ = store.Publish(ctx, messaging.Message{Payload: "test"}, []string{"test.topic"})
 	messages, _ := store.Subscribe(ctx, "test.topic", time.Time{})
 
 	// Acknowledge same message twice

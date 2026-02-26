@@ -22,6 +22,21 @@ func TestMsgPubSub(t *testing.T) {
 	assert.Equal(t, "hello world", lines[0]["payload"])
 }
 
+func TestMsgPubConfirmation(t *testing.T) {
+	h := NewHarness(t)
+
+	// pub now returns JSON confirmation on stdout
+	lines, err := h.RunJSONLines("msg", "pub", "--topic", "test.confirm", "--sender", "tester", "-m", "hello")
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+
+	assert.Equal(t, "ok", lines[0]["status"])
+	topics, ok := lines[0]["topics"].([]any)
+	require.True(t, ok, "topics should be an array")
+	assert.Contains(t, topics, "test.confirm")
+	assert.Equal(t, "tester", lines[0]["sender"])
+}
+
 func TestMsgList(t *testing.T) {
 	h := NewHarness(t)
 
@@ -42,6 +57,31 @@ func TestMsgList(t *testing.T) {
 	}
 	assert.Contains(t, names, "test.list-a")
 	assert.Contains(t, names, "test.list-b")
+}
+
+func TestMsgListEnriched(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("msg", "pub", "--topic", "test.enriched", "--sender", "enricher", "payload")
+	require.NoError(t, err)
+
+	lines, err := h.RunJSONLines("msg", "list")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(lines), 1)
+
+	// Find the enriched topic
+	var found map[string]any
+	for _, l := range lines {
+		if l["name"] == "test.enriched" {
+			found = l
+			break
+		}
+	}
+	require.NotNil(t, found, "test.enriched topic not found in list output")
+
+	assert.Equal(t, float64(1), found["message_count"])
+	assert.NotEmpty(t, found["last_activity"], "should have last_activity")
+	assert.Equal(t, "enricher", found["last_sender"])
 }
 
 func TestMsgTopic(t *testing.T) {

@@ -28,19 +28,21 @@ func NewMessageService(store messaging.Store, cfg *config.Config, bus *eventbus.
 }
 
 // Publish adds a message to multiple topics.
-func (m *MessageService) Publish(ctx context.Context, msg messaging.Message, topics []string) error {
-	if err := m.store.Publish(ctx, msg, topics); err != nil {
-		return err
+// Returns the resolved topics after wildcard expansion.
+func (m *MessageService) Publish(ctx context.Context, msg messaging.Message, topics []string) (messaging.PublishResult, error) {
+	result, err := m.store.Publish(ctx, msg, topics)
+	if err != nil {
+		return messaging.PublishResult{}, err
 	}
 
-	for _, topic := range topics {
+	for _, topic := range result.Topics {
 		m.bus.PublishMessageReceived(eventbus.MessageReceivedPayload{
 			Topic:   topic,
 			Message: &msg,
 		})
 	}
 
-	return nil
+	return result, nil
 }
 
 // Subscribe returns all messages for a topic, optionally filtered by since timestamp.

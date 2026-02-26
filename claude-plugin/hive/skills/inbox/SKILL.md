@@ -19,7 +19,7 @@ Check and read messages sent to this session's inbox from other agents or sessio
 
 Each hive session has a unique inbox topic (`agent.<id>.inbox`). Other agents publish messages to this inbox, readable via the commands below.
 
-Messages are automatically marked as read when checked with the default command. This prevents re-reading the same messages.
+By default, messages are NOT marked as read. Use `--ack` to acknowledge messages.
 
 ## Commands
 
@@ -29,15 +29,15 @@ Messages are automatically marked as read when checked with the default command.
 hive msg inbox
 ```
 
-Shows only unread messages and marks them as read. Most common usage.
+Shows unread messages without marking them as read.
 
-### Peek Without Marking as Read
+### Read and Acknowledge
 
 ```bash
-hive msg inbox --peek
+hive msg inbox --ack
 ```
 
-View unread messages without marking them as read. Useful for quick checks during other work.
+Shows unread messages and marks them as read so they won't appear again.
 
 ### Read All Messages
 
@@ -45,17 +45,52 @@ View unread messages without marking them as read. Useful for quick checks durin
 hive msg inbox --all
 ```
 
-Shows all messages (read and unread). Does NOT mark messages as read.
+Shows all messages (read and unread).
 
-## Message Format
+### Specify Session Explicitly
 
-Messages contain:
+```bash
+hive msg inbox --session <id|name>
+```
+
+Overrides auto-detection from working directory. Useful when running outside a session directory.
+
+### Wait for a Message
+
+```bash
+hive msg inbox --wait
+hive msg inbox --wait --timeout 2m
+```
+
+Blocks until a message arrives. Default timeout is 24h for wait mode.
+
+### Poll for New Messages
+
+```bash
+hive msg inbox --listen --timeout 30s
+```
+
+Continuously polls and outputs new messages until timeout.
+
+### Limit Results
+
+```bash
+hive msg inbox --tail 5
+```
+
+Returns only the last N unread messages.
+
+## Output Format
+
+All output is JSON Lines (one JSON object per line) on stdout. Fields:
 - `id` - Unique message identifier
-- `sender` - Who sent the message (agent ID or session name)
-- `timestamp` - When the message was sent
-- `content` - The message text
-- `read` - Whether the message has been read
-- `topic` - The inbox topic (usually `agent.<id>.inbox`)
+- `topic` - The inbox topic (`agent.<id>.inbox`)
+- `payload` - The message text
+- `sender` - Who sent the message (session ID or custom sender)
+- `session_id` - Sender's session ID (if auto-detected)
+- `created_at` - ISO 8601 timestamp
+
+On timeout (`--listen`/`--wait`), a JSON status line is printed and exit code is 1.
 
 ## Common Workflows
 
@@ -65,7 +100,7 @@ Messages contain:
 hive msg inbox
 ```
 
-Read and act on any unread messages. Messages are automatically marked as read.
+Read and act on any unread messages.
 
 ### Handle Coordinated Handoff
 
@@ -84,15 +119,6 @@ bd show <issue-id>
 ```bash
 hive msg inbox --all
 ```
-
-## Auto-Acknowledgment
-
-When messages are read with `hive msg inbox`, the system automatically:
-1. Marks the message as read
-2. Publishes an acknowledgment to `<topic>.ack`
-3. Includes the message ID and read timestamp
-
-Senders can subscribe to acknowledgment topics to confirm receipt.
 
 ## Additional Resources
 

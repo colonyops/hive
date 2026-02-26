@@ -21,7 +21,7 @@ usercommands:
     silent: false
 
   CheckInbox:
-    sh: "hive msg sub -t agent.{{ .ID }}.inbox --new"
+    sh: "hive msg sub -t agent.{{ .ID }}.inbox"
     help: "Check inbox for new messages"
     silent: false
 ```
@@ -74,7 +74,7 @@ BATCH_JSON=$(cat <<EOF
       "session_id": "$NEW_SESSION",
       "name": "review-$SAFE_BRANCH-$NEW_SESSION",
       "origin": "$CURRENT_REPO",
-      "prompt": "You are a code reviewer. Check your inbox (agent.$NEW_SESSION.inbox) for review instructions using: hive msg sub -t agent.$NEW_SESSION.inbox --new. Wait until you receive a message. If no messages are available use hive msg sub -t agent.$NEW_SESSION.inbox --wait to wait for a message."
+      "prompt": "You are a code reviewer. Check your inbox (agent.$NEW_SESSION.inbox) for review instructions using: hive msg sub -t agent.$NEW_SESSION.inbox. Wait until you receive a message. If no messages are available use hive msg sub -t agent.$NEW_SESSION.inbox --wait to wait for a message."
     }
   ]
 }

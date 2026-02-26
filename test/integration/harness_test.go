@@ -122,6 +122,16 @@ func (h *Harness) RunJSONLines(args ...string) ([]map[string]any, error) {
 	return parseJSONLines(strings.TrimSpace(out))
 }
 
+// RunJSONLinesInDir executes hive with a specific working directory and parses stdout as JSONL.
+func (h *Harness) RunJSONLinesInDir(dir string, args ...string) ([]map[string]any, error) {
+	h.t.Helper()
+	out, err := h.RunStdoutInDir(dir, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseJSONLines(strings.TrimSpace(out))
+}
+
 // RunJSON executes hive and parses stdout as a single JSON object.
 // Use for commands that return one structured result (batch, doctor --format json).
 func (h *Harness) RunJSON(args ...string) (map[string]any, error) {
