@@ -31,7 +31,6 @@ func (m *mockStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
-
 func TestOrphanCheck_NoOrphans(t *testing.T) {
 	tmpDir := t.TempDir()
 

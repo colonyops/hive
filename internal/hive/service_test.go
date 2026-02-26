@@ -58,7 +58,6 @@ func (m *mockStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-
 // mockExec implements executil.Executor for testing.
 type mockExec struct{}
 

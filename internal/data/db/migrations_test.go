@@ -161,7 +161,6 @@ func TestMigrateDown(t *testing.T) {
 	assert.Equal(t, 1, count, "session row should be preserved")
 }
 
-
 func TestMigrateDown_InvalidN(t *testing.T) {
 	conn := openRawConn(t)
 	ctx := context.Background()
