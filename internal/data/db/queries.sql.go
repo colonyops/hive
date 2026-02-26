@@ -791,6 +791,86 @@ func (q *Queries) LatestHCCheckpoint(ctx context.Context, itemID string) (HcActi
 	return i, err
 }
 
+const listAllHCItems = `-- name: ListAllHCItems :many
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAllHCItems(ctx context.Context) ([]HcItem, error) {
+	rows, err := q.db.QueryContext(ctx, listAllHCItems)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HcItem{}
+	for rows.Next() {
+		var i HcItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepoKey,
+			&i.EpicID,
+			&i.ParentID,
+			&i.SessionID,
+			&i.Title,
+			&i.Desc,
+			&i.Type,
+			&i.Status,
+			&i.Depth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listAllHCItemsByStatus = `-- name: ListAllHCItemsByStatus :many
+SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items WHERE status = ? ORDER BY created_at DESC
+`
+
+func (q *Queries) ListAllHCItemsByStatus(ctx context.Context, status string) ([]HcItem, error) {
+	rows, err := q.db.QueryContext(ctx, listAllHCItemsByStatus, status)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HcItem{}
+	for rows.Next() {
+		var i HcItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.RepoKey,
+			&i.EpicID,
+			&i.ParentID,
+			&i.SessionID,
+			&i.Title,
+			&i.Desc,
+			&i.Type,
+			&i.Status,
+			&i.Depth,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHCActivity = `-- name: ListHCActivity :many
 SELECT id, item_id, type, message, created_at FROM hc_activity WHERE item_id = ? ORDER BY created_at ASC
 `

@@ -236,6 +236,12 @@ SELECT * FROM hc_items WHERE type = 'epic' ORDER BY created_at DESC;
 -- name: ListHCEpicsByRepo :many
 SELECT * FROM hc_items WHERE type = 'epic' AND repo_key = ? ORDER BY created_at DESC;
 
+-- name: ListAllHCItems :many
+SELECT * FROM hc_items ORDER BY created_at DESC;
+
+-- name: ListAllHCItemsByStatus :many
+SELECT * FROM hc_items WHERE status = ? ORDER BY created_at DESC;
+
 -- name: NextHCItemForSession :one
 SELECT outer_item.* FROM hc_items AS outer_item
 WHERE outer_item.session_id = ?

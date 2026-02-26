@@ -184,8 +184,10 @@ func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.Hc
 		return s.db.Queries().ListHCItemsBySession(ctx, filter.SessionID)
 	case filter.RepoKey != "":
 		return s.db.Queries().ListHCItemsByRepo(ctx, filter.RepoKey)
+	case filter.Status != nil:
+		return s.db.Queries().ListAllHCItemsByStatus(ctx, string(*filter.Status))
 	default:
-		return s.db.Queries().ListHCEpics(ctx)
+		return s.db.Queries().ListAllHCItems(ctx)
 	}
 }
 
@@ -194,6 +196,9 @@ func matchesHCListFilter(item hc.Item, filter hc.ListFilter) bool {
 		return false
 	}
 	if filter.SessionID != "" && item.SessionID != filter.SessionID {
+		return false
+	}
+	if filter.Status != nil && item.Status != *filter.Status {
 		return false
 	}
 	return true
