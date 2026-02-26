@@ -4,6 +4,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/terminal"
@@ -29,6 +30,7 @@ type App struct {
 	Context  *ContextService
 	Doctor   *DoctorService
 	Todos    *TodoService
+	HC       hc.Store
 
 	Bus      *eventbus.EventBus
 	Terminal *terminal.Manager
@@ -45,6 +47,7 @@ func NewApp(
 	sessions *SessionService,
 	msgStore messaging.Store,
 	todoStore todo.Store,
+	hcStore hc.Store,
 	cfg *config.Config,
 	bus *eventbus.EventBus,
 	termMgr *terminal.Manager,
@@ -61,6 +64,7 @@ func NewApp(
 		Context:  NewContextService(cfg, sessions.git),
 		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
 		Todos:    NewTodoService(todoStore, bus, cfg, logger),
+		HC:       hcStore,
 		Bus:      bus,
 		Terminal: termMgr,
 		Plugins:  pluginMgr,
