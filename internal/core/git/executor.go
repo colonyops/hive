@@ -182,3 +182,53 @@ func (e *Executor) IsValidRepo(ctx context.Context, dir string) error {
 
 	return nil
 }
+
+func (e *Executor) CloneBare(ctx context.Context, url, dest string) error {
+	if _, err := e.exec.Run(ctx, e.gitPath, "clone", "--bare", url, dest); err != nil {
+		return fmt.Errorf("git clone --bare: %w", err)
+	}
+	return nil
+}
+
+func (e *Executor) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {
+	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "add", "-b", branch, path); err != nil {
+		return fmt.Errorf("git worktree add: %w", err)
+	}
+	return nil
+}
+
+func (e *Executor) WorktreeRemove(ctx context.Context, repoDir, path, branch string) error {
+	var errs []string
+	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "remove", "--force", path); err != nil {
+		errs = append(errs, fmt.Sprintf("git worktree remove: %v", err))
+	}
+	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "branch", "-D", branch); err != nil {
+		errs = append(errs, fmt.Sprintf("git branch -D: %v", err))
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("%s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath string) error {
+	out, err := e.exec.RunDir(ctx, bareDir, e.gitPath, "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
+	if err != nil {
+		return fmt.Errorf("get default branch: %w", err)
+	}
+	ref := strings.TrimSpace(string(out)) // e.g., "origin/main"
+	if _, err := e.exec.RunDir(ctx, worktreePath, e.gitPath, "reset", "--hard", ref); err != nil {
+		return fmt.Errorf("git reset --hard %s: %w", ref, err)
+	}
+	if _, err := e.exec.RunDir(ctx, worktreePath, e.gitPath, "clean", "-fdx"); err != nil {
+		return fmt.Errorf("git clean: %w", err)
+	}
+	return nil
+}
+
+func (e *Executor) Fetch(ctx context.Context, dir string) error {
+	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "fetch", "origin"); err != nil {
+		return fmt.Errorf("git fetch: %w", err)
+	}
+	return nil
+}

@@ -131,22 +131,30 @@ func TestMigrateDown(t *testing.T) {
 	ctx := context.Background()
 	conn := database.Conn()
 
-	// Insert a session row so we can verify the table still works.
+	// Insert a session row (clone_strategy defaults to 'full').
 	_, err := conn.ExecContext(ctx, `
 		INSERT INTO sessions (id, name, slug, path, remote, state, created_at, updated_at)
 		VALUES ('test-1', 'Test', 'test', '/tmp/test', 'https://example.com', 'active', 1, 1)
 	`)
 	require.NoError(t, err)
 
-	// Revert the last migration (todo_items).
+	// Revert the last migration (add_clone_strategy).
 	err = MigrateDown(ctx, conn, 1)
 	require.NoError(t, err)
 
-	// todo_items table should be gone.
-	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
-	require.Error(t, err, "todo_items should not exist after down migration")
+	// clone_strategy column should be gone.
+	var colCount int
+	err = conn.QueryRowContext(ctx,
+		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
+	).Scan(&colCount)
+	require.NoError(t, err)
+	assert.Equal(t, 0, colCount, "clone_strategy column should not exist after down migration")
 
-	// sessions table should still exist.
+	// todo_items table should still exist (only migration 8 was reverted).
+	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
+	require.NoError(t, err, "todo_items should still exist")
+
+	// sessions table should still have the row.
 	var count int
 	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM sessions").Scan(&count)
 	require.NoError(t, err)
@@ -204,7 +212,7 @@ func TestParseFilename(t *testing.T) {
 	}{
 		{"0001_initial.up.sql", 1, "initial", "up", false},
 		{"0001_initial.down.sql", 1, "initial", "down", false},
-		{"0007_add_clone_strategy.up.sql", 7, "add_clone_strategy", "up", false},
+		{"0008_add_clone_strategy.up.sql", 8, "add_clone_strategy", "up", false},
 		{"0100_big_version.down.sql", 100, "big_version", "down", false},
 		{"bad.sql", 0, "", "", true},
 		{"0001_initial.sql", 0, "", "", true},

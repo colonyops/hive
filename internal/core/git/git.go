@@ -28,6 +28,17 @@ type Git interface {
 	DiffStats(ctx context.Context, dir string) (additions, deletions int, err error)
 	// IsValidRepo checks if dir contains a valid git repository.
 	IsValidRepo(ctx context.Context, dir string) error
+	// CloneBare creates a bare clone of url at dest.
+	CloneBare(ctx context.Context, url, dest string) error
+	// WorktreeAdd creates a new worktree at path on a new branch named branch.
+	WorktreeAdd(ctx context.Context, repoDir, path, branch string) error
+	// WorktreeRemove removes the worktree at path and deletes the branch from repoDir.
+	WorktreeRemove(ctx context.Context, repoDir, path, branch string) error
+	// WorktreeReset resets the worktree at worktreePath to origin's default branch.
+	// It fetches the default branch ref from bareDir, then resets the worktree.
+	WorktreeReset(ctx context.Context, bareDir, worktreePath string) error
+	// Fetch fetches all remotes in dir.
+	Fetch(ctx context.Context, dir string) error
 }
 
 // ExtractRepoName extracts the repository name from a git remote URL.

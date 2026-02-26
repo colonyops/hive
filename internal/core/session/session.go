@@ -38,6 +38,17 @@ const (
 	MetaGroup = "group" // user-assigned group for tree view grouping
 )
 
+// Clone strategy constants.
+const (
+	CloneStrategyFull     = "full"
+	CloneStrategyWorktree = "worktree"
+)
+
+// Metadata keys for worktree sessions.
+const (
+	MetaWorktreeBranch = "worktree_branch" // branch name used by the git worktree
+)
+
 // Session represents an isolated git environment for an AI agent.
 //
 // Terminology:
@@ -50,15 +61,16 @@ const (
 // Future: Hive will support multiple agents per session, enabling
 // concurrent agents like a primary assistant and a test runner.
 type Session struct {
-	ID        string            `json:"id"`
-	Name      string            `json:"name"`
-	Slug      string            `json:"slug"`
-	Path      string            `json:"path"`
-	Remote    string            `json:"remote"`
-	State     State             `json:"state"`
-	Metadata  map[string]string `json:"metadata,omitempty"` // integration data (e.g., tmux session name)
-	CreatedAt time.Time         `json:"created_at"`
-	UpdatedAt time.Time         `json:"updated_at"`
+	ID            string            `json:"id"`
+	Name          string            `json:"name"`
+	Slug          string            `json:"slug"`
+	Path          string            `json:"path"`
+	Remote        string            `json:"remote"`
+	State         State             `json:"state"`
+	CloneStrategy string            `json:"clone_strategy,omitempty"` // "full" (default) or "worktree"
+	Metadata      map[string]string `json:"metadata,omitempty"`       // integration data (e.g., tmux session name)
+	CreatedAt     time.Time         `json:"created_at"`
+	UpdatedAt     time.Time         `json:"updated_at"`
 }
 
 // InboxTopic returns the conventional inbox topic name for this session.

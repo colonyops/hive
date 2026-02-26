@@ -72,16 +72,22 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
+	strategy := sess.CloneStrategy
+	if strategy == "" {
+		strategy = session.CloneStrategyFull
+	}
+
 	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
-		ID:        sess.ID,
-		Name:      sess.Name,
-		Slug:      sess.Slug,
-		Path:      sess.Path,
-		Remote:    sess.Remote,
-		State:     string(sess.State),
-		Metadata:  metadataJSON,
-		CreatedAt: sess.CreatedAt.UnixNano(),
-		UpdatedAt: sess.UpdatedAt.UnixNano(),
+		ID:            sess.ID,
+		Name:          sess.Name,
+		Slug:          sess.Slug,
+		Path:          sess.Path,
+		Remote:        sess.Remote,
+		State:         string(sess.State),
+		CloneStrategy: strategy,
+		Metadata:      metadataJSON,
+		CreatedAt:     sess.CreatedAt.UnixNano(),
+		UpdatedAt:     sess.UpdatedAt.UnixNano(),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to save session: %w", err)
@@ -109,25 +115,6 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// FindRecyclable returns a recyclable session for the given remote.
-// Returns ErrNoRecyclable if none available.
-func (s *SessionStore) FindRecyclable(ctx context.Context, remote string) (session.Session, error) {
-	row, err := s.db.Queries().FindRecyclableSession(ctx, remote)
-	if IsNotFoundError(err) {
-		return session.Session{}, session.ErrNoRecyclable
-	}
-	if err != nil {
-		return session.Session{}, fmt.Errorf("failed to find recyclable session: %w", err)
-	}
-
-	sess, err := rowToSession(row)
-	if err != nil {
-		return session.Session{}, fmt.Errorf("failed to convert session: %w", err)
-	}
-
-	return sess, nil
-}
-
 // rowToSession converts a db.Session to a session.Session.
 func rowToSession(row db.Session) (session.Session, error) {
 	// Unmarshal metadata from JSON
@@ -139,14 +126,15 @@ func rowToSession(row db.Session) (session.Session, error) {
 	}
 
 	return session.Session{
-		ID:        row.ID,
-		Name:      row.Name,
-		Slug:      row.Slug,
-		Path:      row.Path,
-		Remote:    row.Remote,
-		State:     session.State(row.State),
-		Metadata:  metadata,
-		CreatedAt: time.Unix(0, row.CreatedAt),
-		UpdatedAt: time.Unix(0, row.UpdatedAt),
+		ID:            row.ID,
+		Name:          row.Name,
+		Slug:          row.Slug,
+		Path:          row.Path,
+		Remote:        row.Remote,
+		State:         session.State(row.State),
+		CloneStrategy: row.CloneStrategy,
+		Metadata:      metadata,
+		CreatedAt:     time.Unix(0, row.CreatedAt),
+		UpdatedAt:     time.Unix(0, row.UpdatedAt),
 	}, nil
 }

@@ -76,6 +76,11 @@ func (c *OrphanCheck) Run(ctx context.Context) Result {
 			continue
 		}
 
+		// Skip the bare-clone directory used by worktree sessions
+		if entry.Name() == ".bare" {
+			continue
+		}
+
 		dirPath := filepath.Join(c.reposDir, entry.Name())
 		if !knownPaths[dirPath] {
 			orphans = append(orphans, entry.Name())

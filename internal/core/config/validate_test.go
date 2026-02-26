@@ -1507,3 +1507,84 @@ func TestValidate_GroupByValidModes(t *testing.T) {
 		})
 	}
 }
+
+func TestGetCloneStrategy(t *testing.T) {
+	tests := []struct {
+		name     string
+		global   string
+		rules    []Rule
+		remote   string
+		expected string
+	}{
+		{
+			name:     "empty config defaults to full",
+			global:   "",
+			rules:    nil,
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+		{
+			name:     "global worktree propagates",
+			global:   CloneStrategyWorktree,
+			rules:    nil,
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+		{
+			name:   "non-matching rule does not override global",
+			global: CloneStrategyWorktree,
+			rules: []Rule{
+				{Pattern: "github.com/other/.*", CloneStrategy: CloneStrategyFull},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+		{
+			name:   "matching rule overrides global",
+			global: CloneStrategyFull,
+			rules: []Rule{
+				{Pattern: "github.com/foo/.*", CloneStrategy: CloneStrategyWorktree},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyWorktree,
+		},
+		{
+			name:   "last matching rule wins",
+			global: CloneStrategyFull,
+			rules: []Rule{
+				{Pattern: "github.com/.*", CloneStrategy: CloneStrategyWorktree},
+				{Pattern: "github.com/foo/.*", CloneStrategy: CloneStrategyFull},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.CloneStrategy = tt.global
+			cfg.Rules = tt.rules
+
+			result := cfg.GetCloneStrategy(tt.remote)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestValidateCloneStrategy(t *testing.T) {
+	t.Run("empty is valid", func(t *testing.T) {
+		assert.NoError(t, ValidateCloneStrategy(""))
+	})
+	t.Run("full is valid", func(t *testing.T) {
+		assert.NoError(t, ValidateCloneStrategy(CloneStrategyFull))
+	})
+	t.Run("worktree is valid", func(t *testing.T) {
+		assert.NoError(t, ValidateCloneStrategy(CloneStrategyWorktree))
+	})
+	t.Run("invalid value returns error", func(t *testing.T) {
+		err := ValidateCloneStrategy("invalid")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid clone_strategy")
+	})
+}

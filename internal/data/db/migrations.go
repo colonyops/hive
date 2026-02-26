@@ -312,7 +312,7 @@ func appliedVersions(ctx context.Context, conn *sql.DB) (map[int]bool, error) {
 	return applied, rows.Err()
 }
 
-// applyMigration executes up SQL and records the version in one transaction.
+// applyMigration executes sqlStr and records the version in one transaction.
 func applyMigration(ctx context.Context, conn *sql.DB, version int, name, sqlStr string) error {
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
