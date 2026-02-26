@@ -389,6 +389,61 @@ func TestPrune(t *testing.T) {
 		assert.Len(t, sessions, 2)
 	})
 
+	t.Run("all=false enforces max_recycled per strategy pool", func(t *testing.T) {
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(1)}},
+		}
+		svc := newTestService(t, store, cfg)
+
+		remote := testRemote
+		baseTime := time.Now()
+
+		for i := 0; i < 2; i++ {
+			fullSess := session.Session{
+				ID:            fmt.Sprintf("full-%d", i),
+				Remote:        remote,
+				State:         session.StateRecycled,
+				CloneStrategy: config.CloneStrategyFull,
+				Path:          t.TempDir(),
+				UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[fullSess.ID] = fullSess
+
+			wtSess := session.Session{
+				ID:            fmt.Sprintf("wt-%d", i),
+				Remote:        remote,
+				State:         session.StateRecycled,
+				CloneStrategy: config.CloneStrategyWorktree,
+				Path:          t.TempDir(),
+				UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+			}
+			store.sessions[wtSess.ID] = wtSess
+		}
+
+		count, err := svc.Prune(context.Background(), false)
+		require.NoError(t, err)
+		assert.Equal(t, 2, count)
+
+		sessions, _ := store.List(context.Background())
+		assert.Len(t, sessions, 2)
+
+		fullCount, wtCount := 0, 0
+		for _, sess := range sessions {
+			switch sess.CloneStrategy {
+			case config.CloneStrategyFull:
+				fullCount++
+			case config.CloneStrategyWorktree:
+				wtCount++
+			}
+		}
+
+		assert.Equal(t, 1, fullCount, "full-clone pool should keep one session")
+		assert.Equal(t, 1, wtCount, "worktree pool should keep one session")
+	})
+
 	t.Run("always deletes corrupted", func(t *testing.T) {
 		store := newMockStore()
 		cfg := &config.Config{

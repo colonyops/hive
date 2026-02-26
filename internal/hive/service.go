@@ -535,19 +535,30 @@ func (s *SessionService) Prune(ctx context.Context, all bool) (int, error) {
 	return count, nil
 }
 
-// pruneExcessRecycled deletes recycled sessions exceeding max_recycled per repository.
+// pruneExcessRecycled deletes recycled sessions exceeding max_recycled per repository+strategy pool.
 func (s *SessionService) pruneExcessRecycled(ctx context.Context, sessions []session.Session) (int, error) {
-	// Group recycled sessions by remote
-	byRemote := make(map[string][]session.Session)
+	type recyclePoolKey struct {
+		remote   string
+		strategy string
+	}
+
+	// Group recycled sessions by remote+strategy so full/worktree pools are independent.
+	byPool := make(map[recyclePoolKey][]session.Session)
 	for _, sess := range sessions {
 		if sess.State == session.StateRecycled {
-			byRemote[sess.Remote] = append(byRemote[sess.Remote], sess)
+			strategy := sess.CloneStrategy
+			if strategy == "" {
+				strategy = config.CloneStrategyFull
+			}
+
+			key := recyclePoolKey{remote: sess.Remote, strategy: strategy}
+			byPool[key] = append(byPool[key], sess)
 		}
 	}
 
 	count := 0
-	for remote, recycled := range byRemote {
-		limit := s.config.GetMaxRecycled(remote)
+	for key, recycled := range byPool {
+		limit := s.config.GetMaxRecycled(key.remote)
 		if limit == 0 || len(recycled) <= limit {
 			continue
 		}
