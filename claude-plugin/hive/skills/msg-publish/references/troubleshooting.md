@@ -7,7 +7,7 @@
 **Solutions:**
 - Verify topic name: check recipient's session ID with `hive ls`
 - Correct format: use `agent.<session-id>.inbox` for direct messages
-- Check message file: look in `$XDG_DATA_HOME/hive/messages/topics/<topic>.json`
+- Check topics: `hive msg list` shows all topics with message counts
 
 ## Wildcard Not Expanding
 
@@ -35,3 +35,11 @@
 - Use file-based publishing: `hive msg pub -t topic -f large-file.md`
 - Pipe content: `cat report.txt | hive msg pub -t topic`
 - Split large messages across multiple publishes
+
+## Multiple Source Error
+
+**Problem:** "multiple message sources provided" error
+
+**Solutions:**
+- Use only one of: `-m` flag, positional argument, `-f` file, or stdin
+- Prefer `-m` flag for inline messages

@@ -16,3 +16,5 @@ If there are unread messages:
 If there are no unread messages:
 1. Report that the inbox is empty
 2. Suggest using `/hive:publish` to send messages to other agents if coordination is needed
+
+Note: Messages are not marked as read by default. Use `hive msg inbox --ack` to acknowledge them.

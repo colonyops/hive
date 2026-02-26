@@ -252,7 +252,7 @@ usercommands:
     sh: "~/.config/hive/scripts/request-review.sh {{ .Name }}"
     help: "Request code review of current branch"
   CheckInbox:
-    sh: "hive msg sub -t agent.{{ .ID }}.inbox --new"
+    sh: "hive msg sub -t agent.{{ .ID }}.inbox"
     help: "Check inbox for messages"
 ```
 

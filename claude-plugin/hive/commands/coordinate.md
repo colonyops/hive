@@ -15,7 +15,7 @@ Establish coordination with other hive agents based on the provided context: $AR
    Run `hive ls` to see available sessions and their status.
 
 3. **Check inbox for existing messages:**
-   Run `hive msg inbox --peek` to see if other agents have already sent coordination messages.
+   Run `hive msg inbox` to see if other agents have already sent coordination messages.
 
 4. **Based on the user's context ($ARGUMENTS), determine the coordination approach:**
 
