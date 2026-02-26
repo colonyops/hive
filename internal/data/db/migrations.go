@@ -158,14 +158,8 @@ func migrateUp(ctx context.Context, conn *sql.DB) error {
 			continue
 		}
 
-		upSQL := m.UpSQL
-		fn := func(ctx context.Context, tx *sql.Tx) error {
-			_, err := tx.ExecContext(ctx, upSQL)
-			return err
-		}
-
 		slog.Info("applying migration", "version", m.Version, "name", m.Name)
-		if err := applyMigration(ctx, conn, m.Version, m.Name, fn); err != nil {
+		if err := applyMigration(ctx, conn, m.Version, m.Name, m.UpSQL); err != nil {
 			return fmt.Errorf("migration %04d (%s): %w", m.Version, m.Name, err)
 		}
 	}
@@ -318,16 +312,16 @@ func appliedVersions(ctx context.Context, conn *sql.DB) (map[int]bool, error) {
 	return applied, rows.Err()
 }
 
-// applyMigration calls fn inside a transaction and records the version on success.
-func applyMigration(ctx context.Context, conn *sql.DB, version int, name string, fn func(context.Context, *sql.Tx) error) error {
+// applyMigration executes sqlStr and records the version in one transaction.
+func applyMigration(ctx context.Context, conn *sql.DB, version int, name, sqlStr string) error {
 	tx, err := conn.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin transaction: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	if err := fn(ctx, tx); err != nil {
-		return fmt.Errorf("executing migration: %w", err)
+	if _, err := tx.ExecContext(ctx, sqlStr); err != nil {
+		return fmt.Errorf("executing SQL: %w", err)
 	}
 
 	_, err = tx.ExecContext(ctx,

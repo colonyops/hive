@@ -128,6 +128,10 @@ func TestStore(t *testing.T) {
 		require.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
+	// Note: recycled session discovery is handled by SessionService.findValidRecyclable,
+	// which calls List and filters in Go so it can validate paths and handle multiple
+	// corrupted candidates. There is no FindRecyclable on the store.
+
 	t.Run("metadata serialization", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		require.NoError(t, err, "Open")

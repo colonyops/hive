@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/data/db"
 )
@@ -75,7 +74,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 
 	strategy := sess.CloneStrategy
 	if strategy == "" {
-		strategy = config.CloneStrategyFull
+		strategy = session.CloneStrategyFull
 	}
 
 	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{

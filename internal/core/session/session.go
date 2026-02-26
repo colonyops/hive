@@ -38,6 +38,12 @@ const (
 	MetaGroup = "group" // user-assigned group for tree view grouping
 )
 
+// Clone strategy constants.
+const (
+	CloneStrategyFull     = "full"
+	CloneStrategyWorktree = "worktree"
+)
+
 // Metadata keys for worktree sessions.
 const (
 	MetaWorktreeBranch = "worktree_branch" // branch name used by the git worktree
