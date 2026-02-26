@@ -149,6 +149,16 @@ bd close <id>         # Complete work
 bd sync               # Sync with git
 ```
 
+This project also uses **hive hc** (honeycomb) for multi-agent task coordination within a session. Use `hive hc` to track work items that parallel agents consume and update.
+
+```bash
+hive hc list --json              # List all items (LLM-readable)
+hive hc show --json <id>         # Show item + activity log
+hive hc next                     # Claim next available task for this session
+hive hc checkpoint <id> "msg"    # Record progress checkpoint
+hive hc update <id> --status done  # Mark item complete
+```
+
 ## Landing the Plane (Session Completion)
 
 **When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
@@ -157,17 +167,21 @@ bd sync               # Sync with git
 
 1. **File issues for remaining work** - Create issues for anything that needs follow-up
 2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+3. **Checkpoint active hc tasks** - Record handoff notes for any in-progress honeycomb items:
+   ```bash
+   hive hc checkpoint <task-id> "What was completed. What comes next. Any blockers."
+   ```
+4. **Update issue status** - Close finished work, update in-progress items
+5. **PUSH TO REMOTE** - This is MANDATORY:
    ```bash
    git pull --rebase
    bd sync
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+6. **Clean up** - Clear stashes, prune remote branches
+7. **Verify** - All changes committed AND pushed
+8. **Hand off** - Provide context for next session
 
 **CRITICAL RULES:**
 
