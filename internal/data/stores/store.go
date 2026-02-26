@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/data/db"
 )
@@ -74,7 +75,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 
 	strategy := sess.CloneStrategy
 	if strategy == "" {
-		strategy = "full"
+		strategy = config.CloneStrategyFull
 	}
 
 	err := s.db.Queries().SaveSession(ctx, db.SaveSessionParams{
@@ -115,31 +116,6 @@ func (s *SessionStore) Delete(ctx context.Context, id string) error {
 	return nil
 }
 
-// FindRecyclable returns a recyclable session for the given remote and clone strategy.
-// Returns ErrNoRecyclable if none available.
-func (s *SessionStore) FindRecyclable(ctx context.Context, remote, cloneStrategy string) (session.Session, error) {
-	if cloneStrategy == "" {
-		cloneStrategy = "full"
-	}
-	row, err := s.db.Queries().FindRecyclableSession(ctx, db.FindRecyclableSessionParams{
-		Remote:        remote,
-		CloneStrategy: cloneStrategy,
-	})
-	if IsNotFoundError(err) {
-		return session.Session{}, session.ErrNoRecyclable
-	}
-	if err != nil {
-		return session.Session{}, fmt.Errorf("failed to find recyclable session: %w", err)
-	}
-
-	sess, err := rowToSession(row)
-	if err != nil {
-		return session.Session{}, fmt.Errorf("failed to convert session: %w", err)
-	}
-
-	return sess, nil
-}
-
 // rowToSession converts a db.Session to a session.Session.
 func rowToSession(row db.Session) (session.Session, error) {
 	// Unmarshal metadata from JSON
@@ -150,11 +126,6 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
-	strategy := row.CloneStrategy
-	if strategy == "" {
-		strategy = "full"
-	}
-
 	return session.Session{
 		ID:            row.ID,
 		Name:          row.Name,
@@ -162,7 +133,7 @@ func rowToSession(row db.Session) (session.Session, error) {
 		Path:          row.Path,
 		Remote:        row.Remote,
 		State:         session.State(row.State),
-		CloneStrategy: strategy,
+		CloneStrategy: row.CloneStrategy,
 		Metadata:      metadata,
 		CreatedAt:     time.Unix(0, row.CreatedAt),
 		UpdatedAt:     time.Unix(0, row.UpdatedAt),

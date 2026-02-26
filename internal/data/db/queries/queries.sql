@@ -24,12 +24,6 @@ ON CONFLICT(id) DO UPDATE SET
 -- name: DeleteSession :exec
 DELETE FROM sessions WHERE id = ?;
 
--- name: FindRecyclableSession :one
-SELECT * FROM sessions
-WHERE state = 'recycled' AND remote = ? AND clone_strategy = ?
-ORDER BY updated_at ASC
-LIMIT 1;
-
 -- name: PublishMessage :exec
 INSERT INTO messages (
     id, topic, payload, sender, session_id, created_at

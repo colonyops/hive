@@ -256,36 +256,6 @@ func (q *Queries) FinalizeReviewSession(ctx context.Context, arg FinalizeReviewS
 	return err
 }
 
-const findRecyclableSession = `-- name: FindRecyclableSession :one
-SELECT id, name, slug, path, remote, state, metadata, created_at, updated_at, clone_strategy FROM sessions
-WHERE state = 'recycled' AND remote = ? AND clone_strategy = ?
-ORDER BY updated_at ASC
-LIMIT 1
-`
-
-type FindRecyclableSessionParams struct {
-	Remote        string `json:"remote"`
-	CloneStrategy string `json:"clone_strategy"`
-}
-
-func (q *Queries) FindRecyclableSession(ctx context.Context, arg FindRecyclableSessionParams) (Session, error) {
-	row := q.db.QueryRowContext(ctx, findRecyclableSession, arg.Remote, arg.CloneStrategy)
-	var i Session
-	err := row.Scan(
-		&i.ID,
-		&i.Name,
-		&i.Slug,
-		&i.Path,
-		&i.Remote,
-		&i.State,
-		&i.Metadata,
-		&i.CreatedAt,
-		&i.UpdatedAt,
-		&i.CloneStrategy,
-	)
-	return i, err
-}
-
 const getAllActiveSessionsWithCounts = `-- name: GetAllActiveSessionsWithCounts :many
 SELECT
     rs.id,

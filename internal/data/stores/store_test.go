@@ -128,50 +128,6 @@ func TestStore(t *testing.T) {
 		require.ErrorIs(t, err, session.ErrNotFound, "got %v, want ErrNotFound", err)
 	})
 
-	t.Run("find recyclable", func(t *testing.T) {
-		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
-		require.NoError(t, err, "Open")
-		defer func() { _ = database.Close() }()
-
-		store := NewSessionStore(database)
-		remote := "https://github.com/test/repo"
-
-		// No recyclable sessions
-		_, err = store.FindRecyclable(ctx, remote, "full")
-		require.ErrorIs(t, err, session.ErrNoRecyclable, "empty store: got %v, want ErrNoRecyclable", err)
-
-		// Active session with matching remote - not recyclable
-		require.NoError(t, store.Save(ctx, session.Session{
-			ID:     "active",
-			Remote: remote,
-			State:  session.StateActive,
-		}), "Save")
-
-		_, err = store.FindRecyclable(ctx, remote, "full")
-		require.ErrorIs(t, err, session.ErrNoRecyclable, "active session: got %v, want ErrNoRecyclable", err)
-
-		// Recycled session with different remote - not found
-		require.NoError(t, store.Save(ctx, session.Session{
-			ID:     "different",
-			Remote: "https://github.com/other/repo",
-			State:  session.StateRecycled,
-		}), "Save")
-
-		_, err = store.FindRecyclable(ctx, remote, "full")
-		require.ErrorIs(t, err, session.ErrNoRecyclable, "different remote: got %v, want ErrNoRecyclable", err)
-
-		// Recycled session with matching remote - found
-		require.NoError(t, store.Save(ctx, session.Session{
-			ID:     "recycled",
-			Remote: remote,
-			State:  session.StateRecycled,
-		}), "Save")
-
-		got, err := store.FindRecyclable(ctx, remote, "full")
-		require.NoError(t, err, "FindRecyclable")
-		assert.Equal(t, "recycled", got.ID)
-	})
-
 	t.Run("metadata serialization", func(t *testing.T) {
 		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
 		require.NoError(t, err, "Open")

@@ -31,9 +31,6 @@ func (m *mockStore) Delete(_ context.Context, _ string) error {
 	return nil
 }
 
-func (m *mockStore) FindRecyclable(_ context.Context, _, _ string) (session.Session, error) {
-	return session.Session{}, nil
-}
 
 func TestOrphanCheck_NoOrphans(t *testing.T) {
 	tmpDir := t.TempDir()

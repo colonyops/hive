@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -162,60 +161,6 @@ func TestMigrateDown(t *testing.T) {
 	assert.Equal(t, 1, count, "session row should be preserved")
 }
 
-func TestGoMigration_CloneStrategyIdempotent(t *testing.T) {
-	conn := openRawConn(t)
-	ctx := context.Background()
-
-	migrations, err := loadMigrations()
-	require.NoError(t, err)
-
-	// Apply migrations 1-7 using their SQL directly (simulating a pre-0008 database).
-	for _, m := range migrations {
-		if m.Version >= 8 {
-			break
-		}
-		_, err := conn.ExecContext(ctx, m.UpSQL)
-		require.NoError(t, err, "applying migration %d SQL", m.Version)
-	}
-
-	// Manually add clone_strategy to sessions, simulating a database where the
-	// old migration 0001 had the column baked in.
-	_, err = conn.ExecContext(ctx,
-		"ALTER TABLE sessions ADD COLUMN clone_strategy TEXT NOT NULL DEFAULT 'full'",
-	)
-	require.NoError(t, err, "adding clone_strategy manually")
-
-	// Set up schema_migrations to reflect versions 1-7 as applied.
-	require.NoError(t, ensureMigrationsTable(ctx, conn))
-	now := time.Now().UnixNano()
-	for _, m := range migrations {
-		if m.Version >= 8 {
-			break
-		}
-		_, err := conn.ExecContext(ctx,
-			"INSERT INTO schema_migrations (version, name, applied_at) VALUES (?, ?, ?)",
-			m.Version, m.Name, now,
-		)
-		require.NoError(t, err)
-	}
-
-	// Run migrateUp — migration 8 must succeed even though clone_strategy already exists.
-	err = migrateUp(ctx, conn)
-	require.NoError(t, err, "migrateUp must be idempotent when clone_strategy column already exists")
-
-	// Migration 8 should be recorded as applied.
-	applied, err := appliedVersions(ctx, conn)
-	require.NoError(t, err)
-	assert.True(t, applied[8], "migration 8 should be marked as applied")
-
-	// clone_strategy column should still exist and be queryable.
-	var colCount int
-	err = conn.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
-	).Scan(&colCount)
-	require.NoError(t, err)
-	assert.Equal(t, 1, colCount, "clone_strategy column should exist")
-}
 
 func TestMigrateDown_InvalidN(t *testing.T) {
 	conn := openRawConn(t)

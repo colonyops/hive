@@ -7,8 +7,7 @@ import (
 
 // Sentinel errors for session operations.
 var (
-	ErrNotFound     = errors.New("session not found")
-	ErrNoRecyclable = errors.New("no recyclable session found")
+	ErrNotFound = errors.New("session not found")
 )
 
 // Store defines persistence operations for sessions.
@@ -21,7 +20,4 @@ type Store interface {
 	Save(ctx context.Context, s Session) error
 	// Delete removes a session by ID. Returns ErrNotFound if not found.
 	Delete(ctx context.Context, id string) error
-	// FindRecyclable returns a recyclable session for the given remote and clone strategy.
-	// Returns ErrNoRecyclable if none available.
-	FindRecyclable(ctx context.Context, remote, cloneStrategy string) (Session, error)
 }

@@ -58,18 +58,6 @@ func (m *mockStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-func (m *mockStore) FindRecyclable(_ context.Context, remote, cloneStrategy string) (session.Session, error) {
-	for _, s := range m.sessions {
-		sessStrategy := s.CloneStrategy
-		if sessStrategy == "" {
-			sessStrategy = config.CloneStrategyFull
-		}
-		if s.State == session.StateRecycled && s.Remote == remote && sessStrategy == cloneStrategy {
-			return s, nil
-		}
-	}
-	return session.Session{}, session.ErrNoRecyclable
-}
 
 // mockExec implements executil.Executor for testing.
 type mockExec struct{}
