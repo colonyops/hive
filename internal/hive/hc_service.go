@@ -210,6 +210,11 @@ func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (HCCo
 	}, nil
 }
 
+// ListActivity returns all activity entries for an item.
+func (s *HCService) ListActivity(ctx context.Context, itemID string) ([]hc.Activity, error) {
+	return s.store.ListActivity(ctx, itemID)
+}
+
 // Prune removes old done/cancelled items and their activity.
 func (s *HCService) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	return s.store.Prune(ctx, opts)
