@@ -60,7 +60,7 @@ func TestSubDeprecatedLastFlag(t *testing.T) {
 	h := NewHarness(t)
 
 	for _, msg := range []string{"a", "b", "c"} {
-		_, err := h.Run("msg", "pub", "--topic", "test.last", "--sender", "test", msg)
+		_, err := h.Run("msg", "pub", "--topic", "test.last", "--sender", "test", "-m", msg)
 		require.NoError(t, err)
 	}
 

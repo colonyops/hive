@@ -179,15 +179,9 @@ Examples:
 			},
 			&cli.IntFlag{
 				Name:        "tail",
-				Aliases:     []string{"n"},
+				Aliases:     []string{"n", "last"},
 				Usage:       "return only last N messages",
 				Destination: &cmd.subTail,
-			},
-			&cli.IntFlag{
-				Name:    "last",
-				Usage:   "alias for --tail (deprecated)",
-				Hidden:  true,
-				Sources: cli.NewValueSourceChain(),
 			},
 			&cli.BoolFlag{
 				Name:        "listen",
@@ -214,10 +208,6 @@ Examples:
 			},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
-			// Support deprecated --last flag
-			if c.IsSet("last") {
-				cmd.subTail = c.Int("last")
-			}
 			return cmd.runSub(ctx, c)
 		},
 	}
