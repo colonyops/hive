@@ -21,6 +21,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const testRemote = "https://github.com/test/repo"
+
 // mockStore implements session.Store for testing.
 type mockStore struct {
 	sessions map[string]session.Session
@@ -58,7 +60,11 @@ func (m *mockStore) Delete(_ context.Context, id string) error {
 
 func (m *mockStore) FindRecyclable(_ context.Context, remote, cloneStrategy string) (session.Session, error) {
 	for _, s := range m.sessions {
-		if s.State == session.StateRecycled && s.Remote == remote && s.CloneStrategy == cloneStrategy {
+		sessStrategy := s.CloneStrategy
+		if sessStrategy == "" {
+			sessStrategy = config.CloneStrategyFull
+		}
+		if s.State == session.StateRecycled && s.Remote == remote && sessStrategy == cloneStrategy {
 			return s, nil
 		}
 	}
@@ -95,6 +101,7 @@ func (m *mockGit) Branch(_ context.Context, _ string) (string, error)     { retu
 func (m *mockGit) CloneBare(_ context.Context, _, _ string) error         { return nil }
 func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error    { return nil }
 func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error { return nil }
+func (m *mockGit) WorktreeReset(_ context.Context, _, _ string) error     { return nil }
 func (m *mockGit) Fetch(_ context.Context, _ string) error                { return nil }
 func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 	return "main", nil
@@ -205,7 +212,7 @@ func TestEnforceMaxRecycled(t *testing.T) {
 		svc := newTestService(t, store, cfg)
 
 		// Add sessions
-		remote := "https://github.com/test/repo"
+		remote := testRemote
 		for i := 0; i < 10; i++ {
 			sess := session.Session{
 				ID:        string(rune('a' + i)),
@@ -217,7 +224,7 @@ func TestEnforceMaxRecycled(t *testing.T) {
 			store.sessions[sess.ID] = sess
 		}
 
-		err := svc.enforceMaxRecycled(context.Background(), remote)
+		err := svc.enforceMaxRecycled(context.Background(), remote, config.CloneStrategyFull)
 		require.NoError(t, err)
 
 		// All 10 should still exist
@@ -234,7 +241,7 @@ func TestEnforceMaxRecycled(t *testing.T) {
 		}
 		svc := newTestService(t, store, cfg)
 
-		remote := "https://github.com/test/repo"
+		remote := testRemote
 		baseTime := time.Now()
 
 		// Create 5 sessions with different ages
@@ -249,7 +256,7 @@ func TestEnforceMaxRecycled(t *testing.T) {
 			store.sessions[sess.ID] = sess
 		}
 
-		err := svc.enforceMaxRecycled(context.Background(), remote)
+		err := svc.enforceMaxRecycled(context.Background(), remote, config.CloneStrategyFull)
 		require.NoError(t, err)
 
 		// Should keep 3 newest: c, d, e
@@ -300,7 +307,7 @@ func TestEnforceMaxRecycled(t *testing.T) {
 		}
 
 		// Enforce only for repo1
-		err := svc.enforceMaxRecycled(context.Background(), remote1)
+		err := svc.enforceMaxRecycled(context.Background(), remote1, config.CloneStrategyFull)
 		require.NoError(t, err)
 
 		sessions, _ := store.List(context.Background())
@@ -321,7 +328,7 @@ func TestPrune(t *testing.T) {
 		}
 		svc := newTestService(t, store, cfg)
 
-		remote := "https://github.com/test/repo"
+		remote := testRemote
 		// Add recycled sessions
 		for i := 0; i < 5; i++ {
 			sess := session.Session{
@@ -359,7 +366,7 @@ func TestPrune(t *testing.T) {
 		}
 		svc := newTestService(t, store, cfg)
 
-		remote := "https://github.com/test/repo"
+		remote := testRemote
 		baseTime := time.Now()
 
 		// Add 5 recycled sessions
@@ -667,7 +674,7 @@ func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 
 	req := action.NewSessionRequest{
 		Name:   "test-session",
-		Remote: "https://github.com/test/repo",
+		Remote: testRemote,
 		ShCmd:  "exit 1", // fails: directory won't exist since mockGit.Clone is a no-op
 	}
 
@@ -748,6 +755,160 @@ func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
 	updated, err := store.Get(context.Background(), "test1")
 	require.NoError(t, err)
 	assert.Equal(t, "backend", updated.Group())
+}
+
+func TestRecycleWorktreeSession_KeepsPath(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sessDir := filepath.Join(cfg.ReposDir(), "repo-wt-abc123")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+	sess := session.Session{
+		ID:            "wt1",
+		Name:          "worktree-session",
+		Slug:          "worktree-session",
+		State:         session.StateActive,
+		Path:          sessDir,
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive-abc123"},
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RecycleSession(context.Background(), "wt1", io.Discard)
+	require.NoError(t, err)
+
+	recycled, err := store.Get(context.Background(), "wt1")
+	require.NoError(t, err)
+	assert.Equal(t, session.StateRecycled, recycled.State)
+	assert.Equal(t, sessDir, recycled.Path, "worktree path must be preserved on recycle")
+}
+
+func TestRecycleWorktreeSession_NoMetadata(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sessDir := filepath.Join(cfg.ReposDir(), "repo-wt-nometa")
+	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+	sess := session.Session{
+		ID:            "wt-nometa",
+		Name:          "worktree-nometa",
+		Slug:          "worktree-nometa",
+		State:         session.StateActive,
+		Path:          sessDir,
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+		// No MetaWorktreeBranch
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.RecycleSession(context.Background(), "wt-nometa", io.Discard)
+	require.NoError(t, err)
+
+	recycled, err := store.Get(context.Background(), "wt-nometa")
+	require.NoError(t, err)
+	assert.Equal(t, session.StateRecycled, recycled.State)
+}
+
+func TestDeleteWorktreeSession(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	sessDir := t.TempDir()
+
+	sess := session.Session{
+		ID:            "wt-del",
+		Name:          "to-delete",
+		Slug:          "to-delete",
+		State:         session.StateRecycled,
+		Path:          sessDir,
+		Remote:        "https://github.com/example/repo.git",
+		CloneStrategy: config.CloneStrategyWorktree,
+		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive-del"},
+	}
+	require.NoError(t, store.Save(context.Background(), sess))
+
+	err := svc.DeleteSession(context.Background(), "wt-del")
+	require.NoError(t, err)
+
+	_, err = store.Get(context.Background(), "wt-del")
+	assert.ErrorIs(t, err, session.ErrNotFound)
+}
+
+func TestEnforceMaxRecycled_SeparateByStrategy(t *testing.T) {
+	intPtr := func(n int) *int { return &n }
+
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Rules:   []config.Rule{{Pattern: "", MaxRecycled: intPtr(1)}},
+	}
+	svc := newTestService(t, store, cfg)
+
+	remote := testRemote
+	baseTime := time.Now()
+
+	// 3 full-clone recycled sessions
+	for i := 0; i < 3; i++ {
+		sess := session.Session{
+			ID:            fmt.Sprintf("full-%d", i),
+			Remote:        remote,
+			State:         session.StateRecycled,
+			CloneStrategy: config.CloneStrategyFull,
+			Path:          t.TempDir(),
+			UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+		}
+		store.sessions[sess.ID] = sess
+	}
+
+	// 3 worktree recycled sessions
+	for i := 0; i < 3; i++ {
+		sess := session.Session{
+			ID:            fmt.Sprintf("wt-%d", i),
+			Remote:        remote,
+			State:         session.StateRecycled,
+			CloneStrategy: config.CloneStrategyWorktree,
+			Path:          t.TempDir(),
+			UpdatedAt:     baseTime.Add(time.Duration(i) * time.Hour),
+		}
+		store.sessions[sess.ID] = sess
+	}
+
+	// Enforce limit for full-clone only
+	err := svc.enforceMaxRecycled(context.Background(), remote, config.CloneStrategyFull)
+	require.NoError(t, err)
+
+	sessions, _ := store.List(context.Background())
+	// 1 full + 3 worktree = 4
+	assert.Len(t, sessions, 4)
+
+	// Count strategies
+	fullCount, wtCount := 0, 0
+	for _, s := range sessions {
+		switch s.CloneStrategy {
+		case config.CloneStrategyFull:
+			fullCount++
+		case config.CloneStrategyWorktree:
+			wtCount++
+		}
+	}
+	assert.Equal(t, 1, fullCount, "full strategy should respect limit of 1")
+	assert.Equal(t, 3, wtCount, "worktree sessions must not be affected")
 }
 
 // Ensure the mock implements the interface at compile time.

@@ -198,11 +198,30 @@ func (e *Executor) WorktreeAdd(ctx context.Context, repoDir, path, branch string
 }
 
 func (e *Executor) WorktreeRemove(ctx context.Context, repoDir, path, branch string) error {
+	var errs []string
 	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "worktree", "remove", "--force", path); err != nil {
-		return fmt.Errorf("git worktree remove: %w", err)
+		errs = append(errs, fmt.Sprintf("git worktree remove: %v", err))
 	}
 	if _, err := e.exec.RunDir(ctx, repoDir, e.gitPath, "branch", "-D", branch); err != nil {
-		return fmt.Errorf("git branch -D: %w", err)
+		errs = append(errs, fmt.Sprintf("git branch -D: %v", err))
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("%s", strings.Join(errs, "; "))
+	}
+	return nil
+}
+
+func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath string) error {
+	out, err := e.exec.RunDir(ctx, bareDir, e.gitPath, "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
+	if err != nil {
+		return fmt.Errorf("get default branch: %w", err)
+	}
+	ref := strings.TrimSpace(string(out)) // e.g., "origin/main"
+	if _, err := e.exec.RunDir(ctx, worktreePath, e.gitPath, "reset", "--hard", ref); err != nil {
+		return fmt.Errorf("git reset --hard %s: %w", ref, err)
+	}
+	if _, err := e.exec.RunDir(ctx, worktreePath, e.gitPath, "clean", "-fdx"); err != nil {
+		return fmt.Errorf("git clean: %w", err)
 	}
 	return nil
 }
