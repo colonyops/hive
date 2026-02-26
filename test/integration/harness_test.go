@@ -162,6 +162,16 @@ func (h *Harness) WithConfig(yaml string) *Harness {
 	return h
 }
 
+// RunJSONLinesInDir executes hive with a specific working directory and parses stdout as JSONL.
+func (h *Harness) RunJSONLinesInDir(dir string, args ...string) ([]map[string]any, error) {
+	h.t.Helper()
+	out, err := h.RunStdoutInDir(dir, args...)
+	if err != nil {
+		return nil, err
+	}
+	return parseJSONLines(strings.TrimSpace(out))
+}
+
 // DataDir returns the isolated data directory path.
 func (h *Harness) DataDir() string { return h.dataDir }
 
