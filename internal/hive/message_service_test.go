@@ -20,12 +20,12 @@ type mockMsgStore struct {
 	}
 }
 
-func (m *mockMsgStore) Publish(_ context.Context, msg messaging.Message, topics []string) error {
+func (m *mockMsgStore) Publish(_ context.Context, msg messaging.Message, topics []string) (messaging.PublishResult, error) {
 	m.published = append(m.published, struct {
 		msg    messaging.Message
 		topics []string
 	}{msg: msg, topics: topics})
-	return nil
+	return messaging.PublishResult{Topics: topics}, nil
 }
 
 func (m *mockMsgStore) Subscribe(context.Context, string, time.Time) ([]messaging.Message, error) {
@@ -54,7 +54,7 @@ func TestMessageService_PublishEmitsEvent(t *testing.T) {
 		Payload: "hello",
 	}
 
-	err := svc.Publish(context.Background(), msg, []string{"topic.a", "topic.b"})
+	_, err := svc.Publish(context.Background(), msg, []string{"topic.a", "topic.b"})
 	require.NoError(t, err)
 
 	tb.AssertPublished(t, eventbus.EventMessageReceived)

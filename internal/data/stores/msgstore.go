@@ -35,7 +35,7 @@ func NewMessageStore(db *db.DB, maxMessages int) *MessageStore {
 // Wildcards are expanded before publishing.
 // Enforces retention limit by deleting oldest messages if needed.
 // All topics are published atomically within a single transaction.
-func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topics []string) error {
+func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topics []string) (messaging.PublishResult, error) {
 	// Set timestamp if not set (shared across all copies)
 	if msg.CreatedAt.IsZero() {
 		msg.CreatedAt = time.Now()
@@ -47,7 +47,7 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 		if strings.Contains(pattern, "*") {
 			matched, err := m.expandTopicPattern(ctx, pattern)
 			if err != nil {
-				return fmt.Errorf("expand pattern %s: %w", pattern, err)
+				return messaging.PublishResult{}, fmt.Errorf("expand pattern %s: %w", pattern, err)
 			}
 			for _, topic := range matched {
 				expandedTopics[topic] = true
@@ -57,9 +57,16 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 		}
 	}
 
+	// Collect resolved topic names
+	resolvedTopics := make([]string, 0, len(expandedTopics))
+	for topic := range expandedTopics {
+		resolvedTopics = append(resolvedTopics, topic)
+	}
+	sort.Strings(resolvedTopics)
+
 	// Publish all topics atomically in a single transaction
-	return m.db.WithTx(ctx, func(q *db.Queries) error {
-		for topic := range expandedTopics {
+	err := m.db.WithTx(ctx, func(q *db.Queries) error {
+		for _, topic := range resolvedTopics {
 			msgCopy := msg
 			msgCopy.Topic = topic
 			// Each copy needs a unique ID
@@ -100,6 +107,11 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 		}
 		return nil
 	})
+	if err != nil {
+		return messaging.PublishResult{}, err
+	}
+
+	return messaging.PublishResult{Topics: resolvedTopics}, nil
 }
 
 // Subscribe returns all messages for a topic pattern, optionally filtered by since timestamp.
