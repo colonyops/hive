@@ -30,7 +30,7 @@ type App struct {
 	Context  *ContextService
 	Doctor   *DoctorService
 	Todos    *TodoService
-	HC       hc.Store
+	HC       *HCService
 
 	Bus      *eventbus.EventBus
 	Terminal *terminal.Manager
@@ -58,13 +58,14 @@ func NewApp(
 	pluginInfos []doctor.PluginInfo,
 	logger zerolog.Logger,
 ) *App {
+	msgSvc := NewMessageService(msgStore, cfg, bus)
 	return &App{
 		Sessions: sessions,
-		Messages: NewMessageService(msgStore, cfg, bus),
+		Messages: msgSvc,
 		Context:  NewContextService(cfg, sessions.git),
 		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
 		Todos:    NewTodoService(todoStore, bus, cfg, logger),
-		HC:       hcStore,
+		HC:       NewHCService(hcStore, msgSvc, logger),
 		Bus:      bus,
 		Terminal: termMgr,
 		Plugins:  pluginMgr,
