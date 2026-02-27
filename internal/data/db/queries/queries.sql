@@ -26,8 +26,8 @@ DELETE FROM sessions WHERE id = ?;
 
 -- name: PublishMessage :exec
 INSERT INTO messages (
-    id, topic, payload, sender, session_id, created_at
-) VALUES (?, ?, ?, ?, ?, ?);
+    id, topic, payload, sender, session_id, parent_id, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?);
 
 -- name: CountMessagesInTopic :one
 SELECT COUNT(*) FROM messages
@@ -66,7 +66,7 @@ ON CONFLICT (message_id, consumer_id) DO UPDATE SET
     read_at = excluded.read_at;
 
 -- name: GetUnreadMessages :many
-SELECT m.id, m.topic, m.payload, m.sender, m.session_id, m.created_at
+SELECT m.id, m.topic, m.payload, m.sender, m.session_id, m.parent_id, m.created_at
 FROM messages m
 LEFT JOIN message_reads mr ON mr.message_id = m.id AND mr.consumer_id = ?
 WHERE m.topic = ?

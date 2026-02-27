@@ -397,7 +397,7 @@ func (q *Queries) GetTodoItem(ctx context.Context, id string) (TodoItem, error) 
 }
 
 const getUnreadMessages = `-- name: GetUnreadMessages :many
-SELECT m.id, m.topic, m.payload, m.sender, m.session_id, m.created_at
+SELECT m.id, m.topic, m.payload, m.sender, m.session_id, m.parent_id, m.created_at
 FROM messages m
 LEFT JOIN message_reads mr ON mr.message_id = m.id AND mr.consumer_id = ?
 WHERE m.topic = ?
@@ -410,21 +410,32 @@ type GetUnreadMessagesParams struct {
 	Topic      string `json:"topic"`
 }
 
-func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesParams) ([]Message, error) {
+type GetUnreadMessagesRow struct {
+	ID        string         `json:"id"`
+	Topic     string         `json:"topic"`
+	Payload   string         `json:"payload"`
+	Sender    sql.NullString `json:"sender"`
+	SessionID sql.NullString `json:"session_id"`
+	ParentID  sql.NullString `json:"parent_id"`
+	CreatedAt int64          `json:"created_at"`
+}
+
+func (q *Queries) GetUnreadMessages(ctx context.Context, arg GetUnreadMessagesParams) ([]GetUnreadMessagesRow, error) {
 	rows, err := q.db.QueryContext(ctx, getUnreadMessages, arg.ConsumerID, arg.Topic)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []Message{}
+	items := []GetUnreadMessagesRow{}
 	for rows.Next() {
-		var i Message
+		var i GetUnreadMessagesRow
 		if err := rows.Scan(
 			&i.ID,
 			&i.Topic,
 			&i.Payload,
 			&i.Sender,
 			&i.SessionID,
+			&i.ParentID,
 			&i.CreatedAt,
 		); err != nil {
 			return nil, err
@@ -802,8 +813,8 @@ func (q *Queries) PruneMessages(ctx context.Context, createdAt int64) error {
 
 const publishMessage = `-- name: PublishMessage :exec
 INSERT INTO messages (
-    id, topic, payload, sender, session_id, created_at
-) VALUES (?, ?, ?, ?, ?, ?)
+    id, topic, payload, sender, session_id, parent_id, created_at
+) VALUES (?, ?, ?, ?, ?, ?, ?)
 `
 
 type PublishMessageParams struct {
@@ -812,6 +823,7 @@ type PublishMessageParams struct {
 	Payload   string         `json:"payload"`
 	Sender    sql.NullString `json:"sender"`
 	SessionID sql.NullString `json:"session_id"`
+	ParentID  sql.NullString `json:"parent_id"`
 	CreatedAt int64          `json:"created_at"`
 }
 
@@ -822,6 +834,7 @@ func (q *Queries) PublishMessage(ctx context.Context, arg PublishMessageParams) 
 		arg.Payload,
 		arg.Sender,
 		arg.SessionID,
+		arg.ParentID,
 		arg.CreatedAt,
 	)
 	return err
@@ -902,7 +915,7 @@ func (q *Queries) SaveSession(ctx context.Context, arg SaveSessionParams) error 
 }
 
 const subscribeToTopic = `-- name: SubscribeToTopic :many
-SELECT id, topic, payload, sender, session_id, created_at FROM messages
+SELECT id, topic, payload, sender, session_id, created_at, parent_id FROM messages
 WHERE topic = ? AND created_at > ?
 ORDER BY created_at ASC
 `
@@ -928,6 +941,7 @@ func (q *Queries) SubscribeToTopic(ctx context.Context, arg SubscribeToTopicPara
 			&i.Sender,
 			&i.SessionID,
 			&i.CreatedAt,
+			&i.ParentID,
 		); err != nil {
 			return nil, err
 		}

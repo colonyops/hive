@@ -23,6 +23,7 @@ type Message struct {
 	Sender    sql.NullString `json:"sender"`
 	SessionID sql.NullString `json:"session_id"`
 	CreatedAt int64          `json:"created_at"`
+	ParentID  sql.NullString `json:"parent_id"`
 }
 
 type MessageRead struct {

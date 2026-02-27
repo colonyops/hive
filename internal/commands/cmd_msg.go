@@ -30,6 +30,7 @@ type MsgCmd struct {
 	pubFile    string
 	pubSender  string
 	pubMessage string
+	pubReplyTo string
 
 	// sub flags
 	subTopic   string
@@ -135,6 +136,12 @@ Examples:
 				Aliases:     []string{"s"},
 				Usage:       "override sender ID (default: auto-detect from session)",
 				Destination: &cmd.pubSender,
+			},
+			&cli.StringFlag{
+				Name:        "reply-to",
+				Aliases:     []string{"r"},
+				Usage:       "message ID this message is replying to (for threading)",
+				Destination: &cmd.pubReplyTo,
 			},
 		},
 		Action: cmd.runPub,
@@ -310,6 +317,7 @@ func (cmd *MsgCmd) runPub(ctx context.Context, c *cli.Command) error {
 		Payload:   payload,
 		Sender:    sender,
 		SessionID: sessionID,
+		ParentID:  cmd.pubReplyTo,
 	}
 
 	result, err := msgs.Publish(ctx, msg, topics)

@@ -79,6 +79,7 @@ func (m *MessageStore) Publish(ctx context.Context, msg messaging.Message, topic
 				Payload:   msgCopy.Payload,
 				Sender:    toNullString(msgCopy.Sender),
 				SessionID: toNullString(msgCopy.SessionID),
+				ParentID:  toNullString(msgCopy.ParentID),
 				CreatedAt: msgCopy.CreatedAt.UnixNano(),
 			})
 			if err != nil {
@@ -216,6 +217,20 @@ func rowToMessage(row db.Message) messaging.Message {
 		Payload:   row.Payload,
 		Sender:    fromNullString(row.Sender),
 		SessionID: fromNullString(row.SessionID),
+		ParentID:  fromNullString(row.ParentID),
+		CreatedAt: time.Unix(0, row.CreatedAt),
+	}
+}
+
+// unreadRowToMessage converts a db.GetUnreadMessagesRow to a messaging.Message.
+func unreadRowToMessage(row db.GetUnreadMessagesRow) messaging.Message {
+	return messaging.Message{
+		ID:        row.ID,
+		Topic:     row.Topic,
+		Payload:   row.Payload,
+		Sender:    fromNullString(row.Sender),
+		SessionID: fromNullString(row.SessionID),
+		ParentID:  fromNullString(row.ParentID),
 		CreatedAt: time.Unix(0, row.CreatedAt),
 	}
 }
@@ -292,7 +307,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 		return nil, fmt.Errorf("consumer_id required")
 	}
 
-	var allRows []db.Message
+	var allRows []db.GetUnreadMessagesRow
 
 	if strings.Contains(topic, "*") {
 		// Expand pattern and query each topic
@@ -326,7 +341,7 @@ func (m *MessageStore) GetUnread(ctx context.Context, consumerID string, topic s
 	// Convert and sort by timestamp
 	messages := make([]messaging.Message, len(allRows))
 	for i, row := range allRows {
-		messages[i] = rowToMessage(row)
+		messages[i] = unreadRowToMessage(row)
 	}
 
 	sort.Slice(messages, func(i, j int) bool {
