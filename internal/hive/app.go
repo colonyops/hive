@@ -4,6 +4,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/terminal"
@@ -24,11 +25,12 @@ type BuildInfo struct {
 // App is the central entry point for all hive operations.
 // Commands and TUI consume App instead of cherry-picking raw dependencies.
 type App struct {
-	Sessions *SessionService
-	Messages *MessageService
-	Context  *ContextService
-	Doctor   *DoctorService
-	Todos    *TodoService
+	Sessions  *SessionService
+	Messages  *MessageService
+	Context   *ContextService
+	Doctor    *DoctorService
+	Todos     *TodoService
+	Honeycomb *HoneycombService
 
 	Bus      *eventbus.EventBus
 	Terminal *terminal.Manager
@@ -45,6 +47,7 @@ func NewApp(
 	sessions *SessionService,
 	msgStore messaging.Store,
 	todoStore todo.Store,
+	hcStore hc.Store,
 	cfg *config.Config,
 	bus *eventbus.EventBus,
 	termMgr *terminal.Manager,
@@ -56,17 +59,18 @@ func NewApp(
 	logger zerolog.Logger,
 ) *App {
 	return &App{
-		Sessions: sessions,
-		Messages: NewMessageService(msgStore, cfg, bus),
-		Context:  NewContextService(cfg, sessions.git),
-		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
-		Todos:    NewTodoService(todoStore, bus, cfg, logger),
-		Bus:      bus,
-		Terminal: termMgr,
-		Plugins:  pluginMgr,
-		Config:   cfg,
-		DB:       database,
-		KV:       kvStore,
-		Renderer: renderer,
+		Sessions:  sessions,
+		Messages:  NewMessageService(msgStore, cfg, bus),
+		Context:   NewContextService(cfg, sessions.git),
+		Doctor:    NewDoctorService(sessions.sessions, cfg, pluginInfos),
+		Todos:     NewTodoService(todoStore, bus, cfg, logger.With().Str("component", "todos").Logger()),
+		Honeycomb: NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
+		Bus:       bus,
+		Terminal:  termMgr,
+		Plugins:   pluginMgr,
+		Config:    cfg,
+		DB:        database,
+		KV:        kvStore,
+		Renderer:  renderer,
 	}
 }
