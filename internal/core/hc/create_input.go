@@ -8,3 +8,11 @@ type CreateInput struct {
 	Type     ItemType      `json:"type"`
 	Children []CreateInput `json:"children,omitempty"`
 }
+
+// CreateItemInput describes a single-item create request.
+type CreateItemInput struct {
+	Title    string
+	Desc     string
+	Type     ItemType
+	ParentID string
+}

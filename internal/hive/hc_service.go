@@ -32,9 +32,45 @@ func generateHCID() string {
 	return "hc-" + randid.Generate(8)
 }
 
-// CreateItem creates a single hc item.
-func (s *HCService) CreateItem(ctx context.Context, item hc.Item) error {
-	return s.store.CreateItem(ctx, item)
+// CreateItem creates a single hc item from a domain input DTO.
+func (s *HCService) CreateItem(ctx context.Context, input hc.CreateItemInput, repoKey, sessionID string) (hc.Item, error) {
+	if input.Title == "" {
+		return hc.Item{}, fmt.Errorf("title is required")
+	}
+
+	now := time.Now()
+	item := hc.Item{
+		ID:        generateHCID(),
+		RepoKey:   repoKey,
+		ParentID:  input.ParentID,
+		SessionID: sessionID,
+		Title:     input.Title,
+		Desc:      input.Desc,
+		Type:      input.Type,
+		Status:    hc.StatusOpen,
+		Depth:     0,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}
+
+	if input.ParentID != "" {
+		parent, err := s.store.GetItem(ctx, input.ParentID)
+		if err != nil {
+			return hc.Item{}, fmt.Errorf("get parent item %q: %w", input.ParentID, err)
+		}
+		if parent.IsEpic() {
+			item.EpicID = parent.ID
+		} else {
+			item.EpicID = parent.EpicID
+		}
+		item.Depth = parent.Depth + 1
+	}
+
+	if err := s.store.CreateItem(ctx, item); err != nil {
+		return hc.Item{}, fmt.Errorf("create hc item: %w", err)
+	}
+
+	return item, nil
 }
 
 // CreateBulk walks the CreateInput tree BFS and creates all items atomically.
@@ -160,20 +196,20 @@ func (s *HCService) Checkpoint(ctx context.Context, itemID, message string) (hc.
 	return s.LogActivity(ctx, itemID, hc.ActivityTypeCheckpoint, message)
 }
 
-// Context assembles an HCContextBlock for the given epic.
-func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (HCContextBlock, error) {
+// Context assembles a context block for the given epic.
+func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (hc.ContextBlock, error) {
 	epic, err := s.store.GetItem(ctx, epicID)
 	if err != nil {
-		return HCContextBlock{}, fmt.Errorf("get epic %q: %w", epicID, err)
+		return hc.ContextBlock{}, fmt.Errorf("get epic %q: %w", epicID, err)
 	}
 
 	all, err := s.store.ListItems(ctx, hc.ListFilter{EpicID: epicID})
 	if err != nil {
-		return HCContextBlock{}, fmt.Errorf("list hc items for epic %q: %w", epicID, err)
+		return hc.ContextBlock{}, fmt.Errorf("list hc items for epic %q: %w", epicID, err)
 	}
 
-	counts := HCTaskCounts{}
-	var myTasks []HCTaskWithCheckpoint
+	counts := hc.TaskCounts{}
+	var myTasks []hc.TaskWithCheckpoint
 	var allOpen []hc.Item
 
 	for _, item := range all {
@@ -195,14 +231,14 @@ func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (HCCo
 			if cpErr != nil {
 				s.logger.Debug().Err(cpErr).Str("item_id", item.ID).Msg("failed to fetch latest checkpoint")
 			}
-			myTasks = append(myTasks, HCTaskWithCheckpoint{
+			myTasks = append(myTasks, hc.TaskWithCheckpoint{
 				Item:             item,
 				LatestCheckpoint: checkpoint,
 			})
 		}
 	}
 
-	return HCContextBlock{
+	return hc.ContextBlock{
 		Epic:         epic,
 		Counts:       counts,
 		MyTasks:      myTasks,
@@ -232,26 +268,4 @@ func (s *HCService) publishActivity(ctx context.Context, epicID string, item hc.
 	if err != nil {
 		s.logger.Debug().Err(err).Str("topic", topic).Msg("failed to publish hc activity")
 	}
-}
-
-// HCContextBlock is the assembled context view for an epic.
-type HCContextBlock struct {
-	Epic         hc.Item
-	Counts       HCTaskCounts
-	MyTasks      []HCTaskWithCheckpoint
-	AllOpenTasks []hc.Item
-}
-
-// HCTaskCounts holds counts of items by status.
-type HCTaskCounts struct {
-	Open       int
-	InProgress int
-	Done       int
-	Cancelled  int
-}
-
-// HCTaskWithCheckpoint pairs an item with its latest checkpoint activity.
-type HCTaskWithCheckpoint struct {
-	Item             hc.Item
-	LatestCheckpoint hc.Activity
 }

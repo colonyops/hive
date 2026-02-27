@@ -10,7 +10,6 @@ import (
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
-	"github.com/colonyops/hive/pkg/randid"
 	"github.com/colonyops/hive/pkg/timeutil"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
@@ -143,41 +142,14 @@ func (cmd *HCCmd) createCmd() *cli.Command {
 				return fmt.Errorf("invalid item type %q: %w", itemType, err)
 			}
 
-			now := time.Now()
-			id := "hc-" + randid.Generate(8)
-
-			var epicID string
-			var depth int
-
-			if parentID != "" {
-				parent, err := cmd.app.HC.GetItem(ctx, parentID)
-				if err != nil {
-					return fmt.Errorf("get parent item %q: %w", parentID, err)
-				}
-				if parent.IsEpic() {
-					epicID = parent.ID
-				} else {
-					epicID = parent.EpicID
-				}
-				depth = parent.Depth + 1
-			}
-
-			item := hc.Item{
-				ID:        id,
-				RepoKey:   repoKey,
-				EpicID:    epicID,
-				ParentID:  parentID,
-				SessionID: sessionID,
-				Title:     title,
-				Desc:      desc,
-				Type:      typ,
-				Status:    hc.StatusOpen,
-				Depth:     depth,
-				CreatedAt: now,
-				UpdatedAt: now,
-			}
-			if err := cmd.app.HC.CreateItem(ctx, item); err != nil {
-				return fmt.Errorf("create hc item: %w", err)
+			item, err := cmd.app.HC.CreateItem(ctx, hc.CreateItemInput{
+				Title:    title,
+				Desc:     desc,
+				Type:     typ,
+				ParentID: parentID,
+			}, repoKey, sessionID)
+			if err != nil {
+				return err
 			}
 			return iojson.WriteLine(c.Root().Writer, item)
 		},
