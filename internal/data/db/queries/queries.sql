@@ -269,10 +269,6 @@ LIMIT 1;
 SELECT COUNT(*) FROM hc_items
 WHERE parent_id = ? AND status IN ('open', 'in_progress');
 
--- name: CountHCOpenDescendants :one
-SELECT COUNT(*) FROM hc_items
-WHERE epic_id = ? AND status IN ('open', 'in_progress') AND id != ?;
-
 -- name: DeleteHCItem :exec
 DELETE FROM hc_items WHERE id = ?;
 

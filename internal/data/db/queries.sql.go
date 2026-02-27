@@ -56,23 +56,6 @@ func (q *Queries) CountHCOpenChildren(ctx context.Context, parentID string) (int
 	return count, err
 }
 
-const countHCOpenDescendants = `-- name: CountHCOpenDescendants :one
-SELECT COUNT(*) FROM hc_items
-WHERE epic_id = ? AND status IN ('open', 'in_progress') AND id != ?
-`
-
-type CountHCOpenDescendantsParams struct {
-	EpicID string `json:"epic_id"`
-	ID     string `json:"id"`
-}
-
-func (q *Queries) CountHCOpenDescendants(ctx context.Context, arg CountHCOpenDescendantsParams) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countHCOpenDescendants, arg.EpicID, arg.ID)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
-}
-
 const countMessagesInTopic = `-- name: CountMessagesInTopic :one
 SELECT COUNT(*) FROM messages
 WHERE topic = ?
