@@ -238,6 +238,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			msgStore := stores.NewMessageStore(database, 0) // 0 = unlimited retention
 			kvStore := stores.NewKVStore(database)
 			todoStore := stores.NewTodoStore(database)
+			hcStore := stores.NewHCStore(database)
 
 			// Start background KV sweep goroutine
 			sweepCtx, cancel := context.WithCancel(context.Background())
@@ -314,6 +315,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				sessionSvc,
 				msgStore,
 				todoStore,
+				hcStore,
 				cfg,
 				bus,
 				nil, // terminal manager created in TUI command
