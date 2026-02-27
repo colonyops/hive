@@ -65,6 +65,39 @@ A terminal multiplexer session that hosts a hive session. When you create a hive
 
 A git remote URL (e.g., `github.com/colonyops/hive`). Multiple sessions can be created from the same repository.
 
+## Clone Strategies
+
+Hive supports two strategies for isolating session workspaces:
+
+### Full clone (default)
+
+Each session gets its own independent `git clone`. This is the simplest and most compatible option — sessions are entirely self-contained and can be on different branches.
+
+```yaml
+rules:
+  - pattern: ""  # matches all repos; omitting clone_strategy also defaults to full
+```
+
+### Worktree
+
+Sessions share a single bare clone of the repository. Each session is a [git worktree](https://git-scm.com/docs/git-worktree) pointing into the shared bare clone. This avoids re-downloading the full history for every session and reduces disk usage on large repositories.
+
+Set `clone_strategy: worktree` on a rule. Use a catch-all rule (`pattern: ""`) to apply it globally, or a specific pattern to apply it to matching repos only:
+
+```yaml
+rules:
+  # worktree for all repos
+  - pattern: ""
+    clone_strategy: worktree
+
+  # override back to full for a specific repo
+  - pattern: ".*/legacy/.*"
+    clone_strategy: full
+```
+
+!!! note
+    Recycled worktree sessions are reset by fetching from the bare clone and resetting the worktree branch. Worktree sessions cannot be recycled into full-clone sessions or vice versa — hive only reuses sessions with a matching strategy.
+
 ## Session Lifecycle
 
 Sessions move through a managed lifecycle:

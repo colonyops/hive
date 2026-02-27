@@ -1511,37 +1511,34 @@ func TestValidate_GroupByValidModes(t *testing.T) {
 func TestGetCloneStrategy(t *testing.T) {
 	tests := []struct {
 		name     string
-		global   string
 		rules    []Rule
 		remote   string
 		expected string
 	}{
 		{
-			name:     "empty config defaults to full",
-			global:   "",
+			name:     "no rules defaults to full",
 			rules:    nil,
 			remote:   "https://github.com/foo/bar",
 			expected: CloneStrategyFull,
 		},
 		{
-			name:     "global worktree propagates",
-			global:   CloneStrategyWorktree,
-			rules:    nil,
-			remote:   "https://github.com/foo/bar",
-			expected: CloneStrategyWorktree,
-		},
-		{
-			name:   "non-matching rule does not override global",
-			global: CloneStrategyWorktree,
+			name: "catch-all rule sets worktree",
 			rules: []Rule{
-				{Pattern: "github.com/other/.*", CloneStrategy: CloneStrategyFull},
+				{Pattern: "", CloneStrategy: CloneStrategyWorktree},
 			},
 			remote:   "https://github.com/foo/bar",
 			expected: CloneStrategyWorktree,
 		},
 		{
-			name:   "matching rule overrides global",
-			global: CloneStrategyFull,
+			name: "non-matching rule does not change default",
+			rules: []Rule{
+				{Pattern: "github.com/other/.*", CloneStrategy: CloneStrategyWorktree},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: CloneStrategyFull,
+		},
+		{
+			name: "matching rule overrides default",
 			rules: []Rule{
 				{Pattern: "github.com/foo/.*", CloneStrategy: CloneStrategyWorktree},
 			},
@@ -1549,8 +1546,7 @@ func TestGetCloneStrategy(t *testing.T) {
 			expected: CloneStrategyWorktree,
 		},
 		{
-			name:   "last matching rule wins",
-			global: CloneStrategyFull,
+			name: "last matching rule wins",
 			rules: []Rule{
 				{Pattern: "github.com/.*", CloneStrategy: CloneStrategyWorktree},
 				{Pattern: "github.com/foo/.*", CloneStrategy: CloneStrategyFull},
@@ -1563,7 +1559,6 @@ func TestGetCloneStrategy(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := validConfig(t)
-			cfg.CloneStrategy = tt.global
 			cfg.Rules = tt.rules
 
 			result := cfg.GetCloneStrategy(tt.remote)

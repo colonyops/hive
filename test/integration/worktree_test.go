@@ -12,14 +12,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// worktreeConfig returns inline YAML config that sets a global clone strategy.
+// worktreeConfig returns inline YAML config that sets a catch-all clone strategy via rules.
 // Includes the same tmux spawn commands as testdata/config.yaml so sessions
 // can be created in Docker without a pre-existing tmux session.
 func worktreeConfig(cloneStrategy string) string {
 	return fmt.Sprintf(`data_dir: ""
-clone_strategy: %s
 rules:
-  - spawn:
+  - clone_strategy: %s
+    spawn:
       - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
     batch_spawn:
       - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
@@ -80,16 +80,15 @@ func TestWorktreeCLIOverridesConfig(t *testing.T) {
 func TestWorktreeRuleOverride(t *testing.T) {
 	repo := createBareRepo(t, "wt-rule-repo")
 
-	// Global default is full, but a rule matching everything sets worktree
-	cfg := fmt.Sprintf(`data_dir: ""
-clone_strategy: full
+	// Catch-all rule sets worktree
+	cfg := `data_dir: ""
 rules:
   - clone_strategy: worktree
     spawn:
       - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
     batch_spawn:
       - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"
-`)
+`
 	h := NewHarness(t).WithConfig(cfg)
 
 	out, err := h.Run("new", "--remote", repo, "rule-wt")
@@ -102,9 +101,8 @@ rules:
 func TestWorktreeRuleNoMatchFallsBackToGlobal(t *testing.T) {
 	repo := createBareRepo(t, "wt-nomatch-repo")
 
-	// Rule only matches GitHub remotes — local bare repo won't match
+	// Rule only matches GitHub remotes — local bare repo won't match, so defaults to full
 	cfg := `data_dir: ""
-clone_strategy: full
 rules:
   - spawn:
       - "tmux new-session -d -s {{ .Name | shq }} -c {{ .Path | shq }}"

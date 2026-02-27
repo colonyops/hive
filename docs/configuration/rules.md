@@ -39,16 +39,17 @@ rules:
 
 ## Rule Fields
 
-| Field           | Type             | Default            | Description                                       |
-| --------------- | ---------------- | ------------------ | ------------------------------------------------- |
-| `pattern`       | string           | `""`               | Regex pattern to match remote URL                 |
-| `windows`       | []WindowConfig   | see below          | Declarative tmux window layout (recommended)      |
-| `spawn`         | []string         | —                  | Shell commands run after session creation (legacy) |
-| `batch_spawn`   | []string         | —                  | Shell commands for batch session creation (legacy) |
-| `recycle`       | []string         | git fetch/checkout/reset/clean | Commands run when recycling a session |
-| `commands`      | []string         | `[]`               | Setup commands run after clone                    |
-| `copy`          | []string         | `[]`               | Glob patterns for files to copy from parent repo  |
-| `max_recycled`  | *int             | `5`                | Maximum recycled sessions to keep (0 = unlimited) |
+| Field            | Type             | Default            | Description                                       |
+| ---------------- | ---------------- | ------------------ | ------------------------------------------------- |
+| `pattern`        | string           | `""`               | Regex pattern to match remote URL                 |
+| `clone_strategy` | string           | —                  | Override clone strategy for matching repos: `full` or `worktree` |
+| `windows`        | []WindowConfig   | see below          | Declarative tmux window layout (recommended)      |
+| `spawn`          | []string         | —                  | Shell commands run after session creation (legacy) |
+| `batch_spawn`    | []string         | —                  | Shell commands for batch session creation (legacy) |
+| `recycle`        | []string         | git fetch/checkout/reset/clean | Commands run when recycling a session |
+| `commands`       | []string         | `[]`               | Setup commands run after clone                    |
+| `copy`           | []string         | `[]`               | Glob patterns for files to copy from parent repo  |
+| `max_recycled`   | *int             | `5`                | Maximum recycled sessions to keep (0 = unlimited) |
 
 !!! warning "`windows` vs `spawn`/`batch_spawn`"
     A rule must use either `windows` or `spawn`/`batch_spawn`, not both. If neither is set, the default window layout is used (agent window + shell window).
