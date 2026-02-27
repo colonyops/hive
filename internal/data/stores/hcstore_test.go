@@ -2,6 +2,7 @@ package stores
 
 import (
 	"context"
+	"strings"
 	"testing"
 	"time"
 
@@ -10,6 +11,63 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestHCStore_UpdateItemLogsStatusChangeActivity(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+	require.NoError(t, store.CreateItem(ctx, hc.Item{
+		ID:        "task-1",
+		Title:     "Epic",
+		Type:      hc.ItemTypeEpic,
+		Status:    hc.StatusOpen,
+		CreatedAt: now,
+		UpdatedAt: now,
+	}))
+
+	status := hc.StatusInProgress
+	_, err = store.UpdateItem(ctx, "task-1", hc.ItemUpdate{Status: &status})
+	require.NoError(t, err)
+
+	activity, err := store.ListActivity(ctx, "task-1")
+	require.NoError(t, err)
+	require.Len(t, activity, 1)
+	assert.Equal(t, hc.ActivityTypeStatusChange, activity[0].Type)
+	assert.Equal(t, "status changed from open to in_progress", activity[0].Message)
+	assert.True(t, strings.HasPrefix(activity[0].ID, "hc-"))
+	assert.NotContains(t, activity[0].ID, "act_")
+}
+
+func TestHCStore_UpdateItemDoesNotLogActivityWhenStatusUnchanged(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+	require.NoError(t, store.CreateItem(ctx, hc.Item{
+		ID:        "task-2",
+		Title:     "Epic",
+		Type:      hc.ItemTypeEpic,
+		Status:    hc.StatusOpen,
+		SessionID: "session-a",
+		CreatedAt: now,
+		UpdatedAt: now,
+	}))
+
+	sessionID := "session-b"
+	_, err = store.UpdateItem(ctx, "task-2", hc.ItemUpdate{SessionID: &sessionID})
+	require.NoError(t, err)
+
+	activity, err := store.ListActivity(ctx, "task-2")
+	require.NoError(t, err)
+	assert.Empty(t, activity)
+}
 
 func TestHCStore_PruneRemovesDescendantsOfPrunedRoot(t *testing.T) {
 	ctx := context.Background()

@@ -10,6 +10,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/pkg/randid"
 	"github.com/rs/zerolog/log"
 )
 
@@ -100,25 +101,25 @@ func (s *HCStore) GetItem(ctx context.Context, id string) (hc.Item, error) {
 
 // UpdateItem applies partial updates to an HC item, atomically logging a status_change activity if status changed.
 func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
-	existing, err := s.db.Queries().GetHCItem(ctx, id)
-	if err != nil {
-		return hc.Item{}, fmt.Errorf("get hc item for update: %w", err)
-	}
-
-	newStatus := existing.Status
-	newSessionID := existing.SessionID
-	if update.Status != nil {
-		newStatus = string(*update.Status)
-	}
-	if update.SessionID != nil {
-		newSessionID = *update.SessionID
-	}
-
-	now := time.Now()
-	statusChanged := newStatus != existing.Status
-
 	var updated db.HcItem
-	err = s.db.WithTx(ctx, func(q *db.Queries) error {
+	err := s.db.WithTx(ctx, func(q *db.Queries) error {
+		existing, getErr := q.GetHCItem(ctx, id)
+		if getErr != nil {
+			return fmt.Errorf("get hc item for update: %w", getErr)
+		}
+
+		newStatus := existing.Status
+		newSessionID := existing.SessionID
+		if update.Status != nil {
+			newStatus = string(*update.Status)
+		}
+		if update.SessionID != nil {
+			newSessionID = *update.SessionID
+		}
+
+		now := time.Now()
+		statusChanged := newStatus != existing.Status
+
 		if err := q.UpdateHCItem(ctx, db.UpdateHCItemParams{
 			Status:    newStatus,
 			SessionID: newSessionID,
@@ -129,7 +130,7 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 		}
 
 		if statusChanged {
-			activityID := fmt.Sprintf("act_%d", now.UnixNano())
+			activityID := generateHCID()
 			msg := fmt.Sprintf("status changed from %s to %s", existing.Status, newStatus)
 			if _, err := q.InsertHCActivity(ctx, db.InsertHCActivityParams{
 				ID:        activityID,
@@ -452,4 +453,8 @@ func parseStoredHCActivityType(row db.HcActivity) hc.ActivityType {
 		return fallbackHCActivityType
 	}
 	return actType
+}
+
+func generateHCID() string {
+	return "hc-" + randid.Generate(8)
 }
