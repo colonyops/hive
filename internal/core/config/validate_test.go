@@ -961,17 +961,28 @@ func TestValidate_FormValidConfig(t *testing.T) {
 
 func TestBuildValidationData(t *testing.T) {
 	t.Run("no form fields returns base data", func(t *testing.T) {
-		data := buildValidationData(nil)
+		data := buildValidationData(nil, nil)
 		assert.NotEmpty(t, data["Path"])
 		assert.NotEmpty(t, data["Name"])
 		assert.NotEmpty(t, data["ID"])
 		assert.Nil(t, data["Form"])
 	})
 
+	t.Run("vars are injected under Vars key", func(t *testing.T) {
+		vars := map[string]any{"greeting": "hello"}
+		data := buildValidationData(nil, vars)
+		assert.Equal(t, vars, data["Vars"])
+	})
+
+	t.Run("nil vars produces nil Vars key", func(t *testing.T) {
+		data := buildValidationData(nil, nil)
+		assert.Nil(t, data["Vars"])
+	})
+
 	t.Run("text field produces string", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "msg", Type: FormTypeText},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		assert.IsType(t, "", form["msg"])
 	})
@@ -979,7 +990,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("multi-select produces string slice", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "tags", Type: FormTypeMultiSelect},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		assert.IsType(t, []string{}, form["tags"])
 	})
@@ -987,7 +998,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("preset single produces map", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "target", Preset: FormPresetSessionSelector},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		item, ok := form["target"].(map[string]any)
 		require.True(t, ok)
@@ -997,7 +1008,7 @@ func TestBuildValidationData(t *testing.T) {
 	t.Run("preset multi produces slice of maps", func(t *testing.T) {
 		data := buildValidationData([]FormField{
 			{Variable: "targets", Preset: FormPresetSessionSelector, Multi: true},
-		})
+		}, nil)
 		form := data["Form"].(map[string]any)
 		items, ok := form["targets"].([]map[string]any)
 		require.True(t, ok)
@@ -1582,4 +1593,138 @@ func TestValidateCloneStrategy(t *testing.T) {
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "invalid clone_strategy")
 	})
+}
+
+func TestLoadVarsFiles(t *testing.T) {
+	t.Run("loads and merges single vars file", func(t *testing.T) {
+		dir := t.TempDir()
+		varsFile := filepath.Join(dir, "vars.yaml")
+		require.NoError(t, os.WriteFile(varsFile, []byte("greeting: hello\ncount: 42\n"), 0o600))
+
+		cfg := &Config{VarsFiles: []string{varsFile}}
+		require.NoError(t, cfg.loadVarsFiles(dir))
+		assert.Equal(t, "hello", cfg.Vars["greeting"])
+	})
+
+	t.Run("later files overwrite earlier keys", func(t *testing.T) {
+		dir := t.TempDir()
+		first := filepath.Join(dir, "first.yaml")
+		second := filepath.Join(dir, "second.yaml")
+		require.NoError(t, os.WriteFile(first, []byte("key: from-first\n"), 0o600))
+		require.NoError(t, os.WriteFile(second, []byte("key: from-second\n"), 0o600))
+
+		cfg := &Config{VarsFiles: []string{first, second}}
+		require.NoError(t, cfg.loadVarsFiles(dir))
+		assert.Equal(t, "from-second", cfg.Vars["key"])
+	})
+
+	t.Run("relative path resolved against baseDir", func(t *testing.T) {
+		dir := t.TempDir()
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "v.yaml"), []byte("x: 1\n"), 0o600))
+
+		cfg := &Config{VarsFiles: []string{"v.yaml"}}
+		require.NoError(t, cfg.loadVarsFiles(dir))
+		assert.NotNil(t, cfg.Vars)
+	})
+
+	t.Run("file not found returns error", func(t *testing.T) {
+		cfg := &Config{VarsFiles: []string{"/nonexistent/path/vars.yaml"}}
+		err := cfg.loadVarsFiles("/")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "read vars file")
+	})
+
+	t.Run("invalid YAML returns error", func(t *testing.T) {
+		dir := t.TempDir()
+		bad := filepath.Join(dir, "bad.yaml")
+		require.NoError(t, os.WriteFile(bad, []byte(":\tinvalid: yaml: [\n"), 0o600))
+
+		cfg := &Config{VarsFiles: []string{bad}}
+		err := cfg.loadVarsFiles(dir)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "parse vars file")
+	})
+
+	t.Run("inline vars merged with vars_files - file wins for same key", func(t *testing.T) {
+		dir := t.TempDir()
+		varsFile := filepath.Join(dir, "override.yaml")
+		require.NoError(t, os.WriteFile(varsFile, []byte("key: from-file\n"), 0o600))
+
+		cfg := &Config{
+			Vars:      map[string]any{"key": "from-inline", "other": "kept"},
+			VarsFiles: []string{varsFile},
+		}
+		require.NoError(t, cfg.loadVarsFiles(dir))
+		assert.Equal(t, "from-file", cfg.Vars["key"])
+		assert.Equal(t, "kept", cfg.Vars["other"])
+	})
+}
+
+func TestValidateDeep_VarsInTemplates(t *testing.T) {
+	t.Run("spawn template can reference .Vars", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Vars = map[string]any{"prompt": "be concise"}
+		cfg.Rules = []Rule{
+			{
+				Spawn: []string{`echo {{ .Vars.prompt | shq }}`},
+			},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+
+	t.Run("recycle template can reference .Vars", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Vars = map[string]any{"branch": "develop"}
+		cfg.Rules = []Rule{
+			{
+				Recycle: []string{`git checkout {{ .Vars.branch | shq }}`},
+			},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+
+	t.Run("usercommand sh template can reference .Vars", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Vars = map[string]any{"tool": "claude"}
+		cfg.UserCommands = map[string]UserCommand{
+			"launch": {Sh: `{{ .Vars.tool | shq }} --help`},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+
+	t.Run("template referencing undefined var key fails", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Vars = map[string]any{}
+		cfg.UserCommands = map[string]UserCommand{
+			"bad": {Sh: `echo {{ .Vars.missing }}`},
+		}
+		err := cfg.ValidateDeep("")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "template error")
+	})
+}
+
+func TestLoad_VarsInlineAndFiles(t *testing.T) {
+	dir := t.TempDir()
+	varsFile := filepath.Join(dir, "extra.yaml")
+	require.NoError(t, os.WriteFile(varsFile, []byte("from_file: yes\n"), 0o600))
+
+	cfgContent := `
+version: "0.2.5"
+git_path: git
+vars:
+  inline_key: inline_val
+vars_files:
+  - extra.yaml
+agents:
+  default: claude
+  claude: {}
+`
+	cfgPath := filepath.Join(dir, "config.yaml")
+	require.NoError(t, os.WriteFile(cfgPath, []byte(cfgContent), 0o600))
+
+	cfg, err := Load(cfgPath, dir)
+	require.NoError(t, err)
+	assert.Equal(t, "inline_val", cfg.Vars["inline_key"])
+	assert.Equal(t, "yes", cfg.Vars["from_file"])
 }

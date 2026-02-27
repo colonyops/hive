@@ -236,8 +236,10 @@ type Config struct {
 	Database            DatabaseConfig         `yaml:"database"`
 	Plugins             PluginsConfig          `yaml:"plugins"`
 	Todos               TodosConfig            `yaml:"todos"`
-	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
-	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
+	Vars                map[string]any         `yaml:"vars"`       // user-defined variables exposed as .Vars in all templates
+	VarsFiles           []string               `yaml:"vars_files"` // YAML files whose contents are merged into Vars
+	RepoDirs            []string               `yaml:"repo_dirs"`  // directories containing git repositories for new session dialog
+	DataDir             string                 `yaml:"-"`          // set by caller, not from config file
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -603,6 +605,11 @@ func Load(configPath, dataDir string) (*Config, error) {
 				return nil, fmt.Errorf("parse config file: %w", err)
 			}
 
+			// Load vars_files relative to config file directory and merge into Vars.
+			if err := cfg.loadVarsFiles(filepath.Dir(configPath)); err != nil {
+				return nil, fmt.Errorf("load vars_files: %w", err)
+			}
+
 			// Re-set dataDir since Unmarshal may have cleared it
 			cfg.DataDir = dataDir
 		}
@@ -625,6 +632,30 @@ func Load(configPath, dataDir string) (*Config, error) {
 	}
 
 	return &cfg, nil
+}
+
+// loadVarsFiles reads each file in VarsFiles, parses it as a YAML mapping, and
+// merges the entries into Vars. Later files overwrite keys set by earlier ones.
+// Relative paths are resolved relative to baseDir.
+func (c *Config) loadVarsFiles(baseDir string) error {
+	for _, f := range c.VarsFiles {
+		if !filepath.IsAbs(f) {
+			f = filepath.Join(baseDir, f)
+		}
+		data, err := os.ReadFile(f)
+		if err != nil {
+			return fmt.Errorf("read vars file %q: %w", f, err)
+		}
+		var fileVars map[string]any
+		if err := yaml.Unmarshal(data, &fileVars); err != nil {
+			return fmt.Errorf("parse vars file %q: %w", f, err)
+		}
+		if c.Vars == nil {
+			c.Vars = make(map[string]any)
+		}
+		maps.Copy(c.Vars, fileVars)
+	}
+	return nil
 }
 
 // applyDefaults sets default values for any unset configuration options.
@@ -679,6 +710,9 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Agents.Default == "" {
 		c.Agents.Default = "claude"
+	}
+	if c.Vars == nil {
+		c.Vars = map[string]any{}
 	}
 }
 

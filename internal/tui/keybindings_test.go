@@ -850,3 +850,49 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "Review PR 456")
 	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "/repos/my-repo")
 }
+
+func TestKeybindingResolver_Vars(t *testing.T) {
+	renderer := testRenderer
+	sess := testSession()
+
+	t.Run("vars available in Resolve shell command", func(t *testing.T) {
+		commands := map[string]config.UserCommand{
+			"Run": {Sh: `echo {{ .Vars.greeting }}`},
+		}
+		keybindings := map[string]config.Keybinding{"r": {Cmd: "Run"}}
+		handler := NewKeybindingResolver(keybindings, commands, renderer)
+		handler.SetVars(map[string]any{"greeting": "hello"})
+
+		a, ok := handler.Resolve("r", sess)
+		require.True(t, ok)
+		assert.Equal(t, "echo hello", a.ShellCmd)
+	})
+
+	t.Run("vars available in ResolveUserCommand", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: `echo {{ .Vars.msg }}`}
+		handler := NewKeybindingResolver(nil, nil, renderer)
+		handler.SetVars(map[string]any{"msg": "world"})
+
+		a := handler.ResolveUserCommand("greet", cmd, sess, nil)
+		assert.Equal(t, "echo world", a.ShellCmd)
+	})
+
+	t.Run("vars available in RenderWithFormData", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: `{{ .Vars.prefix }} {{ .Form.value }}`}
+		handler := NewKeybindingResolver(nil, nil, renderer)
+		handler.SetVars(map[string]any{"prefix": "run"})
+
+		a := handler.RenderWithFormData("cmd", cmd, sess, nil, map[string]any{"value": "task"})
+		assert.Equal(t, "run task", a.ShellCmd)
+	})
+
+	t.Run("nil vars set initializes to empty map", func(t *testing.T) {
+		cmd := config.UserCommand{Sh: `echo hi`}
+		handler := NewKeybindingResolver(nil, nil, renderer)
+		handler.SetVars(nil)
+
+		a := handler.ResolveUserCommand("hi", cmd, sess, nil)
+		require.NoError(t, a.Err)
+		assert.Equal(t, "echo hi", a.ShellCmd)
+	})
+}

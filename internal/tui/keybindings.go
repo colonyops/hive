@@ -25,6 +25,7 @@ type KeybindingResolver struct {
 	keybindings            map[string]config.Keybinding
 	commands               map[string]config.UserCommand
 	renderer               *tmpl.Renderer
+	vars                   map[string]any                // user-defined variables exposed as .Vars in templates
 	activeView             ViewType                      // current active view for scope checking
 	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
 	toolLookup             func(sessionID string) string // optional: returns detected tool name for a session
@@ -38,8 +39,17 @@ func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands ma
 		keybindings: keybindings,
 		commands:    commands,
 		renderer:    renderer,
+		vars:        map[string]any{},
 		activeView:  ViewSessions, // default to sessions view
 	}
+}
+
+// SetVars sets the global template variables available as .Vars in all templates.
+func (h *KeybindingResolver) SetVars(vars map[string]any) {
+	if vars == nil {
+		vars = map[string]any{}
+	}
+	h.vars = vars
 }
 
 // SetActiveView updates the current active view for scope checking.
@@ -269,6 +279,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			"Name":       sess.Name,
 			"Tool":       h.toolForSession(sess.ID),
 			"TmuxWindow": h.consumeWindowOverride(sess.ID),
+			"Vars":       h.vars,
 		}
 
 		if len(cmd.Windows) > 0 {
@@ -409,6 +420,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		"Tool":       h.toolForSession(sess.ID),
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
+		"Vars":       h.vars,
 	}
 
 	if len(cmd.Windows) > 0 {
@@ -459,6 +471,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
 		"Form":       formData,
+		"Vars":       h.vars,
 	}
 
 	if len(cmd.Windows) > 0 {
