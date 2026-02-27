@@ -304,6 +304,8 @@ func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 		return total, nil
 	}
 
+	// Activity pruning is always scoped to done and cancelled items,
+	// independent of opts.Statuses.
 	if err := s.db.Queries().PruneHCActivityDone(ctx, cutoff); err != nil {
 		return 0, fmt.Errorf("prune hc activity (done): %w", err)
 	}

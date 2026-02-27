@@ -36,7 +36,6 @@ type ListFilter struct {
 
 // NextFilter selects candidate items for NextItem.
 type NextFilter struct {
-	RepoKey   string
 	EpicID    string
 	SessionID string
 }
