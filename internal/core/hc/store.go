@@ -43,6 +43,20 @@ type ListFilter struct {
 	Status    *Status
 }
 
+// Matches reports whether item satisfies all non-zero filter fields.
+func (f ListFilter) Matches(item Item) bool {
+	if f.RepoKey != "" && item.RepoKey != f.RepoKey {
+		return false
+	}
+	if f.SessionID != "" && item.SessionID != f.SessionID {
+		return false
+	}
+	if f.Status != nil && item.Status != *f.Status {
+		return false
+	}
+	return true
+}
+
 // NextFilter selects candidate items for NextItem.
 type NextFilter struct {
 	EpicID    string
