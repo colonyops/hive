@@ -86,7 +86,7 @@ func (cmd *HCCmd) createCmd() *cli.Command {
 			&cli.StringFlag{
 				Name:        "type",
 				Usage:       "Item type: epic or task",
-				Value:       "task",
+				Value:       "epic",
 				Destination: &itemType,
 			},
 			&cli.StringFlag{
@@ -108,6 +108,10 @@ func (cmd *HCCmd) createCmd() *cli.Command {
 		Action: func(ctx context.Context, c *cli.Command) error {
 			sessionID := cmd.detectSession(ctx)
 			repoKey := cmd.detectRepoKey(ctx)
+
+			if assignID != "" {
+				sessionID = assignID
+			}
 
 			// Bulk creation via JSON file or stdin.
 			if c.IsSet("file") || c.NArg() == 0 {
@@ -136,10 +140,6 @@ func (cmd *HCCmd) createCmd() *cli.Command {
 			typ, err := hc.ParseItemType(itemType)
 			if err != nil {
 				return fmt.Errorf("invalid item type %q: %w", itemType, err)
-			}
-
-			if assignID != "" {
-				sessionID = assignID
 			}
 
 			now := time.Now()
@@ -235,7 +235,6 @@ func (cmd *HCCmd) listCmd() *cli.Command {
 				return nil
 			}
 
-			// Table output: ID, TYPE, STATUS, TITLE
 			_, _ = fmt.Fprintf(c.Root().Writer, "%-20s\t%-6s\t%-12s\t%s\n", "ID", "TYPE", "STATUS", "TITLE")
 			for _, item := range items {
 				_, _ = fmt.Fprintf(c.Root().Writer, "%-20s\t%-6s\t%-12s\t%s\n",
@@ -358,25 +357,16 @@ func (cmd *HCCmd) updateCmd() *cli.Command {
 }
 
 func (cmd *HCCmd) nextCmd() *cli.Command {
-	var repo string
 	return &cli.Command{
 		Name:      "next",
 		Usage:     "Get the next available task for this session",
 		ArgsUsage: "[epic-id]",
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "repo",
-				Usage:       "Filter by repo key (owner/repo)",
-				Destination: &repo,
-			},
-		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			sessionID := cmd.detectSession(ctx)
 			if sessionID == "" {
 				return fmt.Errorf("session not detected: run inside a hive session")
 			}
 			filter := hc.NextFilter{
-				RepoKey:   repo,
 				EpicID:    c.Args().First(),
 				SessionID: sessionID,
 			}
@@ -451,7 +441,7 @@ func (cmd *HCCmd) contextCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "context",
 		Usage:     "Get assembled context for an epic",
-		ArgsUsage: "[epic-id]",
+		ArgsUsage: "<epic-id>",
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:        "json",
@@ -461,6 +451,9 @@ func (cmd *HCCmd) contextCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			epicID := c.Args().First()
+			if epicID == "" {
+				return fmt.Errorf("epic-id is required")
+			}
 			sessionID := cmd.detectSession(ctx)
 			block, err := cmd.app.HC.Context(ctx, epicID, sessionID)
 			if err != nil {
@@ -471,7 +464,6 @@ func (cmd *HCCmd) contextCmd() *cli.Command {
 				return iojson.WriteLine(c.Root().Writer, block)
 			}
 
-			// Human-readable output.
 			w := c.Root().Writer
 			_, _ = fmt.Fprintf(w, "# Honeycomb: %s [%s]\n", block.Epic.Title, block.Epic.ID)
 			_, _ = fmt.Fprintf(w, "Status: %d/%d open · %d done · %d cancelled\n",
