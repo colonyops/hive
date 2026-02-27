@@ -11,6 +11,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/hooks"
 	"github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui"
@@ -77,9 +78,15 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.app.Sessions.DetectRemote(ctx, ".")
 
-	// Create terminal integration manager (tmux always enabled)
-	termMgr := terminal.NewManager([]string{"tmux"})
-	// Register tmux integration with preview window matcher patterns
+	// Create terminal integration manager.
+	// "hooks" is tried first (more accurate when Claude hooks are installed),
+	// then "tmux" as the fallback for terminal-output-based detection.
+	termMgr := terminal.NewManager([]string{"hooks", "tmux"})
+
+	// Register hooks integration (always available; reads .hive-agent-status files).
+	termMgr.Register(hooks.New())
+
+	// Register tmux integration with preview window matcher patterns.
 	preferredWindows := cmd.app.Config.Tmux.PreviewWindowMatcher
 	tmuxIntegration := tmux.New(preferredWindows)
 	if tmuxIntegration.Available() {

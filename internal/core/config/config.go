@@ -418,11 +418,12 @@ type ContextDirPluginConfig struct {
 
 // ClaudePluginConfig holds Claude Code plugin configuration.
 type ClaudePluginConfig struct {
-	Enabled         *bool         `yaml:"enabled"`          // nil = auto-detect, true/false = override
-	CacheTTL        time.Duration `yaml:"cache_ttl"`        // status cache duration (default: 30s)
-	YellowThreshold int           `yaml:"yellow_threshold"` // yellow above this % (default: 60)
-	RedThreshold    int           `yaml:"red_threshold"`    // red above this % (default: 80)
-	ModelLimit      int           `yaml:"model_limit"`      // context limit (default: 200000)
+	Enabled          *bool         `yaml:"enabled"`            // nil = auto-detect, true/false = override
+	CacheTTL         time.Duration `yaml:"cache_ttl"`          // status cache duration (default: 30s)
+	YellowThreshold  int           `yaml:"yellow_threshold"`   // yellow above this % (default: 60)
+	RedThreshold     int           `yaml:"red_threshold"`      // red above this % (default: 80)
+	ModelLimit       int           `yaml:"model_limit"`        // context limit (default: 200000)
+	AutoInstallHooks bool          `yaml:"auto_install_hooks"` // install Claude hooks into new session dirs (default: false)
 }
 
 // DatabaseConfig holds SQLite database configuration.

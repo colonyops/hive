@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
 	coretmux "github.com/colonyops/hive/internal/core/tmux"
+	claudeplugin "github.com/colonyops/hive/internal/hive/plugins/claude"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -243,6 +244,15 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	// Execute matching rules
 	if err := s.executeRules(ctx, remote, opts.Source, sess.Path); err != nil {
 		return nil, fmt.Errorf("execute rules: %w", err)
+	}
+
+	// Auto-install Claude Code hooks for accurate status tracking (non-fatal).
+	if s.config.Plugins.Claude.AutoInstallHooks {
+		if err := claudeplugin.InstallHooks(sess.Path); err != nil {
+			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("failed to install Claude hooks")
+		} else {
+			s.log.Debug().Str("session_id", sess.ID).Msg("Claude hooks installed")
+		}
 	}
 
 	// Save session

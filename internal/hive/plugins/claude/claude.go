@@ -68,6 +68,11 @@ tmux select-window -t "$window_name"
 			Help:   "fork Claude session in new window",
 			Silent: true,
 		},
+		"ClaudeHooksInstall": {
+			Sh:     `hive claude hooks install --path {{ .Path | shq }}`,
+			Help:   "install Claude Code hooks for status tracking",
+			Silent: false,
+		},
 	}
 }
 
