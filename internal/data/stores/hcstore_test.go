@@ -69,6 +69,41 @@ func TestHCStore_UpdateItemDoesNotLogActivityWhenStatusUnchanged(t *testing.T) {
 	assert.Empty(t, activity)
 }
 
+func TestHCStore_ListItemsBySessionFilter(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+	require.NoError(t, store.CreateItemBatch(ctx, []hc.Item{
+		{
+			ID:        "task-a",
+			Title:     "Task A",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusOpen,
+			SessionID: "session-a",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-b",
+			Title:     "Task B",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusOpen,
+			SessionID: "session-b",
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}))
+
+	items, err := store.ListItems(ctx, hc.ListFilter{SessionID: "session-a"})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "task-a", items[0].ID)
+}
+
 func TestHCStore_PruneRemovesDescendantsOfPrunedRoot(t *testing.T) {
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())

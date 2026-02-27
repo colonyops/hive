@@ -19,6 +19,9 @@ type fakeHCStore struct {
 }
 
 func (f *fakeHCStore) CreateItem(_ context.Context, item hc.Item) error {
+	if err := item.Validate(); err != nil {
+		return err
+	}
 	f.created = append(f.created, item)
 	return f.createErr
 }
@@ -103,7 +106,7 @@ func TestHCService_CreateItem_validation(t *testing.T) {
 	fake := &fakeHCStore{}
 	svc := newTestHCService(fake)
 
-	// An item with an empty Title fails validation; store must not be called.
+	// An item with an empty Title fails validation in the store; create still returns an error.
 	item := hc.Item{
 		ID:     "hc-test",
 		Title:  "", // invalid
@@ -115,5 +118,5 @@ func TestHCService_CreateItem_validation(t *testing.T) {
 	err := svc.CreateItem(ctx, item)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "title is required")
-	assert.Empty(t, fake.created, "store must not be called on validation failure")
+	assert.Empty(t, fake.created, "invalid item should not be persisted")
 }

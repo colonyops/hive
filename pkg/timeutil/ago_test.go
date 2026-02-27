@@ -1,4 +1,4 @@
-package commands
+package timeutil
 
 import (
 	"testing"
@@ -7,7 +7,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestTimeAgo(t *testing.T) {
+func TestAgo(t *testing.T) {
 	tests := []struct {
 		name  string
 		input time.Time
@@ -42,13 +42,13 @@ func TestTimeAgo(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := timeAgo(tt.input)
+			got := Ago(tt.input)
 			assert.Equal(t, tt.want, got)
 		})
 	}
 
 	t.Run("non-zero time returns non-empty string", func(t *testing.T) {
-		got := timeAgo(time.Now().Add(-1 * time.Minute))
+		got := Ago(time.Now().Add(-1 * time.Minute))
 		assert.NotEmpty(t, got)
 	})
 }

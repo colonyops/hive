@@ -34,9 +34,6 @@ func generateHCID() string {
 
 // CreateItem creates a single hc item.
 func (s *HCService) CreateItem(ctx context.Context, item hc.Item) error {
-	if err := item.Validate(); err != nil {
-		return fmt.Errorf("validate hc item %q: %w", item.ID, err)
-	}
 	return s.store.CreateItem(ctx, item)
 }
 

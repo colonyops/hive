@@ -96,7 +96,7 @@ func (s *HCStore) GetItem(ctx context.Context, id string) (hc.Item, error) {
 	if err != nil {
 		return hc.Item{}, fmt.Errorf("get hc item: %w", err)
 	}
-	return s.rowToHCItem(ctx, row), nil
+	return s.fetchHCItem(ctx, row), nil
 }
 
 // UpdateItem applies partial updates to an HC item, atomically logging a status_change activity if status changed.
@@ -151,7 +151,7 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 		return hc.Item{}, err
 	}
 
-	return s.rowToHCItem(ctx, updated), nil
+	return s.fetchHCItem(ctx, updated), nil
 }
 
 // ListItems returns HC items matching the given filter.
@@ -163,7 +163,7 @@ func (s *HCStore) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Ite
 
 	result := make([]hc.Item, 0, len(rows))
 	for _, row := range rows {
-		item := s.rowToHCItem(ctx, row)
+		item := s.fetchHCItem(ctx, row)
 		if !matchesHCListFilter(item, filter) {
 			continue
 		}
@@ -173,6 +173,7 @@ func (s *HCStore) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Ite
 	return result, nil
 }
 
+// listHCRows selects the narrowest SQL query that can satisfy the list filter.
 func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.HcItem, error) {
 	switch {
 	case filter.EpicID != "" && filter.Status != nil:
@@ -193,6 +194,7 @@ func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.Hc
 	}
 }
 
+// matchesHCListFilter applies any remaining in-memory filters after SQL query selection.
 func matchesHCListFilter(item hc.Item, filter hc.ListFilter) bool {
 	if filter.RepoKey != "" && item.RepoKey != filter.RepoKey {
 		return false
@@ -219,7 +221,7 @@ func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, 
 		if err != nil {
 			return hc.Item{}, false, fmt.Errorf("next hc item for session in epic: %w", err)
 		}
-		return s.rowToHCItem(ctx, row), true, nil
+		return s.fetchHCItem(ctx, row), true, nil
 	}
 
 	row, err := s.db.Queries().NextHCItemForSession(ctx, filter.SessionID)
@@ -229,7 +231,7 @@ func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, 
 	if err != nil {
 		return hc.Item{}, false, fmt.Errorf("next hc item for session: %w", err)
 	}
-	return s.rowToHCItem(ctx, row), true, nil
+	return s.fetchHCItem(ctx, row), true, nil
 }
 
 // DeleteItem removes an HC item by ID.
@@ -356,6 +358,7 @@ func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	return total, nil
 }
 
+// collectHCSubtreeIDs expands root IDs into a de-duplicated set that includes all descendants.
 func collectHCSubtreeIDs(roots []string, childrenByParent map[string][]string) map[string]struct{} {
 	pruneIDs := make(map[string]struct{}, len(roots))
 	stack := make([]string, len(roots))
@@ -378,6 +381,7 @@ func collectHCSubtreeIDs(roots []string, childrenByParent map[string][]string) m
 	return pruneIDs
 }
 
+// orderHCIDsByDepthDesc returns IDs ordered deepest-first for safe child-before-parent deletes.
 func orderHCIDsByDepthDesc(ids map[string]struct{}, depthByID map[string]int64) []string {
 	ordered := make([]string, 0, len(ids))
 	for id := range ids {
@@ -391,7 +395,8 @@ func orderHCIDsByDepthDesc(ids map[string]struct{}, depthByID map[string]int64) 
 	return ordered
 }
 
-func (s *HCStore) rowToHCItem(ctx context.Context, row db.HcItem) hc.Item {
+// fetchHCItem converts a database row to hc.Item and computes its Blocked state.
+func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) hc.Item {
 	blocked := false
 	count, err := s.db.Queries().CountHCOpenChildren(ctx, row.ID)
 	if err != nil {
@@ -417,6 +422,7 @@ func (s *HCStore) rowToHCItem(ctx context.Context, row db.HcItem) hc.Item {
 	}
 }
 
+// rowToHCActivity maps a database activity row to a domain activity model.
 func rowToHCActivity(row db.HcActivity) hc.Activity {
 	actType := parseStoredHCActivityType(row)
 	return hc.Activity{
@@ -428,6 +434,7 @@ func rowToHCActivity(row db.HcActivity) hc.Activity {
 	}
 }
 
+// parseStoredHCStatus parses row status and applies a safe fallback when invalid.
 func parseStoredHCStatus(row db.HcItem) hc.Status {
 	status, err := hc.ParseStatus(row.Status)
 	if err != nil {
@@ -437,6 +444,7 @@ func parseStoredHCStatus(row db.HcItem) hc.Status {
 	return status
 }
 
+// parseStoredHCItemType parses row item type and applies a safe fallback when invalid.
 func parseStoredHCItemType(row db.HcItem) hc.ItemType {
 	itemType, err := hc.ParseItemType(row.Type)
 	if err != nil {
@@ -446,6 +454,7 @@ func parseStoredHCItemType(row db.HcItem) hc.ItemType {
 	return itemType
 }
 
+// parseStoredHCActivityType parses row activity type and applies a safe fallback when invalid.
 func parseStoredHCActivityType(row db.HcActivity) hc.ActivityType {
 	actType, err := hc.ParseActivityType(row.Type)
 	if err != nil {

@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/randid"
+	"github.com/colonyops/hive/pkg/timeutil"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
@@ -185,6 +186,7 @@ func (cmd *HCCmd) createCmd() *cli.Command {
 
 func (cmd *HCCmd) listCmd() *cli.Command {
 	var repo string
+	var session string
 	var statusStr string
 	var jsonOut bool
 	return &cli.Command{
@@ -196,6 +198,11 @@ func (cmd *HCCmd) listCmd() *cli.Command {
 				Name:        "repo",
 				Usage:       "Filter by repo key (owner/repo)",
 				Destination: &repo,
+			},
+			&cli.StringFlag{
+				Name:        "session",
+				Usage:       "Filter by assigned session ID",
+				Destination: &session,
 			},
 			&cli.StringFlag{
 				Name:        "status",
@@ -210,8 +217,9 @@ func (cmd *HCCmd) listCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			filter := hc.ListFilter{
-				RepoKey: repo,
-				EpicID:  c.Args().First(),
+				RepoKey:   repo,
+				EpicID:    c.Args().First(),
+				SessionID: session,
 			}
 			if statusStr != "" {
 				s, err := hc.ParseStatus(statusStr)
@@ -478,7 +486,7 @@ func (cmd *HCCmd) contextCmd() *cli.Command {
 					if t.LatestCheckpoint.Message != "" {
 						_, _ = fmt.Fprintf(w, "  Last checkpoint: %s (%s)\n",
 							t.LatestCheckpoint.Message,
-							timeAgo(t.LatestCheckpoint.CreatedAt))
+							timeutil.Ago(t.LatestCheckpoint.CreatedAt))
 					} else {
 						_, _ = fmt.Fprintf(w, "  Last checkpoint: no checkpoint\n")
 					}
@@ -552,23 +560,5 @@ func (cmd *HCCmd) pruneCmd() *cli.Command {
 			}
 			return iojson.WriteLine(c.Root().Writer, map[string]int{"count": n})
 		},
-	}
-}
-
-// timeAgo returns a human-readable description of how long ago t was.
-func timeAgo(t time.Time) string {
-	if t.IsZero() {
-		return "never"
-	}
-	d := time.Since(t)
-	switch {
-	case d < time.Minute:
-		return "just now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm ago", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh ago", int(d.Hours()))
-	default:
-		return fmt.Sprintf("%dd ago", int(d.Hours()/24))
 	}
 }

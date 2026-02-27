@@ -38,7 +38,7 @@ type Item struct {
 	Desc      string    `json:"desc"`
 	Type      ItemType  `json:"type"`
 	Status    Status    `json:"status"`
-	Blocked   bool      `json:"blocked"` // computed: has open children
+	Blocked   bool      `json:"blocked"` // computed at read time: true when the item has open/in_progress children
 	Depth     int       `json:"depth"`   // 0 for epics/roots
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
