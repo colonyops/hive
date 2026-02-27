@@ -64,7 +64,7 @@ func (c *Config) Warnings() []ValidationWarning {
 	var warnings []ValidationWarning
 
 	for i, rule := range c.Rules {
-		if len(rule.Commands) == 0 && len(rule.Copy) == 0 {
+		if len(rule.Commands) == 0 && len(rule.Copy) == 0 && rule.Agent == "" {
 			warnings = append(warnings, ValidationWarning{
 				Category: "Rules",
 				Item:     fmt.Sprintf("rule %d", i),
@@ -139,6 +139,13 @@ func (c *Config) validateRules() error {
 		if rule.Pattern != "" {
 			if _, err := regexp.Compile(rule.Pattern); err != nil {
 				errs = errs.Append(fmt.Sprintf("rules[%d].pattern", i), fmt.Errorf("invalid regex %q: %w", rule.Pattern, err))
+			}
+		}
+
+		// Validate agent field references a known profile.
+		if rule.Agent != "" {
+			if _, ok := c.Agents.Profiles[rule.Agent]; !ok {
+				errs = errs.Append(fmt.Sprintf("rules[%d].agent", i), fmt.Errorf("profile %q not found in agents config", rule.Agent))
 			}
 		}
 

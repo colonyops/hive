@@ -80,6 +80,7 @@ type SessionService struct {
 	recycler   *Recycler
 	hookRunner *HookRunner
 	fileCopier *FileCopier
+	renderer   *tmpl.Renderer // base renderer; used to build per-spawn agent overrides
 	out        *switchWriter
 	err        *switchWriter
 	bareMu     sync.Map // map[remote → *sync.Mutex]
@@ -105,6 +106,7 @@ func NewSessionService(
 		bus:        bus,
 		executor:   exec,
 		log:        log,
+		renderer:   renderer,
 		out:        out,
 		err:        err,
 		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), out, err),
@@ -264,13 +266,14 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	if !opts.SkipSpawn {
 		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		spawner := s.spawnerForStrategy(strategy)
 		switch {
 		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background); err != nil {
+			if err := spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		case len(strategy.Commands) > 0:
-			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+			if err := spawner.Spawn(ctx, strategy.Commands, data); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		default:
@@ -611,7 +614,26 @@ func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote
 		Repo:       repo,
 	}
 
-	return s.spawner.OpenWindows(ctx, strategy.Windows, data, background, targetWindow)
+	return s.spawnerForStrategy(strategy).OpenWindows(ctx, strategy.Windows, data, background, targetWindow)
+}
+
+// spawnerForStrategy returns a spawner with the agent profile override applied if the
+// strategy specifies one. Falls back to the base spawner when no override is set.
+func (s *SessionService) spawnerForStrategy(strategy config.SpawnStrategy) *Spawner {
+	if strategy.Agent == "" {
+		return s.spawner
+	}
+	profile, ok := s.config.Agents.Profiles[strategy.Agent]
+	if !ok {
+		s.log.Warn().Str("agent", strategy.Agent).Msg("agent profile not found, using default")
+		return s.spawner
+	}
+	override := s.renderer.WithAgentOverride(
+		profile.CommandOrDefault(strategy.Agent),
+		strategy.Agent,
+		profile.ShellFlags(),
+	)
+	return s.spawner.WithRenderer(override)
 }
 
 // Git returns the git client for use in background operations.

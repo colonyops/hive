@@ -1583,3 +1583,130 @@ func TestValidateCloneStrategy(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid clone_strategy")
 	})
 }
+
+func TestResolveSpawn_AgentField(t *testing.T) {
+	aiderProfile := AgentProfile{Command: "aider", Flags: []string{"--model", "sonnet"}}
+	profiles := map[string]AgentProfile{
+		"claude": {},
+		"aider":  aiderProfile,
+	}
+
+	tests := []struct {
+		name      string
+		rules     []Rule
+		remote    string
+		wantAgent string
+	}{
+		{
+			name:      "no rules returns empty agent",
+			rules:     nil,
+			remote:    "https://github.com/foo/bar",
+			wantAgent: "",
+		},
+		{
+			name: "rule with agent sets agent",
+			rules: []Rule{
+				{Pattern: "", Agent: "aider"},
+			},
+			remote:    "https://github.com/foo/bar",
+			wantAgent: "aider",
+		},
+		{
+			name: "last matching rule agent wins",
+			rules: []Rule{
+				{Pattern: "", Agent: "aider"},
+				{Pattern: "github.com/foo/.*", Agent: "claude"},
+			},
+			remote:    "https://github.com/foo/bar",
+			wantAgent: "claude",
+		},
+		{
+			name: "non-matching rule does not set agent",
+			rules: []Rule{
+				{Pattern: "github.com/other/.*", Agent: "aider"},
+			},
+			remote:    "https://github.com/foo/bar",
+			wantAgent: "",
+		},
+		{
+			name: "agent accumulates independently of windows/spawn",
+			rules: []Rule{
+				{Pattern: "", Windows: []WindowConfig{{Name: "shell"}}},
+				{Pattern: "github.com/foo/.*", Agent: "aider"},
+			},
+			remote:    "https://github.com/foo/bar",
+			wantAgent: "aider",
+		},
+		{
+			name: "later rule without agent does not clear earlier agent",
+			rules: []Rule{
+				{Pattern: "", Agent: "aider"},
+				{Pattern: "github.com/foo/.*", Windows: []WindowConfig{{Name: "shell"}}},
+			},
+			remote:    "https://github.com/foo/bar",
+			wantAgent: "aider",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Agents.Profiles = profiles
+			cfg.Rules = tt.rules
+
+			strategy := ResolveSpawn(cfg.Rules, tt.remote, false)
+			assert.Equal(t, tt.wantAgent, strategy.Agent)
+		})
+	}
+}
+
+func TestValidateRules_AgentField(t *testing.T) {
+	t.Run("valid agent profile passes deep validation", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Agents.Profiles["aider"] = AgentProfile{Command: "aider"}
+		cfg.Rules = []Rule{
+			{Pattern: "", Agent: "aider", Commands: []string{"echo setup"}},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+
+	t.Run("unknown agent profile fails deep validation", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{Pattern: "", Agent: "unknown-agent"},
+		}
+		err := cfg.ValidateDeep("")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "rules[0].agent")
+		assert.Contains(t, err.Error(), "profile \"unknown-agent\" not found")
+	})
+
+	t.Run("empty agent field is valid", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{Pattern: "", Commands: []string{"echo setup"}},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+}
+
+func TestWarnings_AgentOnlyRule(t *testing.T) {
+	t.Run("rule with only agent does not generate warning", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Agents.Profiles["aider"] = AgentProfile{Command: "aider"}
+		cfg.Rules = []Rule{
+			{Pattern: ".*/data-team/.*", Agent: "aider"},
+		}
+		warnings := cfg.Warnings()
+		assert.Empty(t, warnings)
+	})
+
+	t.Run("rule with no commands copy or agent generates warning", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{Pattern: "", MaxRecycled: func() *int { v := 10; return &v }()},
+		}
+		warnings := cfg.Warnings()
+		assert.Len(t, warnings, 1)
+	})
+}

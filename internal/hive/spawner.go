@@ -55,6 +55,14 @@ func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.R
 	}
 }
 
+// WithRenderer returns a shallow copy of this Spawner using the given renderer.
+// Used to apply per-spawn agent profile overrides without mutating the base spawner.
+func (s *Spawner) WithRenderer(r *tmpl.Renderer) *Spawner {
+	copy := *s
+	copy.renderer = r
+	return &copy
+}
+
 // Spawn executes spawn commands sequentially with template rendering.
 func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) error {
 	for _, cmdTmpl := range commands {

@@ -46,22 +46,34 @@ func (c Config) scriptPath(name string) string {
 
 // Renderer renders Go templates with shell-oriented helper functions.
 type Renderer struct {
+	cfg   Config
 	funcs template.FuncMap
 }
 
 // New creates a Renderer with the given config baked into template functions.
 func New(cfg Config) *Renderer {
-	return &Renderer{
-		funcs: template.FuncMap{
-			"shq":          shellQuote,
-			"join":         strings.Join,
-			"hiveTmux":     func() string { return cfg.scriptPath("hive-tmux") },
-			"agentSend":    func() string { return cfg.scriptPath("agent-send") },
-			"agentCommand": func() string { return stringOrDefault(cfg.AgentCommand, "claude") },
-			"agentWindow":  func() string { return stringOrDefault(cfg.AgentWindow, "claude") },
-			"agentFlags":   func() string { return cfg.AgentFlags },
-		},
+	r := &Renderer{cfg: cfg}
+	r.funcs = template.FuncMap{
+		"shq":          shellQuote,
+		"join":         strings.Join,
+		"hiveTmux":     func() string { return cfg.scriptPath("hive-tmux") },
+		"agentSend":    func() string { return cfg.scriptPath("agent-send") },
+		"agentCommand": func() string { return stringOrDefault(cfg.AgentCommand, "claude") },
+		"agentWindow":  func() string { return stringOrDefault(cfg.AgentWindow, "claude") },
+		"agentFlags":   func() string { return cfg.AgentFlags },
 	}
+	return r
+}
+
+// WithAgentOverride returns a new Renderer sharing the same script paths but with
+// the agent template functions (agentCommand, agentWindow, agentFlags) overridden.
+func (r *Renderer) WithAgentOverride(cmd, window, flags string) *Renderer {
+	return New(Config{
+		ScriptPaths:  r.cfg.ScriptPaths,
+		AgentCommand: cmd,
+		AgentWindow:  window,
+		AgentFlags:   flags,
+	})
 }
 
 // NewValidation creates a Renderer with safe defaults for template syntax checking.

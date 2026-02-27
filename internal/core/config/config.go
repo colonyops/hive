@@ -449,6 +449,9 @@ type WindowConfig struct {
 type Rule struct {
 	// Pattern matches against remote URL (regex). Empty = matches all.
 	Pattern string `yaml:"pattern"`
+	// Agent overrides which agent profile is used when spawning sessions for matching repos.
+	// Must reference a key in agents.profiles. Empty = use agents.default.
+	Agent string `yaml:"agent,omitempty"`
 	// Commands to run in the session directory after clone/recycle.
 	Commands []string `yaml:"commands,omitempty"`
 	// Copy are glob patterns to copy from source directory.
@@ -1117,34 +1120,49 @@ func ValidateCloneStrategy(s string) error {
 type SpawnStrategy struct {
 	Windows  []WindowConfig
 	Commands []string
+	// Agent is the resolved agent profile name from rule matching.
+	// Empty means use agents.default.
+	Agent string
 }
 
 // IsWindows returns true if the strategy uses declarative window config.
 func (s SpawnStrategy) IsWindows() bool { return len(s.Windows) > 0 }
 
 // ResolveSpawn determines the spawn strategy for the given remote URL.
-// Rules are evaluated in order (last-match-wins). If the last matching rule
-// has windows, those are used. If it has spawn/batch_spawn commands, those are used.
-// If nothing matches, DefaultWindows() is returned.
+// Rules are evaluated in order (last-match-wins). The last matching rule's
+// windows or spawn/batch_spawn commands determine the spawn method. The last
+// matching rule's agent field (if any) overrides the default agent profile.
+// If no rule sets windows or commands, DefaultWindows() is returned.
 func ResolveSpawn(rules []Rule, remote string, batch bool) SpawnStrategy {
-	var strategy SpawnStrategy
+	var windows []WindowConfig
+	var commands []string
+	var agent string
+
 	for _, rule := range rules {
 		if !rule.Matches(remote) {
 			continue
 		}
+		if rule.Agent != "" {
+			agent = rule.Agent
+		}
 		switch {
 		case len(rule.Windows) > 0:
-			strategy = SpawnStrategy{Windows: rule.Windows}
+			windows = rule.Windows
+			commands = nil
 		case batch && len(rule.BatchSpawn) > 0:
-			strategy = SpawnStrategy{Commands: rule.BatchSpawn}
+			commands = rule.BatchSpawn
+			windows = nil
 		case !batch && len(rule.Spawn) > 0:
-			strategy = SpawnStrategy{Commands: rule.Spawn}
+			commands = rule.Spawn
+			windows = nil
 		}
 	}
-	if !strategy.IsWindows() && len(strategy.Commands) == 0 {
-		return SpawnStrategy{Windows: DefaultWindows()}
+
+	if len(windows) == 0 && len(commands) == 0 {
+		windows = DefaultWindows()
 	}
-	return strategy
+
+	return SpawnStrategy{Windows: windows, Commands: commands, Agent: agent}
 }
 
 // GetRecycleCommands returns the recycle commands for the given remote URL.
