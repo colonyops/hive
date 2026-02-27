@@ -80,3 +80,12 @@ func TestModalCoordinator_Overlay_LoadingState(t *testing.T) {
 	got := mc.Overlay(stateLoading, bg, noSpinner(), "Processing...")
 	assert.Contains(t, got, "Processing...", "loading state should render loading message")
 }
+
+func TestModalCoordinator_Overlay_LoadingState_NoConfirmButtons(t *testing.T) {
+	mc := NewModalCoordinator()
+	// Even with a stale confirm modal set, stateLoading should not show confirm buttons
+	mc.Confirm = NewModal("Confirm", "Are you sure?")
+	bg := testBackground
+	got := mc.Overlay(stateLoading, bg, noSpinner(), "Processing...")
+	assert.NotContains(t, got, "Cancel", "loading state must not render Cancel button")
+}

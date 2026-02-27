@@ -610,6 +610,13 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 		return m.handleFormDialogKey(msg, keyStr)
 	}
 
+	if m.state == stateLoading {
+		if keyStr == keyCtrlC {
+			return m.quit()
+		}
+		return m, nil
+	}
+
 	// When filtering in either list, pass most keys except quit
 	if m.sessionsView.IsSettingFilter() || m.kvView.IsFiltering() || m.sessionsView.FocusMode() {
 		return m.handleFilteringKey(msg, keyStr)

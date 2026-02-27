@@ -598,25 +598,26 @@ func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
 func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyEnter:
+		confirmed := m.modals.Confirm.ConfirmSelected()
+		action := m.modals.Pending
 		m.state = stateNormal
-		if m.modals.Confirm.ConfirmSelected() {
-			action := m.modals.Pending
+		m.modals.DismissConfirm()
+		m.modals.Pending = Action{}
+		m.modals.PendingRecycledSessions = nil
+		if confirmed {
 			if action.Type == act.TypeRecycle {
 				return m, m.startRecycle(action.SessionID)
 			}
 			if action.Type == act.TypeDeleteRecycledBatch {
 				recycled := m.modals.PendingRecycledSessions
-				m.modals.Pending = Action{}
-				m.modals.PendingRecycledSessions = nil
 				return m, m.deleteRecycledSessionsBatch(recycled)
 			}
 			return m, m.executeAction(action)
 		}
-		m.modals.Pending = Action{}
-		m.modals.PendingRecycledSessions = nil
 		return m, nil
 	case "esc":
 		m.state = stateNormal
+		m.modals.DismissConfirm()
 		m.modals.Pending = Action{}
 		m.modals.PendingRecycledSessions = nil
 		return m, nil
