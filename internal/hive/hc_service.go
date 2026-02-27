@@ -42,7 +42,7 @@ func (s *HCService) CreateItem(ctx context.Context, item hc.Item) error {
 
 // CreateBulk walks the CreateInput tree BFS and creates all items atomically.
 // The caller provides the repo key and session ID; IDs are generated here.
-// The root node becomes the epic; all children reference it as EpicID.
+// The root node is expected to be an epic; all children reference it as EpicID.
 func (s *HCService) CreateBulk(ctx context.Context, input hc.CreateInput, repoKey, sessionID string) ([]hc.Item, error) {
 	now := time.Now()
 	var items []hc.Item
@@ -194,7 +194,10 @@ func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (HCCo
 		}
 
 		if item.SessionID == sessionID && (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) {
-			checkpoint, _, _ := s.store.LatestCheckpoint(ctx, item.ID)
+			checkpoint, _, cpErr := s.store.LatestCheckpoint(ctx, item.ID)
+			if cpErr != nil {
+				s.logger.Debug().Err(cpErr).Str("item_id", item.ID).Msg("failed to fetch latest checkpoint")
+			}
 			myTasks = append(myTasks, HCTaskWithCheckpoint{
 				Item:             item,
 				LatestCheckpoint: checkpoint,
