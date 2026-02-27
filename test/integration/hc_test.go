@@ -153,6 +153,82 @@ func TestHCNext(t *testing.T) {
 	require.Error(t, err, "next should error when no session detected; got output: %s", out)
 }
 
+func TestHCNextInSessionReturnsLeafTask(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "hc-next-repo")
+
+	_, err := h.Run("new", "--remote", repo, "hc-next-session")
+	require.NoError(t, err)
+
+	dir := sessionDir(t, h)
+
+	epicLines, err := h.RunJSONLinesInDir(dir, "hc", "create", "Next Epic", "--type", "epic")
+	require.NoError(t, err)
+	require.Len(t, epicLines, 1)
+	epicID, ok := epicLines[0]["id"].(string)
+	require.True(t, ok)
+
+	blockedParentLines, err := h.RunJSONLinesInDir(dir, "hc", "create", "Blocked Parent", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	require.Len(t, blockedParentLines, 1)
+	blockedParentID, ok := blockedParentLines[0]["id"].(string)
+	require.True(t, ok)
+
+	leafSiblingLines, err := h.RunJSONLinesInDir(dir, "hc", "create", "Leaf Sibling", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	require.Len(t, leafSiblingLines, 1)
+	leafSiblingID, ok := leafSiblingLines[0]["id"].(string)
+	require.True(t, ok)
+
+	blockedChildLines, err := h.RunJSONLinesInDir(dir, "hc", "create", "Blocked Child", "--type", "task", "--parent", blockedParentID)
+	require.NoError(t, err)
+	require.Len(t, blockedChildLines, 1)
+	blockedChildID, ok := blockedChildLines[0]["id"].(string)
+	require.True(t, ok)
+
+	nextLines, err := h.RunJSONLinesInDir(dir, "hc", "next")
+	require.NoError(t, err)
+	require.Len(t, nextLines, 1)
+
+	first := nextLines[0]
+	firstID, ok := first["id"].(string)
+	require.True(t, ok)
+	assert.NotEqual(t, blockedParentID, firstID, "next should not return blocked parent with open child")
+	assert.Contains(t, []string{leafSiblingID, blockedChildID}, firstID, "next should return one of the available leaf tasks")
+	assert.Equal(t, epicID, first["epic_id"], "returned item should belong to the created epic")
+
+	items, err := h.RunJSONLines("hc", "list", "--json", epicID)
+	require.NoError(t, err)
+	hasOpenChild := false
+	for _, item := range items {
+		parentID, _ := item["parent_id"].(string)
+		status, _ := item["status"].(string)
+		if parentID == firstID && (status == "open" || status == "in_progress") {
+			hasOpenChild = true
+			break
+		}
+	}
+	assert.False(t, hasOpenChild, "next item should be a leaf task")
+
+	_, err = h.RunJSONLines("hc", "update", firstID, "--status", "done")
+	require.NoError(t, err)
+
+	out, err := h.RunStdoutInDir(dir, "hc", "next")
+	require.NoError(t, err)
+	trimmed := strings.TrimSpace(out)
+	if trimmed == "no ready tasks" {
+		return
+	}
+
+	second, err := parseJSONLines(trimmed)
+	require.NoError(t, err)
+	require.Len(t, second, 1)
+	secondID, ok := second[0]["id"].(string)
+	require.True(t, ok)
+	assert.NotEqual(t, firstID, secondID, "second next should return a different task")
+	assert.Equal(t, epicID, second[0]["epic_id"], "second item should belong to the created epic")
+}
+
 func TestHCContext(t *testing.T) {
 	h := NewHarness(t)
 
