@@ -1,0 +1,398 @@
+package stores
+
+import (
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"sort"
+	"time"
+
+	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/data/db"
+)
+
+// HCStore implements hc.Store using SQLite.
+type HCStore struct {
+	db *db.DB
+}
+
+var _ hc.Store = (*HCStore)(nil)
+
+// NewHCStore creates a new SQLite-backed HC store.
+func NewHCStore(database *db.DB) *HCStore {
+	return &HCStore{db: database}
+}
+
+// CreateItems persists one or more HC items atomically.
+func (s *HCStore) CreateItems(ctx context.Context, items []hc.Item) error {
+	for _, item := range items {
+		if err := item.Validate(); err != nil {
+			return fmt.Errorf("validate hc item %q: %w", item.ID, err)
+		}
+	}
+
+	return s.db.WithTx(ctx, func(q *db.Queries) error {
+		for _, item := range items {
+			err := q.CreateHCItem(ctx, db.CreateHCItemParams{
+				ID:        item.ID,
+				RepoKey:   item.RepoKey,
+				EpicID:    item.EpicID,
+				ParentID:  item.ParentID,
+				SessionID: item.SessionID,
+				Title:     item.Title,
+				Desc:      item.Desc,
+				Type:      item.Type,
+				Status:    item.Status,
+				Depth:     int64(item.Depth),
+				CreatedAt: item.CreatedAt.UnixNano(),
+				UpdatedAt: item.UpdatedAt.UnixNano(),
+			})
+			if err != nil {
+				return fmt.Errorf("create hc item %q: %w", item.ID, err)
+			}
+		}
+		return nil
+	})
+}
+
+// GetItem retrieves a single HC item by ID.
+func (s *HCStore) GetItem(ctx context.Context, id string) (hc.Item, error) {
+	row, err := s.db.Queries().GetHCItem(ctx, id)
+	if err != nil {
+		return hc.Item{}, fmt.Errorf("get hc item: %w", err)
+	}
+	item, err := s.fetchHCItem(ctx, row)
+	if err != nil {
+		return hc.Item{}, err
+	}
+	return item, nil
+}
+
+// UpdateItem applies partial updates to an HC item.
+func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
+	var updated db.HcItem
+	err := s.db.WithTx(ctx, func(q *db.Queries) error {
+		existing, getErr := q.GetHCItem(ctx, id)
+		if getErr != nil {
+			return fmt.Errorf("get hc item for update: %w", getErr)
+		}
+
+		newStatus := existing.Status
+		newSessionID := existing.SessionID
+		if update.Status != nil {
+			newStatus = *update.Status
+		}
+		if update.SessionID != nil {
+			newSessionID = *update.SessionID
+		}
+
+		if err := q.UpdateHCItem(ctx, db.UpdateHCItemParams{
+			Status:    newStatus,
+			SessionID: newSessionID,
+			UpdatedAt: time.Now().UnixNano(),
+			ID:        id,
+		}); err != nil {
+			return fmt.Errorf("update hc item: %w", err)
+		}
+
+		var fetchErr error
+		updated, fetchErr = q.GetHCItem(ctx, id)
+		if fetchErr != nil {
+			return fmt.Errorf("re-fetch after update: %w", fetchErr)
+		}
+		return nil
+	})
+	if err != nil {
+		return hc.Item{}, err
+	}
+
+	item, err := s.fetchHCItem(ctx, updated)
+	if err != nil {
+		return hc.Item{}, err
+	}
+	return item, nil
+}
+
+// ListItems returns HC items matching the given filter.
+func (s *HCStore) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Item, error) {
+	rows, err := s.listHCRows(ctx, filter)
+	if err != nil {
+		return nil, fmt.Errorf("list hc items: %w", err)
+	}
+
+	blockedSet, err := s.fetchBlockedSet(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("fetch blocked set: %w", err)
+	}
+
+	result := make([]hc.Item, 0, len(rows))
+	for _, row := range rows {
+		item := buildHCItem(row, blockedSet)
+		if !filter.Matches(item) {
+			continue
+		}
+		result = append(result, item)
+	}
+
+	return result, nil
+}
+
+// listHCRows selects the narrowest SQL query that can satisfy the list filter.
+func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.HcItem, error) {
+	switch {
+	case filter.EpicID != "" && filter.Status != nil:
+		return s.db.Queries().ListHCItemsByEpicAndStatus(ctx, db.ListHCItemsByEpicAndStatusParams{
+			EpicID: filter.EpicID,
+			Status: *filter.Status,
+		})
+	case filter.EpicID != "":
+		return s.db.Queries().ListHCItemsByEpic(ctx, filter.EpicID)
+	case filter.SessionID != "":
+		return s.db.Queries().ListHCItemsBySession(ctx, filter.SessionID)
+	case filter.RepoKey != "":
+		return s.db.Queries().ListHCItemsByRepo(ctx, filter.RepoKey)
+	case filter.Status != nil:
+		return s.db.Queries().ListAllHCItemsByStatus(ctx, *filter.Status)
+	default:
+		return s.db.Queries().ListAllHCItems(ctx)
+	}
+}
+
+// NextItem returns the next actionable item for the given filter.
+func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
+	if filter.EpicID != "" {
+		row, err := s.db.Queries().NextHCItemForSessionInEpic(ctx, db.NextHCItemForSessionInEpicParams{
+			SessionID: filter.SessionID,
+			EpicID:    filter.EpicID,
+		})
+		if errors.Is(err, sql.ErrNoRows) {
+			return hc.Item{}, false, nil
+		}
+		if err != nil {
+			return hc.Item{}, false, fmt.Errorf("next hc item for session in epic: %w", err)
+		}
+		item, err := s.fetchHCItem(ctx, row)
+		if err != nil {
+			return hc.Item{}, false, err
+		}
+		return item, true, nil
+	}
+
+	row, err := s.db.Queries().NextHCItemForSession(ctx, filter.SessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return hc.Item{}, false, nil
+	}
+	if err != nil {
+		return hc.Item{}, false, fmt.Errorf("next hc item for session: %w", err)
+	}
+	item, err := s.fetchHCItem(ctx, row)
+	if err != nil {
+		return hc.Item{}, false, err
+	}
+	return item, true, nil
+}
+
+// DeleteItem removes an HC item by ID.
+func (s *HCStore) DeleteItem(ctx context.Context, id string) error {
+	if err := s.db.Queries().DeleteHCItem(ctx, id); err != nil {
+		return fmt.Errorf("delete hc item: %w", err)
+	}
+	return nil
+}
+
+// AddComment records a comment on an HC item.
+func (s *HCStore) AddComment(ctx context.Context, c hc.Comment) error {
+	_, err := s.db.Queries().InsertHCComment(ctx, db.InsertHCCommentParams{
+		ID:        c.ID,
+		ItemID:    c.ItemID,
+		Message:   c.Message,
+		CreatedAt: c.CreatedAt.UnixNano(),
+	})
+	if err != nil {
+		return fmt.Errorf("add hc comment: %w", err)
+	}
+	return nil
+}
+
+// ListComments returns all comments for the given item in chronological order.
+func (s *HCStore) ListComments(ctx context.Context, itemID string) ([]hc.Comment, error) {
+	rows, err := s.db.Queries().ListHCComments(ctx, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("list hc comments: %w", err)
+	}
+
+	result := make([]hc.Comment, 0, len(rows))
+	for _, row := range rows {
+		result = append(result, rowToHCComment(row))
+	}
+	return result, nil
+}
+
+// Prune removes old done/cancelled items and their comments.
+func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
+	allRows, err := s.db.Queries().ListAllHCItems(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list hc items for prune: %w", err)
+	}
+	return s.prune(ctx, allRows, opts)
+}
+
+// prune is the internal implementation separated for testability.
+func (s *HCStore) prune(ctx context.Context, allRows []db.HcItem, opts hc.PruneOpts) (int, error) {
+	cutoff := time.Now().Add(-opts.OlderThan).UnixNano()
+
+	statuses := opts.Statuses
+	if len(statuses) == 0 {
+		statuses = []hc.Status{hc.StatusDone, hc.StatusCancelled}
+	}
+
+	statusSet := make(map[hc.Status]struct{}, len(statuses))
+	for _, status := range statuses {
+		statusSet[status] = struct{}{}
+	}
+
+	childrenByParent := make(map[string][]string, len(allRows))
+	depthByID := make(map[string]int64, len(allRows))
+	pruneRoots := make([]string, 0)
+	for _, row := range allRows {
+		depthByID[row.ID] = row.Depth
+		if row.ParentID != "" {
+			childrenByParent[row.ParentID] = append(childrenByParent[row.ParentID], row.ID)
+		}
+
+		if _, ok := statusSet[row.Status]; !ok {
+			continue
+		}
+		if row.UpdatedAt >= cutoff {
+			continue
+		}
+
+		pruneRoots = append(pruneRoots, row.ID)
+	}
+
+	pruneIDs := collectHCSubtreeIDs(pruneRoots, childrenByParent)
+	total := len(pruneIDs)
+
+	if opts.DryRun {
+		return total, nil
+	}
+
+	err := s.db.WithTx(ctx, func(q *db.Queries) error {
+		for _, status := range statuses {
+			if txErr := q.PruneHCCommentsByStatus(ctx, db.PruneHCCommentsByStatusParams{
+				Status:    status,
+				UpdatedAt: cutoff,
+			}); txErr != nil {
+				return fmt.Errorf("prune hc comments (%s): %w", status, txErr)
+			}
+		}
+
+		idsByDepthDesc := orderHCIDsByDepthDesc(pruneIDs, depthByID)
+		for _, id := range idsByDepthDesc {
+			if txErr := q.DeleteHCItem(ctx, id); txErr != nil {
+				return fmt.Errorf("delete hc item %q: %w", id, txErr)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+
+	return total, nil
+}
+
+// collectHCSubtreeIDs expands root IDs into a de-duplicated set that includes all descendants.
+func collectHCSubtreeIDs(roots []string, childrenByParent map[string][]string) map[string]struct{} {
+	pruneIDs := make(map[string]struct{}, len(roots))
+	stack := make([]string, len(roots))
+	copy(stack, roots)
+
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		id := stack[last]
+		stack = stack[:last]
+
+		if _, seen := pruneIDs[id]; seen {
+			continue
+		}
+		pruneIDs[id] = struct{}{}
+
+		children := childrenByParent[id]
+		stack = append(stack, children...)
+	}
+
+	return pruneIDs
+}
+
+// orderHCIDsByDepthDesc returns IDs ordered deepest-first for safe child-before-parent deletes.
+func orderHCIDsByDepthDesc(ids map[string]struct{}, depthByID map[string]int64) []string {
+	ordered := make([]string, 0, len(ids))
+	for id := range ids {
+		ordered = append(ordered, id)
+	}
+
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return depthByID[ordered[i]] > depthByID[ordered[j]]
+	})
+
+	return ordered
+}
+
+// fetchBlockedSet queries all parent IDs with open/in_progress children in a single query.
+func (s *HCStore) fetchBlockedSet(ctx context.Context) (map[string]struct{}, error) {
+	ids, err := s.db.Queries().ListHCBlockedParentIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list hc blocked parent ids: %w", err)
+	}
+	set := make(map[string]struct{}, len(ids))
+	for _, id := range ids {
+		set[id] = struct{}{}
+	}
+	return set, nil
+}
+
+// buildHCItem converts a database row to hc.Item using the pre-fetched blocked set.
+func buildHCItem(row db.HcItem, blockedSet map[string]struct{}) hc.Item {
+	_, blocked := blockedSet[row.ID]
+	return hc.Item{
+		ID:        row.ID,
+		RepoKey:   row.RepoKey,
+		EpicID:    row.EpicID,
+		ParentID:  row.ParentID,
+		SessionID: row.SessionID,
+		Title:     row.Title,
+		Desc:      row.Desc,
+		Type:      row.Type,
+		Status:    row.Status,
+		Blocked:   blocked,
+		Depth:     int(row.Depth),
+		CreatedAt: time.Unix(0, row.CreatedAt),
+		UpdatedAt: time.Unix(0, row.UpdatedAt),
+	}
+}
+
+// fetchHCItem converts a single database row to hc.Item, issuing one DB call to compute Blocked.
+func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) (hc.Item, error) {
+	count, err := s.db.Queries().CountHCOpenChildren(ctx, row.ID)
+	if err != nil {
+		return hc.Item{}, fmt.Errorf("count open children for %q: %w", row.ID, err)
+	}
+	blockedSet := map[string]struct{}{}
+	if count > 0 {
+		blockedSet[row.ID] = struct{}{}
+	}
+	return buildHCItem(row, blockedSet), nil
+}
+
+// rowToHCComment maps a database comment row to a domain comment.
+func rowToHCComment(row db.HcComment) hc.Comment {
+	return hc.Comment{
+		ID:        row.ID,
+		ItemID:    row.ItemID,
+		Message:   row.Message,
+		CreatedAt: time.Unix(0, row.CreatedAt),
+	}
+}

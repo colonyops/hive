@@ -28,6 +28,7 @@ depends = ["generate:enums"]
 sources = [
   "internal/core/eventbus/events.go",
   "internal/data/db/queries/queries.sql",
+  "internal/data/db/queries/queries_hc.sql",
   "internal/data/db/migrations/*.up.sql",
   "sqlc.yaml",
 ]
@@ -36,6 +37,7 @@ outputs = [
   "internal/data/db/db.go",
   "internal/data/db/models.go",
   "internal/data/db/queries.sql.go",
+  "internal/data/db/queries_hc.sql.go",
 ]
 run = ["go generate ./...", "sqlc generate"]
 
