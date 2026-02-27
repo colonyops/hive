@@ -248,7 +248,7 @@ WHERE outer_item.session_id = ?
   AND outer_item.status = 'open'
   AND outer_item.id NOT IN (
     SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
-    WHERE inner_item.parent_id != '' AND inner_item.status = 'open'
+    WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
   )
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1;
@@ -260,7 +260,7 @@ WHERE outer_item.session_id = ?
   AND outer_item.status = 'open'
   AND outer_item.id NOT IN (
     SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
-    WHERE inner_item.parent_id != '' AND inner_item.status = 'open'
+    WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
   )
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1;
