@@ -3,6 +3,8 @@ package hc
 import (
 	"fmt"
 	"time"
+
+	"github.com/hay-kot/criterio"
 )
 
 // ItemType categorizes an item as an epic or a task.
@@ -56,26 +58,20 @@ func (i Item) IsRoot() bool {
 
 // Validate checks that an Item has internally consistent required fields.
 func (i Item) Validate() error {
-	if i.ID == "" {
-		return fmt.Errorf("item ID is required")
+	var epicIDErr error
+	switch {
+	case i.IsEpic() && i.EpicID != "":
+		epicIDErr = criterio.Nest("epic_id", fmt.Errorf("must not be set for epic items"))
+	case !i.IsEpic() && i.EpicID == "":
+		epicIDErr = criterio.Nest("epic_id", fmt.Errorf("required for non-epic items"))
 	}
-	if i.Title == "" {
-		return fmt.Errorf("item title is required")
-	}
-	if !i.Type.IsValid() {
-		return fmt.Errorf("invalid type %q", i.Type)
-	}
-	if !i.Status.IsValid() {
-		return fmt.Errorf("invalid status %q", i.Status)
-	}
-	if i.Depth < 0 || i.Depth > 10 {
-		return fmt.Errorf("depth must be between 0 and 10, got %d", i.Depth)
-	}
-	if i.IsEpic() && i.EpicID != "" {
-		return fmt.Errorf("epic items must not have an epic_id")
-	}
-	if !i.IsEpic() && i.EpicID == "" {
-		return fmt.Errorf("non-epic items must have an epic_id")
-	}
-	return nil
+
+	return criterio.ValidateStruct(
+		criterio.Run("id", i.ID, criterio.StrNotEmpty),
+		criterio.Run("title", i.Title, criterio.StrNotEmpty),
+		criterio.Run("type", i.Type, criterio.OneOf(ItemTypeEpic, ItemTypeTask)),
+		criterio.Run("status", i.Status, criterio.OneOf(StatusOpen, StatusInProgress, StatusDone, StatusCancelled)),
+		criterio.Run("depth", i.Depth, criterio.Between(0, 10)),
+		epicIDErr,
+	)
 }

@@ -30,7 +30,7 @@ type App struct {
 	Context  *ContextService
 	Doctor   *DoctorService
 	Todos    *TodoService
-	HC       *HCService
+	HC       *HoneycombService
 
 	Bus      *eventbus.EventBus
 	Terminal *terminal.Manager
@@ -65,7 +65,7 @@ func NewApp(
 		Context:  NewContextService(cfg, sessions.git),
 		Doctor:   NewDoctorService(sessions.sessions, cfg, pluginInfos),
 		Todos:    NewTodoService(todoStore, bus, cfg, logger),
-		HC:       NewHCService(hcStore, msgSvc, logger),
+		HC:       NewHoneycombService(hcStore, logger),
 		Bus:      bus,
 		Terminal: termMgr,
 		Plugins:  pluginMgr,

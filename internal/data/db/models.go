@@ -6,29 +6,31 @@ package db
 
 import (
 	"database/sql"
+
+	"github.com/colonyops/hive/internal/core/hc"
 )
 
 type HcActivity struct {
-	ID        string `json:"id"`
-	ItemID    string `json:"item_id"`
-	Type      string `json:"type"`
-	Message   string `json:"message"`
-	CreatedAt int64  `json:"created_at"`
+	ID        string          `json:"id"`
+	ItemID    string          `json:"item_id"`
+	Type      hc.ActivityType `json:"type"`
+	Message   string          `json:"message"`
+	CreatedAt int64           `json:"created_at"`
 }
 
 type HcItem struct {
-	ID        string `json:"id"`
-	RepoKey   string `json:"repo_key"`
-	EpicID    string `json:"epic_id"`
-	ParentID  string `json:"parent_id"`
-	SessionID string `json:"session_id"`
-	Title     string `json:"title"`
-	Desc      string `json:"desc"`
-	Type      string `json:"type"`
-	Status    string `json:"status"`
-	Depth     int64  `json:"depth"`
-	CreatedAt int64  `json:"created_at"`
-	UpdatedAt int64  `json:"updated_at"`
+	ID        string      `json:"id"`
+	RepoKey   string      `json:"repo_key"`
+	EpicID    string      `json:"epic_id"`
+	ParentID  string      `json:"parent_id"`
+	SessionID string      `json:"session_id"`
+	Title     string      `json:"title"`
+	Desc      string      `json:"desc"`
+	Type      hc.ItemType `json:"type"`
+	Status    hc.Status   `json:"status"`
+	Depth     int64       `json:"depth"`
+	CreatedAt int64       `json:"created_at"`
+	UpdatedAt int64       `json:"updated_at"`
 }
 
 type KvStore struct {

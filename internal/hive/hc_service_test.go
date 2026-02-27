@@ -6,9 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/hc"
-	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -115,36 +113,14 @@ func (f *fakeHCStore) Prune(_ context.Context, opts hc.PruneOpts) (int, error) {
 	return f.pruneCount, nil
 }
 
-type fakeMessageStore struct {
-	messaging.Store
-	publishErr   error
-	published    []messaging.Message
-	publishedTo  [][]string
-	publishCalls int
+func newTestHoneycombService(store hc.Store) *HoneycombService {
+	return NewHoneycombService(store, zerolog.Nop())
 }
 
-func (f *fakeMessageStore) Publish(_ context.Context, msg messaging.Message, topics []string) (messaging.PublishResult, error) {
-	f.publishCalls++
-	f.published = append(f.published, msg)
-	f.publishedTo = append(f.publishedTo, topics)
-	if f.publishErr != nil {
-		return messaging.PublishResult{}, f.publishErr
-	}
-	return messaging.PublishResult{Topics: topics}, nil
-}
-
-func newTestHCService(store hc.Store, msgStore messaging.Store) *HCService {
-	var messages *MessageService
-	if msgStore != nil {
-		messages = NewMessageService(msgStore, nil, eventbus.New(1))
-	}
-	return NewHCService(store, messages, zerolog.Nop())
-}
-
-func TestHCService_CreateBulk_generatesIDs(t *testing.T) {
+func TestHoneycombService_CreateBulk_generatesIDs(t *testing.T) {
 	ctx := context.Background()
 	fake := &fakeHCStore{}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	input := hc.CreateInput{
 		Title: "My Epic",
@@ -174,10 +150,10 @@ func TestHCService_CreateBulk_generatesIDs(t *testing.T) {
 	}
 }
 
-func TestHCService_CreateBulk_BFS_depth(t *testing.T) {
+func TestHoneycombService_CreateBulk_BFS_depth(t *testing.T) {
 	ctx := context.Background()
 	fake := &fakeHCStore{}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	input := hc.CreateInput{
 		Title: "Root Epic",
@@ -207,17 +183,17 @@ func TestHCService_CreateBulk_BFS_depth(t *testing.T) {
 	assert.Equal(t, 2, byTitle["Grandchild Task"].Depth, "grandchild depth must be 2")
 }
 
-func TestHCService_CreateItem_validation(t *testing.T) {
+func TestHoneycombService_CreateItem_validation(t *testing.T) {
 	ctx := context.Background()
 	fake := &fakeHCStore{}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	_, err := svc.CreateItem(ctx, hc.CreateItemInput{Title: "", Type: hc.ItemTypeEpic}, "owner/repo", "sess-1")
 	require.EqualError(t, err, "title is required")
 	assert.Empty(t, fake.created, "invalid item should not be persisted")
 }
 
-func TestHCService_CreateItem_withParentTaskDerivesEpicAndDepth(t *testing.T) {
+func TestHoneycombService_CreateItem_withParentTaskDerivesEpicAndDepth(t *testing.T) {
 	ctx := context.Background()
 	fake := &fakeHCStore{
 		itemsByID: map[string]hc.Item{
@@ -231,7 +207,7 @@ func TestHCService_CreateItem_withParentTaskDerivesEpicAndDepth(t *testing.T) {
 			},
 		},
 	}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	item, err := svc.CreateItem(ctx, hc.CreateItemInput{
 		Title:    "Child Task",
@@ -247,35 +223,17 @@ func TestHCService_CreateItem_withParentTaskDerivesEpicAndDepth(t *testing.T) {
 	assert.Equal(t, item.ID, fake.created[0].ID)
 }
 
-func TestHCService_UpdateItem_publishesWhenEpicSet(t *testing.T) {
+func TestHoneycombService_UpdateItem_noError(t *testing.T) {
 	ctx := context.Background()
-	msgStore := &fakeMessageStore{}
 	fake := &fakeHCStore{updateItem: hc.Item{ID: "hc-task", EpicID: "hc-epic", Status: hc.StatusInProgress}}
-	svc := newTestHCService(fake, msgStore)
+	svc := newTestHoneycombService(fake)
 
 	updated, err := svc.UpdateItem(ctx, "hc-task", hc.ItemUpdate{})
 	require.NoError(t, err)
 	assert.Equal(t, "hc-task", updated.ID)
-	require.Equal(t, 1, msgStore.publishCalls)
-	require.Len(t, msgStore.publishedTo, 1)
-	assert.Equal(t, []string{"hc.hc-epic.activity"}, msgStore.publishedTo[0])
-	require.Len(t, msgStore.published, 1)
-	assert.Contains(t, msgStore.published[0].Payload, `"item_id":"hc-task"`)
-	assert.Contains(t, msgStore.published[0].Payload, `"status":"in_progress"`)
 }
 
-func TestHCService_UpdateItem_doesNotPublishForEpicRoot(t *testing.T) {
-	ctx := context.Background()
-	msgStore := &fakeMessageStore{}
-	fake := &fakeHCStore{updateItem: hc.Item{ID: "hc-epic", EpicID: "", Status: hc.StatusOpen}}
-	svc := newTestHCService(fake, msgStore)
-
-	_, err := svc.UpdateItem(ctx, "hc-epic", hc.ItemUpdate{})
-	require.NoError(t, err)
-	assert.Equal(t, 0, msgStore.publishCalls)
-}
-
-func TestHCService_Context_countsAndFiltering(t *testing.T) {
+func TestHoneycombService_Context_countsAndFiltering(t *testing.T) {
 	ctx := context.Background()
 	now := time.Now()
 	fake := &fakeHCStore{
@@ -293,7 +251,7 @@ func TestHCService_Context_countsAndFiltering(t *testing.T) {
 			"hc-open": {ID: "hc-cp", ItemID: "hc-open", Type: hc.ActivityTypeCheckpoint, Message: "cp", CreatedAt: now},
 		},
 	}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	block, err := svc.Context(ctx, "hc-epic", "sess-1")
 	require.NoError(t, err)
@@ -311,10 +269,10 @@ func TestHCService_Context_countsAndFiltering(t *testing.T) {
 	require.Len(t, block.AllOpenTasks, 3)
 }
 
-func TestHCService_Prune_forwardsOptionsIncludingDryRun(t *testing.T) {
+func TestHoneycombService_Prune_forwardsOptionsIncludingDryRun(t *testing.T) {
 	ctx := context.Background()
 	fake := &fakeHCStore{pruneCount: 4}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	opts := hc.PruneOpts{OlderThan: 24 * time.Hour, Statuses: []hc.Status{hc.StatusDone}, DryRun: true}
 	n, err := svc.Prune(ctx, opts)
@@ -328,21 +286,20 @@ func TestHCService_Prune_forwardsOptionsIncludingDryRun(t *testing.T) {
 	assert.False(t, fake.lastPruneOpts.DryRun)
 }
 
-func TestHCService_LogActivity_returnsWrappedError(t *testing.T) {
+func TestHoneycombService_LogActivity_returnsWrappedError(t *testing.T) {
 	ctx := context.Background()
 	fake := &fakeHCStore{logErr: errors.New("db write failed")}
-	svc := newTestHCService(fake, nil)
+	svc := newTestHoneycombService(fake)
 
 	_, err := svc.LogActivity(ctx, "hc-item", hc.ActivityTypeComment, "msg")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), `log hc activity for "hc-item": db write failed`)
-	assert.Empty(t, fake.getItemCalls)
 }
 
-func TestHCService_LogActivity_getItemErrorIsNonFatal(t *testing.T) {
+func TestHoneycombService_LogActivity_success(t *testing.T) {
 	ctx := context.Background()
-	fake := &fakeHCStore{getItemErrByID: map[string]error{"hc-item": errors.New("missing")}}
-	svc := newTestHCService(fake, nil)
+	fake := &fakeHCStore{}
+	svc := newTestHoneycombService(fake)
 
 	a, err := svc.LogActivity(ctx, "hc-item", hc.ActivityTypeComment, "msg")
 	require.NoError(t, err)

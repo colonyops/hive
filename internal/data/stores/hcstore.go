@@ -10,13 +10,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/data/db"
-	"github.com/colonyops/hive/pkg/randid"
 	"github.com/rs/zerolog/log"
-)
-
-var (
-	fallbackHCStatus       = hc.StatusOpen
-	fallbackHCActivityType = hc.ActivityTypeUpdate
 )
 
 // HCStore implements hc.Store using SQLite.
@@ -31,31 +25,9 @@ func NewHCStore(database *db.DB) *HCStore {
 	return &HCStore{db: database}
 }
 
-// CreateItem persists a new HC item.
+// CreateItem persists a new HC item by delegating to CreateItemBatch.
 func (s *HCStore) CreateItem(ctx context.Context, item hc.Item) error {
-	if err := item.Validate(); err != nil {
-		return fmt.Errorf("validate hc item %q: %w", item.ID, err)
-	}
-
-	err := s.db.Queries().CreateHCItem(ctx, db.CreateHCItemParams{
-		ID:        item.ID,
-		RepoKey:   item.RepoKey,
-		EpicID:    item.EpicID,
-		ParentID:  item.ParentID,
-		SessionID: item.SessionID,
-		Title:     item.Title,
-		Desc:      item.Desc,
-		Type:      string(item.Type),
-		Status:    string(item.Status),
-		Depth:     int64(item.Depth),
-		CreatedAt: item.CreatedAt.UnixNano(),
-		UpdatedAt: item.UpdatedAt.UnixNano(),
-	})
-	if err != nil {
-		return fmt.Errorf("create hc item: %w", err)
-	}
-
-	return nil
+	return s.CreateItemBatch(ctx, []hc.Item{item})
 }
 
 // CreateItemBatch persists multiple HC items atomically.
@@ -76,8 +48,8 @@ func (s *HCStore) CreateItemBatch(ctx context.Context, items []hc.Item) error {
 				SessionID: item.SessionID,
 				Title:     item.Title,
 				Desc:      item.Desc,
-				Type:      string(item.Type),
-				Status:    string(item.Status),
+				Type:      item.Type,
+				Status:    item.Status,
 				Depth:     int64(item.Depth),
 				CreatedAt: item.CreatedAt.UnixNano(),
 				UpdatedAt: item.UpdatedAt.UnixNano(),
@@ -111,7 +83,7 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 		newStatus := existing.Status
 		newSessionID := existing.SessionID
 		if update.Status != nil {
-			newStatus = string(*update.Status)
+			newStatus = *update.Status
 		}
 		if update.SessionID != nil {
 			newSessionID = *update.SessionID
@@ -130,12 +102,12 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 		}
 
 		if statusChanged {
-			activityID := generateHCID()
+			activityID := hc.GenerateID()
 			msg := fmt.Sprintf("status changed from %s to %s", existing.Status, newStatus)
 			if _, err := q.InsertHCActivity(ctx, db.InsertHCActivityParams{
 				ID:        activityID,
 				ItemID:    id,
-				Type:      string(hc.ActivityTypeStatusChange),
+				Type:      hc.ActivityTypeStatusChange,
 				Message:   msg,
 				CreatedAt: now.UnixNano(),
 			}); err != nil {
@@ -179,7 +151,7 @@ func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.Hc
 	case filter.EpicID != "" && filter.Status != nil:
 		return s.db.Queries().ListHCItemsByEpicAndStatus(ctx, db.ListHCItemsByEpicAndStatusParams{
 			EpicID: filter.EpicID,
-			Status: string(*filter.Status),
+			Status: *filter.Status,
 		})
 	case filter.EpicID != "":
 		return s.db.Queries().ListHCItemsByEpic(ctx, filter.EpicID)
@@ -188,7 +160,7 @@ func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.Hc
 	case filter.RepoKey != "":
 		return s.db.Queries().ListHCItemsByRepo(ctx, filter.RepoKey)
 	case filter.Status != nil:
-		return s.db.Queries().ListAllHCItemsByStatus(ctx, string(*filter.Status))
+		return s.db.Queries().ListAllHCItemsByStatus(ctx, *filter.Status)
 	default:
 		return s.db.Queries().ListAllHCItems(ctx)
 	}
@@ -247,7 +219,7 @@ func (s *HCStore) LogActivity(ctx context.Context, a hc.Activity) error {
 	_, err := s.db.Queries().InsertHCActivity(ctx, db.InsertHCActivityParams{
 		ID:        a.ID,
 		ItemID:    a.ItemID,
-		Type:      string(a.Type),
+		Type:      a.Type,
 		Message:   a.Message,
 		CreatedAt: a.CreatedAt.UnixNano(),
 	})
@@ -285,16 +257,21 @@ func (s *HCStore) LatestCheckpoint(ctx context.Context, itemID string) (hc.Activ
 
 // Prune removes old done/cancelled items and their activity.
 func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
+	allRows, err := s.db.Queries().ListAllHCItems(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list hc items for prune: %w", err)
+	}
+	return s.prune(ctx, allRows, opts)
+}
+
+// prune is the internal implementation of Prune that accepts pre-loaded rows.
+// Separated to allow testing without database access.
+func (s *HCStore) prune(ctx context.Context, allRows []db.HcItem, opts hc.PruneOpts) (int, error) {
 	cutoff := time.Now().Add(-opts.OlderThan).UnixNano()
 
 	statuses := opts.Statuses
 	if len(statuses) == 0 {
 		statuses = []hc.Status{hc.StatusDone, hc.StatusCancelled}
-	}
-
-	allRows, err := s.db.Queries().ListAllHCItems(ctx)
-	if err != nil {
-		return 0, fmt.Errorf("list hc items for prune: %w", err)
 	}
 
 	statusSet := make(map[hc.Status]struct{}, len(statuses))
@@ -311,11 +288,7 @@ func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 			childrenByParent[row.ParentID] = append(childrenByParent[row.ParentID], row.ID)
 		}
 
-		status, parseErr := hc.ParseStatus(row.Status)
-		if parseErr != nil {
-			continue
-		}
-		if _, ok := statusSet[status]; !ok {
+		if _, ok := statusSet[row.Status]; !ok {
 			continue
 		}
 		if row.UpdatedAt >= cutoff {
@@ -332,10 +305,10 @@ func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 		return total, nil
 	}
 
-	err = s.db.WithTx(ctx, func(q *db.Queries) error {
+	err := s.db.WithTx(ctx, func(q *db.Queries) error {
 		for _, status := range statuses {
 			if txErr := q.PruneHCActivityByStatus(ctx, db.PruneHCActivityByStatusParams{
-				Status:    string(status),
+				Status:    status,
 				UpdatedAt: cutoff,
 			}); txErr != nil {
 				return fmt.Errorf("prune hc activity (%s): %w", status, txErr)
@@ -413,8 +386,8 @@ func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) hc.Item {
 		SessionID: row.SessionID,
 		Title:     row.Title,
 		Desc:      row.Desc,
-		Type:      parseStoredHCItemType(row),
-		Status:    parseStoredHCStatus(row),
+		Type:      row.Type,
+		Status:    row.Status,
 		Blocked:   blocked,
 		Depth:     int(row.Depth),
 		CreatedAt: time.Unix(0, row.CreatedAt),
@@ -424,46 +397,11 @@ func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) hc.Item {
 
 // rowToHCActivity maps a database activity row to a domain activity model.
 func rowToHCActivity(row db.HcActivity) hc.Activity {
-	actType := parseStoredHCActivityType(row)
 	return hc.Activity{
 		ID:        row.ID,
 		ItemID:    row.ItemID,
-		Type:      actType,
+		Type:      row.Type,
 		Message:   row.Message,
 		CreatedAt: time.Unix(0, row.CreatedAt),
 	}
-}
-
-// parseStoredHCStatus parses row status and applies a safe fallback when invalid.
-func parseStoredHCStatus(row db.HcItem) hc.Status {
-	status, err := hc.ParseStatus(row.Status)
-	if err != nil {
-		log.Warn().Err(err).Str("id", row.ID).Str("status", row.Status).Msg("invalid status in stored hc item, defaulting to open")
-		return fallbackHCStatus
-	}
-	return status
-}
-
-// parseStoredHCItemType parses row item type and applies a safe fallback when invalid.
-func parseStoredHCItemType(row db.HcItem) hc.ItemType {
-	itemType, err := hc.ParseItemType(row.Type)
-	if err != nil {
-		log.Warn().Err(err).Str("id", row.ID).Str("type", row.Type).Msg("invalid type in stored hc item, defaulting to task")
-		return hc.ItemTypeTask
-	}
-	return itemType
-}
-
-// parseStoredHCActivityType parses row activity type and applies a safe fallback when invalid.
-func parseStoredHCActivityType(row db.HcActivity) hc.ActivityType {
-	actType, err := hc.ParseActivityType(row.Type)
-	if err != nil {
-		log.Warn().Err(err).Str("id", row.ID).Str("type", row.Type).Msg("invalid type in stored hc activity, defaulting to update")
-		return fallbackHCActivityType
-	}
-	return actType
-}
-
-func generateHCID() string {
-	return "hc-" + randid.Generate(8)
 }

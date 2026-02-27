@@ -26,7 +26,7 @@ func (f *fakeHCListStore) ListItems(_ context.Context, filter hc.ListFilter) ([]
 
 func TestHCListCmd_SessionFlagWiresToFilter(t *testing.T) {
 	store := &fakeHCListStore{items: []hc.Item{{ID: "hc-1234", Title: "Task", Type: hc.ItemTypeTask, Status: hc.StatusOpen}}}
-	appSvc := hive.NewHCService(store, nil, zerolog.Nop())
+	appSvc := hive.NewHoneycombService(store, zerolog.Nop())
 
 	var buf bytes.Buffer
 	cmd := NewHCCmd(&Flags{}, &hive.App{HC: appSvc})

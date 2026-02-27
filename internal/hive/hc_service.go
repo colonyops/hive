@@ -6,41 +6,32 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/core/hc"
-	"github.com/colonyops/hive/internal/core/messaging"
-	"github.com/colonyops/hive/pkg/randid"
 	"github.com/rs/zerolog"
 )
 
-// HCService orchestrates honeycomb task operations.
-type HCService struct {
-	store    hc.Store
-	messages *MessageService
-	logger   zerolog.Logger
+// HoneycombService orchestrates honeycomb task operations.
+type HoneycombService struct {
+	store  hc.Store
+	logger zerolog.Logger
 }
 
-// NewHCService creates a new HCService.
-func NewHCService(store hc.Store, messages *MessageService, logger zerolog.Logger) *HCService {
-	return &HCService{
-		store:    store,
-		messages: messages,
-		logger:   logger.With().Str("component", "hc").Logger(),
+// NewHoneycombService creates a new HoneycombService.
+func NewHoneycombService(store hc.Store, logger zerolog.Logger) *HoneycombService {
+	return &HoneycombService{
+		store:  store,
+		logger: logger.With().Str("component", "honeycomb").Logger(),
 	}
 }
 
-// generateHCID generates a short unique ID for an HC item.
-func generateHCID() string {
-	return "hc-" + randid.Generate(8)
-}
-
 // CreateItem creates a single hc item from a domain input DTO.
-func (s *HCService) CreateItem(ctx context.Context, input hc.CreateItemInput, repoKey, sessionID string) (hc.Item, error) {
+func (s *HoneycombService) CreateItem(ctx context.Context, input hc.CreateItemInput, repoKey, sessionID string) (hc.Item, error) {
 	if input.Title == "" {
 		return hc.Item{}, fmt.Errorf("title is required")
 	}
 
 	now := time.Now()
 	item := hc.Item{
-		ID:        generateHCID(),
+		ID:        hc.GenerateID(),
 		RepoKey:   repoKey,
 		ParentID:  input.ParentID,
 		SessionID: sessionID,
@@ -76,12 +67,12 @@ func (s *HCService) CreateItem(ctx context.Context, input hc.CreateItemInput, re
 // CreateBulk walks the CreateInput tree BFS and creates all items atomically.
 // The caller provides the repo key and session ID; IDs are generated here.
 // The root node is expected to be an epic; all children reference it as EpicID.
-func (s *HCService) CreateBulk(ctx context.Context, input hc.CreateInput, repoKey, sessionID string) ([]hc.Item, error) {
+func (s *HoneycombService) CreateBulk(ctx context.Context, input hc.CreateInput, repoKey, sessionID string) ([]hc.Item, error) {
 	now := time.Now()
 	var items []hc.Item
 
 	// Generate the root ID first so children can reference it as EpicID.
-	rootID := generateHCID()
+	rootID := hc.GenerateID()
 	rootItem := hc.Item{
 		ID:        rootID,
 		RepoKey:   repoKey,
@@ -110,7 +101,7 @@ func (s *HCService) CreateBulk(ctx context.Context, input hc.CreateInput, repoKe
 		entry := queue[0]
 		queue = queue[1:]
 		for _, node := range entry.nodes {
-			id := generateHCID()
+			id := hc.GenerateID()
 			item := hc.Item{
 				ID:        id,
 				RepoKey:   repoKey,
@@ -140,39 +131,33 @@ func (s *HCService) CreateBulk(ctx context.Context, input hc.CreateInput, repoKe
 }
 
 // GetItem retrieves a single item by ID.
-func (s *HCService) GetItem(ctx context.Context, id string) (hc.Item, error) {
+func (s *HoneycombService) GetItem(ctx context.Context, id string) (hc.Item, error) {
 	return s.store.GetItem(ctx, id)
 }
 
 // UpdateItem updates an item's status and/or session assignment.
-// On success, publishes a non-fatal activity notification to the epic's topic.
-func (s *HCService) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
+func (s *HoneycombService) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
 	item, err := s.store.UpdateItem(ctx, id, update)
 	if err != nil {
 		return hc.Item{}, fmt.Errorf("update hc item %q: %w", id, err)
 	}
-
-	if item.EpicID != "" {
-		s.publishActivity(ctx, item.EpicID, item)
-	}
-
 	return item, nil
 }
 
 // ListItems returns items matching the filter.
-func (s *HCService) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Item, error) {
+func (s *HoneycombService) ListItems(ctx context.Context, filter hc.ListFilter) ([]hc.Item, error) {
 	return s.store.ListItems(ctx, filter)
 }
 
 // Next returns the next ready leaf task for the session (no open children).
-func (s *HCService) Next(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
+func (s *HoneycombService) Next(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
 	return s.store.NextItem(ctx, filter)
 }
 
 // LogActivity records an activity entry for an item.
-func (s *HCService) LogActivity(ctx context.Context, itemID string, actType hc.ActivityType, message string) (hc.Activity, error) {
+func (s *HoneycombService) LogActivity(ctx context.Context, itemID string, actType hc.ActivityType, message string) (hc.Activity, error) {
 	a := hc.Activity{
-		ID:        generateHCID(),
+		ID:        hc.GenerateID(),
 		ItemID:    itemID,
 		Type:      actType,
 		Message:   message,
@@ -181,23 +166,16 @@ func (s *HCService) LogActivity(ctx context.Context, itemID string, actType hc.A
 	if err := s.store.LogActivity(ctx, a); err != nil {
 		return hc.Activity{}, fmt.Errorf("log hc activity for %q: %w", itemID, err)
 	}
-
-	// Publish to epic's activity topic (non-fatal).
-	item, err := s.store.GetItem(ctx, itemID)
-	if err == nil && item.EpicID != "" {
-		s.publishActivity(ctx, item.EpicID, item)
-	}
-
 	return a, nil
 }
 
 // Checkpoint records a checkpoint activity for an item.
-func (s *HCService) Checkpoint(ctx context.Context, itemID, message string) (hc.Activity, error) {
+func (s *HoneycombService) Checkpoint(ctx context.Context, itemID, message string) (hc.Activity, error) {
 	return s.LogActivity(ctx, itemID, hc.ActivityTypeCheckpoint, message)
 }
 
 // Context assembles a context block for the given epic.
-func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (hc.ContextBlock, error) {
+func (s *HoneycombService) Context(ctx context.Context, epicID, sessionID string) (hc.ContextBlock, error) {
 	epic, err := s.store.GetItem(ctx, epicID)
 	if err != nil {
 		return hc.ContextBlock{}, fmt.Errorf("get epic %q: %w", epicID, err)
@@ -247,25 +225,11 @@ func (s *HCService) Context(ctx context.Context, epicID, sessionID string) (hc.C
 }
 
 // ListActivity returns all activity entries for an item.
-func (s *HCService) ListActivity(ctx context.Context, itemID string) ([]hc.Activity, error) {
+func (s *HoneycombService) ListActivity(ctx context.Context, itemID string) ([]hc.Activity, error) {
 	return s.store.ListActivity(ctx, itemID)
 }
 
 // Prune removes old done/cancelled items and their activity.
-func (s *HCService) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
+func (s *HoneycombService) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	return s.store.Prune(ctx, opts)
-}
-
-// publishActivity publishes a notification to hc.<epic-id>.activity topic.
-// Errors are logged at debug level and not returned (non-fatal).
-func (s *HCService) publishActivity(ctx context.Context, epicID string, item hc.Item) {
-	topic := fmt.Sprintf("hc.%s.activity", epicID)
-	payload := fmt.Sprintf(`{"item_id":%q,"status":%q}`, item.ID, item.Status)
-	_, err := s.messages.Publish(ctx, messaging.Message{
-		ID:      generateHCID(),
-		Payload: payload,
-	}, []string{topic})
-	if err != nil {
-		s.logger.Debug().Err(err).Str("topic", topic).Msg("failed to publish hc activity")
-	}
 }
