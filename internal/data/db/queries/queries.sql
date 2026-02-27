@@ -294,16 +294,11 @@ WHERE item_id = ? AND type = 'checkpoint'
 ORDER BY created_at DESC
 LIMIT 1;
 
--- name: PruneHCActivityDone :exec
+-- name: PruneHCActivityByStatus :exec
 DELETE FROM hc_activity
 WHERE hc_activity.item_id IN (
-    SELECT hc_items.id FROM hc_items WHERE hc_items.status = 'done'
+    SELECT hc_items.id
+    FROM hc_items
+    WHERE hc_items.status = ? AND hc_items.updated_at < ?
 )
-AND hc_activity.created_at < ?;
-
--- name: PruneHCActivityCancelled :exec
-DELETE FROM hc_activity
-WHERE hc_activity.item_id IN (
-    SELECT hc_items.id FROM hc_items WHERE hc_items.status = 'cancelled'
-)
-AND hc_activity.created_at < ?;
+;

@@ -201,3 +201,98 @@ func TestHCStore_PruneDryRunIncludesDescendants(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, remaining, 2)
 }
+
+func TestHCStore_PruneScopesActivityToStatusesAndItemUpdatedAt(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+	old := now.Add(-2 * time.Hour)
+	recent := now.Add(-30 * time.Minute)
+
+	require.NoError(t, store.CreateItemBatch(ctx, []hc.Item{
+		{
+			ID:        "done-old",
+			Title:     "Done old",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusDone,
+			CreatedAt: old,
+			UpdatedAt: old,
+		},
+		{
+			ID:        "cancelled-old",
+			Title:     "Cancelled old",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusCancelled,
+			CreatedAt: old,
+			UpdatedAt: old,
+		},
+		{
+			ID:        "done-recent-update",
+			Title:     "Done recent update",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusDone,
+			CreatedAt: old,
+			UpdatedAt: recent,
+		},
+	}))
+
+	require.NoError(t, store.LogActivity(ctx, hc.Activity{
+		ID:        "act-done-old",
+		ItemID:    "done-old",
+		Type:      hc.ActivityTypeUpdate,
+		Message:   "done old activity",
+		CreatedAt: old,
+	}))
+	require.NoError(t, store.LogActivity(ctx, hc.Activity{
+		ID:        "act-cancelled-old",
+		ItemID:    "cancelled-old",
+		Type:      hc.ActivityTypeUpdate,
+		Message:   "cancelled old activity",
+		CreatedAt: old,
+	}))
+	require.NoError(t, store.LogActivity(ctx, hc.Activity{
+		ID:        "act-done-recent",
+		ItemID:    "done-recent-update",
+		Type:      hc.ActivityTypeUpdate,
+		Message:   "done recent activity",
+		CreatedAt: old,
+	}))
+
+	count, err := store.Prune(ctx, hc.PruneOpts{
+		OlderThan: time.Hour,
+		Statuses:  []hc.Status{hc.StatusDone},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, 1, count)
+
+	remaining, err := store.ListItems(ctx, hc.ListFilter{})
+	require.NoError(t, err)
+	require.Len(t, remaining, 2)
+
+	remainingIDs := map[string]struct{}{}
+	for _, item := range remaining {
+		remainingIDs[item.ID] = struct{}{}
+	}
+	_, hasCancelled := remainingIDs["cancelled-old"]
+	_, hasDoneRecent := remainingIDs["done-recent-update"]
+	assert.True(t, hasCancelled)
+	assert.True(t, hasDoneRecent)
+
+	doneOldActivity, err := store.ListActivity(ctx, "done-old")
+	require.NoError(t, err)
+	assert.Empty(t, doneOldActivity)
+
+	cancelledOldActivity, err := store.ListActivity(ctx, "cancelled-old")
+	require.NoError(t, err)
+	require.Len(t, cancelledOldActivity, 1)
+	assert.Equal(t, "act-cancelled-old", cancelledOldActivity[0].ID)
+
+	doneRecentActivity, err := store.ListActivity(ctx, "done-recent-update")
+	require.NoError(t, err)
+	require.Len(t, doneRecentActivity, 1)
+	assert.Equal(t, "act-done-recent", doneRecentActivity[0].ID)
+}

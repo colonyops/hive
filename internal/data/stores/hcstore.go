@@ -331,13 +331,13 @@ func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	}
 
 	err = s.db.WithTx(ctx, func(q *db.Queries) error {
-		// Activity pruning is always scoped to done and cancelled items,
-		// independent of opts.Statuses.
-		if txErr := q.PruneHCActivityDone(ctx, cutoff); txErr != nil {
-			return fmt.Errorf("prune hc activity (done): %w", txErr)
-		}
-		if txErr := q.PruneHCActivityCancelled(ctx, cutoff); txErr != nil {
-			return fmt.Errorf("prune hc activity (cancelled): %w", txErr)
+		for _, status := range statuses {
+			if txErr := q.PruneHCActivityByStatus(ctx, db.PruneHCActivityByStatusParams{
+				Status:    string(status),
+				UpdatedAt: cutoff,
+			}); txErr != nil {
+				return fmt.Errorf("prune hc activity (%s): %w", status, txErr)
+			}
 		}
 
 		idsByDepthDesc := orderHCIDsByDepthDesc(pruneIDs, depthByID)

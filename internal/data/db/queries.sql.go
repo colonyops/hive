@@ -1413,29 +1413,22 @@ func (q *Queries) NextHCItemForSessionInEpic(ctx context.Context, arg NextHCItem
 	return i, err
 }
 
-const pruneHCActivityCancelled = `-- name: PruneHCActivityCancelled :exec
+const pruneHCActivityByStatus = `-- name: PruneHCActivityByStatus :exec
 DELETE FROM hc_activity
 WHERE hc_activity.item_id IN (
-    SELECT hc_items.id FROM hc_items WHERE hc_items.status = 'cancelled'
+    SELECT hc_items.id
+    FROM hc_items
+    WHERE hc_items.status = ? AND hc_items.updated_at < ?
 )
-AND hc_activity.created_at < ?
 `
 
-func (q *Queries) PruneHCActivityCancelled(ctx context.Context, createdAt int64) error {
-	_, err := q.db.ExecContext(ctx, pruneHCActivityCancelled, createdAt)
-	return err
+type PruneHCActivityByStatusParams struct {
+	Status    string `json:"status"`
+	UpdatedAt int64  `json:"updated_at"`
 }
 
-const pruneHCActivityDone = `-- name: PruneHCActivityDone :exec
-DELETE FROM hc_activity
-WHERE hc_activity.item_id IN (
-    SELECT hc_items.id FROM hc_items WHERE hc_items.status = 'done'
-)
-AND hc_activity.created_at < ?
-`
-
-func (q *Queries) PruneHCActivityDone(ctx context.Context, createdAt int64) error {
-	_, err := q.db.ExecContext(ctx, pruneHCActivityDone, createdAt)
+func (q *Queries) PruneHCActivityByStatus(ctx context.Context, arg PruneHCActivityByStatusParams) error {
+	_, err := q.db.ExecContext(ctx, pruneHCActivityByStatus, arg.Status, arg.UpdatedAt)
 	return err
 }
 
