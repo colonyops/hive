@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/hc"
@@ -288,41 +289,105 @@ func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 		statuses = []hc.Status{hc.StatusDone, hc.StatusCancelled}
 	}
 
-	total := 0
-	for _, status := range statuses {
-		count, err := s.db.Queries().CountHCItemsByStatusOlderThan(ctx, db.CountHCItemsByStatusOlderThanParams{
-			Status:    string(status),
-			UpdatedAt: cutoff,
-		})
-		if err != nil {
-			return total, fmt.Errorf("count hc items for prune (status=%s): %w", status, err)
-		}
-		total += int(count)
+	allRows, err := s.db.Queries().ListAllHCItems(ctx)
+	if err != nil {
+		return 0, fmt.Errorf("list hc items for prune: %w", err)
 	}
+
+	statusSet := make(map[hc.Status]struct{}, len(statuses))
+	for _, status := range statuses {
+		statusSet[status] = struct{}{}
+	}
+
+	childrenByParent := make(map[string][]string, len(allRows))
+	depthByID := make(map[string]int64, len(allRows))
+	pruneRoots := make([]string, 0)
+	for _, row := range allRows {
+		depthByID[row.ID] = row.Depth
+		if row.ParentID != "" {
+			childrenByParent[row.ParentID] = append(childrenByParent[row.ParentID], row.ID)
+		}
+
+		status, parseErr := hc.ParseStatus(row.Status)
+		if parseErr != nil {
+			continue
+		}
+		if _, ok := statusSet[status]; !ok {
+			continue
+		}
+		if row.UpdatedAt >= cutoff {
+			continue
+		}
+
+		pruneRoots = append(pruneRoots, row.ID)
+	}
+
+	pruneIDs := collectHCSubtreeIDs(pruneRoots, childrenByParent)
+	total := len(pruneIDs)
 
 	if opts.DryRun {
 		return total, nil
 	}
 
-	// Activity pruning is always scoped to done and cancelled items,
-	// independent of opts.Statuses.
-	if err := s.db.Queries().PruneHCActivityDone(ctx, cutoff); err != nil {
-		return 0, fmt.Errorf("prune hc activity (done): %w", err)
-	}
-	if err := s.db.Queries().PruneHCActivityCancelled(ctx, cutoff); err != nil {
-		return 0, fmt.Errorf("prune hc activity (cancelled): %w", err)
-	}
-
-	for _, status := range statuses {
-		if err := s.db.Queries().DeleteHCItemsByStatusOlderThan(ctx, db.DeleteHCItemsByStatusOlderThanParams{
-			Status:    string(status),
-			UpdatedAt: cutoff,
-		}); err != nil {
-			return 0, fmt.Errorf("delete hc items (status=%s): %w", status, err)
+	err = s.db.WithTx(ctx, func(q *db.Queries) error {
+		// Activity pruning is always scoped to done and cancelled items,
+		// independent of opts.Statuses.
+		if txErr := q.PruneHCActivityDone(ctx, cutoff); txErr != nil {
+			return fmt.Errorf("prune hc activity (done): %w", txErr)
 		}
+		if txErr := q.PruneHCActivityCancelled(ctx, cutoff); txErr != nil {
+			return fmt.Errorf("prune hc activity (cancelled): %w", txErr)
+		}
+
+		idsByDepthDesc := orderHCIDsByDepthDesc(pruneIDs, depthByID)
+		for _, id := range idsByDepthDesc {
+			if txErr := q.DeleteHCItem(ctx, id); txErr != nil {
+				return fmt.Errorf("delete hc item %q: %w", id, txErr)
+			}
+		}
+
+		return nil
+	})
+	if err != nil {
+		return 0, err
 	}
 
 	return total, nil
+}
+
+func collectHCSubtreeIDs(roots []string, childrenByParent map[string][]string) map[string]struct{} {
+	pruneIDs := make(map[string]struct{}, len(roots))
+	stack := make([]string, len(roots))
+	copy(stack, roots)
+
+	for len(stack) > 0 {
+		last := len(stack) - 1
+		id := stack[last]
+		stack = stack[:last]
+
+		if _, seen := pruneIDs[id]; seen {
+			continue
+		}
+		pruneIDs[id] = struct{}{}
+
+		children := childrenByParent[id]
+		stack = append(stack, children...)
+	}
+
+	return pruneIDs
+}
+
+func orderHCIDsByDepthDesc(ids map[string]struct{}, depthByID map[string]int64) []string {
+	ordered := make([]string, 0, len(ids))
+	for id := range ids {
+		ordered = append(ordered, id)
+	}
+
+	sort.SliceStable(ordered, func(i, j int) bool {
+		return depthByID[ordered[i]] > depthByID[ordered[j]]
+	})
+
+	return ordered
 }
 
 func (s *HCStore) rowToHCItem(ctx context.Context, row db.HcItem) hc.Item {
