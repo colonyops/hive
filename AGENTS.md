@@ -94,7 +94,64 @@ HIVE_CONFIG=./config.dev.yaml
 HIVE_DATA_DIR=./.data
 ```
 
+## Code Generation
+
+### go-enum
+
+Enum types use `// ENUM(...)` comments processed by go-enum. Generated files (`*_enum.go`) are committed and must never be edited manually.
+
+```bash
+mise run generate:enums    # regenerate after changing ENUM comments
+mise run generate          # all generators (go-enum + sqlc)
+```
+
+**Defining an enum:**
+```go
+// ENUM(epic, task)
+type ItemType string
+```
+
+This generates constants (`ItemTypeEpic`, `ItemTypeTask`), `ParseItemType`, `IsValid`, `MarshalText`/`UnmarshalText`, and `ItemTypeValues`. String values match the ENUM comment exactly (lowercase).
+
+**When adding a new value**, update the `ENUM(...)` comment, run `mise run generate:enums`, then update any `switch` statements or `criterio.OneOf(...)` validators that enumerate the values. Also add the source file to `sources` in `mise.toml` under `[tasks."generate:enums"]` if it's a new file.
+
+### sqlc
+
+Queries live in `internal/data/db/queries/`. Generated files (`queries*.sql.go`, `models.go`) are committed and must never be edited manually.
+
+```bash
+mise run generate    # regenerates after SQL or sqlc.yaml changes
+sqlc generate        # directly
+```
+
+**Adding a query:** write the annotated SQL (`:one`, `:many`, `:exec`), run generation, then call via `s.db.Queries().FunctionName(ctx, ...)`.
+
+**Type overrides:** when a column stores a domain enum, add an override to `sqlc.yaml` so the generated code uses the Go type directly instead of `string`. The go-enum type satisfies the required interfaces via `MarshalText`/`UnmarshalText`.
+
+Always commit the generated `*.sql.go` and `models.go` alongside the SQL changes in the same commit.
+
 ## Code Patterns
+
+### Integration Tests
+
+Integration tests live in `test/integration/` and require a compiled binary. They use the `integration` build tag and are excluded from the standard `mise run test` run.
+
+```bash
+mise run test -- -tags integration    # run integration tests
+```
+
+**Key rules:**
+- Every test calls `NewHarness(t)` which creates isolated `dataDir` and `homeDir` per test — no shared state between tests.
+- Use `h.RunStdout(...)` (not `h.Run`) when parsing JSON output — it separates stdout from stderr (migration logs etc. go to stderr).
+- Use `h.RunJSONLines(...)` to get `[]map[string]any` from JSONL output directly.
+- Use `h.RunWithStdin(input, ...)` to pipe JSON to stdin (for bulk create etc.).
+- Avoid `h.Run(...)` for structured output; use it only when testing error messages or combined output.
+- Tests that need a real hive session (e.g. `hc next`) must create one with `h.CreateSession(t)` first.
+- Do not test formatting/cosmetic output — test field values and structural correctness only.
+
+What belongs in integration tests vs unit tests:
+- **Integration**: end-to-end CLI flag wiring, stdin/stdout behavior, multi-command workflows, session detection
+- **Unit**: business logic, validation rules, store behavior (using real SQLite via `db.Open(t.TempDir(), ...)`), service orchestration
 
 ### Bubble Tea (TUI)
 
