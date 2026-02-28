@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -14,56 +15,24 @@ import (
 	"github.com/urfave/cli/v3"
 )
 
-// HCCmd implements the hive hc command group.
-type HCCmd struct {
+// HoneycombCmd implements the hive hc command group.
+type HoneycombCmd struct {
 	flags *Flags
 	app   *hive.App
-
-	// create flags
-	createType     string
-	createDesc     string
-	createParentID string
-	createAssign   bool
-
-	// list flags
-	listStatus  string
-	listSession string
-
-	// show flags
-	showJSON bool
-
-	// update flags
-	updateStatus   string
-	updateAssign   bool
-	updateUnassign bool
-
-	// next flags
-	nextAssign bool
-
-	// context flags
-	contextJSON bool
-
-	// prune flags
-	pruneOlderThan string
-	pruneStatuses  []string
-	pruneDryRun    bool
 }
 
-// NewHCCmd creates a new hc command.
-func NewHCCmd(flags *Flags, app *hive.App) *HCCmd {
-	return &HCCmd{flags: flags, app: app}
+// NewHoneycombCmd creates a new hc command.
+func NewHoneycombCmd(flags *Flags, app *hive.App) *HoneycombCmd {
+	return &HoneycombCmd{flags: flags, app: app}
 }
 
 // Register adds the hc command to the application.
-func (cmd *HCCmd) Register(app *cli.Command) *cli.Command {
+func (cmd *HoneycombCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:  "hc",
-		Usage: "Manage multi-agent task coordination (Honeycomb)",
-		Description: `Honeycomb (hc) is a built-in multi-agent task coordination system.
-
-A conductor agent creates epics and tasks; worker agents claim leaf items
-via 'hive hc next', record progress with 'hive hc checkpoint', and mark
-items done with 'hive hc update'.
+		Usage: "Track tasks and epics for agent workflows",
+		Description: `hc (Honeycomb) is a task tracking system for LLM agents — like GitHub Issues,
+but scoped to a repository and designed for machine consumption.
 
 Session ID and repo key are auto-detected from the working directory.`,
 		Commands: []*cli.Command{
@@ -72,8 +41,7 @@ Session ID and repo key are auto-detected from the working directory.`,
 			cmd.showCmd(),
 			cmd.updateCmd(),
 			cmd.nextCmd(),
-			cmd.logCmd(),
-			cmd.checkpointCmd(),
+			cmd.commentCmd(),
 			cmd.contextCmd(),
 			cmd.pruneCmd(),
 		},
@@ -81,7 +49,7 @@ Session ID and repo key are auto-detected from the working directory.`,
 	return app
 }
 
-func (cmd *HCCmd) detectSession(ctx context.Context) string {
+func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
 	sessionID, err := cmd.app.Sessions.DetectSession(ctx)
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to detect session for hc")
@@ -89,7 +57,7 @@ func (cmd *HCCmd) detectSession(ctx context.Context) string {
 	return sessionID
 }
 
-func (cmd *HCCmd) detectRepoKey(ctx context.Context) string {
+func (cmd *HoneycombCmd) detectRepoKey(ctx context.Context) string {
 	url, err := cmd.app.Sessions.Git().RemoteURL(ctx, ".")
 	if err != nil {
 		log.Debug().Err(err).Msg("failed to get remote URL for hc")
@@ -102,7 +70,12 @@ func (cmd *HCCmd) detectRepoKey(ctx context.Context) string {
 	return owner + "/" + repoName
 }
 
-func (cmd *HCCmd) createCmd() *cli.Command {
+func (cmd *HoneycombCmd) createCmd() *cli.Command {
+	var (
+		flagType     string
+		flagDesc     string
+		flagParentID string
+	)
 	bulk := iojson.FileReader[hc.CreateInput]{}
 	return &cli.Command{
 		Name:      "create",
@@ -110,44 +83,39 @@ func (cmd *HCCmd) createCmd() *cli.Command {
 		UsageText: "hive hc create [title] [--type epic|task] [--desc <desc>] [--parent <id>]",
 		Description: `Creates a single item from flags, or a bulk tree from JSON (--file or stdin).
 
-Bulk JSON format:
-  {"title":"My Epic","type":"epic","children":[{"title":"Task 1","type":"task"}]}
+Bulk JSON format (pipe or --file):
+  {
+    "title": "Auth System",
+    "type": "epic",
+    "desc": "Implement full auth stack",
+    "children": [
+      {"title": "JWT middleware", "type": "task"},
+      {"title": "Login endpoint", "type": "task", "desc": "POST /auth/login"},
+      {
+        "title": "OAuth integration",
+        "type": "task",
+        "children": [
+          {"title": "Google provider", "type": "task"},
+          {"title": "GitHub provider", "type": "task"}
+        ]
+      }
+    ]
+  }
 
 Examples:
   hive hc create "Implement auth" --type task --parent hc-abc123
-  echo '{"title":"Epic","type":"epic","children":[...]}' | hive hc create`,
+  echo '{"title":"Auth System","type":"epic","children":[...]}' | hive hc create
+  hive hc create --file epic.json`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "type",
-				Aliases:     []string{"t"},
-				Usage:       "item type (epic, task)",
-				Value:       "task",
-				Destination: &cmd.createType,
-			},
-			&cli.StringFlag{
-				Name:        "desc",
-				Aliases:     []string{"d"},
-				Usage:       "item description",
-				Destination: &cmd.createDesc,
-			},
-			&cli.StringFlag{
-				Name:        "parent",
-				Aliases:     []string{"p"},
-				Usage:       "parent item ID",
-				Destination: &cmd.createParentID,
-			},
-			&cli.BoolFlag{
-				Name:        "assign",
-				Usage:       "assign item to current session",
-				Destination: &cmd.createAssign,
-			},
+			&cli.StringFlag{Name: "type", Aliases: []string{"t"}, Usage: "item type (epic, task)", Value: "task", Destination: &flagType},
+			&cli.StringFlag{Name: "desc", Aliases: []string{"d"}, Usage: "item description", Destination: &flagDesc},
+			&cli.StringFlag{Name: "parent", Aliases: []string{"p"}, Usage: "parent item ID", Destination: &flagParentID},
 			bulk.Flag(),
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			repoKey := cmd.detectRepoKey(ctx)
 
-			// bulk mode: --file set OR no positional args
-			if c.IsSet("file") || c.NArg() == 0 {
+			if c.NArg() == 0 {
 				input, err := bulk.Read()
 				if err != nil {
 					return fmt.Errorf("read input: %w", err)
@@ -164,33 +132,19 @@ Examples:
 				return nil
 			}
 
-			// single-item mode
-			itemType, err := hc.ParseItemType(cmd.createType)
+			itemType, err := hc.ParseItemType(flagType)
 			if err != nil {
-				return fmt.Errorf("invalid type %q: valid values are epic, task", cmd.createType)
+				return fmt.Errorf("invalid type %q: valid values are epic, task", flagType)
 			}
 
-			input := hc.CreateItemInput{
+			item, err := cmd.app.Honeycomb.CreateItem(ctx, repoKey, hc.CreateItemInput{
 				Title:    c.Args().First(),
-				Desc:     cmd.createDesc,
+				Desc:     flagDesc,
 				Type:     itemType,
-				ParentID: cmd.createParentID,
-			}
-
-			item, err := cmd.app.Honeycomb.CreateItem(ctx, repoKey, input)
+				ParentID: flagParentID,
+			})
 			if err != nil {
 				return fmt.Errorf("create item: %w", err)
-			}
-
-			if cmd.createAssign {
-				sessionID := cmd.detectSession(ctx)
-				if sessionID != "" {
-					updated, err := cmd.app.Honeycomb.UpdateItem(ctx, item.ID, hc.ItemUpdate{SessionID: &sessionID})
-					if err != nil {
-						return fmt.Errorf("assign item: %w", err)
-					}
-					item = updated
-				}
 			}
 
 			return iojson.WriteLine(c.Root().Writer, item)
@@ -198,47 +152,51 @@ Examples:
 	}
 }
 
-func (cmd *HCCmd) listCmd() *cli.Command {
+func (cmd *HoneycombCmd) listCmd() *cli.Command {
+	var (
+		flagStatus  string
+		flagSession string
+		flagTree    bool
+	)
 	return &cli.Command{
 		Name:      "list",
 		Usage:     "List items",
-		UsageText: "hive hc list [epic-id] [--status <status>] [--session <id>]",
+		UsageText: "hive hc list [epic-id] [--status <status>] [--session <id>] [--tree]",
 		Description: `Lists items as JSON lines. Optional positional arg filters by epic ID.
+
+With --tree, outputs a human-readable indented tree instead of JSON lines.
 
 Examples:
   hive hc list
   hive hc list hc-abc123
   hive hc list --status open
-  hive hc list --session mysession`,
+  hive hc list --tree hc-abc123`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "status",
-				Usage:       "filter by status (open, in_progress, done, cancelled)",
-				Destination: &cmd.listStatus,
-			},
-			&cli.StringFlag{
-				Name:        "session",
-				Usage:       "filter by session ID",
-				Destination: &cmd.listSession,
-			},
+			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
+			&cli.StringFlag{Name: "session", Usage: "filter by session ID", Destination: &flagSession},
+			&cli.BoolFlag{Name: "tree", Usage: "output as indented tree", Destination: &flagTree},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			filter := hc.ListFilter{
 				EpicID:    c.Args().First(),
-				SessionID: cmd.listSession,
+				SessionID: flagSession,
 			}
-
-			if cmd.listStatus != "" {
-				s, err := hc.ParseStatus(cmd.listStatus)
+			if flagStatus != "" {
+				status, err := hc.ParseStatus(flagStatus)
 				if err != nil {
-					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", cmd.listStatus)
+					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 				}
-				filter.Status = &s
+				filter.Status = &status
 			}
 
 			items, err := cmd.app.Honeycomb.ListItems(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("list items: %w", err)
+			}
+
+			if flagTree {
+				renderItemTree(c.Root().Writer, items)
+				return nil
 			}
 
 			for _, item := range items {
@@ -251,25 +209,27 @@ Examples:
 	}
 }
 
-func (cmd *HCCmd) showCmd() *cli.Command {
+// renderItemTree prints items as an indented tree using each item's depth.
+func renderItemTree(w io.Writer, items []hc.Item) {
+	for _, item := range items {
+		indent := strings.Repeat("  ", item.Depth)
+		blocked := ""
+		if item.Blocked {
+			blocked = " [blocked]"
+		}
+		_, _ = fmt.Fprintf(w, "%s[%s]%s %s (%s)\n", indent, item.Status, blocked, item.Title, item.ID)
+	}
+}
+
+func (cmd *HoneycombCmd) showCmd() *cli.Command {
 	return &cli.Command{
 		Name:      "show",
 		Usage:     "Show an item and its comments",
-		UsageText: "hive hc show <id> [--json]",
-		Description: `Displays an item and all associated comments as JSON lines.
-
-The item is written first, followed by each comment.
+		UsageText: "hive hc show <id>",
+		Description: `Shows an item followed by its comments as JSON lines.
 
 Examples:
-  hive hc show hc-abc123
-  hive hc show hc-abc123 --json`,
-		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "json",
-				Usage:       "output as JSON lines (default)",
-				Destination: &cmd.showJSON,
-			},
-		},
+  hive hc show hc-abc123`,
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
 				return fmt.Errorf("item ID required as argument")
@@ -295,41 +255,33 @@ Examples:
 					return err
 				}
 			}
-
 			return nil
 		},
 	}
 }
 
-func (cmd *HCCmd) updateCmd() *cli.Command {
+func (cmd *HoneycombCmd) updateCmd() *cli.Command {
+	var (
+		flagStatus   string
+		flagAssign   bool
+		flagUnassign bool
+	)
 	return &cli.Command{
 		Name:      "update",
-		Usage:     "Update an item",
+		Usage:     "Update an item's status or session assignment",
 		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign]",
-		Description: `Updates an item's status or session assignment.
+		Description: `Updates an item's status and/or session assignment.
+
+Status values: open, in_progress, done, cancelled
 
 Examples:
-  hive hc update hc-abc123 --status in_progress
   hive hc update hc-abc123 --status done
-  hive hc update hc-abc123 --assign
+  hive hc update hc-abc123 --status in_progress --assign
   hive hc update hc-abc123 --unassign`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "status",
-				Aliases:     []string{"s"},
-				Usage:       "new status (open, in_progress, done, cancelled)",
-				Destination: &cmd.updateStatus,
-			},
-			&cli.BoolFlag{
-				Name:        "assign",
-				Usage:       "assign item to current session",
-				Destination: &cmd.updateAssign,
-			},
-			&cli.BoolFlag{
-				Name:        "unassign",
-				Usage:       "remove session assignment from item",
-				Destination: &cmd.updateUnassign,
-			},
+			&cli.StringFlag{Name: "status", Usage: "new status (open, in_progress, done, cancelled)", Destination: &flagStatus},
+			&cli.BoolFlag{Name: "assign", Usage: "assign to current session", Destination: &flagAssign},
+			&cli.BoolFlag{Name: "unassign", Usage: "remove session assignment", Destination: &flagUnassign},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
@@ -337,21 +289,21 @@ Examples:
 			}
 			id := c.Args().First()
 
-			update := hc.ItemUpdate{}
+			var update hc.ItemUpdate
 
-			if cmd.updateStatus != "" {
-				s, err := hc.ParseStatus(cmd.updateStatus)
+			if flagStatus != "" {
+				status, err := hc.ParseStatus(flagStatus)
 				if err != nil {
-					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", cmd.updateStatus)
+					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 				}
-				update.Status = &s
+				update.Status = &status
 			}
 
-			if cmd.updateAssign && cmd.updateUnassign {
+			if flagAssign && flagUnassign {
 				return fmt.Errorf("--assign and --unassign are mutually exclusive")
 			}
 
-			if cmd.updateAssign {
+			if flagAssign {
 				sessionID := cmd.detectSession(ctx)
 				if sessionID == "" {
 					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
@@ -359,7 +311,7 @@ Examples:
 				update.SessionID = &sessionID
 			}
 
-			if cmd.updateUnassign {
+			if flagUnassign {
 				empty := ""
 				update.SessionID = &empty
 			}
@@ -374,35 +326,32 @@ Examples:
 	}
 }
 
-func (cmd *HCCmd) nextCmd() *cli.Command {
+func (cmd *HoneycombCmd) nextCmd() *cli.Command {
+	var flagAssign bool
 	return &cli.Command{
 		Name:      "next",
-		Usage:     "Get the next actionable task",
-		UsageText: "hive hc next [epic-id] [--assign]",
-		Description: `Returns the next actionable leaf task for the current session or epic.
+		Usage:     "Get the next actionable task in an epic",
+		UsageText: "hive hc next <epic-id> [--assign]",
+		Description: `Returns the next actionable leaf task in the given epic.
 
 Actionable means the task has status open or in_progress and no open/in_progress children.
 
-If --assign is set, the task is assigned to the current session and its status
-is set to in_progress.
+With --assign, the task is assigned to the current session and set to in_progress.
 
 Examples:
-  hive hc next
   hive hc next hc-epic123
-  hive hc next --assign`,
+  hive hc next hc-epic123 --assign`,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "assign",
-				Usage:       "assign item to current session and set status to in_progress",
-				Destination: &cmd.nextAssign,
-			},
+			&cli.BoolFlag{Name: "assign", Usage: "assign item to current session and set in_progress", Destination: &flagAssign},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
-			filter := hc.NextFilter{
-				EpicID: c.Args().First(),
+			if c.NArg() < 1 {
+				return fmt.Errorf("epic ID required as argument")
 			}
 
-			item, found, err := cmd.app.Honeycomb.Next(ctx, filter)
+			item, found, err := cmd.app.Honeycomb.Next(ctx, hc.NextFilter{
+				EpicID: c.Args().First(),
+			})
 			if err != nil {
 				return fmt.Errorf("next item: %w", err)
 			}
@@ -410,7 +359,7 @@ Examples:
 				return fmt.Errorf("no actionable tasks found")
 			}
 
-			if cmd.nextAssign {
+			if flagAssign {
 				sessionID := cmd.detectSession(ctx)
 				if sessionID == "" {
 					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
@@ -431,27 +380,26 @@ Examples:
 	}
 }
 
-func (cmd *HCCmd) logCmd() *cli.Command {
+func (cmd *HoneycombCmd) commentCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "log",
-		Usage:     "Add a log comment to an item",
-		UsageText: "hive hc log <id> <message>",
-		Description: `Attaches a general log comment to an item. Use for recording observations,
-decisions, or progress notes during implementation.
+		Name:      "comment",
+		Usage:     "Add a comment to an item",
+		UsageText: "hive hc comment <id> <message>",
+		Description: `Attaches a comment to an item.
+
+Use for recording progress notes, decisions, or handoff context.
 
 Examples:
-  hive hc log hc-abc123 "Decided to use JWT for auth"
-  hive hc log hc-abc123 "Added rate limiting middleware"`,
+  hive hc comment hc-abc123 "Decided to use JWT for auth"
+  hive hc comment hc-abc123 "Stopping here — middleware wired, handlers pending"`,
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 2 {
 				return fmt.Errorf("item ID and message required as arguments")
 			}
-			id := c.Args().Get(0)
-			message := strings.Join(c.Args().Slice()[1:], " ")
 
-			comment, err := cmd.app.Honeycomb.AddComment(ctx, id, message)
+			comment, err := cmd.app.Honeycomb.AddComment(ctx, c.Args().Get(0), strings.Join(c.Args().Slice()[1:], " "))
 			if err != nil {
-				return fmt.Errorf("add comment to %q: %w", id, err)
+				return fmt.Errorf("add comment to %q: %w", c.Args().Get(0), err)
 			}
 
 			return iojson.WriteLine(c.Root().Writer, comment)
@@ -459,48 +407,16 @@ Examples:
 	}
 }
 
-func (cmd *HCCmd) checkpointCmd() *cli.Command {
-	return &cli.Command{
-		Name:      "checkpoint",
-		Usage:     "Record a handoff checkpoint comment",
-		UsageText: "hive hc checkpoint <id> <message>",
-		Description: `Attaches a checkpoint comment to an item. Use when stopping mid-implementation
-to leave context for the next agent picking up the work.
-
-The message is prefixed with "CHECKPOINT:" to make it easy to identify in context views.
-
-Examples:
-  hive hc checkpoint hc-abc123 "Implemented login endpoint, auth middleware pending"
-  hive hc checkpoint hc-abc123 "DB schema done, need to wire up API handlers"`,
-		Action: func(ctx context.Context, c *cli.Command) error {
-			if c.NArg() < 2 {
-				return fmt.Errorf("item ID and message required as arguments")
-			}
-			id := c.Args().Get(0)
-			message := "CHECKPOINT: " + strings.Join(c.Args().Slice()[1:], " ")
-
-			comment, err := cmd.app.Honeycomb.AddComment(ctx, id, message)
-			if err != nil {
-				return fmt.Errorf("add checkpoint to %q: %w", id, err)
-			}
-
-			return iojson.WriteLine(c.Root().Writer, comment)
-		},
-	}
-}
-
-func (cmd *HCCmd) contextCmd() *cli.Command {
+func (cmd *HoneycombCmd) contextCmd() *cli.Command {
+	var flagJSON bool
 	return &cli.Command{
 		Name:      "context",
 		Usage:     "Show context block for an epic",
 		UsageText: "hive hc context <epic-id> [--json]",
 		Description: `Assembles and displays the context block for an epic.
 
-The context block contains:
-  - Epic title and description
-  - Task counts by status
-  - Tasks assigned to the current session (with latest comment)
-  - All open/in-progress tasks
+The context block contains the epic title, task counts by status, tasks assigned
+to the current session (with latest comment), and all open/in-progress tasks.
 
 Without --json, outputs a markdown representation suitable for AI agent consumption.
 With --json, outputs a single JSON object.
@@ -509,25 +425,20 @@ Examples:
   hive hc context hc-epic123
   hive hc context hc-epic123 --json`,
 		Flags: []cli.Flag{
-			&cli.BoolFlag{
-				Name:        "json",
-				Usage:       "output as JSON",
-				Destination: &cmd.contextJSON,
-			},
+			&cli.BoolFlag{Name: "json", Usage: "output as JSON", Destination: &flagJSON},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
 				return fmt.Errorf("epic ID required as argument")
 			}
-			epicID := c.Args().First()
-			sessionID := cmd.detectSession(ctx)
 
-			cb, err := cmd.app.Honeycomb.Context(ctx, epicID, sessionID)
+			epicID := c.Args().First()
+			cb, err := cmd.app.Honeycomb.Context(ctx, epicID, cmd.detectSession(ctx))
 			if err != nil {
 				return fmt.Errorf("get context for epic %q: %w", epicID, err)
 			}
 
-			if cmd.contextJSON {
+			if flagJSON {
 				return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, cb)
 			}
 
@@ -537,49 +448,40 @@ Examples:
 	}
 }
 
-func (cmd *HCCmd) pruneCmd() *cli.Command {
+func (cmd *HoneycombCmd) pruneCmd() *cli.Command {
+	var (
+		flagOlderThan string
+		flagStatuses  []string
+		flagDryRun    bool
+	)
 	return &cli.Command{
 		Name:      "prune",
 		Usage:     "Remove old completed items",
 		UsageText: "hive hc prune [--older-than <duration>] [--status <status>...] [--dry-run]",
 		Description: `Removes items older than the specified duration with matching statuses.
 
-Duration format: Go duration string (e.g. 24h, 7d, 168h).
+Defaults to removing done and cancelled items older than 7 days.
 
 Examples:
-  hive hc prune --older-than 168h
-  hive hc prune --older-than 24h --status done --status cancelled
+  hive hc prune
+  hive hc prune --older-than 24h
   hive hc prune --dry-run`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "older-than",
-				Usage:       "remove items older than this duration (e.g. 24h, 168h)",
-				Value:       "168h",
-				Destination: &cmd.pruneOlderThan,
-			},
-			&cli.StringSliceFlag{
-				Name:        "status",
-				Usage:       "statuses to prune (default: done, cancelled)",
-				Destination: &cmd.pruneStatuses,
-			},
-			&cli.BoolFlag{
-				Name:        "dry-run",
-				Usage:       "show what would be pruned without removing",
-				Destination: &cmd.pruneDryRun,
-			},
+			&cli.StringFlag{Name: "older-than", Usage: "remove items older than this duration (e.g. 24h, 168h)", Value: "168h", Destination: &flagOlderThan},
+			&cli.StringSliceFlag{Name: "status", Usage: "statuses to prune (default: done, cancelled)", Destination: &flagStatuses},
+			&cli.BoolFlag{Name: "dry-run", Usage: "show what would be pruned without removing", Destination: &flagDryRun},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
-			olderThan, err := time.ParseDuration(cmd.pruneOlderThan)
+			olderThan, err := time.ParseDuration(flagOlderThan)
 			if err != nil {
-				return fmt.Errorf("invalid duration %q: %w", cmd.pruneOlderThan, err)
+				return fmt.Errorf("invalid duration %q: %w", flagOlderThan, err)
 			}
 
-			statusStrings := cmd.pruneStatuses
-			statuses := make([]hc.Status, 0, len(statusStrings))
-			if len(statusStrings) == 0 {
+			statuses := make([]hc.Status, 0, len(flagStatuses))
+			if len(flagStatuses) == 0 {
 				statuses = []hc.Status{hc.StatusDone, hc.StatusCancelled}
 			} else {
-				for _, s := range statusStrings {
+				for _, s := range flagStatuses {
 					status, err := hc.ParseStatus(s)
 					if err != nil {
 						return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", s)
@@ -588,23 +490,24 @@ Examples:
 				}
 			}
 
-			opts := hc.PruneOpts{
+			count, err := cmd.app.Honeycomb.Prune(ctx, hc.PruneOpts{
 				OlderThan: olderThan,
 				Statuses:  statuses,
-				DryRun:    cmd.pruneDryRun,
-			}
-
-			count, err := cmd.app.Honeycomb.Prune(ctx, opts)
+				DryRun:    flagDryRun,
+			})
 			if err != nil {
 				return fmt.Errorf("prune: %w", err)
 			}
 
 			action := "pruned"
-			if cmd.pruneDryRun {
+			if flagDryRun {
 				action = "would prune"
 			}
-			_, err = fmt.Fprintf(c.Root().Writer, `{"action":%q,"count":%d}`+"\n", action, count)
-			return err
+
+			return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, map[string]any{
+				"action": action,
+				"count":  count,
+			})
 		},
 	}
 }

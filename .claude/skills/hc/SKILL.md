@@ -1,6 +1,6 @@
 ---
 name: hc
-description: Use hive hc commands for multi-agent task coordination (Honeycomb). Use when checking assigned tasks, recording progress, claiming next work, or querying epic context.
+description: Use hive hc commands to track tasks and epics for agent workflows. Like GitHub Issues but scoped to a repository and designed for machine consumption. Use when creating work items, checking status, recording progress, claiming next work, or querying epic context.
 compatibility: claude
 ---
 

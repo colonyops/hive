@@ -40,13 +40,11 @@ func TestHCCreateEpic(t *testing.T) {
 func TestHCCreateTaskWithParent(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create parent epic first
 	epicLines, err := h.RunJSONLines("hc", "create", "Parent Epic", "--type", "epic")
 	require.NoError(t, err)
 	require.Len(t, epicLines, 1)
 	epicID := epicLines[0]["id"].(string)
 
-	// Create task under epic
 	taskLines, err := h.RunJSONLines("hc", "create", "Child Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	require.Len(t, taskLines, 1)
@@ -85,13 +83,11 @@ func TestHCCreateInvalidType(t *testing.T) {
 func TestHCList(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create two items
 	_, err := h.RunJSONLines("hc", "create", "Task One", "--type", "task")
 	require.NoError(t, err)
 	_, err = h.RunJSONLines("hc", "create", "Task Two", "--type", "task")
 	require.NoError(t, err)
 
-	// List all
 	lines, err := h.RunJSONLines("hc", "list")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(lines), 2)
@@ -100,7 +96,6 @@ func TestHCList(t *testing.T) {
 func TestHCListStatusFilter(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create an item and update it to done
 	createLines, err := h.RunJSONLines("hc", "create", "Filterable Task", "--type", "task")
 	require.NoError(t, err)
 	require.Len(t, createLines, 1)
@@ -109,7 +104,6 @@ func TestHCListStatusFilter(t *testing.T) {
 	_, err = h.RunJSONLines("hc", "update", id, "--status", "done")
 	require.NoError(t, err)
 
-	// Filter by done
 	doneLines, err := h.RunJSONLines("hc", "list", "--status", "done")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(doneLines), 1)
@@ -123,7 +117,6 @@ func TestHCListStatusFilter(t *testing.T) {
 	}
 	assert.True(t, found, "updated item should appear in done filter")
 
-	// Filter by open should not include the done item
 	openLines, err := h.RunJSONLines("hc", "list", "--status", "open")
 	require.NoError(t, err)
 	for _, l := range openLines {
@@ -139,8 +132,7 @@ func TestHCShow(t *testing.T) {
 	require.Len(t, createLines, 1)
 	id := createLines[0]["id"].(string)
 
-	// Add a comment
-	_, err = h.RunJSONLines("hc", "log", id, "first note")
+	_, err = h.RunJSONLines("hc", "comment", id, "first note")
 	require.NoError(t, err)
 
 	out, err := h.RunStdout("hc", "show", id)
@@ -150,11 +142,8 @@ func TestHCShow(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 2, "should have item + at least one comment")
 
-	// First line is the item
 	assert.Equal(t, id, showLines[0]["id"])
 	assert.Equal(t, "Show Me", showLines[0]["title"])
-
-	// Second line is the comment
 	assert.Equal(t, "first note", showLines[1]["message"])
 }
 
@@ -183,15 +172,27 @@ func TestHCUpdateInvalidStatus(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestHCNextRequiresEpicID(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("hc", "next")
+	require.Error(t, err)
+}
+
 func TestHCNext(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create an epic with a task
 	bulkInput := `{"title":"Next Epic","type":"epic","children":[{"title":"Next Task","type":"task"}]}`
-	_, err := h.RunWithStdin(bulkInput, "hc", "create")
+	out, err := h.RunWithStdin(bulkInput, "hc", "create")
 	require.NoError(t, err)
 
-	nextLines, err := h.RunJSONLines("hc", "next")
+	lines, err := parseJSONLines(strings.TrimSpace(out))
+	require.NoError(t, err)
+	require.NotEmpty(t, lines)
+
+	epicID := lines[0]["id"].(string)
+
+	nextLines, err := h.RunJSONLines("hc", "next", epicID)
 	require.NoError(t, err)
 	require.Len(t, nextLines, 1)
 
@@ -200,21 +201,25 @@ func TestHCNext(t *testing.T) {
 	assert.Equal(t, "task", item["type"])
 }
 
-func TestHCNextNoItems(t *testing.T) {
+func TestHCNextNoActionableTasks(t *testing.T) {
 	h := NewHarness(t)
 
-	_, err := h.Run("hc", "next")
+	epicLines, err := h.RunJSONLines("hc", "create", "Empty Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	_, err = h.Run("hc", "next", epicID)
 	require.Error(t, err)
 }
 
-func TestHCLog(t *testing.T) {
+func TestHCComment(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Loggable Task", "--type", "task")
+	createLines, err := h.RunJSONLines("hc", "create", "Commentable Task", "--type", "task")
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
 
-	commentLines, err := h.RunJSONLines("hc", "log", id, "noted some progress")
+	commentLines, err := h.RunJSONLines("hc", "comment", id, "noted some progress")
 	require.NoError(t, err)
 	require.Len(t, commentLines, 1)
 
@@ -224,32 +229,13 @@ func TestHCLog(t *testing.T) {
 	assert.NotEmpty(t, comment["id"])
 }
 
-func TestHCCheckpoint(t *testing.T) {
-	h := NewHarness(t)
-
-	createLines, err := h.RunJSONLines("hc", "create", "Checkpoint Task", "--type", "task")
-	require.NoError(t, err)
-	id := createLines[0]["id"].(string)
-
-	commentLines, err := h.RunJSONLines("hc", "checkpoint", id, "mid-implementation handoff")
-	require.NoError(t, err)
-	require.Len(t, commentLines, 1)
-
-	comment := commentLines[0]
-	assert.Equal(t, id, comment["item_id"])
-	assert.Contains(t, comment["message"], "CHECKPOINT:")
-	assert.Contains(t, comment["message"], "mid-implementation handoff")
-}
-
 func TestHCContext(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create epic with tasks
 	bulkInput := `{"title":"Context Epic","type":"epic","children":[{"title":"Open Task","type":"task"}]}`
 	_, err := h.RunWithStdin(bulkInput, "hc", "create")
 	require.NoError(t, err)
 
-	// Get the epic ID
 	listLines, err := h.RunJSONLines("hc", "list", "--status", "open")
 	require.NoError(t, err)
 
@@ -262,7 +248,6 @@ func TestHCContext(t *testing.T) {
 	}
 	require.NotEmpty(t, epicID, "epic should be found in list")
 
-	// Get context as JSON
 	obj, err := h.RunJSON("hc", "context", epicID, "--json")
 	require.NoError(t, err)
 
@@ -302,7 +287,6 @@ func TestHCContextMarkdown(t *testing.T) {
 func TestHCPruneDryRun(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create and complete an item
 	createLines, err := h.RunJSONLines("hc", "create", "Prunable Task", "--type", "task")
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
@@ -310,7 +294,6 @@ func TestHCPruneDryRun(t *testing.T) {
 	_, err = h.RunJSONLines("hc", "update", id, "--status", "done")
 	require.NoError(t, err)
 
-	// Dry run with 0s duration (should see items)
 	out, err := h.RunStdout("hc", "prune", "--older-than", "0s", "--dry-run")
 	require.NoError(t, err)
 
@@ -323,7 +306,6 @@ func TestHCPruneDryRun(t *testing.T) {
 func TestHCPrune(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create and complete an item
 	createLines, err := h.RunJSONLines("hc", "create", "Old Task", "--type", "task")
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
@@ -331,7 +313,6 @@ func TestHCPrune(t *testing.T) {
 	_, err = h.RunJSONLines("hc", "update", id, "--status", "done")
 	require.NoError(t, err)
 
-	// Prune with 0s duration (all done items)
 	out, err := h.RunStdout("hc", "prune", "--older-than", "0s")
 	require.NoError(t, err)
 
@@ -343,17 +324,14 @@ func TestHCPrune(t *testing.T) {
 func TestHCCRUD(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create epic
 	epicLines, err := h.RunJSONLines("hc", "create", "CRUD Epic", "--type", "epic")
 	require.NoError(t, err)
 	epicID := epicLines[0]["id"].(string)
 
-	// Create task under epic
 	taskLines, err := h.RunJSONLines("hc", "create", "CRUD Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	taskID := taskLines[0]["id"].(string)
 
-	// List under epic
 	listLines, err := h.RunJSONLines("hc", "list", epicID)
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(listLines), 1)
@@ -366,17 +344,14 @@ func TestHCCRUD(t *testing.T) {
 	}
 	assert.True(t, found)
 
-	// Update task to in_progress
 	updateLines, err := h.RunJSONLines("hc", "update", taskID, "--status", "in_progress")
 	require.NoError(t, err)
 	assert.Equal(t, "in_progress", updateLines[0]["status"])
 
-	// Add a log comment
-	logLines, err := h.RunJSONLines("hc", "log", taskID, "making progress")
+	commentLines, err := h.RunJSONLines("hc", "comment", taskID, "making progress")
 	require.NoError(t, err)
-	assert.Equal(t, taskID, logLines[0]["item_id"])
+	assert.Equal(t, taskID, commentLines[0]["item_id"])
 
-	// Show item with comment
 	showOut, err := h.RunStdout("hc", "show", taskID)
 	require.NoError(t, err)
 	showLines, err := parseJSONLines(strings.TrimSpace(showOut))
@@ -384,7 +359,6 @@ func TestHCCRUD(t *testing.T) {
 	require.GreaterOrEqual(t, len(showLines), 2)
 	assert.Equal(t, taskID, showLines[0]["id"])
 
-	// Mark done
 	doneLines, err := h.RunJSONLines("hc", "update", taskID, "--status", "done")
 	require.NoError(t, err)
 	assert.Equal(t, "done", doneLines[0]["status"])
