@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/colonyops/hive/pkg/executil"
+	"github.com/rs/zerolog"
 )
 
 // RenderedWindow is a fully-resolved tmux window definition (no templates).
@@ -22,11 +23,12 @@ type RenderedWindow struct {
 // Client creates and manages tmux sessions from window definitions.
 type Client struct {
 	exec executil.Executor
+	log  zerolog.Logger
 }
 
-// New creates a Client with the given executor.
-func New(exec executil.Executor) *Client {
-	return &Client{exec: exec}
+// New creates a Client with the given executor and logger.
+func New(exec executil.Executor, log zerolog.Logger) *Client {
+	return &Client{exec: exec, log: log}
 }
 
 // HasSession checks whether a tmux session with the given name exists.
@@ -53,9 +55,15 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		args = append(args, "--", "sh", "-c", first.Command)
 	}
 
-	if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
-		return fmt.Errorf("tmux new-session: %w", err)
+	c.log.Debug().Strs("args", args).Msg("tmux new-session")
+	if out, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+		return fmt.Errorf("tmux new-session: %w; output: %s", err, strings.TrimSpace(string(out)))
 	}
+
+	// Suppress interactive hooks (e.g. after-new-window command-prompt) that
+	// block the tmux server waiting for input that will never arrive when
+	// windows are created programmatically.
+	c.suppressInteractiveHooks(ctx, name)
 
 	// Create additional windows. On failure, kill the partial session.
 	for _, w := range windows[1:] {
@@ -67,9 +75,10 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 			args = append(args, "--", "sh", "-c", w.Command)
 		}
 
-		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+		c.log.Debug().Strs("args", args).Msg("tmux new-window")
+		if out, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
-			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
+			return fmt.Errorf("tmux new-window %q: %w; output: %s", w.Name, err, strings.TrimSpace(string(out)))
 		}
 	}
 
@@ -81,8 +90,10 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 			break
 		}
 	}
-	if _, err := c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+focusName); err != nil {
-		return fmt.Errorf("tmux select-window: %w", err)
+	selectArgs := []string{"select-window", "-t", name + ":" + focusName}
+	c.log.Debug().Strs("args", selectArgs).Msg("tmux select-window")
+	if out, err := c.exec.Run(ctx, "tmux", selectArgs...); err != nil {
+		return fmt.Errorf("tmux select-window: %w; output: %s", err, strings.TrimSpace(string(out)))
 	}
 
 	if !background {
@@ -94,6 +105,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 // AddWindows adds windows to an existing tmux session.
 // If any window has Focus set, that window is selected after all windows are created.
 func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows []RenderedWindow) error {
+	c.suppressInteractiveHooks(ctx, name)
 	for _, w := range windows {
 		args := []string{"new-window", "-t", name, "-n", w.Name}
 		if dir := windowDir(w, workDir); dir != "" {
@@ -150,6 +162,20 @@ func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows 
 		return c.AttachOrSwitch(ctx, name)
 	}
 	return c.CreateSession(ctx, name, workDir, windows, background)
+}
+
+// suppressInteractiveHooks sets session-level overrides to neutralise global
+// hooks that run interactive commands (e.g. command-prompt). These hooks block
+// the tmux server waiting for user input that never arrives when windows are
+// created programmatically. Errors are logged but not fatal — the worst case
+// is the old blocking behaviour.
+func (c *Client) suppressInteractiveHooks(ctx context.Context, session string) {
+	hooks := []string{"after-new-window", "after-split-window"}
+	for _, h := range hooks {
+		if _, err := c.exec.Run(ctx, "tmux", "set-hook", "-t", session, h, ""); err != nil {
+			c.log.Debug().Err(err).Str("hook", h).Msg("failed to suppress hook")
+		}
+	}
 }
 
 // windowDir returns the working directory for a window, falling back to the session default.

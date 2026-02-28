@@ -104,6 +104,9 @@ type View struct {
 	refreshing  bool
 	modalActive bool
 
+	// Pending selection — overrides saveSelection on next applyFilter.
+	pendingSelectID string
+
 	// Template rendering
 	renderer *tmpl.Renderer
 }
@@ -667,6 +670,10 @@ func (v *View) restoreSelection(sel TreeSelection) {
 // applyFilter rebuilds the tree view from all sessions.
 func (v *View) applyFilter() tea.Cmd {
 	sel := v.saveSelection()
+	if v.pendingSelectID != "" {
+		sel = TreeSelection{sessionID: v.pendingSelectID}
+		v.pendingSelectID = ""
+	}
 
 	allSess := v.allSessions
 	filteredSess := allSess
@@ -1246,6 +1253,12 @@ func (v *View) HasEditorFocus() bool {
 // FocusMode returns true when focus mode filtering is active.
 func (v *View) FocusMode() bool {
 	return v.focusMode
+}
+
+// SelectOnNextRefresh arranges for the session with the given ID to be
+// selected after the next list rebuild (e.g. following session creation).
+func (v *View) SelectOnNextRefresh(sessionID string) {
+	v.pendingSelectID = sessionID
 }
 
 // SelectedSession returns the currently selected session, or nil.

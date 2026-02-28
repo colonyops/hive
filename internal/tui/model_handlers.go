@@ -229,28 +229,71 @@ func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) 
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
-func (m Model) handleRecycleStarted(msg recycleStartedMsg) (tea.Model, tea.Cmd) {
-	m.state = stateRunningRecycle
-	m.modals.ShowOutputModal("Recycling session...")
-	m.modals.RecycleOutput = msg.output
-	m.modals.RecycleDone = msg.done
-	m.modals.RecycleCancel = msg.cancel
+func (m Model) handleStreamStarted(msg streamStartedMsg) (tea.Model, tea.Cmd) {
+	m.state = stateStreaming
+	m.modals.ShowOutputModal(msg.title)
+	m.modals.StreamOutput = msg.output
+	m.modals.StreamDone = msg.done
+	m.modals.StreamCancel = msg.cancel
+	m.modals.StreamResult = msg.result
 	return m, tea.Batch(
-		listenForRecycleOutput(msg.output, msg.done),
+		listenForStreamingOutput(msg.output, msg.done),
 		m.modals.Output.Spinner().Tick,
 	)
 }
 
-func (m Model) handleRecycleOutput(msg recycleOutputMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleStreamOutput(msg streamOutputMsg) (tea.Model, tea.Cmd) {
 	m.modals.Output.AddLine(msg.line)
-	return m, listenForRecycleOutput(m.modals.RecycleOutput, m.modals.RecycleDone)
+	return m, listenForStreamingOutput(m.modals.StreamOutput, m.modals.StreamDone)
 }
 
-func (m Model) handleRecycleComplete(msg recycleCompleteMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleStreamComplete(msg streamCompleteMsg) (tea.Model, tea.Cmd) {
+	result := m.modals.StreamResult
+	m.modals.StreamOutput = nil
+	m.modals.StreamDone = nil
+	m.modals.StreamCancel = nil
+	m.modals.StreamResult = streamResult{}
+
+	if msg.err == nil {
+		// Auto-close on success
+		m.state = stateNormal
+		m.modals.Pending = Action{}
+		if result.sessionID != nil && *result.sessionID != "" {
+			m.sessionsView.SelectOnNextRefresh(*result.sessionID)
+		}
+		cmds := []tea.Cmd{m.refreshSessions()}
+		if result.sessionName != nil && *result.sessionName != "" {
+			cmds = append(cmds, switchTmuxSession(*result.sessionName))
+		}
+		return m, tea.Batch(cmds...)
+	}
+
 	m.modals.Output.SetComplete(msg.err)
-	m.modals.RecycleOutput = nil
-	m.modals.RecycleDone = nil
-	m.modals.RecycleCancel = nil
+	return m, nil
+}
+
+// handleStreamingModalKey handles keys when a streaming output modal is shown.
+func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyCtrlC:
+		if m.modals.StreamCancel != nil {
+			m.modals.StreamCancel()
+		}
+		return m.quit()
+	case "esc":
+		if m.modals.Output.IsRunning() && m.modals.StreamCancel != nil {
+			m.modals.StreamCancel()
+		}
+		m.state = stateNormal
+		m.modals.Pending = Action{}
+		return m, m.refreshSessions()
+	case keyEnter:
+		if !m.modals.Output.IsRunning() {
+			m.state = stateNormal
+			m.modals.Pending = Action{}
+			return m, m.refreshSessions()
+		}
+	}
 	return m, nil
 }
 
@@ -477,9 +520,26 @@ func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
+	var cmds []tea.Cmd
+
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
-	return m, cmd
+	if cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+
+	// Route spinner ticks to the output modal when active
+	if m.state == stateStreaming {
+		s := m.modals.Output.Spinner()
+		s, cmd = s.Update(msg)
+		if cmd != nil {
+			m.modals.Output.SetSpinner(s)
+			m.modals.Output.AdvanceFrame()
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 // handleFallthrough routes messages that don't match any typed case.
@@ -569,29 +629,16 @@ func (m Model) refreshSessions() tea.Cmd {
 	return func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
-// handleRecycleModalKey handles keys when recycle modal is shown.
-func (m Model) handleRecycleModalKey(keyStr string) (tea.Model, tea.Cmd) {
-	switch keyStr {
-	case keyCtrlC:
-		if m.modals.RecycleCancel != nil {
-			m.modals.RecycleCancel()
+// switchTmuxSession returns a command that switches the tmux client to the
+// named session. Errors are logged but not surfaced — the session is already
+// created and the user can switch manually.
+func switchTmuxSession(name string) tea.Cmd {
+	return func() tea.Msg {
+		if err := exec.Command("tmux", "switch-client", "-t", name).Run(); err != nil {
+			log.Debug().Err(err).Str("session", name).Msg("tmux switch-client failed")
 		}
-		return m.quit()
-	case "esc":
-		if m.modals.Output.IsRunning() && m.modals.RecycleCancel != nil {
-			m.modals.RecycleCancel()
-		}
-		m.state = stateNormal
-		m.modals.Pending = Action{}
-		return m, m.refreshSessions()
-	case keyEnter:
-		if !m.modals.Output.IsRunning() {
-			m.state = stateNormal
-			m.modals.Pending = Action{}
-			return m, m.refreshSessions()
-		}
+		return nil
 	}
-	return m, nil
 }
 
 // handleConfirmModalKey handles keys when confirmation modal is shown.

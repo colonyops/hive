@@ -6,14 +6,17 @@ import (
 	"testing"
 
 	"github.com/colonyops/hive/pkg/executil"
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
+var nopLog = zerolog.Nop()
+
 func TestClient_HasSession(t *testing.T) {
 	t.Run("exists", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		assert.True(t, c.HasSession(context.Background(), "my-session"))
 		require.Len(t, rec.Commands, 1)
@@ -25,7 +28,7 @@ func TestClient_HasSession(t *testing.T) {
 		rec := &executil.RecordingExecutor{
 			Errors: map[string]error{"tmux": fmt.Errorf("session not found")},
 		}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		assert.False(t, c.HasSession(context.Background(), "missing"))
 	})
@@ -34,21 +37,21 @@ func TestClient_HasSession(t *testing.T) {
 func TestClient_CreateSession(t *testing.T) {
 	t.Run("single window", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Command: "claude", Focus: true},
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 2) // new-session + select-window
+		require.Len(t, rec.Commands, 4) // new-session + 2 set-hook + select-window
 		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[3].Args)
 	})
 
 	t.Run("two windows", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Command: "claude", Focus: true},
@@ -56,15 +59,15 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 3) // new-session + new-window + select-window
+		require.Len(t, rec.Commands, 5) // new-session + 2 set-hook + new-window + select-window
 		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "shell", "-c", "/work"}, rec.Commands[1].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "shell", "-c", "/work"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[4].Args)
 	})
 
 	t.Run("three windows with dir override", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Command: "claude", Focus: true},
@@ -73,14 +76,14 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 4) // new-session + 2*new-window + select-window
-		// Third window uses custom dir
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "logs", "-c", "/var/log", "--", "sh", "-c", "tail -f /var/log/app.log"}, rec.Commands[2].Args)
+		require.Len(t, rec.Commands, 6) // new-session + 2 set-hook + 2*new-window + select-window
+		// Third window (index 4) uses custom dir
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "logs", "-c", "/var/log", "--", "sh", "-c", "tail -f /var/log/app.log"}, rec.Commands[4].Args)
 	})
 
 	t.Run("focus second window", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "shell"},
@@ -95,7 +98,7 @@ func TestClient_CreateSession(t *testing.T) {
 
 	t.Run("no focus defaults to first", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "first"},
@@ -109,7 +112,7 @@ func TestClient_CreateSession(t *testing.T) {
 
 	t.Run("no windows returns error", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", nil, true)
 		require.Error(t, err)
@@ -118,7 +121,7 @@ func TestClient_CreateSession(t *testing.T) {
 
 	t.Run("window without command gets no sh -c", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "shell"},
@@ -134,7 +137,7 @@ func TestClient_CreateSession_Background(t *testing.T) {
 	t.Setenv("TMUX", "")
 
 	rec := &executil.RecordingExecutor{}
-	c := New(rec)
+	c := New(rec, nopLog)
 
 	err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
 		{Name: "agent", Command: "claude", Focus: true},
@@ -155,7 +158,7 @@ func TestClient_AttachOrSwitch(t *testing.T) {
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.AttachOrSwitch(context.Background(), "sess")
 		require.NoError(t, err)
@@ -170,7 +173,7 @@ func TestClient_AttachOrSwitch(t *testing.T) {
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.AttachOrSwitch(context.Background(), "sess")
 		require.NoError(t, err)
@@ -187,7 +190,7 @@ func TestClient_OpenSession(t *testing.T) {
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
@@ -206,7 +209,7 @@ func TestClient_OpenSession(t *testing.T) {
 		defer func() { insideTmux = orig }()
 
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
@@ -222,7 +225,7 @@ func TestClient_OpenSession(t *testing.T) {
 
 	t.Run("session exists background is noop", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "agent", Focus: true},
@@ -238,7 +241,7 @@ func TestClient_OpenSession(t *testing.T) {
 		rec := &executil.RecordingExecutor{
 			Errors: map[string]error{"tmux": fmt.Errorf("no session")},
 		}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		// HasSession will fail, then CreateSession calls will also fail due to
 		// the blanket error on "tmux". Test just the flow.
@@ -257,7 +260,7 @@ func TestClient_OpenSession(t *testing.T) {
 func TestClient_AddWindows(t *testing.T) {
 	t.Run("adds windows without focus", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.AddWindows(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "w1", Command: "claude"},
@@ -265,14 +268,14 @@ func TestClient_AddWindows(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 2)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w1", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-c", "/work"}, rec.Commands[1].Args)
+		require.Len(t, rec.Commands, 4) // 2 set-hook + 2 new-window
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w1", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-c", "/work"}, rec.Commands[3].Args)
 	})
 
 	t.Run("selects focused window", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.AddWindows(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "w1"},
@@ -280,21 +283,21 @@ func TestClient_AddWindows(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// 2 new-window + 1 select-window
-		require.Len(t, rec.Commands, 3)
-		assert.Equal(t, []string{"select-window", "-t", "sess:w2"}, rec.Commands[2].Args)
+		// 2 set-hook + 2 new-window + 1 select-window
+		require.Len(t, rec.Commands, 5)
+		assert.Equal(t, []string{"select-window", "-t", "sess:w2"}, rec.Commands[4].Args)
 	})
 
 	t.Run("window dir overrides session dir", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
-		c := New(rec)
+		c := New(rec, nopLog)
 
 		err := c.AddWindows(context.Background(), "sess", "/work", []RenderedWindow{
 			{Name: "w1", Dir: "/custom"},
 		})
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 1)
-		assert.Contains(t, rec.Commands[0].Args, "/custom")
+		require.Len(t, rec.Commands, 3) // 2 set-hook + 1 new-window
+		assert.Contains(t, rec.Commands[2].Args, "/custom")
 	})
 }

@@ -18,7 +18,7 @@ import (
 )
 
 // ModalCoordinator owns all modal component references, pending action state,
-// recycle streaming state, and provides overlay rendering plus lifecycle methods.
+// streaming state, and provides overlay rendering plus lifecycle methods.
 type ModalCoordinator struct {
 	// Modal components
 	Confirm         Modal
@@ -38,17 +38,17 @@ type ModalCoordinator struct {
 
 	// Pending action state
 	Pending                 Action
-	PendingCreate           *PendingCreate
 	PendingRecycledSessions []session.Session
 	PendingFormCmd          config.UserCommand
 	PendingFormName         string
 	PendingFormSess         *session.Session
 	PendingFormArgs         []string
 
-	// Recycle streaming
-	RecycleOutput <-chan string
-	RecycleDone   <-chan error
-	RecycleCancel context.CancelFunc
+	// Streaming (create, recycle, etc.)
+	StreamOutput <-chan string
+	StreamDone   <-chan error
+	StreamCancel context.CancelFunc
+	StreamResult streamResult // session metadata from create operations
 
 	// Sizing
 	width, height int
@@ -87,7 +87,7 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 	}
 
 	switch {
-	case state == stateRunningRecycle:
+	case state == stateStreaming:
 		return mc.Output.Overlay(bg, w, h)
 
 	case state == stateCreatingSession && mc.NewSession != nil:

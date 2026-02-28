@@ -19,6 +19,12 @@ const (
 	outputModalMaxLines   = 100 // max lines to buffer
 )
 
+// Pulse animation constants.
+const (
+	outputPulseFrames    = 12  // total frames in one pulse cycle
+	outputPulseMinBright = 0.6 // minimum brightness at midpoint
+)
+
 // OutputModal displays streaming command output in a modal dialog.
 type OutputModal struct {
 	title    string
@@ -27,6 +33,7 @@ type OutputModal struct {
 	err      error
 	spinner  spinner.Model
 	maxLines int // max lines to keep in buffer
+	frame    int // animation frame counter
 }
 
 // NewOutputModal creates a new output modal with the given title.
@@ -76,6 +83,11 @@ func (m *OutputModal) SetSpinner(s spinner.Model) {
 	m.spinner = s
 }
 
+// AdvanceFrame increments the animation frame counter.
+func (m *OutputModal) AdvanceFrame() {
+	m.frame++
+}
+
 // Overlay renders the output modal centered over the background.
 func (m OutputModal) Overlay(background string, width, height int) string {
 	// Calculate modal dimensions - use most of the screen
@@ -83,7 +95,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	modalHeight := min(height-outputModalMargin, outputModalMaxHeight)
 	contentHeight := modalHeight - outputModalChrome
 
-	// Build content lines
+	// Build content lines with per-line status indicators
 	var contentBuilder strings.Builder
 
 	// Show last N lines that fit
@@ -92,13 +104,25 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		startIdx = len(m.lines) - contentHeight
 	}
 
+	indicatorWidth := 4 // "● " or spinner + space, with safety margin
+	maxLineWidth := modalWidth - outputModalPadding - indicatorWidth
+
 	for i := startIdx; i < len(m.lines); i++ {
 		line := m.lines[i]
 		// Truncate long lines
-		if len(line) > modalWidth-outputModalPadding {
-			line = line[:modalWidth-outputModalTruncation] + "..."
+		if len(line) > maxLineWidth {
+			line = line[:maxLineWidth-3] + "..."
 		}
-		contentBuilder.WriteString(line)
+
+		var indicator string
+		if m.running && i == len(m.lines)-1 {
+			c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
+			indicator = lipgloss.NewStyle().Foreground(c).Render("●")
+		} else {
+			indicator = styles.TextSuccessStyle.Render("●")
+		}
+		contentBuilder.WriteString(indicator + " " + styles.TextMutedStyle.Render(line))
+
 		if i < len(m.lines)-1 {
 			contentBuilder.WriteString("\n")
 		}
@@ -116,7 +140,10 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	var status string
 	switch {
 	case m.running:
-		status = m.spinner.View() + " Running..."
+		dots := strings.Repeat(".", m.frame/3%4)
+		pad := strings.Repeat(" ", 3-len(dots))
+		c := styles.PulseColor(styles.ColorSuccess, m.frame, outputPulseFrames, outputPulseMinBright)
+		status = lipgloss.NewStyle().Foreground(c).Render("● Running"+dots) + pad
 	case m.err != nil:
 		status = styles.TextErrorStyle.Render("✗ Error: " + m.err.Error())
 	default:
@@ -136,7 +163,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 		lipgloss.Left,
 		styles.ModalTitleStyle.Render(m.title),
 		"",
-		styles.TextMutedStyle.Width(modalWidth-outputModalPadding).Render(content),
+		lipgloss.NewStyle().Width(modalWidth-outputModalPadding).Render(content),
 		"",
 		status,
 		styles.ModalHelpStyle.Render(help),

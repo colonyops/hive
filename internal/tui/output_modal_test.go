@@ -82,7 +82,7 @@ func TestOutputModal_Overlay(t *testing.T) {
 
 		assert.Contains(t, result, "Running Task")
 		assert.Contains(t, result, "output line")
-		assert.Contains(t, result, "Running...")
+		assert.Contains(t, result, "● Running")
 		assert.Contains(t, result, "[esc] cancel")
 	})
 

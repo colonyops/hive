@@ -6,6 +6,7 @@ import (
 	"io"
 
 	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/internal/hive"
 )
 
 // Action is an alias for the unified action type.
@@ -41,15 +42,25 @@ type Service struct {
 	recycler      SessionRecycler
 	tmuxOpener    TmuxOpener
 	windowSpawner WindowSpawner
+	creator       SessionCreator
 }
 
 // NewService creates a new command service with the given dependencies.
-func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener, windowSpawner WindowSpawner) *Service {
+func NewService(deleter SessionDeleter, recycler SessionRecycler, tmuxOpener TmuxOpener, windowSpawner WindowSpawner, creator SessionCreator) *Service {
 	return &Service{
 		deleter:       deleter,
 		recycler:      recycler,
 		tmuxOpener:    tmuxOpener,
 		windowSpawner: windowSpawner,
+		creator:       creator,
+	}
+}
+
+// NewCreateExecutor creates a CreateExecutor for streaming session creation.
+func (s *Service) NewCreateExecutor(opts hive.CreateOptions) *CreateExecutor {
+	return &CreateExecutor{
+		creator: s.creator,
+		opts:    opts,
 	}
 }
 
