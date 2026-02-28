@@ -77,6 +77,8 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 	// Detect current repository remote for highlighting current repo
 	localRemote, _ := cmd.app.Sessions.DetectRemote(ctx, ".")
 
+	source, _ := os.Getwd()
+
 	// Create terminal integration manager (tmux always enabled)
 	termMgr := terminal.NewManager([]string{"tmux"})
 	// Register tmux integration with preview window matcher patterns
@@ -86,61 +88,40 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		termMgr.Register(tmuxIntegration)
 	}
 
-	for {
-		deps := tui.Deps{
-			Config:          cmd.app.Config,
-			Service:         cmd.app.Sessions,
-			MsgStore:        cmd.app.Messages,
-			TodoService:     cmd.app.Todos,
-			Bus:             cmd.app.Bus,
-			TerminalManager: termMgr,
-			PluginManager:   cmd.app.Plugins,
-			DB:              cmd.app.DB,
-			KVStore:         cmd.app.KV,
-			Renderer:        cmd.app.Renderer,
-			BuildInfo: tui.BuildInfo{
-				Version: cmd.app.Build.Version,
-				Commit:  cmd.app.Build.Commit,
-				Date:    cmd.app.Build.Date,
-			},
-			DoctorService: cmd.app.Doctor,
-		}
-		opts := tui.Opts{
-			LocalRemote: localRemote,
-			Warnings:    warnings,
-			ConfigPath:  cmd.flags.ConfigPath,
-		}
+	deps := tui.Deps{
+		Config:          cmd.app.Config,
+		Service:         cmd.app.Sessions,
+		MsgStore:        cmd.app.Messages,
+		TodoService:     cmd.app.Todos,
+		Bus:             cmd.app.Bus,
+		TerminalManager: termMgr,
+		PluginManager:   cmd.app.Plugins,
+		DB:              cmd.app.DB,
+		KVStore:         cmd.app.KV,
+		Renderer:        cmd.app.Renderer,
+		BuildInfo: tui.BuildInfo{
+			Version: cmd.app.Build.Version,
+			Commit:  cmd.app.Build.Commit,
+			Date:    cmd.app.Build.Date,
+		},
+		DoctorService: cmd.app.Doctor,
+	}
+	opts := tui.Opts{
+		LocalRemote: localRemote,
+		Source:      source,
+		Warnings:    warnings,
+		ConfigPath:  cmd.flags.ConfigPath,
+	}
 
-		restoreOutput := cmd.app.Sessions.SilenceOutput()
+	restoreOutput := cmd.app.Sessions.SilenceOutput()
 
-		m := tui.New(deps, opts)
-		p := tea.NewProgram(m)
+	m := tui.New(deps, opts)
+	p := tea.NewProgram(m)
 
-		finalModel, err := p.Run()
-		restoreOutput()
-		if err != nil {
-			return fmt.Errorf("run tui: %w", err)
-		}
-
-		model := finalModel.(tui.Model)
-
-		// Handle pending session creation
-		if pending := model.PendingCreate(); pending != nil {
-			source, _ := os.Getwd()
-			_, err := cmd.app.Sessions.CreateSession(ctx, hive.CreateOptions{
-				Name:   pending.Name,
-				Remote: pending.Remote,
-				Source: source,
-			})
-			if err != nil {
-				fmt.Printf("Error creating session: %v\n", err)
-				fmt.Println("Press Enter to continue...")
-				_, _ = fmt.Scanln()
-			}
-			continue // Restart TUI
-		}
-
-		break // Normal exit
+	_, err := p.Run()
+	restoreOutput()
+	if err != nil {
+		return fmt.Errorf("run tui: %w", err)
 	}
 
 	return nil

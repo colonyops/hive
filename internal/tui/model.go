@@ -47,7 +47,7 @@ const (
 	stateNormal UIState = iota
 	stateConfirming
 	stateLoading
-	stateRunningRecycle
+	stateStreaming
 	stateCreatingSession
 	stateCommandPalette
 	stateShowingHelp
@@ -87,14 +87,9 @@ type Deps struct {
 // Opts holds runtime options that are not service dependencies.
 type Opts struct {
 	LocalRemote string
+	Source      string // Source directory for file copying (cwd)
 	Warnings    []string
 	ConfigPath  string
-}
-
-// PendingCreate holds data for a session to create after TUI exits.
-type PendingCreate struct {
-	Remote string
-	Name   string
 }
 
 // Model is the main Bubble Tea model for the TUI.
@@ -109,6 +104,9 @@ type Model struct {
 	spinner        spinner.Model
 	loadingMessage string
 	quitting       bool
+
+	// Source directory for file copying during session creation
+	source string
 
 	// Modal coordinator — owns all modal components, pending state, recycle streaming
 	modals *ModalCoordinator
@@ -152,30 +150,35 @@ type Model struct {
 	startupWarnings []string
 }
 
-// PendingCreate returns any pending session creation data.
-func (m Model) PendingCreate() *PendingCreate {
-	return m.modals.PendingCreate
-}
-
 // actionCompleteMsg is sent when an action completes.
 type actionCompleteMsg struct {
 	err error
 }
 
-// recycleStartedMsg is sent when recycle begins with streaming output.
-type recycleStartedMsg struct {
+// streamResult holds optional session metadata from a streaming create operation.
+// Fields are populated by the executor goroutine before the done channel fires,
+// so they are safe to read after receiving from done.
+type streamResult struct {
+	sessionID   *string
+	sessionName *string
+}
+
+// streamStartedMsg is sent when a streaming operation (create, recycle) begins.
+type streamStartedMsg struct {
+	title  string
 	output <-chan string
 	done   <-chan error
 	cancel context.CancelFunc
+	result streamResult // optional: populated for create operations
 }
 
-// recycleOutputMsg is sent when new output is available.
-type recycleOutputMsg struct {
+// streamOutputMsg is sent when new streaming output is available.
+type streamOutputMsg struct {
 	line string
 }
 
-// recycleCompleteMsg is sent when recycle finishes.
-type recycleCompleteMsg struct {
+// streamCompleteMsg is sent when a streaming operation finishes.
+type streamCompleteMsg struct {
 	err error
 }
 
@@ -217,7 +220,7 @@ func New(deps Deps, opts Opts) Model {
 	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
 	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
-	cmdService := command.NewService(service, service, service, service)
+	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
 		Cfg:             cfg,
@@ -312,6 +315,7 @@ func New(deps Deps, opts Opts) Model {
 		handler:         handler,
 		state:           stateNormal,
 		spinner:         s,
+		source:          opts.Source,
 		modals:          NewModalCoordinator(),
 		sessionsView:    sessionsView,
 		msgView:         msgView,
@@ -497,12 +501,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleActionComplete(msg)
 	case doctorResultsMsg:
 		model, cmd = m.handleDoctorResults(msg)
-	case recycleStartedMsg:
-		model, cmd = m.handleRecycleStarted(msg)
-	case recycleOutputMsg:
-		model, cmd = m.handleRecycleOutput(msg)
-	case recycleCompleteMsg:
-		model, cmd = m.handleRecycleComplete(msg)
+	case streamStartedMsg:
+		model, cmd = m.handleStreamStarted(msg)
+	case streamOutputMsg:
+		model, cmd = m.handleStreamOutput(msg)
+	case streamCompleteMsg:
+		model, cmd = m.handleStreamComplete(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -597,8 +601,8 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateSettingGroup {
 		return m.handleGroupKey(msg, keyStr)
 	}
-	if m.state == stateRunningRecycle {
-		return m.handleRecycleModalKey(keyStr)
+	if m.state == stateStreaming {
+		return m.handleStreamingModalKey(keyStr)
 	}
 	if m.state == stateConfirming {
 		return m.handleConfirmModalKey(keyStr)
@@ -636,13 +640,8 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.modals.NewSession.Submitted() {
 		result := m.modals.NewSession.Result()
-		m.state = stateNormal
 		m.modals.NewSession = nil
-		m.modals.PendingCreate = &PendingCreate{
-			Remote: result.Repo.Remote,
-			Name:   result.SessionName,
-		}
-		return m, tea.Quit
+		return m, m.startCreate(result.SessionName, result.Repo.Remote)
 	}
 
 	if m.modals.NewSession.Cancelled() {
@@ -1570,14 +1569,57 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 			SessionID: sessionID,
 		})
 		if err != nil {
-			return recycleCompleteMsg{err: err}
+			return streamCompleteMsg{err: err}
 		}
 
 		output, done, cancel := exec.Execute(context.Background())
-		return recycleStartedMsg{
+		return streamStartedMsg{
+			title:  "Recycling session...",
 			output: output,
 			done:   done,
 			cancel: cancel,
+		}
+	}
+}
+
+// startCreate returns a command that starts session creation with streaming output.
+func (m Model) startCreate(name, remote string) tea.Cmd {
+	return func() tea.Msg {
+		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
+			Name:       name,
+			Remote:     remote,
+			Source:     m.source,
+			Background: true,
+		})
+
+		output, done, cancel := exec.Execute(context.Background())
+		return streamStartedMsg{
+			title:  "Creating session...",
+			output: output,
+			done:   done,
+			cancel: cancel,
+			result: streamResult{
+				sessionID:   &exec.ResultSessionID,
+				sessionName: &exec.ResultSessionName,
+			},
+		}
+	}
+}
+
+// listenForStreamingOutput returns a command that waits for the next line or completion
+// from a streaming operation.
+func listenForStreamingOutput(output <-chan string, done <-chan error) tea.Cmd {
+	return func() tea.Msg {
+		select {
+		case line, ok := <-output:
+			if !ok {
+				// Output channel closed, wait for done
+				err := <-done
+				return streamCompleteMsg{err: err}
+			}
+			return streamOutputMsg{line: line}
+		case err := <-done:
+			return streamCompleteMsg{err: err}
 		}
 	}
 }
@@ -1633,21 +1675,4 @@ func (m *Model) applyTheme(name string) {
 	}
 	styles.SetTheme(palette)
 	m.sessionsView.ApplyTheme()
-}
-
-// listenForRecycleOutput returns a command that waits for the next output or completion.
-func listenForRecycleOutput(output <-chan string, done <-chan error) tea.Cmd {
-	return func() tea.Msg {
-		select {
-		case line, ok := <-output:
-			if !ok {
-				// Output channel closed, wait for done
-				err := <-done
-				return recycleCompleteMsg{err: err}
-			}
-			return recycleOutputMsg{line: line}
-		case err := <-done:
-			return recycleCompleteMsg{err: err}
-		}
-	}
 }

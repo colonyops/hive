@@ -52,26 +52,9 @@ func ClearAnimationColors() {
 // generatePulseColors creates a symmetric fade animation from a seed color.
 // It dims the color to minBrightness (0.0–1.0) at the midpoint and returns to full brightness.
 func generatePulseColors(base color.Color, frames int, minBrightness float64) []color.Color {
-	r, g, b, _ := base.RGBA()
-	br, bg, bb := float64(r>>8), float64(g>>8), float64(b>>8)
-
-	half := frames / 2
 	colors := make([]color.Color, frames)
 	for i := range frames {
-		// Triangle wave: 1.0 at edges, minBrightness at midpoint
-		var t float64
-		if i <= half {
-			t = float64(i) / float64(half)
-		} else {
-			t = float64(frames-i) / float64(half)
-		}
-		scale := 1.0 - t*(1.0-minBrightness)
-
-		colors[i] = lipgloss.Color(fmt.Sprintf("#%02x%02x%02x",
-			uint8(br*scale),
-			uint8(bg*scale),
-			uint8(bb*scale),
-		))
+		colors[i] = styles.PulseColor(base, i, frames, minBrightness)
 	}
 	return colors
 }

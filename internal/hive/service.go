@@ -41,6 +41,9 @@ type CreateOptions struct {
 	// when the session directory is needed but terminal management happens elsewhere
 	// (e.g. CreateSessionWithWindows, which creates the tmux session itself).
 	SkipSpawn bool
+	// Progress receives human-readable progress lines during session creation.
+	// When non-nil, service output (hooks, file copies) is also redirected here.
+	Progress io.Writer
 }
 
 // switchWriter is an io.Writer whose target can be swapped at runtime.
@@ -107,7 +110,7 @@ func NewSessionService(
 		log:        log,
 		out:        out,
 		err:        err,
-		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec), out, err),
+		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec, log.With().Str("component", "tmux").Logger()), out, err),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, out, err),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
@@ -130,8 +133,21 @@ func (s *SessionService) SilenceOutput() (restore func()) {
 func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) (*session.Session, error) {
 	s.log.Info().Str("name", opts.Name).Str("remote", opts.Remote).Msg("creating session")
 
+	progress := opts.Progress
+
+	// Redirect service output to progress writer when provided.
+	if progress != nil {
+		prevOut := s.out.set(progress)
+		prevErr := s.err.set(progress)
+		defer func() {
+			s.out.set(prevOut)
+			s.err.set(prevErr)
+		}()
+	}
+
 	remote := opts.Remote
 	if remote == "" {
+		writeProgressf(progress, "Detecting remote...")
 		var err error
 		remote, err = s.DetectRemote(ctx, ".")
 		if err != nil {
@@ -148,16 +164,19 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	if err := config.ValidateCloneStrategy(cloneStrategy); err != nil {
 		return nil, err
 	}
+	writeProgressf(progress, "Clone strategy: %s", cloneStrategy)
 
 	var sess session.Session
 	slug := session.Slugify(opts.Name)
 
 	// Try to find and validate a recyclable session with matching strategy
+	writeProgressf(progress, "Looking for recyclable session...")
 	recyclable := s.findValidRecyclable(ctx, remote, cloneStrategy)
 
 	if recyclable != nil {
 		// Reuse existing recycled session (already cleaned up when marked for recycle)
 		s.log.Debug().Str("session_id", recyclable.ID).Msg("found valid recyclable session")
+		writeProgressf(progress, "Recycling session %s...", recyclable.ID)
 
 		if cloneStrategy == config.CloneStrategyWorktree {
 			// Worktrees are linked to a bare clone with no origin remote — use fetch+reset instead of pull.
@@ -174,6 +193,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		} else {
 			// Pull latest changes before running hooks
 			s.log.Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
+			writeProgressf(progress, "Pulling latest changes...")
 			if err := s.git.Pull(ctx, recyclable.Path); err != nil {
 				// Pull failed - mark as corrupted and fall through to clone
 				s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("pull failed, marking corrupted")
@@ -222,35 +242,42 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		}
 
 		if cloneStrategy == config.CloneStrategyWorktree {
+			writeProgressf(progress, "Ensuring bare clone...")
 			bareDir, err := s.ensureBareClone(ctx, remote)
 			if err != nil {
 				return nil, fmt.Errorf("ensure bare clone: %w", err)
 			}
+			writeProgressf(progress, "Adding worktree...")
 			branch := "hive-" + dirID
 			if err := s.git.WorktreeAdd(ctx, bareDir, path, branch); err != nil {
 				return nil, fmt.Errorf("worktree add: %w", err)
 			}
 			sess.SetMeta(session.MetaWorktreeBranch, branch)
 		} else {
+			writeProgressf(progress, "Cloning repository...")
 			if err := s.git.Clone(ctx, remote, path); err != nil {
 				return nil, fmt.Errorf("clone repository: %w", err)
 			}
 		}
 
+		writeProgressf(progress, "Clone complete")
 		s.log.Debug().Msg("clone complete")
 	}
 
 	// Execute matching rules
+	writeProgressf(progress, "Executing rules...")
 	if err := s.executeRules(ctx, remote, opts.Source, sess.Path); err != nil {
 		return nil, fmt.Errorf("execute rules: %w", err)
 	}
 
 	// Save session
+	writeProgressf(progress, "Saving session...")
 	if err := s.sessions.Save(ctx, sess); err != nil {
 		return nil, fmt.Errorf("save session: %w", err)
 	}
 
 	// Spawn terminal
+	writeProgressf(progress, "Spawning terminal...")
 	owner, repoName := git.ExtractOwnerRepo(remote)
 	data := SpawnData{
 		Path:       sess.Path,
@@ -278,11 +305,20 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		}
 	}
 
+	writeProgressf(progress, "Session created: %s", sess.Name)
 	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("session created")
 
 	s.bus.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &sess})
 
 	return &sess, nil
+}
+
+// writeProgressf writes a formatted progress line when w is non-nil.
+func writeProgressf(w io.Writer, format string, args ...any) {
+	if w == nil {
+		return
+	}
+	_, _ = fmt.Fprintf(w, format+"\n", args...)
 }
 
 // ListSessions returns all sessions.

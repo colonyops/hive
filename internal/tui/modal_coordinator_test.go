@@ -33,7 +33,7 @@ func TestModalCoordinator_Overlay_OutputModal(t *testing.T) {
 	mc := NewModalCoordinator()
 	mc.Output = NewOutputModal("Processing")
 	bg := testBackground
-	got := mc.Overlay(stateRunningRecycle, bg, noSpinner(), "")
+	got := mc.Overlay(stateStreaming, bg, noSpinner(), "")
 	assert.NotEqual(t, bg, got, "output modal should modify background")
 }
 

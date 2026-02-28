@@ -334,7 +334,7 @@ func (m *mockWindowSpawner) CreateSessionWithWindows(_ context.Context, _ action
 // Service tests
 
 func TestService_CreateExecutor(t *testing.T) {
-	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{}, &mockWindowSpawner{})
+	svc := NewService(&mockDeleter{}, &mockRecycler{}, &mockTmuxOpener{}, &mockWindowSpawner{}, nil)
 
 	tests := []struct {
 		name    string

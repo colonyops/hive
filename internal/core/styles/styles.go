@@ -2,6 +2,7 @@
 package styles
 
 import (
+	"fmt"
 	"image/color"
 
 	lipgloss "charm.land/lipgloss/v2"
@@ -380,6 +381,30 @@ func ColorForString(s string) color.Color {
 		hash = hash*31 + uint32(c)
 	}
 	return ColorPool[hash%uint32(len(ColorPool))]
+}
+
+// PulseColor returns a color dimmed by a triangle-wave brightness cycle.
+// frame is the current animation frame, frames is the total cycle length,
+// and minBrightness (0.0–1.0) controls how dim the color gets at the midpoint.
+func PulseColor(base color.Color, frame, frames int, minBrightness float64) color.Color {
+	r, g, b, _ := base.RGBA()
+	br, bg, bb := float64(r>>8), float64(g>>8), float64(b>>8)
+
+	half := frames / 2
+	f := frame % frames
+	var t float64
+	if f <= half {
+		t = float64(f) / float64(half)
+	} else {
+		t = float64(frames-f) / float64(half)
+	}
+	scale := 1.0 - t*(1.0-minBrightness)
+
+	return lipgloss.Color(fmt.Sprintf("#%02x%02x%02x",
+		uint8(br*scale),
+		uint8(bg*scale),
+		uint8(bb*scale),
+	))
 }
 
 // nolint:gochecknoinits // bootstrap default theme before any style is accessed.
