@@ -1,6 +1,15 @@
 ---
 name: hc
-description: Use hive hc commands to track tasks and epics for agent workflows. Like GitHub Issues but scoped to a repository and designed for machine consumption. Use when creating work items, checking status, recording progress, claiming next work, or querying epic context.
+description: |
+  Use `hive hc` commands to track tasks and epics for agent workflows.
+  Like GitHub Issues but scoped to a repository and designed for machine consumption.
+
+  Use when:
+  - Creating work items (epics, tasks)
+  - Checking item status or listing open work
+  - Recording progress via comments
+  - Claiming the next actionable task for a session
+  - Querying epic context as a structured summary
 compatibility: claude
 ---
 
@@ -13,14 +22,13 @@ Session ID and repo key are auto-detected from the working directory.
 ## Quick Reference
 
 ```
-hive hc create <title>           Create a single task or epic
+hive hc create <title>           Create a single epic or task (tasks require --parent)
 hive hc create                   Bulk create from stdin JSON
 hive hc list [epic-id]           List items (optional epic filter)
 hive hc show <id>                Show item + comments
 hive hc update <id>              Update status or assignment
-hive hc next [epic-id]           Get next actionable task
-hive hc log <id> <message>       Add a log comment
-hive hc checkpoint <id> <msg>    Record a handoff checkpoint
+hive hc next <epic-id>           Get next actionable task for an epic
+hive hc comment <id> <message>   Add a comment to an item
 hive hc context <epic-id>        Show epic context block
 hive hc prune                    Remove old completed items
 ```
@@ -41,27 +49,25 @@ hive hc context <epic-id> --json
 
 ```bash
 # Get and assign in one step
-hive hc next --assign
+hive hc next <epic-id> --assign
 
 # Or get first, then assign
-hive hc next
+hive hc next <epic-id>
 hive hc update <id> --assign --status in_progress
 ```
 
-### 3. Record progress with log comments
+### 3. Record progress
 
 ```bash
-hive hc log <id> "Implemented the database schema"
-hive hc log <id> "Added rate limiting middleware"
+hive hc comment <id> "Implemented the database schema"
+hive hc comment <id> "Added rate limiting middleware"
 ```
 
-### 4. Record a handoff checkpoint when stopping mid-task
+### 4. Record a handoff note when stopping mid-task
 
 ```bash
-hive hc checkpoint <id> "DB schema done, need to wire API handlers next"
+hive hc comment <id> "CHECKPOINT: DB schema done, need to wire API handlers next"
 ```
-
-The checkpoint command prefixes the message with "CHECKPOINT:" to distinguish it from general log notes.
 
 ### 5. Mark task complete
 
@@ -118,10 +124,9 @@ hive hc show <id>
 ### `hive hc create [title]`
 
 Single-item mode (title as positional arg):
-- `--type epic|task` — item type (default: task)
+- `--type epic|task` — item type (default: task; tasks require `--parent`)
 - `--desc <text>` — item description
-- `--parent <id>` — parent item ID
-- `--assign` — assign to current session after creation
+- `--parent <id>` — parent item ID (required for tasks)
 
 Bulk mode (no positional arg, reads JSON from stdin or `--file`):
 - `--file <path>` — read JSON from file instead of stdin
@@ -144,22 +149,18 @@ Output: JSON lines — item first, then comments in chronological order.
 - `--assign` — assign to current session
 - `--unassign` — remove session assignment
 
-### `hive hc next [epic-id]`
+### `hive hc next <epic-id>`
 
 Returns the next actionable leaf task (open/in_progress, no open/in_progress children).
 
-- `[epic-id]` — optional positional arg to scope to an epic
+- `<epic-id>` — required positional arg to scope to an epic
 - `--assign` — assign to current session and set status to in_progress
 
 Exits with error if no actionable tasks found.
 
-### `hive hc log <id> <message>`
+### `hive hc comment <id> <message>`
 
-Adds a general log comment. All positional args after the ID are joined as the message.
-
-### `hive hc checkpoint <id> <message>`
-
-Adds a checkpoint comment prefixed with "CHECKPOINT:". Use when stopping mid-task to leave context for the next agent.
+Adds a comment to an item. All positional args after the ID are joined as the message.
 
 ### `hive hc context <epic-id>`
 
