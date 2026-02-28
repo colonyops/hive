@@ -57,6 +57,29 @@ WHERE outer_item.session_id = ?
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1;
 
+-- name: ResumeHCItemForSession :one
+SELECT outer_item.* FROM hc_items AS outer_item
+WHERE outer_item.session_id = ?
+  AND outer_item.status = 'in_progress'
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
+    WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
+  )
+ORDER BY outer_item.depth DESC, outer_item.created_at ASC
+LIMIT 1;
+
+-- name: ResumeHCItemForSessionInEpic :one
+SELECT outer_item.* FROM hc_items AS outer_item
+WHERE outer_item.session_id = ?
+  AND outer_item.epic_id = ?
+  AND outer_item.status = 'in_progress'
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
+    WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
+  )
+ORDER BY outer_item.depth DESC, outer_item.created_at ASC
+LIMIT 1;
+
 -- name: CountHCOpenChildren :one
 SELECT COUNT(*) FROM hc_items
 WHERE parent_id = ? AND status IN ('open', 'in_progress');

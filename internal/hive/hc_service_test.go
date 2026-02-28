@@ -551,3 +551,36 @@ func TestNext_Delegates(t *testing.T) {
 	assert.True(t, found)
 	assert.Equal(t, hc.ItemTypeTask, item.Type)
 }
+
+// ---------------------------------------------------------------------------
+// Context: empty sessionID tests
+// ---------------------------------------------------------------------------
+
+func TestHoneycombService_Context_EmptySessionID(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := seedEpicWithTasks(store, "session-1")
+
+	// Calling Context with empty sessionID must not populate MyTasks.
+	block, err := svc.Context(context.Background(), epic.ID, "")
+	require.NoError(t, err)
+	assert.Empty(t, block.MyTasks, "MyTasks must be empty when sessionID is empty")
+}
+
+// ---------------------------------------------------------------------------
+// AddComment: empty message validation
+// ---------------------------------------------------------------------------
+
+func TestHoneycombService_AddComment_EmptyMessage(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	_, err := svc.AddComment(context.Background(), "hc-item", "")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "message")
+
+	_, err = svc.AddComment(context.Background(), "hc-item", "   ")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "message")
+}

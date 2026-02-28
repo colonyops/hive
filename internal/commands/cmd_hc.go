@@ -114,6 +114,9 @@ Examples:
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			repoKey := cmd.detectRepoKey(ctx)
+			if repoKey == "" {
+				log.Warn().Msg("could not detect repo key; items will not be scoped to a repository")
+			}
 
 			if c.NArg() == 0 {
 				input, err := bulk.Read()
@@ -182,6 +185,7 @@ Examples:
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			filter := hc.ListFilter{
+				RepoKey:   cmd.detectRepoKey(ctx),
 				EpicID:    c.Args().First(),
 				SessionID: flagSession,
 			}
@@ -293,6 +297,10 @@ Examples:
 			}
 			id := c.Args().First()
 
+			if flagStatus == "" && !flagAssign && !flagUnassign {
+				return fmt.Errorf("at least one of --status, --assign, or --unassign is required")
+			}
+
 			var update hc.ItemUpdate
 
 			if flagStatus != "" {
@@ -340,7 +348,7 @@ func (cmd *HoneycombCmd) nextCmd() *cli.Command {
 
 Actionable means the task has status open or in_progress and no open/in_progress children.
 
-With --assign, the task is assigned to the current session and set to in_progress.
+With --assign, resumes an in_progress task for the current session, or claims the next open task.
 
 Examples:
   hive hc next hc-epic123
@@ -353,9 +361,19 @@ Examples:
 				return fmt.Errorf("epic ID required as argument")
 			}
 
-			item, found, err := cmd.app.Honeycomb.Next(ctx, hc.NextFilter{
-				EpicID: c.Args().First(),
-			})
+			filter := hc.NextFilter{
+				EpicID:  c.Args().First(),
+				RepoKey: cmd.detectRepoKey(ctx),
+			}
+
+			if flagAssign {
+				filter.SessionID = cmd.detectSession(ctx)
+				if filter.SessionID == "" {
+					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
+				}
+			}
+
+			item, found, err := cmd.app.Honeycomb.Next(ctx, filter)
 			if err != nil {
 				return fmt.Errorf("next item: %w", err)
 			}
@@ -363,11 +381,8 @@ Examples:
 				return fmt.Errorf("no actionable tasks found")
 			}
 
-			if flagAssign {
-				sessionID := cmd.detectSession(ctx)
-				if sessionID == "" {
-					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
-				}
+			if flagAssign && item.Status != hc.StatusInProgress {
+				sessionID := filter.SessionID
 				statusInProgress := hc.StatusInProgress
 				updated, err := cmd.app.Honeycomb.UpdateItem(ctx, item.ID, hc.ItemUpdate{
 					Status:    &statusInProgress,
@@ -497,6 +512,7 @@ Examples:
 			count, err := cmd.app.Honeycomb.Prune(ctx, hc.PruneOpts{
 				OlderThan: olderThan,
 				Statuses:  statuses,
+				RepoKey:   cmd.detectRepoKey(ctx),
 				DryRun:    flagDryRun,
 			})
 			if err != nil {

@@ -246,13 +246,13 @@ func TestHCStore_NextItem_returnsLeafTask(t *testing.T) {
 	store := NewHCStore(database)
 	now := time.Now()
 
+	// Items are unassigned (session_id = "") — NextItem claims the next open task.
 	require.NoError(t, store.CreateItems(ctx, []hc.Item{
 		{
 			ID:        "epic-1",
 			Title:     "Epic",
 			Type:      hc.ItemTypeEpic,
 			Status:    hc.StatusOpen,
-			SessionID: "sess-1",
 			Depth:     0,
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -264,14 +264,14 @@ func TestHCStore_NextItem_returnsLeafTask(t *testing.T) {
 			Title:     "Leaf Task",
 			Type:      hc.ItemTypeTask,
 			Status:    hc.StatusOpen,
-			SessionID: "sess-1",
 			Depth:     1,
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
 	}))
 
-	item, ok, err := store.NextItem(ctx, hc.NextFilter{SessionID: "sess-1"})
+	// No session ID: falls back to claiming an unassigned open task.
+	item, ok, err := store.NextItem(ctx, hc.NextFilter{})
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, "task-leaf", item.ID)
@@ -299,13 +299,13 @@ func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 	store := NewHCStore(database)
 	now := time.Now()
 
+	// Items are unassigned — EpicID filter scopes to the correct epic.
 	require.NoError(t, store.CreateItems(ctx, []hc.Item{
 		{
 			ID:        "epic-a",
 			Title:     "Epic A",
 			Type:      hc.ItemTypeEpic,
 			Status:    hc.StatusOpen,
-			SessionID: "sess-1",
 			Depth:     0,
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -317,7 +317,6 @@ func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 			Title:     "Task A",
 			Type:      hc.ItemTypeTask,
 			Status:    hc.StatusOpen,
-			SessionID: "sess-1",
 			Depth:     1,
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -327,7 +326,6 @@ func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 			Title:     "Epic B",
 			Type:      hc.ItemTypeEpic,
 			Status:    hc.StatusOpen,
-			SessionID: "sess-1",
 			Depth:     0,
 			CreatedAt: now,
 			UpdatedAt: now,
@@ -339,14 +337,13 @@ func TestHCStore_NextItem_withEpicFilter(t *testing.T) {
 			Title:     "Task B",
 			Type:      hc.ItemTypeTask,
 			Status:    hc.StatusOpen,
-			SessionID: "sess-1",
 			Depth:     1,
 			CreatedAt: now,
 			UpdatedAt: now,
 		},
 	}))
 
-	item, ok, err := store.NextItem(ctx, hc.NextFilter{SessionID: "sess-1", EpicID: "epic-a"})
+	item, ok, err := store.NextItem(ctx, hc.NextFilter{EpicID: "epic-a"})
 	require.NoError(t, err)
 	require.True(t, ok)
 	assert.Equal(t, "task-a", item.ID)
@@ -362,6 +359,176 @@ func TestHCStore_GetItem_notFound(t *testing.T) {
 
 	_, err = store.GetItem(ctx, "nonexistent-id")
 	require.Error(t, err)
+	assert.ErrorIs(t, err, hc.ErrNotFound)
+}
+
+func TestHCStore_ListItems_EpicAndStatusFilter(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+
+	epicID := "epic-filter"
+	require.NoError(t, store.CreateItems(ctx, []hc.Item{
+		{
+			ID:        epicID,
+			Title:     "Filter Epic",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusOpen,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-open",
+			EpicID:    epicID,
+			ParentID:  epicID,
+			Title:     "Open Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusOpen,
+			Depth:     1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-done",
+			EpicID:    epicID,
+			ParentID:  epicID,
+			Title:     "Done Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusDone,
+			Depth:     1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-other-epic",
+			EpicID:    "other-epic",
+			ParentID:  "other-epic",
+			Title:     "Other Epic Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusOpen,
+			Depth:     1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}))
+
+	open := hc.StatusOpen
+	items, err := store.ListItems(ctx, hc.ListFilter{EpicID: epicID, Status: &open})
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "task-open", items[0].ID)
+}
+
+func TestHCStore_NextItem_ResumeInProgress(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+
+	require.NoError(t, store.CreateItems(ctx, []hc.Item{
+		{
+			ID:        "epic-1",
+			Title:     "Epic",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusOpen,
+			Depth:     0,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-inprogress",
+			EpicID:    "epic-1",
+			ParentID:  "epic-1",
+			Title:     "In Progress Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusInProgress,
+			SessionID: "sess-1",
+			Depth:     1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "task-open",
+			EpicID:    "epic-1",
+			ParentID:  "epic-1",
+			Title:     "Open Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusOpen,
+			Depth:     1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}))
+
+	// With session ID, should resume the in_progress task.
+	item, ok, err := store.NextItem(ctx, hc.NextFilter{SessionID: "sess-1", EpicID: "epic-1"})
+	require.NoError(t, err)
+	require.True(t, ok)
+	assert.Equal(t, "task-inprogress", item.ID)
+}
+
+func TestHCStore_Blocked_ParentWithOpenChild(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+
+	// Epic with a task child that itself has an open grandchild — epic should be blocked.
+	require.NoError(t, store.CreateItems(ctx, []hc.Item{
+		{
+			ID:        "epic-block",
+			Title:     "Blocked Epic",
+			Type:      hc.ItemTypeEpic,
+			Status:    hc.StatusOpen,
+			Depth:     0,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "parent-task",
+			EpicID:    "epic-block",
+			ParentID:  "epic-block",
+			Title:     "Parent Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusOpen,
+			Depth:     1,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+		{
+			ID:        "child-task",
+			EpicID:    "epic-block",
+			ParentID:  "parent-task",
+			Title:     "Child Task",
+			Type:      hc.ItemTypeTask,
+			Status:    hc.StatusOpen,
+			Depth:     2,
+			CreatedAt: now,
+			UpdatedAt: now,
+		},
+	}))
+
+	items, err := store.ListItems(ctx, hc.ListFilter{})
+	require.NoError(t, err)
+
+	parentFound := false
+	for _, item := range items {
+		if item.ID == "parent-task" {
+			parentFound = true
+			assert.True(t, item.Blocked, "parent-task with open child should be blocked")
+		}
+	}
+	assert.True(t, parentFound, "parent-task should be in list")
 }
 
 func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {

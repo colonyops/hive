@@ -357,6 +357,104 @@ func TestHCPrune(t *testing.T) {
 	assert.Equal(t, "pruned", result["action"])
 }
 
+func TestHCNext_Assign(t *testing.T) {
+	h := NewHarness(t)
+
+	bulkInput := `{"title":"Assign Epic","type":"epic","children":[{"title":"Assign Task","type":"task"}]}`
+	out, err := h.RunWithStdin(bulkInput, "hc", "create")
+	require.NoError(t, err)
+
+	lines, err := parseJSONLines(strings.TrimSpace(out))
+	require.NoError(t, err)
+	require.NotEmpty(t, lines)
+	epicID := lines[0]["id"].(string)
+
+	// Without a real session, --assign fails because session detection returns empty.
+	// Run next without --assign to verify basic functionality.
+	nextLines, err := h.RunJSONLines("hc", "next", epicID)
+	require.NoError(t, err)
+	require.Len(t, nextLines, 1)
+	assert.Equal(t, "Assign Task", nextLines[0]["title"])
+	assert.Equal(t, "open", nextLines[0]["status"])
+}
+
+func TestHCUpdate_Assign(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Assign Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Assign Task", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	id := createLines[0]["id"].(string)
+
+	// --assign without a detectable session returns an error.
+	_, err = h.Run("hc", "update", id, "--assign")
+	require.Error(t, err, "assign without session should fail")
+}
+
+func TestHCUpdate_Unassign(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Unassign Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Unassign Task", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	id := createLines[0]["id"].(string)
+
+	updateLines, err := h.RunJSONLines("hc", "update", id, "--unassign")
+	require.NoError(t, err)
+	require.Len(t, updateLines, 1)
+	assert.Equal(t, "", updateLines[0]["session_id"])
+}
+
+func TestHCUpdate_MutuallyExclusive(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Mutex Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Mutex Task", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	id := createLines[0]["id"].(string)
+
+	_, err = h.Run("hc", "update", id, "--assign", "--unassign")
+	require.Error(t, err, "--assign and --unassign together should fail")
+}
+
+func TestHCUpdate_NoOp(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "NoOp Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "NoOp Task", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	id := createLines[0]["id"].(string)
+
+	_, err = h.Run("hc", "update", id)
+	require.Error(t, err, "update with no flags should fail")
+}
+
+func TestHCCreate_TaskWithoutParent(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("hc", "create", "Orphan Task", "--type", "task")
+	require.Error(t, err, "task without --parent should fail")
+}
+
+func TestHCShow_NotFound(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("hc", "show", "hc-doesnotexist")
+	require.Error(t, err, "show with nonexistent ID should fail")
+}
+
 func TestHCCRUD(t *testing.T) {
 	h := NewHarness(t)
 

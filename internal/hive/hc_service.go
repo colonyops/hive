@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"iter"
+	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/hc"
@@ -148,6 +149,10 @@ func (s *HoneycombService) ListComments(ctx context.Context, itemID string) ([]h
 
 // AddComment attaches a new comment to an item and returns the created comment.
 func (s *HoneycombService) AddComment(ctx context.Context, itemID, message string) (hc.Comment, error) {
+	if strings.TrimSpace(message) == "" {
+		return hc.Comment{}, fmt.Errorf("message is required")
+	}
+
 	comment := hc.Comment{
 		ID:        hc.GenerateCommentID(),
 		ItemID:    itemID,
@@ -198,7 +203,7 @@ func (s *HoneycombService) Context(ctx context.Context, epicID, sessionID string
 			allOpen = append(allOpen, item)
 		}
 
-		if item.SessionID == sessionID && (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) {
+		if sessionID != "" && item.SessionID == sessionID && (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) {
 			twc := hc.TaskWithComment{Item: item}
 
 			comments, err := s.store.ListComments(ctx, item.ID)

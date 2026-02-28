@@ -2,8 +2,12 @@ package hc
 
 import (
 	"context"
+	"errors"
 	"time"
 )
+
+// ErrNotFound is returned when a requested item does not exist.
+var ErrNotFound = errors.New("not found")
 
 // Store persists hc items and comments to durable storage.
 type Store interface {
@@ -48,6 +52,9 @@ func (f ListFilter) Matches(item Item) bool {
 	if f.RepoKey != "" && item.RepoKey != f.RepoKey {
 		return false
 	}
+	if f.EpicID != "" && item.EpicID != f.EpicID {
+		return false
+	}
 	if f.SessionID != "" && item.SessionID != f.SessionID {
 		return false
 	}
@@ -61,11 +68,13 @@ func (f ListFilter) Matches(item Item) bool {
 type NextFilter struct {
 	EpicID    string
 	SessionID string
+	RepoKey   string
 }
 
 // PruneOpts controls which items are removed by Prune.
 type PruneOpts struct {
 	OlderThan time.Duration
 	Statuses  []Status
+	RepoKey   string
 	DryRun    bool
 }

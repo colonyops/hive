@@ -59,6 +59,9 @@ func (s *HCStore) CreateItems(ctx context.Context, items []hc.Item) error {
 // GetItem retrieves a single HC item by ID.
 func (s *HCStore) GetItem(ctx context.Context, id string) (hc.Item, error) {
 	row, err := s.db.Queries().GetHCItem(ctx, id)
+	if errors.Is(err, sql.ErrNoRows) {
+		return hc.Item{}, fmt.Errorf("hc item %q: %w", id, hc.ErrNotFound)
+	}
 	if err != nil {
 		return hc.Item{}, fmt.Errorf("get hc item: %w", err)
 	}
@@ -74,6 +77,9 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 	var updated db.HcItem
 	err := s.db.WithTx(ctx, func(q *db.Queries) error {
 		existing, getErr := q.GetHCItem(ctx, id)
+		if errors.Is(getErr, sql.ErrNoRows) {
+			return fmt.Errorf("hc item %q: %w", id, hc.ErrNotFound)
+		}
 		if getErr != nil {
 			return fmt.Errorf("get hc item for update: %w", getErr)
 		}
@@ -160,10 +166,23 @@ func (s *HCStore) listHCRows(ctx context.Context, filter hc.ListFilter) ([]db.Hc
 }
 
 // NextItem returns the next actionable item for the given filter.
+// When filter.SessionID is set, it first tries to resume an in_progress task
+// for that session before falling back to claiming an unassigned open task.
 func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
+	if filter.SessionID != "" {
+		item, ok, err := s.resumeItemForSession(ctx, filter)
+		if err != nil {
+			return hc.Item{}, false, err
+		}
+		if ok {
+			return item, true, nil
+		}
+	}
+
+	// Fall back to claiming the next unassigned open task (session_id = "").
 	if filter.EpicID != "" {
 		row, err := s.db.Queries().NextHCItemForSessionInEpic(ctx, db.NextHCItemForSessionInEpicParams{
-			SessionID: filter.SessionID,
+			SessionID: "",
 			EpicID:    filter.EpicID,
 		})
 		if errors.Is(err, sql.ErrNoRows) {
@@ -176,15 +195,55 @@ func (s *HCStore) NextItem(ctx context.Context, filter hc.NextFilter) (hc.Item, 
 		if err != nil {
 			return hc.Item{}, false, err
 		}
+		if filter.RepoKey != "" && item.RepoKey != filter.RepoKey {
+			return hc.Item{}, false, nil
+		}
 		return item, true, nil
 	}
 
-	row, err := s.db.Queries().NextHCItemForSession(ctx, filter.SessionID)
+	row, err := s.db.Queries().NextHCItemForSession(ctx, "")
 	if errors.Is(err, sql.ErrNoRows) {
 		return hc.Item{}, false, nil
 	}
 	if err != nil {
 		return hc.Item{}, false, fmt.Errorf("next hc item for session: %w", err)
+	}
+	item, err := s.fetchHCItem(ctx, row)
+	if err != nil {
+		return hc.Item{}, false, err
+	}
+	if filter.RepoKey != "" && item.RepoKey != filter.RepoKey {
+		return hc.Item{}, false, nil
+	}
+	return item, true, nil
+}
+
+// resumeItemForSession returns an in_progress leaf task assigned to the given session.
+func (s *HCStore) resumeItemForSession(ctx context.Context, filter hc.NextFilter) (hc.Item, bool, error) {
+	if filter.EpicID != "" {
+		row, err := s.db.Queries().ResumeHCItemForSessionInEpic(ctx, db.ResumeHCItemForSessionInEpicParams{
+			SessionID: filter.SessionID,
+			EpicID:    filter.EpicID,
+		})
+		if errors.Is(err, sql.ErrNoRows) {
+			return hc.Item{}, false, nil
+		}
+		if err != nil {
+			return hc.Item{}, false, fmt.Errorf("resume hc item for session in epic: %w", err)
+		}
+		item, err := s.fetchHCItem(ctx, row)
+		if err != nil {
+			return hc.Item{}, false, err
+		}
+		return item, true, nil
+	}
+
+	row, err := s.db.Queries().ResumeHCItemForSession(ctx, filter.SessionID)
+	if errors.Is(err, sql.ErrNoRows) {
+		return hc.Item{}, false, nil
+	}
+	if err != nil {
+		return hc.Item{}, false, fmt.Errorf("resume hc item for session: %w", err)
 	}
 	item, err := s.fetchHCItem(ctx, row)
 	if err != nil {
@@ -252,10 +311,21 @@ func (s *HCStore) prune(ctx context.Context, allRows []db.HcItem, opts hc.PruneO
 		statusSet[status] = struct{}{}
 	}
 
-	childrenByParent := make(map[string][]string, len(allRows))
-	depthByID := make(map[string]int64, len(allRows))
+	// Scope to repo when requested.
+	scopedRows := allRows
+	if opts.RepoKey != "" {
+		scopedRows = make([]db.HcItem, 0, len(allRows))
+		for _, row := range allRows {
+			if row.RepoKey == opts.RepoKey {
+				scopedRows = append(scopedRows, row)
+			}
+		}
+	}
+
+	childrenByParent := make(map[string][]string, len(scopedRows))
+	depthByID := make(map[string]int64, len(scopedRows))
 	pruneRoots := make([]string, 0)
-	for _, row := range allRows {
+	for _, row := range scopedRows {
 		depthByID[row.ID] = row.Depth
 		if row.ParentID != "" {
 			childrenByParent[row.ParentID] = append(childrenByParent[row.ParentID], row.ID)

@@ -632,6 +632,76 @@ func (q *Queries) PruneHCCommentsByStatus(ctx context.Context, arg PruneHCCommen
 	return err
 }
 
+const resumeHCItemForSession = `-- name: ResumeHCItemForSession :one
+SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
+WHERE outer_item.session_id = ?
+  AND outer_item.status = 'in_progress'
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
+    WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
+  )
+ORDER BY outer_item.depth DESC, outer_item.created_at ASC
+LIMIT 1
+`
+
+func (q *Queries) ResumeHCItemForSession(ctx context.Context, sessionID string) (HcItem, error) {
+	row := q.db.QueryRowContext(ctx, resumeHCItemForSession, sessionID)
+	var i HcItem
+	err := row.Scan(
+		&i.ID,
+		&i.RepoKey,
+		&i.EpicID,
+		&i.ParentID,
+		&i.SessionID,
+		&i.Title,
+		&i.Desc,
+		&i.Type,
+		&i.Status,
+		&i.Depth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const resumeHCItemForSessionInEpic = `-- name: ResumeHCItemForSessionInEpic :one
+SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
+WHERE outer_item.session_id = ?
+  AND outer_item.epic_id = ?
+  AND outer_item.status = 'in_progress'
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
+    WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
+  )
+ORDER BY outer_item.depth DESC, outer_item.created_at ASC
+LIMIT 1
+`
+
+type ResumeHCItemForSessionInEpicParams struct {
+	SessionID string `json:"session_id"`
+	EpicID    string `json:"epic_id"`
+}
+
+func (q *Queries) ResumeHCItemForSessionInEpic(ctx context.Context, arg ResumeHCItemForSessionInEpicParams) (HcItem, error) {
+	row := q.db.QueryRowContext(ctx, resumeHCItemForSessionInEpic, arg.SessionID, arg.EpicID)
+	var i HcItem
+	err := row.Scan(
+		&i.ID,
+		&i.RepoKey,
+		&i.EpicID,
+		&i.ParentID,
+		&i.SessionID,
+		&i.Title,
+		&i.Desc,
+		&i.Type,
+		&i.Status,
+		&i.Depth,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const updateHCItem = `-- name: UpdateHCItem :exec
 UPDATE hc_items SET status = ?, session_id = ?, updated_at = ? WHERE id = ?
 `
