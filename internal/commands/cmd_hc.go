@@ -137,6 +137,10 @@ Examples:
 				return fmt.Errorf("invalid type %q: valid values are epic, task", flagType)
 			}
 
+			if itemType == hc.ItemTypeTask && flagParentID == "" {
+				return fmt.Errorf("tasks require a --parent; use --type epic to create a root item")
+			}
+
 			item, err := cmd.app.Honeycomb.CreateItem(ctx, repoKey, hc.CreateItemInput{
 				Title:    c.Args().First(),
 				Desc:     flagDesc,

@@ -13,7 +13,11 @@ import (
 func TestHCCreateSingle(t *testing.T) {
 	h := NewHarness(t)
 
-	lines, err := h.RunJSONLines("hc", "create", "Implement auth", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Auth Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	lines, err := h.RunJSONLines("hc", "create", "Implement auth", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	require.Len(t, lines, 1)
 
@@ -83,9 +87,13 @@ func TestHCCreateInvalidType(t *testing.T) {
 func TestHCList(t *testing.T) {
 	h := NewHarness(t)
 
-	_, err := h.RunJSONLines("hc", "create", "Task One", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "List Epic", "--type", "epic")
 	require.NoError(t, err)
-	_, err = h.RunJSONLines("hc", "create", "Task Two", "--type", "task")
+	epicID := epicLines[0]["id"].(string)
+
+	_, err = h.RunJSONLines("hc", "create", "Task One", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	_, err = h.RunJSONLines("hc", "create", "Task Two", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 
 	lines, err := h.RunJSONLines("hc", "list")
@@ -96,7 +104,11 @@ func TestHCList(t *testing.T) {
 func TestHCListStatusFilter(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Filterable Task", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Filter Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Filterable Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	require.Len(t, createLines, 1)
 	id := createLines[0]["id"].(string)
@@ -127,7 +139,11 @@ func TestHCListStatusFilter(t *testing.T) {
 func TestHCShow(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Show Me", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Show Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Show Me", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	require.Len(t, createLines, 1)
 	id := createLines[0]["id"].(string)
@@ -150,7 +166,11 @@ func TestHCShow(t *testing.T) {
 func TestHCUpdate(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Updatable Task", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Update Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Updatable Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	require.Len(t, createLines, 1)
 	id := createLines[0]["id"].(string)
@@ -164,7 +184,11 @@ func TestHCUpdate(t *testing.T) {
 func TestHCUpdateInvalidStatus(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Task", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Invalid Status Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
 
@@ -215,7 +239,11 @@ func TestHCNextNoActionableTasks(t *testing.T) {
 func TestHCComment(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Commentable Task", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Comment Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Commentable Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
 
@@ -287,7 +315,11 @@ func TestHCContextMarkdown(t *testing.T) {
 func TestHCPruneDryRun(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Prunable Task", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Prune Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Prunable Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
 
@@ -306,7 +338,11 @@ func TestHCPruneDryRun(t *testing.T) {
 func TestHCPrune(t *testing.T) {
 	h := NewHarness(t)
 
-	createLines, err := h.RunJSONLines("hc", "create", "Old Task", "--type", "task")
+	epicLines, err := h.RunJSONLines("hc", "create", "Old Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	createLines, err := h.RunJSONLines("hc", "create", "Old Task", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 	id := createLines[0]["id"].(string)
 
