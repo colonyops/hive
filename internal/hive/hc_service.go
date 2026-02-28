@@ -141,6 +141,11 @@ func (s *HoneycombService) Next(ctx context.Context, filter hc.NextFilter) (hc.I
 	return s.store.NextItem(ctx, filter)
 }
 
+// ListComments returns all comments for an item in chronological order.
+func (s *HoneycombService) ListComments(ctx context.Context, itemID string) ([]hc.Comment, error) {
+	return s.store.ListComments(ctx, itemID)
+}
+
 // AddComment attaches a new comment to an item and returns the created comment.
 func (s *HoneycombService) AddComment(ctx context.Context, itemID, message string) (hc.Comment, error) {
 	comment := hc.Comment{

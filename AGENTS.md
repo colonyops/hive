@@ -192,6 +192,52 @@ Never silently discard errors. If an error cannot be presented to the user (e.g.
               └──► corrupted ──► (deleted)
 ```
 
+## Honeycomb (hc) — Multi-Agent Task Coordination
+
+`hive hc` is the built-in task coordination system for multi-agent workflows. A conductor creates epics and tasks; workers claim and complete them.
+
+### Quick Reference
+
+```bash
+# Conductor: create work
+echo '{"title":"Epic","type":"epic","children":[{"title":"Task","type":"task"}]}' | hive hc create
+
+# Worker: claim next task
+hive hc next --assign
+
+# Worker: record progress
+hive hc log <id> "implemented X"
+hive hc checkpoint <id> "stopping here, Y still needed"
+
+# Worker: complete task
+hive hc update <id> --status done
+
+# Get context for an epic (markdown for AI consumption)
+hive hc context <epic-id>
+
+# List tasks
+hive hc list                          # all items
+hive hc list <epic-id>                # items under an epic
+hive hc list --status open            # filter by status
+hive hc list --session <session-id>   # filter by session
+```
+
+### Key Commands
+
+| Command | Purpose |
+| ------- | ------- |
+| `hive hc create [title]` | Single item (positional) or bulk tree (stdin JSON) |
+| `hive hc list [epic-id]` | List items, optional epic/status/session filters |
+| `hive hc show <id>` | Item + comments as JSON lines |
+| `hive hc update <id>` | Update status (`--status`), assign (`--assign`/`--unassign`) |
+| `hive hc next [epic-id]` | Next actionable leaf task; `--assign` to claim |
+| `hive hc log <id> <msg>` | Add a log comment |
+| `hive hc checkpoint <id> <msg>` | Handoff checkpoint (prefixed with `CHECKPOINT:`) |
+| `hive hc context <epic-id>` | Epic context block; `--json` for JSON output |
+| `hive hc prune` | Remove old completed items |
+
+See `.claude/skills/hc/SKILL.md` for full agent usage guide.
+
 ## Issue Tracking
 
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
