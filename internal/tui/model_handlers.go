@@ -492,7 +492,7 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 
 // --- Input ---
 
-func (m Model) handleKeyMsg(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.modals.DocPicker != nil {
 		modal, cmd := m.modals.DocPicker.Update(msg)
 		m.modals.DocPicker = modal

@@ -22,7 +22,7 @@ func NewConfirmModal(message string) ConfirmModal {
 
 // Update handles input for the confirmation modal.
 func (m ConfirmModal) Update(msg tea.Msg) (ConfirmModal, tea.Cmd) {
-	keyMsg, ok := msg.(tea.KeyMsg)
+	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}

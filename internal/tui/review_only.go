@@ -81,7 +81,7 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		return m, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Only handle quit keys if review view doesn't have an active editor
 		if !m.reviewView.HasActiveEditor() {
 			switch msg.String() {

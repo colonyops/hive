@@ -80,7 +80,7 @@ func (f *NewSessionForm) Init() tea.Cmd {
 
 // Update handles messages for the form.
 func (f *NewSessionForm) Update(msg tea.Msg) (NewSessionForm, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		return f.handleKey(keyMsg)
 	}
 
@@ -88,7 +88,7 @@ func (f *NewSessionForm) Update(msg tea.Msg) (NewSessionForm, tea.Cmd) {
 }
 
 // handleKey processes key events.
-func (f *NewSessionForm) handleKey(msg tea.KeyMsg) (NewSessionForm, tea.Cmd) {
+func (f *NewSessionForm) handleKey(msg tea.KeyPressMsg) (NewSessionForm, tea.Cmd) {
 	key := msg.String()
 
 	switch key {
