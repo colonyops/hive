@@ -7,7 +7,7 @@ Complete hive configuration examples for common setups.
 ```yaml
 version: 0.2.5
 
-repo_dirs:
+workspaces:
   - ~/code/repos
   - ~/projects
 

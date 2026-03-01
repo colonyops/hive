@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 )
 
-// RepoDirsCheck verifies that configured repo_dirs entries exist and are accessible.
+// RepoDirsCheck verifies that configured workspaces entries exist and are accessible.
 type RepoDirsCheck struct {
 	dirs []string
 }
@@ -26,7 +26,7 @@ func (c *RepoDirsCheck) Run(_ context.Context) Result {
 
 	if len(c.dirs) == 0 {
 		result.Items = append(result.Items, CheckItem{
-			Label:  "repo_dirs",
+			Label:  "workspaces",
 			Status: StatusPass,
 			Detail: "none configured",
 		})

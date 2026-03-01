@@ -236,8 +236,9 @@ type Config struct {
 	Database            DatabaseConfig         `json:"database"              yaml:"database"`
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
-	RepoDirs            []string               `json:"repo_dirs"             yaml:"repo_dirs"` // directories containing git repositories for new session dialog
-	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
+	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // directories containing git repositories for new session dialog
+	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
+	DataDir             string                 `json:"-"                     yaml:"-"`          // set by caller, not from config file
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -605,6 +606,12 @@ func Load(configPath, dataDir string) (*Config, error) {
 
 			// Re-set dataDir since Unmarshal may have cleared it
 			cfg.DataDir = dataDir
+
+			// Backwards compat: migrate deprecated repo_dirs → workspaces
+			if len(cfg.Workspaces) == 0 && len(cfg.RepoDirsCompat) > 0 {
+				cfg.Workspaces = cfg.RepoDirsCompat
+			}
+			cfg.RepoDirsCompat = nil
 		}
 	}
 

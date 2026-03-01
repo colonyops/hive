@@ -229,7 +229,7 @@ func New(deps Deps, opts Opts) Model {
 		TerminalManager: deps.TerminalManager,
 		PluginManager:   deps.PluginManager,
 		LocalRemote:     opts.LocalRemote,
-		RepoDirs:        cfg.RepoDirs,
+		Workspaces:      cfg.Workspaces,
 		Renderer:        deps.Renderer,
 		Bus:             deps.Bus,
 	})
@@ -362,7 +362,7 @@ func (m Model) Init() tea.Cmd {
 		}
 	}
 	// Show toast if no repo dirs configured
-	if len(m.cfg.RepoDirs) == 0 {
+	if len(m.cfg.Workspaces) == 0 {
 		m.toastController.Push(notify.Notification{
 			Level:   notify.LevelInfo,
 			Message: "No directories have been added for project start",
