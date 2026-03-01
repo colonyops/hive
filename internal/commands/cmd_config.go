@@ -36,5 +36,5 @@ applying defaults, and merging keybindings.`,
 }
 
 func (cmd *ConfigCmd) run(_ context.Context, c *cli.Command) error {
-	return iojson.WriteWith(c.Root().Writer, os.Stderr, cmd.app.Config)
+	return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, cmd.app.Config)
 }
