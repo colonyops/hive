@@ -523,6 +523,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Notifications
 	case drainNotificationsMsg:
 		model, cmd = m.handleDrainNotifications(msg)
+	case updateAvailableMsg:
+		model, cmd = m.handleUpdateAvailable(msg)
 
 	// Todos
 	case todoCountUpdatedMsg:
