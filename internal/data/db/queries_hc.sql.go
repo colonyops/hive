@@ -79,6 +79,15 @@ func (q *Queries) CreateHCItem(ctx context.Context, arg CreateHCItemParams) erro
 	return err
 }
 
+const deleteHCCommentsByItemID = `-- name: DeleteHCCommentsByItemID :exec
+DELETE FROM hc_comments WHERE item_id = ?
+`
+
+func (q *Queries) DeleteHCCommentsByItemID(ctx context.Context, itemID string) error {
+	_, err := q.db.ExecContext(ctx, deleteHCCommentsByItemID, itemID)
+	return err
+}
+
 const deleteHCItem = `-- name: DeleteHCItem :exec
 DELETE FROM hc_items WHERE id = ?
 `

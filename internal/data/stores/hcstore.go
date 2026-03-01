@@ -349,17 +349,11 @@ func (s *HCStore) prune(ctx context.Context, allRows []db.HcItem, opts hc.PruneO
 	}
 
 	err := s.db.WithTx(ctx, func(q *db.Queries) error {
-		for _, status := range statuses {
-			if txErr := q.PruneHCCommentsByStatus(ctx, db.PruneHCCommentsByStatusParams{
-				Status:    status,
-				UpdatedAt: cutoff,
-			}); txErr != nil {
-				return fmt.Errorf("prune hc comments (%s): %w", status, txErr)
-			}
-		}
-
 		idsByDepthDesc := orderHCIDsByDepthDesc(pruneIDs, depthByID)
 		for _, id := range idsByDepthDesc {
+			if txErr := q.DeleteHCCommentsByItemID(ctx, id); txErr != nil {
+				return fmt.Errorf("delete hc comments for %q: %w", id, txErr)
+			}
 			if txErr := q.DeleteHCItem(ctx, id); txErr != nil {
 				return fmt.Errorf("delete hc item %q: %w", id, txErr)
 			}

@@ -91,6 +91,9 @@ WHERE parent_id != '' AND status IN ('open', 'in_progress');
 -- name: DeleteHCItem :exec
 DELETE FROM hc_items WHERE id = ?;
 
+-- name: DeleteHCCommentsByItemID :exec
+DELETE FROM hc_comments WHERE item_id = ?;
+
 -- name: CountHCItemsByStatusOlderThan :one
 SELECT COUNT(*) FROM hc_items WHERE status = ? AND updated_at < ?;
 
