@@ -204,7 +204,7 @@ func (s *HoneycombService) Context(ctx context.Context, epicID, sessionID string
 		}
 
 		if (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) &&
-			!(sessionID != "" && item.SessionID == sessionID) {
+			(sessionID == "" || item.SessionID != sessionID) {
 			allOpen = append(allOpen, item)
 		}
 
