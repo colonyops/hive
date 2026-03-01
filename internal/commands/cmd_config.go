@@ -2,7 +2,6 @@ package commands
 
 import (
 	"context"
-	"os"
 
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"

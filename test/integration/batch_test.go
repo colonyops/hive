@@ -10,7 +10,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-
 func TestBatchCreate(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "batch-repo")
