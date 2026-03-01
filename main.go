@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"sync"
 	"time"
 
 	"github.com/rs/zerolog/log"
@@ -122,6 +123,7 @@ func main() {
 		pluginMgr   *plugins.Manager
 		sweepCancel context.CancelFunc
 		busCancel   context.CancelFunc
+		bgWg        sync.WaitGroup // tracks background goroutines for clean shutdown
 	)
 
 	flags := &commands.Flags{}
@@ -240,15 +242,17 @@ Run 'hive new' to create a new session from the current repository.`,
 			// Start background KV sweep goroutine
 			sweepCtx, cancel := context.WithCancel(context.Background())
 			sweepCancel = cancel
-			go sweep.Start(sweepCtx, kvStore, 5*time.Minute)
+			bgWg.Go(func() {
+				sweep.Start(sweepCtx, kvStore, 5*time.Minute)
+			})
 
 			bus := eventbus.New(64)
 			busCtx, cancel := context.WithCancel(context.Background())
 			busCancel = cancel
-			go func() {
+			bgWg.Go(func() {
 				bus.Start(busCtx)
 				log.Debug().Msg("event bus stopped")
-			}()
+			})
 
 			eventbus.RegisterDebugLogger(bus, log.Logger)
 
@@ -352,6 +356,10 @@ Run 'hive new' to create a new session from the current repository.`,
 				}
 			}
 
+			// Wait for background goroutines to finish before closing the
+			// log file so they don't write to a closed file descriptor.
+			bgWg.Wait()
+
 			// Close log file
 			if logCloser != nil {
 				logCloser()
@@ -373,6 +381,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewSessionCmd(flags, hiveApp).Register(app)
 	app = commands.NewReviewCmd(flags, hiveApp).Register(app)
 	app = commands.NewTodoCmd(flags, hiveApp).Register(app)
+	app = commands.NewConfigCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)

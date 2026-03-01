@@ -10,20 +10,20 @@ import (
 
 // TodosConfig holds configuration for the human todo system.
 type TodosConfig struct {
-	Actions       map[string]string  `yaml:"actions"` // scheme -> command template
-	Limiter       TodosLimiterConfig `yaml:"limiter"`
-	Notifications TodosNotifyConfig  `yaml:"notifications"`
+	Actions       map[string]string  `json:"actions"       yaml:"actions"` // scheme -> command template
+	Limiter       TodosLimiterConfig `json:"limiter"       yaml:"limiter"`
+	Notifications TodosNotifyConfig  `json:"notifications" yaml:"notifications"`
 }
 
 // TodosLimiterConfig holds rate limiting settings for todo creation.
 type TodosLimiterConfig struct {
-	MaxPending          int           `yaml:"max_pending"`
-	RateLimitPerSession time.Duration `yaml:"rate_limit_per_session"`
+	MaxPending          int           `json:"max_pending"            yaml:"max_pending"`
+	RateLimitPerSession time.Duration `json:"rate_limit_per_session" yaml:"rate_limit_per_session"`
 }
 
 // TodosNotifyConfig holds notification settings for the todo system.
 type TodosNotifyConfig struct {
-	Toast bool `yaml:"toast"`
+	Toast bool `json:"toast" yaml:"toast"`
 }
 
 // ActionTemplateData provides template variables for custom action templates.
