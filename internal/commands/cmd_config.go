@@ -2,10 +2,10 @@ package commands
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
+	"os"
 
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
@@ -36,11 +36,5 @@ applying defaults, and merging keybindings.`,
 }
 
 func (cmd *ConfigCmd) run(_ context.Context, c *cli.Command) error {
-	data, err := json.MarshalIndent(cmd.app.Config, "", "  ")
-	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
-	}
-
-	_, err = fmt.Fprintln(c.Root().Writer, string(data))
-	return err
+	return iojson.WriteWith(c.Root().Writer, os.Stderr, cmd.app.Config)
 }
