@@ -363,7 +363,6 @@ Run 'hive new' to create a new session from the current repository.`,
 	tuiCmd := commands.NewTuiCmd(flags, hiveApp)
 
 	app = commands.NewNewCmd(flags, hiveApp).Register(app)
-	app = commands.NewLsCmd(flags, hiveApp).Register(app)
 	app = commands.NewPruneCmd(flags, hiveApp).Register(app)
 	app = commands.NewDoctorCmd(flags, hiveApp).Register(app)
 	app = commands.NewBatchCmd(flags, hiveApp).Register(app)
