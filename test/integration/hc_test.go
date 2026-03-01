@@ -96,7 +96,7 @@ func TestHCList(t *testing.T) {
 	_, err = h.RunJSONLines("hc", "create", "Task Two", "--type", "task", "--parent", epicID)
 	require.NoError(t, err)
 
-	lines, err := h.RunJSONLines("hc", "list")
+	lines, err := h.RunJSONLines("hc", "list", "--json")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(lines), 2)
 }
@@ -116,7 +116,7 @@ func TestHCListStatusFilter(t *testing.T) {
 	_, err = h.RunJSONLines("hc", "update", id, "--status", "done")
 	require.NoError(t, err)
 
-	doneLines, err := h.RunJSONLines("hc", "list", "--status", "done")
+	doneLines, err := h.RunJSONLines("hc", "list", "--status", "done", "--json")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(doneLines), 1)
 
@@ -129,7 +129,7 @@ func TestHCListStatusFilter(t *testing.T) {
 	}
 	assert.True(t, found, "updated item should appear in done filter")
 
-	openLines, err := h.RunJSONLines("hc", "list", "--status", "open")
+	openLines, err := h.RunJSONLines("hc", "list", "--status", "open", "--json")
 	require.NoError(t, err)
 	for _, l := range openLines {
 		assert.NotEqual(t, id, l["id"], "done item should not appear in open filter")
@@ -264,7 +264,7 @@ func TestHCContext(t *testing.T) {
 	_, err := h.RunWithStdin(bulkInput, "hc", "create")
 	require.NoError(t, err)
 
-	listLines, err := h.RunJSONLines("hc", "list", "--status", "open")
+	listLines, err := h.RunJSONLines("hc", "list", "--status", "open", "--json")
 	require.NoError(t, err)
 
 	var epicID string
@@ -294,7 +294,7 @@ func TestHCContextMarkdown(t *testing.T) {
 	_, err := h.RunWithStdin(bulkInput, "hc", "create")
 	require.NoError(t, err)
 
-	listLines, err := h.RunJSONLines("hc", "list", "--status", "open")
+	listLines, err := h.RunJSONLines("hc", "list", "--status", "open", "--json")
 	require.NoError(t, err)
 
 	var epicID string
@@ -466,7 +466,7 @@ func TestHCCRUD(t *testing.T) {
 	require.NoError(t, err)
 	taskID := taskLines[0]["id"].(string)
 
-	listLines, err := h.RunJSONLines("hc", "list", epicID)
+	listLines, err := h.RunJSONLines("hc", "list", epicID, "--json")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(listLines), 1)
 
