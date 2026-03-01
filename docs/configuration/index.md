@@ -43,6 +43,8 @@ rules:
 !!! tip
     Run `hive doctor` to validate your configuration and check that all dependencies (git, tmux, plugins) are correctly set up.
 
+    Run `hive config` to dump the fully resolved configuration as JSON — useful for debugging which defaults and overrides are in effect.
+
 ## General Settings
 
 | Option                        | Type       | Default              | Description                                 |

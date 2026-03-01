@@ -46,6 +46,7 @@ mise use -g github:colonyops/hive
 ```bash
 hive --version
 hive doctor        # Check configuration and environment
+hive config        # Dump resolved configuration as JSON
 ```
 
 ## Quick Start
