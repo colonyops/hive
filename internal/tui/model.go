@@ -1157,8 +1157,8 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 		}
 	}
 
-	// Messages preview modal intercepts keys before global handlers
-	if m.isMessagesFocused() && m.msgView != nil && m.msgView.IsPreviewActive() {
+	// Messages preview pane intercepts keys before global handlers
+	if m.isMessagesFocused() && m.msgView != nil && m.msgView.HasPreviewFocus() {
 		if keyStr == keyCtrlC {
 			return m.quit()
 		}

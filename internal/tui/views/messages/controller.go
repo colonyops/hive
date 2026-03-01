@@ -39,10 +39,11 @@ func (c *Controller) Append(msgs []messaging.Message) {
 	c.applyFilter()
 }
 
-// StartFilter begins filter input mode.
+// StartFilter begins filter input mode, preserving any existing filter text.
 func (c *Controller) StartFilter() {
 	c.filtering = true
 	c.filterBuf.Reset()
+	c.filterBuf.WriteString(c.filter)
 }
 
 // StopFilter ends filter input mode without clearing the filter text.
