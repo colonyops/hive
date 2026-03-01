@@ -60,24 +60,6 @@ func TestContextBlockString(t *testing.T) {
 		},
 		AllOpenTasks: []Item{
 			{
-				ID:       "hc-task1",
-				Title:    "Add domain types",
-				Type:     ItemTypeTask,
-				Status:   StatusInProgress,
-				EpicID:   "hc-epic1",
-				ParentID: "hc-epic1",
-				Depth:    1,
-			},
-			{
-				ID:       "hc-task2",
-				Title:    "Add data migrations",
-				Type:     ItemTypeTask,
-				Status:   StatusOpen,
-				EpicID:   "hc-epic1",
-				ParentID: "hc-epic1",
-				Depth:    1,
-			},
-			{
 				ID:       "hc-task3",
 				Title:    "Wire service layer",
 				Type:     ItemTypeTask,

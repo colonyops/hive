@@ -10,8 +10,6 @@ Implement the honeycomb task management system for agent coordination.
   > Started with Item and Activity structs; need to add Store interface next.
 - [open] **Add data migrations** (`hc-task2`)
 
-## Open Tasks
+## Other Open Tasks
 
-- [in_progress] Add domain types (`hc-task1`)
-- [open] Add data migrations (`hc-task2`)
 - [open] Wire service layer (`hc-task3`)

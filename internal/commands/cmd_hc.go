@@ -4,15 +4,20 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"strings"
 	"time"
 
+	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/glamour"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
+	"golang.org/x/term"
 )
 
 // HoneycombCmd implements the hive hc command group.
@@ -163,25 +168,25 @@ func (cmd *HoneycombCmd) listCmd() *cli.Command {
 	var (
 		flagStatus  string
 		flagSession string
-		flagTree    bool
+		flagJSON    bool
 	)
 	return &cli.Command{
 		Name:      "list",
 		Usage:     "List items",
-		UsageText: "hive hc list [epic-id] [--status <status>] [--session <id>] [--tree]",
-		Description: `Lists items as JSON lines. Optional positional arg filters by epic ID.
+		UsageText: "hive hc list [epic-id] [--status <status>] [--session <id>] [--json]",
+		Description: `Lists items as a colored tree. Optional positional arg filters by epic ID.
 
-With --tree, outputs a human-readable indented tree instead of JSON lines.
+With --json, outputs flat JSON lines instead of the tree view.
 
 Examples:
   hive hc list
   hive hc list hc-abc123
   hive hc list --status open
-  hive hc list --tree hc-abc123`,
+  hive hc list --json hc-abc123`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
 			&cli.StringFlag{Name: "session", Usage: "filter by session ID", Destination: &flagSession},
-			&cli.BoolFlag{Name: "tree", Usage: "output as indented tree", Destination: &flagTree},
+			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			filter := hc.ListFilter{
@@ -202,31 +207,127 @@ Examples:
 				return fmt.Errorf("list items: %w", err)
 			}
 
-			if flagTree {
-				renderItemTree(c.Root().Writer, items)
+			if flagJSON {
+				for _, item := range items {
+					if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
+						return err
+					}
+				}
 				return nil
 			}
 
-			for _, item := range items {
-				if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
-					return err
-				}
-			}
+			renderColoredTree(c.Root().Writer, items)
 			return nil
 		},
 	}
 }
 
-// renderItemTree prints items as an indented tree using each item's depth.
-func renderItemTree(w io.Writer, items []hc.Item) {
-	for _, item := range items {
-		indent := strings.Repeat("  ", item.Depth)
-		blocked := ""
-		if item.Blocked {
-			blocked = " [blocked]"
-		}
-		_, _ = fmt.Fprintf(w, "%s[%s]%s %s (%s)\n", indent, item.Status, blocked, item.Title, item.ID)
+type treeNode struct {
+	item     hc.Item
+	children []*treeNode
+}
+
+// renderColoredTree prints items as a colored tree with box-drawing connectors.
+func renderColoredTree(w io.Writer, items []hc.Item) {
+	byID := make(map[string]*treeNode, len(items))
+	for i := range items {
+		byID[items[i].ID] = &treeNode{item: items[i]}
 	}
+
+	var roots []*treeNode
+	for i := range items {
+		node := byID[items[i].ID]
+		if parent, ok := byID[items[i].ParentID]; ok {
+			parent.children = append(parent.children, node)
+		} else {
+			roots = append(roots, node)
+		}
+	}
+
+	mutedStyle := styles.TextMutedStyle
+	assignStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted).Italic(true)
+	warningStyle := styles.TextWarningStyle
+
+	var walk func(node *treeNode, prefix, connector string)
+	walk = func(node *treeNode, prefix, connector string) {
+		item := node.item
+
+		// Status symbol and title style
+		var symbol, title string
+		switch item.Status {
+		case hc.StatusOpen:
+			symbol = styles.TextForegroundStyle.Render("○")
+			if item.IsEpic() {
+				title = styles.TextForegroundBoldStyle.Render(item.Title)
+			} else {
+				title = styles.TextForegroundStyle.Render(item.Title)
+			}
+		case hc.StatusInProgress:
+			symbol = styles.TextPrimaryStyle.Render("◉")
+			if item.IsEpic() {
+				title = styles.TextForegroundBoldStyle.Render(item.Title)
+			} else {
+				title = styles.TextPrimaryStyle.Render(item.Title)
+			}
+		case hc.StatusDone:
+			symbol = lipgloss.NewStyle().Foreground(styles.ColorSuccess).Faint(true).Render("✓")
+			title = mutedStyle.Render(item.Title)
+		case hc.StatusCancelled:
+			symbol = mutedStyle.Render("✗")
+			title = mutedStyle.Render(item.Title)
+		default:
+			symbol = "?"
+			title = item.Title
+		}
+
+		id := mutedStyle.Render("(" + item.ID + ")")
+
+		var extras []string
+		if item.SessionID != "" {
+			extras = append(extras, assignStyle.Render("→ "+item.SessionID))
+		}
+		if item.Blocked {
+			extras = append(extras, warningStyle.Render("[blocked]"))
+		}
+
+		line := prefix + mutedStyle.Render(connector) + symbol + " " + title + " " + id
+		if len(extras) > 0 {
+			line += "  " + strings.Join(extras, " ")
+		}
+		_, _ = fmt.Fprintln(w, line)
+
+		// Continuation bar: only if current node is not the last child (connector != "└─ ")
+		childPrefix := prefix + "│  "
+		if connector == "└─ " || connector == "" {
+			childPrefix = prefix + "   "
+		}
+
+		for i, child := range node.children {
+			childConnector := "├─ "
+			if i == len(node.children)-1 {
+				childConnector = "└─ "
+			}
+			walk(child, childPrefix, childConnector)
+		}
+	}
+
+	for _, root := range roots {
+		walk(root, "", "")
+	}
+}
+
+// renderMarkdown renders markdown to w using glamour when w is a TTY,
+// falling back to plain text otherwise.
+func renderMarkdown(w io.Writer, markdown string) {
+	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle()); err == nil {
+			if rendered, err := r.Render(markdown); err == nil {
+				_, _ = fmt.Fprint(w, rendered)
+				return
+			}
+		}
+	}
+	_, _ = fmt.Fprint(w, markdown)
 }
 
 func (cmd *HoneycombCmd) showCmd() *cli.Command {
@@ -461,8 +562,8 @@ Examples:
 				return iojson.WriteWith(c.Root().Writer, c.Root().ErrWriter, cb)
 			}
 
-			_, err = fmt.Fprint(c.Root().Writer, cb.String())
-			return err
+			renderMarkdown(c.Root().Writer, cb.String())
+			return nil
 		},
 	}
 }

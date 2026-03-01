@@ -56,14 +56,22 @@ hive hc next <epic-id>
 hive hc update <id> --assign --status in_progress
 ```
 
-### 3. Record progress
+### 3. Record progress (use sparingly)
+
+Comments accumulate in context and consume tokens — only add one when there is something worth preserving for the next agent. Prefer a single substantive note over several incremental ones.
+
+Good reasons to comment:
+- A non-obvious decision was made ("chose polling over webhooks because X")
+- Stopping mid-task and the next agent needs orientation
+- A blocker or external dependency was discovered
 
 ```bash
-hive hc comment <id> "Implemented the database schema"
-hive hc comment <id> "Added rate limiting middleware"
+hive hc comment <id> "Switched to optimistic locking — pessimistic caused deadlocks under load"
 ```
 
-### 4. Record a handoff note when stopping mid-task
+### 4. Record a handoff checkpoint when stopping mid-task
+
+One comment at stop time, prefixed with `CHECKPOINT:`, is enough. Include what is done and what remains.
 
 ```bash
 hive hc comment <id> "CHECKPOINT: DB schema done, need to wire API handlers next"
@@ -133,7 +141,7 @@ Bulk mode (no positional arg, reads JSON from stdin or `--file`):
 
 ### `hive hc list [epic-id]`
 
-- `[epic-id]` — optional positional arg to filter by epic
+- `[epic-id]` — optional positional arg to filter by epic (returns children only, not the epic itself)
 - `--status open|in_progress|done|cancelled` — filter by status
 - `--session <id>` — filter by session ID
 
@@ -162,13 +170,15 @@ Exits with error if no actionable tasks found.
 
 Adds a comment to an item. All positional args after the ID are joined as the message.
 
+Use sparingly — comments accumulate in the context block and are visible to every subsequent agent reading this epic. Prefer one meaningful note over several incremental ones. For handoffs, prefix with `CHECKPOINT:`.
+
 ### `hive hc context <epic-id>`
 
 Assembles context block containing:
 - Epic title and description
 - Task counts by status
-- Tasks assigned to current session (with latest comment)
-- All open/in-progress tasks
+- Tasks assigned to current session (with latest comment) — **My Tasks**
+- All open/in-progress tasks not assigned to the current session — **Other Open Tasks**
 
 - `--json` — output as single JSON object (default: markdown)
 

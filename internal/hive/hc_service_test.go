@@ -489,6 +489,7 @@ func TestAddComment_ReturnsComment(t *testing.T) {
 	svc := newTestHoneycombService(store)
 
 	itemID := "hc-testitem"
+	store.items[itemID] = hc.Item{ID: itemID, Title: "Test Item", Type: hc.ItemTypeEpic, Status: hc.StatusOpen}
 
 	comment, err := svc.AddComment(context.Background(), itemID, "hello world")
 	require.NoError(t, err)

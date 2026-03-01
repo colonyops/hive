@@ -52,12 +52,44 @@ func (c ContextBlock) String() string {
 	}
 
 	if len(c.AllOpenTasks) > 0 {
-		fmt.Fprintf(&b, "## Open Tasks\n\n")
-		for _, item := range c.AllOpenTasks {
+		fmt.Fprintf(&b, "## Other Open Tasks\n\n")
+		for _, item := range treeOrder(c.AllOpenTasks) {
 			indent := strings.Repeat("  ", max(0, item.Depth-1))
 			fmt.Fprintf(&b, "%s- [%s] %s (`%s`)\n", indent, item.Status, item.Title, item.ID)
 		}
 	}
 
 	return b.String()
+}
+
+// treeOrder returns items sorted in parent-before-children traversal order,
+// preserving sibling order from the input slice.
+func treeOrder(items []Item) []Item {
+	byID := make(map[string]Item, len(items))
+	for _, item := range items {
+		byID[item.ID] = item
+	}
+
+	children := make(map[string][]Item)
+	var roots []Item
+	for _, item := range items {
+		if _, ok := byID[item.ParentID]; !ok {
+			roots = append(roots, item)
+		} else {
+			children[item.ParentID] = append(children[item.ParentID], item)
+		}
+	}
+
+	result := make([]Item, 0, len(items))
+	var walk func(item Item)
+	walk = func(item Item) {
+		result = append(result, item)
+		for _, child := range children[item.ID] {
+			walk(child)
+		}
+	}
+	for _, root := range roots {
+		walk(root)
+	}
+	return result
 }

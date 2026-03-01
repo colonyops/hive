@@ -153,6 +153,10 @@ func (s *HoneycombService) AddComment(ctx context.Context, itemID, message strin
 		return hc.Comment{}, fmt.Errorf("message is required")
 	}
 
+	if _, err := s.store.GetItem(ctx, itemID); err != nil {
+		return hc.Comment{}, fmt.Errorf("hc item %q: %w", itemID, hc.ErrNotFound)
+	}
+
 	comment := hc.Comment{
 		ID:        hc.GenerateCommentID(),
 		ItemID:    itemID,
@@ -199,7 +203,8 @@ func (s *HoneycombService) Context(ctx context.Context, epicID, sessionID string
 			counts.Cancelled++
 		}
 
-		if item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress {
+		if (item.Status == hc.StatusOpen || item.Status == hc.StatusInProgress) &&
+			!(sessionID != "" && item.SessionID == sessionID) {
 			allOpen = append(allOpen, item)
 		}
 

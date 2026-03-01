@@ -203,11 +203,11 @@ Never silently discard errors. If an error cannot be presented to the user (e.g.
 echo '{"title":"Epic","type":"epic","children":[{"title":"Task","type":"task"}]}' | hive hc create
 
 # Worker: claim next task
-hive hc next --assign
+hive hc next <epic-id> --assign
 
 # Worker: record progress
-hive hc log <id> "implemented X"
-hive hc checkpoint <id> "stopping here, Y still needed"
+hive hc comment <id> "implemented X"
+hive hc comment <id> "CHECKPOINT: stopping here, Y still needed"
 
 # Worker: complete task
 hive hc update <id> --status done
@@ -230,9 +230,9 @@ hive hc list --session <session-id>   # filter by session
 | `hive hc list [epic-id]` | List items, optional epic/status/session filters |
 | `hive hc show <id>` | Item + comments as JSON lines |
 | `hive hc update <id>` | Update status (`--status`), assign (`--assign`/`--unassign`) |
-| `hive hc next [epic-id]` | Next actionable leaf task; `--assign` to claim |
-| `hive hc log <id> <msg>` | Add a log comment |
-| `hive hc checkpoint <id> <msg>` | Handoff checkpoint (prefixed with `CHECKPOINT:`) |
+| `hive hc next <epic-id>` | Next actionable leaf task; `--assign` to claim |
+| `hive hc comment <id> <msg>` | Add a comment |
+| `hive hc comment <id> "CHECKPOINT: msg"` | Handoff checkpoint |
 | `hive hc context <epic-id>` | Epic context block; `--json` for JSON output |
 | `hive hc prune` | Remove old completed items |
 
