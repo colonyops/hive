@@ -1962,66 +1962,88 @@ type OpenDocumentMsg struct {
 }
 
 // OpenDocumentByPath attempts to open a specific document by path.
-// Path can be absolute, relative to context directory, or prefixed with ".hive/"
-// (the symlink name agents use to reference context files from the repo root).
+// Path can be absolute, relative to context directory, prefixed with ".hive/",
+// or a URI with a scheme (e.g. review://.hive/plans/...).
 // Returns a command that sends an OpenDocumentMsg.
 func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 	return func() tea.Msg {
-		// Resolve .hive/ prefix: the .hive symlink in the repo root points to contextDir,
-		// so ".hive/foo" is equivalent to contextDir/foo. Agents use .hive/-prefixed paths
-		// in URIs, but DiscoverDocuments stores RelPath relative to contextDir (no prefix).
-		absPath := path
-		relPath := path
-		if v.contextDir != "" && strings.HasPrefix(path, ".hive/") {
-			rel := strings.TrimPrefix(path, ".hive/")
-			absPath = filepath.Join(v.contextDir, rel)
-			relPath = rel
-		}
-
-		var found *Document
-		for _, ti := range TreeItemsDocuments(v.list.Items()) {
-			if ti.Document.Path == path || ti.Document.RelPath == path ||
-				ti.Document.Path == absPath || ti.Document.RelPath == relPath {
-				doc := ti.Document
-				found = &doc
-				break
-			}
-
-			// Check suffix match to handle stored paths that include a leading
-			// symlink component (e.g. ".hive/plans/doc.md" vs RelPath "plans/doc.md").
-			if strings.HasSuffix(ti.Document.Path, "/"+path) ||
-				strings.HasSuffix(path, "/"+ti.Document.RelPath) {
-				doc := ti.Document
-				found = &doc
-				break
-			}
-
-			// Basename fallback for legacy URIs or short references
-			if filepath.Base(ti.Document.Path) == filepath.Base(path) {
-				doc := ti.Document
-				found = &doc
-				break
-			}
-		}
-
-		// If not in the indexed list, try loading directly from disk.
-		// This handles newly created files that the watcher hasn't indexed yet.
-		if found == nil && absPath != path {
-			if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
-				doc := Document{
-					Path:    absPath,
-					RelPath: relPath,
-					Type:    inferDocumentType(relPath),
-					ModTime: info.ModTime(),
-				}
-				found = &doc
-			}
-		}
-
+		found := v.findDocumentByPath(path)
 		if found == nil {
 			return OpenDocumentMsg{Path: path, Err: fmt.Errorf("document not found: %s", path)}
 		}
-
 		return OpenDocumentMsg{Path: found.Path}
 	}
+}
+
+// findDocumentByPath resolves a path to a Document using progressively looser matching:
+// URI stripping, .hive/ prefix resolution, exact match, symlink resolution,
+// suffix match, basename fallback, and finally disk fallback.
+func (v *View) findDocumentByPath(path string) *Document {
+	// Strip URI scheme if present (e.g. "review://path" → "path")
+	if idx := strings.Index(path, "://"); idx >= 0 {
+		path = path[idx+3:]
+	}
+
+	// Resolve .hive/ prefix: the .hive symlink points to contextDir,
+	// so ".hive/foo" is equivalent to contextDir/foo.
+	absPath := path
+	relPath := path
+	if v.contextDir != "" && strings.HasPrefix(path, ".hive/") {
+		rel := strings.TrimPrefix(path, ".hive/")
+		absPath = filepath.Join(v.contextDir, rel)
+		relPath = rel
+	}
+
+	docs := TreeItemsDocuments(v.list.Items())
+
+	// 1. Exact match against Path or RelPath (including .hive/-resolved variants)
+	for _, ti := range docs {
+		if ti.Document.Path == path || ti.Document.RelPath == path ||
+			ti.Document.Path == absPath || ti.Document.RelPath == relPath {
+			doc := ti.Document
+			return &doc
+		}
+	}
+
+	// 2. Resolve symlinks and try again
+	if resolved, err := filepath.EvalSymlinks(path); err == nil && resolved != path {
+		for _, ti := range docs {
+			if ti.Document.Path == resolved {
+				doc := ti.Document
+				return &doc
+			}
+		}
+	}
+
+	// 3. Suffix match for paths with different prefixes
+	for _, ti := range docs {
+		if strings.HasSuffix(ti.Document.Path, "/"+path) ||
+			strings.HasSuffix(path, "/"+ti.Document.RelPath) {
+			doc := ti.Document
+			return &doc
+		}
+	}
+
+	// 4. Basename fallback
+	base := filepath.Base(path)
+	for _, ti := range docs {
+		if filepath.Base(ti.Document.Path) == base {
+			doc := ti.Document
+			return &doc
+		}
+	}
+
+	// 5. Disk fallback for files not yet indexed by the watcher
+	if absPath != path {
+		if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
+			return &Document{
+				Path:    absPath,
+				RelPath: relPath,
+				Type:    inferDocumentType(relPath),
+				ModTime: info.ModTime(),
+			}
+		}
+	}
+
+	return nil
 }

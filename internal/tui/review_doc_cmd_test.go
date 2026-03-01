@@ -123,8 +123,28 @@ func TestOpenDocument(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name:    "strip review:// URI scheme with absolute path",
+			path:    "review:///test/plans/doc1.md",
+			wantErr: false,
+		},
+		{
+			name:    "strip review:// URI scheme with .hive/ path",
+			path:    "review://.hive/plans/doc1.md",
+			wantErr: false,
+		},
+		{
+			name:    "strip arbitrary URI scheme",
+			path:    "obsidian:///test/research/doc2.md",
+			wantErr: false,
+		},
+		{
 			name:    "not found",
 			path:    "nonexistent.md",
+			wantErr: true,
+		},
+		{
+			name:    "not found with URI scheme",
+			path:    "review://nonexistent.md",
 			wantErr: true,
 		},
 	}

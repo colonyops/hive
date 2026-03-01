@@ -839,6 +839,73 @@ func TestReverseMappingCorrectness(t *testing.T) {
 	assert.Nil(t, nilResult, "buildDisplayToDocMap(nil) should return nil")
 }
 
+func TestFindDocumentByPath(t *testing.T) {
+	docs := []Document{
+		{Path: "/ctx/plans/design.md", RelPath: "plans/design.md", Type: DocTypePlan},
+		{Path: "/ctx/research/notes.md", RelPath: "research/notes.md", Type: DocTypeResearch},
+	}
+	view := New(docs, "/ctx", nil)
+	view.SetSize(100, 40)
+
+	tests := []struct {
+		name    string
+		path    string
+		wantNil bool
+	}{
+		{name: "exact absolute path", path: "/ctx/plans/design.md"},
+		{name: "exact relative path", path: "plans/design.md"},
+		{name: "basename match", path: "design.md"},
+		{name: "strip review:// scheme", path: "review:///ctx/plans/design.md"},
+		{name: "strip review:// with relpath", path: "review://plans/design.md"},
+		{name: "strip arbitrary scheme", path: "obsidian:///ctx/research/notes.md"},
+		{name: "not found", path: "missing.md", wantNil: true},
+		{name: "not found with scheme", path: "review://missing.md", wantNil: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			found := view.findDocumentByPath(tt.path)
+			if tt.wantNil {
+				assert.Nil(t, found)
+			} else {
+				require.NotNil(t, found, "expected document to be found for path %q", tt.path)
+			}
+		})
+	}
+}
+
+func TestFindDocumentByPath_SymlinkResolution(t *testing.T) {
+	// Create a temp directory structure with a symlink
+	tmpDir := t.TempDir()
+	realDir := filepath.Join(tmpDir, "real", "plans")
+	require.NoError(t, os.MkdirAll(realDir, 0o755))
+
+	docPath := filepath.Join(realDir, "test.md")
+	require.NoError(t, os.WriteFile(docPath, []byte("# Test"), 0o644))
+
+	// Create symlink: tmpDir/link -> tmpDir/real
+	linkPath := filepath.Join(tmpDir, "link")
+	require.NoError(t, os.Symlink(filepath.Join(tmpDir, "real"), linkPath))
+
+	// Document is stored with the real (resolved) path
+	docs := []Document{
+		{Path: docPath, RelPath: "plans/test.md", Type: DocTypePlan},
+	}
+	view := New(docs, filepath.Join(tmpDir, "real"), nil)
+	view.SetSize(100, 40)
+
+	// Look up via symlink path — should resolve and find the document
+	symlinkDocPath := filepath.Join(linkPath, "plans", "test.md")
+	found := view.findDocumentByPath(symlinkDocPath)
+	require.NotNil(t, found, "expected symlink path to resolve to document")
+	assert.Equal(t, docPath, found.Path)
+
+	// Also test with URI scheme + symlink
+	found = view.findDocumentByPath("review://" + symlinkDocPath)
+	require.NotNil(t, found, "expected URI+symlink path to resolve to document")
+	assert.Equal(t, docPath, found.Path)
+}
+
 // TestFinalizedSessionsNotReloaded verifies that finalized sessions are not
 // loaded as active sessions when opening a document.
 func TestFinalizedSessionsNotReloaded(t *testing.T) {
