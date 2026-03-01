@@ -46,7 +46,7 @@ type ViewOpts struct {
 
 	// Optional — nil disables the corresponding feature.
 	LocalRemote string
-	RepoDirs    []string
+	Workspaces  []string
 	Renderer    *tmpl.Renderer
 	Bus         *eventbus.EventBus
 }
@@ -94,7 +94,7 @@ type View struct {
 	focusFilterInput textinput.Model
 
 	// Repository discovery
-	repoDirs        []string
+	workspaces      []string
 	discoveredRepos []DiscoveredRepo
 
 	// Layout state
@@ -213,7 +213,7 @@ func New(opts ViewOpts) *View {
 		pluginStatuses:     pluginStatuses,
 		pluginPollInterval: pluginPollInterval,
 
-		repoDirs: opts.RepoDirs,
+		workspaces: opts.Workspaces,
 
 		focusFilterInput: focusInput,
 		renderer:         opts.Renderer,
@@ -226,7 +226,7 @@ func New(opts ViewOpts) *View {
 func (v *View) Init() tea.Cmd {
 	cmds := []tea.Cmd{v.loadSessions()}
 
-	if len(v.repoDirs) > 0 {
+	if len(v.workspaces) > 0 {
 		cmds = append(cmds, v.scanRepoDirs())
 	}
 
@@ -1157,7 +1157,7 @@ func (v *View) loadSessions() tea.Cmd {
 // scanRepoDirs returns a command that scans configured directories for git repositories.
 func (v *View) scanRepoDirs() tea.Cmd {
 	return func() tea.Msg {
-		repos, err := ScanRepoDirs(context.Background(), v.repoDirs, v.service.Git())
+		repos, err := ScanRepoDirs(context.Background(), v.workspaces, v.service.Git())
 		if err != nil {
 			log.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}

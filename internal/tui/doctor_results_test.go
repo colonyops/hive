@@ -20,7 +20,7 @@ func TestBuildDoctorDialogContent_StatusMappingAndSummary(t *testing.T) {
 		{
 			Name: "config",
 			Items: []doctor.CheckItem{
-				{Label: "repo_dirs", Detail: "empty", Status: doctor.StatusWarn},
+				{Label: "workspaces", Detail: "empty", Status: doctor.StatusWarn},
 			},
 		},
 	}
