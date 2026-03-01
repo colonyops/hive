@@ -39,17 +39,17 @@ func (cmd *SessionCmd) Register(app *cli.Command) *cli.Command {
 			Usage: "Session management commands",
 			Description: `Commands for managing and inspecting hive sessions.
 
-Use 'hive session ls' to list all sessions.
+Use 'hive session list' to list all sessions.
 Use 'hive session info' to get details about the current session.`,
 			Commands: []*cli.Command{
 				lsCommand,
 				cmd.infoCmd(),
 			},
 		},
-		// Top-level alias: "hive ls" -> "hive session ls"
+		// Top-level alias: "hive ls" -> "hive session list"
 		&cli.Command{
 			Name:      "ls",
-			Usage:     "List all sessions (alias for 'session ls')",
+			Usage:     "List all sessions (alias for 'session list')",
 			UsageText: "hive ls [--json]",
 			Hidden:    true,
 			Flags:     lsCommand.Flags,
@@ -62,9 +62,10 @@ Use 'hive session info' to get details about the current session.`,
 
 func (cmd *SessionCmd) lsCmd() *cli.Command {
 	return &cli.Command{
-		Name:      "ls",
+		Name:      "list",
+		Aliases:   []string{"ls"},
 		Usage:     "List all sessions",
-		UsageText: "hive session ls [--json]",
+		UsageText: "hive session list [--json]",
 		Description: `Displays a table of all sessions with their repo, name, state, and path.
 
 Use --json for LLM-friendly output with additional fields like inbox topic and unread count.`,
