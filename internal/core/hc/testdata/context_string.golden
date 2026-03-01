@@ -1,0 +1,15 @@
+# Ship Honeycomb Feature
+
+Implement the honeycomb task management system for agent coordination.
+
+**Progress:** 3 open · 1 in progress · 2 done · 0 cancelled
+
+## My Tasks
+
+- [in_progress] **Add domain types** (`hc-task1`)
+  > Started with Item and Activity structs; need to add Store interface next.
+- [open] **Add data migrations** (`hc-task2`)
+
+## Other Open Tasks
+
+- [open] Wire service layer (`hc-task3`)

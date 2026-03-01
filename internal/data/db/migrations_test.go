@@ -131,28 +131,24 @@ func TestMigrateDown(t *testing.T) {
 	ctx := context.Background()
 	conn := database.Conn()
 
+	migrations, err := loadMigrations()
+	require.NoError(t, err)
+
 	// Insert a session row (clone_strategy defaults to 'full').
-	_, err := conn.ExecContext(ctx, `
+	_, err = conn.ExecContext(ctx, `
 		INSERT INTO sessions (id, name, slug, path, remote, state, created_at, updated_at)
 		VALUES ('test-1', 'Test', 'test', '/tmp/test', 'https://example.com', 'active', 1, 1)
 	`)
 	require.NoError(t, err)
 
-	// Revert the last migration (add_clone_strategy).
+	// Revert the last migration.
 	err = MigrateDown(ctx, conn, 1)
 	require.NoError(t, err)
 
-	// clone_strategy column should be gone.
-	var colCount int
-	err = conn.QueryRowContext(ctx,
-		"SELECT COUNT(*) FROM pragma_table_info('sessions') WHERE name = 'clone_strategy'",
-	).Scan(&colCount)
+	// Exactly one version should now be absent from schema_migrations.
+	applied, err := appliedVersions(ctx, conn)
 	require.NoError(t, err)
-	assert.Equal(t, 0, colCount, "clone_strategy column should not exist after down migration")
-
-	// todo_items table should still exist (only migration 8 was reverted).
-	_, err = conn.ExecContext(ctx, "SELECT 1 FROM todo_items LIMIT 0")
-	require.NoError(t, err, "todo_items should still exist")
+	assert.Len(t, applied, len(migrations)-1, "one migration should be reverted")
 
 	// sessions table should still have the row.
 	var count int
