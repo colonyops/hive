@@ -6,14 +6,15 @@ import (
 	"os/exec"
 	"runtime"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
-	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/rs/zerolog/log"
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/tui/command"
@@ -54,10 +55,10 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 	// Publish startup warnings on the first WindowSizeMsg
 	if len(m.startupWarnings) > 0 {
 		for _, w := range m.startupWarnings {
-			m.notifyBus.Warnf("%s", w)
+			m.publishNotificationf(notify.LevelWarning, "%s", w)
 		}
 		m.startupWarnings = nil
-		return m, m.ensureToastTick()
+		return m, nil
 	}
 	return m, nil
 }
@@ -116,7 +117,8 @@ func (m Model) handleToastTick(_ toastTickMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, tea.Cmd) {
 	action := msg.Action
 	if action.Err != nil {
-		return m, m.notifyError("keybinding error: %v", action.Err)
+		m.notifyErrorf("keybinding error: %v", action.Err)
+		return m, nil
 	}
 	if action.Type == act.TypeDocReview {
 		cmd := HiveDocReviewCmd{Arg: ""}
@@ -203,7 +205,8 @@ func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) 
 	if msg.err != nil {
 		log.Error().Err(msg.err).Msg("rename failed")
 		m.state = stateNormal
-		return m, m.notifyError("rename failed: %v", msg.err)
+		m.notifyErrorf("rename failed: %v", msg.err)
+		return m, nil
 	}
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
@@ -222,7 +225,8 @@ func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) 
 		log.Error().Err(msg.err).Msg("action failed")
 		m.state = stateNormal
 		m.modals.Pending = Action{}
-		return m, m.notifyError("action failed: %v", msg.err)
+		m.notifyErrorf("action failed: %v", msg.err)
+		return m, nil
 	}
 	m.state = stateNormal
 	m.modals.Pending = Action{}
@@ -310,7 +314,8 @@ func (m Model) handleReviewDocChange(msg review.DocumentChangeMsg) (tea.Model, t
 
 func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, tea.Cmd) {
 	if err := m.copyToClipboard(msg.Feedback); err != nil {
-		return m, m.notifyError("failed to copy feedback: %v", err)
+		m.notifyErrorf("failed to copy feedback: %v", err)
+		return m, nil
 	}
 
 	// Auto-complete todos whose ref matches the finalized document
@@ -323,7 +328,8 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 
 func (m Model) handleReviewOpenDoc(msg review.OpenDocumentMsg) (tea.Model, tea.Cmd) {
 	if msg.Err != nil {
-		return m, m.notifyError("open document: %v", msg.Err)
+		m.notifyErrorf("open document: %v", msg.Err)
+		return m, nil
 	}
 	if m.reviewView != nil {
 		for _, item := range m.reviewView.List().Items() {
@@ -340,9 +346,30 @@ func (m Model) handleReviewOpenDoc(msg review.OpenDocumentMsg) (tea.Model, tea.C
 
 // --- Notifications ---
 
-func (m Model) handleNotification(msg notificationMsg) (tea.Model, tea.Cmd) {
-	m.notifyBus.Publish(msg.notification)
-	return m, m.ensureToastTick()
+func (m Model) handleDrainNotifications(_ drainNotificationsMsg) (tea.Model, tea.Cmd) {
+	if m.notifyBuffer == nil {
+		return m, nil
+	}
+
+	notifications := m.notifyBuffer.Drain()
+	for _, n := range notifications {
+		if n.CreatedAt.IsZero() {
+			n.CreatedAt = time.Now()
+		}
+
+		if _, err := m.notifyStore.Save(context.Background(), n); err != nil {
+			log.Error().Err(err).Str("message", n.Message).Msg("failed to persist notification")
+		}
+
+		m.toastController.Push(n)
+	}
+
+	cmds := []tea.Cmd{m.notifyBuffer.WaitForSignal()}
+	if m.toastController.HasToasts() {
+		cmds = append(cmds, scheduleToastTick())
+	}
+
+	return m, tea.Batch(cmds...)
 }
 
 func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd) {
@@ -351,8 +378,8 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 	}
 
 	m.updateInfo = msg.result
-	m.notifyBus.Infof("Update available: %s -> %s", msg.result.Current, msg.result.Latest)
-	return m, m.ensureToastTick()
+	m.publishNotificationf(notify.LevelInfo, "Update available: %s -> %s", msg.result.Current, msg.result.Latest)
+	return m, nil
 }
 
 // --- Todo Panel ---
@@ -379,8 +406,8 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if item.URI.IsEmpty() {
-			m.notifyBus.Infof("no URI on this todo")
-			return m, m.ensureToastTick()
+			m.publishNotificationf(notify.LevelInfo, "no URI on this todo")
+			return m, nil
 		}
 		switch item.URI.Scheme() {
 		case "session":
@@ -454,7 +481,7 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		items, err := m.todoService.List(ctx, todo.ListFilter{})
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to list todos for auto-complete")
-			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete failed: unable to list todos"}}
+			return todoAutoCompleteResultMsg{failed: -1}
 		}
 		failed := 0
 		for _, item := range items {
@@ -479,12 +506,12 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 		pending, err := m.todoService.CountPending(ctx)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to load todo pending count after auto-complete")
-			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
+			return todoAutoCompleteResultMsg{failed: failed}
 		}
 		open, err := m.todoService.CountOpen(ctx)
 		if err != nil {
 			log.Warn().Err(err).Msg("failed to load todo open count after auto-complete")
-			return notificationMsg{notification: notify.Notification{Level: notify.LevelWarning, Message: "Auto-complete finished, but todo counts could not be refreshed"}}
+			return todoAutoCompleteResultMsg{failed: failed}
 		}
 		return todoAutoCompleteResultMsg{pendingCount: pending, openCount: open, failed: failed}
 	}
@@ -591,7 +618,8 @@ func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) 
 		}
 	}
 	if repoPath == "" {
-		return m, m.notifyError("no local repository found for %s", name)
+		m.notifyErrorf("no local repository found for %s", name)
+		return m, nil
 	}
 
 	shellCmd, err := m.renderer.Render(
@@ -599,7 +627,8 @@ func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) 
 		struct{ Name, Path string }{Name: name, Path: repoPath},
 	)
 	if err != nil {
-		return m, m.notifyError("template error: %v", err)
+		m.notifyErrorf("template error: %v", err)
+		return m, nil
 	}
 
 	action := Action{

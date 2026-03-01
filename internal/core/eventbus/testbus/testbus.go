@@ -127,3 +127,12 @@ func (tb *Bus) AssertPublished(t *testing.T, event eventbus.Event) {
 		t.Errorf("expected event %q to be published, but it was not", event)
 	}
 }
+
+// AssertNotPublished asserts that an event of the given type was NOT recorded
+// within the specified duration.
+func (tb *Bus) AssertNotPublished(t *testing.T, event eventbus.Event, wait time.Duration) {
+	t.Helper()
+	if tb.WaitFor(event, wait) {
+		t.Errorf("expected event %q to NOT be published, but it was", event)
+	}
+}
