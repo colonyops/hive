@@ -29,7 +29,7 @@ const (
 	unknownSender = "unknown"
 
 	// Minimum width before falling back to single-column layout.
-	minDualPaneWidth = 60
+	minDualPaneWidth = 120
 )
 
 // Focus pane constants for the split-pane layout.
