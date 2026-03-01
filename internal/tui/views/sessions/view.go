@@ -272,7 +272,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 	case RefreshSessionsMsg:
 		v.refreshing = true
 		return v.loadSessions()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return v.handleKeyMsg(msg)
 	default:
 		// Forward all other messages to list.Update()
@@ -411,12 +411,12 @@ func (v *View) handleAnimationTick() tea.Cmd {
 
 // --- Key handling ---
 
-func (v *View) handleKeyMsg(msg tea.KeyMsg) tea.Cmd {
+func (v *View) handleKeyMsg(msg tea.KeyPressMsg) tea.Cmd {
 	_, cmd := v.handleKey(msg)
 	return cmd
 }
 
-func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
+func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Handle focus mode filtering
@@ -535,7 +535,7 @@ func (v *View) handleKey(msg tea.KeyMsg) (*View, tea.Cmd) {
 	return v, cmd
 }
 
-func (v *View) handleFilterKey(msg tea.KeyMsg, keyStr string) (*View, tea.Cmd) {
+func (v *View) handleFilterKey(msg tea.KeyPressMsg, keyStr string) (*View, tea.Cmd) {
 	switch keyStr {
 	case "esc":
 		v.stopFocusMode()

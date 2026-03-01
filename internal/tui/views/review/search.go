@@ -58,7 +58,7 @@ func (s SearchMode) Update(msg tea.Msg) (SearchMode, tea.Cmd) {
 		return s, nil
 	}
 
-	keyMsg, ok := msg.(tea.KeyMsg)
+	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return s, nil
 	}

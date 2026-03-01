@@ -79,7 +79,7 @@ func NewDocumentPickerModal(documents []Document, width, height int, store *stor
 
 // Update handles messages for the picker modal.
 func (m *DocumentPickerModal) Update(msg tea.Msg) (*DocumentPickerModal, tea.Cmd) {
-	keyMsg, ok := msg.(tea.KeyMsg)
+	keyMsg, ok := msg.(tea.KeyPressMsg)
 	if !ok {
 		return m, nil
 	}

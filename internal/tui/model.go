@@ -557,7 +557,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m, tea.Batch(m.loadTodoCounts(), m.ensureToastTick())
 
 	// Input
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		model, cmd = m.handleKeyMsg(msg)
 	case spinner.TickMsg:
 		model, cmd = m.handleSpinnerTick(msg)
@@ -576,7 +576,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 }
 
 // handleKey processes key presses.
-func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	keyStr := msg.String()
 
 	// Handle modal states first
@@ -624,7 +624,7 @@ func (m Model) handleKey(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleNewSessionFormKey handles keys when new session form is shown.
-func (m Model) handleNewSessionFormKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleNewSessionFormKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
 		return m.quit()
 	}
@@ -676,7 +676,7 @@ func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess sessi
 }
 
 // handleFormDialogKey handles keys when the form dialog is shown.
-func (m Model) handleFormDialogKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleFormDialogKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
 		return m.quit()
 	}
@@ -944,7 +944,7 @@ func buildDoctorDialogContent(results []doctor.Result) ([]components.InfoSection
 }
 
 // handleCommandPaletteKey handles keys when command palette is shown.
-func (m Model) handleCommandPaletteKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
 		return m.quit()
 	}
@@ -1099,7 +1099,7 @@ func (m Model) copyToClipboard(text string) error {
 }
 
 // handleFilteringKey handles keys when filter input is active.
-func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleFilteringKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	if keyStr == keyCtrlC {
 		return m.quit()
 	}
@@ -1138,7 +1138,7 @@ func (m Model) handleFilteringKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea
 }
 
 // handleNormalKey handles keys in normal state.
-func (m Model) handleNormalKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	// When editor has focus, block all keybindings except critical ones
 	if m.hasEditorFocus() {
 		switch keyStr {
@@ -1313,7 +1313,7 @@ func (m Model) openRenameInput(sess *session.Session) (tea.Model, tea.Cmd) {
 }
 
 // handleRenameKey handles keys when the rename input is active.
-func (m Model) handleRenameKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleRenameKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyCtrlC:
 		return m.quit()
@@ -1398,7 +1398,7 @@ func (m Model) openGroupInput(sess *session.Session) (tea.Model, tea.Cmd) {
 }
 
 // handleGroupKey handles keys when the group input is active.
-func (m Model) handleGroupKey(msg tea.KeyMsg, keyStr string) (tea.Model, tea.Cmd) {
+func (m Model) handleGroupKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, tea.Cmd) {
 	switch keyStr {
 	case keyCtrlC:
 		return m.quit()
@@ -1485,7 +1485,7 @@ func (m *Model) hasEditorFocus() bool {
 
 // delegateToComponent forwards a key message to the appropriate component.
 // This is used when editor has focus to allow normal typing.
-func (m Model) delegateToComponent(msg tea.KeyMsg) (tea.Model, tea.Cmd) {
+func (m Model) delegateToComponent(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	var cmd tea.Cmd
 
 	// Route based on current state

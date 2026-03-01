@@ -78,7 +78,7 @@ func formatContextPreview(text string) string {
 
 // Update handles messages.
 func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "ctrl+enter", "ctrl+s":
 			// Submit with Ctrl+Enter or Ctrl+S

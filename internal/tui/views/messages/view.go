@@ -67,7 +67,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 		return v.handleMessagesLoaded(msg)
 	case pollTickMsg:
 		return v.handlePollTick()
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		return v.handleKey(msg)
 	}
 	return nil
@@ -130,7 +130,7 @@ func (v *View) handlePollTick() tea.Cmd {
 	return schedulePollTick()
 }
 
-func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
+func (v *View) handleKey(msg tea.KeyPressMsg) tea.Cmd {
 	// Preview modal keys take priority
 	if v.previewModal != nil {
 		return v.handlePreviewKey(msg)
@@ -145,7 +145,7 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 	return v.handleNormalKey(msg)
 }
 
-func (v *View) handlePreviewKey(msg tea.KeyMsg) tea.Cmd {
+func (v *View) handlePreviewKey(msg tea.KeyPressMsg) tea.Cmd {
 	v.previewModal.ClearCopyStatus()
 
 	switch msg.String() {
@@ -167,7 +167,7 @@ func (v *View) handlePreviewKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (v *View) handleFilterKey(msg tea.KeyMsg) tea.Cmd {
+func (v *View) handleFilterKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "esc":
 		v.ctrl.CancelFilter()
@@ -185,7 +185,7 @@ func (v *View) handleFilterKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
-func (v *View) handleNormalKey(msg tea.KeyMsg) tea.Cmd {
+func (v *View) handleNormalKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "enter":
 		sel := v.ctrl.Selected()

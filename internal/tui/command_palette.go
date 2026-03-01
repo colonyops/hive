@@ -107,7 +107,7 @@ func NewCommandPalette(cmds map[string]config.UserCommand, sess *session.Session
 
 // Update handles messages for the command palette.
 func (p *CommandPalette) Update(msg tea.Msg) (*CommandPalette, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
 		case "enter":
 			if len(p.filteredList) > 0 && p.selectedIdx < len(p.filteredList) {

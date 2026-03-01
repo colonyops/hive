@@ -56,7 +56,7 @@ func NewFinalizationModal(feedback string, width, height int) FinalizationModal 
 
 // Update handles input events for the finalization modal.
 func (m FinalizationModal) Update(msg tea.Msg) (FinalizationModal, tea.Cmd) {
-	if keyMsg, ok := msg.(tea.KeyMsg); ok {
+	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		keyStr := keyMsg.String()
 		log.Debug().
 			Str("key", keyStr).

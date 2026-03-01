@@ -206,7 +206,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		}
 		return v, nil
 
-	case tea.KeyMsg:
+	case tea.KeyPressMsg:
 		// Handle document picker modal if active (MUST be first to prevent key conflicts)
 		if v.pickerModal != nil {
 			modal, cmd := v.pickerModal.Update(msg)
