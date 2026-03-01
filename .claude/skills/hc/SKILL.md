@@ -33,6 +33,24 @@ hive hc context <epic-id>        Show epic context block
 hive hc prune                    Remove old completed items
 ```
 
+## Why This System Helps
+
+The hardest part of agent handoffs isn't knowing *what* to do — it's re-orienting after a context compaction or session switch. `hive hc context` solves this directly: one command gives a structured snapshot of what's done, what's yours, and what's left.
+
+**Commands by value, in order:**
+
+1. **`context`** — run this at the start of every session before doing anything else. It replaces reading through git log, comments, and prior prompts.
+2. **`next --assign`** — claim work atomically. Prevents two agents grabbing the same task without any coordination overhead.
+3. **`comment` with `CHECKPOINT:`** — the one note you leave before stopping. The next agent reading `context` will see it alongside your task.
+
+**`list --json`** is for programmatic use; the tree view is for humans. Always use `--json` when parsing output.
+
+**`prune`** is a conductor maintenance command — workers don't need to think about it.
+
+**Task granularity matters.** This system is only as useful as the tasks a conductor creates. Coarse tasks ("implement auth") give `next` nothing useful to sequence. Well-decomposed leaf tasks ("add JWT validation middleware", "write login endpoint tests") make `next` and `context` genuinely load-bearing for multi-agent coordination.
+
+---
+
 ## Workflow for Worker Agents
 
 ### 1. Check context at start of session
