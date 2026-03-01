@@ -70,15 +70,15 @@ var ValidFormPresets = []string{FormPresetSessionSelector, FormPresetProjectSele
 
 // FormField defines an input field in a UserCommand form.
 type FormField struct {
-	Variable    string   `yaml:"variable"`              // Template variable name (under .Form)
-	Type        string   `yaml:"type,omitempty"`        // text, textarea, select, multi-select
-	Preset      string   `yaml:"preset,omitempty"`      // SessionSelector, ProjectSelector
-	Label       string   `yaml:"label"`                 // Display label
-	Placeholder string   `yaml:"placeholder,omitempty"` // Input placeholder text
-	Default     string   `yaml:"default,omitempty"`     // Default value (text/textarea/select)
-	Options     []string `yaml:"options,omitempty"`     // Static options for select/multi-select
-	Multi       bool     `yaml:"multi,omitempty"`       // For presets: enable multi-select
-	Filter      string   `yaml:"filter,omitempty"`      // For SessionSelector: "active" (default) or "all"
+	Variable    string   `json:"variable"              yaml:"variable"`              // Template variable name (under .Form)
+	Type        string   `json:"type,omitempty"        yaml:"type,omitempty"`        // text, textarea, select, multi-select
+	Preset      string   `json:"preset,omitempty"      yaml:"preset,omitempty"`      // SessionSelector, ProjectSelector
+	Label       string   `json:"label"                 yaml:"label"`                 // Display label
+	Placeholder string   `json:"placeholder,omitempty" yaml:"placeholder,omitempty"` // Input placeholder text
+	Default     string   `json:"default,omitempty"     yaml:"default,omitempty"`     // Default value (text/textarea/select)
+	Options     []string `json:"options,omitempty"     yaml:"options,omitempty"`     // Static options for select/multi-select
+	Multi       bool     `json:"multi,omitempty"       yaml:"multi,omitempty"`       // For presets: enable multi-select
+	Filter      string   `json:"filter,omitempty"      yaml:"filter,omitempty"`      // For SessionSelector: "active" (default) or "all"
 }
 
 // defaultUserCommands provides built-in commands that users can override.
@@ -218,26 +218,26 @@ const CurrentConfigVersion = "0.2.5"
 
 // Config holds the application configuration.
 type Config struct {
-	Version             string                 `yaml:"version"`
-	CopyCommand         string                 `yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
-	Git                 GitConfig              `yaml:"git"`
-	GitPath             string                 `yaml:"git_path"`
-	Keybindings         map[string]Keybinding  `yaml:"keybindings"`
-	UserCommands        map[string]UserCommand `yaml:"usercommands"`
-	Rules               []Rule                 `yaml:"rules"`
-	Agents              AgentsConfig           `yaml:"agents"`
-	AutoDeleteCorrupted bool                   `yaml:"auto_delete_corrupted"`
-	History             HistoryConfig          `yaml:"history"`
-	Context             ContextConfig          `yaml:"context"`
-	TUI                 TUIConfig              `yaml:"tui"`
-	Review              ReviewConfig           `yaml:"review"`
-	Messaging           MessagingConfig        `yaml:"messaging"`
-	Tmux                TmuxConfig             `yaml:"tmux"`
-	Database            DatabaseConfig         `yaml:"database"`
-	Plugins             PluginsConfig          `yaml:"plugins"`
-	Todos               TodosConfig            `yaml:"todos"`
-	RepoDirs            []string               `yaml:"repo_dirs"` // directories containing git repositories for new session dialog
-	DataDir             string                 `yaml:"-"`         // set by caller, not from config file
+	Version             string                 `json:"version"               yaml:"version"`
+	CopyCommand         string                 `json:"copy_command"          yaml:"copy_command"` // command to copy to clipboard (e.g., pbcopy, xclip)
+	Git                 GitConfig              `json:"git"                   yaml:"git"`
+	GitPath             string                 `json:"git_path"              yaml:"git_path"`
+	Keybindings         map[string]Keybinding  `json:"keybindings"           yaml:"keybindings"`
+	UserCommands        map[string]UserCommand `json:"usercommands"          yaml:"usercommands"`
+	Rules               []Rule                 `json:"rules"                 yaml:"rules"`
+	Agents              AgentsConfig           `json:"agents"                yaml:"agents"`
+	AutoDeleteCorrupted bool                   `json:"auto_delete_corrupted" yaml:"auto_delete_corrupted"`
+	History             HistoryConfig          `json:"history"               yaml:"history"`
+	Context             ContextConfig          `json:"context"               yaml:"context"`
+	TUI                 TUIConfig              `json:"tui"                   yaml:"tui"`
+	Review              ReviewConfig           `json:"review"                yaml:"review"`
+	Messaging           MessagingConfig        `json:"messaging"             yaml:"messaging"`
+	Tmux                TmuxConfig             `json:"tmux"                  yaml:"tmux"`
+	Database            DatabaseConfig         `json:"database"              yaml:"database"`
+	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
+	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
+	RepoDirs            []string               `json:"repo_dirs"             yaml:"repo_dirs"` // directories containing git repositories for new session dialog
+	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -289,8 +289,8 @@ func (a AgentsConfig) DefaultProfile() AgentProfile {
 
 // AgentProfile defines an agent's command and flags.
 type AgentProfile struct {
-	Command string   `yaml:"command"` // CLI binary (defaults to profile key if omitted)
-	Flags   []string `yaml:"flags"`   // extra CLI args appended to command on spawn
+	Command string   `json:"command" yaml:"command"` // CLI binary (defaults to profile key if omitted)
+	Flags   []string `json:"flags"   yaml:"flags"`   // extra CLI args appended to command on spawn
 }
 
 // CommandOrDefault returns the command, falling back to the given key name.
@@ -311,12 +311,12 @@ func (p AgentProfile) ShellFlags() string {
 
 // HistoryConfig holds command history configuration.
 type HistoryConfig struct {
-	MaxEntries int `yaml:"max_entries"`
+	MaxEntries int `json:"max_entries" yaml:"max_entries"`
 }
 
 // ContextConfig configures context directory behavior.
 type ContextConfig struct {
-	SymlinkName string `yaml:"symlink_name"` // default: ".hive"
+	SymlinkName string `json:"symlink_name" yaml:"symlink_name"` // default: ".hive"
 }
 
 // Group-by mode constants for tree view grouping.
@@ -330,20 +330,20 @@ var ValidGroupByModes = []string{GroupByRepo, GroupByGroup}
 
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
-	Theme           string        `yaml:"theme"`            // built-in theme name (default: "tokyo-night")
-	RefreshInterval time.Duration `yaml:"refresh_interval"` // default: 15s, 0 to disable
-	PreviewEnabled  bool          `yaml:"preview_enabled"`  // enable tmux pane preview sidebar
-	Icons           *bool         `yaml:"icons"`            // enable nerd font icons (nil = true by default)
-	UpdateChecker   bool          `yaml:"update_checker"`   // enable startup update checker (default: true)
-	GroupBy         string        `yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
-	Preview         PreviewConfig `yaml:"preview"`          // preview panel configuration
-	Views           ViewsConfig   `yaml:"views"`            // toggle optional TUI tabs
+	Theme           string        `json:"theme"            yaml:"theme"`            // built-in theme name (default: "tokyo-night")
+	RefreshInterval time.Duration `json:"refresh_interval" yaml:"refresh_interval"` // default: 15s, 0 to disable
+	PreviewEnabled  bool          `json:"preview_enabled"  yaml:"preview_enabled"`  // enable tmux pane preview sidebar
+	Icons           *bool         `json:"icons"            yaml:"icons"`            // enable nerd font icons (nil = true by default)
+	UpdateChecker   bool          `json:"update_checker"   yaml:"update_checker"`   // enable startup update checker (default: true)
+	GroupBy         string        `json:"group_by"         yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
+	Preview         PreviewConfig `json:"preview"          yaml:"preview"`          // preview panel configuration
+	Views           ViewsConfig   `json:"views"            yaml:"views"`            // toggle optional TUI tabs
 }
 
 // ViewsConfig controls which optional TUI tabs are enabled.
 // All optional views default to disabled.
 type ViewsConfig struct {
-	Store bool `yaml:"store"` // KV store browser (default: false)
+	Store bool `json:"store" yaml:"store"` // KV store browser (default: false)
 }
 
 // ReviewConfig holds review-related configuration.
@@ -356,150 +356,150 @@ func (t TUIConfig) IconsEnabled() bool {
 
 // PreviewConfig holds preview panel template configuration.
 type PreviewConfig struct {
-	TitleTemplate  string `yaml:"title_template"`  // Go template for panel title (e.g., "{{ .Name }} • #{{ .ShortID }}")
-	StatusTemplate string `yaml:"status_template"` // Go template for status line (e.g., "{{ .Icon.GitBranch }} {{ .Branch }}")
+	TitleTemplate  string `json:"title_template"  yaml:"title_template"`  // Go template for panel title (e.g., "{{ .Name }} • #{{ .ShortID }}")
+	StatusTemplate string `json:"status_template" yaml:"status_template"` // Go template for status line (e.g., "{{ .Icon.GitBranch }} {{ .Branch }}")
 }
 
 // MessagingConfig holds messaging-related configuration.
 type MessagingConfig struct {
-	TopicPrefix string `yaml:"topic_prefix"` // default: "agent"
-	MaxMessages int    `yaml:"max_messages"` // max messages per topic (default: 100, 0 = unlimited)
+	TopicPrefix string `json:"topic_prefix" yaml:"topic_prefix"` // default: "agent"
+	MaxMessages int    `json:"max_messages" yaml:"max_messages"` // max messages per topic (default: 100, 0 = unlimited)
 }
 
 // TmuxConfig holds tmux integration configuration.
 type TmuxConfig struct {
-	PollInterval         time.Duration `yaml:"poll_interval"`          // status check frequency, default 1.5s
-	PreviewWindowMatcher []string      `yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
+	PollInterval         time.Duration `json:"poll_interval"          yaml:"poll_interval"`          // status check frequency, default 1.5s
+	PreviewWindowMatcher []string      `json:"preview_window_matcher" yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
 }
 
 // PluginsConfig holds configuration for the plugin system.
 type PluginsConfig struct {
-	ShellWorkers int                    `yaml:"shell_workers"` // shared subprocess pool size (default: 5)
-	GitHub       GitHubPluginConfig     `yaml:"github"`
-	Beads        BeadsPluginConfig      `yaml:"beads"`
-	LazyGit      LazyGitPluginConfig    `yaml:"lazygit"`
-	Neovim       NeovimPluginConfig     `yaml:"neovim"`
-	ContextDir   ContextDirPluginConfig `yaml:"contextdir"`
-	Claude       ClaudePluginConfig     `yaml:"claude"`
-	Tmux         TmuxPluginConfig       `yaml:"tmux"`
+	ShellWorkers int                    `json:"shell_workers" yaml:"shell_workers"` // shared subprocess pool size (default: 5)
+	GitHub       GitHubPluginConfig     `json:"github"        yaml:"github"`
+	Beads        BeadsPluginConfig      `json:"beads"         yaml:"beads"`
+	LazyGit      LazyGitPluginConfig    `json:"lazygit"       yaml:"lazygit"`
+	Neovim       NeovimPluginConfig     `json:"neovim"        yaml:"neovim"`
+	ContextDir   ContextDirPluginConfig `json:"contextdir"    yaml:"contextdir"`
+	Claude       ClaudePluginConfig     `json:"claude"        yaml:"claude"`
+	Tmux         TmuxPluginConfig       `json:"tmux"          yaml:"tmux"`
 }
 
 // TmuxPluginConfig holds tmux plugin configuration.
 type TmuxPluginConfig struct {
-	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
 type GitHubPluginConfig struct {
-	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
-	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 8m)
+	Enabled      *bool         `json:"enabled"       yaml:"enabled"`       // nil = auto-detect, true/false = override
+	ResultsCache time.Duration `json:"results_cache" yaml:"results_cache"` // status cache duration (default: 8m)
 }
 
 // BeadsPluginConfig holds Beads plugin configuration.
 type BeadsPluginConfig struct {
-	Enabled      *bool         `yaml:"enabled"`       // nil = auto-detect, true/false = override
-	ResultsCache time.Duration `yaml:"results_cache"` // status cache duration (default: 30s)
+	Enabled      *bool         `json:"enabled"       yaml:"enabled"`       // nil = auto-detect, true/false = override
+	ResultsCache time.Duration `json:"results_cache" yaml:"results_cache"` // status cache duration (default: 30s)
 }
 
 // LazyGitPluginConfig holds lazygit plugin configuration.
 type LazyGitPluginConfig struct {
-	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // NeovimPluginConfig holds neovim plugin configuration.
 type NeovimPluginConfig struct {
-	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // ContextDirPluginConfig holds context directory plugin configuration.
 type ContextDirPluginConfig struct {
-	Enabled *bool `yaml:"enabled"` // nil = auto-detect, true/false = override
+	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
 // ClaudePluginConfig holds Claude Code plugin configuration.
 type ClaudePluginConfig struct {
-	Enabled         *bool         `yaml:"enabled"`          // nil = auto-detect, true/false = override
-	CacheTTL        time.Duration `yaml:"cache_ttl"`        // status cache duration (default: 30s)
-	YellowThreshold int           `yaml:"yellow_threshold"` // yellow above this % (default: 60)
-	RedThreshold    int           `yaml:"red_threshold"`    // red above this % (default: 80)
-	ModelLimit      int           `yaml:"model_limit"`      // context limit (default: 200000)
+	Enabled         *bool         `json:"enabled"          yaml:"enabled"`          // nil = auto-detect, true/false = override
+	CacheTTL        time.Duration `json:"cache_ttl"        yaml:"cache_ttl"`        // status cache duration (default: 30s)
+	YellowThreshold int           `json:"yellow_threshold" yaml:"yellow_threshold"` // yellow above this % (default: 60)
+	RedThreshold    int           `json:"red_threshold"    yaml:"red_threshold"`    // red above this % (default: 80)
+	ModelLimit      int           `json:"model_limit"      yaml:"model_limit"`      // context limit (default: 200000)
 }
 
 // DatabaseConfig holds SQLite database configuration.
 type DatabaseConfig struct {
-	MaxOpenConns int `yaml:"max_open_conns"` // max open connections (default: 2)
-	MaxIdleConns int `yaml:"max_idle_conns"` // max idle connections (default: 2)
-	BusyTimeout  int `yaml:"busy_timeout"`   // busy timeout in milliseconds (default: 5000)
+	MaxOpenConns int `json:"max_open_conns" yaml:"max_open_conns"` // max open connections (default: 2)
+	MaxIdleConns int `json:"max_idle_conns" yaml:"max_idle_conns"` // max idle connections (default: 2)
+	BusyTimeout  int `json:"busy_timeout"   yaml:"busy_timeout"`   // busy timeout in milliseconds (default: 5000)
 }
 
 // GitConfig holds git-related configuration.
 type GitConfig struct {
-	StatusWorkers int `yaml:"status_workers"`
+	StatusWorkers int `json:"status_workers" yaml:"status_workers"`
 }
 
 // WindowConfig defines a tmux window to create when spawning a session.
 type WindowConfig struct {
-	Name    string `yaml:"name"`              // Window name (template string, required)
-	Command string `yaml:"command,omitempty"` // Command to run (template string, empty = shell)
-	Dir     string `yaml:"dir,omitempty"`     // Working directory override (template string)
-	Focus   bool   `yaml:"focus,omitempty"`   // Select this window after creation
+	Name    string `json:"name"              yaml:"name"`              // Window name (template string, required)
+	Command string `json:"command,omitempty" yaml:"command,omitempty"` // Command to run (template string, empty = shell)
+	Dir     string `json:"dir,omitempty"     yaml:"dir,omitempty"`     // Working directory override (template string)
+	Focus   bool   `json:"focus,omitempty"   yaml:"focus,omitempty"`   // Select this window after creation
 }
 
 // Rule defines actions to take for matching repositories.
 type Rule struct {
 	// Pattern matches against remote URL (regex). Empty = matches all.
-	Pattern string `yaml:"pattern"`
+	Pattern string `json:"pattern" yaml:"pattern"`
 	// Commands to run in the session directory after clone/recycle.
-	Commands []string `yaml:"commands,omitempty"`
+	Commands []string `json:"commands,omitempty" yaml:"commands,omitempty"`
 	// Copy are glob patterns to copy from source directory.
-	Copy []string `yaml:"copy,omitempty"`
+	Copy []string `json:"copy,omitempty" yaml:"copy,omitempty"`
 	// MaxRecycled sets the max recycled sessions for matching repos.
 	// nil = inherit from previous rule or default (5), 0 = unlimited, >0 = limit
-	MaxRecycled *int `yaml:"max_recycled,omitempty"`
+	MaxRecycled *int `json:"max_recycled,omitempty" yaml:"max_recycled,omitempty"`
 	// Windows defines tmux windows to create when spawning a session.
 	// Mutually exclusive with Spawn/BatchSpawn.
-	Windows []WindowConfig `yaml:"windows,omitempty"`
+	Windows []WindowConfig `json:"windows,omitempty" yaml:"windows,omitempty"`
 	// Spawn commands to run when creating a new session (hive new).
-	Spawn []string `yaml:"spawn,omitempty"`
+	Spawn []string `json:"spawn,omitempty" yaml:"spawn,omitempty"`
 	// BatchSpawn commands to run when creating a batch session (hive batch).
-	BatchSpawn []string `yaml:"batch_spawn,omitempty"`
+	BatchSpawn []string `json:"batch_spawn,omitempty" yaml:"batch_spawn,omitempty"`
 	// Recycle commands to run when recycling a session.
-	Recycle []string `yaml:"recycle,omitempty"`
+	Recycle []string `json:"recycle,omitempty" yaml:"recycle,omitempty"`
 	// CloneStrategy overrides the clone strategy for matching repos ("full" or "worktree").
-	CloneStrategy string `yaml:"clone_strategy,omitempty"`
+	CloneStrategy string `json:"clone_strategy,omitempty" yaml:"clone_strategy,omitempty"`
 }
 
 // Keybinding defines a TUI keybinding that references a UserCommand.
 type Keybinding struct {
-	Cmd     string `yaml:"cmd"`     // command name (required, references UserCommand)
-	Help    string `yaml:"help"`    // optional override for help text
-	Confirm string `yaml:"confirm"` // optional override for confirmation prompt
+	Cmd     string `json:"cmd"     yaml:"cmd"`     // command name (required, references UserCommand)
+	Help    string `json:"help"    yaml:"help"`    // optional override for help text
+	Confirm string `json:"confirm" yaml:"confirm"` // optional override for confirmation prompt
 }
 
 // UserCommandOptions controls execution behaviour for UserCommands with windows.
 type UserCommandOptions struct {
 	// SessionName is a template string. When non-empty, a new Hive session is created
 	// with this name before sh: runs and windows are opened.
-	SessionName string `yaml:"session_name,omitempty"`
+	SessionName string `json:"session_name,omitempty" yaml:"session_name,omitempty"`
 	// Remote overrides the remote URL for new session creation.
 	// Only valid when SessionName is also set.
-	Remote string `yaml:"remote,omitempty"`
+	Remote string `json:"remote,omitempty" yaml:"remote,omitempty"`
 	// Background creates windows without attaching or switching to the tmux session.
-	Background bool `yaml:"background,omitempty"`
+	Background bool `json:"background,omitempty" yaml:"background,omitempty"`
 }
 
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
-	Action  action.Type        `yaml:"action,omitempty"`  // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
-	Sh      string             `yaml:"sh"`                // shell command template - mutually exclusive with action
-	Windows []WindowConfig     `yaml:"windows,omitempty"` // Tmux windows to open after sh: completes
-	Options UserCommandOptions `yaml:"options,omitempty"` // Execution options for window-based commands
-	Form    []FormField        `yaml:"form,omitempty"`    // interactive input fields collected before sh execution
-	Help    string             `yaml:"help"`              // description shown in palette/help
-	Confirm string             `yaml:"confirm"`           // confirmation prompt (empty = no confirm)
-	Silent  bool               `yaml:"silent"`            // skip loading popup for fast commands
-	Exit    string             `yaml:"exit"`              // exit hive after command (bool or $ENV_VAR)
-	Scope   []string           `yaml:"scope,omitempty"`   // views where command is active (empty = global)
+	Action  action.Type        `json:"action,omitempty"  yaml:"action,omitempty"`  // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
+	Sh      string             `json:"sh"                yaml:"sh"`                // shell command template - mutually exclusive with action
+	Windows []WindowConfig     `json:"windows,omitempty" yaml:"windows,omitempty"` // Tmux windows to open after sh: completes
+	Options UserCommandOptions `json:"options,omitempty" yaml:"options,omitempty"` // Execution options for window-based commands
+	Form    []FormField        `json:"form,omitempty"    yaml:"form,omitempty"`    // interactive input fields collected before sh execution
+	Help    string             `json:"help"              yaml:"help"`              // description shown in palette/help
+	Confirm string             `json:"confirm"           yaml:"confirm"`           // confirmation prompt (empty = no confirm)
+	Silent  bool               `json:"silent"            yaml:"silent"`            // skip loading popup for fast commands
+	Exit    string             `json:"exit"              yaml:"exit"`              // exit hive after command (bool or $ENV_VAR)
+	Scope   []string           `json:"scope,omitempty"   yaml:"scope,omitempty"`   // views where command is active (empty = global)
 }
 
 // ShouldExit evaluates the Exit condition.
