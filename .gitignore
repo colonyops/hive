@@ -27,5 +27,6 @@ dist/
 agent-deck/
 diffnav
 site/
+dev.log
 # binary
-/hive
+hive

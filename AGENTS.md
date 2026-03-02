@@ -85,12 +85,12 @@ mise run coverage         # Generate coverage report
 
 ### Environment
 
-Dev environment uses `config.dev.yaml` and `.data/` for isolation:
+Dev environment uses `dev/config.dev.yaml` and `.data/` for isolation:
 
 ```bash
 HIVE_LOG_LEVEL=debug
 HIVE_LOG_FILE=./dev.log
-HIVE_CONFIG=./config.dev.yaml
+HIVE_CONFIG=./dev/config.dev.yaml
 HIVE_DATA_DIR=./.data
 ```
 
