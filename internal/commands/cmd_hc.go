@@ -88,6 +88,10 @@ func (cmd *HoneycombCmd) createCmd() *cli.Command {
 		UsageText: "hive hc create [title] [--type epic|task] [--desc <desc>] [--parent <id>]",
 		Description: `Creates a single item from flags, or a bulk tree from JSON (--file or stdin).
 
+Tasks can nest under other tasks using "children" to create subtrees. The "next"
+command walks the tree and only returns leaf tasks — parent tasks act as groupings
+that resolve when all their children are done. Nesting supports up to 10 levels.
+
 Bulk JSON format (pipe or --file):
   {
     "title": "Auth System",

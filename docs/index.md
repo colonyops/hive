@@ -37,6 +37,12 @@ Hive manages isolated git sessions for running AI agents in parallel. Instead of
 
     Shared storage per repository via `.hive` symlinks
 
+- :lucide-list-checks: __Task Tracking__
+
+    ---
+
+    Built-in epics and tasks for multi-agent coordination — no external tracker needed
+
 - :lucide-keyboard: __Custom Keybindings__
 
     ---
@@ -100,6 +106,12 @@ The TUI shows real-time agent status:
     ---
 
     How sessions, agents, and lifecycle work
+
+- :lucide-list-checks: __[Task Tracking](getting-started/task-tracking.md)__
+
+    ---
+
+    Built-in epics and tasks for multi-agent coordination
 
 - :lucide-settings: __[Configuration](configuration/)__
 

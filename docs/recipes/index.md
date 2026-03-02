@@ -26,4 +26,4 @@ Spin up a dedicated reviewer agent via inbox messaging. Your session sends conte
 
 ### [Ralph Loop](ralph-loop.md)
 
-Work through a beads backlog autonomously — runs a fresh Claude process per task, retrying until quality gates pass before moving on.
+Work through an `hive hc` epic backlog autonomously — runs a fresh Claude process per task, retrying until quality gates pass before moving on.
