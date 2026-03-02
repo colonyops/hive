@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -14,6 +15,7 @@ import (
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
@@ -332,14 +334,18 @@ func (m Model) handleReviewOpenDoc(msg review.OpenDocumentMsg) (tea.Model, tea.C
 		return m, nil
 	}
 	if m.reviewView != nil {
+		// Try to find the document in the indexed list first
 		for _, item := range m.reviewView.List().Items() {
 			if treeItem, ok := item.(review.TreeItem); ok && !treeItem.IsHeader {
 				if treeItem.Document.Path == msg.Path {
 					m.reviewView.LoadDocument(&treeItem.Document)
-					break
+					return m, nil
 				}
 			}
 		}
+
+		// Document not in the list (cross-repo todo). Load directly from disk.
+		m.reviewView.LoadDocumentFromPath(msg.Path)
 	}
 	return m, nil
 }
@@ -440,7 +446,8 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 				m.modals.DismissTodoPanel()
 				m.activeView = ViewReview
 				m.handler.SetActiveView(ViewReview)
-				return m, m.reviewView.OpenDocumentByPath(item.URI.Value())
+				path := m.resolveReviewDocPath(item)
+				return m, m.reviewView.OpenDocumentByPath(path)
 			}
 			return m, m.notifyError("review view unavailable")
 		case "http", "https":
@@ -471,6 +478,39 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		}
 	}
 	return m, nil
+}
+
+// resolveReviewDocPath resolves a review todo's URI value to an absolute file path
+// by looking up the todo's session to determine the correct context directory.
+// This handles cross-repo todos where the document lives in a different repo's context.
+func (m Model) resolveReviewDocPath(item *todo.Todo) string {
+	if item.SessionID == "" {
+		return item.URI.Value()
+	}
+
+	// Find the session to get its remote URL
+	for _, s := range m.sessionsView.AllSessions() {
+		if s.ID == item.SessionID {
+			return resolveReviewURI(item.URI.Value(), s.Remote, m.cfg)
+		}
+	}
+
+	return item.URI.Value()
+}
+
+// resolveReviewURI resolves a review URI value to an absolute file path using
+// a session's remote URL to determine the correct context directory.
+func resolveReviewURI(uriValue, remote string, cfg *config.Config) string {
+	if remote == "" {
+		return uriValue
+	}
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner == "" || repo == "" {
+		return uriValue
+	}
+	contextDir := cfg.RepoContextDir(owner, repo)
+	rel := strings.TrimPrefix(uriValue, ".hive/")
+	return filepath.Join(contextDir, rel)
 }
 
 // completeTodosMatchingRef completes all open review todos whose URI value matches any of the given paths,

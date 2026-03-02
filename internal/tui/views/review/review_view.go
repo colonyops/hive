@@ -1949,6 +1949,30 @@ func (v *View) LoadDocument(doc *Document) {
 	v.loadDocument(doc)
 }
 
+// LoadDocumentFromPath loads a document directly from an absolute file path.
+// Used for cross-repo documents that aren't in the indexed document list.
+func (v *View) LoadDocumentFromPath(absPath string) {
+	info, err := os.Stat(absPath)
+	if err != nil {
+		return
+	}
+	relPath := filepath.Base(absPath)
+	// Try to infer a better relPath from the path structure
+	if parts := strings.SplitAfter(absPath, "/context/"); len(parts) == 2 {
+		// Skip owner/repo prefix: context/owner/repo/plans/doc.md → plans/doc.md
+		if sub := strings.SplitN(parts[1], "/", 3); len(sub) == 3 {
+			relPath = sub[2]
+		}
+	}
+	doc := Document{
+		Path:    absPath,
+		RelPath: relPath,
+		Type:    inferDocumentType(relPath),
+		ModTime: info.ModTime(),
+	}
+	v.loadDocument(&doc)
+}
+
 // CanShowInTabBar returns true if the review view should be shown in tab bar.
 // This is true when there's an active session with a selected document.
 func (v *View) CanShowInTabBar() bool {
@@ -2005,11 +2029,12 @@ func (v *View) OpenDocumentByPath(path string) tea.Cmd {
 		}
 
 		// If not in the indexed list, try loading directly from disk.
-		// This handles newly created files that the watcher hasn't indexed yet.
-		if found == nil && absPath != path {
-			if info, err := os.Stat(absPath); err == nil && !info.IsDir() {
+		// This handles cross-repo documents and newly created files.
+		if found == nil {
+			tryPath := absPath
+			if info, err := os.Stat(tryPath); err == nil && !info.IsDir() {
 				doc := Document{
-					Path:    absPath,
+					Path:    tryPath,
 					RelPath: relPath,
 					Type:    inferDocumentType(relPath),
 					ModTime: info.ModTime(),

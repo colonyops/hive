@@ -1162,3 +1162,55 @@ func TestHighlightLineNumber_NoSeparator(t *testing.T) {
 	// Should return unchanged
 	assert.Equal(t, input, result, "line without separator should be returned unchanged")
 }
+
+func TestOpenDocumentByPath_AbsolutePathDiskFallback(t *testing.T) {
+	// Create a temp directory with a document file
+	tmpDir := t.TempDir()
+	plansDir := filepath.Join(tmpDir, "plans")
+	require.NoError(t, os.MkdirAll(plansDir, 0o755))
+	docPath := filepath.Join(plansDir, "cross-repo-doc.md")
+	require.NoError(t, os.WriteFile(docPath, []byte("# Cross Repo Doc"), 0o644))
+
+	// Create a review view with NO documents (simulating a different repo's context)
+	view := New(nil, "/some/other/context", nil)
+	view.SetSize(100, 40)
+
+	// Open the document by absolute path — should fall back to disk
+	cmd := view.OpenDocumentByPath(docPath)
+	msg := cmd()
+
+	openMsg, ok := msg.(OpenDocumentMsg)
+	require.True(t, ok, "expected OpenDocumentMsg, got %T", msg)
+	require.NoError(t, openMsg.Err, "expected disk fallback to find the file")
+	assert.Equal(t, docPath, openMsg.Path)
+}
+
+func TestLoadDocumentFromPath(t *testing.T) {
+	// Create a temp file structure mimicking a context directory
+	tmpDir := t.TempDir()
+	plansDir := filepath.Join(tmpDir, "context", "hay-kot", "infra", "plans")
+	require.NoError(t, os.MkdirAll(plansDir, 0o755))
+	docPath := filepath.Join(plansDir, "test-plan.md")
+	require.NoError(t, os.WriteFile(docPath, []byte("# Test Plan\nSome content"), 0o644))
+
+	view := New(nil, "/other/context", nil)
+	view.SetSize(100, 40)
+
+	// Load document from absolute path
+	view.LoadDocumentFromPath(docPath)
+
+	// The document should be loaded and rendered
+	require.NotNil(t, view.selectedDoc, "expected selectedDoc to be set")
+	assert.Equal(t, docPath, view.selectedDoc.Path)
+	assert.Equal(t, "plans/test-plan.md", view.selectedDoc.RelPath)
+	assert.Equal(t, DocTypePlan, view.selectedDoc.Type)
+}
+
+func TestLoadDocumentFromPath_NonExistent(t *testing.T) {
+	view := New(nil, "/some/context", nil)
+	view.SetSize(100, 40)
+
+	// Loading a non-existent file should not crash or set selectedDoc
+	view.LoadDocumentFromPath("/nonexistent/path/doc.md")
+	assert.Nil(t, view.selectedDoc, "expected selectedDoc to remain nil for non-existent file")
+}
