@@ -486,7 +486,7 @@ func TestHCCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, taskID, commentLines[0]["item_id"])
 
-	showOut, err := h.RunStdout("hc", "show", taskID)
+	showOut, err := h.RunStdout("hc", "show", taskID, "--json")
 	require.NoError(t, err)
 	showLines, err := parseJSONLines(strings.TrimSpace(showOut))
 	require.NoError(t, err)
