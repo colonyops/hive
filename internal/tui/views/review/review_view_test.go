@@ -1181,7 +1181,7 @@ func TestOpenDocumentByPath_AbsolutePathDiskFallback(t *testing.T) {
 
 	openMsg, ok := msg.(OpenDocumentMsg)
 	require.True(t, ok, "expected OpenDocumentMsg, got %T", msg)
-	assert.NoError(t, openMsg.Err, "expected disk fallback to find the file")
+	require.NoError(t, openMsg.Err, "expected disk fallback to find the file")
 	assert.Equal(t, docPath, openMsg.Path)
 }
 
