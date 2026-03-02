@@ -44,6 +44,7 @@ Each hive session is a complete git clone in a dedicated directory with its own 
 
 - **Session Management** — Create, recycle, and prune isolated git clones
 - **Terminal Integration** — Real-time status monitoring of AI agents in tmux (works out of the box)
+- **Task Tracking** — Built-in epics and tasks for multi-agent coordination (`hive hc`)
 - **Inter-agent Messaging** — Pub/sub communication between sessions
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
 - **Operator Todos (Experimental)** — Track human follow-up items from agents via CLI/TUI todo flows
@@ -87,6 +88,7 @@ Full documentation is available at **[colonyops.github.io/hive](https://colonyop
 - [Configuration](https://colonyops.github.io/hive/configuration/) — Config file, rules, templates, options
 - [User Commands](https://colonyops.github.io/hive/configuration/commands/) — User commands and command palette
 - [Keybindings](https://colonyops.github.io/hive/configuration/keybindings/) — Key mappings and palette commands
+- [Task Tracking](https://colonyops.github.io/hive/getting-started/task-tracking/) — Built-in epics and tasks for multi-agent coordination
 - [Messaging](https://colonyops.github.io/hive/getting-started/messaging/) — Inter-agent pub/sub communication
 - [Todos (Experimental)](https://colonyops.github.io/hive/getting-started/todos/) — Operator todo lifecycle and CLI usage
 - [Plugins](https://colonyops.github.io/hive/configuration/plugins/) — Claude, tmux, and other plugins
