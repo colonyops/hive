@@ -208,6 +208,55 @@ func TestOpenDocument_SuffixMatch(t *testing.T) {
 	}
 }
 
+func TestResolveReviewURI(t *testing.T) {
+	cfg := &config.Config{DataDir: "/data"}
+
+	tests := []struct {
+		name     string
+		uriValue string
+		remote   string
+		want     string
+	}{
+		{
+			name:     "resolves .hive/ prefixed path to context dir",
+			uriValue: ".hive/plans/my-plan.md",
+			remote:   "git@github.com:owner/repo.git",
+			want:     "/data/context/owner/repo/plans/my-plan.md",
+		},
+		{
+			name:     "resolves path without .hive/ prefix",
+			uriValue: "plans/my-plan.md",
+			remote:   "https://github.com/owner/repo.git",
+			want:     "/data/context/owner/repo/plans/my-plan.md",
+		},
+		{
+			name:     "returns uriValue when remote is empty",
+			uriValue: ".hive/plans/my-plan.md",
+			remote:   "",
+			want:     ".hive/plans/my-plan.md",
+		},
+		{
+			name:     "returns uriValue when remote cannot be parsed",
+			uriValue: ".hive/plans/my-plan.md",
+			remote:   "invalid",
+			want:     ".hive/plans/my-plan.md",
+		},
+		{
+			name:     "handles SSH remote with port",
+			uriValue: ".hive/research/notes.md",
+			remote:   "ssh://gitea@gitea.example.com:222/hay-kot/infra.git",
+			want:     "/data/context/hay-kot/infra/research/notes.md",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := resolveReviewURI(tt.uriValue, tt.remote, cfg)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func TestGetAllDocuments(t *testing.T) {
 	docs := []review.Document{
 		{RelPath: "doc1.md", Type: review.DocTypePlan},
