@@ -151,7 +151,7 @@ func TestHCShow(t *testing.T) {
 	_, err = h.RunJSONLines("hc", "comment", id, "first note")
 	require.NoError(t, err)
 
-	out, err := h.RunStdout("hc", "show", id)
+	out, err := h.RunStdout("hc", "show", id, "--json")
 	require.NoError(t, err)
 
 	showLines, err := parseJSONLines(strings.TrimSpace(out))
