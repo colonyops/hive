@@ -181,6 +181,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		if cloneStrategy == config.CloneStrategyWorktree {
 			// Worktrees are linked to a bare clone with no origin remote — use fetch+reset instead of pull.
 			bareDir := s.bareDirForRemote(remote)
+			writeProgressf(progress, "Fetching latest changes...")
 			if err := s.git.Fetch(ctx, bareDir); err != nil {
 				s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("fetch failed, marking corrupted")
 				s.markCorrupted(ctx, recyclable)
