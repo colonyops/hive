@@ -10,3 +10,10 @@ type itemsLoadedMsg struct {
 	items []hc.Item
 	err   error
 }
+
+// commentsLoadedMsg carries the result of loading comments for an item.
+type commentsLoadedMsg struct {
+	comments []hc.Comment
+	itemID   string
+	err      error
+}
