@@ -31,6 +31,7 @@ type View struct {
 	comments     map[string][]hc.Comment // cache: itemID -> comments
 	lastItemID   string                  // track cursor changes
 	statusFilter StatusFilter            // current status filter (default: FilterOpen)
+	showPreview  bool                    // toggle detail/preview panel visibility
 }
 
 // New creates a new tasks View.
@@ -40,6 +41,7 @@ func New(svc *hive.HoneycombService, repoKey string) *View {
 		repoKey:      repoKey,
 		comments:     make(map[string][]hc.Comment),
 		statusFilter: FilterOpen,
+		showPreview:  true,
 	}
 }
 
@@ -96,51 +98,61 @@ func (v *View) View() string {
 	filterBar := renderFilterBar(v.statusFilter)
 
 	if len(v.flatNodes) == 0 {
-		help := styles.TextMutedStyle.Render("f filter • r refresh")
+		help := styles.TextMutedStyle.Render("p preview • f filter • r refresh")
 		return filterBar + "\n  " + styles.TextMutedStyle.Render("No tasks match the current filter.") + "\n" + help
 	}
 
 	// Reserve 2 lines: filter bar + help bar.
 	contentHeight := max(v.height-2, 1)
 
-	// Pane widths: tree ~30%, detail ~70%.
-	// Account for 1 divider column (1 char).
-	availWidth := max(v.width-1, 30)
-	treeWidth := max(availWidth*30/100, 25)
-	detailWidth := max(availWidth-treeWidth, 10)
+	var body string
 
-	// Tree pane
-	treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, contentHeight)
-	treeContent = ensureExactHeight(treeContent, contentHeight)
-	treeContent = ensureExactWidth(treeContent, treeWidth)
+	if v.showPreview {
+		// Two-column layout: tree ~30%, detail ~70%.
+		// Account for 1 divider column (1 char).
+		availWidth := max(v.width-1, 30)
+		treeWidth := max(availWidth*30/100, 25)
+		detailWidth := max(availWidth-treeWidth, 10)
 
-	// Selected item for detail
-	selected := v.SelectedItem()
-	var selectedNode *TreeNode
-	if v.cursor >= 0 && v.cursor < len(v.flatNodes) {
-		selectedNode = v.flatNodes[v.cursor].Node
+		// Tree pane
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, contentHeight)
+		treeContent = ensureExactHeight(treeContent, contentHeight)
+		treeContent = ensureExactWidth(treeContent, treeWidth)
+
+		// Selected item for detail
+		selected := v.SelectedItem()
+		var selectedNode *TreeNode
+		if v.cursor >= 0 && v.cursor < len(v.flatNodes) {
+			selectedNode = v.flatNodes[v.cursor].Node
+		}
+
+		// Comments for selected item
+		var itemComments []hc.Comment
+		if selected != nil {
+			itemComments = v.comments[selected.ID]
+		}
+
+		// Detail pane (includes header with properties)
+		detailContent := renderDetail(selected, selectedNode, itemComments, detailWidth-2)
+		detailContent = padLines(detailContent, 1)
+		detailContent = ensureExactHeight(detailContent, contentHeight)
+		detailContent = ensureExactWidth(detailContent, detailWidth)
+
+		// Divider
+		divider := buildDivider(contentHeight)
+
+		// Compose panes
+		body = lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
+	} else {
+		// Tree-only layout: full width.
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, contentHeight)
+		treeContent = ensureExactHeight(treeContent, contentHeight)
+		treeContent = ensureExactWidth(treeContent, v.width)
+		body = treeContent
 	}
-
-	// Comments for selected item
-	var itemComments []hc.Comment
-	if selected != nil {
-		itemComments = v.comments[selected.ID]
-	}
-
-	// Detail pane (includes header with properties)
-	detailContent := renderDetail(selected, selectedNode, itemComments, detailWidth-2)
-	detailContent = padLines(detailContent, 1)
-	detailContent = ensureExactHeight(detailContent, contentHeight)
-	detailContent = ensureExactWidth(detailContent, detailWidth)
-
-	// Divider
-	divider := buildDivider(contentHeight)
-
-	// Compose panes
-	body := lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
 
 	// Help bar
-	help := styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • f filter • r refresh")
+	help := styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • p preview • f filter • r refresh")
 
 	return filterBar + "\n" + body + "\n" + help
 }
@@ -230,6 +242,8 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case "r":
 		v.comments = make(map[string][]hc.Comment)
 		return v.loadItems()
+	case "p":
+		v.showPreview = !v.showPreview
 	case "f":
 		v.statusFilter = (v.statusFilter + 1) % filterCount
 		v.rebuildTree()
