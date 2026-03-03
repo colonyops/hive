@@ -202,9 +202,9 @@ func (v *View) View() string {
 		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
 			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
 		}
-		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s • esc back to tree", scrollInfo))
+		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s • h/esc back to tree", scrollInfo))
 	} else {
-		help = styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • tab detail • p preview • f filter • r refresh")
+		help = styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • l detail • p preview • f filter • r refresh")
 	}
 
 	return body + "\n" + help
@@ -361,7 +361,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 		return v.checkCursorChanged()
 	case "enter":
 		v.toggleExpand()
-	case "tab":
+	case "l":
 		if v.showPreview && v.SelectedItem() != nil {
 			v.focus = paneDetail
 			v.updateViewportContent()
@@ -394,7 +394,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 // handleDetailKey processes keys when the detail pane has focus.
 func (v *View) handleDetailKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
-	case "esc", "tab":
+	case "esc", "h":
 		v.focus = paneTree
 	case "j", "down":
 		v.viewport.ScrollDown(1)
