@@ -1254,6 +1254,15 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 		return m, nil
 	}
 
+	// Tasks detail pane intercepts keys before global handlers
+	if m.isTasksFocused() && m.tasksView != nil && m.tasksView.HasDetailFocus() {
+		if keyStr == keyCtrlC {
+			return m.quit()
+		}
+		cmd := m.tasksView.Update(msg)
+		return m, cmd
+	}
+
 	// Tasks view focused - delegate all keys to the sub-model
 	if m.isTasksFocused() && m.tasksView != nil {
 		cmd := m.tasksView.Update(msg)

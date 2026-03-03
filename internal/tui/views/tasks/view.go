@@ -2,8 +2,10 @@ package tasks
 
 import (
 	"context"
+	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -13,6 +15,18 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 )
+
+// focusPane tracks which pane has keyboard focus.
+type focusPane int
+
+const (
+	paneTree focusPane = iota
+	paneDetail
+)
+
+// headerLines is the number of fixed lines above the viewport in the detail pane
+// (properties bar + divider).
+const headerLines = 2
 
 // View is the Bubble Tea sub-model for the tasks tab.
 type View struct {
@@ -32,6 +46,10 @@ type View struct {
 	lastItemID   string                  // track cursor changes
 	statusFilter StatusFilter            // current status filter (default: FilterOpen)
 	showPreview  bool                    // toggle detail/preview panel visibility
+
+	viewport    viewport.Model // scrollable detail content
+	detailWidth int            // cached detail pane width
+	focus       focusPane      // which pane has keyboard focus
 }
 
 // New creates a new tasks View.
@@ -70,6 +88,10 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 			return nil
 		}
 		v.comments[msg.itemID] = msg.comments
+		// Refresh viewport if we're still looking at this item
+		if selected := v.SelectedItem(); selected != nil && selected.ID == msg.itemID {
+			v.updateViewportContent()
+		}
 		return nil
 
 	case RefreshTasksMsg:
@@ -126,20 +148,38 @@ func (v *View) View() string {
 			selectedNode = v.flatNodes[v.cursor].Node
 		}
 
-		// Comments for selected item
-		var itemComments []hc.Comment
-		if selected != nil {
-			itemComments = v.comments[selected.ID]
-		}
+		// Detail pane: static header + scrollable viewport
+		innerWidth := detailWidth - 2 // 1 char padding each side
+		header := renderDetailHeader(selected, selectedNode, innerWidth)
+		header = padLines(header, 1)
+		headerRendered := ensureExactHeight(header, headerLines)
+		headerRendered = ensureExactWidth(headerRendered, detailWidth)
 
-		// Detail pane (includes header with properties)
-		detailContent := renderDetail(selected, selectedNode, itemComments, detailWidth-2)
-		detailContent = padLines(detailContent, 1)
+		// Viewport content
+		vpView := v.viewport.View()
+		vpLines := strings.Split(vpView, "\n")
+		for i, line := range vpLines {
+			vpLines[i] = " " + line
+		}
+		vpContent := strings.Join(vpLines, "\n")
+
+		// Compose header + viewport, then pad to exact height
+		detailContent := headerRendered + "\n" + vpContent
 		detailContent = ensureExactHeight(detailContent, contentHeight)
 		detailContent = ensureExactWidth(detailContent, detailWidth)
 
-		// Divider
-		divider := buildDivider(contentHeight)
+		// Divider — accent color when detail pane has focus
+		dividerStyle := styles.TextMutedStyle
+		if v.focus == paneDetail {
+			dividerStyle = styles.TextPrimaryStyle
+		}
+		divider := buildDividerStyled(contentHeight, dividerStyle)
+
+		// Dim tree pane when detail has focus
+		if v.focus == paneDetail {
+			treeContent = styles.TextMutedStyle.Render(treeContent)
+			treeContent = ensureExactWidth(treeContent, treeWidth)
+		}
 
 		// Compose panes
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
@@ -152,7 +192,16 @@ func (v *View) View() string {
 	}
 
 	// Help bar
-	help := styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • p preview • f filter • r refresh")
+	var help string
+	if v.focus == paneDetail {
+		scrollInfo := ""
+		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
+			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
+		}
+		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s • esc back to tree", scrollInfo))
+	} else {
+		help = styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • tab detail • p preview • f filter • r refresh")
+	}
 
 	return filterBar + "\n" + body + "\n" + help
 }
@@ -162,11 +211,45 @@ func (v *View) SetSize(w, h int) {
 	v.width = w
 	v.height = h
 	v.clampScroll()
+	v.sizeViewport()
+}
+
+// sizeViewport recalculates the viewport dimensions based on the current view size.
+func (v *View) sizeViewport() {
+	if !v.showPreview {
+		return
+	}
+
+	availWidth := max(v.width-1, 30)
+	treeWidth := max(availWidth*30/100, 25)
+	detailWidth := max(availWidth-treeWidth, 10)
+	v.detailWidth = detailWidth
+
+	// Content area: total height minus filter bar (1) and help bar (1)
+	contentHeight := max(v.height-2, 1)
+	// Viewport height: content height minus header lines (properties + divider) minus 1 for the newline separator
+	vpHeight := max(contentHeight-headerLines-1, 1)
+	innerWidth := max(detailWidth-2, 10) // 1 char padding each side
+
+	v.viewport = viewport.New(
+		viewport.WithWidth(innerWidth),
+		viewport.WithHeight(vpHeight),
+	)
+
+	v.lastItemID = "" // force content re-render
 }
 
 // SetActive sets whether this view is the currently active tab.
 func (v *View) SetActive(active bool) {
 	v.active = active
+	if !active {
+		v.focus = paneTree
+	}
+}
+
+// HasDetailFocus returns true when the detail pane has focus.
+func (v *View) HasDetailFocus() bool {
+	return v.focus == paneDetail
 }
 
 // SelectedItem returns the currently selected item, or nil if none.
@@ -203,6 +286,7 @@ func (v *View) checkCursorChanged() tea.Cmd {
 	selected := v.SelectedItem()
 	if selected == nil {
 		v.lastItemID = ""
+		v.viewport.SetContent("")
 		return nil
 	}
 
@@ -211,12 +295,36 @@ func (v *View) checkCursorChanged() tea.Cmd {
 	}
 
 	v.lastItemID = selected.ID
+	v.updateViewportContent()
 
 	if _, cached := v.comments[selected.ID]; cached {
 		return nil
 	}
 
 	return v.loadComments(selected.ID)
+}
+
+// updateViewportContent re-renders the detail content into the viewport.
+func (v *View) updateViewportContent() {
+	selected := v.SelectedItem()
+	if selected == nil {
+		v.viewport.SetContent("")
+		return
+	}
+
+	contentWidth := v.viewport.Width()
+	if contentWidth <= 0 {
+		contentWidth = 60
+	}
+
+	var itemComments []hc.Comment
+	if comments, ok := v.comments[selected.ID]; ok {
+		itemComments = comments
+	}
+
+	content := renderDetailContent(selected, itemComments, contentWidth)
+	v.viewport.SetContent(content)
+	v.viewport.SetYOffset(0)
 }
 
 // rebuildTree rebuilds the tree from the current items, applying the active filter, and clamps the cursor.
@@ -230,6 +338,16 @@ func (v *View) rebuildTree() {
 
 // handleKey processes keyboard input for navigation and actions.
 func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
+	// Detail pane keys take priority when focused
+	if v.focus == paneDetail {
+		return v.handleDetailKey(msg)
+	}
+
+	return v.handleTreeKey(msg)
+}
+
+// handleTreeKey processes keys when the tree pane has focus.
+func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	switch msg.String() {
 	case "j", "down":
 		v.moveCursor(1)
@@ -239,11 +357,20 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 		return v.checkCursorChanged()
 	case "enter":
 		v.toggleExpand()
+	case "tab":
+		if v.showPreview && v.SelectedItem() != nil {
+			v.focus = paneDetail
+			v.updateViewportContent()
+		}
 	case "r":
 		v.comments = make(map[string][]hc.Comment)
 		return v.loadItems()
 	case "p":
 		v.showPreview = !v.showPreview
+		if v.showPreview {
+			v.sizeViewport()
+			v.updateViewportContent()
+		}
 	case "f":
 		v.statusFilter = (v.statusFilter + 1) % filterCount
 		v.rebuildTree()
@@ -256,6 +383,29 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 		v.cursor = 0
 		v.scrollOffset = 0
 		return v.checkCursorChanged()
+	}
+	return nil
+}
+
+// handleDetailKey processes keys when the detail pane has focus.
+func (v *View) handleDetailKey(msg tea.KeyMsg) tea.Cmd {
+	switch msg.String() {
+	case "esc", "tab":
+		v.focus = paneTree
+	case "j", "down":
+		v.viewport.ScrollDown(1)
+	case "k", "up":
+		v.viewport.ScrollUp(1)
+	case "pgdown", "ctrl+d":
+		v.viewport.ScrollDown(v.viewport.VisibleLineCount())
+	case "pgup", "ctrl+u":
+		v.viewport.ScrollUp(v.viewport.VisibleLineCount())
+	case "g":
+		v.viewport.SetYOffset(0)
+	case "G":
+		v.viewport.SetYOffset(v.viewport.TotalLineCount())
+	default:
+		v.viewport, _ = v.viewport.Update(msg)
 	}
 	return nil
 }
@@ -313,11 +463,11 @@ func (v *View) clampScroll() {
 	v.scrollOffset = max(min(v.scrollOffset, maxOffset), 0)
 }
 
-// buildDivider creates a vertical divider string of the given height.
-func buildDivider(height int) string {
+// buildDividerStyled creates a vertical divider string of the given height with the given style.
+func buildDividerStyled(height int, style lipgloss.Style) string {
 	lines := make([]string, height)
 	for i := range lines {
-		lines[i] = styles.TextMutedStyle.Render("│")
+		lines[i] = style.Render("│")
 	}
 	return strings.Join(lines, "\n")
 }

@@ -6,33 +6,45 @@ import (
 	"time"
 
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/glamour"
+	"github.com/rs/zerolog/log"
+
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
-// renderDetail renders the detail pane for a selected item, including
-// a compact header bar with properties and the item content below.
-func renderDetail(item *hc.Item, node *TreeNode, comments []hc.Comment, width int) string {
+// renderDetailHeader renders the static header portion above the viewport:
+// properties bar + divider.
+func renderDetailHeader(item *hc.Item, node *TreeNode, width int) string {
 	if item == nil {
 		return ""
 	}
 
 	var b strings.Builder
 
-	// Header: properties bar
 	b.WriteString(renderHeader(item, node))
 	b.WriteString("\n")
 	b.WriteString(styles.TextMutedStyle.Render(strings.Repeat("─", max(width, 1))))
-	b.WriteString("\n")
+
+	return b.String()
+}
+
+// renderDetailContent renders the scrollable content: title + description + comments.
+func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string {
+	if item == nil {
+		return ""
+	}
+
+	var b strings.Builder
 
 	// Title
 	b.WriteString(styles.TextForegroundBoldStyle.Render(item.Title))
 	b.WriteString("\n")
 
-	// Description
+	// Description (rendered as markdown via glamour)
 	if item.Desc != "" {
 		b.WriteString("\n")
-		b.WriteString(wrapText(item.Desc, width))
+		b.WriteString(renderMarkdown(item.Desc, width))
 	} else {
 		b.WriteString("\n")
 		b.WriteString(styles.TextMutedStyle.Render("No description"))
@@ -40,25 +52,41 @@ func renderDetail(item *hc.Item, node *TreeNode, comments []hc.Comment, width in
 
 	// Comments divider
 	b.WriteString("\n\n")
-	divider := styles.TextMutedStyle.Render("─── Comments ──────")
-	b.WriteString(divider)
+	b.WriteString(styles.TextMutedStyle.Render("─── Comments ──────"))
 	b.WriteString("\n")
 
 	if len(comments) == 0 {
 		b.WriteString("\n")
 		b.WriteString(styles.TextMutedStyle.Render("No comments"))
 	} else {
+		pipe := styles.TextMutedStyle.Render("│")
 		for _, c := range comments {
 			b.WriteString("\n")
-			ts := styles.TextMutedStyle.Render(relativeTime(c.CreatedAt))
 
-			msg := c.Message
-			if checkpoint, ok := strings.CutPrefix(msg, "CHECKPOINT:"); ok {
-				prefix := styles.TextWarningStyle.Render("CHECKPOINT:")
-				msg = prefix + checkpoint
+			ts := relativeTime(c.CreatedAt)
+			isCheckpoint := strings.HasPrefix(c.Message, "CHECKPOINT")
+
+			// Thread header: ┌─ <time> [CHECKPOINT]
+			if isCheckpoint {
+				fmt.Fprintf(&b, "%s %s  %s\n",
+					styles.TextMutedStyle.Render("┌─"),
+					styles.TextMutedStyle.Render(ts),
+					styles.TextWarningStyle.Render("CHECKPOINT"))
+			} else {
+				b.WriteString(styles.TextMutedStyle.Render("┌─ "+ts) + "\n")
 			}
 
-			fmt.Fprintf(&b, "%s  %s", ts, msg)
+			// Thread body: │  <message lines>
+			// "│  " is 3 visual chars
+			bodyWidth := max(width-3, 10)
+			msg := c.Message
+			if checkpoint, ok := strings.CutPrefix(msg, "CHECKPOINT:"); ok {
+				msg = strings.TrimSpace(checkpoint)
+			}
+			wrapped := lipgloss.Wrap(msg, bodyWidth, "")
+			for _, line := range strings.Split(wrapped, "\n") {
+				fmt.Fprintf(&b, "%s  %s\n", pipe, line)
+			}
 		}
 	}
 
@@ -105,42 +133,28 @@ func renderHeader(item *hc.Item, node *TreeNode) string {
 	return strings.Join(parts, "  ")
 }
 
-// wrapText wraps text to the given width using simple word wrapping.
-func wrapText(text string, width int) string {
-	if width <= 0 {
+// renderMarkdown renders text as styled markdown using glamour.
+func renderMarkdown(text string, width int) string {
+	style := styles.GlamourStyle()
+	noMargin := uint(0)
+	style.Document.Margin = &noMargin
+
+	renderer, err := glamour.NewTermRenderer(
+		glamour.WithStyles(style),
+		glamour.WithWordWrap(width),
+	)
+	if err != nil {
+		log.Debug().Err(err).Msg("tasks: failed to create markdown renderer")
 		return text
 	}
 
-	var result strings.Builder
-	for paragraph := range strings.SplitSeq(text, "\n") {
-		if result.Len() > 0 {
-			result.WriteString("\n")
-		}
-
-		words := strings.Fields(paragraph)
-		if len(words) == 0 {
-			continue
-		}
-
-		lineLen := 0
-		for i, word := range words {
-			wLen := len(word)
-			switch {
-			case i == 0:
-				result.WriteString(word)
-				lineLen = wLen
-			case lineLen+1+wLen > width:
-				result.WriteString("\n")
-				result.WriteString(word)
-				lineLen = wLen
-			default:
-				result.WriteString(" ")
-				result.WriteString(word)
-				lineLen += 1 + wLen
-			}
-		}
+	rendered, err := renderer.Render(text)
+	if err != nil {
+		log.Debug().Err(err).Msg("tasks: failed to render markdown")
+		return text
 	}
-	return result.String()
+
+	return strings.TrimSpace(rendered)
 }
 
 // relativeTime formats a time as a human-readable relative duration.

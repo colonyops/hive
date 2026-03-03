@@ -11,8 +11,8 @@ const (
 	IconInProgress = "◉"
 	IconDone       = " "
 	IconCancelled  = ""
-	IconExpanded   = ""
-	IconCollapsed  = ""
+	IconExpanded   = ""
+	IconCollapsed  = ""
 	BadgeBlocked   = "[blocked]"
 )
 
