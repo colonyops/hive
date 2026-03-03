@@ -462,6 +462,29 @@ type TUIConfig struct {
 	GroupBy         string        `json:"group_by"         yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
 	Preview         PreviewConfig `json:"preview"          yaml:"preview"`          // preview panel configuration
 	Views           ViewsConfig   `json:"views"            yaml:"views"`            // toggle optional TUI tabs
+	Layout          LayoutConfig  `json:"layout"           yaml:"layout"`           // panel layout configuration
+}
+
+// LayoutConfig holds per-view panel layout configuration.
+type LayoutConfig struct {
+	Sessions PanelLayout `json:"sessions" yaml:"sessions"`
+	Tasks    PanelLayout `json:"tasks"    yaml:"tasks"`
+	Messages PanelLayout `json:"messages" yaml:"messages"`
+}
+
+// PanelLayout configures the split ratio for dual-pane views.
+type PanelLayout struct {
+	// SplitRatio is the percentage (1-80) of width allocated to the list/tree pane.
+	// The remainder goes to the detail/preview pane. 0 uses the view's default.
+	SplitRatio int `json:"split_ratio" yaml:"split_ratio"`
+}
+
+// SplitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
+func (p PanelLayout) SplitRatioOrDefault(defaultPct int) int {
+	if p.SplitRatio < 1 || p.SplitRatio > 80 {
+		return defaultPct
+	}
+	return p.SplitRatio
 }
 
 // ViewsConfig controls which optional TUI tabs are enabled.

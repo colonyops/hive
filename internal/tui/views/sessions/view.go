@@ -882,8 +882,9 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 	v.treeDelegate.PreviewMode = true
 	v.list.SetDelegate(v.treeDelegate)
 
-	// Calculate widths (25% list, 1 char divider, remaining for preview)
-	listWidth := int(float64(v.width) * 0.25)
+	// Calculate widths (configurable split, 1 char divider, remaining for preview)
+	splitPct := v.cfg.TUI.Layout.Sessions.SplitRatioOrDefault(25)
+	listWidth := v.width * splitPct / 100
 	if listWidth < 20 {
 		listWidth = 20
 	}

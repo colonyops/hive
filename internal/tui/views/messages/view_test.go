@@ -21,7 +21,7 @@ func TestLoadMessages_NilService(t *testing.T) {
 }
 
 func TestHandleMessagesLoaded_WithError(t *testing.T) {
-	v := New(nil, "*", "")
+	v := New(nil, "*", "", 0)
 	err := errors.New("store unavailable")
 	msg := messagesLoadedMsg{err: err}
 	cmd := v.handleMessagesLoaded(msg)
@@ -31,7 +31,7 @@ func TestHandleMessagesLoaded_WithError(t *testing.T) {
 }
 
 func TestHandleMessagesLoaded_WithMessages(t *testing.T) {
-	v := New(nil, "*", "")
+	v := New(nil, "*", "", 0)
 	msgs := []messaging.Message{
 		{Topic: "t", Sender: "s", Payload: "hello", CreatedAt: time.Now()},
 	}
@@ -43,7 +43,7 @@ func TestHandleMessagesLoaded_WithMessages(t *testing.T) {
 }
 
 func TestHandleMessagesLoaded_EmptyMessages(t *testing.T) {
-	v := New(nil, "*", "")
+	v := New(nil, "*", "", 0)
 	msg := messagesLoadedMsg{messages: nil}
 	cmd := v.handleMessagesLoaded(msg)
 	assert.Nil(t, cmd)
@@ -51,7 +51,7 @@ func TestHandleMessagesLoaded_EmptyMessages(t *testing.T) {
 }
 
 func TestHandleMessagesLoaded_ErrorLeavesStateUnchanged(t *testing.T) {
-	v := New(nil, "*", "")
+	v := New(nil, "*", "", 0)
 	// Pre-load a message
 	v.ctrl.Append([]messaging.Message{
 		{Topic: "t", Sender: "s", Payload: "existing", CreatedAt: time.Now()},

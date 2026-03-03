@@ -260,7 +260,7 @@ func New(deps Deps, opts Opts) Model {
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand)
+	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand, cfg.TUI.Layout.Messages.SplitRatio)
 
 	kvView := NewKVView()
 
@@ -276,7 +276,7 @@ func New(deps Deps, opts Opts) Model {
 		}
 	}
 
-	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore)
+	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.TUI.Layout.Tasks)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)

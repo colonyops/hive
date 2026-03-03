@@ -11,6 +11,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/hc"
 	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -49,11 +50,12 @@ type View struct {
 	statusFilter StatusFilter            // current status filter (default: FilterOpen)
 	showPreview  bool                    // toggle detail/preview panel visibility
 
-	viewport    viewport.Model // scrollable detail content
-	detailWidth int            // cached detail pane width
-	focus       focusPane      // which pane has keyboard focus
-	handler     KeyResolver    // resolves configurable keybindings to actions
-	kvStore     corekv.KV      // persistent kv store for saving preferences
+	viewport    viewport.Model     // scrollable detail content
+	detailWidth int                // cached detail pane width
+	focus       focusPane          // which pane has keyboard focus
+	handler     KeyResolver        // resolves configurable keybindings to actions
+	kvStore     corekv.KV          // persistent kv store for saving preferences
+	layout      config.PanelLayout // panel split configuration
 
 	// Rendered content cache — avoids re-running glamour on every cursor change.
 	cachedContentKey string // "itemID:commentCount:width"
@@ -61,12 +63,13 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV) *View {
+func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV, layout config.PanelLayout) *View {
 	return &View{
 		svc:          svc,
 		repoKey:      repoKey,
 		handler:      handler,
 		kvStore:      kvStore,
+		layout:       layout,
 		comments:     make(map[string][]hc.Comment),
 		statusFilter: FilterOpen,
 		showPreview:  true,
@@ -151,10 +154,11 @@ func (v *View) View() string {
 	var body string
 
 	if v.showPreview {
-		// Two-column layout: tree ~30%, detail ~70%.
+		// Two-column layout: configurable tree/detail split.
 		// Account for 1 divider column (1 char).
+		splitPct := v.layout.SplitRatioOrDefault(30)
 		availWidth := max(v.width-1, 30)
-		treeWidth := max(availWidth*30/100, 25)
+		treeWidth := max(availWidth*splitPct/100, 25)
 		detailWidth := max(availWidth-treeWidth, 10)
 
 		// Tree pane: items + filter bar as last line
@@ -255,8 +259,9 @@ func (v *View) sizeViewport() {
 		return
 	}
 
+	splitPct := v.layout.SplitRatioOrDefault(30)
 	availWidth := max(v.width-1, 30)
-	treeWidth := max(availWidth*30/100, 25)
+	treeWidth := max(availWidth*splitPct/100, 25)
 	detailWidth := max(availWidth-treeWidth, 10)
 	v.detailWidth = detailWidth
 
