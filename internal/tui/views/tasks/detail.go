@@ -50,42 +50,36 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string
 		b.WriteString(styles.TextMutedStyle.Render("No description"))
 	}
 
-	// Comments divider
-	b.WriteString("\n\n")
-	b.WriteString(styles.TextMutedStyle.Render("─── Comments ──────"))
 	b.WriteString("\n")
 
 	if len(comments) == 0 {
 		b.WriteString("\n")
 		b.WriteString(styles.TextMutedStyle.Render("No comments"))
 	} else {
-		pipe := styles.TextMutedStyle.Render("│")
 		for _, c := range comments {
 			b.WriteString("\n")
 
 			ts := relativeTime(c.CreatedAt)
 			isCheckpoint := strings.HasPrefix(c.Message, "CHECKPOINT")
 
-			// Thread header: ┌─ <time> [CHECKPOINT]
+			// Header: — <time> [· CHECKPOINT]
 			if isCheckpoint {
-				fmt.Fprintf(&b, "%s %s  %s\n",
-					styles.TextMutedStyle.Render("┌─"),
-					styles.TextMutedStyle.Render(ts),
+				fmt.Fprintf(&b, "%s %s\n",
+					styles.TextMutedStyle.Render(styles.IconComment+" "+ts+" ·"),
 					styles.TextWarningStyle.Render("CHECKPOINT"))
 			} else {
-				b.WriteString(styles.TextMutedStyle.Render("┌─ "+ts) + "\n")
+				b.WriteString(styles.TextMutedStyle.Render(styles.IconComment+" "+ts) + "\n")
 			}
 
-			// Thread body: │  <message lines>
-			// "│  " is 3 visual chars
-			bodyWidth := max(width-3, 10)
+			// Body: indented 2 spaces
+			bodyWidth := max(width-2, 10)
 			msg := c.Message
 			if checkpoint, ok := strings.CutPrefix(msg, "CHECKPOINT:"); ok {
 				msg = strings.TrimSpace(checkpoint)
 			}
 			rendered := renderMarkdown(msg, bodyWidth)
 			for _, line := range strings.Split(rendered, "\n") {
-				fmt.Fprintf(&b, "%s  %s\n", pipe, line)
+				fmt.Fprintf(&b, "   %s\n", line)
 			}
 		}
 	}
@@ -141,22 +135,45 @@ func renderHeader(item *hc.Item, node *TreeNode) string {
 	return strings.Join(parts, "  ")
 }
 
-// renderMarkdown renders text as styled markdown using glamour.
-func renderMarkdown(text string, width int) string {
+// cachedRenderer holds a reusable glamour TermRenderer keyed by word-wrap width.
+var (
+	cachedRenderer      *glamour.TermRenderer
+	cachedRendererWidth int
+)
+
+// getMarkdownRenderer returns a glamour TermRenderer, reusing a cached instance
+// when the width hasn't changed.
+func getMarkdownRenderer(width int) (*glamour.TermRenderer, error) {
+	if cachedRenderer != nil && cachedRendererWidth == width {
+		return cachedRenderer, nil
+	}
+
 	style := styles.GlamourStyle()
 	noMargin := uint(0)
 	style.Document.Margin = &noMargin
 
-	renderer, err := glamour.NewTermRenderer(
+	r, err := glamour.NewTermRenderer(
 		glamour.WithStyles(style),
 		glamour.WithWordWrap(width),
 	)
+	if err != nil {
+		return nil, err
+	}
+
+	cachedRenderer = r
+	cachedRendererWidth = width
+	return r, nil
+}
+
+// renderMarkdown renders text as styled markdown using glamour.
+func renderMarkdown(text string, width int) string {
+	r, err := getMarkdownRenderer(width)
 	if err != nil {
 		log.Debug().Err(err).Msg("tasks: failed to create markdown renderer")
 		return text
 	}
 
-	rendered, err := renderer.Render(text)
+	rendered, err := r.Render(text)
 	if err != nil {
 		log.Debug().Err(err).Msg("tasks: failed to render markdown")
 		return text

@@ -17,3 +17,9 @@ type commentsLoadedMsg struct {
 	itemID   string
 	err      error
 }
+
+// contentRenderedMsg carries pre-rendered detail content produced off the event loop.
+type contentRenderedMsg struct {
+	key     string // cache key: "itemID:commentCount:width"
+	content string
+}

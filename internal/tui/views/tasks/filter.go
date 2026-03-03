@@ -66,5 +66,5 @@ func renderFilterBar(active StatusFilter) string {
 			parts = append(parts, styles.TextMutedStyle.Render(label))
 		}
 	}
-	return "  " + strings.Join(parts, styles.TextMutedStyle.Render(" · "))
+	return strings.Join(parts, styles.TextMutedStyle.Render(" · "))
 }

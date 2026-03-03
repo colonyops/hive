@@ -17,7 +17,7 @@ const (
 // renderTree renders flattened tree nodes into styled strings.
 func renderTree(flatNodes []FlatNode, cursor, scrollOffset, viewHeight int) string {
 	if len(flatNodes) == 0 {
-		return styles.TextMutedStyle.Render("  No tasks found")
+		return styles.TextMutedStyle.Render("  No matching tasks")
 	}
 
 	var b strings.Builder

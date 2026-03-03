@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // focusPane tracks which pane has keyboard focus.
@@ -50,6 +51,10 @@ type View struct {
 	viewport    viewport.Model // scrollable detail content
 	detailWidth int            // cached detail pane width
 	focus       focusPane      // which pane has keyboard focus
+
+	// Rendered content cache — avoids re-running glamour on every cursor change.
+	cachedContentKey string // "itemID:commentCount:width"
+	cachedContent    string
 }
 
 // New creates a new tasks View.
@@ -90,12 +95,25 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 		v.comments[msg.itemID] = msg.comments
 		// Refresh viewport if we're still looking at this item
 		if selected := v.SelectedItem(); selected != nil && selected.ID == msg.itemID {
-			v.updateViewportContent()
+			return v.updateViewportContent()
+		}
+		return nil
+
+	case contentRenderedMsg:
+		v.cachedContentKey = msg.key
+		v.cachedContent = msg.content
+		// Only apply if we're still viewing the same item.
+		if selected := v.SelectedItem(); selected != nil {
+			currentKey := fmt.Sprintf("%s:%d:%d", selected.ID, len(v.comments[selected.ID]), v.viewport.Width())
+			if currentKey == msg.key {
+				v.viewport.SetContent(msg.content)
+			}
 		}
 		return nil
 
 	case RefreshTasksMsg:
 		v.comments = make(map[string][]hc.Comment)
+		v.cachedContentKey = ""
 		return v.loadItems()
 
 	case tea.KeyMsg:
@@ -117,15 +135,9 @@ func (v *View) View() string {
 		return "  No tasks loaded"
 	}
 
-	filterBar := renderFilterBar(v.statusFilter)
-
-	if len(v.flatNodes) == 0 {
-		help := styles.TextMutedStyle.Render("p preview • f filter • r refresh")
-		return filterBar + "\n\n  " + styles.TextMutedStyle.Render("No tasks match the current filter.") + "\n" + help
-	}
-
-	// Reserve 1 line for help bar (filter bar is inside the tree pane).
-	contentHeight := max(v.height-1, 1)
+	// Content area includes the filter bar as the last tree row.
+	contentHeight := max(v.height-bottomBarLines, 1)
+	treeRows := max(contentHeight-1, 1) // tree items above the filter bar
 
 	var body string
 
@@ -136,12 +148,13 @@ func (v *View) View() string {
 		treeWidth := max(availWidth*30/100, 25)
 		detailWidth := max(availWidth-treeWidth, 10)
 
-		// Tree pane: filter bar (1 line) + blank line (1 line) + tree items
-		treeHeight := max(contentHeight-2, 1) // subtract 2 for filter bar + blank line
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeHeight)
-		treeContent = filterBar + "\n\n" + treeContent
-		treeContent = ensureExactHeight(treeContent, contentHeight)
+		// Tree pane: items + filter bar as last line
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
+		treeContent = ensureExactHeight(treeContent, treeRows)
+		filterLine := " " + renderFilterBar(v.statusFilter)
+		filterLine = ensureExactWidth(filterLine, treeWidth)
 		treeContent = ensureExactWidth(treeContent, treeWidth)
+		treeContent = treeContent + "\n" + filterLine
 
 		// Selected item for detail
 		selected := v.SelectedItem()
@@ -177,25 +190,24 @@ func (v *View) View() string {
 		}
 		divider := buildDividerStyled(contentHeight, dividerStyle)
 
-		// Dim tree pane when detail has focus
+		// Dim tree pane when detail has focus.
 		if v.focus == paneDetail {
 			treeContent = styles.TextMutedStyle.Render(treeContent)
-			treeContent = ensureExactWidth(treeContent, treeWidth)
 		}
 
 		// Compose panes
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
 	} else {
 		// Tree-only layout: full width.
-		treeHeight := max(contentHeight-2, 1) // subtract 2 for filter bar + blank line
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeHeight)
-		treeContent = filterBar + "\n\n" + treeContent
-		treeContent = ensureExactHeight(treeContent, contentHeight)
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
+		treeContent = ensureExactHeight(treeContent, treeRows)
 		treeContent = ensureExactWidth(treeContent, v.width)
-		body = treeContent
+		filterLine := " " + renderFilterBar(v.statusFilter)
+		body = treeContent + "\n" + filterLine
 	}
 
-	// Help bar
+	// Bottom: rule + help bar
+	bar := components.StatusBar{Width: v.width}
 	var help string
 	if v.focus == paneDetail {
 		scrollInfo := ""
@@ -207,7 +219,7 @@ func (v *View) View() string {
 		help = styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • l detail • p preview • f filter • r refresh")
 	}
 
-	return body + "\n" + help
+	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
 }
 
 // SetSize updates the view dimensions.
@@ -229,8 +241,8 @@ func (v *View) sizeViewport() {
 	detailWidth := max(availWidth-treeWidth, 10)
 	v.detailWidth = detailWidth
 
-	// Content area: total height minus help bar (1); filter bar is inside the tree pane.
-	contentHeight := max(v.height-1, 1)
+	// Content area: total height minus bottom bars.
+	contentHeight := max(v.height-bottomBarLines, 1)
 	// Viewport height: content height minus header lines (properties + divider) minus 1 for the newline separator
 	vpHeight := max(contentHeight-headerLines-1, 1)
 	innerWidth := max(detailWidth-2, 10) // 1 char padding each side
@@ -299,21 +311,27 @@ func (v *View) checkCursorChanged() tea.Cmd {
 	}
 
 	v.lastItemID = selected.ID
-	v.updateViewportContent()
+	renderCmd := v.updateViewportContent()
 
-	if _, cached := v.comments[selected.ID]; cached {
-		return nil
+	var cmds []tea.Cmd
+	if renderCmd != nil {
+		cmds = append(cmds, renderCmd)
+	}
+	if _, cached := v.comments[selected.ID]; !cached {
+		cmds = append(cmds, v.loadComments(selected.ID))
 	}
 
-	return v.loadComments(selected.ID)
+	return tea.Batch(cmds...)
 }
 
-// updateViewportContent re-renders the detail content into the viewport.
-func (v *View) updateViewportContent() {
+// updateViewportContent sets viewport content from cache or kicks off async rendering.
+// Returns a tea.Cmd when async rendering is needed, nil otherwise.
+func (v *View) updateViewportContent() tea.Cmd {
 	selected := v.SelectedItem()
 	if selected == nil {
 		v.viewport.SetContent("")
-		return
+		v.cachedContentKey = ""
+		return nil
 	}
 
 	contentWidth := v.viewport.Width()
@@ -326,9 +344,26 @@ func (v *View) updateViewportContent() {
 		itemComments = comments
 	}
 
-	content := renderDetailContent(selected, itemComments, contentWidth)
-	v.viewport.SetContent(content)
+	key := fmt.Sprintf("%s:%d:%d", selected.ID, len(itemComments), contentWidth)
+	if key == v.cachedContentKey {
+		v.viewport.SetContent(v.cachedContent)
+		v.viewport.SetYOffset(0)
+		return nil
+	}
+
+	// Show title immediately while markdown renders in the background.
+	v.viewport.SetContent(styles.TextForegroundBoldStyle.Render(selected.Title) + "\n")
 	v.viewport.SetYOffset(0)
+
+	// Capture values for the goroutine.
+	item := *selected
+	comments := itemComments
+	width := contentWidth
+
+	return func() tea.Msg {
+		content := renderDetailContent(&item, comments, width)
+		return contentRenderedMsg{key: key, content: content}
+	}
 }
 
 // rebuildTree rebuilds the tree from the current items, applying the active filter, and clamps the cursor.
@@ -364,7 +399,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	case "l":
 		if v.showPreview && v.SelectedItem() != nil {
 			v.focus = paneDetail
-			v.updateViewportContent()
+			return v.updateViewportContent()
 		}
 	case "r":
 		v.comments = make(map[string][]hc.Comment)
@@ -373,7 +408,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 		v.showPreview = !v.showPreview
 		if v.showPreview {
 			v.sizeViewport()
-			v.updateViewportContent()
+			return v.updateViewportContent()
 		}
 	case "f":
 		v.statusFilter = (v.statusFilter + 1) % filterCount
@@ -449,10 +484,13 @@ func (v *View) clampCursor() {
 	}
 }
 
+// bottomBarLines is the number of fixed lines at the bottom (rule + help).
+const bottomBarLines = 2
+
 // treeViewHeight returns the number of visible tree rows, accounting for
-// the help bar (1 line) and the filter bar + blank line inside the tree pane (2 lines).
+// the bottom bars and the filter bar (which sits inside the tree column).
 func (v *View) treeViewHeight() int {
-	return max(v.height-3, 1) // 1 help bar + 2 filter bar lines
+	return max(v.height-bottomBarLines-1, 1)
 }
 
 // clampScroll ensures the scroll offset keeps the cursor visible.
@@ -476,9 +514,10 @@ func (v *View) clampScroll() {
 
 // buildDividerStyled creates a vertical divider string of the given height with the given style.
 func buildDividerStyled(height int, style lipgloss.Style) string {
+	styledChar := style.Render("│")
 	lines := make([]string, height)
 	for i := range lines {
-		lines[i] = style.Render("│")
+		lines[i] = styledChar
 	}
 	return strings.Join(lines, "\n")
 }
@@ -519,7 +558,9 @@ func ensureExactWidth(content string, width int) string {
 	}
 
 	lines := strings.Split(content, "\n")
+	// Pre-allocate: each line ≈ width bytes + newline
 	var b strings.Builder
+	b.Grow(len(lines) * (width + 1))
 
 	for i, line := range lines {
 		if i > 0 {
