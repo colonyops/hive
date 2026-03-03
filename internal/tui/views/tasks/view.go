@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/hc"
+	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
@@ -52,6 +53,7 @@ type View struct {
 	detailWidth int            // cached detail pane width
 	focus       focusPane      // which pane has keyboard focus
 	handler     KeyResolver    // resolves configurable keybindings to actions
+	kvStore     corekv.KV      // persistent kv store for saving preferences
 
 	// Rendered content cache — avoids re-running glamour on every cursor change.
 	cachedContentKey string // "itemID:commentCount:width"
@@ -59,19 +61,24 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver) *View {
+func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV) *View {
 	return &View{
 		svc:          svc,
 		repoKey:      repoKey,
 		handler:      handler,
+		kvStore:      kvStore,
 		comments:     make(map[string][]hc.Comment),
 		statusFilter: FilterOpen,
 		showPreview:  true,
 	}
 }
 
+// kvFilterKey is the kv store key for persisting the tasks status filter.
+const kvFilterKey = "tui.tasks.filter"
+
 // Init initializes the tasks view.
 func (v *View) Init() tea.Cmd {
+	v.restoreFilter()
 	if v.svc != nil {
 		return v.loadItems()
 	}
@@ -274,11 +281,36 @@ func (v *View) SetActive(active bool) {
 	}
 }
 
-// CycleFilter advances the status filter and rebuilds the tree.
+// CycleFilter advances the status filter, persists it, and rebuilds the tree.
 func (v *View) CycleFilter() tea.Cmd {
 	v.statusFilter = (v.statusFilter + 1) % filterCount
+	v.saveFilter()
 	v.rebuildTree()
 	return v.checkCursorChanged()
+}
+
+// restoreFilter loads the persisted status filter from the kv store.
+func (v *View) restoreFilter() {
+	if v.kvStore == nil {
+		return
+	}
+	var saved int
+	if err := v.kvStore.Get(context.Background(), kvFilterKey, &saved); err != nil {
+		return
+	}
+	if saved >= 0 && saved < filterCount {
+		v.statusFilter = StatusFilter(saved)
+	}
+}
+
+// saveFilter persists the current status filter to the kv store.
+func (v *View) saveFilter() {
+	if v.kvStore == nil {
+		return
+	}
+	if err := v.kvStore.Set(context.Background(), kvFilterKey, int(v.statusFilter)); err != nil {
+		log.Debug().Err(err).Msg("failed to persist tasks filter")
+	}
 }
 
 // TogglePreview toggles the preview panel visibility.

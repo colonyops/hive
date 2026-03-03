@@ -275,7 +275,7 @@ func New(deps Deps, opts Opts) Model {
 		}
 	}
 
-	tasksView := tasks.New(deps.Honeycomb, repoKey, handler)
+	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
