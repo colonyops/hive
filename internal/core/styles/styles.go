@@ -56,8 +56,6 @@ var (
 
 	// Help dialog styles.
 	HelpDialogSectionStyle lipgloss.Style
-	HelpDialogHelpStyle    lipgloss.Style
-	HelpDialogModalStyle   lipgloss.Style
 
 	// Confirm modal styles.
 	ConfirmMessageStyle lipgloss.Style
@@ -211,13 +209,6 @@ func SetTheme(p Palette) {
 	HelpDialogSectionStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).
 		Italic(true)
-	HelpDialogHelpStyle = lipgloss.NewStyle().
-		Foreground(ColorMuted).
-		MarginTop(1)
-	HelpDialogModalStyle = lipgloss.NewStyle().
-		Border(lipgloss.RoundedBorder()).
-		BorderForeground(ColorPrimary).
-		Padding(1, 2)
 
 	ConfirmMessageStyle = lipgloss.NewStyle().
 		Foreground(ColorForeground).

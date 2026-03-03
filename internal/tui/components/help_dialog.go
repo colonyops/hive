@@ -2,10 +2,20 @@
 package components
 
 import (
+	"fmt"
 	"strings"
 
+	"charm.land/bubbles/v2/viewport"
 	lipgloss "charm.land/lipgloss/v2"
+
 	"github.com/colonyops/hive/internal/core/styles"
+)
+
+const (
+	helpModalMaxHeight = 30
+	helpModalMargin    = 4
+	helpModalChrome    = 6 // title + divider + help + spacing
+	helpModalMinWidth  = 45
 )
 
 // HelpEntry represents a single keyboard shortcut entry.
@@ -26,29 +36,37 @@ type HelpDialog struct {
 	sections []HelpDialogSection
 	width    int
 	height   int
+	viewport viewport.Model
 }
 
 // NewHelpDialog creates a new help dialog with the given sections.
 func NewHelpDialog(title string, sections []HelpDialogSection, width, height int) *HelpDialog {
-	return &HelpDialog{
+	modalWidth := min(max(int(float64(width)*0.5), helpModalMinWidth), width-helpModalMargin)
+	modalHeight := min(height-helpModalMargin, helpModalMaxHeight)
+	contentHeight := modalHeight - helpModalChrome
+
+	vp := viewport.New(
+		viewport.WithWidth(modalWidth-4),
+		viewport.WithHeight(contentHeight),
+	)
+
+	d := &HelpDialog{
 		title:    title,
 		sections: sections,
 		width:    width,
 		height:   height,
+		viewport: vp,
 	}
+	d.viewport.SetContent(d.renderContent(modalWidth))
+	return d
 }
 
-// View renders the help dialog.
-func (h *HelpDialog) View() string {
-	title := styles.TextForegroundBoldStyle.Render(h.title)
-
+func (d *HelpDialog) renderContent(modalWidth int) string {
+	separator := styles.TextSurfaceStyle.Render(strings.Repeat("─", max(modalWidth-6, 1)))
 	var lines []string
-	separator := styles.TextMutedStyle.Render("─────────────────────────")
 
-	for i, section := range h.sections {
-		// Add section header if present
+	for i, section := range d.sections {
 		if section.Title != "" {
-			// Add spacing before subsequent sections
 			if i > 0 {
 				lines = append(lines, "")
 			}
@@ -61,39 +79,66 @@ func (h *HelpDialog) View() string {
 		}
 	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left,
-		title,
-		"",
-		strings.Join(lines, "\n"),
-	)
+	return strings.Join(lines, "\n")
+}
 
-	help := styles.HelpDialogHelpStyle.Render("esc/? close")
-	content = lipgloss.JoinVertical(lipgloss.Left, content, help)
+// ScrollUp scrolls the viewport up.
+func (d *HelpDialog) ScrollUp() {
+	d.viewport.ScrollUp(1)
+}
 
-	return styles.HelpDialogModalStyle.Render(content)
+// ScrollDown scrolls the viewport down.
+func (d *HelpDialog) ScrollDown() {
+	d.viewport.ScrollDown(1)
 }
 
 // Overlay renders the help dialog as a layer over the given background.
-func (h *HelpDialog) Overlay(background string, width, height int) string {
-	modal := h.View()
+func (d *HelpDialog) Overlay(background string, width, height int) string {
+	modalWidth := min(max(int(float64(width)*0.5), helpModalMinWidth), width-helpModalMargin)
+	modalHeight := min(height-helpModalMargin, helpModalMaxHeight)
+
+	scrollInfo := ""
+	if d.viewport.TotalLineCount() > d.viewport.VisibleLineCount() {
+		scrollInfo = styles.TextMutedStyle.Render(
+			fmt.Sprintf(" (%.0f%%)", d.viewport.ScrollPercent()*100),
+		)
+	}
+
+	divider := styles.TextSurfaceStyle.Render(strings.Repeat("─", max(modalWidth-6, 1)))
+
+	helpText := "esc/? close"
+	if d.viewport.TotalLineCount() > d.viewport.VisibleLineCount() {
+		helpText = "[j/k] scroll  esc/? close"
+	}
+
+	modalContent := lipgloss.JoinVertical(
+		lipgloss.Left,
+		styles.ModalTitleStyle.Render(d.title+scrollInfo),
+		divider,
+		d.viewport.View(),
+		styles.ModalHelpStyle.Render(helpText),
+	)
+
+	modal := styles.ModalStyle.
+		Width(modalWidth).
+		Height(modalHeight).
+		Render(modalContent)
 
 	bgLayer := lipgloss.NewLayer(background)
 	modalLayer := lipgloss.NewLayer(modal)
 
-	// Center the modal
 	modalW := lipgloss.Width(modal)
 	modalH := lipgloss.Height(modal)
-	centerX := (width - modalW) / 2
-	centerY := (height - modalH) / 2
+	centerX := max((width-modalW)/2, 0)
+	centerY := max((height-modalH)/2, 0)
 	modalLayer.X(centerX).Y(centerY).Z(1)
 
-	compositor := lipgloss.NewCompositor(bgLayer, modalLayer)
-	return compositor.Render()
+	return lipgloss.NewCompositor(bgLayer, modalLayer).Render()
 }
 
 // formatKeyDesc formats a key-description pair with consistent alignment.
 func formatKeyDesc(key, desc string) string {
-	const keyWidth = 12
+	const keyWidth = 10
 
 	// Pad key to fixed width for alignment using display width (handles Unicode)
 	displayWidth := lipgloss.Width(key)

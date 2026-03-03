@@ -774,6 +774,10 @@ func (m Model) handleHelpDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		m.modals.DismissHelp()
 		return m, nil
+	case "j", "down":
+		m.modals.Help.ScrollDown()
+	case "k", "up":
+		m.modals.Help.ScrollUp()
 	}
 	return m, nil
 }
