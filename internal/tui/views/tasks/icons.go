@@ -9,10 +9,10 @@ import (
 const (
 	IconOpen       = "○"
 	IconInProgress = "◉"
-	IconDone       = "✓"
-	IconCancelled  = "✗"
-	IconExpanded   = "▼"
-	IconCollapsed  = "▶"
+	IconDone       = " "
+	IconCancelled  = ""
+	IconExpanded   = ""
+	IconCollapsed  = ""
 	BadgeBlocked   = "[blocked]"
 )
 
