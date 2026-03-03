@@ -4,23 +4,32 @@ icon: lucide/keyboard
 
 # Keybindings
 
-Keybindings map keys to user commands. All keybindings reference a command via the `cmd` field.
+Keybindings map keys to user commands. Keybindings are configured per-view under the `views` section, with a `global` section for bindings available in all views.
 
 ```yaml
-keybindings:
-  r:
-    cmd: Recycle # System default
-  d:
-    cmd: Delete # System default
-  o:
-    cmd: open # User-defined command
-  t:
-    cmd: tidy
-    confirm: "Run tidy on this session?" # Override command's confirm
+views:
+  global:
+    keybindings:
+      "?":
+        cmd: HiveInfo
+  sessions:
+    keybindings:
+      o:
+        cmd: open # User-defined command
+      t:
+        cmd: tidy
+        confirm: "Run tidy on this session?"
+  tasks:
+    keybindings:
+      r:
+        cmd: TasksRefresh
 ```
 
 !!! info
     Keybindings reference commands by name. Both system default commands (like `Recycle`) and user-defined commands can be bound. You can override the command's `help` and `confirm` fields per-binding.
+
+!!! warning "Deprecated: top-level keybindings"
+    The top-level `keybindings` field is deprecated. Move entries to `views.sessions.keybindings` instead. Existing top-level keybindings are automatically migrated to the sessions view.
 
 ## Keybinding Options
 
@@ -32,10 +41,10 @@ keybindings:
 
 ## Default Keybindings
 
+### Sessions View
+
 | Key        | Command              | Description                          |
 | ---------- | -------------------- | ------------------------------------ |
-| `:`        | —                    | Open command palette                 |
-| `v`        | —                    | Toggle preview sidebar               |
 | `r`        | Recycle              | Recycle session                      |
 | `d`        | Delete               | Delete session (or tmux window)      |
 | `n`        | NewSession           | New session (when repos discovered)  |
@@ -43,16 +52,54 @@ keybindings:
 | `ctrl+d`   | TmuxKill             | Kill tmux session                    |
 | `A`        | AgentSend            | Send Enter to agent                  |
 | `R`        | RenameSession        | Rename session                       |
-| `G`        | GroupSet             | Set session group                    |
+| `ctrl+g`   | GroupSet             | Set session group                    |
 | `J`        | NextActive           | Jump to next active session          |
 | `K`        | PrevActive           | Jump to previous active session      |
 | `t`        | TodoPanel            | Open todo panel                      |
 | `p`        | TmuxPopUp            | Popup tmux session                   |
-| `g`        | —                    | Refresh git statuses                 |
-| `tab`      | —                    | Switch views                         |
-| `q`        | —                    | Quit                                 |
+
+### Tasks View
+
+| Key  | Command              | Description                     |
+| ---- | -------------------- | ------------------------------- |
+| `r`  | TasksRefresh         | Refresh task list               |
+| `f`  | TasksFilter          | Cycle status filter             |
+| `y`  | TasksCopyID          | Copy task ID to clipboard       |
+| `v`  | TasksTogglePreview   | Toggle preview panel            |
+
+### Hard-coded Keys (all views)
+
+| Key        | Description                          |
+| ---------- | ------------------------------------ |
+| `:`        | Open command palette                 |
+| `tab`      | Switch views                         |
+| `q`        | Quit                                 |
+
+### Sessions View Navigation
+
+| Key  | Description              |
+| ---- | ------------------------ |
+| `v`  | Toggle preview sidebar   |
+| `g`  | Refresh git statuses     |
+
+### Tasks View Navigation
+
+| Key          | Description              |
+| ------------ | ------------------------ |
+| `space`      | Expand/collapse item     |
+| `enter`, `l` | Open detail pane         |
+| `h`, `esc`   | Back to tree             |
 
 For todo panel interaction keys (`enter`, `c`, `d`, `tab`, etc.), see [Todos (Experimental)](../getting-started/todos.md).
+
+## Per-View Keybinding Resolution
+
+When a key is pressed, hive resolves bindings in this order:
+
+1. **View-specific bindings** — checked first (e.g., `views.sessions.keybindings`)
+2. **Global bindings** — checked as fallback (e.g., `views.global.keybindings`)
+
+A view-specific binding overrides a global binding for the same key.
 
 ## Built-in Palette Commands
 

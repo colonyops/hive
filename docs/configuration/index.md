@@ -98,11 +98,23 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | `todos.limiter.rate_limit_per_session` | `duration`        | `0`     | Per-session add cooldown (`0` disables) |
 | `todos.notifications.toast`          | `bool`              | `true`  | Show toast on todo creation |
 
+## Views & Keybindings
+
+Keybindings are configured per-view under the `views` section:
+
+| Section              | Description                              |
+| -------------------- | ---------------------------------------- |
+| `views.global`       | Keybindings available in all views       |
+| `views.sessions`     | Keybindings for the sessions view        |
+| `views.tasks`        | Keybindings for the tasks view           |
+
+See [Keybindings](keybindings.md) for the full per-view configuration format and defaults.
+
 ## More Configuration
 
 - **[Rules](rules.md)** — Repository-specific spawn, recycle, setup commands, and file copying
 - **[User Commands](commands.md)** — Custom commands for the vim-style command palette
-- **[Keybindings](keybindings.md)** — Map keys to user commands or built-in actions
+- **[Keybindings](keybindings.md)** — Per-view key mappings and palette commands
 - **[Todo Configuration (Experimental)](todos.md)** — Todo actions, limiter, notifications, and enter behavior
 - **[Plugins](plugins.md)** — External service integrations (tmux, Claude, GitHub, Beads, etc.)
 - **[Themes](themes.md)** — Built-in color palettes and custom theme creation
