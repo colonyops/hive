@@ -92,7 +92,7 @@ func (cmd *InstallCmd) run(ctx context.Context, c *cli.Command) error {
 // writeConfig writes workspaces to the config file, preserving any existing keys.
 func writeConfig(configPath string, workspaces []string) error {
 	// Ensure parent directory exists
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
@@ -109,7 +109,7 @@ func writeConfig(configPath string, workspaces []string) error {
 		return fmt.Errorf("marshal config: %w", err)
 	}
 
-	return os.WriteFile(configPath, data, 0644)
+	return os.WriteFile(configPath, data, 0o644)
 }
 
 // checkAgentCommands verifies that common agent commands are available in PATH.
@@ -151,13 +151,17 @@ func addShellAlias(shell install.ShellConfig) error {
 		aliasLine = "\n# Hive alias\nalias hv='tmux new-session -As hive hive'\n"
 	}
 
-	f, err := os.OpenFile(shell.Path, os.O_APPEND|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(shell.Path, os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return fmt.Errorf("open file: %w", err)
 	}
-	defer f.Close()
+	defer func() {
+		if cerr := f.Close(); cerr != nil && err == nil {
+			err = cerr
+		}
+	}()
 
-	if _, err := f.WriteString(aliasLine); err != nil {
+	if _, err = f.WriteString(aliasLine); err != nil {
 		return fmt.Errorf("write alias: %w", err)
 	}
 
