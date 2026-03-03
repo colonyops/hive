@@ -121,11 +121,11 @@ func (v *View) View() string {
 
 	if len(v.flatNodes) == 0 {
 		help := styles.TextMutedStyle.Render("p preview • f filter • r refresh")
-		return filterBar + "\n  " + styles.TextMutedStyle.Render("No tasks match the current filter.") + "\n" + help
+		return filterBar + "\n\n  " + styles.TextMutedStyle.Render("No tasks match the current filter.") + "\n" + help
 	}
 
-	// Reserve 2 lines: filter bar + help bar.
-	contentHeight := max(v.height-2, 1)
+	// Reserve 1 line for help bar (filter bar is inside the tree pane).
+	contentHeight := max(v.height-1, 1)
 
 	var body string
 
@@ -136,8 +136,10 @@ func (v *View) View() string {
 		treeWidth := max(availWidth*30/100, 25)
 		detailWidth := max(availWidth-treeWidth, 10)
 
-		// Tree pane
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, contentHeight)
+		// Tree pane: filter bar (1 line) + blank line (1 line) + tree items
+		treeHeight := max(contentHeight-2, 1) // subtract 2 for filter bar + blank line
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeHeight)
+		treeContent = filterBar + "\n\n" + treeContent
 		treeContent = ensureExactHeight(treeContent, contentHeight)
 		treeContent = ensureExactWidth(treeContent, treeWidth)
 
@@ -185,7 +187,9 @@ func (v *View) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
 	} else {
 		// Tree-only layout: full width.
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, contentHeight)
+		treeHeight := max(contentHeight-2, 1) // subtract 2 for filter bar + blank line
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeHeight)
+		treeContent = filterBar + "\n\n" + treeContent
 		treeContent = ensureExactHeight(treeContent, contentHeight)
 		treeContent = ensureExactWidth(treeContent, v.width)
 		body = treeContent
@@ -203,7 +207,7 @@ func (v *View) View() string {
 		help = styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • tab detail • p preview • f filter • r refresh")
 	}
 
-	return filterBar + "\n" + body + "\n" + help
+	return body + "\n" + help
 }
 
 // SetSize updates the view dimensions.
@@ -225,8 +229,8 @@ func (v *View) sizeViewport() {
 	detailWidth := max(availWidth-treeWidth, 10)
 	v.detailWidth = detailWidth
 
-	// Content area: total height minus filter bar (1) and help bar (1)
-	contentHeight := max(v.height-2, 1)
+	// Content area: total height minus help bar (1); filter bar is inside the tree pane.
+	contentHeight := max(v.height-1, 1)
 	// Viewport height: content height minus header lines (properties + divider) minus 1 for the newline separator
 	vpHeight := max(contentHeight-headerLines-1, 1)
 	innerWidth := max(detailWidth-2, 10) // 1 char padding each side
@@ -445,21 +449,28 @@ func (v *View) clampCursor() {
 	}
 }
 
+// treeViewHeight returns the number of visible tree rows, accounting for
+// the help bar (1 line) and the filter bar + blank line inside the tree pane (2 lines).
+func (v *View) treeViewHeight() int {
+	return max(v.height-3, 1) // 1 help bar + 2 filter bar lines
+}
+
 // clampScroll ensures the scroll offset keeps the cursor visible.
 func (v *View) clampScroll() {
 	if v.height <= 0 {
 		return
 	}
+	visibleRows := v.treeViewHeight()
 	// Cursor below visible area
-	if v.cursor >= v.scrollOffset+v.height {
-		v.scrollOffset = v.cursor - v.height + 1
+	if v.cursor >= v.scrollOffset+visibleRows {
+		v.scrollOffset = v.cursor - visibleRows + 1
 	}
 	// Cursor above visible area
 	if v.cursor < v.scrollOffset {
 		v.scrollOffset = v.cursor
 	}
 	// Don't scroll past the end
-	maxOffset := max(len(v.flatNodes)-v.height, 0)
+	maxOffset := max(len(v.flatNodes)-visibleRows, 0)
 	v.scrollOffset = max(min(v.scrollOffset, maxOffset), 0)
 }
 
