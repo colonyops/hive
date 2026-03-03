@@ -107,6 +107,11 @@ depends = ["build"]
 run = "docker build -f Dockerfile.test -t hive-integration-test . && docker run --rm hive-integration-test"
 
 [tasks."container"]
-description = "Build Docker image and run ephemeral container"
+description = "Build and run container with pre-configured workspace and hive repo"
 depends = ["build"]
-run = "docker run --rm -it -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q .)"
+run = "docker run --rm -it -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q --build-arg SETUP=full .)"
+
+[tasks."container:clean"]
+description = "Build and run vanilla container for install wizard testing"
+depends = ["build"]
+run = "docker run --rm -it -e CLAUDE_CREDENTIALS=\"$CLAUDE_CREDENTIALS\" $(docker build -q --build-arg SETUP=clean .)"

@@ -15,29 +15,30 @@ RUN curl -fsSL https://claude.ai/install.sh | bash
 RUN mkdir -p /root/.claude && \
     echo '{"hasCompletedOnboarding": true}' > /root/.claude.json
 
-# Credentials will be injected at runtime via CLAUDE_CREDENTIALS env var
-
 COPY dist/hive_linux_amd64_v1/hive /usr/local/bin/hive
-
 RUN chmod +x /usr/local/bin/hive
 
 WORKDIR /workspace
 
-# shell and config
 ENV SHELL=/bin/bash
 ENV PATH="/root/.local/bin:${PATH}"
 ENV HIVE_LOG_LEVEL=debug
 ENV HIVE_LOG_FILE=/tmp/hive.log
-COPY dev/config.dev.yaml /etc/hive/config.yaml
-ENV HIVE_CONFIG=/etc/hive/config.yaml
 
 # hv alias
 RUN echo "alias hv='tmux new-session -As hive hive'" >> /root/.bashrc
 
-# working repo
-RUN git clone https://github.com/colonyops/hive.git
+# SETUP=full pre-configures a workspace and clones the hive repo.
+# SETUP=clean leaves the container vanilla for install wizard testing.
+ARG SETUP=full
+ENV CONTAINER_SETUP=$SETUP
 
-# Write credentials on startup if provided
+COPY dev/config.dev.yaml /etc/hive/config.yaml.template
+
+RUN if [ "$SETUP" = "full" ]; then \
+    git clone https://github.com/colonyops/hive.git /workspace/hive; \
+fi
+
 COPY dev/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
