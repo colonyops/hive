@@ -277,7 +277,10 @@ func (v *View) visibleLines() int {
 		// which already has tab chrome (3 lines) subtracted.
 		h -= 3
 	}
-	reserved := 2 // column header + help line
+	reserved := 2 // column header + help line (dual-pane sub-pane footer)
+	if v.width < minDualPaneWidth {
+		reserved = 3 // column header + rule + help bar
+	}
 	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
 		reserved++
 	}
@@ -662,7 +665,11 @@ func (v *View) renderCompactList() string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(styles.MessagesHelpStyle.Render("↑/↓ navigate • / filter • tab switch view"))
+	bar := components.StatusBar{Width: v.width}
+	help := styles.TextMutedStyle.Render("↑/↓ navigate • / filter • tab switch view")
+	b.WriteString(bar.Rule())
+	b.WriteString("\n")
+	b.WriteString(bar.Render(help, ""))
 
 	return b.String()
 }
