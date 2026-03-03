@@ -188,6 +188,12 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
+	"ViewTasks": {
+		Action: action.TypeViewTasks,
+		Help:   "view tasks for repo",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
 	"TasksRefresh": {
 		Action: action.TypeTasksRefresh,
 		Help:   "refresh",
@@ -209,6 +215,12 @@ var defaultUserCommands = map[string]UserCommand{
 	"TasksTogglePreview": {
 		Action: action.TypeTasksTogglePreview,
 		Help:   "toggle preview",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksSelectRepo": {
+		Action: action.TypeTasksSelectRepo,
+		Help:   "select repository",
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
@@ -267,6 +279,7 @@ var defaultViewKeybindings = ViewKeybindings{
 			"J":      {Cmd: "NextActive"},
 			"K":      {Cmd: "PrevActive"},
 			"t":      {Cmd: "TodoPanel"},
+			"T":      {Cmd: "ViewTasks"},
 		},
 	},
 	Tasks: ViewKeybindingConfig{
@@ -275,6 +288,7 @@ var defaultViewKeybindings = ViewKeybindings{
 			"f": {Cmd: "TasksFilter"},
 			"y": {Cmd: "TasksCopyID"},
 			"v": {Cmd: "TasksTogglePreview"},
+			"s": {Cmd: "TasksSelectRepo"},
 		},
 	},
 }

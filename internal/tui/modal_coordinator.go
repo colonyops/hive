@@ -30,6 +30,7 @@ type ModalCoordinator struct {
 	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
 	DocPicker       *review.DocumentPickerModal
+	RepoPicker      *RepoPicker
 	TodoPanel       *TodoPanel
 	RenameInput     textinput.Model
 	RenameSessionID string
@@ -152,6 +153,9 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 	case state == stateShowingTodos && mc.TodoPanel != nil:
 		return mc.TodoPanel.Overlay(bg, w, h)
 
+	case state == stateSelectingRepo && mc.RepoPicker != nil:
+		return mc.RepoPicker.Overlay(bg, w, h)
+
 	case mc.DocPicker != nil:
 		return mc.DocPicker.Overlay(bg, w, h)
 
@@ -227,7 +231,7 @@ func (mc *ModalCoordinator) ClearFormState() {
 // HasEditorFocus returns true if a modal with text input is active.
 func (mc *ModalCoordinator) HasEditorFocus(state UIState) bool {
 	switch state { //nolint:exhaustive // only editor-bearing states return true
-	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateFormInput:
+	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateFormInput, stateSelectingRepo:
 		return true
 	}
 	return false

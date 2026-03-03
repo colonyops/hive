@@ -57,6 +57,7 @@ const (
 	stateSettingGroup
 	stateFormInput
 	stateShowingTodos
+	stateSelectingRepo
 )
 
 // Key constants for event handling.
@@ -521,6 +522,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleTaskAction(msg)
 	case tasks.CommandPaletteRequestMsg:
 		model, cmd = m.handleTaskCommandPalette(msg)
+	case repoKeysLoadedMsg:
+		model, cmd = m.handleRepoKeysLoaded(msg)
 
 	// Action results
 	case renameCompleteMsg:
@@ -642,6 +645,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
+	}
+	if m.state == stateSelectingRepo {
+		return m.handleRepoPickerKey(msg)
 	}
 
 	// When filtering in either list, pass most keys except quit
@@ -1130,7 +1136,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 
 func isTaskAction(t act.Type) bool {
 	switch t { //nolint:exhaustive // only matching task-specific actions
-	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview:
+	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview, act.TypeTasksSelectRepo:
 		return true
 	}
 	return false

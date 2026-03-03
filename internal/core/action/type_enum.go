@@ -67,6 +67,10 @@ const (
 	TypeTasksCopyID Type = "TasksCopyID"
 	// TypeTasksTogglePreview is a Type of type TasksTogglePreview.
 	TypeTasksTogglePreview Type = "TasksTogglePreview"
+	// TypeTasksSelectRepo is a Type of type TasksSelectRepo.
+	TypeTasksSelectRepo Type = "TasksSelectRepo"
+	// TypeViewTasks is a Type of type ViewTasks.
+	TypeViewTasks Type = "ViewTasks"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -100,6 +104,8 @@ var _TypeNames = []string{
 	string(TypeTasksFilter),
 	string(TypeTasksCopyID),
 	string(TypeTasksTogglePreview),
+	string(TypeTasksSelectRepo),
+	string(TypeViewTasks),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -178,6 +184,10 @@ var _TypeValue = map[string]Type{
 	"taskscopyid":         TypeTasksCopyID,
 	"TasksTogglePreview":  TypeTasksTogglePreview,
 	"taskstogglepreview":  TypeTasksTogglePreview,
+	"TasksSelectRepo":     TypeTasksSelectRepo,
+	"tasksselectrepo":     TypeTasksSelectRepo,
+	"ViewTasks":           TypeViewTasks,
+	"viewtasks":           TypeViewTasks,
 }
 
 // ParseType attempts to convert a string to a Type.

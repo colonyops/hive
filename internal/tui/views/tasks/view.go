@@ -237,7 +237,8 @@ func (v *View) View() string {
 		}
 	}
 
-	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
+	repoLabel := styles.TextMutedStyle.Render(v.repoKey)
+	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, repoLabel)
 }
 
 // SetSize updates the view dimensions.
@@ -279,6 +280,34 @@ func (v *View) SetActive(active bool) {
 	if !active {
 		v.focus = paneTree
 	}
+}
+
+// SetRepoKey changes the repository scope, clears state, and reloads items.
+func (v *View) SetRepoKey(repoKey string) tea.Cmd {
+	v.repoKey = repoKey
+	v.items = nil
+	v.roots = nil
+	v.flatNodes = nil
+	v.cursor = 0
+	v.scrollOffset = 0
+	v.comments = make(map[string][]hc.Comment)
+	v.lastItemID = ""
+	v.cachedContentKey = ""
+	v.cachedContent = ""
+	if v.svc != nil {
+		return v.loadItems()
+	}
+	return nil
+}
+
+// RepoKey returns the current repository scope.
+func (v *View) RepoKey() string {
+	return v.repoKey
+}
+
+// Svc returns the honeycomb service, or nil if not configured.
+func (v *View) Svc() *hive.HoneycombService {
+	return v.svc
 }
 
 // CycleFilter advances the status filter, persists it, and rebuilds the tree.

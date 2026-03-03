@@ -32,6 +32,8 @@ package action
 //	TasksFilter
 //	TasksCopyID
 //	TasksTogglePreview
+//	TasksSelectRepo
+//	ViewTasks
 //
 // )
 type Type string
