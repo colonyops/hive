@@ -179,6 +179,40 @@ type Migration struct {
 
 var migrations = []Migration{
 	{
+		Version:     "0.2.6",
+		Title:       "Per-view keybindings",
+		Description: "Keybindings are now organized per-view under a top-level 'views' key instead of a flat 'keybindings' map. Each view (sessions, tasks, global) has its own keybinding set. The old top-level 'keybindings' field is still read and automatically merged into views.sessions.keybindings, but should be migrated to the new structure. User commands now support a 'scope' field to restrict visibility to specific views, and 'tasks' is a new valid scope value.",
+		Migration: `1. Move top-level keybindings into views.sessions.keybindings
+2. Add view-specific keybindings under views.tasks.keybindings or views.global.keybindings
+3. Optionally add scope to user commands to restrict them to specific views`,
+		Before: `# config.yaml (old)
+keybindings:
+  r:
+    cmd: Recycle
+  d:
+    cmd: Delete
+  n:
+    cmd: NewSession`,
+		After: `# config.yaml (new)
+views:
+  sessions:
+    keybindings:
+      r:
+        cmd: Recycle
+      d:
+        cmd: Delete
+      n:
+        cmd: NewSession
+  tasks:
+    keybindings:
+      r:
+        cmd: TasksRefresh
+      f:
+        cmd: TasksFilter
+  global:
+    keybindings: {}  # keybindings available in all views`,
+	},
+	{
 		Version:     "0.2.5",
 		Title:       "Multi-window tmux sessions with TmuxWindow template variable",
 		Description: "When a tmux session has multiple agent windows (matched by preview_window_matcher), each window now appears as its own selectable tree item with independent status and preview. The new {{ .TmuxWindow }} template variable is available in user commands and resolves to the selected window name. If you use a custom script (like hive.sh) with an enter keybinding, you must update the template to pass the window name so that pressing enter on a window sub-item focuses the correct window.",

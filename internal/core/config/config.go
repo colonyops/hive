@@ -320,7 +320,7 @@ func (v *ViewKeybindings) flattenedForView(view string) map[string]Keybinding {
 
 // CurrentConfigVersion is the latest config schema version.
 // Increment this when making breaking changes to config format.
-const CurrentConfigVersion = "0.2.5"
+const CurrentConfigVersion = "0.2.6"
 
 // Config holds the application configuration.
 type Config struct {
