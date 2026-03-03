@@ -218,7 +218,7 @@ func (v *View) View() string {
 		}
 		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"h/esc back to tree", scrollInfo))
 	} else {
-		navHelp := components.HelpNav + components.HelpSep + "enter expand/collapse" + components.HelpSep + "l detail"
+		navHelp := components.HelpNav + components.HelpSep + "space expand/collapse" + components.HelpSep + "enter detail"
 		actionHelp := ""
 		if v.handler != nil {
 			actionHelp = v.handler.HelpString()
@@ -425,10 +425,10 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	case "k", "up":
 		v.moveCursor(-1)
 		return v.checkCursorChanged()
-	case "enter":
+	case " ":
 		v.toggleExpand()
 		return nil
-	case "l":
+	case "enter", "l":
 		if v.showPreview && v.SelectedItem() != nil {
 			v.focus = paneDetail
 			return v.updateViewportContent()

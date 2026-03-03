@@ -236,14 +236,27 @@ func (m Model) handleTaskAction(msg tasks.ActionRequestMsg) (tea.Model, tea.Cmd)
 		}
 		return m, nil
 	default:
-		// Dispatch known global actions
-		switch a.Type {
-		case act.TypeHiveInfo, act.TypeHiveDoctor, act.TypeSetTheme, act.TypeNotifications:
-			return m.dispatchAction(a)
-		default:
-			log.Warn().Str("type", string(a.Type)).Msg("unhandled action type on tasks view")
-			return m, nil
-		}
+		return m.handleGlobalAction(a)
+	}
+}
+
+// handleGlobalAction handles actions that are not view-specific (info, doctor, theme, etc.).
+// Used as a fallback when a view receives an action it doesn't own.
+func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
+	switch a.Type {
+	case act.TypeHiveInfo:
+		return m.showHiveInfo()
+	case act.TypeHiveDoctor:
+		return m.showHiveDoctor()
+	case act.TypeNotifications:
+		m.state = stateShowingNotifications
+		m.modals.ShowNotifications(m.notifyStore)
+		return m, nil
+	case act.TypeSetTheme:
+		return m, nil
+	default:
+		log.Warn().Str("type", string(a.Type)).Msg("unhandled action type")
+		return m, nil
 	}
 }
 

@@ -55,11 +55,13 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Sh:     fmt.Sprintf(`%s "{{ .Path }}/.hive"`, openCmd),
 			Help:   "open session context directory",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 		"ContextOpenAll": {
 			Sh:     fmt.Sprintf(`%s "%s"`, openCmd, contextBase),
 			Help:   "open all hive context directories",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 	}
 }

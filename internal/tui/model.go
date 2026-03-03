@@ -1073,6 +1073,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m.showHiveDoctor()
 		}
 
+		// Task actions don't require a session
+		if isTaskAction(entry.Command.Action) {
+			m.state = stateNormal
+			return m.handleTaskAction(tasks.ActionRequestMsg{
+				Action: act.Action{Type: entry.Command.Action},
+			})
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if sessions.IsFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1118,6 +1126,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 	}
 
 	return m, cmd
+}
+
+func isTaskAction(t act.Type) bool {
+	switch t { //nolint:exhaustive // only matching task-specific actions
+	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview:
+		return true
+	}
+	return false
 }
 
 // copyToClipboard copies the given text to the system clipboard.

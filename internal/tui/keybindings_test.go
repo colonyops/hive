@@ -319,8 +319,8 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		entries := handler.HelpEntries()
 		// Entries are sorted by key
 		require.Len(t, entries, 2, "expected 2 entries, got %d", len(entries))
-		assert.Equal(t, "[o] open in editor", entries[0])
-		assert.Equal(t, "[r] recycle session", entries[1])
+		assert.Equal(t, "o open in editor", entries[0])
+		assert.Equal(t, "r recycle session", entries[1])
 	})
 
 	t.Run("keybinding help overrides command help", func(t *testing.T) {
@@ -331,7 +331,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 
 		entries := handler.HelpEntries()
 		require.Len(t, entries, 1, "expected 1 entry, got %d", len(entries))
-		assert.Equal(t, "[r] custom help", entries[0])
+		assert.Equal(t, "r custom help", entries[0])
 	})
 
 	t.Run("uses action name when help empty", func(t *testing.T) {
@@ -342,7 +342,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 
 		entries := handler.HelpEntries()
 		require.Len(t, entries, 1, "expected 1 entry, got %d", len(entries))
-		assert.Equal(t, "[d] delete", entries[0])
+		assert.Equal(t, "d delete", entries[0])
 	})
 
 	t.Run("invalid command reference is filtered out", func(t *testing.T) {
@@ -913,26 +913,130 @@ func TestResolver_ViewOverridesGlobal(t *testing.T) {
 
 func TestResolver_ResolveAction_SkipsShellCommands(t *testing.T) {
 	viewKBs := map[string]map[string]config.Keybinding{
-		"sessions": {
+		"tasks": {
 			"a": {Cmd: "ActionCmd"},
 			"s": {Cmd: "ShellCmd"},
 		},
 	}
 	commands := map[string]config.UserCommand{
-		"ActionCmd": {Action: act.TypeRecycle, Help: "action"},
-		"ShellCmd":  {Sh: "echo hello", Help: "shell"},
+		"ActionCmd": {Action: act.TypeTasksRefresh, Help: "action", Scope: []string{"tasks"}},
+		"ShellCmd":  {Sh: "echo hello", Help: "shell", Scope: []string{"tasks"}},
 	}
 	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
-	handler.SetActiveView(ViewSessions)
+	handler.SetActiveView(ViewTasks)
 
 	// Built-in action resolves
 	a, ok := handler.ResolveAction("a")
 	assert.True(t, ok)
-	assert.Equal(t, act.TypeRecycle, a.Type)
+	assert.Equal(t, act.TypeTasksRefresh, a.Type)
 
 	// Shell command returns false (needs session context)
 	_, ok2 := handler.ResolveAction("s")
 	assert.False(t, ok2, "ResolveAction should skip shell commands")
+}
+
+func TestResolver_ResolveAction_UnknownCommand(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"tasks": {
+			"x": {Cmd: "NonExistent"},
+		},
+	}
+	commands := map[string]config.UserCommand{}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler.SetActiveView(ViewTasks)
+
+	_, ok := handler.ResolveAction("x")
+	assert.False(t, ok, "ResolveAction should return false for unknown command")
+}
+
+func TestResolver_ResolveAction_OutOfScope(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"global": {
+			"r": {Cmd: "SessionsOnly"},
+		},
+	}
+	commands := map[string]config.UserCommand{
+		"SessionsOnly": {Action: act.TypeRecycle, Help: "recycle", Scope: []string{"sessions"}},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler.SetActiveView(ViewTasks)
+
+	_, ok := handler.ResolveAction("r")
+	assert.False(t, ok, "ResolveAction should return false when command is out of scope")
+}
+
+func TestResolver_IsAction(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"sessions": {"r": {Cmd: "Recycle"}},
+		"tasks":    {"r": {Cmd: "TasksRefresh"}},
+	}
+	commands := map[string]config.UserCommand{
+		"Recycle":      {Action: act.TypeRecycle, Help: "recycle"},
+		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh", Scope: []string{"tasks"}},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+
+	// Sessions view: "r" maps to Recycle
+	handler.SetActiveView(ViewSessions)
+	assert.True(t, handler.IsAction("r", act.TypeRecycle))
+	assert.False(t, handler.IsAction("r", act.TypeTasksRefresh))
+	assert.False(t, handler.IsAction("z", act.TypeRecycle)) // unknown key
+
+	// Tasks view: "r" maps to TasksRefresh
+	handler.SetActiveView(ViewTasks)
+	assert.True(t, handler.IsAction("r", act.TypeTasksRefresh))
+	assert.False(t, handler.IsAction("r", act.TypeRecycle))
+}
+
+func TestResolver_IsCommand(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"sessions": {"r": {Cmd: "Recycle"}},
+	}
+	commands := map[string]config.UserCommand{
+		"Recycle": {Action: act.TypeRecycle},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler.SetActiveView(ViewSessions)
+
+	assert.True(t, handler.IsCommand("r", "Recycle"))
+	assert.False(t, handler.IsCommand("r", "Delete"))
+	assert.False(t, handler.IsCommand("z", "Recycle")) // unknown key
+}
+
+func TestResolver_HelpString(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"tasks": {
+			"r": {Cmd: "TasksRefresh"},
+			"f": {Cmd: "TasksFilter"},
+		},
+		"sessions": {
+			"d": {Cmd: "Delete"},
+		},
+	}
+	commands := map[string]config.UserCommand{
+		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh", Scope: []string{"tasks"}},
+		"TasksFilter":  {Action: act.TypeTasksFilter, Help: "filter", Scope: []string{"tasks"}},
+		"Delete":       {Action: act.TypeDelete, Help: "delete", Scope: []string{"sessions"}},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+
+	// Tasks view: should show tasks keybindings, not sessions
+	handler.SetActiveView(ViewTasks)
+	helpStr := handler.HelpString()
+	assert.Contains(t, helpStr, "refresh")
+	assert.Contains(t, helpStr, "filter")
+	assert.NotContains(t, helpStr, "delete")
+
+	// Sessions view: should show sessions keybindings, not tasks
+	handler.SetActiveView(ViewSessions)
+	helpStr = handler.HelpString()
+	assert.Contains(t, helpStr, "delete")
+	assert.NotContains(t, helpStr, "refresh")
+
+	// Empty view: no keybindings
+	handler.SetActiveView(ViewMessages)
+	helpStr = handler.HelpString()
+	assert.Empty(t, helpStr)
 }
 
 func TestResolver_ViewWithNoKeybindings(t *testing.T) {

@@ -63,7 +63,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 func (c *Config) Warnings() []ValidationWarning {
 	var warnings []ValidationWarning
 
-	if c.deprecatedKeybindings {
+	if c.hasLegacyKeybindings {
 		warnings = append(warnings, ValidationWarning{
 			Category: "Keybindings",
 			Message:  "top-level 'keybindings' field is deprecated; move entries to 'views.sessions.keybindings'",

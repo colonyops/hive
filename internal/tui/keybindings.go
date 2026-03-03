@@ -384,7 +384,7 @@ func (h *KeybindingResolver) HelpEntries() []string {
 		if help == "" {
 			help = unknownViewType
 		}
-		entries = append(entries, fmt.Sprintf("[%s] %s", key, help))
+		entries = append(entries, fmt.Sprintf("%s %s", key, help))
 	}
 	return entries
 }

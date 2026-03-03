@@ -82,6 +82,7 @@ type FormField struct {
 }
 
 // defaultUserCommands provides built-in commands that users can override.
+// Commands with nil Scope are available in all views (global visibility).
 var defaultUserCommands = map[string]UserCommand{
 	"Recycle": {
 		Action:  action.TypeRecycle,
@@ -189,25 +190,25 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"TasksRefresh": {
 		Action: action.TypeTasksRefresh,
-		Help:   "refresh tasks",
+		Help:   "refresh",
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
 	"TasksFilter": {
 		Action: action.TypeTasksFilter,
-		Help:   "cycle task status filter",
+		Help:   "cycle filters",
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
 	"TasksCopyID": {
 		Action: action.TypeTasksCopyID,
-		Help:   "copy task ID to clipboard",
+		Help:   "copy id",
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
 	"TasksTogglePreview": {
 		Action: action.TypeTasksTogglePreview,
-		Help:   "toggle preview panel",
+		Help:   "toggle preview",
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
@@ -317,11 +318,6 @@ func (v *ViewKeybindings) flattenedForView(view string) map[string]Keybinding {
 	return result
 }
 
-// KeybindingsForView returns the merged keybindings for a view (global + view-specific).
-func (c *Config) KeybindingsForView(view string) map[string]Keybinding {
-	return c.Views.flattenedForView(view)
-}
-
 // CurrentConfigVersion is the latest config schema version.
 // Increment this when making breaking changes to config format.
 const CurrentConfigVersion = "0.2.5"
@@ -351,7 +347,7 @@ type Config struct {
 	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"` // deprecated: use workspaces instead (kept for backwards compatibility)
 	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
 
-	deprecatedKeybindings bool `json:"-" yaml:"-"`
+	hasLegacyKeybindings bool `json:"-" yaml:"-"`
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -734,9 +730,10 @@ func Load(configPath, dataDir string) (*Config, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Migrate deprecated top-level keybindings -> views.sessions.keybindings
+	// The top-level keybindings field is deprecated in favor of views.sessions.keybindings.
+	// Migrate any entries the user still has in the old location.
 	if len(cfg.Keybindings) > 0 {
-		cfg.deprecatedKeybindings = true
+		cfg.hasLegacyKeybindings = true
 		if cfg.Views.Sessions.Keybindings == nil {
 			cfg.Views.Sessions.Keybindings = make(map[string]Keybinding)
 		}
@@ -746,7 +743,9 @@ func Load(configPath, dataDir string) (*Config, error) {
 	// Merge per-view defaults (defaults first, user config overrides)
 	cfg.Views = mergeViewKeybindings(defaultViewKeybindings, cfg.Views)
 
-	// Build flat keybindings map for backwards compat with KeybindingResolver
+	// Rebuild flat keybindings map (global + sessions merged) so code that
+	// reads cfg.Keybindings directly still works. Note this includes global
+	// keybindings merged in, unlike the old raw-user-input semantics.
 	cfg.Keybindings = cfg.Views.flattenedForView("sessions")
 
 	// Apply defaults for zero values
@@ -827,8 +826,6 @@ func defaultCopyCommand() string {
 	}
 }
 
-// mergeKeybindings merges user keybindings into defaults.
-// User keybindings override defaults for the same key.
 // mergeUserCommands merges user commands into defaults.
 // User commands override defaults for the same name.
 func mergeUserCommands(defaults, user map[string]UserCommand) map[string]UserCommand {
@@ -942,7 +939,7 @@ func (c *Config) validateUserCommandsBasic() error {
 		// Validate scope values
 		for _, scope := range cmd.Scope {
 			if !isValidScope(scope) {
-				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review, todos, tasks", scope))
+				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: %s", scope, strings.Join(ValidScopes, ", ")))
 			}
 		}
 
@@ -1090,32 +1087,8 @@ func (c *Config) validateGroupBy() error {
 // since default keybindings may reference plugin commands not yet registered.
 func (c *Config) validateKeybindingsBasic() error {
 	var errs criterio.FieldErrorsBuilder
-
-	for key, kb := range c.Keybindings {
-		field := fmt.Sprintf("keybindings[%q]", key)
-
-		if kb.Cmd == "" {
-			errs = errs.Append(field, fmt.Errorf("cmd is required"))
-		}
-	}
-
-	// Also validate per-view keybindings
-	for _, vk := range []struct {
-		name string
-		kbs  map[string]Keybinding
-	}{
-		{"views.global.keybindings", c.Views.Global.Keybindings},
-		{"views.sessions.keybindings", c.Views.Sessions.Keybindings},
-		{"views.tasks.keybindings", c.Views.Tasks.Keybindings},
-	} {
-		for key, kb := range vk.kbs {
-			field := fmt.Sprintf("%s[%q]", vk.name, key)
-			if kb.Cmd == "" {
-				errs = errs.Append(field, fmt.Errorf("cmd is required"))
-			}
-		}
-	}
-
+	validateKeybindingMap(&errs, "keybindings", c.Keybindings)
+	validateViewKeybindingMaps(&errs, c.Views)
 	return errs.ToError()
 }
 
@@ -1125,34 +1098,23 @@ func (c *Config) validateKeybindingsBasic() error {
 // validated at the point of invocation.
 func (c *Config) validateUserKeybindings() error {
 	var errs criterio.FieldErrorsBuilder
-
-	// Validate old top-level keybindings
-	for key, kb := range c.Keybindings {
-		field := fmt.Sprintf("keybindings[%q]", key)
-
-		if kb.Cmd == "" {
-			errs = errs.Append(field, fmt.Errorf("cmd is required"))
-		}
-	}
-
-	// Validate per-view keybindings
-	for _, vk := range []struct {
-		name string
-		kbs  map[string]Keybinding
-	}{
-		{"views.global.keybindings", c.Views.Global.Keybindings},
-		{"views.sessions.keybindings", c.Views.Sessions.Keybindings},
-		{"views.tasks.keybindings", c.Views.Tasks.Keybindings},
-	} {
-		for key, kb := range vk.kbs {
-			field := fmt.Sprintf("%s[%q]", vk.name, key)
-			if kb.Cmd == "" {
-				errs = errs.Append(field, fmt.Errorf("cmd is required"))
-			}
-		}
-	}
-
+	validateKeybindingMap(&errs, "keybindings", c.Keybindings)
+	validateViewKeybindingMaps(&errs, c.Views)
 	return errs.ToError()
+}
+
+func validateKeybindingMap(errs *criterio.FieldErrorsBuilder, prefix string, kbs map[string]Keybinding) {
+	for key, kb := range kbs {
+		if kb.Cmd == "" {
+			*errs = errs.Append(fmt.Sprintf("%s[%q]", prefix, key), fmt.Errorf("cmd is required"))
+		}
+	}
+}
+
+func validateViewKeybindingMaps(errs *criterio.FieldErrorsBuilder, views ViewKeybindings) {
+	validateKeybindingMap(errs, "views.global.keybindings", views.Global.Keybindings)
+	validateKeybindingMap(errs, "views.sessions.keybindings", views.Sessions.Keybindings)
+	validateKeybindingMap(errs, "views.tasks.keybindings", views.Tasks.Keybindings)
 }
 
 // ReposDir returns the path where cloned repositories are stored.
@@ -1199,14 +1161,19 @@ func isValidAction(t action.Type) bool {
 	return t.IsValid() && action.IsConfigAction(t)
 }
 
+// ValidScopes lists all valid scope values for user commands.
+// "global" means the command is available everywhere; other values
+// match ViewType.String() in the TUI package.
+var ValidScopes = []string{"global", "sessions", "messages", "review", "todos", "tasks"}
+
 // isValidScope checks if a scope value is valid.
 func isValidScope(scope string) bool {
-	switch scope {
-	case "global", "sessions", "messages", "review", "todos", "tasks":
-		return true
-	default:
-		return false
+	for _, s := range ValidScopes {
+		if s == scope {
+			return true
+		}
 	}
+	return false
 }
 
 // isValidCommandName checks if a command name is valid.
