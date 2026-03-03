@@ -107,11 +107,12 @@ func New() Model {
 }
 
 func findConfigPath(homeDir string) (string, bool) {
-	if envPath := os.Getenv("HIVE_CONFIG"); envPath != "" {
-		if _, err := os.Stat(envPath); err == nil {
-			return envPath, true
-		}
-		return envPath, false
+	// If HIVE_CONFIG is explicitly set, use it — but only if it points inside
+	// the user's home directory. System paths like /etc/hive/config.yaml are
+	// runtime defaults shipped with the software, not the user's config.
+	if envPath := os.Getenv("HIVE_CONFIG"); envPath != "" && strings.HasPrefix(envPath, homeDir) {
+		_, err := os.Stat(envPath)
+		return envPath, err == nil
 	}
 
 	configDir := filepath.Join(homeDir, ".config", "hive")
