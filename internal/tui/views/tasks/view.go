@@ -103,19 +103,18 @@ func (v *View) View() string {
 	// Reserve 2 lines: filter bar + help bar.
 	contentHeight := max(v.height-2, 1)
 
-	// Pane widths: tree ~30%, content ~45%, properties ~25%.
-	// Account for 2 divider columns (1 char each).
-	availWidth := max(v.width-2, 30)
+	// Pane widths: tree ~30%, detail ~70%.
+	// Account for 1 divider column (1 char).
+	availWidth := max(v.width-1, 30)
 	treeWidth := max(availWidth*30/100, 25)
-	propsWidth := max(availWidth*25/100, 15)
-	contentWidth := max(availWidth-treeWidth-propsWidth, 10)
+	detailWidth := max(availWidth-treeWidth, 10)
 
 	// Tree pane
 	treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, contentHeight)
 	treeContent = ensureExactHeight(treeContent, contentHeight)
 	treeContent = ensureExactWidth(treeContent, treeWidth)
 
-	// Selected item for detail/properties
+	// Selected item for detail
 	selected := v.SelectedItem()
 	var selectedNode *TreeNode
 	if v.cursor >= 0 && v.cursor < len(v.flatNodes) {
@@ -128,24 +127,17 @@ func (v *View) View() string {
 		itemComments = v.comments[selected.ID]
 	}
 
-	// Detail pane
-	detailContent := renderDetail(selected, itemComments, contentWidth-2)
-	// Add horizontal padding
+	// Detail pane (includes header with properties)
+	detailContent := renderDetail(selected, selectedNode, itemComments, detailWidth-2)
 	detailContent = padLines(detailContent, 1)
 	detailContent = ensureExactHeight(detailContent, contentHeight)
-	detailContent = ensureExactWidth(detailContent, contentWidth)
+	detailContent = ensureExactWidth(detailContent, detailWidth)
 
-	// Properties pane
-	propsContent := renderProperties(selected, selectedNode)
-	propsContent = padLines(propsContent, 1)
-	propsContent = ensureExactHeight(propsContent, contentHeight)
-	propsContent = ensureExactWidth(propsContent, propsWidth)
-
-	// Dividers
+	// Divider
 	divider := buildDivider(contentHeight)
 
 	// Compose panes
-	body := lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent, divider, propsContent)
+	body := lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
 
 	// Help bar
 	help := styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • f filter • r refresh")

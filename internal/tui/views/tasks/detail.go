@@ -3,18 +3,27 @@ package tasks
 import (
 	"fmt"
 	"strings"
+	"time"
 
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
-// renderDetail renders the center content pane for a selected item.
-func renderDetail(item *hc.Item, comments []hc.Comment, width int) string {
+// renderDetail renders the detail pane for a selected item, including
+// a compact header bar with properties and the item content below.
+func renderDetail(item *hc.Item, node *TreeNode, comments []hc.Comment, width int) string {
 	if item == nil {
 		return ""
 	}
 
 	var b strings.Builder
+
+	// Header: properties bar
+	b.WriteString(renderHeader(item, node))
+	b.WriteString("\n")
+	b.WriteString(styles.TextMutedStyle.Render(strings.Repeat("─", max(width, 1))))
+	b.WriteString("\n")
 
 	// Title
 	b.WriteString(styles.TextForegroundBoldStyle.Render(item.Title))
@@ -56,6 +65,46 @@ func renderDetail(item *hc.Item, comments []hc.Comment, width int) string {
 	return b.String()
 }
 
+// renderHeader renders a compact properties header bar for the detail pane.
+func renderHeader(item *hc.Item, node *TreeNode) string {
+	var parts []string
+
+	// Type badge with background
+	typeBadge := lipgloss.NewStyle().
+		Background(styles.ColorSurface).
+		Foreground(styles.ColorForeground).
+		Bold(true).
+		PaddingRight(1).
+		Render(strings.ToTitle(string(item.Type)[:1]) + string(item.Type)[1:])
+	parts = append(parts, typeBadge)
+
+	// Status with icon
+	icon := StatusIcon(item.Status, item.Blocked)
+	parts = append(parts, icon+" "+string(item.Status))
+
+	// ID (truncated)
+	id := item.ID
+	if len(id) > 12 {
+		id = id[:12]
+	}
+	parts = append(parts, styles.TextMutedStyle.Render(id))
+
+	// Type-specific: epic progress or task session
+	if item.Type == hc.ItemTypeEpic && node != nil {
+		done, total := countByStatus(node.Children)
+		parts = append(parts, styles.TextMutedStyle.Render(fmt.Sprintf("[%d/%d]", done, total)))
+	} else if item.Type == hc.ItemTypeTask && item.SessionID != "" {
+		sid := item.SessionID
+		if len(sid) > 12 {
+			sid = sid[:12]
+		}
+		assignStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted).Italic(true)
+		parts = append(parts, assignStyle.Render("→ "+sid))
+	}
+
+	return strings.Join(parts, "  ")
+}
+
 // wrapText wraps text to the given width using simple word wrapping.
 func wrapText(text string, width int) string {
 	if width <= 0 {
@@ -92,4 +141,26 @@ func wrapText(text string, width int) string {
 		}
 	}
 	return result.String()
+}
+
+// relativeTime formats a time as a human-readable relative duration.
+func relativeTime(t time.Time) string {
+	if t.IsZero() {
+		return "—"
+	}
+
+	d := time.Since(t)
+	switch {
+	case d < time.Minute:
+		return "just now"
+	case d < time.Hour:
+		m := int(d.Minutes())
+		return fmt.Sprintf("%dm ago", m)
+	case d < 24*time.Hour:
+		h := int(d.Hours())
+		return fmt.Sprintf("%dh ago", h)
+	default:
+		days := int(d.Hours() / 24)
+		return fmt.Sprintf("%dd ago", days)
+	}
 }
