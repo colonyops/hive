@@ -10,9 +10,9 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/urfave/cli/v3"
-	"gopkg.in/yaml.v3"
 
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/defaults"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/install"
 )
@@ -54,11 +54,15 @@ func (cmd *InstallCmd) run(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 
-	// Write/update config file with workspaces
-	if err := writeConfig(result.ConfigPath, result.Workspaces); err != nil {
-		return fmt.Errorf("write config: %w", err)
+	// Write config only if one doesn't already exist
+	if result.ConfigExists {
+		fmt.Printf("Config already exists at %s (not modified)\n", result.ConfigPath)
+	} else {
+		if err := writeConfig(result.ConfigPath, result.Workspaces); err != nil {
+			return fmt.Errorf("write config: %w", err)
+		}
+		fmt.Printf("Config written to %s\n", result.ConfigPath)
 	}
-	fmt.Printf("Config written to %s\n", result.ConfigPath)
 
 	// Add shell aliases
 	var addedShells []install.ShellConfig
@@ -89,27 +93,24 @@ func (cmd *InstallCmd) run(ctx context.Context, c *cli.Command) error {
 	return nil
 }
 
-// writeConfig writes workspaces to the config file, preserving any existing keys.
+// writeConfig writes the default config template to a new config file.
+// It prepends the user's chosen workspaces before the template content.
 func writeConfig(configPath string, workspaces []string) error {
-	// Ensure parent directory exists
 	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
 		return fmt.Errorf("create config dir: %w", err)
 	}
 
-	// Load existing config as a raw map to preserve unknown keys
-	existing := map[string]any{}
-	if data, err := os.ReadFile(configPath); err == nil {
-		_ = yaml.Unmarshal(data, &existing)
+	var buf strings.Builder
+	if len(workspaces) > 0 {
+		buf.WriteString("workspaces:\n")
+		for _, ws := range workspaces {
+			buf.WriteString("  - " + ws + "\n")
+		}
+		buf.WriteString("\n")
 	}
+	buf.WriteString(defaults.HiveConfig)
 
-	existing["workspaces"] = workspaces
-
-	data, err := yaml.Marshal(existing)
-	if err != nil {
-		return fmt.Errorf("marshal config: %w", err)
-	}
-
-	return os.WriteFile(configPath, data, 0o644)
+	return os.WriteFile(configPath, []byte(buf.String()), 0o644)
 }
 
 // checkAgentCommands verifies that common agent commands are available in PATH.

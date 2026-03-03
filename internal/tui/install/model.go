@@ -23,6 +23,7 @@ type ShellConfig struct {
 type Result struct {
 	Workspaces     []string
 	ConfigPath     string
+	ConfigExists   bool
 	SelectedShells []ShellConfig
 	Cancelled      bool
 }
@@ -241,6 +242,7 @@ func (m Model) buildResult() Result {
 	return Result{
 		Workspaces:     workspaces,
 		ConfigPath:     m.configPath,
+		ConfigExists:   m.configExists,
 		SelectedShells: selectedShells,
 	}
 }

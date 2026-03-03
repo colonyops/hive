@@ -8,9 +8,9 @@ import _ "embed"
 // HiveConfig is the sample hive config.yaml with annotated defaults.
 //
 //go:embed config.yaml
-var HiveConfig []byte
+var HiveConfig string
 
 // TmuxConfig is a sample tmux.conf tuned for use with hive.
 //
 //go:embed tmux.conf
-var TmuxConfig []byte
+var TmuxConfig string
