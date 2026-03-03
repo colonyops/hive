@@ -848,7 +848,7 @@ func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 		{Key: "J/K", Desc: "next/prev active session"},
 		{Key: "enter", Desc: "select session"},
 		{Key: "/", Desc: "filter"},
-		{Key: "tab", Desc: "switch view"},
+		{Key: "tab/shift+tab", Desc: "next/prev view"},
 		{Key: ":", Desc: "command palette"},
 		{Key: "g", Desc: "refresh git status"},
 	}
@@ -1201,7 +1201,9 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 			return m, nil
 		}
 	case "tab":
-		return m.handleTabKey()
+		return m.handleTabKey(1)
+	case "shift+tab":
+		return m.handleTabKey(-1)
 	case "?":
 		// Don't show help dialog when in review view - let review view handle keys
 		if !m.isReviewFocused() {
@@ -1279,41 +1281,32 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 	return m, nil
 }
 
-// handleTabKey handles tab key for switching views.
-// Cycle: Sessions -> [Tasks if visible] -> Messages -> Store -> [Review if visible] -> Sessions
-func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
-	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
-	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
-	showTasksTab := m.tasksView != nil
-
-	switch m.activeView {
-	case ViewSessions:
-		if showTasksTab {
-			m.activeView = ViewTasks
-		} else {
-			m.activeView = ViewMessages
-		}
-	case ViewTasks:
-		m.activeView = ViewMessages
-	case ViewMessages:
-		switch {
-		case showStoreTab:
-			m.activeView = ViewStore
-		case showReviewTab:
-			m.activeView = ViewReview
-		default:
-			m.activeView = ViewSessions
-		}
-	case ViewStore:
-		switch {
-		case showReviewTab:
-			m.activeView = ViewReview
-		default:
-			m.activeView = ViewSessions
-		}
-	case ViewReview:
-		m.activeView = ViewSessions
+// handleTabKey handles tab/shift+tab for switching views.
+// direction: +1 for next tab, -1 for previous tab.
+// Cycle: Sessions -> [Tasks if visible] -> Messages -> [Store if visible] -> [Review if visible] -> Sessions
+func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
+	tabs := []ViewType{ViewSessions}
+	if m.tasksView != nil {
+		tabs = append(tabs, ViewTasks)
 	}
+	tabs = append(tabs, ViewMessages)
+	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+		tabs = append(tabs, ViewStore)
+	}
+	if m.reviewView != nil && m.reviewView.CanShowInTabBar() {
+		tabs = append(tabs, ViewReview)
+	}
+
+	current := 0
+	for i, v := range tabs {
+		if v == m.activeView {
+			current = i
+			break
+		}
+	}
+
+	next := (current + direction + len(tabs)) % len(tabs)
+	m.activeView = tabs[next]
 
 	m.handler.SetActiveView(m.activeView)
 	m.sessionsView.SetActive(m.activeView == ViewSessions)
