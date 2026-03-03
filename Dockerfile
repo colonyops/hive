@@ -33,9 +33,9 @@ RUN echo "alias hv='tmux new-session -As hive hive'" >> /root/.bashrc
 ARG SETUP=full
 ENV CONTAINER_SETUP=$SETUP
 
-COPY dev/config.dev.yaml /etc/hive/config.yaml.template
-
 RUN if [ "$SETUP" = "full" ]; then \
+    mkdir -p /root/.config/hive && \
+    printf 'workspaces:\n  - /workspace\n' > /root/.config/hive/config.yaml && \
     git clone https://github.com/colonyops/hive.git /workspace/hive; \
 fi
 
