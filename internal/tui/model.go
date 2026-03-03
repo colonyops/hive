@@ -221,7 +221,12 @@ func New(deps Deps, opts Opts) Model {
 	// Compute merged commands: system → plugins → user
 	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
-	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
+	viewKBs := map[string]map[string]config.Keybinding{
+		"global":   cfg.Views.Global.Keybindings,
+		"sessions": cfg.Views.Sessions.Keybindings,
+		"tasks":    cfg.Views.Tasks.Keybindings,
+	}
+	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
