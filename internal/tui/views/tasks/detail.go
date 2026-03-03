@@ -108,7 +108,7 @@ func renderHeader(item *hc.Item, node *TreeNode) string {
 	parts = append(parts, typeBadge)
 
 	// Status with icon
-	icon := StatusIcon(item.Status, item.Blocked)
+	icon := StatusIcon(item.Status)
 	parts = append(parts, icon+" "+string(item.Status))
 
 	// ID (truncated)

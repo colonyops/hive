@@ -101,7 +101,7 @@ func renderTaskNode(fn FlatNode, isSelected bool) string {
 	connector = styles.TextMutedStyle.Render(connector)
 
 	// Status icon
-	icon := StatusIcon(node.Item.Status, node.Item.Blocked)
+	icon := StatusIcon(node.Item.Status)
 
 	// Title
 	titleStyle := styles.TextForegroundStyle
@@ -128,5 +128,9 @@ func renderTaskNode(fn FlatNode, isSelected bool) string {
 		return fmt.Sprintf("%s%s %s %s %s", indent, connector, expandIcon, title, progress)
 	}
 
-	return fmt.Sprintf("%s%s %s %s", indent, connector, icon, title)
+	line := fmt.Sprintf("%s%s %s %s", indent, connector, icon, title)
+	if node.Item.Blocked {
+		line += " " + styles.TextWarningStyle.Render(BadgeBlocked)
+	}
+	return line
 }
