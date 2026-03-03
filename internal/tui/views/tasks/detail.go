@@ -97,10 +97,17 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string
 func renderHeader(item *hc.Item, node *TreeNode) string {
 	var parts []string
 
-	// Type badge with background
+	// Type badge with background — epic uses primary, task uses surface
+	badgeBg := styles.ColorSurface
+	badgeFg := styles.ColorForeground
+	if item.Type == hc.ItemTypeEpic {
+		badgeBg = styles.ColorPrimary
+		badgeFg = styles.ColorBackground
+	}
+
 	typeBadge := lipgloss.NewStyle().
-		Background(styles.ColorSurface).
-		Foreground(styles.ColorForeground).
+		Background(badgeBg).
+		Foreground(badgeFg).
 		Bold(true).
 		PaddingLeft(1).
 		PaddingRight(1).
