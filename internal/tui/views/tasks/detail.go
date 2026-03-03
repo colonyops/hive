@@ -83,8 +83,8 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string
 			if checkpoint, ok := strings.CutPrefix(msg, "CHECKPOINT:"); ok {
 				msg = strings.TrimSpace(checkpoint)
 			}
-			wrapped := lipgloss.Wrap(msg, bodyWidth, "")
-			for _, line := range strings.Split(wrapped, "\n") {
+			rendered := renderMarkdown(msg, bodyWidth)
+			for _, line := range strings.Split(rendered, "\n") {
 				fmt.Fprintf(&b, "%s  %s\n", pipe, line)
 			}
 		}
