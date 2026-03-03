@@ -242,8 +242,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		}
 
 		if cloneStrategy == config.CloneStrategyWorktree {
-			writeProgressf(progress, "Ensuring bare clone...")
-			bareDir, err := s.ensureBareClone(ctx, remote)
+			bareDir, err := s.ensureBareClone(ctx, remote, progress)
 			if err != nil {
 				return nil, fmt.Errorf("ensure bare clone: %w", err)
 			}
@@ -704,7 +703,7 @@ func (s *SessionService) getBareCloneLock(remote string) *sync.Mutex {
 
 // ensureBareClone returns the path to the bare clone of remote, creating or fetching it as needed.
 // It serializes concurrent calls for the same remote to prevent duplicate clones.
-func (s *SessionService) ensureBareClone(ctx context.Context, remote string) (string, error) {
+func (s *SessionService) ensureBareClone(ctx context.Context, remote string, progress io.Writer) (string, error) {
 	mu := s.getBareCloneLock(remote)
 	mu.Lock()
 	defer mu.Unlock()
@@ -715,6 +714,7 @@ func (s *SessionService) ensureBareClone(ctx context.Context, remote string) (st
 		return "", fmt.Errorf("stat bare dir: %w", statErr)
 	}
 	if os.IsNotExist(statErr) {
+		writeProgressf(progress, "Cloning bare repository (this may take a while)...")
 		if err := os.MkdirAll(filepath.Dir(bareDir), 0o755); err != nil {
 			return "", fmt.Errorf("create bare parent: %w", err)
 		}
@@ -723,6 +723,7 @@ func (s *SessionService) ensureBareClone(ctx context.Context, remote string) (st
 			return "", fmt.Errorf("bare clone: %w", err)
 		}
 	} else {
+		writeProgressf(progress, "Fetching latest changes...")
 		if err := s.git.Fetch(ctx, bareDir); err != nil {
 			return "", fmt.Errorf("fetch bare: %w", err)
 		}
