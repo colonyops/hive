@@ -14,6 +14,7 @@ const (
 	EventConfigReloaded        Event = "config.reloaded"
 	EventMessageReceived       Event = "message.received"
 	EventNotificationPublished Event = "notification.published"
+	EventRepoFocused           Event = "repo.focused"
 	EventSessionCorrupted      Event = "session.corrupted"
 	EventSessionCreated        Event = "session.created"
 	EventSessionDeleted        Event = "session.deleted"
@@ -60,6 +61,7 @@ func newSubscribersMap() map[Event][]any {
 		EventConfigReloaded:        {},
 		EventMessageReceived:       {},
 		EventNotificationPublished: {},
+		EventRepoFocused:           {},
 		EventSessionCorrupted:      {},
 		EventSessionCreated:        {},
 		EventSessionDeleted:        {},
@@ -193,6 +195,30 @@ func (bus *EventBus) SubscribeNotificationPublished(fn func(NotificationPublishe
 	})
 	bus.mu.Unlock()
 	bus.runOnSubscribe(EventNotificationPublished)
+}
+
+// PublishRepoFocused publishes a repo.focused event.
+func (bus *EventBus) PublishRepoFocused(payload RepoFocusedPayload) {
+	select {
+	case bus.ch <- envelope{event: EventRepoFocused, payload: payload}:
+		bus.runOnPublish(EventRepoFocused, payload)
+	default:
+		bus.runOnDrop(EventRepoFocused, payload)
+	}
+}
+
+// SubscribeRepoFocused registers a handler for repo.focused events.
+func (bus *EventBus) SubscribeRepoFocused(fn func(RepoFocusedPayload)) {
+	bus.mu.Lock()
+	bus.subscribers[EventRepoFocused] = append(bus.subscribers[EventRepoFocused], func(v any) {
+		payload, ok := v.(RepoFocusedPayload)
+		if !ok {
+			return
+		}
+		fn(payload)
+	})
+	bus.mu.Unlock()
+	bus.runOnSubscribe(EventRepoFocused)
 }
 
 // PublishSessionCorrupted publishes a session.corrupted event.

@@ -7,6 +7,7 @@ type ViewType int
 
 const (
 	ViewSessions ViewType = iota
+	ViewTasks
 	ViewMessages
 	ViewReview
 	ViewStore
@@ -17,6 +18,8 @@ func (v ViewType) String() string {
 	switch v {
 	case ViewSessions:
 		return "sessions"
+	case ViewTasks:
+		return "tasks"
 	case ViewMessages:
 		return "messages"
 	case ViewReview:

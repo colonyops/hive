@@ -531,6 +531,97 @@ func TestHCStore_Blocked_ParentWithOpenChild(t *testing.T) {
 	assert.True(t, parentFound, "parent-task should be in list")
 }
 
+func TestHCStore_ListRepoKeys(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("returns distinct sorted repo keys", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		store := NewHCStore(database)
+		now := time.Now()
+		require.NoError(t, store.CreateItems(ctx, []hc.Item{
+			{
+				ID:        "item-1",
+				RepoKey:   "org/repo-b",
+				Title:     "Item 1",
+				Type:      hc.ItemTypeEpic,
+				Status:    hc.StatusOpen,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			{
+				ID:        "item-2",
+				RepoKey:   "org/repo-a",
+				Title:     "Item 2",
+				Type:      hc.ItemTypeEpic,
+				Status:    hc.StatusOpen,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			{
+				ID:        "item-3",
+				RepoKey:   "org/repo-b",
+				Title:     "Item 3 (duplicate repo)",
+				Type:      hc.ItemTypeEpic,
+				Status:    hc.StatusOpen,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		}))
+
+		keys, err := store.ListRepoKeys(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"org/repo-a", "org/repo-b"}, keys)
+	})
+
+	t.Run("returns empty slice when no items exist", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		store := NewHCStore(database)
+
+		keys, err := store.ListRepoKeys(ctx)
+		require.NoError(t, err)
+		assert.Empty(t, keys)
+	})
+
+	t.Run("excludes items with empty repo_key", func(t *testing.T) {
+		database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+		require.NoError(t, err)
+		defer func() { _ = database.Close() }()
+
+		store := NewHCStore(database)
+		now := time.Now()
+		require.NoError(t, store.CreateItems(ctx, []hc.Item{
+			{
+				ID:        "item-empty",
+				RepoKey:   "",
+				Title:     "No repo key",
+				Type:      hc.ItemTypeEpic,
+				Status:    hc.StatusOpen,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+			{
+				ID:        "item-with-key",
+				RepoKey:   "org/repo-c",
+				Title:     "Has repo key",
+				Type:      hc.ItemTypeEpic,
+				Status:    hc.StatusOpen,
+				CreatedAt: now,
+				UpdatedAt: now,
+			},
+		}))
+
+		keys, err := store.ListRepoKeys(ctx)
+		require.NoError(t, err)
+		assert.Equal(t, []string{"org/repo-c"}, keys)
+	})
+}
+
 func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {
 	ctx := context.Background()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())

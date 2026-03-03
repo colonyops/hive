@@ -53,8 +53,11 @@ func (m Model) renderTabView() string {
 	// Build tab list
 	tabs := []string{
 		renderTab("Sessions", ViewSessions),
-		renderTab("Messages", ViewMessages),
 	}
+	if m.tasksView != nil {
+		tabs = append(tabs, renderTab("Tasks", ViewTasks))
+	}
+	tabs = append(tabs, renderTab("Messages", ViewMessages))
 	if showStoreTab || m.activeView == ViewStore {
 		tabs = append(tabs, renderTab("Store", ViewStore))
 	}
@@ -123,6 +126,11 @@ func (m Model) renderTabView() string {
 	switch m.activeView {
 	case ViewSessions:
 		content = m.sessionsView.View()
+	case ViewTasks:
+		if m.tasksView != nil {
+			content = m.tasksView.View()
+			content = lipgloss.NewStyle().Height(contentHeight).Render(content)
+		}
 	case ViewMessages:
 		content = m.msgView.View()
 		content = lipgloss.NewStyle().Height(contentHeight).Render(content)

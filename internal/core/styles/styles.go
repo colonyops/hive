@@ -108,6 +108,9 @@ var (
 	// Select field styles.
 	SelectFieldItemSelectedStyle lipgloss.Style
 
+	// Status bar style.
+	StatusBarStyle lipgloss.Style
+
 	// TUI layout styles.
 	ListFilterPromptStyle  lipgloss.Style
 	ListHelpContainerStyle lipgloss.Style
@@ -339,6 +342,10 @@ func SetTheme(p Palette) {
 	SelectFieldItemSelectedStyle = lipgloss.NewStyle().
 		Foreground(ColorPrimary).
 		Bold(true)
+
+	StatusBarStyle = lipgloss.NewStyle().
+		PaddingLeft(1).
+		PaddingRight(1)
 
 	ListFilterPromptStyle = lipgloss.NewStyle().
 		PaddingLeft(1).

@@ -135,6 +135,23 @@ func (f *fakeHCStore) Prune(_ context.Context, opts hc.PruneOpts) (int, error) {
 	return f.pruneCount, nil
 }
 
+func (f *fakeHCStore) ListRepoKeys(_ context.Context) ([]string, error) {
+	if f.forceErr != nil {
+		return nil, f.forceErr
+	}
+	seen := make(map[string]struct{})
+	for _, item := range f.items {
+		if item.RepoKey != "" {
+			seen[item.RepoKey] = struct{}{}
+		}
+	}
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
 func newTestHoneycombService(store hc.Store) *HoneycombService {
 	return NewHoneycombService(store, zerolog.Nop())
 }

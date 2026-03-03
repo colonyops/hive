@@ -20,6 +20,7 @@ var Events = map[string]any{
 	"config.reloaded":        ConfigReloadedPayload{},
 	"message.received":       MessageReceivedPayload{},
 	"notification.published": NotificationPublishedPayload{},
+	"repo.focused":           RepoFocusedPayload{},
 	"session.corrupted":      SessionCorruptedPayload{},
 	"session.created":        SessionCreatedPayload{},
 	"session.deleted":        SessionDeletedPayload{},
@@ -84,6 +85,11 @@ type NotificationPublishedPayload struct {
 // TodoCreatedPayload is emitted when a new todo item is created.
 type TodoCreatedPayload struct {
 	Todo todo.Todo
+}
+
+// RepoFocusedPayload is emitted when the user focuses a repository in the TUI.
+type RepoFocusedPayload struct {
+	RepoKey string
 }
 
 // ConfigReloadedPayload is emitted when configuration is reloaded.

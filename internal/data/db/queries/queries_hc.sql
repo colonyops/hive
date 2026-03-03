@@ -110,6 +110,9 @@ RETURNING *;
 -- name: ListHCComments :many
 SELECT * FROM hc_comments WHERE item_id = ? ORDER BY created_at ASC;
 
+-- name: ListHCRepoKeys :many
+SELECT DISTINCT repo_key FROM hc_items WHERE repo_key != '' ORDER BY repo_key;
+
 -- name: PruneHCCommentsByStatus :exec
 DELETE FROM hc_comments
 WHERE hc_comments.item_id IN (
