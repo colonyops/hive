@@ -31,6 +31,8 @@ type Store interface {
 	ListComments(ctx context.Context, itemID string) ([]Comment, error)
 	// Prune removes old items and related comments according to options.
 	Prune(ctx context.Context, opts PruneOpts) (int, error)
+	// ListRepoKeys returns all distinct, non-empty repo keys in sorted order.
+	ListRepoKeys(ctx context.Context) ([]string, error)
 }
 
 // ItemUpdate carries partial updates to an Item. Nil pointer fields are not changed.

@@ -552,6 +552,33 @@ func (q *Queries) ListHCItemsBySession(ctx context.Context, sessionID string) ([
 	return items, nil
 }
 
+const listHCRepoKeys = `-- name: ListHCRepoKeys :many
+SELECT DISTINCT repo_key FROM hc_items WHERE repo_key != '' ORDER BY repo_key
+`
+
+func (q *Queries) ListHCRepoKeys(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listHCRepoKeys)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var repo_key string
+		if err := rows.Scan(&repo_key); err != nil {
+			return nil, err
+		}
+		items = append(items, repo_key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const nextHCItemForSession = `-- name: NextHCItemForSession :one
 SELECT outer_item.id, outer_item.repo_key, outer_item.epic_id, outer_item.parent_id, outer_item.session_id, outer_item.title, outer_item."desc", outer_item.type, outer_item.status, outer_item.depth, outer_item.created_at, outer_item.updated_at FROM hc_items AS outer_item
 WHERE outer_item.session_id = ?

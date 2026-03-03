@@ -81,6 +81,7 @@ type Deps struct {
 	KVStore       corekv.KV
 	BuildInfo     BuildInfo
 	DoctorService *hive.DoctorService
+	Honeycomb     *hive.HoneycombService
 }
 
 // Opts holds runtime options that are not service dependencies.

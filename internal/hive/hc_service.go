@@ -230,6 +230,11 @@ func (s *HoneycombService) Context(ctx context.Context, epicID, sessionID string
 	}, nil
 }
 
+// ListRepoKeys returns all distinct, non-empty repo keys.
+func (s *HoneycombService) ListRepoKeys(ctx context.Context) ([]string, error) {
+	return s.store.ListRepoKeys(ctx)
+}
+
 // Prune delegates to the store's Prune implementation.
 func (s *HoneycombService) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	return s.store.Prune(ctx, opts)

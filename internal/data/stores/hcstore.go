@@ -288,6 +288,15 @@ func (s *HCStore) ListComments(ctx context.Context, itemID string) ([]hc.Comment
 	return result, nil
 }
 
+// ListRepoKeys returns all distinct, non-empty repo keys in sorted order.
+func (s *HCStore) ListRepoKeys(ctx context.Context) ([]string, error) {
+	keys, err := s.db.Queries().ListHCRepoKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list hc repo keys: %w", err)
+	}
+	return keys, nil
+}
+
 // Prune removes old done/cancelled items and their comments.
 func (s *HCStore) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	allRows, err := s.db.Queries().ListAllHCItems(ctx)
