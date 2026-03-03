@@ -63,6 +63,13 @@ func (c *Config) ValidateDeep(configPath string) error {
 func (c *Config) Warnings() []ValidationWarning {
 	var warnings []ValidationWarning
 
+	if c.deprecatedKeybindings {
+		warnings = append(warnings, ValidationWarning{
+			Category: "Keybindings",
+			Message:  "top-level 'keybindings' field is deprecated; move entries to 'views.sessions.keybindings'",
+		})
+	}
+
 	for i, rule := range c.Rules {
 		if len(rule.Commands) == 0 && len(rule.Copy) == 0 {
 			warnings = append(warnings, ValidationWarning{

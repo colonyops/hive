@@ -196,20 +196,91 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 }
 
-// defaultKeybindings provides built-in keybindings that users can override.
-var defaultKeybindings = map[string]Keybinding{
-	"r":      {Cmd: "Recycle"},
-	"d":      {Cmd: "Delete"},
-	"n":      {Cmd: "NewSession"},
-	"enter":  {Cmd: "TmuxOpen"},
-	"ctrl+d": {Cmd: "TmuxKill"},
-	"A":      {Cmd: "AgentSend"},
-	"p":      {Cmd: "TmuxPopUp"},
-	"R":      {Cmd: "RenameSession"},
-	"G":      {Cmd: "GroupSet"},
-	"J":      {Cmd: "NextActive"},
-	"K":      {Cmd: "PrevActive"},
-	"t":      {Cmd: "TodoPanel"},
+// ViewKeybindings holds per-view keybinding configuration.
+type ViewKeybindings struct {
+	Global   ViewKeybindingConfig `json:"global"   yaml:"global"`
+	Sessions ViewKeybindingConfig `json:"sessions" yaml:"sessions"`
+	Tasks    ViewKeybindingConfig `json:"tasks"    yaml:"tasks"`
+}
+
+// ViewKeybindingConfig holds keybinding configuration for a single view.
+type ViewKeybindingConfig struct {
+	Keybindings map[string]Keybinding `json:"keybindings" yaml:"keybindings"`
+}
+
+// defaultViewKeybindings provides built-in per-view keybindings that users can override.
+var defaultViewKeybindings = ViewKeybindings{
+	Global: ViewKeybindingConfig{
+		Keybindings: map[string]Keybinding{},
+	},
+	Sessions: ViewKeybindingConfig{
+		Keybindings: map[string]Keybinding{
+			"r":      {Cmd: "Recycle"},
+			"d":      {Cmd: "Delete"},
+			"n":      {Cmd: "NewSession"},
+			"enter":  {Cmd: "TmuxOpen"},
+			"ctrl+d": {Cmd: "TmuxKill"},
+			"A":      {Cmd: "AgentSend"},
+			"p":      {Cmd: "TmuxPopUp"},
+			"R":      {Cmd: "RenameSession"},
+			"ctrl+g": {Cmd: "GroupSet"},
+			"J":      {Cmd: "NextActive"},
+			"K":      {Cmd: "PrevActive"},
+			"t":      {Cmd: "TodoPanel"},
+		},
+	},
+	Tasks: ViewKeybindingConfig{
+		Keybindings: map[string]Keybinding{
+			"r": {Cmd: "TasksRefresh"},
+			"f": {Cmd: "TasksFilter"},
+			"y": {Cmd: "TasksCopyID"},
+			"v": {Cmd: "TasksTogglePreview"},
+		},
+	},
+}
+
+func mergeViewKeybindingConfig(defaults, user ViewKeybindingConfig) ViewKeybindingConfig {
+	merged := ViewKeybindingConfig{
+		Keybindings: make(map[string]Keybinding, len(defaults.Keybindings)),
+	}
+	maps.Copy(merged.Keybindings, defaults.Keybindings)
+	maps.Copy(merged.Keybindings, user.Keybindings)
+	return merged
+}
+
+func mergeViewKeybindings(defaults, user ViewKeybindings) ViewKeybindings {
+	return ViewKeybindings{
+		Global:   mergeViewKeybindingConfig(defaults.Global, user.Global),
+		Sessions: mergeViewKeybindingConfig(defaults.Sessions, user.Sessions),
+		Tasks:    mergeViewKeybindingConfig(defaults.Tasks, user.Tasks),
+	}
+}
+
+func (v *ViewKeybindings) keybindingsForView(view string) map[string]Keybinding {
+	switch view {
+	case "sessions":
+		return v.Sessions.Keybindings
+	case "tasks":
+		return v.Tasks.Keybindings
+	case "global":
+		return v.Global.Keybindings
+	default:
+		return nil
+	}
+}
+
+func (v *ViewKeybindings) flattenedForView(view string) map[string]Keybinding {
+	result := make(map[string]Keybinding)
+	maps.Copy(result, v.Global.Keybindings)
+	if viewKBs := v.keybindingsForView(view); viewKBs != nil {
+		maps.Copy(result, viewKBs)
+	}
+	return result
+}
+
+// KeybindingsForView returns the merged keybindings for a view (global + view-specific).
+func (c *Config) KeybindingsForView(view string) map[string]Keybinding {
+	return c.Views.flattenedForView(view)
 }
 
 // CurrentConfigVersion is the latest config schema version.
@@ -237,8 +308,11 @@ type Config struct {
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
 	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // directories containing git repositories for new session dialog
-	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
-	DataDir             string                 `json:"-"                     yaml:"-"`          // set by caller, not from config file
+	Views               ViewKeybindings        `json:"views"                 yaml:"views"`
+	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"` // deprecated: use workspaces instead (kept for backwards compatibility)
+	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
+
+	deprecatedKeybindings bool `json:"-" yaml:"-"`
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -621,8 +695,20 @@ func Load(configPath, dataDir string) (*Config, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Merge user keybindings into defaults (user config overrides defaults)
-	cfg.Keybindings = mergeKeybindings(defaultKeybindings, cfg.Keybindings)
+	// Migrate deprecated top-level keybindings -> views.sessions.keybindings
+	if len(cfg.Keybindings) > 0 {
+		cfg.deprecatedKeybindings = true
+		if cfg.Views.Sessions.Keybindings == nil {
+			cfg.Views.Sessions.Keybindings = make(map[string]Keybinding)
+		}
+		maps.Copy(cfg.Views.Sessions.Keybindings, cfg.Keybindings)
+	}
+
+	// Merge per-view defaults (defaults first, user config overrides)
+	cfg.Views = mergeViewKeybindings(defaultViewKeybindings, cfg.Views)
+
+	// Build flat keybindings map for backwards compat with KeybindingResolver
+	cfg.Keybindings = cfg.Views.flattenedForView("sessions")
 
 	// Apply defaults for zero values
 	cfg.applyDefaults()
@@ -704,16 +790,6 @@ func defaultCopyCommand() string {
 
 // mergeKeybindings merges user keybindings into defaults.
 // User keybindings override defaults for the same key.
-func mergeKeybindings(defaults, user map[string]Keybinding) map[string]Keybinding {
-	result := make(map[string]Keybinding, len(defaults)+len(user))
-
-	// Copy defaults first
-	maps.Copy(result, defaults)
-	maps.Copy(result, user)
-
-	return result
-}
-
 // mergeUserCommands merges user commands into defaults.
 // User commands override defaults for the same name.
 func mergeUserCommands(defaults, user map[string]UserCommand) map[string]UserCommand {
@@ -827,7 +903,7 @@ func (c *Config) validateUserCommandsBasic() error {
 		// Validate scope values
 		for _, scope := range cmd.Scope {
 			if !isValidScope(scope) {
-				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review", scope))
+				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review, todos, tasks", scope))
 			}
 		}
 
@@ -984,6 +1060,23 @@ func (c *Config) validateKeybindingsBasic() error {
 		}
 	}
 
+	// Also validate per-view keybindings
+	for _, vk := range []struct {
+		name string
+		kbs  map[string]Keybinding
+	}{
+		{"views.global.keybindings", c.Views.Global.Keybindings},
+		{"views.sessions.keybindings", c.Views.Sessions.Keybindings},
+		{"views.tasks.keybindings", c.Views.Tasks.Keybindings},
+	} {
+		for key, kb := range vk.kbs {
+			field := fmt.Sprintf("%s[%q]", vk.name, key)
+			if kb.Cmd == "" {
+				errs = errs.Append(field, fmt.Errorf("cmd is required"))
+			}
+		}
+	}
+
 	return errs.ToError()
 }
 
@@ -994,11 +1087,29 @@ func (c *Config) validateKeybindingsBasic() error {
 func (c *Config) validateUserKeybindings() error {
 	var errs criterio.FieldErrorsBuilder
 
+	// Validate old top-level keybindings
 	for key, kb := range c.Keybindings {
 		field := fmt.Sprintf("keybindings[%q]", key)
 
 		if kb.Cmd == "" {
 			errs = errs.Append(field, fmt.Errorf("cmd is required"))
+		}
+	}
+
+	// Validate per-view keybindings
+	for _, vk := range []struct {
+		name string
+		kbs  map[string]Keybinding
+	}{
+		{"views.global.keybindings", c.Views.Global.Keybindings},
+		{"views.sessions.keybindings", c.Views.Sessions.Keybindings},
+		{"views.tasks.keybindings", c.Views.Tasks.Keybindings},
+	} {
+		for key, kb := range vk.kbs {
+			field := fmt.Sprintf("%s[%q]", vk.name, key)
+			if kb.Cmd == "" {
+				errs = errs.Append(field, fmt.Errorf("cmd is required"))
+			}
 		}
 	}
 
@@ -1052,7 +1163,7 @@ func isValidAction(t action.Type) bool {
 // isValidScope checks if a scope value is valid.
 func isValidScope(scope string) bool {
 	switch scope {
-	case "global", "sessions", "messages", "review", "todos":
+	case "global", "sessions", "messages", "review", "todos", "tasks":
 		return true
 	default:
 		return false

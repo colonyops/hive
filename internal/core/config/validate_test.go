@@ -1030,7 +1030,7 @@ func TestValidate_UserCommandInvalidScope(t *testing.T) {
 	err := cfg.Validate()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid scope")
-	assert.Contains(t, err.Error(), "must be one of: global, sessions, messages, review")
+	assert.Contains(t, err.Error(), "must be one of: global, sessions, messages, review, todos, tasks")
 }
 
 func TestAgentsConfig_UnmarshalYAML(t *testing.T) {
