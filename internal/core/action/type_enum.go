@@ -59,6 +59,14 @@ const (
 	TypeGroupToggle Type = "GroupToggle"
 	// TypeTodoPanel is a Type of type TodoPanel.
 	TypeTodoPanel Type = "TodoPanel"
+	// TypeTasksRefresh is a Type of type TasksRefresh.
+	TypeTasksRefresh Type = "TasksRefresh"
+	// TypeTasksFilter is a Type of type TasksFilter.
+	TypeTasksFilter Type = "TasksFilter"
+	// TypeTasksCopyID is a Type of type TasksCopyID.
+	TypeTasksCopyID Type = "TasksCopyID"
+	// TypeTasksTogglePreview is a Type of type TasksTogglePreview.
+	TypeTasksTogglePreview Type = "TasksTogglePreview"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -88,6 +96,10 @@ var _TypeNames = []string{
 	string(TypeGroupSet),
 	string(TypeGroupToggle),
 	string(TypeTodoPanel),
+	string(TypeTasksRefresh),
+	string(TypeTasksFilter),
+	string(TypeTasksCopyID),
+	string(TypeTasksTogglePreview),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -158,6 +170,14 @@ var _TypeValue = map[string]Type{
 	"grouptoggle":         TypeGroupToggle,
 	"TodoPanel":           TypeTodoPanel,
 	"todopanel":           TypeTodoPanel,
+	"TasksRefresh":        TypeTasksRefresh,
+	"tasksrefresh":        TypeTasksRefresh,
+	"TasksFilter":         TypeTasksFilter,
+	"tasksfilter":         TypeTasksFilter,
+	"TasksCopyID":         TypeTasksCopyID,
+	"taskscopyid":         TypeTasksCopyID,
+	"TasksTogglePreview":  TypeTasksTogglePreview,
+	"taskstogglepreview":  TypeTasksTogglePreview,
 }
 
 // ParseType attempts to convert a string to a Type.

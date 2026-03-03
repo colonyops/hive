@@ -85,6 +85,11 @@ var configActions = map[Type]bool{
 	TypeGroupSet:       true,
 	TypeGroupToggle:    true,
 	TypeTodoPanel:      true,
+
+	TypeTasksRefresh:       true,
+	TypeTasksFilter:        true,
+	TypeTasksCopyID:        true,
+	TypeTasksTogglePreview: true,
 }
 
 // IsConfigAction reports whether t is a valid action for use in YAML config.

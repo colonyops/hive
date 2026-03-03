@@ -87,41 +87,49 @@ var defaultUserCommands = map[string]UserCommand{
 		Action:  action.TypeRecycle,
 		Help:    "recycle",
 		Confirm: "Are you sure you want to recycle this session?",
+		Scope:   []string{"sessions"},
 	},
 	"Delete": {
 		Action:  action.TypeDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
+		Scope:   []string{"sessions"},
 	},
 	"NewSession": {
 		Action: action.TypeNewSession,
 		Help:   "new session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"DocReview": {
 		Action: action.TypeDocReview,
 		Help:   "review documents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterAll": {
 		Action: action.TypeFilterAll,
 		Help:   "show all sessions",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterActive": {
 		Action: action.TypeFilterActive,
 		Help:   "show sessions with active agents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterApproval": {
 		Action: action.TypeFilterApproval,
 		Help:   "show sessions needing approval",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterReady": {
 		Action: action.TypeFilterReady,
 		Help:   "show sessions with idle agents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"ThemePreview": {
 		Action: action.TypeSetTheme,
@@ -137,16 +145,19 @@ var defaultUserCommands = map[string]UserCommand{
 		Action: action.TypeRenameSession,
 		Help:   "rename session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"NextActive": {
 		Action: action.TypeNextActive,
 		Help:   "next active session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"PrevActive": {
 		Action: action.TypePrevActive,
 		Help:   "prev active session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"HiveInfo": {
 		Action: action.TypeHiveInfo,
@@ -162,16 +173,43 @@ var defaultUserCommands = map[string]UserCommand{
 		Action: action.TypeGroupSet,
 		Help:   "set session group",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"GroupToggle": {
 		Action: action.TypeGroupToggle,
 		Help:   "toggle group/repo view",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"TodoPanel": {
 		Action: action.TypeTodoPanel,
 		Help:   "open todo panel",
 		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"TasksRefresh": {
+		Action: action.TypeTasksRefresh,
+		Help:   "refresh tasks",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksFilter": {
+		Action: action.TypeTasksFilter,
+		Help:   "cycle task status filter",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksCopyID": {
+		Action: action.TypeTasksCopyID,
+		Help:   "copy task ID to clipboard",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksTogglePreview": {
+		Action: action.TypeTasksTogglePreview,
+		Help:   "toggle preview panel",
+		Silent: true,
+		Scope:  []string{"tasks"},
 	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
@@ -193,6 +231,7 @@ var defaultUserCommands = map[string]UserCommand{
 		},
 		Help:   "send message to multiple agents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 }
 

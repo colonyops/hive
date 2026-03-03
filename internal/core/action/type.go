@@ -28,6 +28,10 @@ package action
 //	GroupSet
 //	GroupToggle
 //	TodoPanel
+//	TasksRefresh
+//	TasksFilter
+//	TasksCopyID
+//	TasksTogglePreview
 //
 // )
 type Type string
