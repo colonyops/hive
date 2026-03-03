@@ -23,7 +23,7 @@
 go.work
 dist/
 .data/
-./dev.log
+dev.log
 agent-deck/
 diffnav
 site/
