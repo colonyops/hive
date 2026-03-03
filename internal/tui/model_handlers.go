@@ -42,10 +42,8 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 		m.sessionsView.SetSize(msg.Width, msg.Height)
 	}
 
-	// msgView gets contentHeight-1 so lipgloss.Height(contentHeight) in model_render.go
-	// adds one trailing blank line, matching the visual spacing of other views.
 	if m.msgView != nil {
-		m.msgView.SetSize(msg.Width, contentHeight-1)
+		m.msgView.SetSize(msg.Width, contentHeight)
 	}
 
 	if m.reviewView != nil {

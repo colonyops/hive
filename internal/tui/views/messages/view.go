@@ -27,6 +27,9 @@ const (
 	pollInterval  = 500 * time.Millisecond
 	iconDot       = "•"
 	unknownSender = "unknown"
+
+	// Minimum width before falling back to single-column layout.
+	minDualPaneWidth = 120
 )
 
 // Focus pane constants for the split-pane layout.
@@ -107,7 +110,10 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the messages view.
 func (v *View) View() string {
-	return v.renderDualColumnLayout()
+	if v.width >= minDualPaneWidth {
+		return v.renderDualColumnLayout()
+	}
+	return v.renderCompactList()
 }
 
 // HasEditorFocus returns true if the filter input is active.
@@ -223,7 +229,7 @@ func (v *View) handleFilterKey(msg tea.KeyPressMsg) tea.Cmd {
 func (v *View) handleNormalKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "enter":
-		if v.ctrl.Selected() != nil {
+		if v.ctrl.Selected() != nil && v.width >= minDualPaneWidth {
 			v.focus = panePreview
 			v.copyStatus = ""
 			v.updatePreviewContent()
@@ -265,14 +271,14 @@ func (v *View) copyToClipboard(text string) error {
 // --------------------------------------------------------------------
 
 func (v *View) visibleLines() int {
-	// Dual-pane: the list pane operates within contentHeight
-	// which already has tab chrome (3 lines) subtracted.
-	h := v.height - 3
-	reserved := 2 // column header + help line
+	// Both layouts use rule + help bar (2 lines) as footer.
+	// Dual-pane also subtracts column header (1 line).
+	// Compact subtracts column header (1 line).
+	reserved := 3 // rule + help bar + column header
 	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
 		reserved++
 	}
-	visible := h - reserved
+	visible := v.height - reserved
 	if visible < 1 {
 		visible = 1
 	}
@@ -280,14 +286,17 @@ func (v *View) visibleLines() int {
 }
 
 func (v *View) sizeViewport() {
+	if v.width < minDualPaneWidth {
+		return
+	}
 	listWidth := int(float64(v.width) * 0.25)
 	if listWidth < 20 {
 		listWidth = 20
 	}
 	previewWidth := v.width - listWidth - 1 // 1 for divider
 
-	// Preview content area: height minus header metadata (4 lines) minus help line (1)
-	previewHeight := v.height - 3 - 5 // 3 for tab chrome, 5 for preview header
+	// Preview content area: height minus footer (2: rule + help) minus header metadata (3 lines)
+	previewHeight := v.height - 2 - 3 // 2 for footer, 3 for preview header
 	if previewHeight < 1 {
 		previewHeight = 1
 	}
@@ -301,9 +310,10 @@ func (v *View) sizeViewport() {
 
 // renderDualColumnLayout renders messages list and preview side by side.
 func (v *View) renderDualColumnLayout() string {
-	contentHeight := v.height - 3 // 3 for tab chrome (divider + header + divider)
-	if contentHeight < 1 {
-		contentHeight = 1
+	// Reserve 2 lines for rule + help bar at bottom
+	paneHeight := v.height - 2
+	if paneHeight < 1 {
+		paneHeight = 1
 	}
 
 	// Calculate widths: 25% list, 1 char divider, remaining for preview
@@ -315,7 +325,7 @@ func (v *View) renderDualColumnLayout() string {
 	previewWidth := v.width - listWidth - dividerWidth
 
 	// Render list pane
-	listView := v.renderListPane(listWidth, contentHeight)
+	listView := v.renderListPane(listWidth, paneHeight)
 
 	// Update preview content if selection changed
 	cursor := v.ctrl.Cursor()
@@ -325,11 +335,11 @@ func (v *View) renderDualColumnLayout() string {
 	}
 
 	// Render preview pane
-	previewContent := v.renderPreviewPane(previewWidth, contentHeight)
+	previewContent := v.renderPreviewPane(previewWidth, paneHeight)
 
 	// Ensure exact dimensions for clean horizontal join
-	listView = ensureExactHeight(listView, contentHeight)
-	previewContent = ensureExactHeight(previewContent, contentHeight)
+	listView = ensureExactHeight(listView, paneHeight)
+	previewContent = ensureExactHeight(previewContent, paneHeight)
 	listView = ensureExactWidth(listView, listWidth)
 	previewContent = ensureExactWidth(previewContent, previewWidth)
 
@@ -338,7 +348,7 @@ func (v *View) renderDualColumnLayout() string {
 	if v.focus == panePreview {
 		dividerStyle = styles.TextPrimaryStyle
 	}
-	dividerLines := make([]string, contentHeight)
+	dividerLines := make([]string, paneHeight)
 	for i := range dividerLines {
 		dividerLines[i] = dividerStyle.Render("│")
 	}
@@ -350,7 +360,29 @@ func (v *View) renderDualColumnLayout() string {
 		listView = ensureExactWidth(listView, listWidth)
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewContent)
+	panes := lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewContent)
+
+	// Common footer: rule + help bar
+	bar := components.StatusBar{Width: v.width}
+	help := v.dualPaneHelp()
+
+	return panes + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
+}
+
+// dualPaneHelp returns context-sensitive help text for the common footer.
+func (v *View) dualPaneHelp() string {
+	switch {
+	case v.copyStatus != "":
+		return styles.TextSuccessStyle.Render(v.copyStatus)
+	case v.focus == panePreview:
+		scrollInfo := ""
+		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
+			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
+		}
+		return styles.TextMutedStyle.Render(fmt.Sprintf("↑/↓ scroll%s • c copy • esc back • tab switch view", scrollInfo))
+	default:
+		return styles.TextMutedStyle.Render("↑/↓ navigate • enter preview • / filter • tab switch view")
+	}
 }
 
 // renderListPane renders the compact message list for the left pane.
@@ -432,14 +464,6 @@ func (v *View) renderListPane(width, maxHeight int) string {
 	// Pad remaining lines
 	for i := linesRendered; i < visibleLines; i++ {
 		b.WriteString("\n")
-	}
-
-	// Help line
-	helpText := "↑/↓ nav • enter preview • / filter"
-	if v.focus == paneList {
-		b.WriteString(styles.MessagesHelpStyle.Render(helpText))
-	} else {
-		b.WriteString(styles.TextMutedStyle.Render(" " + helpText))
 	}
 
 	return b.String()
@@ -534,26 +558,10 @@ func (v *View) renderPreviewPane(width, maxHeight int) string {
 	if sel.SessionID == "" {
 		headerLines = 2
 	}
-	helpLines := 1
 	vpHeight := v.viewport.VisibleLineCount()
-	usedLines := headerLines + vpHeight + helpLines
+	usedLines := headerLines + vpHeight
 	for i := usedLines; i < maxHeight; i++ {
 		b.WriteString("\n")
-	}
-
-	// Help / status line
-	switch {
-	case v.copyStatus != "":
-		b.WriteString("  ")
-		b.WriteString(styles.TextSuccessStyle.Render(v.copyStatus))
-	case v.focus == panePreview:
-		scrollInfo := ""
-		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
-			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
-		}
-		b.WriteString(styles.MessagesHelpStyle.Render(fmt.Sprintf("↑/↓ scroll%s • c copy • esc back", scrollInfo)))
-	default:
-		b.WriteString(styles.TextMutedStyle.Render("  enter to focus preview"))
 	}
 
 	return b.String()
@@ -575,6 +583,142 @@ func (v *View) updatePreviewContent() {
 	rendered := renderMarkdown(sel.Payload, contentWidth)
 	v.viewport.SetContent(rendered)
 	v.viewport.SetYOffset(0)
+}
+
+// renderCompactList is the fallback single-column layout for narrow terminals.
+func (v *View) renderCompactList() string {
+	var b strings.Builder
+
+	senderWidth := 14
+	topicWidth := 14
+	ageWidth := 4
+	padding := 5
+	contentWidth := v.width - senderWidth - topicWidth - ageWidth - padding - 2
+	if contentWidth < 10 {
+		contentWidth = 10
+	}
+
+	// Filter line
+	if v.ctrl.IsFiltering() {
+		b.WriteString(" ")
+		b.WriteString(styles.TextPrimaryBoldStyle.Render("Filter: "))
+		b.WriteString(v.ctrl.Filter())
+		b.WriteString("▎")
+		b.WriteString("\n")
+	} else if v.ctrl.Filter() != "" {
+		b.WriteString(" ")
+		b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("Filter: %s", v.ctrl.Filter())))
+		b.WriteString("\n")
+	}
+
+	// Column headers
+	senderHeader := fmt.Sprintf("%-*s", senderWidth, "Sender")
+	topicHeader := fmt.Sprintf("%-*s", topicWidth, "Topic")
+	msgHeader := fmt.Sprintf("%-*s", contentWidth, "Message")
+	ageHeader := fmt.Sprintf("%*s", ageWidth, "Age")
+	b.WriteString("  ")
+	b.WriteString(styles.TextMutedStyle.Render(senderHeader + " " + topicHeader + " " + msgHeader + " " + ageHeader))
+	b.WriteString("\n")
+
+	linesRendered := 0
+	filteredAt := v.ctrl.FilteredAt()
+	displayed := v.ctrl.Displayed()
+
+	if len(filteredAt) == 0 {
+		if len(displayed) == 0 {
+			b.WriteString(styles.TextMutedStyle.Render("  No messages"))
+		} else {
+			b.WriteString(styles.TextMutedStyle.Render("  No matching messages"))
+		}
+		b.WriteString("\n")
+		linesRendered = 1
+	} else {
+		visible := v.visibleLines()
+		offset := v.ctrl.Offset()
+		end := offset + visible
+		if end > len(filteredAt) {
+			end = len(filteredAt)
+		}
+
+		cursor := v.ctrl.Cursor()
+		for i := offset; i < end; i++ {
+			msgIdx := filteredAt[i]
+			msg := &displayed[msgIdx]
+			isSelected := i == cursor
+
+			line := renderFallbackLine(msg, isSelected, senderWidth, topicWidth, contentWidth, ageWidth)
+			b.WriteString(line)
+			b.WriteString("\n")
+			linesRendered++
+		}
+	}
+
+	visible := v.visibleLines()
+	for i := linesRendered; i < visible; i++ {
+		b.WriteString("\n")
+	}
+
+	bar := components.StatusBar{Width: v.width}
+	help := styles.TextMutedStyle.Render("↑/↓ navigate • / filter • tab switch view")
+	b.WriteString(bar.Rule())
+	b.WriteString("\n")
+	b.WriteString(bar.Render(help, ""))
+
+	return b.String()
+}
+
+func renderFallbackLine(msg *messaging.Message, selected bool, senderW, topicW, contentW, ageW int) string {
+	var b strings.Builder
+
+	if selected {
+		b.WriteString(styles.TextPrimaryStyle.Render("┃"))
+		b.WriteString(" ")
+	} else {
+		b.WriteString("  ")
+	}
+
+	sender := msg.Sender
+	if sender == "" {
+		sender = unknownSender
+	}
+	if len(sender) > senderW-2 {
+		sender = sender[:senderW-3] + "…"
+	}
+	senderColor := styles.ColorForString(sender)
+	senderStyle := lipgloss.NewStyle().Foreground(senderColor)
+	senderPadded := fmt.Sprintf("[%-*s]", senderW-2, sender)
+	b.WriteString(senderStyle.Render(senderPadded))
+	b.WriteString(" ")
+
+	topic := msg.Topic
+	if len(topic) > topicW-2 {
+		topic = topic[:topicW-3] + "…"
+	}
+	topicColor := styles.ColorForString(msg.Topic)
+	topicStyle := lipgloss.NewStyle().Foreground(topicColor)
+	topicPadded := fmt.Sprintf("[%-*s]", topicW-2, topic)
+	b.WriteString(topicStyle.Render(topicPadded))
+	b.WriteString(" ")
+
+	payload := strings.ReplaceAll(msg.Payload, "\n", " ")
+	payload = strings.ReplaceAll(payload, "\t", " ")
+	payloadRunes := []rune(payload)
+	if len(payloadRunes) > contentW-1 {
+		payload = string(payloadRunes[:contentW-1]) + "…"
+	}
+	payloadStyle := styles.TextForegroundStyle
+	if selected {
+		payloadStyle = styles.MessagesPayloadSelectedStyle
+	}
+	payloadPadded := fmt.Sprintf("%-*s", contentW, payload)
+	b.WriteString(payloadStyle.Render(payloadPadded))
+	b.WriteString(" ")
+
+	age := formatAge(msg.CreatedAt)
+	agePadded := fmt.Sprintf("%*s", ageW, age)
+	b.WriteString(styles.TextMutedStyle.Render(agePadded))
+
+	return b.String()
 }
 
 // --------------------------------------------------------------------

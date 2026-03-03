@@ -7,7 +7,6 @@ import (
 	"sync"
 	"time"
 
-	"charm.land/bubbles/v2/key"
 	"charm.land/bubbles/v2/list"
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
@@ -150,23 +149,7 @@ func New(opts ViewOpts) *View {
 	filterStyles.Cursor.Color = styles.ColorPrimary
 	l.FilterInput.SetStyles(filterStyles)
 
-	// Style help to match messages view
-	helpStyle := styles.TextMutedStyle
-	l.Help.Styles.ShortKey = helpStyle
-	l.Help.Styles.ShortDesc = helpStyle
-	l.Help.Styles.ShortSeparator = helpStyle
-	l.Help.Styles.FullKey = helpStyle
-	l.Help.Styles.FullDesc = helpStyle
-	l.Help.Styles.FullSeparator = helpStyle
-	l.Help.ShortSeparator = " • "
-	l.Styles.HelpStyle = styles.ListHelpContainerStyle
-
-	l.AdditionalShortHelpKeys = func() []key.Binding {
-		return []key.Binding{
-			key.NewBinding(key.WithKeys("up", "down"), key.WithHelp("↑/↓", "navigate")),
-			key.NewBinding(key.WithKeys("?"), key.WithHelp("?", "help")),
-		}
-	}
+	l.SetShowHelp(false)
 
 	focusInput := textinput.New()
 	focusInput.Prompt = "/"
@@ -459,7 +442,8 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 		v.focusFilterInput.Reset()
 		v.focusFilterInput.SetValue("")
 
-		contentHeight := v.height - 3
+		// Tab chrome (3) + rule + help bar (2)
+		contentHeight := v.height - 5
 		if contentHeight < 2 {
 			contentHeight = 2
 		}
@@ -471,7 +455,6 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 			listWidth = v.width
 		}
 
-		v.list.SetShowHelp(false)
 		v.list.SetSize(listWidth, contentHeight-1) // Make room for search input
 
 		return v, v.focusFilterInput.Focus()
@@ -820,7 +803,8 @@ func (v *View) stopFocusMode() {
 	v.focusMode = false
 	v.focusFilter = ""
 
-	contentHeight := v.height - 3
+	// Recalculate: tab chrome (3) + rule + help bar (2)
+	contentHeight := v.height - 5
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -833,7 +817,6 @@ func (v *View) stopFocusMode() {
 	}
 
 	v.list.SetSize(listWidth, contentHeight)
-	v.list.SetShowHelp(true)
 }
 
 // updateFocusFilter updates the filter and navigates to first match.
@@ -864,28 +847,34 @@ func (v *View) updateFocusFilter(filter string) {
 
 // View renders the sessions view.
 func (v *View) View() string {
-	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
-	contentHeight := max(v.height-3, 1)
+	// Calculate content height: total - tab chrome (3) - rule + help bar (2)
+	contentHeight := max(v.height-5, 1)
 
+	var body string
 	if v.previewEnabled && v.width >= 80 {
-		return v.renderDualColumnLayout(contentHeight)
+		body = v.renderDualColumnLayout(contentHeight)
+	} else {
+		// Reset delegate to show full info when not in preview mode
+		v.treeDelegate.PreviewMode = false
+		v.list.SetDelegate(v.treeDelegate)
+		body = v.list.View()
+
+		// Show focus mode filter input if active (at bottom to avoid layout shift)
+		if v.focusMode {
+			body = lipgloss.JoinVertical(lipgloss.Left, body, v.focusFilterInput.View())
+		} else if v.list.SettingFilter() {
+			// Fallback: show bubbles built-in filter if somehow active
+			body = lipgloss.JoinVertical(lipgloss.Left, v.list.FilterInput.View(), body)
+		}
+
+		body = lipgloss.NewStyle().Height(contentHeight).Render(body)
 	}
 
-	// Reset delegate to show full info when not in preview mode
-	v.treeDelegate.PreviewMode = false
-	v.list.SetDelegate(v.treeDelegate)
-	content := v.list.View()
+	// Common footer: rule + help bar
+	bar := components.StatusBar{Width: v.width}
+	help := styles.TextMutedStyle.Render("↑/↓ navigate • enter select • / filter • ? help • tab switch view")
 
-	// Show focus mode filter input if active (at bottom to avoid layout shift)
-	if v.focusMode {
-		content = lipgloss.JoinVertical(lipgloss.Left, content, v.focusFilterInput.View())
-	} else if v.list.SettingFilter() {
-		// Fallback: show bubbles built-in filter if somehow active
-		content = lipgloss.JoinVertical(lipgloss.Left, v.list.FilterInput.View(), content)
-	}
-
-	content = lipgloss.NewStyle().Height(contentHeight).Render(content)
-	return content
+	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
 }
 
 // renderDualColumnLayout renders sessions list and preview side by side.
@@ -1220,8 +1209,8 @@ func (v *View) SetSize(width, height int) {
 	v.width = width
 	v.height = height
 
-	// Account for preview mode when setting list dimensions
-	contentHeight := height - 3
+	// Account for tab chrome (3) + rule + help bar (2)
+	contentHeight := height - 5
 	if contentHeight < 1 {
 		contentHeight = 1
 	}

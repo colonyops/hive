@@ -126,6 +126,7 @@ func (m Model) renderTabView() string {
 	switch m.activeView {
 	case ViewSessions:
 		content = m.sessionsView.View()
+		content = lipgloss.NewStyle().Height(contentHeight).Render(content)
 	case ViewTasks:
 		if m.tasksView != nil {
 			content = m.tasksView.View()
