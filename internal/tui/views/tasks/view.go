@@ -28,16 +28,18 @@ type View struct {
 	scrollOffset int
 	repoKey      string
 
-	comments   map[string][]hc.Comment // cache: itemID -> comments
-	lastItemID string                  // track cursor changes
+	comments     map[string][]hc.Comment // cache: itemID -> comments
+	lastItemID   string                  // track cursor changes
+	statusFilter StatusFilter            // current status filter (default: FilterOpen)
 }
 
 // New creates a new tasks View.
 func New(svc *hive.HoneycombService, repoKey string) *View {
 	return &View{
-		svc:      svc,
-		repoKey:  repoKey,
-		comments: make(map[string][]hc.Comment),
+		svc:          svc,
+		repoKey:      repoKey,
+		comments:     make(map[string][]hc.Comment),
+		statusFilter: FilterOpen,
 	}
 }
 
@@ -91,8 +93,15 @@ func (v *View) View() string {
 		return "  No tasks loaded"
 	}
 
-	// Reserve 1 line for help bar.
-	contentHeight := max(v.height-1, 1)
+	filterBar := renderFilterBar(v.statusFilter)
+
+	if len(v.flatNodes) == 0 {
+		help := styles.TextMutedStyle.Render("f filter • r refresh")
+		return filterBar + "\n  " + styles.TextMutedStyle.Render("No tasks match the current filter.") + "\n" + help
+	}
+
+	// Reserve 2 lines: filter bar + help bar.
+	contentHeight := max(v.height-2, 1)
 
 	// Pane widths: tree ~30%, content ~45%, properties ~25%.
 	// Account for 2 divider columns (1 char each).
@@ -139,9 +148,9 @@ func (v *View) View() string {
 	body := lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent, divider, propsContent)
 
 	// Help bar
-	help := styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • r refresh")
+	help := styles.TextMutedStyle.Render("j/k navigate • enter expand/collapse • f filter • r refresh")
 
-	return body + "\n" + help
+	return filterBar + "\n" + body + "\n" + help
 }
 
 // SetSize updates the view dimensions.
@@ -206,9 +215,10 @@ func (v *View) checkCursorChanged() tea.Cmd {
 	return v.loadComments(selected.ID)
 }
 
-// rebuildTree rebuilds the tree from the current items and clamps the cursor.
+// rebuildTree rebuilds the tree from the current items, applying the active filter, and clamps the cursor.
 func (v *View) rebuildTree() {
-	v.roots = buildTree(v.items)
+	filtered := filterItems(v.items, v.statusFilter)
+	v.roots = buildTree(filtered)
 	v.flatNodes = flattenTree(v.roots)
 	v.clampCursor()
 	v.clampScroll()
@@ -228,6 +238,10 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 	case "r":
 		v.comments = make(map[string][]hc.Comment)
 		return v.loadItems()
+	case "f":
+		v.statusFilter = (v.statusFilter + 1) % filterCount
+		v.rebuildTree()
+		return v.checkCursorChanged()
 	case "G":
 		v.cursor = len(v.flatNodes) - 1
 		v.clampScroll()
