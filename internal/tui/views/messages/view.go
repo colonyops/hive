@@ -271,17 +271,14 @@ func (v *View) copyToClipboard(text string) error {
 // --------------------------------------------------------------------
 
 func (v *View) visibleLines() int {
-	h := v.height
-	if v.width >= minDualPaneWidth {
-		// In dual-pane mode, the list pane operates within contentHeight
-		// which already has tab chrome (3 lines) subtracted.
-		h -= 3
-	}
-	reserved := 2 // column header + help line
+	// Both layouts use rule + help bar (2 lines) as footer.
+	// Dual-pane also subtracts column header (1 line).
+	// Compact subtracts column header (1 line).
+	reserved := 3 // rule + help bar + column header
 	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
 		reserved++
 	}
-	visible := h - reserved
+	visible := v.height - reserved
 	if visible < 1 {
 		visible = 1
 	}
@@ -298,8 +295,8 @@ func (v *View) sizeViewport() {
 	}
 	previewWidth := v.width - listWidth - 1 // 1 for divider
 
-	// Preview content area: height minus header metadata (4 lines) minus help line (1)
-	previewHeight := v.height - 3 - 5 // 3 for tab chrome, 5 for preview header
+	// Preview content area: height minus footer (2: rule + help) minus header metadata (3 lines)
+	previewHeight := v.height - 2 - 3 // 2 for footer, 3 for preview header
 	if previewHeight < 1 {
 		previewHeight = 1
 	}
@@ -313,9 +310,10 @@ func (v *View) sizeViewport() {
 
 // renderDualColumnLayout renders messages list and preview side by side.
 func (v *View) renderDualColumnLayout() string {
-	contentHeight := v.height - 3 // 3 for tab chrome (divider + header + divider)
-	if contentHeight < 1 {
-		contentHeight = 1
+	// Reserve 2 lines for rule + help bar at bottom
+	paneHeight := v.height - 2
+	if paneHeight < 1 {
+		paneHeight = 1
 	}
 
 	// Calculate widths: 25% list, 1 char divider, remaining for preview
@@ -327,7 +325,7 @@ func (v *View) renderDualColumnLayout() string {
 	previewWidth := v.width - listWidth - dividerWidth
 
 	// Render list pane
-	listView := v.renderListPane(listWidth, contentHeight)
+	listView := v.renderListPane(listWidth, paneHeight)
 
 	// Update preview content if selection changed
 	cursor := v.ctrl.Cursor()
@@ -337,11 +335,11 @@ func (v *View) renderDualColumnLayout() string {
 	}
 
 	// Render preview pane
-	previewContent := v.renderPreviewPane(previewWidth, contentHeight)
+	previewContent := v.renderPreviewPane(previewWidth, paneHeight)
 
 	// Ensure exact dimensions for clean horizontal join
-	listView = ensureExactHeight(listView, contentHeight)
-	previewContent = ensureExactHeight(previewContent, contentHeight)
+	listView = ensureExactHeight(listView, paneHeight)
+	previewContent = ensureExactHeight(previewContent, paneHeight)
 	listView = ensureExactWidth(listView, listWidth)
 	previewContent = ensureExactWidth(previewContent, previewWidth)
 
@@ -350,7 +348,7 @@ func (v *View) renderDualColumnLayout() string {
 	if v.focus == panePreview {
 		dividerStyle = styles.TextPrimaryStyle
 	}
-	dividerLines := make([]string, contentHeight)
+	dividerLines := make([]string, paneHeight)
 	for i := range dividerLines {
 		dividerLines[i] = dividerStyle.Render("│")
 	}
@@ -362,7 +360,29 @@ func (v *View) renderDualColumnLayout() string {
 		listView = ensureExactWidth(listView, listWidth)
 	}
 
-	return lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewContent)
+	panes := lipgloss.JoinHorizontal(lipgloss.Top, listView, divider, previewContent)
+
+	// Common footer: rule + help bar
+	bar := components.StatusBar{Width: v.width}
+	help := v.dualPaneHelp()
+
+	return panes + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
+}
+
+// dualPaneHelp returns context-sensitive help text for the common footer.
+func (v *View) dualPaneHelp() string {
+	switch {
+	case v.copyStatus != "":
+		return styles.TextSuccessStyle.Render(v.copyStatus)
+	case v.focus == panePreview:
+		scrollInfo := ""
+		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
+			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
+		}
+		return styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"c copy"+components.HelpSep+"esc back", scrollInfo))
+	default:
+		return styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "enter preview")
+	}
 }
 
 // renderListPane renders the compact message list for the left pane.
@@ -444,14 +464,6 @@ func (v *View) renderListPane(width, maxHeight int) string {
 	// Pad remaining lines
 	for i := linesRendered; i < visibleLines; i++ {
 		b.WriteString("\n")
-	}
-
-	// Help line
-	helpText := "↑/↓ nav • enter preview • / filter"
-	if v.focus == paneList {
-		b.WriteString(styles.MessagesHelpStyle.Render(helpText))
-	} else {
-		b.WriteString(styles.TextMutedStyle.Render(" " + helpText))
 	}
 
 	return b.String()
@@ -546,26 +558,10 @@ func (v *View) renderPreviewPane(width, maxHeight int) string {
 	if sel.SessionID == "" {
 		headerLines = 2
 	}
-	helpLines := 1
 	vpHeight := v.viewport.VisibleLineCount()
-	usedLines := headerLines + vpHeight + helpLines
+	usedLines := headerLines + vpHeight
 	for i := usedLines; i < maxHeight; i++ {
 		b.WriteString("\n")
-	}
-
-	// Help / status line
-	switch {
-	case v.copyStatus != "":
-		b.WriteString("  ")
-		b.WriteString(styles.TextSuccessStyle.Render(v.copyStatus))
-	case v.focus == panePreview:
-		scrollInfo := ""
-		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
-			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
-		}
-		b.WriteString(styles.MessagesHelpStyle.Render(fmt.Sprintf("↑/↓ scroll%s • c copy • esc back", scrollInfo)))
-	default:
-		b.WriteString(styles.TextMutedStyle.Render("  enter to focus preview"))
 	}
 
 	return b.String()
@@ -662,7 +658,11 @@ func (v *View) renderCompactList() string {
 		b.WriteString("\n")
 	}
 
-	b.WriteString(styles.MessagesHelpStyle.Render("↑/↓ navigate • / filter • tab switch view"))
+	bar := components.StatusBar{Width: v.width}
+	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter)
+	b.WriteString(bar.Rule())
+	b.WriteString("\n")
+	b.WriteString(bar.Render(help, ""))
 
 	return b.String()
 }

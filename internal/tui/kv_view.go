@@ -8,6 +8,7 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/jsoncolor"
 )
 
@@ -178,8 +179,8 @@ func (v *KVView) View() string {
 		previewWidth = 10
 	}
 
-	// Reserve lines for help bar
-	contentHeight := v.height - 1
+	// Reserve lines for rule + help bar
+	contentHeight := v.height - 2
 	if contentHeight < 1 {
 		contentHeight = 1
 	}
@@ -193,10 +194,11 @@ func (v *KVView) View() string {
 	// Join columns horizontally
 	content := joinColumns(leftPane, divider, rightPane, contentHeight)
 
-	// Help bar
-	help := v.renderHelp()
+	// Rule + help bar
+	bar := components.StatusBar{Width: v.width}
+	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "shift+j/k scroll preview")
 
-	return content + "\n" + help
+	return content + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
 }
 
 func (v *KVView) renderKeyList(width, height int) []string {
@@ -324,12 +326,8 @@ func (v *KVView) renderDivider(height int) []string {
 	return lines
 }
 
-func (v *KVView) renderHelp() string {
-	return styles.MessagesHelpStyle.Render("↑/↓ navigate • shift+↑/↓ scroll preview • / filter • tab switch view")
-}
-
 func (v *KVView) previewHeight() int {
-	h := v.height - 2 // header + help
+	h := v.height - 3 // header + rule + help
 	if h < 1 {
 		h = 1
 	}
