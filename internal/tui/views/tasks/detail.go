@@ -102,6 +102,7 @@ func renderHeader(item *hc.Item, node *TreeNode) string {
 		Background(styles.ColorSurface).
 		Foreground(styles.ColorForeground).
 		Bold(true).
+		PaddingLeft(1).
 		PaddingRight(1).
 		Render(strings.ToTitle(string(item.Type)[:1]) + string(item.Type)[1:])
 	parts = append(parts, typeBadge)
