@@ -8,6 +8,15 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
+// Common help hint fragments for StatusBar footers. Combine with HelpSep to
+// build context-specific help lines while keeping wording consistent.
+const (
+	HelpNav    = "j/k navigate"
+	HelpFilter = "/ filter"
+	HelpHelp   = "? help"
+	HelpSep    = " • "
+)
+
 // StatusBar renders full-width bar lines. Callers pre-style their own text;
 // the bar only handles padding, fill, and layout.
 type StatusBar struct {

@@ -872,7 +872,7 @@ func (v *View) View() string {
 
 	// Common footer: rule + help bar
 	bar := components.StatusBar{Width: v.width}
-	help := styles.TextMutedStyle.Render("↑/↓ navigate • enter select • / filter • ? help • tab switch view")
+	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "enter select" + components.HelpSep + components.HelpHelp)
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
 }

@@ -379,9 +379,9 @@ func (v *View) dualPaneHelp() string {
 		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
 			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
 		}
-		return styles.TextMutedStyle.Render(fmt.Sprintf("↑/↓ scroll%s • c copy • esc back • tab switch view", scrollInfo))
+		return styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"c copy"+components.HelpSep+"esc back", scrollInfo))
 	default:
-		return styles.TextMutedStyle.Render("↑/↓ navigate • enter preview • / filter • tab switch view")
+		return styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "enter preview")
 	}
 }
 
@@ -659,7 +659,7 @@ func (v *View) renderCompactList() string {
 	}
 
 	bar := components.StatusBar{Width: v.width}
-	help := styles.TextMutedStyle.Render("↑/↓ navigate • / filter • tab switch view")
+	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter)
 	b.WriteString(bar.Rule())
 	b.WriteString("\n")
 	b.WriteString(bar.Render(help, ""))
