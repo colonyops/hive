@@ -751,6 +751,7 @@ func TestValidate_UserCommandValidScopes(t *testing.T) {
 		"review-cmd":   {Sh: "echo test", Scope: []string{"review"}},
 		"sessions-cmd": {Sh: "echo test", Scope: []string{"sessions"}},
 		"messages-cmd": {Sh: "echo test", Scope: []string{"messages"}},
+		"tasks-cmd":    {Sh: "echo test", Scope: []string{"tasks"}},
 		"multi-scope":  {Sh: "echo test", Scope: []string{"review", "sessions"}},
 		"no-scope":     {Sh: "echo test"}, // nil scope = global
 	}

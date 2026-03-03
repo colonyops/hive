@@ -836,6 +836,121 @@ func TestResolveWindowsAction_TemplateError(t *testing.T) {
 	assert.Nil(t, a.SpawnWindows)
 }
 
+func TestResolver_PerViewKeybindings(t *testing.T) {
+	// Same key "r" mapped to different actions in different views
+	viewKBs := map[string]map[string]config.Keybinding{
+		"sessions": {"r": {Cmd: "Recycle"}},
+		"tasks":    {"r": {Cmd: "TasksRefresh"}},
+	}
+	commands := map[string]config.UserCommand{
+		"Recycle":      {Action: act.TypeRecycle, Help: "recycle"},
+		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh tasks", Scope: []string{"tasks"}},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	sess := session.Session{ID: "test", Path: "/test", State: session.StateActive}
+
+	// Sessions view: "r" -> Recycle
+	handler.SetActiveView(ViewSessions)
+	a, ok := handler.Resolve("r", sess)
+	assert.True(t, ok)
+	assert.Equal(t, act.TypeRecycle, a.Type)
+
+	// Tasks view: "r" -> TasksRefresh
+	handler.SetActiveView(ViewTasks)
+	a2, ok2 := handler.ResolveAction("r")
+	assert.True(t, ok2)
+	assert.Equal(t, act.TypeTasksRefresh, a2.Type)
+
+	// Switch back to sessions: "r" -> Recycle again
+	handler.SetActiveView(ViewSessions)
+	a3, ok3 := handler.Resolve("r", sess)
+	assert.True(t, ok3)
+	assert.Equal(t, act.TypeRecycle, a3.Type)
+}
+
+func TestResolver_GlobalFallback(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"global": {"?": {Cmd: "HiveInfo"}},
+	}
+	commands := map[string]config.UserCommand{
+		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+
+	// "?" should resolve on both sessions and tasks views
+	for _, view := range []ViewType{ViewSessions, ViewTasks} {
+		handler.SetActiveView(view)
+		a, ok := handler.ResolveAction("?")
+		assert.True(t, ok, "global keybinding should resolve in %s view", view.String())
+		assert.Equal(t, act.TypeHiveInfo, a.Type)
+	}
+}
+
+func TestResolver_ViewOverridesGlobal(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"global":   {"x": {Cmd: "HiveInfo"}},
+		"sessions": {"x": {Cmd: "Recycle"}},
+	}
+	commands := map[string]config.UserCommand{
+		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
+		"Recycle":  {Action: act.TypeRecycle, Help: "recycle"},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	sess := session.Session{ID: "test", Path: "/test", State: session.StateActive}
+
+	// On sessions view, view-specific "x" -> Recycle overrides global "x" -> HiveInfo
+	handler.SetActiveView(ViewSessions)
+	a, ok := handler.Resolve("x", sess)
+	assert.True(t, ok)
+	assert.Equal(t, act.TypeRecycle, a.Type)
+
+	// On tasks view (no override), global "x" -> HiveInfo
+	handler.SetActiveView(ViewTasks)
+	a2, ok2 := handler.ResolveAction("x")
+	assert.True(t, ok2)
+	assert.Equal(t, act.TypeHiveInfo, a2.Type)
+}
+
+func TestResolver_ResolveAction_SkipsShellCommands(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"sessions": {
+			"a": {Cmd: "ActionCmd"},
+			"s": {Cmd: "ShellCmd"},
+		},
+	}
+	commands := map[string]config.UserCommand{
+		"ActionCmd": {Action: act.TypeRecycle, Help: "action"},
+		"ShellCmd":  {Sh: "echo hello", Help: "shell"},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler.SetActiveView(ViewSessions)
+
+	// Built-in action resolves
+	a, ok := handler.ResolveAction("a")
+	assert.True(t, ok)
+	assert.Equal(t, act.TypeRecycle, a.Type)
+
+	// Shell command returns false (needs session context)
+	_, ok2 := handler.ResolveAction("s")
+	assert.False(t, ok2, "ResolveAction should skip shell commands")
+}
+
+func TestResolver_ViewWithNoKeybindings(t *testing.T) {
+	viewKBs := map[string]map[string]config.Keybinding{
+		"global": {"?": {Cmd: "HiveInfo"}},
+	}
+	commands := map[string]config.UserCommand{
+		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
+	}
+	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+
+	// Messages view has no keybinding map entry — only global keybindings resolve
+	handler.SetActiveView(ViewMessages)
+	a, ok := handler.ResolveAction("?")
+	assert.True(t, ok, "global keybinding should resolve in messages view")
+	assert.Equal(t, act.TypeHiveInfo, a.Type)
+}
+
 func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude"})
 	commands := map[string]config.UserCommand{
