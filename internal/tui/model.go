@@ -258,17 +258,19 @@ func New(deps Deps, opts Opts) Model {
 
 	kvView := NewKVView()
 
-	tasksView := tasks.New(deps.Honeycomb)
-
+	var repoKey string
 	var contextDir string
 	var docs []review.Document
 	if opts.LocalRemote != "" {
 		owner, repo := git.ExtractOwnerRepo(opts.LocalRemote)
 		if owner != "" && repo != "" {
+			repoKey = owner + "/" + repo
 			contextDir = cfg.RepoContextDir(owner, repo)
 			docs, _ = review.DiscoverDocuments(contextDir)
 		}
 	}
+
+	tasksView := tasks.New(deps.Honeycomb, repoKey)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
