@@ -425,7 +425,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	case "k", "up":
 		v.moveCursor(-1)
 		return v.checkCursorChanged()
-	case " ":
+	case " ", "space":
 		v.toggleExpand()
 		return nil
 	case "enter", "l":
