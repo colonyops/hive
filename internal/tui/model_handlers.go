@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
+	"github.com/colonyops/hive/internal/tui/views/tasks"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -201,6 +202,55 @@ func (m Model) handleSessionRecycledDelete(msg sessions.RecycledDeleteRequestMsg
 
 func (m Model) handleSessionOpenRepo(msg sessions.OpenRepoRequestMsg) (tea.Model, tea.Cmd) {
 	return m.openRepoHeaderByRemote(msg.Name, msg.Remote)
+}
+
+// --- Outbound messages from tasks view ---
+
+func (m Model) handleTaskAction(msg tasks.ActionRequestMsg) (tea.Model, tea.Cmd) {
+	a := msg.Action
+	if a.Err != nil {
+		m.notifyErrorf("keybinding error: %v", a.Err)
+		return m, nil
+	}
+
+	switch a.Type {
+	case act.TypeTasksRefresh:
+		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
+	case act.TypeTasksFilter:
+		if m.tasksView != nil {
+			return m, m.tasksView.CycleFilter()
+		}
+		return m, nil
+	case act.TypeTasksCopyID:
+		if m.tasksView != nil {
+			if item := m.tasksView.SelectedItem(); item != nil {
+				if err := m.copyToClipboard(item.ID); err != nil {
+					m.notifyErrorf("copy failed: %v", err)
+				}
+			}
+		}
+		return m, nil
+	case act.TypeTasksTogglePreview:
+		if m.tasksView != nil {
+			return m, m.tasksView.TogglePreview()
+		}
+		return m, nil
+	default:
+		// Dispatch known global actions
+		switch a.Type {
+		case act.TypeHiveInfo, act.TypeHiveDoctor, act.TypeSetTheme, act.TypeNotifications:
+			return m.dispatchAction(a)
+		default:
+			log.Warn().Str("type", string(a.Type)).Msg("unhandled action type on tasks view")
+			return m, nil
+		}
+	}
+}
+
+func (m Model) handleTaskCommandPalette(_ tasks.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
+	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
+	m.state = stateCommandPalette
+	return m, nil
 }
 
 // --- Action results ---

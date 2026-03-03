@@ -275,7 +275,7 @@ func New(deps Deps, opts Opts) Model {
 		}
 	}
 
-	tasksView := tasks.New(deps.Honeycomb, repoKey)
+	tasksView := tasks.New(deps.Honeycomb, repoKey, handler)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
@@ -515,6 +515,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case sessions.ErrorMsg:
 		m.notifyErrorf("%v", msg.Err)
 		model, cmd = m, nil
+
+	// Outbound messages from tasks view
+	case tasks.ActionRequestMsg:
+		model, cmd = m.handleTaskAction(msg)
+	case tasks.CommandPaletteRequestMsg:
+		model, cmd = m.handleTaskCommandPalette(msg)
 
 	// Action results
 	case renameCompleteMsg:

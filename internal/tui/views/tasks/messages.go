@@ -1,6 +1,9 @@
 package tasks
 
-import "github.com/colonyops/hive/internal/core/hc"
+import (
+	"github.com/colonyops/hive/internal/core/action"
+	"github.com/colonyops/hive/internal/core/hc"
+)
 
 // RefreshTasksMsg signals the tasks view to reload its data.
 type RefreshTasksMsg struct{}
@@ -23,3 +26,11 @@ type contentRenderedMsg struct {
 	key     string // cache key: "itemID:commentCount:width"
 	content string
 }
+
+// ActionRequestMsg requests the parent to execute a resolved action.
+type ActionRequestMsg struct {
+	Action action.Action
+}
+
+// CommandPaletteRequestMsg requests the parent to open the command palette.
+type CommandPaletteRequestMsg struct{}

@@ -51,6 +51,7 @@ type View struct {
 	viewport    viewport.Model // scrollable detail content
 	detailWidth int            // cached detail pane width
 	focus       focusPane      // which pane has keyboard focus
+	handler     KeyResolver    // resolves configurable keybindings to actions
 
 	// Rendered content cache — avoids re-running glamour on every cursor change.
 	cachedContentKey string // "itemID:commentCount:width"
@@ -58,10 +59,11 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hive.HoneycombService, repoKey string) *View {
+func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver) *View {
 	return &View{
 		svc:          svc,
 		repoKey:      repoKey,
+		handler:      handler,
 		comments:     make(map[string][]hc.Comment),
 		statusFilter: FilterOpen,
 		showPreview:  true,
@@ -216,7 +218,16 @@ func (v *View) View() string {
 		}
 		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"h/esc back to tree", scrollInfo))
 	} else {
-		help = styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + "f filter" + components.HelpSep + "enter expand/collapse" + components.HelpSep + "l detail" + components.HelpSep + "v preview" + components.HelpSep + "r refresh")
+		navHelp := components.HelpNav + components.HelpSep + "enter expand/collapse" + components.HelpSep + "l detail"
+		actionHelp := ""
+		if v.handler != nil {
+			actionHelp = v.handler.HelpString()
+		}
+		if actionHelp != "" {
+			help = styles.TextMutedStyle.Render(navHelp + components.HelpSep + actionHelp)
+		} else {
+			help = styles.TextMutedStyle.Render(navHelp)
+		}
 	}
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
@@ -261,6 +272,23 @@ func (v *View) SetActive(active bool) {
 	if !active {
 		v.focus = paneTree
 	}
+}
+
+// CycleFilter advances the status filter and rebuilds the tree.
+func (v *View) CycleFilter() tea.Cmd {
+	v.statusFilter = (v.statusFilter + 1) % filterCount
+	v.rebuildTree()
+	return v.checkCursorChanged()
+}
+
+// TogglePreview toggles the preview panel visibility.
+func (v *View) TogglePreview() tea.Cmd {
+	v.showPreview = !v.showPreview
+	if v.showPreview {
+		v.sizeViewport()
+		return v.updateViewportContent()
+	}
+	return nil
 }
 
 // HasDetailFocus returns true when the detail pane has focus.
@@ -387,7 +415,10 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 // handleTreeKey processes keys when the tree pane has focus.
 func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.String() {
+	keyStr := msg.String()
+
+	switch keyStr {
+	// Navigation keys — stay hard-coded
 	case "j", "down":
 		v.moveCursor(1)
 		return v.checkCursorChanged()
@@ -396,24 +427,13 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 		return v.checkCursorChanged()
 	case "enter":
 		v.toggleExpand()
+		return nil
 	case "l":
 		if v.showPreview && v.SelectedItem() != nil {
 			v.focus = paneDetail
 			return v.updateViewportContent()
 		}
-	case "r":
-		v.comments = make(map[string][]hc.Comment)
-		return v.loadItems()
-	case "v":
-		v.showPreview = !v.showPreview
-		if v.showPreview {
-			v.sizeViewport()
-			return v.updateViewportContent()
-		}
-	case "f":
-		v.statusFilter = (v.statusFilter + 1) % filterCount
-		v.rebuildTree()
-		return v.checkCursorChanged()
+		return nil
 	case "G":
 		v.cursor = len(v.flatNodes) - 1
 		v.clampScroll()
@@ -422,7 +442,17 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 		v.cursor = 0
 		v.scrollOffset = 0
 		return v.checkCursorChanged()
+	case ":":
+		return func() tea.Msg { return CommandPaletteRequestMsg{} }
 	}
+
+	// Resolve configurable action keys via handler
+	if v.handler != nil {
+		if a, ok := v.handler.ResolveAction(keyStr); ok {
+			return func() tea.Msg { return ActionRequestMsg{Action: a} }
+		}
+	}
+
 	return nil
 }
 
