@@ -35,6 +35,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/views/messages"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
+	"github.com/colonyops/hive/internal/tui/views/tasks"
 
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -128,6 +129,8 @@ type Model struct {
 
 	kvStore corekv.KV
 	kvView  *KVView
+
+	tasksView *tasks.View
 
 	notifyStore     notify.Store
 	notifyBuffer    *NotificationBuffer
@@ -255,6 +258,8 @@ func New(deps Deps, opts Opts) Model {
 
 	kvView := NewKVView()
 
+	tasksView := tasks.New(deps.Honeycomb)
+
 	var contextDir string
 	var docs []review.Document
 	if opts.LocalRemote != "" {
@@ -325,6 +330,7 @@ func New(deps Deps, opts Opts) Model {
 		reviewView:      &reviewView,
 		kvStore:         deps.KVStore,
 		kvView:          kvView,
+		tasksView:       tasksView,
 		notifyStore:     notifyStore,
 		notifyBuffer:    notifyBuffer,
 		toastController: toastCtrl,
@@ -381,6 +387,12 @@ func (m Model) Init() tea.Cmd {
 	// Start KV store polling if store view is enabled
 	if m.kvStore != nil && m.cfg.TUI.Views.Store {
 		cmds = append(cmds, scheduleKVPollTick())
+	}
+	// Start tasks view
+	if m.tasksView != nil {
+		if cmd := m.tasksView.Init(); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
 	}
 	// Start review view file watcher
 	if m.reviewView != nil {
@@ -1240,6 +1252,12 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 		return m, nil
 	}
 
+	// Tasks view focused - delegate all keys to the sub-model
+	if m.isTasksFocused() && m.tasksView != nil {
+		cmd := m.tasksView.Update(msg)
+		return m, cmd
+	}
+
 	// Review view focused - forward keys to review view
 	if m.isReviewFocused() && m.reviewView != nil {
 		var cmd tea.Cmd
@@ -1251,13 +1269,20 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 }
 
 // handleTabKey handles tab key for switching views.
-// Cycle: Sessions -> Messages -> Store -> [Review if visible] -> Sessions
+// Cycle: Sessions -> [Tasks if visible] -> Messages -> Store -> [Review if visible] -> Sessions
 func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
+	showTasksTab := m.tasksView != nil
 
 	switch m.activeView {
 	case ViewSessions:
+		if showTasksTab {
+			m.activeView = ViewTasks
+		} else {
+			m.activeView = ViewMessages
+		}
+	case ViewTasks:
 		m.activeView = ViewMessages
 	case ViewMessages:
 		switch {
@@ -1283,6 +1308,9 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 	m.sessionsView.SetActive(m.activeView == ViewSessions)
 	if m.msgView != nil {
 		m.msgView.SetActive(m.activeView == ViewMessages)
+	}
+	if m.tasksView != nil {
+		m.tasksView.SetActive(m.activeView == ViewTasks)
 	}
 
 	// Load KV keys when switching to Store tab
@@ -1531,6 +1559,10 @@ func (m Model) delegateToComponent(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case ViewSessions:
 		cmd = m.sessionsView.Update(msg)
 		return m, cmd
+	case ViewTasks:
+		if m.tasksView != nil {
+			cmd = m.tasksView.Update(msg)
+		}
 	case ViewMessages:
 		if m.msgView != nil {
 			cmd = m.msgView.Update(msg)
@@ -1560,6 +1592,10 @@ func (m Model) isMessagesFocused() bool {
 // isReviewFocused returns true if the review view is active.
 func (m Model) isReviewFocused() bool {
 	return m.activeView == ViewReview
+}
+
+func (m Model) isTasksFocused() bool {
+	return m.activeView == ViewTasks
 }
 
 func (m Model) isStoreFocused() bool {

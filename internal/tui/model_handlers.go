@@ -54,6 +54,10 @@ func (m Model) handleWindowSize(msg tea.WindowSizeMsg) (tea.Model, tea.Cmd) {
 
 	m.kvView.SetSize(msg.Width, contentHeight)
 
+	if m.tasksView != nil {
+		m.tasksView.SetSize(msg.Width, contentHeight)
+	}
+
 	// Publish startup warnings on the first WindowSizeMsg
 	if len(m.startupWarnings) > 0 {
 		for _, w := range m.startupWarnings {
@@ -631,6 +635,13 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	if m.msgView != nil {
 		if cmd := m.msgView.Update(msg); cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+	}
+
+	// Forward to tasks view
+	if m.activeView == ViewTasks && m.tasksView != nil {
+		if cmd := m.tasksView.Update(msg); cmd != nil {
 			cmds = append(cmds, cmd)
 		}
 	}
