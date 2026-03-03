@@ -216,7 +216,7 @@ func (v *View) View() string {
 		}
 		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"h/esc back to tree", scrollInfo))
 	} else {
-		help = styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + "f filter" + components.HelpSep + "enter expand/collapse" + components.HelpSep + "l detail" + components.HelpSep + "p preview" + components.HelpSep + "r refresh")
+		help = styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + "f filter" + components.HelpSep + "enter expand/collapse" + components.HelpSep + "l detail" + components.HelpSep + "v preview" + components.HelpSep + "r refresh")
 	}
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
@@ -404,7 +404,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	case "r":
 		v.comments = make(map[string][]hc.Comment)
 		return v.loadItems()
-	case "p":
+	case "v":
 		v.showPreview = !v.showPreview
 		if v.showPreview {
 			v.sizeViewport()
