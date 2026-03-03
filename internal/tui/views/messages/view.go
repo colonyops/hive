@@ -27,9 +27,6 @@ const (
 	pollInterval  = 500 * time.Millisecond
 	iconDot       = "•"
 	unknownSender = "unknown"
-
-	// Minimum width before falling back to single-column layout.
-	minDualPaneWidth = 120
 )
 
 // Focus pane constants for the split-pane layout.
@@ -110,10 +107,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 // View renders the messages view.
 func (v *View) View() string {
-	if v.width >= minDualPaneWidth {
-		return v.renderDualColumnLayout()
-	}
-	return v.renderCompactList()
+	return v.renderDualColumnLayout()
 }
 
 // HasEditorFocus returns true if the filter input is active.
@@ -229,7 +223,7 @@ func (v *View) handleFilterKey(msg tea.KeyPressMsg) tea.Cmd {
 func (v *View) handleNormalKey(msg tea.KeyPressMsg) tea.Cmd {
 	switch msg.String() {
 	case "enter":
-		if v.ctrl.Selected() != nil && v.width >= minDualPaneWidth {
+		if v.ctrl.Selected() != nil {
 			v.focus = panePreview
 			v.copyStatus = ""
 			v.updatePreviewContent()
@@ -271,16 +265,10 @@ func (v *View) copyToClipboard(text string) error {
 // --------------------------------------------------------------------
 
 func (v *View) visibleLines() int {
-	h := v.height
-	if v.width >= minDualPaneWidth {
-		// In dual-pane mode, the list pane operates within contentHeight
-		// which already has tab chrome (3 lines) subtracted.
-		h -= 3
-	}
-	reserved := 2 // column header + help line (dual-pane sub-pane footer)
-	if v.width < minDualPaneWidth {
-		reserved = 3 // column header + rule + help bar
-	}
+	// Dual-pane: the list pane operates within contentHeight
+	// which already has tab chrome (3 lines) subtracted.
+	h := v.height - 3
+	reserved := 2 // column header + help line
 	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
 		reserved++
 	}
@@ -292,9 +280,6 @@ func (v *View) visibleLines() int {
 }
 
 func (v *View) sizeViewport() {
-	if v.width < minDualPaneWidth {
-		return
-	}
 	listWidth := int(float64(v.width) * 0.25)
 	if listWidth < 20 {
 		listWidth = 20
@@ -590,142 +575,6 @@ func (v *View) updatePreviewContent() {
 	rendered := renderMarkdown(sel.Payload, contentWidth)
 	v.viewport.SetContent(rendered)
 	v.viewport.SetYOffset(0)
-}
-
-// renderCompactList is the fallback single-column layout for narrow terminals.
-func (v *View) renderCompactList() string {
-	var b strings.Builder
-
-	senderWidth := 14
-	topicWidth := 14
-	ageWidth := 4
-	padding := 5
-	contentWidth := v.width - senderWidth - topicWidth - ageWidth - padding - 2
-	if contentWidth < 10 {
-		contentWidth = 10
-	}
-
-	// Filter line
-	if v.ctrl.IsFiltering() {
-		b.WriteString(" ")
-		b.WriteString(styles.TextPrimaryBoldStyle.Render("Filter: "))
-		b.WriteString(v.ctrl.Filter())
-		b.WriteString("▎")
-		b.WriteString("\n")
-	} else if v.ctrl.Filter() != "" {
-		b.WriteString(" ")
-		b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("Filter: %s", v.ctrl.Filter())))
-		b.WriteString("\n")
-	}
-
-	// Column headers
-	senderHeader := fmt.Sprintf("%-*s", senderWidth, "Sender")
-	topicHeader := fmt.Sprintf("%-*s", topicWidth, "Topic")
-	msgHeader := fmt.Sprintf("%-*s", contentWidth, "Message")
-	ageHeader := fmt.Sprintf("%*s", ageWidth, "Age")
-	b.WriteString("  ")
-	b.WriteString(styles.TextMutedStyle.Render(senderHeader + " " + topicHeader + " " + msgHeader + " " + ageHeader))
-	b.WriteString("\n")
-
-	linesRendered := 0
-	filteredAt := v.ctrl.FilteredAt()
-	displayed := v.ctrl.Displayed()
-
-	if len(filteredAt) == 0 {
-		if len(displayed) == 0 {
-			b.WriteString(styles.TextMutedStyle.Render("  No messages"))
-		} else {
-			b.WriteString(styles.TextMutedStyle.Render("  No matching messages"))
-		}
-		b.WriteString("\n")
-		linesRendered = 1
-	} else {
-		visible := v.visibleLines()
-		offset := v.ctrl.Offset()
-		end := offset + visible
-		if end > len(filteredAt) {
-			end = len(filteredAt)
-		}
-
-		cursor := v.ctrl.Cursor()
-		for i := offset; i < end; i++ {
-			msgIdx := filteredAt[i]
-			msg := &displayed[msgIdx]
-			isSelected := i == cursor
-
-			line := renderFallbackLine(msg, isSelected, senderWidth, topicWidth, contentWidth, ageWidth)
-			b.WriteString(line)
-			b.WriteString("\n")
-			linesRendered++
-		}
-	}
-
-	visible := v.visibleLines()
-	for i := linesRendered; i < visible; i++ {
-		b.WriteString("\n")
-	}
-
-	bar := components.StatusBar{Width: v.width}
-	help := styles.TextMutedStyle.Render("↑/↓ navigate • / filter • tab switch view")
-	b.WriteString(bar.Rule())
-	b.WriteString("\n")
-	b.WriteString(bar.Render(help, ""))
-
-	return b.String()
-}
-
-func renderFallbackLine(msg *messaging.Message, selected bool, senderW, topicW, contentW, ageW int) string {
-	var b strings.Builder
-
-	if selected {
-		b.WriteString(styles.TextPrimaryStyle.Render("┃"))
-		b.WriteString(" ")
-	} else {
-		b.WriteString("  ")
-	}
-
-	sender := msg.Sender
-	if sender == "" {
-		sender = unknownSender
-	}
-	if len(sender) > senderW-2 {
-		sender = sender[:senderW-3] + "…"
-	}
-	senderColor := styles.ColorForString(sender)
-	senderStyle := lipgloss.NewStyle().Foreground(senderColor)
-	senderPadded := fmt.Sprintf("[%-*s]", senderW-2, sender)
-	b.WriteString(senderStyle.Render(senderPadded))
-	b.WriteString(" ")
-
-	topic := msg.Topic
-	if len(topic) > topicW-2 {
-		topic = topic[:topicW-3] + "…"
-	}
-	topicColor := styles.ColorForString(msg.Topic)
-	topicStyle := lipgloss.NewStyle().Foreground(topicColor)
-	topicPadded := fmt.Sprintf("[%-*s]", topicW-2, topic)
-	b.WriteString(topicStyle.Render(topicPadded))
-	b.WriteString(" ")
-
-	payload := strings.ReplaceAll(msg.Payload, "\n", " ")
-	payload = strings.ReplaceAll(payload, "\t", " ")
-	payloadRunes := []rune(payload)
-	if len(payloadRunes) > contentW-1 {
-		payload = string(payloadRunes[:contentW-1]) + "…"
-	}
-	payloadStyle := styles.TextForegroundStyle
-	if selected {
-		payloadStyle = styles.MessagesPayloadSelectedStyle
-	}
-	payloadPadded := fmt.Sprintf("%-*s", contentW, payload)
-	b.WriteString(payloadStyle.Render(payloadPadded))
-	b.WriteString(" ")
-
-	age := formatAge(msg.CreatedAt)
-	agePadded := fmt.Sprintf("%*s", ageW, age)
-	b.WriteString(styles.TextMutedStyle.Render(agePadded))
-
-	return b.String()
 }
 
 // --------------------------------------------------------------------
