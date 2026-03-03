@@ -2,6 +2,7 @@ package install
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 
@@ -24,20 +25,22 @@ type Result struct {
 	Workspaces     []string
 	ConfigPath     string
 	SelectedShells []ShellConfig
+	SkillAgents    []string // agent names selected for skills installation
 	Cancelled      bool
 }
 
 // Model is the Bubble Tea model for the install wizard.
 type Model struct {
-	width, height  int
-	dialog         *form.Dialog
-	shellField     *form.MultiSelectField
-	detectedShells []ShellConfig
-	configPath     string
-	configExists   bool
-	homeDir        string
-	result         Result
-	quitting       bool
+	width, height    int
+	dialog           *form.Dialog
+	shellField       *form.MultiSelectField
+	skillAgentsField *form.MultiSelectField
+	detectedShells   []ShellConfig
+	configPath       string
+	configExists     bool
+	homeDir          string
+	result           Result
+	quitting         bool
 }
 
 // existingConfig holds minimal config structure for reading workspaces.
@@ -94,15 +97,31 @@ func New() Model {
 		variables = append(variables, "shells")
 	}
 
+	skillAgentOptions := []string{
+		"Claude Code (~/.claude)",
+		"Codex (~/.codex)",
+	}
+	skillAgentsField := form.NewMultiSelectFormField("Install AI skills for:", skillAgentOptions)
+	// Pre-check agents that are available in PATH.
+	if _, err := exec.LookPath("claude"); err == nil {
+		skillAgentsField.Check(0)
+	}
+	if _, err := exec.LookPath("codex"); err == nil {
+		skillAgentsField.Check(1)
+	}
+	fields = append(fields, skillAgentsField)
+	variables = append(variables, "skillAgents")
+
 	dialog := form.NewDialog("", fields, variables)
 
 	return Model{
-		dialog:         dialog,
-		shellField:     shellField,
-		detectedShells: detectedShells,
-		configPath:     configPath,
-		configExists:   configExists,
-		homeDir:        homeDir,
+		dialog:           dialog,
+		shellField:       shellField,
+		skillAgentsField: skillAgentsField,
+		detectedShells:   detectedShells,
+		configPath:       configPath,
+		configExists:     configExists,
+		homeDir:          homeDir,
 	}
 }
 
@@ -238,10 +257,19 @@ func (m Model) buildResult() Result {
 		}
 	}
 
+	agentNames := []string{"claude", "codex"}
+	var skillAgents []string
+	for _, idx := range m.skillAgentsField.SelectedIndices() {
+		if idx < len(agentNames) {
+			skillAgents = append(skillAgents, agentNames[idx])
+		}
+	}
+
 	return Result{
 		Workspaces:     workspaces,
 		ConfigPath:     m.configPath,
 		SelectedShells: selectedShells,
+		SkillAgents:    skillAgents,
 	}
 }
 
