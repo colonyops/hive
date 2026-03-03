@@ -1,0 +1,16 @@
+◉ JWT middleware (hc-abc12345)
+  task · in_progress → session-mighty-oak
+
+  Epic  Implement JWT authentication (hc-epic1234)
+
+  Description ──────────────────────────────────────────
+
+  Validate tokens on protected routes
+
+  Comments (2) ─────────────────────────────────────────
+
+  ┌─ 2h ago
+  │  Started implementing middleware validation logic
+
+  ┌─ 12m ago  CHECKPOINT
+  │  CHECKPOINT: middleware wired, need to add refresh token handling

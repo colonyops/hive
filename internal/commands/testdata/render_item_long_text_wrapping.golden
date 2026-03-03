@@ -1,0 +1,17 @@
+◉ Implement text wrapping (hc-wrap1234)
+  task · in_progress
+
+  Epic  Implement JWT authentication (hc-epic1234)
+
+  Description ──────────────────────────────────────────
+
+  This is a very long description that should wrap at the terminal width
+  boundary so that continuation lines are properly indented and aligned with the
+  first line of text in the description area.
+
+  Comments (1) ─────────────────────────────────────────
+
+  ┌─ 30m ago
+  │  This is a long comment message that needs to wrap properly within the
+  │  thread body so that each continuation line is prefixed with the pipe
+  │  character and maintains visual alignment.

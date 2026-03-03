@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
+	"github.com/colonyops/hive/pkg/timeutil"
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 	"golang.org/x/term"
@@ -231,6 +232,58 @@ type treeNode struct {
 	children []*treeNode
 }
 
+// statusSymbol returns a styled status indicator for the given status.
+func statusSymbol(status hc.Status) string {
+	switch status {
+	case hc.StatusOpen:
+		return styles.TextForegroundStyle.Render("○")
+	case hc.StatusInProgress:
+		return styles.TextPrimaryStyle.Render("◉")
+	case hc.StatusDone:
+		return lipgloss.NewStyle().Foreground(styles.ColorSuccess).Faint(true).Render("✓")
+	case hc.StatusCancelled:
+		return styles.TextMutedStyle.Render("✗")
+	default:
+		return "?"
+	}
+}
+
+// styledStatus returns the status string rendered with an appropriate color.
+func styledStatus(status hc.Status) string {
+	switch status {
+	case hc.StatusOpen:
+		return styles.TextForegroundStyle.Render(string(status))
+	case hc.StatusInProgress:
+		return styles.TextPrimaryStyle.Render(string(status))
+	case hc.StatusDone:
+		return styles.TextSuccessStyle.Render(string(status))
+	case hc.StatusCancelled:
+		return styles.TextMutedStyle.Render(string(status))
+	default:
+		return string(status)
+	}
+}
+
+// styledTitle returns the item title rendered with status-appropriate styling.
+func styledTitle(item hc.Item) string {
+	switch item.Status {
+	case hc.StatusOpen:
+		if item.IsEpic() {
+			return styles.TextForegroundBoldStyle.Render(item.Title)
+		}
+		return styles.TextForegroundStyle.Render(item.Title)
+	case hc.StatusInProgress:
+		if item.IsEpic() {
+			return styles.TextForegroundBoldStyle.Render(item.Title)
+		}
+		return styles.TextPrimaryStyle.Render(item.Title)
+	case hc.StatusDone, hc.StatusCancelled:
+		return styles.TextMutedStyle.Render(item.Title)
+	default:
+		return item.Title
+	}
+}
+
 // renderColoredTree prints items as a colored tree with box-drawing connectors.
 func renderColoredTree(w io.Writer, items []hc.Item) {
 	byID := make(map[string]*treeNode, len(items))
@@ -256,34 +309,8 @@ func renderColoredTree(w io.Writer, items []hc.Item) {
 	walk = func(node *treeNode, prefix, connector string) {
 		item := node.item
 
-		// Status symbol and title style
-		var symbol, title string
-		switch item.Status {
-		case hc.StatusOpen:
-			symbol = styles.TextForegroundStyle.Render("○")
-			if item.IsEpic() {
-				title = styles.TextForegroundBoldStyle.Render(item.Title)
-			} else {
-				title = styles.TextForegroundStyle.Render(item.Title)
-			}
-		case hc.StatusInProgress:
-			symbol = styles.TextPrimaryStyle.Render("◉")
-			if item.IsEpic() {
-				title = styles.TextForegroundBoldStyle.Render(item.Title)
-			} else {
-				title = styles.TextPrimaryStyle.Render(item.Title)
-			}
-		case hc.StatusDone:
-			symbol = lipgloss.NewStyle().Foreground(styles.ColorSuccess).Faint(true).Render("✓")
-			title = mutedStyle.Render(item.Title)
-		case hc.StatusCancelled:
-			symbol = mutedStyle.Render("✗")
-			title = mutedStyle.Render(item.Title)
-		default:
-			symbol = "?"
-			title = item.Title
-		}
-
+		symbol := statusSymbol(item.Status)
+		title := styledTitle(item)
 		id := mutedStyle.Render("(" + item.ID + ")")
 
 		var extras []string
@@ -335,14 +362,21 @@ func renderMarkdown(w io.Writer, markdown string) {
 }
 
 func (cmd *HoneycombCmd) showCmd() *cli.Command {
+	var flagJSON bool
 	return &cli.Command{
 		Name:      "show",
 		Usage:     "Show an item and its comments",
-		UsageText: "hive hc show <id>",
-		Description: `Shows an item followed by its comments as JSON lines.
+		UsageText: "hive hc show <id> [--json]",
+		Description: `Shows an item with its comments in a styled view.
+
+With --json, outputs the item and comments as JSON lines (original behavior).
 
 Examples:
-  hive hc show hc-abc123`,
+  hive hc show hc-abc123
+  hive hc show hc-abc123 --json`,
+		Flags: []cli.Flag{
+			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
+		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
 				return fmt.Errorf("item ID required as argument")
@@ -354,22 +388,142 @@ Examples:
 				return fmt.Errorf("get item %q: %w", id, err)
 			}
 
-			if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
-				return err
-			}
-
 			comments, err := cmd.app.Honeycomb.ListComments(ctx, id)
 			if err != nil {
 				return fmt.Errorf("list comments for %q: %w", id, err)
 			}
 
-			for _, comment := range comments {
-				if err := iojson.WriteLine(c.Root().Writer, comment); err != nil {
+			if flagJSON {
+				if err := iojson.WriteLine(c.Root().Writer, item); err != nil {
 					return err
 				}
+				for _, comment := range comments {
+					if err := iojson.WriteLine(c.Root().Writer, comment); err != nil {
+						return err
+					}
+				}
+				return nil
 			}
+
+			// Resolve epic title for breadcrumb
+			var epicTitle string
+			if item.EpicID != "" {
+				epic, err := cmd.app.Honeycomb.GetItem(ctx, item.EpicID)
+				if err != nil {
+					log.Debug().Err(err).Str("epic_id", item.EpicID).Msg("failed to resolve epic title")
+				} else {
+					epicTitle = epic.Title
+				}
+			}
+
+			renderItem(c.Root().Writer, item, comments, epicTitle)
 			return nil
 		},
+	}
+}
+
+// terminalWidth returns the terminal width from w if it's a TTY, or 80 as a default.
+func terminalWidth(w io.Writer) int {
+	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
+		if width, _, err := term.GetSize(int(f.Fd())); err == nil && width > 0 {
+			return width
+		}
+	}
+	return 80
+}
+
+// renderItem prints a styled detail view of an item and its comments.
+func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle string) {
+	mutedStyle := styles.TextMutedStyle
+	fgStyle := styles.TextForegroundStyle
+	indent := "  "
+	indentLen := len(indent)
+	tWidth := terminalWidth(w)
+	if tWidth > 90 {
+		tWidth = 90
+	}
+
+	// Header: symbol + title + (id)
+	symbol := statusSymbol(item.Status)
+	title := styledTitle(item)
+	_, _ = fmt.Fprintf(w, "%s %s %s\n", symbol, title, mutedStyle.Render("("+item.ID+")"))
+
+	// Second line: type · status [→ session]
+	statusText := styledStatus(item.Status)
+	statusLine := mutedStyle.Render(string(item.Type)) + " · " + statusText
+	if item.SessionID != "" {
+		assignStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted).Italic(true)
+		statusLine += " " + assignStyle.Render("→ "+item.SessionID)
+	}
+	_, _ = fmt.Fprintf(w, "%s%s\n", indent, statusLine)
+
+	// Epic breadcrumb
+	if epicTitle != "" {
+		_, _ = fmt.Fprintln(w)
+		epicBadge := lipgloss.NewStyle().
+			Background(styles.ColorSurface).
+			Foreground(styles.ColorForeground).
+			Bold(true).
+			PaddingRight(1).
+			Render("Epic")
+		_, _ = fmt.Fprintf(w, "%s%s %s\n", indent,
+			epicBadge,
+			mutedStyle.Render(epicTitle+" ("+item.EpicID+")"))
+	}
+
+	// Section divider helper: label is styled foreground, dashes fill to fixed total width
+	divider := func(label string) string {
+		const totalWidth = 54
+		dashCount := totalWidth - len(label) - 1 // -1 for the space
+		if dashCount < 4 {
+			dashCount = 4
+		}
+		return fgStyle.Render(label) + " " + mutedStyle.Render(strings.Repeat("─", dashCount))
+	}
+
+	// Description
+	if item.Desc != "" {
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintf(w, "%s%s\n", indent, divider("Description"))
+		_, _ = fmt.Fprintln(w)
+		contentWidth := tWidth - indentLen
+		wrapped := lipgloss.Wrap(item.Desc, contentWidth, "")
+		for _, line := range strings.Split(wrapped, "\n") {
+			_, _ = fmt.Fprintf(w, "%s%s\n", indent, line)
+		}
+	}
+
+	// Comments
+	if len(comments) > 0 {
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintf(w, "%s%s\n", indent, divider(fmt.Sprintf("Comments (%d)", len(comments))))
+
+		for _, c := range comments {
+			_, _ = fmt.Fprintln(w)
+
+			ts := timeutil.Ago(c.CreatedAt)
+			isCheckpoint := strings.HasPrefix(c.Message, "CHECKPOINT")
+
+			// Thread header: ┌─ <time> [CHECKPOINT]
+			if isCheckpoint {
+				_, _ = fmt.Fprintf(w, "%s%s %s  %s\n", indent,
+					mutedStyle.Render("┌─"),
+					mutedStyle.Render(ts),
+					styles.TextWarningStyle.Render("CHECKPOINT"))
+			} else {
+				_, _ = fmt.Fprintf(w, "%s%s\n", indent, mutedStyle.Render("┌─ "+ts))
+			}
+
+			// Thread body: │  <message lines>
+			pipe := mutedStyle.Render("│")
+			pipePrefix := indent + pipe + "  "
+			// "│  " is 3 visual chars
+			bodyWidth := tWidth - indentLen - 3
+			wrapped := lipgloss.Wrap(c.Message, bodyWidth, "")
+			for _, line := range strings.Split(wrapped, "\n") {
+				_, _ = fmt.Fprintf(w, "%s%s\n", pipePrefix, fgStyle.Render(line))
+			}
+		}
 	}
 }
 
