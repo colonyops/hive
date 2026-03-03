@@ -15,26 +15,11 @@ agents:
   #   command: codex
   #   flags: []
 
-# Git settings.
-git:
-  clone_strategy: full  # full | worktree
-
 # TUI appearance.
 tui:
-  theme: default  # default | dracula | catppuccin | nord | gruvbox | solarized
+  theme: tokyo-night  # tokyo-night | gruvbox | catppuccin | kanagawa | onedark
 
-# Context directory settings (the .hive symlink in each session clone).
-context:
-  enabled: true
-
-# History (command palette).
-history:
-  max_entries: 100
-
-# Messaging between sessions.
-messaging:
-  enabled: true
-
-# Tmux integration.
-tmux:
-  enabled: true
+# Clone strategy rules. An empty pattern matches all repos.
+# rules:
+#   - pattern: ""
+#     clone_strategy: full  # full | worktree
