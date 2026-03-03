@@ -1315,9 +1315,14 @@ func (m Model) handleTabKey() (tea.Model, tea.Cmd) {
 		m.tasksView.SetActive(m.activeView == ViewTasks)
 	}
 
-	// Load KV keys when switching to Store tab
-	if m.activeView == ViewStore {
+	// Load data when switching to Store or Tasks tab
+	switch m.activeView {
+	case ViewStore:
 		return m, m.loadKVKeys()
+	case ViewTasks:
+		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
+	case ViewSessions, ViewMessages, ViewReview:
+		// No special load action needed
 	}
 
 	return m, nil
