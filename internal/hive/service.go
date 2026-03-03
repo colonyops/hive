@@ -715,7 +715,7 @@ func (s *SessionService) ensureBareClone(ctx context.Context, remote string, pro
 		return "", fmt.Errorf("stat bare dir: %w", statErr)
 	}
 	if os.IsNotExist(statErr) {
-		writeProgressf(progress, "Cloning bare repository (this may take a while)...")
+		writeProgressf(progress, "Creating bare clone (one-time setup for this repo, may take a while)...")
 		if err := os.MkdirAll(filepath.Dir(bareDir), 0o755); err != nil {
 			return "", fmt.Errorf("create bare parent: %w", err)
 		}
