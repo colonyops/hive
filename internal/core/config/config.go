@@ -248,93 +248,9 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 }
 
-// ViewKeybindings holds per-view keybinding configuration.
-type ViewKeybindings struct {
-	Global   ViewKeybindingConfig `json:"global"   yaml:"global"`
-	Sessions ViewKeybindingConfig `json:"sessions" yaml:"sessions"`
-	Tasks    ViewKeybindingConfig `json:"tasks"    yaml:"tasks"`
-}
-
-// ViewKeybindingConfig holds keybinding configuration for a single view.
-type ViewKeybindingConfig struct {
-	Keybindings map[string]Keybinding `json:"keybindings" yaml:"keybindings"`
-}
-
-// defaultViewKeybindings provides built-in per-view keybindings that users can override.
-var defaultViewKeybindings = ViewKeybindings{
-	Global: ViewKeybindingConfig{
-		Keybindings: map[string]Keybinding{},
-	},
-	Sessions: ViewKeybindingConfig{
-		Keybindings: map[string]Keybinding{
-			"r":      {Cmd: "Recycle"},
-			"d":      {Cmd: "Delete"},
-			"n":      {Cmd: "NewSession"},
-			"enter":  {Cmd: "TmuxOpen"},
-			"ctrl+d": {Cmd: "TmuxKill"},
-			"A":      {Cmd: "AgentSend"},
-			"p":      {Cmd: "TmuxPopUp"},
-			"R":      {Cmd: "RenameSession"},
-			"ctrl+g": {Cmd: "GroupSet"},
-			"J":      {Cmd: "NextActive"},
-			"K":      {Cmd: "PrevActive"},
-			"t":      {Cmd: "TodoPanel"},
-			"T":      {Cmd: "ViewTasks"},
-		},
-	},
-	Tasks: ViewKeybindingConfig{
-		Keybindings: map[string]Keybinding{
-			"r": {Cmd: "TasksRefresh"},
-			"f": {Cmd: "TasksFilter"},
-			"y": {Cmd: "TasksCopyID"},
-			"v": {Cmd: "TasksTogglePreview"},
-			"s": {Cmd: "TasksSelectRepo"},
-		},
-	},
-}
-
-func mergeViewKeybindingConfig(defaults, user ViewKeybindingConfig) ViewKeybindingConfig {
-	merged := ViewKeybindingConfig{
-		Keybindings: make(map[string]Keybinding, len(defaults.Keybindings)),
-	}
-	maps.Copy(merged.Keybindings, defaults.Keybindings)
-	maps.Copy(merged.Keybindings, user.Keybindings)
-	return merged
-}
-
-func mergeViewKeybindings(defaults, user ViewKeybindings) ViewKeybindings {
-	return ViewKeybindings{
-		Global:   mergeViewKeybindingConfig(defaults.Global, user.Global),
-		Sessions: mergeViewKeybindingConfig(defaults.Sessions, user.Sessions),
-		Tasks:    mergeViewKeybindingConfig(defaults.Tasks, user.Tasks),
-	}
-}
-
-func (v *ViewKeybindings) keybindingsForView(view string) map[string]Keybinding {
-	switch view {
-	case "sessions":
-		return v.Sessions.Keybindings
-	case "tasks":
-		return v.Tasks.Keybindings
-	case "global":
-		return v.Global.Keybindings
-	default:
-		return nil
-	}
-}
-
-func (v *ViewKeybindings) flattenedForView(view string) map[string]Keybinding {
-	result := make(map[string]Keybinding)
-	maps.Copy(result, v.Global.Keybindings)
-	if viewKBs := v.keybindingsForView(view); viewKBs != nil {
-		maps.Copy(result, viewKBs)
-	}
-	return result
-}
-
 // CurrentConfigVersion is the latest config schema version.
 // Increment this when making breaking changes to config format.
-const CurrentConfigVersion = "0.2.6"
+const CurrentConfigVersion = "0.2.7"
 
 // Config holds the application configuration.
 type Config struct {
@@ -357,7 +273,7 @@ type Config struct {
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
 	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // directories containing git repositories for new session dialog
-	Views               ViewKeybindings        `json:"views"                 yaml:"views"`
+	Views               ViewsConfig            `json:"views"                 yaml:"views"`
 	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"` // deprecated: use workspaces instead (kept for backwards compatibility)
 	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
 
@@ -454,43 +370,10 @@ var ValidGroupByModes = []string{GroupByRepo, GroupByGroup}
 
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
-	Theme           string        `json:"theme"            yaml:"theme"`            // built-in theme name (default: "tokyo-night")
-	RefreshInterval time.Duration `json:"refresh_interval" yaml:"refresh_interval"` // default: 15s, 0 to disable
-	PreviewEnabled  bool          `json:"preview_enabled"  yaml:"preview_enabled"`  // enable tmux pane preview sidebar
-	Icons           *bool         `json:"icons"            yaml:"icons"`            // enable nerd font icons (nil = true by default)
-	UpdateChecker   bool          `json:"update_checker"   yaml:"update_checker"`   // enable startup update checker (default: true)
-	GroupBy         string        `json:"group_by"         yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
-	Preview         PreviewConfig `json:"preview"          yaml:"preview"`          // preview panel configuration
-	Views           ViewsConfig   `json:"views"            yaml:"views"`            // toggle optional TUI tabs
-	Layout          LayoutConfig  `json:"layout"           yaml:"layout"`           // panel layout configuration
-}
-
-// LayoutConfig holds per-view panel layout configuration.
-type LayoutConfig struct {
-	Sessions PanelLayout `json:"sessions" yaml:"sessions"`
-	Tasks    PanelLayout `json:"tasks"    yaml:"tasks"`
-	Messages PanelLayout `json:"messages" yaml:"messages"`
-}
-
-// PanelLayout configures the split ratio for dual-pane views.
-type PanelLayout struct {
-	// SplitRatio is the percentage (1-80) of width allocated to the list/tree pane.
-	// The remainder goes to the detail/preview pane. 0 uses the view's default.
-	SplitRatio int `json:"split_ratio" yaml:"split_ratio"`
-}
-
-// SplitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
-func (p PanelLayout) SplitRatioOrDefault(defaultPct int) int {
-	if p.SplitRatio < 1 || p.SplitRatio > 80 {
-		return defaultPct
-	}
-	return p.SplitRatio
-}
-
-// ViewsConfig controls which optional TUI tabs are enabled.
-// All optional views default to disabled.
-type ViewsConfig struct {
-	Store bool `json:"store" yaml:"store"` // KV store browser (default: false)
+	Theme         string `json:"theme"          yaml:"theme"`          // built-in theme name (default: "tokyo-night")
+	Icons         *bool  `json:"icons"          yaml:"icons"`          // enable nerd font icons (nil = true by default)
+	UpdateChecker bool   `json:"update_checker" yaml:"update_checker"` // enable startup update checker (default: true)
+	Store         bool   `json:"store"          yaml:"store"`          // KV store browser (default: false)
 }
 
 // ReviewConfig holds review-related configuration.
@@ -499,12 +382,6 @@ type ReviewConfig struct{}
 // IconsEnabled returns true if nerd font icons should be shown.
 func (t TUIConfig) IconsEnabled() bool {
 	return t.Icons == nil || *t.Icons
-}
-
-// PreviewConfig holds preview panel template configuration.
-type PreviewConfig struct {
-	TitleTemplate  string `json:"title_template"  yaml:"title_template"`  // Go template for panel title (e.g., "{{ .Name }} • #{{ .ShortID }}")
-	StatusTemplate string `json:"status_template" yaml:"status_template"` // Go template for status line (e.g., "{{ .Icon.GitBranch }} {{ .Branch }}")
 }
 
 // MessagingConfig holds messaging-related configuration.
@@ -713,9 +590,13 @@ func DefaultConfig() Config {
 			SymlinkName: ".hive",
 		},
 		TUI: TUIConfig{
-			RefreshInterval: 15 * time.Second,
-			PreviewEnabled:  true,
-			UpdateChecker:   true,
+			UpdateChecker: true,
+		},
+		Views: ViewsConfig{
+			Sessions: SessionsViewConfig{
+				RefreshInterval: 15 * time.Second,
+				PreviewEnabled:  true,
+			},
 		},
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
@@ -778,7 +659,7 @@ func Load(configPath, dataDir string) (*Config, error) {
 	}
 
 	// Merge per-view defaults (defaults first, user config overrides)
-	cfg.Views = mergeViewKeybindings(defaultViewKeybindings, cfg.Views)
+	cfg.Views = mergeViewsConfig(defaultViewsConfig, cfg.Views)
 
 	// Rebuild flat keybindings map (global + sessions merged) so code that
 	// reads cfg.Keybindings directly still works. Note this includes global
@@ -810,8 +691,8 @@ func (c *Config) applyDefaults() {
 	if c.TUI.Theme == "" {
 		c.TUI.Theme = styles.DefaultTheme
 	}
-	if c.TUI.GroupBy == "" {
-		c.TUI.GroupBy = GroupByRepo
+	if c.Views.Sessions.GroupBy == "" {
+		c.Views.Sessions.GroupBy = GroupByRepo
 	}
 	if c.CopyCommand == "" {
 		c.CopyCommand = defaultCopyCommand()
@@ -1115,7 +996,7 @@ func (c *Config) validateTheme() error {
 
 // validateGroupBy checks that the configured group_by value is valid.
 func (c *Config) validateGroupBy() error {
-	return criterio.Run("tui.group_by", c.TUI.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
+	return criterio.Run("views.sessions.group_by", c.Views.Sessions.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.
@@ -1146,12 +1027,6 @@ func validateKeybindingMap(errs *criterio.FieldErrorsBuilder, prefix string, kbs
 			*errs = errs.Append(fmt.Sprintf("%s[%q]", prefix, key), fmt.Errorf("cmd is required"))
 		}
 	}
-}
-
-func validateViewKeybindingMaps(errs *criterio.FieldErrorsBuilder, views ViewKeybindings) {
-	validateKeybindingMap(errs, "views.global.keybindings", views.Global.Keybindings)
-	validateKeybindingMap(errs, "views.sessions.keybindings", views.Sessions.Keybindings)
-	validateKeybindingMap(errs, "views.tasks.keybindings", views.Tasks.Keybindings)
 }
 
 // ReposDir returns the path where cloned repositories are stored.

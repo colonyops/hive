@@ -75,12 +75,11 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 
 ## TUI
 
-| Option                 | Type       | Default        | Description                                  |
-| ---------------------- | ---------- | -------------- | -------------------------------------------- |
-| `tui.theme`            | `string`   | `tokyo-night`  | Built-in theme name (see [Themes](themes.md))|
-| `tui.refresh_interval` | `duration` | `15s`          | Auto-refresh interval (0 to disable)         |
-| `tui.preview_enabled`  | `bool`     | `true`         | Enable tmux pane preview sidebar on startup  |
-| `tui.group_by`         | `string`   | `repo`         | Tree view grouping: `repo` or `group`        |
+| Option              | Type     | Default        | Description                                  |
+| ------------------- | -------- | -------------- | -------------------------------------------- |
+| `tui.theme`         | `string` | `tokyo-night`  | Built-in theme name (see [Themes](themes.md))|
+| `tui.update_checker`| `bool`   | `true`         | Check for updates on startup                 |
+| `tui.store`         | `bool`   | `false`        | Enable KV store browser tab                  |
 
 ## Messaging
 
@@ -98,15 +97,41 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | `todos.limiter.rate_limit_per_session` | `duration`        | `0`     | Per-session add cooldown (`0` disables) |
 | `todos.notifications.toast`          | `bool`              | `true`  | Show toast on todo creation |
 
-## Views & Keybindings
+## Views
 
-Keybindings are configured per-view under the `views` section:
+View-specific settings (keybindings, layout, behavior) are configured per-view under the `views` section.
 
-| Section              | Description                              |
-| -------------------- | ---------------------------------------- |
-| `views.global`       | Keybindings available in all views       |
-| `views.sessions`     | Keybindings for the sessions view        |
-| `views.tasks`        | Keybindings for the tasks view           |
+### Sessions View
+
+| Option                              | Type       | Default       | Description                                  |
+| ----------------------------------- | ---------- | ------------- | -------------------------------------------- |
+| `views.sessions.keybindings`        | `map`      |               | Key-to-command mappings                      |
+| `views.sessions.split_ratio`        | `int`      | `25`          | List/preview split percentage (1-80)         |
+| `views.sessions.refresh_interval`   | `duration` | `15s`         | Auto-refresh interval (0 to disable)         |
+| `views.sessions.preview_enabled`    | `bool`     | `true`        | Enable tmux pane preview sidebar on startup  |
+| `views.sessions.preview_title`      | `string`   |               | Go template for preview panel title          |
+| `views.sessions.preview_status`     | `string`   |               | Go template for preview status line          |
+| `views.sessions.group_by`           | `string`   | `repo`        | Tree view grouping: `repo` or `group`        |
+
+### Tasks View
+
+| Option                        | Type  | Default | Description                          |
+| ----------------------------- | ----- | ------- | ------------------------------------ |
+| `views.tasks.keybindings`     | `map` |         | Key-to-command mappings              |
+| `views.tasks.split_ratio`     | `int` | `30`    | Tree/detail split percentage (1-80)  |
+
+### Messages View
+
+| Option                          | Type  | Default | Description                          |
+| ------------------------------- | ----- | ------- | ------------------------------------ |
+| `views.messages.keybindings`    | `map` |         | Key-to-command mappings              |
+| `views.messages.split_ratio`    | `int` | `50`    | List/preview split percentage (1-80) |
+
+### Global
+
+| Option                        | Type  | Description                        |
+| ----------------------------- | ----- | ---------------------------------- |
+| `views.global.keybindings`    | `map` | Keybindings available in all views |
 
 See [Keybindings](keybindings.md) for the full per-view configuration format and defaults.
 

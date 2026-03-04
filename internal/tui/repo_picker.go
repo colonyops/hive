@@ -53,11 +53,11 @@ func (p *RepoPicker) Update(msg tea.Msg) (*RepoPicker, tea.Cmd) {
 		if len(p.filtered) > 0 && p.cursor < len(p.filtered) {
 			p.selected = p.filtered[p.cursor]
 		}
-	case "up", "k":
+	case "up":
 		if p.cursor > 0 {
 			p.cursor--
 		}
-	case "down", "j":
+	case "down":
 		if p.cursor < len(p.filtered)-1 {
 			p.cursor++
 		}
@@ -117,7 +117,7 @@ func (p *RepoPicker) View() string {
 	}
 
 	listView := strings.Join(lines, "\n")
-	help := styles.ModalHelpStyle.Render("↑/↓ navigate  enter select  esc cancel")
+	help := styles.ModalHelpStyle.Render("↑/↓ navigate  enter select  esc/q cancel")
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,

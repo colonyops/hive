@@ -14,9 +14,10 @@ workspaces:
 tmux:
   poll_interval: 1.5s
 
-tui:
-  refresh_interval: 10s
-  preview_enabled: true
+views:
+  sessions:
+    refresh_interval: 10s
+    preview_enabled: true
 
 rules:
   - pattern: ""

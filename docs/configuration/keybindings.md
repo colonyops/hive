@@ -66,6 +66,7 @@ views:
 | `f`  | TasksFilter          | Cycle status filter             |
 | `y`  | TasksCopyID          | Copy task ID to clipboard       |
 | `v`  | TasksTogglePreview   | Toggle preview panel            |
+| `s`  | TasksSelectRepo      | Select repository scope         |
 
 ### Hard-coded Keys (all views)
 

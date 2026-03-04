@@ -40,7 +40,7 @@ func (m Model) View() tea.View {
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
 	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
-	showStoreTab := m.kvStore != nil && m.cfg.TUI.Views.Store
+	showStoreTab := m.kvStore != nil && m.cfg.TUI.Store
 
 	// Render each tab with appropriate style
 	renderTab := func(label string, view ViewType) string {

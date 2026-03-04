@@ -260,7 +260,7 @@ func New(deps Deps, opts Opts) Model {
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand, cfg.TUI.Layout.Messages.SplitRatio)
+	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand, cfg.Views.Messages.SplitRatio)
 
 	kvView := NewKVView()
 
@@ -276,7 +276,7 @@ func New(deps Deps, opts Opts) Model {
 		}
 	}
 
-	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.TUI.Layout.Tasks)
+	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.Views.Tasks.SplitRatio)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
@@ -393,7 +393,7 @@ func (m Model) Init() tea.Cmd {
 		}
 	}
 	// Start KV store polling if store view is enabled
-	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+	if m.kvStore != nil && m.cfg.TUI.Store {
 		cmds = append(cmds, scheduleKVPollTick())
 	}
 	// Start tasks view
@@ -1327,7 +1327,7 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 		tabs = append(tabs, ViewTasks)
 	}
 	tabs = append(tabs, ViewMessages)
-	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+	if m.kvStore != nil && m.cfg.TUI.Store {
 		tabs = append(tabs, ViewStore)
 	}
 	if m.reviewView != nil && m.reviewView.CanShowInTabBar() {

@@ -11,7 +11,6 @@ import (
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/hc"
 	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -50,12 +49,12 @@ type View struct {
 	statusFilter StatusFilter            // current status filter (default: FilterOpen)
 	showPreview  bool                    // toggle detail/preview panel visibility
 
-	viewport    viewport.Model     // scrollable detail content
-	detailWidth int                // cached detail pane width
-	focus       focusPane          // which pane has keyboard focus
-	handler     KeyResolver        // resolves configurable keybindings to actions
-	kvStore     corekv.KV          // persistent kv store for saving preferences
-	layout      config.PanelLayout // panel split configuration
+	viewport    viewport.Model // scrollable detail content
+	detailWidth int            // cached detail pane width
+	focus       focusPane      // which pane has keyboard focus
+	handler     KeyResolver    // resolves configurable keybindings to actions
+	kvStore     corekv.KV      // persistent kv store for saving preferences
+	splitRatio  int            // panel split percentage (1-80, 0 = default)
 
 	// Rendered content cache — avoids re-running glamour on every cursor change.
 	cachedContentKey string // "itemID:commentCount:width"
@@ -63,13 +62,13 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV, layout config.PanelLayout) *View {
+func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV, splitRatio int) *View {
 	return &View{
 		svc:          svc,
 		repoKey:      repoKey,
 		handler:      handler,
 		kvStore:      kvStore,
-		layout:       layout,
+		splitRatio:   splitRatio,
 		comments:     make(map[string][]hc.Comment),
 		statusFilter: FilterOpen,
 		showPreview:  true,
@@ -147,27 +146,30 @@ func (v *View) View() string {
 		return "  No tasks loaded"
 	}
 
-	// Content area includes the filter bar as the last tree row.
+	// Content area includes the repo header and filter bar.
 	contentHeight := max(v.height-bottomBarLines, 1)
-	treeRows := max(contentHeight-1, 1) // tree items above the filter bar
+	treeRows := max(contentHeight-3, 1) // tree items between repo header and filter divider+bar
 
 	var body string
 
 	if v.showPreview {
 		// Two-column layout: configurable tree/detail split.
 		// Account for 1 divider column (1 char).
-		splitPct := v.layout.SplitRatioOrDefault(30)
+		splitPct := v.splitRatioOrDefault(30)
 		availWidth := max(v.width-1, 30)
 		treeWidth := max(availWidth*splitPct/100, 25)
 		detailWidth := max(availWidth-treeWidth, 10)
 
-		// Tree pane: items + filter bar as last line
+		// Tree pane: repo header + items + filter bar
+		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
+		repoHeader = ensureExactWidth(repoHeader, treeWidth)
 		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
 		treeContent = ensureExactHeight(treeContent, treeRows)
 		filterLine := " " + renderFilterBar(v.statusFilter)
 		filterLine = ensureExactWidth(filterLine, treeWidth)
 		treeContent = ensureExactWidth(treeContent, treeWidth)
-		treeContent = treeContent + "\n" + filterLine
+		filterRule := styles.TextMutedStyle.Render(strings.Repeat("─", treeWidth))
+		treeContent = repoHeader + "\n" + treeContent + "\n" + filterRule + "\n" + filterLine
 
 		// Selected item for detail
 		selected := v.SelectedItem()
@@ -212,11 +214,13 @@ func (v *View) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
 	} else {
 		// Tree-only layout: full width.
+		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
 		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
 		treeContent = ensureExactHeight(treeContent, treeRows)
 		treeContent = ensureExactWidth(treeContent, v.width)
 		filterLine := " " + renderFilterBar(v.statusFilter)
-		body = treeContent + "\n" + filterLine
+		filterRule := styles.TextMutedStyle.Render(strings.Repeat("─", v.width))
+		body = repoHeader + "\n" + treeContent + "\n" + filterRule + "\n" + filterLine
 	}
 
 	// Bottom: rule + help bar
@@ -241,8 +245,15 @@ func (v *View) View() string {
 		}
 	}
 
-	repoLabel := styles.TextMutedStyle.Render(v.repoKey)
-	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, repoLabel)
+	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
+}
+
+// splitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
+func (v *View) splitRatioOrDefault(defaultPct int) int {
+	if v.splitRatio < 1 || v.splitRatio > 80 {
+		return defaultPct
+	}
+	return v.splitRatio
 }
 
 // SetSize updates the view dimensions.
@@ -259,7 +270,7 @@ func (v *View) sizeViewport() {
 		return
 	}
 
-	splitPct := v.layout.SplitRatioOrDefault(30)
+	splitPct := v.splitRatioOrDefault(30)
 	availWidth := max(v.width-1, 30)
 	treeWidth := max(availWidth*splitPct/100, 25)
 	detailWidth := max(availWidth-treeWidth, 10)
@@ -584,9 +595,9 @@ func (v *View) clampCursor() {
 const bottomBarLines = 2
 
 // treeViewHeight returns the number of visible tree rows, accounting for
-// the bottom bars and the filter bar (which sits inside the tree column).
+// the bottom bars, repo header, filter divider, and filter bar.
 func (v *View) treeViewHeight() int {
-	return max(v.height-bottomBarLines-1, 1)
+	return max(v.height-bottomBarLines-3, 1)
 }
 
 // clampScroll ensures the scroll offset keeps the cursor visible.
