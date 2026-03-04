@@ -90,6 +90,12 @@ var configActions = map[Type]bool{
 	TypeTasksFilter:        true,
 	TypeTasksCopyID:        true,
 	TypeTasksTogglePreview: true,
+	TypeTasksSetOpen:       true,
+	TypeTasksSetInProgress: true,
+	TypeTasksSetDone:       true,
+	TypeTasksSetCancelled:  true,
+	TypeTasksDelete:        true,
+	TypeTasksPrune:         true,
 }
 
 // IsConfigAction reports whether t is a valid action for use in YAML config.
