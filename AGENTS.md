@@ -216,9 +216,10 @@ hive hc update <id> --status done
 hive hc context <epic-id>
 
 # List tasks
-hive hc list                          # all items
-hive hc list <epic-id>                # items under an epic
-hive hc list --status open            # filter by status
+hive hc list                          # open items (default)
+hive hc list --all                    # all items regardless of status
+hive hc list <epic-id>                # open items under an epic
+hive hc list --status done            # filter by specific status
 hive hc list --session <session-id>   # filter by session
 ```
 
@@ -227,7 +228,7 @@ hive hc list --session <session-id>   # filter by session
 | Command | Purpose |
 | ------- | ------- |
 | `hive hc create [title]` | Single item (positional) or bulk tree (stdin JSON) |
-| `hive hc list [epic-id]` | List items, optional epic/status/session filters |
+| `hive hc list [epic-id]` | List open items (use `--all` for everything) |
 | `hive hc show <id>` | Item + comments as JSON lines |
 | `hive hc update <id>` | Update status (`--status`), assign (`--assign`/`--unassign`) |
 | `hive hc next <epic-id>` | Next actionable leaf task; `--assign` to claim |

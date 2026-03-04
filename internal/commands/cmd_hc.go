@@ -85,6 +85,7 @@ func (cmd *HoneycombCmd) createCmd() *cli.Command {
 	bulk := iojson.FileReader[hc.CreateInput]{}
 	return &cli.Command{
 		Name:      "create",
+		Aliases:   []string{"new", "add"},
 		Usage:     "Create a task or epic",
 		UsageText: "hive hc create [title] [--type epic|task] [--desc <desc>] [--parent <id>]",
 		Description: `Creates a single item from flags, or a bulk tree from JSON (--file or stdin).
@@ -174,22 +175,29 @@ func (cmd *HoneycombCmd) listCmd() *cli.Command {
 		flagStatus  string
 		flagSession string
 		flagJSON    bool
+		flagAll     bool
 	)
 	return &cli.Command{
 		Name:      "list",
-		Usage:     "List items",
-		UsageText: "hive hc list [epic-id] [--status <status>] [--session <id>] [--json]",
+		Aliases:   []string{"ls"},
+		Usage:     "List items (defaults to open items)",
+		UsageText: "hive hc list [epic-id] [--status <status>] [--all] [--session <id>] [--json]",
 		Description: `Lists items as a colored tree. Optional positional arg filters by epic ID.
+
+By default only open items are shown. Use --all to show all statuses,
+or --status to filter by a specific status.
 
 With --json, outputs flat JSON lines instead of the tree view.
 
 Examples:
   hive hc list
+  hive hc list --all
   hive hc list hc-abc123
-  hive hc list --status open
+  hive hc list --status done
   hive hc list --json hc-abc123`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
+			&cli.BoolFlag{Name: "all", Aliases: []string{"a"}, Usage: "show all statuses (overrides default open filter)", Destination: &flagAll},
 			&cli.StringFlag{Name: "session", Usage: "filter by session ID", Destination: &flagSession},
 			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
 		},
@@ -199,12 +207,16 @@ Examples:
 				EpicID:    c.Args().First(),
 				SessionID: flagSession,
 			}
-			if flagStatus != "" {
+			switch {
+			case flagStatus != "":
 				status, err := hc.ParseStatus(flagStatus)
 				if err != nil {
 					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
 				}
 				filter.Status = &status
+			case !flagAll:
+				open := hc.StatusOpen
+				filter.Status = &open
 			}
 
 			items, err := cmd.app.Honeycomb.ListItems(ctx, filter)
@@ -365,6 +377,7 @@ func (cmd *HoneycombCmd) showCmd() *cli.Command {
 	var flagJSON bool
 	return &cli.Command{
 		Name:      "show",
+		Aliases:   []string{"view", "get"},
 		Usage:     "Show an item and its comments",
 		UsageText: "hive hc show <id> [--json]",
 		Description: `Shows an item with its comments in a styled view.
@@ -535,6 +548,7 @@ func (cmd *HoneycombCmd) updateCmd() *cli.Command {
 	)
 	return &cli.Command{
 		Name:      "update",
+		Aliases:   []string{"set", "edit"},
 		Usage:     "Update an item's status or session assignment",
 		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign]",
 		Description: `Updates an item's status and/or session assignment.
@@ -689,6 +703,7 @@ func (cmd *HoneycombCmd) contextCmd() *cli.Command {
 	var flagJSON bool
 	return &cli.Command{
 		Name:      "context",
+		Aliases:   []string{"ctx"},
 		Usage:     "Show context block for an epic",
 		UsageText: "hive hc context <epic-id> [--json]",
 		Description: `Assembles and displays the context block for an epic.
