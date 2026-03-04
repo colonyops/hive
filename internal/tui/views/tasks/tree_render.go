@@ -15,9 +15,13 @@ const (
 )
 
 // renderTree renders flattened tree nodes into styled strings.
-func renderTree(flatNodes []FlatNode, cursor, scrollOffset, viewHeight int) string {
+func renderTree(flatNodes []FlatNode, cursor, scrollOffset, viewHeight int, emptyMsg ...string) string {
 	if len(flatNodes) == 0 {
-		return styles.TextMutedStyle.Render("  No matching tasks")
+		msg := "No matching tasks"
+		if len(emptyMsg) > 0 && emptyMsg[0] != "" {
+			msg = emptyMsg[0]
+		}
+		return styles.TextMutedStyle.Render("  " + msg)
 	}
 
 	var b strings.Builder

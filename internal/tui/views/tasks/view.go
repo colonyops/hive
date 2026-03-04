@@ -142,15 +142,17 @@ func (v *View) View() string {
 	if v.svc == nil {
 		return "Tasks not configured"
 	}
-	if len(v.flatNodes) == 0 && len(v.items) == 0 {
-		return "  No tasks loaded"
-	}
-
 	// Content area includes the repo header and filter bar.
 	contentHeight := max(v.height-bottomBarLines, 1)
 	treeRows := max(contentHeight-3, 1) // tree items between repo header and filter divider+bar
 
 	var body string
+
+	// Choose empty-state message: distinguish "no items at all" from "filtered out".
+	var emptyMsg string
+	if len(v.items) == 0 {
+		emptyMsg = "No tasks for repository"
+	}
 
 	if v.showPreview {
 		// Two-column layout: configurable tree/detail split.
@@ -163,7 +165,7 @@ func (v *View) View() string {
 		// Tree pane: repo header + items + filter bar
 		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
 		repoHeader = ensureExactWidth(repoHeader, treeWidth)
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows, emptyMsg)
 		treeContent = ensureExactHeight(treeContent, treeRows)
 		filterLine := " " + renderFilterBar(v.statusFilter)
 		filterLine = ensureExactWidth(filterLine, treeWidth)
@@ -215,7 +217,7 @@ func (v *View) View() string {
 	} else {
 		// Tree-only layout: full width.
 		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows, emptyMsg)
 		treeContent = ensureExactHeight(treeContent, treeRows)
 		treeContent = ensureExactWidth(treeContent, v.width)
 		filterLine := " " + renderFilterBar(v.statusFilter)

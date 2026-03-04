@@ -738,14 +738,14 @@ func (cmd *HoneycombCmd) pruneCmd() *cli.Command {
 		UsageText: "hive hc prune [--older-than <duration>] [--status <status>...] [--dry-run]",
 		Description: `Removes items older than the specified duration with matching statuses.
 
-Defaults to removing done and cancelled items older than 7 days.
+Defaults to removing all done and cancelled items.
 
 Examples:
   hive hc prune
   hive hc prune --older-than 24h
   hive hc prune --dry-run`,
 		Flags: []cli.Flag{
-			&cli.StringFlag{Name: "older-than", Usage: "remove items older than this duration (e.g. 24h, 168h)", Value: "168h", Destination: &flagOlderThan},
+			&cli.StringFlag{Name: "older-than", Usage: "only remove items older than this duration (e.g. 24h, 168h)", Value: "0", Destination: &flagOlderThan},
 			&cli.StringSliceFlag{Name: "status", Usage: "statuses to prune (default: done, cancelled)", Destination: &flagStatuses},
 			&cli.BoolFlag{Name: "dry-run", Usage: "show what would be pruned without removing", Destination: &flagDryRun},
 		},

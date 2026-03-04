@@ -1359,6 +1359,9 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	case ViewStore:
 		return m, m.loadKVKeys()
 	case ViewTasks:
+		if cmd := m.syncTasksRepoFromSessions(); cmd != nil {
+			return m, cmd
+		}
 		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
 	case ViewSessions, ViewMessages, ViewReview:
 		// No special load action needed
@@ -1543,6 +1546,45 @@ func (m Model) selectedTreeItem() *sessions.TreeItem {
 		return nil
 	}
 	return m.sessionsView.SelectedTreeItem()
+}
+
+// syncTasksRepoFromSessions extracts the repo from the sessions tree selection
+// and updates the tasks view scope if it differs from the current repo.
+func (m Model) syncTasksRepoFromSessions() tea.Cmd {
+	if m.tasksView == nil {
+		return nil
+	}
+
+	ti := m.selectedTreeItem()
+	if ti == nil {
+		return nil
+	}
+
+	var remote string
+	switch {
+	case ti.IsHeader:
+		remote = ti.RepoRemote
+	case ti.IsWindowItem:
+		remote = ti.ParentSession.Remote
+	case !ti.IsRecycledPlaceholder:
+		remote = ti.Session.Remote
+	}
+
+	if remote == "" {
+		return nil
+	}
+
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner == "" || repo == "" {
+		return nil
+	}
+
+	repoKey := owner + "/" + repo
+	if repoKey == m.tasksView.RepoKey() {
+		return nil
+	}
+
+	return m.tasksView.SetRepoKey(repoKey)
 }
 
 // hasEditorFocus returns true if any text input currently has focus.

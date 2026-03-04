@@ -253,6 +253,8 @@ func (m Model) handleTaskAction(msg tasks.ActionRequestMsg) (tea.Model, tea.Cmd)
 			if item := m.tasksView.SelectedItem(); item != nil {
 				if err := m.copyToClipboard(item.ID); err != nil {
 					m.notifyErrorf("copy failed: %v", err)
+				} else {
+					m.publishNotificationf(notify.LevelInfo, "Copied %s", item.ID)
 				}
 			}
 		}
