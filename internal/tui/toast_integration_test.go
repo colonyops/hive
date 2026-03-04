@@ -142,9 +142,9 @@ func TestToastUpdateLoop_second_notification_during_chain(t *testing.T) {
 
 	assert.False(t, ctrl.HasToasts())
 
-	// First toast: expires at T+5s. Second toast: pushed at T+2.5s, expires at T+7.5s.
-	// Total ticks from start: 75 (7.5s / 100ms).
-	assert.Equal(t, 75, tickCount)
+	// First toast: expires at T+3s. Second toast: pushed at T+2.5s, expires at T+5.5s.
+	// Total ticks from start: 55 (5.5s / 100ms).
+	assert.Equal(t, 55, tickCount)
 }
 
 // TestToastUpdateLoop_new_toast_after_chain_stops verifies that draining a

@@ -43,6 +43,7 @@ usercommands:
 | `confirm` | string                | Confirmation prompt (empty = no confirmation)                       |
 | `silent`  | bool                  | Skip loading popup for fast commands                                |
 | `exit`    | string                | Exit TUI after command (bool or `$ENV_VAR`)                         |
+| `scope`   | `[]string`            | Views where command is available (nil = all views). Valid: `global`, `sessions`, `messages`, `review`, `todos`, `tasks` |
 | `form`    | `[]FormField`         | Interactive form fields collected before execution (see below)      |
 
 ## Built-in Actions
@@ -89,6 +90,15 @@ These actions are provided by the tmux plugin and require tmux to be available.
 | ------------ | ------------------------------ |
 | `NextActive` | Jump to next active session    |
 | `PrevActive` | Jump to previous active session |
+
+### Tasks
+
+| Action               | Description                     |
+| -------------------- | ------------------------------- |
+| `TasksRefresh`       | Refresh the task list           |
+| `TasksFilter`        | Cycle task status filter        |
+| `TasksCopyID`        | Copy task ID to clipboard       |
+| `TasksTogglePreview` | Toggle task preview panel       |
 
 ### Other
 
@@ -278,13 +288,15 @@ usercommands:
     help: "Send /review to agent"
     silent: true
 
-keybindings:
-  o:
-    cmd: open
-  t:
-    cmd: tidy
-  R:
-    cmd: review
+views:
+  sessions:
+    keybindings:
+      o:
+        cmd: open
+      t:
+        cmd: tidy
+      R:
+        cmd: review
 ```
 
 ### Conditional Exit

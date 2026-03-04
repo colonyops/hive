@@ -21,7 +21,8 @@ func validConfig(t *testing.T) *Config {
 		GitPath: "git",
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
-		TUI:     TUIConfig{Theme: styles.DefaultTheme, GroupBy: GroupByRepo},
+		TUI:     TUIConfig{Theme: styles.DefaultTheme},
+		Views:   ViewsConfig{Sessions: SessionsViewConfig{GroupBy: GroupByRepo}},
 		Agents: AgentsConfig{
 			Default:  "claude",
 			Profiles: map[string]AgentProfile{"claude": {}},
@@ -751,6 +752,7 @@ func TestValidate_UserCommandValidScopes(t *testing.T) {
 		"review-cmd":   {Sh: "echo test", Scope: []string{"review"}},
 		"sessions-cmd": {Sh: "echo test", Scope: []string{"sessions"}},
 		"messages-cmd": {Sh: "echo test", Scope: []string{"messages"}},
+		"tasks-cmd":    {Sh: "echo test", Scope: []string{"tasks"}},
 		"multi-scope":  {Sh: "echo test", Scope: []string{"review", "sessions"}},
 		"no-scope":     {Sh: "echo test"}, // nil scope = global
 	}
@@ -1030,7 +1032,7 @@ func TestValidate_UserCommandInvalidScope(t *testing.T) {
 	err := cfg.Validate()
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid scope")
-	assert.Contains(t, err.Error(), "must be one of: global, sessions, messages, review")
+	assert.Contains(t, err.Error(), "must be one of: global, sessions, messages, review, todos, tasks")
 }
 
 func TestAgentsConfig_UnmarshalYAML(t *testing.T) {
@@ -1489,18 +1491,18 @@ func TestValidateDeep_WindowTemplates(t *testing.T) {
 
 func TestValidate_GroupByInvalid(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.TUI.GroupBy = "invalid"
+	cfg.Views.Sessions.GroupBy = "invalid"
 
 	err := cfg.Validate()
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "tui.group_by")
+	assert.Contains(t, err.Error(), "views.sessions.group_by")
 }
 
 func TestValidate_GroupByValidModes(t *testing.T) {
 	for _, mode := range ValidGroupByModes {
 		t.Run(mode, func(t *testing.T) {
 			cfg := validConfig(t)
-			cfg.TUI.GroupBy = mode
+			cfg.Views.Sessions.GroupBy = mode
 
 			err := cfg.Validate()
 			assert.NoError(t, err)

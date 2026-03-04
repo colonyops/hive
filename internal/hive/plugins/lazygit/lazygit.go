@@ -40,11 +40,13 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Sh:     `tmux popup -E -w 100% -h 100% -- sh -c 'cd "{{ .Path }}" && lazygit'`,
 			Help:   "open lazygit in session directory",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 		"LazyGitCommits": {
 			Sh:     `tmux popup -E -w 100% -h 100% -- sh -c 'cd "{{ .Path }}" && lazygit log'`,
 			Help:   "open lazygit commit log",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 	}
 }

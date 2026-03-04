@@ -40,32 +40,38 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Help:   "open tmux session",
 			Exit:   "$HIVE_POPUP",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 		"TmuxStart": {
 			Action: action.TypeTmuxStart,
 			Help:   "start tmux session (background)",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 		"TmuxKill": {
 			Sh:      `tmux kill-session -t {{ .Name | shq }} 2>/dev/null || true`,
 			Help:    "kill tmux session",
 			Confirm: "Kill tmux session?",
 			Silent:  true,
+			Scope:   []string{"sessions"},
 		},
 		"TmuxPopUp": {
 			Sh:     `tmux display-popup -E -w 100% -h 100% -t {{ .Name | shq }} -- tmux attach-session -t {{ .Name | shq }}`,
 			Help:   "popup tmux session",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 		"AgentSend": {
 			Sh:     `{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }}`,
 			Help:   "send enter to agent",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 		"AgentSendClear": {
 			Sh:     `{{ agentSend }} {{ .Name | shq }}:{{ agentWindow }} /clear`,
 			Help:   "send /clear to agent",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 	}
 }

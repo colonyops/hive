@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/hc"
+	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
@@ -51,6 +52,9 @@ type View struct {
 	viewport    viewport.Model // scrollable detail content
 	detailWidth int            // cached detail pane width
 	focus       focusPane      // which pane has keyboard focus
+	handler     KeyResolver    // resolves configurable keybindings to actions
+	kvStore     corekv.KV      // persistent kv store for saving preferences
+	splitRatio  int            // panel split percentage (1-80, 0 = default)
 
 	// Rendered content cache — avoids re-running glamour on every cursor change.
 	cachedContentKey string // "itemID:commentCount:width"
@@ -58,18 +62,25 @@ type View struct {
 }
 
 // New creates a new tasks View.
-func New(svc *hive.HoneycombService, repoKey string) *View {
+func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStore corekv.KV, splitRatio int) *View {
 	return &View{
 		svc:          svc,
 		repoKey:      repoKey,
+		handler:      handler,
+		kvStore:      kvStore,
+		splitRatio:   splitRatio,
 		comments:     make(map[string][]hc.Comment),
 		statusFilter: FilterOpen,
 		showPreview:  true,
 	}
 }
 
+// kvFilterKey is the kv store key for persisting the tasks status filter.
+const kvFilterKey = "tui.tasks.filter"
+
 // Init initializes the tasks view.
 func (v *View) Init() tea.Cmd {
+	v.restoreFilter()
 	if v.svc != nil {
 		return v.loadItems()
 	}
@@ -131,30 +142,36 @@ func (v *View) View() string {
 	if v.svc == nil {
 		return "Tasks not configured"
 	}
-	if len(v.flatNodes) == 0 && len(v.items) == 0 {
-		return "  No tasks loaded"
-	}
-
-	// Content area includes the filter bar as the last tree row.
+	// Content area includes the repo header and filter bar.
 	contentHeight := max(v.height-bottomBarLines, 1)
-	treeRows := max(contentHeight-1, 1) // tree items above the filter bar
+	treeRows := max(contentHeight-3, 1) // tree items between repo header and filter divider+bar
 
 	var body string
 
+	// Choose empty-state message: distinguish "no items at all" from "filtered out".
+	var emptyMsg string
+	if len(v.items) == 0 {
+		emptyMsg = "No tasks for repository"
+	}
+
 	if v.showPreview {
-		// Two-column layout: tree ~30%, detail ~70%.
+		// Two-column layout: configurable tree/detail split.
 		// Account for 1 divider column (1 char).
+		splitPct := v.splitRatioOrDefault(30)
 		availWidth := max(v.width-1, 30)
-		treeWidth := max(availWidth*30/100, 25)
+		treeWidth := max(availWidth*splitPct/100, 25)
 		detailWidth := max(availWidth-treeWidth, 10)
 
-		// Tree pane: items + filter bar as last line
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
+		// Tree pane: repo header + items + filter bar
+		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
+		repoHeader = ensureExactWidth(repoHeader, treeWidth)
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows, emptyMsg)
 		treeContent = ensureExactHeight(treeContent, treeRows)
 		filterLine := " " + renderFilterBar(v.statusFilter)
 		filterLine = ensureExactWidth(filterLine, treeWidth)
 		treeContent = ensureExactWidth(treeContent, treeWidth)
-		treeContent = treeContent + "\n" + filterLine
+		filterRule := styles.TextMutedStyle.Render(strings.Repeat("─", treeWidth))
+		treeContent = repoHeader + "\n" + treeContent + "\n" + filterRule + "\n" + filterLine
 
 		// Selected item for detail
 		selected := v.SelectedItem()
@@ -199,11 +216,13 @@ func (v *View) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
 	} else {
 		// Tree-only layout: full width.
-		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows)
+		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
+		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows, emptyMsg)
 		treeContent = ensureExactHeight(treeContent, treeRows)
 		treeContent = ensureExactWidth(treeContent, v.width)
 		filterLine := " " + renderFilterBar(v.statusFilter)
-		body = treeContent + "\n" + filterLine
+		filterRule := styles.TextMutedStyle.Render(strings.Repeat("─", v.width))
+		body = repoHeader + "\n" + treeContent + "\n" + filterRule + "\n" + filterLine
 	}
 
 	// Bottom: rule + help bar
@@ -216,10 +235,27 @@ func (v *View) View() string {
 		}
 		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"h/esc back to tree", scrollInfo))
 	} else {
-		help = styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + "f filter" + components.HelpSep + "enter expand/collapse" + components.HelpSep + "l detail" + components.HelpSep + "v preview" + components.HelpSep + "r refresh")
+		navHelp := components.HelpNav + components.HelpSep + "space expand/collapse" + components.HelpSep + "enter detail"
+		actionHelp := ""
+		if v.handler != nil {
+			actionHelp = v.handler.HelpString()
+		}
+		if actionHelp != "" {
+			help = styles.TextMutedStyle.Render(navHelp + components.HelpSep + actionHelp)
+		} else {
+			help = styles.TextMutedStyle.Render(navHelp)
+		}
 	}
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
+}
+
+// splitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
+func (v *View) splitRatioOrDefault(defaultPct int) int {
+	if v.splitRatio < 1 || v.splitRatio > 80 {
+		return defaultPct
+	}
+	return v.splitRatio
 }
 
 // SetSize updates the view dimensions.
@@ -236,8 +272,9 @@ func (v *View) sizeViewport() {
 		return
 	}
 
+	splitPct := v.splitRatioOrDefault(30)
 	availWidth := max(v.width-1, 30)
-	treeWidth := max(availWidth*30/100, 25)
+	treeWidth := max(availWidth*splitPct/100, 25)
 	detailWidth := max(availWidth-treeWidth, 10)
 	v.detailWidth = detailWidth
 
@@ -261,6 +298,76 @@ func (v *View) SetActive(active bool) {
 	if !active {
 		v.focus = paneTree
 	}
+}
+
+// SetRepoKey changes the repository scope, clears state, and reloads items.
+func (v *View) SetRepoKey(repoKey string) tea.Cmd {
+	v.repoKey = repoKey
+	v.items = nil
+	v.roots = nil
+	v.flatNodes = nil
+	v.cursor = 0
+	v.scrollOffset = 0
+	v.comments = make(map[string][]hc.Comment)
+	v.lastItemID = ""
+	v.cachedContentKey = ""
+	v.cachedContent = ""
+	if v.svc != nil {
+		return v.loadItems()
+	}
+	return nil
+}
+
+// RepoKey returns the current repository scope.
+func (v *View) RepoKey() string {
+	return v.repoKey
+}
+
+// Svc returns the honeycomb service, or nil if not configured.
+func (v *View) Svc() *hive.HoneycombService {
+	return v.svc
+}
+
+// CycleFilter advances the status filter, persists it, and rebuilds the tree.
+func (v *View) CycleFilter() tea.Cmd {
+	v.statusFilter = (v.statusFilter + 1) % filterCount
+	v.saveFilter()
+	v.rebuildTree()
+	return v.checkCursorChanged()
+}
+
+// restoreFilter loads the persisted status filter from the kv store.
+func (v *View) restoreFilter() {
+	if v.kvStore == nil {
+		return
+	}
+	var saved int
+	if err := v.kvStore.Get(context.Background(), kvFilterKey, &saved); err != nil {
+		return
+	}
+	if saved >= 0 && saved < filterCount {
+		v.statusFilter = StatusFilter(saved)
+	}
+}
+
+// saveFilter persists the current status filter to the kv store.
+func (v *View) saveFilter() {
+	if v.kvStore == nil {
+		return
+	}
+	if err := v.kvStore.Set(context.Background(), kvFilterKey, int(v.statusFilter)); err != nil {
+		log.Debug().Err(err).Msg("failed to persist tasks filter")
+	}
+}
+
+// TogglePreview toggles the preview panel visibility.
+func (v *View) TogglePreview() tea.Cmd {
+	v.showPreview = !v.showPreview
+	if v.showPreview {
+		v.sizeViewport()
+		return v.updateViewportContent()
+	}
+	return nil
 }
 
 // HasDetailFocus returns true when the detail pane has focus.
@@ -387,33 +494,25 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 
 // handleTreeKey processes keys when the tree pane has focus.
 func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
-	switch msg.String() {
+	keyStr := msg.String()
+
+	switch keyStr {
+	// Navigation keys — stay hard-coded
 	case "j", "down":
 		v.moveCursor(1)
 		return v.checkCursorChanged()
 	case "k", "up":
 		v.moveCursor(-1)
 		return v.checkCursorChanged()
-	case "enter":
+	case " ", "space":
 		v.toggleExpand()
-	case "l":
+		return nil
+	case "enter", "l":
 		if v.showPreview && v.SelectedItem() != nil {
 			v.focus = paneDetail
 			return v.updateViewportContent()
 		}
-	case "r":
-		v.comments = make(map[string][]hc.Comment)
-		return v.loadItems()
-	case "v":
-		v.showPreview = !v.showPreview
-		if v.showPreview {
-			v.sizeViewport()
-			return v.updateViewportContent()
-		}
-	case "f":
-		v.statusFilter = (v.statusFilter + 1) % filterCount
-		v.rebuildTree()
-		return v.checkCursorChanged()
+		return nil
 	case "G":
 		v.cursor = len(v.flatNodes) - 1
 		v.clampScroll()
@@ -422,7 +521,17 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 		v.cursor = 0
 		v.scrollOffset = 0
 		return v.checkCursorChanged()
+	case ":":
+		return func() tea.Msg { return CommandPaletteRequestMsg{} }
 	}
+
+	// Resolve configurable action keys via handler
+	if v.handler != nil {
+		if a, ok := v.handler.ResolveAction(keyStr); ok {
+			return func() tea.Msg { return ActionRequestMsg{Action: a} }
+		}
+	}
+
 	return nil
 }
 
@@ -488,9 +597,9 @@ func (v *View) clampCursor() {
 const bottomBarLines = 2
 
 // treeViewHeight returns the number of visible tree rows, accounting for
-// the bottom bars and the filter bar (which sits inside the tree column).
+// the bottom bars, repo header, filter divider, and filter bar.
 func (v *View) treeViewHeight() int {
-	return max(v.height-bottomBarLines-1, 1)
+	return max(v.height-bottomBarLines-3, 1)
 }
 
 // clampScroll ensures the scroll offset keeps the cursor visible.

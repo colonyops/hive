@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	defaultToastTTL   = 5 * time.Second
+	defaultToastTTL   = 3 * time.Second
 	defaultMaxToasts  = 5
 	toastTickInterval = 100 * time.Millisecond
 	toastWidth        = 50

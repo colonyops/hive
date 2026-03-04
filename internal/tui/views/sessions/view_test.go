@@ -171,7 +171,7 @@ func newFilterTestView(sessions []session.Session, statusFilter terminal.Status,
 		columnWidths:     columnWidths,
 		service:          new(hive.SessionService),
 		gitWorkers:       1,
-		cfg:              &config.Config{TUI: config.TUIConfig{GroupBy: config.GroupByRepo}},
+		cfg:              &config.Config{Views: config.ViewsConfig{Sessions: config.SessionsViewConfig{GroupBy: config.GroupByRepo}}},
 	}
 }
 

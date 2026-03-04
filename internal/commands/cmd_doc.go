@@ -179,6 +179,83 @@ type Migration struct {
 
 var migrations = []Migration{
 	{
+		Version:     "0.2.7",
+		Title:       "Flatten view config under views section",
+		Description: "View-specific settings (refresh_interval, preview_enabled, group_by, split_ratio, preview templates) have moved from 'tui' to 'views.<name>'. The 'tui.views.store' toggle moved to 'tui.store'. Layout split ratios moved from 'tui.layout.<view>.split_ratio' to 'views.<view>.split_ratio'. Preview templates moved from 'tui.preview.title_template' / 'tui.preview.status_template' to 'views.sessions.preview_title' / 'views.sessions.preview_status'. Old config fields are no longer read.",
+		Migration: `1. Move tui.refresh_interval to views.sessions.refresh_interval
+2. Move tui.preview_enabled to views.sessions.preview_enabled
+3. Move tui.group_by to views.sessions.group_by
+4. Move tui.preview.title_template to views.sessions.preview_title
+5. Move tui.preview.status_template to views.sessions.preview_status
+6. Move tui.layout.sessions.split_ratio to views.sessions.split_ratio
+7. Move tui.layout.tasks.split_ratio to views.tasks.split_ratio
+8. Move tui.layout.messages.split_ratio to views.messages.split_ratio
+9. Move tui.views.store to tui.store`,
+		Before: `# config.yaml (old)
+tui:
+  refresh_interval: 15s
+  preview_enabled: true
+  group_by: repo
+  preview:
+    title_template: "{{ .Name }}"
+    status_template: "{{ .Branch }}"
+  views:
+    store: true
+  layout:
+    sessions:
+      split_ratio: 25
+    tasks:
+      split_ratio: 30`,
+		After: `# config.yaml (new)
+tui:
+  store: true
+
+views:
+  sessions:
+    split_ratio: 25
+    refresh_interval: 15s
+    preview_enabled: true
+    preview_title: "{{ .Name }}"
+    preview_status: "{{ .Branch }}"
+    group_by: repo
+  tasks:
+    split_ratio: 30`,
+	},
+	{
+		Version:     "0.2.6",
+		Title:       "Per-view keybindings",
+		Description: "Keybindings are now organized per-view under a top-level 'views' key instead of a flat 'keybindings' map. Each view (sessions, tasks, global) has its own keybinding set. The old top-level 'keybindings' field is still read and automatically merged into views.sessions.keybindings, but should be migrated to the new structure. User commands now support a 'scope' field to restrict visibility to specific views, and 'tasks' is a new valid scope value.",
+		Migration: `1. Move top-level keybindings into views.sessions.keybindings
+2. Add view-specific keybindings under views.tasks.keybindings or views.global.keybindings
+3. Optionally add scope to user commands to restrict them to specific views`,
+		Before: `# config.yaml (old)
+keybindings:
+  r:
+    cmd: Recycle
+  d:
+    cmd: Delete
+  n:
+    cmd: NewSession`,
+		After: `# config.yaml (new)
+views:
+  sessions:
+    keybindings:
+      r:
+        cmd: Recycle
+      d:
+        cmd: Delete
+      n:
+        cmd: NewSession
+  tasks:
+    keybindings:
+      r:
+        cmd: TasksRefresh
+      f:
+        cmd: TasksFilter
+  global:
+    keybindings: {}  # keybindings available in all views`,
+	},
+	{
 		Version:     "0.2.5",
 		Title:       "Multi-window tmux sessions with TmuxWindow template variable",
 		Description: "When a tmux session has multiple agent windows (matched by preview_window_matcher), each window now appears as its own selectable tree item with independent status and preview. The new {{ .TmuxWindow }} template variable is available in user commands and resolves to the selected window name. If you use a custom script (like hive.sh) with an enter keybinding, you must update the template to pass the window name so that pressing enter on a window sub-item focuses the correct window.",
@@ -323,10 +400,11 @@ rules:
 		Version:     "0.2.1",
 		Title:       "New TUI auto-refresh feature",
 		Description: "The TUI sessions view now auto-refreshes every 15 seconds by default. This can be configured or disabled.",
-		Migration:   "No action required. To customize, add tui.refresh_interval to your config.",
+		Migration:   "No action required. To customize, add views.sessions.refresh_interval to your config.",
 		After: `# config.yaml
-tui:
-  refresh_interval: 15s  # default, set to 0 to disable`,
+views:
+  sessions:
+    refresh_interval: 15s  # default, set to 0 to disable`,
 	},
 	{
 		Version:     "0.2.0",

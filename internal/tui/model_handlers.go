@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
+	"github.com/colonyops/hive/internal/tui/views/tasks"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -154,6 +155,9 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		cmd := m.sessionsView.ToggleGroupBy()
 		return m, cmd
 	}
+	if action.Type == act.TypeViewTasks {
+		return m.viewTasksForSelectedSession()
+	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter
 		m.sessionsView.ApplyStatusFilter(action.Type)
@@ -199,8 +203,131 @@ func (m Model) handleSessionRecycledDelete(msg sessions.RecycledDeleteRequestMsg
 	return m, nil
 }
 
+func (m Model) viewTasksForSelectedSession() (tea.Model, tea.Cmd) {
+	sess := m.sessionsView.SelectedSession()
+	if sess == nil || sess.Remote == "" {
+		return m, nil
+	}
+	if m.tasksView == nil {
+		return m, nil
+	}
+	owner, repo := git.ExtractOwnerRepo(sess.Remote)
+	if owner == "" || repo == "" {
+		return m, nil
+	}
+	repoKey := owner + "/" + repo
+	cmd := m.tasksView.SetRepoKey(repoKey)
+
+	// Switch to tasks tab.
+	m.activeView = ViewTasks
+	m.handler.SetActiveView(ViewTasks)
+	m.sessionsView.SetActive(false)
+	m.tasksView.SetActive(true)
+
+	return m, cmd
+}
+
 func (m Model) handleSessionOpenRepo(msg sessions.OpenRepoRequestMsg) (tea.Model, tea.Cmd) {
 	return m.openRepoHeaderByRemote(msg.Name, msg.Remote)
+}
+
+// --- Outbound messages from tasks view ---
+
+func (m Model) handleTaskAction(msg tasks.ActionRequestMsg) (tea.Model, tea.Cmd) {
+	a := msg.Action
+	if a.Err != nil {
+		m.notifyErrorf("keybinding error: %v", a.Err)
+		return m, nil
+	}
+
+	switch a.Type {
+	case act.TypeTasksRefresh:
+		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
+	case act.TypeTasksFilter:
+		if m.tasksView != nil {
+			return m, m.tasksView.CycleFilter()
+		}
+		return m, nil
+	case act.TypeTasksCopyID:
+		if m.tasksView != nil {
+			if item := m.tasksView.SelectedItem(); item != nil {
+				if err := m.copyToClipboard(item.ID); err != nil {
+					m.notifyErrorf("copy failed: %v", err)
+				} else {
+					m.publishNotificationf(notify.LevelInfo, "Copied %s", item.ID)
+				}
+			}
+		}
+		return m, nil
+	case act.TypeTasksTogglePreview:
+		if m.tasksView != nil {
+			return m, m.tasksView.TogglePreview()
+		}
+		return m, nil
+	case act.TypeTasksSelectRepo:
+		if m.tasksView != nil && m.tasksView.Svc() != nil {
+			return m, m.loadRepoKeys()
+		}
+		return m, nil
+	default:
+		return m.handleGlobalAction(a)
+	}
+}
+
+// handleGlobalAction handles actions that are not view-specific (info, doctor, theme, etc.).
+// Used as a fallback when a view receives an action it doesn't own.
+func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
+	switch a.Type {
+	case act.TypeHiveInfo:
+		return m.showHiveInfo()
+	case act.TypeHiveDoctor:
+		return m.showHiveDoctor()
+	case act.TypeNotifications:
+		m.state = stateShowingNotifications
+		m.modals.ShowNotifications(m.notifyStore)
+		return m, nil
+	case act.TypeSetTheme:
+		return m, nil
+	default:
+		log.Warn().Str("type", string(a.Type)).Msg("unhandled action type")
+		return m, nil
+	}
+}
+
+// repoKeysLoadedMsg carries the result of loading repo keys.
+type repoKeysLoadedMsg struct {
+	repos []string
+	err   error
+}
+
+func (m Model) loadRepoKeys() tea.Cmd {
+	svc := m.tasksView.Svc()
+	return func() tea.Msg {
+		repos, err := svc.ListRepoKeys(context.Background())
+		return repoKeysLoadedMsg{repos: repos, err: err}
+	}
+}
+
+func (m Model) handleRepoKeysLoaded(msg repoKeysLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		return m, m.notifyError("load repos: %v", msg.err)
+	}
+	if len(msg.repos) == 0 {
+		return m, m.notifyError("no repositories found")
+	}
+	currentRepo := ""
+	if m.tasksView != nil {
+		currentRepo = m.tasksView.RepoKey()
+	}
+	m.modals.RepoPicker = NewRepoPicker(msg.repos, currentRepo, m.width, m.height)
+	m.state = stateSelectingRepo
+	return m, nil
+}
+
+func (m Model) handleTaskCommandPalette(_ tasks.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
+	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
+	m.state = stateCommandPalette
+	return m, nil
 }
 
 // --- Action results ---
@@ -387,6 +514,34 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 
 	m.updateInfo = msg.result
 	m.publishNotificationf(notify.LevelInfo, "Update available: %s -> %s", msg.result.Current, msg.result.Latest)
+	return m, nil
+}
+
+// --- Repo Picker ---
+
+func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.modals.RepoPicker == nil {
+		m.state = stateNormal
+		return m, nil
+	}
+
+	m.modals.RepoPicker, _ = m.modals.RepoPicker.Update(msg)
+
+	if m.modals.RepoPicker.Cancelled() {
+		m.modals.RepoPicker = nil
+		m.state = stateNormal
+		return m, nil
+	}
+
+	if selected := m.modals.RepoPicker.Selected(); selected != "" {
+		m.modals.RepoPicker = nil
+		m.state = stateNormal
+		if m.tasksView != nil {
+			return m, m.tasksView.SetRepoKey(selected)
+		}
+		return m, nil
+	}
+
 	return m, nil
 }
 

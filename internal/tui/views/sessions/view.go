@@ -162,8 +162,8 @@ func New(opts ViewOpts) *View {
 	currentTmux := DetectCurrentTmuxSession()
 
 	previewTemplates := ParsePreviewTemplates(
-		cfg.TUI.Preview.TitleTemplate,
-		cfg.TUI.Preview.StatusTemplate,
+		cfg.Views.Sessions.PreviewTitle,
+		cfg.Views.Sessions.PreviewStatus,
 	)
 
 	pluginPollInterval := 5 * time.Second
@@ -173,7 +173,7 @@ func New(opts ViewOpts) *View {
 
 	return &View{
 		localRemote: opts.LocalRemote,
-		groupBy:     cfg.TUI.GroupBy,
+		groupBy:     cfg.Views.Sessions.GroupBy,
 		cfg:         cfg,
 		service:     opts.Service,
 		bus:         opts.Bus,
@@ -188,7 +188,7 @@ func New(opts ViewOpts) *View {
 
 		terminalManager:    opts.TerminalManager,
 		terminalStatuses:   terminalStatuses,
-		previewEnabled:     cfg.TUI.PreviewEnabled,
+		previewEnabled:     cfg.Views.Sessions.PreviewEnabled,
 		previewTemplates:   previewTemplates,
 		currentTmuxSession: currentTmux,
 
@@ -882,8 +882,9 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 	v.treeDelegate.PreviewMode = true
 	v.list.SetDelegate(v.treeDelegate)
 
-	// Calculate widths (25% list, 1 char divider, remaining for preview)
-	listWidth := int(float64(v.width) * 0.25)
+	// Calculate widths (configurable split, 1 char divider, remaining for preview)
+	splitPct := v.cfg.Views.Sessions.SplitRatioOrDefault(25)
+	listWidth := v.width * splitPct / 100
 	if listWidth < 20 {
 		listWidth = 20
 	}
@@ -1181,7 +1182,7 @@ func (v *View) RefreshGitStatuses() tea.Cmd {
 
 // scheduleSessionRefresh returns a command that schedules the next session refresh.
 func (v *View) scheduleSessionRefresh() tea.Cmd {
-	interval := v.cfg.TUI.RefreshInterval
+	interval := v.cfg.Views.Sessions.RefreshInterval
 	if interval == 0 {
 		return nil // Disabled
 	}

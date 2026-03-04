@@ -40,6 +40,7 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Sh:     `tmux new-window -t "{{ .Name }}" -c "{{ .Path }}" nvim`,
 			Help:   "open neovim in new window in session's tmux session",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 	}
 }

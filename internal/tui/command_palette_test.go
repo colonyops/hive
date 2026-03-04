@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -457,4 +458,41 @@ func TestCommandPalette_ViewWithScrolling(t *testing.T) {
 	view = p.View()
 	assert.Contains(t, view, "cmd15")
 	assert.NotContains(t, view, "... and more")
+}
+
+func TestCommandPalette_TasksView_ShowsOnlyTaskAndGlobalCommands(t *testing.T) {
+	cmds := map[string]config.UserCommand{
+		"Recycle":      {Action: act.TypeRecycle, Help: "recycle", Scope: []string{"sessions"}},
+		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh tasks", Scope: []string{"tasks"}},
+		"HiveInfo":     {Action: act.TypeHiveInfo, Help: "info"}, // global (no scope)
+	}
+
+	p := NewCommandPalette(cmds, nil, 100, 50, ViewTasks)
+
+	// Should contain TasksRefresh and HiveInfo
+	names := make([]string, len(p.commands))
+	for i, c := range p.commands {
+		names[i] = c.Name
+	}
+	assert.Contains(t, names, "TasksRefresh")
+	assert.Contains(t, names, "HiveInfo")
+	assert.NotContains(t, names, "Recycle")
+}
+
+func TestCommandPalette_SessionsView_DoesNotShowTaskCommands(t *testing.T) {
+	cmds := map[string]config.UserCommand{
+		"Recycle":      {Action: act.TypeRecycle, Help: "recycle", Scope: []string{"sessions"}},
+		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh tasks", Scope: []string{"tasks"}},
+		"HiveInfo":     {Action: act.TypeHiveInfo, Help: "info"}, // global (no scope)
+	}
+
+	p := NewCommandPalette(cmds, nil, 100, 50, ViewSessions)
+
+	names := make([]string, len(p.commands))
+	for i, c := range p.commands {
+		names[i] = c.Name
+	}
+	assert.Contains(t, names, "Recycle")
+	assert.Contains(t, names, "HiveInfo")
+	assert.NotContains(t, names, "TasksRefresh")
 }

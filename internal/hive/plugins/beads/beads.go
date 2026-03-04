@@ -75,6 +75,7 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 			Sh:     `tmux popup -E -w 95% -h 95% -- sh -c 'cd "{{ .Path }}" && perles'`,
 			Help:   "open perles kanban TUI",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		}
 	}
 

@@ -67,6 +67,7 @@ tmux select-window -t "$window_name"
 `,
 			Help:   "fork Claude session in new window",
 			Silent: true,
+			Scope:  []string{"sessions"},
 		},
 	}
 }

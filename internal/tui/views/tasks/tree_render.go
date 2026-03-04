@@ -15,9 +15,13 @@ const (
 )
 
 // renderTree renders flattened tree nodes into styled strings.
-func renderTree(flatNodes []FlatNode, cursor, scrollOffset, viewHeight int) string {
+func renderTree(flatNodes []FlatNode, cursor, scrollOffset, viewHeight int, emptyMsg ...string) string {
 	if len(flatNodes) == 0 {
-		return styles.TextMutedStyle.Render("  No matching tasks")
+		msg := "No matching tasks"
+		if len(emptyMsg) > 0 && emptyMsg[0] != "" {
+			msg = emptyMsg[0]
+		}
+		return styles.TextMutedStyle.Render("  " + msg)
 	}
 
 	var b strings.Builder
@@ -77,11 +81,14 @@ func renderEpicNode(fn FlatNode, isSelected bool) string {
 	}
 	title := titleStyle.Render(node.Item.Title)
 
+	// Status icon
+	icon := StatusIcon(node.Item.Status)
+
 	// Progress count
 	done, total := countByStatus(node.Children)
 	progress := styles.TextMutedStyle.Render(fmt.Sprintf("[%d/%d]", done, total))
 
-	return fmt.Sprintf("%s %s %s", expandIcon, title, progress)
+	return fmt.Sprintf("%s %s %s %s", expandIcon, icon, title, progress)
 }
 
 // renderTaskNode renders a task (child) node with tree connectors and status icon.
@@ -123,9 +130,10 @@ func renderTaskNode(fn FlatNode, isSelected bool) string {
 		}
 		expandIcon = styles.TextMutedStyle.Render(expandIcon)
 
+		nestedIcon := StatusIcon(node.Item.Status)
 		done, total := countByStatus(node.Children)
 		progress := styles.TextMutedStyle.Render(fmt.Sprintf("[%d/%d]", done, total))
-		return fmt.Sprintf("%s%s %s %s %s", indent, connector, expandIcon, title, progress)
+		return fmt.Sprintf("%s%s %s %s %s %s", indent, connector, expandIcon, nestedIcon, title, progress)
 	}
 
 	line := fmt.Sprintf("%s%s %s %s", indent, connector, icon, title)

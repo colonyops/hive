@@ -68,18 +68,20 @@ type View struct {
 	focus      focusPane
 	viewport   viewport.Model
 	copyStatus string
+	splitRatio int // configurable list/preview split percentage
 
 	// Cached selected message index for detecting changes
 	lastSelectedIdx int
 }
 
 // New creates a new messages View.
-func New(msgStore *hive.MessageService, topicFilter, copyCommand string) *View {
+func New(msgStore *hive.MessageService, topicFilter, copyCommand string, splitRatio int) *View {
 	return &View{
 		ctrl:            NewController(),
 		msgStore:        msgStore,
 		topicFilter:     topicFilter,
 		copyCommand:     copyCommand,
+		splitRatio:      splitRatio,
 		lastSelectedIdx: -1,
 	}
 }
@@ -289,7 +291,11 @@ func (v *View) sizeViewport() {
 	if v.width < minDualPaneWidth {
 		return
 	}
-	listWidth := int(float64(v.width) * 0.25)
+	splitPct := v.splitRatio
+	if splitPct < 1 || splitPct > 80 {
+		splitPct = 25
+	}
+	listWidth := v.width * splitPct / 100
 	if listWidth < 20 {
 		listWidth = 20
 	}
@@ -316,8 +322,12 @@ func (v *View) renderDualColumnLayout() string {
 		paneHeight = 1
 	}
 
-	// Calculate widths: 25% list, 1 char divider, remaining for preview
-	listWidth := int(float64(v.width) * 0.25)
+	// Calculate widths: configurable split, 1 char divider, remaining for preview
+	splitPct := v.splitRatio
+	if splitPct < 1 || splitPct > 80 {
+		splitPct = 25
+	}
+	listWidth := v.width * splitPct / 100
 	if listWidth < 20 {
 		listWidth = 20
 	}

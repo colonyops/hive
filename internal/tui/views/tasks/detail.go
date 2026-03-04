@@ -166,7 +166,15 @@ func getMarkdownRenderer(width int) (*glamour.TermRenderer, error) {
 }
 
 // renderMarkdown renders text as styled markdown using glamour.
-func renderMarkdown(text string, width int) string {
+// Glamour can panic on certain inputs, so we recover gracefully.
+func renderMarkdown(text string, width int) (result string) {
+	defer func() {
+		if r := recover(); r != nil {
+			log.Warn().Interface("panic", r).Msg("tasks: glamour panicked during render")
+			result = text
+		}
+	}()
+
 	r, err := getMarkdownRenderer(width)
 	if err != nil {
 		log.Debug().Err(err).Msg("tasks: failed to create markdown renderer")

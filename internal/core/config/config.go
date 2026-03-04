@@ -82,46 +82,55 @@ type FormField struct {
 }
 
 // defaultUserCommands provides built-in commands that users can override.
+// Commands with nil Scope are available in all views (global visibility).
 var defaultUserCommands = map[string]UserCommand{
 	"Recycle": {
 		Action:  action.TypeRecycle,
 		Help:    "recycle",
 		Confirm: "Are you sure you want to recycle this session?",
+		Scope:   []string{"sessions"},
 	},
 	"Delete": {
 		Action:  action.TypeDelete,
 		Help:    "delete",
 		Confirm: "Are you sure you want to delete this session?",
+		Scope:   []string{"sessions"},
 	},
 	"NewSession": {
 		Action: action.TypeNewSession,
 		Help:   "new session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"DocReview": {
 		Action: action.TypeDocReview,
 		Help:   "review documents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterAll": {
 		Action: action.TypeFilterAll,
 		Help:   "show all sessions",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterActive": {
 		Action: action.TypeFilterActive,
 		Help:   "show sessions with active agents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterApproval": {
 		Action: action.TypeFilterApproval,
 		Help:   "show sessions needing approval",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"FilterReady": {
 		Action: action.TypeFilterReady,
 		Help:   "show sessions with idle agents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"ThemePreview": {
 		Action: action.TypeSetTheme,
@@ -137,16 +146,19 @@ var defaultUserCommands = map[string]UserCommand{
 		Action: action.TypeRenameSession,
 		Help:   "rename session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"NextActive": {
 		Action: action.TypeNextActive,
 		Help:   "next active session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"PrevActive": {
 		Action: action.TypePrevActive,
 		Help:   "prev active session",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"HiveInfo": {
 		Action: action.TypeHiveInfo,
@@ -162,16 +174,55 @@ var defaultUserCommands = map[string]UserCommand{
 		Action: action.TypeGroupSet,
 		Help:   "set session group",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"GroupToggle": {
 		Action: action.TypeGroupToggle,
 		Help:   "toggle group/repo view",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
 	"TodoPanel": {
 		Action: action.TypeTodoPanel,
 		Help:   "open todo panel",
 		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"ViewTasks": {
+		Action: action.TypeViewTasks,
+		Help:   "view tasks for repo",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"TasksRefresh": {
+		Action: action.TypeTasksRefresh,
+		Help:   "refresh",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksFilter": {
+		Action: action.TypeTasksFilter,
+		Help:   "cycle filters",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksCopyID": {
+		Action: action.TypeTasksCopyID,
+		Help:   "copy id",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksTogglePreview": {
+		Action: action.TypeTasksTogglePreview,
+		Help:   "toggle preview",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksSelectRepo": {
+		Action: action.TypeTasksSelectRepo,
+		Help:   "select repository",
+		Silent: true,
+		Scope:  []string{"tasks"},
 	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
@@ -193,28 +244,13 @@ var defaultUserCommands = map[string]UserCommand{
 		},
 		Help:   "send message to multiple agents",
 		Silent: true,
+		Scope:  []string{"sessions"},
 	},
-}
-
-// defaultKeybindings provides built-in keybindings that users can override.
-var defaultKeybindings = map[string]Keybinding{
-	"r":      {Cmd: "Recycle"},
-	"d":      {Cmd: "Delete"},
-	"n":      {Cmd: "NewSession"},
-	"enter":  {Cmd: "TmuxOpen"},
-	"ctrl+d": {Cmd: "TmuxKill"},
-	"A":      {Cmd: "AgentSend"},
-	"p":      {Cmd: "TmuxPopUp"},
-	"R":      {Cmd: "RenameSession"},
-	"G":      {Cmd: "GroupSet"},
-	"J":      {Cmd: "NextActive"},
-	"K":      {Cmd: "PrevActive"},
-	"t":      {Cmd: "TodoPanel"},
 }
 
 // CurrentConfigVersion is the latest config schema version.
 // Increment this when making breaking changes to config format.
-const CurrentConfigVersion = "0.2.5"
+const CurrentConfigVersion = "0.2.7"
 
 // Config holds the application configuration.
 type Config struct {
@@ -237,8 +273,11 @@ type Config struct {
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
 	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // directories containing git repositories for new session dialog
-	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"`  // deprecated: use workspaces instead (kept for backwards compatibility)
-	DataDir             string                 `json:"-"                     yaml:"-"`          // set by caller, not from config file
+	Views               ViewsConfig            `json:"views"                 yaml:"views"`
+	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"` // deprecated: use workspaces instead (kept for backwards compatibility)
+	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
+
+	hasLegacyKeybindings bool `json:"-" yaml:"-"`
 }
 
 // AgentsConfig holds agent profile configuration.
@@ -331,20 +370,10 @@ var ValidGroupByModes = []string{GroupByRepo, GroupByGroup}
 
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
-	Theme           string        `json:"theme"            yaml:"theme"`            // built-in theme name (default: "tokyo-night")
-	RefreshInterval time.Duration `json:"refresh_interval" yaml:"refresh_interval"` // default: 15s, 0 to disable
-	PreviewEnabled  bool          `json:"preview_enabled"  yaml:"preview_enabled"`  // enable tmux pane preview sidebar
-	Icons           *bool         `json:"icons"            yaml:"icons"`            // enable nerd font icons (nil = true by default)
-	UpdateChecker   bool          `json:"update_checker"   yaml:"update_checker"`   // enable startup update checker (default: true)
-	GroupBy         string        `json:"group_by"         yaml:"group_by"`         // tree view grouping mode: "repo" (default) or "group"
-	Preview         PreviewConfig `json:"preview"          yaml:"preview"`          // preview panel configuration
-	Views           ViewsConfig   `json:"views"            yaml:"views"`            // toggle optional TUI tabs
-}
-
-// ViewsConfig controls which optional TUI tabs are enabled.
-// All optional views default to disabled.
-type ViewsConfig struct {
-	Store bool `json:"store" yaml:"store"` // KV store browser (default: false)
+	Theme         string `json:"theme"          yaml:"theme"`          // built-in theme name (default: "tokyo-night")
+	Icons         *bool  `json:"icons"          yaml:"icons"`          // enable nerd font icons (nil = true by default)
+	UpdateChecker bool   `json:"update_checker" yaml:"update_checker"` // enable startup update checker (default: true)
+	Store         bool   `json:"store"          yaml:"store"`          // KV store browser (default: false)
 }
 
 // ReviewConfig holds review-related configuration.
@@ -353,12 +382,6 @@ type ReviewConfig struct{}
 // IconsEnabled returns true if nerd font icons should be shown.
 func (t TUIConfig) IconsEnabled() bool {
 	return t.Icons == nil || *t.Icons
-}
-
-// PreviewConfig holds preview panel template configuration.
-type PreviewConfig struct {
-	TitleTemplate  string `json:"title_template"  yaml:"title_template"`  // Go template for panel title (e.g., "{{ .Name }} • #{{ .ShortID }}")
-	StatusTemplate string `json:"status_template" yaml:"status_template"` // Go template for status line (e.g., "{{ .Icon.GitBranch }} {{ .Branch }}")
 }
 
 // MessagingConfig holds messaging-related configuration.
@@ -567,9 +590,13 @@ func DefaultConfig() Config {
 			SymlinkName: ".hive",
 		},
 		TUI: TUIConfig{
-			RefreshInterval: 15 * time.Second,
-			PreviewEnabled:  true,
-			UpdateChecker:   true,
+			UpdateChecker: true,
+		},
+		Views: ViewsConfig{
+			Sessions: SessionsViewConfig{
+				RefreshInterval: 15 * time.Second,
+				PreviewEnabled:  true,
+			},
 		},
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
@@ -621,8 +648,23 @@ func Load(configPath, dataDir string) (*Config, error) {
 		return nil, fmt.Errorf("invalid config: %w", err)
 	}
 
-	// Merge user keybindings into defaults (user config overrides defaults)
-	cfg.Keybindings = mergeKeybindings(defaultKeybindings, cfg.Keybindings)
+	// The top-level keybindings field is deprecated in favor of views.sessions.keybindings.
+	// Migrate any entries the user still has in the old location.
+	if len(cfg.Keybindings) > 0 {
+		cfg.hasLegacyKeybindings = true
+		if cfg.Views.Sessions.Keybindings == nil {
+			cfg.Views.Sessions.Keybindings = make(map[string]Keybinding)
+		}
+		maps.Copy(cfg.Views.Sessions.Keybindings, cfg.Keybindings)
+	}
+
+	// Merge per-view defaults (defaults first, user config overrides)
+	cfg.Views = mergeViewsConfig(defaultViewsConfig, cfg.Views)
+
+	// Rebuild flat keybindings map (global + sessions merged) so code that
+	// reads cfg.Keybindings directly still works. Note this includes global
+	// keybindings merged in, unlike the old raw-user-input semantics.
+	cfg.Keybindings = cfg.Views.flattenedForView("sessions")
 
 	// Apply defaults for zero values
 	cfg.applyDefaults()
@@ -649,8 +691,8 @@ func (c *Config) applyDefaults() {
 	if c.TUI.Theme == "" {
 		c.TUI.Theme = styles.DefaultTheme
 	}
-	if c.TUI.GroupBy == "" {
-		c.TUI.GroupBy = GroupByRepo
+	if c.Views.Sessions.GroupBy == "" {
+		c.Views.Sessions.GroupBy = GroupByRepo
 	}
 	if c.CopyCommand == "" {
 		c.CopyCommand = defaultCopyCommand()
@@ -700,18 +742,6 @@ func defaultCopyCommand() string {
 		// Linux and others - try xclip first, fall back to xsel
 		return "xclip -selection clipboard"
 	}
-}
-
-// mergeKeybindings merges user keybindings into defaults.
-// User keybindings override defaults for the same key.
-func mergeKeybindings(defaults, user map[string]Keybinding) map[string]Keybinding {
-	result := make(map[string]Keybinding, len(defaults)+len(user))
-
-	// Copy defaults first
-	maps.Copy(result, defaults)
-	maps.Copy(result, user)
-
-	return result
 }
 
 // mergeUserCommands merges user commands into defaults.
@@ -827,7 +857,7 @@ func (c *Config) validateUserCommandsBasic() error {
 		// Validate scope values
 		for _, scope := range cmd.Scope {
 			if !isValidScope(scope) {
-				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: global, sessions, messages, review", scope))
+				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: %s", scope, strings.Join(ValidScopes, ", ")))
 			}
 		}
 
@@ -966,7 +996,7 @@ func (c *Config) validateTheme() error {
 
 // validateGroupBy checks that the configured group_by value is valid.
 func (c *Config) validateGroupBy() error {
-	return criterio.Run("tui.group_by", c.TUI.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
+	return criterio.Run("views.sessions.group_by", c.Views.Sessions.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.
@@ -975,15 +1005,8 @@ func (c *Config) validateGroupBy() error {
 // since default keybindings may reference plugin commands not yet registered.
 func (c *Config) validateKeybindingsBasic() error {
 	var errs criterio.FieldErrorsBuilder
-
-	for key, kb := range c.Keybindings {
-		field := fmt.Sprintf("keybindings[%q]", key)
-
-		if kb.Cmd == "" {
-			errs = errs.Append(field, fmt.Errorf("cmd is required"))
-		}
-	}
-
+	validateKeybindingMap(&errs, "keybindings", c.Keybindings)
+	validateViewKeybindingMaps(&errs, c.Views)
 	return errs.ToError()
 }
 
@@ -993,16 +1016,17 @@ func (c *Config) validateKeybindingsBasic() error {
 // validated at the point of invocation.
 func (c *Config) validateUserKeybindings() error {
 	var errs criterio.FieldErrorsBuilder
+	validateKeybindingMap(&errs, "keybindings", c.Keybindings)
+	validateViewKeybindingMaps(&errs, c.Views)
+	return errs.ToError()
+}
 
-	for key, kb := range c.Keybindings {
-		field := fmt.Sprintf("keybindings[%q]", key)
-
+func validateKeybindingMap(errs *criterio.FieldErrorsBuilder, prefix string, kbs map[string]Keybinding) {
+	for key, kb := range kbs {
 		if kb.Cmd == "" {
-			errs = errs.Append(field, fmt.Errorf("cmd is required"))
+			*errs = errs.Append(fmt.Sprintf("%s[%q]", prefix, key), fmt.Errorf("cmd is required"))
 		}
 	}
-
-	return errs.ToError()
 }
 
 // ReposDir returns the path where cloned repositories are stored.
@@ -1049,14 +1073,19 @@ func isValidAction(t action.Type) bool {
 	return t.IsValid() && action.IsConfigAction(t)
 }
 
+// ValidScopes lists all valid scope values for user commands.
+// "global" means the command is available everywhere; other values
+// match ViewType.String() in the TUI package.
+var ValidScopes = []string{"global", "sessions", "messages", "review", "todos", "tasks"}
+
 // isValidScope checks if a scope value is valid.
 func isValidScope(scope string) bool {
-	switch scope {
-	case "global", "sessions", "messages", "review", "todos":
-		return true
-	default:
-		return false
+	for _, s := range ValidScopes {
+		if s == scope {
+			return true
+		}
 	}
+	return false
 }
 
 // isValidCommandName checks if a command name is valid.

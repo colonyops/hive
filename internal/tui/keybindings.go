@@ -22,7 +22,8 @@ type Action = action.Action
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
 type KeybindingResolver struct {
-	keybindings            map[string]config.Keybinding
+	viewKeybindings        map[string]map[string]config.Keybinding // view name -> key -> binding
+	effectiveKeybindings   map[string]config.Keybinding            // merged global + active view
 	commands               map[string]config.UserCommand
 	renderer               *tmpl.Renderer
 	activeView             ViewType                      // current active view for scope checking
@@ -31,20 +32,42 @@ type KeybindingResolver struct {
 	selectedWindowOverride string                        // if set, overrides tmuxWindowLookup for the next resolve
 }
 
-// NewKeybindingResolver creates a new resolver with the given config.
+// NewKeybindingResolver creates a new resolver with per-view keybinding maps.
 // Commands should be the merged user commands (user config + system defaults).
-func NewKeybindingResolver(keybindings map[string]config.Keybinding, commands map[string]config.UserCommand, renderer *tmpl.Renderer) *KeybindingResolver {
-	return &KeybindingResolver{
-		keybindings: keybindings,
-		commands:    commands,
-		renderer:    renderer,
-		activeView:  ViewSessions, // default to sessions view
+func NewKeybindingResolver(
+	viewKeybindings map[string]map[string]config.Keybinding,
+	commands map[string]config.UserCommand,
+	renderer *tmpl.Renderer,
+) *KeybindingResolver {
+	r := &KeybindingResolver{
+		viewKeybindings: viewKeybindings,
+		commands:        commands,
+		renderer:        renderer,
+		activeView:      ViewSessions, // default to sessions view
 	}
+	r.rebuildEffective()
+	return r
 }
 
-// SetActiveView updates the current active view for scope checking.
+// rebuildEffective merges global keybindings with the active view's keybindings.
+// View-specific bindings override global bindings for the same key.
+func (h *KeybindingResolver) rebuildEffective() {
+	effective := make(map[string]config.Keybinding)
+	if global, ok := h.viewKeybindings["global"]; ok {
+		maps.Copy(effective, global)
+	}
+	viewName := h.activeView.String()
+	if viewKBs, ok := h.viewKeybindings[viewName]; ok {
+		maps.Copy(effective, viewKBs)
+	}
+	h.effectiveKeybindings = effective
+}
+
+// SetActiveView updates the current active view for scope checking
+// and rebuilds the effective keybinding map.
 func (h *KeybindingResolver) SetActiveView(view ViewType) {
 	h.activeView = view
+	h.rebuildEffective()
 }
 
 // SetTmuxWindowLookup sets a function that resolves tmux window names for sessions.
@@ -103,7 +126,7 @@ func (h *KeybindingResolver) isCommandInScope(cmd config.UserCommand) bool {
 
 // IsAction checks if a key maps to the given built-in action.
 func (h *KeybindingResolver) IsAction(key string, t action.Type) bool {
-	kb, exists := h.keybindings[key]
+	kb, exists := h.effectiveKeybindings[key]
 	if !exists {
 		return false
 	}
@@ -113,7 +136,7 @@ func (h *KeybindingResolver) IsAction(key string, t action.Type) bool {
 
 // IsCommand checks if a key maps to the given command name.
 func (h *KeybindingResolver) IsCommand(key string, cmdName string) bool {
-	kb, exists := h.keybindings[key]
+	kb, exists := h.effectiveKeybindings[key]
 	if !exists {
 		return false
 	}
@@ -198,7 +221,7 @@ func (h *KeybindingResolver) resolveWindowsAction(a Action, cmd config.UserComma
 // Resolve attempts to resolve a key press to an action for the given session.
 // Recycled sessions only allow delete actions to prevent accidental operations.
 func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, bool) {
-	kb, exists := h.keybindings[key]
+	kb, exists := h.effectiveKeybindings[key]
 	if !exists {
 		return Action{}, false
 	}
@@ -293,15 +316,55 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	return Action{}, false
 }
 
+// ResolveAction resolves a key press to an action without session context.
+// Used by views (like tasks) that don't operate on sessions.
+// Only resolves built-in action commands -- shell commands are skipped.
+func (h *KeybindingResolver) ResolveAction(key string) (Action, bool) {
+	kb, exists := h.effectiveKeybindings[key]
+	if !exists {
+		return Action{}, false
+	}
+
+	cmd, cmdExists := h.commands[kb.Cmd]
+	if !cmdExists {
+		log.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
+		return Action{}, false
+	}
+
+	if !h.isCommandInScope(cmd) {
+		return Action{}, false
+	}
+
+	// Shell commands need session context - skip them
+	if cmd.Action == "" {
+		return Action{}, false
+	}
+
+	a := Action{
+		Key:    key,
+		Type:   cmd.Action,
+		Help:   kb.Help,
+		Silent: cmd.Silent,
+	}
+	if a.Help == "" {
+		a.Help = cmd.Help
+		if a.Help == "" {
+			a.Help = strings.ToLower(string(cmd.Action))
+		}
+	}
+
+	return a, true
+}
+
 // HelpEntries returns all configured keybindings for display, sorted by key.
 // Only returns keybindings that are in scope for the current view.
 func (h *KeybindingResolver) HelpEntries() []string {
 	// Get sorted keys for consistent ordering
-	keys := slices.Sorted(maps.Keys(h.keybindings))
+	keys := slices.Sorted(maps.Keys(h.effectiveKeybindings))
 
-	entries := make([]string, 0, len(h.keybindings))
+	entries := make([]string, 0, len(h.effectiveKeybindings))
 	for _, key := range keys {
-		kb := h.keybindings[key]
+		kb := h.effectiveKeybindings[key]
 
 		// Get command and check scope
 		cmd, ok := h.commands[kb.Cmd]
@@ -321,7 +384,7 @@ func (h *KeybindingResolver) HelpEntries() []string {
 		if help == "" {
 			help = unknownViewType
 		}
-		entries = append(entries, fmt.Sprintf("[%s] %s", key, help))
+		entries = append(entries, fmt.Sprintf("%s %s", key, help))
 	}
 	return entries
 }
@@ -335,11 +398,11 @@ func (h *KeybindingResolver) HelpString() string {
 // KeyBindings returns key.Binding objects for integration with bubbles help system.
 // Only returns keybindings that are in scope for the current view.
 func (h *KeybindingResolver) KeyBindings() []key.Binding {
-	keys := slices.Sorted(maps.Keys(h.keybindings))
+	keys := slices.Sorted(maps.Keys(h.effectiveKeybindings))
 	bindings := make([]key.Binding, 0, len(keys))
 
 	for _, k := range keys {
-		kb := h.keybindings[k]
+		kb := h.effectiveKeybindings[k]
 
 		// Get command and check scope
 		cmd, ok := h.commands[kb.Cmd]
@@ -481,7 +544,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 // ResolveFormCommand checks if a key maps to a user command with form fields.
 // Returns the command name and command if found, after scope and recycle checks.
 func (h *KeybindingResolver) ResolveFormCommand(key string, sess session.Session) (string, config.UserCommand, bool) {
-	kb, exists := h.keybindings[key]
+	kb, exists := h.effectiveKeybindings[key]
 	if !exists {
 		return "", config.UserCommand{}, false
 	}

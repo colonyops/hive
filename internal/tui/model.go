@@ -57,6 +57,7 @@ const (
 	stateSettingGroup
 	stateFormInput
 	stateShowingTodos
+	stateSelectingRepo
 )
 
 // Key constants for event handling.
@@ -221,7 +222,12 @@ func New(deps Deps, opts Opts) Model {
 	// Compute merged commands: system → plugins → user
 	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
-	handler := NewKeybindingResolver(cfg.Keybindings, mergedCommands, deps.Renderer)
+	viewKBs := map[string]map[string]config.Keybinding{
+		"global":   cfg.Views.Global.Keybindings,
+		"sessions": cfg.Views.Sessions.Keybindings,
+		"tasks":    cfg.Views.Tasks.Keybindings,
+	}
+	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
@@ -254,7 +260,7 @@ func New(deps Deps, opts Opts) Model {
 	s.Spinner = spinner.Dot
 	s.Style = styles.TextPrimaryStyle
 
-	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand)
+	msgView := messages.New(deps.MsgStore, "*", cfg.CopyCommand, cfg.Views.Messages.SplitRatio)
 
 	kvView := NewKVView()
 
@@ -270,7 +276,7 @@ func New(deps Deps, opts Opts) Model {
 		}
 	}
 
-	tasksView := tasks.New(deps.Honeycomb, repoKey)
+	tasksView := tasks.New(deps.Honeycomb, repoKey, handler, deps.KVStore, cfg.Views.Tasks.SplitRatio)
 	if contextDir == "" {
 		contextDir = cfg.SharedContextDir()
 		docs, _ = review.DiscoverDocuments(contextDir)
@@ -387,7 +393,7 @@ func (m Model) Init() tea.Cmd {
 		}
 	}
 	// Start KV store polling if store view is enabled
-	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+	if m.kvStore != nil && m.cfg.TUI.Store {
 		cmds = append(cmds, scheduleKVPollTick())
 	}
 	// Start tasks view
@@ -511,6 +517,14 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.notifyErrorf("%v", msg.Err)
 		model, cmd = m, nil
 
+	// Outbound messages from tasks view
+	case tasks.ActionRequestMsg:
+		model, cmd = m.handleTaskAction(msg)
+	case tasks.CommandPaletteRequestMsg:
+		model, cmd = m.handleTaskCommandPalette(msg)
+	case repoKeysLoadedMsg:
+		model, cmd = m.handleRepoKeysLoaded(msg)
+
 	// Action results
 	case renameCompleteMsg:
 		model, cmd = m.handleRenameComplete(msg)
@@ -631,6 +645,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateFormInput {
 		return m.handleFormDialogKey(msg, keyStr)
+	}
+	if m.state == stateSelectingRepo {
+		return m.handleRepoPickerKey(msg)
 	}
 
 	// When filtering in either list, pass most keys except quit
@@ -1062,6 +1079,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m.showHiveDoctor()
 		}
 
+		// Task actions don't require a session
+		if isTaskAction(entry.Command.Action) {
+			m.state = stateNormal
+			return m.handleTaskAction(tasks.ActionRequestMsg{
+				Action: act.Action{Type: entry.Command.Action},
+			})
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if sessions.IsFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1107,6 +1132,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 	}
 
 	return m, cmd
+}
+
+func isTaskAction(t act.Type) bool {
+	switch t { //nolint:exhaustive // only matching task-specific actions
+	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview, act.TypeTasksSelectRepo:
+		return true
+	}
+	return false
 }
 
 // copyToClipboard copies the given text to the system clipboard.
@@ -1294,7 +1327,7 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 		tabs = append(tabs, ViewTasks)
 	}
 	tabs = append(tabs, ViewMessages)
-	if m.kvStore != nil && m.cfg.TUI.Views.Store {
+	if m.kvStore != nil && m.cfg.TUI.Store {
 		tabs = append(tabs, ViewStore)
 	}
 	if m.reviewView != nil && m.reviewView.CanShowInTabBar() {
@@ -1326,6 +1359,9 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	case ViewStore:
 		return m, m.loadKVKeys()
 	case ViewTasks:
+		if cmd := m.syncTasksRepoFromSessions(); cmd != nil {
+			return m, cmd
+		}
 		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
 	case ViewSessions, ViewMessages, ViewReview:
 		// No special load action needed
@@ -1510,6 +1546,45 @@ func (m Model) selectedTreeItem() *sessions.TreeItem {
 		return nil
 	}
 	return m.sessionsView.SelectedTreeItem()
+}
+
+// syncTasksRepoFromSessions extracts the repo from the sessions tree selection
+// and updates the tasks view scope if it differs from the current repo.
+func (m Model) syncTasksRepoFromSessions() tea.Cmd {
+	if m.tasksView == nil {
+		return nil
+	}
+
+	ti := m.selectedTreeItem()
+	if ti == nil {
+		return nil
+	}
+
+	var remote string
+	switch {
+	case ti.IsHeader:
+		remote = ti.RepoRemote
+	case ti.IsWindowItem:
+		remote = ti.ParentSession.Remote
+	case !ti.IsRecycledPlaceholder:
+		remote = ti.Session.Remote
+	}
+
+	if remote == "" {
+		return nil
+	}
+
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner == "" || repo == "" {
+		return nil
+	}
+
+	repoKey := owner + "/" + repo
+	if repoKey == m.tasksView.RepoKey() {
+		return nil
+	}
+
+	return m.tasksView.SetRepoKey(repoKey)
 }
 
 // hasEditorFocus returns true if any text input currently has focus.
