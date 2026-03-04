@@ -16,6 +16,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/git"
+	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
@@ -269,8 +270,66 @@ func (m Model) handleTaskAction(msg tasks.ActionRequestMsg) (tea.Model, tea.Cmd)
 			return m, m.loadRepoKeys()
 		}
 		return m, nil
+
+	// Direct status changes (no confirmation)
+	case act.TypeTasksSetOpen:
+		return m, m.taskUpdateStatus(hc.StatusOpen)
+	case act.TypeTasksSetInProgress:
+		return m, m.taskUpdateStatus(hc.StatusInProgress)
+	case act.TypeTasksSetDone:
+		return m, m.taskUpdateStatus(hc.StatusDone)
+
+	// Confirmation-required actions
+	case act.TypeTasksSetCancelled:
+		if m.tasksView == nil {
+			return m, nil
+		}
+		item := m.tasksView.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		a.SessionID = item.ID
+		a.SessionName = item.Title
+		a.Confirm = fmt.Sprintf("Cancel task %q?", item.Title)
+		return m.dispatchAction(a)
+	case act.TypeTasksDelete:
+		if m.tasksView == nil {
+			return m, nil
+		}
+		item := m.tasksView.SelectedItem()
+		if item == nil {
+			return m, nil
+		}
+		a.SessionID = item.ID
+		a.SessionName = item.Title
+		a.Confirm = fmt.Sprintf("Delete %q? This cannot be undone.", item.Title)
+		return m.dispatchAction(a)
+	case act.TypeTasksPrune:
+		a.Confirm = "Remove all done/cancelled items older than 24h?"
+		return m.dispatchAction(a)
+
 	default:
 		return m.handleGlobalAction(a)
+	}
+}
+
+// taskUpdateStatus returns a command that updates the selected task's status.
+func (m Model) taskUpdateStatus(status hc.Status) tea.Cmd {
+	if m.tasksView == nil {
+		return nil
+	}
+	item := m.tasksView.SelectedItem()
+	if item == nil {
+		return nil
+	}
+	svc := m.tasksView.Svc()
+	if svc == nil {
+		return nil
+	}
+	id := item.ID
+	return func() tea.Msg {
+		_, err := svc.UpdateItem(context.Background(), id, hc.ItemUpdate{Status: &status})
+		return tasks.TaskActionCompleteMsg{Err: err}
 	}
 }
 
@@ -349,6 +408,14 @@ func (m Model) handleSetGroupComplete(msg setGroupCompleteMsg) (tea.Model, tea.C
 		return m, m.notifyError("set group failed: %v", msg.err)
 	}
 	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
+}
+
+func (m Model) handleTaskActionComplete(msg tasks.TaskActionCompleteMsg) (tea.Model, tea.Cmd) {
+	if msg.Err != nil {
+		m.notifyErrorf("task action failed: %v", msg.Err)
+		return m, nil
+	}
+	return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
 }
 
 func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) {
@@ -892,6 +959,44 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 				m.modals.Pending = Action{}
 				m.modals.PendingRecycledSessions = nil
 				return m, m.deleteRecycledSessionsBatch(recycled)
+			}
+			if action.Type == act.TypeTasksSetCancelled {
+				m.state = stateNormal
+				m.modals.Pending = Action{}
+				status := hc.StatusCancelled
+				id := action.SessionID
+				svc := m.tasksView.Svc()
+				return m, func() tea.Msg {
+					_, err := svc.UpdateItem(context.Background(), id, hc.ItemUpdate{Status: &status})
+					return tasks.TaskActionCompleteMsg{Err: err}
+				}
+			}
+			if action.Type == act.TypeTasksDelete {
+				m.state = stateNormal
+				m.modals.Pending = Action{}
+				id := action.SessionID
+				svc := m.tasksView.Svc()
+				return m, func() tea.Msg {
+					err := svc.DeleteItem(context.Background(), id)
+					return tasks.TaskActionCompleteMsg{Err: err}
+				}
+			}
+			if action.Type == act.TypeTasksPrune {
+				m.state = stateNormal
+				m.modals.Pending = Action{}
+				svc := m.tasksView.Svc()
+				repoKey := ""
+				if m.tasksView != nil {
+					repoKey = m.tasksView.RepoKey()
+				}
+				return m, func() tea.Msg {
+					_, err := svc.Prune(context.Background(), hc.PruneOpts{
+						OlderThan: 24 * time.Hour,
+						Statuses:  []hc.Status{hc.StatusDone, hc.StatusCancelled},
+						RepoKey:   repoKey,
+					})
+					return tasks.TaskActionCompleteMsg{Err: err}
+				}
 			}
 			m.state = stateNormal
 			if !action.Silent {

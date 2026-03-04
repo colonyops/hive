@@ -32,5 +32,10 @@ type ActionRequestMsg struct {
 	Action action.Action
 }
 
+// TaskActionCompleteMsg carries the result of a task mutation (status change, delete, prune).
+type TaskActionCompleteMsg struct {
+	Err error
+}
+
 // CommandPaletteRequestMsg requests the parent to open the command palette.
 type CommandPaletteRequestMsg struct{}

@@ -522,6 +522,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleTaskAction(msg)
 	case tasks.CommandPaletteRequestMsg:
 		model, cmd = m.handleTaskCommandPalette(msg)
+	case tasks.TaskActionCompleteMsg:
+		model, cmd = m.handleTaskActionComplete(msg)
 	case repoKeysLoadedMsg:
 		model, cmd = m.handleRepoKeysLoaded(msg)
 
