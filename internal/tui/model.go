@@ -1138,7 +1138,8 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 
 func isTaskAction(t act.Type) bool {
 	switch t { //nolint:exhaustive // only matching task-specific actions
-	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview, act.TypeTasksSelectRepo:
+	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview, act.TypeTasksSelectRepo,
+		act.TypeTasksSetOpen, act.TypeTasksSetInProgress, act.TypeTasksSetDone, act.TypeTasksSetCancelled, act.TypeTasksDelete, act.TypeTasksPrune:
 		return true
 	}
 	return false

@@ -224,6 +224,42 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
+	"TasksSetOpen": {
+		Action: action.TypeTasksSetOpen,
+		Help:   "set open",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksSetInProgress": {
+		Action: action.TypeTasksSetInProgress,
+		Help:   "set in progress",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksSetDone": {
+		Action: action.TypeTasksSetDone,
+		Help:   "set done",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksSetCancelled": {
+		Action: action.TypeTasksSetCancelled,
+		Help:   "set cancelled",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksDelete": {
+		Action: action.TypeTasksDelete,
+		Help:   "delete",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
+	"TasksPrune": {
+		Action: action.TypeTasksPrune,
+		Help:   "prune done",
+		Silent: true,
+		Scope:  []string{"tasks"},
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
