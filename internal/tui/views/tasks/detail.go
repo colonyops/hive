@@ -6,11 +6,10 @@ import (
 	"time"
 
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/charmbracelet/glamour"
-	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/views/shared"
 )
 
 // renderDetailHeader renders the static header portion above the viewport:
@@ -44,7 +43,7 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string
 	// Description (rendered as markdown via glamour)
 	if item.Desc != "" {
 		b.WriteString("\n")
-		b.WriteString(renderMarkdown(item.Desc, width))
+		b.WriteString(shared.RenderMarkdown(item.Desc, width))
 	} else {
 		b.WriteString("\n")
 		b.WriteString(styles.TextMutedStyle.Render("No description"))
@@ -77,7 +76,7 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string
 			if checkpoint, ok := strings.CutPrefix(msg, "CHECKPOINT:"); ok {
 				msg = strings.TrimSpace(checkpoint)
 			}
-			rendered := renderMarkdown(msg, bodyWidth)
+			rendered := shared.RenderMarkdown(msg, bodyWidth)
 			for _, line := range strings.Split(rendered, "\n") {
 				fmt.Fprintf(&b, "   %s\n", line)
 			}
@@ -133,61 +132,6 @@ func renderHeader(item *hc.Item, node *TreeNode) string {
 	}
 
 	return strings.Join(parts, "  ")
-}
-
-// cachedRenderer holds a reusable glamour TermRenderer keyed by word-wrap width.
-var (
-	cachedRenderer      *glamour.TermRenderer
-	cachedRendererWidth int
-)
-
-// getMarkdownRenderer returns a glamour TermRenderer, reusing a cached instance
-// when the width hasn't changed.
-func getMarkdownRenderer(width int) (*glamour.TermRenderer, error) {
-	if cachedRenderer != nil && cachedRendererWidth == width {
-		return cachedRenderer, nil
-	}
-
-	style := styles.GlamourStyle()
-	noMargin := uint(0)
-	style.Document.Margin = &noMargin
-
-	r, err := glamour.NewTermRenderer(
-		glamour.WithStyles(style),
-		glamour.WithWordWrap(width),
-	)
-	if err != nil {
-		return nil, err
-	}
-
-	cachedRenderer = r
-	cachedRendererWidth = width
-	return r, nil
-}
-
-// renderMarkdown renders text as styled markdown using glamour.
-// Glamour can panic on certain inputs, so we recover gracefully.
-func renderMarkdown(text string, width int) (result string) {
-	defer func() {
-		if r := recover(); r != nil {
-			log.Warn().Interface("panic", r).Msg("tasks: glamour panicked during render")
-			result = text
-		}
-	}()
-
-	r, err := getMarkdownRenderer(width)
-	if err != nil {
-		log.Debug().Err(err).Msg("tasks: failed to create markdown renderer")
-		return text
-	}
-
-	rendered, err := r.Render(text)
-	if err != nil {
-		log.Debug().Err(err).Msg("tasks: failed to render markdown")
-		return text
-	}
-
-	return strings.TrimSpace(rendered)
 }
 
 // relativeTime formats a time as a human-readable relative duration.

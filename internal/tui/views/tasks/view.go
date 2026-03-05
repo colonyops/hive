@@ -8,7 +8,6 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/hc"
@@ -16,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
+	"github.com/colonyops/hive/internal/tui/views/shared"
 )
 
 // focusPane tracks which pane has keyboard focus.
@@ -164,12 +164,12 @@ func (v *View) View() string {
 
 		// Tree pane: repo header + items + filter bar
 		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
-		repoHeader = ensureExactWidth(repoHeader, treeWidth)
+		repoHeader = shared.EnsureExactWidth(repoHeader, treeWidth)
 		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows, emptyMsg)
-		treeContent = ensureExactHeight(treeContent, treeRows)
+		treeContent = shared.EnsureExactHeight(treeContent, treeRows)
 		filterLine := " " + renderFilterBar(v.statusFilter)
-		filterLine = ensureExactWidth(filterLine, treeWidth)
-		treeContent = ensureExactWidth(treeContent, treeWidth)
+		filterLine = shared.EnsureExactWidth(filterLine, treeWidth)
+		treeContent = shared.EnsureExactWidth(treeContent, treeWidth)
 		filterRule := styles.TextMutedStyle.Render(strings.Repeat("─", treeWidth))
 		treeContent = repoHeader + "\n" + treeContent + "\n" + filterRule + "\n" + filterLine
 
@@ -183,9 +183,9 @@ func (v *View) View() string {
 		// Detail pane: static header + scrollable viewport
 		innerWidth := detailWidth - 2 // 1 char padding each side
 		header := renderDetailHeader(selected, selectedNode, innerWidth)
-		header = padLines(header, 1)
-		headerRendered := ensureExactHeight(header, headerLines)
-		headerRendered = ensureExactWidth(headerRendered, detailWidth)
+		header = shared.PadLines(header, 1)
+		headerRendered := shared.EnsureExactHeight(header, headerLines)
+		headerRendered = shared.EnsureExactWidth(headerRendered, detailWidth)
 
 		// Viewport content
 		vpView := v.viewport.View()
@@ -197,15 +197,15 @@ func (v *View) View() string {
 
 		// Compose header + viewport, then pad to exact height
 		detailContent := headerRendered + "\n" + vpContent
-		detailContent = ensureExactHeight(detailContent, contentHeight)
-		detailContent = ensureExactWidth(detailContent, detailWidth)
+		detailContent = shared.EnsureExactHeight(detailContent, contentHeight)
+		detailContent = shared.EnsureExactWidth(detailContent, detailWidth)
 
 		// Divider — accent color when detail pane has focus
 		dividerStyle := styles.TextMutedStyle
 		if v.focus == paneDetail {
 			dividerStyle = styles.TextPrimaryStyle
 		}
-		divider := buildDividerStyled(contentHeight, dividerStyle)
+		divider := shared.BuildDividerStyled(contentHeight, dividerStyle)
 
 		// Dim tree pane when detail has focus.
 		if v.focus == paneDetail {
@@ -218,8 +218,8 @@ func (v *View) View() string {
 		// Tree-only layout: full width.
 		repoHeader := " " + styles.TextMutedStyle.Render(v.repoKey)
 		treeContent := renderTree(v.flatNodes, v.cursor, v.scrollOffset, treeRows, emptyMsg)
-		treeContent = ensureExactHeight(treeContent, treeRows)
-		treeContent = ensureExactWidth(treeContent, v.width)
+		treeContent = shared.EnsureExactHeight(treeContent, treeRows)
+		treeContent = shared.EnsureExactWidth(treeContent, v.width)
 		filterLine := " " + renderFilterBar(v.statusFilter)
 		filterRule := styles.TextMutedStyle.Render(strings.Repeat("─", v.width))
 		body = repoHeader + "\n" + treeContent + "\n" + filterRule + "\n" + filterLine
@@ -652,75 +652,4 @@ func (v *View) clampScroll() {
 	// Don't scroll past the end
 	maxOffset := max(len(v.flatNodes)-visibleRows, 0)
 	v.scrollOffset = max(min(v.scrollOffset, maxOffset), 0)
-}
-
-// buildDividerStyled creates a vertical divider string of the given height with the given style.
-func buildDividerStyled(height int, style lipgloss.Style) string {
-	styledChar := style.Render("│")
-	lines := make([]string, height)
-	for i := range lines {
-		lines[i] = styledChar
-	}
-	return strings.Join(lines, "\n")
-}
-
-// padLines adds left padding to each line of content.
-func padLines(content string, padding int) string {
-	pad := strings.Repeat(" ", padding)
-	lines := strings.Split(content, "\n")
-	for i, line := range lines {
-		lines[i] = pad + line
-	}
-	return strings.Join(lines, "\n")
-}
-
-// ensureExactHeight ensures content has exactly n lines.
-func ensureExactHeight(content string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-
-	lines := strings.Split(content, "\n")
-
-	if len(lines) > n {
-		lines = lines[:n]
-	} else {
-		for len(lines) < n {
-			lines = append(lines, "")
-		}
-	}
-
-	return strings.Join(lines, "\n")
-}
-
-// ensureExactWidth pads or truncates each line to exactly the given width.
-func ensureExactWidth(content string, width int) string {
-	if width <= 0 {
-		return content
-	}
-
-	lines := strings.Split(content, "\n")
-	// Pre-allocate: each line ≈ width bytes + newline
-	var b strings.Builder
-	b.Grow(len(lines) * (width + 1))
-
-	for i, line := range lines {
-		if i > 0 {
-			b.WriteByte('\n')
-		}
-
-		displayWidth := ansi.StringWidth(line)
-
-		switch {
-		case displayWidth == width:
-			b.WriteString(line)
-		case displayWidth < width:
-			b.WriteString(line)
-			b.WriteString(strings.Repeat(" ", width-displayWidth))
-		default:
-			b.WriteString(ansi.Truncate(line, width, ""))
-		}
-	}
-
-	return b.String()
 }
