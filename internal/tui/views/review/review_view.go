@@ -79,12 +79,14 @@ type View struct {
 	treeCursor int            // current cursor position in flatNodes
 	treeScroll int            // scroll offset in flatNodes
 	splitRatio int            // panel split percentage (0 = default 30%)
+
+	handler KeyResolver // resolves configurable keybindings to actions
 }
 
 // New creates a new review view.
 // If contextDir is non-empty, it will watch for file changes.
 // If store is non-nil, comments will be persisted to the database.
-func New(documents []Document, contextDir string, store *stores.ReviewStore) View {
+func New(documents []Document, contextDir string, store *stores.ReviewStore, handler KeyResolver, splitRatio int) View {
 	items := BuildTreeItems(documents)
 	delegate := NewReviewTreeDelegate()
 	l := list.New(items, delegate, 0, 0)
@@ -141,6 +143,8 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore) Vie
 		fullScreen:  false,
 		cursorLine:  1,
 		searchInput: ti,
+		splitRatio:  splitRatio,
+		handler:     handler,
 		// Phase 1 components
 		documentView:        documentView,
 		searchModeComponent: searchModeComponent,
@@ -656,6 +660,13 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					}
 				}
 				return v, nil
+			}
+
+			// Resolve configurable keybindings via handler
+			if v.handler != nil {
+				if a, ok := v.handler.ResolveAction(msg.String()); ok {
+					return v, func() tea.Msg { return ActionRequestMsg{Action: a} }
+				}
 			}
 		}
 

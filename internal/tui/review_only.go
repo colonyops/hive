@@ -41,7 +41,7 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	store := stores.NewReviewStore(opts.DB)
 
 	// Create review view
-	reviewView := review.New(opts.Documents, opts.ContextDir, store)
+	reviewView := review.New(opts.Documents, opts.ContextDir, store, nil, 0)
 
 	return ReviewOnlyModel{
 		reviewView:  reviewView,

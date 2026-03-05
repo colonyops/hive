@@ -260,6 +260,30 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
+	"DocsCopyPath": {
+		Action: action.TypeDocsCopyPath,
+		Help:   "copy path",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
+	"DocsCopyRelPath": {
+		Action: action.TypeDocsCopyRelPath,
+		Help:   "copy relative path",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
+	"DocsCopyContents": {
+		Action: action.TypeDocsCopyContents,
+		Help:   "copy contents",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
+	"DocsOpen": {
+		Action: action.TypeDocsOpen,
+		Help:   "open in editor",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}

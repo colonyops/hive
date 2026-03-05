@@ -226,6 +226,7 @@ func New(deps Deps, opts Opts) Model {
 		"global":   cfg.Views.Global.Keybindings,
 		"sessions": cfg.Views.Sessions.Keybindings,
 		"tasks":    cfg.Views.Tasks.Keybindings,
+		"review":   cfg.Views.Review.Keybindings,
 	}
 	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
@@ -287,7 +288,7 @@ func New(deps Deps, opts Opts) Model {
 		reviewStore = stores.NewReviewStore(deps.DB)
 	}
 
-	reviewView := review.New(docs, contextDir, reviewStore)
+	reviewView := review.New(docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
 
 	notifyStore := stores.NewNotifyStore(deps.DB)
 	toastCtrl := NewToastController()
@@ -524,6 +525,11 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleTaskCommandPalette(msg)
 	case tasks.TaskActionCompleteMsg:
 		model, cmd = m.handleTaskActionComplete(msg)
+
+	// Outbound messages from review view
+	case review.ActionRequestMsg:
+		model, cmd = m.handleReviewAction(msg)
+
 	case repoKeysLoadedMsg:
 		model, cmd = m.handleRepoKeysLoaded(msg)
 
@@ -1068,6 +1074,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			})
 		}
 
+		// Docs actions don't require a session
+		if isDocsAction(entry.Command.Action) {
+			m.state = stateNormal
+			return m.handleReviewAction(review.ActionRequestMsg{
+				Action: act.Action{Type: entry.Command.Action},
+			})
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if sessions.IsFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1119,6 +1133,14 @@ func isTaskAction(t act.Type) bool {
 	switch t { //nolint:exhaustive // only matching task-specific actions
 	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview, act.TypeTasksSelectRepo,
 		act.TypeTasksSetOpen, act.TypeTasksSetInProgress, act.TypeTasksSetDone, act.TypeTasksSetCancelled, act.TypeTasksDelete, act.TypeTasksPrune:
+		return true
+	}
+	return false
+}
+
+func isDocsAction(t act.Type) bool {
+	switch t { //nolint:exhaustive // only matching docs-specific actions
+	case act.TypeDocsCopyPath, act.TypeDocsCopyRelPath, act.TypeDocsCopyContents, act.TypeDocsOpen, act.TypeDocsTogglePreview:
 		return true
 	}
 	return false

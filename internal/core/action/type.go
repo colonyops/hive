@@ -40,6 +40,11 @@ package action
 //	TasksDelete
 //	TasksPrune
 //	ViewTasks
+//	DocsCopyPath
+//	DocsCopyRelPath
+//	DocsCopyContents
+//	DocsOpen
+//	DocsTogglePreview
 //
 // )
 type Type string

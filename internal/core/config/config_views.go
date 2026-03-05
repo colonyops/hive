@@ -13,6 +13,7 @@ type ViewsConfig struct {
 	Sessions SessionsViewConfig `json:"sessions" yaml:"sessions"`
 	Tasks    TasksViewConfig    `json:"tasks"    yaml:"tasks"`
 	Messages MessagesViewConfig `json:"messages" yaml:"messages"`
+	Review   ReviewViewConfig   `json:"review"   yaml:"review"`
 }
 
 // GlobalViewConfig holds configuration for global (cross-view) keybindings.
@@ -51,6 +52,20 @@ func (t TasksViewConfig) SplitRatioOrDefault(defaultPct int) int {
 		return defaultPct
 	}
 	return t.SplitRatio
+}
+
+// ReviewViewConfig holds configuration for the review/docs view.
+type ReviewViewConfig struct {
+	Keybindings map[string]Keybinding `json:"keybindings" yaml:"keybindings"`
+	SplitRatio  int                   `json:"split_ratio" yaml:"split_ratio"`
+}
+
+// SplitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
+func (r ReviewViewConfig) SplitRatioOrDefault(defaultPct int) int {
+	if r.SplitRatio < 1 || r.SplitRatio > 80 {
+		return defaultPct
+	}
+	return r.SplitRatio
 }
 
 // MessagesViewConfig holds configuration for the messages view.
@@ -104,6 +119,14 @@ var defaultViewsConfig = ViewsConfig{
 			"P": {Cmd: "TasksPrune"},
 		},
 	},
+	Review: ReviewViewConfig{
+		Keybindings: map[string]Keybinding{
+			"y": {Cmd: "DocsCopyPath"},
+			"Y": {Cmd: "DocsCopyRelPath"},
+			"c": {Cmd: "DocsCopyContents"},
+			"o": {Cmd: "DocsOpen"},
+		},
+	},
 }
 
 func mergeKeybindingMaps(defaults, user map[string]Keybinding) map[string]Keybinding {
@@ -134,6 +157,10 @@ func mergeViewsConfig(defaults, user ViewsConfig) ViewsConfig {
 		Messages: MessagesViewConfig{
 			Keybindings: mergeKeybindingMaps(defaults.Messages.Keybindings, user.Messages.Keybindings),
 			SplitRatio:  firstNonZero(user.Messages.SplitRatio, defaults.Messages.SplitRatio),
+		},
+		Review: ReviewViewConfig{
+			Keybindings: mergeKeybindingMaps(defaults.Review.Keybindings, user.Review.Keybindings),
+			SplitRatio:  firstNonZero(user.Review.SplitRatio, defaults.Review.SplitRatio),
 		},
 	}
 }
@@ -167,6 +194,8 @@ func (v *ViewsConfig) keybindingsForView(view string) map[string]Keybinding {
 		return v.Tasks.Keybindings
 	case "messages":
 		return v.Messages.Keybindings
+	case "review":
+		return v.Review.Keybindings
 	case "global":
 		return v.Global.Keybindings
 	default:
@@ -188,4 +217,5 @@ func validateViewKeybindingMaps(errs *criterio.FieldErrorsBuilder, views ViewsCo
 	validateKeybindingMap(errs, "views.sessions.keybindings", views.Sessions.Keybindings)
 	validateKeybindingMap(errs, "views.tasks.keybindings", views.Tasks.Keybindings)
 	validateKeybindingMap(errs, "views.messages.keybindings", views.Messages.Keybindings)
+	validateKeybindingMap(errs, "views.review.keybindings", views.Review.Keybindings)
 }

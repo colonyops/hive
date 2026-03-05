@@ -111,7 +111,7 @@ func TestNew(t *testing.T) {
 		},
 	}
 
-	view := New(docs, "", nil)
+	view := New(docs, "", nil, nil, 0)
 
 	// Should not panic and should have a list
 	require.NotNil(t, view.list.Items(), "expected list items to be initialized")
@@ -125,7 +125,7 @@ func TestDocumentWatcherIntegration(t *testing.T) {
 	tmpDir := t.TempDir()
 
 	// Create review view with watcher
-	view := New([]Document{}, tmpDir, nil)
+	view := New([]Document{}, tmpDir, nil, nil, 0)
 
 	// View should have a watcher
 	require.NotNil(t, view.watcher, "expected watcher to be initialized")
@@ -144,7 +144,7 @@ func TestCommentDeletionWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -196,7 +196,7 @@ func TestCommentDeletionCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -245,7 +245,7 @@ func TestReviewDiscardWithConfirmation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -312,7 +312,7 @@ func TestReviewDiscardCancellation(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -359,7 +359,7 @@ func TestReviewDiscardWithNoComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -389,7 +389,7 @@ func TestCommentVisualStyling(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.selectedDoc = &doc
 
@@ -447,7 +447,7 @@ func TestLineMappingWithComments(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.selectedDoc = &doc
 
 	// Create a session with comments on lines 2 and 4
@@ -533,7 +533,7 @@ func TestView_WithPickerModal(t *testing.T) {
 		{RelPath: "doc1.md", Type: DocTypePlan},
 	}
 
-	reviewView := New(docs, "/test", nil)
+	reviewView := New(docs, "/test", nil, nil, 0)
 	reviewView.SetSize(100, 40)
 
 	// Show picker
@@ -546,7 +546,7 @@ func TestView_WithPickerModal(t *testing.T) {
 }
 
 func TestView_HasPickerModalField(t *testing.T) {
-	reviewView := New(nil, "", nil)
+	reviewView := New(nil, "", nil, nil, 0)
 
 	// Access the field to ensure it exists
 	_ = reviewView.pickerModal
@@ -573,7 +573,7 @@ func TestScrollVisibilityWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -655,7 +655,7 @@ func TestJumpToMatchWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 10)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -769,7 +769,7 @@ func TestReverseMappingCorrectness(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3\nLine 4\nLine 5",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.selectedDoc = &doc
 
 	// Create session with comments
@@ -870,7 +870,7 @@ func TestFinalizedSessionsNotReloaded(t *testing.T) {
 	}
 
 	// Create review view with the store
-	view := New([]Document{doc}, tmpDir, store)
+	view := New([]Document{doc}, tmpDir, store, nil, 0)
 	view.SetSize(80, 24)
 
 	// Load document and create a session with a comment
@@ -919,7 +919,7 @@ func TestCtrlDUWithComments(t *testing.T) {
 		RenderedLines: lines,
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 10) // Small height to force scrolling
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -1010,7 +1010,7 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 			Type:    DocTypePlan,
 		},
 	}
-	v := New(docs, "/test", nil)
+	v := New(docs, "/test", nil, nil, 0)
 	v.SetSize(100, 40)
 
 	// Manually set up the finalization modal state (simulating pressing 'f')
@@ -1046,7 +1046,7 @@ func TestHasActiveEditor(t *testing.T) {
 		Content: "Line 1\nLine 2\nLine 3",
 	}
 
-	view := New([]Document{doc}, "", nil)
+	view := New([]Document{doc}, "", nil, nil, 0)
 	view.SetSize(80, 24)
 	view.fullScreen = true
 	view.selectedDoc = &doc
@@ -1172,7 +1172,7 @@ func TestOpenDocumentByPath_AbsolutePathDiskFallback(t *testing.T) {
 	require.NoError(t, os.WriteFile(docPath, []byte("# Cross Repo Doc"), 0o644))
 
 	// Create a review view with NO documents (simulating a different repo's context)
-	view := New(nil, "/some/other/context", nil)
+	view := New(nil, "/some/other/context", nil, nil, 0)
 	view.SetSize(100, 40)
 
 	// Open the document by absolute path — should fall back to disk
@@ -1193,7 +1193,7 @@ func TestLoadDocumentFromPath(t *testing.T) {
 	docPath := filepath.Join(plansDir, "test-plan.md")
 	require.NoError(t, os.WriteFile(docPath, []byte("# Test Plan\nSome content"), 0o644))
 
-	view := New(nil, "/other/context", nil)
+	view := New(nil, "/other/context", nil, nil, 0)
 	view.SetSize(100, 40)
 
 	// Load document from absolute path
@@ -1207,7 +1207,7 @@ func TestLoadDocumentFromPath(t *testing.T) {
 }
 
 func TestLoadDocumentFromPath_NonExistent(t *testing.T) {
-	view := New(nil, "/some/context", nil)
+	view := New(nil, "/some/context", nil, nil, 0)
 	view.SetSize(100, 40)
 
 	// Loading a non-existent file should not crash or set selectedDoc

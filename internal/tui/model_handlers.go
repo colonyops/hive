@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -416,6 +417,75 @@ func (m Model) handleTaskActionComplete(msg tasks.TaskActionCompleteMsg) (tea.Mo
 		return m, nil
 	}
 	return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
+}
+
+func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.Cmd) {
+	a := msg.Action
+	if a.Err != nil {
+		m.notifyErrorf("keybinding error: %v", a.Err)
+		return m, nil
+	}
+
+	var docPath, docRelPath string
+	if m.reviewView != nil {
+		if doc := m.reviewView.SelectedDoc(); doc != nil {
+			docPath = doc.Path
+			docRelPath = doc.RelPath
+		}
+	}
+
+	switch a.Type {
+	case act.TypeDocsCopyPath:
+		if docPath == "" {
+			return m, nil
+		}
+		if err := m.copyToClipboard(docPath); err != nil {
+			m.notifyErrorf("copy failed: %v", err)
+		} else {
+			m.publishNotificationf(notify.LevelInfo, "Copied path")
+		}
+	case act.TypeDocsCopyRelPath:
+		if docRelPath == "" {
+			return m, nil
+		}
+		if err := m.copyToClipboard(docRelPath); err != nil {
+			m.notifyErrorf("copy failed: %v", err)
+		} else {
+			m.publishNotificationf(notify.LevelInfo, "Copied relative path")
+		}
+	case act.TypeDocsCopyContents:
+		if m.reviewView == nil {
+			return m, nil
+		}
+		if doc := m.reviewView.SelectedDoc(); doc != nil {
+			content, err := os.ReadFile(doc.Path)
+			if err != nil {
+				m.notifyErrorf("read failed: %v", err)
+			} else if err := m.copyToClipboard(string(content)); err != nil {
+				m.notifyErrorf("copy failed: %v", err)
+			} else {
+				m.publishNotificationf(notify.LevelInfo, "Copied contents")
+			}
+		}
+	case act.TypeDocsOpen:
+		if docPath == "" {
+			return m, nil
+		}
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+		c := exec.Command(editor, docPath)
+		c.Stdin = os.Stdin
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			m.notifyErrorf("open failed: %v", err)
+		}
+	default:
+		return m.handleGlobalAction(a)
+	}
+	return m, nil
 }
 
 func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) {

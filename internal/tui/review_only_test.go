@@ -116,7 +116,7 @@ func TestReviewOnly_CtrlCAlwaysQuits(t *testing.T) {
 // TestReviewView_HasActiveEditor verifies the HasActiveEditor method.
 func TestReviewView_HasActiveEditor(t *testing.T) {
 	// Create minimal view without database (not needed for this test)
-	v := review.New([]review.Document{}, "", nil)
+	v := review.New([]review.Document{}, "", nil, nil, 0)
 
 	// Initially no active editor
 	assert.False(t, v.HasActiveEditor(), "Should have no active editor initially")
