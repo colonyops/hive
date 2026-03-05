@@ -93,9 +93,9 @@ func renderDocFileNode(fn DocFlatNode, isSelected bool) string {
 	node := fn.Node
 
 	// Indent: 2 spaces per depth level (depth-1 because connector fills some space at parent level)
-	indent := strings.Repeat("  ", fn.Depth-1)
-	if fn.Depth == 0 {
-		indent = ""
+	var indent string
+	if fn.Depth > 1 {
+		indent = strings.Repeat("  ", fn.Depth-1)
 	}
 
 	// Tree connector
