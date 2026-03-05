@@ -1240,7 +1240,17 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 			return m, nil
 		}
 		cmd := m.sessionsView.Update(msg)
-		return m, cmd
+		var cmds []tea.Cmd
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if docCmd := m.syncDocsRepoFromSessions(); docCmd != nil {
+			cmds = append(cmds, docCmd)
+		}
+		if taskCmd := m.syncTasksRepoFromSessions(); taskCmd != nil {
+			cmds = append(cmds, taskCmd)
+		}
+		return m, tea.Batch(cmds...)
 	}
 
 	// Messages view focused - delegate all keys to the sub-model
@@ -1345,7 +1355,11 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
-	case ViewSessions, ViewMessages, ViewReview:
+	case ViewReview:
+		if cmd := m.syncDocsRepoFromSessions(); cmd != nil {
+			return m, cmd
+		}
+	case ViewSessions, ViewMessages:
 		// No special load action needed
 	}
 
@@ -1567,6 +1581,45 @@ func (m Model) syncTasksRepoFromSessions() tea.Cmd {
 	}
 
 	return m.tasksView.SetRepoKey(repoKey)
+}
+
+// syncDocsRepoFromSessions extracts the repo from the sessions tree selection
+// and updates the review view context dir if it differs from the current one.
+func (m Model) syncDocsRepoFromSessions() tea.Cmd {
+	if m.reviewView == nil {
+		return nil
+	}
+
+	ti := m.selectedTreeItem()
+	if ti == nil {
+		return nil
+	}
+
+	var remote string
+	switch {
+	case ti.IsHeader:
+		remote = ti.RepoRemote
+	case ti.IsWindowItem:
+		remote = ti.ParentSession.Remote
+	case !ti.IsRecycledPlaceholder:
+		remote = ti.Session.Remote
+	}
+
+	if remote == "" {
+		return nil
+	}
+
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner == "" || repo == "" {
+		return nil
+	}
+
+	contextDir := m.cfg.RepoContextDir(owner, repo)
+	if contextDir == m.reviewView.ContextDir() {
+		return nil
+	}
+
+	return m.reviewView.SetContextDir(contextDir)
 }
 
 // hasEditorFocus returns true if any text input currently has focus.

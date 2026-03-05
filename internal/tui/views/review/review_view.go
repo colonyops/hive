@@ -182,6 +182,47 @@ func (v *View) HasActiveEditor() bool {
 	return v.searchMode || v.commentModal != nil || v.pickerModal != nil
 }
 
+// ContextDir returns the current context directory.
+func (v View) ContextDir() string {
+	return v.contextDir
+}
+
+// SetContextDir updates the context directory, restarts the file watcher,
+// and returns a cmd that scans and delivers a DocumentChangeMsg.
+func (v *View) SetContextDir(contextDir string) tea.Cmd {
+	if contextDir == v.contextDir {
+		return nil
+	}
+
+	// Stop old watcher
+	if v.watcher != nil {
+		_ = v.watcher.Close()
+		v.watcher = nil
+	}
+
+	v.contextDir = contextDir
+
+	// Start new watcher
+	if contextDir != "" {
+		w, err := NewDocumentWatcher(contextDir)
+		if err == nil {
+			v.watcher = w
+		}
+	}
+
+	// Return a cmd that immediately scans the new contextDir and starts watching
+	return func() tea.Msg {
+		if contextDir == "" {
+			return DocumentChangeMsg{Documents: nil}
+		}
+		docs, err := DiscoverDocuments(contextDir)
+		if err != nil {
+			docs = nil
+		}
+		return DocumentChangeMsg{Documents: docs}
+	}
+}
+
 // Init initializes the review view and starts the file watcher.
 func (v View) Init() tea.Cmd {
 	if v.watcher != nil {
