@@ -71,6 +71,11 @@ type View struct {
 	documentView        DocumentView // Document rendering and navigation
 	searchModeComponent SearchMode   // Search functionality
 	modalState          ModalState   // Modal coordination
+
+	// Phase 2: folder tree state (parallel to list.Model, not yet rendered)
+	roots      []*DocTreeNode // document folder tree
+	flatNodes  []DocFlatNode  // flattened for rendering
+	treeCursor int            // current cursor position in flatNodes
 }
 
 // New creates a new review view.
@@ -178,6 +183,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			Msg("review: rebuilding document tree from file watcher")
 		items := BuildTreeItems(msg.Documents)
 		v.list.SetItems(items)
+		v.rebuildTree()
 
 		// Refresh currently open document if one is selected
 		if v.selectedDoc != nil {
@@ -1534,6 +1540,29 @@ func (v *View) discardReview() tea.Cmd {
 
 		return reviewDiscardedMsg{}
 	}
+}
+
+// rebuildTree rebuilds the folder tree from the current list items.
+// It maintains v.roots, v.flatNodes, and keeps v.treeCursor in bounds.
+func (v *View) rebuildTree() {
+	docs := extractDocumentsFromListItems(v.list.Items())
+	v.roots = buildDocTree(docs)
+	v.flatNodes = flattenDocTree(v.roots)
+	if v.treeCursor >= len(v.flatNodes) {
+		v.treeCursor = max(0, len(v.flatNodes)-1)
+	}
+}
+
+// extractDocumentsFromListItems extracts Document values from a slice of list items,
+// skipping header items.
+func extractDocumentsFromListItems(items []list.Item) []Document {
+	var docs []Document
+	for _, item := range items {
+		if ti, ok := item.(TreeItem); ok && ti.IsDocument() {
+			docs = append(docs, ti.Document)
+		}
+	}
+	return docs
 }
 
 // updateTreeItemCommentCount updates the comment count badge in the tree for the current document.
