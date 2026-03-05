@@ -24,4 +24,7 @@ type KeyResolver interface {
 
 	// SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
 	SetSelectedWindow(windowIndex string)
+
+	// HelpEntries returns formatted help strings for current view keybindings.
+	HelpEntries() []string
 }

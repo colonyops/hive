@@ -11,6 +11,6 @@ type KeyResolver interface {
 	// ResolveAction resolves a key to an action without session context.
 	ResolveAction(key string) (action.Action, bool)
 
-	// HelpString returns a formatted help string for current view keybindings.
-	HelpString() string
+	// HelpEntries returns formatted help strings for current view keybindings.
+	HelpEntries() []string
 }

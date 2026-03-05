@@ -844,50 +844,29 @@ func (m Model) handleInfoDialogKey(keyStr string) (tea.Model, tea.Cmd) {
 func (m Model) showHelpDialog() (tea.Model, tea.Cmd) {
 	var sections []components.HelpDialogSection
 
-	userEntries := m.handler.HelpEntries()
-	if len(userEntries) > 0 {
-		entries := make([]components.HelpEntry, 0, len(userEntries))
-		for _, e := range userEntries {
-			if len(e) > 2 && e[0] == '[' {
-				endBracket := strings.Index(e, "]")
-				if endBracket > 0 {
-					key := e[1:endBracket]
-					desc := strings.TrimSpace(e[endBracket+1:])
-					entries = append(entries, components.HelpEntry{Key: key, Desc: desc})
-				}
-			}
+	switch m.activeView {
+	case ViewTasks:
+		if m.tasksView != nil {
+			sections = m.tasksView.HelpSections()
 		}
-		if len(entries) > 0 {
-			sections = append(sections, components.HelpDialogSection{
-				Title:   "User Commands",
-				Entries: entries,
-			})
+	case ViewMessages:
+		if m.msgView != nil {
+			sections = m.msgView.HelpSections()
+		}
+	default:
+		if m.sessionsView != nil {
+			sections = m.sessionsView.HelpSections()
 		}
 	}
-
-	navEntries := []components.HelpEntry{
-		{Key: "↑/k", Desc: "move up"},
-		{Key: "↓/j", Desc: "move down"},
-		{Key: "J/K", Desc: "next/prev active session"},
-		{Key: "enter", Desc: "select session"},
-		{Key: "/", Desc: "filter"},
-		{Key: "tab/shift+tab", Desc: "next/prev view"},
-		{Key: ":", Desc: "command palette"},
-		{Key: "g", Desc: "refresh git status"},
-	}
-
-	if m.sessionsView != nil && m.sessionsView.PreviewEnabled() {
-		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
-	}
-
-	navEntries = append(navEntries,
-		components.HelpEntry{Key: "R", Desc: "rename session"},
-	)
-	navEntries = append(navEntries, components.HelpEntry{Key: "q", Desc: "quit"})
 
 	sections = append(sections, components.HelpDialogSection{
-		Title:   "Navigation",
-		Entries: navEntries,
+		Title: "General",
+		Entries: []components.HelpEntry{
+			{Key: "tab", Desc: "next view"},
+			{Key: ":", Desc: "command palette"},
+			{Key: "?", Desc: "toggle help"},
+			{Key: "q", Desc: "quit"},
+		},
 	})
 
 	m.modals.ShowHelp("Keyboard Shortcuts", sections)

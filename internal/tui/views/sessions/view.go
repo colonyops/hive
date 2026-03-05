@@ -1310,6 +1310,52 @@ func (v *View) PluginStatuses() map[string]*kv.Store[string, plugins.Status] {
 	return v.pluginStatuses
 }
 
+// HelpSections returns view-specific help sections for the help dialog.
+func (v *View) HelpSections() []components.HelpDialogSection {
+	navEntries := []components.HelpEntry{
+		{Key: "↑/k", Desc: "move up"},
+		{Key: "↓/j", Desc: "move down"},
+		{Key: "J/K", Desc: "next/prev active session"},
+		{Key: "enter", Desc: "select session"},
+		{Key: "/", Desc: "filter"},
+		{Key: "g", Desc: "refresh git status"},
+	}
+
+	if v.previewEnabled {
+		navEntries = append(navEntries, components.HelpEntry{Key: "v", Desc: "toggle preview"})
+	}
+
+	navEntries = append(navEntries, components.HelpEntry{Key: "R", Desc: "rename session"})
+
+	sections := []components.HelpDialogSection{
+		{Title: "Navigation", Entries: navEntries},
+	}
+
+	if v.handler != nil {
+		actionEntries := parseHelpEntries(v.handler.HelpEntries())
+		if len(actionEntries) > 0 {
+			sections = append(sections, components.HelpDialogSection{
+				Title:   "Actions",
+				Entries: actionEntries,
+			})
+		}
+	}
+
+	return sections
+}
+
+// parseHelpEntries converts "key help" formatted strings to HelpEntry slices.
+func parseHelpEntries(raw []string) []components.HelpEntry {
+	entries := make([]components.HelpEntry, 0, len(raw))
+	for _, e := range raw {
+		parts := strings.SplitN(e, " ", 2)
+		if len(parts) == 2 {
+			entries = append(entries, components.HelpEntry{Key: parts[0], Desc: parts[1]})
+		}
+	}
+	return entries
+}
+
 // PreviewEnabled returns whether the preview sidebar is enabled.
 func (v *View) PreviewEnabled() bool {
 	return v.previewEnabled
