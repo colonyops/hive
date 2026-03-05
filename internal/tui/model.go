@@ -1302,7 +1302,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 
 // handleTabKey handles tab/shift+tab for switching views.
 // direction: +1 for next tab, -1 for previous tab.
-// Cycle: Sessions -> [Tasks if visible] -> Messages -> [Store if visible] -> [Review if visible] -> Sessions
+// Cycle: Sessions -> [Tasks if visible] -> Messages -> [Store if visible] -> Docs -> Sessions
 func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	tabs := []ViewType{ViewSessions}
 	if m.tasksView != nil {
@@ -1312,7 +1312,7 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	if m.kvStore != nil && m.cfg.TUI.Store {
 		tabs = append(tabs, ViewStore)
 	}
-	if m.reviewView != nil && m.reviewView.CanShowInTabBar() {
+	if m.reviewView != nil {
 		tabs = append(tabs, ViewReview)
 	}
 

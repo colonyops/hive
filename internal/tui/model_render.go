@@ -39,7 +39,6 @@ func (m Model) View() tea.View {
 
 // renderTabView renders the tab-based view layout.
 func (m Model) renderTabView() string {
-	showReviewTab := m.reviewView != nil && m.reviewView.CanShowInTabBar()
 	showStoreTab := m.kvStore != nil && m.cfg.TUI.Store
 
 	// Render each tab with appropriate style
@@ -61,8 +60,8 @@ func (m Model) renderTabView() string {
 	if showStoreTab || m.activeView == ViewStore {
 		tabs = append(tabs, renderTab("Store", ViewStore))
 	}
-	if showReviewTab || m.activeView == ViewReview {
-		tabs = append(tabs, renderTab("Review", ViewReview))
+	if m.reviewView != nil {
+		tabs = append(tabs, renderTab("Docs", ViewReview))
 	}
 
 	tabsLeft := strings.Join(tabs, " | ")

@@ -652,12 +652,16 @@ func (v View) View() string {
 
 	switch {
 	case v.selectedDoc == nil:
-		// Show helpful message if no document is selected
-		message := "No document selected\n\n"
-		message += styles.TextPrimaryBoldStyle.Render("Press 'p'") + " to open document picker\n"
-		message += styles.TextPrimaryBoldStyle.Render("Press 'tab'") + " to switch to another view"
-
-		baseView = styles.ReviewEmptyMessageStyle.Render(message)
+		if len(v.list.Items()) == 0 {
+			baseView = styles.TextMutedStyle.Render(
+				"\n  No documents found.\n  Run `hive ctx init` then create files in .hive/",
+			)
+		} else {
+			message := "No document selected\n\n"
+			message += styles.TextPrimaryBoldStyle.Render("Press 'p'") + " to open document picker\n"
+			message += styles.TextPrimaryBoldStyle.Render("Press 'tab'") + " to switch to another view"
+			baseView = styles.ReviewEmptyMessageStyle.Render(message)
+		}
 	case v.fullScreen:
 		// Full-screen mode: show viewport with status bar
 		// Guard against rendering before window size is set
@@ -1971,12 +1975,6 @@ func (v *View) LoadDocumentFromPath(absPath string) {
 		ModTime: info.ModTime(),
 	}
 	v.loadDocument(&doc)
-}
-
-// CanShowInTabBar returns true if the review view should be shown in tab bar.
-// This is true when there's an active session with a selected document.
-func (v *View) CanShowInTabBar() bool {
-	return v.activeSession != nil && v.selectedDoc != nil
 }
 
 // OpenDocumentMsg is a message sent when attempting to open a document.
