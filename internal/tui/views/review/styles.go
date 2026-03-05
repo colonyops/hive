@@ -5,3 +5,8 @@ const (
 	treeBranch = "├─"
 	treeLast   = "└─"
 )
+
+// Key constants for keyboard navigation.
+const (
+	keyEnter = "enter"
+)

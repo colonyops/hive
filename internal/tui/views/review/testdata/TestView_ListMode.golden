@@ -1,8 +1,24 @@
-                                             
-                                             
-    No document selected                     
-                                             
-    Press 'p' to open document picker        
-    Press 'tab' to switch to another view    
-                                             
-                                             
+┃   .hive                │                                                      
+      plans              │  Select a document with enter                        
+    └─  feature-a.md     │                                                      
+      research           │                                                      
+    └─  api-design.md    │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+                         │                                                      
+j/k navigate  •  space expand  •  enter open
