@@ -235,16 +235,7 @@ func (v *View) View() string {
 		}
 		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"h/esc back to tree", scrollInfo))
 	} else {
-		navHelp := components.HelpNav + components.HelpSep + "space expand/collapse" + components.HelpSep + "enter detail"
-		actionHelp := ""
-		if v.handler != nil {
-			actionHelp = v.handler.HelpString()
-		}
-		if actionHelp != "" {
-			help = styles.TextMutedStyle.Render(navHelp + components.HelpSep + actionHelp)
-		} else {
-			help = styles.TextMutedStyle.Render(navHelp)
-		}
+		help = styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + "space expand" + components.HelpSep + "enter detail" + components.HelpSep + components.HelpHelp)
 	}
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
@@ -373,6 +364,48 @@ func (v *View) TogglePreview() tea.Cmd {
 // HasDetailFocus returns true when the detail pane has focus.
 func (v *View) HasDetailFocus() bool {
 	return v.focus == paneDetail
+}
+
+// HelpSections returns view-specific help sections for the help dialog.
+func (v *View) HelpSections() []components.HelpDialogSection {
+	sections := []components.HelpDialogSection{
+		{
+			Title: "Navigation",
+			Entries: []components.HelpEntry{
+				{Key: "↑/k", Desc: "move up"},
+				{Key: "↓/j", Desc: "move down"},
+				{Key: "g/G", Desc: "go to top/bottom"},
+				{Key: "space", Desc: "expand/collapse"},
+				{Key: "enter/l", Desc: "detail pane"},
+				{Key: "h/esc", Desc: "back to tree"},
+				{Key: ":", Desc: "command palette"},
+			},
+		},
+	}
+
+	if v.handler != nil {
+		actionEntries := parseHelpEntries(v.handler.HelpEntries())
+		if len(actionEntries) > 0 {
+			sections = append(sections, components.HelpDialogSection{
+				Title:   "Actions",
+				Entries: actionEntries,
+			})
+		}
+	}
+
+	return sections
+}
+
+// parseHelpEntries converts "key help" formatted strings to HelpEntry slices.
+func parseHelpEntries(raw []string) []components.HelpEntry {
+	entries := make([]components.HelpEntry, 0, len(raw))
+	for _, e := range raw {
+		parts := strings.SplitN(e, " ", 2)
+		if len(parts) == 2 {
+			entries = append(entries, components.HelpEntry{Key: parts[0], Desc: parts[1]})
+		}
+	}
+	return entries
 }
 
 // SelectedItem returns the currently selected item, or nil if none.

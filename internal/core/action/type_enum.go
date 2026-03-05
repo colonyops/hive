@@ -69,6 +69,18 @@ const (
 	TypeTasksTogglePreview Type = "TasksTogglePreview"
 	// TypeTasksSelectRepo is a Type of type TasksSelectRepo.
 	TypeTasksSelectRepo Type = "TasksSelectRepo"
+	// TypeTasksSetOpen is a Type of type TasksSetOpen.
+	TypeTasksSetOpen Type = "TasksSetOpen"
+	// TypeTasksSetInProgress is a Type of type TasksSetInProgress.
+	TypeTasksSetInProgress Type = "TasksSetInProgress"
+	// TypeTasksSetDone is a Type of type TasksSetDone.
+	TypeTasksSetDone Type = "TasksSetDone"
+	// TypeTasksSetCancelled is a Type of type TasksSetCancelled.
+	TypeTasksSetCancelled Type = "TasksSetCancelled"
+	// TypeTasksDelete is a Type of type TasksDelete.
+	TypeTasksDelete Type = "TasksDelete"
+	// TypeTasksPrune is a Type of type TasksPrune.
+	TypeTasksPrune Type = "TasksPrune"
 	// TypeViewTasks is a Type of type ViewTasks.
 	TypeViewTasks Type = "ViewTasks"
 )
@@ -105,6 +117,12 @@ var _TypeNames = []string{
 	string(TypeTasksCopyID),
 	string(TypeTasksTogglePreview),
 	string(TypeTasksSelectRepo),
+	string(TypeTasksSetOpen),
+	string(TypeTasksSetInProgress),
+	string(TypeTasksSetDone),
+	string(TypeTasksSetCancelled),
+	string(TypeTasksDelete),
+	string(TypeTasksPrune),
 	string(TypeViewTasks),
 }
 
@@ -186,6 +204,18 @@ var _TypeValue = map[string]Type{
 	"taskstogglepreview":  TypeTasksTogglePreview,
 	"TasksSelectRepo":     TypeTasksSelectRepo,
 	"tasksselectrepo":     TypeTasksSelectRepo,
+	"TasksSetOpen":        TypeTasksSetOpen,
+	"taskssetopen":        TypeTasksSetOpen,
+	"TasksSetInProgress":  TypeTasksSetInProgress,
+	"taskssetinprogress":  TypeTasksSetInProgress,
+	"TasksSetDone":        TypeTasksSetDone,
+	"taskssetdone":        TypeTasksSetDone,
+	"TasksSetCancelled":   TypeTasksSetCancelled,
+	"taskssetcancelled":   TypeTasksSetCancelled,
+	"TasksDelete":         TypeTasksDelete,
+	"tasksdelete":         TypeTasksDelete,
+	"TasksPrune":          TypeTasksPrune,
+	"tasksprune":          TypeTasksPrune,
 	"ViewTasks":           TypeViewTasks,
 	"viewtasks":           TypeViewTasks,
 }

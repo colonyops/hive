@@ -96,6 +96,12 @@ var defaultViewsConfig = ViewsConfig{
 			"y": {Cmd: "TasksCopyID"},
 			"v": {Cmd: "TasksTogglePreview"},
 			"s": {Cmd: "TasksSelectRepo"},
+			"o": {Cmd: "TasksSetOpen"},
+			"i": {Cmd: "TasksSetInProgress"},
+			"d": {Cmd: "TasksSetDone"},
+			"x": {Cmd: "TasksSetCancelled"},
+			"D": {Cmd: "TasksDelete"},
+			"P": {Cmd: "TasksPrune"},
 		},
 	},
 }

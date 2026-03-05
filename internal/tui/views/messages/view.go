@@ -141,6 +141,23 @@ func (v *View) SetActive(active bool) {
 	v.active = active
 }
 
+// HelpSections returns view-specific help sections for the help dialog.
+func (v *View) HelpSections() []components.HelpDialogSection {
+	return []components.HelpDialogSection{
+		{
+			Title: "Navigation",
+			Entries: []components.HelpEntry{
+				{Key: "↑/k", Desc: "move up"},
+				{Key: "↓/j", Desc: "move down"},
+				{Key: "/", Desc: "filter"},
+				{Key: "enter", Desc: "preview pane"},
+				{Key: "c/y", Desc: "copy to clipboard"},
+				{Key: "esc", Desc: "back to list"},
+			},
+		},
+	}
+}
+
 // --------------------------------------------------------------------
 // Key handling
 // --------------------------------------------------------------------

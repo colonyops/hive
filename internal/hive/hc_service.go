@@ -235,6 +235,11 @@ func (s *HoneycombService) ListRepoKeys(ctx context.Context) ([]string, error) {
 	return s.store.ListRepoKeys(ctx)
 }
 
+// DeleteItem removes an item by ID.
+func (s *HoneycombService) DeleteItem(ctx context.Context, id string) error {
+	return s.store.DeleteItem(ctx, id)
+}
+
 // Prune delegates to the store's Prune implementation.
 func (s *HoneycombService) Prune(ctx context.Context, opts hc.PruneOpts) (int, error) {
 	return s.store.Prune(ctx, opts)

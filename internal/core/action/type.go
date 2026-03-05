@@ -33,6 +33,12 @@ package action
 //	TasksCopyID
 //	TasksTogglePreview
 //	TasksSelectRepo
+//	TasksSetOpen
+//	TasksSetInProgress
+//	TasksSetDone
+//	TasksSetCancelled
+//	TasksDelete
+//	TasksPrune
 //	ViewTasks
 //
 // )
