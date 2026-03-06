@@ -289,6 +289,7 @@ func New(deps Deps, opts Opts) Model {
 	}
 
 	reviewView := review.New(docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
+	reviewView.SetRepoKey(repoKey)
 
 	notifyStore := stores.NewNotifyStore(deps.DB)
 	toastCtrl := NewToastController()
@@ -1641,6 +1642,7 @@ func (m Model) syncDocsRepoFromSessions() tea.Cmd {
 		return nil
 	}
 
+	m.reviewView.SetRepoKey(owner + "/" + repo)
 	return m.reviewView.SetContextDir(contextDir)
 }
 

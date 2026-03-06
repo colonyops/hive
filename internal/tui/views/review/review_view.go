@@ -43,6 +43,7 @@ type View struct {
 	viewport          viewport.Model
 	watcher           *DocumentWatcher
 	contextDir        string
+	repoKey           string              // owner/repo display label
 	store             *stores.ReviewStore // SQLite persistence for review sessions
 	width             int
 	height            int
@@ -221,6 +222,11 @@ func (v *View) HasActiveEditor() bool {
 // ContextDir returns the current context directory.
 func (v View) ContextDir() string {
 	return v.contextDir
+}
+
+// SetRepoKey sets the owner/repo display label shown in the header.
+func (v *View) SetRepoKey(repoKey string) {
+	v.repoKey = repoKey
 }
 
 // SetContextDir updates the context directory, restarts the file watcher,
@@ -879,7 +885,10 @@ func (v View) View() string {
 	}
 
 	// --- Repo scope header (1 line above tree) ---
-	repoName := filepath.Base(v.contextDir)
+	repoName := v.repoKey
+	if repoName == "" {
+		repoName = filepath.Base(v.contextDir)
+	}
 	if repoName == "" || repoName == "." {
 		repoName = v.contextDir
 	}
