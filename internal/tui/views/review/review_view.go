@@ -271,6 +271,13 @@ func (v View) Init() tea.Cmd {
 // The underlying list handles j/k navigation, Enter selection, and / filtering.
 func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 	switch msg := msg.(type) {
+	case docPreviewRenderedMsg:
+		// Apply rendered content only if the user hasn't navigated away.
+		if v.selectedDoc != nil && v.selectedDoc.Path == msg.path {
+			v.viewport.SetContent(msg.content)
+		}
+		return v, nil
+
 	case DocumentChangeMsg:
 		// Rebuild tree with new documents
 		log.Debug().
@@ -699,23 +706,21 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					}
 					return v, nil
 				default:
-					var cmd tea.Cmd
-					v.treeSearchInput, cmd = v.treeSearchInput.Update(msg)
+					var inputCmd tea.Cmd
+					v.treeSearchInput, inputCmd = v.treeSearchInput.Update(msg)
 					v.treeSearchQuery = v.treeSearchInput.Value()
-					v.treeSearchJump(v.treeSearchQuery)
-					return v, cmd
+					searchCmd := v.treeSearchJump(v.treeSearchQuery)
+					return v, tea.Batch(inputCmd, searchCmd)
 				}
 			}
 
 			switch msg.String() {
 			case "j", "down":
 				v.moveTreeCursorDown(1)
-				v.previewSelectedDoc()
-				return v, nil
+				return v, v.previewSelectedDoc()
 			case "k", "up":
 				v.moveTreeCursorUp(1)
-				v.previewSelectedDoc()
-				return v, nil
+				return v, v.previewSelectedDoc()
 			case " ", "space":
 				v.toggleDocExpand()
 				return v, nil
@@ -732,13 +737,21 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					node := v.flatNodes[v.treeCursor].Node
 					if node.Doc != nil {
 						if v.selectedDoc != nil && v.selectedDoc.Path == node.Doc.Path {
-							// Doc already previewed — shift focus to preview panel
+							// Doc already previewed — shift focus to preview panel.
 							v.fullScreen = true
 							v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
-							if rendered, err := node.Doc.Render(v.width); err == nil {
-								v.viewport.SetContent(rendered)
-							}
+							v.viewport.SetContent(styles.TextMutedStyle.Render(filepath.Base(node.Doc.RelPath)))
 							v.cursorLine = 1
+							docPath := node.Doc.Path
+							docRef := node.Doc
+							width := v.width
+							return v, func() tea.Msg {
+								rendered, err := docRef.Render(width)
+								if err != nil {
+									rendered = "Error: " + err.Error()
+								}
+								return docPreviewRenderedMsg{path: docPath, content: rendered}
+							}
 						} else {
 							v.loadDocument(node.Doc)
 						}
@@ -1830,25 +1843,29 @@ func (v *View) toggleDocExpand() {
 
 // previewSelectedDoc loads the document under the current tree cursor into the
 // right pane without shifting keyboard focus away from the tree.
-func (v *View) previewSelectedDoc() {
+// Returns a Cmd that performs the async render.
+func (v *View) previewSelectedDoc() tea.Cmd {
 	if v.treeCursor < 0 || v.treeCursor >= len(v.flatNodes) {
-		return
+		return nil
 	}
 	doc := v.flatNodes[v.treeCursor].Node.Doc
 	if doc != nil {
-		v.previewDocument(doc)
+		return v.previewDocument(doc)
 	}
+	return nil
 }
 
-// previewDocument renders a document in the right pane at split width without
-// setting fullScreen, loading a review session, or altering tree focus.
-func (v *View) previewDocument(doc *Document) {
+// previewDocument sets the selected document and returns a Cmd that renders it
+// asynchronously. A placeholder title is shown immediately so the UI does not
+// block. Setting fullScreen, loading a review session, and altering tree focus
+// are intentionally not done here.
+func (v *View) previewDocument(doc *Document) tea.Cmd {
 	if doc == nil {
-		return
+		return nil
 	}
 	// Skip if the same document is already displayed.
 	if v.selectedDoc != nil && v.selectedDoc.Path == doc.Path {
-		return
+		return nil
 	}
 
 	v.selectedDoc = doc
@@ -1859,13 +1876,20 @@ func (v *View) previewDocument(doc *Document) {
 	renderWidth := v.splitDetailWidth()
 	v.viewport = viewport.New(viewport.WithWidth(renderWidth), viewport.WithHeight(v.height-1))
 
-	rendered, err := doc.Render(renderWidth)
-	if err != nil {
-		v.viewport.SetContent("Error rendering: " + err.Error())
-		return
-	}
-	v.viewport.SetContent(rendered)
+	// Show filename immediately so the pane updates without waiting for render.
+	v.viewport.SetContent(styles.TextMutedStyle.Render(filepath.Base(doc.RelPath)))
 	v.viewport.GotoTop()
+
+	// Render in a goroutine.
+	docPath := doc.Path
+	width := renderWidth
+	return func() tea.Msg {
+		rendered, err := doc.Render(width)
+		if err != nil {
+			rendered = styles.TextMutedStyle.Render("Error rendering: " + err.Error())
+		}
+		return docPreviewRenderedMsg{path: docPath, content: rendered}
+	}
 }
 
 // exitFullScreen returns keyboard focus to the tree and re-renders the document
@@ -1888,10 +1912,10 @@ func (v *View) exitFullScreen() {
 }
 
 // treeSearchJump moves the tree cursor to the first node whose name contains
-// query (case-insensitive) and updates the preview pane.
-func (v *View) treeSearchJump(query string) {
+// query (case-insensitive) and returns a Cmd to update the preview pane.
+func (v *View) treeSearchJump(query string) tea.Cmd {
 	if query == "" {
-		return
+		return nil
 	}
 	queryLower := strings.ToLower(query)
 	for i, fn := range v.flatNodes {
@@ -1899,11 +1923,12 @@ func (v *View) treeSearchJump(query string) {
 			v.treeCursor = i
 			v.clampTreeScroll()
 			if fn.Node.Doc != nil {
-				v.previewDocument(fn.Node.Doc)
+				return v.previewDocument(fn.Node.Doc)
 			}
-			return
+			return nil
 		}
 	}
+	return nil
 }
 
 // SelectedDoc returns the document for the currently focused tree node, or nil.

@@ -1340,12 +1340,12 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	if m.tasksView != nil {
 		tabs = append(tabs, ViewTasks)
 	}
+	if m.reviewView != nil {
+		tabs = append(tabs, ViewReview)
+	}
 	tabs = append(tabs, ViewMessages)
 	if m.kvStore != nil && m.cfg.TUI.Store {
 		tabs = append(tabs, ViewStore)
-	}
-	if m.reviewView != nil {
-		tabs = append(tabs, ViewReview)
 	}
 
 	current := 0
