@@ -66,20 +66,12 @@ func renderDocDirNode(fn DocFlatNode, isSelected bool) string {
 	}
 	expandIcon = styles.TextMutedStyle.Render(expandIcon)
 
-	// Dir icon
-	var dirIcon string
-	if node.Expanded {
-		dirIcon = IconDirOpen
-	} else {
-		dirIcon = IconDir
-	}
-
 	// Title style
 	var name string
 	if isSelected {
-		name = styles.TextPrimaryStyle.Render(fmt.Sprintf("%s %s", dirIcon, node.Name))
+		name = styles.TextPrimaryStyle.Render(fmt.Sprintf("%s%s", styles.IconFolder, node.Name))
 	} else {
-		name = styles.TextForegroundStyle.Render(fmt.Sprintf("%s %s", dirIcon, node.Name))
+		name = styles.TextForegroundStyle.Render(fmt.Sprintf("%s%s", styles.IconFolder, node.Name))
 	}
 
 	// Indent based on depth
