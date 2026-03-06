@@ -32,6 +32,11 @@ type HcItem struct {
 	UpdatedAt int64       `json:"updated_at"`
 }
 
+type HcTaskBlocker struct {
+	BlockerID string `json:"blocker_id"`
+	BlockedID string `json:"blocked_id"`
+}
+
 type KvStore struct {
 	Key       string        `json:"key"`
 	Value     []byte        `json:"value"`
