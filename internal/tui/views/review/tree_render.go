@@ -79,7 +79,7 @@ func renderDocDirNode(fn DocFlatNode, isSelected bool) string {
 	if isSelected {
 		name = styles.TextPrimaryStyle.Render(fmt.Sprintf("%s %s", dirIcon, node.Name))
 	} else {
-		name = styles.TextMutedStyle.Render(fmt.Sprintf("%s %s", dirIcon, node.Name))
+		name = styles.TextForegroundStyle.Render(fmt.Sprintf("%s %s", dirIcon, node.Name))
 	}
 
 	// Indent based on depth
@@ -113,7 +113,7 @@ func renderDocFileNode(fn DocFlatNode, isSelected bool) string {
 	if isSelected {
 		name = styles.TextPrimaryStyle.Render(label)
 	} else {
-		name = styles.TextMutedStyle.Render(label)
+		name = styles.TextForegroundStyle.Render(label)
 	}
 
 	if fn.Depth == 0 {

@@ -1,6 +1,6 @@
-┃   test                 │ 1                                                    
-  └─  document.md        │ 2     Test Document                                  
-                         │ 3                                                    
+  docs                   │ 1                                                    
+┃   test                 │ 2     Test Document                                  
+  └─  document.md        │ 3                                                    
                          │ 4    This is a test document with multiple lines. Lin
                          │ 5    Line 5 has more content.                        
                          │ 6                                                    
@@ -16,9 +16,6 @@
                          │                                                      
                          │                                                      
                          │                                                      
-                         │                                                      
-                         │                                                      
-                         │                                                      
-                         │                                                      
                          │ NORMAL  V:visual • p:picker • n/N:navigate • e:edit •
-j/k scroll  •  h/esc back to tree
+────────────────────────────────────────────────────────────────────────────────
+ j/k scroll  •  h/esc back to tree                                              

@@ -1,5 +1,6 @@
-┃   .hive                │                                                      
-      plans              │  Select a document with enter                        
+  docs                   │                                                      
+┃   .hive                │  Navigate to a document or press enter to open       
+      plans              │                                                      
     └─  feature-a.md     │                                                      
       research           │                                                      
     └─  api-design.md    │                                                      
@@ -16,9 +17,5 @@
                          │                                                      
                          │                                                      
                          │                                                      
-                         │                                                      
-                         │                                                      
-                         │                                                      
-                         │                                                      
-                         │                                                      
-j/k navigate  •  space expand  •  enter open
+────────────────────────────────────────────────────────────────────────────────
+ j/k navigate  •  space expand  •  enter focus  •  v preview  •  / search       

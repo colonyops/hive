@@ -74,11 +74,15 @@ type View struct {
 	modalState          ModalState   // Modal coordination
 
 	// Phase 2: folder tree state (parallel to list.Model, not yet rendered)
-	roots      []*DocTreeNode // document folder tree
-	flatNodes  []DocFlatNode  // flattened for rendering
-	treeCursor int            // current cursor position in flatNodes
-	treeScroll int            // scroll offset in flatNodes
-	splitRatio int            // panel split percentage (0 = default 30%)
+	roots          []*DocTreeNode   // document folder tree
+	flatNodes      []DocFlatNode    // flattened for rendering
+	treeCursor     int              // current cursor position in flatNodes
+	treeScroll     int              // scroll offset in flatNodes
+	splitRatio     int              // panel split percentage (0 = default 30%)
+	showPreview    bool             // whether the right pane is visible
+	treeSearchMode bool             // whether the tree search input is active
+	treeSearchInput textinput.Model // search input for tree navigation
+	treeSearchQuery string          // current tree search query
 
 	handler KeyResolver // resolves configurable keybindings to actions
 }
@@ -120,13 +124,17 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore, han
 	// Create viewport for document preview
 	vp := viewport.New()
 
-	// Initialize search input
+	// Initialize search input (for document content search in full-screen mode)
 	ti := textinput.New()
 	ti.Placeholder = "Search..."
 	ti.CharLimit = 100
-
-	// Enable paste
 	ti.KeyMap.Paste.SetEnabled(true)
+
+	// Initialize tree search input (for navigating the file tree)
+	ti2 := textinput.New()
+	ti2.Placeholder = "/"
+	ti2.CharLimit = 100
+	ti2.KeyMap.Paste.SetEnabled(true)
 
 	// Initialize Phase 1 components
 	documentView := NewDocumentView(nil)
@@ -134,17 +142,19 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore, han
 	modalState := NewModalState()
 
 	v := View{
-		list:        l,
-		viewport:    vp,
-		watcher:     watcher,
-		contextDir:  contextDir,
-		store:       store,
-		previewMode: false,
-		fullScreen:  false,
-		cursorLine:  1,
-		searchInput: ti,
-		splitRatio:  splitRatio,
-		handler:     handler,
+		list:            l,
+		viewport:        vp,
+		watcher:         watcher,
+		contextDir:      contextDir,
+		store:           store,
+		previewMode:     false,
+		fullScreen:      false,
+		cursorLine:      1,
+		searchInput:     ti,
+		treeSearchInput: ti2,
+		showPreview:     true,
+		splitRatio:      splitRatio,
+		handler:         handler,
 		// Phase 1 components
 		documentView:        documentView,
 		searchModeComponent: searchModeComponent,
@@ -159,18 +169,40 @@ func (v *View) SetSize(width, height int) {
 	v.width = width
 	v.height = height
 
-	// Recalculate viewport size for the right (detail) pane.
+	if v.selectedDoc == nil {
+		// Size the viewport for the split layout even with no doc selected.
+		vpWidth := v.splitDetailWidth()
+		v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(v.height-1))
+		return
+	}
+
+	if v.fullScreen {
+		v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+		rendered, err := v.selectedDoc.Render(v.width)
+		if err == nil {
+			if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+				v.renderSelection()
+			} else {
+				v.viewport.SetContent(rendered)
+			}
+		}
+	} else {
+		vpWidth := v.splitDetailWidth()
+		v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(v.height-1))
+		rendered, err := v.selectedDoc.Render(vpWidth)
+		if err == nil {
+			v.viewport.SetContent(rendered)
+		}
+	}
+}
+
+// splitDetailWidth returns the width of the right (detail) pane in split layout.
+func (v *View) splitDetailWidth() int {
 	splitPct := v.splitRatioOrDefault(30)
 	availWidth := max(v.width-1, 30)
 	treeWidth := max(availWidth*splitPct/100, 25)
 	detailWidth := max(availWidth-treeWidth, 10)
-	vpWidth := max(detailWidth-2, 10)
-	v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(v.height-1))
-
-	// Reload document if one is selected
-	if v.selectedDoc != nil {
-		v.loadDocument(v.selectedDoc)
-	}
+	return max(detailWidth-2, 10)
 }
 
 // splitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
@@ -460,7 +492,13 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 
 		// Handle esc key
 		if msg.String() == "esc" {
-			// Priority order: search mode > visual mode > close document
+			// Priority order: tree search > doc search > visual mode > exit fullscreen > close preview
+			if v.treeSearchMode {
+				v.treeSearchMode = false
+				v.treeSearchQuery = ""
+				v.treeSearchInput.SetValue("")
+				return v, nil
+			}
 			if v.searchMode {
 				// Exit search mode
 				v.searchMode = false
@@ -475,13 +513,23 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				v.renderSelection()
 				return v, nil
 			}
-			// Close document (return to "no document" view)
+			// Exit fullScreen — return focus to tree, keep doc previewed
+			if v.fullScreen {
+				v.exitFullScreen()
+				return v, nil
+			}
+			// Close preview entirely
 			if v.selectedDoc != nil {
 				v.selectedDoc = nil
-				v.fullScreen = false
 				v.activeSession = nil
 				return v, nil
 			}
+		}
+
+		// "h" exits fullscreen (mirrors vim left-motion / sessions view "h" for back)
+		if msg.String() == "h" && v.fullScreen && !v.selectionMode && !v.searchMode {
+			v.exitFullScreen()
+			return v, nil
 		}
 
 		// Handle visual selection mode and finalization
@@ -640,17 +688,66 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 
 		// Handle tree navigation when not in full-screen mode
 		if !v.fullScreen {
+			// Handle tree search input first
+			if v.treeSearchMode {
+				switch msg.String() {
+				case "enter", "esc":
+					v.treeSearchMode = false
+					if msg.String() == "esc" {
+						v.treeSearchQuery = ""
+						v.treeSearchInput.SetValue("")
+					}
+					return v, nil
+				default:
+					var cmd tea.Cmd
+					v.treeSearchInput, cmd = v.treeSearchInput.Update(msg)
+					v.treeSearchQuery = v.treeSearchInput.Value()
+					v.treeSearchJump(v.treeSearchQuery)
+					return v, cmd
+				}
+			}
+
 			switch msg.String() {
 			case "j", "down":
 				v.moveTreeCursorDown(1)
+				v.previewSelectedDoc()
 				return v, nil
 			case "k", "up":
 				v.moveTreeCursorUp(1)
+				v.previewSelectedDoc()
 				return v, nil
 			case " ", "space":
 				v.toggleDocExpand()
 				return v, nil
-			case keyEnter, "l":
+			case "v":
+				v.showPreview = !v.showPreview
+				return v, nil
+			case "/":
+				v.treeSearchMode = true
+				v.treeSearchQuery = ""
+				v.treeSearchInput.SetValue("")
+				return v, v.treeSearchInput.Focus()
+			case keyEnter:
+				if v.treeCursor >= 0 && v.treeCursor < len(v.flatNodes) {
+					node := v.flatNodes[v.treeCursor].Node
+					if node.Doc != nil {
+						if v.selectedDoc != nil && v.selectedDoc.Path == node.Doc.Path {
+							// Doc already previewed — shift focus to preview panel
+							v.fullScreen = true
+							v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+							if rendered, err := node.Doc.Render(v.width); err == nil {
+								v.viewport.SetContent(rendered)
+							}
+							v.cursorLine = 1
+						} else {
+							v.loadDocument(node.Doc)
+						}
+					} else {
+						v.toggleDocExpand()
+					}
+				}
+				return v, nil
+			case "l":
 				if v.treeCursor >= 0 && v.treeCursor < len(v.flatNodes) {
 					node := v.flatNodes[v.treeCursor].Node
 					if node.Doc != nil {
@@ -753,58 +850,82 @@ func (v View) View() string {
 		return "Loading..."
 	}
 
+	// Height budget: tab chrome (3) is handled by the parent model.
+	// Reserve rule (1) + help bar (1) = 2 lines, so content gets height-5 total.
+	contentHeight := max(v.height-5, 1)
+
 	// --- Two-pane layout ---
 	splitPct := v.splitRatioOrDefault(30)
 	availWidth := max(v.width-1, 30)
 	treeWidth := max(availWidth*splitPct/100, 25)
 	detailWidth := max(availWidth-treeWidth, 10)
 
-	// Content height (leave 1 line for bottom help bar)
-	contentHeight := max(v.height-1, 1)
-	treeRows := contentHeight
+	// If preview is hidden, tree takes the full width.
+	if !v.showPreview {
+		treeWidth = availWidth
+	}
+
+	// --- Repo scope header (1 line above tree) ---
+	repoName := filepath.Base(v.contextDir)
+	if repoName == "" || repoName == "." {
+		repoName = v.contextDir
+	}
+	repoHeader := styles.TextPrimaryBoldStyle.Render(" "+repoName) +
+		styles.TextMutedStyle.Render(" docs")
+	repoHeader = shared.EnsureExactWidth(repoHeader, treeWidth)
+
+	treeRows := max(contentHeight-1, 1) // -1 for the repo header line
 
 	// --- Tree pane ---
 	treeContent := renderDocTree(v.flatNodes, v.treeCursor, v.treeScroll, treeRows)
 	treeContent = shared.EnsureExactHeight(treeContent, treeRows)
 	treeContent = shared.EnsureExactWidth(treeContent, treeWidth)
+	treePane := lipgloss.JoinVertical(lipgloss.Left, repoHeader, treeContent)
 
-	// --- Divider ---
-	dividerStyle := styles.TextMutedStyle
-	if v.fullScreen {
-		dividerStyle = styles.TextPrimaryStyle
-	}
-	divider := shared.BuildDividerStyled(contentHeight, dividerStyle)
-
-	// --- Detail pane ---
-	var detailContent string
-	if v.selectedDoc == nil {
-		hint := "\n  " + styles.TextMutedStyle.Render("Select a document with enter")
-		detailContent = hint
+	var body string
+	if !v.showPreview {
+		body = treePane
 	} else {
-		// Show viewport content and status bar
-		contentH := max(v.height-1, 2)
-		content := v.viewport.View()
-		statusBar := v.renderStatusBar()
-		contentLines := strings.Split(content, "\n")
-		if len(contentLines) > contentH-1 {
-			contentLines = contentLines[:contentH-1]
+		// --- Divider ---
+		dividerStyle := styles.TextMutedStyle
+		if v.fullScreen {
+			dividerStyle = styles.TextPrimaryStyle
 		}
-		detailContent = strings.Join(contentLines, "\n") + "\n" + statusBar
-	}
-	detailContent = shared.EnsureExactHeight(detailContent, contentHeight)
-	detailContent = shared.EnsureExactWidth(detailContent, detailWidth)
+		divider := shared.BuildDividerStyled(contentHeight, dividerStyle)
 
-	// --- Help bar ---
-	var helpText string
-	if v.fullScreen {
-		helpText = styles.TextMutedStyle.Render("j/k scroll  •  h/esc back to tree")
+		// --- Detail pane ---
+		var detailContent string
+		if v.selectedDoc == nil {
+			hint := "\n  " + styles.TextMutedStyle.Render("Navigate to a document or press enter to open")
+			detailContent = hint
+		} else {
+			// Show viewport content and status bar
+			content := v.viewport.View()
+			statusBar := v.renderStatusBar()
+			contentLines := strings.Split(content, "\n")
+			if len(contentLines) > contentHeight-1 {
+				contentLines = contentLines[:contentHeight-1]
+			}
+			detailContent = strings.Join(contentLines, "\n") + "\n" + statusBar
+		}
+		detailContent = shared.EnsureExactHeight(detailContent, contentHeight)
+		detailContent = shared.EnsureExactWidth(detailContent, detailWidth)
+
+		body = lipgloss.JoinHorizontal(lipgloss.Top, treePane, divider, detailContent)
+	}
+
+	// --- Footer (rule + help bar matching sessions view pattern) ---
+	bar := components.StatusBar{Width: v.width}
+	var helpLeft string
+	if v.treeSearchMode {
+		helpLeft = styles.TextMutedStyle.Render("/") + v.treeSearchInput.View()
+	} else if v.fullScreen {
+		helpLeft = styles.TextMutedStyle.Render("j/k scroll  •  h/esc back to tree")
 	} else {
-		helpText = styles.TextMutedStyle.Render("j/k navigate  •  space expand  •  enter open")
+		helpLeft = styles.TextMutedStyle.Render("j/k navigate  •  space expand  •  enter focus  •  v preview  •  / search")
 	}
 
-	// Compose body
-	body := lipgloss.JoinHorizontal(lipgloss.Top, treeContent, divider, detailContent)
-	baseView := body + "\n" + helpText
+	baseView := body + "\n" + bar.Rule() + "\n" + bar.Render(helpLeft, "")
 
 	// Overlay document picker modal if active (highest priority)
 	if v.pickerModal != nil {
@@ -1704,6 +1825,84 @@ func (v *View) toggleDocExpand() {
 			v.treeCursor = max(0, len(v.flatNodes)-1)
 		}
 		v.clampTreeScroll()
+	}
+}
+
+// previewSelectedDoc loads the document under the current tree cursor into the
+// right pane without shifting keyboard focus away from the tree.
+func (v *View) previewSelectedDoc() {
+	if v.treeCursor < 0 || v.treeCursor >= len(v.flatNodes) {
+		return
+	}
+	doc := v.flatNodes[v.treeCursor].Node.Doc
+	if doc != nil {
+		v.previewDocument(doc)
+	}
+}
+
+// previewDocument renders a document in the right pane at split width without
+// setting fullScreen, loading a review session, or altering tree focus.
+func (v *View) previewDocument(doc *Document) {
+	if doc == nil {
+		return
+	}
+	// Skip if the same document is already displayed.
+	if v.selectedDoc != nil && v.selectedDoc.Path == doc.Path {
+		return
+	}
+
+	v.selectedDoc = doc
+	v.cursorLine = 1
+	v.lineMapping = nil
+	v.activeSession = nil
+
+	renderWidth := v.splitDetailWidth()
+	v.viewport = viewport.New(viewport.WithWidth(renderWidth), viewport.WithHeight(v.height-1))
+
+	rendered, err := doc.Render(renderWidth)
+	if err != nil {
+		v.viewport.SetContent("Error rendering: " + err.Error())
+		return
+	}
+	v.viewport.SetContent(rendered)
+	v.viewport.GotoTop()
+}
+
+// exitFullScreen returns keyboard focus to the tree and re-renders the document
+// at split width. The preview remains visible.
+func (v *View) exitFullScreen() {
+	v.fullScreen = false
+	if v.selectedDoc == nil {
+		return
+	}
+	renderWidth := v.splitDetailWidth()
+	v.viewport = viewport.New(viewport.WithWidth(renderWidth), viewport.WithHeight(v.height-1))
+	rendered, err := v.selectedDoc.Render(renderWidth)
+	if err == nil {
+		if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
+			v.renderSelection()
+		} else {
+			v.viewport.SetContent(rendered)
+		}
+	}
+}
+
+// treeSearchJump moves the tree cursor to the first node whose name contains
+// query (case-insensitive) and updates the preview pane.
+func (v *View) treeSearchJump(query string) {
+	if query == "" {
+		return
+	}
+	queryLower := strings.ToLower(query)
+	for i, fn := range v.flatNodes {
+		if strings.Contains(strings.ToLower(fn.Node.Name), queryLower) {
+			v.treeCursor = i
+			v.clampTreeScroll()
+			if fn.Node.Doc != nil {
+				v.previewDocument(fn.Node.Doc)
+			}
+			return
+		}
 	}
 }
 
