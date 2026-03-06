@@ -80,7 +80,8 @@ type View struct {
 	treeCursor     int              // current cursor position in flatNodes
 	treeScroll     int              // scroll offset in flatNodes
 	splitRatio     int              // panel split percentage (0 = default 30%)
-	showPreview    bool             // whether the right pane is visible
+	showPreview    bool             // whether the right detail pane is visible
+	showTree       bool             // whether the left tree pane is visible
 	treeSearchMode bool             // whether the tree search input is active
 	treeSearchInput textinput.Model // search input for tree navigation
 	treeSearchQuery string          // current tree search query
@@ -154,6 +155,7 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore, han
 		searchInput:     ti,
 		treeSearchInput: ti2,
 		showPreview:     true,
+		showTree:        true,
 		splitRatio:      splitRatio,
 		handler:         handler,
 		// Phase 1 components
@@ -227,6 +229,25 @@ func (v View) ContextDir() string {
 // SetRepoKey sets the owner/repo display label shown in the header.
 func (v *View) SetRepoKey(repoKey string) {
 	v.repoKey = repoKey
+}
+
+// TogglePreview shows or hides the detail pane.
+func (v *View) TogglePreview() tea.Cmd {
+	v.showPreview = !v.showPreview
+	return nil
+}
+
+// ToggleTree shows or hides the folder tree pane.
+// When hiding the tree, the detail pane is forced visible and re-rendered at full width.
+func (v *View) ToggleTree() tea.Cmd {
+	v.showTree = !v.showTree
+	if !v.showTree {
+		v.showPreview = true
+	}
+	// Re-render selected doc at new width.
+	doc := v.selectedDoc
+	v.selectedDoc = nil
+	return v.previewDocument(doc)
 }
 
 // SetContextDir updates the context directory, restarts the file watcher,
@@ -730,9 +751,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			case " ", "space":
 				v.toggleDocExpand()
 				return v, nil
-			case "v":
-				v.showPreview = !v.showPreview
-				return v, nil
 			case "/":
 				v.treeSearchMode = true
 				v.treeSearchQuery = ""
@@ -903,24 +921,13 @@ func (v View) View() string {
 	treeContent = shared.EnsureExactWidth(treeContent, treeWidth)
 	treePane := lipgloss.JoinVertical(lipgloss.Left, repoHeader, treeContent)
 
-	var body string
-	if !v.showPreview {
-		body = treePane
-	} else {
-		// --- Divider ---
-		dividerStyle := styles.TextMutedStyle
-		if v.fullScreen {
-			dividerStyle = styles.TextPrimaryStyle
-		}
-		divider := shared.BuildDividerStyled(contentHeight, dividerStyle)
-
-		// --- Detail pane ---
+	// --- Build body ---
+	buildDetailContent := func(width int) string {
 		var detailContent string
 		if v.selectedDoc == nil {
 			hint := "\n  " + styles.TextMutedStyle.Render("Navigate to a document or press enter to open")
 			detailContent = hint
 		} else {
-			// Show viewport content and status bar
 			content := v.viewport.View()
 			statusBar := v.renderStatusBar()
 			contentLines := strings.Split(content, "\n")
@@ -930,9 +937,25 @@ func (v View) View() string {
 			detailContent = strings.Join(contentLines, "\n") + "\n" + statusBar
 		}
 		detailContent = shared.EnsureExactHeight(detailContent, contentHeight)
-		detailContent = shared.EnsureExactWidth(detailContent, detailWidth)
+		return shared.EnsureExactWidth(detailContent, width)
+	}
 
-		body = lipgloss.JoinHorizontal(lipgloss.Top, treePane, divider, detailContent)
+	var body string
+	switch {
+	case !v.showTree:
+		// Focused reader: full-width detail, no tree pane.
+		body = buildDetailContent(v.width)
+	case !v.showPreview:
+		// Tree only.
+		body = treePane
+	default:
+		// Split view.
+		dividerStyle := styles.TextMutedStyle
+		if v.fullScreen {
+			dividerStyle = styles.TextPrimaryStyle
+		}
+		divider := shared.BuildDividerStyled(contentHeight, dividerStyle)
+		body = lipgloss.JoinHorizontal(lipgloss.Top, treePane, divider, buildDetailContent(detailWidth))
 	}
 
 	// --- Footer (rule + help bar matching sessions view pattern) ---

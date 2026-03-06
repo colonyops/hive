@@ -45,6 +45,7 @@ package action
 //	DocsCopyContents
 //	DocsOpen
 //	DocsTogglePreview
+//	DocsToggleTree
 //
 // )
 type Type string

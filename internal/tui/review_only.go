@@ -68,16 +68,13 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.reviewView.SetSize(msg.Width, msg.Height)
 
-		// After first resize (when we know window size), open picker or load initial doc
+		// After first resize (when we know window size), load initial doc if specified.
 		if !m.initialized {
 			m.initialized = true
 			if m.initialDoc != nil {
-				// Load initial document directly
 				m.reviewView.LoadDocument(m.initialDoc)
-			} else {
-				// Open picker in fullscreen mode
-				return m, m.reviewView.ShowDocumentPicker()
 			}
+			// Otherwise the tree view is shown directly — no picker popup.
 		}
 		return m, nil
 

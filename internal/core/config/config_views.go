@@ -125,6 +125,8 @@ var defaultViewsConfig = ViewsConfig{
 			"Y": {Cmd: "DocsCopyRelPath"},
 			"c": {Cmd: "DocsCopyContents"},
 			"o": {Cmd: "DocsOpen"},
+			"v": {Cmd: "DocsTogglePreview"},
+			"V": {Cmd: "DocsToggleTree"},
 		},
 	},
 }

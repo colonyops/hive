@@ -482,6 +482,14 @@ func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.C
 		if err := c.Run(); err != nil {
 			m.notifyErrorf("open failed: %v", err)
 		}
+	case act.TypeDocsTogglePreview:
+		if m.reviewView != nil {
+			return m, m.reviewView.TogglePreview()
+		}
+	case act.TypeDocsToggleTree:
+		if m.reviewView != nil {
+			return m, m.reviewView.ToggleTree()
+		}
 	default:
 		return m.handleGlobalAction(a)
 	}

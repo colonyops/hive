@@ -284,6 +284,18 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"review"},
 	},
+	"DocsTogglePreview": {
+		Action: action.TypeDocsTogglePreview,
+		Help:   "show or hide detail panel",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
+	"DocsToggleTree": {
+		Action: action.TypeDocsToggleTree,
+		Help:   "show or hide folder tree",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
