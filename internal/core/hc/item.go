@@ -31,19 +31,20 @@ type Status string
 
 // Item represents a single unit of work tracked by hc.
 type Item struct {
-	ID        string    `json:"id"`
-	RepoKey   string    `json:"repo_key"`   // "owner/repo" or ""
-	EpicID    string    `json:"epic_id"`    // "" for epics themselves
-	ParentID  string    `json:"parent_id"`  // "" for root items
-	SessionID string    `json:"session_id"` // assigned agent session, may be ""
-	Title     string    `json:"title"`
-	Desc      string    `json:"desc"`
-	Type      ItemType  `json:"type"`
-	Status    Status    `json:"status"`
-	Blocked   bool      `json:"-"`     // computed at read time: true when the item has open/in_progress children
-	Depth     int       `json:"depth"` // 0 for epics/roots
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	RepoKey    string    `json:"repo_key"`   // "owner/repo" or ""
+	EpicID     string    `json:"epic_id"`    // "" for epics themselves
+	ParentID   string    `json:"parent_id"`  // "" for root items
+	SessionID  string    `json:"session_id"` // assigned agent session, may be ""
+	Title      string    `json:"title"`
+	Desc       string    `json:"desc"`
+	Type       ItemType  `json:"type"`
+	Status     Status    `json:"status"`
+	Blocked    bool      `json:"-"`                     // computed at read time: true when the item has open/in_progress children or open/in_progress explicit blockers
+	BlockerIDs []string  `json:"blocker_ids,omitempty"` // explicit blocker item IDs (open/in_progress only)
+	Depth      int       `json:"depth"`                 // 0 for epics/roots
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }
 
 // IsEpic reports whether the item is an epic.

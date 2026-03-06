@@ -67,10 +67,15 @@ func (s *HoneycombService) CreateItem(ctx context.Context, repoKey string, input
 	return item, nil
 }
 
-// walkCreateInput yields hc.Items from a CreateInput tree in BFS order
-// (parent before children), generating IDs and resolving relationships.
-func walkCreateInput(input hc.CreateInput, repoKey, epicID, parentID string, depth int, now time.Time) iter.Seq[hc.Item] {
-	return func(yield func(hc.Item) bool) {
+// createInputEntry pairs a CreateInput with its generated hc.Item.
+type createInputEntry struct {
+	input hc.CreateInput
+	item  hc.Item
+}
+
+// walkCreateInputWithEntry yields (CreateInput, hc.Item) pairs from the tree in BFS order.
+func walkCreateInputWithEntry(input hc.CreateInput, repoKey, epicID, parentID string, depth int, now time.Time) iter.Seq[createInputEntry] {
+	return func(yield func(createInputEntry) bool) {
 		id := hc.GenerateID()
 		item := hc.Item{
 			ID:        id,
@@ -85,7 +90,7 @@ func walkCreateInput(input hc.CreateInput, repoKey, epicID, parentID string, dep
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		if !yield(item) {
+		if !yield(createInputEntry{input: input, item: item}) {
 			return
 		}
 		childEpicID := epicID
@@ -93,13 +98,50 @@ func walkCreateInput(input hc.CreateInput, repoKey, epicID, parentID string, dep
 			childEpicID = id
 		}
 		for _, child := range input.Children {
-			for childItem := range walkCreateInput(child, repoKey, childEpicID, id, depth+1, now) {
-				if !yield(childItem) {
+			for entry := range walkCreateInputWithEntry(child, repoKey, childEpicID, id, depth+1, now) {
+				if !yield(entry) {
 					return
 				}
 			}
 		}
 	}
+}
+
+// validateBatchBlockerRefs checks that all Blockers refs in the batch refer to known refs
+// and that no in-batch cycles exist.
+func validateBatchBlockerRefs(entries []createInputEntry) error {
+	refToID := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.input.Ref != "" {
+			refToID[e.input.Ref] = e.item.ID
+		}
+	}
+
+	// Collect in-batch edges
+	var edges [][2]string
+	for _, e := range entries {
+		for _, blocker := range e.input.Blockers {
+			blockerID, ok := refToID[blocker]
+			if !ok {
+				return fmt.Errorf("unknown blocker ref %q", blocker)
+			}
+			edges = append(edges, [2]string{blockerID, e.item.ID})
+		}
+	}
+
+	// Check for cycles among in-batch edges
+	for i, edge := range edges {
+		existing := make([][2]string, 0, len(edges)-1)
+		for j, e := range edges {
+			if j != i {
+				existing = append(existing, e)
+			}
+		}
+		if wouldCycle(existing, edge[0], edge[1]) {
+			return fmt.Errorf("in-batch cycle detected involving ref edges")
+		}
+	}
+	return nil
 }
 
 // CreateBulk walks a CreateInput tree (BFS) and persists all items in one
@@ -110,16 +152,95 @@ func (s *HoneycombService) CreateBulk(ctx context.Context, repoKey string, input
 	}
 
 	now := time.Now()
-	var items []hc.Item
-	for item := range walkCreateInput(input, repoKey, "", "", 0, now) {
-		items = append(items, item)
+	var entries []createInputEntry
+	for entry := range walkCreateInputWithEntry(input, repoKey, "", "", 0, now) {
+		entries = append(entries, entry)
+	}
+
+	if err := validateBatchBlockerRefs(entries); err != nil {
+		return nil, fmt.Errorf("validate blocker refs: %w", err)
+	}
+
+	items := make([]hc.Item, len(entries))
+	for i, e := range entries {
+		items[i] = e.item
 	}
 
 	if err := s.store.CreateItems(ctx, items); err != nil {
 		return nil, fmt.Errorf("bulk create items: %w", err)
 	}
 
+	// Wire blocker edges
+	refToID := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.input.Ref != "" {
+			refToID[e.input.Ref] = e.item.ID
+		}
+	}
+	for _, e := range entries {
+		for _, blockerRef := range e.input.Blockers {
+			blockerID := refToID[blockerRef]
+			if err := s.store.AddBlocker(ctx, blockerID, e.item.ID); err != nil {
+				s.logger.Warn().Err(err).Str("blocker", blockerID).Str("blocked", e.item.ID).Msg("failed to wire blocker edge")
+			}
+		}
+	}
+
 	return items, nil
+}
+
+// AddBlocker records that blockerID blocks blockedID.
+// Returns hc.ErrCyclicDependency if adding this edge would create a cycle.
+func (s *HoneycombService) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
+	if blockerID == blockedID {
+		return hc.ErrCyclicDependency
+	}
+
+	edges, err := s.store.ListBlockerEdges(ctx)
+	if err != nil {
+		return fmt.Errorf("list blocker edges: %w", err)
+	}
+
+	if wouldCycle(edges, blockerID, blockedID) {
+		return hc.ErrCyclicDependency
+	}
+
+	return s.store.AddBlocker(ctx, blockerID, blockedID)
+}
+
+// RemoveBlocker removes the explicit blocker relationship.
+func (s *HoneycombService) RemoveBlocker(ctx context.Context, blockerID, blockedID string) error {
+	return s.store.RemoveBlocker(ctx, blockerID, blockedID)
+}
+
+// ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
+func (s *HoneycombService) ListBlockers(ctx context.Context, itemID string) ([]string, error) {
+	return s.store.ListBlockers(ctx, itemID)
+}
+
+// wouldCycle reports whether adding edge (from → to) would create a cycle in the graph.
+// DFS from 'to' following existing edges; if we can reach 'from', adding the edge would cycle.
+func wouldCycle(edges [][2]string, from, to string) bool {
+	adj := make(map[string][]string)
+	for _, e := range edges {
+		adj[e[0]] = append(adj[e[0]], e[1])
+	}
+
+	visited := make(map[string]bool)
+	stack := []string{to}
+	for len(stack) > 0 {
+		n := stack[len(stack)-1]
+		stack = stack[:len(stack)-1]
+		if n == from {
+			return true
+		}
+		if visited[n] {
+			continue
+		}
+		visited[n] = true
+		stack = append(stack, adj[n]...)
+	}
+	return false
 }
 
 // GetItem returns an item by ID.

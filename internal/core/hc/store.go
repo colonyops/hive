@@ -9,6 +9,9 @@ import (
 // ErrNotFound is returned when a requested item does not exist.
 var ErrNotFound = errors.New("not found")
 
+// ErrCyclicDependency is returned when an AddBlocker call would create a cycle.
+var ErrCyclicDependency = errors.New("cyclic dependency")
+
 // Store persists hc items and comments to durable storage.
 type Store interface {
 	// CreateItems persists one or more items atomically.
@@ -33,6 +36,15 @@ type Store interface {
 	Prune(ctx context.Context, opts PruneOpts) (int, error)
 	// ListRepoKeys returns all distinct, non-empty repo keys in sorted order.
 	ListRepoKeys(ctx context.Context) ([]string, error)
+	// AddBlocker records that blockerID blocks blockedID.
+	// Cycle detection is handled at the service layer.
+	AddBlocker(ctx context.Context, blockerID, blockedID string) error
+	// RemoveBlocker removes the blocker relationship.
+	RemoveBlocker(ctx context.Context, blockerID, blockedID string) error
+	// ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
+	ListBlockers(ctx context.Context, itemID string) ([]string, error)
+	// ListBlockerEdges returns all blocker edges as [blockerID, blockedID] pairs (for cycle detection).
+	ListBlockerEdges(ctx context.Context) ([][2]string, error)
 }
 
 // ItemUpdate carries partial updates to an Item. Nil pointer fields are not changed.

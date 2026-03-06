@@ -152,6 +152,22 @@ func (f *fakeHCStore) ListRepoKeys(_ context.Context) ([]string, error) {
 	return keys, nil
 }
 
+func (f *fakeHCStore) AddBlocker(_ context.Context, blockerID, blockedID string) error {
+	return nil
+}
+
+func (f *fakeHCStore) RemoveBlocker(_ context.Context, blockerID, blockedID string) error {
+	return nil
+}
+
+func (f *fakeHCStore) ListBlockers(_ context.Context, itemID string) ([]string, error) {
+	return nil, nil
+}
+
+func (f *fakeHCStore) ListBlockerEdges(_ context.Context) ([][2]string, error) {
+	return nil, nil
+}
+
 func newTestHoneycombService(store hc.Store) *HoneycombService {
 	return NewHoneycombService(store, zerolog.Nop())
 }
