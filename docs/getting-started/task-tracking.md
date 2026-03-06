@@ -49,6 +49,29 @@ echo '{
 }' | hive hc create
 ```
 
+### Express blocker dependencies
+
+Use `ref` and `blockers` to express ordering between sibling tasks in a bulk create. The `ref` field is a local label (not stored) that other tasks can reference in their `blockers` list. `hive hc next` skips tasks that have incomplete blockers.
+
+```bash
+echo '{
+  "title": "Auth System",
+  "type": "epic",
+  "children": [
+    {"ref": "jwt", "title": "JWT middleware", "type": "task"},
+    {"ref": "db", "title": "User schema migration", "type": "task"},
+    {"title": "Login endpoint", "type": "task", "blockers": ["jwt", "db"]}
+  ]
+}' | hive hc create
+```
+
+To add or remove blockers after creation:
+
+```bash
+hive hc update <id> --add-blocker <blocker-id>    # mark task as blocked by another
+hive hc update <id> --remove-blocker <blocker-id>  # remove a blocker
+```
+
 Output is JSON lines — one per created item:
 
 ```

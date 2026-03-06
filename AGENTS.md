@@ -199,8 +199,18 @@ Never silently discard errors. If an error cannot be presented to the user (e.g.
 ### Quick Reference
 
 ```bash
-# Conductor: create work
+# Conductor: create work (simple)
 echo '{"title":"Epic","type":"epic","children":[{"title":"Task","type":"task"}]}' | hive hc create
+
+# Conductor: create work with blocker dependencies (ref/blockers are local labels, not stored)
+echo '{
+  "title": "Auth System",
+  "type": "epic",
+  "children": [
+    {"ref": "jwt", "title": "JWT middleware", "type": "task"},
+    {"title": "Login endpoint", "type": "task", "blockers": ["jwt"]}
+  ]
+}' | hive hc create
 
 # Worker: claim next task
 hive hc next <epic-id> --assign
@@ -211,6 +221,10 @@ hive hc comment <id> "CHECKPOINT: stopping here, Y still needed"
 
 # Worker: complete task
 hive hc update <id> --status done
+
+# Worker: manage blockers after creation
+hive hc update <id> --add-blocker <blocker-id>    # mark task as blocked by another
+hive hc update <id> --remove-blocker <blocker-id>  # remove a blocker
 
 # Get context for an epic (markdown for AI consumption)
 hive hc context <epic-id>
@@ -230,7 +244,7 @@ hive hc list --session <session-id>   # filter by session
 | `hive hc create [title]` | Single item (positional) or bulk tree (stdin JSON) |
 | `hive hc list [epic-id]` | List open items (use `--all` for everything) |
 | `hive hc show <id>` | Item + comments as JSON lines |
-| `hive hc update <id>` | Update status (`--status`), assign (`--assign`/`--unassign`) |
+| `hive hc update <id>` | Update status (`--status`), assign (`--assign`/`--unassign`), manage blockers (`--add-blocker`/`--remove-blocker`) |
 | `hive hc next <epic-id>` | Next actionable leaf task; `--assign` to claim |
 | `hive hc comment <id> <msg>` | Add a comment |
 | `hive hc comment <id> "CHECKPOINT: msg"` | Handoff checkpoint |
