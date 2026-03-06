@@ -21,9 +21,16 @@ type commentsLoadedMsg struct {
 	err      error
 }
 
+// blockersLoadedMsg carries the result of loading explicit blockers for an item.
+type blockersLoadedMsg struct {
+	blockers []hc.Item
+	itemID   string
+	err      error
+}
+
 // contentRenderedMsg carries pre-rendered detail content produced off the event loop.
 type contentRenderedMsg struct {
-	key     string // cache key: "itemID:commentCount:width"
+	key     string // cache key: "itemID:commentCount:blockerCount:width"
 	content string
 }
 

@@ -45,6 +45,7 @@ type View struct {
 	repoKey      string
 
 	comments     map[string][]hc.Comment // cache: itemID -> comments
+	blockers     map[string][]hc.Item   // cache: itemID -> its explicit open blockers
 	lastItemID   string                  // track cursor changes
 	statusFilter StatusFilter            // current status filter (default: FilterOpen)
 	showPreview  bool                    // toggle detail/preview panel visibility
@@ -57,7 +58,7 @@ type View struct {
 	splitRatio  int            // panel split percentage (1-80, 0 = default)
 
 	// Rendered content cache — avoids re-running glamour on every cursor change.
-	cachedContentKey string // "itemID:commentCount:width"
+	cachedContentKey string // "itemID:commentCount:blockerCount:width"
 	cachedContent    string
 }
 
@@ -70,6 +71,7 @@ func New(svc *hive.HoneycombService, repoKey string, handler KeyResolver, kvStor
 		kvStore:      kvStore,
 		splitRatio:   splitRatio,
 		comments:     make(map[string][]hc.Comment),
+		blockers:     make(map[string][]hc.Item),
 		statusFilter: FilterOpen,
 		showPreview:  true,
 	}
@@ -110,12 +112,23 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 		}
 		return nil
 
+	case blockersLoadedMsg:
+		if msg.err != nil {
+			log.Debug().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load blockers")
+			return nil
+		}
+		v.blockers[msg.itemID] = msg.blockers
+		if selected := v.SelectedItem(); selected != nil && selected.ID == msg.itemID {
+			return v.updateViewportContent()
+		}
+		return nil
+
 	case contentRenderedMsg:
 		v.cachedContentKey = msg.key
 		v.cachedContent = msg.content
 		// Only apply if we're still viewing the same item.
 		if selected := v.SelectedItem(); selected != nil {
-			currentKey := fmt.Sprintf("%s:%d:%d", selected.ID, len(v.comments[selected.ID]), v.viewport.Width())
+			currentKey := fmt.Sprintf("%s:%d:%d:%d", selected.ID, len(v.comments[selected.ID]), len(v.blockers[selected.ID]), v.viewport.Width())
 			if currentKey == msg.key {
 				v.viewport.SetContent(msg.content)
 			}
@@ -124,6 +137,7 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 	case RefreshTasksMsg:
 		v.comments = make(map[string][]hc.Comment)
+		v.blockers = make(map[string][]hc.Item)
 		v.cachedContentKey = ""
 		return v.loadItems()
 
@@ -300,6 +314,7 @@ func (v *View) SetRepoKey(repoKey string) tea.Cmd {
 	v.cursor = 0
 	v.scrollOffset = 0
 	v.comments = make(map[string][]hc.Comment)
+	v.blockers = make(map[string][]hc.Item)
 	v.lastItemID = ""
 	v.cachedContentKey = ""
 	v.cachedContent = ""
@@ -437,6 +452,26 @@ func (v *View) loadComments(itemID string) tea.Cmd {
 	}
 }
 
+// loadBlockers fetches explicit open blockers for an item in a goroutine.
+func (v *View) loadBlockers(itemID string) tea.Cmd {
+	svc := v.svc
+	return func() tea.Msg {
+		blockerIDs, err := svc.ListBlockers(context.Background(), itemID)
+		if err != nil {
+			return blockersLoadedMsg{itemID: itemID, err: err}
+		}
+		items := make([]hc.Item, 0, len(blockerIDs))
+		for _, bid := range blockerIDs {
+			b, err := svc.GetItem(context.Background(), bid)
+			if err != nil {
+				continue // skip unavailable
+			}
+			items = append(items, b)
+		}
+		return blockersLoadedMsg{blockers: items, itemID: itemID}
+	}
+}
+
 // checkCursorChanged checks if the selected item changed and loads comments if needed.
 func (v *View) checkCursorChanged() tea.Cmd {
 	selected := v.SelectedItem()
@@ -459,6 +494,9 @@ func (v *View) checkCursorChanged() tea.Cmd {
 	}
 	if _, cached := v.comments[selected.ID]; !cached {
 		cmds = append(cmds, v.loadComments(selected.ID))
+	}
+	if _, cached := v.blockers[selected.ID]; !cached {
+		cmds = append(cmds, v.loadBlockers(selected.ID))
 	}
 
 	return tea.Batch(cmds...)
@@ -484,7 +522,12 @@ func (v *View) updateViewportContent() tea.Cmd {
 		itemComments = comments
 	}
 
-	key := fmt.Sprintf("%s:%d:%d", selected.ID, len(itemComments), contentWidth)
+	var itemBlockers []hc.Item
+	if blockers, ok := v.blockers[selected.ID]; ok {
+		itemBlockers = blockers
+	}
+
+	key := fmt.Sprintf("%s:%d:%d:%d", selected.ID, len(itemComments), len(itemBlockers), contentWidth)
 	if key == v.cachedContentKey {
 		v.viewport.SetContent(v.cachedContent)
 		v.viewport.SetYOffset(0)
@@ -498,10 +541,11 @@ func (v *View) updateViewportContent() tea.Cmd {
 	// Capture values for the goroutine.
 	item := *selected
 	comments := itemComments
+	blockers := itemBlockers
 	width := contentWidth
 
 	return func() tea.Msg {
-		content := renderDetailContent(&item, comments, width)
+		content := renderDetailContent(&item, comments, blockers, width)
 		return contentRenderedMsg{key: key, content: content}
 	}
 }
