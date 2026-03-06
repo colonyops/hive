@@ -864,8 +864,8 @@ func (v View) View() string {
 	}
 
 	// Height budget: tab chrome (3) is handled by the parent model.
-	// Reserve rule (1) + help bar (1) = 2 lines, so content gets height-5 total.
-	contentHeight := max(v.height-5, 1)
+	// Reserve rule (1) + help bar (1) = 2 lines for footer.
+	contentHeight := max(v.height-2, 1)
 
 	// --- Two-pane layout ---
 	splitPct := v.splitRatioOrDefault(30)
@@ -883,8 +883,7 @@ func (v View) View() string {
 	if repoName == "" || repoName == "." {
 		repoName = v.contextDir
 	}
-	repoHeader := styles.TextPrimaryBoldStyle.Render(" "+repoName) +
-		styles.TextMutedStyle.Render(" docs")
+	repoHeader := " " + styles.TextMutedStyle.Render(repoName)
 	repoHeader = shared.EnsureExactWidth(repoHeader, treeWidth)
 
 	treeRows := max(contentHeight-1, 1) // -1 for the repo header line
