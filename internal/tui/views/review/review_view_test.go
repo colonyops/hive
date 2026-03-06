@@ -528,32 +528,6 @@ func TestLineMappingWithComments(t *testing.T) {
 	}
 }
 
-func TestView_WithPickerModal(t *testing.T) {
-	docs := []Document{
-		{RelPath: "doc1.md", Type: DocTypePlan},
-	}
-
-	reviewView := New(docs, "/test", nil, nil, 0)
-	reviewView.SetSize(100, 40)
-
-	// Show picker
-	_ = reviewView.ShowDocumentPicker()
-
-	require.NotNil(t, reviewView.pickerModal, "Expected picker modal to be created")
-
-	// Verify picker has documents
-	assert.Len(t, reviewView.pickerModal.documents, 1, "Expected 1 document in picker, got %d", len(reviewView.pickerModal.documents))
-}
-
-func TestView_HasPickerModalField(t *testing.T) {
-	reviewView := New(nil, "", nil, nil, 0)
-
-	// Access the field to ensure it exists
-	_ = reviewView.pickerModal
-
-	// This test passes if it compiles
-}
-
 // TestScrollVisibilityWithComments verifies that ensureCursorVisible uses display coordinates
 // when comments are inserted inline, ensuring the cursor scrolls to the correct position.
 func TestScrollVisibilityWithComments(t *testing.T) {

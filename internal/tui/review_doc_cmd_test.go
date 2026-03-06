@@ -68,15 +68,12 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 		height:     40,
 	}
 
-	// Execute command without argument - falls back to review view documents
+	// Execute command without argument - switches to review tab
 	cmd := HiveDocReviewCmd{Arg: ""}
 	_ = cmd.Execute(m)
 
-	// Check that view stays on Sessions (picker shown on Sessions view)
-	assert.Equal(t, ViewSessions, m.activeView)
-
-	// Check that picker modal is shown on the Model (using fallback docs)
-	require.NotNil(t, m.modals.DocPicker, "Expected picker modal to be created on Model")
+	// Check that view switches to Docs tab
+	assert.Equal(t, ViewReview, m.activeView)
 }
 
 func TestOpenDocument(t *testing.T) {
@@ -257,16 +254,3 @@ func TestResolveReviewURI(t *testing.T) {
 	}
 }
 
-func TestGetAllDocuments(t *testing.T) {
-	docs := []review.Document{
-		{RelPath: "doc1.md", Type: review.DocTypePlan},
-		{RelPath: "doc2.md", Type: review.DocTypeResearch},
-	}
-
-	reviewView := review.New(docs, "/test", nil, nil, 0)
-
-	allDocs := reviewView.GetAllDocuments()
-
-	// Should return all non-header documents
-	assert.Len(t, allDocs, 2, "Expected 2 documents, got %d", len(allDocs))
-}

@@ -14,7 +14,6 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
-	"github.com/colonyops/hive/internal/tui/views/review"
 )
 
 // ModalCoordinator owns all modal component references, pending action state,
@@ -29,7 +28,6 @@ type ModalCoordinator struct {
 	Notification    *NotificationModal
 	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
-	DocPicker       *review.DocumentPickerModal
 	RepoPicker      *RepoPicker
 	TodoPanel       *TodoPanel
 	RenameInput     textinput.Model
@@ -155,9 +153,6 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 
 	case state == stateSelectingRepo && mc.RepoPicker != nil:
 		return mc.RepoPicker.Overlay(bg, w, h)
-
-	case mc.DocPicker != nil:
-		return mc.DocPicker.Overlay(bg, w, h)
 
 	default:
 		return bg

@@ -862,28 +862,6 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 // --- Input ---
 
 func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.modals.DocPicker != nil {
-		modal, cmd := m.modals.DocPicker.Update(msg)
-		m.modals.DocPicker = modal
-
-		if m.modals.DocPicker.SelectedDocument() != nil {
-			doc := m.modals.DocPicker.SelectedDocument()
-			m.modals.DocPicker = nil
-			m.activeView = ViewReview
-			m.handler.SetActiveView(ViewReview)
-			if m.reviewView != nil {
-				m.reviewView.LoadDocument(doc)
-			}
-			return m, cmd
-		}
-
-		if m.modals.DocPicker.Cancelled() {
-			m.modals.DocPicker = nil
-			return m, cmd
-		}
-
-		return m, cmd
-	}
 
 	return m.handleKey(msg)
 }

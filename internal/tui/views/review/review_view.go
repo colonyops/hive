@@ -57,7 +57,6 @@ type View struct {
 	commentModal      *CommentModal            // Active comment entry modal
 	confirmModal      *components.ConfirmModal // Active confirmation modal
 	finalizationModal *FinalizationModal       // Active finalization options modal
-	pickerModal       *DocumentPickerModal     // Active document picker modal
 	feedbackGenerated string                   // Generated feedback (for clipboard)
 	searchMode        bool                     // True when in search/filter mode
 	searchInput       textinput.Model          // Search input field
@@ -216,9 +215,9 @@ func (v *View) splitRatioOrDefault(defaultPct int) int {
 	return v.splitRatio
 }
 
-// HasActiveEditor returns true if an input field has focus (search, comment modal, or picker modal).
+// HasActiveEditor returns true if an input field has focus (search, comment modal).
 func (v *View) HasActiveEditor() bool {
-	return v.searchMode || v.commentModal != nil || v.pickerModal != nil
+	return v.searchMode || v.treeSearchMode || v.commentModal != nil
 }
 
 // ContextDir returns the current context directory.
@@ -342,27 +341,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyPressMsg:
-		// Handle document picker modal if active (MUST be first to prevent key conflicts)
-		if v.pickerModal != nil {
-			modal, cmd := v.pickerModal.Update(msg)
-			v.pickerModal = modal
-
-			if v.pickerModal.SelectedDocument() != nil {
-				// User selected a document - open it
-				doc := v.pickerModal.SelectedDocument()
-				v.pickerModal = nil
-				v.loadDocument(doc)
-				return v, cmd
-			}
-
-			if v.pickerModal.Cancelled() {
-				v.pickerModal = nil
-				return v, cmd
-			}
-
-			return v, cmd
-		}
-
 		// Handle finalization modal for choosing action
 		if v.finalizationModal != nil {
 			modal, cmd := v.finalizationModal.Update(msg)
@@ -666,15 +644,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			}
 		}
 
-		if msg.String() == "p" && !v.selectionMode && !v.searchMode {
-			// Only show picker if there are multiple documents
-			if len(v.GetAllDocuments()) > 1 {
-				return v, v.ShowDocumentPicker()
-			}
-			// In single-file mode, picker is disabled
-			return v, nil
-		}
-
 		if v.fullScreen && !v.selectionMode && msg.String() == "/" {
 			v.searchMode = true
 			v.searchInput.Focus()
@@ -970,11 +939,6 @@ func (v View) View() string {
 	}
 
 	baseView := body + "\n" + bar.Rule() + "\n" + bar.Render(helpLeft, "")
-
-	// Overlay document picker modal if active (highest priority)
-	if v.pickerModal != nil {
-		return v.pickerModal.Overlay(baseView, v.width, v.height)
-	}
 
 	// Overlay finalization modal if active
 	if v.finalizationModal != nil {
@@ -2360,11 +2324,6 @@ func (v *View) List() *list.Model {
 	return &v.list
 }
 
-// SetPickerModal sets the document picker modal.
-func (v *View) SetPickerModal(modal *DocumentPickerModal) {
-	v.pickerModal = modal
-}
-
 // HasActiveSession returns whether there is an active review session.
 func (v *View) HasActiveSession() bool {
 	return v.activeSession != nil
@@ -2376,22 +2335,6 @@ func (v *View) SelectedDocPath() string {
 		return ""
 	}
 	return v.selectedDoc.Path
-}
-
-// GetAllDocuments returns all documents from the tree items.
-func (v *View) GetAllDocuments() []Document {
-	var docs []Document
-	for _, ti := range TreeItemsDocuments(v.list.Items()) {
-		docs = append(docs, ti.Document)
-	}
-	return docs
-}
-
-// ShowDocumentPicker shows the fuzzy search document picker modal.
-func (v *View) ShowDocumentPicker() tea.Cmd {
-	// Create and show the picker modal
-	v.pickerModal = NewDocumentPickerModal(v.GetAllDocuments(), v.width, v.height, v.store)
-	return nil
 }
 
 // LoadDocument loads and renders a document for preview.
