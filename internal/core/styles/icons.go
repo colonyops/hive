@@ -15,6 +15,10 @@ var (
 
 	IconTodo = "\uf4a0 " // checklist
 
+	IconFolder     = " "
+	IconFolderOpen = " "
+	IconFile       = " "
+
 	IconNotifyError   = "\uf06a" //
 	IconNotifyWarning = "\uf071" //
 	IconNotifyInfo    = "\uf05a" //
