@@ -45,39 +45,31 @@ func renderDocNode(fn DocFlatNode, isSelected bool) string {
 	node := fn.Node
 
 	if node.Doc == nil {
-		// Directory node
 		return renderDocDirNode(fn, isSelected)
 	}
 
-	// File node
 	return renderDocFileNode(fn, isSelected)
 }
 
-// renderDocDirNode renders a directory node with expand/collapse icon.
+// renderDocDirNode renders a directory node using open/closed folder icons.
 func renderDocDirNode(fn DocFlatNode, isSelected bool) string {
 	node := fn.Node
 
-	// Expand/collapse icon
-	var expandIcon string
+	folderIcon := styles.IconFolder
 	if node.Expanded {
-		expandIcon = IconExpanded
-	} else {
-		expandIcon = IconCollapsed
-	}
-	expandIcon = styles.TextMutedStyle.Render(expandIcon)
-
-	// Title style
-	var name string
-	if isSelected {
-		name = styles.TextPrimaryStyle.Render(fmt.Sprintf("%s%s", styles.IconFolder, node.Name))
-	} else {
-		name = styles.TextForegroundStyle.Render(fmt.Sprintf("%s%s", styles.IconFolder, node.Name))
+		folderIcon = styles.IconFolderOpen
 	}
 
-	// Indent based on depth
 	indent := strings.Repeat("  ", fn.Depth)
 
-	return fmt.Sprintf("%s%s %s", indent, expandIcon, name)
+	var name string
+	if isSelected {
+		name = styles.TextPrimaryStyle.Render(fmt.Sprintf("%s%s", folderIcon, node.Name))
+	} else {
+		name = styles.TextForegroundStyle.Render(fmt.Sprintf("%s%s", folderIcon, node.Name))
+	}
+
+	return indent + name
 }
 
 // renderDocFileNode renders a file node with tree connectors and file icon.
@@ -99,8 +91,7 @@ func renderDocFileNode(fn DocFlatNode, isSelected bool) string {
 	}
 	connector = styles.TextMutedStyle.Render(connector)
 
-	// File name with icon
-	label := fmt.Sprintf("%s %s", IconFile, node.Name)
+	label := fmt.Sprintf("%s%s", styles.IconFile, node.Name)
 	var name string
 	if isSelected {
 		name = styles.TextPrimaryStyle.Render(label)
@@ -109,7 +100,6 @@ func renderDocFileNode(fn DocFlatNode, isSelected bool) string {
 	}
 
 	if fn.Depth == 0 {
-		// Root-level file: no indent, no connector
 		return name
 	}
 
