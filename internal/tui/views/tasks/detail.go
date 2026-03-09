@@ -57,10 +57,10 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, blockers []hc.Ite
 		b.WriteString("\n")
 		for _, blocker := range blockers {
 			icon := StatusIcon(blocker.Status)
-			b.WriteString(fmt.Sprintf("  %s %s  %s\n",
+			fmt.Fprintf(&b, "  %s %s  %s\n",
 				icon,
 				styles.TextForegroundStyle.Render(blocker.Title),
-				styles.TextMutedStyle.Render("("+blocker.ID+")")))
+				styles.TextMutedStyle.Render("("+blocker.ID+")"))
 		}
 	} else if item.Blocked {
 		// item is blocked by open children (not explicit blockers)
