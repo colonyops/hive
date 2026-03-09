@@ -82,18 +82,18 @@ func TestHCUpdateAddBlocker_Cycle(t *testing.T) {
 	require.NoError(t, err)
 
 	// Now try task2 blocks task1 — should fail with cycle error
-	_, err = h.Run("hc", "update", task1ID, "--add-blocker", task2ID)
+	out, err := h.Run("hc", "update", task1ID, "--add-blocker", task2ID)
 	require.Error(t, err, "adding a cyclic blocker should fail")
-	assert.Contains(t, err.Error(), "cyclic")
+	assert.Contains(t, out, "cyclic")
 }
 
 func TestHCUpdateAddBlocker_MutuallyExclusive(t *testing.T) {
 	h := NewHarness(t)
 	_, task1ID, task2ID := createBlockerFixture(t, h)
 
-	_, err := h.Run("hc", "update", task2ID, "--add-blocker", task1ID, "--remove-blocker", task1ID)
+	out, err := h.Run("hc", "update", task2ID, "--add-blocker", task1ID, "--remove-blocker", task1ID)
 	require.Error(t, err, "--add-blocker and --remove-blocker together should fail")
-	assert.Contains(t, err.Error(), "mutually exclusive")
+	assert.Contains(t, out, "mutually exclusive")
 }
 
 func TestHCShowBlockers(t *testing.T) {
