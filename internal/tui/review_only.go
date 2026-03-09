@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	review "github.com/colonyops/hive/internal/tui/views/review"
@@ -91,7 +92,22 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c", "q":
 				m.quitting = true
 				return m, tea.Quit
+			case "esc":
+				// In tree view (not fullScreen), esc exits the app.
+				// In reader mode, esc is handled by the view to return to tree first.
+				if !m.reviewView.IsFullScreen() {
+					m.quitting = true
+					return m, tea.Quit
+				}
 			}
+		}
+
+	case review.ActionRequestMsg:
+		switch msg.Action.Type {
+		case act.TypeDocsToggleTree:
+			return m, m.reviewView.ToggleTree()
+		case act.TypeDocsTogglePreview:
+			return m, m.reviewView.TogglePreview()
 		}
 
 	case review.ReviewFinalizedMsg:

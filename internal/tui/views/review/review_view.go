@@ -85,7 +85,8 @@ type View struct {
 	treeSearchInput textinput.Model // search input for tree navigation
 	treeSearchQuery string          // current tree search query
 
-	handler KeyResolver // resolves configurable keybindings to actions
+	handler    KeyResolver            // resolves configurable keybindings to actions
+	helpDialog *components.HelpDialog // active help overlay, nil when not shown
 }
 
 // New creates a new review view.
@@ -215,9 +216,14 @@ func (v *View) splitRatioOrDefault(defaultPct int) int {
 	return v.splitRatio
 }
 
-// HasActiveEditor returns true if an input field has focus (search, comment modal).
+// IsFullScreen returns true when the reader pane has keyboard focus.
+func (v *View) IsFullScreen() bool {
+	return v.fullScreen
+}
+
+// HasActiveEditor returns true if an input field or overlay has focus.
 func (v *View) HasActiveEditor() bool {
-	return v.searchMode || v.treeSearchMode || v.commentModal != nil
+	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil
 }
 
 // ContextDir returns the current context directory.
@@ -242,6 +248,54 @@ func (v *View) SetShowTree(show bool) {
 	v.showTree = show
 	if !show {
 		v.showPreview = true
+	}
+}
+
+// HelpSections returns the keyboard shortcut sections for the help dialog.
+func (v *View) HelpSections() []components.HelpDialogSection {
+	if v.fullScreen {
+		return []components.HelpDialogSection{
+			{
+				Title: "Navigation",
+				Entries: []components.HelpEntry{
+					{Key: "j/k", Desc: "scroll down/up"},
+					{Key: "ctrl+d/u", Desc: "half page down/up"},
+					{Key: "g/G", Desc: "top/bottom"},
+					{Key: "n/N", Desc: "next/prev comment or match"},
+					{Key: "h/esc", Desc: "back to tree"},
+				},
+			},
+			{
+				Title: "Actions",
+				Entries: []components.HelpEntry{
+					{Key: "V", Desc: "visual select mode"},
+					{Key: "c", Desc: "add comment (in visual mode)"},
+					{Key: "e", Desc: "edit comment at cursor"},
+					{Key: "d", Desc: "delete comment at cursor"},
+					{Key: "D", Desc: "discard entire review"},
+					{Key: "/", Desc: "search document"},
+					{Key: "f", Desc: "finalize review"},
+				},
+			},
+		}
+	}
+	return []components.HelpDialogSection{
+		{
+			Title: "Navigation",
+			Entries: []components.HelpEntry{
+				{Key: "j/k", Desc: "move down/up"},
+				{Key: "g/G", Desc: "top/bottom"},
+				{Key: "space", Desc: "expand/collapse folder"},
+				{Key: "enter/l", Desc: "open document"},
+				{Key: "/", Desc: "search tree"},
+			},
+		},
+		{
+			Title: "Layout",
+			Entries: []components.HelpEntry{
+				{Key: `\`, Desc: "toggle tree pane"},
+			},
+		},
 	}
 }
 
@@ -350,6 +404,26 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		return v, nil
 
 	case tea.KeyPressMsg:
+		// Handle help dialog if active.
+		if v.helpDialog != nil {
+			switch msg.String() {
+			case "esc", "?", "q":
+				v.helpDialog = nil
+			case "j", "down":
+				v.helpDialog.ScrollDown()
+			case "k", "up":
+				v.helpDialog.ScrollUp()
+			}
+			return v, nil
+		}
+
+		// Toggle help dialog.
+		if msg.String() == "?" && !v.treeSearchMode && !v.searchMode {
+			d := components.NewHelpDialog("Keyboard Shortcuts", v.HelpSections(), v.width, v.height)
+			v.helpDialog = d
+			return v, nil
+		}
+
 		// Handle finalization modal for choosing action
 		if v.finalizationModal != nil {
 			modal, cmd := v.finalizationModal.Update(msg)
@@ -534,21 +608,23 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				v.renderSelection()
 				return v, nil
 			}
-			// Exit fullScreen — return focus to tree, keep doc previewed
+			// Exit fullScreen — return focus to tree, keep doc previewed.
+			// If the tree is hidden, reveal it so the user has somewhere to navigate.
 			if v.fullScreen {
+				if !v.showTree {
+					v.showTree = true
+				}
 				v.exitFullScreen()
-				return v, nil
-			}
-			// Close preview entirely
-			if v.selectedDoc != nil {
-				v.selectedDoc = nil
-				v.activeSession = nil
 				return v, nil
 			}
 		}
 
-		// "h" exits fullscreen (mirrors vim left-motion / sessions view "h" for back)
+		// "h" exits fullscreen (mirrors vim left-motion / sessions view "h" for back).
+		// If the tree is hidden, reveal it so the user has somewhere to navigate.
 		if msg.String() == "h" && v.fullScreen && !v.selectionMode && !v.searchMode {
+			if !v.showTree {
+				v.showTree = true
+			}
 			v.exitFullScreen()
 			return v, nil
 		}
@@ -739,8 +815,9 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 					node := v.flatNodes[v.treeCursor].Node
 					if node.Doc != nil {
 						if v.selectedDoc != nil && v.selectedDoc.Path == node.Doc.Path {
-							// Doc already previewed — shift focus to preview panel.
+							// Doc already previewed — shift focus to reader mode, hide tree.
 							v.fullScreen = true
+							v.showTree = false
 							v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
 							v.viewport.SetContent(styles.TextMutedStyle.Render(filepath.Base(node.Doc.RelPath)))
 							v.cursorLine = 1
@@ -774,11 +851,12 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				return v, nil
 			}
 
-			// Resolve configurable keybindings via handler
-			if v.handler != nil {
-				if a, ok := v.handler.ResolveAction(msg.String()); ok {
-					return v, func() tea.Msg { return ActionRequestMsg{Action: a} }
-				}
+		}
+
+		// Resolve configurable keybindings via handler (works in any mode).
+		if v.handler != nil {
+			if a, ok := v.handler.ResolveAction(msg.String()); ok {
+				return v, func() tea.Msg { return ActionRequestMsg{Action: a} }
 			}
 		}
 
@@ -906,13 +984,7 @@ func (v View) View() string {
 			hint := "\n  " + styles.TextMutedStyle.Render("Navigate to a document or press enter to open")
 			detailContent = hint
 		} else {
-			content := v.viewport.View()
-			statusBar := v.renderStatusBar()
-			contentLines := strings.Split(content, "\n")
-			if len(contentLines) > contentHeight-1 {
-				contentLines = contentLines[:contentHeight-1]
-			}
-			detailContent = strings.Join(contentLines, "\n") + "\n" + statusBar
+			detailContent = v.viewport.View()
 		}
 		detailContent = shared.EnsureExactHeight(detailContent, contentHeight)
 		return shared.EnsureExactWidth(detailContent, width)
@@ -936,18 +1008,40 @@ func (v View) View() string {
 		body = lipgloss.JoinHorizontal(lipgloss.Top, treePane, divider, buildDetailContent(detailWidth))
 	}
 
-	// --- Footer (rule + help bar matching sessions view pattern) ---
+	// --- Footer (single rule + context-aware help bar) ---
 	bar := components.StatusBar{Width: v.width}
-	var helpLeft string
-	if v.treeSearchMode {
+	var helpLeft, helpRight string
+	switch {
+	case v.treeSearchMode:
 		helpLeft = styles.TextMutedStyle.Render("/") + v.treeSearchInput.View()
-	} else if v.fullScreen {
-		helpLeft = styles.TextMutedStyle.Render("j/k scroll  •  h/esc back to tree")
-	} else {
-		helpLeft = styles.TextMutedStyle.Render("j/k navigate  •  space expand  •  enter focus  •  v preview  •  / search")
+	case v.fullScreen:
+		// Show compact mode badge + key hints; position info on the right.
+		mode := "NORMAL"
+		modeStyle := styles.ReviewModeNormalStyle
+		if v.selectionMode {
+			mode = "VISUAL"
+			modeStyle = styles.ReviewModeVisualStyle
+		} else if v.searchMode {
+			mode = "SEARCH"
+			modeStyle = styles.ReviewModeSearchStyle
+		}
+		badge := modeStyle.Render(mode)
+		if v.searchMode {
+			helpLeft = badge + "  " + styles.TextMutedStyle.Render("/") + v.searchInput.View()
+		} else if v.selectionMode {
+			helpLeft = badge + "  " + styles.TextMutedStyle.Render("c:comment"+components.HelpSep+"v/esc:exit visual")
+		} else {
+			helpLeft = badge + "  " + styles.TextMutedStyle.Render("j/k scroll"+components.HelpSep+"n/N comments"+components.HelpSep+"esc back"+components.HelpSep+"? help")
+		}
+		if v.selectedDoc != nil {
+			totalLines := len(v.selectedDoc.RenderedLines)
+			helpRight = styles.ReviewPosStyle.Render(fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines))
+		}
+	default:
+		helpLeft = styles.TextMutedStyle.Render("j/k navigate" + components.HelpSep + "space expand" + components.HelpSep + "enter focus" + components.HelpSep + "/ search" + components.HelpSep + "? help")
 	}
 
-	baseView := body + "\n" + bar.Rule() + "\n" + bar.Render(helpLeft, "")
+	baseView := body + "\n" + bar.Rule() + "\n" + bar.Render(helpLeft, helpRight)
 
 	// Overlay finalization modal if active
 	if v.finalizationModal != nil {
@@ -994,6 +1088,11 @@ func (v View) View() string {
 		return compositor.Render()
 	}
 
+	// Overlay help dialog if active.
+	if v.helpDialog != nil {
+		return v.helpDialog.Overlay(baseView, v.width, v.height)
+	}
+
 	return baseView
 }
 
@@ -1035,8 +1134,9 @@ func (v *View) loadDocument(doc *Document) {
 		Str("type", doc.Type.String()).
 		Msg("review: loading document")
 
-	// Enter full-screen mode when loading a document
+	// Enter full-screen reader mode: hide the tree and give the doc full width.
 	v.fullScreen = true
+	v.showTree = false
 
 	// Adjust viewport size for full-screen
 	v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
@@ -1506,65 +1606,6 @@ func (v *View) mapDisplayToDoc(displayLine int, lineMapping map[int]int) int {
 	// If display line is a comment line (not found in mapping), return 0 or -1
 	// to indicate it's not a document line
 	return 0
-}
-
-// renderStatusBar creates a status bar showing mode and position info.
-func (v View) renderStatusBar() string {
-	// Show search input when in search mode
-	if v.searchMode {
-		prefix := styles.ReviewSearchInputStyle.Render("/")
-		input := v.searchInput.View()
-		remaining := max(0, v.width-lipgloss.Width(prefix)-lipgloss.Width(input))
-
-		return prefix + input + styles.ReviewStatusBarBgStyle.Render(strings.Repeat(" ", remaining))
-	}
-
-	// Determine mode
-	mode := "NORMAL"
-	modeStyle := styles.ReviewModeNormalStyle
-
-	if v.selectionMode {
-		mode = "VISUAL"
-		modeStyle = styles.ReviewModeVisualStyle
-	} else if v.searchQuery != "" && len(v.searchMatches) > 0 {
-		// Show search match count when search is active
-		mode = fmt.Sprintf("SEARCH | Match %d/%d", v.searchMatchIndex+1, len(v.searchMatches))
-		modeStyle = styles.ReviewModeSearchStyle
-	}
-
-	// Calculate total lines
-	totalLines := 0
-	if v.selectedDoc != nil {
-		totalLines = len(v.selectedDoc.RenderedLines)
-	}
-
-	// Position info
-	posInfo := fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines)
-	posStyle := styles.ReviewPosStyle
-
-	// Help text
-	var helpText string
-	if v.selectionMode {
-		helpText = "c:comment • v/esc:exit visual"
-	} else {
-		helpText = "V:visual • p:picker • n/N:navigate • e:edit • d:delete • /:search • f:finalize • esc:close"
-	}
-	helpStyle := styles.ReviewHelpStyle
-
-	// Build status bar
-	leftPart := modeStyle.Render(mode)
-	middlePart := helpStyle.Render(helpText)
-	rightPart := posStyle.Render(posInfo)
-
-	// Calculate spacing to distribute
-	usedWidth := lipgloss.Width(leftPart) + lipgloss.Width(middlePart) + lipgloss.Width(rightPart)
-	availableSpace := max(0, v.width-usedWidth)
-
-	// Split spacing: left spacing between mode and help, right spacing between help and position
-	leftSpacing := availableSpace / 2
-	rightSpacing := availableSpace - leftSpacing
-
-	return leftPart + styles.ReviewStatusBarBgStyle.Render(strings.Repeat(" ", leftSpacing)) + middlePart + styles.ReviewStatusBarBgStyle.Render(strings.Repeat(" ", rightSpacing)) + rightPart
 }
 
 // getSelectedText extracts the text from the selected line range.

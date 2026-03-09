@@ -126,7 +126,6 @@ var defaultViewsConfig = ViewsConfig{
 			"c": {Cmd: "DocsCopyContents"},
 			"o": {Cmd: "DocsOpen"},
 			"v": {Cmd: "DocsTogglePreview"},
-			"V": {Cmd: "DocsToggleTree"},
 		},
 	},
 }
