@@ -43,6 +43,12 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	// Create review view
 	reviewView := review.New(opts.Documents, opts.ContextDir, store, nil, 0)
 
+	// When opening with a specific document, hide the tree so the document
+	// gets full-width focus. The user can toggle the tree with V to navigate.
+	if opts.InitialDoc != nil {
+		reviewView.SetShowTree(false)
+	}
+
 	return ReviewOnlyModel{
 		reviewView:  reviewView,
 		initialDoc:  opts.InitialDoc,

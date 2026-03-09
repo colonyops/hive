@@ -236,6 +236,15 @@ func (v *View) TogglePreview() tea.Cmd {
 	return nil
 }
 
+// SetShowTree sets the tree pane visibility without toggling or re-rendering.
+// Use before the first window size event to configure the initial layout.
+func (v *View) SetShowTree(show bool) {
+	v.showTree = show
+	if !show {
+		v.showPreview = true
+	}
+}
+
 // ToggleTree shows or hides the folder tree pane.
 // When hiding the tree, the detail pane is forced visible and re-rendered at full width.
 func (v *View) ToggleTree() tea.Cmd {
