@@ -16,6 +16,7 @@ import (
 
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
@@ -131,7 +132,8 @@ type Model struct {
 	kvStore corekv.KV
 	kvView  *KVView
 
-	tasksView *tasks.View
+	tasksView     *tasks.View
+	taskUndoEntry *taskUndoEntry
 
 	notifyStore     notify.Store
 	notifyBuffer    *NotificationBuffer
@@ -158,6 +160,12 @@ type Model struct {
 // actionCompleteMsg is sent when an action completes.
 type actionCompleteMsg struct {
 	err error
+}
+
+// taskUndoEntry records a task status change that can be reverted.
+type taskUndoEntry struct {
+	itemID     string
+	prevStatus hc.Status
 }
 
 // streamResult holds optional session metadata from a streaming create operation.

@@ -81,6 +81,8 @@ const (
 	TypeTasksDelete Type = "TasksDelete"
 	// TypeTasksPrune is a Type of type TasksPrune.
 	TypeTasksPrune Type = "TasksPrune"
+	// TypeTasksUndo is a Type of type TasksUndo.
+	TypeTasksUndo Type = "TasksUndo"
 	// TypeViewTasks is a Type of type ViewTasks.
 	TypeViewTasks Type = "ViewTasks"
 )
@@ -123,6 +125,7 @@ var _TypeNames = []string{
 	string(TypeTasksSetCancelled),
 	string(TypeTasksDelete),
 	string(TypeTasksPrune),
+	string(TypeTasksUndo),
 	string(TypeViewTasks),
 }
 
@@ -216,6 +219,8 @@ var _TypeValue = map[string]Type{
 	"tasksdelete":         TypeTasksDelete,
 	"TasksPrune":          TypeTasksPrune,
 	"tasksprune":          TypeTasksPrune,
+	"TasksUndo":           TypeTasksUndo,
+	"tasksundo":           TypeTasksUndo,
 	"ViewTasks":           TypeViewTasks,
 	"viewtasks":           TypeViewTasks,
 }

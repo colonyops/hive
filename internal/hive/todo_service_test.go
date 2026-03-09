@@ -309,10 +309,27 @@ func TestTodoService(t *testing.T) {
 		_, err = svc.Complete(ctx, "t1")
 		require.NoError(t, err)
 
+		// completed → pending is still invalid (only acknowledged is allowed)
 		_, err = svc.Acknowledge(ctx, "t1")
-		require.Error(t, err)
-		assert.Contains(t, err.Error(), "invalid transition")
-		assert.Contains(t, err.Error(), "t1")
+		require.NoError(t, err)
+	})
+
+	t.Run("allows reopening completed and dismissed todos", func(t *testing.T) {
+		svc, _ := newTestTodoService(t)
+
+		td, err := todo.NewAgentTodo("t1", "Test", testSessionID, todo.MustParseRef("review://doc.md"))
+		require.NoError(t, err)
+		_, err = svc.Add(ctx, td)
+		require.NoError(t, err)
+
+		_, err = svc.Complete(ctx, "t1")
+		require.NoError(t, err)
+		_, err = svc.Reopen(ctx, "t1")
+		require.NoError(t, err)
+
+		result, err := svc.Get(ctx, "t1")
+		require.NoError(t, err)
+		assert.Equal(t, todo.StatusAcknowledged, result.Status)
 	})
 
 	t.Run("add rejects invalid todo", func(t *testing.T) {

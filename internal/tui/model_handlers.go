@@ -273,11 +273,16 @@ func (m Model) handleTaskAction(msg tasks.ActionRequestMsg) (tea.Model, tea.Cmd)
 
 	// Direct status changes (no confirmation)
 	case act.TypeTasksSetOpen:
+		m = m.captureTaskUndo()
 		return m, m.taskUpdateStatus(hc.StatusOpen)
 	case act.TypeTasksSetInProgress:
+		m = m.captureTaskUndo()
 		return m, m.taskUpdateStatus(hc.StatusInProgress)
 	case act.TypeTasksSetDone:
+		m = m.captureTaskUndo()
 		return m, m.taskUpdateStatus(hc.StatusDone)
+	case act.TypeTasksUndo:
+		return m.taskUndoStatus()
 
 	// Confirmation-required actions
 	case act.TypeTasksSetCancelled:
@@ -329,6 +334,40 @@ func (m Model) taskUpdateStatus(status hc.Status) tea.Cmd {
 	id := item.ID
 	return func() tea.Msg {
 		_, err := svc.UpdateItem(context.Background(), id, hc.ItemUpdate{Status: &status})
+		return tasks.TaskActionCompleteMsg{Err: err}
+	}
+}
+
+// captureTaskUndo records the selected task's current status so it can be reverted.
+func (m Model) captureTaskUndo() Model {
+	if m.tasksView == nil {
+		return m
+	}
+	item := m.tasksView.SelectedItem()
+	if item == nil {
+		return m
+	}
+	m.taskUndoEntry = &taskUndoEntry{itemID: item.ID, prevStatus: item.Status}
+	return m
+}
+
+// taskUndoStatus reverts the last status change captured by captureTaskUndo.
+func (m Model) taskUndoStatus() (tea.Model, tea.Cmd) {
+	if m.taskUndoEntry == nil {
+		return m, m.notifyError("nothing to undo")
+	}
+	if m.tasksView == nil {
+		return m, nil
+	}
+	svc := m.tasksView.Svc()
+	if svc == nil {
+		return m, nil
+	}
+	entry := m.taskUndoEntry
+	m.taskUndoEntry = nil
+	status := entry.prevStatus
+	return m, func() tea.Msg {
+		_, err := svc.UpdateItem(context.Background(), entry.itemID, hc.ItemUpdate{Status: &status})
 		return tasks.TaskActionCompleteMsg{Err: err}
 	}
 }
@@ -699,6 +738,14 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 	case "d":
 		if err := m.modals.TodoPanel.DismissCurrent(); err != nil {
 			return m, m.notifyError("dismiss todo: %v", err)
+		}
+	case "u":
+		if err := m.modals.TodoPanel.UndoLast(); err != nil {
+			return m, m.notifyError("%v", err)
+		}
+	case "r":
+		if err := m.modals.TodoPanel.ReopenCurrent(); err != nil {
+			return m, m.notifyError("reopen todo: %v", err)
 		}
 	}
 	return m, nil

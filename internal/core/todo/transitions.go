@@ -7,6 +7,8 @@ func ValidateTransition(from, to Status) error {
 	allowed := map[Status][]Status{
 		StatusPending:      {StatusAcknowledged, StatusCompleted, StatusDismissed},
 		StatusAcknowledged: {StatusCompleted, StatusDismissed},
+		StatusCompleted:    {StatusAcknowledged},
+		StatusDismissed:    {StatusAcknowledged},
 	}
 
 	for _, candidate := range allowed[from] {

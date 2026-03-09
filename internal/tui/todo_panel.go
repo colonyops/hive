@@ -36,17 +36,24 @@ var todoFilterLabels = [...]string{
 	todoFilterAll:  "All",
 }
 
+// todoUndoEntry records a status change that can be reverted.
+type todoUndoEntry struct {
+	itemID     string
+	prevStatus todo.Status
+}
+
 // TodoPanel displays an interactive list of todo items.
 type TodoPanel struct {
-	service  *hive.TodoService
-	viewport viewport.Model
-	allItems []todo.Todo // unfiltered list from store
-	items    []todo.Todo // filtered view
-	ackErrs  int
-	cursor   int
-	filter   todoFilter
-	width    int
-	height   int
+	service   *hive.TodoService
+	viewport  viewport.Model
+	allItems  []todo.Todo // unfiltered list from store
+	items     []todo.Todo // filtered view
+	ackErrs   int
+	cursor    int
+	filter    todoFilter
+	width     int
+	height    int
+	undoEntry *todoUndoEntry // last reversible status change
 }
 
 // NewTodoPanel creates a new interactive todo panel modal.
@@ -242,7 +249,9 @@ func (p *TodoPanel) CompleteCurrent() error {
 	if item.Status == todo.StatusCompleted || item.Status == todo.StatusDismissed {
 		return nil
 	}
+	p.undoEntry = &todoUndoEntry{itemID: item.ID, prevStatus: item.Status}
 	if _, err := p.service.Complete(context.Background(), item.ID); err != nil {
+		p.undoEntry = nil
 		return err
 	}
 	p.loadItems()
@@ -274,7 +283,39 @@ func (p *TodoPanel) DismissCurrent() error {
 	if item.Status == todo.StatusCompleted || item.Status == todo.StatusDismissed {
 		return nil
 	}
+	p.undoEntry = &todoUndoEntry{itemID: item.ID, prevStatus: item.Status}
 	if _, err := p.service.Dismiss(context.Background(), item.ID); err != nil {
+		p.undoEntry = nil
+		return err
+	}
+	p.loadItems()
+	return nil
+}
+
+// UndoLast reverts the last complete or dismiss action.
+func (p *TodoPanel) UndoLast() error {
+	if p.undoEntry == nil {
+		return fmt.Errorf("nothing to undo")
+	}
+	entry := p.undoEntry
+	p.undoEntry = nil
+	if _, err := p.service.Reopen(context.Background(), entry.itemID); err != nil {
+		return err
+	}
+	p.loadItems()
+	return nil
+}
+
+// ReopenCurrent reverts the selected completed or dismissed item back to acknowledged.
+func (p *TodoPanel) ReopenCurrent() error {
+	if p.cursor >= len(p.items) {
+		return nil
+	}
+	item := p.items[p.cursor]
+	if item.Status != todo.StatusCompleted && item.Status != todo.StatusDismissed {
+		return nil
+	}
+	if _, err := p.service.Reopen(context.Background(), item.ID); err != nil {
 		return err
 	}
 	p.loadItems()
@@ -373,7 +414,7 @@ func (p *TodoPanel) Overlay(background string, width, height int) string {
 		titleBar,
 		divider,
 		p.viewport.View(),
-		styles.ModalHelpStyle.Render("[j/k] navigate  [tab] filter  [enter] open  [c] complete  [d] dismiss  [esc] close"),
+		styles.ModalHelpStyle.Render("j/k navigate · tab filter · enter open · c done · d dismiss · u undo · r reopen · esc close"),
 	)
 
 	modal := styles.ModalStyle.
