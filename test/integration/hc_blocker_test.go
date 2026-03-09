@@ -154,6 +154,35 @@ func TestHCCreateBulk_Blockers(t *testing.T) {
 	assert.Equal(t, jwtID, blockerIDs[0])
 }
 
+func TestHCBlocker_ClearsWhenBlockerDone(t *testing.T) {
+	h := NewHarness(t)
+	_, blockerID, blockedID := createBlockerFixture(t, h)
+
+	// Wire blocker relationship
+	_, err := h.RunJSONLines("hc", "update", blockedID, "--add-blocker", blockerID)
+	require.NoError(t, err)
+
+	// Confirm blocker is present
+	showLines, err := h.RunJSONLines("hc", "show", blockedID, "--json")
+	require.NoError(t, err)
+	blockerIDs, ok := showLines[0]["blocker_ids"].([]any)
+	require.True(t, ok)
+	require.Len(t, blockerIDs, 1)
+
+	// Complete the blocker
+	_, err = h.RunJSONLines("hc", "update", blockerID, "--status", "done")
+	require.NoError(t, err)
+
+	// blocker_ids should now be absent — done blockers are filtered at read time
+	showLines, err = h.RunJSONLines("hc", "show", blockedID, "--json")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(showLines), 1)
+	if ids, ok := showLines[0]["blocker_ids"]; ok && ids != nil {
+		idList, _ := ids.([]any)
+		assert.Empty(t, idList, "blocker_ids should be empty once the blocker is done")
+	}
+}
+
 func TestHCNext_ExplicitBlockerExcluded(t *testing.T) {
 	h := NewHarness(t)
 	epicID, blockerID, blockedID := createBlockerFixture(t, h)
