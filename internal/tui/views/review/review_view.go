@@ -290,12 +290,6 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 				{Key: "/", Desc: "search tree"},
 			},
 		},
-		{
-			Title: "Layout",
-			Entries: []components.HelpEntry{
-				{Key: `\`, Desc: "toggle tree pane"},
-			},
-		},
 	}
 }
 
