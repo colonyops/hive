@@ -45,7 +45,7 @@ type View struct {
 	repoKey      string
 
 	comments     map[string][]hc.Comment // cache: itemID -> comments
-	blockers     map[string][]hc.Item   // cache: itemID -> its explicit open blockers
+	blockers     map[string][]hc.Item    // cache: itemID -> its explicit open blockers
 	lastItemID   string                  // track cursor changes
 	statusFilter StatusFilter            // current status filter (default: FilterOpen)
 	showPreview  bool                    // toggle detail/preview panel visibility
