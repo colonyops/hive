@@ -47,7 +47,6 @@ type View struct {
 	store             *stores.ReviewStore // SQLite persistence for review sessions
 	width             int
 	height            int
-	previewMode       bool                     // True when showing dual-column layout
 	fullScreen        bool                     // True when showing document in full-screen
 	selectedDoc       *Document                // Currently selected document for preview
 	selectionMode     bool                     // True when in visual selection mode
@@ -149,7 +148,6 @@ func New(documents []Document, contextDir string, store *stores.ReviewStore, han
 		watcher:         watcher,
 		contextDir:      contextDir,
 		store:           store,
-		previewMode:     false,
 		fullScreen:      false,
 		cursorLine:      1,
 		searchInput:     ti,
@@ -172,15 +170,17 @@ func (v *View) SetSize(width, height int) {
 	v.width = width
 	v.height = height
 
+	contentHeight := max(v.height-2, 1)
+
 	if v.selectedDoc == nil {
 		// Size the viewport for the split layout even with no doc selected.
 		vpWidth := v.splitDetailWidth()
-		v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(v.height-1))
+		v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(contentHeight))
 		return
 	}
 
 	if v.fullScreen {
-		v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+		v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(contentHeight))
 		rendered, err := v.selectedDoc.Render(v.width)
 		if err == nil {
 			if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
@@ -191,7 +191,7 @@ func (v *View) SetSize(width, height int) {
 		}
 	} else {
 		vpWidth := v.splitDetailWidth()
-		v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(v.height-1))
+		v.viewport = viewport.New(viewport.WithWidth(vpWidth), viewport.WithHeight(contentHeight))
 		rendered, err := v.selectedDoc.Render(vpWidth)
 		if err == nil {
 			v.viewport.SetContent(rendered)
@@ -223,7 +223,7 @@ func (v *View) IsFullScreen() bool {
 
 // HasActiveEditor returns true if an input field or overlay has focus.
 func (v *View) HasActiveEditor() bool {
-	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil
+	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil || v.finalizationModal != nil
 }
 
 // ContextDir returns the current context directory.
@@ -451,8 +451,13 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			v.finalizationModal = &modal
 
 			if v.finalizationModal.Confirmed() {
-				action := v.finalizationModal.SelectedAction()
+				generalComment := v.finalizationModal.GeneralComment()
 				v.finalizationModal = nil
+
+				feedback := v.feedbackGenerated
+				if generalComment != "" {
+					feedback = "General Notes:\n" + generalComment + "\n\n---\n\n" + feedback
+				}
 
 				// Finalize session in database if store is available
 				if v.store != nil && v.activeSession != nil {
@@ -466,22 +471,14 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// Reload document without comments
 				v.loadDocument(v.selectedDoc)
 
-				// Execute selected action
-				switch action {
-				case FinalizationActionClipboard:
-					var docPath, docRel string
-					if v.selectedDoc != nil {
-						docPath = v.selectedDoc.Path
-						docRel = v.selectedDoc.RelPath
-					}
-					return v, func() tea.Msg {
-						return ReviewFinalizedMsg{Feedback: v.feedbackGenerated, DocumentPath: docPath, DocumentRel: docRel}
-					}
-				case FinalizationActionNone, FinalizationActionSendToAgent:
-					// User cancelled or unsupported action, do nothing
+				var docPath, docRel string
+				if v.selectedDoc != nil {
+					docPath = v.selectedDoc.Path
+					docRel = v.selectedDoc.RelPath
 				}
-
-				return v, cmd
+				return v, func() tea.Msg {
+					return ReviewFinalizedMsg{Feedback: feedback, DocumentPath: docPath, DocumentRel: docRel}
+				}
 			}
 
 			if v.finalizationModal.Cancelled() {
@@ -839,7 +836,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 							// Doc already previewed — shift focus to reader mode, hide tree.
 							v.fullScreen = true
 							v.showTree = false
-							v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+							v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(max(v.height-2, 1)))
 							v.viewport.SetContent(styles.TextMutedStyle.Render(filepath.Base(node.Doc.RelPath)))
 							v.cursorLine = 1
 							docPath := node.Doc.Path
@@ -1054,8 +1051,12 @@ func (v View) View() string {
 			helpLeft = badge + "  " + styles.TextMutedStyle.Render("j/k scroll"+components.HelpSep+"n/N comments"+components.HelpSep+"esc back"+components.HelpSep+"? help")
 		}
 		if v.selectedDoc != nil {
-			totalLines := len(v.selectedDoc.RenderedLines)
-			helpRight = styles.ReviewPosStyle.Render(fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines))
+			if v.searchQuery != "" && len(v.searchMatches) > 0 {
+				helpRight = styles.ReviewPosStyle.Render(fmt.Sprintf("%d/%d matches", v.searchMatchIndex+1, len(v.searchMatches)))
+			} else {
+				totalLines := len(v.selectedDoc.RenderedLines)
+				helpRight = styles.ReviewPosStyle.Render(fmt.Sprintf("Line %d/%d", v.cursorLine, totalLines))
+			}
 		}
 	default:
 		helpLeft = styles.TextMutedStyle.Render("j/k navigate" + components.HelpSep + "space expand" + components.HelpSep + "enter focus" + components.HelpSep + "/ search" + components.HelpSep + "? help")
@@ -1159,7 +1160,7 @@ func (v *View) loadDocument(doc *Document) {
 	v.showTree = false
 
 	// Adjust viewport size for full-screen
-	v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(v.height))
+	v.viewport = viewport.New(viewport.WithWidth(v.width), viewport.WithHeight(max(v.height-2, 1)))
 
 	// Reset cursor to top when loading new document
 	v.cursorLine = 1
@@ -1256,8 +1257,16 @@ func (v *View) moveCursorUp(n int) {
 	v.ensureCursorVisible()
 }
 
+// centerCursorInViewport scrolls the viewport to center the cursor line.
+// Falls back to the top edge if the document is too short to center.
+func (v *View) centerCursorInViewport() {
+	displayCursorLine := v.mapDocToDisplay(v.cursorLine, v.lineMapping)
+	visibleHeight := v.viewport.VisibleLineCount()
+	idealOffset := displayCursorLine - visibleHeight/2 - 1
+	v.viewport.SetYOffset(max(idealOffset, 0))
+}
+
 // ensureCursorVisible scrolls viewport to keep cursor visible.
-// Accounts for status bar in full-screen mode to prevent cursor from being hidden.
 // Uses display coordinates when comments are inserted inline.
 func (v *View) ensureCursorVisible() {
 	// Map cursor line from document coordinates to display coordinates
@@ -1266,18 +1275,12 @@ func (v *View) ensureCursorVisible() {
 	offset := v.viewport.YOffset()
 	visibleHeight := v.viewport.VisibleLineCount()
 
-	// In full-screen mode, reserve 1 line for status bar
-	if v.fullScreen {
-		visibleHeight--
-	}
-
 	// Cursor above viewport - scroll up
 	if displayCursorLine < offset+1 {
 		v.viewport.SetYOffset(displayCursorLine - 1)
 	}
 
 	// Cursor below viewport - scroll down
-	// Keep cursor at least 1 line away from bottom to avoid status bar overlap
 	if displayCursorLine > offset+visibleHeight {
 		v.viewport.SetYOffset(displayCursorLine - visibleHeight)
 	}
@@ -1289,15 +1292,8 @@ func (v *View) renderSelection() {
 		return
 	}
 
-	// Calculate preview width for rendering
-	previewWidth := v.width
-	if v.previewMode && v.width >= 80 {
-		listWidth := int(float64(v.width) * 0.25)
-		previewWidth = v.width - listWidth - 1
-	}
-
 	// Render document
-	rendered, err := v.selectedDoc.Render(previewWidth)
+	rendered, err := v.selectedDoc.Render(v.width)
 	if err != nil {
 		v.viewport.SetContent("Error rendering document: " + err.Error())
 		return
@@ -1306,7 +1302,7 @@ func (v *View) renderSelection() {
 	// Insert comments inline if session exists and build line mapping
 	if v.activeSession != nil && len(v.activeSession.Comments) > 0 {
 		var mappedContent string
-		mappedContent, v.lineMapping = v.insertCommentsInline(rendered, previewWidth)
+		mappedContent, v.lineMapping = v.insertCommentsInline(rendered, v.width)
 		rendered = mappedContent
 	} else {
 		// Clear line mapping when no comments
@@ -1341,11 +1337,11 @@ func (v *View) findSearchMatches() {
 	}
 }
 
-// jumpToMatch moves the cursor to the specified line and scrolls to make it visible.
+// jumpToMatch moves the cursor to the specified line and centers it in the viewport.
 // lineNum should be in document coordinates; this function will map to display coordinates for scrolling.
 func (v *View) jumpToMatch(lineNum int) {
 	v.cursorLine = lineNum
-	v.ensureCursorVisible()
+	v.centerCursorInViewport()
 }
 
 // jumpToNextComment moves the cursor to the next comment after the current cursor position.
@@ -1373,14 +1369,14 @@ func (v *View) jumpToNextComment() {
 	for _, comment := range sortedComments {
 		if comment.StartLine > v.cursorLine {
 			v.cursorLine = comment.StartLine
-			v.ensureCursorVisible()
+			v.centerCursorInViewport()
 			return
 		}
 	}
 
 	// No comment found after cursor - wrap to first comment
 	v.cursorLine = sortedComments[0].StartLine
-	v.ensureCursorVisible()
+	v.centerCursorInViewport()
 }
 
 // jumpToPrevComment moves the cursor to the previous comment before the current cursor position.
@@ -1408,14 +1404,14 @@ func (v *View) jumpToPrevComment() {
 	for i := len(sortedComments) - 1; i >= 0; i-- {
 		if sortedComments[i].StartLine < v.cursorLine {
 			v.cursorLine = sortedComments[i].StartLine
-			v.ensureCursorVisible()
+			v.centerCursorInViewport()
 			return
 		}
 	}
 
 	// No comment found before cursor - wrap to last comment
 	v.cursorLine = sortedComments[len(sortedComments)-1].StartLine
-	v.ensureCursorVisible()
+	v.centerCursorInViewport()
 }
 
 // highlightSelection applies background color to cursor and selected lines.

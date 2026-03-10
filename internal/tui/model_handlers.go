@@ -658,6 +658,8 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 		return m, nil
 	}
 
+	m.publishNotificationf(notify.LevelInfo, "Review copied to clipboard")
+
 	// Auto-complete todos whose ref matches the finalized document
 	if msg.DocumentPath != "" || msg.DocumentRel != "" {
 		return m, m.completeTodosMatchingRef(msg.DocumentPath, msg.DocumentRel)

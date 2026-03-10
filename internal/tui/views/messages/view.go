@@ -450,8 +450,10 @@ func (v *View) renderListPane(width, maxHeight int) string {
 	filteredAt := v.ctrl.FilteredAt()
 	displayed := v.ctrl.Displayed()
 
-	// Determine available lines for message rows
-	reservedLines := 2 // header + help
+	// Determine available lines for message rows.
+	// maxHeight already excludes the footer (rule + help bar).
+	// Reserve 1 line for the column header inside the pane.
+	reservedLines := 1
 	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
 		reservedLines++
 	}

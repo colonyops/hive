@@ -11,5 +11,5 @@ func example() {
 ┃ This is comment line 2 with some text                     
 ┃ This is comment line 3 with some text                     
 ┃ This is comment line 4 with some text                     
-                                       
-ctrl+enter/ctrl+s: submit • esc: cancel
+                            
+ctrl+s: submit • esc: cancel

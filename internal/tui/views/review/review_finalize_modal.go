@@ -3,128 +3,85 @@ package review
 import (
 	"strings"
 
+	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/styles"
-	"github.com/rs/zerolog/log"
 )
 
-// FinalizationAction represents the action to take on finalization.
-type FinalizationAction int
-
-const (
-	FinalizationActionNone FinalizationAction = iota
-	FinalizationActionClipboard
-	FinalizationActionSendToAgent
-)
-
-// FinalizationModal shows options for finalizing a review.
+// FinalizationModal collects an optional general note before saving the review
+// and copying it to the clipboard.
 type FinalizationModal struct {
 	feedback    string
-	selectedIdx int
-	options     []finalizationOption
 	width       int
 	height      int
 	confirmed   bool
 	cancelled   bool
+	generalNote textarea.Model
 }
 
-type finalizationOption struct {
-	label       string
-	description string
-	action      FinalizationAction
-}
-
-// NewFinalizationModal creates a modal for choosing finalization action.
+// NewFinalizationModal creates a new finalization modal.
 func NewFinalizationModal(feedback string, width, height int) FinalizationModal {
-	options := []finalizationOption{
-		{
-			label:       "Copy to clipboard",
-			description: "Copy review feedback to system clipboard",
-			action:      FinalizationActionClipboard,
-		},
-	}
+	contentWidth := max(min(width-14, 100), 40) // 14 = border(2) + padding(4*2) + margin
+	ta := textarea.New()
+	ta.Placeholder = "Optional general notes about this document..."
+	ta.SetWidth(contentWidth)
+	ta.SetHeight(4)
+	ta.ShowLineNumbers = false
+	ta.CharLimit = 2000
+	ta.KeyMap.InsertNewline.SetEnabled(true)
+	ta.KeyMap.Paste.SetEnabled(true)
+	ta.Focus()
 
 	return FinalizationModal{
 		feedback:    feedback,
-		selectedIdx: 0,
-		options:     options,
 		width:       width,
 		height:      height,
+		generalNote: ta,
 	}
 }
 
 // Update handles input events for the finalization modal.
 func (m FinalizationModal) Update(msg tea.Msg) (FinalizationModal, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
-		keyStr := keyMsg.String()
-		log.Debug().
-			Str("key", keyStr).
-			Int("current_idx", m.selectedIdx).
-			Msg("finalization modal received key")
-
-		switch keyStr {
-		case "j", "down", "tab":
-			m.selectedIdx = (m.selectedIdx + 1) % len(m.options)
-			log.Debug().Int("new_idx", m.selectedIdx).Msg("moved selection down")
-		case "k", "up", "shift+tab":
-			m.selectedIdx = (m.selectedIdx - 1 + len(m.options)) % len(m.options)
-			log.Debug().Int("new_idx", m.selectedIdx).Msg("moved selection up")
-		case "enter":
-			m.confirmed = true
-			log.Debug().Msg("confirmed")
+		switch keyMsg.String() {
 		case "esc":
 			m.cancelled = true
-			log.Debug().Msg("cancelled")
+			return m, nil
+		case "ctrl+s":
+			m.confirmed = true
+			return m, nil
 		}
 	}
-	return m, nil
+
+	// Forward all other keys to textarea.
+	var cmd tea.Cmd
+	m.generalNote, cmd = m.generalNote.Update(msg)
+	return m, cmd
 }
 
 // View renders the finalization modal content (without overlay).
 func (m FinalizationModal) View() string {
-	title := "Finalize Review"
+	contentWidth := max(min(m.width-14, 100), 40)
 
 	var content strings.Builder
-	content.WriteString(title + "\n\n")
-	content.WriteString("Review completed. Choose how to save your feedback:\n\n")
 
-	// Render options
-	for i, opt := range m.options {
-		prefix := "  "
-		style := lipgloss.NewStyle()
+	content.WriteString("Finalize Review\n\n")
+	content.WriteString(styles.TextMutedStyle.Render("General Notes") + "\n")
+	content.WriteString(m.generalNote.View())
+	content.WriteString("\n\n")
+	content.WriteString(styles.TextMutedStyle.Render("ctrl+s: save & copy to clipboard  •  esc: cancel"))
 
-		if i == m.selectedIdx {
-			prefix = "▸ "
-			style = styles.ReviewFinalizeOptionStyle
-		}
-
-		content.WriteString(prefix)
-		content.WriteString(style.Render(opt.label))
-		content.WriteString("\n")
-
-		// Description in gray
-		content.WriteString("  " + styles.TextMutedStyle.Render(opt.description) + "\n\n")
-	}
-
-	content.WriteString("\n")
-	content.WriteString(styles.TextMutedStyle.Render("[j/k] select • [enter] confirm • [esc] cancel"))
-
-	// Style the modal
-	modalContent := content.String()
-
-	return styles.ReviewFinalizeModalStyle.Render(modalContent)
+	return styles.ReviewFinalizeModalStyle.Width(contentWidth).Render(content.String())
 }
 
-// Overlay renders the modal over the background content.
+// Overlay renders the modal centered over the background content.
 func (m FinalizationModal) Overlay(background string) string {
 	modal := m.View()
 
-	// Use Compositor/Layer for true overlay
 	bgLayer := lipgloss.NewLayer(background)
 	modalLayer := lipgloss.NewLayer(modal)
 
-	// Center the modal (clamped to 0 for tiny terminals)
 	modalW := lipgloss.Width(modal)
 	modalH := lipgloss.Height(modal)
 	centerX := max((m.width-modalW)/2, 0)
@@ -135,20 +92,13 @@ func (m FinalizationModal) Overlay(background string) string {
 	return compositor.Render()
 }
 
-// Confirmed returns true if user confirmed the selection.
-func (m FinalizationModal) Confirmed() bool {
-	return m.confirmed
-}
+// Confirmed returns true if the user confirmed.
+func (m FinalizationModal) Confirmed() bool { return m.confirmed }
 
-// Cancelled returns true if user cancelled.
-func (m FinalizationModal) Cancelled() bool {
-	return m.cancelled
-}
+// Cancelled returns true if the user cancelled.
+func (m FinalizationModal) Cancelled() bool { return m.cancelled }
 
-// SelectedAction returns the selected finalization action.
-func (m FinalizationModal) SelectedAction() FinalizationAction {
-	if m.selectedIdx >= 0 && m.selectedIdx < len(m.options) {
-		return m.options[m.selectedIdx].action
-	}
-	return FinalizationActionNone
+// GeneralComment returns the trimmed general notes text.
+func (m FinalizationModal) GeneralComment() string {
+	return strings.TrimSpace(m.generalNote.Value())
 }

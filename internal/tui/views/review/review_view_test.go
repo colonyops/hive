@@ -993,22 +993,13 @@ func TestFinalizationModal_IntegrationWithView(t *testing.T) {
 	modal := NewFinalizationModal("test feedback", 100, 40)
 	v.finalizationModal = &modal
 
-	// Verify initial state
-	assert.Equal(t, 0, v.finalizationModal.selectedIdx, "Initial selectedIdx should be 0, got %d", v.finalizationModal.selectedIdx)
+	// Verify modal is active
+	require.NotNil(t, v.finalizationModal, "finalizationModal should be present")
 
-	// Send 'j' key to view - should be forwarded to modal (stays at 0 with single option)
-	jKey := keyMsg("j")
-	v, _ = v.Update(jKey)
-
-	// Verify modal received the key
-	require.NotNil(t, v.finalizationModal, "finalizationModal should not be nil")
-	// With single option, selectedIdx stays at 0
-	assert.Equal(t, 0, v.finalizationModal.selectedIdx, "With single option, selectedIdx should remain 0, got %d", v.finalizationModal.selectedIdx)
-
-	// Test enter key confirms the modal
-	enterKey := keyMsg("enter")
-	v, _ = v.Update(enterKey)
-	// Note: After confirmation, finalizationModal might be nil (handled by view)
+	// ctrl+s confirms the modal
+	v, _ = v.Update(keyMsg("ctrl+s"))
+	// After confirmation, finalizationModal is cleared
+	assert.Nil(t, v.finalizationModal, "finalizationModal should be nil after confirmation")
 }
 
 func TestHasActiveEditor(t *testing.T) {

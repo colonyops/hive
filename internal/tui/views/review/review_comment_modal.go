@@ -80,8 +80,8 @@ func formatContextPreview(text string) string {
 func (m CommentModal) Update(msg tea.Msg) (CommentModal, tea.Cmd) {
 	if keyMsg, ok := msg.(tea.KeyPressMsg); ok {
 		switch keyMsg.String() {
-		case "ctrl+enter", "ctrl+s":
-			// Submit with Ctrl+Enter or Ctrl+S
+		case "ctrl+s":
+			// Submit with Ctrl+S
 			if m.textArea.Value() != "" {
 				m.submitted = true
 				return m, nil
@@ -107,7 +107,7 @@ func (m CommentModal) View() string {
 		styles.ReviewCommentLabelStyle.Render(m.lineRange),
 		styles.ReviewCommentContextStyle.Render(m.contextPreview),
 		m.textArea.View(),
-		styles.ReviewCommentHelpStyle.Render("ctrl+enter/ctrl+s: submit • esc: cancel"),
+		styles.ReviewCommentHelpStyle.Render("ctrl+s: submit • esc: cancel"),
 	}, "\n")
 
 	return content
