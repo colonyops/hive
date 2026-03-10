@@ -74,14 +74,14 @@ type View struct {
 	modalState          ModalState   // Modal coordination
 
 	// Phase 2: folder tree state (parallel to list.Model, not yet rendered)
-	roots          []*DocTreeNode   // document folder tree
-	flatNodes      []DocFlatNode    // flattened for rendering
-	treeCursor     int              // current cursor position in flatNodes
-	treeScroll     int              // scroll offset in flatNodes
-	splitRatio     int              // panel split percentage (0 = default 30%)
-	showPreview    bool             // whether the right detail pane is visible
-	showTree       bool             // whether the left tree pane is visible
-	treeSearchMode bool             // whether the tree search input is active
+	roots           []*DocTreeNode  // document folder tree
+	flatNodes       []DocFlatNode   // flattened for rendering
+	treeCursor      int             // current cursor position in flatNodes
+	treeScroll      int             // scroll offset in flatNodes
+	splitRatio      int             // panel split percentage (0 = default 30%)
+	showPreview     bool            // whether the right detail pane is visible
+	showTree        bool            // whether the left tree pane is visible
+	treeSearchMode  bool            // whether the tree search input is active
 	treeSearchInput textinput.Model // search input for tree navigation
 	treeSearchQuery string          // current tree search query
 
@@ -236,6 +236,11 @@ func (v *View) SetRepoKey(repoKey string) {
 	v.repoKey = repoKey
 }
 
+// RepoKey returns the current owner/repo display label.
+func (v View) RepoKey() string {
+	return v.repoKey
+}
+
 // TogglePreview shows or hides the detail pane.
 func (v *View) TogglePreview() tea.Cmd {
 	v.showPreview = !v.showPreview
@@ -279,7 +284,7 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 			},
 		}
 	}
-	return []components.HelpDialogSection{
+	sections := []components.HelpDialogSection{
 		{
 			Title: "Navigation",
 			Entries: []components.HelpEntry{
@@ -291,6 +296,28 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 			},
 		},
 	}
+	if v.handler != nil {
+		actionEntries := parseHelpEntries(v.handler.HelpEntries())
+		if len(actionEntries) > 0 {
+			sections = append(sections, components.HelpDialogSection{
+				Title:   "Actions",
+				Entries: actionEntries,
+			})
+		}
+	}
+	return sections
+}
+
+// parseHelpEntries converts "key help" formatted strings to HelpEntry slices.
+func parseHelpEntries(raw []string) []components.HelpEntry {
+	entries := make([]components.HelpEntry, 0, len(raw))
+	for _, e := range raw {
+		parts := strings.SplitN(e, " ", 2)
+		if len(parts) == 2 {
+			entries = append(entries, components.HelpEntry{Key: parts[0], Desc: parts[1]})
+		}
+	}
+	return entries
 }
 
 // ToggleTree shows or hides the folder tree pane.
@@ -844,7 +871,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				}
 				return v, nil
 			}
-
 		}
 
 		// Resolve configurable keybindings via handler (works in any mode).

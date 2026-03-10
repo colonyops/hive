@@ -29,6 +29,7 @@ type ModalCoordinator struct {
 	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
 	RepoPicker      *RepoPicker
+	DocsRepoEntries []docsRepoEntry
 	TodoPanel       *TodoPanel
 	RenameInput     textinput.Model
 	RenameSessionID string

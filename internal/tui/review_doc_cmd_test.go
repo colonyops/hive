@@ -253,4 +253,3 @@ func TestResolveReviewURI(t *testing.T) {
 		})
 	}
 }
-

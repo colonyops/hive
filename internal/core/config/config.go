@@ -296,6 +296,12 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"review"},
 	},
+	"DocsSelectRepo": {
+		Action: action.TypeDocsSelectRepo,
+		Help:   "switch repository",
+		Silent: true,
+		Scope:  []string{"review"},
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}

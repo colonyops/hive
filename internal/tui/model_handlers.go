@@ -384,6 +384,68 @@ func (m Model) handleRepoKeysLoaded(msg repoKeysLoadedMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
+// docsRepoEntry holds a repo key and its context directory for the docs repo picker.
+type docsRepoEntry struct {
+	key        string // "owner/repo"
+	contextDir string
+}
+
+// docsRepoKeysLoadedMsg carries the result of loading docs repo keys from sessions.
+type docsRepoKeysLoadedMsg struct {
+	repos []docsRepoEntry
+	err   error
+}
+
+func (m Model) loadDocsRepoKeys() tea.Cmd {
+	svc := m.service
+	cfg := m.cfg
+	return func() tea.Msg {
+		sessions, err := svc.ListSessions(context.Background())
+		if err != nil {
+			return docsRepoKeysLoadedMsg{err: err}
+		}
+		seen := map[string]bool{}
+		var repos []docsRepoEntry
+		for _, s := range sessions {
+			owner, repo := git.ExtractOwnerRepo(s.Remote)
+			if owner == "" || repo == "" {
+				continue
+			}
+			key := owner + "/" + repo
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			repos = append(repos, docsRepoEntry{
+				key:        key,
+				contextDir: cfg.RepoContextDir(owner, repo),
+			})
+		}
+		return docsRepoKeysLoadedMsg{repos: repos}
+	}
+}
+
+func (m Model) handleDocsRepoKeysLoaded(msg docsRepoKeysLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		return m, m.notifyError("load repos: %v", msg.err)
+	}
+	if len(msg.repos) == 0 {
+		return m, m.notifyError("no repositories found")
+	}
+	keys := make([]string, len(msg.repos))
+	for i, r := range msg.repos {
+		keys[i] = r.key
+	}
+	currentRepo := ""
+	if m.reviewView != nil {
+		currentRepo = m.reviewView.RepoKey()
+	}
+	m.modals.DocsRepoEntries = msg.repos
+	m.modals.RepoPicker = NewRepoPicker(keys, currentRepo, m.width, m.height)
+	m.state = stateSelectingRepo
+	return m, nil
+}
+
 func (m Model) handleTaskCommandPalette(_ tasks.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
 	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
 	m.state = stateCommandPalette
@@ -490,6 +552,8 @@ func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.C
 		if m.reviewView != nil {
 			return m, m.reviewView.ToggleTree()
 		}
+	case act.TypeDocsSelectRepo:
+		return m, m.loadDocsRepoKeys()
 	default:
 		return m.handleGlobalAction(a)
 	}
@@ -674,6 +738,7 @@ func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if m.modals.RepoPicker.Cancelled() {
 		m.modals.RepoPicker = nil
+		m.modals.DocsRepoEntries = nil
 		m.state = stateNormal
 		return m, nil
 	}
@@ -681,6 +746,22 @@ func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if selected := m.modals.RepoPicker.Selected(); selected != "" {
 		m.modals.RepoPicker = nil
 		m.state = stateNormal
+
+		if len(m.modals.DocsRepoEntries) > 0 {
+			entries := m.modals.DocsRepoEntries
+			m.modals.DocsRepoEntries = nil
+			if m.reviewView != nil {
+				for _, e := range entries {
+					if e.key == selected {
+						m.reviewView.SetRepoKey(e.key)
+						return m, m.reviewView.SetContextDir(e.contextDir)
+					}
+				}
+			}
+			return m, nil
+		}
+
+		m.modals.DocsRepoEntries = nil
 		if m.tasksView != nil {
 			return m, m.tasksView.SetRepoKey(selected)
 		}
@@ -862,7 +943,6 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 // --- Input ---
 
 func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-
 	return m.handleKey(msg)
 }
 

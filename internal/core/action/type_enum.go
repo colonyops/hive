@@ -95,6 +95,8 @@ const (
 	TypeDocsTogglePreview Type = "DocsTogglePreview"
 	// TypeDocsToggleTree is a Type of type DocsToggleTree.
 	TypeDocsToggleTree Type = "DocsToggleTree"
+	// TypeDocsSelectRepo is a Type of type DocsSelectRepo.
+	TypeDocsSelectRepo Type = "DocsSelectRepo"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -142,6 +144,7 @@ var _TypeNames = []string{
 	string(TypeDocsOpen),
 	string(TypeDocsTogglePreview),
 	string(TypeDocsToggleTree),
+	string(TypeDocsSelectRepo),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -248,6 +251,8 @@ var _TypeValue = map[string]Type{
 	"docstogglepreview":   TypeDocsTogglePreview,
 	"DocsToggleTree":      TypeDocsToggleTree,
 	"docstoggletree":      TypeDocsToggleTree,
+	"DocsSelectRepo":      TypeDocsSelectRepo,
+	"docsselectrepo":      TypeDocsSelectRepo,
 }
 
 // ParseType attempts to convert a string to a Type.

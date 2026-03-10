@@ -534,6 +534,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case repoKeysLoadedMsg:
 		model, cmd = m.handleRepoKeysLoaded(msg)
 
+	case docsRepoKeysLoadedMsg:
+		model, cmd = m.handleDocsRepoKeysLoaded(msg)
+
 	// Action results
 	case renameCompleteMsg:
 		model, cmd = m.handleRenameComplete(msg)

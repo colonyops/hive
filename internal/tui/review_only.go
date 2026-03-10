@@ -108,6 +108,10 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, m.reviewView.ToggleTree()
 		case act.TypeDocsTogglePreview:
 			return m, m.reviewView.TogglePreview()
+		case act.TypeDocsSelectRepo:
+			// Not applicable in review-only mode; ignore.
+		default:
+			// Other action types are not applicable in review-only mode.
 		}
 
 	case review.ReviewFinalizedMsg:

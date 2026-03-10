@@ -46,6 +46,7 @@ package action
 //	DocsOpen
 //	DocsTogglePreview
 //	DocsToggleTree
+//	DocsSelectRepo
 //
 // )
 type Type string
