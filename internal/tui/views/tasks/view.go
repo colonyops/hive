@@ -381,6 +381,15 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 				{Key: ":", Desc: "command palette"},
 			},
 		},
+		{
+			Title: "Status",
+			Entries: []components.HelpEntry{
+				{Key: "o", Desc: "mark open"},
+				{Key: "i", Desc: "mark in progress"},
+				{Key: "d", Desc: "mark done"},
+				{Key: "x", Desc: "mark cancelled"},
+			},
+		},
 	}
 
 	if v.handler != nil {
@@ -586,6 +595,12 @@ func (v *View) handleDetailKey(msg tea.KeyMsg) tea.Cmd {
 	case "G":
 		v.viewport.SetYOffset(v.viewport.TotalLineCount())
 	default:
+		// Try configurable action keys (e.g. status changes work from detail pane)
+		if v.handler != nil {
+			if a, ok := v.handler.ResolveAction(msg.String()); ok {
+				return func() tea.Msg { return ActionRequestMsg{Action: a} }
+			}
+		}
 		v.viewport, _ = v.viewport.Update(msg)
 	}
 	return nil

@@ -92,6 +92,11 @@ func (s *TodoService) Dismiss(ctx context.Context, id string) (todo.Todo, error)
 	return s.transition(ctx, id, todo.StatusDismissed, "dismiss")
 }
 
+// Reopen reverts a completed or dismissed todo back to acknowledged.
+func (s *TodoService) Reopen(ctx context.Context, id string) (todo.Todo, error) {
+	return s.transition(ctx, id, todo.StatusAcknowledged, "reopen")
+}
+
 // List returns todo items matching the given filter.
 func (s *TodoService) List(ctx context.Context, filter todo.ListFilter) ([]todo.Todo, error) {
 	return s.store.List(ctx, filter)

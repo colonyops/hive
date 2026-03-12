@@ -19,8 +19,10 @@ func TestValidateTransition(t *testing.T) {
 		{name: "pending to dismissed", from: StatusPending, to: StatusDismissed},
 		{name: "acknowledged to completed", from: StatusAcknowledged, to: StatusCompleted},
 		{name: "acknowledged to dismissed", from: StatusAcknowledged, to: StatusDismissed},
-		{name: "completed to acknowledged", from: StatusCompleted, to: StatusAcknowledged, wantErr: true},
+		{name: "completed to acknowledged", from: StatusCompleted, to: StatusAcknowledged},
+		{name: "dismissed to acknowledged", from: StatusDismissed, to: StatusAcknowledged},
 		{name: "dismissed to pending", from: StatusDismissed, to: StatusPending, wantErr: true},
+		{name: "completed to dismissed", from: StatusCompleted, to: StatusDismissed, wantErr: true},
 		{name: "pending to pending", from: StatusPending, to: StatusPending, wantErr: true},
 	}
 

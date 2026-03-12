@@ -281,6 +281,22 @@ func (p *TodoPanel) DismissCurrent() error {
 	return nil
 }
 
+// ReopenCurrent reverts the selected completed or dismissed item back to acknowledged.
+func (p *TodoPanel) ReopenCurrent() error {
+	if p.cursor >= len(p.items) {
+		return nil
+	}
+	item := p.items[p.cursor]
+	if item.Status != todo.StatusCompleted && item.Status != todo.StatusDismissed {
+		return nil
+	}
+	if _, err := p.service.Reopen(context.Background(), item.ID); err != nil {
+		return err
+	}
+	p.loadItems()
+	return nil
+}
+
 // CycleFilter advances to the next filter tab.
 func (p *TodoPanel) CycleFilter() {
 	p.filter = (p.filter + 1) % todoFilter(len(todoFilterLabels))
@@ -373,7 +389,7 @@ func (p *TodoPanel) Overlay(background string, width, height int) string {
 		titleBar,
 		divider,
 		p.viewport.View(),
-		styles.ModalHelpStyle.Render("[j/k] navigate  [tab] filter  [enter] open  [c] complete  [d] dismiss  [esc] close"),
+		styles.ModalHelpStyle.Render("j/k navigate · tab filter · enter open · c done · d dismiss · r reopen · esc close"),
 	)
 
 	modal := styles.ModalStyle.

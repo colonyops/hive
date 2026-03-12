@@ -700,6 +700,10 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 		if err := m.modals.TodoPanel.DismissCurrent(); err != nil {
 			return m, m.notifyError("dismiss todo: %v", err)
 		}
+	case "r":
+		if err := m.modals.TodoPanel.ReopenCurrent(); err != nil {
+			return m, m.notifyError("reopen todo: %v", err)
+		}
 	}
 	return m, nil
 }
