@@ -279,7 +279,7 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 					{Key: "d", Desc: "delete comment at cursor"},
 					{Key: "D", Desc: "discard entire review"},
 					{Key: "/", Desc: "search document"},
-					{Key: "f", Desc: "finalize review"},
+					{Key: "f", Desc: "finalize & copy to clipboard"},
 				},
 			},
 		}
@@ -870,6 +870,10 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			}
 		}
 
+		if msg.String() == ":" {
+			return v, func() tea.Msg { return CommandPaletteRequestMsg{} }
+		}
+
 		// Resolve configurable keybindings via handler (works in any mode).
 		if v.handler != nil {
 			if a, ok := v.handler.ResolveAction(msg.String()); ok {
@@ -1048,7 +1052,7 @@ func (v View) View() string {
 		} else if v.selectionMode {
 			helpLeft = badge + "  " + styles.TextMutedStyle.Render("c:comment"+components.HelpSep+"v/esc:exit visual")
 		} else {
-			helpLeft = badge + "  " + styles.TextMutedStyle.Render("j/k scroll"+components.HelpSep+"n/N comments"+components.HelpSep+"esc back"+components.HelpSep+"? help")
+			helpLeft = badge + "  " + styles.TextMutedStyle.Render("j/k scroll"+components.HelpSep+"n/N comments"+components.HelpSep+"f: copy"+components.HelpSep+"esc back"+components.HelpSep+"? help")
 		}
 		if v.selectedDoc != nil {
 			if v.searchQuery != "" && len(v.searchMatches) > 0 {
