@@ -673,8 +673,9 @@ Examples:
 				}
 			}
 
-			if !hasUpdate {
-				// Only blocker flags were set; fetch current state to return.
+			// Re-fetch after any blocker mutation so blocker_ids reflects the
+			// current state; UpdateItem returns the row before edges are written.
+			if !hasUpdate || flagAddBlocker != "" || flagRemoveBlocker != "" {
 				var err error
 				item, err = cmd.app.Honeycomb.GetItem(ctx, id)
 				if err != nil {
