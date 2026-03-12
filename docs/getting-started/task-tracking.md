@@ -100,6 +100,20 @@ hive hc comment hc-e5f6g7h8 "JWT validation working, added RS256 support"
 hive hc update hc-e5f6g7h8 --status done
 ```
 
+When an epic is marked `done` or `cancelled`, all non-terminal descendants are automatically cascaded to the same status. Tasks already in a terminal state are not changed.
+
+```bash
+hive hc update hc-a1b2c3d4 --status done  # cascades to all open/in_progress children
+```
+
+### Edit an item's title or description
+
+```bash
+hive hc update hc-e5f6g7h8 --title "New title"
+hive hc update hc-e5f6g7h8 --desc "Updated description"
+hive hc update hc-e5f6g7h8 --title "New title" --status done  # combine with other flags
+```
+
 ### Check epic progress
 
 ```bash
