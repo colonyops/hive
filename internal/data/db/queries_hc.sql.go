@@ -960,12 +960,14 @@ func (q *Queries) ResumeHCItemForSessionInEpic(ctx context.Context, arg ResumeHC
 }
 
 const updateHCItem = `-- name: UpdateHCItem :exec
-UPDATE hc_items SET status = ?, session_id = ?, updated_at = ? WHERE id = ?
+UPDATE hc_items SET status = ?, session_id = ?, title = ?, desc = ?, updated_at = ? WHERE id = ?
 `
 
 type UpdateHCItemParams struct {
 	Status    hc.Status `json:"status"`
 	SessionID string    `json:"session_id"`
+	Title     string    `json:"title"`
+	Desc      string    `json:"desc"`
 	UpdatedAt int64     `json:"updated_at"`
 	ID        string    `json:"id"`
 }
@@ -974,8 +976,28 @@ func (q *Queries) UpdateHCItem(ctx context.Context, arg UpdateHCItemParams) erro
 	_, err := q.db.ExecContext(ctx, updateHCItem,
 		arg.Status,
 		arg.SessionID,
+		arg.Title,
+		arg.Desc,
 		arg.UpdatedAt,
 		arg.ID,
 	)
+	return err
+}
+
+const updateHCItemStatusByEpicID = `-- name: UpdateHCItemStatusByEpicID :exec
+UPDATE hc_items
+SET status = ?, updated_at = ?
+WHERE epic_id = ?
+  AND status NOT IN ('done', 'cancelled')
+`
+
+type UpdateHCItemStatusByEpicIDParams struct {
+	Status    hc.Status `json:"status"`
+	UpdatedAt int64     `json:"updated_at"`
+	EpicID    string    `json:"epic_id"`
+}
+
+func (q *Queries) UpdateHCItemStatusByEpicID(ctx context.Context, arg UpdateHCItemStatusByEpicIDParams) error {
+	_, err := q.db.ExecContext(ctx, updateHCItemStatusByEpicID, arg.Status, arg.UpdatedAt, arg.EpicID)
 	return err
 }

@@ -8,7 +8,13 @@ VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
 SELECT * FROM hc_items WHERE id = ?;
 
 -- name: UpdateHCItem :exec
-UPDATE hc_items SET status = ?, session_id = ?, updated_at = ? WHERE id = ?;
+UPDATE hc_items SET status = ?, session_id = ?, title = ?, desc = ?, updated_at = ? WHERE id = ?;
+
+-- name: UpdateHCItemStatusByEpicID :exec
+UPDATE hc_items
+SET status = ?, updated_at = ?
+WHERE epic_id = ?
+  AND status NOT IN ('done', 'cancelled');
 
 -- name: ListHCItemsBySession :many
 SELECT * FROM hc_items WHERE session_id = ? ORDER BY created_at ASC;

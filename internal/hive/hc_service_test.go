@@ -66,9 +66,29 @@ func (f *fakeHCStore) UpdateItem(_ context.Context, id string, update hc.ItemUpd
 	if update.SessionID != nil {
 		item.SessionID = *update.SessionID
 	}
+	if update.Title != nil {
+		item.Title = *update.Title
+	}
+	if update.Desc != nil {
+		item.Desc = *update.Desc
+	}
 	item.UpdatedAt = time.Now()
 	f.items[id] = item
 	return item, nil
+}
+
+func (f *fakeHCStore) BulkUpdateStatus(_ context.Context, epicID string, status hc.Status) error {
+	if f.forceErr != nil {
+		return f.forceErr
+	}
+	for id, item := range f.items {
+		if item.EpicID == epicID && item.Status != hc.StatusDone && item.Status != hc.StatusCancelled {
+			item.Status = status
+			item.UpdatedAt = time.Now()
+			f.items[id] = item
+		}
+	}
+	return nil
 }
 
 func (f *fakeHCStore) ListItems(_ context.Context, filter hc.ListFilter) ([]hc.Item, error) {
@@ -630,4 +650,139 @@ func TestHoneycombService_AddComment_EmptyMessage(t *testing.T) {
 	_, err = svc.AddComment(context.Background(), "hc-item", "   ")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "message")
+}
+
+// ---------------------------------------------------------------------------
+// UpdateItem cascade tests
+// ---------------------------------------------------------------------------
+
+func makeTestEpic(id string) hc.Item {
+	return hc.Item{
+		ID:        id,
+		RepoKey:   "owner/repo",
+		Title:     id,
+		Type:      hc.ItemTypeEpic,
+		Status:    hc.StatusOpen,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+}
+
+func makeTestTask(id, epicID string, status hc.Status) hc.Item {
+	return hc.Item{
+		ID:        id,
+		EpicID:    epicID,
+		ParentID:  epicID,
+		RepoKey:   "owner/repo",
+		Title:     id,
+		Type:      hc.ItemTypeTask,
+		Status:    status,
+		Depth:     1,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+}
+
+func TestHoneycombService_UpdateItem_CascadeOnEpicDone(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := makeTestEpic("epic-1")
+	task1 := makeTestTask("task-1", "epic-1", hc.StatusOpen)
+	task2 := makeTestTask("task-2", "epic-1", hc.StatusInProgress)
+	store.items["epic-1"] = epic
+	store.items["task-1"] = task1
+	store.items["task-2"] = task2
+
+	done := hc.StatusDone
+	_, err := svc.UpdateItem(context.Background(), "epic-1", hc.ItemUpdate{Status: &done})
+	require.NoError(t, err)
+
+	assert.Equal(t, hc.StatusDone, store.items["task-1"].Status, "open task should cascade to done")
+	assert.Equal(t, hc.StatusDone, store.items["task-2"].Status, "in_progress task should cascade to done")
+}
+
+func TestHoneycombService_UpdateItem_CascadeOnEpicCancelled(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := makeTestEpic("epic-1")
+	task1 := makeTestTask("task-1", "epic-1", hc.StatusOpen)
+	store.items["epic-1"] = epic
+	store.items["task-1"] = task1
+
+	cancelled := hc.StatusCancelled
+	_, err := svc.UpdateItem(context.Background(), "epic-1", hc.ItemUpdate{Status: &cancelled})
+	require.NoError(t, err)
+
+	assert.Equal(t, hc.StatusCancelled, store.items["task-1"].Status, "open task should cascade to cancelled")
+}
+
+func TestHoneycombService_UpdateItem_CascadeDoneToCancel(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := makeTestEpic("epic-1")
+	epic.Status = hc.StatusDone
+	task1 := makeTestTask("task-1", "epic-1", hc.StatusOpen)
+	store.items["epic-1"] = epic
+	store.items["task-1"] = task1
+
+	cancelled := hc.StatusCancelled
+	_, err := svc.UpdateItem(context.Background(), "epic-1", hc.ItemUpdate{Status: &cancelled})
+	require.NoError(t, err)
+
+	assert.Equal(t, hc.StatusCancelled, store.items["task-1"].Status, "status changed done→cancelled triggers cascade")
+}
+
+func TestHoneycombService_UpdateItem_NoCascadeOnNonTerminal(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := makeTestEpic("epic-1")
+	task1 := makeTestTask("task-1", "epic-1", hc.StatusOpen)
+	store.items["epic-1"] = epic
+	store.items["task-1"] = task1
+
+	inProgress := hc.StatusInProgress
+	_, err := svc.UpdateItem(context.Background(), "epic-1", hc.ItemUpdate{Status: &inProgress})
+	require.NoError(t, err)
+
+	assert.Equal(t, hc.StatusOpen, store.items["task-1"].Status, "non-terminal status should not cascade")
+}
+
+func TestHoneycombService_UpdateItem_NoCascadeOnTask(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := makeTestEpic("epic-1")
+	task1 := makeTestTask("task-1", "epic-1", hc.StatusOpen)
+	task2 := makeTestTask("task-2", "epic-1", hc.StatusOpen)
+	store.items["epic-1"] = epic
+	store.items["task-1"] = task1
+	store.items["task-2"] = task2
+
+	done := hc.StatusDone
+	_, err := svc.UpdateItem(context.Background(), "task-1", hc.ItemUpdate{Status: &done})
+	require.NoError(t, err)
+
+	assert.Equal(t, hc.StatusOpen, store.items["task-2"].Status, "sibling task should not be affected")
+}
+
+func TestHoneycombService_UpdateItem_NoCascadeWhenStatusUnchanged(t *testing.T) {
+	store := newFakeHCStore()
+	svc := newTestHoneycombService(store)
+
+	epic := makeTestEpic("epic-1")
+	epic.Status = hc.StatusDone
+	task1 := makeTestTask("task-1", "epic-1", hc.StatusOpen)
+	store.items["epic-1"] = epic
+	store.items["task-1"] = task1
+
+	done := hc.StatusDone
+	_, err := svc.UpdateItem(context.Background(), "epic-1", hc.ItemUpdate{Status: &done})
+	require.NoError(t, err)
+
+	// status didn't change (done→done), task should remain open
+	assert.Equal(t, hc.StatusOpen, store.items["task-1"].Status, "same status should not trigger cascade")
 }
