@@ -50,12 +50,18 @@ type Store interface {
 	// ListBlockerEdges returns all blocker edges as [blockerID, blockedID] pairs.
 	// Used by callers that need the full graph (e.g. for pre-validation before bulk create).
 	ListBlockerEdges(ctx context.Context) ([][2]string, error)
+	// BulkUpdateStatus sets the status of all non-terminal descendants of the given
+	// epic to the specified status. Items already in a terminal status (done, cancelled)
+	// are not modified.
+	BulkUpdateStatus(ctx context.Context, epicID string, status Status) error
 }
 
 // ItemUpdate carries partial updates to an Item. Nil pointer fields are not changed.
 type ItemUpdate struct {
 	Status    *Status
 	SessionID *string
+	Title     *string
+	Desc      *string
 }
 
 // ListFilter controls which items are returned by ListItems.

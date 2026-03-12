@@ -497,3 +497,167 @@ func TestHCCRUD(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "done", doneLines[0]["status"])
 }
+
+// ---------------------------------------------------------------------------
+// Phase 1: --title and --desc flag tests
+// ---------------------------------------------------------------------------
+
+func TestHCUpdate_TitleRoundTrip(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Original Title", "--type", "epic")
+	require.NoError(t, err)
+	id := epicLines[0]["id"].(string)
+
+	updateLines, err := h.RunJSONLines("hc", "update", id, "--title", "Updated Title")
+	require.NoError(t, err)
+	require.Len(t, updateLines, 1)
+	assert.Equal(t, "Updated Title", updateLines[0]["title"])
+}
+
+func TestHCUpdate_DescRoundTrip(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "My Epic", "--type", "epic")
+	require.NoError(t, err)
+	id := epicLines[0]["id"].(string)
+
+	updateLines, err := h.RunJSONLines("hc", "update", id, "--desc", "brand new description")
+	require.NoError(t, err)
+	require.Len(t, updateLines, 1)
+	assert.Equal(t, "brand new description", updateLines[0]["desc"])
+}
+
+func TestHCUpdate_EmptyTitleRejected(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "My Epic", "--type", "epic")
+	require.NoError(t, err)
+	id := epicLines[0]["id"].(string)
+
+	out, err := h.Run("hc", "update", id, "--title", "")
+	require.Error(t, err, "empty --title should be rejected")
+	assert.Contains(t, out, "--title cannot be empty")
+}
+
+func TestHCUpdate_TitleAndStatusCombined(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Old Title", "--type", "epic")
+	require.NoError(t, err)
+	id := epicLines[0]["id"].(string)
+
+	// Create a task so the epic can have children but we update the epic itself
+	taskLines, err := h.RunJSONLines("hc", "create", "Child Task", "--type", "task", "--parent", id)
+	require.NoError(t, err)
+	taskID := taskLines[0]["id"].(string)
+
+	updateLines, err := h.RunJSONLines("hc", "update", taskID, "--title", "New Task Title", "--status", "done")
+	require.NoError(t, err)
+	require.Len(t, updateLines, 1)
+	assert.Equal(t, "New Task Title", updateLines[0]["title"])
+	assert.Equal(t, "done", updateLines[0]["status"])
+}
+
+// ---------------------------------------------------------------------------
+// Phase 2: cascade behavior tests
+// ---------------------------------------------------------------------------
+
+func TestHCUpdate_CascadeOnEpicDone(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Cascade Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	_, err = h.RunJSONLines("hc", "create", "Task One", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	_, err = h.RunJSONLines("hc", "create", "Task Two", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+
+	_, err = h.RunJSONLines("hc", "update", epicID, "--status", "done")
+	require.NoError(t, err)
+
+	listLines, err := h.RunJSONLines("hc", "list", "--all", "--json")
+	require.NoError(t, err)
+
+	for _, line := range listLines {
+		if line["epic_id"] == epicID {
+			assert.Equal(t, "done", line["status"], "child task %s should be done", line["id"])
+		}
+	}
+}
+
+func TestHCUpdate_CascadeRespectsTerminalGuard(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Guard Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	task1Lines, err := h.RunJSONLines("hc", "create", "Task One", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	task1ID := task1Lines[0]["id"].(string)
+
+	task2Lines, err := h.RunJSONLines("hc", "create", "Task Two", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	task2ID := task2Lines[0]["id"].(string)
+
+	// Mark task1 as done before cascading
+	_, err = h.RunJSONLines("hc", "update", task1ID, "--status", "done")
+	require.NoError(t, err)
+
+	// Now cancel the epic
+	_, err = h.RunJSONLines("hc", "update", epicID, "--status", "cancelled")
+	require.NoError(t, err)
+
+	getTask1, err := h.RunJSONLines("hc", "show", task1ID, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "done", getTask1[0]["status"], "pre-done task1 should remain done")
+
+	getTask2, err := h.RunJSONLines("hc", "show", task2ID, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "cancelled", getTask2[0]["status"], "open task2 should become cancelled")
+}
+
+func TestHCUpdate_NoCascadeOnNonTerminalEpic(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Non-Terminal Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	taskLines, err := h.RunJSONLines("hc", "create", "A Task", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	taskID := taskLines[0]["id"].(string)
+
+	_, err = h.RunJSONLines("hc", "update", epicID, "--status", "in_progress")
+	require.NoError(t, err)
+
+	getTask, err := h.RunJSONLines("hc", "show", taskID, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "open", getTask[0]["status"], "task should remain open when epic goes in_progress")
+}
+
+func TestHCUpdate_NoCascadeOnTaskUpdate(t *testing.T) {
+	h := NewHarness(t)
+
+	epicLines, err := h.RunJSONLines("hc", "create", "Task Update Epic", "--type", "epic")
+	require.NoError(t, err)
+	epicID := epicLines[0]["id"].(string)
+
+	task1Lines, err := h.RunJSONLines("hc", "create", "Task One", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	task1ID := task1Lines[0]["id"].(string)
+
+	task2Lines, err := h.RunJSONLines("hc", "create", "Task Two", "--type", "task", "--parent", epicID)
+	require.NoError(t, err)
+	task2ID := task2Lines[0]["id"].(string)
+
+	_, err = h.RunJSONLines("hc", "update", task1ID, "--status", "done")
+	require.NoError(t, err)
+
+	getTask2, err := h.RunJSONLines("hc", "show", task2ID, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "open", getTask2[0]["status"], "sibling task should not be affected by task update")
+}

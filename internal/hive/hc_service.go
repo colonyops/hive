@@ -190,8 +190,29 @@ func (s *HoneycombService) GetItem(ctx context.Context, id string) (hc.Item, err
 }
 
 // UpdateItem applies a partial update to an item and returns the result.
+// If the item is an epic and the update transitions it to a terminal status
+// (done or cancelled) from a different status, all non-terminal descendants
+// are updated to the same terminal status.
 func (s *HoneycombService) UpdateItem(ctx context.Context, id string, update hc.ItemUpdate) (hc.Item, error) {
-	return s.store.UpdateItem(ctx, id, update)
+	old, err := s.store.GetItem(ctx, id)
+	if err != nil {
+		return hc.Item{}, fmt.Errorf("get item before update %q: %w", id, err)
+	}
+
+	updated, err := s.store.UpdateItem(ctx, id, update)
+	if err != nil {
+		return hc.Item{}, err
+	}
+
+	isTerminal := updated.Status == hc.StatusDone || updated.Status == hc.StatusCancelled
+	statusChanged := old.Status != updated.Status
+	if updated.IsEpic() && isTerminal && statusChanged {
+		if cascadeErr := s.store.BulkUpdateStatus(ctx, updated.ID, updated.Status); cascadeErr != nil {
+			return hc.Item{}, fmt.Errorf("cascade status to descendants of epic %q: %w", updated.ID, cascadeErr)
+		}
+	}
+
+	return updated, nil
 }
 
 // ListItems returns items matching the supplied filter.

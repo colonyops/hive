@@ -86,16 +86,26 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 
 		newStatus := existing.Status
 		newSessionID := existing.SessionID
+		newTitle := existing.Title
+		newDesc := existing.Desc
 		if update.Status != nil {
 			newStatus = *update.Status
 		}
 		if update.SessionID != nil {
 			newSessionID = *update.SessionID
 		}
+		if update.Title != nil {
+			newTitle = *update.Title
+		}
+		if update.Desc != nil {
+			newDesc = *update.Desc
+		}
 
 		if err := q.UpdateHCItem(ctx, db.UpdateHCItemParams{
 			Status:    newStatus,
 			SessionID: newSessionID,
+			Title:     newTitle,
+			Desc:      newDesc,
 			UpdatedAt: time.Now().UnixNano(),
 			ID:        id,
 		}); err != nil {
@@ -118,6 +128,19 @@ func (s *HCStore) UpdateItem(ctx context.Context, id string, update hc.ItemUpdat
 		return hc.Item{}, err
 	}
 	return item, nil
+}
+
+// BulkUpdateStatus sets the status of all non-terminal descendants of the given
+// epic to the specified status. Items already in a terminal status are not modified.
+func (s *HCStore) BulkUpdateStatus(ctx context.Context, epicID string, status hc.Status) error {
+	if err := s.db.Queries().UpdateHCItemStatusByEpicID(ctx, db.UpdateHCItemStatusByEpicIDParams{
+		Status:    status,
+		UpdatedAt: time.Now().UnixNano(),
+		EpicID:    epicID,
+	}); err != nil {
+		return fmt.Errorf("bulk update status for epic %q: %w", epicID, err)
+	}
+	return nil
 }
 
 // ListItems returns HC items matching the given filter.

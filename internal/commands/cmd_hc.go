@@ -582,13 +582,15 @@ func (cmd *HoneycombCmd) updateCmd() *cli.Command {
 		flagUnassign      bool
 		flagAddBlocker    string
 		flagRemoveBlocker string
+		flagTitle         string
+		flagDesc          string
 	)
 	return &cli.Command{
 		Name:      "update",
 		Aliases:   []string{"set", "edit"},
-		Usage:     "Update an item's status or session assignment",
-		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign] [--add-blocker <id>] [--remove-blocker <id>]",
-		Description: `Updates an item's status and/or session assignment.
+		Usage:     "Update an item's status, title, desc, or session assignment",
+		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign] [--add-blocker <id>] [--remove-blocker <id>] [--title <title>] [--desc <desc>]",
+		Description: `Updates an item's status, title, description, and/or session assignment.
 
 Status values: open, in_progress, done, cancelled
 
@@ -597,13 +599,17 @@ Examples:
   hive hc update hc-abc123 --status in_progress --assign
   hive hc update hc-abc123 --unassign
   hive hc update hc-abc123 --add-blocker hc-dep456
-  hive hc update hc-abc123 --remove-blocker hc-dep456`,
+  hive hc update hc-abc123 --remove-blocker hc-dep456
+  hive hc update hc-abc123 --title "new title"
+  hive hc update hc-abc123 --desc "new description"`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "new status (open, in_progress, done, cancelled)", Destination: &flagStatus},
 			&cli.BoolFlag{Name: "assign", Usage: "assign to current session", Destination: &flagAssign},
 			&cli.BoolFlag{Name: "unassign", Usage: "remove session assignment", Destination: &flagUnassign},
 			&cli.StringFlag{Name: "add-blocker", Usage: "add an explicit blocker (item ID that must complete first)", Destination: &flagAddBlocker},
 			&cli.StringFlag{Name: "remove-blocker", Usage: "remove an explicit blocker by item ID", Destination: &flagRemoveBlocker},
+			&cli.StringFlag{Name: "title", Usage: "new title for the item", Destination: &flagTitle},
+			&cli.StringFlag{Name: "desc", Usage: "new description for the item", Destination: &flagDesc},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
@@ -611,8 +617,8 @@ Examples:
 			}
 			id := c.Args().First()
 
-			if flagStatus == "" && !flagAssign && !flagUnassign && flagAddBlocker == "" && flagRemoveBlocker == "" {
-				return fmt.Errorf("at least one of --status, --assign, --unassign, --add-blocker, or --remove-blocker is required")
+			if flagStatus == "" && !flagAssign && !flagUnassign && flagAddBlocker == "" && flagRemoveBlocker == "" && !c.IsSet("title") && !c.IsSet("desc") {
+				return fmt.Errorf("at least one of --status, --assign, --unassign, --add-blocker, --remove-blocker, --title, or --desc is required")
 			}
 
 			if flagAddBlocker != "" && flagRemoveBlocker != "" {
@@ -622,7 +628,7 @@ Examples:
 			// Apply item field updates first so that if they fail, no blocker
 			// mutations are committed and the caller sees a clean error.
 			var item hc.Item
-			hasUpdate := flagStatus != "" || flagAssign || flagUnassign
+			hasUpdate := flagStatus != "" || flagAssign || flagUnassign || c.IsSet("title") || c.IsSet("desc")
 			if hasUpdate {
 				var update hc.ItemUpdate
 
@@ -649,6 +655,16 @@ Examples:
 				if flagUnassign {
 					empty := ""
 					update.SessionID = &empty
+				}
+
+				if c.IsSet("title") {
+					if flagTitle == "" {
+						return fmt.Errorf("--title cannot be empty")
+					}
+					update.Title = &flagTitle
+				}
+				if c.IsSet("desc") {
+					update.Desc = &flagDesc
 				}
 
 				var err error
