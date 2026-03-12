@@ -67,10 +67,15 @@ func (s *HoneycombService) CreateItem(ctx context.Context, repoKey string, input
 	return item, nil
 }
 
-// walkCreateInput yields hc.Items from a CreateInput tree in BFS order
-// (parent before children), generating IDs and resolving relationships.
-func walkCreateInput(input hc.CreateInput, repoKey, epicID, parentID string, depth int, now time.Time) iter.Seq[hc.Item] {
-	return func(yield func(hc.Item) bool) {
+// createInputEntry pairs a CreateInput with its generated hc.Item.
+type createInputEntry struct {
+	input hc.CreateInput
+	item  hc.Item
+}
+
+// walkCreateInputWithEntry yields (CreateInput, hc.Item) pairs from the tree in BFS order.
+func walkCreateInputWithEntry(input hc.CreateInput, repoKey, epicID, parentID string, depth int, now time.Time) iter.Seq[createInputEntry] {
+	return func(yield func(createInputEntry) bool) {
 		id := hc.GenerateID()
 		item := hc.Item{
 			ID:        id,
@@ -85,7 +90,7 @@ func walkCreateInput(input hc.CreateInput, repoKey, epicID, parentID string, dep
 			CreatedAt: now,
 			UpdatedAt: now,
 		}
-		if !yield(item) {
+		if !yield(createInputEntry{input: input, item: item}) {
 			return
 		}
 		childEpicID := epicID
@@ -93,13 +98,43 @@ func walkCreateInput(input hc.CreateInput, repoKey, epicID, parentID string, dep
 			childEpicID = id
 		}
 		for _, child := range input.Children {
-			for childItem := range walkCreateInput(child, repoKey, childEpicID, id, depth+1, now) {
-				if !yield(childItem) {
+			for entry := range walkCreateInputWithEntry(child, repoKey, childEpicID, id, depth+1, now) {
+				if !yield(entry) {
 					return
 				}
 			}
 		}
 	}
+}
+
+// validateBatchBlockerRefs checks that all Blockers refs in the batch refer to known refs
+// and that no in-batch cycles exist. It also builds and returns the resolved edge list.
+func validateBatchBlockerRefs(entries []createInputEntry) ([][2]string, error) {
+	refToID := make(map[string]string, len(entries))
+	for _, e := range entries {
+		if e.input.Ref != "" {
+			refToID[e.input.Ref] = e.item.ID
+		}
+	}
+
+	var edges [][2]string
+	for _, e := range entries {
+		for _, blocker := range e.input.Blockers {
+			blockerID, ok := refToID[blocker]
+			if !ok {
+				return nil, fmt.Errorf("unknown blocker ref %q", blocker)
+			}
+			edges = append(edges, [2]string{blockerID, e.item.ID})
+		}
+	}
+
+	// Check for in-batch cycles by testing each candidate edge against the full set.
+	for _, edge := range edges {
+		if hc.WouldCycle(edges, edge[0], edge[1]) {
+			return nil, fmt.Errorf("in-batch cycle detected involving ref edges")
+		}
+	}
+	return edges, nil
 }
 
 // CreateBulk walks a CreateInput tree (BFS) and persists all items in one
@@ -110,16 +145,43 @@ func (s *HoneycombService) CreateBulk(ctx context.Context, repoKey string, input
 	}
 
 	now := time.Now()
-	var items []hc.Item
-	for item := range walkCreateInput(input, repoKey, "", "", 0, now) {
-		items = append(items, item)
+	var entries []createInputEntry
+	for entry := range walkCreateInputWithEntry(input, repoKey, "", "", 0, now) {
+		entries = append(entries, entry)
 	}
 
-	if err := s.store.CreateItems(ctx, items); err != nil {
+	edges, err := validateBatchBlockerRefs(entries)
+	if err != nil {
+		return nil, fmt.Errorf("validate blocker refs: %w", err)
+	}
+
+	items := make([]hc.Item, len(entries))
+	for i, e := range entries {
+		items[i] = e.item
+	}
+
+	if err := s.store.CreateBulkWithEdges(ctx, items, edges); err != nil {
 		return nil, fmt.Errorf("bulk create items: %w", err)
 	}
 
 	return items, nil
+}
+
+// AddBlocker records that blockerID blocks blockedID.
+// Cycle detection and the insert are performed atomically by the store.
+// Returns hc.ErrCyclicDependency if the edge would create a cycle.
+func (s *HoneycombService) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
+	return s.store.AddBlocker(ctx, blockerID, blockedID)
+}
+
+// RemoveBlocker removes the explicit blocker relationship.
+func (s *HoneycombService) RemoveBlocker(ctx context.Context, blockerID, blockedID string) error {
+	return s.store.RemoveBlocker(ctx, blockerID, blockedID)
+}
+
+// ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
+func (s *HoneycombService) ListBlockers(ctx context.Context, itemID string) ([]string, error) {
+	return s.store.ListBlockers(ctx, itemID)
 }
 
 // GetItem returns an item by ID.

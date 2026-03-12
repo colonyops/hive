@@ -42,6 +42,11 @@ WHERE outer_item.session_id = ?
     SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
     WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
   )
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
+    JOIN hc_items blocker ON blocker.id = b.blocker_id
+    WHERE blocker.status IN ('open', 'in_progress')
+  )
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1;
 
@@ -53,6 +58,11 @@ WHERE outer_item.session_id = ?
   AND outer_item.id NOT IN (
     SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
     WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
+  )
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
+    JOIN hc_items blocker ON blocker.id = b.blocker_id
+    WHERE blocker.status IN ('open', 'in_progress')
   )
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1;
@@ -120,3 +130,37 @@ WHERE hc_comments.item_id IN (
     FROM hc_items
     WHERE hc_items.status = ? AND hc_items.updated_at < ?
 );
+
+-- HC Task Blockers
+
+-- name: AddHCBlocker :exec
+INSERT OR IGNORE INTO hc_task_blockers (blocker_id, blocked_id) VALUES (?, ?);
+
+-- name: RemoveHCBlocker :exec
+DELETE FROM hc_task_blockers WHERE blocker_id = ? AND blocked_id = ?;
+
+-- name: ListHCBlockersForItem :many
+SELECT blocker_id FROM hc_task_blockers WHERE blocked_id = ? ORDER BY blocker_id;
+
+-- name: ListHCItemsBlockedBy :many
+SELECT blocked_id FROM hc_task_blockers WHERE blocker_id = ? ORDER BY blocked_id;
+
+-- name: ListHCOpenBlockerIDsForItem :many
+SELECT b.blocker_id FROM hc_task_blockers b
+JOIN hc_items i ON i.id = b.blocker_id
+WHERE b.blocked_id = ? AND i.status IN ('open', 'in_progress')
+ORDER BY b.blocker_id;
+
+-- name: ListAllHCBlockerEdges :many
+SELECT blocker_id, blocked_id FROM hc_task_blockers;
+
+-- name: ListHCExplicitlyBlockedIDs :many
+SELECT DISTINCT blocked_id FROM hc_task_blockers
+JOIN hc_items ON hc_items.id = hc_task_blockers.blocker_id
+WHERE hc_items.status IN ('open', 'in_progress');
+
+-- name: ListHCExplicitlyBlockedIDsWithBlockers :many
+SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
+JOIN hc_items i ON i.id = b.blocker_id
+WHERE i.status IN ('open', 'in_progress')
+  AND b.blocked_id IN (sqlc.slice('ids'));

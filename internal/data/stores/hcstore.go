@@ -414,50 +414,192 @@ func orderHCIDsByDepthDesc(ids map[string]struct{}, depthByID map[string]int64) 
 	return ordered
 }
 
-// fetchBlockedSet queries all parent IDs with open/in_progress children in a single query.
+// fetchBlockedSet queries all parent IDs with open/in_progress children, plus
+// items that have explicit open/in_progress blockers.
 func (s *HCStore) fetchBlockedSet(ctx context.Context) (map[string]struct{}, error) {
-	ids, err := s.db.Queries().ListHCBlockedParentIDs(ctx)
+	// Parent IDs with open/in_progress children (hierarchy blocking)
+	parentIDs, err := s.db.Queries().ListHCBlockedParentIDs(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("list hc blocked parent ids: %w", err)
 	}
-	set := make(map[string]struct{}, len(ids))
-	for _, id := range ids {
+	// Items with open/in_progress explicit blockers
+	explicitIDs, err := s.db.Queries().ListHCExplicitlyBlockedIDs(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list hc explicitly blocked ids: %w", err)
+	}
+	set := make(map[string]struct{}, len(parentIDs)+len(explicitIDs))
+	for _, id := range parentIDs {
+		set[id] = struct{}{}
+	}
+	for _, id := range explicitIDs {
 		set[id] = struct{}{}
 	}
 	return set, nil
 }
 
-// buildHCItem converts a database row to hc.Item using the pre-fetched blocked set.
-func buildHCItem(row db.HcItem, blockedSet map[string]struct{}) hc.Item {
+// buildHCItemWithBlockers converts a database row to hc.Item.
+// blockedSet contains IDs that are blocked (by children or explicit blockers).
+// blockerIDsMap maps item ID to its explicit open blocker IDs.
+func buildHCItemWithBlockers(row db.HcItem, blockedSet map[string]struct{}, blockerIDsMap map[string][]string) hc.Item {
 	_, blocked := blockedSet[row.ID]
 	return hc.Item{
-		ID:        row.ID,
-		RepoKey:   row.RepoKey,
-		EpicID:    row.EpicID,
-		ParentID:  row.ParentID,
-		SessionID: row.SessionID,
-		Title:     row.Title,
-		Desc:      row.Desc,
-		Type:      row.Type,
-		Status:    row.Status,
-		Blocked:   blocked,
-		Depth:     int(row.Depth),
-		CreatedAt: time.Unix(0, row.CreatedAt),
-		UpdatedAt: time.Unix(0, row.UpdatedAt),
+		ID:         row.ID,
+		RepoKey:    row.RepoKey,
+		EpicID:     row.EpicID,
+		ParentID:   row.ParentID,
+		SessionID:  row.SessionID,
+		Title:      row.Title,
+		Desc:       row.Desc,
+		Type:       row.Type,
+		Status:     row.Status,
+		Blocked:    blocked,
+		BlockerIDs: blockerIDsMap[row.ID],
+		Depth:      int(row.Depth),
+		CreatedAt:  time.Unix(0, row.CreatedAt),
+		UpdatedAt:  time.Unix(0, row.UpdatedAt),
 	}
 }
 
-// fetchHCItem converts a single database row to hc.Item, issuing one DB call to compute Blocked.
+// buildHCItem converts a database row to hc.Item using the pre-fetched blocked set.
+func buildHCItem(row db.HcItem, blockedSet map[string]struct{}) hc.Item {
+	return buildHCItemWithBlockers(row, blockedSet, map[string][]string{})
+}
+
+// fetchHCItem converts a single database row to hc.Item, issuing DB calls to compute Blocked and BlockerIDs.
 func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) (hc.Item, error) {
 	count, err := s.db.Queries().CountHCOpenChildren(ctx, row.ID)
 	if err != nil {
 		return hc.Item{}, fmt.Errorf("count open children for %q: %w", row.ID, err)
 	}
+
+	blockerIDs, err := s.db.Queries().ListHCOpenBlockerIDsForItem(ctx, row.ID)
+	if err != nil {
+		return hc.Item{}, fmt.Errorf("list open blockers for %q: %w", row.ID, err)
+	}
+
 	blockedSet := map[string]struct{}{}
-	if count > 0 {
+	if count > 0 || len(blockerIDs) > 0 {
 		blockedSet[row.ID] = struct{}{}
 	}
-	return buildHCItem(row, blockedSet), nil
+
+	blockerIDsMap := map[string][]string{}
+	if len(blockerIDs) > 0 {
+		blockerIDsMap[row.ID] = blockerIDs
+	}
+
+	return buildHCItemWithBlockers(row, blockedSet, blockerIDsMap), nil
+}
+
+// CreateBulkWithEdges creates items and wires their explicit blocker edges atomically.
+// Cycle validation must be done by the caller; this method only enforces FK constraints.
+func (s *HCStore) CreateBulkWithEdges(ctx context.Context, items []hc.Item, edges [][2]string) error {
+	for _, item := range items {
+		if err := item.Validate(); err != nil {
+			return fmt.Errorf("validate hc item %q: %w", item.ID, err)
+		}
+	}
+	return s.db.WithTx(ctx, func(q *db.Queries) error {
+		for _, item := range items {
+			if err := q.CreateHCItem(ctx, db.CreateHCItemParams{
+				ID:        item.ID,
+				RepoKey:   item.RepoKey,
+				EpicID:    item.EpicID,
+				ParentID:  item.ParentID,
+				SessionID: item.SessionID,
+				Title:     item.Title,
+				Desc:      item.Desc,
+				Type:      item.Type,
+				Status:    item.Status,
+				Depth:     int64(item.Depth),
+				CreatedAt: item.CreatedAt.UnixNano(),
+				UpdatedAt: item.UpdatedAt.UnixNano(),
+			}); err != nil {
+				return fmt.Errorf("create hc item %q: %w", item.ID, err)
+			}
+		}
+		for _, edge := range edges {
+			if err := q.AddHCBlocker(ctx, db.AddHCBlockerParams{
+				BlockerID: edge[0],
+				BlockedID: edge[1],
+			}); err != nil {
+				return fmt.Errorf("wire blocker edge %q→%q: %w", edge[0], edge[1], err)
+			}
+		}
+		return nil
+	})
+}
+
+// AddBlocker records that blockerID blocks blockedID. Cycle detection and the
+// INSERT are performed inside a single transaction so no partial state is possible.
+// Returns ErrCyclicDependency if the edge would create a cycle.
+func (s *HCStore) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
+	return s.db.WithTx(ctx, func(q *db.Queries) error {
+		if _, err := q.GetHCItem(ctx, blockerID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("blocker item %q: %w", blockerID, hc.ErrNotFound)
+			}
+			return fmt.Errorf("get blocker item %q: %w", blockerID, err)
+		}
+		if _, err := q.GetHCItem(ctx, blockedID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("blocked item %q: %w", blockedID, hc.ErrNotFound)
+			}
+			return fmt.Errorf("get blocked item %q: %w", blockedID, err)
+		}
+
+		rows, err := q.ListAllHCBlockerEdges(ctx)
+		if err != nil {
+			return fmt.Errorf("list blocker edges: %w", err)
+		}
+		existing := make([][2]string, len(rows))
+		for i, row := range rows {
+			existing[i] = [2]string{row.BlockerID, row.BlockedID}
+		}
+		if hc.WouldCycle(existing, blockerID, blockedID) {
+			return hc.ErrCyclicDependency
+		}
+
+		if err := q.AddHCBlocker(ctx, db.AddHCBlockerParams{
+			BlockerID: blockerID,
+			BlockedID: blockedID,
+		}); err != nil {
+			return fmt.Errorf("add hc blocker: %w", err)
+		}
+		return nil
+	})
+}
+
+// RemoveBlocker removes the explicit blocker relationship.
+func (s *HCStore) RemoveBlocker(ctx context.Context, blockerID, blockedID string) error {
+	if err := s.db.Queries().RemoveHCBlocker(ctx, db.RemoveHCBlockerParams{
+		BlockerID: blockerID,
+		BlockedID: blockedID,
+	}); err != nil {
+		return fmt.Errorf("remove hc blocker: %w", err)
+	}
+	return nil
+}
+
+// ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
+func (s *HCStore) ListBlockers(ctx context.Context, itemID string) ([]string, error) {
+	ids, err := s.db.Queries().ListHCOpenBlockerIDsForItem(ctx, itemID)
+	if err != nil {
+		return nil, fmt.Errorf("list hc open blockers for %q: %w", itemID, err)
+	}
+	return ids, nil
+}
+
+// ListBlockerEdges returns all blocker edges as [blockerID, blockedID] pairs.
+func (s *HCStore) ListBlockerEdges(ctx context.Context) ([][2]string, error) {
+	rows, err := s.db.Queries().ListAllHCBlockerEdges(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list all hc blocker edges: %w", err)
+	}
+	edges := make([][2]string, len(rows))
+	for i, row := range rows {
+		edges[i] = [2]string{row.BlockerID, row.BlockedID}
+	}
+	return edges, nil
 }
 
 // rowToHCComment maps a database comment row to a domain comment.

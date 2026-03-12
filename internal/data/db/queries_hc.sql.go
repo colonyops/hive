@@ -7,9 +7,26 @@ package db
 
 import (
 	"context"
+	"strings"
 
 	"github.com/colonyops/hive/internal/core/hc"
 )
+
+const addHCBlocker = `-- name: AddHCBlocker :exec
+
+INSERT OR IGNORE INTO hc_task_blockers (blocker_id, blocked_id) VALUES (?, ?)
+`
+
+type AddHCBlockerParams struct {
+	BlockerID string `json:"blocker_id"`
+	BlockedID string `json:"blocked_id"`
+}
+
+// HC Task Blockers
+func (q *Queries) AddHCBlocker(ctx context.Context, arg AddHCBlockerParams) error {
+	_, err := q.db.ExecContext(ctx, addHCBlocker, arg.BlockerID, arg.BlockedID)
+	return err
+}
 
 const countHCItemsByStatusOlderThan = `-- name: CountHCItemsByStatusOlderThan :one
 SELECT COUNT(*) FROM hc_items WHERE status = ? AND updated_at < ?
@@ -167,6 +184,33 @@ func (q *Queries) InsertHCComment(ctx context.Context, arg InsertHCCommentParams
 	return i, err
 }
 
+const listAllHCBlockerEdges = `-- name: ListAllHCBlockerEdges :many
+SELECT blocker_id, blocked_id FROM hc_task_blockers
+`
+
+func (q *Queries) ListAllHCBlockerEdges(ctx context.Context) ([]HcTaskBlocker, error) {
+	rows, err := q.db.QueryContext(ctx, listAllHCBlockerEdges)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []HcTaskBlocker{}
+	for rows.Next() {
+		var i HcTaskBlocker
+		if err := rows.Scan(&i.BlockerID, &i.BlockedID); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listAllHCItems = `-- name: ListAllHCItems :many
 SELECT id, repo_key, epic_id, parent_id, session_id, title, "desc", type, status, depth, created_at, updated_at FROM hc_items ORDER BY created_at DESC
 `
@@ -265,6 +309,33 @@ func (q *Queries) ListHCBlockedParentIDs(ctx context.Context) ([]string, error) 
 			return nil, err
 		}
 		items = append(items, parent_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHCBlockersForItem = `-- name: ListHCBlockersForItem :many
+SELECT blocker_id FROM hc_task_blockers WHERE blocked_id = ? ORDER BY blocker_id
+`
+
+func (q *Queries) ListHCBlockersForItem(ctx context.Context, blockedID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listHCBlockersForItem, blockedID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blocker_id string
+		if err := rows.Scan(&blocker_id); err != nil {
+			return nil, err
+		}
+		items = append(items, blocker_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -377,6 +448,102 @@ func (q *Queries) ListHCEpicsByRepo(ctx context.Context, repoKey string) ([]HcIt
 			return nil, err
 		}
 		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHCExplicitlyBlockedIDs = `-- name: ListHCExplicitlyBlockedIDs :many
+SELECT DISTINCT blocked_id FROM hc_task_blockers
+JOIN hc_items ON hc_items.id = hc_task_blockers.blocker_id
+WHERE hc_items.status IN ('open', 'in_progress')
+`
+
+func (q *Queries) ListHCExplicitlyBlockedIDs(ctx context.Context) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listHCExplicitlyBlockedIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blocked_id string
+		if err := rows.Scan(&blocked_id); err != nil {
+			return nil, err
+		}
+		items = append(items, blocked_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHCExplicitlyBlockedIDsWithBlockers = `-- name: ListHCExplicitlyBlockedIDsWithBlockers :many
+SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
+JOIN hc_items i ON i.id = b.blocker_id
+WHERE i.status IN ('open', 'in_progress')
+  AND b.blocked_id IN (/*SLICE:ids*/?)
+`
+
+func (q *Queries) ListHCExplicitlyBlockedIDsWithBlockers(ctx context.Context, ids []string) ([]string, error) {
+	query := listHCExplicitlyBlockedIDsWithBlockers
+	var queryParams []interface{}
+	if len(ids) > 0 {
+		for _, v := range ids {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:ids*/?", strings.Repeat(",?", len(ids))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:ids*/?", "NULL", 1)
+	}
+	rows, err := q.db.QueryContext(ctx, query, queryParams...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blocked_id string
+		if err := rows.Scan(&blocked_id); err != nil {
+			return nil, err
+		}
+		items = append(items, blocked_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listHCItemsBlockedBy = `-- name: ListHCItemsBlockedBy :many
+SELECT blocked_id FROM hc_task_blockers WHERE blocker_id = ? ORDER BY blocked_id
+`
+
+func (q *Queries) ListHCItemsBlockedBy(ctx context.Context, blockerID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listHCItemsBlockedBy, blockerID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blocked_id string
+		if err := rows.Scan(&blocked_id); err != nil {
+			return nil, err
+		}
+		items = append(items, blocked_id)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -552,6 +719,36 @@ func (q *Queries) ListHCItemsBySession(ctx context.Context, sessionID string) ([
 	return items, nil
 }
 
+const listHCOpenBlockerIDsForItem = `-- name: ListHCOpenBlockerIDsForItem :many
+SELECT b.blocker_id FROM hc_task_blockers b
+JOIN hc_items i ON i.id = b.blocker_id
+WHERE b.blocked_id = ? AND i.status IN ('open', 'in_progress')
+ORDER BY b.blocker_id
+`
+
+func (q *Queries) ListHCOpenBlockerIDsForItem(ctx context.Context, blockedID string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listHCOpenBlockerIDsForItem, blockedID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var blocker_id string
+		if err := rows.Scan(&blocker_id); err != nil {
+			return nil, err
+		}
+		items = append(items, blocker_id)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listHCRepoKeys = `-- name: ListHCRepoKeys :many
 SELECT DISTINCT repo_key FROM hc_items WHERE repo_key != '' ORDER BY repo_key
 `
@@ -587,6 +784,11 @@ WHERE outer_item.session_id = ?
     SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
     WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
   )
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
+    JOIN hc_items blocker ON blocker.id = b.blocker_id
+    WHERE blocker.status IN ('open', 'in_progress')
+  )
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1
 `
@@ -619,6 +821,11 @@ WHERE outer_item.session_id = ?
   AND outer_item.id NOT IN (
     SELECT DISTINCT inner_item.parent_id FROM hc_items AS inner_item
     WHERE inner_item.parent_id != '' AND inner_item.status IN ('open', 'in_progress')
+  )
+  AND outer_item.id NOT IN (
+    SELECT DISTINCT b.blocked_id FROM hc_task_blockers b
+    JOIN hc_items blocker ON blocker.id = b.blocker_id
+    WHERE blocker.status IN ('open', 'in_progress')
   )
 ORDER BY outer_item.depth DESC, outer_item.created_at ASC
 LIMIT 1
@@ -665,6 +872,20 @@ type PruneHCCommentsByStatusParams struct {
 
 func (q *Queries) PruneHCCommentsByStatus(ctx context.Context, arg PruneHCCommentsByStatusParams) error {
 	_, err := q.db.ExecContext(ctx, pruneHCCommentsByStatus, arg.Status, arg.UpdatedAt)
+	return err
+}
+
+const removeHCBlocker = `-- name: RemoveHCBlocker :exec
+DELETE FROM hc_task_blockers WHERE blocker_id = ? AND blocked_id = ?
+`
+
+type RemoveHCBlockerParams struct {
+	BlockerID string `json:"blocker_id"`
+	BlockedID string `json:"blocked_id"`
+}
+
+func (q *Queries) RemoveHCBlocker(ctx context.Context, arg RemoveHCBlockerParams) error {
+	_, err := q.db.ExecContext(ctx, removeHCBlocker, arg.BlockerID, arg.BlockedID)
 	return err
 }
 

@@ -28,8 +28,8 @@ func renderDetailHeader(item *hc.Item, node *TreeNode, width int) string {
 	return b.String()
 }
 
-// renderDetailContent renders the scrollable content: title + description + comments.
-func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string {
+// renderDetailContent renders the scrollable content: title + description + blockers + comments.
+func renderDetailContent(item *hc.Item, comments []hc.Comment, blockers []hc.Item, width int) string {
 	if item == nil {
 		return ""
 	}
@@ -47,6 +47,25 @@ func renderDetailContent(item *hc.Item, comments []hc.Comment, width int) string
 	} else {
 		b.WriteString("\n")
 		b.WriteString(styles.TextMutedStyle.Render("No description"))
+	}
+
+	// Blockers section
+	if len(blockers) > 0 {
+		b.WriteString("\n")
+		b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("Blockers (%d)", len(blockers))))
+		b.WriteString("\n")
+		for _, blocker := range blockers {
+			icon := StatusIcon(blocker.Status)
+			fmt.Fprintf(&b, "  %s %s  %s\n",
+				icon,
+				styles.TextForegroundStyle.Render(blocker.Title),
+				styles.TextMutedStyle.Render("("+blocker.ID+")"))
+		}
+	} else if item.Blocked {
+		// item is blocked by open children (not explicit blockers)
+		b.WriteString("\n")
+		b.WriteString(styles.TextMutedStyle.Render("Blocked by open children"))
+		b.WriteString("\n")
 	}
 
 	b.WriteString("\n")

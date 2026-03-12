@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -112,6 +113,17 @@ Bulk JSON format (pipe or --file):
       }
     ]
   }
+
+To express blocker dependencies between items in a bulk create, use "ref" and "blockers":
+  {
+    "title": "Auth System",
+    "type": "epic",
+    "children": [
+      {"ref": "jwt", "title": "JWT middleware", "type": "task"},
+      {"title": "Login endpoint", "type": "task", "blockers": ["jwt"]}
+    ]
+  }
+The "ref" field is a local label (not stored); "blockers" lists refs that must complete first.
 
 Examples:
   hive hc create "Implement auth" --type task --parent hc-abc123
@@ -429,7 +441,17 @@ Examples:
 				}
 			}
 
-			renderItem(c.Root().Writer, item, comments, epicTitle)
+			var blockers []hc.Item
+			for _, blockerID := range item.BlockerIDs {
+				b, err := cmd.app.Honeycomb.GetItem(ctx, blockerID)
+				if err != nil {
+					log.Debug().Err(err).Str("blocker_id", blockerID).Msg("failed to fetch blocker item")
+					continue
+				}
+				blockers = append(blockers, b)
+			}
+
+			renderItem(c.Root().Writer, item, comments, epicTitle, blockers)
 			return nil
 		},
 	}
@@ -446,7 +468,7 @@ func terminalWidth(w io.Writer) int {
 }
 
 // renderItem prints a styled detail view of an item and its comments.
-func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle string) {
+func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle string, blockers []hc.Item) {
 	mutedStyle := styles.TextMutedStyle
 	fgStyle := styles.TextForegroundStyle
 	indent := "  "
@@ -506,6 +528,19 @@ func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle stri
 		}
 	}
 
+	// Blockers
+	if len(blockers) > 0 {
+		_, _ = fmt.Fprintln(w)
+		_, _ = fmt.Fprintf(w, "%s%s\n", indent, divider(fmt.Sprintf("Blockers (%d)", len(blockers))))
+		_, _ = fmt.Fprintln(w)
+		for _, b := range blockers {
+			symbol := statusSymbol(b.Status)
+			title := styledTitle(b)
+			id := mutedStyle.Render("(" + b.ID + ")")
+			_, _ = fmt.Fprintf(w, "%s%s %s %s\n", indent, symbol, title, id)
+		}
+	}
+
 	// Comments
 	if len(comments) > 0 {
 		_, _ = fmt.Fprintln(w)
@@ -542,15 +577,17 @@ func renderItem(w io.Writer, item hc.Item, comments []hc.Comment, epicTitle stri
 
 func (cmd *HoneycombCmd) updateCmd() *cli.Command {
 	var (
-		flagStatus   string
-		flagAssign   bool
-		flagUnassign bool
+		flagStatus        string
+		flagAssign        bool
+		flagUnassign      bool
+		flagAddBlocker    string
+		flagRemoveBlocker string
 	)
 	return &cli.Command{
 		Name:      "update",
 		Aliases:   []string{"set", "edit"},
 		Usage:     "Update an item's status or session assignment",
-		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign]",
+		UsageText: "hive hc update <id> [--status <status>] [--assign] [--unassign] [--add-blocker <id>] [--remove-blocker <id>]",
 		Description: `Updates an item's status and/or session assignment.
 
 Status values: open, in_progress, done, cancelled
@@ -558,11 +595,15 @@ Status values: open, in_progress, done, cancelled
 Examples:
   hive hc update hc-abc123 --status done
   hive hc update hc-abc123 --status in_progress --assign
-  hive hc update hc-abc123 --unassign`,
+  hive hc update hc-abc123 --unassign
+  hive hc update hc-abc123 --add-blocker hc-dep456
+  hive hc update hc-abc123 --remove-blocker hc-dep456`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "new status (open, in_progress, done, cancelled)", Destination: &flagStatus},
 			&cli.BoolFlag{Name: "assign", Usage: "assign to current session", Destination: &flagAssign},
 			&cli.BoolFlag{Name: "unassign", Usage: "remove session assignment", Destination: &flagUnassign},
+			&cli.StringFlag{Name: "add-blocker", Usage: "add an explicit blocker (item ID that must complete first)", Destination: &flagAddBlocker},
+			&cli.StringFlag{Name: "remove-blocker", Usage: "remove an explicit blocker by item ID", Destination: &flagRemoveBlocker},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			if c.NArg() < 1 {
@@ -570,40 +611,76 @@ Examples:
 			}
 			id := c.Args().First()
 
-			if flagStatus == "" && !flagAssign && !flagUnassign {
-				return fmt.Errorf("at least one of --status, --assign, or --unassign is required")
+			if flagStatus == "" && !flagAssign && !flagUnassign && flagAddBlocker == "" && flagRemoveBlocker == "" {
+				return fmt.Errorf("at least one of --status, --assign, --unassign, --add-blocker, or --remove-blocker is required")
 			}
 
-			var update hc.ItemUpdate
+			if flagAddBlocker != "" && flagRemoveBlocker != "" {
+				return fmt.Errorf("--add-blocker and --remove-blocker are mutually exclusive")
+			}
 
-			if flagStatus != "" {
-				status, err := hc.ParseStatus(flagStatus)
+			// Apply item field updates first so that if they fail, no blocker
+			// mutations are committed and the caller sees a clean error.
+			var item hc.Item
+			hasUpdate := flagStatus != "" || flagAssign || flagUnassign
+			if hasUpdate {
+				var update hc.ItemUpdate
+
+				if flagStatus != "" {
+					status, err := hc.ParseStatus(flagStatus)
+					if err != nil {
+						return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
+					}
+					update.Status = &status
+				}
+
+				if flagAssign && flagUnassign {
+					return fmt.Errorf("--assign and --unassign are mutually exclusive")
+				}
+
+				if flagAssign {
+					sessionID := cmd.detectSession(ctx)
+					if sessionID == "" {
+						return fmt.Errorf("could not detect current session; use 'hive session' to verify")
+					}
+					update.SessionID = &sessionID
+				}
+
+				if flagUnassign {
+					empty := ""
+					update.SessionID = &empty
+				}
+
+				var err error
+				item, err = cmd.app.Honeycomb.UpdateItem(ctx, id, update)
 				if err != nil {
-					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
+					return fmt.Errorf("update item %q: %w", id, err)
 				}
-				update.Status = &status
 			}
 
-			if flagAssign && flagUnassign {
-				return fmt.Errorf("--assign and --unassign are mutually exclusive")
-			}
-
-			if flagAssign {
-				sessionID := cmd.detectSession(ctx)
-				if sessionID == "" {
-					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
+			if flagAddBlocker != "" {
+				if err := cmd.app.Honeycomb.AddBlocker(ctx, flagAddBlocker, id); err != nil {
+					if errors.Is(err, hc.ErrCyclicDependency) {
+						return fmt.Errorf("cannot add blocker: would create a cyclic dependency")
+					}
+					return fmt.Errorf("add blocker: %w", err)
 				}
-				update.SessionID = &sessionID
 			}
 
-			if flagUnassign {
-				empty := ""
-				update.SessionID = &empty
+			if flagRemoveBlocker != "" {
+				if err := cmd.app.Honeycomb.RemoveBlocker(ctx, flagRemoveBlocker, id); err != nil {
+					return fmt.Errorf("remove blocker: %w", err)
+				}
 			}
 
-			item, err := cmd.app.Honeycomb.UpdateItem(ctx, id, update)
-			if err != nil {
-				return fmt.Errorf("update item %q: %w", id, err)
+			// Re-fetch after any blocker mutation so blocker_ids reflects the
+			// current state; UpdateItem returns the row before edges are written.
+			if !hasUpdate || flagAddBlocker != "" || flagRemoveBlocker != "" {
+				var err error
+				item, err = cmd.app.Honeycomb.GetItem(ctx, id)
+				if err != nil {
+					return fmt.Errorf("get item %q: %w", id, err)
+				}
 			}
 
 			return iojson.WriteLine(c.Root().Writer, item)
