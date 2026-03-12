@@ -26,7 +26,7 @@ hive hc create <title>           Create a single epic or task (tasks require --p
 hive hc create                   Bulk create from stdin JSON
 hive hc list [epic-id]           List items (optional epic filter)
 hive hc show <id>                Show item + comments
-hive hc update <id>              Update status or assignment
+hive hc update <id>              Update status, title, desc, or assignment
 hive hc next <epic-id>           Get next actionable task for an epic
 hive hc comment <id> <message>   Add a comment to an item
 hive hc context <epic-id>        Show epic context block
@@ -154,8 +154,14 @@ Output: JSON lines — item first, then comments in chronological order.
 ### `hive hc update <id>`
 
 - `--status open|in_progress|done|cancelled` — new status
+- `--title <text>` — update the item's title (empty string rejected)
+- `--desc <text>` — update the item's description (empty string clears it)
 - `--assign` — assign to current session
 - `--unassign` — remove session assignment
+- `--add-blocker <id>` — mark another item as a blocker (must complete first)
+- `--remove-blocker <id>` — remove an explicit blocker
+
+**Cascade**: when an epic transitions to `done` or `cancelled`, all non-terminal descendants are automatically set to the same status. Items already in a terminal state are not changed.
 
 ### `hive hc next <epic-id>`
 
