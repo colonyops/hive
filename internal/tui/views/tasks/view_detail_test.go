@@ -53,7 +53,6 @@ func TestHandleDetailKey_ActionPassthrough(t *testing.T) {
 		{"done key dispatches TypeTasksSetDone", "d", action.TypeTasksSetDone},
 		{"open key dispatches TypeTasksSetOpen", "o", action.TypeTasksSetOpen},
 		{"in-progress key dispatches TypeTasksSetInProgress", "i", action.TypeTasksSetInProgress},
-		{"undo key dispatches TypeTasksUndo", "u", action.TypeTasksUndo},
 	}
 
 	for _, tt := range tests {

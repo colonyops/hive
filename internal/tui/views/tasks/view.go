@@ -388,7 +388,6 @@ func (v *View) HelpSections() []components.HelpDialogSection {
 				{Key: "i", Desc: "mark in progress"},
 				{Key: "d", Desc: "mark done"},
 				{Key: "x", Desc: "mark cancelled"},
-				{Key: "u", Desc: "undo last status change"},
 			},
 		},
 	}

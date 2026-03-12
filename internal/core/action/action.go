@@ -96,7 +96,6 @@ var configActions = map[Type]bool{
 	TypeTasksSetCancelled:  true,
 	TypeTasksDelete:        true,
 	TypeTasksPrune:         true,
-	TypeTasksUndo:          true,
 }
 
 // IsConfigAction reports whether t is a valid action for use in YAML config.

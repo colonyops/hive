@@ -100,7 +100,6 @@ var defaultViewsConfig = ViewsConfig{
 			"i": {Cmd: "TasksSetInProgress"},
 			"d": {Cmd: "TasksSetDone"},
 			"x": {Cmd: "TasksSetCancelled"},
-			"u": {Cmd: "TasksUndo"},
 			"D": {Cmd: "TasksDelete"},
 			"P": {Cmd: "TasksPrune"},
 		},

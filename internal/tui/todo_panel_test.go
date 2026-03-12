@@ -46,105 +46,13 @@ func newTestTodoPanel(t *testing.T, svc *hive.TodoService) *TodoPanel {
 	return NewTodoPanel(svc, 120, 40)
 }
 
-// --- UndoLast ---
-
-func TestTodoPanel_UndoLast_AfterComplete(t *testing.T) {
-	svc := newTodoPanelService(t)
-	addHumanTodo(t, svc, "t1", "Write tests")
-
-	p := newTestTodoPanel(t, svc)
-	require.Len(t, p.items, 1)
-
-	require.NoError(t, p.CompleteCurrent())
-	assert.NotNil(t, p.undoEntry, "undoEntry should be set after complete")
-	assert.Equal(t, "t1", p.undoEntry.itemID)
-	assert.Equal(t, todo.StatusAcknowledged, p.undoEntry.prevStatus)
-
-	require.NoError(t, p.UndoLast())
-	assert.Nil(t, p.undoEntry, "undoEntry cleared after undo")
-
-	result, err := svc.Get(context.Background(), "t1")
-	require.NoError(t, err)
-	assert.Equal(t, todo.StatusAcknowledged, result.Status)
-}
-
-func TestTodoPanel_UndoLast_AfterDismiss(t *testing.T) {
-	svc := newTodoPanelService(t)
-	addHumanTodo(t, svc, "t1", "Write tests")
-
-	p := newTestTodoPanel(t, svc)
-	require.Len(t, p.items, 1)
-
-	require.NoError(t, p.DismissCurrent())
-	assert.NotNil(t, p.undoEntry)
-	assert.Equal(t, todo.StatusAcknowledged, p.undoEntry.prevStatus)
-
-	require.NoError(t, p.UndoLast())
-	assert.Nil(t, p.undoEntry)
-
-	result, err := svc.Get(context.Background(), "t1")
-	require.NoError(t, err)
-	assert.Equal(t, todo.StatusAcknowledged, result.Status)
-}
-
-func TestTodoPanel_UndoLast_NoEntry(t *testing.T) {
-	svc := newTodoPanelService(t)
-	p := newTestTodoPanel(t, svc)
-
-	err := p.UndoLast()
-	assert.ErrorContains(t, err, "nothing to undo")
-}
-
-func TestTodoPanel_UndoLast_OnlyRetainsLastAction(t *testing.T) {
-	svc := newTodoPanelService(t)
-	addHumanTodo(t, svc, "t1", "First")
-	addHumanTodo(t, svc, "t2", "Second")
-
-	p := newTestTodoPanel(t, svc)
-	require.Len(t, p.items, 2)
-
-	// Complete first item
-	require.NoError(t, p.CompleteCurrent())
-	firstEntry := p.undoEntry
-
-	// Dismiss second item — overwrites undo entry
-	require.NoError(t, p.DismissCurrent())
-	assert.NotEqual(t, firstEntry.itemID, p.undoEntry.itemID, "undo entry should be overwritten")
-
-	// Undo only reverts the second action
-	require.NoError(t, p.UndoLast())
-	result, err := svc.Get(context.Background(), p.items[0].ID)
-	require.NoError(t, err)
-	assert.Equal(t, todo.StatusAcknowledged, result.Status)
-}
-
-func TestTodoPanel_UndoLast_CanUndoTwice(t *testing.T) {
-	svc := newTodoPanelService(t)
-	addHumanTodo(t, svc, "t1", "Write tests")
-
-	p := newTestTodoPanel(t, svc)
-	require.Len(t, p.items, 1)
-
-	require.NoError(t, p.CompleteCurrent())
-	require.NoError(t, p.UndoLast())
-
-	// Item reappears after undo; complete again
-	require.Len(t, p.items, 1)
-	require.NoError(t, p.CompleteCurrent())
-	require.NoError(t, p.UndoLast())
-
-	result, err := svc.Get(context.Background(), "t1")
-	require.NoError(t, err)
-	assert.Equal(t, todo.StatusAcknowledged, result.Status)
-}
-
 // --- ReopenCurrent ---
 
 func TestTodoPanel_ReopenCurrent_FromCompleted(t *testing.T) {
 	svc := newTodoPanelService(t)
 	addHumanTodo(t, svc, "t1", "Write tests")
 
-	// Complete via service directly, bypassing panel undo
+	// Complete via service directly
 	_, err := svc.Complete(context.Background(), "t1")
 	require.NoError(t, err)
 
@@ -203,48 +111,4 @@ func TestTodoPanel_ReopenCurrent_EmptyList(t *testing.T) {
 
 	// Should not panic or error with empty list
 	require.NoError(t, p.ReopenCurrent())
-}
-
-// --- CompleteCurrent undo capture ---
-
-func TestTodoPanel_CompleteCurrent_ClearsUndoEntryOnAlreadyDone(t *testing.T) {
-	svc := newTodoPanelService(t)
-	addHumanTodo(t, svc, "t1", "Write tests")
-
-	p := newTestTodoPanel(t, svc)
-	require.Len(t, p.items, 1)
-
-	// Complete once — captures undo
-	require.NoError(t, p.CompleteCurrent())
-	assert.NotNil(t, p.undoEntry)
-
-	// Undo to get it back
-	require.NoError(t, p.UndoLast())
-	require.Len(t, p.items, 1)
-
-	// Completing again should set a fresh undo entry
-	require.NoError(t, p.CompleteCurrent())
-	assert.NotNil(t, p.undoEntry)
-	assert.Equal(t, "t1", p.undoEntry.itemID)
-}
-
-// --- Filter interaction ---
-
-func TestTodoPanel_UndoLast_WorksAfterItemFiltered(t *testing.T) {
-	svc := newTodoPanelService(t)
-	addHumanTodo(t, svc, "t1", "Write tests")
-
-	p := newTestTodoPanel(t, svc)
-	require.Len(t, p.items, 1, "item should be visible before completion")
-
-	require.NoError(t, p.CompleteCurrent())
-	assert.Len(t, p.items, 0, "item disappears in Open filter after completion")
-
-	// Undo should still work even though item is no longer visible
-	require.NoError(t, p.UndoLast())
-	assert.Len(t, p.items, 1, "item reappears after undo")
-
-	result, err := svc.Get(context.Background(), "t1")
-	require.NoError(t, err)
-	assert.Equal(t, todo.StatusAcknowledged, result.Status)
 }

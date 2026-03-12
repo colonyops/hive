@@ -260,12 +260,6 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"tasks"},
 	},
-	"TasksUndo": {
-		Action: action.TypeTasksUndo,
-		Help:   "undo last status change",
-		Silent: true,
-		Scope:  []string{"tasks"},
-	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}
