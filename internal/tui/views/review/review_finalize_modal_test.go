@@ -63,5 +63,5 @@ func TestFinalizationModal_KeyHandling(t *testing.T) {
 
 func TestFinalizationModal_GeneralComment(t *testing.T) {
 	modal := NewFinalizationModal(testFeedback, 100, 40)
-	assert.Equal(t, "", modal.GeneralComment())
+	assert.Empty(t, modal.GeneralComment())
 }

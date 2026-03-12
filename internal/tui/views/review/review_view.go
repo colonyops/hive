@@ -1047,11 +1047,12 @@ func (v View) View() string {
 			modeStyle = styles.ReviewModeSearchStyle
 		}
 		badge := modeStyle.Render(mode)
-		if v.searchMode {
+		switch {
+		case v.searchMode:
 			helpLeft = badge + "  " + styles.TextMutedStyle.Render("/") + v.searchInput.View()
-		} else if v.selectionMode {
+		case v.selectionMode:
 			helpLeft = badge + "  " + styles.TextMutedStyle.Render("c:comment"+components.HelpSep+"v/esc:exit visual")
-		} else {
+		default:
 			helpLeft = badge + "  " + styles.TextMutedStyle.Render("j/k scroll"+components.HelpSep+"n/N comments"+components.HelpSep+"f: copy"+components.HelpSep+"esc back"+components.HelpSep+"? help")
 		}
 		if v.selectedDoc != nil {
