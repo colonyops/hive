@@ -530,6 +530,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Outbound messages from review view
 	case review.ActionRequestMsg:
 		model, cmd = m.handleReviewAction(msg)
+	case review.CommandPaletteRequestMsg:
+		model, cmd = m.handleReviewCommandPalette()
 
 	case repoKeysLoadedMsg:
 		model, cmd = m.handleRepoKeysLoaded(msg)
@@ -1144,7 +1146,7 @@ func isTaskAction(t act.Type) bool {
 
 func isDocsAction(t act.Type) bool {
 	switch t { //nolint:exhaustive // only matching docs-specific actions
-	case act.TypeDocsCopyPath, act.TypeDocsCopyRelPath, act.TypeDocsCopyContents, act.TypeDocsOpen, act.TypeDocsTogglePreview:
+	case act.TypeDocsCopyPath, act.TypeDocsCopyRelPath, act.TypeDocsCopyContents, act.TypeDocsOpen, act.TypeDocsTogglePreview, act.TypeDocsSelectRepo:
 		return true
 	}
 	return false

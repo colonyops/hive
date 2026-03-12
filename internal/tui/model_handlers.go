@@ -452,6 +452,12 @@ func (m Model) handleTaskCommandPalette(_ tasks.CommandPaletteRequestMsg) (tea.M
 	return m, nil
 }
 
+func (m Model) handleReviewCommandPalette() (tea.Model, tea.Cmd) {
+	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
+	m.state = stateCommandPalette
+	return m, nil
+}
+
 // --- Action results ---
 
 func (m Model) handleRenameComplete(msg renameCompleteMsg) (tea.Model, tea.Cmd) {
