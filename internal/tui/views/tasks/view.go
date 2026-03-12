@@ -114,7 +114,11 @@ func (v *View) Update(msg tea.Msg) tea.Cmd {
 
 	case blockersLoadedMsg:
 		if msg.err != nil {
-			log.Debug().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load blockers")
+			log.Warn().Err(msg.err).Str("item_id", msg.itemID).Msg("tasks: failed to load blockers")
+			return nil
+		}
+		if msg.partial {
+			log.Warn().Str("item_id", msg.itemID).Msg("tasks: blockers partially loaded; skipping cache")
 			return nil
 		}
 		v.blockers[msg.itemID] = msg.blockers
@@ -461,14 +465,17 @@ func (v *View) loadBlockers(itemID string) tea.Cmd {
 			return blockersLoadedMsg{itemID: itemID, err: err}
 		}
 		items := make([]hc.Item, 0, len(blockerIDs))
+		partial := false
 		for _, bid := range blockerIDs {
 			b, err := svc.GetItem(context.Background(), bid)
 			if err != nil {
-				continue // skip unavailable
+				log.Warn().Err(err).Str("blocker_id", bid).Msg("tasks: failed to fetch blocker item")
+				partial = true
+				continue
 			}
 			items = append(items, b)
 		}
-		return blockersLoadedMsg{blockers: items, itemID: itemID}
+		return blockersLoadedMsg{blockers: items, itemID: itemID, partial: partial}
 	}
 }
 

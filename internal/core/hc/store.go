@@ -36,14 +36,19 @@ type Store interface {
 	Prune(ctx context.Context, opts PruneOpts) (int, error)
 	// ListRepoKeys returns all distinct, non-empty repo keys in sorted order.
 	ListRepoKeys(ctx context.Context) ([]string, error)
-	// AddBlocker records that blockerID blocks blockedID.
-	// Cycle detection is handled at the service layer.
+	// CreateBulkWithEdges creates items and wires their explicit blocker edges atomically.
+	// edges is a slice of [blockerID, blockedID] pairs. Cycle validation must be done
+	// by the caller before invoking this method; this method only enforces FK constraints.
+	CreateBulkWithEdges(ctx context.Context, items []Item, edges [][2]string) error
+	// AddBlocker records that blockerID blocks blockedID atomically, including cycle detection.
+	// Returns ErrCyclicDependency if the edge would create a cycle.
 	AddBlocker(ctx context.Context, blockerID, blockedID string) error
 	// RemoveBlocker removes the blocker relationship.
 	RemoveBlocker(ctx context.Context, blockerID, blockedID string) error
 	// ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
 	ListBlockers(ctx context.Context, itemID string) ([]string, error)
-	// ListBlockerEdges returns all blocker edges as [blockerID, blockedID] pairs (for cycle detection).
+	// ListBlockerEdges returns all blocker edges as [blockerID, blockedID] pairs.
+	// Used by callers that need the full graph (e.g. for pre-validation before bulk create).
 	ListBlockerEdges(ctx context.Context) ([][2]string, error)
 }
 

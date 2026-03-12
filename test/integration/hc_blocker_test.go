@@ -66,11 +66,8 @@ func TestHCUpdateRemoveBlocker(t *testing.T) {
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
 
-	// blocker_ids should be absent or empty after removal
-	if ids, ok := showLines[0]["blocker_ids"]; ok && ids != nil {
-		idList, _ := ids.([]any)
-		assert.Empty(t, idList, "blocker_ids should be empty after removal")
-	}
+	idList, _ := showLines[0]["blocker_ids"].([]any)
+	assert.Empty(t, idList, "blocker_ids should be empty after removal")
 }
 
 func TestHCUpdateAddBlocker_Cycle(t *testing.T) {
@@ -177,10 +174,29 @@ func TestHCBlocker_ClearsWhenBlockerDone(t *testing.T) {
 	showLines, err = h.RunJSONLines("hc", "show", blockedID, "--json")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(showLines), 1)
-	if ids, ok := showLines[0]["blocker_ids"]; ok && ids != nil {
-		idList, _ := ids.([]any)
-		assert.Empty(t, idList, "blocker_ids should be empty once the blocker is done")
-	}
+	idList, _ := showLines[0]["blocker_ids"].([]any)
+	assert.Empty(t, idList, "blocker_ids should be empty once the blocker is done")
+}
+
+func TestHCUpdateCombined_StatusAndBlocker(t *testing.T) {
+	h := NewHarness(t)
+	_, blockerID, blockedID := createBlockerFixture(t, h)
+
+	// Apply --status in_progress and --add-blocker in a single command.
+	lines, err := h.RunJSONLines("hc", "update", blockedID, "--status", "in_progress", "--add-blocker", blockerID)
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	assert.Equal(t, "in_progress", lines[0]["status"], "status should be updated")
+
+	// Verify the blocker edge was also wired.
+	showLines, err := h.RunJSONLines("hc", "show", blockedID, "--json")
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(showLines), 1)
+
+	blockerIDs, ok := showLines[0]["blocker_ids"].([]any)
+	require.True(t, ok, "blocker_ids should be present")
+	require.Len(t, blockerIDs, 1)
+	assert.Equal(t, blockerID, blockerIDs[0])
 }
 
 func TestHCNext_ExplicitBlockerExcluded(t *testing.T) {

@@ -108,8 +108,8 @@ func walkCreateInputWithEntry(input hc.CreateInput, repoKey, epicID, parentID st
 }
 
 // validateBatchBlockerRefs checks that all Blockers refs in the batch refer to known refs
-// and that no in-batch cycles exist.
-func validateBatchBlockerRefs(entries []createInputEntry) error {
+// and that no in-batch cycles exist. It also builds and returns the resolved edge list.
+func validateBatchBlockerRefs(entries []createInputEntry) ([][2]string, error) {
 	refToID := make(map[string]string, len(entries))
 	for _, e := range entries {
 		if e.input.Ref != "" {
@@ -117,31 +117,24 @@ func validateBatchBlockerRefs(entries []createInputEntry) error {
 		}
 	}
 
-	// Collect in-batch edges
 	var edges [][2]string
 	for _, e := range entries {
 		for _, blocker := range e.input.Blockers {
 			blockerID, ok := refToID[blocker]
 			if !ok {
-				return fmt.Errorf("unknown blocker ref %q", blocker)
+				return nil, fmt.Errorf("unknown blocker ref %q", blocker)
 			}
 			edges = append(edges, [2]string{blockerID, e.item.ID})
 		}
 	}
 
-	// Check for cycles among in-batch edges
-	for i, edge := range edges {
-		existing := make([][2]string, 0, len(edges)-1)
-		for j, e := range edges {
-			if j != i {
-				existing = append(existing, e)
-			}
-		}
-		if wouldCycle(existing, edge[0], edge[1]) {
-			return fmt.Errorf("in-batch cycle detected involving ref edges")
+	// Check for in-batch cycles by testing each candidate edge against the full set.
+	for _, edge := range edges {
+		if hc.WouldCycle(edges, edge[0], edge[1]) {
+			return nil, fmt.Errorf("in-batch cycle detected involving ref edges")
 		}
 	}
-	return nil
+	return edges, nil
 }
 
 // CreateBulk walks a CreateInput tree (BFS) and persists all items in one
@@ -157,7 +150,8 @@ func (s *HoneycombService) CreateBulk(ctx context.Context, repoKey string, input
 		entries = append(entries, entry)
 	}
 
-	if err := validateBatchBlockerRefs(entries); err != nil {
+	edges, err := validateBatchBlockerRefs(entries)
+	if err != nil {
 		return nil, fmt.Errorf("validate blocker refs: %w", err)
 	}
 
@@ -166,45 +160,17 @@ func (s *HoneycombService) CreateBulk(ctx context.Context, repoKey string, input
 		items[i] = e.item
 	}
 
-	if err := s.store.CreateItems(ctx, items); err != nil {
+	if err := s.store.CreateBulkWithEdges(ctx, items, edges); err != nil {
 		return nil, fmt.Errorf("bulk create items: %w", err)
-	}
-
-	// Wire blocker edges
-	refToID := make(map[string]string, len(entries))
-	for _, e := range entries {
-		if e.input.Ref != "" {
-			refToID[e.input.Ref] = e.item.ID
-		}
-	}
-	for _, e := range entries {
-		for _, blockerRef := range e.input.Blockers {
-			blockerID := refToID[blockerRef]
-			if err := s.store.AddBlocker(ctx, blockerID, e.item.ID); err != nil {
-				s.logger.Warn().Err(err).Str("blocker", blockerID).Str("blocked", e.item.ID).Msg("failed to wire blocker edge")
-			}
-		}
 	}
 
 	return items, nil
 }
 
 // AddBlocker records that blockerID blocks blockedID.
-// Returns hc.ErrCyclicDependency if adding this edge would create a cycle.
+// Cycle detection and the insert are performed atomically by the store.
+// Returns hc.ErrCyclicDependency if the edge would create a cycle.
 func (s *HoneycombService) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
-	if blockerID == blockedID {
-		return hc.ErrCyclicDependency
-	}
-
-	edges, err := s.store.ListBlockerEdges(ctx)
-	if err != nil {
-		return fmt.Errorf("list blocker edges: %w", err)
-	}
-
-	if wouldCycle(edges, blockerID, blockedID) {
-		return hc.ErrCyclicDependency
-	}
-
 	return s.store.AddBlocker(ctx, blockerID, blockedID)
 }
 
@@ -216,31 +182,6 @@ func (s *HoneycombService) RemoveBlocker(ctx context.Context, blockerID, blocked
 // ListBlockers returns IDs of open/in_progress items that explicitly block the given item.
 func (s *HoneycombService) ListBlockers(ctx context.Context, itemID string) ([]string, error) {
 	return s.store.ListBlockers(ctx, itemID)
-}
-
-// wouldCycle reports whether adding edge (from → to) would create a cycle in the graph.
-// DFS from 'to' following existing edges; if we can reach 'from', adding the edge would cycle.
-func wouldCycle(edges [][2]string, from, to string) bool {
-	adj := make(map[string][]string)
-	for _, e := range edges {
-		adj[e[0]] = append(adj[e[0]], e[1])
-	}
-
-	visited := make(map[string]bool)
-	stack := []string{to}
-	for len(stack) > 0 {
-		n := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if n == from {
-			return true
-		}
-		if visited[n] {
-			continue
-		}
-		visited[n] = true
-		stack = append(stack, adj[n]...)
-	}
-	return false
 }
 
 // GetItem returns an item by ID.

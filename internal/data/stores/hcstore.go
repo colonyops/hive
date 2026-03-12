@@ -490,22 +490,83 @@ func (s *HCStore) fetchHCItem(ctx context.Context, row db.HcItem) (hc.Item, erro
 	return buildHCItemWithBlockers(row, blockedSet, blockerIDsMap), nil
 }
 
-// AddBlocker records that blockerID blocks blockedID.
-// Cycle detection is handled at the service layer (HoneycombService.AddBlocker).
+// CreateBulkWithEdges creates items and wires their explicit blocker edges atomically.
+// Cycle validation must be done by the caller; this method only enforces FK constraints.
+func (s *HCStore) CreateBulkWithEdges(ctx context.Context, items []hc.Item, edges [][2]string) error {
+	for _, item := range items {
+		if err := item.Validate(); err != nil {
+			return fmt.Errorf("validate hc item %q: %w", item.ID, err)
+		}
+	}
+	return s.db.WithTx(ctx, func(q *db.Queries) error {
+		for _, item := range items {
+			if err := q.CreateHCItem(ctx, db.CreateHCItemParams{
+				ID:        item.ID,
+				RepoKey:   item.RepoKey,
+				EpicID:    item.EpicID,
+				ParentID:  item.ParentID,
+				SessionID: item.SessionID,
+				Title:     item.Title,
+				Desc:      item.Desc,
+				Type:      item.Type,
+				Status:    item.Status,
+				Depth:     int64(item.Depth),
+				CreatedAt: item.CreatedAt.UnixNano(),
+				UpdatedAt: item.UpdatedAt.UnixNano(),
+			}); err != nil {
+				return fmt.Errorf("create hc item %q: %w", item.ID, err)
+			}
+		}
+		for _, edge := range edges {
+			if err := q.AddHCBlocker(ctx, db.AddHCBlockerParams{
+				BlockerID: edge[0],
+				BlockedID: edge[1],
+			}); err != nil {
+				return fmt.Errorf("wire blocker edge %q→%q: %w", edge[0], edge[1], err)
+			}
+		}
+		return nil
+	})
+}
+
+// AddBlocker records that blockerID blocks blockedID. Cycle detection and the
+// INSERT are performed inside a single transaction so no partial state is possible.
+// Returns ErrCyclicDependency if the edge would create a cycle.
 func (s *HCStore) AddBlocker(ctx context.Context, blockerID, blockedID string) error {
-	if _, err := s.db.Queries().GetHCItem(ctx, blockerID); err != nil {
-		return fmt.Errorf("blocker item %q: %w", blockerID, hc.ErrNotFound)
-	}
-	if _, err := s.db.Queries().GetHCItem(ctx, blockedID); err != nil {
-		return fmt.Errorf("blocked item %q: %w", blockedID, hc.ErrNotFound)
-	}
-	if err := s.db.Queries().AddHCBlocker(ctx, db.AddHCBlockerParams{
-		BlockerID: blockerID,
-		BlockedID: blockedID,
-	}); err != nil {
-		return fmt.Errorf("add hc blocker: %w", err)
-	}
-	return nil
+	return s.db.WithTx(ctx, func(q *db.Queries) error {
+		if _, err := q.GetHCItem(ctx, blockerID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("blocker item %q: %w", blockerID, hc.ErrNotFound)
+			}
+			return fmt.Errorf("get blocker item %q: %w", blockerID, err)
+		}
+		if _, err := q.GetHCItem(ctx, blockedID); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("blocked item %q: %w", blockedID, hc.ErrNotFound)
+			}
+			return fmt.Errorf("get blocked item %q: %w", blockedID, err)
+		}
+
+		rows, err := q.ListAllHCBlockerEdges(ctx)
+		if err != nil {
+			return fmt.Errorf("list blocker edges: %w", err)
+		}
+		existing := make([][2]string, len(rows))
+		for i, row := range rows {
+			existing[i] = [2]string{row.BlockerID, row.BlockedID}
+		}
+		if hc.WouldCycle(existing, blockerID, blockedID) {
+			return hc.ErrCyclicDependency
+		}
+
+		if err := q.AddHCBlocker(ctx, db.AddHCBlockerParams{
+			BlockerID: blockerID,
+			BlockedID: blockedID,
+		}); err != nil {
+			return fmt.Errorf("add hc blocker: %w", err)
+		}
+		return nil
+	})
 }
 
 // RemoveBlocker removes the explicit blocker relationship.

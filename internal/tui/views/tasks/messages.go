@@ -25,6 +25,7 @@ type commentsLoadedMsg struct {
 type blockersLoadedMsg struct {
 	blockers []hc.Item
 	itemID   string
+	partial  bool // true when some blocker items could not be fetched
 	err      error
 }
 

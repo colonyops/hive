@@ -21,7 +21,12 @@ func newFakeBlockerStore() *fakeBlockerStore {
 	}
 }
 
+// AddBlocker simulates the real store: enforces cycle detection so service-layer
+// tests remain meaningful even though HoneycombService.AddBlocker now delegates entirely.
 func (f *fakeBlockerStore) AddBlocker(_ context.Context, blockerID, blockedID string) error {
+	if hc.WouldCycle(f.edges, blockerID, blockedID) {
+		return hc.ErrCyclicDependency
+	}
 	f.edges = append(f.edges, [2]string{blockerID, blockedID})
 	return nil
 }
@@ -31,36 +36,36 @@ func (f *fakeBlockerStore) ListBlockerEdges(_ context.Context) ([][2]string, err
 }
 
 // ---------------------------------------------------------------------------
-// wouldCycle unit tests
+// hc.WouldCycle unit tests
 // ---------------------------------------------------------------------------
 
 func TestWouldCycle_SelfLoop(t *testing.T) {
-	assert.True(t, wouldCycle(nil, "A", "A"))
+	assert.True(t, hc.WouldCycle(nil, "A", "A"))
 }
 
 func TestWouldCycle_DirectCycle(t *testing.T) {
 	edges := [][2]string{{"A", "B"}}
 	// Adding B→A would create A→B→A
-	assert.True(t, wouldCycle(edges, "B", "A"))
+	assert.True(t, hc.WouldCycle(edges, "B", "A"))
 }
 
 func TestWouldCycle_NoCycle(t *testing.T) {
 	edges := [][2]string{{"A", "B"}}
 	// A→B already exists; adding B→C should be fine
-	assert.False(t, wouldCycle(edges, "B", "C"))
+	assert.False(t, hc.WouldCycle(edges, "B", "C"))
 }
 
 func TestWouldCycle_IndirectCycle(t *testing.T) {
 	edges := [][2]string{{"A", "B"}, {"B", "C"}}
 	// Adding C→A would create A→B→C→A
-	assert.True(t, wouldCycle(edges, "C", "A"))
+	assert.True(t, hc.WouldCycle(edges, "C", "A"))
 }
 
 func TestWouldCycle_DiamondNoCycle(t *testing.T) {
 	// Diamond: A→C, B→C, A→B
 	edges := [][2]string{{"A", "C"}, {"B", "C"}, {"A", "B"}}
 	// No cycle in diamond — e.g. adding D→A should be fine
-	assert.False(t, wouldCycle(edges, "D", "A"))
+	assert.False(t, hc.WouldCycle(edges, "D", "A"))
 }
 
 // ---------------------------------------------------------------------------

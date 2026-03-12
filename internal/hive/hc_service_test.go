@@ -152,6 +152,19 @@ func (f *fakeHCStore) ListRepoKeys(_ context.Context) ([]string, error) {
 	return keys, nil
 }
 
+func (f *fakeHCStore) CreateBulkWithEdges(_ context.Context, items []hc.Item, _ [][2]string) error {
+	if f.forceErr != nil {
+		return f.forceErr
+	}
+	for _, item := range items {
+		if err := item.Validate(); err != nil {
+			return err
+		}
+		f.items[item.ID] = item
+	}
+	return nil
+}
+
 func (f *fakeHCStore) AddBlocker(_ context.Context, blockerID, blockedID string) error {
 	return nil
 }

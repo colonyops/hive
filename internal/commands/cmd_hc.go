@@ -619,6 +619,45 @@ Examples:
 				return fmt.Errorf("--add-blocker and --remove-blocker are mutually exclusive")
 			}
 
+			// Apply item field updates first so that if they fail, no blocker
+			// mutations are committed and the caller sees a clean error.
+			var item hc.Item
+			hasUpdate := flagStatus != "" || flagAssign || flagUnassign
+			if hasUpdate {
+				var update hc.ItemUpdate
+
+				if flagStatus != "" {
+					status, err := hc.ParseStatus(flagStatus)
+					if err != nil {
+						return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
+					}
+					update.Status = &status
+				}
+
+				if flagAssign && flagUnassign {
+					return fmt.Errorf("--assign and --unassign are mutually exclusive")
+				}
+
+				if flagAssign {
+					sessionID := cmd.detectSession(ctx)
+					if sessionID == "" {
+						return fmt.Errorf("could not detect current session; use 'hive session' to verify")
+					}
+					update.SessionID = &sessionID
+				}
+
+				if flagUnassign {
+					empty := ""
+					update.SessionID = &empty
+				}
+
+				var err error
+				item, err = cmd.app.Honeycomb.UpdateItem(ctx, id, update)
+				if err != nil {
+					return fmt.Errorf("update item %q: %w", id, err)
+				}
+			}
+
 			if flagAddBlocker != "" {
 				if err := cmd.app.Honeycomb.AddBlocker(ctx, flagAddBlocker, id); err != nil {
 					if errors.Is(err, hc.ErrCyclicDependency) {
@@ -634,45 +673,13 @@ Examples:
 				}
 			}
 
-			// If only blocker flags were set with no item update, fetch and return current state.
-			if flagStatus == "" && !flagAssign && !flagUnassign {
-				item, err := cmd.app.Honeycomb.GetItem(ctx, id)
+			if !hasUpdate {
+				// Only blocker flags were set; fetch current state to return.
+				var err error
+				item, err = cmd.app.Honeycomb.GetItem(ctx, id)
 				if err != nil {
 					return fmt.Errorf("get item %q: %w", id, err)
 				}
-				return iojson.WriteLine(c.Root().Writer, item)
-			}
-
-			var update hc.ItemUpdate
-
-			if flagStatus != "" {
-				status, err := hc.ParseStatus(flagStatus)
-				if err != nil {
-					return fmt.Errorf("invalid status %q: valid values are open, in_progress, done, cancelled", flagStatus)
-				}
-				update.Status = &status
-			}
-
-			if flagAssign && flagUnassign {
-				return fmt.Errorf("--assign and --unassign are mutually exclusive")
-			}
-
-			if flagAssign {
-				sessionID := cmd.detectSession(ctx)
-				if sessionID == "" {
-					return fmt.Errorf("could not detect current session; use 'hive session' to verify")
-				}
-				update.SessionID = &sessionID
-			}
-
-			if flagUnassign {
-				empty := ""
-				update.SessionID = &empty
-			}
-
-			item, err := cmd.app.Honeycomb.UpdateItem(ctx, id, update)
-			if err != nil {
-				return fmt.Errorf("update item %q: %w", id, err)
 			}
 
 			return iojson.WriteLine(c.Root().Writer, item)
