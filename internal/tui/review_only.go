@@ -9,6 +9,7 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	review "github.com/colonyops/hive/internal/tui/views/review"
@@ -41,7 +42,13 @@ func NewReviewOnly(opts ReviewOnlyOptions) ReviewOnlyModel {
 	store := stores.NewReviewStore(opts.DB)
 
 	// Create review view
-	reviewView := review.New(opts.Documents, opts.ContextDir, store)
+	reviewView := review.New(opts.Documents, opts.ContextDir, store, nil, 0)
+
+	// When opening with a specific document, hide the tree so the document
+	// gets full-width focus. The user can toggle the tree with V to navigate.
+	if opts.InitialDoc != nil {
+		reviewView.SetShowTree(false)
+	}
 
 	return ReviewOnlyModel{
 		reviewView:  reviewView,
@@ -68,16 +75,13 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.height = msg.Height
 		m.reviewView.SetSize(msg.Width, msg.Height)
 
-		// After first resize (when we know window size), open picker or load initial doc
+		// After first resize (when we know window size), load initial doc if specified.
 		if !m.initialized {
 			m.initialized = true
 			if m.initialDoc != nil {
-				// Load initial document directly
 				m.reviewView.LoadDocument(m.initialDoc)
-			} else {
-				// Open picker in fullscreen mode
-				return m, m.reviewView.ShowDocumentPicker()
 			}
+			// Otherwise the tree view is shown directly — no picker popup.
 		}
 		return m, nil
 
@@ -88,7 +92,26 @@ func (m ReviewOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			case "ctrl+c", "q":
 				m.quitting = true
 				return m, tea.Quit
+			case "esc":
+				// In tree view (not fullScreen), esc exits the app.
+				// In reader mode, esc is handled by the view to return to tree first.
+				if !m.reviewView.IsFullScreen() {
+					m.quitting = true
+					return m, tea.Quit
+				}
 			}
+		}
+
+	case review.ActionRequestMsg:
+		switch msg.Action.Type {
+		case act.TypeDocsToggleTree:
+			return m, m.reviewView.ToggleTree()
+		case act.TypeDocsTogglePreview:
+			return m, m.reviewView.TogglePreview()
+		case act.TypeDocsSelectRepo:
+			// Not applicable in review-only mode; ignore.
+		default:
+			// Other action types are not applicable in review-only mode.
 		}
 
 	case review.ReviewFinalizedMsg:

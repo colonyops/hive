@@ -3,6 +3,7 @@ package tui
 import (
 	"context"
 	"fmt"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
@@ -383,7 +384,75 @@ func (m Model) handleRepoKeysLoaded(msg repoKeysLoadedMsg) (tea.Model, tea.Cmd) 
 	return m, nil
 }
 
+// docsRepoEntry holds a repo key and its context directory for the docs repo picker.
+type docsRepoEntry struct {
+	key        string // "owner/repo"
+	contextDir string
+}
+
+// docsRepoKeysLoadedMsg carries the result of loading docs repo keys from sessions.
+type docsRepoKeysLoadedMsg struct {
+	repos []docsRepoEntry
+	err   error
+}
+
+func (m Model) loadDocsRepoKeys() tea.Cmd {
+	svc := m.service
+	cfg := m.cfg
+	return func() tea.Msg {
+		sessions, err := svc.ListSessions(context.Background())
+		if err != nil {
+			return docsRepoKeysLoadedMsg{err: err}
+		}
+		seen := map[string]bool{}
+		var repos []docsRepoEntry
+		for _, s := range sessions {
+			owner, repo := git.ExtractOwnerRepo(s.Remote)
+			if owner == "" || repo == "" {
+				continue
+			}
+			key := owner + "/" + repo
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			repos = append(repos, docsRepoEntry{
+				key:        key,
+				contextDir: cfg.RepoContextDir(owner, repo),
+			})
+		}
+		return docsRepoKeysLoadedMsg{repos: repos}
+	}
+}
+
+func (m Model) handleDocsRepoKeysLoaded(msg docsRepoKeysLoadedMsg) (tea.Model, tea.Cmd) {
+	if msg.err != nil {
+		return m, m.notifyError("load repos: %v", msg.err)
+	}
+	if len(msg.repos) == 0 {
+		return m, m.notifyError("no repositories found")
+	}
+	keys := make([]string, len(msg.repos))
+	for i, r := range msg.repos {
+		keys[i] = r.key
+	}
+	currentRepo := ""
+	if m.reviewView != nil {
+		currentRepo = m.reviewView.RepoKey()
+	}
+	m.modals.DocsRepoEntries = msg.repos
+	m.modals.RepoPicker = NewRepoPicker(keys, currentRepo, m.width, m.height)
+	m.state = stateSelectingRepo
+	return m, nil
+}
+
 func (m Model) handleTaskCommandPalette(_ tasks.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
+	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
+	m.state = stateCommandPalette
+	return m, nil
+}
+
+func (m Model) handleReviewCommandPalette() (tea.Model, tea.Cmd) {
 	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
 	m.state = stateCommandPalette
 	return m, nil
@@ -416,6 +485,85 @@ func (m Model) handleTaskActionComplete(msg tasks.TaskActionCompleteMsg) (tea.Mo
 		return m, nil
 	}
 	return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
+}
+
+func (m Model) handleReviewAction(msg review.ActionRequestMsg) (tea.Model, tea.Cmd) {
+	a := msg.Action
+	if a.Err != nil {
+		m.notifyErrorf("keybinding error: %v", a.Err)
+		return m, nil
+	}
+
+	var docPath, docRelPath string
+	if m.reviewView != nil {
+		if doc := m.reviewView.SelectedDoc(); doc != nil {
+			docPath = doc.Path
+			docRelPath = doc.RelPath
+		}
+	}
+
+	switch a.Type {
+	case act.TypeDocsCopyPath:
+		if docPath == "" {
+			return m, nil
+		}
+		if err := m.copyToClipboard(docPath); err != nil {
+			m.notifyErrorf("copy failed: %v", err)
+		} else {
+			m.publishNotificationf(notify.LevelInfo, "Copied path")
+		}
+	case act.TypeDocsCopyRelPath:
+		if docRelPath == "" {
+			return m, nil
+		}
+		if err := m.copyToClipboard(docRelPath); err != nil {
+			m.notifyErrorf("copy failed: %v", err)
+		} else {
+			m.publishNotificationf(notify.LevelInfo, "Copied relative path")
+		}
+	case act.TypeDocsCopyContents:
+		if m.reviewView == nil {
+			return m, nil
+		}
+		if doc := m.reviewView.SelectedDoc(); doc != nil {
+			content, err := os.ReadFile(doc.Path)
+			if err != nil {
+				m.notifyErrorf("read failed: %v", err)
+			} else if err := m.copyToClipboard(string(content)); err != nil {
+				m.notifyErrorf("copy failed: %v", err)
+			} else {
+				m.publishNotificationf(notify.LevelInfo, "Copied contents")
+			}
+		}
+	case act.TypeDocsOpen:
+		if docPath == "" {
+			return m, nil
+		}
+		editor := os.Getenv("EDITOR")
+		if editor == "" {
+			editor = "vi"
+		}
+		c := exec.Command(editor, docPath)
+		c.Stdin = os.Stdin
+		c.Stdout = os.Stdout
+		c.Stderr = os.Stderr
+		if err := c.Run(); err != nil {
+			m.notifyErrorf("open failed: %v", err)
+		}
+	case act.TypeDocsTogglePreview:
+		if m.reviewView != nil {
+			return m, m.reviewView.TogglePreview()
+		}
+	case act.TypeDocsToggleTree:
+		if m.reviewView != nil {
+			return m, m.reviewView.ToggleTree()
+		}
+	case act.TypeDocsSelectRepo:
+		return m, m.loadDocsRepoKeys()
+	default:
+		return m.handleGlobalAction(a)
+	}
+	return m, nil
 }
 
 func (m Model) handleActionComplete(msg actionCompleteMsg) (tea.Model, tea.Cmd) {
@@ -516,6 +664,8 @@ func (m Model) handleReviewFinalized(msg review.ReviewFinalizedMsg) (tea.Model, 
 		return m, nil
 	}
 
+	m.publishNotificationf(notify.LevelInfo, "Review copied to clipboard")
+
 	// Auto-complete todos whose ref matches the finalized document
 	if msg.DocumentPath != "" || msg.DocumentRel != "" {
 		return m, m.completeTodosMatchingRef(msg.DocumentPath, msg.DocumentRel)
@@ -596,6 +746,7 @@ func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	if m.modals.RepoPicker.Cancelled() {
 		m.modals.RepoPicker = nil
+		m.modals.DocsRepoEntries = nil
 		m.state = stateNormal
 		return m, nil
 	}
@@ -603,6 +754,22 @@ func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if selected := m.modals.RepoPicker.Selected(); selected != "" {
 		m.modals.RepoPicker = nil
 		m.state = stateNormal
+
+		if len(m.modals.DocsRepoEntries) > 0 {
+			entries := m.modals.DocsRepoEntries
+			m.modals.DocsRepoEntries = nil
+			if m.reviewView != nil {
+				for _, e := range entries {
+					if e.key == selected {
+						m.reviewView.SetRepoKey(e.key)
+						return m, m.reviewView.SetContextDir(e.contextDir)
+					}
+				}
+			}
+			return m, nil
+		}
+
+		m.modals.DocsRepoEntries = nil
 		if m.tasksView != nil {
 			return m, m.tasksView.SetRepoKey(selected)
 		}
@@ -788,29 +955,6 @@ func (m Model) completeTodosMatchingRef(paths ...string) tea.Cmd {
 // --- Input ---
 
 func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
-	if m.modals.DocPicker != nil {
-		modal, cmd := m.modals.DocPicker.Update(msg)
-		m.modals.DocPicker = modal
-
-		if m.modals.DocPicker.SelectedDocument() != nil {
-			doc := m.modals.DocPicker.SelectedDocument()
-			m.modals.DocPicker = nil
-			m.activeView = ViewReview
-			m.handler.SetActiveView(ViewReview)
-			if m.reviewView != nil {
-				m.reviewView.LoadDocument(doc)
-			}
-			return m, cmd
-		}
-
-		if m.modals.DocPicker.Cancelled() {
-			m.modals.DocPicker = nil
-			return m, cmd
-		}
-
-		return m, cmd
-	}
-
 	return m.handleKey(msg)
 }
 

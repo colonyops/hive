@@ -226,6 +226,7 @@ func New(deps Deps, opts Opts) Model {
 		"global":   cfg.Views.Global.Keybindings,
 		"sessions": cfg.Views.Sessions.Keybindings,
 		"tasks":    cfg.Views.Tasks.Keybindings,
+		"review":   cfg.Views.Review.Keybindings,
 	}
 	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
@@ -287,7 +288,8 @@ func New(deps Deps, opts Opts) Model {
 		reviewStore = stores.NewReviewStore(deps.DB)
 	}
 
-	reviewView := review.New(docs, contextDir, reviewStore)
+	reviewView := review.New(docs, contextDir, reviewStore, handler, cfg.Views.Review.SplitRatioOrDefault(30))
+	reviewView.SetRepoKey(repoKey)
 
 	notifyStore := stores.NewNotifyStore(deps.DB)
 	toastCtrl := NewToastController()
@@ -524,8 +526,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleTaskCommandPalette(msg)
 	case tasks.TaskActionCompleteMsg:
 		model, cmd = m.handleTaskActionComplete(msg)
+
+	// Outbound messages from review view
+	case review.ActionRequestMsg:
+		model, cmd = m.handleReviewAction(msg)
+	case review.CommandPaletteRequestMsg:
+		model, cmd = m.handleReviewCommandPalette()
+
 	case repoKeysLoadedMsg:
 		model, cmd = m.handleRepoKeysLoaded(msg)
+
+	case docsRepoKeysLoadedMsg:
+		model, cmd = m.handleDocsRepoKeysLoaded(msg)
 
 	// Action results
 	case renameCompleteMsg:
@@ -1068,6 +1080,14 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			})
 		}
 
+		// Docs actions don't require a session
+		if isDocsAction(entry.Command.Action) {
+			m.state = stateNormal
+			return m.handleReviewAction(review.ActionRequestMsg{
+				Action: act.Action{Type: entry.Command.Action},
+			})
+		}
+
 		// Check if this is a filter action (doesn't require a session)
 		if sessions.IsFilterAction(entry.Command.Action) {
 			m.state = stateNormal
@@ -1119,6 +1139,14 @@ func isTaskAction(t act.Type) bool {
 	switch t { //nolint:exhaustive // only matching task-specific actions
 	case act.TypeTasksRefresh, act.TypeTasksFilter, act.TypeTasksCopyID, act.TypeTasksTogglePreview, act.TypeTasksSelectRepo,
 		act.TypeTasksSetOpen, act.TypeTasksSetInProgress, act.TypeTasksSetDone, act.TypeTasksSetCancelled, act.TypeTasksDelete, act.TypeTasksPrune:
+		return true
+	}
+	return false
+}
+
+func isDocsAction(t act.Type) bool {
+	switch t { //nolint:exhaustive // only matching docs-specific actions
+	case act.TypeDocsCopyPath, act.TypeDocsCopyRelPath, act.TypeDocsCopyContents, act.TypeDocsOpen, act.TypeDocsTogglePreview, act.TypeDocsSelectRepo:
 		return true
 	}
 	return false
@@ -1240,7 +1268,17 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 			return m, nil
 		}
 		cmd := m.sessionsView.Update(msg)
-		return m, cmd
+		var cmds []tea.Cmd
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+		if docCmd := m.syncDocsRepoFromSessions(); docCmd != nil {
+			cmds = append(cmds, docCmd)
+		}
+		if taskCmd := m.syncTasksRepoFromSessions(); taskCmd != nil {
+			cmds = append(cmds, taskCmd)
+		}
+		return m, tea.Batch(cmds...)
 	}
 
 	// Messages view focused - delegate all keys to the sub-model
@@ -1302,18 +1340,18 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 
 // handleTabKey handles tab/shift+tab for switching views.
 // direction: +1 for next tab, -1 for previous tab.
-// Cycle: Sessions -> [Tasks if visible] -> Messages -> [Store if visible] -> [Review if visible] -> Sessions
+// Cycle: Sessions -> [Tasks if visible] -> Messages -> [Store if visible] -> Docs -> Sessions
 func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	tabs := []ViewType{ViewSessions}
 	if m.tasksView != nil {
 		tabs = append(tabs, ViewTasks)
 	}
+	if m.reviewView != nil {
+		tabs = append(tabs, ViewReview)
+	}
 	tabs = append(tabs, ViewMessages)
 	if m.kvStore != nil && m.cfg.TUI.Store {
 		tabs = append(tabs, ViewStore)
-	}
-	if m.reviewView != nil && m.reviewView.CanShowInTabBar() {
-		tabs = append(tabs, ViewReview)
 	}
 
 	current := 0
@@ -1345,7 +1383,11 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
-	case ViewSessions, ViewMessages, ViewReview:
+	case ViewReview:
+		if cmd := m.syncDocsRepoFromSessions(); cmd != nil {
+			return m, cmd
+		}
+	case ViewSessions, ViewMessages:
 		// No special load action needed
 	}
 
@@ -1567,6 +1609,46 @@ func (m Model) syncTasksRepoFromSessions() tea.Cmd {
 	}
 
 	return m.tasksView.SetRepoKey(repoKey)
+}
+
+// syncDocsRepoFromSessions extracts the repo from the sessions tree selection
+// and updates the review view context dir if it differs from the current one.
+func (m Model) syncDocsRepoFromSessions() tea.Cmd {
+	if m.reviewView == nil {
+		return nil
+	}
+
+	ti := m.selectedTreeItem()
+	if ti == nil {
+		return nil
+	}
+
+	var remote string
+	switch {
+	case ti.IsHeader:
+		remote = ti.RepoRemote
+	case ti.IsWindowItem:
+		remote = ti.ParentSession.Remote
+	case !ti.IsRecycledPlaceholder:
+		remote = ti.Session.Remote
+	}
+
+	if remote == "" {
+		return nil
+	}
+
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner == "" || repo == "" {
+		return nil
+	}
+
+	contextDir := m.cfg.RepoContextDir(owner, repo)
+	if contextDir == m.reviewView.ContextDir() {
+		return nil
+	}
+
+	m.reviewView.SetRepoKey(owner + "/" + repo)
+	return m.reviewView.SetContextDir(contextDir)
 }
 
 // hasEditorFocus returns true if any text input currently has focus.

@@ -83,6 +83,20 @@ const (
 	TypeTasksPrune Type = "TasksPrune"
 	// TypeViewTasks is a Type of type ViewTasks.
 	TypeViewTasks Type = "ViewTasks"
+	// TypeDocsCopyPath is a Type of type DocsCopyPath.
+	TypeDocsCopyPath Type = "DocsCopyPath"
+	// TypeDocsCopyRelPath is a Type of type DocsCopyRelPath.
+	TypeDocsCopyRelPath Type = "DocsCopyRelPath"
+	// TypeDocsCopyContents is a Type of type DocsCopyContents.
+	TypeDocsCopyContents Type = "DocsCopyContents"
+	// TypeDocsOpen is a Type of type DocsOpen.
+	TypeDocsOpen Type = "DocsOpen"
+	// TypeDocsTogglePreview is a Type of type DocsTogglePreview.
+	TypeDocsTogglePreview Type = "DocsTogglePreview"
+	// TypeDocsToggleTree is a Type of type DocsToggleTree.
+	TypeDocsToggleTree Type = "DocsToggleTree"
+	// TypeDocsSelectRepo is a Type of type DocsSelectRepo.
+	TypeDocsSelectRepo Type = "DocsSelectRepo"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -124,6 +138,13 @@ var _TypeNames = []string{
 	string(TypeTasksDelete),
 	string(TypeTasksPrune),
 	string(TypeViewTasks),
+	string(TypeDocsCopyPath),
+	string(TypeDocsCopyRelPath),
+	string(TypeDocsCopyContents),
+	string(TypeDocsOpen),
+	string(TypeDocsTogglePreview),
+	string(TypeDocsToggleTree),
+	string(TypeDocsSelectRepo),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -218,6 +239,20 @@ var _TypeValue = map[string]Type{
 	"tasksprune":          TypeTasksPrune,
 	"ViewTasks":           TypeViewTasks,
 	"viewtasks":           TypeViewTasks,
+	"DocsCopyPath":        TypeDocsCopyPath,
+	"docscopypath":        TypeDocsCopyPath,
+	"DocsCopyRelPath":     TypeDocsCopyRelPath,
+	"docscopyrelpath":     TypeDocsCopyRelPath,
+	"DocsCopyContents":    TypeDocsCopyContents,
+	"docscopycontents":    TypeDocsCopyContents,
+	"DocsOpen":            TypeDocsOpen,
+	"docsopen":            TypeDocsOpen,
+	"DocsTogglePreview":   TypeDocsTogglePreview,
+	"docstogglepreview":   TypeDocsTogglePreview,
+	"DocsToggleTree":      TypeDocsToggleTree,
+	"docstoggletree":      TypeDocsToggleTree,
+	"DocsSelectRepo":      TypeDocsSelectRepo,
+	"docsselectrepo":      TypeDocsSelectRepo,
 }
 
 // ParseType attempts to convert a string to a Type.

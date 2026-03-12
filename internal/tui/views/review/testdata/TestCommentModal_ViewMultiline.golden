@@ -11,5 +11,5 @@ func example() {
 ┃ Line 3                                                    
 ┃                                                           
 ┃                                                           
-                                       
-ctrl+enter/ctrl+s: submit • esc: cancel
+                            
+ctrl+s: submit • esc: cancel
