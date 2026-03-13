@@ -9,12 +9,14 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/glamour"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/tui"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/colonyops/hive/pkg/timeutil"
 	"github.com/rs/zerolog/log"
@@ -42,6 +44,7 @@ func (cmd *HoneycombCmd) Register(app *cli.Command) *cli.Command {
 but scoped to a repository and designed for machine consumption.
 
 Session ID and repo key are auto-detected from the working directory.`,
+		Action: cmd.run,
 		Commands: []*cli.Command{
 			cmd.createCmd(),
 			cmd.listCmd(),
@@ -54,6 +57,21 @@ Session ID and repo key are auto-detected from the working directory.`,
 		},
 	})
 	return app
+}
+
+func (cmd *HoneycombCmd) run(ctx context.Context, c *cli.Command) error {
+	opts := tui.HoneycombOnlyOptions{
+		Honeycomb: cmd.app.Honeycomb,
+		RepoKey:   cmd.detectRepoKey(ctx),
+		Config:    cmd.app.Config,
+		KVStore:   cmd.app.KV,
+		Renderer:  cmd.app.Renderer,
+	}
+	m := tui.NewHoneycombOnly(opts)
+	if _, err := tea.NewProgram(m).Run(); err != nil {
+		return fmt.Errorf("run hc TUI: %w", err)
+	}
+	return nil
 }
 
 func (cmd *HoneycombCmd) detectSession(ctx context.Context) string {
