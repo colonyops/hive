@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/hc"
 	corekv "github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
@@ -35,17 +36,16 @@ const hcHeaderLines = 3
 
 // HoneycombOnlyModel is a minimal TUI for browsing and mutating honeycomb tasks.
 type HoneycombOnlyModel struct {
-	tasksView     *tasks.View
-	handler       *KeybindingResolver
-	copyCmd       string
-	width, height int
-	quitting      bool
-	helpDialog    *components.HelpDialog
-	// inline confirmation state
-	confirming    bool
-	confirmMsg    string
-	pendingAct    act.Action
-	pendingItemID string
+	tasksView       *tasks.View
+	handler         *KeybindingResolver
+	copyCmd         string
+	width, height   int
+	quitting        bool
+	helpDialog      *components.HelpDialog
+	confirmModal    *components.ConfirmModal
+	pendingCmd      tea.Cmd
+	toastController *ToastController
+	toastView       *ToastView
 }
 
 // NewHoneycombOnly creates a new honeycomb-only TUI model.
@@ -61,16 +61,19 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 	handler.SetActiveView(ViewTasks)
 
 	tasksView := tasks.New(opts.Honeycomb, opts.RepoKey, handler, opts.KVStore, cfg.Views.Tasks.SplitRatio)
+	toastCtrl := NewToastController()
 	return HoneycombOnlyModel{
-		tasksView: tasksView,
-		handler:   handler,
-		copyCmd:   cfg.CopyCommand,
+		tasksView:       tasksView,
+		handler:         handler,
+		copyCmd:         cfg.CopyCommand,
+		toastController: toastCtrl,
+		toastView:       NewToastView(toastCtrl),
 	}
 }
 
 // Init implements tea.Model.
 func (m HoneycombOnlyModel) Init() tea.Cmd {
-	return m.tasksView.Init()
+	return tea.Batch(m.tasksView.Init(), scheduleToastTick())
 }
 
 // Update implements tea.Model.
@@ -82,6 +85,10 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.tasksView.SetSize(msg.Width, max(msg.Height-hcHeaderLines, 1))
 		m.tasksView.SetActive(true)
 		return m, nil
+
+	case toastTickMsg:
+		m.toastController.Tick()
+		return m, scheduleToastTick()
 
 	case tea.KeyPressMsg:
 		if m.helpDialog != nil {
@@ -98,27 +105,35 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, nil
 		}
-		if m.confirming {
-			switch msg.String() {
-			case "y", "Y":
-				m.confirming = false
-				cmd := m.executeConfirmedAction()
-				m.pendingAct = act.Action{}
-				m.pendingItemID = ""
-				m.confirmMsg = ""
-				return m, cmd
-			default:
-				m.confirming = false
-				m.pendingAct = act.Action{}
-				m.pendingItemID = ""
-				m.confirmMsg = ""
-				return m, nil
+		if m.confirmModal != nil {
+			// Allow quitting even while a confirmation is pending.
+			if msg.String() == "ctrl+c" || msg.String() == "q" {
+				m.quitting = true
+				return m, tea.Quit
 			}
+			modal, cmd := m.confirmModal.Update(msg)
+			m.confirmModal = &modal
+			if m.confirmModal.Confirmed() {
+				pendingCmd := m.pendingCmd
+				m.confirmModal = nil
+				m.pendingCmd = nil
+				return m, tea.Batch(pendingCmd, cmd)
+			}
+			if m.confirmModal.Cancelled() {
+				m.confirmModal = nil
+				m.pendingCmd = nil
+			}
+			return m, cmd
 		}
 		switch msg.String() {
 		case "ctrl+c", "q":
 			m.quitting = true
 			return m, tea.Quit
+		case "esc":
+			if m.toastController.HasToasts() {
+				m.toastController.Dismiss()
+			}
+			return m, nil
 		case "?":
 			sections := m.tasksView.HelpSections()
 			sections = append(sections, components.HelpDialogSection{
@@ -137,7 +152,11 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tasks.TaskActionCompleteMsg:
 		if msg.Err != nil {
-			return m, nil
+			m.toastController.Push(notify.Notification{
+				Level:   notify.LevelError,
+				Message: msg.Err.Error(),
+			})
+			return m, scheduleToastTick()
 		}
 		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
 	}
@@ -159,9 +178,19 @@ func (m HoneycombOnlyModel) handleTaskAction(a act.Action) (tea.Model, tea.Cmd) 
 		return m, m.tasksView.CycleFilter()
 	case act.TypeTasksCopyID:
 		if item := m.tasksView.SelectedItem(); item != nil {
-			_ = m.copyToClipboard(item.ID)
+			if err := m.copyToClipboard(item.ID); err != nil {
+				m.toastController.Push(notify.Notification{
+					Level:   notify.LevelError,
+					Message: fmt.Sprintf("copy failed: %v", err),
+				})
+			} else {
+				m.toastController.Push(notify.Notification{
+					Level:   notify.LevelInfo,
+					Message: fmt.Sprintf("Copied %s", item.ID),
+				})
+			}
 		}
-		return m, nil
+		return m, scheduleToastTick()
 	case act.TypeTasksTogglePreview:
 		return m, m.tasksView.TogglePreview()
 	case act.TypeTasksSelectRepo:
@@ -178,53 +207,45 @@ func (m HoneycombOnlyModel) handleTaskAction(a act.Action) (tea.Model, tea.Cmd) 
 		if item == nil {
 			return m, nil
 		}
-		m.pendingItemID = item.ID
-		m.pendingAct = a
-		m.confirmMsg = fmt.Sprintf("Cancel %q? (y/n)", item.Title)
-		m.confirming = true
+		svc := m.tasksView.Svc()
+		if svc == nil {
+			return m, nil
+		}
+		id, title := item.ID, item.Title
+		modal := components.NewConfirmModal(fmt.Sprintf("Cancel %q?", title))
+		m.confirmModal = &modal
+		m.pendingCmd = func() tea.Msg {
+			status := hc.StatusCancelled
+			_, err := svc.UpdateItem(context.Background(), id, hc.ItemUpdate{Status: &status})
+			return tasks.TaskActionCompleteMsg{Err: err}
+		}
 		return m, nil
 	case act.TypeTasksDelete:
 		item := m.tasksView.SelectedItem()
 		if item == nil {
 			return m, nil
 		}
-		m.pendingItemID = item.ID
-		m.pendingAct = a
-		m.confirmMsg = fmt.Sprintf("Delete %q? This cannot be undone. (y/n)", item.Title)
-		m.confirming = true
-		return m, nil
-	case act.TypeTasksPrune:
-		m.pendingItemID = ""
-		m.pendingAct = a
-		m.confirmMsg = "Remove all done/cancelled items older than 24h? (y/n)"
-		m.confirming = true
-		return m, nil
-	default:
-		return m, nil
-	}
-}
-
-// executeConfirmedAction executes the stored pending action after user confirmation.
-func (m HoneycombOnlyModel) executeConfirmedAction() tea.Cmd {
-	svc := m.tasksView.Svc()
-	a := m.pendingAct
-	id := m.pendingItemID
-	repoKey := m.tasksView.RepoKey()
-
-	switch a.Type {
-	case act.TypeTasksSetCancelled:
-		return func() tea.Msg {
-			status := hc.StatusCancelled
-			_, err := svc.UpdateItem(context.Background(), id, hc.ItemUpdate{Status: &status})
-			return tasks.TaskActionCompleteMsg{Err: err}
+		svc := m.tasksView.Svc()
+		if svc == nil {
+			return m, nil
 		}
-	case act.TypeTasksDelete:
-		return func() tea.Msg {
+		id, title := item.ID, item.Title
+		modal := components.NewConfirmModal(fmt.Sprintf("Delete %q? This cannot be undone.", title))
+		m.confirmModal = &modal
+		m.pendingCmd = func() tea.Msg {
 			err := svc.DeleteItem(context.Background(), id)
 			return tasks.TaskActionCompleteMsg{Err: err}
 		}
+		return m, nil
 	case act.TypeTasksPrune:
-		return func() tea.Msg {
+		svc := m.tasksView.Svc()
+		if svc == nil {
+			return m, nil
+		}
+		repoKey := m.tasksView.RepoKey()
+		modal := components.NewConfirmModal("Remove all done/cancelled items older than 24h?")
+		m.confirmModal = &modal
+		m.pendingCmd = func() tea.Msg {
 			_, err := svc.Prune(context.Background(), hc.PruneOpts{
 				OlderThan: 24 * time.Hour,
 				Statuses:  []hc.Status{hc.StatusDone, hc.StatusCancelled},
@@ -232,8 +253,9 @@ func (m HoneycombOnlyModel) executeConfirmedAction() tea.Cmd {
 			})
 			return tasks.TaskActionCompleteMsg{Err: err}
 		}
+		return m, nil
 	default:
-		return nil
+		return m, nil
 	}
 }
 
@@ -292,9 +314,10 @@ func (m HoneycombOnlyModel) View() tea.View {
 		return tea.NewView("")
 	}
 	content := m.renderHeader() + "\n" + m.tasksView.View()
-	if m.confirming {
-		content += "\n" + m.confirmMsg
+	if m.confirmModal != nil {
+		content += "\n" + m.confirmModal.View()
 	}
+	content = m.toastView.Overlay(content, m.width, m.height)
 	if m.helpDialog != nil {
 		content = m.helpDialog.Overlay(content, m.width, m.height)
 	}
