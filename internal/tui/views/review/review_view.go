@@ -223,7 +223,7 @@ func (v *View) IsFullScreen() bool {
 
 // HasActiveEditor returns true if an input field or overlay has focus.
 func (v *View) HasActiveEditor() bool {
-	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil || v.finalizationModal != nil
+	return v.searchMode || v.treeSearchMode || v.commentModal != nil || v.helpDialog != nil || v.finalizationModal != nil || v.confirmModal != nil
 }
 
 // ContextDir returns the current context directory.
@@ -439,7 +439,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 		}
 
 		// Toggle help dialog.
-		if msg.String() == "?" && !v.treeSearchMode && !v.searchMode {
+		if msg.String() == "?" && !v.treeSearchMode && !v.searchMode && v.commentModal == nil {
 			d := components.NewHelpDialog("Keyboard Shortcuts", v.HelpSections(), v.width, v.height)
 			v.helpDialog = d
 			return v, nil
