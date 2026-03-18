@@ -35,12 +35,22 @@ func (p pickItem) DisplayName() string {
 	return p.Session.Name
 }
 
+// statusKey returns the map key used for status lookups.
+// Window items use "sessionID/windowIndex", others use "sessionID".
+func (p pickItem) statusKey() string {
+	if p.WindowIndex != "" {
+		return p.Session.ID + "/" + p.WindowIndex
+	}
+	return p.Session.ID
+}
+
 // statusTickMsg triggers a terminal status refresh cycle.
 type statusTickMsg struct{}
 
-// statusRefreshMsg carries refreshed terminal statuses for all sessions.
+// statusRefreshMsg carries refreshed terminal statuses and expanded items.
 type statusRefreshMsg struct {
-	statuses map[string]terminal.Status
+	statuses map[string]terminal.Status // keyed by statusKey()
+	items    []pickItem                 // expanded item list (nil = no change)
 }
 
 // pickModel is the Bubble Tea model for the session picker.
@@ -98,6 +108,10 @@ func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case statusRefreshMsg:
 		m.statuses = msg.statuses
+		if msg.items != nil {
+			m.items = msg.items
+			m.applyFilter()
+		}
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -179,7 +193,7 @@ func (m pickModel) View() tea.View {
 
 			// Status indicator from live polling
 			status := terminal.StatusMissing
-			if s, ok := m.statuses[item.Session.ID]; ok {
+			if s, ok := m.statuses[item.statusKey()]; ok {
 				status = s
 			}
 			indicator := styles.RenderStatusIndicator(status)
@@ -221,28 +235,81 @@ func tickCmd(d time.Duration) tea.Cmd {
 }
 
 // refreshStatusCmd returns a command that refreshes terminal statuses for all items.
+// It also expands multi-window sessions into individual window rows.
 func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 	return func() tea.Msg {
 		if mgr == nil || !mgr.HasEnabledIntegrations() {
-			return statusRefreshMsg{}
+			return statusRefreshMsg{items: items}
 		}
 		mgr.RefreshAll()
+
 		statuses := make(map[string]terminal.Status)
+		var expanded []pickItem
 		ctx := context.Background()
+
 		for _, item := range items {
-			info, integration, err := mgr.DiscoverSession(ctx, item.Session.Slug, item.Session.Metadata)
+			// Skip window sub-items; we only expand from base session items
+			if item.WindowIndex != "" {
+				continue
+			}
+
+			metadata := item.Session.Metadata
+			if item.Session.Path != "" {
+				metadata = make(map[string]string, len(item.Session.Metadata)+1)
+				for k, v := range item.Session.Metadata {
+					metadata[k] = v
+				}
+				metadata["_session_path"] = item.Session.Path
+			}
+
+			info, integration, err := mgr.DiscoverSession(ctx, item.Session.Slug, metadata)
 			if err != nil || info == nil || integration == nil {
 				statuses[item.Session.ID] = terminal.StatusMissing
+				expanded = append(expanded, item)
 				continue
 			}
-			status, err := integration.GetStatus(ctx, info)
-			if err != nil {
-				statuses[item.Session.ID] = terminal.StatusMissing
+
+			// Get overall status
+			status, sErr := integration.GetStatus(ctx, info)
+			if sErr != nil {
+				status = terminal.StatusMissing
+			}
+
+			// Try multi-window expansion
+			disc, ok := integration.(terminal.AllWindowsDiscoverer)
+			if !ok {
+				statuses[item.Session.ID] = status
+				expanded = append(expanded, item)
 				continue
 			}
-			statuses[item.Session.ID] = status
+
+			allInfos, dErr := disc.DiscoverAllWindows(ctx, item.Session.Slug, metadata)
+			if dErr != nil || len(allInfos) <= 1 {
+				// Single window or error — keep as single item
+				statuses[item.Session.ID] = status
+				expanded = append(expanded, item)
+				continue
+			}
+
+			// Multi-window: expand into individual window rows
+			for _, wi := range allInfos {
+				wStatus, wErr := integration.GetStatus(ctx, wi)
+				if wErr != nil {
+					wStatus = terminal.StatusMissing
+				}
+
+				windowItem := pickItem{
+					Session:     item.Session,
+					WindowName:  wi.WindowName,
+					WindowIndex: wi.Pane,
+					IsCurrent:   item.IsCurrent,
+				}
+				statuses[windowItem.statusKey()] = wStatus
+				expanded = append(expanded, windowItem)
+			}
 		}
-		return statusRefreshMsg{statuses: statuses}
+
+		return statusRefreshMsg{statuses: statuses, items: expanded}
 	}
 }
 
@@ -283,24 +350,36 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			}
 
 			slug := result.selected.Session.Slug
-			return switchTmux(slug)
+			return switchTmux(slug, result.selected.WindowName)
 		},
 	}
 }
 
 // switchTmux switches to or attaches the named tmux session.
-func switchTmux(name string) error {
+// If windowName is non-empty, it also selects that window after switching.
+func switchTmux(name string, windowName string) error {
 	if strings.TrimSpace(os.Getenv("TMUX")) != "" {
 		cmd := exec.Command("tmux", "switch-client", "-t", name)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+	} else {
+		cmd := exec.Command("tmux", "attach-session", "-t", name)
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return err
+		}
 	}
 
-	cmd := exec.Command("tmux", "attach-session", "-t", name)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-	return cmd.Run()
+	if windowName != "" {
+		// Best-effort window selection after switching
+		cmd := exec.Command("tmux", "select-window", "-t", name+":"+windowName)
+		_ = cmd.Run()
+	}
+	return nil
 }
