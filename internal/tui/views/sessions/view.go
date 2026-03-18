@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
@@ -160,7 +161,7 @@ func New(opts ViewOpts) *View {
 	focusInput.SetStyles(focusInputStyles)
 
 	// Detect current tmux session to prevent recursive preview
-	currentTmux := DetectCurrentTmuxSession()
+	currentTmux := tmux.DetectCurrentTmuxSession()
 
 	previewTemplates := ParsePreviewTemplates(
 		cfg.Views.Sessions.PreviewTitle,

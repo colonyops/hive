@@ -42,3 +42,8 @@ type Integration interface {
 	// GetStatus returns the current status of a previously discovered session.
 	GetStatus(ctx context.Context, info *SessionInfo) (Status, error)
 }
+
+// AllWindowsDiscoverer is implemented by integrations that can return all windows.
+type AllWindowsDiscoverer interface {
+	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
+}

@@ -34,11 +34,6 @@ type TerminalStatus struct {
 	Windows     []WindowStatus // per-window statuses (populated only for multi-window sessions)
 }
 
-// allWindowsDiscoverer is implemented by integrations that can return all windows.
-type allWindowsDiscoverer interface {
-	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error)
-}
-
 // TerminalStatusBatchCompleteMsg is sent when all terminal status fetches complete.
 type TerminalStatusBatchCompleteMsg struct {
 	Results map[string]TerminalStatus // sessionID -> status
@@ -134,7 +129,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	status.PaneContent = info.PaneContent
 
 	// Discover all windows if the integration supports it.
-	if disc, ok := integration.(allWindowsDiscoverer); ok {
+	if disc, ok := integration.(terminal.AllWindowsDiscoverer); ok {
 		allInfos, discErr := disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
 		if discErr != nil {
 			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
