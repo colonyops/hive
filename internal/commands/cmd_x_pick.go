@@ -5,18 +5,45 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"sort"
 	"strings"
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/urfave/cli/v3"
 )
+
+const (
+	recentsTTL       = 30 * time.Minute
+	recentsKeyPrefix = "picker.recent."
+)
+
+func loadRecents(ctx context.Context, kvStore kv.KV) map[string]time.Time {
+	keys, err := kvStore.ListKeys(ctx)
+	if err != nil {
+		return nil
+	}
+	recents := make(map[string]time.Time)
+	for _, key := range keys {
+		if !strings.HasPrefix(key, recentsKeyPrefix) {
+			continue
+		}
+		sessionID := strings.TrimPrefix(key, recentsKeyPrefix)
+		entry, err := kvStore.GetRaw(ctx, key)
+		if err != nil {
+			continue
+		}
+		recents[sessionID] = entry.UpdatedAt
+	}
+	return recents
+}
 
 // pickItem represents a selectable item in the session picker.
 type pickItem struct {
@@ -66,9 +93,11 @@ type pickModel struct {
 	termMgr      *terminal.Manager
 	statuses     map[string]terminal.Status
 	pollInterval time.Duration
+	recentsMap   map[string]time.Time
+	kvStore      kv.KV
 }
 
-func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration) pickModel {
+func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration, kvStore kv.KV, recentsMap map[string]time.Time) pickModel {
 	ti := textinput.New()
 	ti.Placeholder = "search sessions..."
 	ti.Prompt = "> "
@@ -87,6 +116,8 @@ func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manage
 		termMgr:      termMgr,
 		statuses:     make(map[string]terminal.Status),
 		pollInterval: pollInterval,
+		kvStore:      kvStore,
+		recentsMap:   recentsMap,
 	}
 
 	return m
@@ -162,9 +193,49 @@ func (m *pickModel) applyFilter() {
 		m.filtered = filtered
 	}
 
+	sortItems(m.filtered, m.statuses, m.recentsMap)
+
 	// Clamp cursor
 	if m.cursor >= len(m.filtered) {
 		m.cursor = max(len(m.filtered)-1, 0)
+	}
+}
+
+func sortItems(items []pickItem, statuses map[string]terminal.Status, recentsMap map[string]time.Time) {
+	sort.SliceStable(items, func(i, j int) bool {
+		a, b := items[i], items[j]
+		aRecent := recentsMap[a.Session.ID]
+		bRecent := recentsMap[b.Session.ID]
+
+		// Recents first
+		aIsRecent := !aRecent.IsZero()
+		bIsRecent := !bRecent.IsZero()
+		if aIsRecent != bIsRecent {
+			return aIsRecent
+		}
+		if aIsRecent && bIsRecent {
+			return aRecent.After(bRecent) // most recent first
+		}
+
+		// Then by status priority
+		aStatus := statuses[a.statusKey()]
+		bStatus := statuses[b.statusKey()]
+		return statusSortOrder(aStatus) < statusSortOrder(bStatus)
+	})
+}
+
+func statusSortOrder(s terminal.Status) int {
+	switch s {
+	case terminal.StatusApproval:
+		return 0
+	case terminal.StatusActive:
+		return 1
+	case terminal.StatusReady:
+		return 2
+	case terminal.StatusMissing:
+		return 3
+	default:
+		return 4
 	}
 }
 
@@ -212,6 +283,10 @@ func (m pickModel) View() tea.View {
 				b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("%s %s  %s", indicator, name, shortID)))
 			} else {
 				fmt.Fprintf(&b, "%s %s  %s", indicator, name, shortID)
+			}
+
+			if item.IsRecent {
+				fmt.Fprintf(&b, " %s", styles.TextWarningStyle.Render("◆"))
 			}
 
 			b.WriteString("\n")
@@ -303,6 +378,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 					WindowName:  wi.WindowName,
 					WindowIndex: wi.Pane,
 					IsCurrent:   item.IsCurrent,
+					IsRecent:    item.IsRecent,
 				}
 				statuses[windowItem.statusKey()] = wStatus
 				expanded = append(expanded, windowItem)
@@ -337,7 +413,14 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				})
 			}
 
-			m := newPickModel(items, currentSlug, cmd.app.Terminal, cmd.app.Config.Tmux.PollInterval)
+			recents := loadRecents(ctx, cmd.app.KV)
+			for i := range items {
+				if _, ok := recents[items[i].Session.ID]; ok {
+					items[i].IsRecent = true
+				}
+			}
+
+			m := newPickModel(items, currentSlug, cmd.app.Terminal, cmd.app.Config.Tmux.PollInterval, cmd.app.KV, recents)
 			p := tea.NewProgram(m)
 			finalModel, err := p.Run()
 			if err != nil {
@@ -348,6 +431,8 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			if !ok || result.selected == nil {
 				return nil
 			}
+
+			_ = cmd.app.KV.SetTTL(ctx, recentsKeyPrefix+result.selected.Session.ID, result.selected.Session.Name, recentsTTL)
 
 			slug := result.selected.Session.Slug
 			return switchTmux(slug, result.selected.WindowName)
