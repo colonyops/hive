@@ -17,6 +17,7 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/tmux"
+	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
 
@@ -95,9 +96,10 @@ type pickModel struct {
 	pollInterval time.Duration
 	recentsMap   map[string]time.Time
 	kvStore      kv.KV
+	statusFilter string // "" = all, or "active", "approval", "ready", "missing"
 }
 
-func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration, kvStore kv.KV, recentsMap map[string]time.Time) pickModel {
+func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration, kvStore kv.KV, recentsMap map[string]time.Time, statusFilter string) pickModel {
 	ti := textinput.New()
 	ti.Placeholder = "search sessions..."
 	ti.Prompt = "> "
@@ -118,6 +120,7 @@ func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manage
 		pollInterval: pollInterval,
 		kvStore:      kvStore,
 		recentsMap:   recentsMap,
+		statusFilter: statusFilter,
 	}
 
 	return m
@@ -163,6 +166,18 @@ func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				m.selected = &item
 			}
 			return m, tea.Quit
+		case "tab":
+			statusCycle := []string{"", "active", "approval", "ready", "missing"}
+			idx := 0
+			for i, s := range statusCycle {
+				if s == m.statusFilter {
+					idx = i
+					break
+				}
+			}
+			m.statusFilter = statusCycle[(idx+1)%len(statusCycle)]
+			m.applyFilter()
+			return m, nil
 		case "esc", "ctrl+c":
 			return m, tea.Quit
 		}
@@ -191,6 +206,17 @@ func (m *pickModel) applyFilter() {
 			}
 		}
 		m.filtered = filtered
+	}
+
+	if m.statusFilter != "" {
+		var statusFiltered []pickItem
+		for _, item := range m.filtered {
+			s := m.statuses[item.statusKey()]
+			if string(s) == m.statusFilter {
+				statusFiltered = append(statusFiltered, item)
+			}
+		}
+		m.filtered = statusFiltered
 	}
 
 	sortItems(m.filtered, m.statuses, m.recentsMap)
@@ -246,6 +272,11 @@ func (m pickModel) View() tea.View {
 	b.WriteString(m.input.View())
 	b.WriteString("\n")
 
+	if m.statusFilter != "" {
+		b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("  [filter: %s]", m.statusFilter)))
+		b.WriteString("\n")
+	}
+
 	if len(m.filtered) == 0 {
 		if len(m.items) == 0 {
 			b.WriteString(styles.TextMutedStyle.Render("  No active sessions"))
@@ -295,7 +326,7 @@ func (m pickModel) View() tea.View {
 
 	// Help line
 	b.WriteString("\n")
-	b.WriteString(styles.TextMutedStyle.Render("  ↑↓ navigate · enter select · esc cancel"))
+	b.WriteString(styles.TextMutedStyle.Render("  ↑↓ navigate · tab filter · enter select · esc cancel"))
 
 	v := tea.NewView(b.String())
 	v.AltScreen = true
@@ -390,10 +421,38 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 }
 
 func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
+	var (
+		flagStatus      string
+		flagRepo        string
+		flagPrint       bool
+		flagFormat      string
+		flagHideCurrent bool
+		flagNoRecents   bool
+	)
+
 	return &cli.Command{
 		Name:  "pick",
 		Usage: "Fuzzy-pick a session and switch tmux to it",
+		Flags: []cli.Flag{
+			&cli.StringFlag{Name: "status", Aliases: []string{"s"}, Usage: "Filter by terminal status (active, approval, ready, missing)", Destination: &flagStatus},
+			&cli.StringFlag{Name: "repo", Aliases: []string{"r"}, Usage: "Filter by repository remote URL (substring match)", Destination: &flagRepo},
+			&cli.BoolFlag{Name: "print", Aliases: []string{"p"}, Usage: "Print selected session info instead of switching tmux", Destination: &flagPrint},
+			&cli.StringFlag{Name: "format", Aliases: []string{"f"}, Value: "id", Usage: "Output format for --print (id, name, path, json)", Destination: &flagFormat},
+			&cli.BoolFlag{Name: "hide-current", Usage: "Hide the current tmux session from the list", Destination: &flagHideCurrent},
+			&cli.BoolFlag{Name: "no-recents", Usage: "Don't prioritize recently-used sessions", Destination: &flagNoRecents},
+		},
 		Action: func(ctx context.Context, c *cli.Command) error {
+			// Validate flags
+			validStatuses := map[string]bool{"active": true, "approval": true, "ready": true, "missing": true}
+			if flagStatus != "" && !validStatuses[flagStatus] {
+				return fmt.Errorf("invalid --status %q: valid values are active, approval, ready, missing", flagStatus)
+			}
+
+			validFormats := map[string]bool{"id": true, "name": true, "path": true, "json": true}
+			if !validFormats[flagFormat] {
+				return fmt.Errorf("invalid --format %q: valid values are id, name, path, json", flagFormat)
+			}
+
 			sessions, err := cmd.app.Sessions.ListSessions(ctx)
 			if err != nil {
 				return fmt.Errorf("listing sessions: %w", err)
@@ -407,20 +466,29 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				if s.State != session.StateActive {
 					continue
 				}
+				if flagRepo != "" && !strings.Contains(strings.ToLower(s.Remote), strings.ToLower(flagRepo)) {
+					continue
+				}
+				if flagHideCurrent && s.Slug == currentSlug {
+					continue
+				}
 				items = append(items, pickItem{
 					Session:   s,
 					IsCurrent: s.Slug == currentSlug,
 				})
 			}
 
-			recents := loadRecents(ctx, cmd.app.KV)
-			for i := range items {
-				if _, ok := recents[items[i].Session.ID]; ok {
-					items[i].IsRecent = true
+			var recents map[string]time.Time
+			if !flagNoRecents {
+				recents = loadRecents(ctx, cmd.app.KV)
+				for i := range items {
+					if _, ok := recents[items[i].Session.ID]; ok {
+						items[i].IsRecent = true
+					}
 				}
 			}
 
-			m := newPickModel(items, currentSlug, cmd.app.Terminal, cmd.app.Config.Tmux.PollInterval, cmd.app.KV, recents)
+			m := newPickModel(items, currentSlug, cmd.app.Terminal, cmd.app.Config.Tmux.PollInterval, cmd.app.KV, recents, flagStatus)
 			p := tea.NewProgram(m)
 			finalModel, err := p.Run()
 			if err != nil {
@@ -433,6 +501,20 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			}
 
 			_ = cmd.app.KV.SetTTL(ctx, recentsKeyPrefix+result.selected.Session.ID, result.selected.Session.Name, recentsTTL)
+
+			if flagPrint {
+				switch flagFormat {
+				case "id":
+					_, err = fmt.Fprintln(c.Root().Writer, result.selected.Session.ID)
+				case "name":
+					_, err = fmt.Fprintln(c.Root().Writer, result.selected.Session.Name)
+				case "path":
+					_, err = fmt.Fprintln(c.Root().Writer, result.selected.Session.Path)
+				case "json":
+					err = iojson.WriteLine(c.Root().Writer, result.selected.Session)
+				}
+				return err
+			}
 
 			slug := result.selected.Session.Slug
 			return switchTmux(slug, result.selected.WindowName)
