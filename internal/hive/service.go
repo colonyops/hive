@@ -83,6 +83,7 @@ type SessionService struct {
 	recycler   *Recycler
 	hookRunner *HookRunner
 	fileCopier *FileCopier
+	renderer   *tmpl.Renderer
 	out        *switchWriter
 	err        *switchWriter
 	bareMu     sync.Map // map[remote → *sync.Mutex]
@@ -114,6 +115,7 @@ func NewSessionService(
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
 		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, out, err),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
+		renderer:   renderer,
 	}
 }
 
@@ -260,6 +262,20 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 			}
 			writeProgressf(progress, "Adding worktree...")
 			branch := "hive-" + dirID
+			if tmplStr := s.config.GetBranchTemplate(remote); tmplStr != "" {
+				owner, repo := git.ExtractOwnerRepo(remote)
+				rendered, err := s.renderer.Render(tmplStr, config.BranchTemplateData{
+					Name:  opts.Name,
+					Slug:  slug,
+					Owner: owner,
+					Repo:  repo,
+				})
+				if err != nil {
+					s.log.Warn().Err(err).Str("template", tmplStr).Msg("branch_template render failed, using default branch name")
+				} else {
+					branch = rendered
+				}
+			}
 			if err := s.git.WorktreeAdd(ctx, bareDir, path, branch); err != nil {
 				return nil, fmt.Errorf("worktree add: %w", err)
 			}

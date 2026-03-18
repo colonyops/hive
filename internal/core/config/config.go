@@ -571,6 +571,10 @@ type Rule struct {
 	Recycle []string `json:"recycle,omitempty" yaml:"recycle,omitempty"`
 	// CloneStrategy overrides the clone strategy for matching repos ("full" or "worktree").
 	CloneStrategy string `json:"clone_strategy,omitempty" yaml:"clone_strategy,omitempty"`
+	// BranchTemplate is a Go template for the git branch name when using the worktree
+	// clone strategy. Available variables: .Name, .Slug, .Owner, .Repo.
+	// Defaults to "hive-<randomID>" when empty.
+	BranchTemplate string `json:"branch_template,omitempty" yaml:"branch_template,omitempty"`
 }
 
 // Keybinding defines a TUI keybinding that references a UserCommand.
@@ -1219,6 +1223,19 @@ func (c *Config) GetCloneStrategy(remote string) string {
 		}
 	}
 	return strategy
+}
+
+// GetBranchTemplate returns the branch_template for the given remote URL.
+// The last matching rule with a branch_template set wins.
+// Returns "" if no rule defines a template (caller uses the default "hive-<id>" branch).
+func (c *Config) GetBranchTemplate(remote string) string {
+	var tmpl string
+	for _, rule := range c.Rules {
+		if rule.Matches(remote) && rule.BranchTemplate != "" {
+			tmpl = rule.BranchTemplate
+		}
+	}
+	return tmpl
 }
 
 // ValidateCloneStrategy returns an error if s is not a valid clone strategy value.

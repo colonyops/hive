@@ -43,6 +43,7 @@ rules:
 | ---------------- | ---------------- | ------------------ | ------------------------------------------------- |
 | `pattern`        | string           | `""`               | Regex pattern to match remote URL                 |
 | `clone_strategy` | string           | —                  | Override clone strategy for matching repos: `full` or `worktree` |
+| `branch_template` | string          | —                  | Go template for the git branch name (worktree only). Variables: `.Name`, `.Slug`, `.Owner`, `.Repo` |
 | `windows`        | []WindowConfig   | see below          | Declarative tmux window layout (recommended)      |
 | `spawn`          | []string         | —                  | Shell commands run after session creation (legacy) |
 | `batch_spawn`    | []string         | —                  | Shell commands for batch session creation (legacy) |
@@ -121,6 +122,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
 | `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                                       |
 | `rules[].recycle`      | `.DefaultBranch`                                                    |
+| `rules[].branch_template` | `.Name`, `.Slug`, `.Owner`, `.Repo`                            |
 | `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
 
 !!! warning "Always use `shq` for shell quoting"
