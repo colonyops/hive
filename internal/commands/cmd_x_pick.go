@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"os/exec"
 	"sort"
@@ -12,10 +13,12 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
@@ -84,7 +87,8 @@ type statusRefreshMsg struct {
 // pickModel is the Bubble Tea model for the session picker.
 type pickModel struct {
 	input        textinput.Model
-	items        []pickItem
+	baseItems    []pickItem // original per-session items, used for polling
+	items        []pickItem // display items (may include expanded window sub-items)
 	filtered     []pickItem
 	cursor       int
 	selected     *pickItem
@@ -93,6 +97,7 @@ type pickModel struct {
 	currentSlug  string
 	termMgr      *terminal.Manager
 	statuses     map[string]terminal.Status
+	statusLoaded bool // true after first status poll completes
 	pollInterval time.Duration
 	recentsMap   map[string]time.Time
 	kvStore      kv.KV
@@ -101,17 +106,22 @@ type pickModel struct {
 
 func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration, kvStore kv.KV, recentsMap map[string]time.Time, statusFilter string) pickModel {
 	ti := textinput.New()
-	ti.Placeholder = "search sessions..."
-	ti.Prompt = "> "
+	ti.Placeholder = "filter..."
+	ti.Prompt = "/ "
 	ti.CharLimit = 64
 
 	inputStyles := textinput.DefaultStyles(true)
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	inputStyles.Focused.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	ti.SetStyles(inputStyles)
+	ti.Focus() // Must focus after SetStyles; Init() has value receiver so focus there is lost
+
+	// Sort once: top 3 recents, then alphabetical. This order stays stable.
+	sortItemsInitial(items, recentsMap)
 
 	m := pickModel{
 		input:        ti,
+		baseItems:    items,
 		items:        items,
 		filtered:     items,
 		currentSlug:  currentSlug,
@@ -138,14 +148,15 @@ func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, nil
 
 	case statusTickMsg:
-		return m, tea.Batch(refreshStatusCmd(m.termMgr, m.items), tickCmd(m.pollInterval))
+		return m, tea.Batch(refreshStatusCmd(m.termMgr, m.baseItems), tickCmd(m.pollInterval))
 
 	case statusRefreshMsg:
 		m.statuses = msg.statuses
+		m.statusLoaded = true
 		if msg.items != nil {
 			m.items = msg.items
-			m.applyFilter()
 		}
+		m.applyFilter()
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -167,7 +178,8 @@ func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 			return m, tea.Quit
 		case "tab":
-			statusCycle := []string{"", "active", "approval", "ready", "missing"}
+			// "" = hide missing (default), "all" = show everything, then specific statuses
+			statusCycle := []string{"", "all", "active", "approval", "ready", "missing"}
 			idx := 0
 			for i, s := range statusCycle {
 				if s == m.statusFilter {
@@ -201,25 +213,39 @@ func (m *pickModel) applyFilter() {
 	} else {
 		var filtered []pickItem
 		for _, item := range m.items {
-			if strings.Contains(strings.ToLower(item.DisplayName()), query) {
+			searchable := strings.ToLower(git.ExtractRepoName(item.Session.Remote) + " " + item.DisplayName())
+			if strings.Contains(searchable, query) {
 				filtered = append(filtered, item)
 			}
 		}
 		m.filtered = filtered
 	}
 
-	if m.statusFilter != "" {
+	switch m.statusFilter {
+	case "all":
+		// Show everything, no further filtering
+	case "":
+		// Default: hide sessions with no tmux session (StatusMissing).
+		// If statuses haven't loaded yet (empty map), show all items.
+		if len(m.statuses) > 0 {
+			var visible []pickItem
+			for _, item := range m.filtered {
+				if m.statuses[item.statusKey()] != terminal.StatusMissing {
+					visible = append(visible, item)
+				}
+			}
+			m.filtered = visible
+		}
+	default:
+		// Specific status filter
 		var statusFiltered []pickItem
 		for _, item := range m.filtered {
-			s := m.statuses[item.statusKey()]
-			if string(s) == m.statusFilter {
+			if string(m.statuses[item.statusKey()]) == m.statusFilter {
 				statusFiltered = append(statusFiltered, item)
 			}
 		}
 		m.filtered = statusFiltered
 	}
-
-	sortItems(m.filtered, m.statuses, m.recentsMap)
 
 	// Clamp cursor
 	if m.cursor >= len(m.filtered) {
@@ -227,41 +253,38 @@ func (m *pickModel) applyFilter() {
 	}
 }
 
-func sortItems(items []pickItem, statuses map[string]terminal.Status, recentsMap map[string]time.Time) {
+const maxRecents = 3
+
+// sortItemsInitial sorts items once at startup: top N recents first (by time),
+// then everything else alphabetically. This order is stable across status polls.
+func sortItemsInitial(items []pickItem, recentsMap map[string]time.Time) {
 	sort.SliceStable(items, func(i, j int) bool {
 		a, b := items[i], items[j]
 		aRecent := recentsMap[a.Session.ID]
 		bRecent := recentsMap[b.Session.ID]
-
-		// Recents first
 		aIsRecent := !aRecent.IsZero()
 		bIsRecent := !bRecent.IsZero()
+
 		if aIsRecent != bIsRecent {
 			return aIsRecent
 		}
 		if aIsRecent && bIsRecent {
-			return aRecent.After(bRecent) // most recent first
+			return aRecent.After(bRecent)
 		}
 
-		// Then by status priority
-		aStatus := statuses[a.statusKey()]
-		bStatus := statuses[b.statusKey()]
-		return statusSortOrder(aStatus) < statusSortOrder(bStatus)
+		// Alphabetical by name
+		return strings.ToLower(a.DisplayName()) < strings.ToLower(b.DisplayName())
 	})
-}
 
-func statusSortOrder(s terminal.Status) int {
-	switch s {
-	case terminal.StatusApproval:
-		return 0
-	case terminal.StatusActive:
-		return 1
-	case terminal.StatusReady:
-		return 2
-	case terminal.StatusMissing:
-		return 3
-	default:
-		return 4
+	// Cap IsRecent to top N
+	recentCount := 0
+	for i := range items {
+		if items[i].IsRecent {
+			recentCount++
+			if recentCount > maxRecents {
+				items[i].IsRecent = false
+			}
+		}
 	}
 }
 
@@ -277,18 +300,29 @@ func (m pickModel) View() tea.View {
 		b.WriteString("\n")
 	}
 
-	if len(m.filtered) == 0 {
+	switch {
+	case !m.statusLoaded:
+		b.WriteString(styles.TextMutedStyle.Render("  Loading..."))
+		b.WriteString("\n")
+	case len(m.filtered) == 0:
 		if len(m.items) == 0 {
 			b.WriteString(styles.TextMutedStyle.Render("  No active sessions"))
 		} else {
 			b.WriteString(styles.TextMutedStyle.Render("  No matches"))
 		}
 		b.WriteString("\n")
-	} else {
+	default:
+		// Layout: "› [>] name···        repo #abcd ◆"
+		// Fixed-width parts: cursor(2) + status(3) + spaces(3) + #id(5) = 13
+		// Right side (repo + #id) is right-aligned; name fills remaining space.
+		const fixedWidth = 13 // cursor(2) + status(3) + 3 gaps + #id(5)
+
 		for i, item := range m.filtered {
-			// Cursor indicator
-			if i == m.cursor {
-				b.WriteString(styles.TextPrimaryStyle.Render("► "))
+			isSelected := i == m.cursor
+
+			// Cursor indicator (Secondary/cyan, matching tree view's SelectedBorder)
+			if isSelected {
+				b.WriteString(styles.TextSecondaryStyle.Render(styles.IconSelector) + " ")
 			} else {
 				b.WriteString("  ")
 			}
@@ -300,24 +334,53 @@ func (m pickModel) View() tea.View {
 			}
 			indicator := styles.RenderStatusIndicator(status)
 
-			// Session name
 			name := item.DisplayName()
-
-			// Short ID: last 4 chars
+			repo := git.ExtractRepoName(item.Session.Remote)
 			id := item.Session.ID
 			if len(id) > 4 {
 				id = id[len(id)-4:]
 			}
-			shortID := styles.TextMutedStyle.Render("#" + id)
 
-			if item.IsCurrent {
-				b.WriteString(styles.TextMutedStyle.Render(fmt.Sprintf("%s %s  %s", indicator, name, shortID)))
-			} else {
-				fmt.Fprintf(&b, "%s %s  %s", indicator, name, shortID)
+			// Diamond goes after name, so account for it in name column width
+			recentSuffix := ""
+			recentWidth := 0
+			if item.IsRecent {
+				recentSuffix = " ◆"
+				recentWidth = 2
 			}
 
-			if item.IsRecent {
-				fmt.Fprintf(&b, " %s", styles.TextWarningStyle.Render("◆"))
+			// Right-side text (repo + #id), right-aligned
+			rightText := repo + " #" + id
+			rightWidth := len(rightText)
+
+			// Available width for the name + recent indicator
+			availWidth := max(m.width-fixedWidth-rightWidth-recentWidth, 10)
+
+			// Truncate name if needed
+			if len(name) > availWidth {
+				name = name[:availWidth-1] + "…"
+			}
+			namePad := strings.Repeat(" ", max(availWidth-len(name), 0))
+
+			// Selected item: name in Primary+Bold (matches tree view Selected style)
+			nameStyle := styles.TextForegroundStyle
+			if isSelected {
+				nameStyle = styles.TextPrimaryBoldStyle
+			}
+
+			if item.IsCurrent {
+				mutedStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted).Faint(true)
+				fmt.Fprintf(&b, "%s %s", indicator, mutedStyle.Render(name))
+				if recentSuffix != "" {
+					b.WriteString(styles.TextWarningStyle.Render(recentSuffix))
+				}
+				fmt.Fprintf(&b, "%s %s %s", namePad, mutedStyle.Render(repo), mutedStyle.Render("#"+id))
+			} else {
+				fmt.Fprintf(&b, "%s %s", indicator, nameStyle.Render(name))
+				if recentSuffix != "" {
+					b.WriteString(styles.TextWarningStyle.Render(recentSuffix))
+				}
+				fmt.Fprintf(&b, "%s %s %s", namePad, styles.TextMutedStyle.Render(repo), styles.TextSecondaryStyle.Render("#"+id))
 			}
 
 			b.WriteString("\n")
@@ -362,9 +425,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 			metadata := item.Session.Metadata
 			if item.Session.Path != "" {
 				metadata = make(map[string]string, len(item.Session.Metadata)+1)
-				for k, v := range item.Session.Metadata {
-					metadata[k] = v
-				}
+				maps.Copy(metadata, item.Session.Metadata)
 				metadata["_session_path"] = item.Session.Path
 			}
 
@@ -443,9 +504,9 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
 			// Validate flags
-			validStatuses := map[string]bool{"active": true, "approval": true, "ready": true, "missing": true}
+			validStatuses := map[string]bool{"all": true, "active": true, "approval": true, "ready": true, "missing": true}
 			if flagStatus != "" && !validStatuses[flagStatus] {
-				return fmt.Errorf("invalid --status %q: valid values are active, approval, ready, missing", flagStatus)
+				return fmt.Errorf("invalid --status %q: valid values are all, active, approval, ready, missing", flagStatus)
 			}
 
 			validFormats := map[string]bool{"id": true, "name": true, "path": true, "json": true}
@@ -488,7 +549,23 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				}
 			}
 
-			m := newPickModel(items, currentSlug, cmd.app.Terminal, cmd.app.Config.Tmux.PollInterval, cmd.app.KV, recents, flagStatus)
+			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
+			termMgr := terminal.NewManager([]string{"tmux"})
+			tmuxIntegration := terminaltmux.New(cmd.app.Config.Tmux.PreviewWindowMatcher)
+			if tmuxIntegration.Available() {
+				termMgr.Register(tmuxIntegration)
+			}
+
+			// Pre-fetch statuses synchronously so the first render has data
+			initialRefresh := refreshStatusCmd(termMgr, items)().(statusRefreshMsg)
+			if initialRefresh.items != nil {
+				items = initialRefresh.items
+			}
+
+			m := newPickModel(items, currentSlug, termMgr, cmd.app.Config.Tmux.PollInterval, cmd.app.KV, recents, flagStatus)
+			m.statuses = initialRefresh.statuses
+			m.statusLoaded = true
+			m.applyFilter()
 			p := tea.NewProgram(m)
 			finalModel, err := p.Run()
 			if err != nil {
