@@ -6,12 +6,14 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/urfave/cli/v3"
 )
@@ -33,19 +35,30 @@ func (p pickItem) DisplayName() string {
 	return p.Session.Name
 }
 
-// pickModel is the Bubble Tea model for the session picker.
-type pickModel struct {
-	input       textinput.Model
-	items       []pickItem
-	filtered    []pickItem
-	cursor      int
-	selected    *pickItem
-	width       int
-	height      int
-	currentSlug string
+// statusTickMsg triggers a terminal status refresh cycle.
+type statusTickMsg struct{}
+
+// statusRefreshMsg carries refreshed terminal statuses for all sessions.
+type statusRefreshMsg struct {
+	statuses map[string]terminal.Status
 }
 
-func newPickModel(items []pickItem, currentSlug string) pickModel {
+// pickModel is the Bubble Tea model for the session picker.
+type pickModel struct {
+	input        textinput.Model
+	items        []pickItem
+	filtered     []pickItem
+	cursor       int
+	selected     *pickItem
+	width        int
+	height       int
+	currentSlug  string
+	termMgr      *terminal.Manager
+	statuses     map[string]terminal.Status
+	pollInterval time.Duration
+}
+
+func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration) pickModel {
 	ti := textinput.New()
 	ti.Placeholder = "search sessions..."
 	ti.Prompt = "> "
@@ -57,17 +70,20 @@ func newPickModel(items []pickItem, currentSlug string) pickModel {
 	ti.SetStyles(inputStyles)
 
 	m := pickModel{
-		input:       ti,
-		items:       items,
-		filtered:    items,
-		currentSlug: currentSlug,
+		input:        ti,
+		items:        items,
+		filtered:     items,
+		currentSlug:  currentSlug,
+		termMgr:      termMgr,
+		statuses:     make(map[string]terminal.Status),
+		pollInterval: pollInterval,
 	}
 
 	return m
 }
 
 func (m pickModel) Init() tea.Cmd {
-	return m.input.Focus()
+	return tea.Batch(m.input.Focus(), tickCmd(m.pollInterval))
 }
 
 func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
@@ -75,6 +91,13 @@ func (m pickModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		m.width = msg.Width
 		m.height = msg.Height
+		return m, nil
+
+	case statusTickMsg:
+		return m, tea.Batch(refreshStatusCmd(m.termMgr, m.items), tickCmd(m.pollInterval))
+
+	case statusRefreshMsg:
+		m.statuses = msg.statuses
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -154,8 +177,12 @@ func (m pickModel) View() tea.View {
 				b.WriteString("  ")
 			}
 
-			// Status indicator (Phase 1: all missing)
-			indicator := styles.StatusIndicatorMissing
+			// Status indicator from live polling
+			status := terminal.StatusMissing
+			if s, ok := m.statuses[item.Session.ID]; ok {
+				status = s
+			}
+			indicator := styles.RenderStatusIndicator(status)
 
 			// Session name
 			name := item.DisplayName()
@@ -186,6 +213,39 @@ func (m pickModel) View() tea.View {
 	return v
 }
 
+// tickCmd returns a command that sends a statusTickMsg after the given duration.
+func tickCmd(d time.Duration) tea.Cmd {
+	return tea.Tick(d, func(time.Time) tea.Msg {
+		return statusTickMsg{}
+	})
+}
+
+// refreshStatusCmd returns a command that refreshes terminal statuses for all items.
+func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
+	return func() tea.Msg {
+		if mgr == nil || !mgr.HasEnabledIntegrations() {
+			return statusRefreshMsg{}
+		}
+		mgr.RefreshAll()
+		statuses := make(map[string]terminal.Status)
+		ctx := context.Background()
+		for _, item := range items {
+			info, integration, err := mgr.DiscoverSession(ctx, item.Session.Slug, item.Session.Metadata)
+			if err != nil || info == nil || integration == nil {
+				statuses[item.Session.ID] = terminal.StatusMissing
+				continue
+			}
+			status, err := integration.GetStatus(ctx, info)
+			if err != nil {
+				statuses[item.Session.ID] = terminal.StatusMissing
+				continue
+			}
+			statuses[item.Session.ID] = status
+		}
+		return statusRefreshMsg{statuses: statuses}
+	}
+}
+
 func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 	return &cli.Command{
 		Name:  "pick",
@@ -210,7 +270,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				})
 			}
 
-			m := newPickModel(items, currentSlug)
+			m := newPickModel(items, currentSlug, cmd.app.Terminal, cmd.app.Config.Tmux.PollInterval)
 			p := tea.NewProgram(m)
 			finalModel, err := p.Run()
 			if err != nil {
