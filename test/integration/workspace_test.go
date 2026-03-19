@@ -5,7 +5,6 @@ package integration
 import (
 	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"testing"
 
@@ -23,15 +22,7 @@ func TestWorkspaceListEmpty(t *testing.T) {
 func TestWorkspaceListJSON(t *testing.T) {
 	h := NewHarness(t)
 
-	// Create a workspace dir containing a git repo
-	wsDir := filepath.Join(h.DataDir(), "workspaces")
-	repoDir := filepath.Join(wsDir, "test-repo")
-	require.NoError(t, os.MkdirAll(repoDir, 0o755))
-
-	// Init git repo and set remote origin
-	runGit(t, repoDir, "init")
-	runGit(t, repoDir, "remote", "add", "origin", "git@github.com:test/repo.git")
-
+	wsDir, repoDir := createWorkspaceRepo(t, "test-repo", "git@github.com:test/repo.git")
 	h.WithConfig(fmt.Sprintf("workspaces:\n  - %s\n", wsDir))
 
 	results, err := h.RunJSONLines("workspace", "list", "--json")
@@ -45,13 +36,7 @@ func TestWorkspaceListJSON(t *testing.T) {
 func TestWorkspaceListTable(t *testing.T) {
 	h := NewHarness(t)
 
-	wsDir := filepath.Join(h.DataDir(), "workspaces")
-	repoDir := filepath.Join(wsDir, "test-repo")
-	require.NoError(t, os.MkdirAll(repoDir, 0o755))
-
-	runGit(t, repoDir, "init")
-	runGit(t, repoDir, "remote", "add", "origin", "git@github.com:test/repo.git")
-
+	wsDir, _ := createWorkspaceRepo(t, "test-repo", "git@github.com:test/repo.git")
 	h.WithConfig(fmt.Sprintf("workspaces:\n  - %s\n", wsDir))
 
 	out, err := h.RunStdout("workspace", "list")
@@ -60,11 +45,14 @@ func TestWorkspaceListTable(t *testing.T) {
 	assert.Contains(t, out, "git@github.com:test/repo.git")
 }
 
-// runGit runs a git command in the given directory.
-func runGit(t *testing.T, dir string, args ...string) {
+// createWorkspaceRepo creates a workspace directory containing a git repo with the given name and remote.
+// Returns (workspaceDir, repoDir).
+func createWorkspaceRepo(t *testing.T, name, remote string) (string, string) {
 	t.Helper()
-	cmd := exec.Command("git", args...)
-	cmd.Dir = dir
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "git %v failed: %s", args, out)
+	wsDir := filepath.Join(t.TempDir(), "workspaces")
+	repoDir := filepath.Join(wsDir, name)
+	require.NoError(t, os.MkdirAll(repoDir, 0o755))
+	runInDir(t, repoDir, "git", "init")
+	runInDir(t, repoDir, "git", "remote", "add", "origin", remote)
+	return wsDir, repoDir
 }

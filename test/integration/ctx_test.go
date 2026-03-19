@@ -3,6 +3,7 @@
 package integration
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -84,4 +85,27 @@ func TestCtxPrune(t *testing.T) {
 	out, err := h.RunInDir(workDir, "ctx", "prune", "--older-than", "1d")
 	require.NoError(t, err, "ctx prune: %s", out)
 	assert.Contains(t, out, "No files older than")
+}
+
+func TestCtxInitWithBaseDir(t *testing.T) {
+	h := NewHarness(t)
+	baseDir := filepath.Join(h.DataDir(), "custom-context")
+	require.NoError(t, os.MkdirAll(baseDir, 0o755))
+
+	h.WithConfig(fmt.Sprintf("context:\n  base_dir: %s\n", baseDir))
+
+	repo := createBareRepo(t, "ctx-basedir-repo")
+	workDir := filepath.Join(t.TempDir(), "work")
+	run(t, "git", "clone", repo, workDir)
+
+	out, err := h.RunInDir(workDir, "ctx", "init")
+	require.NoError(t, err, "ctx init: %s", out)
+	assert.Contains(t, out, "Created symlink")
+
+	// Verify .hive symlink points into custom base dir
+	linkPath := filepath.Join(workDir, ".hive")
+	target, err := os.Readlink(linkPath)
+	require.NoError(t, err, "readlink .hive")
+	assert.True(t, filepath.HasPrefix(target, baseDir),
+		"symlink target %q should be under custom base dir %q", target, baseDir)
 }

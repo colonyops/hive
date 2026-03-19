@@ -150,12 +150,10 @@ func (c *Config) validateContextBaseDir() error {
 		return nil
 	}
 
-	// Reject relative paths that don't start with ~
-	if !filepath.IsAbs(dir) && dir[0] != '~' {
-		return criterio.NewFieldErrors("context.base_dir", fmt.Errorf("must be an absolute path or start with ~, got %q", dir))
-	}
-
 	expanded := pathutil.ExpandHome(dir)
+	if !filepath.IsAbs(expanded) {
+		return criterio.NewFieldErrors("context.base_dir", fmt.Errorf("must be an absolute path or start with ~/, got %q", dir))
+	}
 	return criterio.Run("context.base_dir", expanded, isDirectoryOrNotExist)
 }
 
