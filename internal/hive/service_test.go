@@ -706,6 +706,47 @@ func TestCreateSession_RecycledSessionKeepsPath(t *testing.T) {
 	assert.Equal(t, session.StateActive, sess.State)
 }
 
+func TestCreateSession_DuplicateNameRejected(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+	}
+	svc := newTestService(t, store, cfg)
+
+	// Pre-populate an active session with a known name.
+	require.NoError(t, store.Save(context.Background(), session.Session{
+		ID:     "existing1",
+		Name:   "my-feature",
+		Slug:   "my-feature",
+		State:  session.StateActive,
+		Remote: testRemote,
+	}))
+
+	// Attempt to create another session with the same name.
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "my-feature",
+		Remote: testRemote,
+	})
+	require.ErrorIs(t, err, session.ErrDuplicateName)
+
+	// Recycled sessions with the same name should not block creation.
+	require.NoError(t, store.Save(context.Background(), session.Session{
+		ID:     "recycled1",
+		Name:   "recycled-feature",
+		Slug:   "recycled-feature",
+		State:  session.StateRecycled,
+		Remote: testRemote,
+	}))
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "recycled-feature",
+		Remote: testRemote,
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "recycled-feature", sess.Name)
+}
+
 func TestCreateSessionWithWindows_RollbackOnRunShFailure(t *testing.T) {
 	store := newMockStore()
 	cfg := &config.Config{

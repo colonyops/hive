@@ -7,7 +7,8 @@ import (
 
 // Sentinel errors for session operations.
 var (
-	ErrNotFound = errors.New("session not found")
+	ErrNotFound      = errors.New("session not found")
+	ErrDuplicateName = errors.New("session name already exists")
 )
 
 // Store defines persistence operations for sessions.
