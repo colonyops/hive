@@ -18,17 +18,19 @@ type SpawnTemplateData struct {
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
 	Repo       string // Repository name
+	ID         string // Short random ID shared with the session directory
 }
 
 // BatchSpawnTemplateData defines available fields for batch_spawn command templates (hive batch).
 type BatchSpawnTemplateData struct {
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
-	Prompt     string // User-provided prompt (batch only)
+	Prompt     string // User-supported prompt (batch only)
 	Slug       string // Session slug (URL-safe version of name)
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
 	Repo       string // Repository name
+	ID         string // Short random ID shared with the session directory
 }
 
 // RecycleTemplateData defines available fields for recycle command templates.

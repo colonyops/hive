@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
 
@@ -16,32 +17,39 @@ import (
 type HookRunner struct {
 	log      zerolog.Logger
 	executor executil.Executor
+	renderer *tmpl.Renderer
 	stdout   io.Writer
 	stderr   io.Writer
 }
 
 // NewHookRunner creates a new HookRunner.
-func NewHookRunner(log zerolog.Logger, executor executil.Executor, stdout, stderr io.Writer) *HookRunner {
+func NewHookRunner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.Renderer, stdout, stderr io.Writer) *HookRunner {
 	return &HookRunner{
 		log:      log,
 		executor: executor,
+		renderer: renderer,
 		stdout:   stdout,
 		stderr:   stderr,
 	}
 }
 
-// RunHooks executes the commands from a matched rule.
-func (h *HookRunner) RunHooks(ctx context.Context, rule config.Rule, path string) error {
+// RunHooks executes the commands from a matched rule, rendering each as a Go template.
+func (h *HookRunner) RunHooks(ctx context.Context, rule config.Rule, path string, data config.SpawnTemplateData) error {
 	h.log.Debug().
 		Str("pattern", rule.Pattern).
 		Strs("commands", rule.Commands).
 		Msg("running rule commands")
 
-	for i, cmd := range rule.Commands {
+	for i, cmdTmpl := range rule.Commands {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
 		default:
+		}
+
+		cmd, err := h.renderer.Render(cmdTmpl, data)
+		if err != nil {
+			return fmt.Errorf("render command %q: %w", cmdTmpl, err)
 		}
 
 		h.printCommandHeader(i+1, len(rule.Commands), cmd)

@@ -121,6 +121,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].windows`      | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.Prompt` (batch) |
 | `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
 | `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                                       |
+| `rules[].commands`     | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.ID` |
 | `rules[].recycle`      | `.DefaultBranch`                                                    |
 | `rules[].branch_template` | `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`                     |
 | `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |

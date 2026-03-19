@@ -113,7 +113,7 @@ func NewSessionService(
 		err:        err,
 		spawner:    NewSpawner(log.With().Str("component", "spawner").Logger(), exec, renderer, coretmux.New(exec, log.With().Str("component", "tmux").Logger()), out, err),
 		recycler:   NewRecycler(log.With().Str("component", "recycler").Logger(), exec, renderer),
-		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, out, err),
+		hookRunner: NewHookRunner(log.With().Str("component", "hooks").Logger(), exec, renderer, out, err),
 		fileCopier: NewFileCopier(log.With().Str("component", "copier").Logger(), out),
 		renderer:   renderer,
 	}
@@ -169,6 +169,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	writeProgressf(progress, "Clone strategy: %s", cloneStrategy)
 
 	var sess session.Session
+	var dirID string
 	slug := session.Slugify(opts.Name)
 
 	// Try to find and validate a recyclable session with matching strategy
@@ -218,7 +219,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		if sessID == "" {
 			sessID = generateID()
 		}
-		dirID := generateID()
+		dirID = generateID()
 		repoName := git.ExtractRepoName(remote)
 
 		var path string
@@ -283,7 +284,17 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	// Execute matching rules
 	writeProgressf(progress, "Executing rules...")
-	if err := s.executeRules(ctx, remote, opts.Source, sess.Path); err != nil {
+	owner, repoName := git.ExtractOwnerRepo(remote)
+	hookData := config.SpawnTemplateData{
+		Path:       sess.Path,
+		Name:       opts.Name,
+		Slug:       slug,
+		ContextDir: s.config.RepoContextDir(owner, repoName),
+		Owner:      owner,
+		Repo:       repoName,
+		ID:         dirID,
+	}
+	if err := s.executeRules(ctx, remote, opts.Source, sess.Path, hookData); err != nil {
 		return nil, fmt.Errorf("execute rules: %w", err)
 	}
 
@@ -295,7 +306,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	// Spawn terminal
 	writeProgressf(progress, "Spawning terminal...")
-	owner, repoName := git.ExtractOwnerRepo(remote)
+	owner, repoName = git.ExtractOwnerRepo(remote)
 	data := SpawnData{
 		Path:       sess.Path,
 		Name:       sess.Name,
@@ -777,7 +788,7 @@ func (s *SessionService) markCorrupted(ctx context.Context, sess *session.Sessio
 }
 
 // executeRules executes all rules matching the remote URL.
-func (s *SessionService) executeRules(ctx context.Context, remote, source, dest string) error {
+func (s *SessionService) executeRules(ctx context.Context, remote, source, dest string, data config.SpawnTemplateData) error {
 	for _, rule := range s.config.Rules {
 		matched, err := matchRemotePattern(rule.Pattern, remote)
 		if err != nil {
@@ -802,7 +813,7 @@ func (s *SessionService) executeRules(ctx context.Context, remote, source, dest 
 
 		// Run commands
 		if len(rule.Commands) > 0 {
-			if err := s.hookRunner.RunHooks(ctx, rule, dest); err != nil {
+			if err := s.hookRunner.RunHooks(ctx, rule, dest, data); err != nil {
 				return fmt.Errorf("run hooks: %w", err)
 			}
 		}
