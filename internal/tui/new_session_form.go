@@ -5,12 +5,12 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/styles"
-	"github.com/colonyops/hive/internal/tui/views/sessions"
+	"github.com/colonyops/hive/internal/core/workspace"
 )
 
 // NewSessionForm manages the new session creation form.
 type NewSessionForm struct {
-	repos         []sessions.DiscoveredRepo
+	repos         []workspace.DiscoveredRepo
 	existingNames map[string]bool
 
 	repoSelect SelectField
@@ -24,14 +24,14 @@ type NewSessionForm struct {
 
 // NewSessionFormResult contains the form submission result.
 type NewSessionFormResult struct {
-	Repo        sessions.DiscoveredRepo
+	Repo        workspace.DiscoveredRepo
 	SessionName string
 }
 
 // NewNewSessionForm creates a new session form with the given repos.
 // If preselectedRemote is non-empty, the matching repo will be pre-selected.
 // existingNames is used to validate that the session name is unique.
-func NewNewSessionForm(repos []sessions.DiscoveredRepo, preselectedRemote string, existingNames map[string]bool) *NewSessionForm {
+func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote string, existingNames map[string]bool) *NewSessionForm {
 	selectedIdx := 0
 	for i, r := range repos {
 		if r.Remote == preselectedRemote {
