@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 
+	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/hay-kot/criterio"
 )
@@ -54,6 +56,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
+		c.validateContextBaseDir(),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
 	)
@@ -137,6 +140,23 @@ func isDirectoryOrNotExist(path string) error {
 		return fmt.Errorf("exists but is not a directory")
 	}
 	return nil
+}
+
+// validateContextBaseDir checks that context.base_dir is an absolute or tilde path
+// and that the expanded directory exists (or doesn't exist yet).
+func (c *Config) validateContextBaseDir() error {
+	dir := c.Context.BaseDir
+	if dir == "" {
+		return nil
+	}
+
+	// Reject relative paths that don't start with ~
+	if !filepath.IsAbs(dir) && dir[0] != '~' {
+		return criterio.NewFieldErrors("context.base_dir", fmt.Errorf("must be an absolute path or start with ~, got %q", dir))
+	}
+
+	expanded := pathutil.ExpandHome(dir)
+	return criterio.Run("context.base_dir", expanded, isDirectoryOrNotExist)
 }
 
 // validateRules checks rule patterns are valid regex and command templates are valid.

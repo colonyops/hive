@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
 )
@@ -434,6 +435,7 @@ type HistoryConfig struct {
 
 // ContextConfig configures context directory behavior.
 type ContextConfig struct {
+	BaseDir     string `json:"base_dir"     yaml:"base_dir"`     // override context base path (default: $HIVE_DATA_DIR/context/)
 	SymlinkName string `json:"symlink_name" yaml:"symlink_name"` // default: ".hive"
 }
 
@@ -1124,6 +1126,9 @@ func (c *Config) LogsDir() string {
 
 // ContextDir returns the base context directory path.
 func (c *Config) ContextDir() string {
+	if c.Context.BaseDir != "" {
+		return pathutil.ExpandHome(c.Context.BaseDir)
+	}
 	return filepath.Join(c.DataDir, "context")
 }
 
