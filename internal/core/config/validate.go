@@ -44,6 +44,7 @@ type BranchTemplateData struct {
 	Slug  string // Session slug (URL-safe version of name)
 	Owner string // Repository owner
 	Repo  string // Repository name
+	ID    string // Short random ID shared with the session directory
 }
 
 // ValidationWarning represents a non-fatal configuration issue.

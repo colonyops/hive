@@ -261,7 +261,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 				return nil, fmt.Errorf("ensure bare clone: %w", err)
 			}
 			writeProgressf(progress, "Adding worktree...")
-			branch := "hive-" + dirID
+			branch := "hive/" + slug + "-" + dirID
 			if tmplStr := s.config.GetBranchTemplate(remote); tmplStr != "" {
 				owner, repo := git.ExtractOwnerRepo(remote)
 				rendered, err := s.renderer.Render(tmplStr, config.BranchTemplateData{
@@ -269,6 +269,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 					Slug:  slug,
 					Owner: owner,
 					Repo:  repo,
+					ID:    dirID,
 				})
 				if err != nil {
 					s.log.Warn().Err(err).Str("template", tmplStr).Msg("branch_template render failed, using default branch name")
