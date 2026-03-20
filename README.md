@@ -47,7 +47,6 @@ Each hive session is a complete git clone in a dedicated directory with its own 
 - **Task Tracking** — Built-in epics and tasks for multi-agent coordination (`hive hc`)
 - **Inter-agent Messaging** — Pub/sub communication between sessions
 - **Context Sharing** — Shared storage per repository via `.hive` symlinks
-- **Session Picker (Experimental)** — Fuzzy-search across all sessions and jump directly to one (`hive x pick`)
 - **Operator Todos (Experimental)** — Track human follow-up items from agents via CLI/TUI todo flows
 - **Custom Keybindings** — Bind keys to user-defined or system commands
 - **Command Palette** — Vim-style command palette for custom commands (`:` key)
@@ -70,32 +69,6 @@ hv
 Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
 See the [Getting Started guide](https://colonyops.github.io/hive/getting-started/) for full setup instructions.
-
-## Session Picker (Experimental)
-
-> **Experimental:** `hive x pick` is under active development. Flags, output formats, and behavior may change in future releases.
-
-`hive x pick` opens a fuzzy session picker directly in the terminal. It shows all active sessions with live status indicators, lets you filter by name or repository, and switches your tmux client to the selected session.
-
-```bash
-hive x pick                  # open picker, switch to selection
-hive x pick --print          # print selected session ID (for scripting)
-hive x pick --repo myrepo    # pre-filter by repository
-hive x pick --hide-current   # exclude the session you're already in
-```
-
-Use `tab` to cycle through status filters (active, waiting, missing), `↑↓` or `ctrl+j/k` to navigate, and `enter` to jump.
-
-**Quick navigation popup via tmux**
-
-Bind `hive x pick` to a tmux key so it opens as an overlay from any window:
-
-```bash
-# ~/.tmux.conf
-bind-key f run-shell 'tmux new-window "hive x pick"'
-```
-
-Press `prefix + f` from anywhere to get a picker window that auto-closes when you select a session or press `esc`.
 
 ## Status Indicators
 
