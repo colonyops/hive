@@ -32,6 +32,7 @@ nav = [
     "recipes/parallel-code-review.md",
     "recipes/inter-agent-code-review.md",
     "recipes/ralph-loop.md",
+    "recipes/git-backed-context.md",
   ]},
   { "FAQ" = "faq.md" },
 ]
