@@ -22,15 +22,6 @@ const (
 	treeLast   = "└─"
 )
 
-// Status indicators for sessions.
-const (
-	statusActive   = "[●]" // green - agent actively working
-	statusApproval = "[!]" // yellow - needs approval/permission
-	statusReady    = "[>]" // cyan - ready for next input
-	statusUnknown  = "[?]" // dim - no terminal found
-	statusRecycled = "[○]" // gray - session recycled
-)
-
 // Animation constants.
 const (
 	// AnimationFrameCount is the total number of frames in the fade animation.
@@ -66,10 +57,10 @@ const currentRepoIndicator = "◆"
 // For active sessions with terminal integration, it uses terminal status.
 // For recycled sessions or when no terminal status is available, it falls back to session state.
 // The animFrame parameter controls the fade animation for active status (0 to AnimationFrameCount-1).
-func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styles TreeDelegateStyles, animFrame int) string {
+func renderStatusIndicator(state session.State, termStatus *TerminalStatus, treeStyles TreeDelegateStyles, animFrame int) string {
 	// Recycled sessions always show recycled indicator
 	if state == session.StateRecycled {
-		return styles.StatusRecycled.Render(statusRecycled)
+		return treeStyles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
 	}
 
 	// If we have terminal status for active sessions, use it
@@ -78,21 +69,21 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, styl
 		case terminal.StatusActive:
 			return renderActiveIndicator(animFrame)
 		case terminal.StatusApproval:
-			return styles.StatusApproval.Render(statusApproval)
+			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
 		case terminal.StatusReady:
-			return styles.StatusReady.Render(statusReady)
+			return treeStyles.StatusReady.Render(styles.StatusIndicatorReady)
 		case terminal.StatusMissing:
-			return styles.StatusUnknown.Render(statusUnknown)
+			return treeStyles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 		}
 	}
 
 	// Default: active session without terminal status shows as unknown
 	// We only show active (green) when we have positive confirmation of activity
 	if state == session.StateActive {
-		return styles.StatusUnknown.Render(statusUnknown)
+		return treeStyles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 	}
 
-	return styles.StatusRecycled.Render(statusRecycled)
+	return treeStyles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
 }
 
 // renderActiveIndicator renders the active status with fade animation.
@@ -108,7 +99,7 @@ func renderActiveIndicator(frame int) string {
 		frame = 0
 	}
 	style := lipgloss.NewStyle().Foreground(activeAnimationColors[frame])
-	return style.Render(statusActive)
+	return style.Render(styles.StatusIndicatorActive)
 }
 
 // TreeItem represents an item in the tree view.
@@ -391,7 +382,7 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
 	// Status indicator (recycled)
-	statusStr := d.Styles.StatusRecycled.Render(statusRecycled)
+	statusStr := d.Styles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
 
 	// Label with count
 	labelStyle := d.Styles.StatusRecycled
@@ -524,7 +515,7 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 		termStatus := &TerminalStatus{Status: windowStatus.Status}
 		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
 	} else {
-		statusStr = d.Styles.StatusUnknown.Render(statusUnknown)
+		statusStr = d.Styles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 	}
 
 	// Window name

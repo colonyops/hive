@@ -6,10 +6,12 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"strings"
 
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 // RenderedWindow is a fully-resolved tmux window definition (no templates).
@@ -189,4 +191,15 @@ func windowDir(w RenderedWindow, sessionDir string) string {
 // insideTmux reports whether the current process is running inside tmux.
 var insideTmux = func() bool {
 	return strings.TrimSpace(os.Getenv("TMUX")) != ""
+}
+
+// DetectCurrentTmuxSession returns the current tmux session name, or empty if not in tmux.
+func DetectCurrentTmuxSession() string {
+	cmd := exec.Command("tmux", "display-message", "-p", "#S")
+	output, err := cmd.Output()
+	if err != nil {
+		log.Debug().Err(err).Msg("tmux session detection failed")
+		return ""
+	}
+	return strings.TrimSpace(string(output))
 }

@@ -15,6 +15,7 @@ nav = [
     "getting-started/messaging.md",
     "getting-started/task-tracking.md",
     "getting-started/todos.md",
+    "getting-started/session-picker.md",
     "getting-started/claude-plugin.md",
   ]},
   { "Configuration" = [
