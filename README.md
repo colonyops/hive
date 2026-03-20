@@ -73,6 +73,8 @@ See the [Getting Started guide](https://colonyops.github.io/hive/getting-started
 
 ## Session Picker (Experimental)
 
+> **Experimental:** `hive x pick` is under active development. Flags, output formats, and behavior may change in future releases.
+
 `hive x pick` opens a fuzzy session picker directly in the terminal. It shows all active sessions with live status indicators, lets you filter by name or repository, and switches your tmux client to the selected session.
 
 ```bash
