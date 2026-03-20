@@ -169,6 +169,17 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	var sess session.Session
 	slug := session.Slugify(opts.Name)
 
+	// Check for duplicate active session name
+	existing, err := s.sessions.List(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("list sessions: %w", err)
+	}
+	for _, e := range existing {
+		if e.State == session.StateActive && e.Name == opts.Name {
+			return nil, fmt.Errorf("%w: %q", session.ErrDuplicateName, opts.Name)
+		}
+	}
+
 	// Try to find and validate a recyclable session with matching strategy
 	writeProgressf(progress, "Looking for recyclable session...")
 	recyclable := s.findValidRecyclable(ctx, remote, cloneStrategy)
