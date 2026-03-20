@@ -99,14 +99,11 @@ type pickModel struct {
 	statuses     map[string]terminal.Status
 	statusLoaded bool // true after first status poll completes
 	pollInterval time.Duration
-	recentsMap   map[string]time.Time
-	kvStore      kv.KV
 	statusFilter string // "" = all, or "active", "approval", "ready", "missing"
 }
 
-func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration, kvStore kv.KV, recentsMap map[string]time.Time, statusFilter string) pickModel {
+func newPickModel(baseItems, items []pickItem, currentSlug string, termMgr *terminal.Manager, pollInterval time.Duration, recentsMap map[string]time.Time, statusFilter string) pickModel {
 	ti := textinput.New()
-	ti.Placeholder = "filter..."
 	ti.Prompt = "/ "
 	ti.CharLimit = 64
 
@@ -117,19 +114,18 @@ func newPickModel(items []pickItem, currentSlug string, termMgr *terminal.Manage
 	ti.Focus() // Must focus after SetStyles; Init() has value receiver so focus there is lost
 
 	// Sort once: top 3 recents, then alphabetical. This order stays stable.
+	sortItemsInitial(baseItems, recentsMap)
 	sortItemsInitial(items, recentsMap)
 
 	m := pickModel{
 		input:        ti,
-		baseItems:    items,
+		baseItems:    baseItems,
 		items:        items,
 		filtered:     items,
 		currentSlug:  currentSlug,
 		termMgr:      termMgr,
 		statuses:     make(map[string]terminal.Status),
 		pollInterval: pollInterval,
-		kvStore:      kvStore,
-		recentsMap:   recentsMap,
 		statusFilter: statusFilter,
 	}
 
@@ -227,10 +223,13 @@ func (m *pickModel) applyFilter() {
 	case "":
 		// Default: hide sessions with no tmux session (StatusMissing).
 		// If statuses haven't loaded yet (empty map), show all items.
+		// Always keep the current session: while the picker is open its pane
+		// shows no AI output, so detection returns StatusMissing even though
+		// the tmux session clearly exists.
 		if len(m.statuses) > 0 {
 			var visible []pickItem
 			for _, item := range m.filtered {
-				if m.statuses[item.statusKey()] != terminal.StatusMissing {
+				if item.IsCurrent || m.statuses[item.statusKey()] != terminal.StatusMissing {
 					visible = append(visible, item)
 				}
 			}
@@ -556,13 +555,19 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 				termMgr.Register(tmuxIntegration)
 			}
 
-			// Pre-fetch statuses synchronously so the first render has data
-			initialRefresh := refreshStatusCmd(termMgr, items)().(statusRefreshMsg)
+			// Pre-fetch statuses synchronously so the first render has data.
+			// Keep baseItems as the original per-session slice; refreshStatusCmd
+			// uses these as polling inputs and must not receive window sub-items
+			// (it skips them, causing multi-window sessions to vanish after the
+			// first tick).
+			baseItems := items
+			initialRefresh := refreshStatusCmd(termMgr, baseItems)().(statusRefreshMsg)
+			displayItems := baseItems
 			if initialRefresh.items != nil {
-				items = initialRefresh.items
+				displayItems = initialRefresh.items
 			}
 
-			m := newPickModel(items, currentSlug, termMgr, cmd.app.Config.Tmux.PollInterval, cmd.app.KV, recents, flagStatus)
+			m := newPickModel(baseItems, displayItems, currentSlug, termMgr, cmd.app.Config.Tmux.PollInterval, recents, flagStatus)
 			m.statuses = initialRefresh.statuses
 			m.statusLoaded = true
 			m.applyFilter()
@@ -600,30 +605,32 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 }
 
 // switchTmux switches to or attaches the named tmux session.
-// If windowName is non-empty, it also selects that window after switching.
+// If windowName is non-empty, it selects that window before attaching so the
+// correct window is visible on entry (attach-session blocks until detach, so
+// any post-attach select-window would never run outside tmux).
 func switchTmux(name string, windowName string) error {
+	target := name
+	if windowName != "" {
+		target = name + ":" + windowName
+	}
+
 	if strings.TrimSpace(os.Getenv("TMUX")) != "" {
-		cmd := exec.Command("tmux", "switch-client", "-t", name)
+		cmd := exec.Command("tmux", "switch-client", "-t", target)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return err
-		}
-	} else {
-		cmd := exec.Command("tmux", "attach-session", "-t", name)
-		cmd.Stdin = os.Stdin
-		cmd.Stdout = os.Stdout
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return err
-		}
+		return cmd.Run()
 	}
 
 	if windowName != "" {
-		// Best-effort window selection after switching
-		cmd := exec.Command("tmux", "select-window", "-t", name+":"+windowName)
+		// Select the window before attaching; attach-session blocks until detach.
+		cmd := exec.Command("tmux", "select-window", "-t", target)
 		_ = cmd.Run()
 	}
-	return nil
+
+	cmd := exec.Command("tmux", "attach-session", "-t", name)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
 }
