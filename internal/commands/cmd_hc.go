@@ -184,38 +184,48 @@ Examples:
 
 func (cmd *HoneycombCmd) listCmd() *cli.Command {
 	var (
-		flagStatus  string
-		flagSession string
-		flagJSON    bool
-		flagAll     bool
+		flagStatus   string
+		flagSession  string
+		flagJSON     bool
+		flagAll      bool
+		flagAllRepos bool
 	)
 	return &cli.Command{
 		Name:      "list",
 		Aliases:   []string{"ls"},
 		Usage:     "List items (defaults to open items)",
-		UsageText: "hive hc list [epic-id] [--status <status>] [--all] [--session <id>] [--json]",
+		UsageText: "hive hc list [epic-id] [--status <status>] [--all] [--all-repos] [--session <id>] [--json]",
 		Description: `Lists items as a colored tree. Optional positional arg filters by epic ID.
 
 By default only open items are shown. Use --all to show all statuses,
 or --status to filter by a specific status.
+
+Use --all-repos to list items across all repos (ignores CWD repo detection).
 
 With --json, outputs flat JSON lines instead of the tree view.
 
 Examples:
   hive hc list
   hive hc list --all
+  hive hc list --all-repos --json
+  hive hc list --all-repos --status in_progress --json
   hive hc list hc-abc123
   hive hc list --status done
   hive hc list --json hc-abc123`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{Name: "status", Usage: "filter by status (open, in_progress, done, cancelled)", Destination: &flagStatus},
 			&cli.BoolFlag{Name: "all", Aliases: []string{"a"}, Usage: "show all statuses (overrides default open filter)", Destination: &flagAll},
+			&cli.BoolFlag{Name: "all-repos", Usage: "list items across all repos, ignoring CWD repo detection", Destination: &flagAllRepos},
 			&cli.StringFlag{Name: "session", Usage: "filter by session ID", Destination: &flagSession},
 			&cli.BoolFlag{Name: "json", Usage: "output as JSON lines", Destination: &flagJSON},
 		},
 		Action: func(ctx context.Context, c *cli.Command) error {
+			var repoKey string
+			if !flagAllRepos {
+				repoKey = cmd.detectRepoKey(ctx)
+			}
 			filter := hc.ListFilter{
-				RepoKey:   cmd.detectRepoKey(ctx),
+				RepoKey:   repoKey,
 				EpicID:    c.Args().First(),
 				SessionID: flagSession,
 			}
