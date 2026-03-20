@@ -22,6 +22,12 @@ Parallel specialists plus a coordinator. Best for fast feedback with active coor
 
 Spin up a dedicated reviewer agent via inbox messaging. Your session sends context, the reviewer analyzes the branch, and feedback comes back through pub/sub — no manual coordination needed.
 
+## Context Management
+
+### [Git-backed Context](git-backed-context.md)
+
+Store plans and research documents in a git repository by pointing `context.base_dir` at a dedicated repo. Gives you full history, diffs, and cross-machine sharing for all your `.hive/` documents.
+
 ## Automation
 
 ### [Ralph Loop](ralph-loop.md)

@@ -5,6 +5,7 @@ import (
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
@@ -74,7 +75,7 @@ type sessionsLoadedMsg struct {
 
 // reposDiscoveredMsg is sent when repository scanning completes.
 type reposDiscoveredMsg struct {
-	repos []DiscoveredRepo
+	repos []workspace.DiscoveredRepo
 	err   error
 }
 

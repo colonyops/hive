@@ -6,6 +6,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/pkg/kv"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,7 @@ func TestNewFormDialog(t *testing.T) {
 		{ID: "s1", Name: "alpha", State: session.StateActive},
 		{ID: "s2", Name: "beta", State: session.StateActive},
 	}
-	repos := []sessions.DiscoveredRepo{
+	repos := []workspace.DiscoveredRepo{
 		{Name: "hive", Path: "/tmp/hive", Remote: "git@github.com:org/hive.git"},
 	}
 

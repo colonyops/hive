@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/components"
@@ -94,7 +95,7 @@ type View struct {
 
 	// Repository discovery
 	workspaces      []string
-	discoveredRepos []DiscoveredRepo
+	discoveredRepos []workspace.DiscoveredRepo
 
 	// Layout state
 	width       int
@@ -1147,7 +1148,7 @@ func (v *View) loadSessions() tea.Cmd {
 // scanRepoDirs returns a command that scans configured directories for git repositories.
 func (v *View) scanRepoDirs() tea.Cmd {
 	return func() tea.Msg {
-		repos, err := ScanRepoDirs(context.Background(), v.workspaces, v.service.Git())
+		repos, err := workspace.ScanRepoDirs(context.Background(), v.workspaces, v.service.Git())
 		if err != nil {
 			log.Warn().Err(err).Msg("repo directory scan encountered errors")
 		}
@@ -1291,7 +1292,7 @@ func (v *View) AllSessions() []session.Session {
 }
 
 // DiscoveredRepos returns the discovered repositories.
-func (v *View) DiscoveredRepos() []DiscoveredRepo {
+func (v *View) DiscoveredRepos() []workspace.DiscoveredRepo {
 	return v.discoveredRepos
 }
 

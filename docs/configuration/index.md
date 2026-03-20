@@ -86,7 +86,22 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | Option                   | Type     | Default  | Description                  |
 | ------------------------ | -------- | -------- | ---------------------------- |
 | `messaging.topic_prefix` | `string` | `agent`  | Default prefix for topic IDs |
-| `context.symlink_name`   | `string` | `.hive`  | Symlink name for context dir |
+
+## Context
+
+| Option                 | Type     | Default                          | Description                                                                          |
+| ---------------------- | -------- | -------------------------------- | ------------------------------------------------------------------------------------ |
+| `context.symlink_name` | `string` | `.hive`                          | Symlink name created by `hive ctx init`                                              |
+| `context.base_dir`     | `string` | `$HIVE_DATA_DIR/context/`        | Override the base directory for all context storage. Accepts `~` and absolute paths. |
+
+By default context documents are stored under hive's data directory (`~/.local/share/hive/context/`). Set `context.base_dir` to redirect them elsewhere — for example, into a git repository so plans and research are version-controlled alongside your code.
+
+```yaml
+context:
+  base_dir: ~/notes/hive-context   # store in a dedicated git repo
+```
+
+See [Git-backed Context](../recipes/git-backed-context.md) for a practical guide.
 
 ## Todos (Experimental)
 
