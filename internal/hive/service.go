@@ -383,8 +383,8 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 	}
 
 	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Name); err != nil {
-		s.log.Debug().Err(err).Str("session", sess.Name).Msg("no tmux session to kill")
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
+		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
 	}
 
 	sess.MarkRecycled(time.Now())
@@ -420,8 +420,8 @@ func (s *SessionService) recycleWorktreeSession(ctx context.Context, sess *sessi
 	}
 
 	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Name); err != nil {
-		s.log.Debug().Err(err).Str("session", sess.Name).Msg("no tmux session to kill")
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
+		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
 	}
 
 	sess.MarkRecycled(time.Now())
@@ -900,7 +900,7 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 	for i, w := range windows {
 		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
 	}
-	if err := s.spawner.tmux.CreateSession(ctx, sess.Name, sess.Path, rendered, background); err != nil {
+	if err := s.spawner.tmux.CreateSession(ctx, sess.Slug, sess.Path, rendered, background); err != nil {
 		cleanup()
 		return fmt.Errorf("create tmux session: %w", err)
 	}
