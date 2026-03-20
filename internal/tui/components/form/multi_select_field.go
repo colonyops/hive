@@ -154,6 +154,13 @@ func (f *MultiSelectField) Value() any {
 	return selected
 }
 
+// Check sets the checked state of the item at the given index.
+func (f *MultiSelectField) Check(index int) {
+	if index >= 0 && index < len(f.options) {
+		f.checked[index] = true
+	}
+}
+
 // SelectedIndices returns the indices of checked items.
 func (f *MultiSelectField) SelectedIndices() []int {
 	var indices []int

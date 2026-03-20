@@ -1,0 +1,25 @@
+version: "0.2.5"
+
+# Directories containing git repositories shown in the new-session dialog.
+# workspaces:
+#   - ~/code
+#   - ~/projects
+
+# Agent profiles. The "default" key selects which profile is active.
+agents:
+  default: claude
+  claude:
+    command: claude
+    flags: []
+  # codex:
+  #   command: codex
+  #   flags: []
+
+# TUI appearance.
+tui:
+  theme: tokyo-night  # tokyo-night | gruvbox | catppuccin | kanagawa | onedark
+
+# Clone strategy rules. An empty pattern matches all repos.
+# rules:
+#   - pattern: ""
+#     clone_strategy: full  # full | worktree
