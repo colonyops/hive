@@ -341,8 +341,8 @@ func TestDiscoverSession_ExplicitTmuxSessionMeta(t *testing.T) {
 	t.Run("explicit MetaTmuxSession metadata finds session", func(t *testing.T) {
 		// MetaTmuxSession stores the actual tmux session name used at creation.
 		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{
-			sessionPathKey:            "/some/path",
-			"tmux_session":            "My Feature",
+			sessionPathKey: "/some/path",
+			"tmux_session": "My Feature",
 		})
 		require.NoError(t, err)
 		require.NotNil(t, info, "session should be found via explicit MetaTmuxSession metadata")

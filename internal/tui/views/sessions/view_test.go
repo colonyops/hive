@@ -287,12 +287,13 @@ func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
 // Available() returns true so it registers as an enabled integration.
 type mockIntegration struct{}
 
-func (m *mockIntegration) Name() string      { return "mock" }
-func (m *mockIntegration) Available() bool   { return true }
-func (m *mockIntegration) RefreshCache()     {}
+func (m *mockIntegration) Name() string    { return "mock" }
+func (m *mockIntegration) Available() bool { return true }
+func (m *mockIntegration) RefreshCache()   {}
 func (m *mockIntegration) DiscoverSession(_ context.Context, _ string, _ map[string]string) (*terminal.SessionInfo, error) {
 	return nil, nil
 }
+
 func (m *mockIntegration) GetStatus(_ context.Context, _ *terminal.SessionInfo) (terminal.Status, error) {
 	return terminal.StatusMissing, nil
 }
@@ -304,16 +305,16 @@ func newViewWithTerminalMgr(sessions []session.Session) *View {
 	delegate := NewTreeDelegate()
 	l := list.New([]list.Item{}, delegate, 80, 24)
 	return &View{
-		list:            l,
-		allSessions:     sessions,
-		groupBy:         config.GroupByRepo,
+		list:             l,
+		allSessions:      sessions,
+		groupBy:          config.GroupByRepo,
 		terminalStatuses: kv.New[string, TerminalStatus](),
-		gitStatuses:     kv.New[string, GitStatus](),
-		columnWidths:    &ColumnWidths{},
-		service:         new(hive.SessionService),
-		terminalManager: mgr,
-		gitWorkers:      1,
-		cfg:             &config.Config{},
+		gitStatuses:      kv.New[string, GitStatus](),
+		columnWidths:     &ColumnWidths{},
+		service:          new(hive.SessionService),
+		terminalManager:  mgr,
+		gitWorkers:       1,
+		cfg:              &config.Config{},
 	}
 }
 
