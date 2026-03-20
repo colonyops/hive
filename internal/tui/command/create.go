@@ -40,7 +40,7 @@ func (e *CreateExecutor) Execute(ctx context.Context) (output <-chan string, don
 		sess, err := e.creator.CreateSession(ctx, opts)
 		if err == nil && sess != nil {
 			e.ResultSessionID = sess.ID
-			e.ResultSessionName = sess.Name
+			e.ResultSessionName = sess.Slug
 		}
 		doneCh <- err
 	}()

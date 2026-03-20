@@ -313,6 +313,68 @@ func TestDiscoverAllWindows(t *testing.T) {
 	})
 }
 
+// TestDiscoverSession_ExplicitTmuxSessionMeta tests that DiscoverSession finds a session
+// when MetaTmuxSession metadata is set and the tmux session name differs from the slug.
+// This covers the case where a session is created with a display name like "My Feature"
+// (tmux session = "My Feature") but the slug is "my-feature".
+func TestDiscoverSession_ExplicitTmuxSessionMeta(t *testing.T) {
+	integ := New(nil)
+	// Tmux session name uses the display name (with spaces/capitals), not the slug.
+	integ.cache = map[string]*sessionCache{
+		"My Feature": {
+			agentWindows: []*agentWindow{
+				{windowIndex: "0", windowName: "bash"},
+			},
+		},
+	}
+	integ.cacheTime = timeNow()
+
+	ctx := context.Background()
+
+	t.Run("slug lookup fails without metadata", func(t *testing.T) {
+		// Slug "my-feature" won't match tmux session "My Feature" without explicit metadata.
+		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{})
+		require.NoError(t, err)
+		assert.Nil(t, info, "slug lookup should fail when tmux session name differs from slug")
+	})
+
+	t.Run("explicit MetaTmuxSession metadata finds session", func(t *testing.T) {
+		// MetaTmuxSession stores the actual tmux session name used at creation.
+		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{
+			sessionPathKey: "/some/path",
+			"tmux_session": "My Feature",
+		})
+		require.NoError(t, err)
+		require.NotNil(t, info, "session should be found via explicit MetaTmuxSession metadata")
+		assert.Equal(t, "My Feature", info.Name)
+	})
+}
+
+// TestDiscoverSession_StaleMetaTmuxSession tests that a stale MetaTmuxSession value
+// (e.g., after a rename) gracefully falls back to slug-based lookup.
+func TestDiscoverSession_StaleMetaTmuxSession(t *testing.T) {
+	integ := New(nil)
+	// After rename, tmux session was renamed to new slug "new-name".
+	integ.cache = map[string]*sessionCache{
+		"new-name": {
+			agentWindows: []*agentWindow{
+				{windowIndex: "0", windowName: "bash"},
+			},
+		},
+	}
+	integ.cacheTime = timeNow()
+
+	ctx := context.Background()
+
+	// MetaTmuxSession still holds the old name from before the rename.
+	info, err := integ.DiscoverSession(ctx, "new-name", map[string]string{
+		"tmux_session": "old-name", // stale — not in cache
+	})
+	require.NoError(t, err)
+	require.NotNil(t, info, "should fall back to slug lookup when MetaTmuxSession is stale")
+	assert.Equal(t, "new-name", info.Name)
+}
+
 // timeNow returns a time that makes cache fresh for tests.
 func timeNow() (t time.Time) {
 	return time.Now()

@@ -275,7 +275,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		return ErrorCmd(fmt.Errorf("failed to load sessions: %w", msg.err))
 	}
 	v.allSessions = msg.sessions
-	cmd := v.applyFilter()
+	cmds := []tea.Cmd{v.applyFilter()}
 	if len(v.pluginStatuses) > 0 {
 		sessions := make([]*session.Session, len(v.allSessions))
 		for i := range v.allSessions {
@@ -284,7 +284,16 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		v.pluginManager.UpdateSessions(sessions)
 		log.Debug().Int("sessionCount", len(sessions)).Msg("updated plugin manager sessions")
 	}
-	return cmd
+	// Immediately fetch terminal status so newly created sessions are detected
+	// without waiting for the next scheduled poll tick (up to 1500ms delay).
+	if v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations() && len(v.allSessions) > 0 {
+		sessPtrs := make([]*session.Session, len(v.allSessions))
+		for i := range v.allSessions {
+			sessPtrs[i] = &v.allSessions[i]
+		}
+		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+	}
+	return tea.Batch(cmds...)
 }
 
 func (v *View) handleGitStatusComplete(msg GitStatusBatchCompleteMsg) tea.Cmd {

@@ -83,7 +83,7 @@ func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfi
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Msg("spawning tmux session")
 
-	if err := s.tmux.CreateSession(ctx, data.Name, data.Path, rendered, background); err != nil {
+	if err := s.tmux.CreateSession(ctx, data.Slug, data.Path, rendered, background); err != nil {
 		return fmt.Errorf("create tmux session: %w", err)
 	}
 
@@ -101,7 +101,7 @@ func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig
 
 	s.log.Debug().Int("windows", len(rendered)).Bool("background", background).Str("targetWindow", targetWindow).Msg("opening tmux session")
 
-	if err := s.tmux.OpenSession(ctx, data.Name, data.Path, rendered, background, targetWindow); err != nil {
+	if err := s.tmux.OpenSession(ctx, data.Slug, data.Path, rendered, background, targetWindow); err != nil {
 		return fmt.Errorf("open tmux session: %w", err)
 	}
 

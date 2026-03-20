@@ -186,6 +186,72 @@ func TestRenameSession_EmptySlug(t *testing.T) {
 	assert.Contains(t, err.Error(), "empty slug")
 }
 
+// TestCreateSession_SlugUsedAsTmuxName verifies that CreateSession uses the slug (not the
+// display name) as the tmux session name when using the windows spawn strategy. This ensures
+// that tmux session detection always works via slug-based lookup, even when the display name
+// contains spaces or uppercase letters (e.g. "My Feature" → tmux session "my-feature").
+func TestCreateSession_SlugUsedAsTmuxName(t *testing.T) {
+	store := newMockStore()
+
+	var capturedTmuxName string
+	exec := &capturingExec{capturedName: &capturedTmuxName}
+
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Rules: []config.Rule{
+			{
+				Pattern: "",
+				Windows: []config.WindowConfig{{Name: "agent"}},
+			},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:       "My Feature",
+		Remote:     testRemote,
+		Background: true,
+	})
+	require.NoError(t, err)
+	require.NotNil(t, sess)
+
+	assert.Equal(t, "my-feature", sess.Slug)
+	assert.Equal(t, "my-feature", capturedTmuxName,
+		"tmux session should be created with the slug, not the display name")
+}
+
+// capturingExec records the tmux session name passed to new-session for assertion.
+type capturingExec struct {
+	capturedName *string
+}
+
+func (c *capturingExec) Run(_ context.Context, cmd string, args ...string) ([]byte, error) {
+	if cmd == "tmux" && len(args) >= 4 && args[0] == "new-session" {
+		for i, a := range args {
+			if a == "-s" && i+1 < len(args) {
+				*c.capturedName = args[i+1]
+				break
+			}
+		}
+	}
+	return nil, nil
+}
+
+func (c *capturingExec) RunDir(_ context.Context, _ string, _ string, _ ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (c *capturingExec) RunStream(_ context.Context, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+	return nil
+}
+
+func (c *capturingExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+	return nil
+}
+
 func TestEnforceMaxRecycled(t *testing.T) {
 	intPtr := func(n int) *int { return &n }
 

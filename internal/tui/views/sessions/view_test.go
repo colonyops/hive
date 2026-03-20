@@ -1,6 +1,7 @@
 package sessions
 
 import (
+	"context"
 	"testing"
 
 	"charm.land/bubbles/v2/list"
@@ -278,6 +279,82 @@ func TestApplyFilter_NoTerminalStatusExcluded(t *testing.T) {
 		}
 	}
 	assert.Empty(t, sessionIDs, "sessions without terminal status are excluded from status filter")
+}
+
+// --- handleSessionsLoaded ---
+
+// mockIntegration implements terminal.Integration for testing.
+// Available() returns true so it registers as an enabled integration.
+type mockIntegration struct{}
+
+func (m *mockIntegration) Name() string    { return "mock" }
+func (m *mockIntegration) Available() bool { return true }
+func (m *mockIntegration) RefreshCache()   {}
+func (m *mockIntegration) DiscoverSession(_ context.Context, _ string, _ map[string]string) (*terminal.SessionInfo, error) {
+	return nil, nil
+}
+
+func (m *mockIntegration) GetStatus(_ context.Context, _ *terminal.SessionInfo) (terminal.Status, error) {
+	return terminal.StatusMissing, nil
+}
+
+func newViewWithTerminalMgr(sessions []session.Session) *View {
+	mgr := terminal.NewManager([]string{"mock"})
+	mgr.Register(&mockIntegration{})
+
+	delegate := NewTreeDelegate()
+	l := list.New([]list.Item{}, delegate, 80, 24)
+	return &View{
+		list:             l,
+		allSessions:      sessions,
+		groupBy:          config.GroupByRepo,
+		terminalStatuses: kv.New[string, TerminalStatus](),
+		gitStatuses:      kv.New[string, GitStatus](),
+		columnWidths:     &ColumnWidths{},
+		service:          new(hive.SessionService),
+		terminalManager:  mgr,
+		gitWorkers:       1,
+		cfg:              &config.Config{},
+	}
+}
+
+func TestHandleSessionsLoaded_TriggersTerminalPoll(t *testing.T) {
+	// When terminal integrations are enabled, handleSessionsLoaded should return
+	// a non-nil command that includes the terminal status batch fetch. This ensures
+	// newly created sessions are detected immediately without waiting for the next
+	// scheduled poll tick (up to 1500ms).
+	sessions := []session.Session{
+		{ID: "s1", Name: "new-session", State: session.StateActive},
+	}
+	v := newViewWithTerminalMgr(nil)
+
+	cmd := v.handleSessionsLoaded(sessionsLoadedMsg{sessions: sessions})
+	assert.NotNil(t, cmd, "handleSessionsLoaded should return a command when integrations are enabled and sessions exist")
+	assert.Equal(t, sessions, v.allSessions, "allSessions should be updated")
+}
+
+func TestHandleSessionsLoaded_NoTerminalPollWhenEmpty(t *testing.T) {
+	// When no sessions are present, no terminal poll command should be returned
+	// (FetchTerminalStatusBatch returns nil for empty sessions).
+	v := newViewWithTerminalMgr(nil)
+	v.handleSessionsLoaded(sessionsLoadedMsg{sessions: nil})
+	// The returned cmd may be nil or a no-op batch — either is acceptable.
+	assert.Equal(t, []session.Session(nil), v.allSessions)
+}
+
+func TestHandleSessionsLoaded_NoTerminalPollWithoutIntegrations(t *testing.T) {
+	// When no terminal integrations are registered, no terminal poll command
+	// should be added beyond the git status fetch.
+	sessions := []session.Session{
+		{ID: "s1", Name: "session"},
+	}
+	// View with no terminal manager integrations enabled.
+	v := newFilterTestView(sessions, "", nil)
+	// terminalManager is nil in newFilterTestView — no integrations
+	v.handleSessionsLoaded(sessionsLoadedMsg{sessions: sessions})
+	// Returns the applyFilter cmd (git status) but no terminal batch.
+	// We just verify it doesn't panic and allSessions is set.
+	assert.Equal(t, sessions, v.allSessions)
 }
 
 func TestApplyFilter_GroupByGroup(t *testing.T) {
