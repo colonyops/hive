@@ -38,11 +38,13 @@ const hcHeaderLines = 3
 type HoneycombOnlyModel struct {
 	tasksView       *tasks.View
 	handler         *KeybindingResolver
+	mergedCmds      map[string]config.UserCommand
 	copyCmd         string
 	width, height   int
 	quitting        bool
 	helpDialog      *components.HelpDialog
 	confirmModal    *components.ConfirmModal
+	commandPalette  *CommandPalette
 	pendingCmd      tea.Cmd
 	toastController *ToastController
 	toastView       *ToastView
@@ -65,6 +67,7 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 	return HoneycombOnlyModel{
 		tasksView:       tasksView,
 		handler:         handler,
+		mergedCmds:      mergedCmds,
 		copyCmd:         cfg.CopyCommand,
 		toastController: toastCtrl,
 		toastView:       NewToastView(toastCtrl),
@@ -90,10 +93,35 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.toastController.Tick()
 		return m, scheduleToastTick()
 
+	case tasks.CommandPaletteRequestMsg:
+		m.commandPalette = NewCommandPalette(m.mergedCmds, nil, m.width, m.height, ViewTasks)
+		return m, nil
+
 	case tea.KeyPressMsg:
+		if m.commandPalette != nil {
+			if msg.String() == keyCtrlC {
+				m.quitting = true
+				return m, tea.Quit
+			}
+			var cmd tea.Cmd
+			m.commandPalette, cmd = m.commandPalette.Update(msg)
+			if entry, _, ok := m.commandPalette.SelectedCommand(); ok {
+				m.commandPalette = nil
+				if entry.Command.Action != "" {
+					return m.handleTaskAction(act.Action{Type: entry.Command.Action})
+				}
+				// Shell commands require session context not available in standalone mode.
+				return m, nil
+			}
+			if m.commandPalette.Cancelled() {
+				m.commandPalette = nil
+				return m, nil
+			}
+			return m, cmd
+		}
 		if m.helpDialog != nil {
 			switch msg.String() {
-			case "ctrl+c":
+			case keyCtrlC:
 				m.quitting = true
 				return m, tea.Quit
 			case "esc", "?", "q":
@@ -107,7 +135,7 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		if m.confirmModal != nil {
 			// Allow quitting even while a confirmation is pending.
-			if msg.String() == "ctrl+c" || msg.String() == "q" {
+			if msg.String() == keyCtrlC || msg.String() == "q" {
 				m.quitting = true
 				return m, tea.Quit
 			}
@@ -126,7 +154,7 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, cmd
 		}
 		switch msg.String() {
-		case "ctrl+c", "q":
+		case keyCtrlC, "q":
 			m.quitting = true
 			return m, tea.Quit
 		case "esc":
@@ -316,6 +344,9 @@ func (m HoneycombOnlyModel) View() tea.View {
 	content := m.renderHeader() + "\n" + m.tasksView.View()
 	if m.confirmModal != nil {
 		content += "\n" + m.confirmModal.View()
+	}
+	if m.commandPalette != nil {
+		content = m.commandPalette.Overlay(content, m.width, m.height)
 	}
 	content = m.toastView.Overlay(content, m.width, m.height)
 	if m.helpDialog != nil {
