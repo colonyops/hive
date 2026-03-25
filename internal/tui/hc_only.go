@@ -94,7 +94,7 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		return m, scheduleToastTick()
 
 	case tasks.CommandPaletteRequestMsg:
-		m.commandPalette = NewCommandPalette(m.mergedCmds, nil, m.width, m.height, ViewTasks)
+		m.commandPalette = NewCommandPalette(m.taskCommands(), nil, m.width, m.height, ViewTasks)
 		return m, nil
 
 	case tea.KeyPressMsg:
@@ -191,6 +191,20 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	cmd := m.tasksView.Update(msg)
 	return m, cmd
+}
+
+// taskCommands returns commands that are valid in the standalone honeycomb TUI.
+// Non-task action commands (e.g. HiveDoctor, ThemePreview) are excluded since
+// they require infrastructure only present in the full TUI.
+func (m HoneycombOnlyModel) taskCommands() map[string]config.UserCommand {
+	filtered := make(map[string]config.UserCommand, len(m.mergedCmds))
+	for name, cmd := range m.mergedCmds {
+		if cmd.Action != "" && !isTaskAction(cmd.Action) {
+			continue
+		}
+		filtered[name] = cmd
+	}
+	return filtered
 }
 
 // handleTaskAction dispatches based on action type.
