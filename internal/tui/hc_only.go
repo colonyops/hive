@@ -43,7 +43,7 @@ type HoneycombOnlyModel struct {
 	width, height   int
 	quitting        bool
 	helpDialog      *components.HelpDialog
-	confirmModal    *components.ConfirmModal
+	confirmModal    *Modal
 	commandPalette  *CommandPalette
 	pendingCmd      tea.Cmd
 	toastController *ToastController
@@ -134,24 +134,26 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.confirmModal != nil {
-			// Allow quitting even while a confirmation is pending.
-			if msg.String() == keyCtrlC || msg.String() == "q" {
+			switch msg.String() {
+			case keyCtrlC, "q":
 				m.quitting = true
 				return m, tea.Quit
-			}
-			modal, cmd := m.confirmModal.Update(msg)
-			m.confirmModal = &modal
-			if m.confirmModal.Confirmed() {
-				pendingCmd := m.pendingCmd
+			case "enter":
+				confirmed := m.confirmModal.ConfirmSelected()
+				m.confirmModal = nil
+				if confirmed {
+					pendingCmd := m.pendingCmd
+					m.pendingCmd = nil
+					return m, pendingCmd
+				}
+				m.pendingCmd = nil
+			case "esc":
 				m.confirmModal = nil
 				m.pendingCmd = nil
-				return m, tea.Batch(pendingCmd, cmd)
+			case "left", "right", "h", "l", "tab":
+				m.confirmModal.ToggleSelection()
 			}
-			if m.confirmModal.Cancelled() {
-				m.confirmModal = nil
-				m.pendingCmd = nil
-			}
-			return m, cmd
+			return m, nil
 		}
 		switch msg.String() {
 		case keyCtrlC, "q":
@@ -254,7 +256,7 @@ func (m HoneycombOnlyModel) handleTaskAction(a act.Action) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		id, title := item.ID, item.Title
-		modal := components.NewConfirmModal(fmt.Sprintf("Cancel %q?", title))
+		modal := NewModal("Confirm", fmt.Sprintf("Cancel %q?", title))
 		m.confirmModal = &modal
 		m.pendingCmd = func() tea.Msg {
 			status := hc.StatusCancelled
@@ -272,7 +274,7 @@ func (m HoneycombOnlyModel) handleTaskAction(a act.Action) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		id, title := item.ID, item.Title
-		modal := components.NewConfirmModal(fmt.Sprintf("Delete %q? This cannot be undone.", title))
+		modal := NewModal("Confirm", fmt.Sprintf("Delete %q? This cannot be undone.", title))
 		m.confirmModal = &modal
 		m.pendingCmd = func() tea.Msg {
 			err := svc.DeleteItem(context.Background(), id)
@@ -285,7 +287,7 @@ func (m HoneycombOnlyModel) handleTaskAction(a act.Action) (tea.Model, tea.Cmd) 
 			return m, nil
 		}
 		repoKey := m.tasksView.RepoKey()
-		modal := components.NewConfirmModal("Remove all done/cancelled items older than 24h?")
+		modal := NewModal("Confirm", "Remove all done/cancelled items older than 24h?")
 		m.confirmModal = &modal
 		m.pendingCmd = func() tea.Msg {
 			_, err := svc.Prune(context.Background(), hc.PruneOpts{
@@ -357,7 +359,7 @@ func (m HoneycombOnlyModel) View() tea.View {
 	}
 	content := m.renderHeader() + "\n" + m.tasksView.View()
 	if m.confirmModal != nil {
-		content += "\n" + m.confirmModal.View()
+		content = m.confirmModal.Overlay(content, m.width, m.height)
 	}
 	if m.commandPalette != nil {
 		content = m.commandPalette.Overlay(content, m.width, m.height)
