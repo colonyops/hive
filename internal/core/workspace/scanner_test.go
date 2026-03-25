@@ -28,6 +28,7 @@ func (m *mockGit) WorktreeAdd(context.Context, string, string, string) error    
 func (m *mockGit) WorktreeRemove(context.Context, string, string, string) error { return nil }
 func (m *mockGit) WorktreeReset(context.Context, string, string) error          { return nil }
 func (m *mockGit) Fetch(context.Context, string) error                          { return nil }
+func (m *mockGit) HasUnpushedCommits(context.Context, string) (bool, error)     { return false, nil }
 func (m *mockGit) RemoteURL(_ context.Context, dir string) (string, error) {
 	if remote, ok := m.remotes[dir]; ok {
 		return remote, nil

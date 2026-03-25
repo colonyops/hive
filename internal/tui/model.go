@@ -8,6 +8,7 @@ import (
 	"runtime"
 	"strconv"
 	"strings"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -603,6 +604,12 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 		model, cmd = m, m.loadTodoCounts()
 
+	// Session risk check result (pre-delete/recycle safety gate)
+	case sessionRiskCheckedMsg:
+		model, cmd = m.handleSessionRiskChecked(msg)
+	case showRiskLoadingMsg:
+		model, cmd = m.handleShowRiskLoading(msg)
+
 	// Input
 	case tea.KeyPressMsg:
 		model, cmd = m.handleKeyMsg(msg)
@@ -757,12 +764,49 @@ func (m Model) handleFormDialogKey(msg tea.KeyPressMsg, keyStr string) (tea.Mode
 	return m, cmd
 }
 
+// sessionRiskCheckedMsg is returned by the async git risk check before delete/recycle.
+type sessionRiskCheckedMsg struct {
+	action Action
+	risk   hive.SessionRisk
+}
+
+// riskCheckLoaderDelay is how long to wait before showing the "Checking for
+// unsaved work..." spinner when a delete/recycle is triggered. Fast repos
+// complete the git check before this fires, avoiding a distracting flash.
+// 100ms is below the threshold of noticeable lag while still catching slow repos.
+const riskCheckLoaderDelay = 100 * time.Millisecond
+
+// showRiskLoadingMsg is sent after a short delay to reveal the loading spinner
+// only if the risk check is still in progress.
+type showRiskLoadingMsg struct {
+	sessionID string
+}
+
 // dispatchAction handles an action that may need confirmation or immediate execution.
 func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if action.Err != nil {
 		m.state = stateNormal
 		m.notifyErrorf("%v", action.Err)
 		return m, nil
+	}
+
+	// For delete and recycle on named sessions, run an async git risk check first.
+	// The result handler (handleSessionRiskChecked) continues the dispatch.
+	// A separate 250ms delay command reveals the loading spinner only if the
+	// check hasn't completed yet, avoiding a flash on fast repos.
+	if (action.Type == act.TypeDelete || action.Type == act.TypeRecycle) && action.SessionID != "" {
+		m.modals.Pending = action
+		sessionID := action.SessionID
+		return m, tea.Batch(
+			func() tea.Msg {
+				risk, _ := m.service.CheckSessionRisk(context.Background(), action.SessionID)
+				return sessionRiskCheckedMsg{action: action, risk: risk}
+			},
+			func() tea.Msg {
+				time.Sleep(riskCheckLoaderDelay)
+				return showRiskLoadingMsg{sessionID: sessionID}
+			},
+		)
 	}
 
 	if action.NeedsConfirm() {

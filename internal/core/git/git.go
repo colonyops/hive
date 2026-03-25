@@ -39,6 +39,10 @@ type Git interface {
 	WorktreeReset(ctx context.Context, bareDir, worktreePath string) error
 	// Fetch fetches all remotes in dir.
 	Fetch(ctx context.Context, dir string) error
+	// HasUnpushedCommits returns true if there are local commits not yet pushed to a remote.
+	// It first checks the upstream tracking branch; if none is set, it falls back to comparing
+	// against origin/<default branch>. Returns false (no risk) on any git error.
+	HasUnpushedCommits(ctx context.Context, dir string) (bool, error)
 }
 
 // ExtractRepoName extracts the repository name from a git remote URL.

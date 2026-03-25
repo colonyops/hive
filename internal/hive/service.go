@@ -495,6 +495,49 @@ func (s *SessionService) SetSessionGroup(ctx context.Context, id, group string) 
 	return nil
 }
 
+// SessionRisk describes uncommitted or unpushed work that would be lost if a session
+// is deleted or recycled. Only meaningful for active sessions.
+type SessionRisk struct {
+	UncommittedChanges bool
+	UnpushedCommits    bool
+}
+
+// HasRisk returns true if any data would be lost.
+func (r SessionRisk) HasRisk() bool {
+	return r.UncommittedChanges || r.UnpushedCommits
+}
+
+// CheckSessionRisk checks whether an active session has uncommitted or unpushed changes.
+// Non-active sessions (recycled, corrupted) always return an empty risk.
+// Git errors are treated conservatively: IsClean failures assume dirty; HasUnpushedCommits
+// failures assume no unpushed commits.
+func (s *SessionService) CheckSessionRisk(ctx context.Context, id string) (SessionRisk, error) {
+	sess, err := s.sessions.Get(ctx, id)
+	if err != nil {
+		return SessionRisk{}, fmt.Errorf("get session: %w", err)
+	}
+	if sess.State != session.StateActive {
+		return SessionRisk{}, nil
+	}
+
+	clean, err := s.git.IsClean(ctx, sess.Path)
+	if err != nil {
+		s.log.Debug().Err(err).Str("session_id", id).Msg("failed to check git clean status")
+		clean = false // assume dirty on error to be safe
+	}
+
+	unpushed, err := s.git.HasUnpushedCommits(ctx, sess.Path)
+	if err != nil {
+		s.log.Debug().Err(err).Str("session_id", id).Msg("failed to check unpushed commits")
+		unpushed = true // assume risky on error, consistent with IsClean failure handling
+	}
+
+	return SessionRisk{
+		UncommittedChanges: !clean,
+		UnpushedCommits:    unpushed,
+	}, nil
+}
+
 // DeleteSession removes a session and its directory.
 func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	sess, err := s.sessions.Get(ctx, id)

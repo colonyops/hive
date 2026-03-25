@@ -78,18 +78,19 @@ func (m *mockExec) RunDirStream(context.Context, string, io.Writer, io.Writer, s
 // mockGit implements git.Git for testing.
 type mockGit struct{}
 
-func (m *mockGit) Clone(_ context.Context, _, _ string) error             { return nil }
-func (m *mockGit) Checkout(_ context.Context, _, _ string) error          { return nil }
-func (m *mockGit) Pull(_ context.Context, _ string) error                 { return nil }
-func (m *mockGit) ResetHard(_ context.Context, _ string) error            { return nil }
-func (m *mockGit) RemoteURL(_ context.Context, _ string) (string, error)  { return "", nil }
-func (m *mockGit) IsClean(_ context.Context, _ string) (bool, error)      { return true, nil }
-func (m *mockGit) Branch(_ context.Context, _ string) (string, error)     { return "main", nil }
-func (m *mockGit) CloneBare(_ context.Context, _, _ string) error         { return nil }
-func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error    { return nil }
-func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error { return nil }
-func (m *mockGit) WorktreeReset(_ context.Context, _, _ string) error     { return nil }
-func (m *mockGit) Fetch(_ context.Context, _ string) error                { return nil }
+func (m *mockGit) Clone(_ context.Context, _, _ string) error                   { return nil }
+func (m *mockGit) Checkout(_ context.Context, _, _ string) error                { return nil }
+func (m *mockGit) Pull(_ context.Context, _ string) error                       { return nil }
+func (m *mockGit) ResetHard(_ context.Context, _ string) error                  { return nil }
+func (m *mockGit) RemoteURL(_ context.Context, _ string) (string, error)        { return "", nil }
+func (m *mockGit) IsClean(_ context.Context, _ string) (bool, error)            { return true, nil }
+func (m *mockGit) Branch(_ context.Context, _ string) (string, error)           { return "main", nil }
+func (m *mockGit) CloneBare(_ context.Context, _, _ string) error               { return nil }
+func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error          { return nil }
+func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error       { return nil }
+func (m *mockGit) WorktreeReset(_ context.Context, _, _ string) error           { return nil }
+func (m *mockGit) Fetch(_ context.Context, _ string) error                      { return nil }
+func (m *mockGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) { return false, nil }
 func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
 	return "main", nil
 }

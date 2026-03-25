@@ -1089,8 +1089,77 @@ func switchTmuxSession(name string) tea.Cmd {
 	}
 }
 
+// handleShowRiskLoading reveals the loading spinner after the 250ms delay, but
+// only if the risk check is still in progress (state is still normal and the
+// pending action matches). This prevents a flash on fast repos.
+func (m Model) handleShowRiskLoading(msg showRiskLoadingMsg) (tea.Model, tea.Cmd) {
+	if m.state != stateNormal || m.modals.Pending.SessionID != msg.sessionID {
+		return m, nil
+	}
+	m.state = stateLoading
+	m.loadingMessage = "Checking for unsaved work..."
+	return m, nil
+}
+
+// handleSessionRiskChecked continues the delete/recycle dispatch after the async
+// git risk check completes. If the session has at-risk data, a dangerous
+// confirmation modal is shown; otherwise normal dispatch resumes.
+func (m Model) handleSessionRiskChecked(msg sessionRiskCheckedMsg) (tea.Model, tea.Cmd) {
+	action := msg.action
+
+	if msg.risk.HasRisk() {
+		var lines []string
+		lines = append(lines, "This session has work that will be permanently lost:")
+		lines = append(lines, "")
+		if msg.risk.UncommittedChanges {
+			lines = append(lines, "  • Uncommitted changes")
+		}
+		if msg.risk.UnpushedCommits {
+			lines = append(lines, "  • Unpushed commits")
+		}
+
+		title := "Delete Session?"
+		requireText := "delete"
+		if action.Type == act.TypeRecycle {
+			title = "Recycle Session?"
+			requireText = "recycle"
+		}
+
+		m.state = stateConfirming
+		m.modals.Pending = action
+		m.modals.Confirm = NewDangerousModal(title, strings.Join(lines, "\n"), requireText)
+		return m, nil
+	}
+
+	// No risk — continue with the normal dispatch path.
+	if action.NeedsConfirm() {
+		m.state = stateConfirming
+		m.modals.Pending = action
+		m.modals.Confirm = NewModal("Confirm", action.Confirm)
+		return m, nil
+	}
+
+	if action.Type == act.TypeRecycle {
+		m.state = stateNormal
+		m.modals.Pending = Action{}
+		return m, m.startRecycle(action.SessionID)
+	}
+
+	m.state = stateNormal
+	m.modals.Pending = action
+	if !action.Silent {
+		m.state = stateLoading
+		m.loadingMessage = "Processing..."
+	}
+	return m, m.executeAction(action)
+}
+
 // handleConfirmModalKey handles keys when confirmation modal is shown.
 func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
+	if m.modals.Confirm.IsTextInput() {
+		return m.handleDangerousConfirmKey(keyStr)
+	}
+
 	switch keyStr {
 	case keyEnter:
 		confirmed := m.modals.Confirm.ConfirmSelected()
@@ -1167,6 +1236,47 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 	return m, nil
+}
+
+// handleDangerousConfirmKey handles keys for text-input confirmation modals
+// (dangerous delete/recycle). The user must type the required word before enter
+// is accepted; all other printable characters are fed into the text buffer.
+func (m Model) handleDangerousConfirmKey(keyStr string) (tea.Model, tea.Cmd) {
+	switch keyStr {
+	case keyEnter:
+		if !m.modals.Confirm.ConfirmSelected() {
+			// Text doesn't match the required word yet — do nothing.
+			return m, nil
+		}
+		m.modals.DismissConfirm()
+		action := m.modals.Pending
+		m.modals.Pending = Action{}
+		m.modals.PendingRecycledSessions = nil
+		if action.Type == act.TypeRecycle {
+			m.state = stateNormal
+			return m, m.startRecycle(action.SessionID)
+		}
+		m.state = stateNormal
+		if !action.Silent {
+			m.state = stateLoading
+			m.loadingMessage = "Processing..."
+		}
+		return m, m.executeAction(action)
+	case "esc":
+		m.state = stateNormal
+		m.modals.DismissConfirm()
+		m.modals.Pending = Action{}
+		m.modals.PendingRecycledSessions = nil
+		return m, nil
+	case "backspace":
+		m.modals.Confirm.DeleteChar()
+		return m, nil
+	default:
+		if len(keyStr) == 1 {
+			m.modals.Confirm.AddChar(keyStr)
+		}
+		return m, nil
+	}
 }
 
 // selectedSession returns the session selected in the sessions view, or nil.
