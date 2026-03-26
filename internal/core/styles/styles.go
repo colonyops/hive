@@ -31,11 +31,15 @@ var (
 
 	// TUI shared styles.
 	ModalStyle               lipgloss.Style
+	ModalDangerStyle         lipgloss.Style
 	FormModalStyle           lipgloss.Style
 	ModalTitleStyle          lipgloss.Style
+	ModalDangerTitleStyle    lipgloss.Style
 	ModalHelpStyle           lipgloss.Style
 	ModalButtonStyle         lipgloss.Style
 	ModalButtonSelectedStyle lipgloss.Style
+	ModalInputStyle          lipgloss.Style
+	ModalInputReadyStyle     lipgloss.Style
 	TextMutedStyle           lipgloss.Style
 	TextPrimaryStyle         lipgloss.Style
 	TextPrimaryBoldStyle     lipgloss.Style
@@ -144,6 +148,10 @@ func SetTheme(p Palette) {
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
 		Padding(1, 2)
+	ModalDangerStyle = lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(ColorError).
+		Padding(1, 2)
 	FormModalStyle = lipgloss.NewStyle().
 		Border(lipgloss.RoundedBorder()).
 		BorderForeground(ColorPrimary).
@@ -152,6 +160,9 @@ func SetTheme(p Palette) {
 	ModalTitleStyle = lipgloss.NewStyle().
 		Bold(true).
 		Foreground(ColorForeground)
+	ModalDangerTitleStyle = lipgloss.NewStyle().
+		Bold(true).
+		Foreground(ColorError)
 	ModalHelpStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).
 		MarginTop(1)
@@ -163,6 +174,11 @@ func SetTheme(p Palette) {
 		Padding(0, 1).
 		Background(ColorPrimary).
 		Foreground(ColorBackground).
+		Bold(true)
+	ModalInputStyle = lipgloss.NewStyle().
+		Foreground(ColorMuted)
+	ModalInputReadyStyle = lipgloss.NewStyle().
+		Foreground(ColorError).
 		Bold(true)
 
 	TextMutedStyle = lipgloss.NewStyle().

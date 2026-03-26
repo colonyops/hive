@@ -1,0 +1,16 @@
+╭────────────────────────────────────────────────────────╮
+│                                                        │
+│  Delete Session?                                       │
+│                                                        │
+│  This session has work that will be permanently lost:  │
+│                                                        │
+│    • Uncommitted changes                               │
+│    • Unpushed commits                                  │
+│                                                        │
+│                                                        │
+│  Type "delete" to confirm:                             │
+│  > delete█                                             │
+│                                                        │
+│  enter confirm  esc cancel                             │
+│                                                        │
+╰────────────────────────────────────────────────────────╯

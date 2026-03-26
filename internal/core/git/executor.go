@@ -226,6 +226,29 @@ func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath stri
 	return nil
 }
 
+func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, error) {
+	// Try the upstream tracking branch first (set via "git push -u" or "git branch --set-upstream-to").
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "rev-list", "--count", "@{upstream}..HEAD")
+	if err == nil {
+		n, _ := parseInt(strings.TrimSpace(string(out)))
+		return n > 0, nil
+	}
+
+	// No upstream — fall back to comparing against origin/<default branch>.
+	defaultBranch, err := e.DefaultBranch(ctx, dir)
+	if err != nil {
+		return false, fmt.Errorf("get default branch: %w", err)
+	}
+
+	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "rev-list", "--count", "origin/"+defaultBranch+"..HEAD")
+	if err != nil {
+		return false, fmt.Errorf("rev-list unpushed: %w", err)
+	}
+
+	n, _ := parseInt(strings.TrimSpace(string(out)))
+	return n > 0, nil
+}
+
 func (e *Executor) Fetch(ctx context.Context, dir string) error {
 	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "fetch", "origin"); err != nil {
 		return fmt.Errorf("git fetch: %w", err)
