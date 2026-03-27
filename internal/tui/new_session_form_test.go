@@ -82,7 +82,7 @@ func TestNewNewSessionForm(t *testing.T) {
 		form.nameInput.SetValue("bad~name")
 		updated, _ := form.Update(keyPress(tea.KeyEnter))
 		assert.False(t, updated.Submitted())
-		assert.Contains(t, updated.nameError, "invalid characters")
+		assert.Contains(t, updated.nameError, "invalid session name")
 	})
 
 	t.Run("validates duplicate session name", func(t *testing.T) {

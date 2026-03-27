@@ -26,7 +26,7 @@ func ValidateName(name string) error {
 		return fmt.Errorf("session name cannot be empty")
 	}
 	if !validName.MatchString(name) {
-		return fmt.Errorf("session name %q contains invalid characters: allowed characters are alphanumeric, spaces, hyphens, underscores, colons, periods, and slashes", name)
+		return fmt.Errorf("invalid session name: allowed characters are a-z, 0-9, spaces, and - _ : . /")
 	}
 	return nil
 }

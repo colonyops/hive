@@ -153,10 +153,10 @@ func TestSessionName_InvalidCharsRejected(t *testing.T) {
 		name    string
 		wantErr string
 	}{
-		{"feat~bad", "invalid characters"},
-		{"feat^1", "invalid characters"},
-		{"feat*", "invalid characters"},
-		{"feat?", "invalid characters"},
+		{"feat~bad", "invalid session name"},
+		{"feat^1", "invalid session name"},
+		{"feat*", "invalid session name"},
+		{"feat?", "invalid session name"},
 	}
 
 	for _, tc := range cases {

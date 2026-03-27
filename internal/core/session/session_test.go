@@ -107,13 +107,13 @@ func TestValidateName(t *testing.T) {
 	}{
 		{"", "cannot be empty"},
 		{"   ", "cannot be empty"},
-		{"my~feature", "invalid characters"},
-		{"fix^1", "invalid characters"},
-		{"feat*", "invalid characters"},
-		{"feat?", "invalid characters"},
-		{"feat[0]", "invalid characters"},
-		{`feat\branch`, "invalid characters"},
-		{"-starts-with-hyphen", "invalid characters"},
+		{"my~feature", "invalid session name"},
+		{"fix^1", "invalid session name"},
+		{"feat*", "invalid session name"},
+		{"feat?", "invalid session name"},
+		{"feat[0]", "invalid session name"},
+		{`feat\branch`, "invalid session name"},
+		{"-starts-with-hyphen", "invalid session name"},
 	}
 	for _, tt := range invalid {
 		t.Run("invalid/"+tt.input, func(t *testing.T) {

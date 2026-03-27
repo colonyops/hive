@@ -184,7 +184,7 @@ func TestRenameSession_InvalidChars(t *testing.T) {
 
 	err := svc.RenameSession(context.Background(), "test1", "feat: something!")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid characters")
+	assert.Contains(t, err.Error(), "invalid session name")
 }
 
 // TestCreateSession_SlugUsedAsTmuxName verifies that CreateSession uses the slug (not the
