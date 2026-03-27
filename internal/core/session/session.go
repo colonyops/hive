@@ -33,7 +33,7 @@ func ValidateName(name string) error {
 
 // Slugify converts a name to a URL-safe slug for use in directory paths and tmux session names.
 // "My Session Name"    -> "my-session-name"
-// "jalevin/test-thing" -> "jalevin-test-thing"
+// "dev/test-thing" -> "dev-test-thing"
 func Slugify(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
 	s = nonAlphanumeric.ReplaceAllString(s, "-")

@@ -135,18 +135,18 @@ These two variables behave very differently as a branch name source:
 
 | | `.Slug` | `.Name` |
 |---|---|---|
-| Value for session `"jalevin/fix auth"` | `jalevin-fix-auth` | `jalevin/fix auth` |
+| Value for session `"dev/fix auth"` | `dev-fix-auth` | `dev/fix auth` |
 | Always a valid git branch name | ✅ | ❌ (spaces, colons, etc. are rejected by git) |
 | Preserves `/` namespace separator | ❌ (converted to `-` for safe directory paths) | ✅ |
 
 **Use `.Slug` when you want a safe, predictable branch name:**
 ```yaml
-branch_template: "jalevin/{{ .Slug }}"   # jalevin/fix-auth-abc123
+branch_template: "dev/{{ .Slug }}"   # dev/fix-auth-abc123
 ```
 
 **Use `.Name` when your session names already follow git branch conventions** (alphanumeric, hyphens, slashes — no spaces or colons):
 ```yaml
-branch_template: "{{ .Name }}"           # jalevin/fix-auth (if that's the session name)
+branch_template: "{{ .Name }}"           # dev/fix-auth (if that's the session name)
 ```
 
 If `.Name` renders to an invalid git branch name (e.g. contains a space), hive will fail with a clear error at session creation time rather than passing a bad name to git.

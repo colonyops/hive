@@ -92,7 +92,7 @@ func TestValidateName(t *testing.T) {
 		"my_feature",
 		"JIRA-123: fix auth",
 		"v1.2.3",
-		"jalevin/test-thing",
+		"dev/test-thing",
 		"release/1.0",
 	}
 	for _, name := range valid {

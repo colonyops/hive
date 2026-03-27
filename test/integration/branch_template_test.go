@@ -45,8 +45,9 @@ func bareRepoBranches(t *testing.T, sessionPath string) []string {
 }
 
 func TestBranchTemplate_RendersSlugAndID(t *testing.T) {
-	h := NewHarness(t).WithConfig(branchTemplateConfig("jalevin/{{ .Slug }}-{{ .ID }}"))
+	h := NewHarness(t).WithConfig(branchTemplateConfig("dev/{{ .Slug }}-{{ .ID }}"))
 	repo := createBareRepo(t, "bt-slug-repo")
+	cleanupTmuxSession(t, "my-feature")
 
 	out, err := h.Run("new", "--remote", repo, "my-feature")
 	require.NoError(t, err, "hive new: %s", out)
@@ -56,12 +57,12 @@ func TestBranchTemplate_RendersSlugAndID(t *testing.T) {
 
 	var found bool
 	for _, b := range branches {
-		if regexp.MustCompile(`^jalevin/my-feature-[a-z0-9]+$`).MatchString(b) {
+		if regexp.MustCompile(`^dev/my-feature-[a-z0-9]+$`).MatchString(b) {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "expected jalevin/my-feature-<id> branch, got: %v", branches)
+	assert.True(t, found, "expected dev/my-feature-<id> branch, got: %v", branches)
 }
 
 func TestBranchTemplate_DefaultIsHiveSlugID(t *testing.T) {
@@ -72,8 +73,9 @@ rules:
       - "tmux new-session -d -s {{ .Slug | shq }} -c {{ .Path | shq }}"
 `)
 	repo := createBareRepo(t, "bt-default-repo")
+	cleanupTmuxSession(t, "bt-default")
 
-	out, err := h.Run("new", "--remote", repo, "my-feature")
+	out, err := h.Run("new", "--remote", repo, "bt-default")
 	require.NoError(t, err, "hive new: %s", out)
 
 	path := parseCreatedSessionPath(t, out)
@@ -81,12 +83,12 @@ rules:
 
 	var found bool
 	for _, b := range branches {
-		if regexp.MustCompile(`^hive/my-feature-[a-z0-9]+$`).MatchString(b) {
+		if regexp.MustCompile(`^hive/bt-default-[a-z0-9]+$`).MatchString(b) {
 			found = true
 			break
 		}
 	}
-	assert.True(t, found, "expected hive/my-feature-<id> branch, got: %v", branches)
+	assert.True(t, found, "expected hive/bt-default-<id> branch, got: %v", branches)
 }
 
 func TestBranchTemplate_InvalidRenderedNameReturnsError(t *testing.T) {
@@ -105,13 +107,14 @@ func TestBranchTemplate_NameWithSlashPreservesInBranch(t *testing.T) {
 	// Using .Name directly when the session name is already branch-safe
 	h := NewHarness(t).WithConfig(branchTemplateConfig("{{ .Name }}"))
 	repo := createBareRepo(t, "bt-slash-repo")
+	cleanupTmuxSession(t, "dev-my-feature")
 
-	out, err := h.Run("new", "--remote", repo, "jalevin/my-feature")
+	out, err := h.Run("new", "--remote", repo, "dev/my-feature")
 	require.NoError(t, err, "hive new with slash name: %s", out)
 
 	path := parseCreatedSessionPath(t, out)
 	branches := bareRepoBranches(t, path)
-	assert.Contains(t, branches, "jalevin/my-feature", "branch should preserve / from session name")
+	assert.Contains(t, branches, "dev/my-feature", "branch should preserve / from session name")
 }
 
 func TestBranchTemplate_CommandsReceiveTemplateVars(t *testing.T) {
@@ -119,7 +122,7 @@ func TestBranchTemplate_CommandsReceiveTemplateVars(t *testing.T) {
 	cfg := fmt.Sprintf(`data_dir: ""
 rules:
   - clone_strategy: worktree
-    branch_template: "jalevin/{{ .Slug }}-{{ .ID }}"
+    branch_template: "dev/{{ .Slug }}-{{ .ID }}"
     commands:
       - "echo NAME={{ .Name | shq }} SLUG={{ .Slug }} OWNER={{ .Owner }} REPO={{ .Repo }} ID={{ .ID }} >> %s"
     spawn:
@@ -128,15 +131,16 @@ rules:
 
 	h := NewHarness(t).WithConfig(cfg)
 	repo := createBareRepo(t, "bt-commands-repo")
+	cleanupTmuxSession(t, "bt-commands")
 
-	out, err := h.Run("new", "--remote", repo, "my feature")
+	out, err := h.Run("new", "--remote", repo, "bt commands")
 	require.NoError(t, err, "hive new: %s", out)
 
 	contentBytes, err := os.ReadFile(outFile)
 	require.NoError(t, err, "hook output file must exist")
 	content := string(contentBytes)
-	assert.Contains(t, content, "NAME=my feature")
-	assert.Contains(t, content, "SLUG=my-feature")
+	assert.Contains(t, content, "NAME=bt commands")
+	assert.Contains(t, content, "SLUG=bt-commands")
 	assert.Contains(t, content, "REPO=bt-commands-repo")
 	assert.Regexp(t, `ID=[a-z0-9]+`, content)
 }
@@ -173,7 +177,7 @@ func TestSessionName_ValidCharsAccepted(t *testing.T) {
 		"my feature",
 		"JIRA-123",
 		"v1.2.3",
-		"jalevin/test-thing",
+		"dev/test-thing",
 		"my_feature",
 	}
 
