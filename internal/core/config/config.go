@@ -572,8 +572,8 @@ type Rule struct {
 	// CloneStrategy overrides the clone strategy for matching repos ("full" or "worktree").
 	CloneStrategy string `json:"clone_strategy,omitempty" yaml:"clone_strategy,omitempty"`
 	// BranchTemplate is a Go template for the git branch name when using the worktree
-	// clone strategy. Available variables: .Name, .Slug, .Owner, .Repo.
-	// Defaults to "hive-<randomID>" when empty.
+	// clone strategy. Available variables: .Name, .Slug, .Owner, .Repo, .ID.
+	// Defaults to "hive/{{ .Slug }}-{{ .ID }}" when empty.
 	BranchTemplate string `json:"branch_template,omitempty" yaml:"branch_template,omitempty"`
 }
 
