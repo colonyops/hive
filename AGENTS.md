@@ -81,7 +81,21 @@ mise run test             # Run tests with go test
 mise run lint             # Run golangci-lint
 mise run check            # tidy + lint + test (full validation)
 mise run coverage         # Generate coverage report
+mise container            # Build and launch an ephemeral Docker container with hive pre-installed
 ```
+
+### Manual Testing
+
+Use `mise container` to manually test hive end-to-end. It builds the current branch and drops you into an isolated Docker container with hive installed and tmux available — no need to install a local binary or worry about polluting your dev environment.
+
+```bash
+mise container
+# Inside the container (hive is aliased to 'hv'):
+hv new --remote <url> "my-session"
+hv ls
+```
+
+This is the preferred way to test CLI/TUI behavior, session creation, branch templates, tmux integration, and anything that requires a real git environment. Do NOT attempt to test by manually building and replacing a binary in your PATH.
 
 ### Environment
 
