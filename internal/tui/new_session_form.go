@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/workspace"
 )
@@ -132,9 +133,11 @@ func (f *NewSessionForm) updateFocusedField(msg tea.Msg) (NewSessionForm, tea.Cm
 	if f.focusedField == 0 {
 		f.repoSelect, cmd = f.repoSelect.Update(msg)
 	} else {
+		prev := f.nameInput.Value()
 		f.nameInput, cmd = f.nameInput.Update(msg)
-		// Clear error when typing
-		f.nameError = ""
+		if f.nameInput.Value() != prev {
+			f.nameError = ""
+		}
 	}
 
 	return *f, cmd
@@ -145,6 +148,10 @@ func (f *NewSessionForm) validateAndSubmit() (NewSessionForm, tea.Cmd) {
 	name := f.nameInput.Value()
 	if name == "" {
 		f.nameError = "Session name is required"
+		return *f, nil
+	}
+	if err := session.ValidateName(name); err != nil {
+		f.nameError = err.Error()
 		return *f, nil
 	}
 	if f.existingNames[name] {
@@ -197,11 +204,14 @@ func (f *NewSessionForm) View() string {
 	// Build content: title + input (+ error if present)
 	nameContent := lipgloss.JoinVertical(lipgloss.Left, nameTitle, f.nameInput.View())
 
-	// Add error inside the bordered area if present
-	if f.nameError != "" {
-		errorView := styles.TextErrorStyle.Render(f.nameError)
-		nameContent = lipgloss.JoinVertical(lipgloss.Left, nameContent, errorView)
+	// Always render error slot at fixed height to keep modal size stable.
+	// Width-constrain to match the input so long messages wrap instead of overflowing.
+	errText := f.nameError
+	if errText == "" {
+		errText = " " // placeholder to hold the line
 	}
+	errorView := styles.TextErrorStyle.Width(f.nameInput.Width()).Render(errText)
+	nameContent = lipgloss.JoinVertical(lipgloss.Left, nameContent, errorView)
 
 	// Apply border style
 	inputBorderStyle := styles.FormFieldStyle

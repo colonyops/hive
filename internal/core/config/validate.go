@@ -20,6 +20,7 @@ type SpawnTemplateData struct {
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
 	Repo       string // Repository name
+	ID         string // Short random ID shared with the session directory
 }
 
 // BatchSpawnTemplateData defines available fields for batch_spawn command templates (hive batch).
@@ -31,11 +32,21 @@ type BatchSpawnTemplateData struct {
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner
 	Repo       string // Repository name
+	ID         string // Short random ID shared with the session directory
 }
 
 // RecycleTemplateData defines available fields for recycle command templates.
 type RecycleTemplateData struct {
 	DefaultBranch string // Default branch name (e.g., "main" or "master")
+}
+
+// BranchTemplateData defines available fields for branch_template Go templates.
+type BranchTemplateData struct {
+	Name  string // Session name (display name)
+	Slug  string // Session slug (URL-safe version of name)
+	Owner string // Repository owner
+	Repo  string // Repository name
+	ID    string // Short random ID shared with the session directory
 }
 
 // ValidationWarning represents a non-fatal configuration issue.
@@ -199,6 +210,12 @@ func (c *Config) validateRules() error {
 				if err := validateTemplate(w.Dir, BatchSpawnTemplateData{}); err != nil {
 					errs = errs.Append(prefix+".dir", fmt.Errorf("template error: %w", err))
 				}
+			}
+		}
+		// Validate branch_template
+		if rule.BranchTemplate != "" {
+			if err := validateTemplate(rule.BranchTemplate, BranchTemplateData{}); err != nil {
+				errs = errs.Append(fmt.Sprintf("rules[%d].branch_template", i), fmt.Errorf("template error: %w", err))
 			}
 		}
 	}

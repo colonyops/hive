@@ -2,6 +2,7 @@
 package session
 
 import (
+	"fmt"
 	"regexp"
 	"strings"
 	"time"
@@ -9,8 +10,30 @@ import (
 
 var nonAlphanumeric = regexp.MustCompile(`[^a-z0-9]+`)
 
-// Slugify converts a name to a URL-safe slug.
-// "My Session Name" -> "my-session-name"
+// validName matches the allowed session name character set.
+// Blocks characters that are meaningless or actively harmful in session names
+// while allowing the full range developers commonly use in branch/ticket names.
+// Disallowed: ~ ^ * ? [ \ @ and control characters.
+var validName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9 _.:/\-]*$`)
+
+// ValidateName returns an error if name contains characters outside the
+// allowed set. Slugify maps all non-alphanumeric characters to hyphens, so
+// the derived slug is always safe for tmux session names and git branch names
+// regardless of what permitted characters appear in the raw name.
+func ValidateName(name string) error {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("session name cannot be empty")
+	}
+	if !validName.MatchString(name) {
+		return fmt.Errorf("invalid session name: allowed characters are a-z, 0-9, spaces, and - _ : . /")
+	}
+	return nil
+}
+
+// Slugify converts a name to a URL-safe slug for use in directory paths and tmux session names.
+// "My Session Name"    -> "my-session-name"
+// "dev/test-thing" -> "dev-test-thing"
 func Slugify(name string) string {
 	s := strings.ToLower(strings.TrimSpace(name))
 	s = nonAlphanumeric.ReplaceAllString(s, "-")

@@ -76,6 +76,15 @@ func TestNewNewSessionForm(t *testing.T) {
 		assert.Equal(t, "Session name is required", updated.nameError)
 	})
 
+	t.Run("validates session name characters", func(t *testing.T) {
+		form := NewNewSessionForm(repos, "", nil)
+		form.focusedField = 1
+		form.nameInput.SetValue("bad~name")
+		updated, _ := form.Update(keyPress(tea.KeyEnter))
+		assert.False(t, updated.Submitted())
+		assert.Contains(t, updated.nameError, "invalid session name")
+	})
+
 	t.Run("validates duplicate session name", func(t *testing.T) {
 		existingNames := map[string]bool{"existing-session": true}
 		form := NewNewSessionForm(repos, "", existingNames)

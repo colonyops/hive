@@ -1585,3 +1585,92 @@ func TestValidateCloneStrategy(t *testing.T) {
 		assert.Contains(t, err.Error(), "invalid clone_strategy")
 	})
 }
+
+func TestGetBranchTemplate(t *testing.T) {
+	tests := []struct {
+		name     string
+		rules    []Rule
+		remote   string
+		expected string
+	}{
+		{
+			name:     "no rules returns empty string",
+			rules:    nil,
+			remote:   "https://github.com/foo/bar",
+			expected: "",
+		},
+		{
+			name: "catch-all rule sets template",
+			rules: []Rule{
+				{Pattern: "", BranchTemplate: "dev/{{ .Slug }}"},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: "dev/{{ .Slug }}",
+		},
+		{
+			name: "non-matching rule returns empty string",
+			rules: []Rule{
+				{Pattern: "github.com/other/.*", BranchTemplate: "dev/{{ .Slug }}"},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: "",
+		},
+		{
+			name: "matching rule returns template",
+			rules: []Rule{
+				{Pattern: "github.com/foo/.*", BranchTemplate: "dev/{{ .Slug }}-{{ .ID }}"},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: "dev/{{ .Slug }}-{{ .ID }}",
+		},
+		{
+			name: "last matching rule wins",
+			rules: []Rule{
+				{Pattern: "github.com/.*", BranchTemplate: "dev/{{ .Slug }}"},
+				{Pattern: "github.com/foo/.*", BranchTemplate: "feat/{{ .Slug }}-{{ .ID }}"},
+			},
+			remote:   "https://github.com/foo/bar",
+			expected: "feat/{{ .Slug }}-{{ .ID }}",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Rules = tt.rules
+
+			result := cfg.GetBranchTemplate(tt.remote)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestValidateDeep_BranchTemplate(t *testing.T) {
+	t.Run("valid template passes", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{Pattern: "", BranchTemplate: "dev/{{ .Slug }}-{{ .ID }}"},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+
+	t.Run("invalid template syntax fails", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{Pattern: "", BranchTemplate: "dev/{{ .Slug"},
+		}
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "rules[0].branch_template")
+		assert.Contains(t, fieldErrs[0].Err.Error(), "template error")
+	})
+
+	t.Run("empty branch_template is valid", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{Pattern: "", Commands: []string{"echo hello"}},
+		}
+		assert.NoError(t, cfg.ValidateDeep(""))
+	})
+}

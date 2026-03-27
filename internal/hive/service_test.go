@@ -152,12 +152,12 @@ func TestRenameSession_Slugify(t *testing.T) {
 	}
 	require.NoError(t, store.Save(context.Background(), sess))
 
-	err := svc.RenameSession(context.Background(), "test1", "My Feature Branch!")
+	err := svc.RenameSession(context.Background(), "test1", "My Feature Branch")
 	require.NoError(t, err)
 
 	updated, err := store.Get(context.Background(), "test1")
 	require.NoError(t, err)
-	assert.Equal(t, "My Feature Branch!", updated.Name)
+	assert.Equal(t, "My Feature Branch", updated.Name)
 	assert.Equal(t, "my-feature-branch", updated.Slug)
 }
 
@@ -178,13 +178,13 @@ func TestRenameSession_EmptyName(t *testing.T) {
 	assert.Contains(t, err.Error(), "name cannot be empty")
 }
 
-func TestRenameSession_EmptySlug(t *testing.T) {
+func TestRenameSession_InvalidChars(t *testing.T) {
 	store := newMockStore()
 	svc := newTestService(t, store, nil)
 
-	err := svc.RenameSession(context.Background(), "test1", "!!!")
+	err := svc.RenameSession(context.Background(), "test1", "feat: something!")
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "empty slug")
+	assert.Contains(t, err.Error(), "invalid session name")
 }
 
 // TestCreateSession_SlugUsedAsTmuxName verifies that CreateSession uses the slug (not the
@@ -1061,8 +1061,100 @@ func TestEnforceMaxRecycled_SeparateByStrategy(t *testing.T) {
 	assert.Equal(t, 3, wtCount, "worktree sessions must not be affected")
 }
 
+func TestCreateSession_BranchTemplate(t *testing.T) {
+	makeService := func(t *testing.T, gitImpl git.Git, rules []config.Rule) *SessionService {
+		t.Helper()
+		store := newMockStore()
+		cfg := &config.Config{
+			DataDir: t.TempDir(),
+			GitPath: "git",
+			Rules:   rules,
+		}
+		log := zerolog.New(io.Discard)
+		renderer := tmpl.New(tmpl.Config{})
+		return NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &mockExec{}, renderer, log, io.Discard, io.Discard)
+	}
+
+	t.Run("valid template uses rendered branch", func(t *testing.T) {
+		var capturedBranch string
+		spy := &capturingMockGit{}
+		spy.WorktreeAddFn = func(_ context.Context, _, _, branch string) error {
+			capturedBranch = branch
+			return nil
+		}
+		svc := makeService(t, spy, []config.Rule{
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree, BranchTemplate: "feat/{{ .Slug }}-{{ .ID }}"},
+		})
+		sess, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "my-feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.NoError(t, err)
+		assert.Regexp(t, `^feat/my-feature-[a-z0-9]+$`, capturedBranch)
+		assert.Equal(t, capturedBranch, sess.GetMeta(session.MetaWorktreeBranch))
+	})
+
+	t.Run("no template uses default hive/<slug>-<id>", func(t *testing.T) {
+		var capturedBranch string
+		spy := &capturingMockGit{}
+		spy.WorktreeAddFn = func(_ context.Context, _, _, branch string) error {
+			capturedBranch = branch
+			return nil
+		}
+		svc := makeService(t, spy, []config.Rule{
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree},
+		})
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "my-feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.NoError(t, err)
+		assert.Regexp(t, `^hive/my-feature-[a-z0-9]+$`, capturedBranch)
+	})
+
+	t.Run("template rendering to invalid branch name returns error", func(t *testing.T) {
+		svc := makeService(t, &mockGit{}, []config.Rule{
+			// .Name will be "My Feature" (has a space) → invalid git branch name
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree, BranchTemplate: "feat/{{ .Name }}"},
+		})
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "My Feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "invalid git branch name")
+		assert.Contains(t, err.Error(), "feat/My Feature")
+	})
+
+	t.Run("template render failure returns error", func(t *testing.T) {
+		svc := makeService(t, &mockGit{}, []config.Rule{
+			{Pattern: "", CloneStrategy: config.CloneStrategyWorktree, BranchTemplate: "feat/{{ .Unknown }}"},
+		})
+		_, err := svc.CreateSession(context.Background(), CreateOptions{
+			Name:   "my-feature",
+			Remote: "https://github.com/example/repo.git",
+		})
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "branch_template render failed")
+	})
+}
+
+// capturingMockGit extends mockGit with optional function overrides for capturing calls.
+type capturingMockGit struct {
+	mockGit
+	WorktreeAddFn func(ctx context.Context, repoDir, path, branch string) error
+}
+
+func (m *capturingMockGit) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {
+	if m.WorktreeAddFn != nil {
+		return m.WorktreeAddFn(ctx, repoDir, path, branch)
+	}
+	return nil
+}
+
 // Ensure the mock implements the interface at compile time.
 var (
 	_ git.Git       = (*mockGit)(nil)
+	_ git.Git       = (*capturingMockGit)(nil)
 	_ session.Store = (*mockStore)(nil)
 )

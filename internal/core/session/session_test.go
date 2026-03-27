@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSession_CanRecycle(t *testing.T) {
@@ -78,6 +79,49 @@ func TestSession_GroupAccessors(t *testing.T) {
 		s.SetGroup("")
 		assert.Empty(t, s.Group())
 	})
+}
+
+func TestValidateName(t *testing.T) {
+	valid := []string{
+		"my-feature",
+		"My Feature",
+		"feature-123",
+		"ABC",
+		"a",
+		"fix auth bug",
+		"my_feature",
+		"JIRA-123: fix auth",
+		"v1.2.3",
+		"dev/test-thing",
+		"release/1.0",
+	}
+	for _, name := range valid {
+		t.Run("valid/"+name, func(t *testing.T) {
+			assert.NoError(t, ValidateName(name))
+		})
+	}
+
+	invalid := []struct {
+		input  string
+		errMsg string
+	}{
+		{"", "cannot be empty"},
+		{"   ", "cannot be empty"},
+		{"my~feature", "invalid session name"},
+		{"fix^1", "invalid session name"},
+		{"feat*", "invalid session name"},
+		{"feat?", "invalid session name"},
+		{"feat[0]", "invalid session name"},
+		{`feat\branch`, "invalid session name"},
+		{"-starts-with-hyphen", "invalid session name"},
+	}
+	for _, tt := range invalid {
+		t.Run("invalid/"+tt.input, func(t *testing.T) {
+			err := ValidateName(tt.input)
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errMsg)
+		})
+	}
 }
 
 func TestSlugify(t *testing.T) {
