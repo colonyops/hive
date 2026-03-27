@@ -50,7 +50,7 @@ func (e *Executor) ResetHard(ctx context.Context, dir string) error {
 }
 
 func (e *Executor) RemoteURL(ctx context.Context, dir string) (string, error) {
-	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "remote", "get-url", "origin")
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "remote", "get-url", "origin")
 	if err != nil {
 		return "", fmt.Errorf("git remote get-url: %w", err)
 	}
@@ -58,7 +58,7 @@ func (e *Executor) RemoteURL(ctx context.Context, dir string) (string, error) {
 }
 
 func (e *Executor) IsClean(ctx context.Context, dir string) (bool, error) {
-	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "status", "--porcelain")
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "status", "--porcelain")
 	if err != nil {
 		return false, fmt.Errorf("git status: %w", err)
 	}
@@ -67,7 +67,7 @@ func (e *Executor) IsClean(ctx context.Context, dir string) (bool, error) {
 
 func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
 	// Try to get branch name first
-	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "branch", "--show-current")
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "branch", "--show-current")
 	if err != nil {
 		return "", fmt.Errorf("git branch: %w", err)
 	}
@@ -78,7 +78,7 @@ func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
 	}
 
 	// Empty branch name means detached HEAD - get short commit SHA
-	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "rev-parse", "--short", "HEAD")
+	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--short", "HEAD")
 	if err != nil {
 		return "", fmt.Errorf("git rev-parse: %w", err)
 	}
@@ -88,7 +88,7 @@ func (e *Executor) Branch(ctx context.Context, dir string) (string, error) {
 
 func (e *Executor) DefaultBranch(ctx context.Context, dir string) (string, error) {
 	// Get the default branch from origin's HEAD reference
-	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
 	if err != nil {
 		return "", fmt.Errorf("git symbolic-ref: %w", err)
 	}
@@ -111,10 +111,10 @@ func (e *Executor) DiffStats(ctx context.Context, dir string) (additions, deleti
 	var out []byte
 	if defaultBranch == "HEAD" {
 		// Compare working directory against HEAD
-		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "diff", "--shortstat", "HEAD")
+		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "diff", "--shortstat", "HEAD")
 	} else {
 		// Compare current branch against default branch (e.g., main...HEAD)
-		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "diff", "--shortstat", defaultBranch+"...HEAD")
+		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "diff", "--shortstat", defaultBranch+"...HEAD")
 	}
 
 	if err != nil {
@@ -176,7 +176,7 @@ func (e *Executor) IsValidRepo(ctx context.Context, dir string) error {
 		return fmt.Errorf(".git directory missing")
 	}
 
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "rev-parse", "--git-dir"); err != nil {
+	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--git-dir"); err != nil {
 		return fmt.Errorf("git rev-parse failed: %w", err)
 	}
 
@@ -212,7 +212,7 @@ func (e *Executor) WorktreeRemove(ctx context.Context, repoDir, path, branch str
 }
 
 func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath string) error {
-	out, err := e.exec.RunDir(ctx, bareDir, e.gitPath, "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
+	out, err := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
 	if err != nil {
 		return fmt.Errorf("get default branch: %w", err)
 	}
@@ -228,7 +228,7 @@ func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath stri
 
 func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, error) {
 	// Try the upstream tracking branch first (set via "git push -u" or "git branch --set-upstream-to").
-	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "rev-list", "--count", "@{upstream}..HEAD")
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-list", "--count", "@{upstream}..HEAD")
 	if err == nil {
 		n, _ := parseInt(strings.TrimSpace(string(out)))
 		return n > 0, nil
@@ -240,7 +240,7 @@ func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, er
 		return false, fmt.Errorf("get default branch: %w", err)
 	}
 
-	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "rev-list", "--count", "origin/"+defaultBranch+"..HEAD")
+	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-list", "--count", "origin/"+defaultBranch+"..HEAD")
 	if err != nil {
 		return false, fmt.Errorf("rev-list unpushed: %w", err)
 	}
