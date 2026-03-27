@@ -4,6 +4,7 @@ import (
 	"charm.land/bubbles/v2/textinput"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/workspace"
 )
@@ -145,6 +146,10 @@ func (f *NewSessionForm) validateAndSubmit() (NewSessionForm, tea.Cmd) {
 	name := f.nameInput.Value()
 	if name == "" {
 		f.nameError = "Session name is required"
+		return *f, nil
+	}
+	if err := session.ValidateName(name); err != nil {
+		f.nameError = err.Error()
 		return *f, nil
 	}
 	if f.existingNames[name] {

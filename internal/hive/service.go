@@ -323,7 +323,6 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 
 	// Spawn terminal
 	writeProgressf(progress, "Spawning terminal...")
-	owner, repoName = git.ExtractOwnerRepo(remote)
 	data := SpawnData{
 		Path:       sess.Path,
 		Name:       sess.Name,

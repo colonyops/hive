@@ -47,6 +47,8 @@ func TestValidateBranchName(t *testing.T) {
 		{"ends-with-dot", "feat.", "end with '.'"},
 		{"ends-with-slash", "feat/", "end with '/'"},
 		{"ends-with-lock", "feat.lock", "'.lock'"},
+		{"component-starts-with-dot", "feat/.hidden", "start with '.'"},
+		{"component-ends-with-lock", "feat/refs.lock", "'.lock'"},
 		{"control-char", "feat\x01branch", "control character"},
 		{"newline", "feat\nbranch", "control character"},
 	}

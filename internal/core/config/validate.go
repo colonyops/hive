@@ -27,7 +27,7 @@ type SpawnTemplateData struct {
 type BatchSpawnTemplateData struct {
 	Path       string // Absolute path to the session directory
 	Name       string // Session name (directory basename)
-	Prompt     string // User-supported prompt (batch only)
+	Prompt     string // User-provided prompt (batch only)
 	Slug       string // Session slug (URL-safe version of name)
 	ContextDir string // Path to context directory
 	Owner      string // Repository owner

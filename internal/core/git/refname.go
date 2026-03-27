@@ -51,21 +51,25 @@ func ValidateBranchName(s string) error {
 		return fmt.Errorf("branch name cannot contain '//'")
 	}
 
-	// Disallowed starts/ends
-	if strings.HasPrefix(s, ".") {
-		return fmt.Errorf("branch name cannot start with '.'")
-	}
+	// Disallowed starts/ends (whole name)
 	if strings.HasPrefix(s, "/") {
 		return fmt.Errorf("branch name cannot start with '/'")
-	}
-	if strings.HasSuffix(s, ".") {
-		return fmt.Errorf("branch name cannot end with '.'")
 	}
 	if strings.HasSuffix(s, "/") {
 		return fmt.Errorf("branch name cannot end with '/'")
 	}
-	if strings.HasSuffix(s, ".lock") {
-		return fmt.Errorf("branch name cannot end with '.lock'")
+	if strings.HasSuffix(s, ".") {
+		return fmt.Errorf("branch name cannot end with '.'")
+	}
+
+	// Per-component rules: no component may start with '.' or end with '.lock'
+	for _, component := range strings.Split(s, "/") {
+		if strings.HasPrefix(component, ".") {
+			return fmt.Errorf("branch name component %q cannot start with '.'", component)
+		}
+		if strings.HasSuffix(component, ".lock") {
+			return fmt.Errorf("branch name component %q cannot end with '.lock'", component)
+		}
 	}
 
 	return nil

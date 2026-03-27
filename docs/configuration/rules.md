@@ -136,8 +136,8 @@ These two variables behave very differently as a branch name source:
 | | `.Slug` | `.Name` |
 |---|---|---|
 | Value for session `"dev/fix auth"` | `dev-fix-auth` | `dev/fix auth` |
-| Always a valid git branch name | ✅ | ❌ (spaces, colons, etc. are rejected by git) |
-| Preserves `/` namespace separator | ❌ (converted to `-` for safe directory paths) | ✅ |
+| Always a valid git branch name | yes | no (spaces, colons, etc. are rejected by git) |
+| Preserves `/` namespace separator | no (converted to `-` for safe directory paths) | yes |
 
 **Use `.Slug` when you want a safe, predictable branch name:**
 ```yaml
