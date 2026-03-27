@@ -168,6 +168,10 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 	writeProgressf(progress, "Clone strategy: %s", cloneStrategy)
 
+	if err := session.ValidateName(opts.Name); err != nil {
+		return nil, err
+	}
+
 	var sess session.Session
 	var dirID string
 	slug := session.Slugify(opts.Name)
@@ -273,10 +277,12 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 					ID:    dirID,
 				})
 				if err != nil {
-					s.log.Warn().Err(err).Str("template", tmplStr).Msg("branch_template render failed, using default branch name")
-				} else {
-					branch = rendered
+					return nil, fmt.Errorf("branch_template render failed: %w", err)
 				}
+				if err := git.ValidateBranchName(rendered); err != nil {
+					return nil, fmt.Errorf("branch_template %q rendered to invalid git branch name %q: %w", tmplStr, rendered, err)
+				}
+				branch = rendered
 			}
 			if err := s.git.WorktreeAdd(ctx, bareDir, path, branch); err != nil {
 				return nil, fmt.Errorf("worktree add: %w", err)
@@ -473,14 +479,11 @@ func (s *SessionService) recycleWorktreeSession(ctx context.Context, sess *sessi
 // RenameSession changes the name (and slug) of an existing session.
 func (s *SessionService) RenameSession(ctx context.Context, id, newName string) error {
 	newName = strings.TrimSpace(newName)
-	if newName == "" {
-		return fmt.Errorf("rename session: name cannot be empty")
+	if err := session.ValidateName(newName); err != nil {
+		return fmt.Errorf("rename session: %w", err)
 	}
 
 	slug := session.Slugify(newName)
-	if slug == "" {
-		return fmt.Errorf("rename session: name %q produces an empty slug", newName)
-	}
 
 	sess, err := s.sessions.Get(ctx, id)
 	if err != nil {
