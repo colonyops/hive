@@ -9,11 +9,11 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/x/ansi v0.11.6
-	github.com/charmbracelet/x/exp/golden v0.0.0-20260323091123-df7b1bcffcca
+	github.com/charmbracelet/x/exp/golden v0.0.0-20260329003944-7eda8903d971
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/hay-kot/criterio v1.0.0
-	github.com/lucasb-eyer/go-colorful v1.3.0
+	github.com/lucasb-eyer/go-colorful v1.4.0
 	github.com/rs/zerolog v1.35.0
 	github.com/sahilm/fuzzy v0.1.1
 	github.com/stretchr/testify v1.11.1
