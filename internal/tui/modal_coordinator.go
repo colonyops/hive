@@ -50,6 +50,13 @@ type ModalCoordinator struct {
 	StreamCancel context.CancelFunc
 	StreamResult streamResult // session metadata from create operations
 
+	// Background streaming (dismissed but still running)
+	BgStreamOutput <-chan string
+	BgStreamDone   <-chan error
+	BgStreamCancel context.CancelFunc
+	BgStreamResult streamResult
+	BgStreamTitle  string
+
 	// Sizing
 	width, height int
 }
