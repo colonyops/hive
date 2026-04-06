@@ -9,7 +9,7 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/x/ansi v0.11.6
-	github.com/charmbracelet/x/exp/golden v0.0.0-20260329003944-7eda8903d971
+	github.com/charmbracelet/x/exp/golden v0.0.0-20260330094520-2dce04b6f8a4
 	github.com/fsnotify/fsnotify v1.9.0
 	github.com/google/uuid v1.6.0
 	github.com/hay-kot/criterio v1.0.0
@@ -21,7 +21,7 @@ require (
 	golang.org/x/mod v0.34.0
 	golang.org/x/term v0.41.0
 	gopkg.in/yaml.v3 v3.0.1
-	modernc.org/sqlite v1.48.0
+	modernc.org/sqlite v1.48.1
 )
 
 require (
