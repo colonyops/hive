@@ -5,6 +5,7 @@ import "context"
 // TmuxExecutor opens or creates a tmux session via the TmuxOpener interface.
 type TmuxExecutor struct {
 	opener       TmuxOpener
+	sessionID    string
 	name         string
 	path         string
 	remote       string
@@ -20,7 +21,7 @@ func (e *TmuxExecutor) Execute(ctx context.Context) (output <-chan string, done 
 
 	go func() {
 		defer close(doneCh)
-		doneCh <- e.opener.OpenTmuxSession(ctx, e.name, e.path, e.remote, e.targetWindow, e.background)
+		doneCh <- e.opener.OpenTmuxSession(ctx, e.sessionID, e.name, e.path, e.remote, e.targetWindow, e.background)
 	}()
 
 	return nil, doneCh, cancel

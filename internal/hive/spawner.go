@@ -24,6 +24,7 @@ type SessionClient interface {
 
 // SpawnData is the template context for spawn commands.
 type SpawnData struct {
+	ID         string // Hive session ID (injected as HIVE_SESSION_ID env var)
 	Path       string // Absolute path to session directory
 	Name       string // Session name (display name)
 	Prompt     string // User-provided prompt (batch only)
@@ -63,6 +64,10 @@ func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) 
 		rendered, err := s.renderer.Render(cmdTmpl, data)
 		if err != nil {
 			return fmt.Errorf("render spawn command %q: %w", cmdTmpl, err)
+		}
+
+		if data.ID != "" {
+			rendered = "HIVE_SESSION_ID=" + data.ID + " " + rendered
 		}
 
 		if err := s.executor.RunStream(ctx, s.stdout, s.stderr, "sh", "-c", rendered); err != nil {
@@ -152,9 +157,16 @@ func renderWindowCommon(w config.WindowConfig, render func(string) (string, erro
 
 // renderWindow renders a single WindowConfig against SpawnData.
 func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData) (coretmux.RenderedWindow, error) {
-	return renderWindowCommon(w, func(tmplStr string) (string, error) {
+	rw, err := renderWindowCommon(w, func(tmplStr string) (string, error) {
 		return renderer.Render(tmplStr, data)
 	})
+	if err != nil {
+		return rw, err
+	}
+	if data.ID != "" && rw.Command != "" {
+		rw.Command = "HIVE_SESSION_ID=" + data.ID + " " + rw.Command
+	}
+	return rw, nil
 }
 
 // renderWindowMap renders a single WindowConfig against a map[string]any data context.

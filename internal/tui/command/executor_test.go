@@ -312,12 +312,12 @@ type mockTmuxOpener struct {
 }
 
 type tmuxOpenCall struct {
-	Name, Path, Remote, TargetWindow string
-	Background                       bool
+	SessionID, Name, Path, Remote, TargetWindow string
+	Background                                  bool
 }
 
-func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, name, path, remote, targetWindow string, background bool) error {
-	m.calls = append(m.calls, tmuxOpenCall{name, path, remote, targetWindow, background})
+func (m *mockTmuxOpener) OpenTmuxSession(_ context.Context, sessionID, name, path, remote, targetWindow string, background bool) error {
+	m.calls = append(m.calls, tmuxOpenCall{sessionID, name, path, remote, targetWindow, background})
 	return m.openErr
 }
 

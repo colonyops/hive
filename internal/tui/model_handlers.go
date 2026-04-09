@@ -867,9 +867,11 @@ func (m Model) handleTodoPanelKey(keyStr string) (tea.Model, tea.Cmd) {
 			m.todoBadge.clearPendingWithOpen(m.modals.TodoPanel.OpenCount())
 			m.modals.DismissTodoPanel()
 			return m, m.executeAction(act.Action{
-				Type:        act.TypeTmuxOpen,
-				SessionName: found.Name,
-				SessionPath: found.Path,
+				Type:          act.TypeTmuxOpen,
+				SessionID:     found.ID,
+				SessionName:   found.Name,
+				SessionPath:   found.Path,
+				SessionRemote: found.Remote,
 			})
 		case "review":
 			if m.reviewView != nil {
