@@ -637,6 +637,26 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		m.modals.Pending = Action{}
 		return m, m.refreshSessions()
+	case "b":
+		if !m.modals.Output.IsRunning() {
+			return m, nil
+		}
+		// Move the running operation to background.
+		m.modals.BgStreamOutput = m.modals.StreamOutput
+		m.modals.BgStreamDone = m.modals.StreamDone
+		m.modals.BgStreamCancel = m.modals.StreamCancel
+		m.modals.BgStreamResult = m.modals.StreamResult
+		m.modals.BgStreamTitle = m.modals.Output.title
+
+		m.modals.StreamOutput = nil
+		m.modals.StreamDone = nil
+		m.modals.StreamCancel = nil
+		m.modals.StreamResult = streamResult{}
+
+		m.state = stateNormal
+		m.modals.Pending = Action{}
+		m.publishNotificationf(notify.LevelInfo, "Moved to background: %s", m.modals.BgStreamTitle)
+		return m, listenForBgStreamComplete(m.modals.BgStreamOutput, m.modals.BgStreamDone, m.modals.BgStreamResult)
 	case keyEnter:
 		if !m.modals.Output.IsRunning() {
 			m.state = stateNormal
@@ -644,6 +664,27 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 			return m, m.refreshSessions()
 		}
 	}
+	return m, nil
+}
+
+// handleBgStreamComplete handles completion of a backgrounded streaming operation.
+func (m Model) handleBgStreamComplete(msg bgStreamCompleteMsg) (tea.Model, tea.Cmd) {
+	title := m.modals.BgStreamTitle
+	m.modals.BgStreamOutput = nil
+	m.modals.BgStreamDone = nil
+	m.modals.BgStreamCancel = nil
+	m.modals.BgStreamResult = streamResult{}
+	m.modals.BgStreamTitle = ""
+
+	if msg.err == nil {
+		m.publishNotificationf(notify.LevelInfo, "Complete: %s", title)
+		if msg.result.sessionID != nil && *msg.result.sessionID != "" {
+			m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
+		}
+		return m, m.refreshSessions()
+	}
+
+	m.publishNotificationf(notify.LevelError, "Failed: %s — %v", title, msg.err)
 	return m, nil
 }
 

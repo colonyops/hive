@@ -72,6 +72,12 @@ func (m Model) renderTabView() string {
 		tabsLeft = lipgloss.JoinHorizontal(lipgloss.Left, tabsLeft, "  ", styles.TextPrimaryBoldStyle.Render("["+filterLabel+"]"))
 	}
 
+	// Background operation indicator
+	bgIndicator := ""
+	if m.modals.BgStreamDone != nil {
+		bgIndicator = styles.TextWarningStyle.Render("⟳ " + m.modals.BgStreamTitle + " ")
+	}
+
 	// Todo indicator: right-aligned, warning when pending or counts are degraded.
 	todoIndicator := ""
 	if m.todoBadge.degraded {
@@ -97,17 +103,18 @@ func (m Model) renderTabView() string {
 	}
 
 	// Calculate spacing to push right-side elements to right edge
-	// Layout: [margin] tabs [spacer] todoIndicator branding [margin]
+	// Layout: [margin] tabs [spacer] bgIndicator todoIndicator branding [margin]
 	margin := 1
 	tabsWidth := lipgloss.Width(tabsLeft)
 	brandingWidth := lipgloss.Width(branding)
 	todoWidth := lipgloss.Width(todoIndicator)
-	spacerWidth := max(m.width-tabsWidth-todoWidth-brandingWidth-(margin*2), 1)
+	bgWidth := lipgloss.Width(bgIndicator)
+	spacerWidth := max(m.width-tabsWidth-bgWidth-todoWidth-brandingWidth-(margin*2), 1)
 	leftMargin := components.Pad(margin)
 	spacer := components.Pad(spacerWidth)
 	rightMargin := components.Pad(margin)
 
-	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, todoIndicator, branding, rightMargin)
+	header := lipgloss.JoinHorizontal(lipgloss.Left, leftMargin, tabsLeft, spacer, bgIndicator, todoIndicator, branding, rightMargin)
 
 	// Horizontal dividers above and below header
 	dividerWidth := m.width

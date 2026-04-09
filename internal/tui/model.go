@@ -188,6 +188,12 @@ type streamCompleteMsg struct {
 	err error
 }
 
+// bgStreamCompleteMsg is sent when a backgrounded streaming operation finishes.
+type bgStreamCompleteMsg struct {
+	err    error
+	result streamResult
+}
+
 // drainNotificationsMsg signals that buffered notifications should be drained.
 type drainNotificationsMsg struct{}
 
@@ -361,6 +367,9 @@ func New(deps Deps, opts Opts) Model {
 // quit sets the quitting flag and emits tui.stopped.
 func (m Model) quit() (Model, tea.Cmd) {
 	m.quitting = true
+	if m.modals.BgStreamCancel != nil {
+		m.modals.BgStreamCancel()
+	}
 	if m.bus != nil {
 		m.bus.PublishTuiStopped(eventbus.TUIStoppedPayload{})
 	}
@@ -555,6 +564,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleStreamOutput(msg)
 	case streamCompleteMsg:
 		model, cmd = m.handleStreamComplete(msg)
+	case bgStreamCompleteMsg:
+		model, cmd = m.handleBgStreamComplete(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -1863,6 +1874,19 @@ func listenForStreamingOutput(output <-chan string, done <-chan error) tea.Cmd {
 		case err := <-done:
 			return streamCompleteMsg{err: err}
 		}
+	}
+}
+
+// listenForBgStreamComplete drains any remaining output and waits for the done
+// signal from a backgrounded streaming operation. Individual output lines are
+// discarded since the modal is no longer visible.
+func listenForBgStreamComplete(output <-chan string, done <-chan error, result streamResult) tea.Cmd {
+	return func() tea.Msg {
+		// Drain output channel until closed.
+		for range output {
+		}
+		err := <-done
+		return bgStreamCompleteMsg{err: err, result: result}
 	}
 }
 

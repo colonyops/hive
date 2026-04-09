@@ -153,7 +153,7 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	// Build help line
 	var help string
 	if m.running {
-		help = "[esc] cancel"
+		help = "[b] background • [esc] cancel"
 	} else {
 		help = "[enter/esc] close"
 	}
