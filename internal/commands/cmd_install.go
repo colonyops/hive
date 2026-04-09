@@ -71,6 +71,11 @@ func (cmd *InstallCmd) runClaude(_ context.Context, _ *cli.Command) error {
 	}
 
 	settingsPath := filepath.Join(home, ".claude", "settings.json")
+	// Resolve any symlink so Rename writes to the real file, not a new regular file
+	// (important for users managing ~/.claude/settings.json via dotfile managers).
+	if resolved, err := filepath.EvalSymlinks(settingsPath); err == nil {
+		settingsPath = resolved
+	}
 
 	// Read existing settings, preserving all unknown fields.
 	raw := make(map[string]json.RawMessage)
@@ -103,7 +108,6 @@ func (cmd *InstallCmd) runClaude(_ context.Context, _ *cli.Command) error {
 		return nil
 	}
 
-	// Re-encode hooks and merge back into the raw map.
 	hooksJSON, err := json.Marshal(hooks)
 	if err != nil {
 		return fmt.Errorf("encode hooks: %w", err)

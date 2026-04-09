@@ -96,20 +96,6 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 		Status: terminal.StatusMissing,
 	}
 
-	// Check hook KV before issuing tmux commands. A fresh hook entry means the
-	// agent is alive and reporting status directly — no tmux capture needed.
-	if kvStore != nil {
-		hookKV := corekv.Scoped[terminal.HookStatus](kvStore, "hook.status")
-		if hs, err := hookKV.Get(ctx, sess.ID+":0"); err == nil {
-			if time.Since(hs.WrittenAt) < freshnessWindow {
-				return TerminalStatus{
-					Status: hs.Status,
-					Tool:   terminal.ToolClaude,
-				}
-			}
-		}
-	}
-
 	// Inject session path into metadata for multi-window disambiguation
 	metadata := sess.Metadata
 	if sess.Path != "" {

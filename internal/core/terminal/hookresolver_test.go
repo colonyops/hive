@@ -40,7 +40,7 @@ func TestMapEventToStatus(t *testing.T) {
 
 func TestHookResolverEnvVar(t *testing.T) {
 	t.Setenv("HIVE_SESSION_ID", "test-session-id")
-	t.Setenv("TMUX", "") // not inside tmux
+	t.Setenv("TMUX", "")
 
 	resolver := terminal.NewHookResolver(&stubSessionStore{})
 	sessionID, windowIndex, err := resolver.Resolve(context.Background())
@@ -57,7 +57,7 @@ func TestHookResolverEnvVar(t *testing.T) {
 
 func TestHookResolverCWDFallback(t *testing.T) {
 	t.Setenv("HIVE_SESSION_ID", "")
-	t.Setenv("TMUX", "") // not inside tmux
+	t.Setenv("TMUX", "")
 
 	// CWD won't match any session path → empty string returned, no error.
 	resolver := terminal.NewHookResolver(&stubSessionStore{sessions: []session.Session{}})

@@ -92,7 +92,6 @@ func (cmd *HookHandlerCmd) run(_ context.Context, _ *cli.Command) error {
 	sessionStore := stores.NewSessionStore(database)
 	kvStore := stores.NewKVStore(database)
 
-	// Resolve which Hive session this hook event belongs to.
 	resolver := terminal.NewHookResolver(sessionStore)
 	sessionID, windowIndex, err := resolver.Resolve(ctx)
 	if err != nil {

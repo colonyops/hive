@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/hay-kot/criterio"
 	"gopkg.in/yaml.v3"
@@ -530,12 +531,12 @@ type ClaudePluginConfig struct {
 	HookFreshnessWindow time.Duration `json:"hook_freshness_window" yaml:"hook_freshness_window"` // max age of hook status before tmux fallback (default: 2m)
 }
 
-// GetHookFreshnessWindow returns the configured freshness window, defaulting to 2 minutes.
+// GetHookFreshnessWindow returns the configured freshness window, defaulting to DefaultHookFreshnessWindow.
 func (c ClaudePluginConfig) GetHookFreshnessWindow() time.Duration {
 	if c.HookFreshnessWindow > 0 {
 		return c.HookFreshnessWindow
 	}
-	return 2 * time.Minute
+	return terminal.DefaultHookFreshnessWindow
 }
 
 // DatabaseConfig holds SQLite database configuration.

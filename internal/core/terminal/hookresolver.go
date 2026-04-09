@@ -37,7 +37,6 @@ func (r *HookResolver) Resolve(ctx context.Context) (sessionID, windowIndex stri
 		return id, windowIndex, nil
 	}
 
-	// Strategy 2: tmux session name matches sess.Slug
 	if tmuxName := tmuxSessionName(); tmuxName != "" {
 		sessions, err := r.store.List(ctx)
 		if err != nil {
@@ -50,7 +49,6 @@ func (r *HookResolver) Resolve(ctx context.Context) (sessionID, windowIndex stri
 		}
 	}
 
-	// Strategy 3: CWD path match
 	detector := messaging.NewSessionDetector(r.store)
 	id, err := detector.DetectSession(ctx)
 	return id, windowIndex, err

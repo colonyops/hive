@@ -28,6 +28,30 @@ func TestRenderWindowCommon(t *testing.T) {
 	assert.True(t, rw.Focus)
 }
 
+func TestRenderWindowHIVESessionID(t *testing.T) {
+	r := testRenderer()
+	w := config.WindowConfig{Name: "agent", Command: "claude"}
+
+	t.Run("injects env var prefix when ID is set", func(t *testing.T) {
+		rw, err := renderWindow(r, w, SpawnData{ID: "abc123", Name: "s"})
+		require.NoError(t, err)
+		assert.Equal(t, "HIVE_SESSION_ID=abc123 claude", rw.Command)
+	})
+
+	t.Run("skips injection when ID is empty", func(t *testing.T) {
+		rw, err := renderWindow(r, w, SpawnData{ID: "", Name: "s"})
+		require.NoError(t, err)
+		assert.Equal(t, "claude", rw.Command)
+	})
+
+	t.Run("env var appears at start of command", func(t *testing.T) {
+		rw, err := renderWindow(r, w, SpawnData{ID: "xyz99", Name: "s"})
+		require.NoError(t, err)
+		assert.True(t, len(rw.Command) > 0 && rw.Command[:len("HIVE_SESSION_ID=")] == "HIVE_SESSION_ID=",
+			"HIVE_SESSION_ID must be first in command, got: %q", rw.Command)
+	})
+}
+
 func TestRenderUserCommandWindows(t *testing.T) {
 	r := testRenderer()
 	windows := []config.WindowConfig{
