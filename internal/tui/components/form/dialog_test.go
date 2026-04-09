@@ -78,7 +78,7 @@ func TestDialog(t *testing.T) {
 		assert.False(t, d.Submitted())
 	})
 
-	t.Run("enter advances focus on non-textarea", func(t *testing.T) {
+	t.Run("enter advances focus", func(t *testing.T) {
 		f1 := NewTextField("A", "", "")
 		f2 := NewTextField("B", "", "")
 		d := NewDialog("Test", []Field{f1, f2}, []string{"a", "b"})
@@ -88,7 +88,7 @@ func TestDialog(t *testing.T) {
 		assert.True(t, f2.Focused())
 	})
 
-	t.Run("enter on last non-textarea field submits", func(t *testing.T) {
+	t.Run("enter on last field submits", func(t *testing.T) {
 		f1 := NewTextField("A", "", "")
 		d := NewDialog("Test", []Field{f1}, []string{"a"})
 
@@ -96,15 +96,14 @@ func TestDialog(t *testing.T) {
 		assert.True(t, d.Submitted())
 	})
 
-	t.Run("enter on textarea does not advance", func(t *testing.T) {
+	t.Run("enter on textarea advances focus", func(t *testing.T) {
 		f1 := NewTextAreaField("Body", "", "")
 		f2 := NewTextField("Name", "", "")
 		d := NewDialog("Test", []Field{f1, f2}, []string{"body", "name"})
 
-		// Enter should be forwarded to textarea, not advance focus
 		d.Update(tea.KeyPressMsg(tea.Key{Code: tea.KeyEnter}))
-		assert.True(t, f1.Focused())
-		assert.False(t, f2.Focused())
+		assert.False(t, f1.Focused())
+		assert.True(t, f2.Focused())
 		assert.False(t, d.Submitted())
 	})
 
