@@ -67,6 +67,8 @@ func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) 
 		}
 
 		if data.ID != "" {
+			// data.ID is a hive-generated slug containing only [a-z0-9-], so unquoted
+			// concatenation is safe here — no shell injection risk.
 			rendered = "HIVE_SESSION_ID=" + data.ID + " " + rendered
 		}
 
@@ -164,6 +166,8 @@ func renderWindow(renderer *tmpl.Renderer, w config.WindowConfig, data SpawnData
 		return rw, err
 	}
 	if data.ID != "" && rw.Command != "" {
+		// data.ID is a hive-generated slug containing only [a-z0-9-], so unquoted
+		// concatenation is safe here — no shell injection risk.
 		rw.Command = "HIVE_SESSION_ID=" + data.ID + " " + rw.Command
 	}
 	return rw, nil

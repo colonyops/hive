@@ -45,6 +45,20 @@ func TestAddHookEntry(t *testing.T) {
 			want:    true,
 			wantLen: 2,
 		},
+		{
+			name: "same matcher different command adds new entry",
+			setup: func() map[string][]hookEntry {
+				h := make(map[string][]hookEntry)
+				h["SessionStart"] = []hookEntry{
+					{Matcher: "", Hooks: []hookItem{{Type: "command", Command: "other-tool", Async: false}}},
+				}
+				return h
+			},
+			event:   "SessionStart",
+			matcher: "",
+			want:    true,
+			wantLen: 2,
+		},
 	}
 
 	for _, tt := range tests {
