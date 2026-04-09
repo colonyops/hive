@@ -522,11 +522,20 @@ type ContextDirPluginConfig struct {
 
 // ClaudePluginConfig holds Claude Code plugin configuration.
 type ClaudePluginConfig struct {
-	Enabled         *bool         `json:"enabled"          yaml:"enabled"`          // nil = auto-detect, true/false = override
-	CacheTTL        time.Duration `json:"cache_ttl"        yaml:"cache_ttl"`        // status cache duration (default: 30s)
-	YellowThreshold int           `json:"yellow_threshold" yaml:"yellow_threshold"` // yellow above this % (default: 60)
-	RedThreshold    int           `json:"red_threshold"    yaml:"red_threshold"`    // red above this % (default: 80)
-	ModelLimit      int           `json:"model_limit"      yaml:"model_limit"`      // context limit (default: 200000)
+	Enabled             *bool         `json:"enabled"               yaml:"enabled"`               // nil = auto-detect, true/false = override
+	CacheTTL            time.Duration `json:"cache_ttl"             yaml:"cache_ttl"`             // status cache duration (default: 30s)
+	YellowThreshold     int           `json:"yellow_threshold"      yaml:"yellow_threshold"`      // yellow above this % (default: 60)
+	RedThreshold        int           `json:"red_threshold"         yaml:"red_threshold"`         // red above this % (default: 80)
+	ModelLimit          int           `json:"model_limit"           yaml:"model_limit"`           // context limit (default: 200000)
+	HookFreshnessWindow time.Duration `json:"hook_freshness_window" yaml:"hook_freshness_window"` // max age of hook status before tmux fallback (default: 2m)
+}
+
+// GetHookFreshnessWindow returns the configured freshness window, defaulting to 2 minutes.
+func (c ClaudePluginConfig) GetHookFreshnessWindow() time.Duration {
+	if c.HookFreshnessWindow > 0 {
+		return c.HookFreshnessWindow
+	}
+	return 2 * time.Minute
 }
 
 // DatabaseConfig holds SQLite database configuration.

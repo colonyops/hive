@@ -17,6 +17,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
+	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
@@ -46,10 +47,12 @@ type ViewOpts struct {
 	PluginManager   *plugins.Manager
 
 	// Optional — nil disables the corresponding feature.
-	LocalRemote string
-	Workspaces  []string
-	Renderer    *tmpl.Renderer
-	Bus         *eventbus.EventBus
+	LocalRemote         string
+	Workspaces          []string
+	Renderer            *tmpl.Renderer
+	Bus                 *eventbus.EventBus
+	KVStore             corekv.KV
+	HookFreshnessWindow time.Duration
 }
 
 // View is the Bubble Tea sub-model for the sessions tab.
@@ -74,11 +77,13 @@ type View struct {
 	gitWorkers  int
 
 	// Terminal integration
-	terminalManager    *terminal.Manager
-	terminalStatuses   *kv.Store[string, TerminalStatus]
-	previewEnabled     bool
-	previewTemplates   *PreviewTemplates
-	currentTmuxSession string
+	terminalManager     *terminal.Manager
+	terminalStatuses    *kv.Store[string, TerminalStatus]
+	kvStore             corekv.KV
+	hookFreshnessWindow time.Duration
+	previewEnabled      bool
+	previewTemplates    *PreviewTemplates
+	currentTmuxSession  string
 
 	// Plugin integration
 	pluginManager      *plugins.Manager
@@ -188,11 +193,13 @@ func New(opts ViewOpts) *View {
 		gitStatuses: gitStatuses,
 		gitWorkers:  cfg.Git.StatusWorkers,
 
-		terminalManager:    opts.TerminalManager,
-		terminalStatuses:   terminalStatuses,
-		previewEnabled:     cfg.Views.Sessions.PreviewEnabled,
-		previewTemplates:   previewTemplates,
-		currentTmuxSession: currentTmux,
+		terminalManager:     opts.TerminalManager,
+		terminalStatuses:    terminalStatuses,
+		kvStore:             opts.KVStore,
+		hookFreshnessWindow: opts.HookFreshnessWindow,
+		previewEnabled:      cfg.Views.Sessions.PreviewEnabled,
+		previewTemplates:    previewTemplates,
+		currentTmuxSession:  currentTmux,
 
 		pluginManager:      opts.PluginManager,
 		pluginStatuses:     pluginStatuses,
@@ -291,7 +298,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		for i := range v.allSessions {
 			sessPtrs[i] = &v.allSessions[i]
 		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.kvStore, v.hookFreshnessWindow))
 	}
 	return tea.Batch(cmds...)
 }
@@ -344,7 +351,7 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.kvStore, v.hookFreshnessWindow))
 	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}

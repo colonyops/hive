@@ -239,15 +239,17 @@ func New(deps Deps, opts Opts) Model {
 	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
-		Cfg:             cfg,
-		Service:         service,
-		Handler:         handler,
-		TerminalManager: deps.TerminalManager,
-		PluginManager:   deps.PluginManager,
-		LocalRemote:     opts.LocalRemote,
-		Workspaces:      cfg.Workspaces,
-		Renderer:        deps.Renderer,
-		Bus:             deps.Bus,
+		Cfg:                 cfg,
+		Service:             service,
+		Handler:             handler,
+		TerminalManager:     deps.TerminalManager,
+		PluginManager:       deps.PluginManager,
+		LocalRemote:         opts.LocalRemote,
+		Workspaces:          cfg.Workspaces,
+		Renderer:            deps.Renderer,
+		Bus:                 deps.Bus,
+		KVStore:             deps.KVStore,
+		HookFreshnessWindow: cfg.Plugins.Claude.GetHookFreshnessWindow(),
 	})
 
 	// Wire handler lookups through sessions view stores

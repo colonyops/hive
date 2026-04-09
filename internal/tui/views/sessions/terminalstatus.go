@@ -8,6 +8,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
+	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 )
@@ -43,7 +44,8 @@ type TerminalStatusBatchCompleteMsg struct {
 type TerminalPollTickMsg struct{}
 
 // FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
-func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
+// kvStore and freshnessWindow are optional: if kvStore is nil the hook KV check is skipped.
+func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int, kvStore corekv.KV, freshnessWindow time.Duration) tea.Cmd {
 	if len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
 		return nil
 	}
@@ -74,7 +76,7 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 				ctx, cancel := context.WithTimeout(context.Background(), terminalStatusTimeout)
 				defer cancel()
 
-				status := fetchTerminalStatusForSession(ctx, mgr, s)
+				status := fetchTerminalStatusForSession(ctx, mgr, s, kvStore, freshnessWindow)
 
 				mu.Lock()
 				results[s.ID] = status
@@ -88,9 +90,24 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 }
 
 // fetchTerminalStatusForSession fetches terminal status for a single session.
-func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session) TerminalStatus {
+// If kvStore is non-nil, hook-sourced status is checked first; tmux is used as fallback.
+func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session, kvStore corekv.KV, freshnessWindow time.Duration) TerminalStatus {
 	status := TerminalStatus{
 		Status: terminal.StatusMissing,
+	}
+
+	// Check hook KV before issuing tmux commands. A fresh hook entry means the
+	// agent is alive and reporting status directly — no tmux capture needed.
+	if kvStore != nil {
+		hookKV := corekv.Scoped[terminal.HookStatus](kvStore, "hook.status")
+		if hs, err := hookKV.Get(ctx, sess.ID+":0"); err == nil {
+			if time.Since(hs.WrittenAt) < freshnessWindow {
+				return TerminalStatus{
+					Status: hs.Status,
+					Tool:   terminal.ToolClaude,
+				}
+			}
+		}
 	}
 
 	// Inject session path into metadata for multi-window disambiguation
@@ -136,11 +153,19 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 		} else if len(allInfos) > 1 {
 			windows := make([]WindowStatus, 0, len(allInfos))
 			for _, wi := range allInfos {
-				// Get per-window status and content
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
 					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.Pane).Msg("per-window status failed, marking missing")
 					wStatus = terminal.StatusMissing
+				}
+				// Override per-window status with fresh hook KV if available.
+				if kvStore != nil {
+					hookKV := corekv.Scoped[terminal.HookStatus](kvStore, "hook.status")
+					if hs, err := hookKV.Get(ctx, sess.ID+":"+wi.Pane); err == nil {
+						if time.Since(hs.WrittenAt) < freshnessWindow {
+							wStatus = hs.Status
+						}
+					}
 				}
 				windows = append(windows, WindowStatus{
 					WindowIndex: wi.Pane,
