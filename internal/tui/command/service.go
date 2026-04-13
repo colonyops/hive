@@ -24,7 +24,7 @@ type SessionRecycler interface {
 
 // TmuxOpener opens or creates tmux sessions for hive sessions.
 type TmuxOpener interface {
-	OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error
+	OpenTmuxSession(ctx context.Context, sessionID, name, path, remote, targetWindow string, background bool) error
 }
 
 // WindowSpawner handles window operations for SpawnWindows actions.
@@ -94,6 +94,7 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 	case action.TypeTmuxOpen:
 		return &TmuxExecutor{
 			opener:       s.tmuxOpener,
+			sessionID:    a.SessionID,
 			name:         a.SessionName,
 			path:         a.SessionPath,
 			remote:       a.SessionRemote,
@@ -103,6 +104,7 @@ func (s *Service) CreateExecutor(a Action) (Executor, error) {
 	case action.TypeTmuxStart:
 		return &TmuxExecutor{
 			opener:       s.tmuxOpener,
+			sessionID:    a.SessionID,
 			name:         a.SessionName,
 			path:         a.SessionPath,
 			remote:       a.SessionRemote,

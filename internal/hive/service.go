@@ -324,6 +324,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	// Spawn terminal
 	writeProgressf(progress, "Spawning terminal...")
 	data := SpawnData{
+		ID:         sess.ID,
 		Path:       sess.Path,
 		Name:       sess.Name,
 		Prompt:     opts.Prompt,
@@ -715,7 +716,7 @@ func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
 
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
-func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error {
+func (s *SessionService) OpenTmuxSession(ctx context.Context, sessionID, name, path, remote, targetWindow string, background bool) error {
 	strategy := config.ResolveSpawn(s.config.Rules, remote, false)
 	if !strategy.IsWindows() {
 		return fmt.Errorf("tmux action requires windows config (legacy spawn commands should use shell executor)")
@@ -723,6 +724,7 @@ func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote
 
 	owner, repo := git.ExtractOwnerRepo(remote)
 	data := SpawnData{
+		ID:         sessionID,
 		Path:       path,
 		Name:       name,
 		Slug:       session.Slugify(name),
