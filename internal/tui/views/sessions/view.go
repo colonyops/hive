@@ -1081,12 +1081,6 @@ func (v *View) isCurrentTmuxSession(sess *session.Session) bool {
 		return true
 	}
 
-	// Check prefix match (tmux session might be slug_suffix or slug-suffix)
-	if strings.HasPrefix(v.currentTmuxSession, sess.Slug+"_") ||
-		strings.HasPrefix(v.currentTmuxSession, sess.Slug+"-") {
-		return true
-	}
-
 	if tmuxSession := sess.Metadata[session.MetaTmuxSession]; tmuxSession != "" {
 		if v.currentTmuxSession == tmuxSession {
 			return true

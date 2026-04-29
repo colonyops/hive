@@ -286,23 +286,35 @@ func TestDiscoverAllWindows(t *testing.T) {
 		assert.Nil(t, infos, "expected nil with stale cache, got %v", infos)
 	})
 
-	t.Run("prefix match finds session", func(t *testing.T) {
-		// Add a session keyed with a slug prefix
-		integ.cache["myslug-extra"] = &sessionCache{
+	t.Run("does not cross-match similar slugs", func(t *testing.T) {
+		// Regression: tmux sessions with similar slug prefixes from different
+		// hive sessions must not be matched when the exact slug is missing.
+		// e.g. hive session "foo" (slug "foo") whose tmux session is gone must
+		// not pick up tmux session "foo-bar" belonging to hive session "foo bar".
+		integ.cache["foo-bar"] = &sessionCache{
 			agentWindows: []*agentWindow{
 				{windowIndex: "0", windowName: "claude"},
-				{windowIndex: "1", windowName: "aider"},
 			},
 		}
 		integ.cacheTime = time.Now()
 
-		infos, err := integ.DiscoverAllWindows(ctx, "myslug", nil)
+		infos, err := integ.DiscoverAllWindows(ctx, "foo", nil)
 		require.NoError(t, err)
-		require.Len(t, infos, 2, "expected 2 windows via prefix match, got %d", len(infos))
-		assert.Equal(t, "myslug-extra", infos[0].Name)
+		assert.Nil(t, infos, "expected nil — slug 'foo' must not match tmux session 'foo-bar'")
 	})
 
-	t.Run("metadata match takes precedence over prefix", func(t *testing.T) {
+	t.Run("hyphenated slug still found by exact match", func(t *testing.T) {
+		// Regression sibling: ensure removing the prefix-match fallback did not
+		// break the normal path where session "foo bar" (slug "foo-bar") finds
+		// its own tmux session "foo-bar".
+		integ.cacheTime = time.Now()
+		infos, err := integ.DiscoverAllWindows(ctx, "foo-bar", nil)
+		require.NoError(t, err)
+		require.Len(t, infos, 1, "expected 1 window for slug 'foo-bar'")
+		assert.Equal(t, "foo-bar", infos[0].Name)
+	})
+
+	t.Run("metadata match still works", func(t *testing.T) {
 		integ.cacheTime = time.Now()
 		infos, err := integ.DiscoverAllWindows(ctx, "myslug", map[string]string{
 			"tmux_session": "multi-sess",

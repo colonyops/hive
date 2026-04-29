@@ -235,7 +235,7 @@ func (t *Integration) matchesPreferredWindow(windowName string) bool {
 // sessionPathKey is the metadata key injected by the TUI to pass session path for multi-window matching.
 const sessionPathKey = "_session_path"
 
-// findSessionCache locates the sessionCache for a slug using metadata, exact match, or prefix match.
+// findSessionCache locates the sessionCache for a slug using metadata or exact match.
 // Must be called with t.mu held (read or write). Returns the session name and cache, or ("", nil).
 func (t *Integration) findSessionCache(slug string, metadata map[string]string) (string, *sessionCache) {
 	if name := metadata[session.MetaTmuxSession]; name != "" {
@@ -245,11 +245,6 @@ func (t *Integration) findSessionCache(slug string, metadata map[string]string) 
 	}
 	if sc, exists := t.cache[slug]; exists {
 		return slug, sc
-	}
-	for name, sc := range t.cache {
-		if strings.HasPrefix(name, slug+"_") || strings.HasPrefix(name, slug+"-") {
-			return name, sc
-		}
 	}
 	return "", nil
 }
