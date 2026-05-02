@@ -154,6 +154,10 @@ type Model struct {
 
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
+
+	// Double-click tracking: last left-button click position and time.
+	lastClickX, lastClickY int
+	lastClickTime          time.Time
 }
 
 // actionCompleteMsg is sent when an action completes.
@@ -626,6 +630,21 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleKeyMsg(msg)
 	case spinner.TickMsg:
 		model, cmd = m.handleSpinnerTick(msg)
+	case tea.MouseClickMsg:
+		model, cmd = m.handleMouseClick(msg)
+	case tea.MouseWheelMsg:
+		if m.state == stateShowingNotifications && m.modals.Notification != nil {
+			if msg.Button == tea.MouseWheelUp {
+				m.modals.Notification.ScrollUp()
+			} else {
+				m.modals.Notification.ScrollDown()
+			}
+			model, cmd = m, nil
+		} else {
+			model, cmd = m.handleFallthrough(msg)
+		}
+	case tea.PasteMsg:
+		model, cmd = m.handleFallthrough(msg)
 
 	default:
 		model, cmd = m.handleFallthrough(msg)
@@ -1418,35 +1437,7 @@ func (m Model) handleTabKey(direction int) (tea.Model, tea.Cmd) {
 	}
 
 	next := (current + direction + len(tabs)) % len(tabs)
-	m.activeView = tabs[next]
-
-	m.handler.SetActiveView(m.activeView)
-	m.sessionsView.SetActive(m.activeView == ViewSessions)
-	if m.msgView != nil {
-		m.msgView.SetActive(m.activeView == ViewMessages)
-	}
-	if m.tasksView != nil {
-		m.tasksView.SetActive(m.activeView == ViewTasks)
-	}
-
-	// Load data when switching to Store or Tasks tab
-	switch m.activeView {
-	case ViewStore:
-		return m, m.loadKVKeys()
-	case ViewTasks:
-		if cmd := m.syncTasksRepoFromSessions(); cmd != nil {
-			return m, cmd
-		}
-		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
-	case ViewReview:
-		if cmd := m.syncDocsRepoFromSessions(); cmd != nil {
-			return m, cmd
-		}
-	case ViewSessions, ViewMessages:
-		// No special load action needed
-	}
-
-	return m, nil
+	return m.switchToView(tabs[next])
 }
 
 // renameCompleteMsg is sent when a rename operation completes.

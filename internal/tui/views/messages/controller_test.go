@@ -233,3 +233,65 @@ func TestController_Selected(t *testing.T) {
 		assert.Nil(t, c.Selected())
 	})
 }
+
+func TestController_SelectAt(t *testing.T) {
+	setup := func() *Controller {
+		c := NewController()
+		c.Append([]messaging.Message{
+			newMsg("t1", "s1", "first"),
+			newMsg("t2", "s2", "second"),
+			newMsg("t3", "s3", "third"),
+		})
+		return c
+	}
+
+	t.Run("valid idx moves cursor", func(t *testing.T) {
+		c := setup()
+		c.SelectAt(2, 10)
+		assert.Equal(t, 2, c.Cursor())
+		sel := c.Selected()
+		require.NotNil(t, sel)
+		assert.Equal(t, "first", sel.Payload)
+	})
+
+	t.Run("negative idx is no-op", func(t *testing.T) {
+		c := setup()
+		c.SelectAt(-1, 10)
+		assert.Equal(t, 0, c.Cursor())
+	})
+
+	t.Run("idx >= len(filteredAt) is no-op", func(t *testing.T) {
+		c := setup()
+		// filteredAt has 3 entries
+		c.SelectAt(3, 10)
+		assert.Equal(t, 0, c.Cursor())
+	})
+
+	t.Run("regression: filter active, idx valid for displayed but past filteredAt is no-op", func(t *testing.T) {
+		c := NewController()
+		c.Append([]messaging.Message{
+			newMsg("agent.inbox", "alice", "hello"),
+			newMsg("system.log", "bob", "error"),
+			newMsg("agent.outbox", "alice", "bye"),
+		})
+		// Filter to agent-only: 2 matches
+		c.StartFilter()
+		c.AddFilterRune('a')
+		c.AddFilterRune('g')
+		c.AddFilterRune('e')
+		c.AddFilterRune('n')
+		c.AddFilterRune('t')
+		c.ConfirmFilter()
+
+		require.Len(t, c.FilteredAt(), 2)
+
+		// idx=2 is valid in displayed (len=3) but past filteredAt (len=2) — no-op
+		c.SelectAt(2, 10)
+		assert.Equal(t, 0, c.Cursor())
+
+		// idx=1 is valid
+		c.SelectAt(1, 10)
+		assert.Equal(t, 1, c.Cursor())
+		assert.NotNil(t, c.Selected())
+	})
+}

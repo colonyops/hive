@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -76,6 +77,34 @@ func (v *KVView) SelectedKey() string {
 		return ""
 	}
 	return v.keys[v.filtered[v.cursor]]
+}
+
+// SelectAtRow moves the cursor to the key at contentY rows from the view top.
+// The key list renders a one-line header and, when filtering is active, a filter line.
+// Clicks in the preview pane (right of the key list) are ignored.
+func (v *KVView) SelectAtRow(x, contentY int) tea.Cmd {
+	// Key list occupies 20% of width (min 15), matching View().
+	listWidth := int(float64(v.width) * 0.20)
+	if listWidth < 15 {
+		listWidth = 15
+	}
+	if x >= listWidth {
+		return nil
+	}
+	headerRows := 1 // "Keys" header
+	if v.filtering || v.filter != "" {
+		headerRows = 2 // header + filter line
+	}
+	listRow := contentY - headerRows
+	if listRow < 0 || len(v.filtered) == 0 {
+		return nil
+	}
+	idx := v.offset + listRow
+	if idx >= len(v.filtered) {
+		return nil
+	}
+	v.cursor = idx
+	return nil
 }
 
 // MoveUp moves the cursor up in the key list.

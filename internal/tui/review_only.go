@@ -153,7 +153,9 @@ func (m ReviewOnlyModel) View() tea.View {
 	if m.quitting {
 		return tea.NewView("")
 	}
-	return tea.NewView(m.reviewView.View())
+	v := tea.NewView(m.reviewView.View())
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }
 
 // copyToClipboard copies the given text to the system clipboard using the configured copy command.

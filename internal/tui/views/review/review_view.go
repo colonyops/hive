@@ -247,6 +247,35 @@ func (v *View) TogglePreview() tea.Cmd {
 	return nil
 }
 
+// SelectAtRow selects the document tree item at contentY rows from the view top.
+// The tree has a one-line repo header above it, so treeRow = contentY - 1.
+// x is the terminal column; clicks in the detail pane are ignored.
+// Returns a command to load the preview for the newly selected document.
+func (v *View) SelectAtRow(x, contentY int) tea.Cmd {
+	if !v.showTree || len(v.flatNodes) == 0 {
+		return nil
+	}
+	if v.showPreview {
+		splitPct := v.splitRatioOrDefault(30)
+		availWidth := max(v.width-1, 30)
+		treeWidth := max(availWidth*splitPct/100, 25)
+		if x >= treeWidth {
+			return nil
+		}
+	}
+	treeRow := contentY - 1 // skip repo header line
+	if treeRow < 0 {
+		return nil
+	}
+	idx := v.treeScroll + treeRow
+	if idx >= len(v.flatNodes) {
+		return nil
+	}
+	v.treeCursor = idx
+	v.clampTreeScroll()
+	return v.previewSelectedDoc()
+}
+
 // SetShowTree sets the tree pane visibility without toggling or re-rendering.
 // Use before the first window size event to configure the initial layout.
 func (v *View) SetShowTree(show bool) {

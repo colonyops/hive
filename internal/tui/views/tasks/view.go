@@ -657,6 +657,32 @@ func (v *View) handleDetailKey(msg tea.KeyMsg) tea.Cmd {
 	return nil
 }
 
+// SelectAtRow moves the cursor to the tree node at contentY rows from the view top.
+// The view renders a one-line repo header above the tree items.
+// x is the terminal column; clicks in the detail pane are ignored.
+// Returns any command needed to load content for the newly selected item.
+func (v *View) SelectAtRow(x, contentY int) tea.Cmd {
+	if v.showPreview {
+		splitPct := v.splitRatioOrDefault(30)
+		treeWidth := max(max(v.width-1, 30)*splitPct/100, 25)
+		if x >= treeWidth {
+			return nil
+		}
+	}
+	treeRow := contentY - 1 // skip repo header line
+	if treeRow < 0 || len(v.flatNodes) == 0 {
+		return nil
+	}
+	idx := v.scrollOffset + treeRow
+	if idx >= len(v.flatNodes) {
+		return nil
+	}
+	v.cursor = idx
+	v.clampCursor()
+	v.clampScroll()
+	return v.checkCursorChanged()
+}
+
 // moveCursor moves the cursor by delta and adjusts scroll.
 func (v *View) moveCursor(delta int) {
 	v.cursor += delta
