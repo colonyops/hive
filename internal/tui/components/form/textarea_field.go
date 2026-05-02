@@ -20,6 +20,11 @@ func NewTextAreaField(label, placeholder, defaultVal string) *TextAreaField {
 	ta.Placeholder = placeholder
 	ta.SetHeight(4)
 	ta.SetWidth(40)
+	ta.ShowLineNumbers = false
+	// InsertNewline is disabled so Enter advances the form rather than inserting a newline.
+	// Multi-line content can still be pasted.
+	ta.KeyMap.InsertNewline.SetEnabled(false)
+	ta.KeyMap.Paste.SetEnabled(true)
 
 	if defaultVal != "" {
 		ta.SetValue(defaultVal)

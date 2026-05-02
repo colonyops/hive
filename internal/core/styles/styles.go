@@ -214,13 +214,9 @@ func SetTheme(p Palette) {
 		Foreground(ColorPrimary).
 		Bold(true)
 	FormFieldStyle = lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder(), false, false, false, true).
-		BorderForeground(ColorMuted).
-		PaddingLeft(1)
+		PaddingLeft(2)
 	FormFieldFocusedStyle = lipgloss.NewStyle().
-		Border(lipgloss.ThickBorder(), false, false, false, true).
-		BorderForeground(ColorPrimary).
-		PaddingLeft(1)
+		PaddingLeft(2)
 
 	HelpDialogSectionStyle = lipgloss.NewStyle().
 		Foreground(ColorMuted).

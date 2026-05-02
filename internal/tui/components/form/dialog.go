@@ -51,10 +51,6 @@ func (d *Dialog) Update(msg tea.Msg) (*Dialog, tea.Cmd) {
 	case "shift+tab":
 		return d.retreatFocus()
 	case "enter":
-		if d.isTextAreaFocused() {
-			// Let textarea handle enter for newline insertion
-			return d.updateFocusedField(msg)
-		}
 		return d.advanceFocus()
 	case "esc":
 		if d.isFocusedFieldFiltering() {
@@ -136,14 +132,6 @@ func (d *Dialog) updateFocusedField(msg tea.Msg) (*Dialog, tea.Cmd) {
 	var cmd tea.Cmd
 	d.fields[d.focusedField], cmd = d.fields[d.focusedField].Update(msg)
 	return d, cmd
-}
-
-func (d *Dialog) isTextAreaFocused() bool {
-	if len(d.fields) == 0 {
-		return false
-	}
-	_, ok := d.fields[d.focusedField].(*TextAreaField)
-	return ok
 }
 
 func (d *Dialog) isFocusedFieldFiltering() bool {

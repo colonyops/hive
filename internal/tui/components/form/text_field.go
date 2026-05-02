@@ -30,6 +30,7 @@ func NewTextField(label, placeholder, defaultVal string) *TextField {
 	inputStyles.Focused.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	inputStyles.Blurred.Placeholder = lipgloss.NewStyle().Foreground(styles.ColorMuted)
 	ti.SetStyles(inputStyles)
+	ti.KeyMap.Paste.SetEnabled(true)
 
 	return &TextField{
 		input: ti,
