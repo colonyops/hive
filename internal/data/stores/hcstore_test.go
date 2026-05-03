@@ -713,3 +713,60 @@ func TestHCStore_PruneScopesCommentsToStatusesAndItemUpdatedAt(t *testing.T) {
 	require.Len(t, doneRecentComments, 1)
 	assert.Equal(t, "cmt-done-recent", doneRecentComments[0].ID)
 }
+
+func TestHCStore_DeleteItemCascadesToDescendants(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+
+	items := []hc.Item{
+		{ID: "epic-1", Title: "Epic", Type: hc.ItemTypeEpic, Status: hc.StatusOpen, Depth: 0, CreatedAt: now, UpdatedAt: now},
+		{ID: "task-1", EpicID: "epic-1", ParentID: "epic-1", Title: "Task 1", Type: hc.ItemTypeTask, Status: hc.StatusOpen, Depth: 1, CreatedAt: now, UpdatedAt: now},
+		{ID: "task-2", EpicID: "epic-1", ParentID: "epic-1", Title: "Task 2", Type: hc.ItemTypeTask, Status: hc.StatusDone, Depth: 1, CreatedAt: now, UpdatedAt: now},
+		{ID: "task-1-1", EpicID: "epic-1", ParentID: "task-1", Title: "Subtask", Type: hc.ItemTypeTask, Status: hc.StatusOpen, Depth: 2, CreatedAt: now, UpdatedAt: now},
+		{ID: "epic-2", Title: "Other Epic", Type: hc.ItemTypeEpic, Status: hc.StatusOpen, Depth: 0, CreatedAt: now, UpdatedAt: now},
+	}
+	require.NoError(t, store.CreateItems(ctx, items))
+
+	err = store.DeleteItem(ctx, "epic-1")
+	require.NoError(t, err)
+
+	remaining, err := store.ListItems(ctx, hc.ListFilter{})
+	require.NoError(t, err)
+	require.Len(t, remaining, 1)
+	assert.Equal(t, "epic-2", remaining[0].ID)
+}
+
+func TestHCStore_DeleteItemCascadesComments(t *testing.T) {
+	ctx := context.Background()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	defer func() { _ = database.Close() }()
+
+	store := NewHCStore(database)
+	now := time.Now()
+
+	items := []hc.Item{
+		{ID: "epic-1", Title: "Epic", Type: hc.ItemTypeEpic, Status: hc.StatusOpen, Depth: 0, CreatedAt: now, UpdatedAt: now},
+		{ID: "task-1", EpicID: "epic-1", ParentID: "epic-1", Title: "Task", Type: hc.ItemTypeTask, Status: hc.StatusOpen, Depth: 1, CreatedAt: now, UpdatedAt: now},
+	}
+	require.NoError(t, store.CreateItems(ctx, items))
+
+	require.NoError(t, store.AddComment(ctx, hc.Comment{ID: "c1", ItemID: "epic-1", Message: "epic comment", CreatedAt: now}))
+	require.NoError(t, store.AddComment(ctx, hc.Comment{ID: "c2", ItemID: "task-1", Message: "task comment", CreatedAt: now}))
+
+	err = store.DeleteItem(ctx, "epic-1")
+	require.NoError(t, err)
+
+	epicComments, err := store.ListComments(ctx, "epic-1")
+	require.NoError(t, err)
+	assert.Empty(t, epicComments)
+
+	taskComments, err := store.ListComments(ctx, "task-1")
+	require.NoError(t, err)
+	assert.Empty(t, taskComments)
+}

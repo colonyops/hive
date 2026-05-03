@@ -275,12 +275,35 @@ func (s *HCStore) resumeItemForSession(ctx context.Context, filter hc.NextFilter
 	return item, true, nil
 }
 
-// DeleteItem removes an HC item by ID.
+// DeleteItem removes an HC item and all its descendants by ID.
 func (s *HCStore) DeleteItem(ctx context.Context, id string) error {
-	if err := s.db.Queries().DeleteHCItem(ctx, id); err != nil {
-		return fmt.Errorf("delete hc item: %w", err)
+	allRows, err := s.db.Queries().ListAllHCItems(ctx)
+	if err != nil {
+		return fmt.Errorf("list hc items for delete: %w", err)
 	}
-	return nil
+
+	childrenByParent := make(map[string][]string, len(allRows))
+	depthByID := make(map[string]int64, len(allRows))
+	for _, row := range allRows {
+		depthByID[row.ID] = row.Depth
+		if row.ParentID != "" {
+			childrenByParent[row.ParentID] = append(childrenByParent[row.ParentID], row.ID)
+		}
+	}
+
+	deleteIDs := collectHCSubtreeIDs([]string{id}, childrenByParent)
+
+	return s.db.WithTx(ctx, func(q *db.Queries) error {
+		for _, did := range orderHCIDsByDepthDesc(deleteIDs, depthByID) {
+			if err := q.DeleteHCCommentsByItemID(ctx, did); err != nil {
+				return fmt.Errorf("delete hc comments for %q: %w", did, err)
+			}
+			if err := q.DeleteHCItem(ctx, did); err != nil {
+				return fmt.Errorf("delete hc item %q: %w", did, err)
+			}
+		}
+		return nil
+	})
 }
 
 // AddComment records a comment on an HC item.
