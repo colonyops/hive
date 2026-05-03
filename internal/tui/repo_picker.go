@@ -11,14 +11,15 @@ import (
 
 // RepoPicker is a simple modal for selecting a repository scope.
 type RepoPicker struct {
-	repos     []string
-	filtered  []string
-	cursor    int
-	query     string
-	width     int
-	height    int
-	cancelled bool
-	selected  string
+	repos        []string
+	filtered     []string
+	cursor       int
+	scrollOffset int
+	query        string
+	width        int
+	height       int
+	cancelled    bool
+	selected     string
 }
 
 // NewRepoPicker creates a new repository picker modal.
@@ -56,10 +57,12 @@ func (p *RepoPicker) Update(msg tea.Msg) (*RepoPicker, tea.Cmd) {
 	case "up":
 		if p.cursor > 0 {
 			p.cursor--
+			p.clampScroll()
 		}
 	case "down":
 		if p.cursor < len(p.filtered)-1 {
 			p.cursor++
+			p.clampScroll()
 		}
 	case "backspace":
 		if len(p.query) > 0 {
@@ -90,6 +93,22 @@ func (p *RepoPicker) applyFilter() {
 		p.filtered = filtered
 	}
 	p.cursor = 0
+	p.scrollOffset = 0
+}
+
+func (p *RepoPicker) visibleCount() int {
+	return min(len(p.filtered), max(p.height/3, 5))
+}
+
+func (p *RepoPicker) clampScroll() {
+	mv := p.visibleCount()
+	if p.cursor < p.scrollOffset {
+		p.scrollOffset = p.cursor
+	} else if p.cursor >= p.scrollOffset+mv {
+		p.scrollOffset = p.cursor - mv + 1
+	}
+	maxOffset := max(len(p.filtered)-mv, 0)
+	p.scrollOffset = min(max(p.scrollOffset, 0), maxOffset)
 }
 
 // View renders the picker content.
@@ -102,11 +121,15 @@ func (p *RepoPicker) View() string {
 	searchLine := styles.TextMutedStyle.Render("> ") + p.query + styles.TextMutedStyle.Render("█")
 
 	// List items
-	maxVisible := min(len(p.filtered), max(p.height/3, 5))
+	maxVisible := p.visibleCount()
 	var lines []string
-	for i := 0; i < maxVisible; i++ {
-		repo := p.filtered[i]
-		if i == p.cursor {
+	for i := range maxVisible {
+		idx := i + p.scrollOffset
+		if idx >= len(p.filtered) {
+			break
+		}
+		repo := p.filtered[idx]
+		if idx == p.cursor {
 			lines = append(lines, styles.TextPrimaryBoldStyle.Render("▸ "+repo))
 		} else {
 			lines = append(lines, "  "+repo)

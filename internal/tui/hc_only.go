@@ -368,5 +368,7 @@ func (m HoneycombOnlyModel) View() tea.View {
 	if m.helpDialog != nil {
 		content = m.helpDialog.Overlay(content, m.width, m.height)
 	}
-	return tea.NewView(content)
+	v := tea.NewView(content)
+	v.MouseMode = tea.MouseModeCellMotion
+	return v
 }

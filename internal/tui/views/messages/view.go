@@ -136,6 +136,36 @@ func (v *View) SetSize(width, height int) {
 	v.sizeViewport()
 }
 
+// SelectAtRow moves the cursor to the message at contentY rows from the view top.
+// The list renders an optional filter line then a column header above the message items.
+// x is the terminal column; clicks in the preview pane are ignored.
+func (v *View) SelectAtRow(x, contentY int) tea.Cmd {
+	if v.width >= minDualPaneWidth {
+		splitPct := v.splitRatio
+		if splitPct < 1 || splitPct > 80 {
+			splitPct = 25
+		}
+		listWidth := v.width * splitPct / 100
+		if listWidth < 20 {
+			listWidth = 20
+		}
+		if x >= listWidth {
+			return nil
+		}
+	}
+	headerRows := 1 // column header
+	if v.ctrl.IsFiltering() || v.ctrl.Filter() != "" {
+		headerRows++ // filter line appears above column header
+	}
+	listRow := contentY - headerRows
+	if listRow < 0 {
+		return nil
+	}
+	idx := v.ctrl.Offset() + listRow
+	v.ctrl.SelectAt(idx, v.visibleLines())
+	return nil
+}
+
 // SetActive marks whether this view is the currently active tab.
 func (v *View) SetActive(active bool) {
 	v.active = active

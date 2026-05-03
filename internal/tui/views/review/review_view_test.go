@@ -1179,3 +1179,101 @@ func TestLoadDocumentFromPath_NonExistent(t *testing.T) {
 	view.LoadDocumentFromPath("/nonexistent/path/doc.md")
 	assert.Nil(t, view.selectedDoc, "expected selectedDoc to remain nil for non-existent file")
 }
+
+// --- SelectAtRow ---
+
+// newReviewViewWithDocs creates a View with flatNodes populated from the given documents.
+// showTree and showPreview are set as specified.
+func newReviewViewWithDocs(docs []Document, showTree, showPreview bool) View {
+	v := New(docs, "", nil, nil, 0)
+	v.SetSize(100, 24)
+	v.showTree = showTree
+	v.showPreview = showPreview
+	return v
+}
+
+func TestSelectAtRow_ShowTreeFalse_ReturnsNil(t *testing.T) {
+	docs := []Document{
+		{Path: "/p/doc.md", RelPath: "doc.md", Type: DocTypePlan},
+	}
+	v := newReviewViewWithDocs(docs, false, true)
+
+	cmd := v.SelectAtRow(0, 1)
+	assert.Nil(t, cmd)
+	assert.Equal(t, 0, v.treeCursor, "treeCursor should be unchanged when showTree=false")
+}
+
+func TestSelectAtRow_EmptyFlatNodes_ReturnsNil(t *testing.T) {
+	v := New(nil, "", nil, nil, 0)
+	v.SetSize(100, 24)
+	v.showTree = true
+
+	cmd := v.SelectAtRow(0, 1)
+	assert.Nil(t, cmd)
+	assert.Equal(t, 0, v.treeCursor)
+}
+
+func TestSelectAtRow_ContentY0_RepoHeader_NoOp(t *testing.T) {
+	docs := []Document{
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+	}
+	v := newReviewViewWithDocs(docs, true, false)
+	require.NotEmpty(t, v.flatNodes)
+
+	// treeRow = contentY - 1 = -1 → no-op
+	v.SelectAtRow(0, 0)
+	assert.Equal(t, 0, v.treeCursor, "contentY=0 (repo header) should be no-op")
+}
+
+func TestSelectAtRow_ContentY1_SetsTreeCursor0(t *testing.T) {
+	docs := []Document{
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+	}
+	v := newReviewViewWithDocs(docs, true, false)
+	require.NotEmpty(t, v.flatNodes)
+
+	v.SelectAtRow(0, 1)
+	assert.Equal(t, 0, v.treeCursor, "contentY=1 should set treeCursor=0")
+}
+
+func TestSelectAtRow_ContentY2_SetsTreeCursor1(t *testing.T) {
+	docs := []Document{
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+	}
+	v := newReviewViewWithDocs(docs, true, false)
+	require.GreaterOrEqual(t, len(v.flatNodes), 2, "need at least 2 flat nodes")
+
+	v.SelectAtRow(0, 2)
+	assert.Equal(t, 1, v.treeCursor, "contentY=2 should set treeCursor=1")
+}
+
+func TestSelectAtRow_ShowPreview_ClickInDetailPane_NoOp(t *testing.T) {
+	docs := []Document{
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
+	}
+	v := newReviewViewWithDocs(docs, true, true)
+	v.width = 100
+	// splitPct=30 (default), availWidth=max(100-1,30)=99
+	// treeWidth=max(99*30/100,25)=max(29,25)=29
+	// x=50 >= 29 → no-op
+
+	v.SelectAtRow(50, 1)
+	assert.Equal(t, 0, v.treeCursor, "click in detail pane should be no-op when showPreview=true")
+}
+
+func TestSelectAtRow_ShowPreview_ClickInTree_Selects(t *testing.T) {
+	docs := []Document{
+		{Path: "/p/doc1.md", RelPath: "doc1.md", Type: DocTypePlan},
+		{Path: "/p/doc2.md", RelPath: "doc2.md", Type: DocTypePlan},
+	}
+	v := newReviewViewWithDocs(docs, true, true)
+	v.width = 100
+	require.GreaterOrEqual(t, len(v.flatNodes), 2)
+
+	// x=5 < treeWidth=29, contentY=2 → treeRow=1 → treeCursor=1
+	v.SelectAtRow(5, 2)
+	assert.Equal(t, 1, v.treeCursor, "click in tree pane should select item")
+}

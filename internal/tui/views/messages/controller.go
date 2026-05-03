@@ -142,6 +142,16 @@ func (c *Controller) Offset() int {
 	return c.offset
 }
 
+// SelectAt sets the cursor to idx and adjusts the offset to keep it visible.
+// idx is an index into filteredAt (the visible/filtered item list).
+func (c *Controller) SelectAt(idx int, visibleLines int) {
+	if idx < 0 || idx >= len(c.filteredAt) {
+		return
+	}
+	c.cursor = idx
+	c.clampOffset(visibleLines)
+}
+
 // Len returns the total number of accumulated messages.
 func (c *Controller) Len() int {
 	return len(c.messages)

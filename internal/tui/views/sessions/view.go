@@ -1210,6 +1210,32 @@ func scheduleAnimationTick() tea.Cmd {
 
 // --- Public accessors ---
 
+// SelectAtRow moves the list cursor to the item at the given row within the
+// visible list area (row 0 = first visible item on the current page).
+// x is the terminal column of the click; clicks in the preview pane are ignored.
+func (v *View) SelectAtRow(x, row int) tea.Cmd {
+	if v.previewEnabled && v.width >= 80 {
+		splitPct := v.cfg.Views.Sessions.SplitRatioOrDefault(25)
+		listWidth := v.width * splitPct / 100
+		if x >= listWidth {
+			return nil
+		}
+	}
+	if row < 0 {
+		return nil
+	}
+	perPage := v.list.Paginator.PerPage
+	if perPage <= 0 {
+		return nil
+	}
+	globalIndex := v.list.Paginator.Page*perPage + row
+	if globalIndex >= len(v.list.VisibleItems()) {
+		return nil
+	}
+	v.list.Select(globalIndex)
+	return nil
+}
+
 // SetSize updates the view dimensions.
 func (v *View) SetSize(width, height int) {
 	v.width = width

@@ -1067,6 +1067,137 @@ func (m Model) handleFallthrough(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, tea.Batch(cmds...)
 }
 
+const doubleClickWindow = 300 * time.Millisecond
+
+// handleMouseClick routes left-button clicks to the active view or tab bar.
+// Two clicks within doubleClickWindow at the same cell synthesize an Enter key press.
+func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
+	if msg.Button != tea.MouseLeft || m.isModalActive() {
+		return m, nil
+	}
+
+	// Tab bar is at terminal row 1 (topDivider=0, header=1, headerDivider=2).
+	if msg.Y == 1 {
+		return m.handleTabClick(msg.X)
+	}
+
+	const tabChrome = 3
+	contentY := msg.Y - tabChrome
+	if contentY < 0 {
+		return m, nil
+	}
+
+	// Detect double-click: same cell within the window.
+	now := time.Now()
+	isDouble := msg.X == m.lastClickX && msg.Y == m.lastClickY &&
+		now.Sub(m.lastClickTime) <= doubleClickWindow
+	m.lastClickX = msg.X
+	m.lastClickY = msg.Y
+	m.lastClickTime = now
+
+	if isDouble {
+		return m.handleKeyMsg(tea.KeyPressMsg{Code: tea.KeyEnter})
+	}
+
+	var cmd tea.Cmd
+	switch m.activeView {
+	case ViewSessions:
+		if m.sessionsView != nil {
+			cmd = m.sessionsView.SelectAtRow(msg.X, contentY)
+		}
+	case ViewTasks:
+		if m.tasksView != nil {
+			cmd = m.tasksView.SelectAtRow(msg.X, contentY)
+		}
+	case ViewMessages:
+		if m.msgView != nil {
+			cmd = m.msgView.SelectAtRow(msg.X, contentY)
+		}
+	case ViewReview:
+		if m.reviewView != nil {
+			cmd = m.reviewView.SelectAtRow(msg.X, contentY)
+		}
+	case ViewStore:
+		if m.kvView != nil {
+			cmd = m.kvView.SelectAtRow(msg.X, contentY)
+		}
+	}
+	return m, cmd
+}
+
+// switchToView activates the given view, updating all per-view active flags and
+// firing any data-load commands required on first entry. This is the single
+// source of truth for view switching used by both keyboard (tab key) and mouse
+// (tab bar click).
+func (m Model) switchToView(view ViewType) (tea.Model, tea.Cmd) {
+	m.lastClickTime = time.Time{} // reset double-click state across view changes
+	m.activeView = view
+	m.handler.SetActiveView(view)
+	m.sessionsView.SetActive(view == ViewSessions)
+	if m.msgView != nil {
+		m.msgView.SetActive(view == ViewMessages)
+	}
+	if m.tasksView != nil {
+		m.tasksView.SetActive(view == ViewTasks)
+	}
+
+	switch view {
+	case ViewStore:
+		return m, m.loadKVKeys()
+	case ViewTasks:
+		if cmd := m.syncTasksRepoFromSessions(); cmd != nil {
+			return m, cmd
+		}
+		return m, func() tea.Msg { return tasks.RefreshTasksMsg{} }
+	case ViewReview:
+		if cmd := m.syncDocsRepoFromSessions(); cmd != nil {
+			return m, cmd
+		}
+	case ViewSessions, ViewMessages:
+		// No data load needed on switch.
+	}
+	return m, nil
+}
+
+// handleTabClick switches the active view based on which tab label was clicked at column x.
+// Tab labels start at column 1 (one-space left margin) and are separated by " | " (3 cols).
+func (m Model) handleTabClick(x int) (tea.Model, tea.Cmd) {
+	showStoreTab := m.kvStore != nil && m.cfg.TUI.Store
+
+	type tabEntry struct {
+		view  ViewType
+		label string
+	}
+	tabs := []tabEntry{{ViewSessions, "Sessions"}}
+	if m.tasksView != nil {
+		tabs = append(tabs, tabEntry{ViewTasks, "Tasks"})
+	}
+	if m.reviewView != nil {
+		tabs = append(tabs, tabEntry{ViewReview, "Docs"})
+	}
+	tabs = append(tabs, tabEntry{ViewMessages, "Messages"})
+	if showStoreTab || m.activeView == ViewStore {
+		tabs = append(tabs, tabEntry{ViewStore, "Store"})
+	}
+
+	const (
+		leftMargin = 1
+		sepWidth   = 3 // " | "
+	)
+	pos := leftMargin
+	for i, t := range tabs {
+		w := len(t.label) // styles use no padding/borders, so visual width == len
+		if x >= pos && x < pos+w {
+			return m.switchToView(t.view)
+		}
+		pos += w
+		if i < len(tabs)-1 {
+			pos += sepWidth
+		}
+	}
+	return m, nil
+}
+
 // --- Helper for repo header opening ---
 
 func (m Model) openRepoHeaderByRemote(name, remote string) (tea.Model, tea.Cmd) {

@@ -384,3 +384,60 @@ func TestApplyFilter_GroupByGroup(t *testing.T) {
 	assert.Equal(t, []string{"backend", "frontend", "(ungrouped)"}, headers, "groups sorted alphabetically with ungrouped last")
 	assert.Equal(t, []string{"s1", "s2", "s3"}, sessionIDs, "all sessions present")
 }
+
+// --- SelectAtRow ---
+
+func TestSelectAtRow_HappyPath(t *testing.T) {
+	items := []list.Item{
+		TreeItem{Session: session.Session{ID: "s1", Name: "first"}},
+		TreeItem{Session: session.Session{ID: "s2", Name: "second"}},
+		TreeItem{Session: session.Session{ID: "s3", Name: "third"}},
+	}
+	v := newTestView(items, 0)
+
+	v.SelectAtRow(0, 0)
+	assert.Equal(t, 0, v.list.Index(), "row=0 should select item 0")
+
+	v.SelectAtRow(0, 1)
+	assert.Equal(t, 1, v.list.Index(), "row=1 should select item 1")
+}
+
+func TestSelectAtRow_RowBeyondItems_NoOp(t *testing.T) {
+	items := []list.Item{
+		TreeItem{Session: session.Session{ID: "s1", Name: "first"}},
+	}
+	v := newTestView(items, 0)
+
+	v.SelectAtRow(0, 5) // beyond len(VisibleItems)
+	assert.Equal(t, 0, v.list.Index(), "row beyond items should be no-op")
+}
+
+func TestSelectAtRow_PreviewEnabled_ClickInPreview_NoOp(t *testing.T) {
+	items := []list.Item{
+		TreeItem{Session: session.Session{ID: "s1", Name: "first"}},
+		TreeItem{Session: session.Session{ID: "s2", Name: "second"}},
+	}
+	v := newTestView(items, 0)
+	v.previewEnabled = true
+	v.width = 100
+	v.cfg = &config.Config{} // SplitRatioOrDefault(25) = 25, listWidth = 100*25/100 = 25
+
+	// x=50 is well inside the preview pane (>= listWidth 25)
+	v.SelectAtRow(50, 1)
+	assert.Equal(t, 0, v.list.Index(), "click in preview pane should be no-op")
+}
+
+func TestSelectAtRow_PreviewEnabled_ClickInList_Selects(t *testing.T) {
+	items := []list.Item{
+		TreeItem{Session: session.Session{ID: "s1", Name: "first"}},
+		TreeItem{Session: session.Session{ID: "s2", Name: "second"}},
+	}
+	v := newTestView(items, 0)
+	v.previewEnabled = true
+	v.width = 100
+	v.cfg = &config.Config{} // listWidth = 25
+
+	// x=10 is inside the list pane
+	v.SelectAtRow(10, 1)
+	assert.Equal(t, 1, v.list.Index(), "click in list pane should select item")
+}
