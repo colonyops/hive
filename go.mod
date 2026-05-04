@@ -9,8 +9,8 @@ require (
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/glamour v0.10.0
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/charmbracelet/x/exp/golden v0.0.0-20260426004601-d5e63ff0b9ca
-	github.com/fsnotify/fsnotify v1.9.0
+	github.com/charmbracelet/x/exp/golden v0.0.0-20260503005035-c113ba3d2310
+	github.com/fsnotify/fsnotify v1.10.0
 	github.com/google/uuid v1.6.0
 	github.com/hay-kot/criterio v1.0.0
 	github.com/lucasb-eyer/go-colorful v1.4.0
