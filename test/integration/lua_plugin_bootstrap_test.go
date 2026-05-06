@@ -86,3 +86,53 @@ plugins:
 		assert.Equal(c, "lua command ran", string(content))
 	}, 5*time.Second, 200*time.Millisecond)
 }
+
+func TestLuaPluginInvalidEntrypointLogsWarningAndStartupContinues(t *testing.T) {
+	tests := []struct {
+		name     string
+		script   string
+		logMatch string
+	}{
+		{
+			name: "syntax error",
+			script: `
+return function(hive)
+  this is not valid lua
+end
+`,
+			logMatch: "load lua plugin",
+		},
+		{
+			name:     "wrong return type",
+			script:   "return {}\n",
+			logMatch: "must return a function",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := NewHarness(t)
+
+			entry := filepath.Join(h.DataDir(), "lua", "plugins", "init.lua")
+			require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
+			require.NoError(t, os.WriteFile(entry, []byte(tt.script), 0o644))
+
+			h.WithConfig(fmt.Sprintf(`version: "0.2.4"
+plugins:
+  lua:
+    entry: %q
+`, entry))
+
+			out, err := h.RunStdout("config")
+			require.NoError(t, err)
+			_, err = parseJSON(out)
+			require.NoError(t, err, "parse config JSON: %s", out)
+
+			logPath := filepath.Join(h.DataDir(), "hive.log")
+			logContent, err := os.ReadFile(logPath)
+			require.NoError(t, err)
+			assert.Contains(t, string(logContent), "plugin initialization failed")
+			assert.Contains(t, string(logContent), tt.logMatch)
+		})
+	}
+}
