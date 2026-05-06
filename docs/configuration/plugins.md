@@ -20,10 +20,26 @@ plugins:
   beads:
     enabled: true
     results_cache: 30s
+  lua:
+    entry: ~/.config/hive/plugins/init.lua
 ```
 
 !!! info "Auto-detection"
     Most plugins auto-detect their dependencies at startup. You only need to set `enabled: true` — if the required CLI tool isn't installed, the plugin silently deactivates. No errors, no configuration needed.
+
+## Lua Plugin Entry
+
+Hive also reserves `plugins.lua` for the user Lua plugin entrypoint.
+
+```yaml
+plugins:
+  lua:
+    entry: ~/.config/hive/plugins/init.lua
+```
+
+If `plugins.lua.entry` is unset, Hive looks for `~/.config/hive/plugins/init.lua` by convention. A missing default file is a no-op. Set `plugins.lua.entry` only when you want Hive to load a different entry file; in that case the file must exist.
+
+The Lua module root is derived from the directory containing the entry file. Organize helper modules beside that entry file and load them with normal Lua `require()` behavior.
 
 ## Tmux Plugin
 

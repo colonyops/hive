@@ -68,6 +68,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
 		c.validateContextBaseDir(),
+		c.validateLuaPluginEntry(),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
 	)
@@ -166,6 +167,40 @@ func (c *Config) validateContextBaseDir() error {
 		return criterio.NewFieldErrors("context.base_dir", fmt.Errorf("must be an absolute path or start with ~/, got %q", dir))
 	}
 	return criterio.Run("context.base_dir", expanded, isDirectoryOrNotExist)
+}
+
+// validateLuaPluginEntry validates discovery for the optional Lua plugin entrypoint.
+func (c *Config) validateLuaPluginEntry() error {
+	const field = "plugins.lua.entry"
+
+	if c.Plugins.Lua.Entry != "" {
+		expanded := pathutil.ExpandHome(c.Plugins.Lua.Entry)
+		if !filepath.IsAbs(expanded) {
+			return criterio.NewFieldErrors(field, fmt.Errorf("must be an absolute path or start with ~/, got %q", c.Plugins.Lua.Entry))
+		}
+	}
+
+	entry := c.LuaPluginEntry()
+	info, err := os.Stat(entry)
+	if os.IsNotExist(err) {
+		if c.Plugins.Lua.entryExplicit {
+			return criterio.NewFieldErrors(field, fmt.Errorf("file does not exist: %s", entry))
+		}
+		return nil
+	}
+	if err != nil {
+		return criterio.NewFieldErrors(field, fmt.Errorf("cannot access: %w", err))
+	}
+	if info.IsDir() {
+		return criterio.NewFieldErrors(field, fmt.Errorf("%s is a directory, not a file", entry))
+	}
+
+	f, err := os.Open(entry)
+	if err != nil {
+		return criterio.NewFieldErrors(field, fmt.Errorf("cannot read: %w", err))
+	}
+
+	return f.Close()
 }
 
 // validateRules checks rule patterns are valid regex and command templates are valid.

@@ -2,6 +2,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
@@ -486,11 +487,69 @@ type PluginsConfig struct {
 	ContextDir   ContextDirPluginConfig `json:"contextdir"    yaml:"contextdir"`
 	Claude       ClaudePluginConfig     `json:"claude"        yaml:"claude"`
 	Tmux         TmuxPluginConfig       `json:"tmux"          yaml:"tmux"`
+	Lua          LuaPluginConfig        `json:"lua"           yaml:"lua"`
 }
 
 // TmuxPluginConfig holds tmux plugin configuration.
 type TmuxPluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
+}
+
+// LuaPluginConfig holds Lua plugin discovery configuration.
+type LuaPluginConfig struct {
+	Entry         string `json:"entry" yaml:"entry"` // optional entry file override; defaults to ~/.config/hive/plugins/init.lua
+	entryExplicit bool   `json:"-"     yaml:"-"`
+}
+
+// UnmarshalYAML records whether plugins.lua.entry was explicitly configured.
+func (c *LuaPluginConfig) UnmarshalYAML(node *yaml.Node) error {
+	type luaPluginConfigAlias LuaPluginConfig
+	var alias luaPluginConfigAlias
+	if err := node.Decode(&alias); err != nil {
+		return err
+	}
+
+	*c = LuaPluginConfig(alias)
+	if node.Kind != yaml.MappingNode {
+		return nil
+	}
+
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		if node.Content[i].Value == "entry" {
+			c.entryExplicit = true
+			break
+		}
+	}
+
+	return nil
+}
+
+// MarshalJSON emits the effective Lua entry path used by Hive.
+func (c LuaPluginConfig) MarshalJSON() ([]byte, error) {
+	type luaPluginConfigJSON struct {
+		Entry string `json:"entry"`
+	}
+
+	return json.Marshal(luaPluginConfigJSON{Entry: c.ResolvedEntry()})
+}
+
+// ResolvedEntry returns the configured Lua entry path or the default discovery path.
+func (c LuaPluginConfig) ResolvedEntry() string {
+	if c.Entry != "" {
+		return pathutil.ExpandHome(c.Entry)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return pathutil.ExpandHome("~/.config/hive/plugins/init.lua")
+	}
+
+	return filepath.Join(home, ".config", "hive", "plugins", "init.lua")
+}
+
+// ModuleRoot returns the directory containing the Lua entry file.
+func (c LuaPluginConfig) ModuleRoot() string {
+	return filepath.Dir(c.ResolvedEntry())
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -1144,6 +1203,16 @@ func (c *Config) RepoContextDir(owner, repo string) string {
 // SharedContextDir returns the shared context directory.
 func (c *Config) SharedContextDir() string {
 	return filepath.Join(c.ContextDir(), "shared")
+}
+
+// LuaPluginEntry returns the effective Lua plugin entry path.
+func (c *Config) LuaPluginEntry() string {
+	return c.Plugins.Lua.ResolvedEntry()
+}
+
+// LuaPluginModuleRoot returns the effective Lua module root derived from the entry file path.
+func (c *Config) LuaPluginModuleRoot() string {
+	return c.Plugins.Lua.ModuleRoot()
 }
 
 // DatabaseFile returns the path to the SQLite database file.
