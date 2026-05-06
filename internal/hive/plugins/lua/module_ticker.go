@@ -70,10 +70,6 @@ type tickerHandle struct {
 // installs the per-instance registry sub-table used to pin Lua callback
 // functions for the lifetime of their handles.
 func (m *TickerModule) Register(state *glua.LState, hive *glua.LTable) error {
-	if m.Runtime == nil {
-		return fmt.Errorf("ticker module: Runtime is required")
-	}
-
 	m.handles = map[uint64]*tickerHandle{}
 	m.rootCtx, m.rootCancel = context.WithCancel(context.Background())
 	m.registryKey = fmt.Sprintf("%s%p", tickerRegistryKeyPrefix, m)
