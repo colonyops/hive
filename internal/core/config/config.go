@@ -486,11 +486,46 @@ type PluginsConfig struct {
 	ContextDir   ContextDirPluginConfig `json:"contextdir"    yaml:"contextdir"`
 	Claude       ClaudePluginConfig     `json:"claude"        yaml:"claude"`
 	Tmux         TmuxPluginConfig       `json:"tmux"          yaml:"tmux"`
+	Lua          LuaPluginConfig        `json:"lua"           yaml:"lua"`
 }
 
 // TmuxPluginConfig holds tmux plugin configuration.
 type TmuxPluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
+}
+
+// LuaPluginConfig holds Lua plugin discovery configuration.
+//
+// Entry is the absolute (or tilde-prefixed) path to the entry file. When empty
+// Hive looks for the default discovery path (~/.config/hive/plugins/init.lua),
+// and a missing file there is silently treated as "no Lua plugin." When Entry
+// is set explicitly, the file must exist.
+//
+// Entry is intentionally not pre-filled by DefaultConfig or applyDefaults:
+// distinguishing "user did not configure this" from "user explicitly chose the
+// default path" relies on Entry == "" being preserved as the unset signal.
+type LuaPluginConfig struct {
+	Enabled *bool  `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
+	Entry   string `json:"entry"   yaml:"entry"`
+}
+
+// ResolvedEntry returns the configured Lua entry path or the default discovery path.
+func (c LuaPluginConfig) ResolvedEntry() string {
+	if c.Entry != "" {
+		return pathutil.ExpandHome(c.Entry)
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return pathutil.ExpandHome("~/.config/hive/plugins/init.lua")
+	}
+
+	return filepath.Join(home, ".config", "hive", "plugins", "init.lua")
+}
+
+// ModuleRoot returns the directory containing the Lua entry file.
+func (c LuaPluginConfig) ModuleRoot() string {
+	return filepath.Dir(c.ResolvedEntry())
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -870,6 +905,7 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
+		c.validateLuaPluginEntryBasic(),
 	)
 }
 
@@ -889,84 +925,7 @@ func (c *Config) validateUserCommandsBasic() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
-
-		// Validate command name format
-		if name == "" {
-			errs = errs.Append(field, fmt.Errorf("command name cannot be empty"))
-			continue
-		}
-		if !isValidCommandName(name) {
-			errs = errs.Append(field, fmt.Errorf("invalid command name: must contain only alphanumeric characters, dashes, and underscores (no spaces)"))
-			continue
-		}
-
-		// Must have at least one of: action, sh, windows
-		hasAction := cmd.Action != ""
-		hasSh := cmd.Sh != ""
-		hasWindows := len(cmd.Windows) > 0
-
-		if !hasAction && !hasSh && !hasWindows {
-			errs = errs.Append(field, fmt.Errorf("must have at least one of: action, sh, windows"))
-			continue
-		}
-		if hasAction && (hasSh || hasWindows) {
-			errs = errs.Append(field, fmt.Errorf("action is mutually exclusive with sh and windows"))
-			continue
-		}
-		if hasAction && !isValidAction(cmd.Action) {
-			errs = errs.Append(field, fmt.Errorf("invalid action %q", cmd.Action))
-		}
-
-		// Validate windows entries
-		for i, w := range cmd.Windows {
-			wfield := fmt.Sprintf("%s.windows[%d]", field, i)
-			if w.Name == "" {
-				errs = errs.Append(wfield, fmt.Errorf("name is required"))
-			}
-		}
-
-		// options.remote requires options.session_name
-		if cmd.Options.Remote != "" && cmd.Options.SessionName == "" {
-			errs = errs.Append(field+".options.remote", fmt.Errorf("remote requires session_name to be set"))
-		}
-		// options.background only meaningful when windows are present
-		if cmd.Options.Background && !hasWindows {
-			errs = errs.Append(field+".options.background", fmt.Errorf("background only applies when windows are defined"))
-		}
-		// options.session_name only applies when windows are defined
-		if cmd.Options.SessionName != "" && !hasWindows {
-			errs = errs.Append(field+".options.session_name", fmt.Errorf("session_name only applies when windows are defined"))
-		}
-
-		// Validate scope values
-		for _, scope := range cmd.Scope {
-			if !isValidScope(scope) {
-				errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: %s", scope, strings.Join(ValidScopes, ", ")))
-			}
-		}
-
-		// Validate form fields
-		if len(cmd.Form) > 0 {
-			if cmd.Action != "" {
-				errs = errs.Append(field, fmt.Errorf("form can only be used with sh, not action"))
-				continue
-			}
-
-			if err := criterio.ValidateSlice(field+".form", cmd.Form, validateFormField); err != nil {
-				errs = errs.Append("", err)
-				continue
-			}
-
-			// Check for duplicate variables
-			seenVars := make(map[string]bool, len(cmd.Form))
-			for j, ff := range cmd.Form {
-				if seenVars[ff.Variable] {
-					errs = errs.Append(fmt.Sprintf("%s.form[%d].variable", field, j),
-						fmt.Errorf("duplicate variable %q", ff.Variable))
-				}
-				seenVars[ff.Variable] = true
-			}
-		}
+		errs = append(errs, ValidateUserCommandBasic(field, name, cmd)...)
 	}
 
 	return errs.ToError()

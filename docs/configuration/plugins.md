@@ -20,10 +20,117 @@ plugins:
   beads:
     enabled: true
     results_cache: 30s
+  lua:
+    enabled: true
+    entry: ~/.config/hive/plugins/init.lua
 ```
 
 !!! info "Auto-detection"
     Most plugins auto-detect their dependencies at startup. You only need to set `enabled: true` — if the required CLI tool isn't installed, the plugin silently deactivates. No errors, no configuration needed.
+
+## Lua Plugin Entry
+
+Hive can load user commands from a local Lua entry file.
+
+```yaml
+plugins:
+  lua:
+    enabled: true                              # nil = auto-detect, false to disable
+    entry: ~/.config/hive/plugins/init.lua     # omit to use the default discovery path
+```
+
+When `entry` is omitted, Hive checks `~/.config/hive/plugins/init.lua` automatically; a missing file there is silently ignored. When `entry` is set explicitly, the file must exist. Set `enabled: false` to keep the entry file on disk but skip loading it.
+
+The entry file should return a function that registers one or more commands:
+
+```lua
+return function(hive)
+  hive.commands({
+    LuaHello = {
+      sh = "printf 'hello from lua\\n'",
+      help = "example Lua-backed command",
+      scope = { "sessions" },
+    },
+  })
+end
+```
+
+Hive loads helper modules relative to that entry file, so `require("commands.hello")` works for files placed alongside `init.lua`.
+
+Supported command fields:
+
+| Field     | Type                  | Meaning |
+| --------- | --------------------- | ------- |
+| `sh`      | `string`              | Shell command template to execute. This is required. |
+| `help`    | `string`              | Help text shown in the command palette. |
+| `scope`   | `string[]`            | Views where the command is available. Omit it for global availability. |
+| `confirm` | `string`              | Confirmation prompt shown before execution. |
+| `silent`  | `boolean`             | Skip the loading popup for fast commands. |
+| `exit`    | `boolean` or `string` | Exit condition, using the same rules as normal user commands. |
+
+Lua-backed commands are intentionally limited to shell-backed command registration. Fields such as `action`, `windows`, `options`, and `form` are not supported here.
+
+Example layout:
+
+```text
+~/.config/hive/plugins/
+├── init.lua
+└── commands/
+    └── hello.lua
+```
+
+`init.lua`:
+
+```lua
+local commands = require("commands.hello")
+
+return function(hive)
+  hive.commands(commands)
+end
+```
+
+`commands/hello.lua`:
+
+```lua
+return {
+  LuaHello = {
+    sh = "printf 'lua command ran' > .lua-plugin-output",
+    help = "lua command",
+    scope = { "sessions" },
+    silent = true,
+  },
+}
+```
+
+To try it:
+
+```bash
+mise container
+mkdir -p ~/.config/hive/plugins/commands
+cat > ~/.config/hive/plugins/init.lua <<'EOF'
+local commands = require("commands.hello")
+
+return function(hive)
+  hive.commands(commands)
+end
+EOF
+
+cat > ~/.config/hive/plugins/commands/hello.lua <<'EOF'
+return {
+  LuaHello = {
+    sh = "printf 'lua command ran' > .lua-plugin-output",
+    help = "lua command",
+    scope = { "sessions" },
+    silent = true,
+  },
+}
+EOF
+
+hv new --remote <url> lua-smoke
+hv
+```
+
+Open the command palette with `:`, run `LuaHello`, and confirm that `.lua-plugin-output` was created in the selected session directory.
 
 ## Tmux Plugin
 

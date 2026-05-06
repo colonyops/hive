@@ -68,6 +68,7 @@ func (c *Config) ValidateDeep(configPath string) error {
 	return criterio.ValidateStruct(
 		c.validateFileAccess(configPath),
 		c.validateContextBaseDir(),
+		c.validateLuaPluginEntry(),
 		c.validateRules(),
 		c.validateUserCommandTemplates(),
 	)
@@ -168,6 +169,51 @@ func (c *Config) validateContextBaseDir() error {
 	return criterio.Run("context.base_dir", expanded, isDirectoryOrNotExist)
 }
 
+// validateLuaPluginEntryBasic enforces that a user-supplied Lua entry path is
+// absolute (or tilde-prefixed). Runs during normal startup so a relative
+// entry never reaches the runtime, where it would be resolved against the
+// process working directory.
+func (c *Config) validateLuaPluginEntryBasic() error {
+	const field = "plugins.lua.entry"
+	entry := c.Plugins.Lua.Entry
+	if entry == "" {
+		return nil
+	}
+	if !filepath.IsAbs(pathutil.ExpandHome(entry)) {
+		return criterio.NewFieldErrors(field, fmt.Errorf("must be an absolute path or start with ~/, got %q", entry))
+	}
+	return nil
+}
+
+// validateLuaPluginEntry verifies that an explicitly configured Lua entry file
+// exists and is readable. The default discovery path (Entry == "") is allowed
+// to be missing — a no-op in that case.
+func (c *Config) validateLuaPluginEntry() error {
+	const field = "plugins.lua.entry"
+	if c.Plugins.Lua.Entry == "" {
+		return nil
+	}
+
+	entry := pathutil.ExpandHome(c.Plugins.Lua.Entry)
+	info, err := os.Stat(entry)
+	if os.IsNotExist(err) {
+		return criterio.NewFieldErrors(field, fmt.Errorf("file does not exist: %s", entry))
+	}
+	if err != nil {
+		return criterio.NewFieldErrors(field, fmt.Errorf("cannot access: %w", err))
+	}
+	if info.IsDir() {
+		return criterio.NewFieldErrors(field, fmt.Errorf("%s is a directory, not a file", entry))
+	}
+
+	f, err := os.Open(entry)
+	if err != nil {
+		return criterio.NewFieldErrors(field, fmt.Errorf("cannot read: %w", err))
+	}
+
+	return f.Close()
+}
+
 // validateRules checks rule patterns are valid regex and command templates are valid.
 func (c *Config) validateRules() error {
 	var errs criterio.FieldErrorsBuilder
@@ -228,42 +274,7 @@ func (c *Config) validateUserCommandTemplates() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
-		testData := buildValidationData(cmd.Form)
-
-		if cmd.Sh != "" {
-			if err := validateTemplate(cmd.Sh, testData); err != nil {
-				errs = errs.Append(field, fmt.Errorf("template error in sh: %w", err))
-			}
-		}
-
-		// Validate options templates
-		if cmd.Options.SessionName != "" {
-			if err := validateTemplate(cmd.Options.SessionName, testData); err != nil {
-				errs = errs.Append(field+".options.session_name", err)
-			}
-		}
-		if cmd.Options.Remote != "" {
-			if err := validateTemplate(cmd.Options.Remote, testData); err != nil {
-				errs = errs.Append(field+".options.remote", err)
-			}
-		}
-
-		// Validate window templates
-		for i, w := range cmd.Windows {
-			wfield := fmt.Sprintf("%s.windows[%d]", field, i)
-			for tname, tmplStr := range map[string]string{
-				".name":    w.Name,
-				".command": w.Command,
-				".dir":     w.Dir,
-			} {
-				if tmplStr == "" {
-					continue
-				}
-				if err := validateTemplate(tmplStr, testData); err != nil {
-					errs = errs.Append(wfield+tname, err)
-				}
-			}
-		}
+		errs = append(errs, ValidateUserCommandTemplates(field, cmd)...)
 	}
 	return errs.ToError()
 }
