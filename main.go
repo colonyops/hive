@@ -27,6 +27,7 @@ import (
 	"github.com/colonyops/hive/internal/hive/plugins/contextdir"
 	"github.com/colonyops/hive/internal/hive/plugins/github"
 	"github.com/colonyops/hive/internal/hive/plugins/lazygit"
+	luaplugin "github.com/colonyops/hive/internal/hive/plugins/lua"
 	"github.com/colonyops/hive/internal/hive/plugins/neovim"
 	plugintmux "github.com/colonyops/hive/internal/hive/plugins/tmux"
 	"github.com/colonyops/hive/internal/hive/scripts"
@@ -269,41 +270,39 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			// Create all plugin instances, collect availability info for doctor,
 			// then register with the manager.
-			allPlugins := []plugins.Plugin{
-				github.New(cfg.Plugins.GitHub, kvStore),
-				beads.New(cfg.Plugins.Beads, kvStore),
-				lazygit.New(cfg.Plugins.LazyGit),
-				neovim.New(cfg.Plugins.Neovim),
-				contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir),
-				claude.New(cfg.Plugins.Claude, kvStore),
-				plugintmux.New(cfg.Plugins.Tmux),
+			type configuredPlugin struct {
+				plugin   plugins.Plugin
+				disabled bool
 			}
 
-			// Map plugin configs' Enabled field to detect explicitly disabled plugins.
-			// All plugin configs use *bool: nil=auto-detect, false=disabled.
-			enabledFlags := []*bool{
-				cfg.Plugins.GitHub.Enabled,
-				cfg.Plugins.Beads.Enabled,
-				cfg.Plugins.LazyGit.Enabled,
-				cfg.Plugins.Neovim.Enabled,
-				cfg.Plugins.ContextDir.Enabled,
-				cfg.Plugins.Claude.Enabled,
-				cfg.Plugins.Tmux.Enabled,
+			isDisabled := func(flag *bool) bool {
+				return flag != nil && !*flag
+			}
+
+			allPlugins := []configuredPlugin{
+				{plugin: github.New(cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},
+				{plugin: beads.New(cfg.Plugins.Beads, kvStore), disabled: isDisabled(cfg.Plugins.Beads.Enabled)},
+				{plugin: lazygit.New(cfg.Plugins.LazyGit), disabled: isDisabled(cfg.Plugins.LazyGit.Enabled)},
+				{plugin: neovim.New(cfg.Plugins.Neovim), disabled: isDisabled(cfg.Plugins.Neovim.Enabled)},
+				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
+				{plugin: claude.New(cfg.Plugins.Claude, kvStore), disabled: isDisabled(cfg.Plugins.Claude.Enabled)},
+				{plugin: plugintmux.New(cfg.Plugins.Tmux), disabled: isDisabled(cfg.Plugins.Tmux.Enabled)},
+				{plugin: luaplugin.New(cfg.Plugins.Lua)},
 			}
 
 			pluginInfos := make([]doctor.PluginInfo, len(allPlugins))
-			for i, p := range allPlugins {
-				disabled := enabledFlags[i] != nil && !*enabledFlags[i]
+			for i, candidate := range allPlugins {
+				p := candidate.plugin
 				pluginInfos[i] = doctor.PluginInfo{
 					Name:      p.Name(),
 					Available: p.Available(),
-					Disabled:  disabled,
+					Disabled:  candidate.disabled,
 				}
 			}
 
 			pluginMgr = plugins.NewManager(cfg.Plugins)
-			for _, p := range allPlugins {
-				pluginMgr.Register(p)
+			for _, candidate := range allPlugins {
+				pluginMgr.Register(candidate.plugin)
 			}
 
 			// Initialize plugins (errors are logged but don't stop startup)

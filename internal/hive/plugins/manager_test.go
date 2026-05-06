@@ -1,8 +1,10 @@
 package plugins
 
 import (
+	"context"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/stretchr/testify/assert"
 )
@@ -75,3 +77,42 @@ func TestSessionsChanged(t *testing.T) {
 		})
 	}
 }
+
+func TestMergedCommandsPriority(t *testing.T) {
+	mgr := NewManager(config.PluginsConfig{})
+	mgr.Register(&mockPlugin{
+		name: "plugin",
+		commands: map[string]config.UserCommand{
+			"Shared":     {Sh: "plugin"},
+			"PluginOnly": {Sh: "plugin-only"},
+		},
+	})
+
+	system := map[string]config.UserCommand{
+		"Shared":     {Sh: "system"},
+		"SystemOnly": {Sh: "system-only"},
+	}
+	user := map[string]config.UserCommand{
+		"Shared":   {Sh: "user"},
+		"UserOnly": {Sh: "user-only"},
+	}
+
+	merged := mgr.MergedCommands(system, user)
+
+	assert.Equal(t, "user", merged["Shared"].Sh)
+	assert.Equal(t, "plugin-only", merged["PluginOnly"].Sh)
+	assert.Equal(t, "system-only", merged["SystemOnly"].Sh)
+	assert.Equal(t, "user-only", merged["UserOnly"].Sh)
+}
+
+type mockPlugin struct {
+	name     string
+	commands map[string]config.UserCommand
+}
+
+func (p *mockPlugin) Name() string                            { return p.name }
+func (p *mockPlugin) Available() bool                         { return true }
+func (p *mockPlugin) Init(_ context.Context) error            { return nil }
+func (p *mockPlugin) Close() error                            { return nil }
+func (p *mockPlugin) Commands() map[string]config.UserCommand { return p.commands }
+func (p *mockPlugin) StatusProvider() StatusProvider          { return nil }
