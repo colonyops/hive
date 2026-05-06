@@ -172,18 +172,21 @@ func (c *Config) validateContextBaseDir() error {
 // validateLuaPluginEntry validates discovery for the optional Lua plugin entrypoint.
 func (c *Config) validateLuaPluginEntry() error {
 	const field = "plugins.lua.entry"
-
-	if c.Plugins.Lua.Entry != "" {
-		expanded := pathutil.ExpandHome(c.Plugins.Lua.Entry)
-		if !filepath.IsAbs(expanded) {
-			return criterio.NewFieldErrors(field, fmt.Errorf("must be an absolute path or start with ~/, got %q", c.Plugins.Lua.Entry))
-		}
+	defaultEntry := DefaultConfig().Plugins.Lua.Entry
+	configuredEntry := c.Plugins.Lua.Entry
+	if configuredEntry == "" {
+		configuredEntry = defaultEntry
 	}
 
-	entry := c.LuaPluginEntry()
+	expanded := pathutil.ExpandHome(configuredEntry)
+	if !filepath.IsAbs(expanded) {
+		return criterio.NewFieldErrors(field, fmt.Errorf("must be an absolute path or start with ~/, got %q", configuredEntry))
+	}
+
+	entry := pathutil.ExpandHome(configuredEntry)
 	info, err := os.Stat(entry)
 	if os.IsNotExist(err) {
-		if c.Plugins.Lua.entryExplicit {
+		if configuredEntry != defaultEntry {
 			return criterio.NewFieldErrors(field, fmt.Errorf("file does not exist: %s", entry))
 		}
 		return nil

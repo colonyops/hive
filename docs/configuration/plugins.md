@@ -29,7 +29,7 @@ plugins:
 
 ## Lua Plugin Entry
 
-Hive reserves `plugins.lua` for a user-provided Lua plugin entrypoint.
+Hive can load user commands from a local Lua entry file.
 
 ```yaml
 plugins:
@@ -37,31 +37,9 @@ plugins:
     entry: ~/.config/hive/plugins/init.lua
 ```
 
-If `plugins.lua.entry` is unset, Hive looks for `~/.config/hive/plugins/init.lua` by convention. A missing default file is a no-op. Set `plugins.lua.entry` only when you want Hive to load a different entry file; in that case the file must exist.
+If you use the default location, Hive checks `~/.config/hive/plugins/init.lua` automatically. If that file is missing, nothing happens. Set `plugins.lua.entry` only when you want Hive to load a different file.
 
-The Lua module root is derived from the directory containing the entry file. Organize helper modules beside that entry file and load them with normal Lua `require()` behavior.
-
-### Entrypoint Contract
-
-Hive executes the entry file at startup and expects it to return exactly one function:
-
-```lua
-return function(hive)
-  -- register commands here
-end
-```
-
-If the file does not compile, returns the wrong value, or raises an error while initializing, Hive logs a plugin initialization warning and continues startup without loading the Lua commands.
-
-### V1 Host API
-
-Lua plugins get a deliberately small `hive` table:
-
-- `hive.commands(map)` registers one or more user commands.
-- `hive.log.debug(msg)`, `hive.log.info(msg)`, `hive.log.warn(msg)`, `hive.log.error(msg)` write to the normal hive log.
-- `hive.plugin.name`, `hive.plugin.entry`, and `hive.plugin.module_root` expose plugin metadata.
-
-`hive.commands(map)` accepts the same command names used elsewhere in hive config. Each value must be a Lua table describing one shell-backed command.
+The entry file should return a function that registers one or more commands:
 
 ```lua
 return function(hive)
@@ -70,30 +48,25 @@ return function(hive)
       sh = "printf 'hello from lua\\n'",
       help = "example Lua-backed command",
       scope = { "sessions" },
-      confirm = "Run LuaHello?",
-      silent = true,
-      exit = "$HIVE_POPUP",
     },
   })
 end
 ```
 
-Supported command fields in v1:
+Hive loads helper modules relative to that entry file, so `require("commands.hello")` works for files placed alongside `init.lua`.
+
+Supported command fields:
 
 | Field     | Type                  | Meaning |
 | --------- | --------------------- | ------- |
 | `sh`      | `string`              | Shell command template to execute. This is required. |
 | `help`    | `string`              | Help text shown in the command palette. |
-| `scope`   | `string[]`            | Views where the command is available. Valid values match normal user commands: `global`, `sessions`, `messages`, `review`, `todos`, `tasks`. Omit it for global availability. |
+| `scope`   | `string[]`            | Views where the command is available. Omit it for global availability. |
 | `confirm` | `string`              | Confirmation prompt shown before execution. |
 | `silent`  | `boolean`             | Skip the loading popup for fast commands. |
-| `exit`    | `boolean` or `string` | Exit condition, using the same rules as normal user commands such as `true` or `$HIVE_POPUP`. |
+| `exit`    | `boolean` or `string` | Exit condition, using the same rules as normal user commands. |
 
-Lua plugin commands intentionally do not support the broader user-command surface in v1. In particular, `action`, `windows`, `options`, and `form` are rejected.
-
-### Module Layout And `require()`
-
-The Lua module root is the directory containing the entry file. Hive configures `require()` relative to that directory, so helper modules can live alongside `init.lua` and use normal dot-notation imports.
+Lua-backed commands are intentionally limited to shell-backed command registration. Fields such as `action`, `windows`, `options`, and `form` are not supported here.
 
 Example layout:
 
@@ -127,30 +100,10 @@ return {
 }
 ```
 
-Use standard Lua `require()` naming rooted at the entry file directory. For example, `commands/hello.lua` becomes `require("commands.hello")`, and `commands/hello/init.lua` becomes `require("commands.hello")`.
-
-### V1 Boundaries
-
-The Lua plugin API is intentionally narrow in v1:
-
-- No status hooks or custom status providers.
-- No event bus or session lifecycle APIs.
-- No package-management helpers, dependency installer, or remote module loading.
-- No callback-style command fields; command definitions are declarative tables only.
-
-The supported v1 use case is: load local Lua modules from the plugin directory, then register shell-backed commands through `hive.commands(map)`.
-
-### End-To-End Smoke Test
-
-The preferred way to try a Lua plugin end-to-end is inside the project container so you do not have to install a development binary locally:
+To try it:
 
 ```bash
 mise container
-```
-
-Inside the container:
-
-```bash
 mkdir -p ~/.config/hive/plugins/commands
 cat > ~/.config/hive/plugins/init.lua <<'EOF'
 local commands = require("commands.hello")
@@ -175,7 +128,7 @@ hv new --remote <url> lua-smoke
 hv
 ```
 
-Open the command palette with `:`, run `LuaHello`, then verify that `.lua-plugin-output` was created in the selected session directory. If you want to keep the plugin somewhere else, set `plugins.lua.entry` to that alternate `init.lua` path and keep using standard Lua `require()` from that entry file's directory.
+Open the command palette with `:`, run `LuaHello`, and confirm that `.lua-plugin-output` was created in the selected session directory.
 
 ## Tmux Plugin
 

@@ -18,8 +18,8 @@ func TestLuaPluginEntry_DefaultResolution(t *testing.T) {
 	cfg.DataDir = t.TempDir()
 
 	wantEntry := filepath.Join(home, ".config", "hive", "plugins", "init.lua")
-	assert.Equal(t, wantEntry, cfg.LuaPluginEntry())
-	assert.Equal(t, filepath.Dir(wantEntry), cfg.LuaPluginModuleRoot())
+	assert.Equal(t, wantEntry, cfg.Plugins.Lua.ResolvedEntry())
+	assert.Equal(t, filepath.Dir(wantEntry), cfg.Plugins.Lua.ModuleRoot())
 }
 
 func TestLoad_LuaPluginEntryOverride(t *testing.T) {
@@ -38,69 +38,74 @@ plugins:
 	require.NoError(t, err)
 
 	wantEntry := filepath.Join(home, "lua", "plugins", "custom.lua")
-	assert.Equal(t, wantEntry, cfg.LuaPluginEntry())
-	assert.Equal(t, filepath.Join(home, "lua", "plugins"), cfg.LuaPluginModuleRoot())
+	assert.Equal(t, wantEntry, cfg.Plugins.Lua.ResolvedEntry())
+	assert.Equal(t, filepath.Join(home, "lua", "plugins"), cfg.Plugins.Lua.ModuleRoot())
 }
 
 func TestValidateDeep_LuaPluginEntry(t *testing.T) {
-	t.Run("default entry missing is a no-op", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+	tests := []struct {
+		name      string
+		entry     string
+		prepare   func(t *testing.T, home string)
+		wantError string
+		wantRoot  string
+	}{
+		{
+			name:     "default entry missing is a no-op",
+			entry:    DefaultConfig().Plugins.Lua.Entry,
+			wantRoot: filepath.Join(".config", "hive", "plugins"),
+		},
+		{
+			name:  "default entry resolves when file exists",
+			entry: DefaultConfig().Plugins.Lua.Entry,
+			prepare: func(t *testing.T, home string) {
+				entry := filepath.Join(home, ".config", "hive", "plugins", "init.lua")
+				require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
+				require.NoError(t, os.WriteFile(entry, []byte("return function() end\n"), 0o644))
+			},
+			wantRoot: filepath.Join(".config", "hive", "plugins"),
+		},
+		{
+			name:  "explicit override derives module root",
+			entry: "~/lua/plugins/custom.lua",
+			prepare: func(t *testing.T, home string) {
+				entry := filepath.Join(home, "lua", "plugins", "custom.lua")
+				require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
+				require.NoError(t, os.WriteFile(entry, []byte("return function() end\n"), 0o644))
+			},
+			wantRoot: filepath.Join("lua", "plugins"),
+		},
+		{
+			name:      "missing override errors",
+			entry:     "~/lua/plugins/custom.lua",
+			wantError: "file does not exist",
+		},
+	}
 
-		cfg := validConfig(t)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			home := t.TempDir()
+			t.Setenv("HOME", home)
 
-		assert.Equal(t, filepath.Join(home, ".config", "hive", "plugins", "init.lua"), cfg.LuaPluginEntry())
-		assert.NoError(t, cfg.ValidateDeep(""))
-	})
+			if tt.prepare != nil {
+				tt.prepare(t, home)
+			}
 
-	t.Run("default entry resolves when file exists", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
+			cfg := validConfig(t)
+			cfg.Plugins.Lua.Entry = tt.entry
 
-		entry := filepath.Join(home, ".config", "hive", "plugins", "init.lua")
-		require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
-		require.NoError(t, os.WriteFile(entry, []byte("return function() end\n"), 0o644))
+			err := cfg.ValidateDeep("")
+			if tt.wantError != "" {
+				var fieldErrs criterio.FieldErrors
+				require.ErrorAs(t, err, &fieldErrs)
+				require.Len(t, fieldErrs, 1)
+				assert.Equal(t, "plugins.lua.entry", fieldErrs[0].Field)
+				assert.Contains(t, fieldErrs[0].Err.Error(), tt.wantError)
+				return
+			}
 
-		cfg := validConfig(t)
-
-		assert.Equal(t, filepath.Dir(entry), cfg.LuaPluginModuleRoot())
-		assert.NoError(t, cfg.ValidateDeep(""))
-	})
-
-	t.Run("explicit override derives module root", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-
-		entry := filepath.Join(home, "lua", "plugins", "custom.lua")
-		require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
-		require.NoError(t, os.WriteFile(entry, []byte("return function() end\n"), 0o644))
-
-		cfg := validConfig(t)
-		cfg.Plugins.Lua = LuaPluginConfig{
-			Entry:         "~/lua/plugins/custom.lua",
-			entryExplicit: true,
-		}
-
-		assert.Equal(t, entry, cfg.LuaPluginEntry())
-		assert.Equal(t, filepath.Dir(entry), cfg.LuaPluginModuleRoot())
-		assert.NoError(t, cfg.ValidateDeep(""))
-	})
-
-	t.Run("missing file errors only when entry is explicit", func(t *testing.T) {
-		home := t.TempDir()
-		t.Setenv("HOME", home)
-
-		cfg := validConfig(t)
-		cfg.Plugins.Lua = LuaPluginConfig{
-			Entry:         "~/.config/hive/plugins/init.lua",
-			entryExplicit: true,
-		}
-
-		err := cfg.ValidateDeep("")
-		var fieldErrs criterio.FieldErrors
-		require.ErrorAs(t, err, &fieldErrs)
-		require.Len(t, fieldErrs, 1)
-		assert.Equal(t, "plugins.lua.entry", fieldErrs[0].Field)
-		assert.Contains(t, fieldErrs[0].Err.Error(), "file does not exist")
-	})
+			require.NoError(t, err)
+			assert.Equal(t, filepath.Join(home, tt.wantRoot), cfg.Plugins.Lua.ModuleRoot())
+		})
+	}
 }

@@ -2,7 +2,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"maps"
 	"os"
@@ -497,40 +496,7 @@ type TmuxPluginConfig struct {
 
 // LuaPluginConfig holds Lua plugin discovery configuration.
 type LuaPluginConfig struct {
-	Entry         string `json:"entry" yaml:"entry"` // optional entry file override; defaults to ~/.config/hive/plugins/init.lua
-	entryExplicit bool   `json:"-"     yaml:"-"`
-}
-
-// UnmarshalYAML records whether plugins.lua.entry was explicitly configured.
-func (c *LuaPluginConfig) UnmarshalYAML(node *yaml.Node) error {
-	type luaPluginConfigAlias LuaPluginConfig
-	var alias luaPluginConfigAlias
-	if err := node.Decode(&alias); err != nil {
-		return err
-	}
-
-	*c = LuaPluginConfig(alias)
-	if node.Kind != yaml.MappingNode {
-		return nil
-	}
-
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == "entry" {
-			c.entryExplicit = true
-			break
-		}
-	}
-
-	return nil
-}
-
-// MarshalJSON emits the effective Lua entry path used by Hive.
-func (c LuaPluginConfig) MarshalJSON() ([]byte, error) {
-	type luaPluginConfigJSON struct {
-		Entry string `json:"entry"`
-	}
-
-	return json.Marshal(luaPluginConfigJSON{Entry: c.ResolvedEntry()})
+	Entry string `json:"entry" yaml:"entry"` // defaults to ~/.config/hive/plugins/init.lua
 }
 
 // ResolvedEntry returns the configured Lua entry path or the default discovery path.
@@ -744,6 +710,11 @@ func DefaultConfig() Config {
 		Messaging: MessagingConfig{
 			TopicPrefix: "agent",
 			MaxMessages: 100,
+		},
+		Plugins: PluginsConfig{
+			Lua: LuaPluginConfig{
+				Entry: "~/.config/hive/plugins/init.lua",
+			},
 		},
 		Todos: TodosConfig{
 			Limiter: TodosLimiterConfig{
@@ -1126,16 +1097,6 @@ func (c *Config) RepoContextDir(owner, repo string) string {
 // SharedContextDir returns the shared context directory.
 func (c *Config) SharedContextDir() string {
 	return filepath.Join(c.ContextDir(), "shared")
-}
-
-// LuaPluginEntry returns the effective Lua plugin entry path.
-func (c *Config) LuaPluginEntry() string {
-	return c.Plugins.Lua.ResolvedEntry()
-}
-
-// LuaPluginModuleRoot returns the effective Lua module root derived from the entry file path.
-func (c *Config) LuaPluginModuleRoot() string {
-	return c.Plugins.Lua.ModuleRoot()
 }
 
 // DatabaseFile returns the path to the SQLite database file.
