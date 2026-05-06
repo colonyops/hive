@@ -64,7 +64,16 @@ plugins:
 	cleanupTmuxSession(t, sessionName)
 	cleanupTmuxSession(t, uiSession)
 
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", uiSession, hiveBin)
+	// Pass env explicitly via tmux -e so the TUI sees the current harness's
+	// data dir and config rather than whatever env tmux's persistent server
+	// captured when an earlier test first started it. Use a wider window so
+	// the session name is not truncated in the TUI tree view.
+	tmuxArgs := []string{"new-session", "-d", "-s", uiSession, "-x", "200", "-y", "50"}
+	for _, kv := range h.command().Env {
+		tmuxArgs = append(tmuxArgs, "-e", kv)
+	}
+	tmuxArgs = append(tmuxArgs, hiveBin)
+	cmd := exec.Command("tmux", tmuxArgs...)
 	cmd.Env = h.command().Env
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "tmux new-session: %s", out)
@@ -76,6 +85,11 @@ plugins:
 		assert.NoError(c, err, "tmux capture-pane: %s", out)
 		assert.Contains(c, string(out), sessionName)
 	}, 5*time.Second, 200*time.Millisecond)
+
+	// Move cursor down past the repo header onto the session row so the
+	// command palette has a selected session for the Lua command to act on.
+	_, err = exec.Command("tmux", "send-keys", "-t", uiSession, "j").CombinedOutput()
+	require.NoError(t, err)
 
 	_, err = exec.Command("tmux", "send-keys", "-t", uiSession, ":", "LuaHello", "Enter").CombinedOutput()
 	require.NoError(t, err)
