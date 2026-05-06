@@ -2,6 +2,10 @@
 package lua
 
 import (
+	"fmt"
+	"path/filepath"
+	"strings"
+
 	"github.com/rs/zerolog/log"
 	glua "github.com/yuin/gopher-lua"
 )
@@ -13,10 +17,11 @@ type Runtime struct {
 }
 
 // NewRuntime constructs a sandboxed Lua runtime for a Hive plugin.
-func NewRuntime(pluginName string) *Runtime {
+func NewRuntime(pluginName string, moduleRoot string) *Runtime {
 	L := glua.NewState(glua.Options{SkipOpenLibs: true})
 
 	openLib(L, glua.BaseLibName, glua.OpenBase)
+	openLib(L, glua.LoadLibName, glua.OpenPackage)
 	openLib(L, glua.TabLibName, glua.OpenTable)
 	openLib(L, glua.StringLibName, glua.OpenString)
 	openLib(L, glua.MathLibName, glua.OpenMath)
@@ -25,10 +30,7 @@ func NewRuntime(pluginName string) *Runtime {
 	L.SetGlobal("loadfile", glua.LNil)
 	L.SetGlobal("dofile", glua.LNil)
 	L.SetGlobal("load", glua.LNil)
-	L.SetGlobal("require", L.NewFunction(func(L *glua.LState) int {
-		L.RaiseError("require is not available in hive lua plugins")
-		return 0
-	}))
+	configureRequire(L, moduleRoot)
 
 	hiveTable := registerHive(L, pluginName)
 
@@ -82,4 +84,55 @@ func newLogFn(state *glua.LState, fn func(string)) *glua.LFunction {
 		fn(state.CheckString(1))
 		return 0
 	})
+}
+
+func configureRequire(state *glua.LState, moduleRoot string) {
+	requireFn := state.GetGlobal("require")
+	pkg, ok := state.GetGlobal(glua.LoadLibName).(*glua.LTable)
+	if !ok {
+		panic("lua package library is unavailable")
+	}
+
+	patterns := []string{
+		filepath.Join(moduleRoot, "?.lua"),
+		filepath.Join(moduleRoot, "?", "init.lua"),
+	}
+	state.SetField(pkg, "path", glua.LString(strings.Join(patterns, ";")))
+	state.SetField(pkg, "cpath", glua.LString(""))
+
+	state.SetGlobal("require", state.NewFunction(func(state *glua.LState) int {
+		name := state.CheckString(1)
+		if err := validateModuleName(name); err != nil {
+			state.RaiseError("%s", err.Error())
+			return 0
+		}
+
+		if err := state.CallByParam(glua.P{
+			Fn:      requireFn,
+			NRet:    1,
+			Protect: true,
+		}, glua.LString(name)); err != nil {
+			state.RaiseError("%s", err.Error())
+			return 0
+		}
+
+		return 1
+	}))
+}
+
+func validateModuleName(name string) error {
+	if name == "" {
+		return fmt.Errorf("module name cannot be empty")
+	}
+	if strings.ContainsAny(name, `/\`) {
+		return fmt.Errorf("module name %q must use dot notation", name)
+	}
+
+	for _, segment := range strings.Split(name, ".") {
+		if segment == "" || segment == "." || segment == ".." {
+			return fmt.Errorf("module name %q is invalid", name)
+		}
+	}
+
+	return nil
 }

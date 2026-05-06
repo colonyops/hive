@@ -14,20 +14,28 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestLuaPluginBootstrapRegistersKnownCommand(t *testing.T) {
+func TestLuaPluginBootstrapRequiresModuleAndExecutesCommand(t *testing.T) {
 	h := NewHarness(t)
+	repo := createBareRepo(t, "lua-plugin-repo")
 
-	entry := filepath.Join(h.DataDir(), "lua", "init.lua")
-	require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
+	entry := filepath.Join(h.DataDir(), "lua", "plugins", "init.lua")
+	module := filepath.Join(h.DataDir(), "lua", "plugins", "commands", "hello.lua")
+	require.NoError(t, os.MkdirAll(filepath.Dir(module), 0o755))
+	require.NoError(t, os.WriteFile(module, []byte(`
+return {
+  LuaHello = {
+    sh = "printf 'lua command ran' > .lua-plugin-output",
+    help = "lua command",
+    scope = {"sessions"},
+    silent = true,
+  },
+}
+`), 0o644))
 	require.NoError(t, os.WriteFile(entry, []byte(`
+local commands = require("commands.hello")
+
 return function(hive)
-  hive.commands({
-    LuaHello = {
-      sh = "echo lua",
-      help = "lua command",
-      scope = {"sessions"},
-    },
-  })
+  hive.commands(commands)
 end
 `), 0o644))
 
@@ -47,26 +55,34 @@ plugins:
     entry: %q
 `, entry))
 
-	sessionName := "lua-plugin-bootstrap"
-	cleanupTmuxSession(t, sessionName)
+	sessionName := "lua-plugin-command"
+	sessionOut, err := h.Run("new", "--remote", repo, sessionName)
+	require.NoError(t, err)
+	sessionPath := parseCreatedSessionPath(t, sessionOut)
 
-	cmd := exec.Command("tmux", "new-session", "-d", "-s", sessionName, hiveBin)
+	uiSession := "lua-plugin-ui"
+	cleanupTmuxSession(t, sessionName)
+	cleanupTmuxSession(t, uiSession)
+
+	cmd := exec.Command("tmux", "new-session", "-d", "-s", uiSession, hiveBin)
 	cmd.Env = h.command().Env
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, "tmux new-session: %s", out)
 
-	assertTmuxSessionExists(t, sessionName)
+	assertTmuxSessionExists(t, uiSession)
 
-	// Wait for the TUI to finish initial startup before opening the palette.
-	time.Sleep(500 * time.Millisecond)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := exec.Command("tmux", "capture-pane", "-t", uiSession, "-p").CombinedOutput()
+		assert.NoError(c, err, "tmux capture-pane: %s", out)
+		assert.Contains(c, string(out), sessionName)
+	}, 5*time.Second, 200*time.Millisecond)
 
-	_, err = exec.Command("tmux", "send-keys", "-t", sessionName, ":", "LuaHello").CombinedOutput()
+	_, err = exec.Command("tmux", "send-keys", "-t", uiSession, ":", "LuaHello", "Enter").CombinedOutput()
 	require.NoError(t, err)
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		out, err := exec.Command("tmux", "capture-pane", "-t", sessionName, "-p").CombinedOutput()
-		assert.NoError(c, err, "tmux capture-pane: %s", out)
-		assert.Contains(c, string(out), "LuaHello")
-		assert.Contains(c, string(out), "lua command")
+		content, err := os.ReadFile(filepath.Join(sessionPath, ".lua-plugin-output"))
+		assert.NoError(c, err)
+		assert.Equal(c, "lua command ran", string(content))
 	}, 5*time.Second, 200*time.Millisecond)
 }

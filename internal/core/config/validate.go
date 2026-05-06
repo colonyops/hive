@@ -263,42 +263,7 @@ func (c *Config) validateUserCommandTemplates() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
-		testData := buildValidationData(cmd.Form)
-
-		if cmd.Sh != "" {
-			if err := validateTemplate(cmd.Sh, testData); err != nil {
-				errs = errs.Append(field, fmt.Errorf("template error in sh: %w", err))
-			}
-		}
-
-		// Validate options templates
-		if cmd.Options.SessionName != "" {
-			if err := validateTemplate(cmd.Options.SessionName, testData); err != nil {
-				errs = errs.Append(field+".options.session_name", err)
-			}
-		}
-		if cmd.Options.Remote != "" {
-			if err := validateTemplate(cmd.Options.Remote, testData); err != nil {
-				errs = errs.Append(field+".options.remote", err)
-			}
-		}
-
-		// Validate window templates
-		for i, w := range cmd.Windows {
-			wfield := fmt.Sprintf("%s.windows[%d]", field, i)
-			for tname, tmplStr := range map[string]string{
-				".name":    w.Name,
-				".command": w.Command,
-				".dir":     w.Dir,
-			} {
-				if tmplStr == "" {
-					continue
-				}
-				if err := validateTemplate(tmplStr, testData); err != nil {
-					errs = errs.Append(wfield+tname, err)
-				}
-			}
-		}
+		AppendUserCommandTemplateValidation(&errs, field, cmd)
 	}
 	return errs.ToError()
 }

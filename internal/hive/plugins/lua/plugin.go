@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"strconv"
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/hay-kot/criterio"
 	glua "github.com/yuin/gopher-lua"
 )
 
@@ -42,7 +44,7 @@ func (p *Plugin) Init(_ context.Context) error {
 	}
 	p.commands = map[string]config.UserCommand{}
 
-	runtime := NewRuntime(p.Name())
+	runtime := NewRuntime(p.Name(), p.cfg.ModuleRoot())
 	p.installHiveAPI(runtime.L, runtime.Hive())
 
 	entrypoint, err := runtime.LoadEntrypoint(p.cfg.ResolvedEntry())
@@ -97,7 +99,7 @@ func (p *Plugin) pluginTable(state *glua.LState) *glua.LTable {
 func (p *Plugin) commandsFn(state *glua.LState) *glua.LFunction {
 	return state.NewFunction(func(state *glua.LState) int {
 		commandsTable := state.CheckTable(1)
-		commands, err := commandsFromTable(commandsTable)
+		commands, err := commandsFromTable(commandsTable, p.commands)
 		if err != nil {
 			state.RaiseError("%s", err.Error())
 			return 0
@@ -107,7 +109,7 @@ func (p *Plugin) commandsFn(state *glua.LState) *glua.LFunction {
 	})
 }
 
-func commandsFromTable(commandsTable *glua.LTable) (map[string]config.UserCommand, error) {
+func commandsFromTable(commandsTable *glua.LTable, existing map[string]config.UserCommand) (map[string]config.UserCommand, error) {
 	commands := make(map[string]config.UserCommand)
 	var parseErr error
 
@@ -121,6 +123,14 @@ func commandsFromTable(commandsTable *glua.LTable) (map[string]config.UserComman
 			parseErr = fmt.Errorf("command names must be strings")
 			return
 		}
+		if _, dup := existing[string(name)]; dup {
+			parseErr = fmt.Errorf("duplicate command %q", string(name))
+			return
+		}
+		if _, dup := commands[string(name)]; dup {
+			parseErr = fmt.Errorf("duplicate command %q", string(name))
+			return
+		}
 
 		commandTable, ok := value.(*glua.LTable)
 		if !ok {
@@ -128,9 +138,9 @@ func commandsFromTable(commandsTable *glua.LTable) (map[string]config.UserComman
 			return
 		}
 
-		cmd, err := userCommandFromLua(commandTable)
+		cmd, err := userCommandFromLua(string(name), commandTable)
 		if err != nil {
-			parseErr = fmt.Errorf("command %q: %w", key.String(), err)
+			parseErr = err
 			return
 		}
 
@@ -140,48 +150,99 @@ func commandsFromTable(commandsTable *glua.LTable) (map[string]config.UserComman
 	return commands, parseErr
 }
 
-func userCommandFromLua(commandTable *glua.LTable) (config.UserCommand, error) {
-	sh, err := luaStringField(commandTable, "sh")
-	if err != nil {
-		return config.UserCommand{}, err
-	}
-	if sh == "" {
-		return config.UserCommand{}, fmt.Errorf("field %q is required", "sh")
+func userCommandFromLua(name string, commandTable *glua.LTable) (config.UserCommand, error) {
+	var cmd config.UserCommand
+	var parseErr error
+
+	commandTable.ForEach(func(key, _ glua.LValue) {
+		if parseErr != nil {
+			return
+		}
+
+		fieldName, ok := key.(glua.LString)
+		if !ok {
+			parseErr = fmt.Errorf("command %q field names must be strings", name)
+			return
+		}
+
+		field := string(fieldName)
+		switch field {
+		case "sh":
+			sh, err := luaStringField(commandTable, field)
+			if err != nil {
+				parseErr = fmt.Errorf("command %q: %w", name, err)
+				return
+			}
+			cmd.Sh = sh
+		case "help":
+			help, err := luaStringField(commandTable, field)
+			if err != nil {
+				parseErr = fmt.Errorf("command %q: %w", name, err)
+				return
+			}
+			cmd.Help = help
+		case "confirm":
+			confirm, err := luaStringField(commandTable, field)
+			if err != nil {
+				parseErr = fmt.Errorf("command %q: %w", name, err)
+				return
+			}
+			cmd.Confirm = confirm
+		case "silent":
+			silent, err := luaBoolField(commandTable, field)
+			if err != nil {
+				parseErr = fmt.Errorf("command %q: %w", name, err)
+				return
+			}
+			cmd.Silent = silent
+		case "scope":
+			scope, err := luaStringSliceField(commandTable, field)
+			if err != nil {
+				parseErr = fmt.Errorf("command %q: %w", name, err)
+				return
+			}
+			cmd.Scope = scope
+		case "exit":
+			exit, err := luaExitField(commandTable, field)
+			if err != nil {
+				parseErr = fmt.Errorf("command %q: %w", name, err)
+				return
+			}
+			cmd.Exit = exit
+		case "action", "windows", "options", "form":
+			parseErr = fmt.Errorf("command %q: field %q is not supported in hive lua command v1", name, field)
+		default:
+			parseErr = fmt.Errorf("command %q: unsupported field %q (supported fields: sh, help, scope, confirm, silent, exit)", name, field)
+		}
+	})
+
+	if parseErr != nil {
+		return config.UserCommand{}, parseErr
 	}
 
-	help, err := luaStringField(commandTable, "help")
-	if err != nil {
+	field := fmt.Sprintf("command %q", name)
+	var errs criterio.FieldErrorsBuilder
+	config.AppendUserCommandBasicValidation(&errs, field, name, cmd)
+	if err := errs.ToError(); err != nil {
 		return config.UserCommand{}, err
 	}
 
-	confirm, err := luaStringField(commandTable, "confirm")
-	if err != nil {
+	var templateErrs criterio.FieldErrorsBuilder
+	config.AppendUserCommandTemplateValidation(&templateErrs, field, cmd)
+	if err := templateErrs.ToError(); err != nil {
 		return config.UserCommand{}, err
 	}
 
-	silent, err := luaBoolField(commandTable, "silent")
-	if err != nil {
-		return config.UserCommand{}, err
-	}
-
-	scope, err := luaStringSliceField(commandTable, "scope")
-	if err != nil {
-		return config.UserCommand{}, err
-	}
-
-	return config.UserCommand{
-		Sh:      sh,
-		Help:    help,
-		Confirm: confirm,
-		Silent:  silent,
-		Scope:   scope,
-	}, nil
+	return cmd, nil
 }
 
 func luaStringField(table *glua.LTable, field string) (string, error) {
 	value := table.RawGetString(field)
 	if value == glua.LNil {
 		return "", nil
+	}
+	if value.Type() == glua.LTFunction {
+		return "", fmt.Errorf("field %q does not support callback values", field)
 	}
 
 	str, ok := value.(glua.LString)
@@ -197,6 +258,9 @@ func luaBoolField(table *glua.LTable, field string) (bool, error) {
 	if value == glua.LNil {
 		return false, nil
 	}
+	if value.Type() == glua.LTFunction {
+		return false, fmt.Errorf("field %q does not support callback values", field)
+	}
 
 	boolean, ok := value.(glua.LBool)
 	if !ok {
@@ -210,6 +274,9 @@ func luaStringSliceField(table *glua.LTable, field string) ([]string, error) {
 	value := table.RawGetString(field)
 	if value == glua.LNil {
 		return nil, nil
+	}
+	if value.Type() == glua.LTFunction {
+		return nil, fmt.Errorf("field %q does not support callback values", field)
 	}
 
 	list, ok := value.(*glua.LTable)
@@ -234,4 +301,23 @@ func luaStringSliceField(table *glua.LTable, field string) ([]string, error) {
 	})
 
 	return values, parseErr
+}
+
+func luaExitField(table *glua.LTable, field string) (string, error) {
+	value := table.RawGetString(field)
+	if value == glua.LNil {
+		return "", nil
+	}
+	if value.Type() == glua.LTFunction {
+		return "", fmt.Errorf("field %q does not support callback values", field)
+	}
+
+	switch v := value.(type) {
+	case glua.LString:
+		return string(v), nil
+	case glua.LBool:
+		return strconv.FormatBool(bool(v)), nil
+	default:
+		return "", fmt.Errorf("field %q must be a string or boolean", field)
+	}
 }
