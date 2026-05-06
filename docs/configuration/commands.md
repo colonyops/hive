@@ -156,6 +156,27 @@ usercommands:
 
 See the [Recipes](../recipes/index.md) for full multi-agent workflow examples.
 
+## Document Context (review scope)
+
+When a command runs from the document review view, the focused document is exposed under the `.Doc` namespace:
+
+| Variable       | Description                                                         |
+| -------------- | ------------------------------------------------------------------- |
+| `.Doc.Path`    | Absolute path to the focused document                               |
+| `.Doc.RelPath` | Path relative to the repo (e.g. `.hive/plans/2026-05-06-plan.md`)   |
+| `.Doc.Type`    | Lowercase category: `plan`, `research`, `context`, or `other`       |
+
+`.Doc.*` fields render as empty strings outside the review view or when no document is focused. Scope the command to `review` so it only appears where these values are populated.
+
+```yaml
+usercommands:
+  AnnotateDoc:
+    sh: "send-claude {{ .Name | shq }} /annotate {{ .Doc.RelPath | shq }}"
+    help: "Send the focused doc to Claude for annotation"
+    scope: [review]
+    silent: true
+```
+
 ## Using Arguments
 
 Arguments passed in the command palette are available via the `.Args` template variable:

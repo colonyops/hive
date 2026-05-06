@@ -193,7 +193,7 @@ func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			action := handler.ResolveUserCommand(tt.cmdName, tt.cmd, sess, tt.args)
+			action := handler.ResolveUserCommand(tt.cmdName, tt.cmd, sess, tt.args, nil)
 
 			assert.Equal(t, tt.wantKey, action.Key, "ResolveUserCommand() Key = %v, want %v", action.Key, tt.wantKey)
 			assert.Equal(t, tt.wantHelp, action.Help, "ResolveUserCommand() Help = %v, want %v", action.Help, tt.wantHelp)
@@ -416,11 +416,11 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 		handler.SetSelectedWindow("override-window")
 
 		cmd := config.UserCommand{Sh: "echo {{ .TmuxWindow }}", Help: "test"}
-		action := handler.ResolveUserCommand("test", cmd, sess, nil)
+		action := handler.ResolveUserCommand("test", cmd, sess, nil, nil)
 		assert.Equal(t, "echo override-window", action.ShellCmd)
 
 		// Override should be consumed
-		action = handler.ResolveUserCommand("test", cmd, sess, nil)
+		action = handler.ResolveUserCommand("test", cmd, sess, nil, nil)
 		assert.Equal(t, "echo default-window", action.ShellCmd, "after consume")
 	})
 }
@@ -489,7 +489,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 		handler.SetSelectedWindow("editor")
 
 		cmd := config.UserCommand{Action: act.TypeTmuxOpen, Help: "open"}
-		action := handler.ResolveUserCommand("TmuxOpen", cmd, sess, nil)
+		action := handler.ResolveUserCommand("TmuxOpen", cmd, sess, nil, nil)
 		assert.Equal(t, act.TypeTmuxOpen, action.Type)
 		assert.Equal(t, "editor", action.TmuxWindow)
 	})
@@ -514,7 +514,7 @@ func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 			"message": "hello world",
 		}
 
-		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
+		action := handler.RenderWithFormData("test", cmd, sess, nil, formData, nil)
 		assert.Equal(t, act.TypeShell, action.Type)
 		assert.Equal(t, "echo hello world", action.ShellCmd)
 		assert.NoError(t, action.Err)
@@ -529,7 +529,7 @@ func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 			"env": "staging",
 		}
 
-		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
+		action := handler.RenderWithFormData("test", cmd, sess, nil, formData, nil)
 		assert.Equal(t, "echo test-name staging", action.ShellCmd)
 	})
 
@@ -540,9 +540,59 @@ func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 		}
 		formData := map[string]any{}
 
-		action := handler.RenderWithFormData("test", cmd, sess, nil, formData)
+		action := handler.RenderWithFormData("test", cmd, sess, nil, formData, nil)
 		require.Error(t, action.Err)
 		assert.Empty(t, action.ShellCmd)
+	})
+}
+
+func TestKeybindingResolver_DocTemplateData(t *testing.T) {
+	handler := NewKeybindingResolver(nil, nil, testRenderer)
+	sess := session.Session{
+		ID:   "test-id",
+		Path: "/test/path",
+		Name: "test-name",
+	}
+	cmd := config.UserCommand{
+		Sh:   "echo {{ .Doc.Path }}|{{ .Doc.RelPath }}|{{ .Doc.Type }}",
+		Help: "doc-aware",
+	}
+
+	t.Run("ResolveUserCommand renders Doc fields when provided", func(t *testing.T) {
+		doc := &DocTemplateData{
+			Path:    "/repo/.hive/plans/x.md",
+			RelPath: ".hive/plans/x.md",
+			Type:    "plan",
+		}
+		a := handler.ResolveUserCommand("review", cmd, sess, nil, doc)
+		require.NoError(t, a.Err)
+		assert.Equal(t, "echo /repo/.hive/plans/x.md|.hive/plans/x.md|plan", a.ShellCmd)
+	})
+
+	t.Run("ResolveUserCommand renders empty Doc fields when nil", func(t *testing.T) {
+		a := handler.ResolveUserCommand("review", cmd, sess, nil, nil)
+		require.NoError(t, a.Err)
+		assert.Equal(t, "echo ||", a.ShellCmd)
+	})
+
+	t.Run("RenderWithFormData renders Doc fields when provided", func(t *testing.T) {
+		doc := &DocTemplateData{
+			Path:    "/repo/.hive/research/y.md",
+			RelPath: ".hive/research/y.md",
+			Type:    "research",
+		}
+		formCmd := config.UserCommand{
+			Sh: "echo {{ .Form.note }}@{{ .Doc.RelPath }}",
+		}
+		a := handler.RenderWithFormData("annotate", formCmd, sess, nil, map[string]any{"note": "hi"}, doc)
+		require.NoError(t, a.Err)
+		assert.Equal(t, "echo hi@.hive/research/y.md", a.ShellCmd)
+	})
+
+	t.Run("RenderWithFormData renders empty Doc fields when nil", func(t *testing.T) {
+		a := handler.RenderWithFormData("review", cmd, sess, nil, map[string]any{}, nil)
+		require.NoError(t, a.Err)
+		assert.Equal(t, "echo ||", a.ShellCmd)
 	})
 }
 
@@ -658,14 +708,14 @@ func TestKeybindingResolver_ShellDirIsSessionPath(t *testing.T) {
 
 	t.Run("ResolveUserCommand sets ShellDir to sess.Path", func(t *testing.T) {
 		cmd := config.UserCommand{Sh: "echo hello", Help: "run"}
-		a := handler.ResolveUserCommand("run", cmd, sess, nil)
+		a := handler.ResolveUserCommand("run", cmd, sess, nil, nil)
 		assert.Equal(t, act.TypeShell, a.Type)
 		assert.Equal(t, sess.Path, a.ShellDir)
 	})
 
 	t.Run("RenderWithFormData sets ShellDir to sess.Path", func(t *testing.T) {
 		cmd := config.UserCommand{Sh: "echo {{ .Form.msg }}", Help: "run"}
-		a := handler.RenderWithFormData("run", cmd, sess, nil, map[string]any{"msg": "hello"})
+		a := handler.RenderWithFormData("run", cmd, sess, nil, map[string]any{"msg": "hello"}, nil)
 		assert.Equal(t, act.TypeShell, a.Type)
 		assert.Equal(t, sess.Path, a.ShellDir)
 	})
@@ -751,7 +801,7 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 	sess := testSession()
 
 	cmd := commands["PRReview"]
-	a := handler.RenderWithFormData("PRReview", cmd, sess, nil, map[string]any{"pr": "123"})
+	a := handler.RenderWithFormData("PRReview", cmd, sess, nil, map[string]any{"pr": "123"}, nil)
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
@@ -779,7 +829,7 @@ func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
 	sess := testSession()
 
 	cmd := commands["NewWin"]
-	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil)
+	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil, nil)
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)
@@ -805,7 +855,7 @@ func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
 	sess := testSession()
 
 	cmd := commands["NewWin"]
-	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil)
+	a := handler.ResolveUserCommand("NewWin", cmd, sess, nil, nil)
 
 	require.NotNil(t, a.SpawnWindows.NewSession)
 	assert.Equal(t, "https://github.com/other/repo", a.SpawnWindows.NewSession.Remote,
@@ -828,7 +878,7 @@ func TestResolveWindowsAction_TemplateError(t *testing.T) {
 	sess := testSession()
 
 	cmd := commands["Bad"]
-	a := handler.ResolveUserCommand("Bad", cmd, sess, nil)
+	a := handler.ResolveUserCommand("Bad", cmd, sess, nil, nil)
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.Error(t, a.Err)
@@ -1069,7 +1119,7 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	sess := testSession()
 
 	cmd := commands["Spawn"]
-	a := handler.RenderWithFormData("Spawn", cmd, sess, nil, map[string]any{"pr": "456"})
+	a := handler.RenderWithFormData("Spawn", cmd, sess, nil, map[string]any{"pr": "456"}, nil)
 
 	assert.Equal(t, act.TypeSpawnWindows, a.Type)
 	require.NotNil(t, a.SpawnWindows)

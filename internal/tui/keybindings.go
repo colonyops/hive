@@ -19,6 +19,21 @@ import (
 // Action is an alias for the unified action type.
 type Action = action.Action
 
+// DocTemplateData exposes the focused review-view document to user-command
+// shell templates under the .Doc namespace.
+type DocTemplateData struct {
+	Path    string
+	RelPath string
+	Type    string
+}
+
+func docTemplateValue(doc *DocTemplateData) DocTemplateData {
+	if doc == nil {
+		return DocTemplateData{}
+	}
+	return *doc
+}
+
 // KeybindingResolver resolves keybindings to actions via UserCommands.
 // It handles resolution only - execution is handled by the command.Service.
 type KeybindingResolver struct {
@@ -435,7 +450,9 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 // ResolveUserCommand converts a user command to an Action ready for execution.
 // The name is used to display the command source (e.g., ":review").
 // Supports both action-based commands (recycle, delete) and shell commands.
-func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string) Action {
+// doc, when non-nil, populates the .Doc.* template namespace with the focused
+// review-view document; otherwise .Doc fields render as empty strings.
+func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserCommand, sess session.Session, args []string, doc *DocTemplateData) Action {
 	a := Action{
 		Key:           ":" + name,
 		Help:          cmd.Help,
@@ -472,6 +489,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 		"Tool":       h.toolForSession(sess.ID),
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
+		"Doc":        docTemplateValue(doc),
 	}
 
 	if len(cmd.Windows) > 0 {
@@ -494,12 +512,15 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 
 // RenderWithFormData resolves a user command with form data injected
 // into the template context under the .Form namespace.
+// doc, when non-nil, populates the .Doc.* template namespace with the focused
+// review-view document; otherwise .Doc fields render as empty strings.
 func (h *KeybindingResolver) RenderWithFormData(
 	name string,
 	cmd config.UserCommand,
 	sess session.Session,
 	args []string,
 	formData map[string]any,
+	doc *DocTemplateData,
 ) Action {
 	a := Action{
 		Key:           ":" + name,
@@ -522,6 +543,7 @@ func (h *KeybindingResolver) RenderWithFormData(
 		"TmuxWindow": h.consumeWindowOverride(sess.ID),
 		"Args":       args,
 		"Form":       formData,
+		"Doc":        docTemplateValue(doc),
 	}
 
 	if len(cmd.Windows) > 0 {
