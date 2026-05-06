@@ -35,7 +35,7 @@ func TestBuildTreeItems(t *testing.T) {
 				},
 			},
 			wantHeaders: 1,
-			wantItems:   3, // 1 header + 1 session + 1 recycled placeholder
+			wantItems:   2, // 1 header + 1 session (recycled placeholder hidden)
 		},
 		{
 			name: "multiple groups",
@@ -94,7 +94,7 @@ func TestBuildTreeItems_HeaderFields(t *testing.T) {
 	}
 
 	items := BuildTreeItems(groups, "git@github.com:user/local.git")
-	require.Len(t, items, 4) // 1 header + 2 active sessions + 1 recycled placeholder
+	require.Len(t, items, 3) // 1 header + 2 active sessions
 
 	header := items[0].(TreeItem)
 	assert.True(t, header.IsHeader)
@@ -116,7 +116,7 @@ func TestBuildTreeItems_SessionFields(t *testing.T) {
 	}
 
 	items := BuildTreeItems(groups, "")
-	require.Len(t, items, 4) // 1 header + 2 sessions + 1 recycled placeholder
+	require.Len(t, items, 3) // 1 header + 2 sessions
 
 	// First session
 	first := items[1].(TreeItem)
@@ -125,19 +125,12 @@ func TestBuildTreeItems_SessionFields(t *testing.T) {
 	assert.False(t, first.IsLastInRepo)
 	assert.Equal(t, "repo", first.RepoPrefix)
 
-	// Second session (not last because recycled placeholder follows)
+	// Second session is last
 	second := items[2].(TreeItem)
 	assert.False(t, second.IsHeader)
 	assert.Equal(t, "second", second.Session.Name)
-	assert.False(t, second.IsLastInRepo)
+	assert.True(t, second.IsLastInRepo)
 	assert.Equal(t, "repo", second.RepoPrefix)
-
-	// Recycled placeholder is last
-	recycled := items[3].(TreeItem)
-	assert.True(t, recycled.IsRecycledPlaceholder)
-	assert.True(t, recycled.IsLastInRepo)
-	assert.Equal(t, 1, recycled.RecycledCount)
-	assert.Equal(t, "repo", recycled.RepoPrefix)
 }
 
 func TestTreeItem_FilterValue(t *testing.T) {
