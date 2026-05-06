@@ -6,22 +6,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/rs/zerolog/log"
 	glua "github.com/yuin/gopher-lua"
 )
-
-// HostMetadata describes the plugin to the Lua-side `hive.plugin` table and is
-// used as the `plugin` field on every log record emitted via `hive.log`.
-type HostMetadata struct {
-	Name       string
-	Entry      string
-	ModuleRoot string
-}
-
-// CommandsHandler is invoked when a Lua plugin calls `hive.commands(map)`. It
-// receives the raw Lua table; returning an error aborts the entrypoint via
-// `RaiseError` and surfaces the message to the Go caller.
-type CommandsHandler func(*glua.LTable) error
 
 // Runtime owns a sandboxed Lua state for a Hive plugin. The state is private:
 // callers interact through LoadEntrypoint / CallEntrypoint / Close.
@@ -29,9 +15,10 @@ type Runtime struct {
 	state *glua.LState
 }
 
-// NewRuntime constructs a sandboxed Lua runtime and wires the v1 host API
-// (`hive.log`, `hive.plugin`, `hive.commands`) for the given plugin metadata.
-func NewRuntime(meta HostMetadata, onCommands CommandsHandler) *Runtime {
+// NewRuntime constructs a sandboxed Lua runtime, configures `require()` to
+// resolve relative to moduleRoot, and registers each HostModule onto the
+// global `hive` table in order.
+func NewRuntime(moduleRoot string, modules ...HostModule) (*Runtime, error) {
 	state := glua.NewState(glua.Options{SkipOpenLibs: true})
 
 	// Opt-in standard libraries: omit io/os/debug so plugins cannot touch the
@@ -49,11 +36,18 @@ func NewRuntime(meta HostMetadata, onCommands CommandsHandler) *Runtime {
 	state.SetGlobal("loadfile", glua.LNil)
 	state.SetGlobal("dofile", glua.LNil)
 	state.SetGlobal("load", glua.LNil)
-	configureRequire(state, meta.ModuleRoot)
+	configureRequire(state, moduleRoot)
 
-	installHostAPI(state, meta, onCommands)
+	hive := state.NewTable()
+	for _, m := range modules {
+		if err := m.Register(state, hive); err != nil {
+			state.Close()
+			return nil, fmt.Errorf("register host module: %w", err)
+		}
+	}
+	state.SetGlobal("hive", hive)
 
-	return &Runtime{state: state}
+	return &Runtime{state: state}, nil
 }
 
 // LoadEntrypoint executes the plugin entry file and returns the function it
@@ -107,57 +101,6 @@ func openLib(state *glua.LState, name string, fn glua.LGFunction) {
 	state.Push(state.NewFunction(fn))
 	state.Push(glua.LString(name))
 	state.Call(1, 0)
-}
-
-func installHostAPI(state *glua.LState, meta HostMetadata, onCommands CommandsHandler) {
-	hive := state.NewTable()
-	state.SetField(hive, "log", logTable(state, meta.Name))
-	state.SetField(hive, "plugin", pluginMetaTable(state, meta))
-	state.SetField(hive, "commands", commandsFn(state, onCommands))
-	state.SetGlobal("hive", hive)
-}
-
-func logTable(state *glua.LState, pluginName string) *glua.LTable {
-	logs := state.NewTable()
-	state.SetField(logs, "debug", newLogFn(state, func(msg string) {
-		log.Debug().Str("plugin", pluginName).Msg(msg)
-	}))
-	state.SetField(logs, "info", newLogFn(state, func(msg string) {
-		log.Info().Str("plugin", pluginName).Msg(msg)
-	}))
-	state.SetField(logs, "warn", newLogFn(state, func(msg string) {
-		log.Warn().Str("plugin", pluginName).Msg(msg)
-	}))
-	state.SetField(logs, "error", newLogFn(state, func(msg string) {
-		log.Error().Str("plugin", pluginName).Msg(msg)
-	}))
-	return logs
-}
-
-func newLogFn(state *glua.LState, fn func(string)) *glua.LFunction {
-	return state.NewFunction(func(state *glua.LState) int {
-		fn(state.CheckString(1))
-		return 0
-	})
-}
-
-func pluginMetaTable(state *glua.LState, meta HostMetadata) *glua.LTable {
-	plugin := state.NewTable()
-	state.SetField(plugin, "name", glua.LString(meta.Name))
-	state.SetField(plugin, "entry", glua.LString(meta.Entry))
-	state.SetField(plugin, "module_root", glua.LString(meta.ModuleRoot))
-	return plugin
-}
-
-func commandsFn(state *glua.LState, onCommands CommandsHandler) *glua.LFunction {
-	return state.NewFunction(func(state *glua.LState) int {
-		table := state.CheckTable(1)
-		if err := onCommands(table); err != nil {
-			state.RaiseError("%s", err.Error())
-			return 0
-		}
-		return 0
-	})
 }
 
 // configureRequire pins package.path to moduleRoot and wraps require() so

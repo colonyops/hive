@@ -42,18 +42,26 @@ func (p *Plugin) Init(_ context.Context) error {
 	// load or while calling the entrypoint) cannot leave stale commands
 	// reachable from MergedCommands.
 	commands := map[string]config.UserCommand{}
-	runtime := NewRuntime(HostMetadata{
-		Name:       p.Name(),
-		Entry:      p.cfg.ResolvedEntry(),
-		ModuleRoot: p.cfg.ModuleRoot(),
-	}, func(table *glua.LTable) error {
-		next, err := commandsFromTable(table, commands)
-		if err != nil {
-			return err
-		}
-		maps.Copy(commands, next)
-		return nil
-	})
+	runtime, err := NewRuntime(
+		p.cfg.ModuleRoot(),
+		&LogModule{PluginName: p.Name()},
+		&PluginInfoModule{
+			Name:       p.Name(),
+			Entry:      p.cfg.ResolvedEntry(),
+			ModuleRoot: p.cfg.ModuleRoot(),
+		},
+		&CommandsModule{Handler: func(table *glua.LTable) error {
+			next, err := commandsFromTable(table, commands)
+			if err != nil {
+				return err
+			}
+			maps.Copy(commands, next)
+			return nil
+		}},
+	)
+	if err != nil {
+		return err
+	}
 
 	entrypoint, err := runtime.LoadEntrypoint(p.cfg.ResolvedEntry())
 	if err != nil {
