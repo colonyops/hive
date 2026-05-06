@@ -500,6 +500,10 @@ type TmuxPluginConfig struct {
 // Hive looks for the default discovery path (~/.config/hive/plugins/init.lua),
 // and a missing file there is silently treated as "no Lua plugin." When Entry
 // is set explicitly, the file must exist.
+//
+// Entry is intentionally not pre-filled by DefaultConfig or applyDefaults:
+// distinguishing "user did not configure this" from "user explicitly chose the
+// default path" relies on Entry == "" being preserved as the unset signal.
 type LuaPluginConfig struct {
 	Enabled *bool  `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 	Entry   string `json:"entry"   yaml:"entry"`
