@@ -32,6 +32,7 @@ type Integration struct {
 type agentWindow struct {
 	windowIndex       string // window index for targeted capture (e.g., "0", "1")
 	windowName        string // window name for display and matching
+	paneID            string // tmux pane ID in %N format (empty until Phase 2)
 	workDir           string
 	activity          int64
 	paneContent       string
@@ -141,7 +142,7 @@ func (t *Integration) RefreshCache() {
 	}
 	collected := make(map[string][]windowEntry)
 
-	for _, line := range strings.Split(strings.TrimSpace(string(output)), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
 		if line == "" {
 			continue
 		}
@@ -264,8 +265,12 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 		return nil, nil
 	}
 
-	// If explicit pane given, use it directly
-	if pane := metadata[session.MetaTmuxPane]; pane != "" {
+	// If explicit window given, use it directly (check new key first, then legacy key).
+	pane := metadata[session.MetaTmuxWindow]
+	if pane == "" {
+		pane = metadata["tmux_pane"] // migration fallback for legacy sessions
+	}
+	if pane != "" {
 		w := sc.findWindow(pane)
 		if w == nil {
 			log.Debug().Str("session", sessionName).Str("pane", pane).Msg("explicit pane not found, falling back to best window")
@@ -321,9 +326,10 @@ func (t *Integration) sessionInfoFromWindow(sessionName string, _ *sessionCache,
 		return &terminal.SessionInfo{Name: sessionName}
 	}
 	return &terminal.SessionInfo{
-		Name:       sessionName,
-		Pane:       w.windowIndex,
-		WindowName: w.windowName,
+		Name:        sessionName,
+		WindowIndex: w.windowIndex,
+		PaneID:      w.paneID,
+		WindowName:  w.windowName,
 	}
 }
 
@@ -342,9 +348,9 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return terminal.StatusMissing, nil
 	}
 
-	w := sc.findWindow(info.Pane)
+	w := sc.findWindow(info.WindowIndex)
 	if w == nil {
-		log.Debug().Str("session", info.Name).Str("pane", info.Pane).Msg("window not found in cache, falling back to best window")
+		log.Debug().Str("session", info.Name).Str("window", info.WindowIndex).Msg("window not found in cache, falling back to best window")
 		w = sc.bestWindow()
 	}
 	if w == nil {
@@ -479,9 +485,10 @@ func (t *Integration) DiscoverAllWindows(_ context.Context, slug string, metadat
 	infos := make([]*terminal.SessionInfo, 0, len(sc.agentWindows))
 	for _, w := range sc.agentWindows {
 		infos = append(infos, &terminal.SessionInfo{
-			Name:       sessionName,
-			Pane:       w.windowIndex,
-			WindowName: w.windowName,
+			Name:        sessionName,
+			WindowIndex: w.windowIndex,
+			PaneID:      w.paneID,
+			WindowName:  w.windowName,
 		})
 	}
 	return infos, nil

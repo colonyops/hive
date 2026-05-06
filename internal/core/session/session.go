@@ -53,7 +53,8 @@ const (
 // Metadata keys for terminal integration.
 const (
 	MetaTmuxSession = "tmux_session" // tmux session name
-	MetaTmuxPane    = "tmux_pane"    // tmux pane identifier
+	MetaTmuxWindow  = "tmux_window"  // tmux window index (legacy key: "tmux_pane")
+	MetaTmuxPaneID  = "tmux_pane_id" // tmux pane ID in %N format
 )
 
 // Metadata keys for session organization.

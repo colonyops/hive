@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"time"
 
@@ -97,9 +98,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	metadata := sess.Metadata
 	if sess.Path != "" {
 		metadata = make(map[string]string, len(sess.Metadata)+1)
-		for k, v := range sess.Metadata {
-			metadata[k] = v
-		}
+		maps.Copy(metadata, sess.Metadata)
 		metadata["_session_path"] = sess.Path
 	}
 
@@ -139,11 +138,11 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 				// Get per-window status and content
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
-					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.Pane).Msg("per-window status failed, marking missing")
+					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.WindowIndex).Msg("per-window status failed, marking missing")
 					wStatus = terminal.StatusMissing
 				}
 				windows = append(windows, WindowStatus{
-					WindowIndex: wi.Pane,
+					WindowIndex: wi.WindowIndex,
 					WindowName:  wi.WindowName,
 					Status:      wStatus,
 					Tool:        wi.DetectedTool,

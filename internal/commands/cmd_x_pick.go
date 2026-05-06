@@ -467,7 +467,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 				windowItem := pickItem{
 					Session:     item.Session,
 					WindowName:  wi.WindowName,
-					WindowIndex: wi.Pane,
+					WindowIndex: wi.WindowIndex,
 					IsCurrent:   item.IsCurrent,
 					IsRecent:    item.IsRecent,
 				}
