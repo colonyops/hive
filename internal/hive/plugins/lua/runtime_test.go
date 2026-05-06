@@ -68,21 +68,38 @@ end
 	assert.Contains(t, help, "is invalid")
 }
 
-func TestHiveLogFunctionsAreInvocable(t *testing.T) {
-	entry := filepath.Join(t.TempDir(), "init.lua")
-	require.NoError(t, os.WriteFile(entry, []byte(`
-return function(hive)
-  hive.log.debug("d")
-  hive.log.info("i")
-  hive.log.warn("w")
-  hive.log.error("e")
-  hive.commands({ Logged = { sh = "echo done" } })
-end
-`), 0o644))
+func TestLoadEntrypointRejectsInvalidArity(t *testing.T) {
+	tests := []struct {
+		name   string
+		script string
+		errMsg string
+	}{
+		{
+			name:   "non-function value",
+			script: `return {}`,
+			errMsg: "must return a function",
+		},
+		{
+			name:   "no return value",
+			script: `local _ = 1`,
+			errMsg: "must return exactly one function",
+		},
+		{
+			name:   "multiple return values",
+			script: `return 1, 2`,
+			errMsg: "must return exactly one function",
+		},
+	}
 
-	plugin := NewConfigPlugin(entry)
-	require.NoError(t, plugin.Init(context.Background()))
-	t.Cleanup(func() { require.NoError(t, plugin.Close()) })
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			entry := filepath.Join(t.TempDir(), "init.lua")
+			require.NoError(t, os.WriteFile(entry, []byte(tt.script), 0o644))
 
-	assert.Contains(t, plugin.Commands(), "Logged")
+			plugin := NewConfigPlugin(entry)
+			err := plugin.Init(context.Background())
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), tt.errMsg)
+		})
+	}
 }
