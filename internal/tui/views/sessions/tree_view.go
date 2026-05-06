@@ -163,6 +163,10 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 	items := make([]list.Item, 0)
 
 	for _, group := range groups {
+		if len(group.Sessions) == 0 {
+			continue
+		}
+
 		// Add header
 		header := TreeItem{
 			IsHeader:      true,
@@ -172,12 +176,9 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 		}
 		items = append(items, header)
 
-		// Determine if recycled placeholder will be the last item
-		hasRecycled := group.RecycledCount > 0
-
 		// Add active sessions
 		for idx, s := range group.Sessions {
-			isLast := idx == len(group.Sessions)-1 && !hasRecycled
+			isLast := idx == len(group.Sessions)-1
 			item := TreeItem{
 				IsHeader:     false,
 				Session:      s,
@@ -185,18 +186,6 @@ func BuildTreeItems(groups []RepoGroup, localRemote string) []list.Item {
 				RepoPrefix:   group.Name,
 			}
 			items = append(items, item)
-		}
-
-		// Add recycled placeholder if there are recycled sessions
-		if hasRecycled {
-			placeholder := TreeItem{
-				IsRecycledPlaceholder: true,
-				RecycledCount:         group.RecycledCount,
-				RecycledSessions:      group.RecycledSessions,
-				IsLastInRepo:          true,
-				RepoPrefix:            group.Name,
-			}
-			items = append(items, placeholder)
 		}
 	}
 
@@ -381,9 +370,6 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 	}
 	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
-	// Status indicator (recycled)
-	statusStr := d.Styles.StatusRecycled.Render(styles.StatusIndicatorRecycled)
-
 	// Label with count
 	labelStyle := d.Styles.StatusRecycled
 	if isSelected {
@@ -391,7 +377,7 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 	}
 	label := labelStyle.Render(fmt.Sprintf("Recycled (%d)", item.RecycledCount))
 
-	return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, label)
+	return fmt.Sprintf("%s %s", prefixStyled, label)
 }
 
 // renderSession renders a session entry.
