@@ -290,6 +290,11 @@ func buildValidationData(formFields []FormField) map[string]any {
 		"Tool":       "claude",
 		"TmuxWindow": "main",
 		"Args":       []string{"arg1", "arg2"},
+		"Doc": map[string]any{
+			"Path":    "/tmp/test/.hive/plans/test.md",
+			"RelPath": ".hive/plans/test.md",
+			"Type":    "plan",
+		},
 	}
 
 	if len(formFields) > 0 {

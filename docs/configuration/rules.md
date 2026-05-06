@@ -124,7 +124,7 @@ Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | 
 | `rules[].commands`     | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.ID` |
 | `rules[].recycle`      | `.DefaultBranch`                                                    |
 | `rules[].branch_template` | `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`                     |
-| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*` |
+| `usercommands.*.sh`    | `.Path`, `.Name`, `.Remote`, `.ID`, `.Tool`, `.TmuxWindow`, `.Args`, `.Form.*`, `.Doc.Path`, `.Doc.RelPath`, `.Doc.Type` (review scope) |
 
 !!! warning "Always use `shq` for shell quoting"
     Template variables like `.Name` and `.Path` may contain spaces or special characters. Always pipe them through `shq` (e.g., `{{ .Name | shq }}`) to prevent shell injection and word-splitting issues.

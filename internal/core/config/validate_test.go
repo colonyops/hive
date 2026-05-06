@@ -968,6 +968,11 @@ func TestBuildValidationData(t *testing.T) {
 		assert.NotEmpty(t, data["Name"])
 		assert.NotEmpty(t, data["ID"])
 		assert.Nil(t, data["Form"])
+		doc, ok := data["Doc"].(map[string]any)
+		require.True(t, ok, "Doc should be a map for nested template access")
+		assert.NotEmpty(t, doc["Path"])
+		assert.NotEmpty(t, doc["RelPath"])
+		assert.NotEmpty(t, doc["Type"])
 	})
 
 	t.Run("text field produces string", func(t *testing.T) {
@@ -1016,6 +1021,19 @@ func TestValidateDeep_UserCommandWithFormTemplate(t *testing.T) {
 			Form: []FormField{
 				{Variable: "targets", Preset: FormPresetSessionSelector, Multi: true, Label: "Targets"},
 			},
+		},
+	}
+
+	err := cfg.ValidateDeep("")
+	assert.NoError(t, err)
+}
+
+func TestValidateDeep_UserCommandWithDocTemplate(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"copy-doc": {
+			Sh:    "echo {{ .Doc.Path }} {{ .Doc.RelPath }} {{ .Doc.Type }}",
+			Scope: []string{"review"},
 		},
 	}
 

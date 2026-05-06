@@ -740,11 +740,28 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
+// docTemplateData returns the focused review-view document for user-command
+// templates, or nil when not in the review view or no document is selected.
+func (m Model) docTemplateData() *DocTemplateData {
+	if m.activeView != ViewReview || m.reviewView == nil {
+		return nil
+	}
+	doc := m.reviewView.SelectedDoc()
+	if doc == nil {
+		return nil
+	}
+	return &DocTemplateData{
+		Path:    doc.Path,
+		RelPath: doc.RelPath,
+		Type:    strings.ToLower(doc.Type.String()),
+	}
+}
+
 // showFormOrExecute checks if a command has form fields. If so, creates a form
 // dialog. Otherwise falls through to normal execution via ResolveUserCommand.
 func (m Model) showFormOrExecute(name string, cmd config.UserCommand, sess session.Session, args []string) (Model, tea.Cmd) {
 	if len(cmd.Form) == 0 {
-		action := m.handler.ResolveUserCommand(name, cmd, sess, args)
+		action := m.handler.ResolveUserCommand(name, cmd, sess, args, m.docTemplateData())
 		return m.dispatchAction(action)
 	}
 
@@ -780,6 +797,7 @@ func (m Model) handleFormDialogKey(msg tea.KeyPressMsg, keyStr string) (tea.Mode
 			*m.modals.PendingFormSess,
 			m.modals.PendingFormArgs,
 			formValues,
+			m.docTemplateData(),
 		)
 		m.modals.ClearFormState()
 		return m.dispatchAction(action)
@@ -1193,7 +1211,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		}
 
 		// Resolve the user command to an Action
-		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args)
+		action := m.handler.ResolveUserCommand(entry.Name, entry.Command, *selected, args, m.docTemplateData())
 		action = sessions.MaybeOverrideWindowDelete(action, m.selectedTreeItem(), m.renderer)
 
 		m.state = stateNormal
