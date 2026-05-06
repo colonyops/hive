@@ -9,11 +9,8 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/hive/plugins"
-	"github.com/hay-kot/criterio"
 	glua "github.com/yuin/gopher-lua"
 )
-
-const pluginName = "lua"
 
 // Plugin adapts a Lua entry file to Hive's plugin interface.
 type Plugin struct {
@@ -22,15 +19,12 @@ type Plugin struct {
 	commands map[string]config.UserCommand
 }
 
-// New creates a new Lua-backed Hive plugin.
+// New creates a Lua-backed Hive plugin.
 func New(cfg config.LuaPluginConfig) *Plugin {
-	return &Plugin{
-		cfg:      cfg,
-		commands: map[string]config.UserCommand{},
-	}
+	return &Plugin{cfg: cfg}
 }
 
-func (p *Plugin) Name() string { return pluginName }
+func (p *Plugin) Name() string { return "lua" }
 
 func (p *Plugin) Available() bool {
 	info, err := os.Stat(p.cfg.ResolvedEntry())
@@ -42,10 +36,24 @@ func (p *Plugin) Init(_ context.Context) error {
 		p.runtime.Close()
 		p.runtime = nil
 	}
-	p.commands = map[string]config.UserCommand{}
+	p.commands = nil
 
-	runtime := NewRuntime(p.Name(), p.cfg.ModuleRoot())
-	p.installHiveAPI(runtime.L, runtime.Hive())
+	// Build into a local map so a partial init (failure during entry-file
+	// load or while calling the entrypoint) cannot leave stale commands
+	// reachable from MergedCommands.
+	commands := map[string]config.UserCommand{}
+	runtime := NewRuntime(HostMetadata{
+		Name:       p.Name(),
+		Entry:      p.cfg.ResolvedEntry(),
+		ModuleRoot: p.cfg.ModuleRoot(),
+	}, func(table *glua.LTable) error {
+		next, err := commandsFromTable(table, commands)
+		if err != nil {
+			return err
+		}
+		maps.Copy(commands, next)
+		return nil
+	})
 
 	entrypoint, err := runtime.LoadEntrypoint(p.cfg.ResolvedEntry())
 	if err != nil {
@@ -59,6 +67,7 @@ func (p *Plugin) Init(_ context.Context) error {
 	}
 
 	p.runtime = runtime
+	p.commands = commands
 	return nil
 }
 
@@ -67,46 +76,16 @@ func (p *Plugin) Close() error {
 		p.runtime.Close()
 		p.runtime = nil
 	}
-	p.commands = map[string]config.UserCommand{}
+	p.commands = nil
 	return nil
 }
 
 func (p *Plugin) Commands() map[string]config.UserCommand {
-	commands := make(map[string]config.UserCommand, len(p.commands))
-	for name, cmd := range p.commands {
-		commands[name] = cmd
-	}
-	return commands
+	return p.commands
 }
 
 func (p *Plugin) StatusProvider() plugins.StatusProvider {
 	return nil
-}
-
-func (p *Plugin) installHiveAPI(state *glua.LState, hive *glua.LTable) {
-	state.SetField(hive, "commands", p.commandsFn(state))
-	state.SetField(hive, "plugin", p.pluginTable(state))
-}
-
-func (p *Plugin) pluginTable(state *glua.LState) *glua.LTable {
-	plugin := state.NewTable()
-	state.SetField(plugin, "name", glua.LString(p.Name()))
-	state.SetField(plugin, "entry", glua.LString(p.cfg.ResolvedEntry()))
-	state.SetField(plugin, "module_root", glua.LString(p.cfg.ModuleRoot()))
-	return plugin
-}
-
-func (p *Plugin) commandsFn(state *glua.LState) *glua.LFunction {
-	return state.NewFunction(func(state *glua.LState) int {
-		commandsTable := state.CheckTable(1)
-		commands, err := commandsFromTable(commandsTable, p.commands)
-		if err != nil {
-			state.RaiseError("%s", err.Error())
-			return 0
-		}
-		maps.Copy(p.commands, commands)
-		return 0
-	})
 }
 
 func commandsFromTable(commandsTable *glua.LTable, existing map[string]config.UserCommand) (map[string]config.UserCommand, error) {
@@ -124,10 +103,6 @@ func commandsFromTable(commandsTable *glua.LTable, existing map[string]config.Us
 			return
 		}
 		if _, dup := existing[string(name)]; dup {
-			parseErr = fmt.Errorf("duplicate command %q", string(name))
-			return
-		}
-		if _, dup := commands[string(name)]; dup {
 			parseErr = fmt.Errorf("duplicate command %q", string(name))
 			return
 		}
@@ -150,6 +125,9 @@ func commandsFromTable(commandsTable *glua.LTable, existing map[string]config.Us
 	return commands, parseErr
 }
 
+// Adding a new field requires updating both UserCommand in config and the
+// switch below; the explicit cases for action/windows/options/form keep them
+// rejected at the v1 boundary.
 func userCommandFromLua(name string, commandTable *glua.LTable) (config.UserCommand, error) {
 	var cmd config.UserCommand
 	var parseErr error
@@ -210,9 +188,9 @@ func userCommandFromLua(name string, commandTable *glua.LTable) (config.UserComm
 			}
 			cmd.Exit = exit
 		case "action", "windows", "options", "form":
-			parseErr = fmt.Errorf("command %q: field %q is not supported in hive lua command v1", name, field)
+			parseErr = fmt.Errorf("command %q: field %q is not supported by lua plugins (supported: sh, help, scope, confirm, silent, exit)", name, field)
 		default:
-			parseErr = fmt.Errorf("command %q: unsupported field %q (supported fields: sh, help, scope, confirm, silent, exit)", name, field)
+			parseErr = fmt.Errorf("command %q: unsupported field %q (supported: sh, help, scope, confirm, silent, exit)", name, field)
 		}
 	})
 
@@ -221,15 +199,10 @@ func userCommandFromLua(name string, commandTable *glua.LTable) (config.UserComm
 	}
 
 	field := fmt.Sprintf("command %q", name)
-	var errs criterio.FieldErrorsBuilder
-	config.AppendUserCommandBasicValidation(&errs, field, name, cmd)
-	if err := errs.ToError(); err != nil {
+	if err := config.ValidateUserCommandBasic(field, name, cmd).ToError(); err != nil {
 		return config.UserCommand{}, err
 	}
-
-	var templateErrs criterio.FieldErrorsBuilder
-	config.AppendUserCommandTemplateValidation(&templateErrs, field, cmd)
-	if err := templateErrs.ToError(); err != nil {
+	if err := config.ValidateUserCommandTemplates(field, cmd).ToError(); err != nil {
 		return config.UserCommand{}, err
 	}
 

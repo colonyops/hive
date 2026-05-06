@@ -21,6 +21,7 @@ plugins:
     enabled: true
     results_cache: 30s
   lua:
+    enabled: true
     entry: ~/.config/hive/plugins/init.lua
 ```
 
@@ -34,10 +35,11 @@ Hive can load user commands from a local Lua entry file.
 ```yaml
 plugins:
   lua:
-    entry: ~/.config/hive/plugins/init.lua
+    enabled: true                              # nil = auto-detect, false to disable
+    entry: ~/.config/hive/plugins/init.lua     # omit to use the default discovery path
 ```
 
-If you use the default location, Hive checks `~/.config/hive/plugins/init.lua` automatically. If that file is missing, nothing happens. Set `plugins.lua.entry` only when you want Hive to load a different file.
+When `entry` is omitted, Hive checks `~/.config/hive/plugins/init.lua` automatically; a missing file there is silently ignored. When `entry` is set explicitly, the file must exist. Set `enabled: false` to keep the entry file on disk but skip loading it.
 
 The entry file should return a function that registers one or more commands:
 

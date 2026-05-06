@@ -495,8 +495,14 @@ type TmuxPluginConfig struct {
 }
 
 // LuaPluginConfig holds Lua plugin discovery configuration.
+//
+// Entry is the absolute (or tilde-prefixed) path to the entry file. When empty
+// Hive looks for the default discovery path (~/.config/hive/plugins/init.lua),
+// and a missing file there is silently treated as "no Lua plugin." When Entry
+// is set explicitly, the file must exist.
 type LuaPluginConfig struct {
-	Entry string `json:"entry" yaml:"entry"` // defaults to ~/.config/hive/plugins/init.lua
+	Enabled *bool  `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
+	Entry   string `json:"entry"   yaml:"entry"`
 }
 
 // ResolvedEntry returns the configured Lua entry path or the default discovery path.
@@ -711,11 +717,6 @@ func DefaultConfig() Config {
 			TopicPrefix: "agent",
 			MaxMessages: 100,
 		},
-		Plugins: PluginsConfig{
-			Lua: LuaPluginConfig{
-				Entry: "~/.config/hive/plugins/init.lua",
-			},
-		},
 		Todos: TodosConfig{
 			Limiter: TodosLimiterConfig{
 				MaxPending:          0,
@@ -900,6 +901,7 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
+		c.validateLuaPluginEntryBasic(),
 	)
 }
 
@@ -919,7 +921,7 @@ func (c *Config) validateUserCommandsBasic() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
-		AppendUserCommandBasicValidation(&errs, field, name, cmd)
+		errs = append(errs, ValidateUserCommandBasic(field, name, cmd)...)
 	}
 
 	return errs.ToError()

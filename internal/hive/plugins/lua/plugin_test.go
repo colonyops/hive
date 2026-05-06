@@ -53,22 +53,40 @@ end
 				assert.Equal(t, "lua", plugin.Name())
 				assert.Nil(t, plugin.StatusProvider())
 				assert.Equal(t, map[string]any{
-					"sh":          "echo hello",
-					"help":        entry,
-					"confirm":     "Run it?",
-					"silent":      true,
-					"exit":        "true",
-					"scope":       []string{"sessions"},
-					"module_root": filepath.Dir(entry),
+					"sh":      "echo hello",
+					"help":    entry,
+					"confirm": "Run it?",
+					"silent":  true,
+					"exit":    "true",
+					"scope":   []string{"sessions"},
 				}, map[string]any{
-					"sh":          plugin.Commands()["LuaHello"].Sh,
-					"help":        plugin.Commands()["LuaHello"].Help,
-					"confirm":     plugin.Commands()["LuaHello"].Confirm,
-					"silent":      plugin.Commands()["LuaHello"].Silent,
-					"exit":        plugin.Commands()["LuaHello"].Exit,
-					"scope":       plugin.Commands()["LuaHello"].Scope,
-					"module_root": plugin.cfg.ModuleRoot(),
+					"sh":      plugin.Commands()["LuaHello"].Sh,
+					"help":    plugin.Commands()["LuaHello"].Help,
+					"confirm": plugin.Commands()["LuaHello"].Confirm,
+					"silent":  plugin.Commands()["LuaHello"].Silent,
+					"exit":    plugin.Commands()["LuaHello"].Exit,
+					"scope":   plugin.Commands()["LuaHello"].Scope,
 				})
+			},
+		},
+		{
+			name: "exit false coerces to string",
+			files: map[string]string{
+				"init.lua": `
+return function(hive)
+  hive.commands({
+    LuaHello = {
+      sh = "echo hello",
+      exit = false,
+    },
+  })
+end
+`,
+			},
+			entry: "init.lua",
+			asserts: func(t *testing.T, _ string, plugin *Plugin) {
+				t.Helper()
+				assert.Equal(t, "false", plugin.Commands()["LuaHello"].Exit)
 			},
 		},
 		{
@@ -120,6 +138,48 @@ return {
 	}
 }
 
+func TestPluginInitReplacesPriorRunOnReinitialization(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ First = { sh = "echo first" } })
+end
+`), 0o644))
+
+	plugin := NewConfigPlugin(entry)
+	require.NoError(t, plugin.Init(context.Background()))
+	t.Cleanup(func() { require.NoError(t, plugin.Close()) })
+
+	require.Contains(t, plugin.Commands(), "First")
+
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ Second = { sh = "echo second" } })
+end
+`), 0o644))
+
+	require.NoError(t, plugin.Init(context.Background()))
+
+	assert.NotContains(t, plugin.Commands(), "First", "stale command from prior init must not survive re-initialization")
+	assert.Contains(t, plugin.Commands(), "Second")
+}
+
+func TestPluginInitDoesNotLeakCommandsOnFailure(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ Good = { sh = "echo good" } })
+  error("boom")
+end
+`), 0o644))
+
+	plugin := NewConfigPlugin(entry)
+	err := plugin.Init(context.Background())
+	require.Error(t, err)
+
+	assert.Empty(t, plugin.Commands(), "Commands() must be empty after a failed Init")
+}
+
 func TestPluginInitRejectsInvalidInputs(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -131,6 +191,16 @@ func TestPluginInitRejectsInvalidInputs(t *testing.T) {
 			script: `return {}
 `,
 			errMsg: "must return a function",
+		},
+		{
+			name:   "no return value",
+			script: `local _ = 1`,
+			errMsg: "must return exactly one function",
+		},
+		{
+			name:   "multiple return values",
+			script: `return 1, 2`,
+			errMsg: "must return exactly one function",
 		},
 		{
 			name: "non-string command name",

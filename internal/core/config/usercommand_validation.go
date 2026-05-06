@@ -7,117 +7,99 @@ import (
 	"github.com/hay-kot/criterio"
 )
 
-// AppendUserCommandBasicValidation appends basic structural validation errors
-// for a single user command onto errs using the provided field prefix.
-func AppendUserCommandBasicValidation(errs *criterio.FieldErrorsBuilder, field, name string, cmd UserCommand) {
-	if errs == nil {
-		return
-	}
+// ValidateUserCommandBasic returns structural validation errors for a single
+// user command, prefixed by field. The result is empty when the command is valid.
+func ValidateUserCommandBasic(field, name string, cmd UserCommand) criterio.FieldErrorsBuilder {
+	var errs criterio.FieldErrorsBuilder
 
-	// Validate command name format.
 	if name == "" {
-		*errs = errs.Append(field, fmt.Errorf("command name cannot be empty"))
-		return
+		return errs.Append(field, fmt.Errorf("command name cannot be empty"))
 	}
 	if !isValidCommandName(name) {
-		*errs = errs.Append(field, fmt.Errorf("invalid command name: must contain only alphanumeric characters, dashes, and underscores (no spaces)"))
-		return
+		return errs.Append(field, fmt.Errorf("invalid command name: must contain only alphanumeric characters, dashes, and underscores (no spaces)"))
 	}
 
-	// Must have at least one of: action, sh, windows.
 	hasAction := cmd.Action != ""
 	hasSh := cmd.Sh != ""
 	hasWindows := len(cmd.Windows) > 0
 
 	if !hasAction && !hasSh && !hasWindows {
-		*errs = errs.Append(field, fmt.Errorf("must have at least one of: action, sh, windows"))
-		return
+		return errs.Append(field, fmt.Errorf("must have at least one of: action, sh, windows"))
 	}
 	if hasAction && (hasSh || hasWindows) {
-		*errs = errs.Append(field, fmt.Errorf("action is mutually exclusive with sh and windows"))
-		return
+		return errs.Append(field, fmt.Errorf("action is mutually exclusive with sh and windows"))
 	}
 	if hasAction && !isValidAction(cmd.Action) {
-		*errs = errs.Append(field, fmt.Errorf("invalid action %q", cmd.Action))
+		errs = errs.Append(field, fmt.Errorf("invalid action %q", cmd.Action))
 	}
 
-	// Validate windows entries.
 	for i, w := range cmd.Windows {
 		wfield := fmt.Sprintf("%s.windows[%d]", field, i)
 		if w.Name == "" {
-			*errs = errs.Append(wfield, fmt.Errorf("name is required"))
+			errs = errs.Append(wfield, fmt.Errorf("name is required"))
 		}
 	}
 
-	// options.remote requires options.session_name.
 	if cmd.Options.Remote != "" && cmd.Options.SessionName == "" {
-		*errs = errs.Append(field+".options.remote", fmt.Errorf("remote requires session_name to be set"))
+		errs = errs.Append(field+".options.remote", fmt.Errorf("remote requires session_name to be set"))
 	}
-
-	// options.background only meaningful when windows are present.
 	if cmd.Options.Background && !hasWindows {
-		*errs = errs.Append(field+".options.background", fmt.Errorf("background only applies when windows are defined"))
+		errs = errs.Append(field+".options.background", fmt.Errorf("background only applies when windows are defined"))
 	}
-
-	// options.session_name only applies when windows are defined.
 	if cmd.Options.SessionName != "" && !hasWindows {
-		*errs = errs.Append(field+".options.session_name", fmt.Errorf("session_name only applies when windows are defined"))
+		errs = errs.Append(field+".options.session_name", fmt.Errorf("session_name only applies when windows are defined"))
 	}
 
-	// Validate scope values.
 	for _, scope := range cmd.Scope {
 		if !isValidScope(scope) {
-			*errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: %s", scope, strings.Join(ValidScopes, ", ")))
+			errs = errs.Append(field+".scope", fmt.Errorf("invalid scope %q: must be one of: %s", scope, strings.Join(ValidScopes, ", ")))
 		}
 	}
 
-	// Validate form fields.
 	if len(cmd.Form) == 0 {
-		return
+		return errs
 	}
 
 	if cmd.Action != "" {
-		*errs = errs.Append(field, fmt.Errorf("form can only be used with sh, not action"))
-		return
+		return errs.Append(field, fmt.Errorf("form can only be used with sh, not action"))
 	}
 
 	if err := criterio.ValidateSlice(field+".form", cmd.Form, validateFormField); err != nil {
-		*errs = errs.Append("", err)
-		return
+		return errs.Append("", err)
 	}
 
 	seenVars := make(map[string]bool, len(cmd.Form))
 	for i, ff := range cmd.Form {
 		if seenVars[ff.Variable] {
-			*errs = errs.Append(fmt.Sprintf("%s.form[%d].variable", field, i), fmt.Errorf("duplicate variable %q", ff.Variable))
+			errs = errs.Append(fmt.Sprintf("%s.form[%d].variable", field, i), fmt.Errorf("duplicate variable %q", ff.Variable))
 		}
 		seenVars[ff.Variable] = true
 	}
+
+	return errs
 }
 
-// AppendUserCommandTemplateValidation appends template syntax validation errors
-// for a single user command onto errs using the provided field prefix.
-func AppendUserCommandTemplateValidation(errs *criterio.FieldErrorsBuilder, field string, cmd UserCommand) {
-	if errs == nil {
-		return
-	}
-
+// ValidateUserCommandTemplates returns template-syntax validation errors for a
+// single user command, prefixed by field. The result is empty when all templates
+// parse successfully.
+func ValidateUserCommandTemplates(field string, cmd UserCommand) criterio.FieldErrorsBuilder {
+	var errs criterio.FieldErrorsBuilder
 	testData := buildValidationData(cmd.Form)
 
 	if cmd.Sh != "" {
 		if err := validateTemplate(cmd.Sh, testData); err != nil {
-			*errs = errs.Append(field, fmt.Errorf("template error in sh: %w", err))
+			errs = errs.Append(field, fmt.Errorf("template error in sh: %w", err))
 		}
 	}
 
 	if cmd.Options.SessionName != "" {
 		if err := validateTemplate(cmd.Options.SessionName, testData); err != nil {
-			*errs = errs.Append(field+".options.session_name", err)
+			errs = errs.Append(field+".options.session_name", err)
 		}
 	}
 	if cmd.Options.Remote != "" {
 		if err := validateTemplate(cmd.Options.Remote, testData); err != nil {
-			*errs = errs.Append(field+".options.remote", err)
+			errs = errs.Append(field+".options.remote", err)
 		}
 	}
 
@@ -132,8 +114,10 @@ func AppendUserCommandTemplateValidation(errs *criterio.FieldErrorsBuilder, fiel
 				continue
 			}
 			if err := validateTemplate(tmplStr, testData); err != nil {
-				*errs = errs.Append(wfield+tname, err)
+				errs = errs.Append(wfield+tname, err)
 			}
 		}
 	}
+
+	return errs
 }

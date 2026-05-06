@@ -169,27 +169,35 @@ func (c *Config) validateContextBaseDir() error {
 	return criterio.Run("context.base_dir", expanded, isDirectoryOrNotExist)
 }
 
-// validateLuaPluginEntry validates discovery for the optional Lua plugin entrypoint.
+// validateLuaPluginEntryBasic enforces that a user-supplied Lua entry path is
+// absolute (or tilde-prefixed). Runs during normal startup so a relative
+// entry never reaches the runtime, where it would be resolved against the
+// process working directory.
+func (c *Config) validateLuaPluginEntryBasic() error {
+	const field = "plugins.lua.entry"
+	entry := c.Plugins.Lua.Entry
+	if entry == "" {
+		return nil
+	}
+	if !filepath.IsAbs(pathutil.ExpandHome(entry)) {
+		return criterio.NewFieldErrors(field, fmt.Errorf("must be an absolute path or start with ~/, got %q", entry))
+	}
+	return nil
+}
+
+// validateLuaPluginEntry verifies that an explicitly configured Lua entry file
+// exists and is readable. The default discovery path (Entry == "") is allowed
+// to be missing — a no-op in that case.
 func (c *Config) validateLuaPluginEntry() error {
 	const field = "plugins.lua.entry"
-	defaultEntry := DefaultConfig().Plugins.Lua.Entry
-	configuredEntry := c.Plugins.Lua.Entry
-	if configuredEntry == "" {
-		configuredEntry = defaultEntry
+	if c.Plugins.Lua.Entry == "" {
+		return nil
 	}
 
-	expanded := pathutil.ExpandHome(configuredEntry)
-	if !filepath.IsAbs(expanded) {
-		return criterio.NewFieldErrors(field, fmt.Errorf("must be an absolute path or start with ~/, got %q", configuredEntry))
-	}
-
-	entry := pathutil.ExpandHome(configuredEntry)
+	entry := pathutil.ExpandHome(c.Plugins.Lua.Entry)
 	info, err := os.Stat(entry)
 	if os.IsNotExist(err) {
-		if configuredEntry != defaultEntry {
-			return criterio.NewFieldErrors(field, fmt.Errorf("file does not exist: %s", entry))
-		}
-		return nil
+		return criterio.NewFieldErrors(field, fmt.Errorf("file does not exist: %s", entry))
 	}
 	if err != nil {
 		return criterio.NewFieldErrors(field, fmt.Errorf("cannot access: %w", err))
@@ -266,7 +274,7 @@ func (c *Config) validateUserCommandTemplates() error {
 	var errs criterio.FieldErrorsBuilder
 	for name, cmd := range c.UserCommands {
 		field := fmt.Sprintf("usercommands[%q]", name)
-		AppendUserCommandTemplateValidation(&errs, field, cmd)
+		errs = append(errs, ValidateUserCommandTemplates(field, cmd)...)
 	}
 	return errs.ToError()
 }

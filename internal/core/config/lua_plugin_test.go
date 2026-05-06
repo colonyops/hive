@@ -51,13 +51,11 @@ func TestValidateDeep_LuaPluginEntry(t *testing.T) {
 		wantRoot  string
 	}{
 		{
-			name:     "default entry missing is a no-op",
-			entry:    DefaultConfig().Plugins.Lua.Entry,
+			name:     "unset entry is a no-op when file is missing",
 			wantRoot: filepath.Join(".config", "hive", "plugins"),
 		},
 		{
-			name:  "default entry resolves when file exists",
-			entry: DefaultConfig().Plugins.Lua.Entry,
+			name: "unset entry resolves when default file exists",
 			prepare: func(t *testing.T, home string) {
 				entry := filepath.Join(home, ".config", "hive", "plugins", "init.lua")
 				require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
@@ -79,6 +77,14 @@ func TestValidateDeep_LuaPluginEntry(t *testing.T) {
 			name:      "missing override errors",
 			entry:     "~/lua/plugins/custom.lua",
 			wantError: "file does not exist",
+		},
+		{
+			name:  "override pointing at a directory errors",
+			entry: "~/lua/plugins",
+			prepare: func(t *testing.T, home string) {
+				require.NoError(t, os.MkdirAll(filepath.Join(home, "lua", "plugins"), 0o755))
+			},
+			wantError: "is a directory",
 		},
 	}
 
@@ -108,4 +114,16 @@ func TestValidateDeep_LuaPluginEntry(t *testing.T) {
 			assert.Equal(t, filepath.Join(home, tt.wantRoot), cfg.Plugins.Lua.ModuleRoot())
 		})
 	}
+}
+
+func TestValidate_LuaPluginEntryRejectsRelativePath(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Plugins.Lua.Entry = "plugins/init.lua"
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	require.Len(t, fieldErrs, 1)
+	assert.Equal(t, "plugins.lua.entry", fieldErrs[0].Field)
+	assert.Contains(t, fieldErrs[0].Err.Error(), "must be an absolute path")
 }
