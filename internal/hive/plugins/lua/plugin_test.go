@@ -2,11 +2,17 @@ package lua
 
 import (
 	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -67,5 +73,79 @@ end
 // NewConfigPlugin builds a Plugin from a single entry file path. Shared by
 // the lifecycle, runtime, and per-module tests in this package.
 func NewConfigPlugin(entry string) *Plugin {
-	return New(config.LuaPluginConfig{Entry: entry})
+	return New(config.LuaPluginConfig{Entry: entry}, newFakeKV())
+}
+
+// fakeKV is an in-memory kv.KV used purely for test wiring. It JSON-encodes
+// values so semantics match the production KVStore: a Set followed by a Get
+// into a string dest works the same way as it would over SQLite.
+type fakeKV struct {
+	mu   sync.Mutex
+	data map[string][]byte
+}
+
+func newFakeKV() *fakeKV {
+	return &fakeKV{data: map[string][]byte{}}
+}
+
+func (f *fakeKV) Get(_ context.Context, key string, dest any) error {
+	f.mu.Lock()
+	raw, ok := f.data[key]
+	f.mu.Unlock()
+	if !ok {
+		return fmt.Errorf("kv get %q: %w", key, sql.ErrNoRows)
+	}
+	if err := json.Unmarshal(raw, dest); err != nil {
+		return fmt.Errorf("kv get %q unmarshal: %w", key, err)
+	}
+	return nil
+}
+
+func (f *fakeKV) Set(_ context.Context, key string, value any) error {
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return fmt.Errorf("kv set %q marshal: %w", key, err)
+	}
+	f.mu.Lock()
+	f.data[key] = raw
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeKV) SetTTL(ctx context.Context, key string, value any, _ time.Duration) error {
+	return f.Set(ctx, key, value)
+}
+
+func (f *fakeKV) Delete(_ context.Context, key string) error {
+	f.mu.Lock()
+	delete(f.data, key)
+	f.mu.Unlock()
+	return nil
+}
+
+func (f *fakeKV) Has(_ context.Context, key string) (bool, error) {
+	f.mu.Lock()
+	_, ok := f.data[key]
+	f.mu.Unlock()
+	return ok, nil
+}
+
+func (f *fakeKV) ListKeys(_ context.Context) ([]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	keys := make([]string, 0, len(f.data))
+	for k := range f.data {
+		keys = append(keys, k)
+	}
+	return keys, nil
+}
+
+func (f *fakeKV) GetRaw(_ context.Context, key string) (kv.Entry, error) {
+	f.mu.Lock()
+	raw, ok := f.data[key]
+	f.mu.Unlock()
+	if !ok {
+		return kv.Entry{}, fmt.Errorf("kv get raw %q: %w", key, sql.ErrNoRows)
+	}
+	return kv.Entry{Key: key, Value: raw}, nil
 }

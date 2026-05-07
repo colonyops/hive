@@ -8,23 +8,29 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/hive/plugins"
 )
+
+// pluginName identifies this plugin to logs, the hive.plugin Lua bindings,
+// and the kv.Scoped namespace shared between production and tests.
+const pluginName = "lua"
 
 // Plugin adapts a Lua entry file to Hive's plugin interface.
 type Plugin struct {
 	cfg      config.LuaPluginConfig
+	kvStore  kv.KV
 	runtime  *Runtime
 	modules  []HostModule
 	commands map[string]config.UserCommand
 }
 
 // New creates a Lua-backed Hive plugin.
-func New(cfg config.LuaPluginConfig) *Plugin {
-	return &Plugin{cfg: cfg}
+func New(cfg config.LuaPluginConfig, kvStore kv.KV) *Plugin {
+	return &Plugin{cfg: cfg, kvStore: kvStore}
 }
 
-func (p *Plugin) Name() string { return "lua" }
+func (p *Plugin) Name() string { return pluginName }
 
 func (p *Plugin) Available() bool {
 	info, err := os.Stat(p.cfg.ResolvedEntry())
@@ -51,6 +57,7 @@ func (p *Plugin) Init(_ context.Context) error {
 		cmdModule,
 		tickerModule,
 		&JSONModule{},
+		&KVModule{Store: kv.Scoped[string](p.kvStore, p.Name())},
 	}
 
 	runtime, err := NewRuntime(p.cfg.ModuleRoot(), modules...)

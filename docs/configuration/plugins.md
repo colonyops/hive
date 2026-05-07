@@ -219,6 +219,35 @@ Decoding `[]` from JSON produces a marked table, so `decode` followed by `encode
 !!! warning "Cycles raise an error"
     `encode` rejects self-referencing tables with a Lua error. Detect cycles before encoding if your data may contain back-references.
 
+### hive.kv
+
+Persist string values across hive restarts. Backed by the same SQLite store that other Hive plugins use, but every key is automatically prefixed with `lua:` so a Lua plugin cannot read or stomp keys owned by other components.
+
+| Function | Purpose |
+| -------- | ------- |
+| `hive.kv.set(key, value)` | Store `value` under `key`. Both must be strings. |
+| `hive.kv.get(key)` | Return the value for `key`, or `nil` if missing. |
+| `hive.kv.delete(key)` | Remove `key`. No-op if absent. |
+
+```lua
+return function(hive)
+  local last = hive.kv.get("last_run")
+  if last then
+    hive.log.info("previous run: " .. last)
+  end
+  hive.kv.set("last_run", os.date("!%Y-%m-%dT%H:%M:%SZ"))
+end
+```
+
+!!! note "Strings only in v1"
+    Both arguments to `set` go through `CheckString` — Lua numbers are coerced via `tostring`, but tables, booleans, and `nil` are rejected with a Lua error. Use `hive.json.encode` if you need to persist a structured value.
+
+!!! note "Missing keys return `nil`"
+    `get` is the only op that distinguishes missing from present; `set` and `delete` raise a Lua error on store failure but otherwise succeed silently. `delete` on a missing key is a no-op.
+
+!!! warning "Empty keys are rejected"
+    `set("", v)`, `get("")`, and `delete("")` all raise a Lua error. Pick a non-empty key.
+
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.
