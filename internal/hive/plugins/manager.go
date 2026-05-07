@@ -45,7 +45,7 @@ type Manager struct {
 // NewManager creates a new plugin manager. The pool is injected so it can be
 // shared with plugins (e.g. the Lua hive.sh module) that draw from the same
 // concurrency budget as status refreshes.
-func NewManager(_ config.PluginsConfig, pool *WorkerPool) *Manager {
+func NewManager(pool *WorkerPool) *Manager {
 	return &Manager{
 		plugins:        make(map[string]Plugin),
 		pool:           pool,

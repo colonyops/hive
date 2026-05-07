@@ -2,22 +2,22 @@ package lua
 
 import (
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	glua "github.com/yuin/gopher-lua"
 )
 
 // LogModule exposes `hive.log.{debug,info,warn,error}` functions that emit to
-// the standard Hive log with a "plugin" field tagged with PluginName.
+// the injected logger with a "plugin" field tagged with PluginName.
 type LogModule struct {
 	PluginName string
+	Logger     zerolog.Logger
 }
 
 func (m *LogModule) Register(state *glua.LState, hive *glua.LTable) error {
 	logs := state.NewTable()
-	state.SetField(logs, "debug", m.fn(state, log.Debug))
-	state.SetField(logs, "info", m.fn(state, log.Info))
-	state.SetField(logs, "warn", m.fn(state, log.Warn))
-	state.SetField(logs, "error", m.fn(state, log.Error))
+	state.SetField(logs, "debug", m.fn(state, m.Logger.Debug))
+	state.SetField(logs, "info", m.fn(state, m.Logger.Info))
+	state.SetField(logs, "warn", m.fn(state, m.Logger.Warn))
+	state.SetField(logs, "error", m.fn(state, m.Logger.Error))
 	state.SetField(hive, "log", logs)
 	return nil
 }

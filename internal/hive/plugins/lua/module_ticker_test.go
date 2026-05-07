@@ -9,6 +9,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	glua "github.com/yuin/gopher-lua"
@@ -43,12 +44,13 @@ func newTickerHarness(t *testing.T, script string) *tickerHarness {
 	require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
 
 	counter := &atomic.Int64{}
-	tickerModule := &TickerModule{PluginName: "lua-test"}
+	tickerModule := &TickerModule{PluginName: "lua-test", Logger: zerolog.Nop()}
 	bump := &bumpModule{counter: counter}
 
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: "lua-test"},
+		zerolog.Nop(),
+		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 		&CommandsModule{},
 		tickerModule,
@@ -202,10 +204,11 @@ end
 		require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
 
 		counter := &atomic.Int64{}
-		tickerModule := &TickerModule{PluginName: "lua-test"}
+		tickerModule := &TickerModule{PluginName: "lua-test", Logger: zerolog.Nop()}
 		rt, err := NewRuntime(
 			root,
-			&LogModule{PluginName: "lua-test"},
+			zerolog.Nop(),
+			&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 			&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 			&CommandsModule{},
 			tickerModule,

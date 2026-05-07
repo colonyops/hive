@@ -9,7 +9,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	glua "github.com/yuin/gopher-lua"
 )
 
@@ -22,7 +22,8 @@ const dispatcherQueueSize = 64
 // dispatcher started in NewRuntime — touches state. Schedule work via
 // Submit, LoadEntrypoint, or CallEntrypoint; tear down with Close.
 type Runtime struct {
-	state *glua.LState
+	state  *glua.LState
+	logger zerolog.Logger
 
 	work   chan func(*glua.LState)
 	ctx    context.Context
@@ -37,7 +38,7 @@ type Runtime struct {
 // resolve relative to moduleRoot, and registers each HostModule onto the
 // global `hive` table. Setup is synchronous; the dispatcher goroutine takes
 // over LState ownership when this returns.
-func NewRuntime(moduleRoot string, modules ...HostModule) (*Runtime, error) {
+func NewRuntime(moduleRoot string, logger zerolog.Logger, modules ...HostModule) (*Runtime, error) {
 	state := glua.NewState(glua.Options{SkipOpenLibs: true})
 
 	// Opt-in standard libraries: omit io/os/debug so plugins cannot touch the
@@ -69,6 +70,7 @@ func NewRuntime(moduleRoot string, modules ...HostModule) (*Runtime, error) {
 	ctx, cancel := context.WithCancel(context.Background())
 	r := &Runtime{
 		state:  state,
+		logger: logger,
 		work:   make(chan func(*glua.LState), dispatcherQueueSize),
 		ctx:    ctx,
 		cancel: cancel,
@@ -118,7 +120,7 @@ func (r *Runtime) Submit(fn func(*glua.LState)) {
 	closed := r.closed
 	r.mu.Unlock()
 	if closed {
-		log.Debug().Str("plugin", "lua").Msg("dropped lua work item: runtime closed")
+		r.logger.Debug().Msg("dropped lua work item: runtime closed")
 		return
 	}
 	// The work channel is never closed (ctx signals shutdown), so a
@@ -126,7 +128,7 @@ func (r *Runtime) Submit(fn func(*glua.LState)) {
 	select {
 	case r.work <- fn:
 	default:
-		log.Warn().Str("plugin", "lua").Msg("dropped lua work item: dispatcher queue full")
+		r.logger.Warn().Msg("dropped lua work item: dispatcher queue full")
 	}
 }
 

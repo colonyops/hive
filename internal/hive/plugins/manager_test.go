@@ -79,7 +79,7 @@ func TestSessionsChanged(t *testing.T) {
 }
 
 func TestMergedCommandsPriority(t *testing.T) {
-	mgr := NewManager(config.PluginsConfig{}, NewWorkerPool(0))
+	mgr := NewManager(NewWorkerPool(0))
 	mgr.Register(&mockPlugin{
 		name: "plugin",
 		commands: map[string]config.UserCommand{

@@ -10,6 +10,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/rs/zerolog"
 	glua "github.com/yuin/gopher-lua"
 
 	"github.com/colonyops/hive/internal/hive/plugins"
@@ -90,6 +91,7 @@ type ShModule struct {
 	Pool           *plugins.WorkerPool
 	Executor       ShellExecutor
 	DefaultTimeout time.Duration
+	Logger         zerolog.Logger
 
 	rootCtx    context.Context
 	rootCancel context.CancelFunc
@@ -135,16 +137,35 @@ func (m *ShModule) runViaPool(cmd string, opts shOptions) shResult {
 	m.wg.Add(1)
 	defer m.wg.Done()
 
-	if m.Pool == nil {
-		return m.Executor.Exec(m.rootCtx, cmd, opts)
-	}
+	start := time.Now()
+	m.Logger.Debug().
+		Str("cmd", cmd).
+		Str("cwd", opts.Cwd).
+		Dur("timeout", opts.Timeout).
+		Msg("hive.sh: starting shell command")
 
 	var result shResult
 	if err := m.Pool.RunContext(m.rootCtx, func() {
 		result = m.Executor.Exec(m.rootCtx, cmd, opts)
 	}); err != nil {
+		m.Logger.Warn().
+			Str("cmd", cmd).
+			Err(err).
+			Msg("hive.sh: pool acquisition cancelled")
 		return shResult{Code: -1, Err: err}
 	}
+
+	level := m.Logger.Debug
+	if result.Err != nil || result.Code != 0 {
+		level = m.Logger.Warn
+	}
+	level().
+		Str("cmd", cmd).
+		Int("code", result.Code).
+		Dur("duration", time.Since(start)).
+		Err(result.Err).
+		Msg("hive.sh: shell command finished")
+
 	return result
 }
 

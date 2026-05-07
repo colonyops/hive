@@ -1,12 +1,13 @@
 package lua
 
 import (
+	"cmp"
 	"context"
 	"fmt"
 	"os"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/kv"
@@ -22,6 +23,7 @@ type Plugin struct {
 	cfg      config.LuaPluginConfig
 	kvStore  kv.KV
 	pool     *plugins.WorkerPool
+	logger   zerolog.Logger
 	runtime  *Runtime
 	modules  []HostModule
 	commands map[string]config.UserCommand
@@ -30,8 +32,8 @@ type Plugin struct {
 // New creates a Lua-backed Hive plugin. The shared worker pool throttles
 // hive.sh.* shell execution; pass nil only in tests that don't exercise the
 // shell module.
-func New(cfg config.LuaPluginConfig, kvStore kv.KV, pool *plugins.WorkerPool) *Plugin {
-	return &Plugin{cfg: cfg, kvStore: kvStore, pool: pool}
+func New(cfg config.LuaPluginConfig, kvStore kv.KV, pool *plugins.WorkerPool, logger zerolog.Logger) *Plugin {
+	return &Plugin{cfg: cfg, kvStore: kvStore, pool: pool, logger: logger}
 }
 
 func (p *Plugin) Name() string { return pluginName }
@@ -49,16 +51,20 @@ func (p *Plugin) Init(_ context.Context) error {
 	// commands reachable from MergedCommands.
 	cmdModule := &CommandsModule{}
 
-	tickerModule := &TickerModule{PluginName: p.Name()}
+	tickerModule := &TickerModule{
+		PluginName: p.Name(),
+		Logger:     p.logger.With().Str("module", "ticker").Logger(),
+	}
 
 	shModule := &ShModule{
 		PluginName:     p.Name(),
 		Pool:           p.pool,
-		DefaultTimeout: defaultDuration(p.cfg.ShellTimeout, 30*time.Second),
+		DefaultTimeout: cmp.Or(p.cfg.ShellTimeout, 30*time.Second),
+		Logger:         p.logger.With().Str("module", "sh").Logger(),
 	}
 
 	modules := []HostModule{
-		&LogModule{PluginName: p.Name()},
+		&LogModule{PluginName: p.Name(), Logger: p.logger},
 		&PluginInfoModule{
 			Name:       p.Name(),
 			Entry:      p.cfg.ResolvedEntry(),
@@ -71,7 +77,7 @@ func (p *Plugin) Init(_ context.Context) error {
 		shModule,
 	}
 
-	runtime, err := NewRuntime(p.cfg.ModuleRoot(), modules...)
+	runtime, err := NewRuntime(p.cfg.ModuleRoot(), p.logger, modules...)
 	if err != nil {
 		return err
 	}
@@ -112,8 +118,7 @@ func (p *Plugin) shutdown() {
 			continue
 		}
 		if err := closer.Close(); err != nil {
-			log.Warn().
-				Str("plugin", p.Name()).
+			p.logger.Warn().
 				Err(err).
 				Msg("host module close failed")
 		}
@@ -133,12 +138,4 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 
 func (p *Plugin) StatusProvider() plugins.StatusProvider {
 	return nil
-}
-
-// defaultDuration returns d when positive, otherwise fallback.
-func defaultDuration(d, fallback time.Duration) time.Duration {
-	if d > 0 {
-		return d
-	}
-	return fallback
 }

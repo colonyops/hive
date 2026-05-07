@@ -6,10 +6,10 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	glua "github.com/yuin/gopher-lua"
@@ -99,12 +99,14 @@ func newShHarness(t *testing.T, script string, executor *fakeExecutor, defaultTi
 		Pool:           pool,
 		Executor:       executor,
 		DefaultTimeout: defaultTimeout,
+		Logger:         zerolog.Nop(),
 	}
 	captured := &shCaptureModule{}
 
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: "lua-test"},
+		zerolog.Nop(),
+		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 		&CommandsModule{},
 		module,
@@ -213,11 +215,13 @@ end
 		Pool:           pool,
 		Executor:       exec,
 		DefaultTimeout: 5 * time.Second,
+		Logger:         zerolog.Nop(),
 	}
 
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: "lua-test"},
+		zerolog.Nop(),
+		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 		&CommandsModule{},
 		module,
@@ -355,11 +359,13 @@ end
 		Pool:           pool,
 		Executor:       exec,
 		DefaultTimeout: 0,
+		Logger:         zerolog.Nop(),
 	}
 
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: "lua-test"},
+		zerolog.Nop(),
+		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 		&CommandsModule{},
 		module,
@@ -420,12 +426,14 @@ end
 		PluginName:     "lua-test",
 		Pool:           pool,
 		DefaultTimeout: 5 * time.Second,
+		Logger:         zerolog.Nop(),
 	}
 	captured := &shCaptureModule{}
 
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: "lua-test"},
+		zerolog.Nop(),
+		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 		&CommandsModule{},
 		module,
@@ -444,52 +452,4 @@ end
 	values := captured.snapshot()
 	require.Len(t, values, 1)
 	assert.Equal(t, glua.LString("hello"), values[0])
-}
-
-// TestShModule_NilPoolRunsInline guards against a nil Pool panic so the
-// module remains usable in tests that don't care about pool semantics.
-func TestShModule_NilPoolRunsInline(t *testing.T) {
-	t.Parallel()
-
-	var calls atomic.Int32
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			calls.Add(1)
-			return shResult{Code: 0}
-		},
-	}
-
-	root := t.TempDir()
-	entry := filepath.Join(root, "init.lua")
-	require.NoError(t, os.WriteFile(entry, []byte(`
-return function(hive)
-  hive.sh.run("anything")
-end
-`), 0o644))
-
-	module := &ShModule{
-		PluginName:     "lua-test",
-		Pool:           nil,
-		Executor:       exec,
-		DefaultTimeout: time.Second,
-	}
-
-	rt, err := NewRuntime(
-		root,
-		&LogModule{PluginName: "lua-test"},
-		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
-		&CommandsModule{},
-		module,
-	)
-	require.NoError(t, err)
-	t.Cleanup(func() {
-		_ = module.Close()
-		rt.Close()
-	})
-
-	fn, err := rt.LoadEntrypoint(entry)
-	require.NoError(t, err)
-	require.NoError(t, rt.CallEntrypoint(fn))
-
-	assert.Equal(t, int32(1), calls.Load())
 }

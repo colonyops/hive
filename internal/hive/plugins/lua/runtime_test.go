@@ -9,6 +9,7 @@ import (
 	"testing/synctest"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	glua "github.com/yuin/gopher-lua"
@@ -75,7 +76,7 @@ end
 // newBareRuntime is a Runtime with no host modules — for dispatcher tests.
 func newBareRuntime(t *testing.T) *Runtime {
 	t.Helper()
-	rt, err := NewRuntime(t.TempDir())
+	rt, err := NewRuntime(t.TempDir(), zerolog.Nop())
 	require.NoError(t, err)
 	return rt
 }
