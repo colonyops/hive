@@ -9,6 +9,7 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/terminal"
+	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 )
 
 func (cmd *ExperimentalCmd) detectCmd() *cli.Command {
@@ -22,11 +23,12 @@ func (cmd *ExperimentalCmd) detectCmd() *cli.Command {
 }
 
 func (cmd *ExperimentalCmd) runDetect(ctx context.Context, c *cli.Command) error {
-	disc := cmd.app.TmuxIntegration()
-	if disc == nil {
-		_, _ = fmt.Fprintln(c.Writer, "tmux integration not available")
+	tmuxI := terminaltmux.New(cmd.app.Config.Tmux.PreviewWindowMatcher)
+	if !tmuxI.Available() {
+		_, _ = fmt.Fprintln(c.Writer, "tmux not available")
 		return nil
 	}
+	disc := terminal.AllPanesDiscoverer(tmuxI)
 
 	panes, err := disc.DiscoverAllPanes(ctx)
 	if err != nil {
