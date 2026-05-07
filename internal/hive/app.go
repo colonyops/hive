@@ -42,6 +42,19 @@ type App struct {
 	Build    BuildInfo
 }
 
+// TmuxIntegration returns the registered tmux integration, or nil if unavailable.
+func (a *App) TmuxIntegration() terminal.AllPanesDiscoverer {
+	if a.Terminal == nil {
+		return nil
+	}
+	i := a.Terminal.Get("tmux")
+	if i == nil {
+		return nil
+	}
+	disc, _ := i.(terminal.AllPanesDiscoverer)
+	return disc
+}
+
 // NewApp constructs an App from explicit dependencies.
 func NewApp(
 	sessions *SessionService,

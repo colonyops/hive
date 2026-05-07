@@ -555,5 +555,53 @@ func (t *Integration) DiscoverAllWindows(_ context.Context, slug string, metadat
 	return infos, nil
 }
 
+// DiscoverAllPanes enumerates every pane across all tmux sessions for diagnostics.
+// Results are not cached and do not affect RefreshCache state.
+func (t *Integration) DiscoverAllPanes(_ context.Context) ([]terminal.PaneDetail, error) {
+	cmd := exec.Command("tmux", "list-panes", "-a", "-F",
+		"#{session_name}\t#{window_index}\t#{window_name}\t#{pane_id}\t#{pane_pid}\t#{@hive-session}")
+	output, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("list-panes: %w", err)
+	}
+
+	var panes []terminal.PaneDetail
+	for line := range strings.SplitSeq(strings.TrimSpace(string(output)), "\n") {
+		if line == "" {
+			continue
+		}
+		parts := strings.SplitN(line, "\t", 6)
+		if len(parts) < 4 {
+			continue
+		}
+		pd := terminal.PaneDetail{
+			TmuxSession: parts[0],
+			WindowIndex: parts[1],
+			WindowName:  parts[2],
+			PaneID:      parts[3],
+		}
+		if len(parts) >= 5 {
+			_, _ = fmt.Sscanf(parts[4], "%d", &pd.PanePID)
+		}
+		if len(parts) >= 6 {
+			pd.HiveSession = strings.TrimSpace(parts[5])
+		}
+
+		// Enrich with process-tree identification (non-fatal if unavailable).
+		if pd.PanePID > 0 {
+			if proc, procErr := process.Identify(int(pd.PanePID)); procErr == nil && proc != nil {
+				pd.Tool = proc.Tool
+				pd.FgPID = int64(proc.PID)
+			}
+		}
+
+		panes = append(panes, pd)
+	}
+	return panes, nil
+}
+
 // Ensure Integration implements terminal.Integration.
 var _ terminal.Integration = (*Integration)(nil)
+
+// Ensure Integration implements terminal.AllPanesDiscoverer.
+var _ terminal.AllPanesDiscoverer = (*Integration)(nil)

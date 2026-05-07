@@ -23,6 +23,7 @@ func (cmd *ExperimentalCmd) Register(app *cli.Command) *cli.Command {
 		Usage: "Experimental commands",
 		Commands: []*cli.Command{
 			cmd.pickCmd(),
+			cmd.detectCmd(),
 		},
 	})
 	return app

@@ -98,4 +98,3 @@ func toolFromBasename(comm string) string {
 		return ""
 	}
 }
-

@@ -58,3 +58,22 @@ type Integration interface {
 type AllWindowsDiscoverer interface {
 	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
 }
+
+// PaneDetail holds diagnostic information about a single tmux pane.
+type PaneDetail struct {
+	TmuxSession string
+	WindowIndex string
+	WindowName  string
+	PaneID      string // %N format
+	PanePID     int64  // pane shell PID (0 if unavailable)
+	FgPID       int64  // foreground process group leader PID (0 if unavailable)
+	HiveSession string // value of @hive-session pane option (empty if untagged)
+	Tool        string // detected agent ("claude", "shell", etc.; empty if undetected)
+}
+
+// AllPanesDiscoverer is implemented by integrations that can enumerate all
+// panes for diagnostic purposes. DiscoverAllPanes must not modify the live
+// detection cache.
+type AllPanesDiscoverer interface {
+	DiscoverAllPanes(ctx context.Context) ([]PaneDetail, error)
+}
