@@ -50,9 +50,12 @@ func (m *JSONModule) luaEncode(state *glua.LState) int {
 	pretty := false
 	if state.GetTop() >= 2 {
 		opts := state.CheckTable(2)
-		if v, ok := opts.RawGetString("pretty").(glua.LBool); ok {
-			pretty = bool(v)
+		p, err := parseEncodeOpts(opts)
+		if err != nil {
+			state.RaiseError("hive.json.encode: %s", err.Error())
+			return 0
 		}
+		pretty = p
 	}
 
 	visited := map[*glua.LTable]bool{}
@@ -137,14 +140,15 @@ func (m *JSONModule) luaToGo(lv glua.LValue, visited map[*glua.LTable]bool) (any
 // tableToGo decides between array and object encoding for a Lua table.
 //
 // Detection order:
-//  1. The array marker metatable is set → []any (preserves empty-array intent).
+//  1. The array marker metatable is set → []any (preserves empty-array intent
+//     and rejects tables whose shape contradicts the array claim).
 //  2. All keys are positive integers 1..n with no holes → []any.
 //  3. Otherwise → map[string]any.
-//
-// We index sequentially via RawGetInt because ForEach iteration order is
-// undefined; relying on it would race with table layout changes.
 func (m *JSONModule) tableToGo(tbl *glua.LTable, visited map[*glua.LTable]bool) (any, error) {
 	if tbl.Metatable == m.arrayMarker {
+		if err := arrayShapeError(tbl); err != nil {
+			return nil, fmt.Errorf("array-tagged table %s", err.Error())
+		}
 		return m.tableToArray(tbl, visited)
 	}
 
@@ -155,37 +159,44 @@ func (m *JSONModule) tableToGo(tbl *glua.LTable, visited map[*glua.LTable]bool) 
 	return m.tableToObject(tbl, visited)
 }
 
-// isArrayLike returns true when every key in tbl is a positive integer 1..n
-// with no holes and no extra non-array keys. Empty tables are NOT array-like;
-// callers must apply the marker rule first to disambiguate them as []any.
-func isArrayLike(tbl *glua.LTable) bool {
+// arrayShapeError returns nil when tbl's keys are exactly the positive
+// integers 1..n with no holes (empty tables satisfy the contract). Otherwise
+// it returns an error describing the first violation. Used by the marker
+// path to surface inconsistent claims (e.g. hive.json.array({foo="x"})) as
+// errors instead of silently dropping data.
+func arrayShapeError(tbl *glua.LTable) error {
 	n := tbl.Len()
-	if n == 0 {
-		return false
-	}
 	for i := 1; i <= n; i++ {
 		if tbl.RawGetInt(i) == glua.LNil {
-			return false
+			return fmt.Errorf("has hole at index %d", i)
 		}
 	}
-
-	// Confirm there are no non-integer or out-of-range keys.
-	extra := false
+	var keyErr error
 	tbl.ForEach(func(key glua.LValue, _ glua.LValue) {
-		if extra {
+		if keyErr != nil {
 			return
 		}
 		num, ok := key.(glua.LNumber)
 		if !ok {
-			extra = true
+			keyErr = fmt.Errorf("has non-integer key %q", key.String())
 			return
 		}
 		idx := int(num)
 		if glua.LNumber(idx) != num || idx < 1 || idx > n {
-			extra = true
+			keyErr = fmt.Errorf("has out-of-range key %v", num)
 		}
 	})
-	return !extra
+	return keyErr
+}
+
+// isArrayLike returns true when tbl matches the heuristic for an untagged
+// array. Empty tables fail the heuristic so the marker rule can disambiguate
+// them as []any vs. {}.
+func isArrayLike(tbl *glua.LTable) bool {
+	if tbl.Len() == 0 {
+		return false
+	}
+	return arrayShapeError(tbl) == nil
 }
 
 func (m *JSONModule) tableToArray(tbl *glua.LTable, visited map[*glua.LTable]bool) ([]any, error) {
@@ -207,7 +218,11 @@ func (m *JSONModule) tableToObject(tbl *glua.LTable, visited map[*glua.LTable]bo
 		if walkErr != nil {
 			return
 		}
-		k := glua.LVAsString(key)
+		k, err := objectKey(key)
+		if err != nil {
+			walkErr = err
+			return
+		}
 		entry, err := m.luaToGo(value, visited)
 		if err != nil {
 			walkErr = err
@@ -219,6 +234,50 @@ func (m *JSONModule) tableToObject(tbl *glua.LTable, visited map[*glua.LTable]bo
 		return nil, walkErr
 	}
 	return out, nil
+}
+
+// objectKey coerces a Lua table key to a JSON object key. Only string and
+// number keys are supported; other types (booleans, tables, functions,
+// userdata) would silently collide on the empty string via LVAsString and
+// drop entries, so they're rejected with an explicit error.
+func objectKey(key glua.LValue) (string, error) {
+	switch k := key.(type) {
+	case glua.LString:
+		return string(k), nil
+	case glua.LNumber:
+		return glua.LVAsString(key), nil
+	default:
+		return "", fmt.Errorf("cannot use %s as object key", key.Type().String())
+	}
+}
+
+// parseEncodeOpts validates the optional opts table for hive.json.encode.
+// Unknown keys and non-bool values for known keys are rejected so typos
+// surface immediately rather than silently producing the wrong output.
+func parseEncodeOpts(opts *glua.LTable) (pretty bool, err error) {
+	var walkErr error
+	opts.ForEach(func(key glua.LValue, value glua.LValue) {
+		if walkErr != nil {
+			return
+		}
+		name, ok := key.(glua.LString)
+		if !ok {
+			walkErr = fmt.Errorf("opts key must be a string")
+			return
+		}
+		switch string(name) {
+		case "pretty":
+			b, ok := value.(glua.LBool)
+			if !ok {
+				walkErr = fmt.Errorf("opts.pretty must be a boolean")
+				return
+			}
+			pretty = bool(b)
+		default:
+			walkErr = fmt.Errorf("unknown opts key %q", string(name))
+		}
+	})
+	return pretty, walkErr
 }
 
 // goToLua walks Go values from encoding/json back into Lua. Empty []any
@@ -238,11 +297,10 @@ func (m *JSONModule) goToLua(state *glua.LState, value any) glua.LValue {
 		for i, item := range v {
 			tbl.RawSetInt(i+1, m.goToLua(state, item))
 		}
-		// Empty arrays would otherwise round-trip to {}; tag them so a
-		// follow-up encode preserves the [] shape.
-		if len(v) == 0 {
-			state.SetMetatable(tbl, m.arrayMarker)
-		}
+		// Tag every decoded array so re-encode preserves the [] shape
+		// regardless of mutations (table.remove emptying it, removing the
+		// last element, etc.) that would otherwise flunk the heuristic.
+		state.SetMetatable(tbl, m.arrayMarker)
 		return tbl
 	case map[string]any:
 		tbl := state.NewTable()

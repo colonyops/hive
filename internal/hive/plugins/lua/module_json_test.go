@@ -325,6 +325,116 @@ end
 	}, got)
 }
 
+func TestJSONEncodeArrayMarkerRejectsNonArrayKeys(t *testing.T) {
+	t.Parallel()
+	h := newJSONHarness(t, `
+return function(hive)
+  local string_key = hive.json.array({ foo = "x" })
+  local ok1, err1 = pcall(hive.json.encode, string_key)
+  hive.test_capture_err("string_key", tostring(err1))
+  if ok1 then hive.test_capture_err("string_key_ok", "true") end
+
+  local mixed = hive.json.array({ "a", "b", foo = "x" })
+  local ok2, err2 = pcall(hive.json.encode, mixed)
+  hive.test_capture_err("mixed", tostring(err2))
+  if ok2 then hive.test_capture_err("mixed_ok", "true") end
+
+  local sparse = hive.json.array({ [1] = "a", [3] = "c" })
+  local ok3, err3 = pcall(hive.json.encode, sparse)
+  hive.test_capture_err("sparse", tostring(err3))
+  if ok3 then hive.test_capture_err("sparse_ok", "true") end
+end
+`)
+	t.Cleanup(func() { h.close(t) })
+
+	assert.NotContains(t, h.capture.errs, "string_key_ok", "encode should reject array-tagged table with string key")
+	assert.Contains(t, h.capture.errs["string_key"], "array-tagged")
+	assert.Contains(t, h.capture.errs["string_key"], "non-integer key")
+
+	assert.NotContains(t, h.capture.errs, "mixed_ok")
+	assert.Contains(t, h.capture.errs["mixed"], "non-integer key")
+
+	assert.NotContains(t, h.capture.errs, "sparse_ok")
+	assert.Contains(t, h.capture.errs["sparse"], "hole at index 2")
+}
+
+func TestJSONEncodeRejectsUnsupportedKeyTypes(t *testing.T) {
+	t.Parallel()
+	h := newJSONHarness(t, `
+return function(hive)
+  local bool_key = {}
+  bool_key[true] = "x"
+  local ok1, err1 = pcall(hive.json.encode, bool_key)
+  hive.test_capture_err("bool", tostring(err1))
+  if ok1 then hive.test_capture_err("bool_ok", "true") end
+
+  local table_key = {}
+  table_key[{}] = "x"
+  local ok2, err2 = pcall(hive.json.encode, table_key)
+  hive.test_capture_err("table", tostring(err2))
+  if ok2 then hive.test_capture_err("table_ok", "true") end
+end
+`)
+	t.Cleanup(func() { h.close(t) })
+
+	assert.NotContains(t, h.capture.errs, "bool_ok")
+	assert.Contains(t, h.capture.errs["bool"], "boolean as object key")
+
+	assert.NotContains(t, h.capture.errs, "table_ok")
+	assert.Contains(t, h.capture.errs["table"], "table as object key")
+}
+
+func TestJSONEncodeOptsValidation(t *testing.T) {
+	t.Parallel()
+	h := newJSONHarness(t, `
+return function(hive)
+  local ok1, err1 = pcall(hive.json.encode, {}, { pretty = "true" })
+  hive.test_capture_err("non_bool", tostring(err1))
+  if ok1 then hive.test_capture_err("non_bool_ok", "true") end
+
+  local ok2, err2 = pcall(hive.json.encode, {}, { prety = true })
+  hive.test_capture_err("typo", tostring(err2))
+  if ok2 then hive.test_capture_err("typo_ok", "true") end
+
+  -- Valid opts still works.
+  hive.test_capture("valid", hive.json.encode({ foo = 1 }, { pretty = true }))
+end
+`)
+	t.Cleanup(func() { h.close(t) })
+
+	assert.NotContains(t, h.capture.errs, "non_bool_ok")
+	assert.Contains(t, h.capture.errs["non_bool"], "opts.pretty must be a boolean")
+
+	assert.NotContains(t, h.capture.errs, "typo_ok")
+	assert.Contains(t, h.capture.errs["typo"], `unknown opts key "prety"`)
+
+	assert.Contains(t, h.capture.strings["valid"], "\n")
+}
+
+func TestJSONDecodedArrayRoundTripsAfterMutation(t *testing.T) {
+	t.Parallel()
+	h := newJSONHarness(t, `
+return function(hive)
+  -- Remove the only element and re-encode: must stay [], not become {}.
+  local arr = hive.json.decode('[1]')
+  table.remove(arr, 1)
+  hive.test_capture("after_drain", hive.json.encode(arr))
+
+  -- Remove a middle element from a longer array; result is still 1..n.
+  local arr2 = hive.json.decode('[1,2,3]')
+  table.remove(arr2, 2)
+  hive.test_capture("after_remove_middle", hive.json.encode(arr2))
+end
+`)
+	t.Cleanup(func() { h.close(t) })
+
+	assert.Equal(t, "[]", h.capture.strings["after_drain"])
+
+	var arr []any
+	require.NoError(t, json.Unmarshal([]byte(h.capture.strings["after_remove_middle"]), &arr))
+	assert.Equal(t, []any{float64(1), float64(3)}, arr)
+}
+
 func TestJSONModuleRegistersInPlugin(t *testing.T) {
 	t.Parallel()
 	entry := filepath.Join(t.TempDir(), "init.lua")
