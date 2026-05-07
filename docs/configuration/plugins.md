@@ -132,6 +132,43 @@ hv
 
 Open the command palette with `:`, run `LuaHello`, and confirm that `.lua-plugin-output` was created in the selected session directory.
 
+### hive.ticker
+
+Schedule callbacks to run repeatedly or after a delay.
+
+| Function | Purpose |
+| -------- | ------- |
+| `hive.ticker.every(duration, fn)` | Run `fn` every `duration`. Returns a handle. |
+| `hive.ticker.after(duration, fn)` | Run `fn` once after `duration`. Returns a handle. |
+| `handle:cancel()` | Cancel the ticker. Idempotent. |
+
+`duration` accepts any Go duration string (e.g. `"5s"`, `"1m30s"`).
+
+```lua
+return function(hive)
+  local heartbeat = hive.ticker.every("5s", function()
+    hive.log.info("still alive")
+  end)
+
+  hive.ticker.after("60s", function()
+    hive.log.info("stopping heartbeat")
+    heartbeat:cancel()
+  end)
+end
+```
+
+!!! warning "1-second minimum interval"
+    Anything shorter raises a Lua error rather than silently clamping. Sub-second polling is not supported — pick reasonable cadences.
+
+!!! note "Callbacks run serially"
+    All ticker fires share the same dispatcher goroutine as your entrypoint and command handlers, so a long-running callback delays every other ticker on the plugin's Lua state.
+
+!!! warning "Backpressure: drop + log"
+    If a callback runs longer than the tick interval, additional ticks queue in a bounded buffer (currently 64 items per plugin). When the buffer is full, further ticks are dropped and a warning is logged. The module does **not** coalesce or skip cleanly — it drops, so plan for callbacks that may not fire on every tick under heavy load.
+
+!!! note "Shutdown cancels everything"
+    When hive shuts down or the plugin is reloaded, every outstanding ticker is cancelled and its callback is released for GC.
+
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.

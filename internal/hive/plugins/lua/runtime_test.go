@@ -4,10 +4,14 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
+	"testing/synctest"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glua "github.com/yuin/gopher-lua"
 )
 
 func TestValidateModuleName(t *testing.T) {
@@ -66,6 +70,82 @@ end
 	help := plugin.Commands()["Ok"].Help
 	assert.Contains(t, help, "must use dot notation")
 	assert.Contains(t, help, "is invalid")
+}
+
+// newBareRuntime is a Runtime with no host modules — for dispatcher tests.
+func newBareRuntime(t *testing.T) *Runtime {
+	t.Helper()
+	rt, err := NewRuntime(t.TempDir())
+	require.NoError(t, err)
+	return rt
+}
+
+func TestRuntimeSubmitSerializesConcurrentCalls(t *testing.T) {
+	t.Parallel()
+
+	rt := newBareRuntime(t)
+	t.Cleanup(rt.Close)
+
+	// Non-atomic increments are safe iff the dispatcher serializes
+	// closures; -race catches a regression.
+	const n = 50 // < dispatcherQueueSize (64), no drops.
+	var counter int
+	var wg sync.WaitGroup
+	wg.Add(n)
+
+	// Barrier so every goroutine races Submit at roughly the same instant.
+	var start sync.WaitGroup
+	start.Add(1)
+
+	for range n {
+		go func() {
+			start.Wait()
+			rt.Submit(func(_ *glua.LState) {
+				counter++
+				wg.Done()
+			})
+		}()
+	}
+	start.Done()
+
+	doneCh := make(chan struct{})
+	go func() {
+		wg.Wait()
+		close(doneCh)
+	}()
+
+	select {
+	case <-doneCh:
+	case <-time.After(2 * time.Second):
+		t.Fatalf("dispatcher did not process all Submits within 2s (counter=%d)", counter)
+	}
+
+	assert.Equal(t, n, counter, "every submitted closure should have run exactly once")
+}
+
+func TestRuntimeSubmitAfterCloseIsNoOp(t *testing.T) {
+	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		rt := newBareRuntime(t)
+		rt.Close()
+
+		// Twice to exercise the idempotent post-Close fast path.
+		require.NotPanics(t, func() {
+			rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
+			rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
+		})
+
+		synctest.Wait()
+	})
+}
+
+func TestRuntimeSubmitOnNilReceiverIsNoOp(t *testing.T) {
+	t.Parallel()
+
+	var rt *Runtime
+	require.NotPanics(t, func() {
+		rt.Submit(func(_ *glua.LState) {})
+	})
 }
 
 func TestLoadEntrypointRejectsInvalidArity(t *testing.T) {

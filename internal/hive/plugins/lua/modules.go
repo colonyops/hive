@@ -11,3 +11,10 @@ import (
 type HostModule interface {
 	Register(state *glua.LState, hive *glua.LTable) error
 }
+
+// HostModuleCloser is an optional add-on for HostModules with background
+// resources. Plugin.Close invokes it before closing the LState so workers
+// stop while Lua callbacks are still safe to invoke.
+type HostModuleCloser interface {
+	Close() error
+}

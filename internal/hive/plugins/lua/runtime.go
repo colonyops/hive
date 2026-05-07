@@ -2,22 +2,41 @@
 package lua
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
+	"runtime/debug"
 	"strings"
+	"sync"
 
+	"github.com/rs/zerolog/log"
 	glua "github.com/yuin/gopher-lua"
 )
 
-// Runtime owns a sandboxed Lua state for a Hive plugin. The state is private:
-// callers interact through LoadEntrypoint / CallEntrypoint / Close.
+// dispatcherQueueSize buffers async work (ticker fires, etc.) without
+// blocking producers, but stays small enough that a runaway producer
+// surfaces via drop+log.
+const dispatcherQueueSize = 64
+
+// Runtime owns a sandboxed Lua state. Exactly one goroutine — the
+// dispatcher started in NewRuntime — touches state. Schedule work via
+// Submit, LoadEntrypoint, or CallEntrypoint; tear down with Close.
 type Runtime struct {
 	state *glua.LState
+
+	work   chan func(*glua.LState)
+	ctx    context.Context
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
+	mu     sync.Mutex
+	closed bool
 }
 
 // NewRuntime constructs a sandboxed Lua runtime, configures `require()` to
 // resolve relative to moduleRoot, and registers each HostModule onto the
-// global `hive` table in order.
+// global `hive` table. Setup is synchronous; the dispatcher goroutine takes
+// over LState ownership when this returns.
 func NewRuntime(moduleRoot string, modules ...HostModule) (*Runtime, error) {
 	state := glua.NewState(glua.Options{SkipOpenLibs: true})
 
@@ -47,54 +66,186 @@ func NewRuntime(moduleRoot string, modules ...HostModule) (*Runtime, error) {
 	}
 	state.SetGlobal("hive", hive)
 
-	return &Runtime{state: state}, nil
+	ctx, cancel := context.WithCancel(context.Background())
+	r := &Runtime{
+		state:  state,
+		work:   make(chan func(*glua.LState), dispatcherQueueSize),
+		ctx:    ctx,
+		cancel: cancel,
+	}
+
+	r.wg.Add(1)
+	go r.dispatch()
+
+	return r, nil
 }
 
-// LoadEntrypoint executes the plugin entry file and returns the function it
-// must yield as its single return value.
+// dispatch drains the work channel on the goroutine that owns r.state.
+// Returns once ctx is cancelled and the channel is drained.
+func (r *Runtime) dispatch() {
+	defer r.wg.Done()
+	for {
+		select {
+		case fn := <-r.work:
+			if fn != nil {
+				fn(r.state)
+			}
+		case <-r.ctx.Done():
+			// Drain so submitSync callers that won the race against
+			// Close still get their result.
+			for {
+				select {
+				case fn := <-r.work:
+					if fn != nil {
+						fn(r.state)
+					}
+				default:
+					return
+				}
+			}
+		}
+	}
+}
+
+// Submit schedules fn on the dispatcher. Fire-and-forget, never blocks.
+// Drops and logs if the queue is full or the runtime is closed.
+func (r *Runtime) Submit(fn func(*glua.LState)) {
+	if r == nil || fn == nil {
+		return
+	}
+
+	r.mu.Lock()
+	closed := r.closed
+	r.mu.Unlock()
+	if closed {
+		log.Debug().Str("plugin", "lua").Msg("dropped lua work item: runtime closed")
+		return
+	}
+	// The work channel is never closed (ctx signals shutdown), so a
+	// non-blocking send is always safe.
+	select {
+	case r.work <- fn:
+	default:
+		log.Warn().Str("plugin", "lua").Msg("dropped lua work item: dispatcher queue full")
+	}
+}
+
+// submitSync runs fn on the dispatcher and blocks until it finishes.
+// Panics inside fn surface as errors so the dispatcher cannot crash.
+func (r *Runtime) submitSync(fn func(*glua.LState) error) error {
+	if r == nil {
+		return fmt.Errorf("lua runtime is nil")
+	}
+
+	type result struct {
+		err error
+	}
+	// Buffered so wrapped completes even if the caller times out below.
+	done := make(chan result, 1)
+
+	wrapped := func(state *glua.LState) {
+		defer func() {
+			if rec := recover(); rec != nil {
+				done <- result{err: fmt.Errorf("lua dispatcher panic: %v\n%s", rec, debug.Stack())}
+			}
+		}()
+		done <- result{err: fn(state)}
+	}
+
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return fmt.Errorf("lua runtime is closed")
+	}
+	r.mu.Unlock()
+
+	// Block (don't drop) until the dispatcher accepts or shutdown wins.
+	select {
+	case r.work <- wrapped:
+	case <-r.ctx.Done():
+		return fmt.Errorf("lua runtime is closed")
+	}
+
+	select {
+	case res := <-done:
+		return res.err
+	case <-r.ctx.Done():
+		return fmt.Errorf("lua runtime closed before work completed")
+	}
+}
+
+// LoadEntrypoint executes the plugin entry file on the dispatcher and
+// returns the function it must yield as its single return value.
 func (r *Runtime) LoadEntrypoint(path string) (*glua.LFunction, error) {
-	base := r.state.GetTop()
-	if err := r.state.DoFile(path); err != nil {
-		return nil, fmt.Errorf("load lua plugin %q: %w", path, err)
-	}
+	var entrypoint *glua.LFunction
+	err := r.submitSync(func(state *glua.LState) error {
+		base := state.GetTop()
+		if err := state.DoFile(path); err != nil {
+			return fmt.Errorf("load lua plugin %q: %w", path, err)
+		}
 
-	returned := r.state.GetTop() - base
-	if returned != 1 {
-		r.state.Pop(returned)
-		return nil, fmt.Errorf("lua plugin %q must return exactly one function", path)
-	}
+		returned := state.GetTop() - base
+		if returned != 1 {
+			state.Pop(returned)
+			return fmt.Errorf("lua plugin %q must return exactly one function", path)
+		}
 
-	entrypoint, ok := r.state.Get(-1).(*glua.LFunction)
-	r.state.Pop(1)
-	if !ok {
-		return nil, fmt.Errorf("lua plugin %q must return a function", path)
-	}
+		fn, ok := state.Get(-1).(*glua.LFunction)
+		state.Pop(1)
+		if !ok {
+			return fmt.Errorf("lua plugin %q must return a function", path)
+		}
 
+		entrypoint = fn
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
 	return entrypoint, nil
 }
 
-// CallEntrypoint invokes the plugin entry function in protected mode, passing
-// the global `hive` table as its single argument.
+// CallEntrypoint invokes the plugin entry function on the dispatcher in
+// protected mode, passing the global `hive` table as its single argument.
 func (r *Runtime) CallEntrypoint(entrypoint *glua.LFunction) error {
-	hive, ok := r.state.GetGlobal("hive").(*glua.LTable)
-	if !ok {
-		return fmt.Errorf("internal error: hive table missing from lua runtime")
-	}
-	return r.state.CallByParam(glua.P{
-		Fn:      entrypoint,
-		NRet:    0,
-		Protect: true,
-	}, hive)
+	return r.submitSync(func(state *glua.LState) error {
+		hive, ok := state.GetGlobal("hive").(*glua.LTable)
+		if !ok {
+			return fmt.Errorf("internal error: hive table missing from lua runtime")
+		}
+		return state.CallByParam(glua.P{
+			Fn:      entrypoint,
+			NRet:    0,
+			Protect: true,
+		}, hive)
+	})
 }
 
-// Close releases the underlying Lua state. Safe on a nil receiver and on a
-// runtime that has already been closed.
+// Close stops the dispatcher and releases the LState. Idempotent and
+// safe across goroutines.
 func (r *Runtime) Close() {
-	if r == nil || r.state == nil {
+	if r == nil {
 		return
 	}
-	r.state.Close()
-	r.state = nil
+
+	r.mu.Lock()
+	if r.closed {
+		r.mu.Unlock()
+		return
+	}
+	r.closed = true
+	r.mu.Unlock()
+
+	// ctx signals shutdown — the work channel is never closed because
+	// late producers can still race a send (see Submit).
+	r.cancel()
+
+	r.wg.Wait()
+
+	if r.state != nil {
+		r.state.Close()
+		r.state = nil
+	}
 }
 
 func openLib(state *glua.LState, name string, fn glua.LGFunction) {
