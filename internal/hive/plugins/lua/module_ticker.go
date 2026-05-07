@@ -12,53 +12,44 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// tickerMinInterval is the smallest interval a plugin may request via
-// hive.ticker.every / hive.ticker.after. The floor exists to keep runaway
-// plugins from spamming the dispatcher queue; we surface the violation as a
-// Lua error rather than silently clamping so authors notice.
+// tickerMinInterval floors every/after; sub-second intervals raise a
+// Lua error rather than clamp silently.
 const tickerMinInterval = time.Second
 
-// tickerRegistryKeyPrefix namespaces the per-module sub-table inside the Lua
-// registry. The instance pointer is appended so multiple TickerModules on the
-// same LState (in tests, etc.) cannot stomp each other.
+// tickerRegistryKeyPrefix namespaces the per-module sub-table in the Lua
+// registry. The instance pointer is appended so tests with multiple
+// modules on one LState don't stomp each other.
 const tickerRegistryKeyPrefix = "hive.ticker."
 
-// tickerHandleMetatableName is the registry key for the metatable shared by
-// every handle userdata produced by this module.
+// tickerHandleMetatableName keys the metatable shared by every handle.
 const tickerHandleMetatableName = "hive.ticker.handle"
 
-// TickerModule exposes `hive.ticker.every` and `hive.ticker.after`, returning
-// userdata handles with a `:cancel()` method. All goroutines spawned by the
-// module bottom out at the runtime's dispatcher via Runtime.Submit so they
-// never touch the LState directly.
+// TickerModule exposes hive.ticker.every and hive.ticker.after, returning
+// userdata handles with a :cancel() method. Ticker goroutines route
+// callbacks through Runtime.Submit; they never touch the LState directly.
 type TickerModule struct {
 	Runtime    *Runtime
 	PluginName string
 
-	// rootCtx fans out to every per-handle context; cancelling it during Close
-	// stops every running ticker without per-handle bookkeeping.
+	// rootCtx fans out to every per-handle context; cancelling it during
+	// Close stops every running ticker.
 	rootCtx    context.Context
 	rootCancel context.CancelFunc
 
-	// wg tracks live ticker/timer goroutines so Close can join them.
 	wg sync.WaitGroup
 
-	// nextID hands out monotonically increasing handle IDs (also used as the
-	// registry sub-key, stringified).
+	// nextID is also the per-handle registry sub-key, stringified.
 	nextID atomic.Uint64
 
 	mu      sync.Mutex
 	handles map[uint64]*tickerHandle
 
-	// registryKey is the key under which this module's function-pinning
-	// sub-table lives inside the Lua registry. Populated in Register.
 	registryKey string
 }
 
 // tickerHandle is the Go-side state behind the userdata returned to Lua.
-// Cancel is idempotent via once; the per-handle context cancel is what stops
-// the goroutine, and the registry slot is cleared via Submit so registry
-// mutations stay on the dispatcher goroutine.
+// Cancel is idempotent; the per-handle ctx stops the goroutine and the
+// registry slot is released via Submit.
 type tickerHandle struct {
 	id     uint64
 	cancel context.CancelFunc
@@ -66,9 +57,8 @@ type tickerHandle struct {
 	module *TickerModule
 }
 
-// Register attaches `every` and `after` to a fresh `hive.ticker` subtable and
-// installs the per-instance registry sub-table used to pin Lua callback
-// functions for the lifetime of their handles.
+// Register attaches every/after to a fresh hive.ticker subtable and
+// creates this module's registry sub-table for pinning callback functions.
 func (m *TickerModule) Register(state *glua.LState, hive *glua.LTable) error {
 	m.handles = map[uint64]*tickerHandle{}
 	m.rootCtx, m.rootCancel = context.WithCancel(context.Background())
@@ -89,9 +79,7 @@ func (m *TickerModule) Register(state *glua.LState, hive *glua.LTable) error {
 	return nil
 }
 
-// Close stops every running ticker/timer goroutine and clears the handle map.
-// It is safe to call multiple times; the second call is a no-op because
-// rootCancel is idempotent and the map is already empty.
+// Close stops every ticker goroutine and clears the handle map. Idempotent.
 func (m *TickerModule) Close() error {
 	if m.rootCancel != nil {
 		m.rootCancel()
@@ -104,9 +92,8 @@ func (m *TickerModule) Close() error {
 	return nil
 }
 
-// ensureHandleMetatable installs the metatable used by every handle userdata.
-// Sharing one metatable across handles keeps construction cheap and means the
-// `cancel` Go closure only allocates once per module.
+// ensureHandleMetatable installs the metatable shared by every handle.
+// One metatable per module means cancel allocates only once.
 func (m *TickerModule) ensureHandleMetatable(state *glua.LState) {
 	mt := state.NewTypeMetatable(tickerHandleMetatableName)
 	state.SetField(mt, "__index", state.SetFuncs(state.NewTable(), map[string]glua.LGFunction{
@@ -114,7 +101,6 @@ func (m *TickerModule) ensureHandleMetatable(state *glua.LState) {
 	}))
 }
 
-// luaEvery implements hive.ticker.every(duration, fn).
 func (m *TickerModule) luaEvery(state *glua.LState) int {
 	d, fn := m.checkArgs(state)
 	handle := m.spawn(state, fn, func(ctx context.Context, h *tickerHandle) {
@@ -133,9 +119,8 @@ func (m *TickerModule) luaEvery(state *glua.LState) int {
 	return 1
 }
 
-// luaAfter implements hive.ticker.after(duration, fn). The goroutine fires
-// exactly once, then auto-cancels so the registry slot and map entry are
-// released without the plugin having to call cancel explicitly.
+// luaAfter fires once then auto-cancels, releasing the registry slot
+// and map entry without an explicit cancel from the plugin.
 func (m *TickerModule) luaAfter(state *glua.LState) int {
 	d, fn := m.checkArgs(state)
 	handle := m.spawn(state, fn, func(ctx context.Context, h *tickerHandle) {
@@ -153,7 +138,7 @@ func (m *TickerModule) luaAfter(state *glua.LState) int {
 	return 1
 }
 
-// luaCancel is the Lua-callable __index method on handle userdata.
+// luaCancel is the __index method bound to handle userdata.
 func (m *TickerModule) luaCancel(state *glua.LState) int {
 	ud := state.CheckUserData(1)
 	handle, ok := ud.Value.(*tickerHandle)
@@ -165,10 +150,8 @@ func (m *TickerModule) luaCancel(state *glua.LState) int {
 	return 0
 }
 
-// checkArgs validates and parses the (duration, fn) argument pair shared by
-// every and after. It raises a Lua error on bad input, which longjmps out of
-// the calling C function — callers should treat its return as the only path
-// that survives.
+// checkArgs parses (duration, fn). On bad input it raises a Lua error,
+// which longjmps out of the calling C function — there is no error return.
 func (m *TickerModule) checkArgs(state *glua.LState) (time.Duration, *glua.LFunction) {
 	durationStr := state.CheckString(1)
 	fn := state.CheckFunction(2)
@@ -183,10 +166,9 @@ func (m *TickerModule) checkArgs(state *glua.LState) (time.Duration, *glua.LFunc
 	return d, fn
 }
 
-// spawn pins fn in the registry, allocates a handle, and starts the supplied
-// run loop. It runs on the dispatcher goroutine, so registry and map writes
-// here are race-free with each other (but still need the mutex against
-// goroutine-side reads via Cancel-from-after).
+// spawn pins fn, allocates a handle, and starts run on a goroutine.
+// Runs on the dispatcher; the mutex guards against goroutine-side
+// Cancel via the after-fire path.
 func (m *TickerModule) spawn(state *glua.LState, fn *glua.LFunction, run func(context.Context, *tickerHandle)) *tickerHandle {
 	id := m.nextID.Add(1)
 	ctx, cancel := context.WithCancel(m.rootCtx)
@@ -204,14 +186,13 @@ func (m *TickerModule) spawn(state *glua.LState, fn *glua.LFunction, run func(co
 	return h
 }
 
-// fire is invoked from a ticker/timer goroutine. It hops onto the dispatcher
-// before touching the LState; if the runtime is closed Submit drops the work
-// and the goroutine exits via ctx cancellation on the next select.
+// fire hops from a ticker goroutine onto the dispatcher to run the
+// callback. If the runtime is closed, Submit drops the work.
 func (m *TickerModule) fire(h *tickerHandle) {
 	m.Runtime.Submit(func(state *glua.LState) {
 		fn := m.loadFunction(state, h.id)
 		if fn == nil {
-			// Handle was cancelled between fire and dispatch; nothing to do.
+			// Cancelled between fire and dispatch.
 			return
 		}
 		if err := state.CallByParam(glua.P{
@@ -228,10 +209,8 @@ func (m *TickerModule) fire(h *tickerHandle) {
 	})
 }
 
-// Cancel stops the goroutine, removes the map entry, and clears the registry
-// slot. Safe to call from any goroutine and idempotent under sync.Once. The
-// registry release hops onto the dispatcher because the registry must only be
-// touched by the dispatcher goroutine.
+// Cancel stops the goroutine, removes the map entry, and releases the
+// registry slot via Submit. Idempotent and safe from any goroutine.
 func (h *tickerHandle) Cancel() {
 	h.once.Do(func() {
 		h.cancel()
@@ -248,8 +227,8 @@ func (h *tickerHandle) Cancel() {
 	})
 }
 
-// newHandleUserData wraps a handle in *LUserData with the shared metatable
-// installed in Register. It must be called on the dispatcher goroutine.
+// newHandleUserData wraps a handle in *LUserData with the shared metatable.
+// Must run on the dispatcher.
 func (m *TickerModule) newHandleUserData(state *glua.LState, h *tickerHandle) *glua.LUserData {
 	ud := state.NewUserData()
 	ud.Value = h
@@ -257,9 +236,8 @@ func (m *TickerModule) newHandleUserData(state *glua.LState, h *tickerHandle) *g
 	return ud
 }
 
-// storeFunction pins fn under the handle ID inside this module's registry
-// sub-table, preventing Lua GC from collecting it while the goroutine is
-// alive. Must run on the dispatcher goroutine.
+// storeFunction pins fn so Lua cannot GC it while the goroutine holds
+// a reference. Must run on the dispatcher.
 func (m *TickerModule) storeFunction(state *glua.LState, id uint64, fn *glua.LFunction) {
 	table := m.registryTable(state)
 	if table == nil {
@@ -268,9 +246,8 @@ func (m *TickerModule) storeFunction(state *glua.LState, id uint64, fn *glua.LFu
 	state.SetField(table, strconv.FormatUint(id, 10), fn)
 }
 
-// loadFunction retrieves the pinned LFunction for a handle. Returns nil when
-// the handle has already been released, which races naturally with cancel
-// because both run on the dispatcher.
+// loadFunction returns the pinned function for a handle, or nil if
+// already released. Cancel and load both run on the dispatcher.
 func (m *TickerModule) loadFunction(state *glua.LState, id uint64) *glua.LFunction {
 	table := m.registryTable(state)
 	if table == nil {
@@ -284,8 +261,8 @@ func (m *TickerModule) loadFunction(state *glua.LState, id uint64) *glua.LFuncti
 	return fn
 }
 
-// releaseFunction drops the registry pin so the LFunction becomes eligible for
-// Lua GC. Must run on the dispatcher goroutine.
+// releaseFunction drops the registry pin so Lua can GC the LFunction.
+// Must run on the dispatcher.
 func (m *TickerModule) releaseFunction(state *glua.LState, id uint64) {
 	table := m.registryTable(state)
 	if table == nil {
@@ -294,9 +271,8 @@ func (m *TickerModule) releaseFunction(state *glua.LState, id uint64) {
 	state.SetField(table, strconv.FormatUint(id, 10), glua.LNil)
 }
 
-// registryTable returns this module's pinning sub-table from the Lua
-// registry, or nil if Register has not been called yet. Must run on the
-// dispatcher goroutine.
+// registryTable returns this module's pinning sub-table, or nil if
+// Register has not run.
 func (m *TickerModule) registryTable(state *glua.LState) *glua.LTable {
 	registry, ok := state.Get(glua.RegistryIndex).(*glua.LTable)
 	if !ok {

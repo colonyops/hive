@@ -56,12 +56,10 @@ func (p *Plugin) Init(_ context.Context) error {
 	if err != nil {
 		return err
 	}
-	// Runtime is wired in after construction because NewRuntime is the function that produces it. Register stores no Runtime calls, so this is safe.
+	// Wired post-construction; Register makes no Runtime calls.
 	tickerModule.Runtime = runtime
 
-	// Stash modules and runtime now so a failure during LoadEntrypoint or
-	// CallEntrypoint can be cleaned up via shutdown(), which closes every
-	// HostModuleCloser before tearing down the runtime.
+	// Stash now so an entrypoint failure below cleans up via shutdown().
 	p.runtime = runtime
 	p.modules = modules
 
@@ -85,11 +83,9 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
-// shutdown tears down the runtime and every module that owns background
-// resources, in reverse-registration order. Module Close errors are logged
-// but do not short-circuit the loop — every module gets a chance to release
-// its resources before the runtime goes away. Safe to call on a partially
-// initialised Plugin and idempotent across repeated calls.
+// shutdown closes every HostModuleCloser in reverse-registration order
+// before closing the runtime. Errors are logged but do not short-circuit.
+// Safe on a partial init; idempotent.
 func (p *Plugin) shutdown() {
 	for i := len(p.modules) - 1; i >= 0; i-- {
 		closer, ok := p.modules[i].(HostModuleCloser)

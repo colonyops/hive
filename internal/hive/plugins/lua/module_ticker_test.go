@@ -13,8 +13,7 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// bumpModule is a test-only HostModule that exposes `hive.test_bump()` for
-// observing how many times a Lua callback executed on the dispatcher.
+// bumpModule exposes hive.test_bump() so tests can count Lua-side fires.
 type bumpModule struct {
 	counter *atomic.Int64
 }
@@ -27,10 +26,8 @@ func (b *bumpModule) Register(state *glua.LState, hive *glua.LTable) error {
 	return nil
 }
 
-// tickerHarness wires a Runtime + TickerModule + bumpModule together and runs
-// the supplied Lua script as the entrypoint so the call to
-// `hive.ticker.every` / `hive.ticker.after` happens on the dispatcher
-// goroutine. The returned counter is bumped each time the Lua callback runs.
+// tickerHarness wires a Runtime + TickerModule + bumpModule and runs the
+// supplied Lua script as the entrypoint. counter bumps on every fire.
 type tickerHarness struct {
 	runtime *Runtime
 	module  *TickerModule
@@ -67,13 +64,11 @@ func newTickerHarness(t *testing.T, script string) *tickerHarness {
 }
 
 func (h *tickerHarness) Close() {
-	// Mirror Plugin.shutdown(): close modules in reverse order before runtime.
+	// Mirror Plugin.shutdown: module before runtime.
 	_ = h.module.Close()
 	h.runtime.Close()
 }
 
-// closeWithCleanup wires harness shutdown into t.Cleanup so each test releases
-// goroutines and the LState even on early failures.
 func (h *tickerHarness) closeWithCleanup(t *testing.T) {
 	t.Helper()
 	t.Cleanup(h.Close)
@@ -114,8 +109,7 @@ end
 func TestTickerCancelStopsFurtherFires(t *testing.T) {
 	t.Parallel()
 
-	// The Lua callback cancels its own handle on the first fire, so we should
-	// see exactly one bump regardless of how long we sleep afterwards.
+	// Callback cancels itself on first fire — exactly one bump expected.
 	h := newTickerHarness(t, `
 return function(hive)
   local handle
@@ -127,8 +121,7 @@ end
 `)
 	h.closeWithCleanup(t)
 
-	// Wait long enough for the first fire plus several intervals afterwards
-	// so a missed cancel would surface as additional bumps.
+	// 3s covers several would-be ticks if cancel were missed.
 	time.Sleep(3 * time.Second)
 
 	got := h.counter.Load()
@@ -138,8 +131,6 @@ end
 func TestTickerCallbackErrorsKeepFiring(t *testing.T) {
 	t.Parallel()
 
-	// The callback bumps the counter and then raises a Lua error. The runtime
-	// should log it and keep the ticker alive.
 	h := newTickerHarness(t, `
 return function(hive)
   hive.ticker.every("1s", function()
@@ -157,12 +148,9 @@ end
 }
 
 func TestTickerCloseCancelsAllOutstandingTickers(t *testing.T) {
-	// Intentionally NOT t.Parallel(): runtime.NumGoroutine is process-wide so
-	// concurrent ticker tests would corrupt the before/after delta.
+	// Not parallel: runtime.NumGoroutine is process-wide.
 
-	// Allow the test process a moment to settle background goroutines from
-	// the harness setup before we capture the baseline.
-	time.Sleep(100 * time.Millisecond)
+	time.Sleep(100 * time.Millisecond) // settle baseline
 	before := runtime.NumGoroutine()
 
 	h := newTickerHarness(t, `
@@ -173,18 +161,14 @@ return function(hive)
 end
 `)
 
-	// Confirm tickers are actually running before we shut them down.
 	time.Sleep(1200 * time.Millisecond)
 	require.Positive(t, h.counter.Load(), "tickers should have fired before close")
 
 	h.Close()
-
-	// Give the runtime a tick to fully unwind goroutines.
-	time.Sleep(200 * time.Millisecond)
+	time.Sleep(200 * time.Millisecond) // let goroutines unwind
 	after := runtime.NumGoroutine()
 
-	// runtime.NumGoroutine is inherently noisy with -parallel; allow a small
-	// margin but flag any obvious leak (the 3 ticker goroutines + dispatcher).
+	// NumGoroutine is noisy; allow a small margin but flag obvious leaks.
 	assert.LessOrEqual(t, after, before+2,
 		"goroutine count should not grow appreciably after Close (before=%d, after=%d)", before, after)
 }
@@ -192,10 +176,8 @@ end
 func TestTickerEveryRejectsSubSecondDuration(t *testing.T) {
 	t.Parallel()
 
-	// The Lua entrypoint uses pcall and stashes the error message in a global
-	// so we can inspect it from Go via a follow-up bump-style probe. If the
-	// duration is rejected, no ticker is registered and the counter must stay
-	// at zero even after we sleep past the would-be interval.
+	// The entrypoint asserts via pcall that the call errored with the
+	// expected message; the counter stays zero since no ticker registers.
 	root := t.TempDir()
 	entry := filepath.Join(root, "init.lua")
 	script := `
@@ -232,7 +214,6 @@ end
 	require.NoError(t, err)
 	require.NoError(t, rt.CallEntrypoint(fn))
 
-	// Wait past 500ms to confirm no ticker was registered.
 	time.Sleep(1200 * time.Millisecond)
 	assert.Equal(t, int64(0), counter.Load(), "no ticker should have been registered")
 }

@@ -71,9 +71,7 @@ end
 	assert.Contains(t, help, "is invalid")
 }
 
-// newBareRuntime constructs a Runtime with no host modules attached. Tests that
-// only exercise dispatcher mechanics (Submit, Close, etc.) don't need the full
-// `hive` API surface, and a bare runtime keeps the failure mode obvious.
+// newBareRuntime is a Runtime with no host modules — for dispatcher tests.
 func newBareRuntime(t *testing.T) *Runtime {
 	t.Helper()
 	rt, err := NewRuntime(t.TempDir())
@@ -87,17 +85,14 @@ func TestRuntimeSubmitSerializesConcurrentCalls(t *testing.T) {
 	rt := newBareRuntime(t)
 	t.Cleanup(rt.Close)
 
-	// Each closure increments a plain int. The dispatcher promises to run
-	// closures one at a time on a single goroutine, so a non-atomic increment
-	// is safe — if serialization were broken the race detector would catch
-	// it under `go test -race`.
-	const n = 50 // stays under dispatcherQueueSize (64) so no Submits drop.
+	// Non-atomic increments are safe iff the dispatcher serializes
+	// closures; -race catches a regression.
+	const n = 50 // < dispatcherQueueSize (64), no drops.
 	var counter int
 	var wg sync.WaitGroup
 	wg.Add(n)
 
-	// A barrier ensures all goroutines race to call Submit at roughly the
-	// same instant, maximising the chance of any concurrency bug surfacing.
+	// Barrier so every goroutine races Submit at roughly the same instant.
 	var start sync.WaitGroup
 	start.Add(1)
 
@@ -133,15 +128,12 @@ func TestRuntimeSubmitAfterCloseIsNoOp(t *testing.T) {
 	rt := newBareRuntime(t)
 	rt.Close()
 
-	// Submitting after Close must not panic; the documented behaviour is to
-	// silently drop the work item. We invoke it twice to also exercise the
-	// idempotent fast path inside Submit.
+	// Twice to exercise the idempotent post-Close fast path.
 	require.NotPanics(t, func() {
 		rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
 		rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
 	})
 
-	// Give the dispatcher a moment to confirm nothing fires.
 	time.Sleep(50 * time.Millisecond)
 }
 
