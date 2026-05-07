@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -76,41 +77,44 @@ func (h *tickerHarness) closeWithCleanup(t *testing.T) {
 
 func TestTickerEveryFiresRepeatedly(t *testing.T) {
 	t.Parallel()
-
-	h := newTickerHarness(t, `
+	synctest.Test(t, func(t *testing.T) {
+		h := newTickerHarness(t, `
 return function(hive)
   hive.ticker.every("1s", function() hive.test_bump() end)
 end
 `)
-	h.closeWithCleanup(t)
+		h.closeWithCleanup(t)
 
-	time.Sleep(2500 * time.Millisecond)
+		// 2.5s of virtual time fires the 1s ticker exactly twice.
+		time.Sleep(2500 * time.Millisecond)
+		synctest.Wait()
 
-	got := h.counter.Load()
-	assert.GreaterOrEqual(t, got, int64(2), "ticker should fire at least twice in 2.5s")
+		assert.Equal(t, int64(2), h.counter.Load())
+	})
 }
 
 func TestTickerAfterFiresOnce(t *testing.T) {
 	t.Parallel()
-
-	h := newTickerHarness(t, `
+	synctest.Test(t, func(t *testing.T) {
+		h := newTickerHarness(t, `
 return function(hive)
   hive.ticker.after("1s", function() hive.test_bump() end)
 end
 `)
-	h.closeWithCleanup(t)
+		h.closeWithCleanup(t)
 
-	time.Sleep(2500 * time.Millisecond)
+		time.Sleep(2500 * time.Millisecond)
+		synctest.Wait()
 
-	got := h.counter.Load()
-	assert.Equal(t, int64(1), got, "after should fire exactly once")
+		assert.Equal(t, int64(1), h.counter.Load())
+	})
 }
 
 func TestTickerCancelStopsFurtherFires(t *testing.T) {
 	t.Parallel()
-
-	// Callback cancels itself on first fire — exactly one bump expected.
-	h := newTickerHarness(t, `
+	synctest.Test(t, func(t *testing.T) {
+		// Callback cancels itself on first fire — exactly one bump expected.
+		h := newTickerHarness(t, `
 return function(hive)
   local handle
   handle = hive.ticker.every("1s", function()
@@ -119,19 +123,20 @@ return function(hive)
   end)
 end
 `)
-	h.closeWithCleanup(t)
+		h.closeWithCleanup(t)
 
-	// 3s covers several would-be ticks if cancel were missed.
-	time.Sleep(3 * time.Second)
+		// 3s covers several would-be ticks if cancel were missed.
+		time.Sleep(3 * time.Second)
+		synctest.Wait()
 
-	got := h.counter.Load()
-	assert.Equal(t, int64(1), got, "cancel from inside callback must stop further fires")
+		assert.Equal(t, int64(1), h.counter.Load())
+	})
 }
 
 func TestTickerCallbackErrorsKeepFiring(t *testing.T) {
 	t.Parallel()
-
-	h := newTickerHarness(t, `
+	synctest.Test(t, func(t *testing.T) {
+		h := newTickerHarness(t, `
 return function(hive)
   hive.ticker.every("1s", function()
     hive.test_bump()
@@ -139,21 +144,22 @@ return function(hive)
   end)
 end
 `)
-	h.closeWithCleanup(t)
+		h.closeWithCleanup(t)
 
-	time.Sleep(2500 * time.Millisecond)
+		time.Sleep(2500 * time.Millisecond)
+		synctest.Wait()
 
-	got := h.counter.Load()
-	assert.GreaterOrEqual(t, got, int64(2), "ticker must keep firing after callback errors")
+		assert.Equal(t, int64(2), h.counter.Load())
+	})
 }
 
 func TestTickerCloseCancelsAllOutstandingTickers(t *testing.T) {
 	// Not parallel: runtime.NumGoroutine is process-wide.
+	synctest.Test(t, func(t *testing.T) {
+		synctest.Wait()
+		before := runtime.NumGoroutine()
 
-	time.Sleep(100 * time.Millisecond) // settle baseline
-	before := runtime.NumGoroutine()
-
-	h := newTickerHarness(t, `
+		h := newTickerHarness(t, `
 return function(hive)
   hive.ticker.every("1s", function() hive.test_bump() end)
   hive.ticker.every("1s", function() hive.test_bump() end)
@@ -161,26 +167,28 @@ return function(hive)
 end
 `)
 
-	time.Sleep(1200 * time.Millisecond)
-	require.Positive(t, h.counter.Load(), "tickers should have fired before close")
+		time.Sleep(1200 * time.Millisecond)
+		synctest.Wait()
+		require.Positive(t, h.counter.Load(), "tickers should have fired before close")
 
-	h.Close()
-	time.Sleep(200 * time.Millisecond) // let goroutines unwind
-	after := runtime.NumGoroutine()
+		h.Close()
+		synctest.Wait()
+		after := runtime.NumGoroutine()
 
-	// NumGoroutine is noisy; allow a small margin but flag obvious leaks.
-	assert.LessOrEqual(t, after, before+2,
-		"goroutine count should not grow appreciably after Close (before=%d, after=%d)", before, after)
+		// NumGoroutine is noisy; allow a small margin but flag obvious leaks.
+		assert.LessOrEqual(t, after, before+2,
+			"goroutine count should not grow appreciably after Close (before=%d, after=%d)", before, after)
+	})
 }
 
 func TestTickerEveryRejectsSubSecondDuration(t *testing.T) {
 	t.Parallel()
-
-	// The entrypoint asserts via pcall that the call errored with the
-	// expected message; the counter stays zero since no ticker registers.
-	root := t.TempDir()
-	entry := filepath.Join(root, "init.lua")
-	script := `
+	synctest.Test(t, func(t *testing.T) {
+		// The entrypoint asserts via pcall that the call errored with the
+		// expected message; the counter stays zero since no ticker registers.
+		root := t.TempDir()
+		entry := filepath.Join(root, "init.lua")
+		script := `
 return function(hive)
   local ok, err = pcall(hive.ticker.every, "500ms", function() hive.test_bump() end)
   if ok then
@@ -191,29 +199,31 @@ return function(hive)
   end
 end
 `
-	require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
+		require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
 
-	counter := &atomic.Int64{}
-	tickerModule := &TickerModule{PluginName: "lua-test"}
-	rt, err := NewRuntime(
-		root,
-		&LogModule{PluginName: "lua-test"},
-		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
-		&CommandsModule{},
-		tickerModule,
-		&bumpModule{counter: counter},
-	)
-	require.NoError(t, err)
-	tickerModule.Runtime = rt
-	t.Cleanup(func() {
-		_ = tickerModule.Close()
-		rt.Close()
+		counter := &atomic.Int64{}
+		tickerModule := &TickerModule{PluginName: "lua-test"}
+		rt, err := NewRuntime(
+			root,
+			&LogModule{PluginName: "lua-test"},
+			&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
+			&CommandsModule{},
+			tickerModule,
+			&bumpModule{counter: counter},
+		)
+		require.NoError(t, err)
+		tickerModule.Runtime = rt
+		t.Cleanup(func() {
+			_ = tickerModule.Close()
+			rt.Close()
+		})
+
+		fn, err := rt.LoadEntrypoint(entry)
+		require.NoError(t, err)
+		require.NoError(t, rt.CallEntrypoint(fn))
+
+		time.Sleep(1200 * time.Millisecond)
+		synctest.Wait()
+		assert.Equal(t, int64(0), counter.Load(), "no ticker should have been registered")
 	})
-
-	fn, err := rt.LoadEntrypoint(entry)
-	require.NoError(t, err)
-	require.NoError(t, rt.CallEntrypoint(fn))
-
-	time.Sleep(1200 * time.Millisecond)
-	assert.Equal(t, int64(0), counter.Load(), "no ticker should have been registered")
 }

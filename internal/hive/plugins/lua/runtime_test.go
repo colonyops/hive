@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/assert"
@@ -124,17 +125,18 @@ func TestRuntimeSubmitSerializesConcurrentCalls(t *testing.T) {
 
 func TestRuntimeSubmitAfterCloseIsNoOp(t *testing.T) {
 	t.Parallel()
+	synctest.Test(t, func(t *testing.T) {
+		rt := newBareRuntime(t)
+		rt.Close()
 
-	rt := newBareRuntime(t)
-	rt.Close()
+		// Twice to exercise the idempotent post-Close fast path.
+		require.NotPanics(t, func() {
+			rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
+			rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
+		})
 
-	// Twice to exercise the idempotent post-Close fast path.
-	require.NotPanics(t, func() {
-		rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
-		rt.Submit(func(_ *glua.LState) { t.Fatalf("closure must not run after Close") })
+		synctest.Wait()
 	})
-
-	time.Sleep(50 * time.Millisecond)
 }
 
 func TestRuntimeSubmitOnNilReceiverIsNoOp(t *testing.T) {
