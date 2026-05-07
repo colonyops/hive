@@ -35,8 +35,8 @@ Hive can load user commands from a local Lua entry file.
 ```yaml
 plugins:
   lua:
-    enabled: true                              # nil = auto-detect, false to disable
-    entry: ~/.config/hive/plugins/init.lua     # omit to use the default discovery path
+    enabled: true # nil = auto-detect, false to disable
+    entry: ~/.config/hive/plugins/init.lua # omit to use the default discovery path
 ```
 
 When `entry` is omitted, Hive checks `~/.config/hive/plugins/init.lua` automatically; a missing file there is silently ignored. When `entry` is set explicitly, the file must exist. Set `enabled: false` to keep the entry file on disk but skip loading it.
@@ -59,14 +59,14 @@ Hive loads helper modules relative to that entry file, so `require("commands.hel
 
 Supported command fields:
 
-| Field     | Type                  | Meaning |
-| --------- | --------------------- | ------- |
-| `sh`      | `string`              | Shell command template to execute. This is required. |
-| `help`    | `string`              | Help text shown in the command palette. |
+| Field     | Type                  | Meaning                                                                |
+| --------- | --------------------- | ---------------------------------------------------------------------- |
+| `sh`      | `string`              | Shell command template to execute. This is required.                   |
+| `help`    | `string`              | Help text shown in the command palette.                                |
 | `scope`   | `string[]`            | Views where the command is available. Omit it for global availability. |
-| `confirm` | `string`              | Confirmation prompt shown before execution. |
-| `silent`  | `boolean`             | Skip the loading popup for fast commands. |
-| `exit`    | `boolean` or `string` | Exit condition, using the same rules as normal user commands. |
+| `confirm` | `string`              | Confirmation prompt shown before execution.                            |
+| `silent`  | `boolean`             | Skip the loading popup for fast commands.                              |
+| `exit`    | `boolean` or `string` | Exit condition, using the same rules as normal user commands.          |
 
 Lua-backed commands are intentionally limited to shell-backed command registration. Fields such as `action`, `windows`, `options`, and `form` are not supported here.
 
@@ -136,11 +136,11 @@ Open the command palette with `:`, run `LuaHello`, and confirm that `.lua-plugin
 
 Schedule callbacks to run repeatedly or after a delay.
 
-| Function | Purpose |
-| -------- | ------- |
-| `hive.ticker.every(duration, fn)` | Run `fn` every `duration`. Returns a handle. |
+| Function                          | Purpose                                           |
+| --------------------------------- | ------------------------------------------------- |
+| `hive.ticker.every(duration, fn)` | Run `fn` every `duration`. Returns a handle.      |
 | `hive.ticker.after(duration, fn)` | Run `fn` once after `duration`. Returns a handle. |
-| `handle:cancel()` | Cancel the ticker. Idempotent. |
+| `handle:cancel()`                 | Cancel the ticker. Idempotent.                    |
 
 `duration` accepts any Go duration string (e.g. `"5s"`, `"1m30s"`).
 
@@ -173,11 +173,11 @@ end
 
 Encode and decode JSON values for IPC, config files, or HTTP integrations.
 
-| Function | Purpose |
-| -------- | ------- |
-| `hive.json.encode(value, opts?)` | Encode a Lua value to a JSON string. |
-| `hive.json.decode(string)` | Decode a JSON string to a Lua value. |
-| `hive.json.array(table)` | Tag a Lua table so it always encodes as a JSON array. |
+| Function                         | Purpose                                               |
+| -------------------------------- | ----------------------------------------------------- |
+| `hive.json.encode(value, opts?)` | Encode a Lua value to a JSON string.                  |
+| `hive.json.decode(string)`       | Decode a JSON string to a Lua value.                  |
+| `hive.json.array(table)`         | Tag a Lua table so it always encodes as a JSON array. |
 
 `opts` is an optional table. Set `pretty = true` to pretty-print the output with two-space indentation.
 
@@ -247,18 +247,18 @@ The Claude plugin provides integration with Claude Code sessions — forking ses
 ```yaml
 plugins:
   claude:
-    enabled: true        # auto-detected (requires `claude` CLI)
-    cache_ttl: 30s       # status cache duration
+    enabled: true # auto-detected (requires `claude` CLI)
+    cache_ttl: 30s # status cache duration
     yellow_threshold: 60 # yellow warning above this % (default: 60)
-    red_threshold: 80    # red warning above this % (default: 80)
-    model_limit: 200000  # context token limit (default: 200000)
+    red_threshold: 80 # red warning above this % (default: 80)
+    model_limit: 200000 # context token limit (default: 200000)
 ```
 
 ### Commands Provided
 
-| Command      | Description                      | Default Key |
-| ------------ | -------------------------------- | ----------- |
-| `ClaudeFork` | Fork Claude session in new window | —          |
+| Command      | Description                       | Default Key |
+| ------------ | --------------------------------- | ----------- |
+| `ClaudeFork` | Fork Claude session in new window | —           |
 
 ### Context Analytics
 
@@ -290,8 +290,8 @@ The GitHub plugin provides PR status display and GitHub CLI commands. Auto-detec
 ```yaml
 plugins:
   github:
-    enabled: true      # auto-detected (requires `gh` CLI)
-    results_cache: 8m  # how often to refresh PR status (default: 8m)
+    enabled: true # auto-detected (requires `gh` CLI)
+    results_cache: 8m # how often to refresh PR status (default: 8m)
 ```
 
 ### Commands Provided
@@ -307,12 +307,12 @@ plugins:
 
 Sessions with an associated PR show a status indicator:
 
-| Label    | Color   | Meaning          |
-| -------- | ------- | ---------------- |
-| `PR open`   | Green   | PR is open       |
-| `PR draft`  | Muted   | PR is a draft    |
-| `PR merged` | Primary | PR was merged    |
-| `PR closed` | Muted   | PR was closed    |
+| Label       | Color   | Meaning       |
+| ----------- | ------- | ------------- |
+| `PR open`   | Green   | PR is open    |
+| `PR draft`  | Muted   | PR is a draft |
+| `PR merged` | Primary | PR was merged |
+| `PR closed` | Muted   | PR was closed |
 
 ## Beads Plugin
 
@@ -321,8 +321,8 @@ The Beads plugin provides issue tracking integration with the `bd` (beads) CLI. 
 ```yaml
 plugins:
   beads:
-    enabled: true        # auto-detected (requires `bd` CLI)
-    results_cache: 30s   # how often to refresh issue counts (default: 30s)
+    enabled: true # auto-detected (requires `bd` CLI)
+    results_cache: 30s # how often to refresh issue counts (default: 30s)
 ```
 
 ### Commands Provided
@@ -339,10 +339,10 @@ plugins:
 
 Sessions with a `.beads` directory show issue progress:
 
-| Display  | Color   | Meaning                    |
-| -------- | ------- | -------------------------- |
-| `BD 3/5` | Primary | 3 of 5 issues closed       |
-| `BD 5/5` | Green   | All issues closed          |
+| Display  | Color   | Meaning              |
+| -------- | ------- | -------------------- |
+| `BD 3/5` | Primary | 3 of 5 issues closed |
+| `BD 5/5` | Green   | All issues closed    |
 
 ## LazyGit Plugin
 
@@ -351,15 +351,15 @@ The lazygit plugin provides commands to open lazygit in a tmux popup. Auto-detec
 ```yaml
 plugins:
   lazygit:
-    enabled: true  # auto-detected (requires `lazygit`)
+    enabled: true # auto-detected (requires `lazygit`)
 ```
 
 ### Commands Provided
 
-| Command          | Description                 | Default Key |
-| ---------------- | --------------------------- | ----------- |
-| `LazyGitOpen`    | Open lazygit (full popup)   | —           |
-| `LazyGitCommits` | Open lazygit commit log     | —           |
+| Command          | Description               | Default Key |
+| ---------------- | ------------------------- | ----------- |
+| `LazyGitOpen`    | Open lazygit (full popup) | —           |
+| `LazyGitCommits` | Open lazygit commit log   | —           |
 
 ## Neovim Plugin
 
@@ -368,14 +368,14 @@ The neovim plugin provides a command to open neovim in the session's tmux sessio
 ```yaml
 plugins:
   neovim:
-    enabled: true  # auto-detected (requires `nvim`)
+    enabled: true # auto-detected (requires `nvim`)
 ```
 
 ### Commands Provided
 
-| Command      | Description                          | Default Key |
-| ------------ | ------------------------------------ | ----------- |
-| `NeovimOpen` | Open neovim in new tmux window       | —           |
+| Command      | Description                    | Default Key |
+| ------------ | ------------------------------ | ----------- |
+| `NeovimOpen` | Open neovim in new tmux window | —           |
 
 ## Context Directory Plugin
 
@@ -384,7 +384,7 @@ The context directory plugin provides commands to open context directories in th
 ```yaml
 plugins:
   contextdir:
-    enabled: true  # always available on macOS/Linux
+    enabled: true # always available on macOS/Linux
 ```
 
 ### Commands Provided
