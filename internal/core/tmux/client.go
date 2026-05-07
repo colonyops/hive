@@ -62,6 +62,9 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 		return fmt.Errorf("tmux new-session: %w; output: %s", err, strings.TrimSpace(string(out)))
 	}
 
+	// Tag the initial pane for hive-managed pane identification.
+	c.tagPanesWithSession(ctx, name, name)
+
 	// Suppress interactive hooks (e.g. after-new-window command-prompt) that
 	// block the tmux server waiting for input that will never arrive when
 	// windows are created programmatically.
@@ -82,6 +85,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
 			return fmt.Errorf("tmux new-window %q: %w; output: %s", w.Name, err, strings.TrimSpace(string(out)))
 		}
+		c.tagPanesWithSession(ctx, name+":"+w.Name, name)
 	}
 
 	// Select the focused window (default to first).
@@ -119,6 +123,7 @@ func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows [
 		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
 			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
 		}
+		c.tagPanesWithSession(ctx, name+":"+w.Name, name)
 	}
 	for _, w := range windows {
 		if w.Focus {
@@ -164,6 +169,23 @@ func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows 
 		return c.AttachOrSwitch(ctx, name)
 	}
 	return c.CreateSession(ctx, name, workDir, windows, background)
+}
+
+// tagPanesWithSession sets @hive-session on the active pane so list-panes can
+// identify hive-managed panes. Errors are non-fatal — tagging is best-effort.
+func (c *Client) tagPanesWithSession(ctx context.Context, sessionTarget, slug string) {
+	if _, err := c.exec.Run(ctx, "tmux", "set-option", "-p", "-t", sessionTarget, "@hive-session", slug); err != nil {
+		c.log.Debug().Err(err).Str("target", sessionTarget).Msg("failed to tag pane with @hive-session")
+	}
+}
+
+// QueryPaneID returns the pane ID of the active pane in the named tmux session.
+func (c *Client) QueryPaneID(ctx context.Context, sessionName string) (string, error) {
+	out, err := c.exec.Run(ctx, "tmux", "display-message", "-t", sessionName, "-p", "#{pane_id}")
+	if err != nil {
+		return "", fmt.Errorf("tmux query pane id: %w", err)
+	}
+	return strings.TrimSpace(string(out)), nil
 }
 
 // suppressInteractiveHooks sets session-level overrides to neutralise global
