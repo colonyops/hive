@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 )
 
 const terminalStatusTimeout = 2 * time.Second
@@ -99,7 +100,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	if sess.Path != "" {
 		metadata = make(map[string]string, len(sess.Metadata)+1)
 		maps.Copy(metadata, sess.Metadata)
-		metadata["_session_path"] = sess.Path
+		metadata[terminaltmux.SessionPathKey] = sess.Path
 	}
 
 	// Try to discover terminal session

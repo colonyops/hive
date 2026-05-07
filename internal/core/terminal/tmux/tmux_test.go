@@ -144,30 +144,28 @@ func TestSessionInfoFromWindow(t *testing.T) {
 	integ := New(nil)
 
 	t.Run("nil window", func(t *testing.T) {
-		sc := &sessionCache{}
-		info := integ.sessionInfoFromWindow("mysess", sc, nil)
+		info := integ.sessionInfoFromWindow("mysess", nil)
 		assert.Equal(t, "mysess", info.Name)
 		assert.Empty(t, info.WindowIndex)
 		assert.Empty(t, info.WindowName)
 	})
 
 	t.Run("single window sets WindowName", func(t *testing.T) {
-		w := &agentWindow{windowIndex: "2", windowName: "claude"}
-		sc := &sessionCache{agentWindows: []*agentWindow{w}}
-		info := integ.sessionInfoFromWindow("mysess", sc, w)
+		w := &agentWindow{windowIndex: "2", windowName: "claude", primaryPaneID: "%5"}
+		info := integ.sessionInfoFromWindow("mysess", w)
 		assert.Equal(t, "mysess", info.Name)
 		assert.Equal(t, "2", info.WindowIndex)
 		assert.Equal(t, "claude", info.WindowName)
+		assert.Equal(t, "%5", info.PaneID)
 	})
 
 	t.Run("multi window sets WindowName", func(t *testing.T) {
-		w1 := &agentWindow{windowIndex: "0", windowName: "claude"}
-		w2 := &agentWindow{windowIndex: "1", windowName: "aider"}
-		sc := &sessionCache{agentWindows: []*agentWindow{w1, w2}}
-		info := integ.sessionInfoFromWindow("mysess", sc, w2)
+		w2 := &agentWindow{windowIndex: "1", windowName: "aider", primaryPaneID: "%9"}
+		info := integ.sessionInfoFromWindow("mysess", w2)
 		assert.Equal(t, "mysess", info.Name)
 		assert.Equal(t, "1", info.WindowIndex)
 		assert.Equal(t, "aider", info.WindowName)
+		assert.Equal(t, "%9", info.PaneID)
 	})
 }
 
@@ -189,7 +187,7 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 
 	t.Run("path match selects correct window", func(t *testing.T) {
 		info, err := integ.DiscoverSession(ctx, "my-session", map[string]string{
-			sessionPathKey: "/project-b",
+			SessionPathKey: "/project-b",
 		})
 		require.NoError(t, err)
 		require.NotNil(t, info, "expected info")
@@ -203,7 +201,7 @@ func TestDiscoverSession_MultiWindow(t *testing.T) {
 		integ.cache["my-session"].agentWindows[1].activity = 100
 
 		info, err := integ.DiscoverSession(ctx, "my-session", map[string]string{
-			sessionPathKey: "/nonexistent",
+			SessionPathKey: "/nonexistent",
 		})
 		require.NoError(t, err)
 		require.NotNil(t, info, "expected info")
@@ -353,7 +351,7 @@ func TestDiscoverSession_ExplicitTmuxSessionMeta(t *testing.T) {
 	t.Run("explicit MetaTmuxSession metadata finds session", func(t *testing.T) {
 		// MetaTmuxSession stores the actual tmux session name used at creation.
 		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{
-			sessionPathKey: "/some/path",
+			SessionPathKey: "/some/path",
 			"tmux_session": "My Feature",
 		})
 		require.NoError(t, err)

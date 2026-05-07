@@ -104,57 +104,93 @@ func (t *Integration) Available() bool {
 	return t.available
 }
 
-// paneRecord holds per-pane data from a single list-panes output line.
-type paneRecord struct {
+// listPanesFormat is the tab-delimited format used for `tmux list-panes -a`.
+// Fields, in order: session_name, window_index, window_name, pane_current_path,
+// window_activity, pane_id, pane_pid, @hive-session.
+const listPanesFormat = "#{session_name}\t#{window_index}\t#{window_name}\t" +
+	"#{pane_current_path}\t#{window_activity}\t#{pane_id}\t#{pane_pid}\t#{@hive-session}"
+
+// paneLine is the parsed form of one line of `tmux list-panes` output.
+type paneLine struct {
+	sessName    string
+	winIdx      string
+	winName     string
+	workDir     string
+	activity    int64
 	paneID      string
 	panePID     int64
 	hiveSession string // value of @hive-session option, empty if untagged
 }
 
-// parsePaneLine parses one tab-delimited line from `tmux list-panes -a`.
-// Expected format: session\twinIdx\twinName\tworkDir\tactivity\tpaneID\tpanePID\t@hive-session
-// Returns ok=false if the line has fewer than 6 fields.
-func parsePaneLine(line string) (sessName, winIdx, winName, workDir string, activity int64, rec paneRecord, ok bool) {
+// parsePaneLine parses one tab-delimited line in listPanesFormat. Returns
+// ok=false if the line has fewer than the minimum required fields.
+func parsePaneLine(line string) (paneLine, bool) {
 	parts := strings.SplitN(line, "\t", 8)
 	if len(parts) < 6 {
-		return "", "", "", "", 0, paneRecord{}, false
+		return paneLine{}, false
 	}
-	sessName, winIdx, winName, workDir = parts[0], parts[1], parts[2], parts[3]
-	_, _ = fmt.Sscanf(parts[4], "%d", &activity)
-	rec.paneID = parts[5]
+	pl := paneLine{
+		sessName: parts[0],
+		winIdx:   parts[1],
+		winName:  parts[2],
+		workDir:  parts[3],
+		paneID:   parts[5],
+	}
+	_, _ = fmt.Sscanf(parts[4], "%d", &pl.activity)
 	if len(parts) >= 7 {
-		_, _ = fmt.Sscanf(parts[6], "%d", &rec.panePID)
+		_, _ = fmt.Sscanf(parts[6], "%d", &pl.panePID)
 	}
 	if len(parts) >= 8 {
-		rec.hiveSession = strings.TrimSpace(parts[7])
+		pl.hiveSession = strings.TrimSpace(parts[7])
 	}
-	return sessName, winIdx, winName, workDir, activity, rec, true
+	return pl, true
 }
 
 // selectPrimary picks the primary pane from a window's pane list.
-// The primary is the first pane tagged with @hive-session; falls back to the
-// first pane if none are tagged.
-func selectPrimary(panes []paneRecord) (primaryPaneID string, panePID int64, allPaneIDs []string) {
+// Preference order:
+//  1. Pane whose @hive-session tag equals expectedSlug (the hive session that
+//     created this window), surviving user-initiated splits where tmux may
+//     propagate pane-local options to new siblings.
+//  2. Any pane with a non-empty @hive-session tag.
+//  3. The first pane in list order.
+func selectPrimary(panes []paneLine, expectedSlug string) (primaryPaneID string, panePID int64, allPaneIDs []string) {
 	allPaneIDs = make([]string, 0, len(panes))
+	var taggedID string
+	var taggedPID int64
+	var matchedID string
+	var matchedPID int64
 	for _, p := range panes {
 		allPaneIDs = append(allPaneIDs, p.paneID)
-		if primaryPaneID == "" && p.hiveSession != "" {
-			primaryPaneID = p.paneID
-			panePID = p.panePID
+		if p.hiveSession == "" {
+			continue
+		}
+		if taggedID == "" {
+			taggedID = p.paneID
+			taggedPID = p.panePID
+		}
+		if expectedSlug != "" && matchedID == "" && p.hiveSession == expectedSlug {
+			matchedID = p.paneID
+			matchedPID = p.panePID
 		}
 	}
-	if primaryPaneID == "" && len(panes) > 0 {
-		primaryPaneID = panes[0].paneID
-		panePID = panes[0].panePID
+	switch {
+	case matchedID != "":
+		return matchedID, matchedPID, allPaneIDs
+	case taggedID != "":
+		return taggedID, taggedPID, allPaneIDs
+	case len(panes) > 0:
+		return panes[0].paneID, panes[0].panePID, allPaneIDs
 	}
-	return primaryPaneID, panePID, allPaneIDs
+	return "", 0, allPaneIDs
 }
 
 // RefreshCache updates the cached session list. Call once per poll cycle.
 func (t *Integration) RefreshCache() {
-	cmd := exec.Command("tmux", "list-panes", "-a", "-F",
-		"#{session_name}\t#{window_index}\t#{window_name}\t#{pane_current_path}\t#{window_activity}\t#{pane_id}\t#{pane_pid}\t#{@hive-session}")
-	output, err := cmd.Output()
+	t.refreshCache(context.Background())
+}
+
+func (t *Integration) refreshCache(ctx context.Context) {
+	output, err := exec.CommandContext(ctx, "tmux", "list-panes", "-a", "-F", listPanesFormat).Output()
 	if err != nil {
 		log.Debug().Err(err).Msg("tmux list-panes failed, clearing cache")
 		t.mu.Lock()
@@ -188,10 +224,9 @@ func (t *Integration) RefreshCache() {
 		windowName string
 		workDir    string
 		activity   int64
-		panes      []paneRecord
+		panes      []paneLine
 	}
 
-	// First pass: collect panes grouped by "sessionName:windowIndex".
 	type windowKey struct{ session, index string }
 	accumMap := make(map[windowKey]*windowAccum)
 	var order []windowKey // preserve insertion order for deterministic output
@@ -200,21 +235,20 @@ func (t *Integration) RefreshCache() {
 		if line == "" {
 			continue
 		}
-		sessName, winIdx, winName, workDir, activity, rec, ok := parsePaneLine(line)
+		pl, ok := parsePaneLine(line)
 		if !ok {
 			continue
 		}
-		key := windowKey{sessName, winIdx}
+		key := windowKey{pl.sessName, pl.winIdx}
 		acc := accumMap[key]
 		if acc == nil {
-			acc = &windowAccum{windowName: winName, workDir: workDir, activity: activity}
+			acc = &windowAccum{windowName: pl.winName, workDir: pl.workDir, activity: pl.activity}
 			accumMap[key] = acc
 			order = append(order, key)
 		}
-		acc.panes = append(acc.panes, rec)
+		acc.panes = append(acc.panes, pl)
 	}
 
-	// Second pass: convert accumulators to agentWindow, grouped by tmux session.
 	type windowEntry struct {
 		window    *agentWindow
 		preferred bool
@@ -223,7 +257,9 @@ func (t *Integration) RefreshCache() {
 
 	for _, key := range order {
 		acc := accumMap[key]
-		primaryPaneID, panePID, allPaneIDs := selectPrimary(acc.panes)
+		// expectedSlug is the tmux session name; tagPanesWithSession writes the
+		// session slug into @hive-session, so they match for hive-managed panes.
+		primaryPaneID, panePID, allPaneIDs := selectPrimary(acc.panes, key.session)
 
 		w := &agentWindow{
 			windowIndex:   key.index,
@@ -235,7 +271,6 @@ func (t *Integration) RefreshCache() {
 			activity:      acc.activity,
 		}
 
-		// Carry over cached content
 		if snap, ok := oldWindows[key.session+":"+key.index]; ok {
 			w.paneContent = snap.paneContent
 			w.lastCaptureActive = snap.lastCaptureActive
@@ -246,7 +281,8 @@ func (t *Integration) RefreshCache() {
 		collected[key.session] = append(collected[key.session], windowEntry{window: w, preferred: isPreferred})
 	}
 
-	// Third pass: same preferred-window filtering as before.
+	// Filter to preferred windows when any match; otherwise keep the
+	// highest-activity window.
 	newCache := make(map[string]*sessionCache, len(collected))
 	for sessionName, entries := range collected {
 		hasPreferred := false
@@ -293,8 +329,9 @@ func (t *Integration) matchesPreferredWindow(windowName string) bool {
 	return false
 }
 
-// sessionPathKey is the metadata key injected by the TUI to pass session path for multi-window matching.
-const sessionPathKey = "_session_path"
+// SessionPathKey is the metadata key callers inject to pass session path for
+// multi-window disambiguation. Lives here because tmux is its only consumer.
+const SessionPathKey = "_session_path"
 
 // findSessionCache locates the sessionCache for a slug using metadata or exact match.
 // Must be called with t.mu held (read or write). Returns the session name and cache, or ("", nil).
@@ -325,23 +362,19 @@ func (t *Integration) DiscoverSession(_ context.Context, slug string, metadata m
 		return nil, nil
 	}
 
-	// If explicit window given, use it directly (check new key first, then legacy key).
-	pane := metadata[session.MetaTmuxWindow]
-	if pane == "" {
-		pane = metadata["tmux_pane"] // migration fallback for legacy sessions
-	}
-	if pane != "" {
-		w := sc.findWindow(pane)
+	// If explicit window given, use it directly.
+	if windowIdx := metadata[session.MetaTmuxWindow]; windowIdx != "" {
+		w := sc.findWindow(windowIdx)
 		if w == nil {
-			log.Debug().Str("session", sessionName).Str("pane", pane).Msg("explicit pane not found, falling back to best window")
+			log.Debug().Str("session", sessionName).Str("window", windowIdx).Msg("explicit window not found, falling back to best window")
 			w = sc.bestWindow()
 		}
-		return t.sessionInfoFromWindow(sessionName, sc, w), nil
+		return t.sessionInfoFromWindow(sessionName, w), nil
 	}
 
 	// Multi-window disambiguation
-	w := t.disambiguateWindow(sc, metadata[sessionPathKey], slug)
-	return t.sessionInfoFromWindow(sessionName, sc, w), nil
+	w := t.disambiguateWindow(sc, metadata[SessionPathKey], slug)
+	return t.sessionInfoFromWindow(sessionName, w), nil
 }
 
 // disambiguateWindow selects the best window from a multi-window session cache.
@@ -381,7 +414,7 @@ func (t *Integration) disambiguateWindow(sc *sessionCache, sessionPath, slug str
 // sessionInfoFromWindow builds a SessionInfo from a matched agentWindow.
 // WindowName is always set so that template variables (e.g., .TmuxWindow) are
 // populated regardless of whether the session has one or many windows.
-func (t *Integration) sessionInfoFromWindow(sessionName string, _ *sessionCache, w *agentWindow) *terminal.SessionInfo {
+func (t *Integration) sessionInfoFromWindow(sessionName string, w *agentWindow) *terminal.SessionInfo {
 	if w == nil {
 		return &terminal.SessionInfo{Name: sessionName}
 	}
@@ -448,8 +481,8 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		// Activity changed but rate limited, use cached content
 		content = prevContent
 	default:
-		// Activity changed and rate limit allows, capture fresh.
-		// Use pane ID directly if available (Phase 2+), else fall back to session:window.
+		// Prefer the pane ID for capture so multi-pane windows hit the right
+		// pane; fall back to session:window if the cache has no pane ID yet.
 		captureTarget := sessionName + ":" + windowIndex
 		if primaryPaneID != "" {
 			captureTarget = primaryPaneID
@@ -481,20 +514,21 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return cachedStatus, nil
 	}
 
-	// Detect tool if not already set.
-	// First try process-tree identification (more reliable than text patterns),
-	// then fall back to text-pattern detection.
+	// Identify the agent. Process-tree detection is preferred when it returns
+	// a known agent (more reliable than text patterns), but Identify returns
+	// "" when it can't classify the foreground process — in that case we fall
+	// back to content-based detection so wrappers like `sh -c claude` and
+	// hardened-runtime panes still resolve to the right tool-specific detector.
 	tool := info.DetectedTool
 	if tool == "" && panePID > 0 {
 		if proc, procErr := process.Identify(int(panePID)); procErr == nil && proc != nil {
 			tool = proc.Tool
-			info.DetectedTool = tool
 		}
 	}
 	if tool == "" {
 		tool = terminal.DetectTool(content)
-		info.DetectedTool = tool
 	}
+	info.DetectedTool = tool
 
 	// Get or create state tracker for this window
 	t.mu.Lock()
@@ -505,7 +539,6 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	}
 	t.mu.Unlock()
 
-	// Use state tracker to determine status with spike detection
 	detector := terminal.NewDetector(tool)
 	status := tracker.Update(content, activity, detector)
 
@@ -524,15 +557,13 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 
 // capturePane captures the content of a tmux pane identified by target.
 // target may be a pane ID (e.g. "%0") or a session:window address.
-func (t *Integration) capturePane(_ context.Context, target string) (string, error) {
+func (t *Integration) capturePane(ctx context.Context, target string) (string, error) {
 	// -p: print to stdout
 	// -J: join wrapped lines and trim trailing spaces
-	cmd := exec.Command("tmux", "capture-pane", "-t", target, "-p", "-J")
-	output, err := cmd.Output()
+	output, err := exec.CommandContext(ctx, "tmux", "capture-pane", "-t", target, "-p", "-J").Output()
 	if err != nil {
 		return "", fmt.Errorf("capture-pane failed: %w", err)
 	}
-
 	return string(output), nil
 }
 
@@ -567,10 +598,8 @@ func (t *Integration) DiscoverAllWindows(_ context.Context, slug string, metadat
 
 // DiscoverAllPanes enumerates every pane across all tmux sessions for diagnostics.
 // Results are not cached and do not affect RefreshCache state.
-func (t *Integration) DiscoverAllPanes(_ context.Context) ([]terminal.PaneDetail, error) {
-	cmd := exec.Command("tmux", "list-panes", "-a", "-F",
-		"#{session_name}\t#{window_index}\t#{window_name}\t#{pane_id}\t#{pane_pid}\t#{@hive-session}")
-	output, err := cmd.Output()
+func (t *Integration) DiscoverAllPanes(ctx context.Context) ([]terminal.PaneDetail, error) {
+	output, err := exec.CommandContext(ctx, "tmux", "list-panes", "-a", "-F", listPanesFormat).Output()
 	if err != nil {
 		return nil, fmt.Errorf("list-panes: %w", err)
 	}
@@ -580,21 +609,17 @@ func (t *Integration) DiscoverAllPanes(_ context.Context) ([]terminal.PaneDetail
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 6)
-		if len(parts) < 4 {
+		pl, ok := parsePaneLine(line)
+		if !ok {
 			continue
 		}
 		pd := terminal.PaneDetail{
-			TmuxSession: parts[0],
-			WindowIndex: parts[1],
-			WindowName:  parts[2],
-			PaneID:      parts[3],
-		}
-		if len(parts) >= 5 {
-			_, _ = fmt.Sscanf(parts[4], "%d", &pd.PanePID)
-		}
-		if len(parts) >= 6 {
-			pd.HiveSession = strings.TrimSpace(parts[5])
+			TmuxSession: pl.sessName,
+			WindowIndex: pl.winIdx,
+			WindowName:  pl.winName,
+			PaneID:      pl.paneID,
+			PanePID:     pl.panePID,
+			HiveSession: pl.hiveSession,
 		}
 
 		// Enrich with process-tree identification (non-fatal if unavailable).
@@ -612,6 +637,3 @@ func (t *Integration) DiscoverAllPanes(_ context.Context) ([]terminal.PaneDetail
 
 // Ensure Integration implements terminal.Integration.
 var _ terminal.Integration = (*Integration)(nil)
-
-// Ensure Integration implements terminal.AllPanesDiscoverer.
-var _ terminal.AllPanesDiscoverer = (*Integration)(nil)

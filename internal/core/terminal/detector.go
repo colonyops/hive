@@ -279,46 +279,16 @@ func (d *Detector) DetectStatus(content string) Status {
 }
 
 // DetectTool attempts to identify the AI tool from terminal content.
+// Returns "shell" if no known agent's keywords appear in content.
 func DetectTool(content string) string {
 	lower := strings.ToLower(content)
-
-	patterns := map[string][]string{
-		"claude": {
-			"claude",
-			"anthropic",
-			"ctrl+c to interrupt",
-		},
-		"cursor": {
-			"cursor",
-		},
-		"crush": {
-			"crush",
-		},
-		"agent": {
-			"agent",
-		},
-		"gemini": {
-			"gemini",
-			"google ai",
-		},
-		"opencode": {
-			"opencode",
-			"open code",
-		},
-		"codex": {
-			"codex",
-			"openai",
-		},
-	}
-
-	for tool, keywords := range patterns {
-		for _, keyword := range keywords {
-			if strings.Contains(lower, keyword) {
-				return tool
+	for _, a := range KnownAgents {
+		for _, kw := range a.ContentKeywords {
+			if strings.Contains(lower, kw) {
+				return a.Name
 			}
 		}
 	}
-
 	return "shell"
 }
 
