@@ -169,6 +169,56 @@ end
 !!! note "Shutdown cancels everything"
     When hive shuts down or the plugin is reloaded, every outstanding ticker is cancelled and its callback is released for GC.
 
+### hive.json
+
+Encode and decode JSON values for IPC, config files, or HTTP integrations.
+
+| Function | Purpose |
+| -------- | ------- |
+| `hive.json.encode(value, opts?)` | Encode a Lua value to a JSON string. |
+| `hive.json.decode(string)` | Decode a JSON string to a Lua value. |
+| `hive.json.array(table)` | Tag a Lua table so it always encodes as a JSON array. |
+
+`opts` is an optional table. Set `pretty = true` to pretty-print the output with two-space indentation.
+
+```lua
+return function(hive)
+  local payload = hive.json.encode({
+    sessions = { "alpha", "beta" },
+    count    = 2,
+  }, { pretty = true })
+  hive.log.info(payload)
+
+  local decoded = hive.json.decode('{"foo":[1,2,3]}')
+  hive.log.info("first item: " .. tostring(decoded.foo[1]))
+end
+```
+
+#### Array vs object detection
+
+A Lua table encodes as a JSON array when:
+
+1. It was passed through `hive.json.array(...)`, **or**
+2. Every key is a positive integer `1..n` with no holes.
+
+Otherwise it encodes as a JSON object. Empty unmarked tables encode as `{}` because Lua cannot distinguish "empty array" from "empty object" without a hint:
+
+```lua
+hive.json.encode({})                      -- "{}"
+hive.json.encode(hive.json.array({}))     -- "[]"
+```
+
+Decoding `[]` from JSON produces a marked table, so `decode` followed by `encode` round-trips empty arrays as `[]` rather than `{}`.
+
+!!! warning "Number precision"
+    All Lua numbers are 64-bit floats, so integer values larger than 2^53 (≈ 9 × 10^15) lose precision on the round-trip. If you need full-width integer fidelity, encode such values as strings.
+
+!!! note "JSON null becomes Lua nil"
+    JSON `null` decodes to `nil`, which Lua treats as "field absent". A re-encode of a decoded object will therefore omit any field that was originally `null`. There is no `hive.json.null` sentinel in this release.
+
+!!! warning "Cycles raise an error"
+    `encode` rejects self-referencing tables with a Lua error. Detect cycles before encoding if your data may contain back-references.
+
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.
