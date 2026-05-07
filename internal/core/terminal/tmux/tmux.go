@@ -14,6 +14,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/process"
 )
 
 // Integration implements terminal.Integration for tmux.
@@ -415,6 +416,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	windowIndex := w.windowIndex
 	primaryPaneID := w.primaryPaneID
 	sessionName := info.Name
+	panePID := w.panePID
 	t.mu.RUnlock()
 
 	// Get or create rate limiter for this window
@@ -469,8 +471,16 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		return cachedStatus, nil
 	}
 
-	// Detect tool if not already set
+	// Detect tool if not already set.
+	// First try process-tree identification (more reliable than text patterns),
+	// then fall back to text-pattern detection.
 	tool := info.DetectedTool
+	if tool == "" && panePID > 0 {
+		if proc, procErr := process.Identify(int(panePID)); procErr == nil && proc != nil {
+			tool = proc.Tool
+			info.DetectedTool = tool
+		}
+	}
 	if tool == "" {
 		tool = terminal.DetectTool(content)
 		info.DetectedTool = tool
