@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/hookstatus"
 )
 
 const terminalStatusTimeout = 2 * time.Second
@@ -19,6 +20,7 @@ const terminalStatusTimeout = 2 * time.Second
 type WindowStatus struct {
 	WindowIndex string
 	WindowName  string
+	PaneID      string // tmux pane ID in %N format (for hook KV lookup)
 	Status      terminal.Status
 	Tool        string
 	PaneContent string
@@ -44,7 +46,7 @@ type TerminalStatusBatchCompleteMsg struct {
 type TerminalPollTickMsg struct{}
 
 // FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
-func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
+func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int, hookStore *hookstatus.Store) tea.Cmd {
 	if len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
 		return nil
 	}
@@ -75,7 +77,7 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 				ctx, cancel := context.WithTimeout(context.Background(), terminalStatusTimeout)
 				defer cancel()
 
-				status := fetchTerminalStatusForSession(ctx, mgr, s)
+				status := fetchTerminalStatusForSession(ctx, mgr, s, hookStore)
 
 				mu.Lock()
 				results[s.ID] = status
@@ -89,7 +91,7 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 }
 
 // fetchTerminalStatusForSession fetches terminal status for a single session.
-func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session) TerminalStatus {
+func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session, hookStore *hookstatus.Store) TerminalStatus {
 	status := TerminalStatus{
 		Status: terminal.StatusMissing,
 	}
@@ -122,6 +124,23 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 		return status
 	}
 
+	// Check hook KV for a fresher status written by hooks.
+	// Primary key: pane ID; legacy fallback: window index (pre-Phase-2 sessions).
+	if hookStore != nil {
+		const maxAge = 30 * time.Second
+		paneKey := info.PaneID
+		if paneKey == "" {
+			paneKey = info.WindowIndex // legacy fallback
+		}
+		if paneKey != "" {
+			if hookStatus, ok := hookStore.Read(ctx, sess.ID, paneKey); ok {
+				if hookStore.IsFresh(ctx, sess.ID, paneKey, maxAge) {
+					termStatus = hookStatus
+				}
+			}
+		}
+	}
+
 	status.Status = termStatus
 	status.Tool = info.DetectedTool
 	status.WindowName = info.WindowName
@@ -144,6 +163,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 				windows = append(windows, WindowStatus{
 					WindowIndex: wi.WindowIndex,
 					WindowName:  wi.WindowName,
+					PaneID:      wi.PaneID,
 					Status:      wStatus,
 					Tool:        wi.DetectedTool,
 					PaneContent: wi.PaneContent,

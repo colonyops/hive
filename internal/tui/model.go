@@ -25,6 +25,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/hookstatus"
 
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -242,6 +243,11 @@ func New(deps Deps, opts Opts) Model {
 	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
 
+	var hookStore *hookstatus.Store
+	if deps.KVStore != nil {
+		hookStore = hookstatus.New(deps.KVStore)
+	}
+
 	sessionsView := sessions.New(sessions.ViewOpts{
 		Cfg:             cfg,
 		Service:         service,
@@ -252,6 +258,7 @@ func New(deps Deps, opts Opts) Model {
 		Workspaces:      cfg.Workspaces,
 		Renderer:        deps.Renderer,
 		Bus:             deps.Bus,
+		HookStore:       hookStore,
 	})
 
 	// Wire handler lookups through sessions view stores

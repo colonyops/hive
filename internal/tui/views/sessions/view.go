@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/hookstatus"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
@@ -50,6 +51,7 @@ type ViewOpts struct {
 	Workspaces  []string
 	Renderer    *tmpl.Renderer
 	Bus         *eventbus.EventBus
+	HookStore   *hookstatus.Store // Optional — nil disables hook KV status checks
 }
 
 // View is the Bubble Tea sub-model for the sessions tab.
@@ -76,6 +78,7 @@ type View struct {
 	// Terminal integration
 	terminalManager    *terminal.Manager
 	terminalStatuses   *kv.Store[string, TerminalStatus]
+	hookStore          *hookstatus.Store
 	previewEnabled     bool
 	previewTemplates   *PreviewTemplates
 	currentTmuxSession string
@@ -190,6 +193,7 @@ func New(opts ViewOpts) *View {
 
 		terminalManager:    opts.TerminalManager,
 		terminalStatuses:   terminalStatuses,
+		hookStore:          opts.HookStore,
 		previewEnabled:     cfg.Views.Sessions.PreviewEnabled,
 		previewTemplates:   previewTemplates,
 		currentTmuxSession: currentTmux,
@@ -291,7 +295,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		for i := range v.allSessions {
 			sessPtrs[i] = &v.allSessions[i]
 		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.hookStore))
 	}
 	return tea.Batch(cmds...)
 }
@@ -344,7 +348,7 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.hookStore))
 	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}
