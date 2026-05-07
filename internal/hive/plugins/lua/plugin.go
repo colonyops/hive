@@ -50,6 +50,7 @@ func (p *Plugin) Init(_ context.Context) error {
 		},
 		cmdModule,
 		tickerModule,
+		&JSONModule{},
 	}
 
 	runtime, err := NewRuntime(p.cfg.ModuleRoot(), modules...)
