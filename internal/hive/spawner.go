@@ -20,7 +20,6 @@ type SessionClient interface {
 	OpenSession(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow, background bool, targetWindow string) error
 	AddWindows(ctx context.Context, name, workDir string, windows []coretmux.RenderedWindow) error
 	AttachOrSwitch(ctx context.Context, name string) error
-	QueryPaneID(ctx context.Context, sessionName string) (string, error)
 }
 
 // SpawnData is the template context for spawn commands.

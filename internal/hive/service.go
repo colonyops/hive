@@ -340,15 +340,6 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
-			// Persist pane ID so the TUI can target the exact pane.
-			if paneID, qErr := s.spawner.tmux.QueryPaneID(ctx, sess.Slug); qErr == nil && paneID != "" {
-				sess.SetMeta(session.MetaTmuxPaneID, paneID)
-				if saveErr := s.sessions.Save(ctx, sess); saveErr != nil {
-					s.log.Debug().Err(saveErr).Str("session_id", sess.ID).Msg("failed to persist pane ID")
-				}
-			} else if qErr != nil {
-				s.log.Debug().Err(qErr).Str("session_id", sess.ID).Msg("failed to query pane ID")
-			}
 		case len(strategy.Commands) > 0:
 			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
@@ -985,15 +976,6 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 	if err := s.spawner.tmux.CreateSession(ctx, sess.Slug, sess.Path, rendered, background); err != nil {
 		cleanup()
 		return fmt.Errorf("create tmux session: %w", err)
-	}
-	// Persist pane ID so the TUI can target the exact pane.
-	if paneID, qErr := s.spawner.tmux.QueryPaneID(ctx, sess.Slug); qErr == nil && paneID != "" {
-		sess.SetMeta(session.MetaTmuxPaneID, paneID)
-		if saveErr := s.sessions.Save(ctx, *sess); saveErr != nil {
-			s.log.Debug().Err(saveErr).Str("session_id", sess.ID).Msg("failed to persist pane ID")
-		}
-	} else if qErr != nil {
-		s.log.Debug().Err(qErr).Str("session_id", sess.ID).Msg("failed to query pane ID")
 	}
 	return nil
 }

@@ -183,15 +183,6 @@ func (c *Client) tagPanesWithSession(ctx context.Context, sessionTarget, slug st
 	}
 }
 
-// QueryPaneID returns the pane ID of the active pane in the named tmux session.
-func (c *Client) QueryPaneID(ctx context.Context, sessionName string) (string, error) {
-	out, err := c.exec.Run(ctx, "tmux", "display-message", "-t", sessionName, "-p", "#{pane_id}")
-	if err != nil {
-		return "", fmt.Errorf("tmux query pane id: %w", err)
-	}
-	return strings.TrimSpace(string(out)), nil
-}
-
 // suppressInteractiveHooks sets session-level overrides to neutralise global
 // hooks that run interactive commands (e.g. command-prompt). These hooks block
 // the tmux server waiting for user input that never arrives when windows are

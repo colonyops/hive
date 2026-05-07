@@ -13,25 +13,15 @@ const (
 	StatusMissing  Status = "missing"  // terminal session not found
 )
 
-// PaneInfo holds status for a single tmux pane.
-type PaneInfo struct {
-	PaneID       string // tmux pane ID in %N format
-	WindowIndex  string // tmux window index (e.g., "0", "1")
-	Status       Status
-	DetectedTool string
-	PaneContent  string
-}
-
 // SessionInfo holds information about a discovered terminal session.
 type SessionInfo struct {
-	Name         string     // terminal session name (e.g., tmux session name)
-	WindowIndex  string     // tmux window index (e.g., "0", "1")
-	PaneID       string     // tmux pane ID in %N format (empty until Phase 2)
-	WindowName   string     // window name (for display and template data)
-	Status       Status     // current detected status
-	DetectedTool string     // detected AI tool (claude, gemini, etc.)
-	PaneContent  string     // captured pane content for preview
-	Panes        []PaneInfo // per-pane info (populated in Phase 2+)
+	Name         string // terminal session name (e.g., tmux session name)
+	WindowIndex  string // tmux window index (e.g., "0", "1")
+	PaneID       string // tmux pane ID in %N format
+	WindowName   string // window name (for display and template data)
+	Status       Status // current detected status
+	DetectedTool string // detected AI tool (claude, gemini, etc.)
+	PaneContent  string // captured pane content for preview
 }
 
 // Integration defines the interface for terminal multiplexer integrations.
@@ -68,12 +58,5 @@ type PaneDetail struct {
 	PanePID     int64  // pane shell PID (0 if unavailable)
 	FgPID       int64  // foreground process group leader PID (0 if unavailable)
 	HiveSession string // value of @hive-session pane option (empty if untagged)
-	Tool        string // detected agent ("claude", "shell", etc.; empty if undetected)
-}
-
-// AllPanesDiscoverer is implemented by integrations that can enumerate all
-// panes for diagnostic purposes. DiscoverAllPanes must not modify the live
-// detection cache.
-type AllPanesDiscoverer interface {
-	DiscoverAllPanes(ctx context.Context) ([]PaneDetail, error)
+	Tool        string // detected agent ("claude", etc.); empty if undetected
 }
