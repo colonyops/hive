@@ -54,6 +54,11 @@ func kernProcArgs2(pid int) (argv []string, env map[string]string) {
 	return parseKernProcargs2(data)
 }
 
+// maxArgcPrealloc bounds the slice prealloc derived from the kernel-supplied
+// argc to avoid a giant allocation if the sysctl buffer is corrupted.
+// Real argc is small (usually <100); the bound is generous.
+const maxArgcPrealloc = 4096
+
 // parseKernProcargs2 parses the KERN_PROCARGS2 sysctl output.
 // Layout: [argc int32][exec_path\0][padding NULs][argv[0]\0 ... argv[n]\0][env\0...]
 func parseKernProcargs2(data []byte) (argv []string, env map[string]string) {
@@ -76,7 +81,11 @@ func parseKernProcargs2(data []byte) (argv []string, env map[string]string) {
 	}
 
 	// Parse argv
-	argv = make([]string, 0, argc)
+	prealloc := argc
+	if prealloc < 0 || prealloc > maxArgcPrealloc {
+		prealloc = 0
+	}
+	argv = make([]string, 0, prealloc)
 	for i := 0; i < argc && len(rest) > 0; i++ {
 		idx := bytes.IndexByte(rest, 0)
 		if idx < 0 {

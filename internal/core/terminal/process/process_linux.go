@@ -8,8 +8,12 @@ import (
 	"strings"
 )
 
+// procRoot is the procfs mount point. Tests override it to point at a tempdir
+// fixture. Production code keeps the kernel default.
+var procRoot = "/proc"
+
 func tpgidFromPID(pid int) (int, error) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", pid))
+	data, err := os.ReadFile(fmt.Sprintf("%s/%d/stat", procRoot, pid))
 	if err != nil {
 		return 0, err
 	}
@@ -37,7 +41,7 @@ func parseTpgid(stat string) (int, error) {
 }
 
 func commForPID(pid int) string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+	data, err := os.ReadFile(fmt.Sprintf("%s/%d/comm", procRoot, pid))
 	if err != nil {
 		return ""
 	}
@@ -45,9 +49,12 @@ func commForPID(pid int) string {
 }
 
 func cmdlineForPID(pid int) ([]string, error) {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/cmdline", pid))
-	if err != nil || len(data) == 0 {
+	data, err := os.ReadFile(fmt.Sprintf("%s/%d/cmdline", procRoot, pid))
+	if err != nil {
 		return nil, err
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 	var parts []string
 	for part := range strings.SplitSeq(strings.TrimRight(string(data), "\x00"), "\x00") {
@@ -57,7 +64,7 @@ func cmdlineForPID(pid int) ([]string, error) {
 }
 
 func environForPID(pid int) map[string]string {
-	data, err := os.ReadFile(fmt.Sprintf("/proc/%d/environ", pid))
+	data, err := os.ReadFile(fmt.Sprintf("%s/%d/environ", procRoot, pid))
 	if err != nil || len(data) == 0 {
 		return nil
 	}
