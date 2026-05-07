@@ -41,6 +41,22 @@ plugins:
 
 When `entry` is omitted, Hive checks `~/.config/hive/plugins/init.lua` automatically; a missing file there is silently ignored. When `entry` is set explicitly, the file must exist. Set `enabled: false` to keep the entry file on disk but skip loading it.
 
+### Scaffolding
+
+`hive plugin init` writes a starter `init.lua` and `commands/hello.lua` into the default plugin directory, where the loader auto-discovers it on next run:
+
+```bash
+hive plugin init
+# Scaffolded Lua plugin at ~/.config/hive/plugins
+```
+
+| Flag             | Effect                                                                                   |
+| ---------------- | ---------------------------------------------------------------------------------------- |
+| `--path <dir>`   | Write to `<dir>` instead of the default. Set `plugins.lua.entry` to `<dir>/init.lua`.    |
+| `--force`        | Overwrite an existing `init.lua` or `commands/hello.lua`. Other files are preserved.     |
+
+Without `--force`, the command refuses if either generated file already exists.
+
 The entry file should return a function that registers one or more commands:
 
 ```lua
