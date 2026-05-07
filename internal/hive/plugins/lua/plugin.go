@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog/log"
 
@@ -20,14 +21,17 @@ const pluginName = "lua"
 type Plugin struct {
 	cfg      config.LuaPluginConfig
 	kvStore  kv.KV
+	pool     *plugins.WorkerPool
 	runtime  *Runtime
 	modules  []HostModule
 	commands map[string]config.UserCommand
 }
 
-// New creates a Lua-backed Hive plugin.
-func New(cfg config.LuaPluginConfig, kvStore kv.KV) *Plugin {
-	return &Plugin{cfg: cfg, kvStore: kvStore}
+// New creates a Lua-backed Hive plugin. The shared worker pool throttles
+// hive.sh.* shell execution; pass nil only in tests that don't exercise the
+// shell module.
+func New(cfg config.LuaPluginConfig, kvStore kv.KV, pool *plugins.WorkerPool) *Plugin {
+	return &Plugin{cfg: cfg, kvStore: kvStore, pool: pool}
 }
 
 func (p *Plugin) Name() string { return pluginName }
@@ -47,6 +51,12 @@ func (p *Plugin) Init(_ context.Context) error {
 
 	tickerModule := &TickerModule{PluginName: p.Name()}
 
+	shModule := &ShModule{
+		PluginName:     p.Name(),
+		Pool:           p.pool,
+		DefaultTimeout: defaultDuration(p.cfg.ShellTimeout, 30*time.Second),
+	}
+
 	modules := []HostModule{
 		&LogModule{PluginName: p.Name()},
 		&PluginInfoModule{
@@ -58,6 +68,7 @@ func (p *Plugin) Init(_ context.Context) error {
 		tickerModule,
 		&JSONModule{},
 		&KVModule{Store: kv.Scoped[string](p.kvStore, p.Name())},
+		shModule,
 	}
 
 	runtime, err := NewRuntime(p.cfg.ModuleRoot(), modules...)
@@ -122,4 +133,12 @@ func (p *Plugin) Commands() map[string]config.UserCommand {
 
 func (p *Plugin) StatusProvider() plugins.StatusProvider {
 	return nil
+}
+
+// defaultDuration returns d when positive, otherwise fallback.
+func defaultDuration(d, fallback time.Duration) time.Duration {
+	if d > 0 {
+		return d
+	}
+	return fallback
 }

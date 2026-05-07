@@ -13,6 +13,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -73,7 +74,7 @@ end
 // NewConfigPlugin builds a Plugin from a single entry file path. Shared by
 // the lifecycle, runtime, and per-module tests in this package.
 func NewConfigPlugin(entry string) *Plugin {
-	return New(config.LuaPluginConfig{Entry: entry}, newFakeKV())
+	return New(config.LuaPluginConfig{Entry: entry}, newFakeKV(), plugins.NewWorkerPool(1))
 }
 
 // fakeKV is an in-memory kv.KV used purely for test wiring. It JSON-encodes
