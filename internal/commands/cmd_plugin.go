@@ -99,12 +99,10 @@ func (cmd *PluginCmd) runInit(ctx context.Context, c *cli.Command) error {
 
 	if _, err := os.Stat(target); err == nil {
 		if !cmd.initForce {
-			return fmt.Errorf("%s already exists; pass --force to overwrite the two generated files", target)
+			return fmt.Errorf("%s already exists; pass --force to overwrite", target)
 		}
 	} else if !os.IsNotExist(err) {
-		if !cmd.initForce {
-			return fmt.Errorf("%s already exists; pass --force to overwrite the two generated files", target)
-		}
+		return fmt.Errorf("stat %s: %w", target, err)
 	}
 
 	if err := os.MkdirAll(target, 0o755); err != nil {
@@ -151,25 +149,21 @@ func (cmd *PluginCmd) runInit(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("write %s: %w", helloPath, err)
 	}
 
-	fmt.Fprintf(os.Stderr, `Scaffolded plugin %q at %s
+	_, _ = fmt.Fprintf(c.Root().ErrWriter, `Scaffolded plugin %q at %s
 
 Files written:
   %s
   %s
 
-To activate the plugin, do one of:
+To activate the plugin, set in your hive config:
 
-  1. Set in your hive config:
-         plugins:
-           lua:
-             entry: %s
-
-  2. require() it from your top-level ~/.config/hive/plugins/init.lua:
-         local %s = require("%s.init")
+    plugins:
+      lua:
+        entry: %s
 
 --force only overwrites init.lua and commands/hello.lua; other files in the
 directory are preserved.
-`, name, target, initPath, helloPath, initPath, name, name)
+`, name, target, initPath, helloPath, initPath)
 
 	return nil
 }
