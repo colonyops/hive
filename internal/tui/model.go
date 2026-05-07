@@ -243,6 +243,7 @@ func New(deps Deps, opts Opts) Model {
 	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
 
+	// KVStore is optional in Deps (nil in tests). Nil disables hook KV status checks.
 	var hookStore *hookstatus.Store
 	if deps.KVStore != nil {
 		hookStore = hookstatus.New(deps.KVStore)

@@ -76,25 +76,37 @@ func toolFromArgv(argv []string) string {
 	return toolFromBasename(filepath.Base(argv[0]))
 }
 
+// agentPattern matches a process basename against a known agent name.
+// Set exact to require a full-string match; otherwise substring is used.
+type agentPattern struct {
+	name  string
+	sub   string
+	exact bool
+}
+
+// knownAgents is the ordered list of basename→agent mappings.
+// First match wins. Add new agents here; configurable patterns are a TODO.
+var knownAgents = []agentPattern{
+	{name: "claude", sub: "claude"},
+	{name: "gemini", sub: "gemini"},
+	{name: "aider", sub: "aider", exact: true},
+	{name: "codex", sub: "codex"},
+	{name: "cursor", sub: "cursor"},
+	{name: "opencode", sub: "opencode"},
+	{name: "cline", sub: "cline"},
+}
+
 // toolFromBasename maps a process basename to an agent name.
 func toolFromBasename(comm string) string {
 	lower := strings.ToLower(comm)
-	switch {
-	case strings.Contains(lower, "claude"):
-		return "claude"
-	case strings.Contains(lower, "gemini"):
-		return "gemini"
-	case lower == "aider":
-		return "aider"
-	case strings.Contains(lower, "codex"):
-		return "codex"
-	case strings.Contains(lower, "cursor"):
-		return "cursor"
-	case strings.Contains(lower, "opencode"):
-		return "opencode"
-	case strings.Contains(lower, "cline"):
-		return "cline"
-	default:
-		return ""
+	for _, p := range knownAgents {
+		if p.exact {
+			if lower == p.sub {
+				return p.name
+			}
+		} else if strings.Contains(lower, p.sub) {
+			return p.name
+		}
 	}
+	return ""
 }

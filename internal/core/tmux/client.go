@@ -171,8 +171,12 @@ func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows 
 	return c.CreateSession(ctx, name, workDir, windows, background)
 }
 
-// tagPanesWithSession sets @hive-session on the active pane so list-panes can
-// identify hive-managed panes. Errors are non-fatal — tagging is best-effort.
+// tagPanesWithSession sets the @hive-session pane option on the active pane.
+// When a user later splits a window, list-panes returns multiple panes for the
+// same window index. The tag lets RefreshCache identify which pane was created
+// by hive (and should be captured for status) vs. user-created siblings.
+// Errors are non-fatal — tagging is best-effort; untagged panes fall back to
+// first-pane selection.
 func (c *Client) tagPanesWithSession(ctx context.Context, sessionTarget, slug string) {
 	if _, err := c.exec.Run(ctx, "tmux", "set-option", "-p", "-t", sessionTarget, "@hive-session", slug); err != nil {
 		c.log.Debug().Err(err).Str("target", sessionTarget).Msg("failed to tag pane with @hive-session")

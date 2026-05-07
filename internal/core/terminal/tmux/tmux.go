@@ -104,6 +104,52 @@ func (t *Integration) Available() bool {
 	return t.available
 }
 
+// paneRecord holds per-pane data from a single list-panes output line.
+type paneRecord struct {
+	paneID      string
+	panePID     int64
+	hiveSession string // value of @hive-session option, empty if untagged
+}
+
+// parsePaneLine parses one tab-delimited line from `tmux list-panes -a`.
+// Expected format: session\twinIdx\twinName\tworkDir\tactivity\tpaneID\tpanePID\t@hive-session
+// Returns ok=false if the line has fewer than 6 fields.
+func parsePaneLine(line string) (sessName, winIdx, winName, workDir string, activity int64, rec paneRecord, ok bool) {
+	parts := strings.SplitN(line, "\t", 8)
+	if len(parts) < 6 {
+		return "", "", "", "", 0, paneRecord{}, false
+	}
+	sessName, winIdx, winName, workDir = parts[0], parts[1], parts[2], parts[3]
+	_, _ = fmt.Sscanf(parts[4], "%d", &activity)
+	rec.paneID = parts[5]
+	if len(parts) >= 7 {
+		_, _ = fmt.Sscanf(parts[6], "%d", &rec.panePID)
+	}
+	if len(parts) >= 8 {
+		rec.hiveSession = strings.TrimSpace(parts[7])
+	}
+	return sessName, winIdx, winName, workDir, activity, rec, true
+}
+
+// selectPrimary picks the primary pane from a window's pane list.
+// The primary is the first pane tagged with @hive-session; falls back to the
+// first pane if none are tagged.
+func selectPrimary(panes []paneRecord) (primaryPaneID string, panePID int64, allPaneIDs []string) {
+	allPaneIDs = make([]string, 0, len(panes))
+	for _, p := range panes {
+		allPaneIDs = append(allPaneIDs, p.paneID)
+		if primaryPaneID == "" && p.hiveSession != "" {
+			primaryPaneID = p.paneID
+			panePID = p.panePID
+		}
+	}
+	if primaryPaneID == "" && len(panes) > 0 {
+		primaryPaneID = panes[0].paneID
+		panePID = panes[0].panePID
+	}
+	return primaryPaneID, panePID, allPaneIDs
+}
+
 // RefreshCache updates the cached session list. Call once per poll cycle.
 func (t *Integration) RefreshCache() {
 	cmd := exec.Command("tmux", "list-panes", "-a", "-F",
@@ -137,12 +183,6 @@ func (t *Integration) RefreshCache() {
 	}
 	t.mu.RUnlock()
 
-	// paneRecord holds per-pane data from a single list-panes line.
-	type paneRecord struct {
-		paneID      string
-		panePID     int64
-		hiveSession string // value of @hive-session option, empty if untagged
-	}
 	// windowAccum accumulates panes that share the same tmux session+window.
 	type windowAccum struct {
 		windowName string
@@ -160,31 +200,16 @@ func (t *Integration) RefreshCache() {
 		if line == "" {
 			continue
 		}
-		parts := strings.SplitN(line, "\t", 8)
-		if len(parts) < 6 {
+		sessName, winIdx, winName, workDir, activity, rec, ok := parsePaneLine(line)
+		if !ok {
 			continue
 		}
-		sessName := parts[0]
-		winIdx := parts[1]
-		winName := parts[2]
-		workDir := parts[3]
-		paneID := parts[5]
-
 		key := windowKey{sessName, winIdx}
 		acc := accumMap[key]
 		if acc == nil {
-			acc = &windowAccum{windowName: winName, workDir: workDir}
-			_, _ = fmt.Sscanf(parts[4], "%d", &acc.activity)
+			acc = &windowAccum{windowName: winName, workDir: workDir, activity: activity}
 			accumMap[key] = acc
 			order = append(order, key)
-		}
-
-		rec := paneRecord{paneID: paneID}
-		if len(parts) >= 7 {
-			_, _ = fmt.Sscanf(parts[6], "%d", &rec.panePID)
-		}
-		if len(parts) >= 8 {
-			rec.hiveSession = strings.TrimSpace(parts[7])
 		}
 		acc.panes = append(acc.panes, rec)
 	}
@@ -198,22 +223,7 @@ func (t *Integration) RefreshCache() {
 
 	for _, key := range order {
 		acc := accumMap[key]
-
-		// Pick primary pane: first pane tagged with @hive-session, else first pane.
-		var primaryPaneID string
-		var panePID int64
-		allPaneIDs := make([]string, 0, len(acc.panes))
-		for _, p := range acc.panes {
-			allPaneIDs = append(allPaneIDs, p.paneID)
-			if primaryPaneID == "" && p.hiveSession != "" {
-				primaryPaneID = p.paneID
-				panePID = p.panePID
-			}
-		}
-		if primaryPaneID == "" && len(acc.panes) > 0 {
-			primaryPaneID = acc.panes[0].paneID
-			panePID = acc.panes[0].panePID
-		}
+		primaryPaneID, panePID, allPaneIDs := selectPrimary(acc.panes)
 
 		w := &agentWindow{
 			windowIndex:   key.index,
