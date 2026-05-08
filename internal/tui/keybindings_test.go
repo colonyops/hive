@@ -6,6 +6,7 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,6 +17,13 @@ var testRenderer = tmpl.New(tmpl.Config{})
 // sessionsKBs wraps a flat keybinding map as sessions-view keybindings for testing.
 func sessionsKBs(kbs map[string]config.Keybinding) map[string]map[string]config.Keybinding {
 	return map[string]map[string]config.Keybinding{"sessions": kbs}
+}
+
+// commandSetFromMap builds a CommandSet from a flat command map for test
+// convenience. The map lands in the system slot so tests behave as if no
+// plugin/user overrides exist.
+func commandSetFromMap(commands map[string]config.UserCommand) *plugins.CommandSet {
+	return plugins.NewCommandSet(commands, nil)
 }
 
 func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
@@ -30,7 +38,7 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 		"o": {Cmd: "open"},
 	}
 
-	handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+	handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 	activeSession := session.Session{
 		ID:    "test-id",
@@ -111,7 +119,7 @@ func TestKeybindingHandler_Resolve_RecycledSession(t *testing.T) {
 }
 
 func TestKeybindingHandler_ResolveUserCommand(t *testing.T) {
-	handler := NewKeybindingResolver(nil, nil, testRenderer)
+	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
 
 	sess := session.Session{
 		ID:     "test-id",
@@ -231,7 +239,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"r": {Cmd: "Recycle", Help: "keybinding help"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		action, ok := handler.Resolve("r", sess)
 		require.True(t, ok, "expected ok = true")
@@ -242,7 +250,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"r": {Cmd: "Recycle", Confirm: "keybinding confirm"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		action, ok := handler.Resolve("r", sess)
 		require.True(t, ok, "expected ok = true")
@@ -253,7 +261,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"s": {Cmd: "shell-cmd"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		action, ok := handler.Resolve("s", sess)
 		require.True(t, ok, "expected ok = true")
@@ -266,7 +274,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"x": {Cmd: "NonExistent"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		_, ok := handler.Resolve("x", sess)
 		assert.False(t, ok, "expected ok = false for invalid command reference")
@@ -280,7 +288,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"e": {Cmd: "empty"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), emptyCommands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(emptyCommands), testRenderer)
 
 		_, ok := handler.Resolve("e", sess)
 		assert.False(t, ok, "expected ok = false for command with neither action nor sh")
@@ -293,7 +301,7 @@ func TestKeybindingHandler_Resolve_Overrides(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"b": {Cmd: "bad"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), badTemplateCommands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(badTemplateCommands), testRenderer)
 
 		action, ok := handler.Resolve("b", sess)
 		require.True(t, ok, "expected ok = true even with template error")
@@ -314,7 +322,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 			"o": {Cmd: "open"},
 			"r": {Cmd: "Recycle"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		entries := handler.HelpEntries()
 		// Entries are sorted by key
@@ -327,7 +335,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"r": {Cmd: "Recycle", Help: "custom help"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		entries := handler.HelpEntries()
 		require.Len(t, entries, 1, "expected 1 entry, got %d", len(entries))
@@ -338,7 +346,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"d": {Cmd: "Delete"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		entries := handler.HelpEntries()
 		require.Len(t, entries, 1, "expected 1 entry, got %d", len(entries))
@@ -349,7 +357,7 @@ func TestKeybindingHandler_HelpEntries(t *testing.T) {
 		keybindings := map[string]config.Keybinding{
 			"x": {Cmd: "NonExistent"},
 		}
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		entries := handler.HelpEntries()
 		// Invalid command references are filtered out (not shown in help)
@@ -372,7 +380,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	}
 
 	t.Run("uses lookup functions for TmuxWindow and Tool", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "claude-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
 
@@ -382,7 +390,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	})
 
 	t.Run("SetSelectedWindow overrides lookup", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
 		handler.SetSelectedWindow("override-window")
@@ -393,7 +401,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	})
 
 	t.Run("override is consumed after resolve", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
 		handler.SetSelectedWindow("override-window")
@@ -410,7 +418,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 	})
 
 	t.Run("ResolveUserCommand also consumes override", func(t *testing.T) {
-		handler := NewKeybindingResolver(nil, nil, testRenderer)
+		handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
 		handler.SetSelectedWindow("override-window")
@@ -442,7 +450,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 	}
 
 	t.Run("TmuxOpen consumes window override", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetSelectedWindow("editor")
 
@@ -458,7 +466,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 	})
 
 	t.Run("TmuxOpen without override uses lookup", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "agent" })
 
 		action, ok := handler.Resolve("enter", sess)
@@ -467,7 +475,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 	})
 
 	t.Run("TmuxOpen without override or lookup returns empty", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 
 		action, ok := handler.Resolve("enter", sess)
 		require.True(t, ok)
@@ -475,7 +483,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 	})
 
 	t.Run("TmuxStart also consumes window override", func(t *testing.T) {
-		handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, testRenderer)
+		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetSelectedWindow("editor")
 
 		action, ok := handler.Resolve("s", sess)
@@ -485,7 +493,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 	})
 
 	t.Run("ResolveUserCommand TmuxOpen consumes override", func(t *testing.T) {
-		handler := NewKeybindingResolver(nil, nil, testRenderer)
+		handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
 		handler.SetSelectedWindow("editor")
 
 		cmd := config.UserCommand{Action: act.TypeTmuxOpen, Help: "open"}
@@ -496,7 +504,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 }
 
 func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
-	handler := NewKeybindingResolver(nil, nil, testRenderer)
+	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
 
 	sess := session.Session{
 		ID:     "test-id",
@@ -547,7 +555,7 @@ func TestKeybindingResolver_RenderWithFormData(t *testing.T) {
 }
 
 func TestKeybindingResolver_DocTemplateData(t *testing.T) {
-	handler := NewKeybindingResolver(nil, nil, testRenderer)
+	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
 	sess := session.Session{
 		ID:   "test-id",
 		Path: "/test/path",
@@ -613,7 +621,7 @@ func TestKeybindingResolver_Scope(t *testing.T) {
 	// Place all keybindings in "global" so they're visible in every view.
 	// Command-level scope filtering is what this test validates.
 	globalKBs := map[string]map[string]config.Keybinding{"global": keybindings}
-	handler := NewKeybindingResolver(globalKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(globalKBs, commandSetFromMap(commands), testRenderer)
 	sess := session.Session{
 		ID:    "test-id",
 		Path:  "/test/path",
@@ -692,7 +700,7 @@ func TestKeybindingResolver_ShellDirIsSessionPath(t *testing.T) {
 	keybindings := map[string]config.Keybinding{
 		"r": {Cmd: "run"},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), renderer)
 	sess := session.Session{
 		ID:    "abc123",
 		Path:  "/repos/my-repo",
@@ -745,7 +753,7 @@ func TestResolveWindowsAction_SameSession(t *testing.T) {
 		"s": {Cmd: "Spawn"},
 	}
 
-	handler := NewKeybindingResolver(sessionsKBs(keybindings), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	a, ok := handler.Resolve("s", sess)
@@ -770,7 +778,7 @@ func TestResolveWindowsAction_SameSessionWithSh(t *testing.T) {
 			},
 		},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{"r": {Cmd: "Review"}}), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{"r": {Cmd: "Review"}}), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	a, ok := handler.Resolve("r", sess)
@@ -797,7 +805,7 @@ func TestResolveWindowsAction_NewSession(t *testing.T) {
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
 		},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	cmd := commands["PRReview"]
@@ -825,7 +833,7 @@ func TestResolveWindowsAction_NewSessionInheritsRemote(t *testing.T) {
 			},
 		},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	cmd := commands["NewWin"]
@@ -851,7 +859,7 @@ func TestResolveWindowsAction_NewSessionExplicitRemote(t *testing.T) {
 			},
 		},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	cmd := commands["NewWin"]
@@ -874,7 +882,7 @@ func TestResolveWindowsAction_TemplateError(t *testing.T) {
 			},
 		},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	cmd := commands["Bad"]
@@ -896,7 +904,7 @@ func TestResolver_PerViewKeybindings(t *testing.T) {
 		"Recycle":      {Action: act.TypeRecycle, Help: "recycle"},
 		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh tasks", Scope: []string{"tasks"}},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	sess := session.Session{ID: "test", Path: "/test", State: session.StateActive}
 
 	// Sessions view: "r" -> Recycle
@@ -925,7 +933,7 @@ func TestResolver_GlobalFallback(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 
 	// "?" should resolve on both sessions and tasks views
 	for _, view := range []ViewType{ViewSessions, ViewTasks} {
@@ -945,7 +953,7 @@ func TestResolver_ViewOverridesGlobal(t *testing.T) {
 		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
 		"Recycle":  {Action: act.TypeRecycle, Help: "recycle"},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	sess := session.Session{ID: "test", Path: "/test", State: session.StateActive}
 
 	// On sessions view, view-specific "x" -> Recycle overrides global "x" -> HiveInfo
@@ -972,7 +980,7 @@ func TestResolver_ResolveAction_SkipsShellCommands(t *testing.T) {
 		"ActionCmd": {Action: act.TypeTasksRefresh, Help: "action", Scope: []string{"tasks"}},
 		"ShellCmd":  {Sh: "echo hello", Help: "shell", Scope: []string{"tasks"}},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	handler.SetActiveView(ViewTasks)
 
 	// Built-in action resolves
@@ -992,7 +1000,7 @@ func TestResolver_ResolveAction_UnknownCommand(t *testing.T) {
 		},
 	}
 	commands := map[string]config.UserCommand{}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	handler.SetActiveView(ViewTasks)
 
 	_, ok := handler.ResolveAction("x")
@@ -1008,7 +1016,7 @@ func TestResolver_ResolveAction_OutOfScope(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"SessionsOnly": {Action: act.TypeRecycle, Help: "recycle", Scope: []string{"sessions"}},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	handler.SetActiveView(ViewTasks)
 
 	_, ok := handler.ResolveAction("r")
@@ -1024,7 +1032,7 @@ func TestResolver_IsAction(t *testing.T) {
 		"Recycle":      {Action: act.TypeRecycle, Help: "recycle"},
 		"TasksRefresh": {Action: act.TypeTasksRefresh, Help: "refresh", Scope: []string{"tasks"}},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 
 	// Sessions view: "r" maps to Recycle
 	handler.SetActiveView(ViewSessions)
@@ -1045,7 +1053,7 @@ func TestResolver_IsCommand(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"Recycle": {Action: act.TypeRecycle},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	handler.SetActiveView(ViewSessions)
 
 	assert.True(t, handler.IsCommand("r", "Recycle"))
@@ -1068,7 +1076,7 @@ func TestResolver_HelpString(t *testing.T) {
 		"TasksFilter":  {Action: act.TypeTasksFilter, Help: "filter", Scope: []string{"tasks"}},
 		"Delete":       {Action: act.TypeDelete, Help: "delete", Scope: []string{"sessions"}},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 
 	// Tasks view: should show tasks keybindings, not sessions
 	handler.SetActiveView(ViewTasks)
@@ -1096,7 +1104,7 @@ func TestResolver_ViewWithNoKeybindings(t *testing.T) {
 	commands := map[string]config.UserCommand{
 		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
 	}
-	handler := NewKeybindingResolver(viewKBs, commands, testRenderer)
+	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 
 	// Messages view has no keybinding map entry — only global keybindings resolve
 	handler.SetActiveView(ViewMessages)
@@ -1115,7 +1123,7 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 			Form: []config.FormField{{Variable: "pr", Type: config.FormTypeText, Label: "PR"}},
 		},
 	}
-	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commands, renderer)
+	handler := NewKeybindingResolver(sessionsKBs(map[string]config.Keybinding{}), commandSetFromMap(commands), renderer)
 	sess := testSession()
 
 	cmd := commands["Spawn"]
@@ -1126,4 +1134,46 @@ func TestRenderWithFormData_WindowsWithFormValues(t *testing.T) {
 	require.Len(t, a.SpawnWindows.Windows, 1)
 	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "Review PR 456")
 	assert.Contains(t, a.SpawnWindows.Windows[0].Command, "/repos/my-repo")
+}
+
+// TestKeybindingResolver_LookupReadsLive verifies IsAction sees commands
+// added to the CommandSet after the resolver was constructed (no rebuild).
+func TestKeybindingResolver_LookupReadsLive(t *testing.T) {
+	set := plugins.NewCommandSet(nil, nil)
+	keybindings := map[string]config.Keybinding{
+		"x": {Cmd: "Foo"},
+	}
+	handler := NewKeybindingResolver(sessionsKBs(keybindings), set, testRenderer)
+
+	// Before push: the keybinding references an unknown command, so IsAction is false.
+	assert.False(t, handler.IsAction("x", act.TypeRecycle))
+
+	set.MergePlugin("test", map[string]config.UserCommand{
+		"Foo": {Action: act.TypeRecycle},
+	})
+
+	// After push: the resolver picks it up on the next call without any rebuild.
+	assert.True(t, handler.IsAction("x", act.TypeRecycle))
+}
+
+// TestKeybindingResolver_ResolveReadsLive verifies Resolve returns a fresh
+// command after CommandSet mutation.
+func TestKeybindingResolver_ResolveReadsLive(t *testing.T) {
+	set := plugins.NewCommandSet(nil, nil)
+	keybindings := map[string]config.Keybinding{
+		"x": {Cmd: "Foo"},
+	}
+	handler := NewKeybindingResolver(sessionsKBs(keybindings), set, testRenderer)
+
+	sess := session.Session{ID: "s", Name: "s", Path: "/tmp", State: session.StateActive}
+	_, ok := handler.Resolve("x", sess)
+	require.False(t, ok)
+
+	set.MergePlugin("test", map[string]config.UserCommand{
+		"Foo": {Sh: "echo updated"},
+	})
+
+	a, ok := handler.Resolve("x", sess)
+	require.True(t, ok)
+	assert.Contains(t, a.ShellCmd, "echo updated")
 }

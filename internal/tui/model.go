@@ -125,8 +125,9 @@ type Model struct {
 
 	copyCommand string
 
-	// Merged commands (system + plugins + user)
-	mergedCommands map[string]config.UserCommand
+	// Canonical command registry (system + plugins + user). Read at palette
+	// open time so newly registered Lua commands appear without rebuilds.
+	commandSet *plugins.CommandSet
 
 	reviewView *review.View
 
@@ -231,18 +232,13 @@ func New(deps Deps, opts Opts) Model {
 	cfg := deps.Config
 	service := deps.Service
 
-	// Snapshot of merged commands at construction time. CommandSet is the
-	// canonical registry; later phases will consult it directly to pick up
-	// dynamic Lua registrations without rebuilding this map.
-	mergedCommands := deps.CommandSet.All()
-
 	viewKBs := map[string]map[string]config.Keybinding{
 		"global":   cfg.Views.Global.Keybindings,
 		"sessions": cfg.Views.Sessions.Keybindings,
 		"tasks":    cfg.Views.Tasks.Keybindings,
 		"review":   cfg.Views.Review.Keybindings,
 	}
-	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
+	handler := NewKeybindingResolver(viewKBs, deps.CommandSet, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
@@ -350,7 +346,7 @@ func New(deps Deps, opts Opts) Model {
 		msgView:         msgView,
 		activeView:      ViewSessions,
 		copyCommand:     cfg.CopyCommand,
-		mergedCommands:  mergedCommands,
+		commandSet:      deps.CommandSet,
 		reviewView:      &reviewView,
 		kvStore:         deps.KVStore,
 		kvView:          kvView,

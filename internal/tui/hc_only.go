@@ -3,7 +3,6 @@ package tui
 import (
 	"context"
 	"fmt"
-	"maps"
 	"os/exec"
 	"strings"
 	"time"
@@ -17,6 +16,7 @@ import (
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/views/tasks"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -38,7 +38,7 @@ const hcHeaderLines = 3
 type HoneycombOnlyModel struct {
 	tasksView       *tasks.View
 	handler         *KeybindingResolver
-	mergedCmds      map[string]config.UserCommand
+	commandSet      *plugins.CommandSet
 	copyCmd         string
 	width, height   int
 	quitting        bool
@@ -57,9 +57,11 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 		"global": cfg.Views.Global.Keybindings,
 		"tasks":  cfg.Views.Tasks.Keybindings,
 	}
-	mergedCmds := config.DefaultUserCommands()
-	maps.Copy(mergedCmds, cfg.UserCommands)
-	handler := NewKeybindingResolver(viewKBs, mergedCmds, opts.Renderer)
+	// Standalone honeycomb mode bypasses the plugin manager — no Lua-registered
+	// commands surface here. Build a CommandSet directly so the resolver has a
+	// canonical registry to query.
+	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
+	handler := NewKeybindingResolver(viewKBs, commandSet, opts.Renderer)
 	handler.SetActiveView(ViewTasks)
 
 	tasksView := tasks.New(opts.Honeycomb, opts.RepoKey, handler, opts.KVStore, cfg.Views.Tasks.SplitRatio)
@@ -67,7 +69,7 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 	return HoneycombOnlyModel{
 		tasksView:       tasksView,
 		handler:         handler,
-		mergedCmds:      mergedCmds,
+		commandSet:      commandSet,
 		copyCmd:         cfg.CopyCommand,
 		toastController: toastCtrl,
 		toastView:       NewToastView(toastCtrl),
@@ -199,8 +201,9 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 // Non-task action commands (e.g. HiveDoctor, ThemePreview) are excluded since
 // they require infrastructure only present in the full TUI.
 func (m HoneycombOnlyModel) taskCommands() map[string]config.UserCommand {
-	filtered := make(map[string]config.UserCommand, len(m.mergedCmds))
-	for name, cmd := range m.mergedCmds {
+	all := m.commandSet.All()
+	filtered := make(map[string]config.UserCommand, len(all))
+	for name, cmd := range all {
 		if cmd.Action != "" && !isTaskAction(cmd.Action) {
 			continue
 		}

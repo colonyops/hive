@@ -173,7 +173,7 @@ func (m Model) handleSessionFormCommand(msg sessions.FormCommandRequestMsg) (tea
 }
 
 func (m Model) handleSessionCommandPalette(msg sessions.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
-	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, msg.Session, m.width, m.height, m.activeView)
+	m.modals.CommandPalette = NewCommandPalette(m.commandSet.All(), msg.Session, m.width, m.height, m.activeView)
 	m.state = stateCommandPalette
 	return m, nil
 }
@@ -447,13 +447,13 @@ func (m Model) handleDocsRepoKeysLoaded(msg docsRepoKeysLoadedMsg) (tea.Model, t
 }
 
 func (m Model) handleTaskCommandPalette(_ tasks.CommandPaletteRequestMsg) (tea.Model, tea.Cmd) {
-	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
+	m.modals.CommandPalette = NewCommandPalette(m.commandSet.All(), nil, m.width, m.height, m.activeView)
 	m.state = stateCommandPalette
 	return m, nil
 }
 
 func (m Model) handleReviewCommandPalette() (tea.Model, tea.Cmd) {
-	m.modals.CommandPalette = NewCommandPalette(m.mergedCommands, nil, m.width, m.height, m.activeView)
+	m.modals.CommandPalette = NewCommandPalette(m.commandSet.All(), nil, m.width, m.height, m.activeView)
 	m.state = stateCommandPalette
 	return m, nil
 }
