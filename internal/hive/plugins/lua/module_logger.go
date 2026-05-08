@@ -12,6 +12,7 @@ type LogModule struct {
 	Logger     zerolog.Logger
 }
 
+// Register attaches debug/info/warn/error to a fresh hive.log subtable.
 func (m *LogModule) Register(state *glua.LState, hive *glua.LTable) error {
 	logs := state.NewTable()
 	state.SetField(logs, "debug", m.fn(state, m.Logger.Debug))

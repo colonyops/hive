@@ -271,22 +271,53 @@ Run shell commands from Lua. All three functions execute via `sh -c` and share t
 !!! danger "Trust boundary"
     `hive.sh` runs commands with the full privileges of the Hive process. Only enable Lua plugins from sources you trust — installing one is equivalent to running its shell commands as your user.
 
-| Function | Purpose |
-| -------- | ------- |
-| `hive.sh.run(cmd)` | Run `cmd`. Returns the exit code. Never raises. |
-| `hive.sh.output(cmd)` | Run `cmd`, return stdout with one trailing newline stripped. Raises on non-zero exit or executor error. |
-| `hive.sh.exec(cmd[, opts])` | Run `cmd` with optional `{cwd, timeout}`. Returns `{stdout, stderr, code, err}`. Never raises. |
+Every `hive.sh.*` call is async: the call returns a handle immediately and the supplied callback fires on the dispatcher when the subprocess finishes. The callback is **required** — calling without one raises a Lua error.
+
+| Function | Callback signature | Notes |
+| -------- | ------------------ | ----- |
+| `hive.sh.run(cmd, fn)` | `fn(code)` | Receives the exit code. |
+| `hive.sh.output(cmd, fn)` | `fn(stdout, err)` | On success: `stdout` is trimmed of one trailing newline and `err` is nil. On non-zero exit or executor error: `stdout` is nil and `err` is a string with the exit code and stderr. |
+| `hive.sh.exec(cmd[, opts], fn)` | `fn(result)` | `result` is `{stdout, stderr, code, err}`. |
 
 `opts.timeout` is in seconds (number). `opts.cwd` overrides the working directory for that call only; an empty string inherits Hive's working directory.
 
+Each call returns a handle with a `:cancel()` method that kills the in-flight subprocess and suppresses the pending callback.
+
 ```lua
 return function(hive)
-  local code = hive.sh.run("git fetch origin")          -- exit code only
-  local head = hive.sh.output("git rev-parse HEAD")     -- stdout, raises on non-zero
-  local r = hive.sh.exec("ls -la", { cwd = "/tmp", timeout = 5 })
-  -- r.stdout, r.stderr, r.code, r.err
+  hive.sh.run("git fetch origin", function(code)
+    hive.log.info("fetch exited with " .. code)
+  end)
+
+  hive.sh.output("git rev-parse HEAD", function(head, err)
+    if err ~= nil then
+      hive.log.warn("rev-parse failed: " .. err)
+      return
+    end
+    hive.log.info("HEAD is " .. head)
+  end)
+
+  hive.sh.exec("ls -la", { cwd = "/tmp", timeout = 5 }, function(r)
+    hive.log.info("listed " .. r.stdout)
+  end)
+
+  local handle = hive.sh.run("sleep 600", function(_) end)
+  hive.ticker.after("5s", function() handle:cancel() end)
 end
 ```
+
+!!! note "Callbacks run on the dispatcher"
+    Every callback runs on the same Lua dispatcher as ticker fires and
+    the plugin entrypoint. A slow callback serialises later Lua work in
+    that plugin — keep callbacks short or hand long work off via another
+    `hive.sh.*` call.
+
+!!! warning "Shutdown cancels in-flight calls"
+    Plugin reload or `hive` shutdown cancels every in-flight call: the
+    per-handle context is cancelled, the subprocess is killed, and the
+    pinned callback is released for GC. Pending callbacks may still fire
+    once with a non-zero `code` and a cancellation `err`, but never
+    after the runtime has fully closed.
 
 !!! note "Shared shell pool"
     `hive.sh.*` calls draw from the same `plugins.shell_workers` budget as plugin status refreshes, so a slow shell command from Lua can delay other plugins. The default per-call timeout is 30s; tune it via `plugins.lua.shell_timeout`. Plugin shutdown cancels every in-flight command.

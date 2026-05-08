@@ -18,6 +18,8 @@ type CommandsModule struct {
 	commands map[string]config.UserCommand
 }
 
+// Register exposes hive.commands(map) and lazily allocates the
+// accumulator if a previous Register hasn't already done so.
 func (m *CommandsModule) Register(state *glua.LState, hive *glua.LTable) error {
 	if m.commands == nil {
 		m.commands = map[string]config.UserCommand{}
@@ -26,7 +28,7 @@ func (m *CommandsModule) Register(state *glua.LState, hive *glua.LTable) error {
 		table := state.CheckTable(1)
 		next, err := commandsFromTable(table, m.commands)
 		if err != nil {
-			state.RaiseError("%s", err.Error())
+			state.RaiseError("hive.commands: %s", err.Error())
 			return 0
 		}
 		maps.Copy(m.commands, next)
@@ -162,49 +164,56 @@ func userCommandFromLua(name string, commandTable *glua.LTable) (config.UserComm
 	return cmd, nil
 }
 
-func luaStringField(table *glua.LTable, field string) (string, error) {
+// luaCommandField reads field off table after applying the policy shared
+// by every command-table reader: an absent field returns LNil, and a
+// callback value is rejected because the v1 command schema is data-only.
+// Typed readers below dispatch on the returned LValue.
+func luaCommandField(table *glua.LTable, field string) (glua.LValue, error) {
 	value := table.RawGetString(field)
+	if value.Type() == glua.LTFunction {
+		return nil, fmt.Errorf("field %q does not support callback values", field)
+	}
+	return value, nil
+}
+
+func luaStringField(table *glua.LTable, field string) (string, error) {
+	value, err := luaCommandField(table, field)
+	if err != nil {
+		return "", err
+	}
 	if value == glua.LNil {
 		return "", nil
 	}
-	if value.Type() == glua.LTFunction {
-		return "", fmt.Errorf("field %q does not support callback values", field)
-	}
-
 	str, ok := value.(glua.LString)
 	if !ok {
 		return "", fmt.Errorf("field %q must be a string", field)
 	}
-
 	return string(str), nil
 }
 
 func luaBoolField(table *glua.LTable, field string) (bool, error) {
-	value := table.RawGetString(field)
+	value, err := luaCommandField(table, field)
+	if err != nil {
+		return false, err
+	}
 	if value == glua.LNil {
 		return false, nil
 	}
-	if value.Type() == glua.LTFunction {
-		return false, fmt.Errorf("field %q does not support callback values", field)
-	}
-
 	boolean, ok := value.(glua.LBool)
 	if !ok {
 		return false, fmt.Errorf("field %q must be a boolean", field)
 	}
-
 	return bool(boolean), nil
 }
 
 func luaStringSliceField(table *glua.LTable, field string) ([]string, error) {
-	value := table.RawGetString(field)
+	value, err := luaCommandField(table, field)
+	if err != nil {
+		return nil, err
+	}
 	if value == glua.LNil {
 		return nil, nil
 	}
-	if value.Type() == glua.LTFunction {
-		return nil, fmt.Errorf("field %q does not support callback values", field)
-	}
-
 	list, ok := value.(*glua.LTable)
 	if !ok {
 		return nil, fmt.Errorf("field %q must be a table", field)
@@ -216,29 +225,24 @@ func luaStringSliceField(table *glua.LTable, field string) ([]string, error) {
 		if parseErr != nil {
 			return
 		}
-
 		str, ok := value.(glua.LString)
 		if !ok {
 			parseErr = fmt.Errorf("field %q entries must be strings", field)
 			return
 		}
-
 		values = append(values, string(str))
 	})
-
 	return values, parseErr
 }
 
 func luaExitField(table *glua.LTable, field string) (string, error) {
-	value := table.RawGetString(field)
-	if value == glua.LNil {
-		return "", nil
+	value, err := luaCommandField(table, field)
+	if err != nil {
+		return "", err
 	}
-	if value.Type() == glua.LTFunction {
-		return "", fmt.Errorf("field %q does not support callback values", field)
-	}
-
 	switch v := value.(type) {
+	case *glua.LNilType:
+		return "", nil
 	case glua.LString:
 		return string(v), nil
 	case glua.LBool:
