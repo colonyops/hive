@@ -1,10 +1,7 @@
 package lua
 
 import (
-	"os"
-	"path/filepath"
 	"runtime"
-	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -12,69 +9,22 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	glua "github.com/yuin/gopher-lua"
 )
 
-// bumpModule exposes hive.test_bump() so tests can count Lua-side fires.
-type bumpModule struct {
-	counter *atomic.Int64
-}
-
-func (b *bumpModule) Register(state *glua.LState, hive *glua.LTable) error {
-	state.SetField(hive, "test_bump", state.NewFunction(func(state *glua.LState) int {
-		b.counter.Add(1)
-		return 0
-	}))
-	return nil
-}
-
-// tickerHarness wires a Runtime + TickerModule + bumpModule and runs the
-// supplied Lua script as the entrypoint. counter bumps on every fire.
+// tickerHarness wraps luaHarness with a TickerModule reference so tests can
+// reach the module for explicit shutdown ordering.
 type tickerHarness struct {
-	runtime *Runtime
-	module  *TickerModule
-	counter *atomic.Int64
+	*luaHarness
+	module *TickerModule
 }
 
 func newTickerHarness(t *testing.T, script string) *tickerHarness {
 	t.Helper()
-
-	root := t.TempDir()
-	entry := filepath.Join(root, "init.lua")
-	require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
-
-	counter := &atomic.Int64{}
-	tickerModule := &TickerModule{PluginName: "lua-test", Logger: zerolog.Nop()}
-	bump := &bumpModule{counter: counter}
-
-	rt, err := NewRuntime(
-		root,
-		zerolog.Nop(),
-		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
-		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
-		&CommandsModule{},
-		tickerModule,
-		bump,
-	)
-	require.NoError(t, err)
-	tickerModule.Runtime = rt
-
-	fn, err := rt.LoadEntrypoint(entry)
-	require.NoError(t, err)
-	require.NoError(t, rt.CallEntrypoint(fn))
-
-	return &tickerHarness{runtime: rt, module: tickerModule, counter: counter}
-}
-
-func (h *tickerHarness) Close() {
-	// Mirror Plugin.shutdown: module before runtime.
-	_ = h.module.Close()
-	h.runtime.Close()
-}
-
-func (h *tickerHarness) closeWithCleanup(t *testing.T) {
-	t.Helper()
-	t.Cleanup(h.Close)
+	module := &TickerModule{Logger: zerolog.Nop()}
+	return &tickerHarness{
+		luaHarness: newLuaHarness(t, script, module),
+		module:     module,
+	}
 }
 
 func TestTickerEveryFiresRepeatedly(t *testing.T) {
@@ -85,13 +35,12 @@ return function(hive)
   hive.ticker.every("1s", function() hive.test_bump() end)
 end
 `)
-		h.closeWithCleanup(t)
 
 		// 2.5s of virtual time fires the 1s ticker exactly twice.
 		time.Sleep(2500 * time.Millisecond)
 		synctest.Wait()
 
-		assert.Equal(t, int64(2), h.counter.Load())
+		assert.Equal(t, int64(2), h.capture.Counter())
 	})
 }
 
@@ -103,12 +52,11 @@ return function(hive)
   hive.ticker.after("1s", function() hive.test_bump() end)
 end
 `)
-		h.closeWithCleanup(t)
 
 		time.Sleep(2500 * time.Millisecond)
 		synctest.Wait()
 
-		assert.Equal(t, int64(1), h.counter.Load())
+		assert.Equal(t, int64(1), h.capture.Counter())
 	})
 }
 
@@ -125,13 +73,12 @@ return function(hive)
   end)
 end
 `)
-		h.closeWithCleanup(t)
 
 		// 3s covers several would-be ticks if cancel were missed.
 		time.Sleep(3 * time.Second)
 		synctest.Wait()
 
-		assert.Equal(t, int64(1), h.counter.Load())
+		assert.Equal(t, int64(1), h.capture.Counter())
 	})
 }
 
@@ -146,12 +93,11 @@ return function(hive)
   end)
 end
 `)
-		h.closeWithCleanup(t)
 
 		time.Sleep(2500 * time.Millisecond)
 		synctest.Wait()
 
-		assert.Equal(t, int64(2), h.counter.Load())
+		assert.Equal(t, int64(2), h.capture.Counter())
 	})
 }
 
@@ -171,7 +117,7 @@ end
 
 		time.Sleep(1200 * time.Millisecond)
 		synctest.Wait()
-		require.Positive(t, h.counter.Load(), "tickers should have fired before close")
+		require.Positive(t, h.capture.Counter(), "tickers should have fired before close")
 
 		h.Close()
 		synctest.Wait()
@@ -188,9 +134,7 @@ func TestTickerEveryRejectsSubSecondDuration(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		// The entrypoint asserts via pcall that the call errored with the
 		// expected message; the counter stays zero since no ticker registers.
-		root := t.TempDir()
-		entry := filepath.Join(root, "init.lua")
-		script := `
+		h := newTickerHarness(t, `
 return function(hive)
   local ok, err = pcall(hive.ticker.every, "500ms", function() hive.test_bump() end)
   if ok then
@@ -200,33 +144,10 @@ return function(hive)
     error("unexpected error: " .. tostring(err))
   end
 end
-`
-		require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
-
-		counter := &atomic.Int64{}
-		tickerModule := &TickerModule{PluginName: "lua-test", Logger: zerolog.Nop()}
-		rt, err := NewRuntime(
-			root,
-			zerolog.Nop(),
-			&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
-			&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
-			&CommandsModule{},
-			tickerModule,
-			&bumpModule{counter: counter},
-		)
-		require.NoError(t, err)
-		tickerModule.Runtime = rt
-		t.Cleanup(func() {
-			_ = tickerModule.Close()
-			rt.Close()
-		})
-
-		fn, err := rt.LoadEntrypoint(entry)
-		require.NoError(t, err)
-		require.NoError(t, rt.CallEntrypoint(fn))
+`)
 
 		time.Sleep(1200 * time.Millisecond)
 		synctest.Wait()
-		assert.Equal(t, int64(0), counter.Load(), "no ticker should have been registered")
+		assert.Equal(t, int64(0), h.capture.Counter(), "no ticker should have been registered")
 	})
 }

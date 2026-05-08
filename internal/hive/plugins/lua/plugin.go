@@ -36,13 +36,20 @@ func New(cfg config.LuaPluginConfig, kvStore kv.KV, pool *plugins.WorkerPool, lo
 	return &Plugin{cfg: cfg, kvStore: kvStore, pool: pool, logger: logger}
 }
 
+// Name returns the plugin identifier used in logs and the kv namespace.
 func (p *Plugin) Name() string { return pluginName }
 
+// Available reports whether the configured Lua entry file exists. Used by
+// the Hive plugin manager to skip plugins that aren't installed.
 func (p *Plugin) Available() bool {
 	info, err := os.Stat(p.cfg.ResolvedEntry())
 	return err == nil && !info.IsDir()
 }
 
+// Init builds the Lua runtime, loads the entrypoint, and runs it once
+// to register commands and other plugin state. Re-initialisation is
+// supported: any prior runtime is shut down first so commands from a
+// previous Init can't leak into MergedCommands.
 func (p *Plugin) Init(_ context.Context) error {
 	p.shutdown()
 
@@ -52,12 +59,10 @@ func (p *Plugin) Init(_ context.Context) error {
 	cmdModule := &CommandsModule{}
 
 	tickerModule := &TickerModule{
-		PluginName: p.Name(),
-		Logger:     p.logger.With().Str("module", "ticker").Logger(),
+		Logger: p.logger.With().Str("module", "ticker").Logger(),
 	}
 
 	shModule := &ShModule{
-		PluginName:     p.Name(),
 		Pool:           p.pool,
 		DefaultTimeout: cmp.Or(p.cfg.ShellTimeout, 30*time.Second),
 		Logger:         p.logger.With().Str("module", "sh").Logger(),
@@ -73,7 +78,10 @@ func (p *Plugin) Init(_ context.Context) error {
 		cmdModule,
 		tickerModule,
 		&JSONModule{},
-		&KVModule{Store: kv.Scoped[string](p.kvStore, p.Name())},
+		&KVModule{
+			Store:  kv.Scoped[string](p.kvStore, p.Name()),
+			Logger: p.logger.With().Str("module", "kv").Logger(),
+		},
 		shModule,
 	}
 
@@ -83,6 +91,7 @@ func (p *Plugin) Init(_ context.Context) error {
 	}
 	// Wired post-construction; Register makes no Runtime calls.
 	tickerModule.Runtime = runtime
+	shModule.Runtime = runtime
 
 	// Stash now so an entrypoint failure below cleans up via shutdown().
 	p.runtime = runtime
@@ -103,6 +112,8 @@ func (p *Plugin) Init(_ context.Context) error {
 	return nil
 }
 
+// Close releases the Lua runtime and any resources its host modules hold.
+// Safe to call multiple times; safe on a partially-initialised plugin.
 func (p *Plugin) Close() error {
 	p.shutdown()
 	return nil
@@ -132,10 +143,14 @@ func (p *Plugin) shutdown() {
 	p.commands = nil
 }
 
+// Commands returns the user commands registered by the plugin's
+// entrypoint. Returns nil if Init has not run or if it failed.
 func (p *Plugin) Commands() map[string]config.UserCommand {
 	return p.commands
 }
 
+// StatusProvider returns nil because Lua plugins don't expose a status
+// provider yet. Reserved for a future hook.
 func (p *Plugin) StatusProvider() plugins.StatusProvider {
 	return nil
 }

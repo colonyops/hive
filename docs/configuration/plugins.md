@@ -288,6 +288,65 @@ return function(hive)
 end
 ```
 
+#### Async form
+
+Pass a function as the last argument to run the command without blocking
+the Lua dispatcher. The call returns immediately with a handle; the
+callback fires on the dispatcher when the subprocess finishes.
+
+| Function | Callback signature | Notes |
+| -------- | ------------------ | ----- |
+| `hive.sh.run(cmd, fn)` | `fn(code)` | Same exit-code semantics as the sync form. |
+| `hive.sh.output(cmd, fn)` | `fn(stdout, err)` | Async cannot raise; check `err` for non-nil. |
+| `hive.sh.exec(cmd[, opts], fn)` | `fn(result)` | `result` matches the sync table: `{stdout, stderr, code, err}`. |
+
+Each call returns a handle with a `:cancel()` method that kills the
+in-flight subprocess and suppresses the pending callback.
+
+```lua
+return function(hive)
+  hive.sh.run("git fetch origin", function(code)
+    hive.log.info("fetch exited with " .. code)
+  end)
+
+  hive.sh.output("git rev-parse HEAD", function(head, err)
+    if err ~= nil then
+      hive.log.warn("rev-parse failed: " .. err)
+      return
+    end
+    hive.log.info("HEAD is " .. head)
+  end)
+
+  hive.sh.exec("ls -la", { cwd = "/tmp", timeout = 5 }, function(r)
+    hive.log.info("listed " .. r.stdout)
+  end)
+
+  local handle = hive.sh.run("sleep 600", function(_) end)
+  hive.ticker.after("5s", function() handle:cancel() end)
+end
+```
+
+!!! note "output's async error convention"
+    The sync form of `output` raises a Lua error on non-zero exit. The
+    async form **cannot** raise — the Lua call has already returned by
+    the time the subprocess finishes — so the callback receives
+    `(stdout, err)`: `err` is `nil` on success and a string mirroring
+    the sync error message on failure. Plugin authors converting
+    sync → async must update their error handling to check `err`.
+
+!!! note "Callbacks run on the dispatcher"
+    Every async callback runs on the same Lua dispatcher as ticker
+    fires and the plugin entrypoint. A slow callback serialises later
+    Lua work in that plugin — keep callbacks short or hand long work
+    off via another async call.
+
+!!! warning "Shutdown cancels in-flight calls"
+    Plugin reload or `hive` shutdown cancels every in-flight async
+    call: the per-handle context is cancelled, the subprocess is
+    killed, and the pinned callback is released for GC. Pending
+    callbacks may still fire once with a non-zero `code` and a
+    cancellation `err`, but never after the runtime has fully closed.
+
 !!! note "Shared shell pool"
     `hive.sh.*` calls draw from the same `plugins.shell_workers` budget as plugin status refreshes, so a slow shell command from Lua can delay other plugins. The default per-call timeout is 30s; tune it via `plugins.lua.shell_timeout`. Plugin shutdown cancels every in-flight command.
 

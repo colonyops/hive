@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,4 +109,91 @@ plugins:
 	assert.Contains(t, logStr, "plugin initialization failed")
 	assert.Contains(t, logStr, "hive.sh.output")
 	assert.Contains(t, logStr, "exit 1")
+}
+
+// TestLuaPluginShModule_AsyncDoesNotBlockTicker verifies that the async form
+// of hive.sh.run returns immediately and does not block the Lua dispatcher.
+//
+// The original plan called for a ticker.every fire-pattern across multiple
+// seconds, but `hive config` tears the plugin down immediately after init,
+// so we instead prove the property within a single entrypoint: launching a
+// long async sleep MUST NOT delay the synchronous work that follows.
+//
+// We can't time the property from the host side: hive's plugin shutdown
+// drains in-flight async work, so the total `hive config` wall time always
+// includes the residual sleep. Instead the entrypoint stamps "start" and
+// "done" marker files around the sync block. The mtime delta between the
+// two markers is the entrypoint wall time, isolated from shutdown drain.
+// With async dispatching correctly, that delta is ~2s (only the two 1s
+// sync sleeps). If async incorrectly blocked the dispatcher, the delta
+// would jump to ~7s (the 5s blocking sleep plus the two 1s sync sleeps).
+func TestLuaPluginShModule_AsyncDoesNotBlockTicker(t *testing.T) {
+	h := NewHarness(t)
+
+	counter := filepath.Join(h.DataDir(), "counter.txt")
+	startMarker := filepath.Join(h.DataDir(), "start.marker")
+	doneMarker := filepath.Join(h.DataDir(), "done.marker")
+
+	entry := filepath.Join(h.DataDir(), "lua", "plugins", "init.lua")
+	require.NoError(t, os.MkdirAll(filepath.Dir(entry), 0o755))
+	require.NoError(t, os.WriteFile(entry, []byte(fmt.Sprintf(`
+local COUNTER = %q
+local START   = %q
+local DONE    = %q
+
+return function(hive)
+  -- Stamp the start marker just before kicking off the async work so the
+  -- mtime delta between START and DONE captures only the entrypoint's
+  -- wall time, not hive's startup/shutdown overhead.
+  hive.sh.run("touch " .. START)
+
+  -- Async: kicks off a 5s sleep. If async-doesn't-block-the-dispatcher
+  -- holds, this returns immediately and the rest of the entrypoint runs
+  -- in ~2s wall time. The async subprocess is cancelled when the plugin
+  -- shuts down at the end of the hive command.
+  hive.sh.run("sleep 5", function(_) end)
+
+  hive.sh.run("printf 'tick1\n' >> " .. COUNTER)
+  hive.sh.run("sleep 1")
+  hive.sh.run("printf 'tick2\n' >> " .. COUNTER)
+  hive.sh.run("sleep 1")
+  hive.sh.run("printf 'tick3\n' >> " .. COUNTER)
+
+  hive.sh.run("touch " .. DONE)
+end
+`, counter, startMarker, doneMarker)), 0o644))
+
+	h.WithConfig(fmt.Sprintf(`
+plugins:
+  lua:
+    entry: %q
+`, entry))
+
+	_, err := h.RunStdout("config")
+	require.NoError(t, err)
+
+	// Counter should hold three ticks in order, proving the sync sleeps
+	// and writes ran sequentially after the async launch.
+	content, err := os.ReadFile(counter)
+	require.NoError(t, err)
+	lines := strings.Split(strings.TrimRight(string(content), "\n"), "\n")
+	assert.Equal(t, []string{"tick1", "tick2", "tick3"}, lines,
+		"counter should record three ticks in order; got %q", string(content))
+
+	startInfo, err := os.Stat(startMarker)
+	require.NoError(t, err, "start marker should exist")
+	doneInfo, err := os.Stat(doneMarker)
+	require.NoError(t, err, "done marker should exist")
+
+	entrypointDelta := doneInfo.ModTime().Sub(startInfo.ModTime())
+	t.Logf("entrypoint wall time (start->done marker delta): %s", entrypointDelta)
+
+	// Sync work alone is ~2s; the entrypoint should fit comfortably under
+	// 4s if async did not block the dispatcher. If async incorrectly
+	// blocked, the delta would also include the 5s sleep, pushing it past
+	// 7s. 4s leaves generous margin for filesystem mtime granularity and
+	// CI noise.
+	assert.Less(t, entrypointDelta, 4*time.Second,
+		"entrypoint took %s between start and done markers — async hive.sh.run appears to block the dispatcher",
+		entrypointDelta)
 }

@@ -3,12 +3,9 @@ package lua
 import (
 	"context"
 	"errors"
-	"os"
-	"path/filepath"
 	"testing"
 	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -17,27 +14,11 @@ import (
 	"github.com/colonyops/hive/internal/data/stores"
 )
 
-func newKVHarness(t *testing.T, store kv.KV, script string) {
+// kvHarness wires the shared luaHarness with a KVModule scoped under the
+// production pluginName so namespacing assertions ("lua:foo") match.
+func kvHarness(t *testing.T, store kv.KV, script string) *luaHarness {
 	t.Helper()
-
-	root := t.TempDir()
-	entry := filepath.Join(root, "init.lua")
-	require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
-
-	rt, err := NewRuntime(
-		root,
-		zerolog.Nop(),
-		&LogModule{PluginName: pluginName, Logger: zerolog.Nop()},
-		&PluginInfoModule{Name: pluginName, Entry: entry, ModuleRoot: root},
-		&CommandsModule{},
-		&KVModule{Store: kv.Scoped[string](store, pluginName)},
-	)
-	require.NoError(t, err)
-	t.Cleanup(rt.Close)
-
-	fn, err := rt.LoadEntrypoint(entry)
-	require.NoError(t, err)
-	require.NoError(t, rt.CallEntrypoint(fn))
+	return newLuaHarness(t, script, &KVModule{Store: kv.Scoped[string](store, pluginName)})
 }
 
 func newRealKVStore(t *testing.T) kv.KV {
@@ -50,7 +31,7 @@ func newRealKVStore(t *testing.T) kv.KV {
 
 func TestKVModule_RoundTrip(t *testing.T) {
 	store := newRealKVStore(t)
-	newKVHarness(t, store, `
+	kvHarness(t, store, `
 return function(hive)
   hive.kv.set("foo", "bar")
   assert(hive.kv.get("foo") == "bar", "expected foo=bar")
@@ -63,7 +44,7 @@ end
 }
 
 func TestKVModule_GetMissingReturnsNil(t *testing.T) {
-	newKVHarness(t, newRealKVStore(t), `
+	kvHarness(t, newRealKVStore(t), `
 return function(hive)
   assert(hive.kv.get("missing") == nil, "expected nil for missing key")
 end
@@ -72,7 +53,7 @@ end
 
 func TestKVModule_DeleteRemovesKey(t *testing.T) {
 	store := newRealKVStore(t)
-	newKVHarness(t, store, `
+	kvHarness(t, store, `
 return function(hive)
   hive.kv.set("foo", "bar")
   hive.kv.delete("foo")
@@ -89,7 +70,7 @@ func TestKVModule_NamespacingIsolatesPlugins(t *testing.T) {
 	store := newRealKVStore(t)
 	require.NoError(t, store.Set(context.Background(), "other:foo", "v"))
 
-	newKVHarness(t, store, `
+	kvHarness(t, store, `
 return function(hive)
   assert(hive.kv.get("foo") == nil, "lua plugin must not see other:foo")
 end
@@ -97,7 +78,7 @@ end
 }
 
 func TestKVModule_RejectsNonStringValue(t *testing.T) {
-	newKVHarness(t, newRealKVStore(t), `
+	kvHarness(t, newRealKVStore(t), `
 return function(hive)
   local ok = pcall(hive.kv.set, "foo", {1, 2, 3})
   if ok then
@@ -117,14 +98,14 @@ func TestKVModule_OpsRejectInputs(t *testing.T) {
 		{"set empty key", newRealKVStore(t), `local ok = pcall(hive.kv.set, "", "v"); if ok then error("expected empty key") end`},
 		{"get empty key", newRealKVStore(t), `local ok = pcall(hive.kv.get, ""); if ok then error("expected empty key") end`},
 		{"delete empty key", newRealKVStore(t), `local ok = pcall(hive.kv.delete, ""); if ok then error("expected empty key") end`},
-		{"set store error", storeErr, `local ok, err = pcall(hive.kv.set, "foo", "bar"); if ok or not string.find(tostring(err), "kv set") then error("unexpected: " .. tostring(err)) end`},
-		{"get store error", storeErr, `local ok, err = pcall(hive.kv.get, "foo"); if ok or not string.find(tostring(err), "kv get") then error("unexpected: " .. tostring(err)) end`},
-		{"delete store error", storeErr, `local ok, err = pcall(hive.kv.delete, "foo"); if ok or not string.find(tostring(err), "kv delete") then error("unexpected: " .. tostring(err)) end`},
+		{"set store error", storeErr, `local ok, err = pcall(hive.kv.set, "foo", "bar"); if ok or not string.find(tostring(err), "hive.kv.set", 1, true) then error("unexpected: " .. tostring(err)) end`},
+		{"get store error", storeErr, `local ok, err = pcall(hive.kv.get, "foo"); if ok or not string.find(tostring(err), "hive.kv.get", 1, true) then error("unexpected: " .. tostring(err)) end`},
+		{"delete store error", storeErr, `local ok, err = pcall(hive.kv.delete, "foo"); if ok or not string.find(tostring(err), "hive.kv.delete", 1, true) then error("unexpected: " .. tostring(err)) end`},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			newKVHarness(t, tc.store, "return function(hive) "+tc.script+" end")
+			kvHarness(t, tc.store, "return function(hive) "+tc.script+" end")
 		})
 	}
 }

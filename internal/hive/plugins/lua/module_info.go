@@ -10,6 +10,7 @@ type PluginInfoModule struct {
 	ModuleRoot string
 }
 
+// Register exposes the plugin metadata as a hive.plugin subtable.
 func (m *PluginInfoModule) Register(state *glua.LState, hive *glua.LTable) error {
 	plugin := state.NewTable()
 	state.SetField(plugin, "name", glua.LString(m.Name))
