@@ -9,6 +9,7 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	glua "github.com/yuin/gopher-lua"
@@ -90,7 +91,8 @@ func newJSONHarness(t *testing.T, script string) *jsonHarness {
 	capture := newCaptureModule()
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: "lua-test"},
+		zerolog.Nop(),
+		&LogModule{PluginName: "lua-test", Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: "lua-test", Entry: entry, ModuleRoot: root},
 		&JSONModule{},
 		capture,

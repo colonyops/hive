@@ -8,7 +8,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 	glua "github.com/yuin/gopher-lua"
 )
 
@@ -30,6 +30,7 @@ const tickerHandleMetatableName = "hive.ticker.handle"
 type TickerModule struct {
 	Runtime    *Runtime
 	PluginName string
+	Logger     zerolog.Logger
 
 	// rootCtx fans out to every per-handle context; cancelling it during
 	// Close stops every running ticker.
@@ -200,8 +201,7 @@ func (m *TickerModule) fire(h *tickerHandle) {
 			NRet:    0,
 			Protect: true,
 		}); err != nil {
-			log.Warn().
-				Str("plugin", m.PluginName).
+			m.Logger.Warn().
 				Uint64("handle", h.id).
 				Err(err).
 				Msg("ticker callback returned error")

@@ -264,6 +264,40 @@ end
 !!! warning "Empty keys are rejected"
     `set("", v)`, `get("")`, and `delete("")` all raise a Lua error. Pick a non-empty key.
 
+### hive.sh
+
+Run shell commands from Lua. All three functions execute via `sh -c` and share the same per-call timeout (default 30s) and shared worker pool used by status refreshes.
+
+!!! danger "Trust boundary"
+    `hive.sh` runs commands with the full privileges of the Hive process. Only enable Lua plugins from sources you trust — installing one is equivalent to running its shell commands as your user.
+
+| Function | Purpose |
+| -------- | ------- |
+| `hive.sh.run(cmd)` | Run `cmd`. Returns the exit code. Never raises. |
+| `hive.sh.output(cmd)` | Run `cmd`, return stdout with one trailing newline stripped. Raises on non-zero exit or executor error. |
+| `hive.sh.exec(cmd[, opts])` | Run `cmd` with optional `{cwd, timeout}`. Returns `{stdout, stderr, code, err}`. Never raises. |
+
+`opts.timeout` is in seconds (number). `opts.cwd` overrides the working directory for that call only; an empty string inherits Hive's working directory.
+
+```lua
+return function(hive)
+  local code = hive.sh.run("git fetch origin")          -- exit code only
+  local head = hive.sh.output("git rev-parse HEAD")     -- stdout, raises on non-zero
+  local r = hive.sh.exec("ls -la", { cwd = "/tmp", timeout = 5 })
+  -- r.stdout, r.stderr, r.code, r.err
+end
+```
+
+!!! note "Shared shell pool"
+    `hive.sh.*` calls draw from the same `plugins.shell_workers` budget as plugin status refreshes, so a slow shell command from Lua can delay other plugins. The default per-call timeout is 30s; tune it via `plugins.lua.shell_timeout`. Plugin shutdown cancels every in-flight command.
+
+```yaml
+plugins:
+  lua:
+    enabled: true
+    shell_timeout: 30s   # per-call timeout for hive.sh.* (default: 30s)
+```
+
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.

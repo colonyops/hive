@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -25,7 +26,8 @@ func newKVHarness(t *testing.T, store kv.KV, script string) {
 
 	rt, err := NewRuntime(
 		root,
-		&LogModule{PluginName: pluginName},
+		zerolog.Nop(),
+		&LogModule{PluginName: pluginName, Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: pluginName, Entry: entry, ModuleRoot: root},
 		&CommandsModule{},
 		&KVModule{Store: kv.Scoped[string](store, pluginName)},
