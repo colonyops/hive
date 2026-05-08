@@ -1,11 +1,59 @@
 package plugins
 
 import (
+	"context"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+// mockPlugin is a minimal Plugin implementation used by manager-level tests
+// to exercise registration, init, and command-slot seeding without spinning
+// up a real Lua/GitHub backend.
+type mockPlugin struct {
+	name     string
+	commands map[string]config.UserCommand
+}
+
+func (p *mockPlugin) Name() string                            { return p.name }
+func (p *mockPlugin) Available() bool                         { return true }
+func (p *mockPlugin) Init(_ context.Context) error            { return nil }
+func (p *mockPlugin) Close() error                            { return nil }
+func (p *mockPlugin) Commands() map[string]config.UserCommand { return p.commands }
+func (p *mockPlugin) StatusProvider() StatusProvider          { return nil }
+
+func TestManager_InitAll_SeedsStaticPluginSlots(t *testing.T) {
+	set := NewCommandSet(nil, nil)
+	mgr := NewManager(NewWorkerPool(0), set)
+
+	stub := &mockPlugin{
+		name: "stub",
+		commands: map[string]config.UserCommand{
+			"Foo": {Sh: "echo foo"},
+		},
+	}
+	mgr.Register(stub)
+
+	require.NoError(t, mgr.InitAll(context.Background()))
+
+	got := set.Plugin("stub")
+	require.NotNil(t, got)
+	assert.Equal(t, "echo foo", got["Foo"].Sh)
+}
+
+func TestManager_InitAll_SkipsPluginsWithNilCommands(t *testing.T) {
+	set := NewCommandSet(nil, nil)
+	mgr := NewManager(NewWorkerPool(0), set)
+
+	mgr.Register(&mockPlugin{name: "empty", commands: nil})
+
+	require.NoError(t, mgr.InitAll(context.Background()))
+
+	assert.Nil(t, set.Plugin("empty"), "no slot should be created for plugins that return nil commands")
+}
 
 func TestSessionsChanged(t *testing.T) {
 	mkSession := func(id string) *session.Session {

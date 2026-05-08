@@ -72,6 +72,27 @@ end
 	assert.Empty(t, plugin.Commands(), "Commands() must be empty after a failed Init")
 }
 
+func TestPlugin_Reinit_ClearsLuaSlot(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ Foo = { sh = "echo foo" } })
+end
+`), 0o644))
+
+	plugin, set := newConfigPluginWithSet(entry)
+	require.NoError(t, plugin.Init(context.Background()))
+	require.Contains(t, set.Plugin("lua"), "Foo")
+
+	// Re-write entry to register nothing.
+	require.NoError(t, os.WriteFile(entry, []byte(`return function(hive) end`), 0o644))
+	require.NoError(t, plugin.Init(context.Background()))
+	t.Cleanup(func() { require.NoError(t, plugin.Close()) })
+
+	// After re-init, the slot must not contain Foo from the prior run.
+	assert.NotContains(t, set.Plugin("lua"), "Foo")
+}
+
 // NewConfigPlugin builds a Plugin from a single entry file path. Shared by
 // the lifecycle, runtime, and per-module tests in this package.
 func NewConfigPlugin(entry string) *Plugin {
@@ -82,6 +103,21 @@ func NewConfigPlugin(entry string) *Plugin {
 		plugins.NewCommandSet(nil, nil),
 		zerolog.Nop(),
 	)
+}
+
+// newConfigPluginWithSet builds a Plugin and returns the shared CommandSet so
+// tests can inspect plugin slot writes directly. Mirrors NewConfigPlugin but
+// hands the set back to the caller.
+func newConfigPluginWithSet(entry string) (*Plugin, *plugins.CommandSet) {
+	set := plugins.NewCommandSet(nil, nil)
+	p := New(
+		config.LuaPluginConfig{Entry: entry, DispatcherQueueSize: 64},
+		newFakeKV(),
+		plugins.NewWorkerPool(1),
+		set,
+		zerolog.Nop(),
+	)
+	return p, set
 }
 
 // fakeKV is an in-memory kv.KV used purely for test wiring. It JSON-encodes
