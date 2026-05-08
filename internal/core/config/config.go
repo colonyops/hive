@@ -505,9 +505,11 @@ type TmuxPluginConfig struct {
 // distinguishing "user did not configure this" from "user explicitly chose the
 // default path" relies on Entry == "" being preserved as the unset signal.
 type LuaPluginConfig struct {
-	Enabled      *bool         `json:"enabled"       yaml:"enabled"` // nil = auto-detect, true/false = override
-	Entry        string        `json:"entry"         yaml:"entry"`
-	ShellTimeout time.Duration `json:"shell_timeout" yaml:"shell_timeout"` // per-call timeout for hive.sh.* (default: 30s)
+	Enabled      *bool         `json:"enabled"        yaml:"enabled"` // nil = auto-detect, true/false = override
+	Entry        string        `json:"entry"          yaml:"entry"`
+	ShellTimeout time.Duration `json:"shell_timeout"  yaml:"shell_timeout"`  // per-call timeout for hive.sh.* (default: 30s)
+	HTTPTimeout  time.Duration `json:"http_timeout"   yaml:"http_timeout"`   // per-call timeout for hive.http.* (default: 30s)
+	HTTPMaxBytes int64         `json:"http_max_bytes" yaml:"http_max_bytes"` // response body cap for hive.http.* (default: 10 MiB)
 }
 
 // ResolvedEntry returns the configured Lua entry path or the default discovery path.

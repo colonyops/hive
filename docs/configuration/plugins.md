@@ -329,6 +329,74 @@ plugins:
     shell_timeout: 30s   # per-call timeout for hive.sh.* (default: 30s)
 ```
 
+### hive.http
+
+Make outbound HTTP requests from Lua. Like `hive.sh`, every call is async: the call returns a handle immediately and the supplied callback fires on the dispatcher when the response (or error) is in. The callback is **required** — calling without one raises a Lua error.
+
+| Function | Notes |
+| -------- | ----- |
+| `hive.http.get(url[, opts], fn)` | GET request. `opts` is optional. |
+| `hive.http.post(url[, opts], fn)` | POST request. Pass `opts.body` as a string (use `hive.json.encode` for JSON). |
+| `hive.http.put(url[, opts], fn)` | PUT request. |
+| `hive.http.delete(url[, opts], fn)` | DELETE request. |
+| `hive.http.request(opts, fn)` | Full control. `opts.method` defaults to `"GET"`; `opts.url` is required. |
+
+Callback signature: `fn(response, err)`.
+
+- On success, `response` is `{ status, body, headers }` and `err` is `nil`. Non-2xx HTTP responses are still successes — branch on `response.status`.
+- On network/protocol failure (DNS, connection refused, timeout, response too large), `response` is `nil` and `err` is a string.
+
+`opts` fields:
+
+| Field | Type | Meaning |
+| ----- | ---- | ------- |
+| `headers` | `{ [name] = string }` | Request headers. Numeric values are coerced via `tostring`. |
+| `query` | `{ [key] = string\|number\|boolean }` | Merged into the URL's query string. Existing query params are preserved. |
+| `body` | `string` | Request body (raw). Use `hive.json.encode` for JSON. |
+| `timeout` | `number` (seconds) | Per-call timeout. Defaults to `plugins.lua.http_timeout`. |
+| `max_bytes` | `number` | Response body cap. Defaults to `plugins.lua.http_max_bytes`. Exceeding the cap surfaces as an error to the callback. |
+
+Each call returns a handle with a `:cancel()` method that aborts the in-flight request and suppresses the pending callback.
+
+```lua
+return function(hive)
+  hive.http.get("https://api.github.com/repos/colonyops/hive", {
+    headers = { Authorization = "token " .. (hive.kv.get("gh_token") or "") },
+    timeout = 10,
+  }, function(res, err)
+    if err ~= nil then
+      hive.log.warn("github fetch failed: " .. err)
+      return
+    end
+    if res.status >= 400 then
+      hive.log.warn("github returned " .. res.status)
+      return
+    end
+    local data = hive.json.decode(res.body)
+    hive.log.info("stars: " .. tostring(data.stargazers_count))
+  end)
+
+  hive.http.post("https://example.com/api", {
+    headers = { ["Content-Type"] = "application/json" },
+    body = hive.json.encode({ foo = 1 }),
+  }, function(res, err) end)
+end
+```
+
+!!! warning "Trust boundary"
+    `hive.http` issues requests with the network access the Hive process has. Only enable Lua plugins from sources you trust.
+
+!!! note "Shutdown cancels in-flight calls"
+    Plugin reload or `hive` shutdown cancels every in-flight request. Pending callbacks may still fire once with a non-nil `err` describing the cancellation, but never after the runtime has fully closed.
+
+```yaml
+plugins:
+  lua:
+    enabled: true
+    http_timeout: 30s         # per-call timeout for hive.http.* (default: 30s)
+    http_max_bytes: 10485760  # response body cap in bytes (default: 10 MiB)
+```
+
 ## Tmux Plugin
 
 The tmux plugin provides default commands for session management using bundled scripts (`hive-tmux`, `agent-send`) that are auto-extracted to `$HIVE_DATA_DIR/bin/`.

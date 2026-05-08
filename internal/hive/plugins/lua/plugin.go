@@ -68,6 +68,12 @@ func (p *Plugin) Init(_ context.Context) error {
 		Logger:         p.logger.With().Str("module", "sh").Logger(),
 	}
 
+	httpModule := &HTTPModule{
+		DefaultTimeout:  cmp.Or(p.cfg.HTTPTimeout, 30*time.Second),
+		DefaultMaxBytes: cmp.Or(p.cfg.HTTPMaxBytes, int64(10*1024*1024)),
+		Logger:          p.logger.With().Str("module", "http").Logger(),
+	}
+
 	modules := []HostModule{
 		&LogModule{PluginName: p.Name(), Logger: p.logger},
 		&PluginInfoModule{
@@ -83,6 +89,7 @@ func (p *Plugin) Init(_ context.Context) error {
 			Logger: p.logger.With().Str("module", "kv").Logger(),
 		},
 		shModule,
+		httpModule,
 	}
 
 	runtime, err := NewRuntime(p.cfg.ModuleRoot(), p.logger, modules...)
@@ -92,6 +99,7 @@ func (p *Plugin) Init(_ context.Context) error {
 	// Wired post-construction; Register makes no Runtime calls.
 	tickerModule.Runtime = runtime
 	shModule.Runtime = runtime
+	httpModule.Runtime = runtime
 
 	// Stash now so an entrypoint failure below cleans up via shutdown().
 	p.runtime = runtime

@@ -167,6 +167,8 @@ func newLuaHarness(t *testing.T, script string, extras ...HostModule) *luaHarnes
 			m.Runtime = rt
 		case *ShModule:
 			m.Runtime = rt
+		case *HTTPModule:
+			m.Runtime = rt
 		}
 	}
 
