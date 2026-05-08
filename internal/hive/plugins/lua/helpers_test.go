@@ -200,29 +200,3 @@ func (h *luaHarness) Close() {
 	}
 	h.runtime.Close()
 }
-
-// writeLuaEntry writes script to root/init.lua and returns the path. Used
-// by tests that need lower-level control than newLuaHarness gives — most
-// notably, asserting on CallEntrypoint failure.
-func writeLuaEntry(t *testing.T, root, script string) string {
-	t.Helper()
-	entry := filepath.Join(root, "init.lua")
-	require.NoError(t, os.WriteFile(entry, []byte(script), 0o644))
-	return entry
-}
-
-// newRawRuntime builds a Runtime with the standard test module set plus
-// extras but does not load or invoke any entrypoint. Pair with
-// writeLuaEntry for tests that need to drive LoadEntrypoint /
-// CallEntrypoint themselves.
-func newRawRuntime(t *testing.T, root, entry string, extras ...HostModule) *Runtime {
-	t.Helper()
-	modules := append([]HostModule{
-		&LogModule{PluginName: testPluginName, Logger: zerolog.Nop()},
-		&PluginInfoModule{Name: testPluginName, Entry: entry, ModuleRoot: root},
-		&CommandsModule{},
-	}, extras...)
-	rt, err := NewRuntime(root, zerolog.Nop(), modules...)
-	require.NoError(t, err)
-	return rt
-}

@@ -48,8 +48,8 @@ func (f *fakeExecutor) snapshot() (cmd string, opts shOptions, ctx context.Conte
 }
 
 // shHarness wraps luaHarness with the ShModule reference so tests can
-// reach the module for explicit shutdown ordering, direct method calls,
-// or to drive the dispatcher for handle inspection.
+// reach the module for explicit shutdown ordering or to drive the
+// dispatcher for handle inspection.
 type shHarness struct {
 	*luaHarness
 	module   *ShModule
@@ -97,264 +97,7 @@ func waitForCaptures(t *testing.T, capture *captureModule, n int) []glua.LValue 
 	}
 }
 
-func TestShRun_ExitCodes(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, cmd string, _ shOptions) shResult {
-			switch cmd {
-			case "ok":
-				return shResult{Code: 0}
-			case "fail":
-				return shResult{Code: 1}
-			case "weird":
-				return shResult{Code: 7}
-			}
-			t.Fatalf("unexpected cmd %q", cmd)
-			return shResult{}
-		},
-	}
-
-	h := newShHarness(t, `
-return function(hive)
-  hive.test_capture(hive.sh.run("ok"))
-  hive.test_capture(hive.sh.run("fail"))
-  hive.test_capture(hive.sh.run("weird"))
-end
-`, exec, 0)
-
-	values := h.capture.Snapshot()
-	require.Len(t, values, 3)
-	assert.Equal(t, 0, asLuaInt(t, values[0]))
-	assert.Equal(t, 1, asLuaInt(t, values[1]))
-	assert.Equal(t, 7, asLuaInt(t, values[2]))
-}
-
-func TestShOutput_StripsTrailingNewline(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			return shResult{Stdout: "hello\n", Code: 0}
-		},
-	}
-
-	h := newShHarness(t, `
-return function(hive)
-  hive.test_capture(hive.sh.output("anything"))
-end
-`, exec, 0)
-
-	values := h.capture.Snapshot()
-	require.Len(t, values, 1)
-	assert.Equal(t, glua.LString("hello"), values[0])
-}
-
-func TestShOutput_NonZeroRaises(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			return shResult{Code: 1, Stderr: "boom\n"}
-		},
-	}
-
-	module := &ShModule{
-		Pool:           plugins.NewWorkerPool(1),
-		Executor:       exec,
-		DefaultTimeout: 5 * time.Second,
-		Logger:         zerolog.Nop(),
-	}
-
-	// hive.sh.output raising during entry execution surfaces as a
-	// CallEntrypoint error, so this test cannot use newLuaHarness which
-	// asserts CallEntrypoint succeeds.
-	root := t.TempDir()
-	entry := writeLuaEntry(t, root, `
-return function(hive)
-  hive.sh.output("bad")
-end
-`)
-
-	rt := newRawRuntime(t, root, entry, module)
-	module.Runtime = rt
-	t.Cleanup(func() {
-		_ = module.Close()
-		rt.Close()
-	})
-
-	fn, err := rt.LoadEntrypoint(entry)
-	require.NoError(t, err)
-
-	err = rt.CallEntrypoint(fn)
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "boom")
-	assert.Contains(t, err.Error(), "exit 1")
-}
-
-func TestShExec_TableShape(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			return shResult{Stdout: "out", Stderr: "err", Code: 2}
-		},
-	}
-
-	h := newShHarness(t, `
-return function(hive)
-  local r = hive.sh.exec("anything")
-  hive.test_capture(r.stdout)
-  hive.test_capture(r.stderr)
-  hive.test_capture(r.code)
-  hive.test_capture(r.err)
-end
-`, exec, 0)
-
-	values := h.capture.Snapshot()
-	require.Len(t, values, 4)
-	assert.Equal(t, glua.LString("out"), values[0])
-	assert.Equal(t, glua.LString("err"), values[1])
-	assert.Equal(t, 2, asLuaInt(t, values[2]))
-	assert.Equal(t, glua.LNil, values[3])
-}
-
-func TestShExec_TableShape_WithErr(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			return shResult{Code: -1, Err: errors.New("timeout")}
-		},
-	}
-
-	h := newShHarness(t, `
-return function(hive)
-  local r = hive.sh.exec("anything")
-  hive.test_capture(r.err)
-end
-`, exec, 0)
-
-	values := h.capture.Snapshot()
-	require.Len(t, values, 1)
-	assert.Equal(t, glua.LString("timeout"), values[0])
-}
-
-func TestShExec_OptionsThreaded(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			return shResult{Code: 0}
-		},
-	}
-
-	newShHarness(t, `
-return function(hive)
-  hive.sh.exec("anything", { cwd = "/tmp", timeout = 5 })
-end
-`, exec, 0)
-
-	_, opts, _, calls := exec.snapshot()
-	assert.Equal(t, 1, calls)
-	assert.Equal(t, "/tmp", opts.Cwd)
-	assert.Equal(t, 5*time.Second, opts.Timeout)
-}
-
-func TestShExec_DefaultTimeout(t *testing.T) {
-	t.Parallel()
-
-	exec := &fakeExecutor{
-		respond: func(_ context.Context, _ string, _ shOptions) shResult {
-			return shResult{Code: 0}
-		},
-	}
-
-	newShHarness(t, `
-return function(hive)
-  hive.sh.exec("anything")
-end
-`, exec, 11*time.Second)
-
-	_, opts, _, calls := exec.snapshot()
-	assert.Equal(t, 1, calls)
-	assert.Equal(t, 11*time.Second, opts.Timeout)
-}
-
-func TestShModule_ShutdownCancelsInflight(t *testing.T) {
-	t.Parallel()
-
-	released := make(chan struct{})
-	captured := make(chan context.Context, 1)
-
-	exec := &fakeExecutor{
-		respond: func(ctx context.Context, _ string, _ shOptions) shResult {
-			captured <- ctx
-			<-ctx.Done()
-			close(released)
-			return shResult{Code: -1, Err: ctx.Err()}
-		},
-	}
-
-	h := newShHarness(t, `
-return function(hive)
-  hive.commands({ Trigger = { sh = "true", help = "noop" } })
-end
-`, exec, 0)
-
-	// Kick off a blocked exec from a goroutine; it will park inside
-	// the fake executor until rootCtx is cancelled.
-	done := make(chan shResult, 1)
-	go func() {
-		done <- h.module.runViaPool("blocking", shOptions{})
-	}()
-
-	var execCtx context.Context
-	select {
-	case execCtx = <-captured:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("executor never received a context")
-	}
-
-	require.NoError(t, h.module.Close())
-
-	select {
-	case <-released:
-	case <-time.After(2 * time.Second):
-		t.Fatalf("executor never released after Close")
-	}
-
-	require.Error(t, execCtx.Err(), "executor's context should be cancelled by Close")
-
-	select {
-	case res := <-done:
-		assert.Equal(t, -1, res.Code)
-	case <-time.After(2 * time.Second):
-		t.Fatalf("runViaPool never returned after Close")
-	}
-}
-
-func TestShModule_RealExecutor_EndToEnd(t *testing.T) {
-	t.Parallel()
-
-	module := &ShModule{
-		Pool:           plugins.NewWorkerPool(1),
-		DefaultTimeout: 5 * time.Second,
-		Logger:         zerolog.Nop(),
-	}
-
-	h := newLuaHarness(t, `
-return function(hive)
-  hive.test_capture(hive.sh.output("echo hello"))
-end
-`, module)
-
-	values := h.capture.Snapshot()
-	require.Len(t, values, 1)
-	assert.Equal(t, glua.LString("hello"), values[0])
-}
-
-func TestShRun_AsyncCallbackReceivesCode(t *testing.T) {
+func TestShRun_CallbackReceivesCode(t *testing.T) {
 	t.Parallel()
 
 	exec := &fakeExecutor{
@@ -384,7 +127,24 @@ end
 	assert.ElementsMatch(t, []int{0, 7}, codes)
 }
 
-func TestShOutput_AsyncSuccessPassesStdoutNilErr(t *testing.T) {
+func TestShRun_RequiresCallback(t *testing.T) {
+	t.Parallel()
+
+	h := newShHarness(t, `
+return function(hive)
+  local ok, err = pcall(hive.sh.run, "anything")
+  if ok then
+    error("expected hive.sh.run to require a callback")
+  end
+  hive.test_capture("err", tostring(err))
+end
+`, &fakeExecutor{}, 0)
+
+	got := h.capture.String("err")
+	assert.NotEmpty(t, got, "callback-missing pcall should have captured an err")
+}
+
+func TestShOutput_SuccessPassesStdoutNilErr(t *testing.T) {
 	t.Parallel()
 
 	exec := &fakeExecutor{
@@ -408,7 +168,7 @@ end
 	assert.Equal(t, glua.LNil, values[1])
 }
 
-func TestShOutput_AsyncFailurePassesNilStdoutAndErr(t *testing.T) {
+func TestShOutput_FailurePassesNilStdoutAndErr(t *testing.T) {
 	t.Parallel()
 
 	exec := &fakeExecutor{
@@ -435,7 +195,7 @@ end
 	assert.Contains(t, string(errStr), "boom")
 }
 
-func TestShExec_AsyncCallbackReceivesTable(t *testing.T) {
+func TestShExec_CallbackReceivesTable(t *testing.T) {
 	t.Parallel()
 
 	exec := &fakeExecutor{
@@ -463,7 +223,7 @@ end
 	assert.Equal(t, glua.LString("explained"), values[3])
 }
 
-func TestShExec_AsyncOptsThreaded(t *testing.T) {
+func TestShExec_OptsThreaded(t *testing.T) {
 	t.Parallel()
 
 	exec := &fakeExecutor{
@@ -486,6 +246,28 @@ end
 	assert.Equal(t, 1, calls)
 	assert.Equal(t, "/tmp", opts.Cwd)
 	assert.Equal(t, 5*time.Second, opts.Timeout)
+}
+
+func TestShExec_DefaultTimeoutAppliedWhenOptsOmitted(t *testing.T) {
+	t.Parallel()
+
+	exec := &fakeExecutor{
+		respond: func(_ context.Context, _ string, _ shOptions) shResult {
+			return shResult{Code: 0}
+		},
+	}
+
+	h := newShHarness(t, `
+return function(hive)
+  hive.sh.exec("anything", function(r) hive.test_capture(r.code) end)
+end
+`, exec, 11*time.Second)
+
+	_ = waitForCaptures(t, h.capture, 1)
+
+	_, opts, _, calls := exec.snapshot()
+	assert.Equal(t, 1, calls)
+	assert.Equal(t, 11*time.Second, opts.Timeout)
 }
 
 func TestShAsync_HandleCancelKillsSubprocess(t *testing.T) {
@@ -635,4 +417,28 @@ end
 	// Still exactly one capture; no panic in the dispatcher.
 	values = h.capture.Snapshot()
 	assert.Len(t, values, 1)
+}
+
+func TestShModule_RealExecutor_EndToEnd(t *testing.T) {
+	t.Parallel()
+
+	module := &ShModule{
+		Pool:           plugins.NewWorkerPool(1),
+		DefaultTimeout: 5 * time.Second,
+		Logger:         zerolog.Nop(),
+	}
+
+	h := newLuaHarness(t, `
+return function(hive)
+  hive.sh.output("echo hello", function(stdout, err)
+    hive.test_capture(stdout)
+    hive.test_capture(err)
+  end)
+end
+`, module)
+
+	values := waitForCaptures(t, h.capture, 2)
+	require.Len(t, values, 2)
+	assert.Equal(t, glua.LString("hello"), values[0])
+	assert.Equal(t, glua.LNil, values[1])
 }

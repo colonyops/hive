@@ -32,17 +32,15 @@ type HostModuleCloser interface {
 //
 //  2. state.RaiseError("hive.<module>.<fn>: %s", err) — an operation
 //     failed at runtime after argument parsing succeeded (e.g. JSON
-//     decode hit invalid input, a kv store write returned an error, a
-//     synchronous shell command exited non-zero). The "hive.<module>.<fn>"
-//     prefix identifies the source so plugin authors can locate the
-//     failure without traversing a stack trace.
+//     decode hit invalid input, a kv store write returned an error).
+//     The "hive.<module>.<fn>" prefix identifies the source so plugin
+//     authors can locate the failure without traversing a stack trace.
 //
-//  3. Two-return (nil, errstr) — the call has already returned past the
-//     synchronous Lua boundary (the error surfaces in a callback) and
-//     RaiseError is therefore impossible. The async form of
-//     hive.sh.output is the only current case: it cannot raise on
-//     non-zero exit because the callback fires after the original call
-//     has returned.
+//  3. Callback (..., errstr) — the call has already returned past the
+//     synchronous Lua boundary, so RaiseError is impossible: the error
+//     surfaces inside the callback as a trailing argument. hive.sh.output
+//     uses this convention, passing (stdout, err) where err is nil on
+//     success and a string describing the failure on non-zero exit.
 //
 // Module-specific errors raised by case (2) should always include the
 // "hive.<module>.<fn>" prefix; case (1) messages are framed by the

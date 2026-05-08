@@ -84,10 +84,11 @@ func (osExecutor) Exec(ctx context.Context, cmd string, opts shOptions) shResult
 }
 
 // ShModule exposes hive.sh.{run,output,exec} for shell command execution.
-// Synchronous calls block the Lua dispatcher; async calls (callback as the
-// last argument) return a handle and run on the registry's WaitGroup.
-// Concurrency across plugins is bounded by the shared Pool. Close cancels
-// in-flight work.
+// Every entry point is async: the call returns a handle immediately, the
+// subprocess runs on a goroutine bound to a per-handle context, and the
+// caller-supplied callback fires on the dispatcher when the subprocess
+// finishes. Concurrency across plugins is bounded by the shared Pool.
+// Close cancels every in-flight call.
 type ShModule struct {
 	Pool           *plugins.WorkerPool
 	Executor       ShellExecutor
@@ -133,13 +134,6 @@ func (m *ShModule) Close() error {
 	return nil
 }
 
-// runViaPool executes cmd through the shared worker pool. Pool acquisition
-// itself respects rootCtx so a Close mid-wait returns without running.
-func (m *ShModule) runViaPool(cmd string, opts shOptions) shResult {
-	defer m.registry.trackGoroutine()()
-	return m.execWithLogging(0, m.registry.rootContext(), cmd, opts)
-}
-
 // spawnAsync pins fn, allocates a handle, and starts the executor on a
 // goroutine. Runs on the dispatcher; the goroutine hops back via
 // Runtime.Submit to invoke dispatch with the executor result.
@@ -171,10 +165,8 @@ func (m *ShModule) spawnAsync(
 }
 
 // execWithLogging acquires a pool slot, runs cmd through the executor,
-// and emits start/finish/cancel logs. Shared between the sync and async
-// paths; id is 0 for sync (no handle field is logged) and non-zero for
-// async (handle is included in every log line so operators can correlate
-// start/finish/cancel for a specific in-flight call).
+// and emits start/finish/cancel logs tagged with the handle id so
+// operators can correlate the events for a specific in-flight call.
 func (m *ShModule) execWithLogging(id uint64, ctx context.Context, cmd string, opts shOptions) shResult {
 	start := time.Now()
 	m.logShellStart(id, cmd, opts)
@@ -193,7 +185,7 @@ func (m *ShModule) execWithLogging(id uint64, ctx context.Context, cmd string, o
 
 func (m *ShModule) logShellStart(id uint64, cmd string, opts shOptions) {
 	m.Logger.Debug().
-		Func(addHandle(id)).
+		Uint64("handle", id).
 		Str("cmd", cmd).
 		Str("cwd", opts.Cwd).
 		Dur("timeout", opts.Timeout).
@@ -202,7 +194,7 @@ func (m *ShModule) logShellStart(id uint64, cmd string, opts shOptions) {
 
 func (m *ShModule) logShellPoolCancelled(id uint64, cmd string, err error) {
 	m.Logger.Warn().
-		Func(addHandle(id)).
+		Uint64("handle", id).
 		Str("cmd", cmd).
 		Err(err).
 		Msg("hive.sh: pool acquisition cancelled")
@@ -214,7 +206,7 @@ func (m *ShModule) logShellFinish(id uint64, cmd string, dur time.Duration, resu
 		level = m.Logger.Warn
 	}
 	level().
-		Func(addHandle(id)).
+		Uint64("handle", id).
 		Str("cmd", cmd).
 		Int("code", result.Code).
 		Dur("duration", dur).
@@ -222,18 +214,7 @@ func (m *ShModule) logShellFinish(id uint64, cmd string, dur time.Duration, resu
 		Msg("hive.sh: shell command finished")
 }
 
-// addHandle returns a zerolog Event hook that attaches the handle field
-// when id is non-zero. Used by sh's start/finish/cancel logs to
-// correlate async log lines.
-func addHandle(id uint64) func(*zerolog.Event) {
-	return func(e *zerolog.Event) {
-		if id != 0 {
-			e.Uint64("handle", id)
-		}
-	}
-}
-
-// dispatchRun invokes the async run callback with the exit code.
+// dispatchRun invokes the run callback with the exit code.
 func (m *ShModule) dispatchRun(state *glua.LState, fn *glua.LFunction, result shResult) {
 	if err := state.CallByParam(glua.P{
 		Fn:      fn,
@@ -242,14 +223,14 @@ func (m *ShModule) dispatchRun(state *glua.LState, fn *glua.LFunction, result sh
 	}, glua.LNumber(result.Code)); err != nil {
 		m.Logger.Warn().
 			Err(err).
-			Msg("hive.sh.run: async callback returned error")
+			Msg("hive.sh.run: callback returned error")
 	}
 }
 
-// dispatchOutput invokes the async output callback with (stdout, err).
-// On non-zero exit or executor error, stdout is LNil and err is the
-// same string the sync form would raise; otherwise stdout is the
-// trimmed output and err is LNil.
+// dispatchOutput invokes the output callback with (stdout, err). On
+// non-zero exit or executor error, stdout is LNil and err is a string
+// describing the failure; otherwise stdout is the trimmed output and
+// err is LNil.
 func (m *ShModule) dispatchOutput(state *glua.LState, fn *glua.LFunction, result shResult) {
 	var stdoutArg, errArg glua.LValue
 	if result.Err != nil || result.Code != 0 {
@@ -266,12 +247,12 @@ func (m *ShModule) dispatchOutput(state *glua.LState, fn *glua.LFunction, result
 	}, stdoutArg, errArg); err != nil {
 		m.Logger.Warn().
 			Err(err).
-			Msg("hive.sh.output: async callback returned error")
+			Msg("hive.sh.output: callback returned error")
 	}
 }
 
-// dispatchExec invokes the async exec callback with the result table
-// matching the sync form's shape: { stdout, stderr, code, err }.
+// dispatchExec invokes the exec callback with a result table:
+// { stdout, stderr, code, err }.
 func (m *ShModule) dispatchExec(state *glua.LState, fn *glua.LFunction, result shResult) {
 	if err := state.CallByParam(glua.P{
 		Fn:      fn,
@@ -280,60 +261,45 @@ func (m *ShModule) dispatchExec(state *glua.LState, fn *glua.LFunction, result s
 	}, buildExecTable(state, result)); err != nil {
 		m.Logger.Warn().
 			Err(err).
-			Msg("hive.sh.exec: async callback returned error")
+			Msg("hive.sh.exec: callback returned error")
 	}
 }
 
-// parseRunArgs parses the args for hive.sh.run. Returns the trailing
-// callback if the second arg is a function; otherwise nil for sync.
+// parseRunArgs parses the args for hive.sh.run(cmd, fn). The callback is
+// required; non-function arg 2 raises a Lua error via CheckFunction.
 func (m *ShModule) parseRunArgs(state *glua.LState) (cmd string, callback *glua.LFunction) {
 	cmd = state.CheckString(1)
-	if state.GetTop() >= 2 {
-		if fn, ok := state.Get(2).(*glua.LFunction); ok {
-			callback = fn
-		}
-	}
+	callback = state.CheckFunction(2)
 	return cmd, callback
 }
 
-// parseOutputArgs parses the args for hive.sh.output. Same shape as run.
+// parseOutputArgs parses the args for hive.sh.output(cmd, fn). Same
+// shape as run.
 func (m *ShModule) parseOutputArgs(state *glua.LState) (cmd string, callback *glua.LFunction) {
 	return m.parseRunArgs(state)
 }
 
 // parseExecArgs parses the args for hive.sh.exec. Accepts:
 //
-//	exec(cmd)
-//	exec(cmd, opts)
 //	exec(cmd, fn)
 //	exec(cmd, opts, fn)
 //
-// where opts is a Lua table and fn is a Lua function. Anything else at
-// arg 2 raises a Lua error.
+// where opts is a Lua table and fn is a Lua function. The callback is
+// required; non-function final arg raises a Lua error.
 func (m *ShModule) parseExecArgs(state *glua.LState) (cmd string, opts shOptions, callback *glua.LFunction) {
 	cmd = state.CheckString(1)
 	opts = shOptions{Timeout: m.DefaultTimeout}
 
-	if state.GetTop() < 2 {
-		return cmd, opts, nil
-	}
-
-	switch v := state.Get(2).(type) {
-	case *glua.LTable:
-		applyExecOpts(v, &opts)
-		if state.GetTop() >= 3 {
-			if fn, ok := state.Get(3).(*glua.LFunction); ok {
-				callback = fn
-			} else if state.Get(3) != glua.LNil {
-				state.ArgError(3, "expected function or nil")
-			}
+	switch state.GetTop() {
+	case 2:
+		callback = state.CheckFunction(2)
+	case 3:
+		if state.Get(2) != glua.LNil {
+			applyExecOpts(state.CheckTable(2), &opts)
 		}
-	case *glua.LFunction:
-		callback = v
-	case *glua.LNilType:
-		// no-op: treat as sync no-opts
+		callback = state.CheckFunction(3)
 	default:
-		state.ArgError(2, "expected table, function, or nil")
+		state.RaiseError("hive.sh.exec: expected (cmd, fn) or (cmd, opts, fn)")
 	}
 
 	return cmd, opts, callback
@@ -351,11 +317,6 @@ func applyExecOpts(t *glua.LTable, opts *shOptions) {
 
 func (m *ShModule) luaRun(state *glua.LState) int {
 	cmd, callback := m.parseRunArgs(state)
-	if callback == nil {
-		result := m.runViaPool(cmd, shOptions{Timeout: m.DefaultTimeout})
-		state.Push(glua.LNumber(result.Code))
-		return 1
-	}
 	handle := m.spawnAsync(state, callback, cmd, shOptions{Timeout: m.DefaultTimeout}, m.dispatchRun)
 	state.Push(m.registry.handleUserData(state, handle))
 	return 1
@@ -363,17 +324,6 @@ func (m *ShModule) luaRun(state *glua.LState) int {
 
 func (m *ShModule) luaOutput(state *glua.LState) int {
 	cmd, callback := m.parseOutputArgs(state)
-	if callback == nil {
-		result := m.runViaPool(cmd, shOptions{Timeout: m.DefaultTimeout})
-
-		if result.Err != nil || result.Code != 0 {
-			state.RaiseError("hive.sh.output: %s", formatExecError(result))
-			return 0
-		}
-
-		state.Push(glua.LString(strings.TrimRight(result.Stdout, "\n")))
-		return 1
-	}
 	handle := m.spawnAsync(state, callback, cmd, shOptions{Timeout: m.DefaultTimeout}, m.dispatchOutput)
 	state.Push(m.registry.handleUserData(state, handle))
 	return 1
@@ -381,18 +331,13 @@ func (m *ShModule) luaOutput(state *glua.LState) int {
 
 func (m *ShModule) luaExec(state *glua.LState) int {
 	cmd, opts, callback := m.parseExecArgs(state)
-	if callback == nil {
-		result := m.runViaPool(cmd, opts)
-		state.Push(buildExecTable(state, result))
-		return 1
-	}
 	handle := m.spawnAsync(state, callback, cmd, opts, m.dispatchExec)
 	state.Push(m.registry.handleUserData(state, handle))
 	return 1
 }
 
-// buildExecTable builds the Lua result table {stdout, stderr, code, err}.
-// Shared between the sync luaExec return and the async dispatchExec path.
+// buildExecTable builds the Lua result table {stdout, stderr, code, err}
+// passed to hive.sh.exec callbacks.
 func buildExecTable(state *glua.LState, r shResult) *glua.LTable {
 	out := state.NewTable()
 	state.SetField(out, "stdout", glua.LString(r.Stdout))
@@ -406,8 +351,9 @@ func buildExecTable(state *glua.LState, r shResult) *glua.LTable {
 	return out
 }
 
-// formatExecError builds the Lua error message used by hive.sh.output.
-// Includes stderr (trimmed) and Err when present.
+// formatExecError builds the err string passed to hive.sh.output
+// callbacks on non-zero exit. Includes stderr (trimmed) and Err when
+// present.
 func formatExecError(r shResult) string {
 	var parts []string
 	parts = append(parts, fmt.Sprintf("exit %d", r.Code))

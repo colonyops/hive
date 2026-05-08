@@ -113,19 +113,6 @@ func (r *asyncRegistry) shutdown() {
 	})
 }
 
-// rootContext returns the root context whose cancellation fans out to
-// every per-handle context. Synchronous callers can use this directly;
-// async callers should derive a per-handle context via allocate.
-func (r *asyncRegistry) rootContext() context.Context { return r.rootCtx }
-
-// trackGoroutine increments the WaitGroup and returns a function that
-// decrements it. Use as `defer r.trackGoroutine()()` to ensure shutdown
-// waits for in-flight synchronous work.
-func (r *asyncRegistry) trackGoroutine() func() {
-	r.wg.Add(1)
-	return r.wg.Done
-}
-
 // Go starts fn in a goroutine tracked by the registry's WaitGroup so
 // shutdown blocks until fn completes. Mirrors sync.WaitGroup.Go;
 // capitalised because lowercase `go` is a reserved keyword.
