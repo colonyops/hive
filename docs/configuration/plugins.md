@@ -177,7 +177,7 @@ end
     All ticker fires share the same dispatcher goroutine as your entrypoint and command handlers, so a long-running callback delays every other ticker on the plugin's Lua state.
 
 !!! warning "Backpressure: drop + log"
-    If a callback runs longer than the tick interval, additional ticks queue in a bounded buffer (currently 64 items per plugin). When the buffer is full, further ticks are dropped and a warning is logged. The module does **not** coalesce or skip cleanly — it drops, so plan for callbacks that may not fire on every tick under heavy load.
+    If a callback runs longer than the tick interval, additional ticks queue in a bounded buffer (default 128 items per plugin, configurable via `plugins.lua.dispatcher_queue_size`). When the buffer is full, further ticks are dropped and a warning is logged. The module does **not** coalesce or skip cleanly — it drops, so plan for callbacks that may not fire on every tick under heavy load.
 
 !!! note "Shutdown cancels everything"
     When hive shuts down or the plugin is reloaded, every outstanding ticker is cancelled and its callback is released for GC.
@@ -323,7 +323,8 @@ end
 plugins:
   lua:
     enabled: true
-    shell_timeout: 30s   # per-call timeout for hive.sh.* (default: 30s)
+    shell_timeout: 30s            # per-call timeout for hive.sh.* (default: 30s)
+    dispatcher_queue_size: 128    # bounded buffer for ticker fires and other deferred work (default: 128)
 ```
 
 ### hive.http
