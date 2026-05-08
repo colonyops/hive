@@ -145,6 +145,14 @@ hv
 
 Open the command palette with `:`, run `LuaHello`, and confirm that `.lua-plugin-output` was created in the selected session directory.
 
+### Dynamic command registration
+
+`hive.commands(table)` can be called from any Lua context — including ticker callbacks and other deferred work — not just the entrypoint. Each successful call merges its entries into the plugin's command slot; existing names are replaced (last write wins), and new names are added. The TUI command palette picks up changes on the next palette open; an open palette continues to show the snapshot taken when it was opened.
+
+Failures are non-fatal: invalid registrations log an error and leave the existing command set unchanged. The dispatcher work queue is bounded by `plugins.lua.dispatcher_queue_size` (default 128); bursts above this size drop the oldest fire-and-forget submissions with a warn-level log.
+
+The standalone `hc` TUI (`hive hc`) does not load plugins and does not display Lua-registered commands. Run the full `hive` TUI to see them.
+
 ### hive.ticker
 
 Schedule callbacks to run repeatedly or after a delay.
