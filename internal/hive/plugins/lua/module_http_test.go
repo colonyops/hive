@@ -480,6 +480,63 @@ end
 	assert.Equal(t, 0, client.requestCount())
 }
 
+func TestHTTPModule_SetCookieSurfacedSeparately(t *testing.T) {
+	t.Parallel()
+
+	// Two cookies with commas in Expires dates — joining with ", " would
+	// corrupt both. The module surfaces them via res.cookies (verbatim,
+	// in order) and omits Set-Cookie from res.headers.
+	client := &fakeHTTPClient{
+		respond: func(req *http.Request) (*http.Response, error) {
+			h := http.Header{}
+			h.Add("Set-Cookie", "session=abc123; Expires=Tue, 06 May 2026 12:00:00 GMT")
+			h.Add("Set-Cookie", "tracking=xyz; Path=/")
+			h.Set("Content-Type", "text/plain")
+			return jsonResponse(200, "ok", h), nil
+		},
+	}
+
+	h := newHTTPHarness(t, `
+return function(hive)
+  hive.http.get("https://example.com", function(res, _)
+    hive.test_capture("cookie_count", #res.cookies)
+    hive.test_capture("cookie_1", res.cookies[1])
+    hive.test_capture("cookie_2", res.cookies[2])
+    hive.test_capture("set_cookie_in_headers", res.headers["Set-Cookie"] == nil and "absent" or "present")
+  end)
+end
+`, client)
+
+	waitForKey(t, h.capture, "cookie_count")
+	assert.Equal(t, 2, int(h.capture.Number("cookie_count")))
+	assert.Equal(t, "session=abc123; Expires=Tue, 06 May 2026 12:00:00 GMT", h.capture.String("cookie_1"))
+	assert.Equal(t, "tracking=xyz; Path=/", h.capture.String("cookie_2"))
+	assert.Equal(t, "absent", h.capture.String("set_cookie_in_headers"))
+}
+
+func TestHTTPModule_NoCookiesIsEmptyArray(t *testing.T) {
+	t.Parallel()
+
+	client := &fakeHTTPClient{
+		respond: func(req *http.Request) (*http.Response, error) {
+			return jsonResponse(200, "ok", nil), nil
+		},
+	}
+
+	h := newHTTPHarness(t, `
+return function(hive)
+  hive.http.get("https://example.com", function(res, _)
+    hive.test_capture("type", type(res.cookies))
+    hive.test_capture("count", #res.cookies)
+  end)
+end
+`, client)
+
+	waitForKey(t, h.capture, "type")
+	assert.Equal(t, "table", h.capture.String("type"))
+	assert.Equal(t, 0, int(h.capture.Number("count")))
+}
+
 // waitForKey polls for a keyed capture entry with a generous CI-friendly
 // timeout. Use when tests need to await a single named callback rather
 // than an N-element list (waitForCaptures handles the latter).

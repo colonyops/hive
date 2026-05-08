@@ -44,11 +44,15 @@ type httpRequest struct {
 // failures populate Err; non-2xx status codes are not failures and live
 // alongside Body+Headers.
 type httpResult struct {
-	Status    int
-	Body      string
-	Headers   map[string]string
-	Truncated bool
-	Err       error
+	Status  int
+	Body    string
+	Headers map[string]string
+	// Cookies preserves Set-Cookie verbatim and in order. Set-Cookie
+	// cannot be safely flattened into Headers because cookie values
+	// legitimately contain commas (Expires dates), so a comma-joined
+	// string corrupts every cookie after the first.
+	Cookies []string
+	Err     error
 }
 
 // HTTPModule exposes hive.http.{get,post,put,delete,request} for outbound
@@ -398,28 +402,40 @@ func (m *HTTPModule) do(ctx context.Context, req httpRequest) httpResult {
 	}
 	if int64(len(data)) > limit {
 		return httpResult{
-			Status:    resp.StatusCode,
-			Truncated: true,
-			Err:       fmt.Errorf("response body exceeded max_bytes (%d)", limit),
+			Err: fmt.Errorf("response body exceeded max_bytes (%d)", limit),
 		}
 	}
 
+	headers, cookies := splitHeaders(resp.Header)
 	return httpResult{
 		Status:  resp.StatusCode,
 		Body:    string(data),
-		Headers: collapseHeaders(resp.Header),
+		Headers: headers,
+		Cookies: cookies,
 	}
 }
 
-// collapseHeaders flattens http.Header (multimap) into a single-value
-// map for the Lua side. Multi-value headers join with ", " so plugins
-// can split if they need the original values.
-func collapseHeaders(h http.Header) map[string]string {
-	out := make(map[string]string, len(h))
+// splitHeaders flattens http.Header into a single-value map plus a
+// cookies slice. Set-Cookie is split off because comma-joining cookie
+// header lines corrupts dates (Expires=Tue, 06 May ...). Other
+// multi-value headers join with ", " — plugins can split if they need
+// the original values.
+//
+// Header names follow net/http's canonical MIME case (e.g. "X-Echo")
+// because the response is keyed by the values http.Header chose; this
+// is documented in the Lua-facing docs so plugin authors don't have to
+// guess the casing.
+func splitHeaders(h http.Header) (map[string]string, []string) {
+	headers := make(map[string]string, len(h))
+	var cookies []string
 	for name, values := range h {
-		out[name] = strings.Join(values, ", ")
+		if http.CanonicalHeaderKey(name) == "Set-Cookie" {
+			cookies = append(cookies, values...)
+			continue
+		}
+		headers[name] = strings.Join(values, ", ")
 	}
-	return out
+	return headers, cookies
 }
 
 // dispatch invokes the callback on the dispatcher with (response, err).
@@ -447,7 +463,9 @@ func (m *HTTPModule) dispatch(state *glua.LState, fn *glua.LFunction, result htt
 }
 
 // buildResponseTable shapes the success response for Lua: status, body,
-// and a string-valued headers map.
+// a string-valued headers map, and a cookies array. Cookies are always
+// present (empty array when none were sent) so plugins can iterate
+// without nil-checking.
 func buildResponseTable(state *glua.LState, r httpResult) *glua.LTable {
 	out := state.NewTable()
 	state.SetField(out, "status", glua.LNumber(r.Status))
@@ -458,6 +476,12 @@ func buildResponseTable(state *glua.LState, r httpResult) *glua.LTable {
 		state.SetField(headers, name, glua.LString(value))
 	}
 	state.SetField(out, "headers", headers)
+
+	cookies := state.NewTable()
+	for i, c := range r.Cookies {
+		cookies.RawSetInt(i+1, glua.LString(c))
+	}
+	state.SetField(out, "cookies", cookies)
 	return out
 }
 
@@ -485,9 +509,6 @@ func (m *HTTPModule) logRequestFinish(id uint64, req httpRequest, dur time.Durat
 		event = event.Err(result.Err)
 	} else {
 		event = event.Int("status", result.Status).Int("bytes", len(result.Body))
-	}
-	if result.Truncated {
-		event = event.Bool("truncated", true)
 	}
 	event.Msg("hive.http: request finished")
 }

@@ -343,8 +343,12 @@ Make outbound HTTP requests from Lua. Like `hive.sh`, every call is async: the c
 
 Callback signature: `fn(response, err)`.
 
-- On success, `response` is `{ status, body, headers }` and `err` is `nil`. Non-2xx HTTP responses are still successes — branch on `response.status`.
+- On success, `response` is `{ status, body, headers, cookies }` and `err` is `nil`. Non-2xx HTTP responses are still successes — branch on `response.status`.
 - On network/protocol failure (DNS, connection refused, timeout, response too large), `response` is `nil` and `err` is a string.
+
+`response.headers` is keyed by net/http's canonical MIME case (e.g. `Content-Type`, `X-Echo`), not the raw casing the server sent. Multi-value headers are joined with `", "`.
+
+`response.cookies` is a 1-indexed array of raw `Set-Cookie` header strings, in the order the server sent them. `Set-Cookie` is split off from `headers` because cookie values legitimately contain commas (e.g. `Expires` dates) and would be corrupted by the join above. The array is empty (not `nil`) when no cookies were set.
 
 `opts` fields:
 
