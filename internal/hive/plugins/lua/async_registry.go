@@ -6,9 +6,18 @@ import (
 	"strconv"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	glua "github.com/yuin/gopher-lua"
 )
+
+// asyncShutdownGracePeriod bounds how long shutdown waits for in-flight
+// goroutines to finish naturally before force-cancelling. Long enough
+// for fast plugin entrypoint chains (a few subprocess calls) to drain
+// at app exit; short enough that a stuck call can't stall shutdown
+// indefinitely. After the grace period elapses, rootCtx is cancelled
+// and any remaining work aborts via the per-handle ctx.
+const asyncShutdownGracePeriod = time.Second
 
 // asyncRegistry holds the Lua-side and Go-side bookkeeping shared by
 // every async host module (hive.ticker, hive.sh, ...). Each module owns
@@ -98,14 +107,39 @@ func (r *asyncRegistry) init(state *glua.LState, modulePtr any, cfg asyncRegistr
 	return nil
 }
 
-// shutdown cancels rootCtx, waits for goroutines to drain, and clears
-// the handle map. Idempotent.
+// shutdown drains in-flight goroutines before force-cancelling. First
+// gives the chain up to asyncShutdownGracePeriod to finish naturally so
+// fast callback chains spawned during plugin Init complete cleanly;
+// only then cancels rootCtx and waits for stragglers. Clears the handle
+// map. Idempotent.
 func (r *asyncRegistry) shutdown() {
 	r.closeOnce.Do(func() {
+		// Phase 1: graceful drain. Wait up to asyncShutdownGracePeriod
+		// for the chain to complete naturally. spawnAsync's goroutines
+		// hold the wg until their dispatch (and any callback-spawned
+		// work) finishes, so wg.Wait covers the full callback chain.
+		drained := make(chan struct{})
+		go func() {
+			r.wg.Wait()
+			close(drained)
+		}()
+
+		select {
+		case <-drained:
+		case <-time.After(asyncShutdownGracePeriod):
+			// Phase 2: force-cancel and wait for stragglers.
+			if r.rootCancel != nil {
+				r.rootCancel()
+			}
+			<-drained
+		}
+
+		// Cancel rootCtx unconditionally so any goroutine that races
+		// past the drain (none should, but defensively) sees a closed
+		// context if it inspects ctx after spawnAsync returns.
 		if r.rootCancel != nil {
 			r.rootCancel()
 		}
-		r.wg.Wait()
 
 		r.mu.Lock()
 		r.handles = map[uint64]context.CancelFunc{}

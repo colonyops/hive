@@ -136,7 +136,15 @@ func (m *ShModule) Close() error {
 
 // spawnAsync pins fn, allocates a handle, and starts the executor on a
 // goroutine. Runs on the dispatcher; the goroutine hops back via
-// Runtime.Submit to invoke dispatch with the executor result.
+// Runtime.submitSync to invoke dispatch with the executor result.
+//
+// We use submitSync (not Submit) so the registry's WaitGroup accurately
+// tracks every callback in a chain. If a Lua callback fires another
+// hive.sh.* call, that call's wg.Add happens synchronously on the
+// dispatcher inside dispatch(). By blocking the parent goroutine until
+// dispatch returns, we ensure wg.Wait sees the child goroutine before
+// the parent decrements. This lets registry.shutdown drain the entire
+// callback chain rather than returning after just the first hop.
 func (m *ShModule) spawnAsync(
 	state *glua.LState,
 	fn *glua.LFunction,
@@ -149,16 +157,23 @@ func (m *ShModule) spawnAsync(
 
 	m.registry.Go(func() {
 		result := m.execWithLogging(id, ctx, cmd, opts)
-		m.Runtime.Submit(func(state *glua.LState) {
+		err := m.Runtime.submitSync(func(state *glua.LState) error {
 			fn := m.registry.loadFunction(state, id)
 			if fn == nil {
 				// Cancelled between completion and dispatch.
-				return
+				return nil
 			}
 			dispatch(state, fn, result)
 			m.registry.release(state, id)
 			h.poison()
+			return nil
 		})
+		if err != nil {
+			m.Logger.Debug().
+				Uint64("handle", id).
+				Err(err).
+				Msg("hive.sh: dispatch dropped (runtime closed)")
+		}
 	})
 
 	return h
