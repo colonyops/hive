@@ -11,6 +11,8 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
 	glua "github.com/yuin/gopher-lua"
+
+	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
 // testPluginName is the plugin name registered with LogModule and
@@ -233,11 +235,11 @@ func newLuaHarness(t *testing.T, script string, extras ...HostModule) *luaHarnes
 	modules := append([]HostModule{
 		&LogModule{PluginName: testPluginName, Logger: zerolog.Nop()},
 		&PluginInfoModule{Name: testPluginName, Entry: entry, ModuleRoot: root},
-		&CommandsModule{},
+		&CommandsModule{PluginName: testPluginName, Set: plugins.NewCommandSet(nil, nil)},
 		capture,
 	}, extras...)
 
-	rt, err := NewRuntime(root, zerolog.Nop(), modules...)
+	rt, err := NewRuntime(zerolog.Nop(), root, 64, modules...)
 	require.NoError(t, err)
 
 	for _, m := range extras {

@@ -2,11 +2,9 @@ package plugins
 
 import (
 	"context"
-	"maps"
 	"sync"
 	"time"
 
-	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/rs/zerolog/log"
 )
@@ -22,9 +20,10 @@ const (
 
 // Manager manages plugin registration, lifecycle, and status fetching.
 type Manager struct {
-	plugins map[string]Plugin
-	pool    *WorkerPool
-	mu      sync.RWMutex
+	plugins    map[string]Plugin
+	pool       *WorkerPool
+	commandSet *CommandSet
+	mu         sync.RWMutex
 
 	// Background worker state
 	collector     *StatusCollector
@@ -44,11 +43,14 @@ type Manager struct {
 
 // NewManager creates a new plugin manager. The pool is injected so it can be
 // shared with plugins (e.g. the Lua hive.sh module) that draw from the same
-// concurrency budget as status refreshes.
-func NewManager(pool *WorkerPool) *Manager {
+// concurrency budget as status refreshes. commandSet is the canonical command
+// registry the manager seeds plugin slots into during InitAll; the manager
+// does not own or expose it — callers keep the reference for lookups.
+func NewManager(pool *WorkerPool, commandSet *CommandSet) *Manager {
 	return &Manager{
 		plugins:        make(map[string]Plugin),
 		pool:           pool,
+		commandSet:     commandSet,
 		collector:      NewStatusCollector(),
 		jobs:           make(chan Job, defaultJobBufferSize),
 		results:        make(chan Result, defaultResultBufferSize),
@@ -72,8 +74,10 @@ func (m *Manager) Register(p Plugin) {
 	log.Debug().Str("plugin", p.Name()).Msg("plugin registered")
 }
 
-// InitAll initializes all registered plugins.
-// Errors are logged but do not stop initialization of other plugins.
+// InitAll initializes all registered plugins. Errors are logged but do not
+// stop initialization of other plugins. After each successful Init the
+// plugin's Commands() are seeded into the shared CommandSet's plugin slot;
+// failed inits leave the slot untouched.
 func (m *Manager) InitAll(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -81,6 +85,13 @@ func (m *Manager) InitAll(ctx context.Context) error {
 	for name, p := range m.plugins {
 		if err := p.Init(ctx); err != nil {
 			log.Warn().Err(err).Str("plugin", name).Msg("plugin initialization failed")
+			continue
+		}
+		if m.commandSet == nil {
+			continue
+		}
+		if cmds := p.Commands(); cmds != nil {
+			m.commandSet.SetPlugin(name, cmds)
 		}
 	}
 	return nil
@@ -111,27 +122,6 @@ func (m *Manager) EnabledPlugins() []Plugin {
 		plugins = append(plugins, p)
 	}
 	return plugins
-}
-
-// MergedCommands merges system, plugin, and user commands.
-// Priority order: system (lowest) → plugins → user (highest).
-func (m *Manager) MergedCommands(systemCmds, userCmds map[string]config.UserCommand) map[string]config.UserCommand {
-	result := make(map[string]config.UserCommand)
-
-	// 1. System defaults (lowest priority)
-	maps.Copy(result, systemCmds)
-
-	// 2. Plugin commands (middle priority)
-	m.mu.RLock()
-	for _, p := range m.plugins {
-		maps.Copy(result, p.Commands())
-	}
-	m.mu.RUnlock()
-
-	// 3. User commands (highest priority - always wins)
-	maps.Copy(result, userCmds)
-
-	return result
 }
 
 // Collector returns the status collector for reading cached statuses.

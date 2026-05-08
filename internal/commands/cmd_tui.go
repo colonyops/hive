@@ -96,6 +96,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		Bus:             cmd.app.Bus,
 		TerminalManager: termMgr,
 		PluginManager:   cmd.app.Plugins,
+		CommandSet:      cmd.app.CommandSet,
 		DB:              cmd.app.DB,
 		KVStore:         cmd.app.KV,
 		Renderer:        cmd.app.Renderer,

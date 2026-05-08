@@ -75,7 +75,13 @@ end
 // NewConfigPlugin builds a Plugin from a single entry file path. Shared by
 // the lifecycle, runtime, and per-module tests in this package.
 func NewConfigPlugin(entry string) *Plugin {
-	return New(config.LuaPluginConfig{Entry: entry}, newFakeKV(), plugins.NewWorkerPool(1), zerolog.Nop())
+	return New(
+		config.LuaPluginConfig{Entry: entry, DispatcherQueueSize: 64},
+		newFakeKV(),
+		plugins.NewWorkerPool(1),
+		plugins.NewCommandSet(nil, nil),
+		zerolog.Nop(),
+	)
 }
 
 // fakeKV is an in-memory kv.KV used purely for test wiring. It JSON-encodes

@@ -168,20 +168,6 @@ end
 			errMsg: `command "Broken"`,
 		},
 		{
-			name: "duplicate command names",
-			script: `
-return function(hive)
-  hive.commands({
-    LuaHello = { sh = "echo first" },
-  })
-  hive.commands({
-    LuaHello = { sh = "echo second" },
-  })
-end
-`,
-			errMsg: `duplicate command "LuaHello"`,
-		},
-		{
 			name: "invalid template syntax",
 			script: `
 return function(hive)
@@ -245,4 +231,20 @@ end
 			assert.Contains(t, err.Error(), `field "`+field+`" is not supported`)
 		})
 	}
+}
+
+func TestCommandsModule_ReplaceByName(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ LuaHello = { sh = "echo first" } })
+  hive.commands({ LuaHello = { sh = "echo second" } })
+end
+`), 0o644))
+
+	plugin := NewConfigPlugin(entry)
+	require.NoError(t, plugin.Init(context.Background()))
+	t.Cleanup(func() { require.NoError(t, plugin.Close()) })
+
+	assert.Equal(t, "echo second", plugin.Commands()["LuaHello"].Sh)
 }

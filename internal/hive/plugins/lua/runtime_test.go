@@ -76,9 +76,28 @@ end
 // newBareRuntime is a Runtime with no host modules — for dispatcher tests.
 func newBareRuntime(t *testing.T) *Runtime {
 	t.Helper()
-	rt, err := NewRuntime(t.TempDir(), zerolog.Nop())
+	rt, err := NewRuntime(zerolog.Nop(), t.TempDir(), 64)
 	require.NoError(t, err)
 	return rt
+}
+
+func TestNewRuntime_RejectsNonPositiveQueueSize(t *testing.T) {
+	t.Parallel()
+	_, err := NewRuntime(zerolog.Nop(), t.TempDir(), 0)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dispatcher queue size")
+
+	_, err = NewRuntime(zerolog.Nop(), t.TempDir(), -1)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "dispatcher queue size")
+}
+
+func TestNewRuntime_HonorsQueueSize(t *testing.T) {
+	t.Parallel()
+	rt, err := NewRuntime(zerolog.Nop(), t.TempDir(), 256)
+	require.NoError(t, err)
+	t.Cleanup(rt.Close)
+	assert.Equal(t, 256, cap(rt.work))
 }
 
 func TestRuntimeSubmitSerializesConcurrentCalls(t *testing.T) {
@@ -89,7 +108,7 @@ func TestRuntimeSubmitSerializesConcurrentCalls(t *testing.T) {
 
 	// Non-atomic increments are safe iff the dispatcher serializes
 	// closures; -race catches a regression.
-	const n = 50 // < dispatcherQueueSize (64), no drops.
+	const n = 50 // < queueSize (64 here), no drops.
 	var counter int
 	var wg sync.WaitGroup
 	wg.Add(n)

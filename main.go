@@ -279,6 +279,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			shellPool := plugins.NewWorkerPool(cfg.Plugins.ShellWorkers)
+			commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 
 			allPlugins := []configuredPlugin{
 				{plugin: github.New(cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},
@@ -287,7 +288,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
 				{plugin: claude.New(cfg.Plugins.Claude, kvStore), disabled: isDisabled(cfg.Plugins.Claude.Enabled)},
 				{plugin: plugintmux.New(cfg.Plugins.Tmux), disabled: isDisabled(cfg.Plugins.Tmux.Enabled)},
-				{plugin: luaplugin.New(cfg.Plugins.Lua, kvStore, shellPool, log.With().Str("component", "lua").Logger()), disabled: isDisabled(cfg.Plugins.Lua.Enabled)},
+				{plugin: luaplugin.New(cfg.Plugins.Lua, kvStore, shellPool, commandSet, log.With().Str("component", "lua").Logger()), disabled: isDisabled(cfg.Plugins.Lua.Enabled)},
 			}
 
 			pluginInfos := make([]doctor.PluginInfo, len(allPlugins))
@@ -300,7 +301,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				}
 			}
 
-			pluginMgr = plugins.NewManager(shellPool)
+			pluginMgr = plugins.NewManager(shellPool, commandSet)
 			for _, candidate := range allPlugins {
 				pluginMgr.Register(candidate.plugin)
 			}
@@ -320,6 +321,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				bus,
 				nil, // terminal manager created in TUI command
 				pluginMgr,
+				commandSet,
 				database,
 				kvStore,
 				renderer,

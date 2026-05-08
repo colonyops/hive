@@ -32,14 +32,15 @@ type App struct {
 	Todos     *TodoService
 	Honeycomb *HoneycombService
 
-	Bus      *eventbus.EventBus
-	Terminal *terminal.Manager
-	Plugins  *plugins.Manager
-	Config   *config.Config
-	DB       *db.DB
-	KV       kv.KV
-	Renderer *tmpl.Renderer
-	Build    BuildInfo
+	Bus        *eventbus.EventBus
+	Terminal   *terminal.Manager
+	Plugins    *plugins.Manager
+	CommandSet *plugins.CommandSet
+	Config     *config.Config
+	DB         *db.DB
+	KV         kv.KV
+	Renderer   *tmpl.Renderer
+	Build      BuildInfo
 }
 
 // NewApp constructs an App from explicit dependencies.
@@ -52,6 +53,7 @@ func NewApp(
 	bus *eventbus.EventBus,
 	termMgr *terminal.Manager,
 	pluginMgr *plugins.Manager,
+	commandSet *plugins.CommandSet,
 	database *db.DB,
 	kvStore kv.KV,
 	renderer *tmpl.Renderer,
@@ -59,18 +61,19 @@ func NewApp(
 	logger zerolog.Logger,
 ) *App {
 	return &App{
-		Sessions:  sessions,
-		Messages:  NewMessageService(msgStore, cfg, bus),
-		Context:   NewContextService(cfg, sessions.git),
-		Doctor:    NewDoctorService(sessions.sessions, cfg, pluginInfos),
-		Todos:     NewTodoService(todoStore, bus, cfg, logger.With().Str("component", "todos").Logger()),
-		Honeycomb: NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
-		Bus:       bus,
-		Terminal:  termMgr,
-		Plugins:   pluginMgr,
-		Config:    cfg,
-		DB:        database,
-		KV:        kvStore,
-		Renderer:  renderer,
+		Sessions:   sessions,
+		Messages:   NewMessageService(msgStore, cfg, bus),
+		Context:    NewContextService(cfg, sessions.git),
+		Doctor:     NewDoctorService(sessions.sessions, cfg, pluginInfos),
+		Todos:      NewTodoService(todoStore, bus, cfg, logger.With().Str("component", "todos").Logger()),
+		Honeycomb:  NewHoneycombService(hcStore, logger.With().Str("component", "honeycomb").Logger()),
+		Bus:        bus,
+		Terminal:   termMgr,
+		Plugins:    pluginMgr,
+		CommandSet: commandSet,
+		Config:     cfg,
+		DB:         database,
+		KV:         kvStore,
+		Renderer:   renderer,
 	}
 }

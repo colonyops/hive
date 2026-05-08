@@ -105,7 +105,7 @@ func newMouseTestSessionsView(t *testing.T) *sessions.View {
 	cfg := &config.Config{}
 	handler := NewKeybindingResolver(nil, nil, testRenderer)
 	mgr := terminal.NewManager(nil)
-	pm := plugins.NewManager(plugins.NewWorkerPool(0))
+	pm := plugins.NewManager(plugins.NewWorkerPool(0), plugins.NewCommandSet(nil, nil))
 	return sessions.New(sessions.ViewOpts{
 		Cfg:             cfg,
 		Service:         svc,

@@ -75,6 +75,7 @@ type Deps struct {
 	Renderer        *tmpl.Renderer
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
+	CommandSet      *plugins.CommandSet
 	TodoService     *hive.TodoService
 	DB              *db.DB
 
@@ -224,14 +225,16 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.TodoService == nil || deps.DB == nil {
-		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, TodoService, and DB are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, CommandSet, TodoService, and DB are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
 
-	// Compute merged commands: system → plugins → user
-	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
+	// Snapshot of merged commands at construction time. CommandSet is the
+	// canonical registry; later phases will consult it directly to pick up
+	// dynamic Lua registrations without rebuilding this map.
+	mergedCommands := deps.CommandSet.All()
 
 	viewKBs := map[string]map[string]config.Keybinding{
 		"global":   cfg.Views.Global.Keybindings,
