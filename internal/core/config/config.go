@@ -894,6 +894,7 @@ func (c *Config) Validate() error {
 		criterio.Run("database.max_open_conns", c.Database.MaxOpenConns, criterio.Min(1)),
 		criterio.Run("database.max_idle_conns", c.Database.MaxIdleConns, criterio.Min(1)),
 		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
+		criterio.Run("plugins.lua.dispatcher_queue_size", c.Plugins.Lua.DispatcherQueueSize, criterio.Min(0)),
 		c.validateTheme(),
 		c.validateGroupBy(),
 		c.validateKeybindingsBasic(),

@@ -127,3 +127,34 @@ func TestValidate_LuaPluginEntryRejectsRelativePath(t *testing.T) {
 	assert.Equal(t, "plugins.lua.entry", fieldErrs[0].Field)
 	assert.Contains(t, fieldErrs[0].Err.Error(), "must be an absolute path")
 }
+
+func TestValidate_LuaPluginDispatcherQueueSize(t *testing.T) {
+	tests := []struct {
+		name    string
+		size    int
+		wantErr bool
+	}{
+		{"default fills via applyDefaults", 0, false},
+		{"explicit small positive", 1, false},
+		{"explicit large positive", 1024, false},
+		{"negative rejected", -1, true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Plugins.Lua.DispatcherQueueSize = tt.size
+			cfg.applyDefaults()
+
+			err := cfg.Validate()
+			if tt.wantErr {
+				var fieldErrs criterio.FieldErrors
+				require.ErrorAs(t, err, &fieldErrs)
+				require.Len(t, fieldErrs, 1)
+				assert.Equal(t, "plugins.lua.dispatcher_queue_size", fieldErrs[0].Field)
+				return
+			}
+			require.NoError(t, err)
+		})
+	}
+}
