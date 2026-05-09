@@ -6,6 +6,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/require"
@@ -25,16 +26,31 @@ const testPluginName = "lua-test"
 //
 // All three are safe to call from any goroutine; the unified type replaces
 // the per-test capture/bump modules that used to live alongside each
-// module's tests.
+// module's tests. The notify channel signals every state change so tests
+// can wait without polling.
 type captureModule struct {
 	mu      sync.Mutex
 	list    []glua.LValue
 	keyed   map[string]glua.LValue
 	counter atomic.Int64
+	notify  chan struct{}
 }
 
 func newCaptureModule() *captureModule {
-	return &captureModule{keyed: map[string]glua.LValue{}}
+	return &captureModule{
+		keyed:  map[string]glua.LValue{},
+		notify: make(chan struct{}, 1),
+	}
+}
+
+// signal nudges the notify channel without blocking. Tests use a buffered
+// receive in WaitForKey/WaitForCaptures, so dropped signals don't matter
+// — once the buffered slot is full, any pending waiter will read it.
+func (c *captureModule) signal() {
+	select {
+	case c.notify <- struct{}{}:
+	default:
+	}
 }
 
 func (c *captureModule) Register(state *glua.LState, hive *glua.LTable) error {
@@ -49,6 +65,7 @@ func (c *captureModule) luaCapture(state *glua.LState) int {
 		c.mu.Lock()
 		c.list = append(c.list, v)
 		c.mu.Unlock()
+		c.signal()
 		return 0
 	}
 	key := state.CheckString(1)
@@ -56,11 +73,13 @@ func (c *captureModule) luaCapture(state *glua.LState) int {
 	c.mu.Lock()
 	c.keyed[key] = val
 	c.mu.Unlock()
+	c.signal()
 	return 0
 }
 
 func (c *captureModule) luaBump(_ *glua.LState) int {
 	c.counter.Add(1)
+	c.signal()
 	return 0
 }
 
@@ -123,6 +142,66 @@ func (c *captureModule) Counter() int64 {
 	return c.counter.Load()
 }
 
+// captureWaitTimeout bounds how long the wait helpers below block. Long
+// enough to absorb CI scheduling variance, short enough that a deadlocked
+// callback fails the test instead of hanging the whole suite.
+const captureWaitTimeout = 2 * time.Second
+
+// WaitForKey blocks until key has been captured or captureWaitTimeout
+// elapses. Failure here means the callback never wrote the key — it
+// did not race the deadline.
+func (c *captureModule) WaitForKey(t *testing.T, key string) {
+	t.Helper()
+	deadline := time.NewTimer(captureWaitTimeout)
+	defer deadline.Stop()
+	for {
+		if c.Has(key) {
+			return
+		}
+		select {
+		case <-c.notify:
+		case <-deadline.C:
+			t.Fatalf("expected capture key %q within %s", key, captureWaitTimeout)
+		}
+	}
+}
+
+// WaitForCaptures blocks until the positional list has at least n
+// entries, then returns the snapshot.
+func (c *captureModule) WaitForCaptures(t *testing.T, n int) []glua.LValue {
+	t.Helper()
+	deadline := time.NewTimer(captureWaitTimeout)
+	defer deadline.Stop()
+	for {
+		values := c.Snapshot()
+		if len(values) >= n {
+			return values
+		}
+		select {
+		case <-c.notify:
+		case <-deadline.C:
+			t.Fatalf("expected %d captures within %s, got %d", n, captureWaitTimeout, len(values))
+		}
+	}
+}
+
+// WaitForCounter blocks until the bump counter has reached at least n.
+func (c *captureModule) WaitForCounter(t *testing.T, n int64) {
+	t.Helper()
+	deadline := time.NewTimer(captureWaitTimeout)
+	defer deadline.Stop()
+	for {
+		if c.counter.Load() >= n {
+			return
+		}
+		select {
+		case <-c.notify:
+		case <-deadline.C:
+			t.Fatalf("expected counter >= %d within %s, got %d", n, captureWaitTimeout, c.counter.Load())
+		}
+	}
+}
+
 // luaHarness wraps a Runtime configured with the standard test module set
 // (LogModule, PluginInfoModule, CommandsModule, captureModule) plus any
 // caller-supplied modules. The Lua entry script runs during construction;
@@ -166,6 +245,8 @@ func newLuaHarness(t *testing.T, script string, extras ...HostModule) *luaHarnes
 		case *TickerModule:
 			m.Runtime = rt
 		case *ShModule:
+			m.Runtime = rt
+		case *HTTPModule:
 			m.Runtime = rt
 		}
 	}
