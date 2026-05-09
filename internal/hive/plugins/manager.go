@@ -76,8 +76,12 @@ func (m *Manager) Register(p Plugin) {
 
 // InitAll initializes all registered plugins. Errors are logged but do not
 // stop initialization of other plugins. After each successful Init the
-// plugin's Commands() are seeded into the shared CommandSet's plugin slot;
-// failed inits leave the slot untouched.
+// plugin's Commands() are seeded into the shared CommandSet's plugin slot,
+// unless the plugin already populated its own slot during Init (e.g. the
+// Lua plugin via MergePlugin from its entrypoint or a ticker callback).
+// Skipping in that case avoids a lost-update race: reading Commands() and
+// then SetPlugin'ing it back would clobber any writes that landed in
+// between. Failed inits leave the slot untouched.
 func (m *Manager) InitAll(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -88,6 +92,9 @@ func (m *Manager) InitAll(ctx context.Context) error {
 			continue
 		}
 		if m.commandSet == nil {
+			continue
+		}
+		if m.commandSet.Plugin(name) != nil {
 			continue
 		}
 		if cmds := p.Commands(); cmds != nil {

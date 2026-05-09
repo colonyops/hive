@@ -55,6 +55,53 @@ func TestManager_InitAll_SkipsPluginsWithNilCommands(t *testing.T) {
 	assert.Nil(t, set.Plugin("empty"), "no slot should be created for plugins that return nil commands")
 }
 
+// selfRegisteringPlugin populates its slot directly from Init, mirroring
+// the Lua plugin's MergePlugin-from-entrypoint behavior. Commands() reads
+// back from the slot.
+type selfRegisteringPlugin struct {
+	name string
+	set  *CommandSet
+	init map[string]config.UserCommand
+	post map[string]config.UserCommand
+}
+
+func (p *selfRegisteringPlugin) Name() string    { return p.name }
+func (p *selfRegisteringPlugin) Available() bool { return true }
+func (p *selfRegisteringPlugin) Init(_ context.Context) error {
+	p.set.MergePlugin(p.name, p.init)
+	if p.post != nil {
+		p.set.MergePlugin(p.name, p.post)
+	}
+	return nil
+}
+func (p *selfRegisteringPlugin) Close() error { return nil }
+func (p *selfRegisteringPlugin) Commands() map[string]config.UserCommand {
+	return p.set.Plugin(p.name)
+}
+func (p *selfRegisteringPlugin) StatusProvider() StatusProvider { return nil }
+
+func TestManager_InitAll_PreservesSelfRegisteredCommands(t *testing.T) {
+	set := NewCommandSet(nil, nil)
+	mgr := NewManager(NewWorkerPool(0), set)
+
+	// Simulates a Lua-style plugin whose entrypoint registers Foo and a
+	// ticker callback registers Bar between Init returning and the
+	// manager's seeding step.
+	mgr.Register(&selfRegisteringPlugin{
+		name: "self",
+		set:  set,
+		init: map[string]config.UserCommand{"Foo": {Sh: "echo foo"}},
+		post: map[string]config.UserCommand{"Bar": {Sh: "echo bar"}},
+	})
+
+	require.NoError(t, mgr.InitAll(context.Background()))
+
+	got := set.Plugin("self")
+	require.NotNil(t, got)
+	assert.Equal(t, "echo foo", got["Foo"].Sh, "entrypoint registration must survive InitAll")
+	assert.Equal(t, "echo bar", got["Bar"].Sh, "post-Init registration must survive InitAll")
+}
+
 func TestSessionsChanged(t *testing.T) {
 	mkSession := func(id string) *session.Session {
 		return &session.Session{ID: id}
