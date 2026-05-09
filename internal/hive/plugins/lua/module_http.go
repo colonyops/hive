@@ -14,13 +14,10 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// httpDefaultTimeout is used when HTTPModule.DefaultTimeout is zero.
-const httpDefaultTimeout = 30 * time.Second
-
-// httpDefaultMaxBytes caps response bodies so a runaway download cannot
-// OOM the process. Plugins that legitimately need more must opt in
-// per-call via opts.max_bytes.
-const httpDefaultMaxBytes = int64(10 * 1024 * 1024)
+const (
+	httpDefaultTimeout  = 30 * time.Second
+	httpDefaultMaxBytes = int64(10 * 1024 * 1024)
+)
 
 // httpClient is the subset of *http.Client the module uses; tests
 // inject a fake to avoid hitting the network.
@@ -28,9 +25,6 @@ type httpClient interface {
 	Do(req *http.Request) (*http.Response, error)
 }
 
-// httpRequest captures the resolved per-call inputs for an HTTP call.
-// Built from the Lua opts table by applyHTTPOpts so the executor stays
-// independent of glua types.
 type httpRequest struct {
 	Method   string
 	URL      string
@@ -40,26 +34,24 @@ type httpRequest struct {
 	MaxBytes int64
 }
 
-// httpResult is the executor's complete return value. Network/protocol
-// failures populate Err; non-2xx status codes are not failures and live
-// alongside Body+Headers.
+// httpResult is the executor's return value. Network/protocol failures
+// populate Err; non-2xx status codes are not failures and live alongside
+// Body+Headers. Cookies preserves Set-Cookie verbatim because cookie
+// values can contain commas (Expires dates), which would corrupt every
+// cookie after the first if joined into Headers.
 type httpResult struct {
 	Status  int
 	Body    string
 	Headers map[string]string
-	// Cookies preserves Set-Cookie verbatim and in order. Set-Cookie
-	// cannot be safely flattened into Headers because cookie values
-	// legitimately contain commas (Expires dates), so a comma-joined
-	// string corrupts every cookie after the first.
 	Cookies []string
 	Err     error
 }
 
-// HTTPModule exposes hive.http.{get,post,put,delete,request} for outbound
-// HTTP requests. Every entry point is async: the call returns a handle
-// immediately, the request runs on a goroutine bound to a per-handle
-// context, and the caller-supplied callback fires on the dispatcher when
-// the response (or error) is in. Close cancels every in-flight call.
+// HTTPModule exposes hive.http.{get,post,put,delete,request}. Every
+// entry point is async: the call returns a handle immediately, the
+// request runs on a goroutine bound to a per-handle context, and the
+// callback fires on the dispatcher when the response (or error) is in.
+// Close cancels every in-flight call.
 type HTTPModule struct {
 	Client          httpClient
 	DefaultTimeout  time.Duration
@@ -68,13 +60,10 @@ type HTTPModule struct {
 
 	Runtime *Runtime
 
-	registry asyncRegistry
-
+	registry  asyncRegistry
 	closeOnce sync.Once
 }
 
-// Register installs the hive.http subtable and initialises the per-module
-// async registry. Defaults the client, timeout, and max-bytes if unset.
 func (m *HTTPModule) Register(state *glua.LState, hive *glua.LTable) error {
 	if m.Client == nil {
 		m.Client = &http.Client{}
@@ -103,114 +92,88 @@ func (m *HTTPModule) Register(state *glua.LState, hive *glua.LTable) error {
 	return nil
 }
 
-// Close cancels every in-flight request and waits for the workers to
-// drain. Idempotent.
 func (m *HTTPModule) Close() error {
 	m.closeOnce.Do(func() { m.registry.shutdown() })
 	return nil
 }
 
-// luaVerb returns the Lua handler for a verb where the URL is the first
-// positional argument. Accepts (url, fn) or (url, opts, fn).
+// luaVerb handles `hive.http.<verb>(url, fn)` and `(url, opts, fn)`.
 func (m *HTTPModule) luaVerb(method string) glua.LGFunction {
 	return func(state *glua.LState) int {
-		req, callback, err := m.parseVerbArgs(state, method)
-		if err != nil {
-			state.RaiseError("hive.http.%s: %s", strings.ToLower(method), err.Error())
+		rawURL := state.CheckString(1)
+
+		var optsTable *glua.LTable
+		var callback *glua.LFunction
+		switch state.GetTop() {
+		case 2:
+			callback = state.CheckFunction(2)
+		case 3:
+			if state.Get(2) != glua.LNil {
+				optsTable = state.CheckTable(2)
+			}
+			callback = state.CheckFunction(3)
+		default:
+			state.RaiseError("hive.http.%s: expected (url, fn) or (url, opts, fn)", strings.ToLower(method))
 			return 0
 		}
-		handle := m.spawnAsync(state, callback, req)
-		state.Push(m.registry.handleUserData(state, handle))
+
+		req := httpRequest{
+			Method:   method,
+			URL:      rawURL,
+			Headers:  http.Header{},
+			Timeout:  m.DefaultTimeout,
+			MaxBytes: m.DefaultMaxBytes,
+		}
+		if optsTable != nil {
+			if err := applyHTTPOpts(optsTable, &req); err != nil {
+				state.RaiseError("hive.http.%s: %s", strings.ToLower(method), err.Error())
+				return 0
+			}
+		}
+		if req.URL == "" {
+			state.RaiseError("hive.http.%s: url must be a non-empty string", strings.ToLower(method))
+			return 0
+		}
+
+		state.Push(m.registry.handleUserData(state, m.spawnAsync(state, callback, req)))
 		return 1
 	}
 }
 
-// luaRequest is hive.http.request(opts, fn). opts.method defaults to GET
-// and opts.url is required.
+// luaRequest handles `hive.http.request(opts, fn)`. opts.method defaults
+// to GET; opts.url is required.
 func (m *HTTPModule) luaRequest(state *glua.LState) int {
 	opts := state.CheckTable(1)
 	callback := state.CheckFunction(2)
 
-	req, err := m.parseRequestTable(opts)
-	if err != nil {
-		state.RaiseError("hive.http.request: %s", err.Error())
-		return 0
-	}
-	handle := m.spawnAsync(state, callback, req)
-	state.Push(m.registry.handleUserData(state, handle))
-	return 1
-}
-
-// parseVerbArgs handles the (url, fn) and (url, opts, fn) shapes shared
-// by get/post/put/delete.
-func (m *HTTPModule) parseVerbArgs(state *glua.LState, method string) (httpRequest, *glua.LFunction, error) {
-	rawURL := state.CheckString(1)
-
-	var (
-		optsTable *glua.LTable
-		callback  *glua.LFunction
-	)
-	switch state.GetTop() {
-	case 2:
-		callback = state.CheckFunction(2)
-	case 3:
-		if state.Get(2) != glua.LNil {
-			optsTable = state.CheckTable(2)
-		}
-		callback = state.CheckFunction(3)
-	default:
-		return httpRequest{}, nil, fmt.Errorf("expected (url, fn) or (url, opts, fn)")
-	}
-
-	req := m.defaultRequest()
-	req.Method = method
-	req.URL = rawURL
-	if optsTable != nil {
-		if err := applyHTTPOpts(optsTable, &req); err != nil {
-			return httpRequest{}, nil, err
-		}
-	}
-	if err := finaliseRequest(&req); err != nil {
-		return httpRequest{}, nil, err
-	}
-	return req, callback, nil
-}
-
-// parseRequestTable handles hive.http.request's single opts table. Like
-// applyHTTPOpts but also reads method and url from the table.
-func (m *HTTPModule) parseRequestTable(opts *glua.LTable) (httpRequest, error) {
-	req := m.defaultRequest()
-	req.Method = "GET"
-	if method, ok := opts.RawGetString("method").(glua.LString); ok && method != "" {
-		req.Method = strings.ToUpper(string(method))
-	}
-	rawURL, ok := opts.RawGetString("url").(glua.LString)
-	if !ok || rawURL == "" {
-		return httpRequest{}, fmt.Errorf("opts.url must be a non-empty string")
-	}
-	req.URL = string(rawURL)
-	if err := applyHTTPOpts(opts, &req); err != nil {
-		return httpRequest{}, err
-	}
-	if err := finaliseRequest(&req); err != nil {
-		return httpRequest{}, err
-	}
-	return req, nil
-}
-
-// defaultRequest seeds a request with the module's default timeout and
-// max-bytes plus an empty headers map ready for opt copying.
-func (m *HTTPModule) defaultRequest() httpRequest {
-	return httpRequest{
+	req := httpRequest{
+		Method:   "GET",
 		Headers:  http.Header{},
 		Timeout:  m.DefaultTimeout,
 		MaxBytes: m.DefaultMaxBytes,
 	}
+	if method, ok := opts.RawGetString("method").(glua.LString); ok && method != "" {
+		req.Method = strings.ToUpper(string(method))
+	}
+	if rawURL, ok := opts.RawGetString("url").(glua.LString); ok {
+		req.URL = string(rawURL)
+	}
+	if err := applyHTTPOpts(opts, &req); err != nil {
+		state.RaiseError("hive.http.request: %s", err.Error())
+		return 0
+	}
+	if req.URL == "" {
+		state.RaiseError("hive.http.request: opts.url must be a non-empty string")
+		return 0
+	}
+
+	state.Push(m.registry.handleUserData(state, m.spawnAsync(state, callback, req)))
+	return 1
 }
 
 // applyHTTPOpts copies headers/query/body/timeout/max_bytes from t into
-// req. Unknown keys are ignored so plugins can add forward-compatible
-// extensions to their own opts tables without surprise errors.
+// req. Unknown keys are ignored so plugins can extend their own opts
+// tables forward-compatibly.
 func applyHTTPOpts(t *glua.LTable, req *httpRequest) error {
 	if headers, ok := t.RawGetString("headers").(*glua.LTable); ok {
 		if err := copyHeaders(headers, req.Headers); err != nil {
@@ -236,22 +199,8 @@ func applyHTTPOpts(t *glua.LTable, req *httpRequest) error {
 	return nil
 }
 
-// finaliseRequest validates the assembled request shape so dispatcher
-// goroutines never fire a malformed call.
-func finaliseRequest(req *httpRequest) error {
-	if req.URL == "" {
-		return fmt.Errorf("url must be a non-empty string")
-	}
-	if req.Method == "" {
-		return fmt.Errorf("method must be a non-empty string")
-	}
-	return nil
-}
-
-// copyHeaders copies string-valued entries from t into dst. Numeric
-// values are coerced via tostring so plugins can pass bare numbers
-// (e.g. Content-Length) without manual conversion. Other types are
-// rejected so silent string("") substitutions don't strip data.
+// copyHeaders rejects non-string/number values explicitly — silently
+// stringifying a table or function would strip data without warning.
 func copyHeaders(t *glua.LTable, dst http.Header) error {
 	var walkErr error
 	t.ForEach(func(key, value glua.LValue) {
@@ -275,8 +224,6 @@ func copyHeaders(t *glua.LTable, dst http.Header) error {
 	return walkErr
 }
 
-// mergeQuery splices key=value pairs from t into rawURL's query string.
-// Existing query parameters are preserved.
 func mergeQuery(rawURL string, t *glua.LTable) (string, error) {
 	u, err := url.Parse(rawURL)
 	if err != nil {
@@ -296,9 +243,7 @@ func mergeQuery(rawURL string, t *glua.LTable) (string, error) {
 		switch v := value.(type) {
 		case glua.LString:
 			q.Add(string(name), string(v))
-		case glua.LNumber:
-			q.Add(string(name), glua.LVAsString(v))
-		case glua.LBool:
+		case glua.LNumber, glua.LBool:
 			q.Add(string(name), glua.LVAsString(v))
 		default:
 			walkErr = fmt.Errorf("query %q must be a string, number, or boolean", string(name))
@@ -311,30 +256,16 @@ func mergeQuery(rawURL string, t *glua.LTable) (string, error) {
 	return u.String(), nil
 }
 
-// spawnAsync mirrors ShModule.spawnAsync — pin the callback in the Lua
+// spawnAsync mirrors ShModule.spawnAsync: pin the callback in the Lua
 // registry, allocate a per-handle context, run the request on a tracked
 // goroutine, and dispatch the result back through the runtime so
-// shutdown can drain in-flight work. Each request emits paired
-// start/finish log lines tagged with the handle id so operators can
-// correlate events for a specific in-flight call.
-func (m *HTTPModule) spawnAsync(
-	state *glua.LState,
-	fn *glua.LFunction,
-	req httpRequest,
-) *asyncHandle {
+// shutdown can drain in-flight work.
+func (m *HTTPModule) spawnAsync(state *glua.LState, fn *glua.LFunction, req httpRequest) *asyncHandle {
 	id, ctx := m.registry.allocate(state, fn)
 	h := m.registry.newHandle(id, m.Runtime)
 
 	m.registry.Go(func() {
 		start := time.Now()
-		m.Logger.Debug().
-			Uint64("handle", id).
-			Str("method", req.Method).
-			Str("url", req.URL).
-			Dur("timeout", req.Timeout).
-			Int64("max_bytes", req.MaxBytes).
-			Msg("hive.http: starting request")
-
 		result := m.do(ctx, req)
 
 		level := m.Logger.Debug
@@ -373,9 +304,6 @@ func (m *HTTPModule) spawnAsync(
 	return h
 }
 
-// do builds and sends the HTTP request, capping the response body at
-// req.MaxBytes. Cancellation comes from ctx (per-handle) and the
-// per-call timeout layered on top.
 func (m *HTTPModule) do(ctx context.Context, req httpRequest) httpResult {
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
@@ -404,21 +332,15 @@ func (m *HTTPModule) do(ctx context.Context, req httpRequest) httpResult {
 	}
 	defer func() { _ = resp.Body.Close() }()
 
-	limit := req.MaxBytes
-	if limit <= 0 {
-		limit = httpDefaultMaxBytes
-	}
-	// Read up to limit+1 so we can tell "exactly limit" apart from
-	// "exceeded the cap"; on overrun, surface a single deterministic
-	// error rather than a partially-truncated body.
-	data, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
+	// Read up to MaxBytes+1 so an exact-cap body is distinguishable from
+	// an over-cap body. Over-cap surfaces a single deterministic error
+	// rather than a partially-truncated body.
+	data, err := io.ReadAll(io.LimitReader(resp.Body, req.MaxBytes+1))
 	if err != nil {
 		return httpResult{Err: err}
 	}
-	if int64(len(data)) > limit {
-		return httpResult{
-			Err: fmt.Errorf("response body exceeded max_bytes (%d)", limit),
-		}
+	if int64(len(data)) > req.MaxBytes {
+		return httpResult{Err: fmt.Errorf("response body exceeded max_bytes (%d)", req.MaxBytes)}
 	}
 
 	headers, cookies := splitHeaders(resp.Header)
@@ -430,16 +352,9 @@ func (m *HTTPModule) do(ctx context.Context, req httpRequest) httpResult {
 	}
 }
 
-// splitHeaders flattens http.Header into a single-value map plus a
-// cookies slice. Set-Cookie is split off because comma-joining cookie
-// header lines corrupts dates (Expires=Tue, 06 May ...). Other
-// multi-value headers join with ", " — plugins can split if they need
-// the original values.
-//
-// Header names follow net/http's canonical MIME case (e.g. "X-Echo")
-// because the response is keyed by the values http.Header chose; this
-// is documented in the Lua-facing docs so plugin authors don't have to
-// guess the casing.
+// splitHeaders peels Set-Cookie off into its own slice because comma-joining
+// cookie header lines corrupts dates (Expires=Tue, 06 May ...). All other
+// multi-value headers join with ", ".
 func splitHeaders(h http.Header) (map[string]string, []string) {
 	headers := make(map[string]string, len(h))
 	var cookies []string
@@ -453,10 +368,9 @@ func splitHeaders(h http.Header) (map[string]string, []string) {
 	return headers, cookies
 }
 
-// dispatch invokes the callback on the dispatcher with (response, err).
-// On network/protocol failure, response is LNil and err is a string.
-// Non-2xx HTTP responses are NOT failures here — the callback gets a
-// populated response and can branch on response.status.
+// dispatch invokes the callback with (response, err). On failure,
+// response is LNil and err is a string. Non-2xx HTTP responses get a
+// populated response — the plugin branches on response.status.
 func (m *HTTPModule) dispatch(state *glua.LState, fn *glua.LFunction, result httpResult) {
 	var responseArg, errArg glua.LValue
 	if result.Err != nil {
@@ -471,16 +385,10 @@ func (m *HTTPModule) dispatch(state *glua.LState, fn *glua.LFunction, result htt
 		NRet:    0,
 		Protect: true,
 	}, responseArg, errArg); err != nil {
-		m.Logger.Warn().
-			Err(err).
-			Msg("hive.http: callback returned error")
+		m.Logger.Warn().Err(err).Msg("hive.http: callback returned error")
 	}
 }
 
-// buildResponseTable shapes the success response for Lua: status, body,
-// a string-valued headers map, and a cookies array. Cookies are always
-// present (empty array when none were sent) so plugins can iterate
-// without nil-checking.
 func buildResponseTable(state *glua.LState, r httpResult) *glua.LTable {
 	out := state.NewTable()
 	state.SetField(out, "status", glua.LNumber(r.Status))
@@ -492,6 +400,7 @@ func buildResponseTable(state *glua.LState, r httpResult) *glua.LTable {
 	}
 	state.SetField(out, "headers", headers)
 
+	// Empty array (not nil) so plugins can iterate without nil-checking.
 	cookies := state.NewTable()
 	for i, c := range r.Cookies {
 		cookies.RawSetInt(i+1, glua.LString(c))
