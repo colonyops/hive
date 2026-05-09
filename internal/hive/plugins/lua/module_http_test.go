@@ -115,7 +115,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "status")
+	h.capture.WaitForKey(t, "status")
 	assert.Equal(t, 200, int(h.capture.Number("status")))
 	assert.Equal(t, `{"ok":true}`, h.capture.String("body"))
 	assert.Equal(t, "yes", h.capture.String("echo"))
@@ -160,7 +160,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "status")
+	h.capture.WaitForKey(t, "status")
 	assert.Equal(t, 201, int(h.capture.Number("status")))
 	assert.Equal(t, "POST", gotMethod)
 	assert.Equal(t, "application/json", gotHeader)
@@ -190,7 +190,7 @@ return function(hive)
 end
 `, client)
 
-	values := waitForCaptures(t, h.capture, 2)
+	values := h.capture.WaitForCaptures(t, 2)
 	for _, v := range values {
 		assert.Equal(t, 204, asLuaInt(t, v))
 	}
@@ -227,7 +227,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "status")
+	h.capture.WaitForKey(t, "status")
 	assert.Equal(t, 200, int(h.capture.Number("status")))
 }
 
@@ -248,7 +248,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "status")
+	h.capture.WaitForKey(t, "status")
 
 	req := h.client.lastRequest()
 	require.NotNil(t, req)
@@ -276,7 +276,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "err")
+	h.capture.WaitForKey(t, "err")
 	assert.Equal(t, "nil", h.capture.String("res"))
 	assert.Contains(t, h.capture.String("err"), "connection refused")
 }
@@ -302,7 +302,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "status")
+	h.capture.WaitForKey(t, "status")
 	assert.True(t, h.capture.Bool("err_is_nil"))
 	assert.Equal(t, 503, int(h.capture.Number("status")))
 	assert.Equal(t, "down for maintenance", h.capture.String("body"))
@@ -327,7 +327,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "err")
+	h.capture.WaitForKey(t, "err")
 	assert.Equal(t, "nil", h.capture.String("res"), "response should be nil when cap exceeded")
 	assert.Contains(t, h.capture.String("err"), "max_bytes")
 }
@@ -335,12 +335,12 @@ end
 func TestHTTPModule_PerCallTimeoutCancelsCtx(t *testing.T) {
 	t.Parallel()
 
-	captureCtx := make(chan context.Context, 1)
+	executorCtx := make(chan context.Context, 1)
 	released := make(chan struct{})
 
 	client := &fakeHTTPClient{
 		respond: func(req *http.Request) (*http.Response, error) {
-			captureCtx <- req.Context()
+			executorCtx <- req.Context()
 			<-req.Context().Done()
 			close(released)
 			return nil, req.Context().Err()
@@ -357,7 +357,7 @@ end
 `, client)
 
 	select {
-	case ctx := <-captureCtx:
+	case ctx := <-executorCtx:
 		select {
 		case <-released:
 			require.Error(t, ctx.Err())
@@ -368,7 +368,7 @@ end
 		t.Fatalf("request never received a context")
 	}
 
-	waitForKey(t, h.capture, "err")
+	h.capture.WaitForKey(t, "err")
 	assert.Equal(t, "nil", h.capture.String("res"))
 	assert.NotEmpty(t, h.capture.String("err"))
 }
@@ -376,12 +376,12 @@ end
 func TestHTTPModule_HandleCancelStopsRequest(t *testing.T) {
 	t.Parallel()
 
-	captureCtx := make(chan context.Context, 1)
+	executorCtx := make(chan context.Context, 1)
 	released := make(chan struct{})
 
 	client := &fakeHTTPClient{
 		respond: func(req *http.Request) (*http.Response, error) {
-			captureCtx <- req.Context()
+			executorCtx <- req.Context()
 			<-req.Context().Done()
 			close(released)
 			return nil, req.Context().Err()
@@ -396,7 +396,7 @@ end
 
 	var ctx context.Context
 	select {
-	case ctx = <-captureCtx:
+	case ctx = <-executorCtx:
 	case <-time.After(2 * time.Second):
 		t.Fatalf("request never received a context")
 	}
@@ -507,7 +507,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "cookie_count")
+	h.capture.WaitForKey(t, "cookie_count")
 	assert.Equal(t, 2, int(h.capture.Number("cookie_count")))
 	assert.Equal(t, "session=abc123; Expires=Tue, 06 May 2026 12:00:00 GMT", h.capture.String("cookie_1"))
 	assert.Equal(t, "tracking=xyz; Path=/", h.capture.String("cookie_2"))
@@ -532,24 +532,7 @@ return function(hive)
 end
 `, client)
 
-	waitForKey(t, h.capture, "type")
+	h.capture.WaitForKey(t, "type")
 	assert.Equal(t, "table", h.capture.String("type"))
 	assert.Equal(t, 0, int(h.capture.Number("count")))
-}
-
-// waitForKey polls for a keyed capture entry with a generous CI-friendly
-// timeout. Use when tests need to await a single named callback rather
-// than an N-element list (waitForCaptures handles the latter).
-func waitForKey(t *testing.T, c *captureModule, key string) {
-	t.Helper()
-	deadline := time.Now().Add(2 * time.Second)
-	for {
-		if c.Has(key) {
-			return
-		}
-		if time.Now().After(deadline) {
-			t.Fatalf("expected capture key %q within 2s", key)
-		}
-		time.Sleep(5 * time.Millisecond)
-	}
 }

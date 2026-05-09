@@ -314,7 +314,9 @@ func mergeQuery(rawURL string, t *glua.LTable) (string, error) {
 // spawnAsync mirrors ShModule.spawnAsync — pin the callback in the Lua
 // registry, allocate a per-handle context, run the request on a tracked
 // goroutine, and dispatch the result back through the runtime so
-// shutdown can drain in-flight work.
+// shutdown can drain in-flight work. Each request emits paired
+// start/finish log lines tagged with the handle id so operators can
+// correlate events for a specific in-flight call.
 func (m *HTTPModule) spawnAsync(
 	state *glua.LState,
 	fn *glua.LFunction,
@@ -324,7 +326,33 @@ func (m *HTTPModule) spawnAsync(
 	h := m.registry.newHandle(id, m.Runtime)
 
 	m.registry.Go(func() {
-		result := m.execWithLogging(id, ctx, req)
+		start := time.Now()
+		m.Logger.Debug().
+			Uint64("handle", id).
+			Str("method", req.Method).
+			Str("url", req.URL).
+			Dur("timeout", req.Timeout).
+			Int64("max_bytes", req.MaxBytes).
+			Msg("hive.http: starting request")
+
+		result := m.do(ctx, req)
+
+		level := m.Logger.Debug
+		if result.Err != nil {
+			level = m.Logger.Warn
+		}
+		event := level().
+			Uint64("handle", id).
+			Str("method", req.Method).
+			Str("url", req.URL).
+			Dur("duration", time.Since(start))
+		if result.Err != nil {
+			event = event.Err(result.Err)
+		} else {
+			event = event.Int("status", result.Status).Int("bytes", len(result.Body))
+		}
+		event.Msg("hive.http: request finished")
+
 		err := m.Runtime.submitSync(func(state *glua.LState) error {
 			fn := m.registry.loadFunction(state, id)
 			if fn == nil {
@@ -343,19 +371,6 @@ func (m *HTTPModule) spawnAsync(
 		}
 	})
 	return h
-}
-
-// execWithLogging runs the HTTP call with start/finish/cancel logs
-// tagged by handle id so operators can correlate events for an
-// in-flight request.
-func (m *HTTPModule) execWithLogging(id uint64, ctx context.Context, req httpRequest) httpResult {
-	start := time.Now()
-	m.logRequestStart(id, req)
-
-	result := m.do(ctx, req)
-
-	m.logRequestFinish(id, req, time.Since(start), result)
-	return result
 }
 
 // do builds and sends the HTTP request, capping the response body at
@@ -483,32 +498,4 @@ func buildResponseTable(state *glua.LState, r httpResult) *glua.LTable {
 	}
 	state.SetField(out, "cookies", cookies)
 	return out
-}
-
-func (m *HTTPModule) logRequestStart(id uint64, req httpRequest) {
-	m.Logger.Debug().
-		Uint64("handle", id).
-		Str("method", req.Method).
-		Str("url", req.URL).
-		Dur("timeout", req.Timeout).
-		Int64("max_bytes", req.MaxBytes).
-		Msg("hive.http: starting request")
-}
-
-func (m *HTTPModule) logRequestFinish(id uint64, req httpRequest, dur time.Duration, result httpResult) {
-	level := m.Logger.Debug
-	if result.Err != nil {
-		level = m.Logger.Warn
-	}
-	event := level().
-		Uint64("handle", id).
-		Str("method", req.Method).
-		Str("url", req.URL).
-		Dur("duration", dur)
-	if result.Err != nil {
-		event = event.Err(result.Err)
-	} else {
-		event = event.Int("status", result.Status).Int("bytes", len(result.Body))
-	}
-	event.Msg("hive.http: request finished")
 }
