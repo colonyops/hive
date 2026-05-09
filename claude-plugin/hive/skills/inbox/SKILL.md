@@ -111,7 +111,7 @@ When another agent hands off work:
 hive msg inbox
 
 # Read referenced task details
-bd show <issue-id>
+hive hc show <issue-id>
 ```
 
 ### Review Message History

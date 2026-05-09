@@ -24,7 +24,7 @@ NAV=(
   "Configuration|configuration/rules.md|Rules|Repository-specific rules, templates, and pattern matching"
   "Configuration|configuration/commands.md|User Commands|User commands, command palette, and form fields"
   "Configuration|configuration/keybindings.md|Keybindings|Key mappings, default keys, and palette commands"
-  "Configuration|configuration/plugins.md|Plugins|Tmux, Claude, GitHub, and Beads plugin configuration"
+  "Configuration|configuration/plugins.md|Plugins|Tmux, Claude, and GitHub plugin configuration"
   "Configuration|configuration/themes.md|Themes|Built-in themes and custom color palettes"
   "Recipes|recipes/inter-agent-code-review.md|Inter-Agent Code Review|Using messaging for collaborative code review"
   "FAQ|faq.md|FAQ|Common questions and answers"

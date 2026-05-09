@@ -22,7 +22,6 @@ import (
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
-	"github.com/colonyops/hive/internal/hive/plugins/beads"
 	"github.com/colonyops/hive/internal/hive/plugins/claude"
 	"github.com/colonyops/hive/internal/hive/plugins/contextdir"
 	"github.com/colonyops/hive/internal/hive/plugins/github"
@@ -283,7 +282,6 @@ Run 'hive new' to create a new session from the current repository.`,
 
 			allPlugins := []configuredPlugin{
 				{plugin: github.New(cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},
-				{plugin: beads.New(cfg.Plugins.Beads, kvStore), disabled: isDisabled(cfg.Plugins.Beads.Enabled)},
 				{plugin: lazygit.New(cfg.Plugins.LazyGit), disabled: isDisabled(cfg.Plugins.LazyGit.Enabled)},
 				{plugin: neovim.New(cfg.Plugins.Neovim), disabled: isDisabled(cfg.Plugins.Neovim.Enabled)},
 				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},

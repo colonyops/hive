@@ -11,7 +11,7 @@ import (
 func TestPluginCheck_AllAvailable(t *testing.T) {
 	plugins := []PluginInfo{
 		{Name: "github", Available: true},
-		{Name: "beads", Available: true},
+		{Name: "claude", Available: true},
 	}
 
 	check := NewPluginCheck(plugins)
@@ -22,13 +22,13 @@ func TestPluginCheck_AllAvailable(t *testing.T) {
 	assert.Equal(t, StatusPass, result.Items[0].Status)
 	assert.Equal(t, "github", result.Items[0].Label)
 	assert.Equal(t, StatusPass, result.Items[1].Status)
-	assert.Equal(t, "beads", result.Items[1].Label)
+	assert.Equal(t, "claude", result.Items[1].Label)
 }
 
 func TestPluginCheck_SomeUnavailable(t *testing.T) {
 	plugins := []PluginInfo{
 		{Name: "github", Available: true},
-		{Name: "beads", Available: false},
+		{Name: "claude", Available: false},
 	}
 
 	check := NewPluginCheck(plugins)
@@ -43,7 +43,7 @@ func TestPluginCheck_SomeUnavailable(t *testing.T) {
 func TestPluginCheck_DisabledPlugin(t *testing.T) {
 	plugins := []PluginInfo{
 		{Name: "github", Available: true},
-		{Name: "beads", Available: false, Disabled: true},
+		{Name: "claude", Available: false, Disabled: true},
 	}
 
 	check := NewPluginCheck(plugins)

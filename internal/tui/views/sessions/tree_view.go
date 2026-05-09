@@ -589,7 +589,7 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string, hasTerminal bool) s
 	neutralStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 
 	var parts []string
-	pluginOrder := []string{PluginGitHub, PluginBeads, PluginClaude}
+	pluginOrder := []string{PluginGitHub, PluginClaude}
 	for _, name := range pluginOrder {
 		if name == PluginClaude && !hasTerminal {
 			continue
@@ -608,8 +608,6 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string, hasTerminal bool) s
 			switch name {
 			case PluginGitHub:
 				icon = styles.IconGithub
-			case PluginBeads:
-				icon = styles.IconCheckList
 			case PluginClaude:
 				icon = styles.IconBrain
 			default:

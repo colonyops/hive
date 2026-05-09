@@ -1024,7 +1024,7 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 
 	// Plugin statuses (neutral color)
 	if v.pluginStatuses != nil {
-		pluginOrder := []string{PluginGitHub, PluginBeads, PluginClaude}
+		pluginOrder := []string{PluginGitHub, PluginClaude}
 		for _, name := range pluginOrder {
 			store, ok := v.pluginStatuses[name]
 			if !ok || store == nil {
@@ -1040,8 +1040,6 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 				switch name {
 				case PluginGitHub:
 					icon = styles.IconGithub
-				case PluginBeads:
-					icon = styles.IconCheckList
 				case PluginClaude:
 					icon = styles.IconBrain
 				}
