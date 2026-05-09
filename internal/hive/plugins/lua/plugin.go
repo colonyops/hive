@@ -51,7 +51,7 @@ func (p *Plugin) Available() bool {
 // Init builds the Lua runtime, loads the entrypoint, and runs it once
 // to register commands and other plugin state. Re-initialisation is
 // supported: any prior runtime is shut down first so commands from a
-// previous Init can't leak into MergedCommands.
+// previous Init can't leak into the shared CommandSet's plugin slot.
 func (p *Plugin) Init(_ context.Context) error {
 	p.shutdown()
 
@@ -128,15 +128,13 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
-// shutdown clears the plugin's slot in the shared CommandSet, then closes
-// every HostModuleCloser in reverse-registration order before closing the
-// runtime. Errors are logged but do not short-circuit. Safe on a partial
-// init; idempotent.
+// shutdown stops the runtime and host modules before clearing the plugin's
+// slot in the shared CommandSet. Order matters: closing the runtime drains
+// any queued hive.commands(...) work, and closing host modules stops tickers
+// that could still submit more. Clearing the slot last guarantees no writer
+// can repopulate it after the clear. Errors are logged but do not
+// short-circuit. Safe on a partial init; idempotent.
 func (p *Plugin) shutdown() {
-	if p.cmdSet != nil {
-		p.cmdSet.SetPlugin(p.Name(), nil)
-	}
-
 	for i := len(p.modules) - 1; i >= 0; i-- {
 		closer, ok := p.modules[i].(HostModuleCloser)
 		if !ok {
@@ -153,6 +151,10 @@ func (p *Plugin) shutdown() {
 	if p.runtime != nil {
 		p.runtime.Close()
 		p.runtime = nil
+	}
+
+	if p.cmdSet != nil {
+		p.cmdSet.SetPlugin(p.Name(), nil)
 	}
 }
 

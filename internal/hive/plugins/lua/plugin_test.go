@@ -17,6 +17,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	glua "github.com/yuin/gopher-lua"
 )
 
 func TestPluginAvailable(t *testing.T) {
@@ -91,6 +92,34 @@ end
 
 	// After re-init, the slot must not contain Foo from the prior run.
 	assert.NotContains(t, set.Plugin("lua"), "Foo")
+}
+
+func TestPlugin_Close_ClearsSlotAfterDispatcherDrains(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ Foo = { sh = "echo foo" } })
+end
+`), 0o644))
+
+	p, set := newConfigPluginWithSet(entry)
+	require.NoError(t, p.Init(context.Background()))
+	require.Contains(t, set.Plugin("lua"), "Foo")
+
+	// Queue a MergePlugin on the dispatcher right before Close. The
+	// dispatcher drains pending work during Close, so this work is
+	// guaranteed to run; the bug fix ensures the slot is cleared *after*
+	// the runtime has fully shut down, so any late writer cannot leave
+	// stale commands behind.
+	p.runtime.Submit(func(_ *glua.LState) {
+		set.MergePlugin("lua", map[string]config.UserCommand{
+			"LateRegistered": {Sh: "echo late"},
+		})
+	})
+
+	require.NoError(t, p.Close())
+
+	assert.Empty(t, set.Plugin("lua"), "slot must be empty after Close, regardless of in-flight dispatcher work")
 }
 
 // NewConfigPlugin builds a Plugin from a single entry file path. Shared by
