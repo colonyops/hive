@@ -13,7 +13,7 @@ import (
 
 // Plugin defines the interface for Hive plugins.
 type Plugin interface {
-	// Name returns the plugin name (e.g., "github", "beads").
+	// Name returns the plugin name (e.g., "github", "claude").
 	Name() string
 
 	// Available returns true if the plugin's dependencies are met

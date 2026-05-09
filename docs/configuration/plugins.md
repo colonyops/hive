@@ -17,9 +17,6 @@ plugins:
   github:
     enabled: true
     results_cache: 8m
-  beads:
-    enabled: true
-    results_cache: 30s
   lua:
     enabled: true
     entry: ~/.config/hive/plugins/init.lua
@@ -423,36 +420,6 @@ Sessions with an associated PR show a status indicator:
 | `PR draft`  | Muted   | PR is a draft |
 | `PR merged` | Primary | PR was merged |
 | `PR closed` | Muted   | PR was closed |
-
-## Beads Plugin
-
-The Beads plugin provides issue tracking integration with the `bd` (beads) CLI. Auto-detected when `bd` CLI is installed.
-
-```yaml
-plugins:
-  beads:
-    enabled: true # auto-detected (requires `bd` CLI)
-    results_cache: 30s # how often to refresh issue counts (default: 30s)
-```
-
-### Commands Provided
-
-| Command      | Description              | Default Key |
-| ------------ | ------------------------ | ----------- |
-| `BeadsReady` | Show ready tasks (popup) | —           |
-| `BeadsList`  | List all issues (popup)  | —           |
-| `BeadsTUI`   | Open perles kanban TUI   | —           |
-
-`BeadsTUI` is only registered if the `perles` CLI is available.
-
-### Status Display
-
-Sessions with a `.beads` directory show issue progress:
-
-| Display  | Color   | Meaning              |
-| -------- | ------- | -------------------- |
-| `BD 3/5` | Primary | 3 of 5 issues closed |
-| `BD 5/5` | Green   | All issues closed    |
 
 ## LazyGit Plugin
 

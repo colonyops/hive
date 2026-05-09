@@ -163,14 +163,11 @@ var (
 	thinkingPatternEllipsis = regexp.MustCompile(`[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏·✳✽✶✻✢]\s*.+…\s*\([^)]*\)`)
 
 	// Status line patterns (Claude Code status bar)
-	// Example: "📂 hive-fsnotify-co4xf6 • 🌿 feat/fsnotify-watcher • 🗃 50/57"
+	// Example: "📂 hive-fsnotify-co4xf6 • 🌿 feat/fsnotify-watcher"
 	statusLinePattern = regexp.MustCompile(`📂[^•]+•[^•]+•[^•\n]+`)
 
 	// Git branch in status: "🌿 branch-name" or "🌿 main"
 	gitBranchStatusPattern = regexp.MustCompile(`🌿\s*[a-zA-Z0-9/_-]+`)
-
-	// Beads count: "🗃 50/57" or similar
-	beadsCountPattern = regexp.MustCompile(`🗃\s*\d+/\d+`)
 )
 
 // NormalizeContent prepares content for hashing by removing dynamic elements.
@@ -203,7 +200,6 @@ func NormalizeContent(content string) string {
 	// Normalize status line patterns (Claude Code status bar that updates frequently)
 	result = statusLinePattern.ReplaceAllString(result, "[STATUSLINE]")
 	result = gitBranchStatusPattern.ReplaceAllString(result, "[BRANCH]")
-	result = beadsCountPattern.ReplaceAllString(result, "[BEADS]")
 
 	// Trim trailing whitespace per line (fixes resize false positives)
 	lines := strings.Split(result, "\n")

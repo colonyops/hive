@@ -98,7 +98,6 @@ rules:
       - name: shell
     commands:
       - hive ctx init
-      - bd init --stealth || true
 
 usercommands:
   worktree:

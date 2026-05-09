@@ -480,7 +480,6 @@ type TmuxConfig struct {
 type PluginsConfig struct {
 	ShellWorkers int                    `json:"shell_workers" yaml:"shell_workers"` // shared subprocess pool size (default: 5)
 	GitHub       GitHubPluginConfig     `json:"github"        yaml:"github"`
-	Beads        BeadsPluginConfig      `json:"beads"         yaml:"beads"`
 	LazyGit      LazyGitPluginConfig    `json:"lazygit"       yaml:"lazygit"`
 	Neovim       NeovimPluginConfig     `json:"neovim"        yaml:"neovim"`
 	ContextDir   ContextDirPluginConfig `json:"contextdir"    yaml:"contextdir"`
@@ -533,12 +532,6 @@ func (c LuaPluginConfig) ModuleRoot() string {
 type GitHubPluginConfig struct {
 	Enabled      *bool         `json:"enabled"       yaml:"enabled"`       // nil = auto-detect, true/false = override
 	ResultsCache time.Duration `json:"results_cache" yaml:"results_cache"` // status cache duration (default: 8m)
-}
-
-// BeadsPluginConfig holds Beads plugin configuration.
-type BeadsPluginConfig struct {
-	Enabled      *bool         `json:"enabled"       yaml:"enabled"`       // nil = auto-detect, true/false = override
-	ResultsCache time.Duration `json:"results_cache" yaml:"results_cache"` // status cache duration (default: 30s)
 }
 
 // LazyGitPluginConfig holds lazygit plugin configuration.
@@ -837,9 +830,6 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
-	}
-	if c.Plugins.Beads.ResultsCache == 0 {
-		c.Plugins.Beads.ResultsCache = 30 * time.Second
 	}
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{

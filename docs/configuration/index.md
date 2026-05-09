@@ -156,7 +156,7 @@ See [Keybindings](keybindings.md) for the full per-view configuration format and
 - **[User Commands](commands.md)** — Custom commands for the vim-style command palette
 - **[Keybindings](keybindings.md)** — Per-view key mappings and palette commands
 - **[Todo Configuration (Experimental)](todos.md)** — Todo actions, limiter, notifications, and enter behavior
-- **[Plugins](plugins.md)** — External service integrations (tmux, Claude, GitHub, Beads, etc.)
+- **[Plugins](plugins.md)** — External service integrations (tmux, Claude, GitHub, etc.)
 - **[Themes](themes.md)** — Built-in color palettes and custom theme creation
 
 ## Data Storage
