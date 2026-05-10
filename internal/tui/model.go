@@ -75,6 +75,7 @@ type Deps struct {
 	Renderer        *tmpl.Renderer
 	TerminalManager *terminal.Manager
 	PluginManager   *plugins.Manager
+	CommandSet      *plugins.CommandSet
 	TodoService     *hive.TodoService
 	DB              *db.DB
 
@@ -124,8 +125,9 @@ type Model struct {
 
 	copyCommand string
 
-	// Merged commands (system + plugins + user)
-	mergedCommands map[string]config.UserCommand
+	// Canonical command registry (system + plugins + user). Read at palette
+	// open time so newly registered Lua commands appear without rebuilds.
+	commandSet *plugins.CommandSet
 
 	reviewView *review.View
 
@@ -224,14 +226,11 @@ type todoCreatedMsg struct {
 
 // New creates a new TUI model. Panics if required Deps fields are nil.
 func New(deps Deps, opts Opts) Model {
-	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.TodoService == nil || deps.DB == nil {
-		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, TodoService, and DB are required")
+	if deps.Config == nil || deps.Service == nil || deps.Renderer == nil || deps.TerminalManager == nil || deps.PluginManager == nil || deps.CommandSet == nil || deps.TodoService == nil || deps.DB == nil {
+		panic("tui.New: Config, Service, Renderer, TerminalManager, PluginManager, CommandSet, TodoService, and DB are required")
 	}
 	cfg := deps.Config
 	service := deps.Service
-
-	// Compute merged commands: system → plugins → user
-	mergedCommands := deps.PluginManager.MergedCommands(config.DefaultUserCommands(), cfg.UserCommands)
 
 	viewKBs := map[string]map[string]config.Keybinding{
 		"global":   cfg.Views.Global.Keybindings,
@@ -239,7 +238,7 @@ func New(deps Deps, opts Opts) Model {
 		"tasks":    cfg.Views.Tasks.Keybindings,
 		"review":   cfg.Views.Review.Keybindings,
 	}
-	handler := NewKeybindingResolver(viewKBs, mergedCommands, deps.Renderer)
+	handler := NewKeybindingResolver(viewKBs, deps.CommandSet, deps.Renderer)
 	cmdService := command.NewService(service, service, service, service, service)
 
 	sessionsView := sessions.New(sessions.ViewOpts{
@@ -347,7 +346,7 @@ func New(deps Deps, opts Opts) Model {
 		msgView:         msgView,
 		activeView:      ViewSessions,
 		copyCommand:     cfg.CopyCommand,
-		mergedCommands:  mergedCommands,
+		commandSet:      deps.CommandSet,
 		reviewView:      &reviewView,
 		kvStore:         deps.KVStore,
 		kvView:          kvView,

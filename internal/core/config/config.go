@@ -2,6 +2,7 @@
 package config
 
 import (
+	"cmp"
 	"fmt"
 	"maps"
 	"os"
@@ -509,6 +510,9 @@ type LuaPluginConfig struct {
 	ShellTimeout time.Duration `json:"shell_timeout"  yaml:"shell_timeout"`  // per-call timeout for hive.sh.* (default: 30s)
 	HTTPTimeout  time.Duration `json:"http_timeout"   yaml:"http_timeout"`   // per-call timeout for hive.http.* (default: 30s)
 	HTTPMaxBytes int64         `json:"http_max_bytes" yaml:"http_max_bytes"` // response body cap for hive.http.* (default: 10 MiB)
+	// DispatcherQueueSize bounds the Lua dispatcher work queue; bursts above
+	// this size drop with a warn log. Default: 128.
+	DispatcherQueueSize int `json:"dispatcher_queue_size" yaml:"dispatcher_queue_size"`
 }
 
 // ResolvedEntry returns the configured Lua entry path or the default discovery path.
@@ -833,6 +837,7 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
+	c.Plugins.Lua.DispatcherQueueSize = cmp.Or(c.Plugins.Lua.DispatcherQueueSize, 128)
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -889,6 +894,7 @@ func (c *Config) Validate() error {
 		criterio.Run("database.max_open_conns", c.Database.MaxOpenConns, criterio.Min(1)),
 		criterio.Run("database.max_idle_conns", c.Database.MaxIdleConns, criterio.Min(1)),
 		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
+		criterio.Run("plugins.lua.dispatcher_queue_size", c.Plugins.Lua.DispatcherQueueSize, criterio.Min(0)),
 		c.validateTheme(),
 		c.validateGroupBy(),
 		c.validateKeybindingsBasic(),

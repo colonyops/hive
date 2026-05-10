@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -39,7 +40,7 @@ func docTemplateValue(doc *DocTemplateData) DocTemplateData {
 type KeybindingResolver struct {
 	viewKeybindings        map[string]map[string]config.Keybinding // view name -> key -> binding
 	effectiveKeybindings   map[string]config.Keybinding            // merged global + active view
-	commands               map[string]config.UserCommand
+	commandSet             *plugins.CommandSet
 	renderer               *tmpl.Renderer
 	activeView             ViewType                      // current active view for scope checking
 	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
@@ -47,16 +48,18 @@ type KeybindingResolver struct {
 	selectedWindowOverride string                        // if set, overrides tmuxWindowLookup for the next resolve
 }
 
-// NewKeybindingResolver creates a new resolver with per-view keybinding maps.
-// Commands should be the merged user commands (user config + system defaults).
+// NewKeybindingResolver creates a resolver. commandSet is the canonical
+// command registry; the resolver reads from it on every IsAction/Resolve
+// call, so mutations from any goroutine become visible immediately without
+// rebuilding the resolver.
 func NewKeybindingResolver(
 	viewKeybindings map[string]map[string]config.Keybinding,
-	commands map[string]config.UserCommand,
+	commandSet *plugins.CommandSet,
 	renderer *tmpl.Renderer,
 ) *KeybindingResolver {
 	r := &KeybindingResolver{
 		viewKeybindings: viewKeybindings,
-		commands:        commands,
+		commandSet:      commandSet,
 		renderer:        renderer,
 		activeView:      ViewSessions, // default to sessions view
 	}
@@ -145,7 +148,7 @@ func (h *KeybindingResolver) IsAction(key string, t action.Type) bool {
 	if !exists {
 		return false
 	}
-	cmd, exists := h.commands[kb.Cmd]
+	cmd, exists := h.commandSet.Lookup(kb.Cmd)
 	return exists && cmd.Action == t
 }
 
@@ -242,7 +245,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	}
 
 	// Look up the referenced command
-	cmd, cmdExists := h.commands[kb.Cmd]
+	cmd, cmdExists := h.commandSet.Lookup(kb.Cmd)
 	if !cmdExists {
 		// Command reference is invalid - validation should catch this,
 		// but log and return gracefully for debugging
@@ -340,7 +343,7 @@ func (h *KeybindingResolver) ResolveAction(key string) (Action, bool) {
 		return Action{}, false
 	}
 
-	cmd, cmdExists := h.commands[kb.Cmd]
+	cmd, cmdExists := h.commandSet.Lookup(kb.Cmd)
 	if !cmdExists {
 		log.Warn().Str("key", key).Str("cmd", kb.Cmd).Msg("keybinding references unknown command")
 		return Action{}, false
@@ -382,7 +385,7 @@ func (h *KeybindingResolver) HelpEntries() []string {
 		kb := h.effectiveKeybindings[key]
 
 		// Get command and check scope
-		cmd, ok := h.commands[kb.Cmd]
+		cmd, ok := h.commandSet.Lookup(kb.Cmd)
 		if !ok || !h.isCommandInScope(cmd) {
 			continue // skip out-of-scope commands
 		}
@@ -420,7 +423,7 @@ func (h *KeybindingResolver) KeyBindings() []key.Binding {
 		kb := h.effectiveKeybindings[k]
 
 		// Get command and check scope
-		cmd, ok := h.commands[kb.Cmd]
+		cmd, ok := h.commandSet.Lookup(kb.Cmd)
 		if !ok || !h.isCommandInScope(cmd) {
 			continue // skip out-of-scope commands
 		}
@@ -571,7 +574,7 @@ func (h *KeybindingResolver) ResolveFormCommand(key string, sess session.Session
 		return "", config.UserCommand{}, false
 	}
 
-	cmd, cmdExists := h.commands[kb.Cmd]
+	cmd, cmdExists := h.commandSet.Lookup(kb.Cmd)
 	if !cmdExists || len(cmd.Form) == 0 {
 		return "", config.UserCommand{}, false
 	}

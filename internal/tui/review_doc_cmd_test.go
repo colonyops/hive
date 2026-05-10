@@ -7,6 +7,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
+	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -20,7 +21,7 @@ func TestHiveDocReviewCmd_nil_reviewView_shows_toast(t *testing.T) {
 		received.Add(1)
 	})
 
-	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
+	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
 	m := &Model{
 		activeView:      ViewSessions,
 		reviewView:      nil,
@@ -57,7 +58,7 @@ func TestHiveDocReviewCmd_Execute(t *testing.T) {
 	reviewView.SetSize(100, 40)
 
 	// Create a minimal handler for testing
-	handler := NewKeybindingResolver(nil, map[string]config.UserCommand{}, testRenderer)
+	handler := NewKeybindingResolver(nil, plugins.NewCommandSet(map[string]config.UserCommand{}, nil), testRenderer)
 
 	m := &Model{
 		activeView: ViewSessions,

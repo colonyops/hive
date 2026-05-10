@@ -13,11 +13,6 @@ import (
 	glua "github.com/yuin/gopher-lua"
 )
 
-// dispatcherQueueSize buffers async work (ticker fires, etc.) without
-// blocking producers, but stays small enough that a runaway producer
-// surfaces via drop+log.
-const dispatcherQueueSize = 64
-
 // Runtime owns a sandboxed Lua state. Exactly one goroutine — the
 // dispatcher started in NewRuntime — touches state. Schedule work via
 // Submit, LoadEntrypoint, or CallEntrypoint; tear down with Close.
@@ -36,9 +31,15 @@ type Runtime struct {
 
 // NewRuntime constructs a sandboxed Lua runtime, configures `require()` to
 // resolve relative to moduleRoot, and registers each HostModule onto the
-// global `hive` table. Setup is synchronous; the dispatcher goroutine takes
-// over LState ownership when this returns.
-func NewRuntime(moduleRoot string, logger zerolog.Logger, modules ...HostModule) (*Runtime, error) {
+// global `hive` table. queueSize bounds the dispatcher's work-channel buffer;
+// producers that exceed it drop with a warn-level log via Submit. Setup is
+// synchronous; the dispatcher goroutine takes over LState ownership when
+// this returns.
+func NewRuntime(logger zerolog.Logger, moduleRoot string, queueSize int, modules ...HostModule) (*Runtime, error) {
+	if queueSize < 1 {
+		return nil, fmt.Errorf("dispatcher queue size must be >= 1, got %d", queueSize)
+	}
+
 	state := glua.NewState(glua.Options{SkipOpenLibs: true})
 
 	// Opt-in standard libraries: omit io/os/debug so plugins cannot touch the
@@ -71,7 +72,7 @@ func NewRuntime(moduleRoot string, logger zerolog.Logger, modules ...HostModule)
 	r := &Runtime{
 		state:  state,
 		logger: logger,
-		work:   make(chan func(*glua.LState), dispatcherQueueSize),
+		work:   make(chan func(*glua.LState), queueSize),
 		ctx:    ctx,
 		cancel: cancel,
 	}

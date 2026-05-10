@@ -145,6 +145,14 @@ hv
 
 Open the command palette with `:`, run `LuaHello`, and confirm that `.lua-plugin-output` was created in the selected session directory.
 
+### Dynamic command registration
+
+`hive.commands(table)` can be called from any Lua context — including ticker callbacks and other deferred work — not just the entrypoint. Each successful call merges its entries into the plugin's command slot; existing names are replaced (last write wins), and new names are added. The TUI command palette picks up changes on the next palette open; an open palette continues to show the snapshot taken when it was opened.
+
+Failures are non-fatal: invalid registrations log an error and leave the existing command set unchanged. The dispatcher work queue is bounded by `plugins.lua.dispatcher_queue_size` (default 128); bursts above this size drop the oldest fire-and-forget submissions with a warn-level log.
+
+The standalone `hc` TUI (`hive hc`) does not load plugins and does not display Lua-registered commands. Run the full `hive` TUI to see them.
+
 ### hive.ticker
 
 Schedule callbacks to run repeatedly or after a delay.
@@ -177,7 +185,7 @@ end
     All ticker fires share the same dispatcher goroutine as your entrypoint and command handlers, so a long-running callback delays every other ticker on the plugin's Lua state.
 
 !!! warning "Backpressure: drop + log"
-    If a callback runs longer than the tick interval, additional ticks queue in a bounded buffer (currently 64 items per plugin). When the buffer is full, further ticks are dropped and a warning is logged. The module does **not** coalesce or skip cleanly — it drops, so plan for callbacks that may not fire on every tick under heavy load.
+    If a callback runs longer than the tick interval, additional ticks queue in a bounded buffer (default 128 items per plugin, configurable via `plugins.lua.dispatcher_queue_size`). When the buffer is full, further ticks are dropped and a warning is logged. The module does **not** coalesce or skip cleanly — it drops, so plan for callbacks that may not fire on every tick under heavy load.
 
 !!! note "Shutdown cancels everything"
     When hive shuts down or the plugin is reloaded, every outstanding ticker is cancelled and its callback is released for GC.
@@ -323,7 +331,8 @@ end
 plugins:
   lua:
     enabled: true
-    shell_timeout: 30s   # per-call timeout for hive.sh.* (default: 30s)
+    shell_timeout: 30s            # per-call timeout for hive.sh.* (default: 30s)
+    dispatcher_queue_size: 128    # bounded buffer for ticker fires and other deferred work (default: 128)
 ```
 
 ### hive.http

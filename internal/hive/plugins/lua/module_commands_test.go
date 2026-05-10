@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -168,20 +169,6 @@ end
 			errMsg: `command "Broken"`,
 		},
 		{
-			name: "duplicate command names",
-			script: `
-return function(hive)
-  hive.commands({
-    LuaHello = { sh = "echo first" },
-  })
-  hive.commands({
-    LuaHello = { sh = "echo second" },
-  })
-end
-`,
-			errMsg: `duplicate command "LuaHello"`,
-		},
-		{
 			name: "invalid template syntax",
 			script: `
 return function(hive)
@@ -245,4 +232,54 @@ end
 			assert.Contains(t, err.Error(), `field "`+field+`" is not supported`)
 		})
 	}
+}
+
+func TestCommandsModule_ReplaceByName(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ LuaHello = { sh = "echo first" } })
+  hive.commands({ LuaHello = { sh = "echo second" } })
+end
+`), 0o644))
+
+	plugin := NewConfigPlugin(entry)
+	require.NoError(t, plugin.Init(context.Background()))
+	t.Cleanup(func() { require.NoError(t, plugin.Close()) })
+
+	assert.Equal(t, "echo second", plugin.Commands()["LuaHello"].Sh)
+}
+
+// TestCommandsModule_TickerFiredRegistration is the regression test for the
+// dynamic-registration scenario the epic targets: an entrypoint registers a
+// command, schedules a ticker callback that re-registers the same command
+// with a different sh, and the post-tick value is observable in the shared
+// CommandSet. Uses a 1s after() because tickerMinInterval floors at 1s.
+func TestCommandsModule_TickerFiredRegistration(t *testing.T) {
+	entry := filepath.Join(t.TempDir(), "init.lua")
+	require.NoError(t, os.WriteFile(entry, []byte(`
+return function(hive)
+  hive.commands({ Foo = { sh = "first" } })
+  hive.ticker.after("1s", function()
+    hive.commands({ Foo = { sh = "second" } })
+  end)
+end
+`), 0o644))
+
+	plugin, set := newConfigPluginWithSet(entry)
+	require.NoError(t, plugin.Init(context.Background()))
+	t.Cleanup(func() { require.NoError(t, plugin.Close()) })
+
+	// Initial registration is synchronous through the entrypoint.
+	require.Equal(t, "first", set.Plugin("lua")["Foo"].Sh)
+
+	// Wait for the ticker to fire and replace.
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if set.Plugin("lua")["Foo"].Sh == "second" {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("ticker did not fire registration within deadline; got Sh=%q", set.Plugin("lua")["Foo"].Sh)
 }

@@ -2,48 +2,44 @@ package lua
 
 import (
 	"fmt"
-	"maps"
 	"strconv"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/hive/plugins"
 	glua "github.com/yuin/gopher-lua"
 )
 
-// CommandsModule exposes `hive.commands(map)` and accumulates registered
-// commands. Read them out via Commands() after the entrypoint runs.
+// CommandsModule exposes `hive.commands(table)` to Lua plugins. Each call
+// merges its entries into the plugin's slot in the shared CommandSet via
+// MergePlugin. Registrations from any Lua context (entrypoint, ticker
+// callback, deferred work) are supported; re-registering an existing name
+// replaces it (last-write-wins).
 //
-// A CommandsModule is single-use: registration writes into its commands map,
-// so create a fresh instance per Runtime.
+// Concurrency: the dispatcher goroutine is the sole writer through this
+// module. CommandSet.MergePlugin takes its own write lock and is safe to
+// call from any goroutine.
 type CommandsModule struct {
-	commands map[string]config.UserCommand
+	PluginName string
+	Set        *plugins.CommandSet
 }
 
 // Register exposes hive.commands(map) and lazily allocates the
 // accumulator if a previous Register hasn't already done so.
 func (m *CommandsModule) Register(state *glua.LState, hive *glua.LTable) error {
-	if m.commands == nil {
-		m.commands = map[string]config.UserCommand{}
-	}
 	state.SetField(hive, "commands", state.NewFunction(func(state *glua.LState) int {
 		table := state.CheckTable(1)
-		next, err := commandsFromTable(table, m.commands)
+		next, err := commandsFromTable(table)
 		if err != nil {
 			state.RaiseError("hive.commands: %s", err.Error())
 			return 0
 		}
-		maps.Copy(m.commands, next)
+		m.Set.MergePlugin(m.PluginName, next)
 		return 0
 	}))
 	return nil
 }
 
-// Commands returns the commands registered by the Lua plugin. Returns an
-// empty map until at least one Register call has occurred.
-func (m *CommandsModule) Commands() map[string]config.UserCommand {
-	return m.commands
-}
-
-func commandsFromTable(commandsTable *glua.LTable, existing map[string]config.UserCommand) (map[string]config.UserCommand, error) {
+func commandsFromTable(commandsTable *glua.LTable) (map[string]config.UserCommand, error) {
 	commands := make(map[string]config.UserCommand)
 	var parseErr error
 
@@ -55,10 +51,6 @@ func commandsFromTable(commandsTable *glua.LTable, existing map[string]config.Us
 		name, ok := key.(glua.LString)
 		if !ok {
 			parseErr = fmt.Errorf("command names must be strings")
-			return
-		}
-		if _, dup := existing[string(name)]; dup {
-			parseErr = fmt.Errorf("duplicate command %q", string(name))
 			return
 		}
 

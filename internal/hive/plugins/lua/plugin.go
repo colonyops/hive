@@ -20,20 +20,22 @@ const pluginName = "lua"
 
 // Plugin adapts a Lua entry file to Hive's plugin interface.
 type Plugin struct {
-	cfg      config.LuaPluginConfig
-	kvStore  kv.KV
-	pool     *plugins.WorkerPool
-	logger   zerolog.Logger
-	runtime  *Runtime
-	modules  []HostModule
-	commands map[string]config.UserCommand
+	cfg     config.LuaPluginConfig
+	kvStore kv.KV
+	pool    *plugins.WorkerPool
+	cmdSet  *plugins.CommandSet
+	logger  zerolog.Logger
+	runtime *Runtime
+	modules []HostModule
 }
 
 // New creates a Lua-backed Hive plugin. The shared worker pool throttles
 // hive.sh.* shell execution; pass nil only in tests that don't exercise the
-// shell module.
-func New(cfg config.LuaPluginConfig, kvStore kv.KV, pool *plugins.WorkerPool, logger zerolog.Logger) *Plugin {
-	return &Plugin{cfg: cfg, kvStore: kvStore, pool: pool, logger: logger}
+// shell module. cmdSet is the shared command registry the plugin pushes
+// hive.commands(...) registrations into; tests that don't exercise commands
+// may pass plugins.NewCommandSet(nil, nil).
+func New(cfg config.LuaPluginConfig, kvStore kv.KV, pool *plugins.WorkerPool, cmdSet *plugins.CommandSet, logger zerolog.Logger) *Plugin {
+	return &Plugin{cfg: cfg, kvStore: kvStore, pool: pool, cmdSet: cmdSet, logger: logger}
 }
 
 // Name returns the plugin identifier used in logs and the kv namespace.
@@ -49,14 +51,14 @@ func (p *Plugin) Available() bool {
 // Init builds the Lua runtime, loads the entrypoint, and runs it once
 // to register commands and other plugin state. Re-initialisation is
 // supported: any prior runtime is shut down first so commands from a
-// previous Init can't leak into MergedCommands.
+// previous Init can't leak into the shared CommandSet's plugin slot.
 func (p *Plugin) Init(_ context.Context) error {
 	p.shutdown()
 
-	// Build into a fresh CommandsModule so a partial init (failure during
-	// entry-file load or while calling the entrypoint) cannot leave stale
-	// commands reachable from MergedCommands.
-	cmdModule := &CommandsModule{}
+	cmdModule := &CommandsModule{
+		PluginName: p.Name(),
+		Set:        p.cmdSet,
+	}
 
 	tickerModule := &TickerModule{
 		Logger: p.logger.With().Str("module", "ticker").Logger(),
@@ -92,7 +94,7 @@ func (p *Plugin) Init(_ context.Context) error {
 		httpModule,
 	}
 
-	runtime, err := NewRuntime(p.cfg.ModuleRoot(), p.logger, modules...)
+	runtime, err := NewRuntime(p.logger, p.cfg.ModuleRoot(), p.cfg.DispatcherQueueSize, modules...)
 	if err != nil {
 		return err
 	}
@@ -116,7 +118,6 @@ func (p *Plugin) Init(_ context.Context) error {
 		return fmt.Errorf("initialize lua plugin %q: %w", p.cfg.ResolvedEntry(), err)
 	}
 
-	p.commands = cmdModule.Commands()
 	return nil
 }
 
@@ -127,9 +128,12 @@ func (p *Plugin) Close() error {
 	return nil
 }
 
-// shutdown closes every HostModuleCloser in reverse-registration order
-// before closing the runtime. Errors are logged but do not short-circuit.
-// Safe on a partial init; idempotent.
+// shutdown stops the runtime and host modules before clearing the plugin's
+// slot in the shared CommandSet. Order matters: closing the runtime drains
+// any queued hive.commands(...) work, and closing host modules stops tickers
+// that could still submit more. Clearing the slot last guarantees no writer
+// can repopulate it after the clear. Errors are logged but do not
+// short-circuit. Safe on a partial init; idempotent.
 func (p *Plugin) shutdown() {
 	for i := len(p.modules) - 1; i >= 0; i-- {
 		closer, ok := p.modules[i].(HostModuleCloser)
@@ -148,13 +152,19 @@ func (p *Plugin) shutdown() {
 		p.runtime.Close()
 		p.runtime = nil
 	}
-	p.commands = nil
+
+	if p.cmdSet != nil {
+		p.cmdSet.SetPlugin(p.Name(), nil)
+	}
 }
 
 // Commands returns the user commands registered by the plugin's
 // entrypoint. Returns nil if Init has not run or if it failed.
 func (p *Plugin) Commands() map[string]config.UserCommand {
-	return p.commands
+	if p.cmdSet == nil {
+		return nil
+	}
+	return p.cmdSet.Plugin(p.Name())
 }
 
 // StatusProvider returns nil because Lua plugins don't expose a status
