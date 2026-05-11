@@ -9,12 +9,11 @@ import (
 
 // CommandSet is the canonical merged registry of user commands across system
 // defaults, plugin contributions, and user-config overrides. It is concurrent-
-// safe: writers from any goroutine push via Set*/Merge*; readers via Lookup
+// safe: writers from any goroutine push via SetPlugin; readers via Lookup
 // or All. Merge precedence in reads is user > plugin > system.
 //
-// Slots are kept separate so writers touch only their own source — a plugin
-// re-registering does not need to know about user/system entries to avoid
-// clobbering them.
+// Slots are kept separate so each source updates only its own commands while
+// preserving the overall precedence ordering.
 type CommandSet struct {
 	mu      sync.RWMutex
 	system  map[string]config.UserCommand
@@ -33,9 +32,8 @@ func NewCommandSet(system, user map[string]config.UserCommand) *CommandSet {
 	}
 }
 
-// SetPlugin replaces the named plugin's slot. Used by static plugins at
-// InitAll time and to clear a per-plugin slot during a Plugin re-init.
-// Pass nil cmds to clear (removes the entry from plugins map).
+// SetPlugin replaces the named plugin's slot. Pass nil cmds to clear
+// (removes the entry from plugins map).
 func (s *CommandSet) SetPlugin(name string, cmds map[string]config.UserCommand) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -45,25 +43,6 @@ func (s *CommandSet) SetPlugin(name string, cmds map[string]config.UserCommand) 
 		return
 	}
 	s.plugins[name] = cloneCommands(cmds)
-}
-
-// MergePlugin merges cmds into the named plugin's slot. Existing entries
-// not in cmds are preserved; entries in cmds replace any existing same-named
-// entry. Used by the Lua plugin on each hive.commands(...) call.
-func (s *CommandSet) MergePlugin(name string, cmds map[string]config.UserCommand) {
-	if cmds == nil {
-		return
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	slot, ok := s.plugins[name]
-	if !ok {
-		slot = make(map[string]config.UserCommand, len(cmds))
-		s.plugins[name] = slot
-	}
-	maps.Copy(slot, cmds)
 }
 
 // Plugin returns a defensive copy of the named plugin's slot, or nil if the

@@ -125,8 +125,7 @@ type Model struct {
 
 	copyCommand string
 
-	// Canonical command registry (system + plugins + user). Read at palette
-	// open time so newly registered Lua commands appear without rebuilds.
+	// Canonical command registry (system + plugins + user).
 	commandSet *plugins.CommandSet
 
 	reviewView *review.View

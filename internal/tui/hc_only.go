@@ -57,9 +57,8 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 		"global": cfg.Views.Global.Keybindings,
 		"tasks":  cfg.Views.Tasks.Keybindings,
 	}
-	// Standalone honeycomb mode bypasses the plugin manager — no Lua-registered
-	// commands surface here. Build a CommandSet directly so the resolver has a
-	// canonical registry to query.
+	// Standalone honeycomb mode bypasses the plugin manager. Build a CommandSet
+	// directly so the resolver has a canonical registry to query.
 	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
 	handler := NewKeybindingResolver(viewKBs, commandSet, opts.Renderer)
 	handler.SetActiveView(ViewTasks)

@@ -42,10 +42,10 @@ type Manager struct {
 }
 
 // NewManager creates a new plugin manager. The pool is injected so it can be
-// shared with plugins (e.g. the Lua hive.sh module) that draw from the same
-// concurrency budget as status refreshes. commandSet is the canonical command
-// registry the manager seeds plugin slots into during InitAll; the manager
-// does not own or expose it — callers keep the reference for lookups.
+// shared with plugins that draw from the same concurrency budget as status
+// refreshes. commandSet is the canonical command registry the manager seeds
+// plugin slots into during InitAll; the manager does not own or expose it —
+// callers keep the reference for lookups.
 func NewManager(pool *WorkerPool, commandSet *CommandSet) *Manager {
 	return &Manager{
 		plugins:        make(map[string]Plugin),
@@ -75,13 +75,8 @@ func (m *Manager) Register(p Plugin) {
 }
 
 // InitAll initializes all registered plugins. Errors are logged but do not
-// stop initialization of other plugins. After each successful Init the
-// plugin's Commands() are seeded into the shared CommandSet's plugin slot,
-// unless the plugin already populated its own slot during Init (e.g. the
-// Lua plugin via MergePlugin from its entrypoint or a ticker callback).
-// Skipping in that case avoids a lost-update race: reading Commands() and
-// then SetPlugin'ing it back would clobber any writes that landed in
-// between. Failed inits leave the slot untouched.
+// stop initialization of other plugins. After each successful Init, the
+// plugin's Commands() populate that plugin's slot in the shared CommandSet.
 func (m *Manager) InitAll(ctx context.Context) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
@@ -92,9 +87,6 @@ func (m *Manager) InitAll(ctx context.Context) error {
 			continue
 		}
 		if m.commandSet == nil {
-			continue
-		}
-		if m.commandSet.Plugin(name) != nil {
 			continue
 		}
 		if cmds := p.Commands(); cmds != nil {
@@ -458,11 +450,6 @@ func (m *Manager) RefreshAllStatus(ctx context.Context, sessions []*session.Sess
 	wg.Wait()
 	log.Debug().Int("resultCount", len(results)).Msg("RefreshAllStatus complete")
 	return results
-}
-
-// Pool returns the shared worker pool for plugins to use.
-func (m *Manager) Pool() *WorkerPool {
-	return m.pool
 }
 
 // Get returns a plugin by name, or nil if not found.
