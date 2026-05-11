@@ -47,6 +47,16 @@ package action
 //	DocsTogglePreview
 //	DocsToggleTree
 //	DocsSelectRepo
+//	SessionsRefreshGitStatuses
+//	SessionsTogglePreview
+//	SessionsNavigateUp
+//	SessionsNavigateDown
+//	SessionsFilterStart
+//	SessionsCommandPaletteOpen
+//	GoToTop
+//	GoToBottom
+//	Quit
+//	ShowHelp
 //
 // )
 type Type string

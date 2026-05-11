@@ -348,6 +348,13 @@ func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
 		return m, nil
 	case act.TypeSetTheme:
 		return m, nil
+	case act.TypeQuit:
+		return m.quit()
+	case act.TypeShowHelp:
+		if !m.isReviewFocused() {
+			return m.showHelpDialog()
+		}
+		return m, nil
 	default:
 		log.Warn().Str("type", string(a.Type)).Msg("unhandled action type")
 		return m, nil
