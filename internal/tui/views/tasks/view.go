@@ -10,6 +10,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/hc"
 	corekv "github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -589,6 +590,19 @@ func (v *View) handleKey(msg tea.KeyMsg) tea.Cmd {
 func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	keyStr := msg.String()
 
+	if v.handler != nil {
+		if v.handler.IsAction(keyStr, act.TypeGoToTop) {
+			v.cursor = 0
+			v.scrollOffset = 0
+			return v.checkCursorChanged()
+		}
+		if v.handler.IsAction(keyStr, act.TypeGoToBottom) {
+			v.cursor = len(v.flatNodes) - 1
+			v.clampScroll()
+			return v.checkCursorChanged()
+		}
+	}
+
 	switch keyStr {
 	// Navigation keys — stay hard-coded
 	case "j", "down":
@@ -606,14 +620,6 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 			return v.updateViewportContent()
 		}
 		return nil
-	case "G":
-		v.cursor = len(v.flatNodes) - 1
-		v.clampScroll()
-		return v.checkCursorChanged()
-	case "g":
-		v.cursor = 0
-		v.scrollOffset = 0
-		return v.checkCursorChanged()
 	case ":":
 		return func() tea.Msg { return CommandPaletteRequestMsg{} }
 	}

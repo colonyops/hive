@@ -119,6 +119,8 @@ var defaultViewsConfig = ViewsConfig{
 		Keybindings: map[string]Keybinding{
 			"r": {Cmd: "TasksRefresh"},
 			"f": {Cmd: "TasksFilter"},
+			"g": {Cmd: "GoToTop"},
+			"G": {Cmd: "GoToBottom"},
 			"y": {Cmd: "TasksCopyID"},
 			"v": {Cmd: "TasksTogglePreview"},
 			"s": {Cmd: "TasksSelectRepo"},
@@ -138,6 +140,8 @@ var defaultViewsConfig = ViewsConfig{
 			"o": {Cmd: "DocsOpen"},
 			"v": {Cmd: "DocsTogglePreview"},
 			"r": {Cmd: "DocsSelectRepo"},
+			"g": {Cmd: "GoToTop"},
+			"G": {Cmd: "GoToBottom"},
 		},
 	},
 }
