@@ -4,6 +4,9 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
+
+	"gopkg.in/yaml.v3"
 )
 
 // ConfigTemplateData is the data context for the annotated config template.
@@ -114,6 +117,58 @@ func appendAlias(rcFile, shellName string) error {
 		err = closeErr
 	}
 	return err
+}
+
+// defaultConfigPath returns $XDG_CONFIG_HOME/hive/config.yaml.
+// This is the write-side counterpart to DefaultConfigPath in flags.go which probes for existing files.
+//
+//nolint:unused
+func defaultConfigPath() string {
+	return filepath.Join(defaultConfigDir(), "config.yaml")
+}
+
+// toStringSlice serialises a []string as a YAML inline sequence using yaml.v3.
+// Example: []string{"--foo"} → `["--foo"]`, nil/empty → `[]`.
+//
+//nolint:unused
+func toStringSlice(ss []string) string {
+	if len(ss) == 0 {
+		return "[]"
+	}
+	node := &yaml.Node{
+		Kind:  yaml.SequenceNode,
+		Style: yaml.FlowStyle,
+	}
+	for _, s := range ss {
+		node.Content = append(node.Content, &yaml.Node{
+			Kind:  yaml.ScalarNode,
+			Value: s,
+		})
+	}
+	out, err := yaml.Marshal(node)
+	if err != nil {
+		return "[]"
+	}
+	return strings.TrimRight(string(out), "\n")
+}
+
+// renderConfigTemplate executes configTemplate with data and returns the rendered string.
+// Registers toStringSlice as a template func internally.
+//
+//nolint:unused
+func renderConfigTemplate(data ConfigTemplateData) (string, error) {
+	funcMap := template.FuncMap{
+		"toStringSlice": toStringSlice,
+	}
+	tmpl, err := template.New("config").Funcs(funcMap).Parse(configTemplate)
+	if err != nil {
+		return "", err
+	}
+	var sb strings.Builder
+	if err := tmpl.Execute(&sb, data); err != nil {
+		return "", err
+	}
+	return sb.String(), nil
 }
 
 //nolint:unused
