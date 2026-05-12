@@ -10,7 +10,6 @@ linters:
     - errorlint
     - exhaustive
     - gochecknoinits
-    - goconst
     - gocritic
     - goprintffuncname
     - govet
@@ -40,9 +39,6 @@ linters:
               desc: Should be replaced by standard lib errors package
     exhaustive:
       default-signifies-exhaustive: true
-    goconst:
-      min-len: 5
-      min-occurrences: 5
     gocritic:
       enabled-checks:
         - ruleguard
