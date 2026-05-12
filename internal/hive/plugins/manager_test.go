@@ -12,7 +12,7 @@ import (
 
 // mockPlugin is a minimal Plugin implementation used by manager-level tests
 // to exercise registration, init, and command-slot seeding without spinning
-// up a real Lua/GitHub backend.
+// up a real backend.
 type mockPlugin struct {
 	name     string
 	commands map[string]config.UserCommand
@@ -55,51 +55,42 @@ func TestManager_InitAll_SkipsPluginsWithNilCommands(t *testing.T) {
 	assert.Nil(t, set.Plugin("empty"), "no slot should be created for plugins that return nil commands")
 }
 
-// selfRegisteringPlugin populates its slot directly from Init, mirroring
-// the Lua plugin's MergePlugin-from-entrypoint behavior. Commands() reads
-// back from the slot.
-type selfRegisteringPlugin struct {
-	name string
-	set  *CommandSet
-	init map[string]config.UserCommand
-	post map[string]config.UserCommand
+// initUpdatingPlugin mutates its command set during Init so InitAll seeds the
+// post-init command map rather than the pre-init one.
+type initUpdatingPlugin struct {
+	name     string
+	commands map[string]config.UserCommand
+	updated  map[string]config.UserCommand
 }
 
-func (p *selfRegisteringPlugin) Name() string    { return p.name }
-func (p *selfRegisteringPlugin) Available() bool { return true }
-func (p *selfRegisteringPlugin) Init(_ context.Context) error {
-	p.set.MergePlugin(p.name, p.init)
-	if p.post != nil {
-		p.set.MergePlugin(p.name, p.post)
-	}
+func (p *initUpdatingPlugin) Name() string    { return p.name }
+func (p *initUpdatingPlugin) Available() bool { return true }
+func (p *initUpdatingPlugin) Init(_ context.Context) error {
+	p.commands = p.updated
 	return nil
 }
-func (p *selfRegisteringPlugin) Close() error { return nil }
-func (p *selfRegisteringPlugin) Commands() map[string]config.UserCommand {
-	return p.set.Plugin(p.name)
-}
-func (p *selfRegisteringPlugin) StatusProvider() StatusProvider { return nil }
+func (p *initUpdatingPlugin) Close() error                            { return nil }
+func (p *initUpdatingPlugin) Commands() map[string]config.UserCommand { return p.commands }
+func (p *initUpdatingPlugin) StatusProvider() StatusProvider          { return nil }
 
-func TestManager_InitAll_PreservesSelfRegisteredCommands(t *testing.T) {
+func TestManager_InitAll_SeedsCommandsObservedAfterInit(t *testing.T) {
 	set := NewCommandSet(nil, nil)
 	mgr := NewManager(NewWorkerPool(0), set)
 
-	// Simulates a Lua-style plugin whose entrypoint registers Foo and a
-	// ticker callback registers Bar between Init returning and the
-	// manager's seeding step.
-	mgr.Register(&selfRegisteringPlugin{
-		name: "self",
-		set:  set,
-		init: map[string]config.UserCommand{"Foo": {Sh: "echo foo"}},
-		post: map[string]config.UserCommand{"Bar": {Sh: "echo bar"}},
+	mgr.Register(&initUpdatingPlugin{
+		name:     "self",
+		commands: map[string]config.UserCommand{"Old": {Sh: "echo old"}},
+		updated:  map[string]config.UserCommand{"Foo": {Sh: "echo foo"}, "Bar": {Sh: "echo bar"}},
 	})
 
 	require.NoError(t, mgr.InitAll(context.Background()))
 
 	got := set.Plugin("self")
 	require.NotNil(t, got)
-	assert.Equal(t, "echo foo", got["Foo"].Sh, "entrypoint registration must survive InitAll")
-	assert.Equal(t, "echo bar", got["Bar"].Sh, "post-Init registration must survive InitAll")
+	assert.Equal(t, "echo foo", got["Foo"].Sh)
+	assert.Equal(t, "echo bar", got["Bar"].Sh)
+	_, hasOld := got["Old"]
+	assert.False(t, hasOld)
 }
 
 func TestSessionsChanged(t *testing.T) {

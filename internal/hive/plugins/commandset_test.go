@@ -39,37 +39,18 @@ func TestCommandSet_PrecedenceOrdering(t *testing.T) {
 	assert.Equal(t, "S", s.All()["Foo"].Sh)
 }
 
-func TestCommandSet_MergePlugin_PerKeyMerge(t *testing.T) {
-	s := NewCommandSet(nil, nil)
-
-	s.MergePlugin("lua", map[string]config.UserCommand{
-		"A": {Sh: "a1"},
-		"B": {Sh: "b1"},
-	})
-	s.MergePlugin("lua", map[string]config.UserCommand{
-		"B": {Sh: "b2"},
-		"C": {Sh: "c1"},
-	})
-
-	got := s.Plugin("lua")
-	assert.Len(t, got, 3)
-	assert.Equal(t, "a1", got["A"].Sh)
-	assert.Equal(t, "b2", got["B"].Sh) // replaced
-	assert.Equal(t, "c1", got["C"].Sh)
-}
-
 func TestCommandSet_SetPlugin_ReplacesSlot(t *testing.T) {
 	s := NewCommandSet(nil, nil)
 
-	s.SetPlugin("lua", map[string]config.UserCommand{
+	s.SetPlugin("test", map[string]config.UserCommand{
 		"A": {Sh: "a"},
 		"B": {Sh: "b"},
 	})
-	s.SetPlugin("lua", map[string]config.UserCommand{
+	s.SetPlugin("test", map[string]config.UserCommand{
 		"C": {Sh: "c"},
 	})
 
-	got := s.Plugin("lua")
+	got := s.Plugin("test")
 	assert.Len(t, got, 1)
 	_, hasA := got["A"]
 	_, hasB := got["B"]
@@ -81,10 +62,10 @@ func TestCommandSet_SetPlugin_ReplacesSlot(t *testing.T) {
 func TestCommandSet_SetPluginNil_ClearsSlot(t *testing.T) {
 	s := NewCommandSet(nil, nil)
 
-	s.SetPlugin("lua", map[string]config.UserCommand{"A": {Sh: "a"}})
-	s.SetPlugin("lua", nil)
+	s.SetPlugin("test", map[string]config.UserCommand{"A": {Sh: "a"}})
+	s.SetPlugin("test", nil)
 
-	assert.Nil(t, s.Plugin("lua"))
+	assert.Nil(t, s.Plugin("test"))
 
 	all := s.All()
 	_, hasA := all["A"]
@@ -114,15 +95,15 @@ func TestCommandSet_DefensiveCopy_All(t *testing.T) {
 
 func TestCommandSet_DefensiveCopy_Plugin(t *testing.T) {
 	s := NewCommandSet(nil, nil)
-	s.SetPlugin("lua", map[string]config.UserCommand{"A": {Sh: "a"}})
+	s.SetPlugin("test", map[string]config.UserCommand{"A": {Sh: "a"}})
 
-	first := s.Plugin("lua")
+	first := s.Plugin("test")
 	first["Injected"] = config.UserCommand{Sh: "x"}
 	mutated := first["A"]
 	mutated.Sh = "MUTATED"
 	first["A"] = mutated
 
-	second := s.Plugin("lua")
+	second := s.Plugin("test")
 	_, hasInjected := second["Injected"]
 	assert.False(t, hasInjected)
 	assert.Equal(t, "a", second["A"].Sh)
@@ -207,16 +188,10 @@ func TestCommandSet_ConcurrentReadersWriters(t *testing.T) {
 		wg.Go(func() {
 			<-start
 			pname := pluginName(w)
-			for i := range writerIters {
-				if i%2 == 0 {
-					s.MergePlugin(pname, map[string]config.UserCommand{
-						sharedKey: {Sh: "merged"},
-					})
-				} else {
-					s.SetPlugin(pname, map[string]config.UserCommand{
-						sharedKey: {Sh: "set"},
-					})
-				}
+			for range writerIters {
+				s.SetPlugin(pname, map[string]config.UserCommand{
+					sharedKey: {Sh: "set"},
+				})
 			}
 		})
 	}

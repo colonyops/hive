@@ -1148,7 +1148,7 @@ func TestKeybindingResolver_LookupReadsLive(t *testing.T) {
 	// Before push: the keybinding references an unknown command, so IsAction is false.
 	assert.False(t, handler.IsAction("x", act.TypeRecycle))
 
-	set.MergePlugin("test", map[string]config.UserCommand{
+	set.SetPlugin("test", map[string]config.UserCommand{
 		"Foo": {Action: act.TypeRecycle},
 	})
 
@@ -1169,7 +1169,7 @@ func TestKeybindingResolver_ResolveReadsLive(t *testing.T) {
 	_, ok := handler.Resolve("x", sess)
 	require.False(t, ok)
 
-	set.MergePlugin("test", map[string]config.UserCommand{
+	set.SetPlugin("test", map[string]config.UserCommand{
 		"Foo": {Sh: "echo updated"},
 	})
 

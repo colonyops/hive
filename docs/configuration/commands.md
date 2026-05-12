@@ -247,7 +247,7 @@ usercommands:
 
 ## What You Can Build
 
-User commands combined with tmux integration and messaging create a powerful extensibility layer — like NeoVim's Lua config for AI agent management. Here are real-world patterns:
+User commands combined with tmux integration and messaging create a powerful extensibility layer for AI agent management. Here are real-world patterns:
 
 ### Batch Send to Multiple Agents
 

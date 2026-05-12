@@ -26,7 +26,6 @@ import (
 	"github.com/colonyops/hive/internal/hive/plugins/contextdir"
 	"github.com/colonyops/hive/internal/hive/plugins/github"
 	"github.com/colonyops/hive/internal/hive/plugins/lazygit"
-	luaplugin "github.com/colonyops/hive/internal/hive/plugins/lua"
 	"github.com/colonyops/hive/internal/hive/plugins/neovim"
 	plugintmux "github.com/colonyops/hive/internal/hive/plugins/tmux"
 	"github.com/colonyops/hive/internal/hive/scripts"
@@ -288,7 +287,6 @@ Run 'hive new' to create a new session from the current repository.`,
 				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
 				{plugin: claude.New(cfg.Plugins.Claude, kvStore), disabled: isDisabled(cfg.Plugins.Claude.Enabled)},
 				{plugin: plugintmux.New(cfg.Plugins.Tmux), disabled: isDisabled(cfg.Plugins.Tmux.Enabled)},
-				{plugin: luaplugin.New(cfg.Plugins.Lua, kvStore, shellPool, commandSet, log.With().Str("component", "lua").Logger()), disabled: isDisabled(cfg.Plugins.Lua.Enabled)},
 			}
 
 			pluginInfos := make([]doctor.PluginInfo, len(allPlugins))
@@ -387,7 +385,6 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewConfigCmd(flags, hiveApp).Register(app)
 	app = commands.NewHoneycombCmd(flags, hiveApp).Register(app)
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
-	app = commands.NewPluginCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command

@@ -2,7 +2,6 @@
 package config
 
 import (
-	"cmp"
 	"fmt"
 	"maps"
 	"os"
@@ -486,52 +485,11 @@ type PluginsConfig struct {
 	ContextDir   ContextDirPluginConfig `json:"contextdir"    yaml:"contextdir"`
 	Claude       ClaudePluginConfig     `json:"claude"        yaml:"claude"`
 	Tmux         TmuxPluginConfig       `json:"tmux"          yaml:"tmux"`
-	Lua          LuaPluginConfig        `json:"lua"           yaml:"lua"`
 }
 
 // TmuxPluginConfig holds tmux plugin configuration.
 type TmuxPluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
-}
-
-// LuaPluginConfig holds Lua plugin discovery configuration.
-//
-// Entry is the absolute (or tilde-prefixed) path to the entry file. When empty
-// Hive looks for the default discovery path (~/.config/hive/plugins/init.lua),
-// and a missing file there is silently treated as "no Lua plugin." When Entry
-// is set explicitly, the file must exist.
-//
-// Entry is intentionally not pre-filled by DefaultConfig or applyDefaults:
-// distinguishing "user did not configure this" from "user explicitly chose the
-// default path" relies on Entry == "" being preserved as the unset signal.
-type LuaPluginConfig struct {
-	Enabled      *bool         `json:"enabled"        yaml:"enabled"` // nil = auto-detect, true/false = override
-	Entry        string        `json:"entry"          yaml:"entry"`
-	ShellTimeout time.Duration `json:"shell_timeout"  yaml:"shell_timeout"`  // per-call timeout for hive.sh.* (default: 30s)
-	HTTPTimeout  time.Duration `json:"http_timeout"   yaml:"http_timeout"`   // per-call timeout for hive.http.* (default: 30s)
-	HTTPMaxBytes int64         `json:"http_max_bytes" yaml:"http_max_bytes"` // response body cap for hive.http.* (default: 10 MiB)
-	// DispatcherQueueSize bounds the Lua dispatcher work queue; bursts above
-	// this size drop with a warn log. Default: 128.
-	DispatcherQueueSize int `json:"dispatcher_queue_size" yaml:"dispatcher_queue_size"`
-}
-
-// ResolvedEntry returns the configured Lua entry path or the default discovery path.
-func (c LuaPluginConfig) ResolvedEntry() string {
-	if c.Entry != "" {
-		return pathutil.ExpandHome(c.Entry)
-	}
-
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return pathutil.ExpandHome("~/.config/hive/plugins/init.lua")
-	}
-
-	return filepath.Join(home, ".config", "hive", "plugins", "init.lua")
-}
-
-// ModuleRoot returns the directory containing the Lua entry file.
-func (c LuaPluginConfig) ModuleRoot() string {
-	return filepath.Dir(c.ResolvedEntry())
 }
 
 // GitHubPluginConfig holds GitHub plugin configuration.
@@ -837,7 +795,6 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
-	c.Plugins.Lua.DispatcherQueueSize = cmp.Or(c.Plugins.Lua.DispatcherQueueSize, 128)
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -894,7 +851,6 @@ func (c *Config) Validate() error {
 		criterio.Run("database.max_open_conns", c.Database.MaxOpenConns, criterio.Min(1)),
 		criterio.Run("database.max_idle_conns", c.Database.MaxIdleConns, criterio.Min(1)),
 		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
-		criterio.Run("plugins.lua.dispatcher_queue_size", c.Plugins.Lua.DispatcherQueueSize, criterio.Min(0)),
 		c.validateTheme(),
 		c.validateGroupBy(),
 		c.validateKeybindingsBasic(),
@@ -904,7 +860,6 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
-		c.validateLuaPluginEntryBasic(),
 	)
 }
 
