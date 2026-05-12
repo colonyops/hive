@@ -604,7 +604,7 @@ func (v *View) handleTreeKey(msg tea.KeyMsg) tea.Cmd {
 	}
 
 	switch keyStr {
-	// Navigation keys — stay hard-coded
+	// Direct navigation keys — not user-overridable.
 	case "j", "down":
 		v.moveCursor(1)
 		return v.checkCursorChanged()

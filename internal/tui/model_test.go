@@ -2,8 +2,12 @@ package tui
 
 import (
 	"io"
+	"reflect"
 	"testing"
+	"time"
+	"unsafe"
 
+	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -12,6 +16,8 @@ import (
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
+	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -123,6 +129,30 @@ func switchTestView(t *testing.T, m Model, view ViewType) Model {
 
 	model, _ := m.switchToView(view)
 	return model.(Model)
+}
+
+func setUnexportedField[T any](t *testing.T, target any, field string, value T) {
+	t.Helper()
+
+	v := reflect.ValueOf(target)
+	require.Equal(t, reflect.Pointer, v.Kind())
+
+	f := v.Elem().FieldByName(field)
+	require.True(t, f.IsValid(), "field %s not found", field)
+
+	reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).Elem().Set(reflect.ValueOf(value))
+}
+
+func getUnexportedField[T any](t *testing.T, target any, field string) T {
+	t.Helper()
+
+	v := reflect.ValueOf(target)
+	require.Equal(t, reflect.Pointer, v.Kind())
+
+	f := v.Elem().FieldByName(field)
+	require.True(t, f.IsValid(), "field %s not found", field)
+
+	return reflect.NewAt(f.Type(), unsafe.Pointer(f.UnsafeAddr())).Elem().Interface().(T)
 }
 
 func TestPromotedKeysAreOverridable(t *testing.T) {
@@ -297,6 +327,93 @@ func TestPromotedKeysAreOverridable(t *testing.T) {
 	}
 }
 
+func TestPromotedKeysDefaultBehavior(t *testing.T) {
+	t.Run("sessions g refreshes git statuses", func(t *testing.T) {
+		m := newKeybindingPrecedenceModel(t, nil)
+		m = switchTestView(t, m, ViewSessions)
+
+		sessionItem := sessions.TreeItem{
+			Session: session.Session{
+				ID:    "s1",
+				Name:  "alpha",
+				Path:  "/tmp/alpha",
+				State: session.StateActive,
+			},
+		}
+		listModel := getUnexportedField[list.Model](t, m.sessionsView, "list")
+		listModel.SetItems([]list.Item{sessionItem})
+		setUnexportedField(t, m.sessionsView, "list", listModel)
+
+		model, cmd := m.Update(keyPressMsg("g"))
+		m = model.(Model)
+
+		status, ok := m.sessionsView.GitStatuses().Get("/tmp/alpha")
+		require.True(t, ok)
+		assert.True(t, status.IsLoading)
+		assert.NotNil(t, cmd)
+	})
+
+	t.Run("sessions slash enters focus mode", func(t *testing.T) {
+		m := newKeybindingPrecedenceModel(t, nil)
+		m = switchTestView(t, m, ViewSessions)
+
+		model, _ := m.Update(keyPressMsg("/"))
+		m = model.(Model)
+
+		assert.True(t, m.sessionsView.FocusMode())
+	})
+
+	t.Run("tasks g goes to top", func(t *testing.T) {
+		m := newKeybindingPrecedenceModel(t, nil)
+		m = switchTestView(t, m, ViewTasks)
+
+		nodes := []tasks.FlatNode{
+			{Node: &tasks.TreeNode{Item: hc.Item{ID: "task-1", Type: hc.ItemTypeTask, CreatedAt: time.Now()}}},
+			{Node: &tasks.TreeNode{Item: hc.Item{ID: "task-2", Type: hc.ItemTypeTask, CreatedAt: time.Now()}}},
+		}
+		setUnexportedField(t, m.tasksView, "flatNodes", nodes)
+		setUnexportedField(t, m.tasksView, "cursor", 1)
+
+		model, _ := m.Update(keyPressMsg("g"))
+		m = model.(Model)
+
+		assert.Equal(t, 0, getUnexportedField[int](t, m.tasksView, "cursor"))
+	})
+
+	t.Run("review G goes to bottom", func(t *testing.T) {
+		m := newKeybindingPrecedenceModel(t, nil)
+		m = switchTestView(t, m, ViewReview)
+
+		doc := &review.Document{
+			Path:          "/tmp/doc.md",
+			RelPath:       "plans/doc.md",
+			Content:       "line 1\nline 2\nline 3",
+			RenderedLines: []string{"line 1", "line 2", "line 3"},
+		}
+		m.reviewView.SetSize(80, 24)
+		setUnexportedField(t, m.reviewView, "fullScreen", true)
+		setUnexportedField(t, m.reviewView, "selectedDoc", doc)
+		setUnexportedField(t, m.reviewView, "cursorLine", 1)
+
+		model, _ := m.Update(keyPressMsg("G"))
+		m = model.(Model)
+
+		assert.Equal(t, 3, getUnexportedField[int](t, m.reviewView, "cursorLine"))
+	})
+}
+
+func TestReviewQuestionMarkDoesNotOpenGlobalHelpDialog(t *testing.T) {
+	m := newKeybindingPrecedenceModel(t, nil)
+	m = switchTestView(t, m, ViewReview)
+
+	model, cmd := m.Update(keyPressMsg("?"))
+	m = model.(Model)
+
+	assert.Equal(t, stateNormal, m.state)
+	assert.Nil(t, cmd)
+	assert.False(t, m.quitting)
+}
+
 func TestCtrlCAlwaysQuits(t *testing.T) {
 	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
 		cfg.UserCommands["SentinelNotifications"] = config.UserCommand{
@@ -339,12 +456,93 @@ func TestFilterModeSwallowsKeys(t *testing.T) {
 }
 
 func TestUnknownCommandDoesNotFallBack(t *testing.T) {
-	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
-		cfg.Views.Sessions.Keybindings["q"] = config.Keybinding{Cmd: "DoesNotExist"}
-	})
+	tests := []struct {
+		name string
+		bind func(*config.Config)
+	}{
+		{
+			name: "missing command lookup",
+			bind: func(cfg *config.Config) {
+				cfg.Views.Sessions.Keybindings["q"] = config.Keybinding{Cmd: "DoesNotExist"}
+			},
+		},
+		{
+			name: "existing command out of scope",
+			bind: func(cfg *config.Config) {
+				cfg.UserCommands["TasksOnlyQuit"] = config.UserCommand{
+					Action: act.TypeQuit,
+					Help:   "tasks only quit",
+					Scope:  []string{"tasks"},
+				}
+				cfg.Views.Global.Keybindings["q"] = config.Keybinding{Cmd: "TasksOnlyQuit"}
+			},
+		},
+	}
 
-	m = driveKeyUpdate(t, m, "q")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newKeybindingPrecedenceModel(t, tt.bind)
 
-	assert.False(t, m.quitting)
-	assert.Equal(t, stateNormal, m.state)
+			m = driveKeyUpdate(t, m, "q")
+
+			assert.False(t, m.quitting)
+			assert.Equal(t, stateNormal, m.state)
+		})
+	}
+}
+
+func TestModalDismissalQIgnoresNormalModeOverride(t *testing.T) {
+	tests := []struct {
+		name       string
+		open       func(t *testing.T, m Model) Model
+		wantBefore UIState
+	}{
+		{
+			name: "help dialog",
+			open: func(t *testing.T, m Model) Model {
+				t.Helper()
+				model, _ := m.showHelpDialog()
+				return model.(Model)
+			},
+			wantBefore: stateShowingHelp,
+		},
+		{
+			name: "notifications modal",
+			open: func(t *testing.T, m Model) Model {
+				t.Helper()
+				model, _ := m.handleGlobalAction(Action{Type: act.TypeNotifications})
+				return model.(Model)
+			},
+			wantBefore: stateShowingNotifications,
+		},
+		{
+			name: "info dialog",
+			open: func(t *testing.T, m Model) Model {
+				t.Helper()
+				model, _ := m.showHiveInfo()
+				return model.(Model)
+			},
+			wantBefore: stateShowingInfo,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
+				cfg.UserCommands["SentinelNotifications"] = config.UserCommand{
+					Action: act.TypeNotifications,
+					Help:   "sentinel notifications",
+				}
+				cfg.Views.Global.Keybindings["q"] = config.Keybinding{Cmd: "SentinelNotifications"}
+			})
+
+			m = tt.open(t, m)
+			assert.Equal(t, tt.wantBefore, m.state)
+
+			m = driveKeyUpdate(t, m, "q")
+
+			assert.Equal(t, stateNormal, m.state)
+			assert.NotEqual(t, stateShowingNotifications, m.state)
+		})
+	}
 }

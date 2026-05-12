@@ -920,7 +920,7 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				return v, nil
 			}
 
-			// Resolve configurable keybindings via handler (works in any mode).
+			// Fall through to the resolver-driven action pass after the direct key checks above.
 			if a, ok := v.handler.ResolveAction(msg.String()); ok {
 				return v, func() tea.Msg { return ActionRequestMsg{Action: a} }
 			}

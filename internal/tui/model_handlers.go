@@ -354,6 +354,7 @@ func (m Model) handleGlobalAction(a Action) (tea.Model, tea.Cmd) {
 		if !m.isReviewFocused() {
 			return m.showHelpDialog()
 		}
+		// Review renders its own help overlay, so the global help modal stays out of the way here.
 		return m, nil
 	default:
 		log.Warn().Str("type", string(a.Type)).Msg("unhandled action type")

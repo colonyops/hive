@@ -157,6 +157,10 @@ func (h *KeybindingResolver) IsCommand(key string, cmdName string) bool {
 	return kb.Cmd == cmdName
 }
 
+// commandFor resolves key to a UserCommand after applying both key lookup and
+// isCommandInScope filtering for the resolver's active view. Callers rely on
+// this to distinguish missing bindings from commands that exist but are out of
+// scope for the current dispatch path.
 func (h *KeybindingResolver) commandFor(key string) (config.UserCommand, bool) {
 	kb, exists := h.effectiveKeybindings[key]
 	if !exists {

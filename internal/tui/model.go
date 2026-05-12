@@ -1243,6 +1243,10 @@ func isDocsAction(t act.Type) bool {
 	return false
 }
 
+// isGlobalAction reports whether key resolves to t via a command whose scope is
+// empty or entirely "global". Empty scope counts as global so default commands
+// like Quit and ShowHelp always qualify; this keeps global q/? gated on
+// strictly-global bindings rather than falling through view-scoped overrides.
 func (m Model) isGlobalAction(key string, t act.Type) bool {
 	cmd, ok := m.handler.commandFor(key)
 	if !ok || cmd.Action != t {
