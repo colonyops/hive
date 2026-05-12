@@ -946,12 +946,20 @@ func TestResolver_GlobalFallback(t *testing.T) {
 
 func TestResolver_ViewOverridesGlobal(t *testing.T) {
 	viewKBs := map[string]map[string]config.Keybinding{
-		"global":   {"x": {Cmd: "HiveInfo"}},
-		"sessions": {"x": {Cmd: "Recycle"}},
+		"global": {
+			"x": {Cmd: "HiveInfo"},
+			"q": {Cmd: "Quit"},
+		},
+		"sessions": {
+			"x": {Cmd: "Recycle"},
+			"q": {Cmd: "Notifications"},
+		},
 	}
 	commands := map[string]config.UserCommand{
-		"HiveInfo": {Action: act.TypeHiveInfo, Help: "info"},
-		"Recycle":  {Action: act.TypeRecycle, Help: "recycle"},
+		"HiveInfo":      {Action: act.TypeHiveInfo, Help: "info"},
+		"Recycle":       {Action: act.TypeRecycle, Help: "recycle"},
+		"Quit":          {Action: act.TypeQuit, Help: "quit"},
+		"Notifications": {Action: act.TypeNotifications, Help: "notifications"},
 	}
 	handler := NewKeybindingResolver(viewKBs, commandSetFromMap(commands), testRenderer)
 	sess := session.Session{ID: "test", Path: "/test", State: session.StateActive}
@@ -967,6 +975,18 @@ func TestResolver_ViewOverridesGlobal(t *testing.T) {
 	a2, ok2 := handler.ResolveAction("x")
 	assert.True(t, ok2)
 	assert.Equal(t, act.TypeHiveInfo, a2.Type)
+
+	// On sessions view, view-specific "q" -> Notifications overrides global "q" -> Quit.
+	handler.SetActiveView(ViewSessions)
+	a3, ok3 := handler.Resolve("q", sess)
+	assert.True(t, ok3)
+	assert.Equal(t, act.TypeNotifications, a3.Type)
+
+	// On tasks view (no override), global "q" -> Quit.
+	handler.SetActiveView(ViewTasks)
+	a4, ok4 := handler.ResolveAction("q")
+	assert.True(t, ok4)
+	assert.Equal(t, act.TypeQuit, a4.Type)
 }
 
 func TestResolver_ResolveAction_SkipsShellCommands(t *testing.T) {
