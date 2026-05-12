@@ -397,6 +397,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewConfigCmd(flags, hiveApp).Register(app)
 	app = commands.NewHoneycombCmd(flags, hiveApp).Register(app)
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
+	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
