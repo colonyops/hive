@@ -257,6 +257,76 @@ func TestClient_OpenSession(t *testing.T) {
 	})
 }
 
+func TestClient_Exists(t *testing.T) {
+	t.Run("server up", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec, nopLog)
+
+		assert.True(t, c.Exists(context.Background()))
+		require.Len(t, rec.Commands, 1)
+		assert.Equal(t, "tmux", rec.Commands[0].Cmd)
+		assert.Equal(t, []string{"info"}, rec.Commands[0].Args)
+	})
+
+	t.Run("server down", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{
+			Errors: map[string]error{"tmux": fmt.Errorf("no server running")},
+		}
+		c := New(rec, nopLog)
+
+		assert.False(t, c.Exists(context.Background()))
+	})
+}
+
+func TestClient_ListWindows(t *testing.T) {
+	t.Run("returns window names", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{
+			Outputs: map[string][]byte{"tmux": []byte("agent\nshell\nlogs\n")},
+		}
+		c := New(rec, nopLog)
+
+		names, err := c.ListWindows(context.Background(), "my-session")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"agent", "shell", "logs"}, names)
+
+		require.Len(t, rec.Commands, 1)
+		assert.Equal(t, []string{"list-windows", "-t", "my-session", "-F", "#{window_name}"}, rec.Commands[0].Args)
+	})
+
+	t.Run("trims whitespace and skips empty lines", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{
+			Outputs: map[string][]byte{"tmux": []byte("agent\n\n  shell  \n\n")},
+		}
+		c := New(rec, nopLog)
+
+		names, err := c.ListWindows(context.Background(), "sess")
+		require.NoError(t, err)
+		assert.Equal(t, []string{"agent", "shell"}, names)
+	})
+
+	t.Run("session missing returns error", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{
+			Errors: map[string]error{"tmux": fmt.Errorf("can't find session")},
+		}
+		c := New(rec, nopLog)
+
+		_, err := c.ListWindows(context.Background(), "missing")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "missing")
+	})
+
+	t.Run("empty output returns empty slice no error", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{
+			Outputs: map[string][]byte{"tmux": []byte("")},
+		}
+		c := New(rec, nopLog)
+
+		names, err := c.ListWindows(context.Background(), "empty-sess")
+		require.NoError(t, err)
+		assert.Empty(t, names)
+	})
+}
+
 func TestClient_AddWindows(t *testing.T) {
 	t.Run("adds windows without focus", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}

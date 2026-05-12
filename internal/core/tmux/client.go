@@ -39,6 +39,32 @@ func (c *Client) HasSession(ctx context.Context, name string) bool {
 	return err == nil
 }
 
+// Exists reports whether the tmux server is currently reachable.
+// Equivalent to the `tmux info` exit code: 0 means server is up.
+func (c *Client) Exists(ctx context.Context) bool {
+	_, err := c.exec.Run(ctx, "tmux", "info")
+	return err == nil
+}
+
+// ListWindows returns the names of windows in a tmux session, or an error
+// if the session does not exist or tmux fails. Equivalent to
+// `tmux list-windows -t <session> -F '#{window_name}'`. Each non-empty
+// line of stdout is one window name; empty lines are skipped.
+func (c *Client) ListWindows(ctx context.Context, session string) ([]string, error) {
+	out, err := c.exec.Run(ctx, "tmux", "list-windows", "-t", session, "-F", "#{window_name}")
+	if err != nil {
+		return nil, fmt.Errorf("tmux list-windows -t %s: %w", session, err)
+	}
+	names := []string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if line != "" {
+			names = append(names, line)
+		}
+	}
+	return names, nil
+}
+
 // CreateSession creates a tmux session with the given windows.
 // The first window is created via new-session; additional windows via new-window.
 // If background is true, the session is created detached.
