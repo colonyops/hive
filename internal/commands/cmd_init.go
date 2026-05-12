@@ -2,6 +2,7 @@ package commands
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"text/template"
@@ -38,6 +39,20 @@ var agentFlagMap = map[string][]string{ //nolint:unused
 	"claude":   {"--dangerously-skip-permissions"},
 	"opencode": {"--agent", "free-permissions-runner"},
 	"codex":    {"--full-auto"},
+}
+
+// detectInstalledAgents returns the subset of known agent names found on PATH,
+// preserving input order. Uses exec.LookPath.
+//
+//nolint:unused
+func detectInstalledAgents(known []string) []string {
+	result := []string{}
+	for _, name := range known {
+		if _, err := exec.LookPath(name); err == nil {
+			result = append(result, name)
+		}
+	}
+	return result
 }
 
 // detectShell inspects $SHELL and returns a short name and the rc file path.
