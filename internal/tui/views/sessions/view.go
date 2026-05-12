@@ -425,15 +425,6 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 		return v, cmd
 	}
 
-	switch keyStr {
-	case "up", "k":
-		v.navigateSkippingPlaceholders(-1)
-		return v, nil
-	case "down", "j":
-		v.navigateSkippingPlaceholders(1)
-		return v, nil
-	}
-
 	if v.handler.IsAction(keyStr, act.TypeNextActive) {
 		v.navigateToNextActive(1)
 		return v, nil
@@ -442,12 +433,22 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 		v.navigateToNextActive(-1)
 		return v, nil
 	}
-
-	if v.handler.IsAction(keyStr, act.TypeNewSession) && len(v.discoveredRepos) > 0 {
-		return v, func() tea.Msg { return NewSessionRequestMsg{} }
+	if v.handler.IsAction(keyStr, act.TypeSessionsNavigateUp) {
+		v.navigateSkippingPlaceholders(-1)
+		return v, nil
 	}
-
-	if keyStr == "/" {
+	if v.handler.IsAction(keyStr, act.TypeSessionsNavigateDown) {
+		v.navigateSkippingPlaceholders(1)
+		return v, nil
+	}
+	if v.handler.IsAction(keyStr, act.TypeSessionsRefreshGitStatuses) {
+		return v, v.RefreshGitStatuses()
+	}
+	if v.handler.IsAction(keyStr, act.TypeSessionsTogglePreview) && v.HasTerminalIntegration() {
+		v.TogglePreview()
+		return v, nil
+	}
+	if v.handler.IsAction(keyStr, act.TypeSessionsFilterStart) {
 		v.focusMode = true
 		v.focusFilter = ""
 		v.focusFilterInput.Reset()
@@ -470,10 +471,13 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 
 		return v, v.focusFilterInput.Focus()
 	}
-
-	if keyStr == ":" {
+	if v.handler.IsAction(keyStr, act.TypeSessionsCommandPaletteOpen) {
 		sess := v.SelectedSession()
 		return v, func() tea.Msg { return CommandPaletteRequestMsg{Session: sess} }
+	}
+
+	if v.handler.IsAction(keyStr, act.TypeNewSession) && len(v.discoveredRepos) > 0 {
+		return v, func() tea.Msg { return NewSessionRequestMsg{} }
 	}
 
 	treeItem := v.SelectedTreeItem()

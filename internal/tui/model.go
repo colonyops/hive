@@ -1351,13 +1351,6 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 
 	// Session-specific keys only when sessions focused
 	if m.isSessionsFocused() {
-		if keyStr == "g" {
-			return m, m.sessionsView.RefreshGitStatuses()
-		}
-		if keyStr == "v" && m.sessionsView.HasTerminalIntegration() {
-			m.sessionsView.TogglePreview()
-			return m, nil
-		}
 		cmd := m.sessionsView.Update(msg)
 		var cmds []tea.Cmd
 		if cmd != nil {
