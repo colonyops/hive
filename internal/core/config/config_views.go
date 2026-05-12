@@ -85,7 +85,10 @@ func (m MessagesViewConfig) SplitRatioOrDefault(defaultPct int) int {
 // defaultViewsConfig provides built-in per-view keybindings that users can override.
 var defaultViewsConfig = ViewsConfig{
 	Global: GlobalViewConfig{
-		Keybindings: map[string]Keybinding{},
+		Keybindings: map[string]Keybinding{
+			"q": {Cmd: "Quit"},
+			"?": {Cmd: "ShowHelp"},
+		},
 	},
 	Sessions: SessionsViewConfig{
 		Keybindings: map[string]Keybinding{
