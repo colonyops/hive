@@ -72,6 +72,9 @@ The sender is auto-detected from the current working directory's hive session.
 
 Output format: All commands produce JSON Lines (one JSON object per line) on stdout.
 Warnings and errors are written to stderr.`,
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Commands: []*cli.Command{
 			cmd.pubCmd(),
 			cmd.subCmd(),

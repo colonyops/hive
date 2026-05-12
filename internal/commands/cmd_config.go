@@ -28,6 +28,9 @@ func (cmd *ConfigCmd) Register(app *cli.Command) *cli.Command {
 
 This shows the effective configuration after loading the config file,
 applying defaults, and merging keybindings.`,
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Action: cmd.run,
 	})
 

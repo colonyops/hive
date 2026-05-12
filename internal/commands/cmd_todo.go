@@ -45,6 +45,9 @@ Agents create todos to request human attention (code review, document review, et
 The operator manages them through the TUI action panel or CLI commands.
 
 Session ID is auto-detected from the current working directory.`,
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Commands: []*cli.Command{
 			cmd.addCmd(),
 			cmd.listCmd(),

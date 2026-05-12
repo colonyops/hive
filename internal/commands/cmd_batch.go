@@ -76,7 +76,10 @@ Config example (in ~/.config/hive/config.yaml):
       - "wezterm cli spawn --cwd {{.Path}} -- claude --prompt '{{.Prompt}}'"
 
 Output is JSON with a batch ID, log file path, and results for each session.`,
-		Flags:  []cli.Flag{cmd.fr.Flag()},
+		Flags: []cli.Flag{cmd.fr.Flag()},
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Action: cmd.run,
 	})
 

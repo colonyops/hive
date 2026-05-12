@@ -1,6 +1,8 @@
 package commands
 
 import (
+	"context"
+
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 )
@@ -21,6 +23,9 @@ func (cmd *ExperimentalCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:  "x",
 		Usage: "Experimental commands",
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Commands: []*cli.Command{
 			cmd.pickCmd(),
 		},

@@ -33,6 +33,10 @@ func NewSessionCmd(flags *Flags, app *hive.App) *SessionCmd {
 func (cmd *SessionCmd) Register(app *cli.Command) *cli.Command {
 	lsCommand := cmd.lsCmd()
 
+	bootstrap := func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+		return ctx, cmd.app.FullBootstrap(ctx)
+	}
+
 	app.Commands = append(app.Commands,
 		&cli.Command{
 			Name:  "session",
@@ -41,6 +45,7 @@ func (cmd *SessionCmd) Register(app *cli.Command) *cli.Command {
 
 Use 'hive session list' to list all sessions.
 Use 'hive session info' to get details about the current session.`,
+			Before: bootstrap,
 			Commands: []*cli.Command{
 				lsCommand,
 				cmd.infoCmd(),
@@ -53,6 +58,7 @@ Use 'hive session info' to get details about the current session.`,
 			UsageText: "hive ls [--json]",
 			Hidden:    true,
 			Flags:     lsCommand.Flags,
+			Before:    bootstrap,
 			Action:    lsCommand.Action,
 		},
 	)

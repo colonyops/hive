@@ -44,6 +44,9 @@ func (cmd *HoneycombCmd) Register(app *cli.Command) *cli.Command {
 but scoped to a repository and designed for machine consumption.
 
 Session ID and repo key are auto-detected from the working directory.`,
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Action: cmd.run,
 		Commands: []*cli.Command{
 			cmd.createCmd(),

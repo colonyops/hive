@@ -42,8 +42,13 @@ func (cmd *TuiCmd) Flags() []cli.Flag {
 	}
 }
 
-// Run executes the TUI. Exported for use as default command.
+// Run executes the TUI. Exported for use as default command. Because the
+// TUI runs as the root command's Action (not a registered subcommand), it
+// invokes FullBootstrap itself rather than relying on a per-command Before.
 func (cmd *TuiCmd) Run(ctx context.Context, c *cli.Command) error {
+	if err := cmd.app.FullBootstrap(ctx); err != nil {
+		return err
+	}
 	return cmd.run(ctx, c)
 }
 

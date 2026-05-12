@@ -30,6 +30,9 @@ func (cmd *DocCmd) Register(app *cli.Command) *cli.Command {
 
 Use 'hive doc migrate' to see configuration migration information.
 Use 'hive doc messaging' to see inter-agent messaging conventions.`,
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Commands: []*cli.Command{
 			cmd.migrateCmd(),
 			cmd.messagingCmd(),

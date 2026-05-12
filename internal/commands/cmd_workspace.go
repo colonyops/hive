@@ -29,6 +29,9 @@ func (cmd *WorkspaceCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:  "workspace",
 		Usage: "Workspace management commands",
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Commands: []*cli.Command{
 			cmd.listCmd(),
 		},

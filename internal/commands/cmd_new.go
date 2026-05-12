@@ -66,6 +66,9 @@ Example:
 				Destination: &cmd.cloneStrategy,
 			},
 		},
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Action: cmd.run,
 	})
 

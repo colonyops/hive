@@ -52,6 +52,9 @@ Use 'hive ctx init' in a git repository to create a .hive symlink pointing to th
 				Destination: &cmd.shared,
 			},
 		},
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Commands: []*cli.Command{
 			cmd.initCmd(),
 			cmd.lsCmd(),

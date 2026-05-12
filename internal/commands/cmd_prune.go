@@ -33,6 +33,9 @@ max_recycled config) and deletes the rest.
 Use --all to delete ALL recycled sessions regardless of the limit.
 
 Active sessions are not affected.`,
+		Before: func(ctx context.Context, _ *cli.Command) (context.Context, error) {
+			return ctx, cmd.app.FullBootstrap(ctx)
+		},
 		Action: cmd.run,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
