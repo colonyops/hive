@@ -1242,6 +1242,26 @@ func isDocsAction(t act.Type) bool {
 	return false
 }
 
+// isGlobalAction reports whether key resolves to t via a command whose scope is
+// empty or entirely "global". Empty scope counts as global so default commands
+// like Quit and ShowHelp always qualify; this keeps global q/? gated on
+// strictly-global bindings rather than falling through view-scoped overrides.
+func (m Model) isGlobalAction(key string, t act.Type) bool {
+	cmd, ok := m.handler.commandFor(key)
+	if !ok || cmd.Action != t {
+		return false
+	}
+	if len(cmd.Scope) == 0 {
+		return true
+	}
+	for _, scope := range cmd.Scope {
+		if scope != "global" {
+			return false
+		}
+	}
+	return true
+}
+
 // copyToClipboard copies the given text to the system clipboard.
 func (m Model) copyToClipboard(text string) error {
 	if m.copyCommand == "" {
@@ -1330,7 +1350,7 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 	// Not in editor - handle core hardcoded keys
 	// Global keys that work regardless of focus
 	switch keyStr {
-	case "q", keyCtrlC:
+	case keyCtrlC:
 		return m.quit()
 	case "esc":
 		if m.toastController.HasToasts() {
@@ -1341,22 +1361,16 @@ func (m Model) handleNormalKey(msg tea.KeyPressMsg, keyStr string) (tea.Model, t
 		return m.handleTabKey(1)
 	case "shift+tab":
 		return m.handleTabKey(-1)
-	case "?":
-		// Don't show help dialog when in review view - let review view handle keys
-		if !m.isReviewFocused() {
-			return m.showHelpDialog()
+	}
+
+	if m.isGlobalAction(keyStr, act.TypeQuit) || m.isGlobalAction(keyStr, act.TypeShowHelp) {
+		if a, ok := m.handler.ResolveAction(keyStr); ok {
+			return m.handleGlobalAction(a)
 		}
 	}
 
 	// Session-specific keys only when sessions focused
 	if m.isSessionsFocused() {
-		if keyStr == "g" {
-			return m, m.sessionsView.RefreshGitStatuses()
-		}
-		if keyStr == "v" && m.sessionsView.HasTerminalIntegration() {
-			m.sessionsView.TogglePreview()
-			return m, nil
-		}
 		cmd := m.sessionsView.Update(msg)
 		var cmds []tea.Cmd
 		if cmd != nil {

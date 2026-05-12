@@ -85,13 +85,24 @@ func (m MessagesViewConfig) SplitRatioOrDefault(defaultPct int) int {
 // defaultViewsConfig provides built-in per-view keybindings that users can override.
 var defaultViewsConfig = ViewsConfig{
 	Global: GlobalViewConfig{
-		Keybindings: map[string]Keybinding{},
+		Keybindings: map[string]Keybinding{
+			"q": {Cmd: "Quit"},
+			"?": {Cmd: "ShowHelp"},
+		},
 	},
 	Sessions: SessionsViewConfig{
 		Keybindings: map[string]Keybinding{
 			"r":      {Cmd: "Recycle"},
 			"d":      {Cmd: "Delete"},
 			"n":      {Cmd: "NewSession"},
+			"g":      {Cmd: "SessionsRefreshGitStatuses"},
+			"v":      {Cmd: "SessionsTogglePreview"},
+			"up":     {Cmd: "SessionsNavigateUp"},
+			"k":      {Cmd: "SessionsNavigateUp"},
+			"down":   {Cmd: "SessionsNavigateDown"},
+			"j":      {Cmd: "SessionsNavigateDown"},
+			"/":      {Cmd: "SessionsFilterStart"},
+			":":      {Cmd: "SessionsCommandPaletteOpen"},
 			"enter":  {Cmd: "TmuxOpen"},
 			"ctrl+d": {Cmd: "TmuxKill"},
 			"A":      {Cmd: "AgentSend"},
@@ -108,6 +119,8 @@ var defaultViewsConfig = ViewsConfig{
 		Keybindings: map[string]Keybinding{
 			"r": {Cmd: "TasksRefresh"},
 			"f": {Cmd: "TasksFilter"},
+			"g": {Cmd: "GoToTop"},
+			"G": {Cmd: "GoToBottom"},
 			"y": {Cmd: "TasksCopyID"},
 			"v": {Cmd: "TasksTogglePreview"},
 			"s": {Cmd: "TasksSelectRepo"},
@@ -127,6 +140,8 @@ var defaultViewsConfig = ViewsConfig{
 			"o": {Cmd: "DocsOpen"},
 			"v": {Cmd: "DocsTogglePreview"},
 			"r": {Cmd: "DocsSelectRepo"},
+			"g": {Cmd: "GoToTop"},
+			"G": {Cmd: "GoToBottom"},
 		},
 	},
 }

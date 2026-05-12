@@ -144,11 +144,7 @@ func (h *KeybindingResolver) isCommandInScope(cmd config.UserCommand) bool {
 
 // IsAction checks if a key maps to the given built-in action.
 func (h *KeybindingResolver) IsAction(key string, t action.Type) bool {
-	kb, exists := h.effectiveKeybindings[key]
-	if !exists {
-		return false
-	}
-	cmd, exists := h.commandSet.Lookup(kb.Cmd)
+	cmd, exists := h.commandFor(key)
 	return exists && cmd.Action == t
 }
 
@@ -159,6 +155,24 @@ func (h *KeybindingResolver) IsCommand(key string, cmdName string) bool {
 		return false
 	}
 	return kb.Cmd == cmdName
+}
+
+// commandFor resolves key to a UserCommand after applying both key lookup and
+// isCommandInScope filtering for the resolver's active view. Callers rely on
+// this to distinguish missing bindings from commands that exist but are out of
+// scope for the current dispatch path.
+func (h *KeybindingResolver) commandFor(key string) (config.UserCommand, bool) {
+	kb, exists := h.effectiveKeybindings[key]
+	if !exists {
+		return config.UserCommand{}, false
+	}
+
+	cmd, exists := h.commandSet.Lookup(kb.Cmd)
+	if !exists || !h.isCommandInScope(cmd) {
+		return config.UserCommand{}, false
+	}
+
+	return cmd, true
 }
 
 // renderUserCommandWindows renders a slice of WindowConfig templates against a UserCommand

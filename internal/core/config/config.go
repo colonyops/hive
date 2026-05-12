@@ -303,6 +303,64 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"review"},
 	},
+	"SessionsRefreshGitStatuses": {
+		Action: action.TypeSessionsRefreshGitStatuses,
+		Help:   "refresh git status",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SessionsTogglePreview": {
+		Action: action.TypeSessionsTogglePreview,
+		Help:   "toggle preview pane",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SessionsNavigateUp": {
+		Action: action.TypeSessionsNavigateUp,
+		Help:   "move selection up",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SessionsNavigateDown": {
+		Action: action.TypeSessionsNavigateDown,
+		Help:   "move selection down",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SessionsFilterStart": {
+		Action: action.TypeSessionsFilterStart,
+		Help:   "start filter",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SessionsCommandPaletteOpen": {
+		Action: action.TypeSessionsCommandPaletteOpen,
+		Help:   "open command palette",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"GoToTop": {
+		Action: action.TypeGoToTop,
+		Help:   "jump to top",
+		Silent: true,
+		Scope:  []string{"tasks", "review"},
+	},
+	"GoToBottom": {
+		Action: action.TypeGoToBottom,
+		Help:   "jump to bottom",
+		Silent: true,
+		Scope:  []string{"tasks", "review"},
+	},
+	"Quit": {
+		Action: action.TypeQuit,
+		Help:   "quit",
+		Silent: true,
+	},
+	"ShowHelp": {
+		Action: action.TypeShowHelp,
+		Help:   "show help",
+		Silent: true,
+	},
 	"SendBatch": {
 		Sh: `{{ range .Form.targets }}
 {{ agentSend }} {{ .Name | shq }}:claude {{ $.Form.message | shq }}

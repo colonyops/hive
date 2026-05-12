@@ -20,6 +20,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 
+	act "github.com/colonyops/hive/internal/core/action"
 	corereview "github.com/colonyops/hive/internal/core/review"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -903,8 +904,23 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 			return v, func() tea.Msg { return CommandPaletteRequestMsg{} }
 		}
 
-		// Resolve configurable keybindings via handler (works in any mode).
 		if v.handler != nil {
+			if v.handler.IsAction(msg.String(), act.TypeGoToTop) && v.fullScreen {
+				v.viewport.GotoTop()
+				v.cursorLine = 1
+				v.renderSelection()
+				return v, nil
+			}
+			if v.handler.IsAction(msg.String(), act.TypeGoToBottom) && v.fullScreen {
+				v.viewport.GotoBottom()
+				if v.selectedDoc != nil {
+					v.cursorLine = len(v.selectedDoc.RenderedLines)
+				}
+				v.renderSelection()
+				return v, nil
+			}
+
+			// Fall through to the resolver-driven action pass after the direct key checks above.
 			if a, ok := v.handler.ResolveAction(msg.String()); ok {
 				return v, func() tea.Msg { return ActionRequestMsg{Action: a} }
 			}
@@ -944,18 +960,6 @@ func (v View) Update(msg tea.Msg) (View, tea.Cmd) {
 				// If mapped to comment line (0), adjust to nearest valid document line
 				if v.cursorLine == 0 && v.selectedDoc != nil {
 					v.cursorLine = 1 // Default to first line
-				}
-				v.renderSelection()
-				return v, nil
-			case "g":
-				v.viewport.GotoTop()
-				v.cursorLine = 1
-				v.renderSelection()
-				return v, nil
-			case "G":
-				v.viewport.GotoBottom()
-				if v.selectedDoc != nil {
-					v.cursorLine = len(v.selectedDoc.RenderedLines)
 				}
 				v.renderSelection()
 				return v, nil
