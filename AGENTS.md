@@ -198,6 +198,16 @@ Available variables vary by context - see `internal/core/config/validate.go` for
 
 Never silently discard errors. If an error cannot be presented to the user (e.g., in background polling, cache refresh, or TUI status fetching), log it at an appropriate level (`debug` for expected/transient failures, `warn` for configuration problems). Prefer degraded behavior with logging over silent fallbacks — for example, show a `StatusMissing` indicator instead of dropping an item from the UI.
 
+### Keybinding Precedence
+
+The TUI dispatches keystrokes through three layers, in this order:
+
+1. **Layer 1: hardcoded, non-overridable** - `ctrl+c`, `esc`, `tab`, and `shift+tab` in normal-mode handling, plus modal-lifecycle dismissal keys (`esc` / `q`) inside dialogs and modals.
+2. **Layer 2: configurable via `KeybindingResolver`** - every other user-overridable key. Default bindings live in `defaultViewsConfig` (`internal/core/config/config_views.go`), and user config in `cfg.Views.{Global,Sessions,Tasks,Review}.Keybindings` overrides those defaults because `maps.Copy(merged, user)` overlays user values onto the merged map.
+3. **Layer 3: bubbles list internals** - the underlying list component claims keys like `g`, `G`, `j`, `k`, `h`, `l`, `u`, `d`, `f`, `b`, `/`, `?`, `q`, and `esc`. This is intentionally out of scope for hive keybinding configuration: the resolver consumes configured bindings before the list sees them.
+
+When adding a new overridable key, do not add a new `if keyStr == "X"` block in view code. Register an `action.Type` in `internal/core/action/type.go`, add a default `UserCommand` in `defaultUserCommands` (`internal/core/config/config.go`), bind it in `defaultViewsConfig`, and dispatch it from `internal/tui/model_handlers.go`.
+
 ### Session States
 
 ```
