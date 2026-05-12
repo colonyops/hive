@@ -713,6 +713,43 @@ func (s *SessionService) DetectSession(ctx context.Context) (string, error) {
 	return detector.DetectSession(ctx)
 }
 
+// ResolveTmuxTarget returns the canonical tmux target for the given session ID,
+// suitable for passing to `tmux send-keys -t` (and therefore to the agent-send
+// script). The returned form is either "session" or "session:window".
+//
+// Resolution rules mirror the inline TUI code at
+// internal/tui/views/sessions/view.go:1509-1521:
+//
+//  1. Tmux session name: sess.GetMeta(MetaTmuxSession) -> Slug -> Name.
+//     If all three are empty, returns an error.
+//  2. Window: sess.GetMeta(MetaTmuxPane) (despite the name, this metadata key
+//     stores a tmux window index — see internal/core/terminal/tmux/tmux.go
+//     where the same value is passed to findWindow(windowIndex string)).
+//     When empty, the returned target omits the colon suffix, which agent-send
+//     forwards to tmux as "active window of session".
+func (s *SessionService) ResolveTmuxTarget(ctx context.Context, sessionID string) (string, error) {
+	sess, err := s.GetSession(ctx, sessionID)
+	if err != nil {
+		return "", fmt.Errorf("resolve tmux target: %w", err)
+	}
+
+	tmuxSession := sess.GetMeta(session.MetaTmuxSession)
+	if tmuxSession == "" {
+		tmuxSession = sess.Slug
+	}
+	if tmuxSession == "" {
+		tmuxSession = sess.Name
+	}
+	if tmuxSession == "" {
+		return "", fmt.Errorf("resolve tmux target: session %q has no tmux session name, slug, or name", sessionID)
+	}
+
+	if window := sess.GetMeta(session.MetaTmuxPane); window != "" {
+		return tmuxSession + ":" + window, nil
+	}
+	return tmuxSession, nil
+}
+
 // OpenTmuxSession opens (or creates) a tmux session for the given session parameters.
 // It resolves the spawn strategy, renders window templates, and delegates to the spawner.
 func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote, targetWindow string, background bool) error {

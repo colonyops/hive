@@ -1139,6 +1139,96 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 	})
 }
 
+func TestResolveTmuxTarget(t *testing.T) {
+	// makeSession builds a session with the supplied identifiers and tmux
+	// metadata. Empty values are omitted from the metadata map.
+	makeSession := func(id, name, slug, metaTmuxSession, metaTmuxPane string) session.Session {
+		sess := session.Session{
+			ID:    id,
+			Name:  name,
+			Slug:  slug,
+			State: session.StateActive,
+		}
+		if metaTmuxSession != "" {
+			sess.SetMeta(session.MetaTmuxSession, metaTmuxSession)
+		}
+		if metaTmuxPane != "" {
+			sess.SetMeta(session.MetaTmuxPane, metaTmuxPane)
+		}
+		return sess
+	}
+
+	tests := []struct {
+		name            string
+		sess            session.Session
+		wantTarget      string
+		wantErrContains string
+	}{
+		{
+			name:       "meta tmux session and pane both set",
+			sess:       makeSession("s1", "My Feature", "my-feature", "explicit-tmux", "2"),
+			wantTarget: "explicit-tmux:2",
+		},
+		{
+			name:       "meta tmux session set, pane empty",
+			sess:       makeSession("s2", "My Feature", "my-feature", "explicit-tmux", ""),
+			wantTarget: "explicit-tmux",
+		},
+		{
+			name:       "meta tmux session empty, slug used, pane empty",
+			sess:       makeSession("s3", "My Feature", "my-feature", "", ""),
+			wantTarget: "my-feature",
+		},
+		{
+			name:       "meta tmux session and slug empty, name used, pane empty",
+			sess:       makeSession("s4", "fallback-name", "", "", ""),
+			wantTarget: "fallback-name",
+		},
+		{
+			name:       "slug used with pane set",
+			sess:       makeSession("s5", "My Feature", "my-feature", "", "3"),
+			wantTarget: "my-feature:3",
+		},
+		{
+			name:            "all identifiers empty returns error",
+			sess:            makeSession("s6", "", "", "", "2"),
+			wantErrContains: "tmux",
+		},
+		{
+			name:       "pinned format: agent-send target form",
+			sess:       makeSession("s7", "anything", "anything-slug", "my-session", "%3"),
+			wantTarget: "my-session:%3",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMockStore()
+			require.NoError(t, store.Save(context.Background(), tt.sess))
+			svc := newTestService(t, store, nil)
+
+			got, err := svc.ResolveTmuxTarget(context.Background(), tt.sess.ID)
+			if tt.wantErrContains != "" {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.wantErrContains)
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantTarget, got)
+		})
+	}
+
+	t.Run("session not in store returns wrapped error", func(t *testing.T) {
+		store := newMockStore()
+		svc := newTestService(t, store, nil)
+
+		_, err := svc.ResolveTmuxTarget(context.Background(), "missing")
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "resolve tmux target")
+		assert.ErrorIs(t, err, session.ErrNotFound)
+	})
+}
+
 // capturingMockGit extends mockGit with optional function overrides for capturing calls.
 type capturingMockGit struct {
 	mockGit
