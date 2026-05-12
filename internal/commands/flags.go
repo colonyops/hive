@@ -24,13 +24,6 @@ func defaultConfigDir() string {
 	return filepath.Join(configHome, "hive")
 }
 
-// defaultPluginsDir returns the directory where hive discovers Lua plugins.
-// This must stay in lockstep with config.LuaPluginConfig.ResolvedEntry()'s
-// directory portion so the scaffold and the loader look in the same place.
-func defaultPluginsDir() string {
-	return filepath.Join(defaultConfigDir(), "plugins")
-}
-
 // DefaultConfigPath probes for config files with supported extensions
 // (config.yaml, config.yml, hive.yaml, hive.yml) and returns the first
 // match. Returns empty string when no file is found.
