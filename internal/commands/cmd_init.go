@@ -134,6 +134,73 @@ func appendAlias(rcFile, shellName string) error {
 	return err
 }
 
+// detectTmuxConfigPath resolves the tmux config file path (first match):
+//  1. $TMUX_CONFIG env var (if set)
+//  2. $XDG_CONFIG_HOME/tmux/tmux.conf (if file exists)
+//  3. ~/.tmux.conf (fallback; may not exist — callers create it on write)
+//
+//nolint:unused
+func detectTmuxConfigPath() string {
+	if v := os.Getenv("TMUX_CONFIG"); v != "" {
+		return v
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return ""
+	}
+
+	xdgConfigHome := os.Getenv("XDG_CONFIG_HOME")
+	if xdgConfigHome == "" {
+		xdgConfigHome = filepath.Join(home, ".config")
+	}
+
+	xdgPath := filepath.Join(xdgConfigHome, "tmux", "tmux.conf")
+	if _, err := os.Stat(xdgPath); err == nil {
+		return xdgPath
+	}
+
+	return filepath.Join(home, ".tmux.conf")
+}
+
+// tmuxBindingAlreadyPresent reports whether configPath contains
+// "switch-client -t hive". Returns (false, nil) if the file does not exist.
+//
+//nolint:unused
+func tmuxBindingAlreadyPresent(configPath string) (bool, error) {
+	data, err := os.ReadFile(configPath)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return strings.Contains(string(data), "switch-client -t hive"), nil
+}
+
+// appendTmuxBinding appends the bind-key H binding to configPath.
+// Creates the file (and parent directories) if they do not exist.
+//
+//nolint:unused
+func appendTmuxBinding(configPath string) error {
+	const content = "\n# Switch to the hive session\nbind-key H switch-client -t hive\n"
+
+	if err := os.MkdirAll(filepath.Dir(configPath), 0o755); err != nil {
+		return err
+	}
+
+	f, err := os.OpenFile(configPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString(content)
+	if closeErr := f.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	return err
+}
+
 // defaultConfigPath returns $XDG_CONFIG_HOME/hive/config.yaml.
 // This is the write-side counterpart to DefaultConfigPath in flags.go which probes for existing files.
 //
