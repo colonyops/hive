@@ -112,6 +112,13 @@ func isShellCompletion(args []string) bool {
 	return true
 }
 
+// isInitCommand reports whether the first positional argument is "init".
+// hive init must run before any config exists, so Before() skips full
+// app initialisation when this returns true.
+func isInitCommand(args []string) bool {
+	return len(args) >= 2 && args[1] == "init"
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -177,6 +184,11 @@ Run 'hive new' to create a new session from the current repository.`,
 			// completion handler only needs the command tree (already
 			// registered) to suggest subcommands and flags.
 			if isShellCompletion(os.Args) {
+				return ctx, nil
+			}
+			if isInitCommand(os.Args) {
+				v, c, d := resolvedBuildInfo()
+				hiveApp.Build = hive.BuildInfo{Version: v, Commit: c, Date: d}
 				return ctx, nil
 			}
 
