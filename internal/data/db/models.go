@@ -8,6 +8,7 @@ import (
 	"database/sql"
 
 	"github.com/colonyops/hive/internal/core/hc"
+	"github.com/colonyops/hive/internal/core/timer"
 )
 
 type HcComment struct {
@@ -96,6 +97,19 @@ type Session struct {
 	CreatedAt     int64          `json:"created_at"`
 	UpdatedAt     int64          `json:"updated_at"`
 	CloneStrategy string         `json:"clone_strategy"`
+}
+
+type Timer struct {
+	ID         string        `json:"id"`
+	SessionID  string        `json:"session_id"`
+	TmuxTarget string        `json:"tmux_target"`
+	Prompt     string        `json:"prompt"`
+	DurationNs int64         `json:"duration_ns"`
+	FiresAt    int64         `json:"fires_at"`
+	Pid        sql.NullInt64 `json:"pid"`
+	Status     timer.Status  `json:"status"`
+	CreatedAt  int64         `json:"created_at"`
+	FiredAt    sql.NullInt64 `json:"fired_at"`
 }
 
 type TodoItem struct {

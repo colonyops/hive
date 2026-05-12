@@ -4,6 +4,7 @@ sql:
     queries:
       - "internal/data/db/queries/queries.sql"
       - "internal/data/db/queries/queries_hc.sql"
+      - "internal/data/db/queries/timers.sql"
     schema: "internal/data/db/migrations/*.up.sql"
     gen:
       go:
@@ -23,3 +24,7 @@ sql:
             go_type:
               import: "github.com/colonyops/hive/internal/core/hc"
               type: "ItemType"
+          - column: "timers.status"
+            go_type:
+              import: "github.com/colonyops/hive/internal/core/timer"
+              type: "Status"
