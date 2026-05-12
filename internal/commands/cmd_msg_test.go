@@ -23,7 +23,7 @@ func TestRunTopic_DefaultPrefix(t *testing.T) {
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &hive.App{Config: cfg, Opts: hive.BootstrapOptions{SkipBootstrap: true}})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -54,7 +54,7 @@ func TestRunTopic_CustomPrefixFlag(t *testing.T) {
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &hive.App{Config: cfg, Opts: hive.BootstrapOptions{SkipBootstrap: true}})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -84,7 +84,7 @@ func TestRunTopic_EmptyPrefixFlag(t *testing.T) {
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &hive.App{Config: cfg, Opts: hive.BootstrapOptions{SkipBootstrap: true}})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -117,7 +117,7 @@ func TestRunTopic_EmptyConfigPrefix(t *testing.T) {
 	}
 	flags := &Flags{}
 
-	cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+	cmd := NewMsgCmd(flags, &hive.App{Config: cfg, Opts: hive.BootstrapOptions{SkipBootstrap: true}})
 
 	app := &cli.Command{
 		Name:   "hive",
@@ -151,7 +151,7 @@ func TestRunTopic_Uniqueness(t *testing.T) {
 		}
 		flags := &Flags{}
 
-		cmd := NewMsgCmd(flags, &hive.App{Config: cfg})
+		cmd := NewMsgCmd(flags, &hive.App{Config: cfg, Opts: hive.BootstrapOptions{SkipBootstrap: true}})
 
 		app := &cli.Command{
 			Name:   "hive",

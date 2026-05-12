@@ -12,47 +12,8 @@ import (
 
 	"github.com/colonyops/hive/internal/core/timer"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 )
-
-// dbAdapter wraps *db.Queries to satisfy timer.InactiveQuerier. It exists
-// because timer cannot import db (db imports timer for the Status enum), so
-// the helper takes a small interface and tests provide this adapter.
-type dbAdapter struct{ q *db.Queries }
-
-func (a dbAdapter) ActiveTimersForSession(ctx context.Context, sessionID string) ([]timer.Row, error) {
-	rows, err := a.q.ActiveTimersForSession(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	return toRows(rows), nil
-}
-
-func (a dbAdapter) ActiveTimersAll(ctx context.Context) ([]timer.Row, error) {
-	rows, err := a.q.ActiveTimersAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return toRows(rows), nil
-}
-
-func (a dbAdapter) MarkInactiveTimersForSession(ctx context.Context, arg timer.MarkInactiveParams) error {
-	return a.q.MarkInactiveTimersForSession(ctx, db.MarkInactiveTimersForSessionParams{
-		SessionID: arg.SessionID,
-		Ids:       arg.IDs,
-	})
-}
-
-func (a dbAdapter) MarkInactiveTimersAll(ctx context.Context, ids []string) error {
-	return a.q.MarkInactiveTimersAll(ctx, ids)
-}
-
-func toRows(in []db.Timer) []timer.Row {
-	out := make([]timer.Row, len(in))
-	for i, r := range in {
-		out[i] = timer.Row{ID: r.ID, Pid: r.Pid}
-	}
-	return out
-}
 
 // openTestDB opens an isolated DB in t.TempDir() and registers cleanup.
 func openTestDB(t *testing.T) *db.DB {
@@ -135,7 +96,7 @@ func TestMarkInactiveForSession_HappyPath(t *testing.T) {
 	ctx := context.Background()
 	database := openTestDB(t)
 	q := database.Queries()
-	adapter := dbAdapter{q: q}
+	adapter := stores.DBTimerAdapter{Q: q}
 
 	livePID := spawnLiveSleep(t)
 	deadPID := spawnDeadPID(t)
@@ -181,7 +142,7 @@ func TestMarkInactiveForSession_OtherSessionIsolated(t *testing.T) {
 	ctx := context.Background()
 	database := openTestDB(t)
 	q := database.Queries()
-	adapter := dbAdapter{q: q}
+	adapter := stores.DBTimerAdapter{Q: q}
 
 	deadPID := spawnDeadPID(t)
 	insertTimer(t, ctx, q, "t-s2-dead", "s2", sql.NullInt64{Int64: int64(deadPID), Valid: true}, timer.StatusActive)
@@ -207,7 +168,7 @@ func TestMarkInactiveAll(t *testing.T) {
 	ctx := context.Background()
 	database := openTestDB(t)
 	q := database.Queries()
-	adapter := dbAdapter{q: q}
+	adapter := stores.DBTimerAdapter{Q: q}
 
 	deadA := spawnDeadPID(t)
 	deadB := spawnDeadPID(t)
@@ -247,7 +208,7 @@ func TestMarkInactiveAll(t *testing.T) {
 func TestMarkInactive_NoActiveRows(t *testing.T) {
 	ctx := context.Background()
 	database := openTestDB(t)
-	adapter := dbAdapter{q: database.Queries()}
+	adapter := stores.DBTimerAdapter{Q: database.Queries()}
 
 	nSess, err := timer.MarkInactiveForSession(ctx, adapter, "s1")
 	if err != nil {

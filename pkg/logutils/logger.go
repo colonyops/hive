@@ -5,15 +5,17 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/rs/zerolog"
 )
 
 // New returns a new logger.
 //
-// If file is set, logs are written to that file in console format.
-// If file is empty, logs are written to stdout in JSON format.
+// Logs are emitted as one structured JSON object per line. When file is set
+// the JSON is appended to that file; otherwise it goes to stdout. The JSON
+// format keeps log assertions (and external tools like jq) trivial in tests
+// and downstream tooling — see hive timer's cap-bypass / fire-failure
+// assertions.
 //
 // The level parameter can be one of: debug, info, warn, error, fatal.
 func New(level string, file string) (zerolog.Logger, func(), error) {
@@ -36,11 +38,7 @@ func New(level string, file string) (zerolog.Logger, func(), error) {
 			return zerolog.Logger{}, closer, err
 		}
 		closer = func() { _ = osFile.Close() }
-		writer = zerolog.ConsoleWriter{
-			Out:        osFile,
-			NoColor:    true,
-			TimeFormat: time.RFC3339,
-		}
+		writer = osFile
 	}
 
 	l := zerolog.New(writer).

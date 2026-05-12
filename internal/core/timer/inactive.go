@@ -4,7 +4,6 @@ package timer
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
 	"syscall"
@@ -16,7 +15,7 @@ import (
 // for the Status enum — a hard import cycle).
 type Row struct {
 	ID  string
-	Pid sql.NullInt64
+	Pid *int64 // nil when no PID has been assigned yet
 }
 
 // MarkInactiveParams is the argument shape for MarkInactiveTimersForSession.
@@ -83,15 +82,15 @@ func MarkInactiveAll(ctx context.Context, q InactiveQuerier) (int, error) {
 }
 
 // collectDeadIDs filters rows down to those whose PID is set and the PID is
-// no longer alive. Rows with NULL pid are skipped — the SQL clauses already
+// no longer alive. Rows with nil PID are skipped — the SQL clauses already
 // exclude them, but we double-check defensively.
 func collectDeadIDs(rows []Row) []string {
 	dead := []string{}
 	for _, r := range rows {
-		if !r.Pid.Valid {
+		if r.Pid == nil {
 			continue
 		}
-		if !pidAlive(int(r.Pid.Int64)) {
+		if !pidAlive(int(*r.Pid)) {
 			dead = append(dead, r.ID)
 		}
 	}

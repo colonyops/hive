@@ -28,6 +28,7 @@ import (
 	"github.com/colonyops/hive/internal/core/timer"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/scripts"
 	"github.com/colonyops/hive/pkg/executil"
@@ -145,9 +146,6 @@ func (cmd *TimerCmd) fireCmd() *cli.Command {
 	}
 }
 
-// runSchedule is the parent's action. Validation order mirrors the timer
-// plan: parse, detect session, resolve target, schedule-time inactive-marker
-// pass, cap check, insert row, fork child, update PID, emit confirmation.
 func (cmd *TimerCmd) runSchedule(ctx context.Context, c *cli.Command) error {
 	d, err := timer.ParseDuration(cmd.duration)
 	if err != nil {
@@ -179,7 +177,7 @@ func (cmd *TimerCmd) runSchedule(ctx context.Context, c *cli.Command) error {
 
 	// Schedule-time inactive-marker pass: mark any active timers whose
 	// owning PIDs are gone as orphaned before we count toward the cap.
-	if n, err := timer.MarkInactiveForSession(ctx, dbInactiveAdapter{q: q}, sessionID); err != nil {
+	if n, err := timer.MarkInactiveForSession(ctx, stores.DBTimerAdapter{Q: q}, sessionID); err != nil {
 		log.Debug().Err(err).Str("session_id", sessionID).Msg("inactive-marker pass failed (continuing)")
 	} else if n > 0 {
 		log.Debug().Int("marked", n).Str("session_id", sessionID).Msg("schedule-time inactive marker")
@@ -224,13 +222,20 @@ func (cmd *TimerCmd) runSchedule(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("locate self executable: %w", err)
 	}
 	childEnv := buildChildEnv(cmd.app.Opts)
-	pid, err := timer.ForkChild(self, []string{"timer-fire", "--id", id}, childEnv)
-	if err != nil {
+	pid, forkErr := timer.ForkChild(self, []string{"timer-fire", "--id", id}, childEnv)
+	if pid == 0 {
+		// Child did not start — roll back the row so the cap stays accurate.
 		if delErr := q.DeleteTimer(ctx, id); delErr != nil {
 			log.Warn().Err(delErr).Str("timer_id", id).Msg("rollback after fork failed")
 		}
-		return fmt.Errorf("fork timer-fire: %w", err)
+		return fmt.Errorf("fork timer-fire: %w", forkErr)
 	}
+	if forkErr != nil {
+		// Child is running (pid > 0) but Release failed. Log and continue —
+		// the row stays and the child will fire normally.
+		log.Warn().Err(forkErr).Int("pid", pid).Str("timer_id", id).Msg("fork partial failure (child alive, continuing)")
+	}
+
 	if err := q.UpdateTimerPID(ctx, db.UpdateTimerPIDParams{
 		Pid: sql.NullInt64{Int64: int64(pid), Valid: true},
 		ID:  id,
@@ -243,7 +248,7 @@ func (cmd *TimerCmd) runSchedule(ctx context.Context, c *cli.Command) error {
 }
 
 // resolvePrompt returns cmd.prompt unchanged, or reads stdin when the flag
-// value is the literal "-". Trailing newlines are trimmed.
+// value is the literal "-". Trailing newlines and carriage returns are trimmed.
 func (cmd *TimerCmd) resolvePrompt(stdin io.Reader) (string, error) {
 	if cmd.prompt != "-" {
 		return cmd.prompt, nil
@@ -252,11 +257,9 @@ func (cmd *TimerCmd) resolvePrompt(stdin io.Reader) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("read prompt from stdin: %w", err)
 	}
-	return strings.TrimRight(string(b), "\n"), nil
+	return strings.TrimRight(string(b), "\r\n"), nil
 }
 
-// printConfirmation writes the schedule result either as a human-readable
-// line or a single JSON object, depending on --json.
 func (cmd *TimerCmd) printConfirmation(w io.Writer, id, target string, firesAt time.Time, d time.Duration, pid int) error {
 	if cmd.asJSON {
 		type scheduleResult struct {
@@ -283,6 +286,10 @@ func (cmd *TimerCmd) printConfirmation(w io.Writer, id, target string, firesAt t
 // parent env is inherited so PATH and friends are preserved, then HIVE_*
 // vars are injected from the resolved bootstrap opts so the child sees the
 // same data dir / config / log file as the parent.
+//
+// Empty opts fields are left unset — the child inherits the parent's env var
+// (or uses its own default), which is the correct "unset means use default"
+// behaviour.
 func buildChildEnv(opts hive.BootstrapOptions) []string {
 	env := append([]string{}, os.Environ()...)
 	inject := map[string]string{
@@ -312,10 +319,6 @@ func setEnvKey(env []string, key, value string) []string {
 	return append(env, prefix+value)
 }
 
-// runFire is the hidden child's action. It loads the timer row, sleeps until
-// fires_at, then runs agent-send. On success the row is marked fired; on
-// failure triage is run and the row is marked failed. Either way a single
-// structured log line is emitted.
 func (cmd *TimerCmd) runFire(ctx context.Context, _ *cli.Command) error {
 	q := cmd.app.DB.Queries()
 	row, err := q.GetTimer(ctx, cmd.fireID)
@@ -335,13 +338,7 @@ func (cmd *TimerCmd) runFire(ctx context.Context, _ *cli.Command) error {
 	if sleepDur > 0 {
 		t := time.NewTimer(sleepDur)
 		defer t.Stop()
-		select {
-		case <-ctx.Done():
-			// Parent SIGTERM mid-sleep. Leave row active; sweep will mark orphaned.
-			log.Info().Str("timer_id", row.ID).Msg("timer-fire interrupted before fire")
-			return ctx.Err()
-		case <-t.C:
-		}
+		<-t.C
 	}
 
 	agentSendPath := scripts.ScriptPaths(cmd.app.Opts.DataDir)["agent-send"]
@@ -379,16 +376,16 @@ func (cmd *TimerCmd) runFire(ctx context.Context, _ *cli.Command) error {
 // errors during manual testing).
 func (cmd *TimerCmd) recordFailure(ctx context.Context, q *db.Queries, row db.Timer, exitCode int, stderr, extra string) error {
 	tmuxClient := tmux.New(&executil.RealExecutor{}, log.Logger)
-	report := RunTmuxTriage(ctx, tmuxClient, row.TmuxTarget, exitCode, stderr)
+	report := runTmuxTriage(ctx, tmuxClient, row.TmuxTarget, exitCode, stderr)
 
 	log.Warn().
 		Str("timer_id", row.ID).
 		Str("session_id", row.SessionID).
-		Int("agent_send_exit", report.AgentSendExit).
-		Str("agent_send_stderr", report.AgentSendStderr).
-		Bool("tmux_server_exists", report.TmuxServerExists).
-		Bool("session_exists", report.SessionExists).
-		Bool("window_exists", report.WindowExists).
+		Int("agent_send_exit", report.agentSendExit).
+		Str("agent_send_stderr", report.agentSendStderr).
+		Bool("tmux_server_exists", report.tmuxServerExists).
+		Bool("session_exists", report.sessionExists).
+		Bool("window_exists", report.windowExists).
 		Str("extra", extra).
 		Msg("timer fire failed")
 
@@ -399,44 +396,4 @@ func (cmd *TimerCmd) recordFailure(ctx context.Context, q *db.Queries, row db.Ti
 		log.Warn().Err(err).Str("timer_id", row.ID).Msg("update failed status failed")
 	}
 	return nil
-}
-
-// dbInactiveAdapter wraps *db.Queries to satisfy timer.InactiveQuerier. The
-// adapter exists because the timer package's Row type is intentionally a
-// minimal subset (ID + Pid) decoupled from the sqlc-generated db.Timer.
-type dbInactiveAdapter struct{ q *db.Queries }
-
-func (a dbInactiveAdapter) ActiveTimersForSession(ctx context.Context, sessionID string) ([]timer.Row, error) {
-	rows, err := a.q.ActiveTimersForSession(ctx, sessionID)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]timer.Row, len(rows))
-	for i, r := range rows {
-		out[i] = timer.Row{ID: r.ID, Pid: r.Pid}
-	}
-	return out, nil
-}
-
-func (a dbInactiveAdapter) ActiveTimersAll(ctx context.Context) ([]timer.Row, error) {
-	rows, err := a.q.ActiveTimersAll(ctx)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]timer.Row, len(rows))
-	for i, r := range rows {
-		out[i] = timer.Row{ID: r.ID, Pid: r.Pid}
-	}
-	return out, nil
-}
-
-func (a dbInactiveAdapter) MarkInactiveTimersForSession(ctx context.Context, arg timer.MarkInactiveParams) error {
-	return a.q.MarkInactiveTimersForSession(ctx, db.MarkInactiveTimersForSessionParams{
-		SessionID: arg.SessionID,
-		Ids:       arg.IDs,
-	})
-}
-
-func (a dbInactiveAdapter) MarkInactiveTimersAll(ctx context.Context, ids []string) error {
-	return a.q.MarkInactiveTimersAll(ctx, ids)
 }

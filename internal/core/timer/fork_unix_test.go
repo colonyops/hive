@@ -6,7 +6,6 @@ import (
 	"os/exec"
 	"syscall"
 	"testing"
-	"time"
 
 	"github.com/colonyops/hive/internal/core/timer"
 )
@@ -35,6 +34,11 @@ func TestForkChild(t *testing.T) {
 	// the child becomes a zombie until reaped by init (PID 1 / launchd on
 	// macOS adopts the session leader's orphans), which is fine for a test.
 	_ = syscall.Kill(pid, syscall.SIGKILL)
-	// Give the OS a moment so a follow-up `kill -0` in CI doesn't race.
-	time.Sleep(50 * time.Millisecond)
+}
+
+func TestForkChild_InvalidPath(t *testing.T) {
+	_, err := timer.ForkChild("/nonexistent/binary", []string{}, nil)
+	if err == nil {
+		t.Fatal("expected error for non-existent binary, got nil")
+	}
 }

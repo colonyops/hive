@@ -4,13 +4,12 @@ package timer
 
 import (
 	"context"
-	"database/sql"
 	"errors"
 )
 
 type Row struct {
 	ID  string
-	Pid sql.NullInt64
+	Pid *int64 // nil when no PID has been assigned yet
 }
 
 type MarkInactiveParams struct {

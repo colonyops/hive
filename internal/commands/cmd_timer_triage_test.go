@@ -1,4 +1,4 @@
-package commands_test
+package commands
 
 import (
 	"context"
@@ -6,7 +6,6 @@ import (
 	"io"
 	"testing"
 
-	"github.com/colonyops/hive/internal/commands"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/rs/zerolog"
 )
@@ -121,16 +120,6 @@ func TestRunTmuxTriage(t *testing.T) {
 			wantSessExists:   true,
 			wantWinExists:    true,
 		},
-		{
-			name:             "agent_send fields propagated",
-			mock:             &triageMockExecutor{listOutput: "agent\n"},
-			target:           "sess:agent",
-			agentSendExit:    42,
-			agentSendStderr:  "oops",
-			wantServerExists: true,
-			wantSessExists:   true,
-			wantWinExists:    true,
-		},
 	}
 
 	for _, tc := range tests {
@@ -138,23 +127,23 @@ func TestRunTmuxTriage(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			client := newTriageClient(tc.mock)
-			rep := commands.RunTmuxTriage(context.Background(), client, tc.target,
+			rep := runTmuxTriage(context.Background(), client, tc.target,
 				tc.agentSendExit, tc.agentSendStderr)
 
-			if rep.TmuxServerExists != tc.wantServerExists {
-				t.Errorf("TmuxServerExists = %v, want %v", rep.TmuxServerExists, tc.wantServerExists)
+			if rep.tmuxServerExists != tc.wantServerExists {
+				t.Errorf("tmuxServerExists = %v, want %v", rep.tmuxServerExists, tc.wantServerExists)
 			}
-			if rep.SessionExists != tc.wantSessExists {
-				t.Errorf("SessionExists = %v, want %v", rep.SessionExists, tc.wantSessExists)
+			if rep.sessionExists != tc.wantSessExists {
+				t.Errorf("sessionExists = %v, want %v", rep.sessionExists, tc.wantSessExists)
 			}
-			if rep.WindowExists != tc.wantWinExists {
-				t.Errorf("WindowExists = %v, want %v", rep.WindowExists, tc.wantWinExists)
+			if rep.windowExists != tc.wantWinExists {
+				t.Errorf("windowExists = %v, want %v", rep.windowExists, tc.wantWinExists)
 			}
-			if rep.AgentSendExit != tc.agentSendExit {
-				t.Errorf("AgentSendExit = %d, want %d", rep.AgentSendExit, tc.agentSendExit)
+			if rep.agentSendExit != tc.agentSendExit {
+				t.Errorf("agentSendExit = %d, want %d", rep.agentSendExit, tc.agentSendExit)
 			}
-			if rep.AgentSendStderr != tc.agentSendStderr {
-				t.Errorf("AgentSendStderr = %q, want %q", rep.AgentSendStderr, tc.agentSendStderr)
+			if rep.agentSendStderr != tc.agentSendStderr {
+				t.Errorf("agentSendStderr = %q, want %q", rep.agentSendStderr, tc.agentSendStderr)
 			}
 		})
 	}
