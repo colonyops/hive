@@ -1,5 +1,11 @@
 package commands
 
+import (
+	"os"
+	"path/filepath"
+	"strings"
+)
+
 // ConfigTemplateData is the data context for the annotated config template.
 type ConfigTemplateData struct {
 	Version      string
@@ -29,6 +35,85 @@ var agentFlagMap = map[string][]string{ //nolint:unused
 	"claude":   {"--dangerously-skip-permissions"},
 	"opencode": {"--agent", "free-permissions-runner"},
 	"codex":    {"--full-auto"},
+}
+
+// detectShell inspects $SHELL and returns a short name and the rc file path.
+// Returns ("unknown", "") when $SHELL is unset, empty, or unrecognised.
+// The bash case performs a file existence check on ~/.bash_profile.
+//
+//nolint:unused
+func detectShell() (shellName, rcFile string) {
+	shell := os.Getenv("SHELL")
+	if shell == "" {
+		return "unknown", ""
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "unknown", ""
+	}
+
+	switch {
+	case strings.HasSuffix(shell, "zsh"):
+		return "zsh", filepath.Join(home, ".zshrc")
+	case strings.HasSuffix(shell, "bash"):
+		bashProfile := filepath.Join(home, ".bash_profile")
+		if _, err := os.Stat(bashProfile); err == nil {
+			return "bash", bashProfile
+		}
+		return "bash", filepath.Join(home, ".bashrc")
+	case strings.HasSuffix(shell, "fish"):
+		return "fish", filepath.Join(home, ".config", "fish", "config.fish")
+	default:
+		return "unknown", ""
+	}
+}
+
+// aliasAlreadyPresent reports whether rcFile contains "alias hv" on any line.
+// Returns (false, nil) if the file does not exist.
+//
+//nolint:unused
+func aliasAlreadyPresent(rcFile, aliasName string) (bool, error) {
+	data, err := os.ReadFile(rcFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+
+	lines := strings.Split(string(data), "\n")
+	needle := "alias " + aliasName
+	for _, line := range lines {
+		if strings.Contains(line, needle) {
+			return true, nil
+		}
+	}
+	return false, nil
+}
+
+// appendAlias appends the hv alias line to rcFile.
+// Fish uses `alias hv '...'`; all other shells use `alias hv='...'`.
+//
+//nolint:unused
+func appendAlias(rcFile, shellName string) error {
+	var line string
+	if shellName == "fish" {
+		line = "\nalias hv 'tmux new-session -As hive hive'\n"
+	} else {
+		line = "\nalias hv='tmux new-session -As hive hive'\n"
+	}
+
+	f, err := os.OpenFile(rcFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+
+	_, err = f.WriteString(line)
+	if closeErr := f.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	return err
 }
 
 //nolint:unused
