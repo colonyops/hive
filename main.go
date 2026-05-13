@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,11 +113,24 @@ func isShellCompletion(args []string) bool {
 	return true
 }
 
-// isInitCommand reports whether the first positional argument is "init".
-// hive init must run before any config exists, so Before() skips full
-// app initialisation when this returns true.
+// isInitCommand reports whether the subcommand is "init", scanning past any
+// leading flags. hive init must run before any config exists, so Before()
+// skips full app initialisation when this returns true.
+//
+// Only --flag=value style global flags are handled correctly here; space-separated
+// --flag value pairs would cause the value to be mistaken for a subcommand. Use
+// --flag=value syntax when passing global flags before init.
 func isInitCommand(args []string) bool {
-	return len(args) >= 2 && args[1] == "init"
+	if len(args) == 0 {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg == "init"
+	}
+	return false
 }
 
 func main() {
