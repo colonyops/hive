@@ -2,7 +2,9 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -10,13 +12,13 @@ import (
 	"text/template"
 
 	"charm.land/huh/v2"
+	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
 	"gopkg.in/yaml.v3"
 )
 
-// ConfigTemplateData is the data context for the annotated config template.
-type ConfigTemplateData struct {
+type configTemplateData struct {
 	Version      string
 	Workspace    string
 	AgentDefault string
@@ -36,6 +38,7 @@ type stepResult struct {
 	status  resultStatus
 	detail  string
 	fixHint string
+	aborted bool
 }
 
 var knownAgents = []string{"claude", "opencode", "codex", "pi", "amp"}
@@ -60,6 +63,8 @@ func detectInstalledAgents(known []string) []string {
 
 // detectShell inspects $SHELL and returns a short name and the rc file path.
 // Returns ("unknown", "") when $SHELL is unset, empty, or unrecognised.
+// Returns (shellName, "") when the shell is recognised but the home directory
+// is unavailable; callers should treat an empty rcFile as a failure.
 // The bash case performs a file existence check on ~/.bash_profile.
 func detectShell() (shellName, rcFile string) {
 	shell := os.Getenv("SHELL")
@@ -67,25 +72,35 @@ func detectShell() (shellName, rcFile string) {
 		return "unknown", ""
 	}
 
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "unknown", ""
-	}
-
 	switch {
 	case strings.HasSuffix(shell, "zsh"):
-		return "zsh", filepath.Join(home, ".zshrc")
+		shellName = "zsh"
 	case strings.HasSuffix(shell, "bash"):
-		bashProfile := filepath.Join(home, ".bash_profile")
-		if _, err := os.Stat(bashProfile); err == nil {
-			return "bash", bashProfile
-		}
-		return "bash", filepath.Join(home, ".bashrc")
+		shellName = "bash"
 	case strings.HasSuffix(shell, "fish"):
-		return "fish", filepath.Join(home, ".config", "fish", "config.fish")
+		shellName = "fish"
 	default:
 		return "unknown", ""
 	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return shellName, ""
+	}
+
+	switch shellName {
+	case "zsh":
+		return shellName, filepath.Join(home, ".zshrc")
+	case "bash":
+		bashProfile := filepath.Join(home, ".bash_profile")
+		if _, err := os.Stat(bashProfile); err == nil {
+			return shellName, bashProfile
+		}
+		return shellName, filepath.Join(home, ".bashrc")
+	case "fish":
+		return shellName, filepath.Join(home, ".config", "fish", "config.fish")
+	}
+	return "unknown", ""
 }
 
 // aliasAlreadyPresent reports whether rcFile contains "alias hv" on any line.
@@ -135,6 +150,8 @@ func appendAlias(rcFile, shellName string) error {
 //  1. $TMUX_CONFIG env var (if set)
 //  2. $XDG_CONFIG_HOME/tmux/tmux.conf (if file exists)
 //  3. ~/.tmux.conf (fallback; may not exist — callers create it on write)
+//
+// Returns "" when the home directory is unavailable and no env vars are set.
 func detectTmuxConfigPath() string {
 	if v := os.Getenv("TMUX_CONFIG"); v != "" {
 		return v
@@ -221,11 +238,21 @@ func toStringSlice(ss []string) string {
 	return strings.TrimRight(string(out), "\n")
 }
 
+// toYAMLScalar serialises a string as a safe YAML scalar via yaml.v3.
+// Values containing YAML-significant characters (e.g. ": ") are quoted.
+func toYAMLScalar(s string) string {
+	out, err := yaml.Marshal(s)
+	if err != nil {
+		return `"` + strings.ReplaceAll(s, `"`, `\"`) + `"`
+	}
+	return strings.TrimRight(string(out), "\n")
+}
+
 // renderConfigTemplate executes configTemplate with data and returns the rendered string.
-// Registers toStringSlice as a template func internally.
-func renderConfigTemplate(data ConfigTemplateData) (string, error) {
+func renderConfigTemplate(data configTemplateData) (string, error) {
 	funcMap := template.FuncMap{
 		"toStringSlice": toStringSlice,
+		"toYAMLScalar":  toYAMLScalar,
 	}
 	tmpl, err := template.New("config").Funcs(funcMap).Parse(configTemplate)
 	if err != nil {
@@ -244,7 +271,7 @@ version: {{ .Version }}
 
 # Directories hive scans for git repositories (used in session picker).
 workspaces:
-  - {{ .Workspace }}  # add more paths here as needed
+  - {{ .Workspace | toYAMLScalar }}  # add more paths here as needed
 
 # Context directory settings
 context:
@@ -274,13 +301,12 @@ rules:
 
 // InitCmd implements the interactive setup wizard.
 type InitCmd struct {
-	flags *Flags
-	app   *hive.App
+	app *hive.App
 }
 
 // NewInitCmd constructs an InitCmd.
-func NewInitCmd(flags *Flags, app *hive.App) *InitCmd {
-	return &InitCmd{flags: flags, app: app}
+func NewInitCmd(_ *Flags, app *hive.App) *InitCmd {
+	return &InitCmd{app: app}
 }
 
 // Register adds the init subcommand to the root CLI command.
@@ -297,18 +323,18 @@ func (cmd *InitCmd) Register(app *cli.Command) *cli.Command {
 
 func (cmd *InitCmd) run(_ context.Context, _ *cli.Command) error {
 	var results []stepResult
-
-	// Step 1: Shell alias
-	results = append(results, cmd.stepShellAlias())
-
-	// Step 2: Config file (includes workspace + agent sub-steps)
-	results = append(results, cmd.stepConfigFile())
-
-	// Step 3: Tmux binding
-	results = append(results, cmd.stepTmuxBinding())
-
-	// Step 4: Summary
-	printSummary(results)
+	for _, step := range []func() stepResult{
+		cmd.stepShellAlias,
+		cmd.stepConfigFile,
+		cmd.stepTmuxBinding,
+	} {
+		r := step()
+		results = append(results, r)
+		if r.aborted {
+			break
+		}
+	}
+	printSummary(os.Stderr, results)
 	return nil
 }
 
@@ -320,6 +346,9 @@ func (cmd *InitCmd) stepShellAlias() stepResult {
 			status: statusSkipped,
 			detail: "unknown shell — add manually: alias hv='tmux new-session -As hive hive'",
 		}
+	}
+	if rcFile == "" {
+		return stepResult{name: "Shell alias", status: statusFailed, detail: "cannot determine home directory"}
 	}
 
 	present, err := aliasAlreadyPresent(rcFile, "hv")
@@ -335,7 +364,10 @@ func (cmd *InitCmd) stepShellAlias() stepResult {
 		Title(fmt.Sprintf("Append alias hv to %s?", rcFile)).
 		Value(&confirm).
 		Run()
-	if err != nil || !confirm {
+	if errors.Is(err, huh.ErrUserAborted) {
+		return stepResult{name: "Shell alias", status: statusFailed, detail: "wizard aborted", aborted: true}
+	}
+	if !confirm {
 		return stepResult{name: "Shell alias", status: statusSkipped, detail: "skipped"}
 	}
 
@@ -347,72 +379,26 @@ func (cmd *InitCmd) stepShellAlias() stepResult {
 
 func (cmd *InitCmd) stepConfigFile() stepResult {
 	cfgPath := defaultConfigPath()
-
 	if _, err := os.Stat(cfgPath); err == nil {
 		return stepResult{name: "Config file", status: statusSkipped, detail: "already exists at " + cfgPath}
 	}
 
-	// Sub-step: workspace selection
-	home, _ := os.UserHomeDir()
-	workspace := filepath.Join(home, "code") // sensible default
-
-	var pickDir bool
-	_ = huh.NewConfirm().
-		Title("Select a workspace directory for your git repositories?").
-		Value(&pickDir).
-		Run()
-
-	if pickDir {
-		var picked string
-		err := huh.NewFilePicker().
-			Title("Select your workspace directory").
-			Description("The folder that contains your git repositories").
-			DirAllowed(true).
-			FileAllowed(false).
-			CurrentDirectory(home).
-			Value(&picked).
-			Run()
-		if err == nil && picked != "" {
-			workspace = picked
-		}
-	} else {
-		workspace = "~/code  # update this path to your repositories folder"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return stepResult{name: "Config file", status: statusFailed, detail: "cannot determine home directory: " + err.Error()}
 	}
 
-	// Sub-step: agent selection
-	agentDefault := "claude"
-	var agentFlags []string
-
-	installed := detectInstalledAgents(knownAgents)
-	if len(installed) > 0 {
-		opts := make([]huh.Option[string], len(installed))
-		for i, a := range installed {
-			opts[i] = huh.NewOption(a, a)
-		}
-		var selected string
-		err := huh.NewSelect[string]().
-			Title("Select your default AI agent").
-			Options(opts...).
-			Value(&selected).
-			Run()
-		if err == nil && selected != "" {
-			agentDefault = selected
-		}
-
-		if flags, ok := agentFlagMap[agentDefault]; ok {
-			var skipPerms bool
-			_ = huh.NewConfirm().
-				Title(fmt.Sprintf("Run %s in skip-permissions mode?", agentDefault)).
-				Value(&skipPerms).
-				Run()
-			if skipPerms {
-				agentFlags = flags
-			}
-		}
+	workspace, aborted := selectWorkspace(home)
+	if aborted {
+		return stepResult{name: "Config file", status: statusFailed, detail: "wizard aborted", aborted: true}
 	}
 
-	// Render template and write config
-	data := ConfigTemplateData{
+	agentDefault, agentFlags, aborted := selectAgent()
+	if aborted {
+		return stepResult{name: "Config file", status: statusFailed, detail: "wizard aborted", aborted: true}
+	}
+
+	data := configTemplateData{
 		Version:      cmd.app.Build.Version,
 		Workspace:    workspace,
 		AgentDefault: agentDefault,
@@ -424,10 +410,12 @@ func (cmd *InitCmd) stepConfigFile() stepResult {
 	}
 
 	var writeConfirm bool
-	_ = huh.NewConfirm().
+	if err := huh.NewConfirm().
 		Title(fmt.Sprintf("Write config to %s?", cfgPath)).
 		Value(&writeConfirm).
-		Run()
+		Run(); errors.Is(err, huh.ErrUserAborted) {
+		return stepResult{name: "Config file", status: statusFailed, detail: "wizard aborted", aborted: true}
+	}
 	if !writeConfirm {
 		return stepResult{name: "Config file", status: statusSkipped, detail: "skipped"}
 	}
@@ -436,7 +424,7 @@ func (cmd *InitCmd) stepConfigFile() stepResult {
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
 	}
 
-	// Atomic write: write to temp then rename
+	// atomic write via rename
 	tmp := cfgPath + ".tmp"
 	if err := os.WriteFile(tmp, []byte(rendered), 0o644); err != nil {
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
@@ -445,7 +433,6 @@ func (cmd *InitCmd) stepConfigFile() stepResult {
 		_ = os.Remove(tmp)
 		return stepResult{name: "Config file", status: statusFailed, detail: err.Error()}
 	}
-
 	return stepResult{name: "Config file", status: statusDone, detail: "created " + cfgPath}
 }
 
@@ -455,6 +442,9 @@ func (cmd *InitCmd) stepTmuxBinding() stepResult {
 	}
 
 	cfgPath := detectTmuxConfigPath()
+	if cfgPath == "" {
+		return stepResult{name: "Tmux binding", status: statusFailed, detail: "cannot determine tmux config path: home directory unavailable"}
+	}
 
 	present, err := tmuxBindingAlreadyPresent(cfgPath)
 	if err != nil {
@@ -465,10 +455,12 @@ func (cmd *InitCmd) stepTmuxBinding() stepResult {
 	}
 
 	var confirm bool
-	_ = huh.NewConfirm().
+	if err := huh.NewConfirm().
 		Title(fmt.Sprintf("Append bind-key H switch-client -t hive to %s?", cfgPath)).
 		Value(&confirm).
-		Run()
+		Run(); errors.Is(err, huh.ErrUserAborted) {
+		return stepResult{name: "Tmux binding", status: statusFailed, detail: "wizard aborted", aborted: true}
+	}
 	if !confirm {
 		return stepResult{name: "Tmux binding", status: statusSkipped, detail: "skipped"}
 	}
@@ -479,9 +471,78 @@ func (cmd *InitCmd) stepTmuxBinding() stepResult {
 	return stepResult{name: "Tmux binding", status: statusDone, detail: "appended to " + cfgPath}
 }
 
-func printSummary(results []stepResult) {
-	w := os.Stderr
-	divider := strings.Repeat("─", 54)
+// selectWorkspace prompts the user to choose a workspace directory.
+// Falls back to filepath.Join(home, "code") on skip or picker error.
+// Returns (path, true) if the user aborted the wizard.
+func selectWorkspace(home string) (path string, aborted bool) {
+	var pick bool
+	if err := huh.NewConfirm().
+		Title("Select a workspace directory for your git repositories?").
+		Value(&pick).
+		Run(); errors.Is(err, huh.ErrUserAborted) {
+		return "", true
+	}
+	if pick {
+		var picked string
+		err := huh.NewFilePicker().
+			Title("Select your workspace directory").
+			Description("The folder that contains your git repositories").
+			DirAllowed(true).
+			FileAllowed(false).
+			CurrentDirectory(home).
+			Value(&picked).
+			Run()
+		if err == nil && picked != "" {
+			return picked, false
+		}
+	}
+	return filepath.Join(home, "code"), false
+}
+
+// selectAgent prompts for the default AI agent and optional skip-permissions flags.
+// Returns ("claude", nil, false) if no known agents are installed.
+// Returns ("", nil, true) if the user aborted the wizard.
+func selectAgent() (name string, agentFlags []string, aborted bool) {
+	installed := detectInstalledAgents(knownAgents)
+	if len(installed) == 0 {
+		return "claude", nil, false
+	}
+
+	opts := make([]huh.Option[string], len(installed))
+	for i, a := range installed {
+		opts[i] = huh.NewOption(a, a)
+	}
+
+	name = "claude"
+	var selected string
+	if err := huh.NewSelect[string]().
+		Title("Select your default AI agent").
+		Options(opts...).
+		Value(&selected).
+		Run(); errors.Is(err, huh.ErrUserAborted) {
+		return "", nil, true
+	}
+	if selected != "" {
+		name = selected
+	}
+
+	if flags, ok := agentFlagMap[name]; ok {
+		var skipPerms bool
+		if err := huh.NewConfirm().
+			Title(fmt.Sprintf("Run %s in skip-permissions mode?", name)).
+			Value(&skipPerms).
+			Run(); errors.Is(err, huh.ErrUserAborted) {
+			return "", nil, true
+		}
+		if skipPerms {
+			agentFlags = flags
+		}
+	}
+	return name, agentFlags, false
+}
+
+func printSummary(w io.Writer, results []stepResult) {
+	divider := styles.TextMutedStyle.Render(strings.Repeat("─", 54))
 	_, _ = fmt.Fprintln(w)
 	_, _ = fmt.Fprintln(w, "Setup Summary")
 	_, _ = fmt.Fprintln(w, divider)
@@ -489,11 +550,11 @@ func printSummary(results []stepResult) {
 		var icon string
 		switch r.status {
 		case statusDone:
-			icon = "✓"
+			icon = styles.TextSuccessStyle.Render("✓")
 		case statusSkipped:
-			icon = "-"
+			icon = styles.TextMutedStyle.Render("-")
 		case statusFailed:
-			icon = "✗"
+			icon = styles.TextErrorStyle.Render("✗")
 		}
 		_, _ = fmt.Fprintf(w, "  %s  %-18s %s\n", icon, r.name, r.detail)
 		if r.fixHint != "" {
@@ -502,5 +563,5 @@ func printSummary(results []stepResult) {
 	}
 	_, _ = fmt.Fprintln(w, divider)
 	_, _ = fmt.Fprintln(w)
-	_, _ = fmt.Fprintln(w, "Run 'hive doctor' to verify your full setup.")
+	_, _ = fmt.Fprintln(w, styles.TextMutedStyle.Render("Run 'hive doctor' to verify your full setup."))
 }
