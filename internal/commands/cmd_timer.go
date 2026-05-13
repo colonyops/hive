@@ -284,12 +284,11 @@ func (cmd *TimerCmd) printConfirmation(w io.Writer, id, target string, firesAt t
 
 // buildChildEnv returns the environment for the detached child. The full
 // parent env is inherited so PATH and friends are preserved, then HIVE_*
-// vars are injected from the resolved bootstrap opts so the child sees the
+// vars are overridden from the resolved bootstrap opts so the child sees the
 // same data dir / config / log file as the parent.
 //
-// Empty opts fields are left unset — the child inherits the parent's env var
-// (or uses its own default), which is the correct "unset means use default"
-// behaviour.
+// Empty opts fields are explicitly deleted from the child env so relative
+// paths or stale values set in the parent's shell don't bleed into the child.
 func buildChildEnv(opts hive.BootstrapOptions) []string {
 	env := append([]string{}, os.Environ()...)
 	inject := map[string]string{
@@ -300,6 +299,7 @@ func buildChildEnv(opts hive.BootstrapOptions) []string {
 	}
 	for k, v := range inject {
 		if v == "" {
+			env = deleteEnvKey(env, k)
 			continue
 		}
 		env = setEnvKey(env, k, v)
@@ -317,6 +317,18 @@ func setEnvKey(env []string, key, value string) []string {
 		}
 	}
 	return append(env, prefix+value)
+}
+
+// deleteEnvKey removes any KEY=... entry from env.
+func deleteEnvKey(env []string, key string) []string {
+	prefix := key + "="
+	out := env[:0]
+	for _, e := range env {
+		if !strings.HasPrefix(e, prefix) {
+			out = append(out, e)
+		}
+	}
+	return out
 }
 
 func (cmd *TimerCmd) runFire(ctx context.Context, _ *cli.Command) error {
