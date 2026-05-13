@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
@@ -293,56 +294,113 @@ func TestAppendTmuxBinding(t *testing.T) {
 		require.NoError(t, err)
 		assert.Contains(t, string(data), "bind-key H switch-client -t hive")
 	})
+
+	t.Run("appends to existing file without truncating", func(t *testing.T) {
+		path := filepath.Join(t.TempDir(), ".tmux.conf")
+		require.NoError(t, os.WriteFile(path, []byte("set -g mouse on\n"), 0o644))
+
+		require.NoError(t, appendTmuxBinding(path))
+
+		data, err := os.ReadFile(path)
+		require.NoError(t, err)
+		content := string(data)
+		assert.Contains(t, content, "set -g mouse on")
+		assert.Contains(t, content, "bind-key H switch-client -t hive")
+	})
 }
 
 // TestRenderConfigTemplate validates template rendering.
 func TestRenderConfigTemplate(t *testing.T) {
-	t.Run("fully populated data contains expected fields", func(t *testing.T) {
-		data := ConfigTemplateData{
-			Version:      "1",
-			Workspace:    "/home/user/projects",
-			AgentDefault: "claude",
-			AgentFlags:   []string{"--dangerously-skip-permissions"},
-		}
+	tests := []struct {
+		name     string
+		data     configTemplateData
+		wantYAML bool
+		contains []string
+	}{
+		{
+			name: "all fields present and output is valid YAML",
+			data: configTemplateData{
+				Version:      "1",
+				Workspace:    "/home/user/projects",
+				AgentDefault: "claude",
+				AgentFlags:   []string{"--dangerously-skip-permissions"},
+			},
+			wantYAML: true,
+			contains: []string{"version: 1", "/home/user/projects", "claude", "--dangerously-skip-permissions"},
+		},
+		{
+			name: "empty flags renders as []",
+			data: configTemplateData{
+				Version:      "1",
+				Workspace:    "/home/user/projects",
+				AgentDefault: "claude",
+			},
+			contains: []string{"flags: []"},
+		},
+		{
+			name: "workspace with YAML-significant characters produces valid YAML",
+			data: configTemplateData{
+				Version:      "1",
+				Workspace:    "/home/user/my: code",
+				AgentDefault: "claude",
+			},
+			wantYAML: true,
+		},
+	}
 
-		out, err := renderConfigTemplate(data)
-		require.NoError(t, err)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := renderConfigTemplate(tt.data)
+			require.NoError(t, err)
 
-		assert.Contains(t, out, "version: 1")
-		assert.Contains(t, out, "/home/user/projects")
-		assert.Contains(t, out, "claude")
-		assert.Contains(t, out, "--dangerously-skip-permissions")
+			for _, s := range tt.contains {
+				assert.Contains(t, out, s)
+			}
+
+			if tt.wantYAML {
+				var parsed map[string]any
+				require.NoError(t, yaml.Unmarshal([]byte(out), &parsed), "output must be valid YAML:\n%s", out)
+				assert.NotNil(t, parsed["version"])
+				assert.NotNil(t, parsed["agents"])
+				assert.NotNil(t, parsed["workspaces"])
+			}
+		})
+	}
+}
+
+// TestPrintSummary verifies output content for all status types and fixHint.
+func TestPrintSummary(t *testing.T) {
+	t.Run("all step names and details are present", func(t *testing.T) {
+		var buf bytes.Buffer
+		printSummary(&buf, []stepResult{
+			{name: "Shell alias", status: statusDone, detail: "appended to .zshrc"},
+			{name: "Config file", status: statusSkipped, detail: "already exists"},
+			{name: "Tmux binding", status: statusFailed, detail: "permission denied"},
+		})
+		out := buf.String()
+		assert.Contains(t, out, "Shell alias")
+		assert.Contains(t, out, "appended to .zshrc")
+		assert.Contains(t, out, "Config file")
+		assert.Contains(t, out, "already exists")
+		assert.Contains(t, out, "Tmux binding")
+		assert.Contains(t, out, "permission denied")
+		assert.Contains(t, out, "Setup Summary")
+		assert.Contains(t, out, "hive doctor")
 	})
 
-	t.Run("output is valid YAML with expected keys", func(t *testing.T) {
-		data := ConfigTemplateData{
-			Version:      "1",
-			Workspace:    "/home/user/projects",
-			AgentDefault: "claude",
-			AgentFlags:   []string{"--dangerously-skip-permissions"},
-		}
-
-		out, err := renderConfigTemplate(data)
-		require.NoError(t, err)
-
-		var parsed map[string]any
-		require.NoError(t, yaml.Unmarshal([]byte(out), &parsed))
-
-		assert.NotNil(t, parsed["version"])
-		assert.NotNil(t, parsed["agents"])
-		assert.NotNil(t, parsed["workspaces"])
+	t.Run("fixHint is printed when set", func(t *testing.T) {
+		var buf bytes.Buffer
+		printSummary(&buf, []stepResult{
+			{name: "Shell alias", status: statusFailed, detail: "err", fixHint: "chmod u+w ~/.zshrc"},
+		})
+		assert.Contains(t, buf.String(), "chmod u+w ~/.zshrc")
 	})
 
-	t.Run("empty flags renders as []", func(t *testing.T) {
-		data := ConfigTemplateData{
-			Version:      "1",
-			Workspace:    "/home/user/projects",
-			AgentDefault: "claude",
-			AgentFlags:   nil,
-		}
-
-		out, err := renderConfigTemplate(data)
-		require.NoError(t, err)
-		assert.Contains(t, out, "flags: []")
+	t.Run("empty results prints header and footer", func(t *testing.T) {
+		var buf bytes.Buffer
+		printSummary(&buf, nil)
+		out := buf.String()
+		assert.Contains(t, out, "Setup Summary")
+		assert.Contains(t, out, "hive doctor")
 	})
 }
