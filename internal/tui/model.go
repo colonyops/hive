@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -726,7 +727,7 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.modals.NewSession.Submitted() {
 		result := m.modals.NewSession.Result()
 		m.modals.NewSession = nil
-		return m, m.startCreate(result.SessionName, result.Repo.Remote)
+		return m, m.startCreate(result.SessionName, result.Repo.Remote, result.AgentKey)
 	}
 
 	if m.modals.NewSession.Cancelled() {
@@ -1635,7 +1636,28 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	for _, s := range allSessions {
 		existingNames[s.Name] = true
 	}
-	m.modals.NewSession = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames)
+
+	var agentKeys []string
+	if m.cfg.Agents.AgentSelector && len(m.cfg.Agents.Profiles) > 1 {
+		// Sort alphabetically, then rotate so the configured default is first
+		// (agentPicker pre-selects index 0).
+		all := make([]string, 0, len(m.cfg.Agents.Profiles))
+		for k := range m.cfg.Agents.Profiles {
+			all = append(all, k)
+		}
+		sort.Strings(all)
+		// Put the default first so it is pre-selected.
+		def := m.cfg.Agents.Default
+		agentKeys = make([]string, 0, len(all))
+		agentKeys = append(agentKeys, def)
+		for _, k := range all {
+			if k != def {
+				agentKeys = append(agentKeys, k)
+			}
+		}
+	}
+
+	m.modals.NewSession = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
 	m.state = stateCreatingSession
 	return m, m.modals.NewSession.Init()
 }
@@ -1857,13 +1879,14 @@ func (m Model) startRecycle(sessionID string) tea.Cmd {
 }
 
 // startCreate returns a command that starts session creation with streaming output.
-func (m Model) startCreate(name, remote string) tea.Cmd {
+func (m Model) startCreate(name, remote, agentKey string) tea.Cmd {
 	return func() tea.Msg {
 		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
 			Name:       name,
 			Remote:     remote,
 			Source:     m.source,
 			Background: true,
+			AgentKey:   agentKey,
 		})
 
 		output, done, cancel := exec.Execute(context.Background())

@@ -56,22 +56,35 @@ func (d selectItemDelegate) Render(w io.Writer, m list.Model, index int, listIte
 	_, _ = io.WriteString(w, style.Render(item.label))
 }
 
+// maxSelectFieldHeight is the tallest a SelectField list will grow before scrolling.
+const maxSelectFieldHeight = 8
+
 // NewSelectField creates a new select field with the given items.
 // selected is the index to pre-select (-1 for none).
+// The list height is sized to fit the items (up to maxSelectFieldHeight) so
+// there is no blank padding below the last item.
 func NewSelectField(title string, items []SelectItem, selected int) SelectField {
 	listItems := make([]list.Item, len(items))
 	for i, item := range items {
 		listItems[i] = item
 	}
 
+	h := len(listItems)
+	if h < 1 {
+		h = 1
+	}
+	if h > maxSelectFieldHeight {
+		h = maxSelectFieldHeight
+	}
+
 	delegate := selectItemDelegate{}
-	// Height 8 matches the original huh config
-	l := list.New(listItems, delegate, 40, 8)
+	l := list.New(listItems, delegate, 40, h)
 	l.SetShowTitle(false)
 	l.SetShowStatusBar(false)
 	l.SetFilteringEnabled(true)
 	l.SetShowFilter(false) // Only show filter input when actively filtering
 	l.SetShowHelp(false)
+	l.SetShowPagination(false)
 	l.Styles.TitleBar = lipgloss.NewStyle()
 
 	// Configure filter input styles
@@ -90,7 +103,7 @@ func NewSelectField(title string, items []SelectItem, selected int) SelectField 
 		list:   l,
 		title:  title,
 		width:  40,
-		height: 8,
+		height: h,
 	}
 }
 
