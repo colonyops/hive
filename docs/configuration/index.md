@@ -58,11 +58,12 @@ rules:
 
 Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session.
 
-| Option                  | Type       | Default        | Description                                          |
-| ----------------------- | ---------- | -------------- | ---------------------------------------------------- |
-| `agents.default`        | `string`   | `"claude"`     | Profile name to use by default                       |
-| `agents.<name>.command` | `string`   | profile name   | CLI binary to run (defaults to profile name if empty)|
-| `agents.<name>.flags`   | `[]string` | `[]`           | Extra CLI args appended to the command on spawn      |
+| Option                    | Type       | Default        | Description                                                                    |
+| ------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------ |
+| `agents.default`          | `string`   | `"claude"`     | Profile name to use by default                                                 |
+| `agents.agent_selector`   | `bool`     | `false`        | Show an inline agent picker in the new-session form; default profile pre-selected |
+| `agents.<name>.command`   | `string`   | profile name   | CLI binary to run (defaults to profile name if empty)                          |
+| `agents.<name>.flags`     | `[]string` | `[]`           | Extra CLI args appended to the command on spawn                                |
 
 Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
 

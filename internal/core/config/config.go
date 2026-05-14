@@ -420,11 +420,12 @@ type Config struct {
 // AgentsConfig holds agent profile configuration.
 // The "default" key selects which profile to use; all other keys are profile definitions.
 type AgentsConfig struct {
-	Default  string                  // reserved key selecting the active profile
-	Profiles map[string]AgentProfile // profile name → agent configuration
+	Default       string                  // reserved key selecting the active profile
+	AgentSelector bool                    // when true, the TUI new-session form prompts for agent selection
+	Profiles      map[string]AgentProfile // profile name → agent configuration
 }
 
-// UnmarshalYAML separates the "default" key from profile entries.
+// UnmarshalYAML separates the "default" and "agent_selector" keys from profile entries.
 func (a *AgentsConfig) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("agents: expected mapping, got %v", node.Kind)
@@ -436,20 +437,26 @@ func (a *AgentsConfig) UnmarshalYAML(node *yaml.Node) error {
 		key := node.Content[i].Value
 		val := node.Content[i+1]
 
-		if key == "default" {
+		switch key {
+		case "default":
 			var s string
 			if err := val.Decode(&s); err != nil {
 				return fmt.Errorf("agents.default: %w", err)
 			}
 			a.Default = s
-			continue
+		case "agent_selector":
+			var b bool
+			if err := val.Decode(&b); err != nil {
+				return fmt.Errorf("agents.agent_selector: %w", err)
+			}
+			a.AgentSelector = b
+		default:
+			var profile AgentProfile
+			if err := val.Decode(&profile); err != nil {
+				return fmt.Errorf("agents.%s: %w", key, err)
+			}
+			a.Profiles[key] = profile
 		}
-
-		var profile AgentProfile
-		if err := val.Decode(&profile); err != nil {
-			return fmt.Errorf("agents.%s: %w", key, err)
-		}
-		a.Profiles[key] = profile
 	}
 
 	return nil

@@ -41,6 +41,10 @@ type CreateOptions struct {
 	// when the session directory is needed but terminal management happens elsewhere
 	// (e.g. CreateSessionWithWindows, which creates the tmux session itself).
 	SkipSpawn bool
+	// AgentKey selects a named agent profile for this session's spawn command.
+	// When non-empty, the spawn templates use that profile's command/flags instead
+	// of the process-wide default. Must match a key in config.Agents.Profiles.
+	AgentKey string
 	// Progress receives human-readable progress lines during session creation.
 	// When non-nil, service output (hooks, file copies) is also redirected here.
 	Progress io.Writer
@@ -334,14 +338,24 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	if !opts.SkipSpawn {
+		renderer := s.renderer
+		if opts.AgentKey != "" {
+			if profile, ok := s.config.Agents.Profiles[opts.AgentKey]; ok {
+				renderer = s.renderer.WithAgent(
+					profile.CommandOrDefault(opts.AgentKey),
+					opts.AgentKey,
+					profile.ShellFlags(),
+				)
+			}
+		}
 		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
 		switch {
 		case strategy.IsWindows():
-			if err := s.spawner.SpawnWindows(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background); err != nil {
+			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		case len(strategy.Commands) > 0:
-			if err := s.spawner.Spawn(ctx, strategy.Commands, data); err != nil {
+			if err := s.spawner.SpawnWith(ctx, strategy.Commands, data, renderer); err != nil {
 				return nil, fmt.Errorf("spawn terminal: %w", err)
 			}
 		default:

@@ -57,10 +57,15 @@ func NewSpawner(log zerolog.Logger, executor executil.Executor, renderer *tmpl.R
 
 // Spawn executes spawn commands sequentially with template rendering.
 func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) error {
+	return s.SpawnWith(ctx, commands, data, s.renderer)
+}
+
+// SpawnWith executes spawn commands using the given renderer instead of the default.
+func (s *Spawner) SpawnWith(ctx context.Context, commands []string, data SpawnData, renderer *tmpl.Renderer) error {
 	for _, cmdTmpl := range commands {
 		s.log.Debug().Str("command", cmdTmpl).Msg("executing spawn command")
 
-		rendered, err := s.renderer.Render(cmdTmpl, data)
+		rendered, err := renderer.Render(cmdTmpl, data)
 		if err != nil {
 			return fmt.Errorf("render spawn command %q: %w", cmdTmpl, err)
 		}
@@ -76,7 +81,12 @@ func (s *Spawner) Spawn(ctx context.Context, commands []string, data SpawnData) 
 
 // SpawnWindows renders window templates and creates a tmux session.
 func (s *Spawner) SpawnWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool) error {
-	rendered, err := RenderWindows(s.renderer, windows, data)
+	return s.SpawnWindowsWith(ctx, windows, data, background, s.renderer)
+}
+
+// SpawnWindowsWith renders window templates using the given renderer and creates a tmux session.
+func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, renderer *tmpl.Renderer) error {
+	rendered, err := RenderWindows(renderer, windows, data)
 	if err != nil {
 		return err
 	}

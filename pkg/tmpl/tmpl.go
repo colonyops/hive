@@ -46,12 +46,14 @@ func (c Config) scriptPath(name string) string {
 
 // Renderer renders Go templates with shell-oriented helper functions.
 type Renderer struct {
+	cfg   Config
 	funcs template.FuncMap
 }
 
 // New creates a Renderer with the given config baked into template functions.
 func New(cfg Config) *Renderer {
 	return &Renderer{
+		cfg: cfg,
 		funcs: template.FuncMap{
 			"shq":          shellQuote,
 			"join":         strings.Join,
@@ -72,6 +74,16 @@ func NewValidation() *Renderer {
 		AgentCommand: "claude",
 		AgentWindow:  "claude",
 	})
+}
+
+// WithAgent returns a new Renderer with the agent values overridden.
+// All other config (script paths etc.) is inherited from the receiver.
+func (r *Renderer) WithAgent(command, window, flags string) *Renderer {
+	cfg := r.cfg
+	cfg.AgentCommand = command
+	cfg.AgentWindow = window
+	cfg.AgentFlags = flags
+	return New(cfg)
 }
 
 // Render executes a Go template string with the given data.
