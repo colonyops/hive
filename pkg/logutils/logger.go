@@ -31,7 +31,7 @@ func New(level string, file string) (zerolog.Logger, func(), error) {
 			return zerolog.Logger{}, closer, fmt.Errorf("create logs dir: %w", err)
 		}
 
-		osFile, err := os.Create(file)
+		osFile, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 		if err != nil {
 			return zerolog.Logger{}, closer, err
 		}
