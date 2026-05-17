@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime/debug"
+	"strings"
 	"sync"
 	"time"
 
@@ -112,6 +113,26 @@ func isShellCompletion(args []string) bool {
 	return true
 }
 
+// isInitCommand reports whether the subcommand is "init", scanning past any
+// leading flags. hive init must run before any config exists, so Before()
+// skips full app initialisation when this returns true.
+//
+// Only --flag=value style global flags are handled correctly here; space-separated
+// --flag value pairs would cause the value to be mistaken for a subcommand. Use
+// --flag=value syntax when passing global flags before init.
+func isInitCommand(args []string) bool {
+	if len(args) == 0 {
+		return false
+	}
+	for _, arg := range args[1:] {
+		if strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return arg == "init"
+	}
+	return false
+}
+
 func main() {
 	ctx := context.Background()
 
@@ -177,6 +198,11 @@ Run 'hive new' to create a new session from the current repository.`,
 			// completion handler only needs the command tree (already
 			// registered) to suggest subcommands and flags.
 			if isShellCompletion(os.Args) {
+				return ctx, nil
+			}
+			if isInitCommand(os.Args) {
+				v, c, d := resolvedBuildInfo()
+				hiveApp.Build = hive.BuildInfo{Version: v, Commit: c, Date: d}
 				return ctx, nil
 			}
 
@@ -385,6 +411,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewConfigCmd(flags, hiveApp).Register(app)
 	app = commands.NewHoneycombCmd(flags, hiveApp).Register(app)
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
+	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
