@@ -2,6 +2,7 @@ package sessions
 
 import (
 	"context"
+	"maps"
 	"sync"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 )
 
 const terminalStatusTimeout = 2 * time.Second
@@ -97,10 +99,8 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	metadata := sess.Metadata
 	if sess.Path != "" {
 		metadata = make(map[string]string, len(sess.Metadata)+1)
-		for k, v := range sess.Metadata {
-			metadata[k] = v
-		}
-		metadata["_session_path"] = sess.Path
+		maps.Copy(metadata, sess.Metadata)
+		metadata[terminaltmux.SessionPathKey] = sess.Path
 	}
 
 	// Try to discover terminal session
@@ -139,11 +139,11 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 				// Get per-window status and content
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
-					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.Pane).Msg("per-window status failed, marking missing")
+					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.WindowIndex).Msg("per-window status failed, marking missing")
 					wStatus = terminal.StatusMissing
 				}
 				windows = append(windows, WindowStatus{
-					WindowIndex: wi.Pane,
+					WindowIndex: wi.WindowIndex,
 					WindowName:  wi.WindowName,
 					Status:      wStatus,
 					Tool:        wi.DetectedTool,
