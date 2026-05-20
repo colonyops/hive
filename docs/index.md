@@ -19,14 +19,14 @@ brew install colonyops/tap/hive</code></pre>
     </div>
   </div>
 
-  <div class="hive-terminal-demo" aria-label="Animated terminal demo of creating Hive sessions">
-    <div class="hive-terminal-demo__bar">
+  <div class="hive-terminal-demo" role="img" aria-label="Animated terminal demo of creating Hive sessions">
+    <div class="hive-terminal-demo__bar" aria-hidden="true">
       <span></span><span></span><span></span>
       <strong>hive</strong>
     </div>
-    <div class="hive-terminal-demo__screen">
+    <div class="hive-terminal-demo__screen" aria-hidden="true">
       <div class="term-shell">
-        <div class="term-line term-command term-command--one"><span class="term-prompt">$</span> <span class="term-typed">hive new auth-refactor --remote github.com/acme/app --background</span></div>
+        <div class="term-line term-command term-command--one"><span class="term-prompt">$</span> <span class="term-typed">hive new auth-refactor --remote https://github.com/acme/app.git --background</span></div>
         <div class="term-line term-output term-output--one">hook [1/2] mise install</div>
         <div class="term-line term-output term-output--two">mise all tools are installed</div>
         <div class="term-line term-output term-output--three">hook [2/2] hive ctx init</div>
@@ -97,12 +97,12 @@ brew install colonyops/tap/hive</code></pre>
   <h2>See What Hive Actually Is</h2>
   <p>Hive is a tmux-native command center for local agents, isolated git workspaces, project commands, and interactive terminals. It keeps your stack visible and gives Claude Code, Codex, Pi, and the rest of your tools one shared control surface.</p>
 
-  <div class="hive-preview-terminal" aria-label="Hive terminal UI preview coming soon">
-    <div class="hive-preview-terminal__nav">
+  <div class="hive-preview-terminal" role="img" aria-label="Hive terminal UI preview coming soon">
+    <div class="hive-preview-terminal__nav" aria-hidden="true">
       <strong>Sessions</strong><span>|</span><span>Tasks</span><span>|</span><span>Docs</span><span>|</span><span>Messages</span>
       <em><svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 5 2 2 4-4"/><path d="m3 12 2 2 4-4"/><path d="m3 19 2 2 4-4"/></svg>2</em><b>Hive</b>
     </div>
-    <div class="hive-preview-terminal__body">
+    <div class="hive-preview-terminal__body" aria-hidden="true">
       <div class="hive-preview-tree" aria-label="Hive session tree preview">
         <div class="hive-preview-tree__repo">hive <span>◆</span></div>
         <div class="hive-preview-tree__line">├─ <b>[&gt;]</b> init-command <em>#ek3p</em></div>
@@ -128,7 +128,7 @@ brew install colonyops/tap/hive</code></pre>
         </div>
       </div>
     </div>
-    <div class="hive-preview-terminal__footer">j/k navigate · / filter · enter select · ? help</div>
+    <div class="hive-preview-terminal__footer" aria-hidden="true">j/k navigate · / filter · enter select · ? help</div>
   </div>
 </section>
 
@@ -147,7 +147,7 @@ brew install colonyops/tap/hive</code></pre>
     <a class="hive-feature-card" href="getting-started/sessions/#status-indicators">
       <span class="hive-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M12 19h8M4 17l6-6-6-6"/></svg></span>
       <strong>Terminal Integration</strong>
-      <p>Monitor Claude Code, Codex, Pi, shell windows, test watchers, and dev servers through tmux-backed status detection.</p>
+      <p>Track Claude Code and Codex status alongside shell, test, and dev-server tmux windows.</p>
     </a>
     <a class="hive-feature-card" href="getting-started/task-tracking/">
       <span class="hive-feature-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" viewBox="0 0 24 24"><path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 5 2 2 4-4"/><path d="m3 12 2 2 4-4"/><path d="m3 19 2 2 4-4"/></svg></span>
