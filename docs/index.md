@@ -122,9 +122,7 @@ brew install colonyops/tap/hive</code></pre>
       </div>
       <div class="hive-preview-pane">
         <div class="hive-preview-coming-soon">
-          <span>Coming soon</span>
-          <strong>Terminal preview in progress</strong>
-          <em>A short capture will show sessions, live agent status, tmux previews, and coordination flows.</em>
+          <span>Demo coming soon</span>
         </div>
       </div>
     </div>

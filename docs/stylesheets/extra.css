@@ -715,16 +715,6 @@ html:has(.hive-hero) .md-tabs .md-grid {
   text-transform: uppercase;
 }
 
-.md-typeset .hive-preview-coming-soon strong {
-  color: #d8e6dc;
-  font-size: 1.2rem;
-}
-
-.md-typeset .hive-preview-coming-soon em {
-  color: rgba(216, 230, 220, 0.58);
-  font-style: normal;
-  line-height: 1.55;
-}
 
 .md-typeset .hive-preview-terminal__footer {
   padding: 0.7rem 0.9rem;
