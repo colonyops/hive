@@ -11,6 +11,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 RUN curl -fsSL https://claude.ai/install.sh | bash
 
+# Stub agent binaries so `hive init` agent detection finds them
+RUN for agent in pi codex copilot cursor amp opencode; do \
+    printf '#!/bin/sh\n' > /usr/local/bin/$agent && \
+    chmod +x /usr/local/bin/$agent; \
+done
+
 # Create Claude directories and skip onboarding
 RUN mkdir -p /root/.claude && \
     echo '{"hasCompletedOnboarding": true}' > /root/.claude.json
