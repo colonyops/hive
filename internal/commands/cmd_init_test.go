@@ -265,7 +265,7 @@ func TestTmuxBindingAlreadyPresent(t *testing.T) {
 	t.Run("file with binding returns true", func(t *testing.T) {
 		f, err := os.CreateTemp(t.TempDir(), "tmux-*")
 		require.NoError(t, err)
-		_, err = f.WriteString("bind-key H switch-client -t hive\n")
+		_, err = f.WriteString("bind-key h switch-client -t hive\n")
 		require.NoError(t, err)
 		require.NoError(t, f.Close())
 
@@ -283,7 +283,7 @@ func TestAppendTmuxBinding(t *testing.T) {
 
 		data, err := os.ReadFile(path)
 		require.NoError(t, err)
-		assert.Contains(t, string(data), "bind-key H switch-client -t hive")
+		assert.Contains(t, string(data), "bind-key h switch-client -t hive")
 	})
 
 	t.Run("creates parent directories when missing", func(t *testing.T) {
@@ -292,7 +292,7 @@ func TestAppendTmuxBinding(t *testing.T) {
 
 		data, err := os.ReadFile(path)
 		require.NoError(t, err)
-		assert.Contains(t, string(data), "bind-key H switch-client -t hive")
+		assert.Contains(t, string(data), "bind-key h switch-client -t hive")
 	})
 
 	t.Run("appends to existing file without truncating", func(t *testing.T) {
@@ -305,7 +305,7 @@ func TestAppendTmuxBinding(t *testing.T) {
 		require.NoError(t, err)
 		content := string(data)
 		assert.Contains(t, content, "set -g mouse on")
-		assert.Contains(t, content, "bind-key H switch-client -t hive")
+		assert.Contains(t, content, "bind-key h switch-client -t hive")
 	})
 }
 
@@ -320,29 +320,48 @@ func TestRenderConfigTemplate(t *testing.T) {
 		{
 			name: "all fields present and output is valid YAML",
 			data: configTemplateData{
-				Version:      "1",
-				Workspace:    "/home/user/projects",
-				AgentDefault: "claude",
-				AgentFlags:   []string{"--dangerously-skip-permissions"},
+				Version:   "1",
+				Workspace: "/home/user/projects",
+				Default:   "claude",
+				Agents: []agentTemplateData{
+					{Name: "claude", Flags: []string{"--dangerously-skip-permissions"}},
+				},
 			},
 			wantYAML: true,
 			contains: []string{"version: 1", "/home/user/projects", "claude", "--dangerously-skip-permissions"},
 		},
 		{
+			name: "multiple agents all written to config",
+			data: configTemplateData{
+				Version:   "1",
+				Workspace: "/home/user/projects",
+				Default:   "claude",
+				Agents: []agentTemplateData{
+					{Name: "claude", Flags: []string{"--dangerously-skip-permissions"}},
+					{Name: "codex", Flags: []string{"--full-auto"}},
+					{Name: "pi", Flags: nil},
+				},
+			},
+			wantYAML: true,
+			contains: []string{"claude", "codex", "--full-auto", "pi", "flags: []"},
+		},
+		{
 			name: "empty flags renders as []",
 			data: configTemplateData{
-				Version:      "1",
-				Workspace:    "/home/user/projects",
-				AgentDefault: "claude",
+				Version:   "1",
+				Workspace: "/home/user/projects",
+				Default:   "claude",
+				Agents:    []agentTemplateData{{Name: "claude"}},
 			},
 			contains: []string{"flags: []"},
 		},
 		{
 			name: "workspace with YAML-significant characters produces valid YAML",
 			data: configTemplateData{
-				Version:      "1",
-				Workspace:    "/home/user/my: code",
-				AgentDefault: "claude",
+				Version:   "1",
+				Workspace: "/home/user/my: code",
+				Default:   "claude",
+				Agents:    []agentTemplateData{{Name: "claude"}},
 			},
 			wantYAML: true,
 		},
@@ -366,6 +385,85 @@ func TestRenderConfigTemplate(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestExpandTilde covers tilde expansion cases.
+func TestExpandTilde(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{"~", home},
+		{"~/projects", filepath.Join(home, "projects")},
+		{"~/a/b/c", filepath.Join(home, "a/b/c")},
+		{"/abs/path", "/abs/path"},
+		{"relative/path", "relative/path"},
+		{"", ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			assert.Equal(t, tt.want, expandTilde(tt.input))
+		})
+	}
+}
+
+// TestDirSuggestions verifies directory completion behaviour.
+func TestDirSuggestions(t *testing.T) {
+	t.Run("empty input returns nil", func(t *testing.T) {
+		assert.Nil(t, dirSuggestions(""))
+	})
+
+	t.Run("trailing slash lists directory contents", func(t *testing.T) {
+		base := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "alpha"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "beta"), 0o755))
+		require.NoError(t, os.WriteFile(filepath.Join(base, "file.txt"), []byte{}, 0o644))
+
+		got := dirSuggestions(base + "/")
+		assert.ElementsMatch(t, []string{
+			filepath.Join(base, "alpha"),
+			filepath.Join(base, "beta"),
+		}, got)
+	})
+
+	t.Run("prefix filters to matching dirs only", func(t *testing.T) {
+		base := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "projects"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "pictures"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "documents"), 0o755))
+
+		got := dirSuggestions(filepath.Join(base, "p"))
+		assert.ElementsMatch(t, []string{
+			filepath.Join(base, "projects"),
+			filepath.Join(base, "pictures"),
+		}, got)
+	})
+
+	t.Run("hidden directories are excluded", func(t *testing.T) {
+		base := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(base, ".hidden"), 0o755))
+		require.NoError(t, os.MkdirAll(filepath.Join(base, "visible"), 0o755))
+
+		got := dirSuggestions(base + "/")
+		assert.Equal(t, []string{filepath.Join(base, "visible")}, got)
+	})
+
+	t.Run("tilde is expanded", func(t *testing.T) {
+		home := t.TempDir()
+		t.Setenv("HOME", home)
+		require.NoError(t, os.MkdirAll(filepath.Join(home, "workspace"), 0o755))
+
+		got := dirSuggestions("~/")
+		assert.Contains(t, got, filepath.Join(home, "workspace"))
+	})
+
+	t.Run("nonexistent directory returns nil", func(t *testing.T) {
+		assert.Nil(t, dirSuggestions("/nonexistent-path-xyz-123/"))
+	})
 }
 
 // TestPrintSummary verifies output content for all status types and fixHint.
