@@ -51,22 +51,41 @@ hive config        # Dump resolved configuration as JSON
 
 ## Quick Start
 
-### 1. Set up a shell alias
+### 1. Run the setup wizard
 
-Hive works best when running inside tmux. When you create a session, hive spawns a tmux session for the agent — if hive itself is also a tmux session, you can seamlessly switch between hive and your agents without leaving tmux. Hive becomes your home base: open an agent, do some work, jump back to hive, spin up another.
+```bash
+hive init
+```
 
-!!! tip "Recommended alias"
-    Add to your `.bashrc` / `.zshrc`:
+The interactive wizard:
 
-    ```bash
-    alias hv='tmux new-session -As hive hive'
-    ```
+- Detects installed AI agents (Claude, Codex, OpenCode, and others) and writes `~/.config/hive/config.yaml` with your preferred default
+- Appends `alias hv='tmux new-session -As hive hive'` to your shell rc (`.zshrc`, `.bashrc`, or `config.fish`)
+- Appends `bind-key h switch-client -t hive` to your `~/.tmux.conf` (or `$XDG_CONFIG_HOME/tmux/tmux.conf`)
 
-    This runs hive inside a dedicated tmux session called `hive`. If the session already exists, it reattaches.
+Type a workspace path to complete setup (tab or `→` to autocomplete directories), then follow the remaining prompts.
 
-### 2. Add a tmux keybinding to jump back
+### 2. Launch
 
-Add to your `~/.tmux.conf`:
+```bash
+hv
+```
+
+Hive auto-detects tmux, bundles its own session management scripts, and registers default keybindings — no other config needed. Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
+
+### Manual setup (alternative)
+
+If you prefer to configure things by hand instead of using the wizard:
+
+**Shell alias** — add to your `.bashrc` / `.zshrc`:
+
+```bash
+alias hv='tmux new-session -As hive hive'
+```
+
+This runs hive inside a dedicated tmux session called `hive`. If the session already exists, it reattaches.
+
+**tmux keybinding** — add to `~/.tmux.conf`:
 
 ```tmux
 bind l switch-client -t hive
@@ -74,9 +93,7 @@ bind l switch-client -t hive
 
 Now `<prefix> l` returns you to hive from any agent session.
 
-### 3. Configure repo directories (optional)
-
-To create sessions from the TUI with `n`, tell hive where your repos live:
+**Config file** — tell hive where your repos live:
 
 ```yaml
 # ~/.config/hive/config.yaml
@@ -92,14 +109,6 @@ workspaces:
     cd ~/projects/my-app
     hive new Fix Auth Bug
     ```
-
-### 4. Launch
-
-```bash
-hv
-```
-
-Hive auto-detects tmux, bundles its own session management scripts, and registers default keybindings — no other config needed. Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
 ## Next Steps
 

@@ -56,15 +56,11 @@ Each hive session is a complete git clone in a dedicated directory with its own 
 **Prerequisites:** Git and tmux installed.
 
 ```bash
-# Add alias to .bashrc/.zshrc
-alias hv='tmux new-session -As hive hive'
-
-# Add to ~/.tmux.conf to jump back to hive
-# bind l switch-client -t hive
-
-# Launch
-hv
+hive init   # interactive setup wizard — alias, config, tmux binding
+hv          # launch
 ```
+
+`hive init` detects installed AI agents, scaffolds `~/.config/hive/config.yaml`, appends an `hv` alias to your shell rc, and adds a tmux keybinding to jump back to hive.
 
 Press `n` to create sessions, `enter` to open them, and `:` for the command palette.
 
