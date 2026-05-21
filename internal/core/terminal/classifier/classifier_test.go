@@ -237,13 +237,29 @@ func TestClassify_ConfidenceLevels(t *testing.T) {
 	}
 }
 
+func TestClassify_WindowNamePiDoesNotMatchNonAgentPane(t *testing.T) {
+	cls := classifier.New(titlePatterns("\\bpi\\b", "pi"), shellReader(), nil, nil)
+	got := cls.Classify(context.Background(), classifier.PaneInput{
+		PaneID:     "%1",
+		PanePID:    100,
+		WindowName: "pi",
+		PaneTitle:  "zsh",
+	})
+
+	assert.False(t, got.IsAgent)
+	assert.Equal(t, 0, got.Tier)
+}
+
 func TestTitlePatternsFromConfig(t *testing.T) {
-	patterns := classifier.TitlePatternsFromConfig([]string{"(?i)claude", "[", "worker"})
-	require.Len(t, patterns, 2)
+	patterns := classifier.TitlePatternsFromConfig([]string{"(?i)claude", "[", "worker", "\\bpi\\b", "pipeline", "π"})
+	require.Len(t, patterns, 5)
 	assert.Equal(t, testToolClaude, patterns[0].Tool)
 	assert.True(t, patterns[0].Pattern.MatchString("Claude"))
 	assert.True(t, patterns[1].Pattern.MatchString("WORKER"))
 	assert.Equal(t, testToolAgent, patterns[1].Tool)
+	assert.Equal(t, "pi", patterns[2].Tool)
+	assert.Equal(t, testToolAgent, patterns[3].Tool)
+	assert.Equal(t, "pi", patterns[4].Tool)
 }
 
 func assertClassifiedAt(t *testing.T, got classifier.Result) {

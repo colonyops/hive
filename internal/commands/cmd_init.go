@@ -293,7 +293,7 @@ tmux:
   enabled: [tmux]
   poll_interval: 500ms
   # Pane content patterns that indicate an active AI agent window:
-  preview_window_matcher: [claude, aider, codex, opencode, agent, \bpi\b, amp]
+  preview_window_matcher: [claude, aider, codex, opencode, agent, amp]
 
 # Session lifecycle rules (last-match wins on remote URL pattern).
 rules:

@@ -82,6 +82,11 @@ func TestToolFromArgv(t *testing.T) {
 			want: toolAider,
 		},
 		{
+			name: "direct pi",
+			argv: []string{"/usr/local/bin/pi"},
+			want: toolPi,
+		},
+		{
 			name: "python module aider",
 			argv: []string{"python3", "-m", toolAider},
 			want: toolAider,
@@ -155,6 +160,17 @@ func TestIdentifyWith(t *testing.T) {
 			wantPID:  200,
 			wantTool: toolClaude,
 			wantComm: toolClaude,
+		},
+		{
+			name:    "direct pi binary",
+			panePID: 100,
+			reader: fakeReader{procs: map[int]fakeProc{
+				100: {tpgid: 200},
+				200: {comm: toolPi, argv: []string{"/usr/local/bin/pi"}},
+			}},
+			wantPID:  200,
+			wantTool: toolPi,
+			wantComm: toolPi,
 		},
 		{
 			name:    "node wrapper claude child depth 1",
@@ -383,6 +399,16 @@ func TestToolFromBasename(t *testing.T) {
 			name:  "cline",
 			input: "cline",
 			want:  "cline",
+		},
+		{
+			name:  "pi exact",
+			input: "pi",
+			want:  toolPi,
+		},
+		{
+			name:  "pipeline does not match pi",
+			input: "pipeline",
+			want:  "",
 		},
 		{
 			name:  "bash returns empty",

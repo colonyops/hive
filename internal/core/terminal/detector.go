@@ -283,6 +283,9 @@ func DetectTool(content string) string {
 	if looksLikeAiderContent(content) {
 		return "aider"
 	}
+	if looksLikePiContent(content) {
+		return "pi"
+	}
 
 	lower := strings.ToLower(content)
 
@@ -337,6 +340,17 @@ func looksLikeAiderContent(content string) bool {
 		}
 		version := strings.TrimPrefix(strings.ToLower(fields[1]), "v")
 		return version != "" && version[0] >= '0' && version[0] <= '9'
+	}
+	return false
+}
+
+func looksLikePiContent(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		return strings.HasPrefix(trimmed, "π - ") || strings.EqualFold(trimmed, "pi") || strings.HasPrefix(strings.ToLower(trimmed), "pi ")
 	}
 	return false
 }

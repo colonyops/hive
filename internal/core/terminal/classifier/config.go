@@ -26,10 +26,18 @@ func TitlePatternsFromConfig(patterns []string) []TitlePattern {
 
 func inferTool(pattern string) string {
 	lower := strings.ToLower(pattern)
+	if isPiTitlePattern(lower) {
+		return "pi"
+	}
 	for _, tool := range knownTools {
 		if strings.Contains(lower, tool) {
 			return tool
 		}
 	}
 	return "agent"
+}
+
+func isPiTitlePattern(pattern string) bool {
+	trimmed := strings.TrimSpace(pattern)
+	return trimmed == "pi" || trimmed == "\\bpi\\b" || trimmed == "(?i)\\bpi\\b" || strings.Contains(trimmed, "π")
 }

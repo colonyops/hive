@@ -13,6 +13,7 @@ const (
 	toolCursor    = "cursor"
 	toolGemini    = "gemini"
 	toolOpencode  = "opencode"
+	toolPi        = "pi"
 	toolShell     = "shell"
 	envClaudeCode = "CLAUDECODE"
 )
@@ -216,6 +217,8 @@ func toolFromBasename(comm string) string {
 		return toolCursor
 	case strings.Contains(lower, toolOpencode):
 		return toolOpencode
+	case lower == toolPi:
+		return toolPi
 	case strings.Contains(lower, "cline"):
 		return "cline"
 	default:
