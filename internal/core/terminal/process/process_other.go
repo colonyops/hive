@@ -15,3 +15,5 @@ func cmdlineForPID(_ int) ([]string, error) {
 }
 
 func environForPID(_ int) map[string]string { return nil }
+
+func childrenForPID(_ int) ([]int, error) { return nil, nil }

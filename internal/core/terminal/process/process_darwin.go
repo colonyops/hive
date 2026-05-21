@@ -43,6 +43,20 @@ func environForPID(pid int) map[string]string {
 	return env
 }
 
+func childrenForPID(pid int) ([]int, error) {
+	procs, err := unix.SysctlKinfoProcSlice("kern.proc.all")
+	if err != nil {
+		return nil, err
+	}
+	var children []int
+	for _, proc := range procs {
+		if int(proc.Eproc.Ppid) == pid {
+			children = append(children, int(proc.Proc.P_pid))
+		}
+	}
+	return children, nil
+}
+
 // kernProcArgs2 fetches argv and env for a process via kern.procargs2.
 // On macOS with hardened runtime, env may be empty (zeroed by kernel) — in
 // that case env is returned as nil to signal unavailability.

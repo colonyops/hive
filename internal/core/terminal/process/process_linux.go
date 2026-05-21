@@ -5,6 +5,8 @@ package process
 import (
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 )
 
@@ -72,4 +74,85 @@ func environForPID(pid int) map[string]string {
 		return nil
 	}
 	return env
+}
+
+func childrenForPID(pid int) ([]int, error) {
+	children, err := childrenFromTaskFiles(pid)
+	if err == nil {
+		return children, nil
+	}
+	return childrenByScanningProc(pid)
+}
+
+func childrenFromTaskFiles(pid int) ([]int, error) {
+	matches, err := filepath.Glob(fmt.Sprintf("/proc/%d/task/*/children", pid))
+	if err != nil {
+		return nil, err
+	}
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("no task children files for pid %d", pid)
+	}
+
+	seen := make(map[int]bool)
+	var children []int
+	for _, path := range matches {
+		data, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		for _, field := range strings.Fields(string(data)) {
+			childPID, err := strconv.Atoi(field)
+			if err != nil || childPID <= 0 || seen[childPID] {
+				continue
+			}
+			seen[childPID] = true
+			children = append(children, childPID)
+		}
+	}
+	return children, nil
+}
+
+func childrenByScanningProc(pid int) ([]int, error) {
+	entries, err := os.ReadDir("/proc")
+	if err != nil {
+		return nil, err
+	}
+	var children []int
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		childPID, err := strconv.Atoi(entry.Name())
+		if err != nil {
+			continue
+		}
+		data, err := os.ReadFile(fmt.Sprintf("/proc/%d/stat", childPID))
+		if err != nil {
+			continue
+		}
+		ppid, err := parsePPID(string(data))
+		if err != nil {
+			continue
+		}
+		if ppid == pid {
+			children = append(children, childPID)
+		}
+	}
+	return children, nil
+}
+
+func parsePPID(stat string) (int, error) {
+	idx := strings.LastIndex(stat, ")")
+	if idx < 0 {
+		return 0, fmt.Errorf("malformed stat: no closing paren")
+	}
+	fields := strings.Fields(stat[idx+1:])
+	if len(fields) < 2 {
+		return 0, fmt.Errorf("malformed stat: too few fields after comm")
+	}
+	ppid, err := strconv.Atoi(fields[1])
+	if err != nil {
+		return 0, fmt.Errorf("parse ppid: %w", err)
+	}
+	return ppid, nil
 }
