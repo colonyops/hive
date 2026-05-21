@@ -155,20 +155,48 @@ func (c *Client) AttachOrSwitch(ctx context.Context, name string) error {
 }
 
 // OpenSession creates a session if it doesn't exist, or attaches to it.
-// If targetWindow is non-empty and the session already exists, select that window before attaching.
+// If targetWindow is non-empty and the session already exists, select that window or pane.
 func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error {
 	if c.HasSession(ctx, name) {
 		if background {
 			return nil
 		}
-		if targetWindow != "" {
-			// Best-effort: window may not exist if config changed since session was created.
-			// Failure is expected (e.g., window renamed/closed) — attach to current window instead.
-			_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", name+":"+targetWindow)
+		if insideTmux() {
+			if err := c.AttachOrSwitch(ctx, name); err != nil {
+				return err
+			}
+			c.selectTarget(ctx, name, targetWindow)
+			return nil
 		}
+		c.selectTarget(ctx, name, targetWindow)
 		return c.AttachOrSwitch(ctx, name)
 	}
 	return c.CreateSession(ctx, name, workDir, windows, background)
+}
+
+func (c *Client) selectTarget(ctx context.Context, sessionName, target string) {
+	if target == "" {
+		return
+	}
+	if strings.HasPrefix(target, "%") {
+		c.selectPaneTarget(ctx, target)
+		return
+	}
+	// Best-effort: window may not exist if config changed since session was created.
+	// Failure is expected (e.g., window renamed/closed) — attach to current window instead.
+	_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", sessionName+":"+target)
+}
+
+func (c *Client) selectPaneTarget(ctx context.Context, paneID string) {
+	// select-pane alone does not move the client/session to the pane's window.
+	// Resolve the pane's window first, then select the pane inside it.
+	out, err := c.exec.Run(ctx, "tmux", "display-message", "-p", "-t", paneID, "#{session_name}:#{window_index}")
+	if err == nil {
+		if windowTarget := strings.TrimSpace(string(out)); windowTarget != "" {
+			_, _ = c.exec.Run(ctx, "tmux", "select-window", "-t", windowTarget)
+		}
+	}
+	_, _ = c.exec.Run(ctx, "tmux", "select-pane", "-t", paneID)
 }
 
 // tagPanesWithSession sets @hive-session on the active pane so list-panes can

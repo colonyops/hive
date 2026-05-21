@@ -111,6 +111,60 @@ func TestExpandWindowItems_OneWindow(t *testing.T) {
 	assert.Len(t, got, 1, "session with 1 window should not be expanded (threshold is >1)")
 }
 
+func TestExpandWindowItems_OneWindowMultiplePanes(t *testing.T) {
+	ts := kv.New[string, TerminalStatus]()
+	ts.Set("s1", TerminalStatus{
+		Windows: []WindowStatus{{
+			WindowIndex: "0",
+			WindowName:  "main",
+			Panes: []PaneStatus{
+				{PaneID: "%1", Tool: "claude", Status: terminal.StatusReady},
+				{PaneID: "%2", Tool: "codex", Status: terminal.StatusActive},
+			},
+		}},
+	})
+	v := &View{terminalStatuses: ts}
+
+	sess := session.Session{ID: "s1", Name: "my-session"}
+	items := []list.Item{TreeItem{Session: sess, RepoPrefix: "repo"}}
+	got := v.expandWindowItems(items)
+
+	assert.Len(t, got, 4, "session with 2 panes should expand to session, window, and panes")
+	windowItem := got[1].(TreeItem)
+	assert.True(t, windowItem.IsWindowItem)
+	assert.Equal(t, "main", windowItem.WindowName)
+	paneItem := got[2].(TreeItem)
+	assert.True(t, paneItem.IsPaneItem)
+	assert.Equal(t, "%1", paneItem.PaneID)
+	assert.Equal(t, "0", paneItem.ParentWindow)
+	lastPane := got[3].(TreeItem)
+	assert.True(t, lastPane.IsLastPane)
+}
+
+func TestRenderPreviewHeader_SelectedPaneUsesDisplayID(t *testing.T) {
+	sess := session.Session{ID: "abcd1234", Name: "my-session"}
+	ts := kv.New[string, TerminalStatus]()
+	ts.Set("s1", TerminalStatus{Windows: []WindowStatus{{
+		WindowIndex: "0",
+		WindowName:  "main",
+		Panes:       []PaneStatus{{PaneID: "%12", Tool: "claude", Status: terminal.StatusReady}},
+	}}})
+	v := newTestView([]list.Item{TreeItem{
+		IsPaneItem:    true,
+		PaneID:        "%12",
+		ParentWindow:  "0",
+		ParentSession: session.Session{ID: "s1", Name: "my-session"},
+	}}, 0)
+	cfg := config.DefaultConfig()
+	v.cfg = &cfg
+	v.terminalStatuses = ts
+
+	got := terminal.StripANSI(v.renderPreviewHeader(&sess, 80))
+
+	assert.Contains(t, got, "[#12]")
+	assert.NotContains(t, got, "[%12]")
+}
+
 func TestExpandWindowItems_MultipleWindows(t *testing.T) {
 	ts := kv.New[string, TerminalStatus]()
 	ts.Set("s1", TerminalStatus{

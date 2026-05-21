@@ -1202,8 +1202,10 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m, nil
 		}
 
-		// If a window sub-item is selected, override TmuxWindow for template rendering
-		if ti := m.selectedTreeItem(); ti != nil && ti.IsWindowItem {
+		// If a pane/window sub-item is selected, override TmuxWindow for template rendering.
+		if ti := m.selectedTreeItem(); ti != nil && ti.IsPaneItem {
+			m.handler.SetSelectedWindow(ti.PaneID)
+		} else if ti := m.selectedTreeItem(); ti != nil && ti.IsWindowItem {
 			m.handler.SetSelectedWindow(ti.WindowName)
 		} else {
 			m.handler.SetSelectedWindow("")

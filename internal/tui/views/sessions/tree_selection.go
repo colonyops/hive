@@ -4,9 +4,10 @@ package sessions
 // the best matching item after a list rebuild. Operates purely on TreeItem
 // slices so it can be tested without the full TUI model.
 type TreeSelection struct {
-	sessionID    string // session ID (or parent session ID for window items)
+	sessionID    string // session ID (or parent session ID for window/pane items)
 	windowName   string // non-empty for window sub-items
 	windowIndex  string // fallback for window sub-items
+	paneID       string // non-empty for pane sub-items
 	recycledRepo string // non-empty for recycled placeholders
 	index        int    // raw list index as last-resort fallback
 }
@@ -19,6 +20,10 @@ func SaveTreeSelection(item *TreeItem, index int) TreeSelection {
 		return sel
 	}
 	switch {
+	case item.IsPaneItem:
+		sel.sessionID = item.ParentSession.ID
+		sel.windowIndex = item.ParentWindow
+		sel.paneID = item.PaneID
 	case item.IsWindowItem:
 		sel.sessionID = item.ParentSession.ID
 		sel.windowName = item.WindowName
@@ -41,7 +46,16 @@ func SaveTreeSelection(item *TreeItem, index int) TreeSelection {
 //  5. Original index (clamped to bounds)
 //  6. First non-header item
 func (s TreeSelection) Restore(items []TreeItem) int {
-	// 1. Window by index
+	// 1. Pane by ID
+	if s.paneID != "" {
+		for i, ti := range items {
+			if ti.IsPaneItem && ti.ParentSession.ID == s.sessionID && ti.PaneID == s.paneID {
+				return i
+			}
+		}
+	}
+
+	// 2. Window by index
 	if s.windowIndex != "" {
 		for i, ti := range items {
 			if ti.IsWindowItem &&
@@ -51,7 +65,7 @@ func (s TreeSelection) Restore(items []TreeItem) int {
 		}
 	}
 
-	// 2. Window by name
+	// 3. Window by name
 	if s.windowName != "" {
 		for i, ti := range items {
 			if ti.IsWindowItem &&
@@ -61,7 +75,7 @@ func (s TreeSelection) Restore(items []TreeItem) int {
 		}
 	}
 
-	// 3. Recycled placeholder by repo
+	// 4. Recycled placeholder by repo
 	if s.recycledRepo != "" {
 		for i, ti := range items {
 			if ti.IsRecycledPlaceholder && ti.RepoPrefix == s.recycledRepo {
@@ -70,7 +84,7 @@ func (s TreeSelection) Restore(items []TreeItem) int {
 		}
 	}
 
-	// 4. Session by ID
+	// 5. Session by ID
 	if s.sessionID != "" {
 		for i, ti := range items {
 			if ti.IsSession() && ti.Session.ID == s.sessionID {
@@ -79,12 +93,12 @@ func (s TreeSelection) Restore(items []TreeItem) int {
 		}
 	}
 
-	// 5. Original index clamped to bounds
+	// 6. Original index clamped to bounds
 	if s.index >= 0 && s.index < len(items) {
 		return s.index
 	}
 
-	// 6. First non-header
+	// 7. First non-header
 	for i, ti := range items {
 		if !ti.IsHeader {
 			return i

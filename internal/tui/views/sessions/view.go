@@ -493,9 +493,12 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 
 	// Set window override before Resolve so TmuxOpen/TmuxStart actions
 	// target the selected window sub-item instead of the default.
-	if treeItem != nil && treeItem.IsWindowItem {
+	switch {
+	case treeItem != nil && treeItem.IsPaneItem:
+		v.handler.SetSelectedWindow(treeItem.PaneID)
+	case treeItem != nil && treeItem.IsWindowItem:
 		v.handler.SetSelectedWindow(treeItem.WindowIndex)
-	} else {
+	default:
 		v.handler.SetSelectedWindow("")
 	}
 
@@ -600,6 +603,11 @@ func (v *View) navigateToNextActive(direction int) {
 		treeItem, ok := items[idx].(TreeItem)
 		if !ok || treeItem.IsHeader || treeItem.IsRecycledPlaceholder {
 			continue
+		}
+
+		if treeItem.IsPaneItem && isActiveStatus(treeItem.PaneStatus) {
+			v.list.Select(idx)
+			return
 		}
 
 		if treeItem.IsWindowItem {
@@ -731,16 +739,25 @@ func (v *View) rebuildWindowItems() {
 	current := make(map[string]struct{})
 	expected := make(map[string]struct{})
 	for _, ti := range TreeItemsAll(items) {
+		if ti.IsPaneItem {
+			current["p\x1f"+ti.ParentSession.ID+"\x1f"+ti.ParentWindow+"\x1f"+ti.PaneID] = struct{}{}
+			continue
+		}
 		if ti.IsWindowItem {
-			current[ti.ParentSession.ID+"\x1f"+ti.WindowIndex+"\x1f"+ti.WindowName] = struct{}{}
+			current["w\x1f"+ti.ParentSession.ID+"\x1f"+ti.WindowIndex+"\x1f"+ti.WindowName] = struct{}{}
 			continue
 		}
 		if !ti.IsSession() {
 			continue
 		}
-		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && len(ts.Windows) > 1 {
+		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && shouldExposeWindows(ts.Windows) {
 			for _, w := range ts.Windows {
-				expected[ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
+				expected["w\x1f"+ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
+				if len(w.Panes) > 1 {
+					for _, p := range w.Panes {
+						expected["p\x1f"+ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+p.PaneID] = struct{}{}
+					}
+				}
 			}
 		}
 	}
@@ -762,7 +779,7 @@ func (v *View) rebuildWindowItems() {
 
 	stripped := make([]list.Item, 0, len(items))
 	for i, ti := range TreeItemsAll(items) {
-		if ti.IsWindowItem {
+		if ti.IsWindowItem || ti.IsPaneItem {
 			continue
 		}
 		stripped = append(stripped, items[i])
@@ -773,8 +790,8 @@ func (v *View) rebuildWindowItems() {
 	v.restoreSelection(sel)
 }
 
-// expandWindowItems inserts window sub-items after each session that has multiple
-// terminal windows. Single-window sessions are left unchanged.
+// expandWindowItems inserts window and pane sub-items after sessions that have
+// multiple terminal windows or multiple agent panes in one window.
 func (v *View) expandWindowItems(items []list.Item) []list.Item {
 	if v.terminalStatuses == nil {
 		return items
@@ -790,7 +807,7 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 		}
 
 		ts, ok := v.terminalStatuses.Get(treeItem.Session.ID)
-		if !ok || len(ts.Windows) <= 1 {
+		if !ok || !shouldExposeWindows(ts.Windows) {
 			continue
 		}
 
@@ -805,6 +822,22 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 				RepoPrefix:    treeItem.RepoPrefix,
 			}
 			expanded = append(expanded, windowItem)
+			if len(w.Panes) > 1 {
+				for j, p := range w.Panes {
+					expanded = append(expanded, TreeItem{
+						IsPaneItem:    true,
+						PaneID:        p.PaneID,
+						PaneTool:      p.Tool,
+						PaneStatus:    p.Status,
+						ParentWindow:  w.WindowIndex,
+						ParentSession: treeItem.Session,
+						IsLastPane:    j == len(w.Panes)-1,
+						IsLastWindow:  i == len(ts.Windows)-1,
+						IsLastInRepo:  treeItem.IsLastInRepo,
+						RepoPrefix:    treeItem.RepoPrefix,
+					})
+				}
+			}
 		}
 	}
 
@@ -918,7 +951,9 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		// Determine pane content: use per-window content if a window item is selected,
 		// otherwise fall back to session-level content.
 		var paneContent string
-		if ws := v.selectedWindowStatus(); ws != nil {
+		if ps := v.selectedPaneStatus(); ps != nil {
+			paneContent = ps.PaneContent
+		} else if ws := v.selectedWindowStatus(); ws != nil {
 			paneContent = ws.PaneContent
 		} else if status, ok := v.terminalStatuses.Get(selected.ID); ok {
 			paneContent = status.PaneContent
@@ -1000,8 +1035,10 @@ func (v *View) renderPreviewHeader(sess *session.Session, maxWidth int) string {
 		shortID = shortID[len(shortID)-4:]
 	}
 	title := nameStyle.Render(sess.Name)
-	// Show window name if a specific window is selected
-	if ws := v.selectedWindowStatus(); ws != nil {
+	// Show window/pane name if a specific sub-item is selected
+	if ps := v.selectedPaneStatus(); ps != nil {
+		title += " " + styles.TextMutedStyle.Render("["+displayPaneID(ps.PaneID)+"]")
+	} else if ws := v.selectedWindowStatus(); ws != nil {
 		title += " " + styles.TextSecondaryStyle.Render("["+ws.WindowName+"]")
 	}
 	title += separatorStyle.Render(" • ") + idStyle.Render("#"+shortID)
@@ -1113,6 +1150,37 @@ func (v *View) handleFilterAction(actionType act.Type) bool {
 	default:
 		return false
 	}
+}
+
+// selectedPaneStatus returns the PaneStatus for the currently selected pane item,
+// or nil if a session/window is selected.
+func (v *View) selectedPaneStatus() *PaneStatus {
+	item := v.list.SelectedItem()
+	if item == nil {
+		return nil
+	}
+	treeItem, ok := item.(TreeItem)
+	if !ok || !treeItem.IsPaneItem {
+		return nil
+	}
+	if v.terminalStatuses == nil {
+		return nil
+	}
+	ts, ok := v.terminalStatuses.Get(treeItem.ParentSession.ID)
+	if !ok {
+		return nil
+	}
+	for i := range ts.Windows {
+		if ts.Windows[i].WindowIndex != treeItem.ParentWindow {
+			continue
+		}
+		for j := range ts.Windows[i].Panes {
+			if ts.Windows[i].Panes[j].PaneID == treeItem.PaneID {
+				return &ts.Windows[i].Panes[j]
+			}
+		}
+	}
+	return nil
 }
 
 // selectedWindowStatus returns the WindowStatus for the currently selected window item,
@@ -1299,7 +1367,7 @@ func (v *View) SelectedSession() *session.Session {
 	if ti.IsHeader || ti.IsRecycledPlaceholder {
 		return nil
 	}
-	if ti.IsWindowItem {
+	if ti.IsPaneItem || ti.IsWindowItem {
 		return &ti.ParentSession
 	}
 	return &ti.Session

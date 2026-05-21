@@ -16,6 +16,15 @@ import (
 
 const terminalStatusTimeout = 2 * time.Second
 
+// PaneStatus holds per-pane terminal status for agent panes.
+type PaneStatus struct {
+	PaneID      string
+	Status      terminal.Status
+	Tool        string
+	PaneContent string
+	IsAgent     bool
+}
+
 // WindowStatus holds per-window terminal status for multi-window sessions.
 type WindowStatus struct {
 	WindowIndex string
@@ -23,6 +32,7 @@ type WindowStatus struct {
 	Status      terminal.Status
 	Tool        string
 	PaneContent string
+	Panes       []PaneStatus
 }
 
 // TerminalStatus holds the terminal integration status for a session.
@@ -139,30 +149,88 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	if allInfos != nil || discErr != nil {
 		if discErr != nil {
 			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
-		} else if len(allInfos) > 1 {
-			windows := make([]WindowStatus, 0, len(allInfos))
-			for _, wi := range allInfos {
-				// Get per-window status and content
-				wStatus, wErr := integration.GetStatus(ctx, wi)
-				if wErr != nil {
-					log.Debug().Err(wErr).Str("session", sess.Slug).Str("window", wi.WindowIndex).Msg("per-window status failed, marking missing")
-					wStatus = terminal.StatusMissing
-				}
-				windows = append(windows, WindowStatus{
-					WindowIndex: wi.WindowIndex,
-					WindowName:  wi.WindowName,
-					Status:      wStatus,
-					Tool:        wi.DetectedTool,
-					PaneContent: wi.PaneContent,
-				})
-			}
-			if len(windows) > 1 {
+		} else if len(allInfos) > 0 {
+			windows := groupPaneStatuses(ctx, integration, sess.Slug, allInfos)
+			if shouldExposeWindows(windows) {
 				status.Windows = windows
 			}
 		}
 	}
 
 	return status
+}
+
+func groupPaneStatuses(ctx context.Context, integration terminal.Integration, slug string, infos []*terminal.SessionInfo) []WindowStatus {
+	windows := make([]WindowStatus, 0, len(infos))
+	byWindow := make(map[string]int, len(infos))
+	for _, wi := range infos {
+		paneStatus, wErr := integration.GetStatus(ctx, wi)
+		if wErr != nil {
+			log.Debug().Err(wErr).Str("session", slug).Str("window", wi.WindowIndex).Str("pane", wi.PaneID).Msg("per-pane status failed, marking missing")
+			paneStatus = terminal.StatusMissing
+		}
+
+		pane := PaneStatus{
+			PaneID:      wi.PaneID,
+			Status:      paneStatus,
+			Tool:        wi.DetectedTool,
+			PaneContent: wi.PaneContent,
+			IsAgent:     true,
+		}
+
+		key := wi.WindowIndex + "\x1f" + wi.WindowName
+		idx, ok := byWindow[key]
+		if !ok {
+			idx = len(windows)
+			byWindow[key] = idx
+			windows = append(windows, WindowStatus{
+				WindowIndex: wi.WindowIndex,
+				WindowName:  wi.WindowName,
+				Status:      paneStatus,
+				Tool:        wi.DetectedTool,
+				PaneContent: wi.PaneContent,
+			})
+		} else {
+			windows[idx].Status = aggregateStatus(windows[idx].Status, paneStatus)
+			if windows[idx].Tool == "" {
+				windows[idx].Tool = wi.DetectedTool
+			}
+			if windows[idx].PaneContent == "" {
+				windows[idx].PaneContent = wi.PaneContent
+			}
+		}
+		windows[idx].Panes = append(windows[idx].Panes, pane)
+	}
+	return windows
+}
+
+func shouldExposeWindows(windows []WindowStatus) bool {
+	if len(windows) > 1 {
+		return true
+	}
+	return len(windows) == 1 && len(windows[0].Panes) > 1
+}
+
+func aggregateStatus(current, next terminal.Status) terminal.Status {
+	if statusRank(next) > statusRank(current) {
+		return next
+	}
+	return current
+}
+
+func statusRank(status terminal.Status) int {
+	switch status {
+	case terminal.StatusApproval:
+		return 4
+	case terminal.StatusActive:
+		return 3
+	case terminal.StatusMissing:
+		return 2
+	case terminal.StatusReady:
+		return 1
+	default:
+		return 0
+	}
 }
 
 // StartTerminalPollTicker returns a command that starts the terminal status poll ticker.

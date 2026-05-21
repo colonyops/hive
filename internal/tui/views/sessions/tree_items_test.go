@@ -16,6 +16,7 @@ func TestIsSession(t *testing.T) {
 		{name: "header", item: TreeItem{IsHeader: true}, want: false},
 		{name: "recycled", item: TreeItem{IsRecycledPlaceholder: true}, want: false},
 		{name: "window", item: TreeItem{IsWindowItem: true}, want: false},
+		{name: "pane", item: TreeItem{IsPaneItem: true}, want: false},
 		{name: "session", item: TreeItem{Session: session.Session{ID: "a"}}, want: true},
 	}
 	for _, tt := range tests {
@@ -53,6 +54,27 @@ func TestTreeItemsAll(t *testing.T) {
 	}
 }
 
+func TestDisplayPaneID(t *testing.T) {
+	tests := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{name: "tmux pane id", in: "%1", want: "#1"},
+		{name: "multi digit", in: "%12", want: "#12"},
+		{name: "already display id", in: "#3", want: "#3"},
+		{name: "empty", in: "", want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := displayPaneID(tt.in); got != tt.want {
+				t.Errorf("displayPaneID(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
 func TestTreeItemsSessions(t *testing.T) {
 	items := []list.Item{
 		TreeItem{IsHeader: true, RepoName: "repo1"},
@@ -60,6 +82,7 @@ func TestTreeItemsSessions(t *testing.T) {
 		TreeItem{IsRecycledPlaceholder: true},
 		TreeItem{Session: session.Session{ID: "s2"}},
 		TreeItem{IsWindowItem: true},
+		TreeItem{IsPaneItem: true},
 	}
 
 	var indices []int

@@ -228,6 +228,49 @@ func TestClient_OpenSession(t *testing.T) {
 		assert.Equal(t, []string{"attach-session", "-t", "sess"}, rec.Commands[2].Args)
 	})
 
+	t.Run("session exists with target pane", func(t *testing.T) {
+		orig := insideTmux
+		insideTmux = func() bool { return false }
+		defer func() { insideTmux = orig }()
+
+		rec := &executil.RecordingExecutor{Outputs: map[string][]byte{"tmux": []byte("sess:2\n")}}
+		c := New(rec, nopLog)
+
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Focus: true},
+		}, false, "%7")
+		require.NoError(t, err)
+
+		// has-session, resolve pane window, select-window, select-pane, attach
+		require.Len(t, rec.Commands, 5)
+		assert.Equal(t, []string{"has-session", "-t", "sess"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"display-message", "-p", "-t", "%7", "#{session_name}:#{window_index}"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:2"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"select-pane", "-t", "%7"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"attach-session", "-t", "sess"}, rec.Commands[4].Args)
+	})
+
+	t.Run("session exists with target pane inside tmux switches then selects", func(t *testing.T) {
+		orig := insideTmux
+		insideTmux = func() bool { return true }
+		defer func() { insideTmux = orig }()
+
+		rec := &executil.RecordingExecutor{Outputs: map[string][]byte{"tmux": []byte("sess:2\n")}}
+		c := New(rec, nopLog)
+
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Focus: true},
+		}, false, "%7")
+		require.NoError(t, err)
+
+		require.Len(t, rec.Commands, 5)
+		assert.Equal(t, []string{"has-session", "-t", "sess"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"switch-client", "-t", "sess"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"display-message", "-p", "-t", "%7", "#{session_name}:#{window_index}"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:2"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"select-pane", "-t", "%7"}, rec.Commands[4].Args)
+	})
+
 	t.Run("session exists background is noop", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
 		c := New(rec, nopLog)
