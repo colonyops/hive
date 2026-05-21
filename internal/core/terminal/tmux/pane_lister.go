@@ -17,11 +17,16 @@ type PaneLister interface {
 // TmuxPaneLister calls tmux list-panes -a and parses the output.
 type TmuxPaneLister struct{}
 
-// listPanesFormat is the tab-delimited format used for `tmux list-panes -a`.
+// listPanesFormat is the delimited format used for `tmux list-panes -a`.
+// tmux replaces literal tab format separators with underscores, so use a
+// printable delimiter that survives format rendering.
 // Fields: session_name, window_index, window_name, pane_current_path,
 // window_activity, pane_id, pane_pid, pane_title, @hive-session.
-const listPanesFormat = "#{session_name}\t#{window_index}\t#{window_name}\t" +
-	"#{pane_current_path}\t#{window_activity}\t#{pane_id}\t#{pane_pid}\t#{pane_title}\t#{@hive-session}"
+const listPanesDelimiter = "|||"
+
+const listPanesFormat = "#{session_name}" + listPanesDelimiter + "#{window_index}" + listPanesDelimiter + "#{window_name}" + listPanesDelimiter +
+	"#{pane_current_path}" + listPanesDelimiter + "#{window_activity}" + listPanesDelimiter + "#{pane_id}" + listPanesDelimiter +
+	"#{pane_pid}" + listPanesDelimiter + "#{pane_title}" + listPanesDelimiter + "#{@hive-session}"
 
 // paneLine is the parsed form of one line of `tmux list-panes` output.
 type paneLine struct {
@@ -74,9 +79,9 @@ func paneInputFromLine(pl paneLine) classifier.PaneInput {
 	}
 }
 
-// parsePaneLine parses one tab-delimited line in listPanesFormat.
+// parsePaneLine parses one delimited line in listPanesFormat.
 func parsePaneLine(line string) (paneLine, bool) {
-	parts := strings.SplitN(line, "\t", 9)
+	parts := strings.SplitN(line, listPanesDelimiter, 9)
 	if len(parts) < 6 || line == "" {
 		return paneLine{}, false
 	}

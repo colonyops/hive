@@ -15,7 +15,7 @@ func TestParsePaneLine(t *testing.T) {
 	}{
 		{
 			name: "9 fields with pane title and hive tag",
-			line: "sess\t1\twname\t/work\t12345\t%2\t6789\tptitle\tmy-slug",
+			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||my-slug",
 			want: paneLine{
 				sessName: "sess", winIdx: "1", winName: "wname", workDir: "/work",
 				activity: 12345, paneID: "%2", panePID: 6789, paneTitle: "ptitle", hiveSession: "my-slug",
@@ -24,7 +24,7 @@ func TestParsePaneLine(t *testing.T) {
 		},
 		{
 			name: "8 fields with pane title and no hive tag",
-			line: "sess\t0\tbash\t/home\t100\t%0\t1234\tptitle",
+			line: "sess|||0|||bash|||/home|||100|||%0|||1234|||ptitle",
 			want: paneLine{
 				sessName: "sess", winIdx: "0", winName: "bash", workDir: "/home",
 				activity: 100, paneID: "%0", panePID: 1234, paneTitle: "ptitle",
@@ -33,7 +33,7 @@ func TestParsePaneLine(t *testing.T) {
 		},
 		{
 			name: "6 fields (no panePID, no tag)",
-			line: "sess\t0\tbash\t/home\t100\t%0",
+			line: "sess|||0|||bash|||/home|||100|||%0",
 			want: paneLine{
 				sessName: "sess", winIdx: "0", winName: "bash", workDir: "/home",
 				activity: 100, paneID: "%0",
@@ -42,7 +42,7 @@ func TestParsePaneLine(t *testing.T) {
 		},
 		{
 			name: "5 fields rejected",
-			line: "sess\t0\tbash\t/home\t100",
+			line: "sess|||0|||bash|||/home|||100",
 			ok:   false,
 		},
 		{
@@ -52,7 +52,7 @@ func TestParsePaneLine(t *testing.T) {
 		},
 		{
 			name: "malformed activity treated as zero",
-			line: "sess\t0\tbash\t/home\tnotanumber\t%0\t1234",
+			line: "sess|||0|||bash|||/home|||notanumber|||%0|||1234",
 			want: paneLine{
 				sessName: "sess", winIdx: "0", winName: "bash", workDir: "/home",
 				activity: 0, paneID: "%0", panePID: 1234,
@@ -61,7 +61,7 @@ func TestParsePaneLine(t *testing.T) {
 		},
 		{
 			name: "tag with surrounding whitespace trimmed",
-			line: "sess\t1\twname\t/work\t12345\t%2\t6789\tptitle\t  my-slug  ",
+			line: "sess|||1|||wname|||/work|||12345|||%2|||6789|||ptitle|||  my-slug  ",
 			want: paneLine{
 				sessName: "sess", winIdx: "1", winName: "wname", workDir: "/work",
 				activity: 12345, paneID: "%2", panePID: 6789, paneTitle: "ptitle", hiveSession: "my-slug",
@@ -83,7 +83,7 @@ func TestParsePaneLine(t *testing.T) {
 }
 
 func TestParsePaneList(t *testing.T) {
-	got := parsePaneList("sess\t0\tclaude\t/work\t100\t%1\t123\tptitle\tmy-slug\n")
+	got := parsePaneList("sess|||0|||claude|||/work|||100|||%1|||123|||ptitle|||my-slug\n")
 	assert.Len(t, got, 1)
 	assert.Equal(t, "sess", got[0].SessionName)
 	assert.Equal(t, "%1", got[0].PaneID)
