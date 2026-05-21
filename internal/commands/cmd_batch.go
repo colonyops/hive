@@ -56,7 +56,8 @@ Input JSON schema:
         "session_id": "optional-id",
         "prompt": "optional task prompt",
         "remote": "optional-url",
-        "source": "optional-path"
+        "source": "optional-path",
+        "agent": "optional-agent-key"
       }
     ]
   }
@@ -67,6 +68,7 @@ Fields:
   prompt     - Optional. Task prompt passed to batch_spawn via {{.Prompt}} template.
   remote     - Optional. Git remote URL (auto-detected from current dir if empty).
   source     - Optional. Directory to copy files from (per copy rules in config).
+  agent      - Optional. Agent profile key from agents config.
 
 Config example (in ~/.config/hive/config.yaml):
   commands:
@@ -105,6 +107,11 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 
 	if err := input.Validate(); err != nil {
 		logger.Error().Err(err).Msg("input validation failed")
+		return iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
+	}
+
+	if err := cmd.validateAgents(input); err != nil {
+		logger.Error().Err(err).Msg("agent validation failed")
 		return iojson.WriteError(fmt.Sprintf("invalid input: %s", err), nil)
 	}
 
@@ -150,6 +157,20 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 	return iojson.Write(output)
 }
 
+func (cmd *BatchCmd) validateAgents(input BatchInput) error {
+	var errs criterio.FieldErrorsBuilder
+	for i, sess := range input.Sessions {
+		if sess.Agent == "" {
+			continue
+		}
+		if _, ok := cmd.app.Config.Agents.Profiles[sess.Agent]; !ok {
+			field := fmt.Sprintf("sessions[%d].agent", i)
+			errs = errs.Append(field, fmt.Errorf("unknown agent %q", sess.Agent))
+		}
+	}
+	return errs.ToError()
+}
+
 func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) BatchResult {
 	source := sess.Source
 	if source == "" {
@@ -172,6 +193,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Source:        source,
 		UseBatchSpawn: true,
 		CloneStrategy: sess.CloneStrategy,
+		AgentKey:      sess.Agent,
 	}
 
 	created, err := cmd.app.Sessions.CreateSession(ctx, opts)
@@ -254,6 +276,7 @@ type BatchSession struct {
 	Remote        string `json:"remote,omitempty"`
 	Source        string `json:"source,omitempty"`
 	CloneStrategy string `json:"clone_strategy,omitempty"`
+	Agent         string `json:"agent,omitempty"`
 }
 
 // BatchResult is the output for a single session creation attempt.

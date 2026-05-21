@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -104,7 +106,7 @@ func TestBatchInput_Validate(t *testing.T) {
 func TestBatchInput_JSON(t *testing.T) {
 	jsonInput := `{
 		"sessions": [
-			{"name": "task1", "session_id": "abc123"},
+			{"name": "task1", "session_id": "abc123", "agent": "claude"},
 			{"name": "task2", "remote": "https://github.com/org/repo"}
 		]
 	}`
@@ -115,7 +117,38 @@ func TestBatchInput_JSON(t *testing.T) {
 	assert.Len(t, input.Sessions, 2, "expected 2 sessions, got %d", len(input.Sessions))
 	assert.Equal(t, "task1", input.Sessions[0].Name)
 	assert.Equal(t, "abc123", input.Sessions[0].SessionID)
+	assert.Equal(t, "claude", input.Sessions[0].Agent)
 	assert.Equal(t, "https://github.com/org/repo", input.Sessions[1].Remote)
+
+	data, err := json.Marshal(input)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), `"agent":"claude"`)
+}
+
+func TestBatchCmd_validateAgents(t *testing.T) {
+	cmd := &BatchCmd{
+		app: &hive.App{
+			Config: &config.Config{
+				Agents: config.AgentsConfig{
+					Profiles: map[string]config.AgentProfile{
+						"claude": {},
+					},
+				},
+			},
+		},
+	}
+
+	require.NoError(t, cmd.validateAgents(BatchInput{Sessions: []BatchSession{
+		{Name: "task1", Agent: "claude"},
+		{Name: "task2"},
+	}}))
+
+	err := cmd.validateAgents(BatchInput{Sessions: []BatchSession{
+		{Name: "task1", Agent: "missing"},
+	}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sessions[0].agent")
+	assert.Contains(t, err.Error(), `unknown agent "missing"`)
 }
 
 func TestBatchOutput_JSON(t *testing.T) {
