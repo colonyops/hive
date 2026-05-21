@@ -8,9 +8,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/terminal/classifier"
-	"github.com/colonyops/hive/internal/core/terminal/content"
-	"github.com/colonyops/hive/internal/core/terminal/process"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/hive"
 )
@@ -71,8 +68,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 
 	tmuxSessions := detectTmuxSessionNames(sess)
 
-	titlePatterns := classifier.TitlePatternsFromConfig(cmd.app.Config.Tmux.PreviewWindowMatcher)
-	cls := classifier.New(titlePatterns, process.OSReader{}, terminaltmux.TmuxCapture{}, content.NewScorer())
+	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {
 		if !tmuxSessions[pane.SessionName] {

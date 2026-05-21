@@ -5,6 +5,7 @@ import (
 	"regexp"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
 )
 
@@ -42,6 +43,7 @@ type PaneInput struct {
 	PaneTitle   string
 	WorkDir     string
 	Activity    int64
+	HiveSession string
 }
 
 // Classifier classifies tmux panes as agent or non-agent.
@@ -108,12 +110,12 @@ func (c *Classifier) classifyContent(ctx context.Context, paneID string) (tool s
 	if c.scorer == nil || c.capture == nil || paneID == "" {
 		return "", false
 	}
-	content, err := c.capture.CapturePane(ctx, paneID)
-	if err != nil || content == "" {
+	paneContent, err := c.capture.CapturePane(ctx, paneID)
+	if err != nil || paneContent == "" {
 		return "", false
 	}
-	score, categories, tool := c.scorer.Score(content)
-	if score < 6 || categories < 3 {
+	score, categories, tool := c.scorer.Score(paneContent)
+	if score < content.AgentScoreThreshold || categories < content.AgentCategoriesThreshold {
 		return "", false
 	}
 	if tool == "" || tool == shellTool {

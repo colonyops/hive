@@ -127,6 +127,11 @@ func TestToolFromArgv(t *testing.T) {
 			want: toolClaude,
 		},
 		{
+			name: "env prefix claude",
+			argv: []string{"env", "DEBUG=1", "claude"},
+			want: toolClaude,
+		},
+		{
 			name: toolCodex,
 			argv: []string{"/usr/bin/codex"},
 			want: toolCodex,

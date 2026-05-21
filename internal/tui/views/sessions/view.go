@@ -491,15 +491,15 @@ func (v *View) handleKey(msg tea.KeyPressMsg) (*View, tea.Cmd) {
 
 	selected := v.SelectedSession()
 
-	// Set window override before Resolve so TmuxOpen/TmuxStart actions
-	// target the selected window sub-item instead of the default.
+	// Set target override before Resolve so TmuxOpen/TmuxStart actions
+	// target the selected pane/window sub-item instead of the default.
 	switch {
 	case treeItem != nil && treeItem.IsPaneItem:
-		v.handler.SetSelectedWindow(treeItem.PaneID)
+		v.handler.SetSelectedTarget(treeItem.PaneID)
 	case treeItem != nil && treeItem.IsWindowItem:
-		v.handler.SetSelectedWindow(treeItem.WindowIndex)
+		v.handler.SetSelectedTarget(treeItem.WindowIndex)
 	default:
-		v.handler.SetSelectedWindow("")
+		v.handler.SetSelectedTarget("")
 	}
 
 	// Resolve keybinding actions before the nil-session guard so that
@@ -948,8 +948,7 @@ func (v *View) renderDualColumnLayout(contentHeight int) string {
 		// Check if this is the current session (would cause recursive preview)
 		isSelf := v.isCurrentTmuxSession(selected)
 
-		// Determine pane content: use per-window content if a window item is selected,
-		// otherwise fall back to session-level content.
+		// Determine pane content: prefer the selected pane, then selected window, then session fallback.
 		var paneContent string
 		if ps := v.selectedPaneStatus(); ps != nil {
 			paneContent = ps.PaneContent

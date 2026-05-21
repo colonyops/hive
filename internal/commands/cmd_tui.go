@@ -11,9 +11,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/classifier"
-	"github.com/colonyops/hive/internal/core/terminal/content"
-	"github.com/colonyops/hive/internal/core/terminal/process"
 	"github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui"
@@ -84,10 +81,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 	// Create terminal integration manager (tmux always enabled)
 	termMgr := terminal.NewManager([]string{"tmux"})
-	// Register tmux integration with pane classifier.
-	titlePatterns := classifier.TitlePatternsFromConfig(cmd.app.Config.Tmux.PreviewWindowMatcher)
-	cls := classifier.New(titlePatterns, process.OSReader{}, tmux.TmuxCapture{}, content.NewScorer())
-	tmuxIntegration := tmux.New(cls, tmux.TmuxPaneLister{})
+	tmuxIntegration := tmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher)
 	if tmuxIntegration.Available() {
 		termMgr.Register(tmuxIntegration)
 	}

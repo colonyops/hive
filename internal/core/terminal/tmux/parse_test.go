@@ -83,10 +83,11 @@ func TestParsePaneLine(t *testing.T) {
 }
 
 func TestParsePaneList(t *testing.T) {
-	got := parsePaneList("sess\t0\tclaude\t/work\t100\t%1\t123\tptitle\t\n")
+	got := parsePaneList("sess\t0\tclaude\t/work\t100\t%1\t123\tptitle\tmy-slug\n")
 	assert.Len(t, got, 1)
 	assert.Equal(t, "sess", got[0].SessionName)
 	assert.Equal(t, "%1", got[0].PaneID)
 	assert.Equal(t, int64(123), got[0].PanePID)
 	assert.Equal(t, "ptitle", got[0].PaneTitle)
+	assert.Equal(t, "my-slug", got[0].HiveSession)
 }

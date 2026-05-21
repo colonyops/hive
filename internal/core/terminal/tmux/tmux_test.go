@@ -105,6 +105,36 @@ func TestRefreshCache_DoesNotClassifyShellPaneFromWindowName(t *testing.T) {
 	assert.False(t, sc.findPane("%2").result.IsAgent)
 }
 
+func TestRefreshCache_ReclassifiesNegativeResult(t *testing.T) {
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "zsh"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, nil, nil), lister, reader)
+
+	integ.RefreshCache()
+	assert.False(t, integ.cache["sess"].findPane("%1").result.IsAgent)
+
+	reader.comm[200] = testToolClaude
+	integ.RefreshCache()
+	assert.True(t, integ.cache["sess"].findPane("%1").result.IsAgent)
+}
+
+func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: testToolClaude, 201: testToolCodex}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, nil, nil), lister, reader)
+
+	integ.RefreshCache()
+	assert.Equal(t, testToolClaude, integ.cache["sess"].findPane("%1").result.Tool)
+
+	reader.tpgid = 201
+	integ.RefreshCache()
+	assert.Equal(t, testToolCodex, integ.cache["sess"].findPane("%1").result.Tool)
+}
+
 func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 202, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 200},
@@ -143,7 +173,7 @@ func TestDiscoverSession(t *testing.T) {
 	assert.Equal(t, "%1", info.PaneID)
 }
 
-func TestDiscoverAllPanesAndWindows(t *testing.T) {
+func TestDiscoverAllPanes(t *testing.T) {
 	integ := New(nil, nil)
 	integ.cache = map[string]*sessionCache{"multi-sess": {panes: []cachedPane{
 		{input: classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
@@ -157,13 +187,9 @@ func TestDiscoverAllPanesAndWindows(t *testing.T) {
 	require.Len(t, infos, 2)
 	assert.Equal(t, "%1", infos[0].PaneID)
 	assert.Equal(t, "%3", infos[1].PaneID)
-
-	windowInfos, err := integ.DiscoverAllWindows(context.Background(), "multi-sess", nil)
-	require.NoError(t, err)
-	assert.Equal(t, infos, windowInfos)
 }
 
-func TestDiscoverAllPanes_BackwardCompatibility(t *testing.T) {
+func TestDiscoverAllPanes_Matching(t *testing.T) {
 	integ := New(nil, nil)
 	integ.cache = map[string]*sessionCache{
 		"multi-sess": {panes: []cachedPane{
@@ -182,10 +208,6 @@ func TestDiscoverAllPanes_BackwardCompatibility(t *testing.T) {
 		infos, err := integ.DiscoverAllPanes(ctx, "nonexistent", nil)
 		require.NoError(t, err)
 		assert.Nil(t, infos)
-
-		windowInfos, err := integ.DiscoverAllWindows(ctx, "nonexistent", nil)
-		require.NoError(t, err)
-		assert.Nil(t, windowInfos)
 	})
 
 	t.Run("stale cache returns nil", func(t *testing.T) {
@@ -193,10 +215,6 @@ func TestDiscoverAllPanes_BackwardCompatibility(t *testing.T) {
 		infos, err := integ.DiscoverAllPanes(ctx, "multi-sess", nil)
 		require.NoError(t, err)
 		assert.Nil(t, infos)
-
-		windowInfos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
-		require.NoError(t, err)
-		assert.Nil(t, windowInfos)
 		integ.cacheTime = time.Now()
 	})
 
@@ -260,6 +278,20 @@ func TestDiscoverSession_MetaTmuxSessionCompatibility(t *testing.T) {
 		assert.Equal(t, "new-name", info.Name)
 		assert.Equal(t, "%2", info.PaneID)
 	})
+
+	t.Run("hive session tag maps renamed tmux session", func(t *testing.T) {
+		integ := New(nil, nil)
+		pane := agentCachedPane("%3", "0", testToolClaude)
+		pane.input.HiveSession = "my-feature"
+		integ.cache = map[string]*sessionCache{"My Feature": {panes: []cachedPane{pane}}}
+		integ.cacheTime = time.Now()
+
+		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{})
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, "My Feature", info.Name)
+		assert.Equal(t, "%3", info.PaneID)
+	})
 }
 
 func TestGetStatus_ExplicitNonAgentPaneMissing(t *testing.T) {
@@ -314,6 +346,22 @@ func agentCachedPane(paneID, windowIndex, tool string) cachedPane {
 type fakePaneLister struct{ panes []classifier.PaneInput }
 
 func (f *fakePaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return f.panes, nil }
+
+type fakeProcessReader struct {
+	tpgid int
+	comm  map[int]string
+}
+
+func (f *fakeProcessReader) TPGID(int) (int, error) { return f.tpgid, nil }
+func (f *fakeProcessReader) Comm(pid int) string    { return f.comm[pid] }
+func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
+	if comm := f.comm[pid]; comm != "" {
+		return []string{comm}, nil
+	}
+	return nil, nil
+}
+func (f *fakeProcessReader) Environ(int) map[string]string { return nil }
+func (f *fakeProcessReader) Children(int) ([]int, error)   { return nil, nil }
 
 type fakeCapture struct {
 	content string

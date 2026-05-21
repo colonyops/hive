@@ -95,6 +95,7 @@ func matchLinePrefix(prefix string) func([]string) (string, bool) {
 }
 
 func promptGlyph(lines []string) (string, bool) {
+	// Agent prompt glyphs appear at the bottom of the visible terminal; scanning the tail avoids scrollback false positives.
 	start := len(lines) - 5
 	if start < 0 {
 		start = 0

@@ -70,6 +70,7 @@ func paneInputFromLine(pl paneLine) classifier.PaneInput {
 		PaneTitle:   pl.paneTitle,
 		WorkDir:     pl.workDir,
 		Activity:    pl.activity,
+		HiveSession: pl.hiveSession,
 	}
 }
 

@@ -27,14 +27,6 @@ type AgentProcess struct {
 	Env  map[string]string // environment (nil if unavailable, e.g. macOS hardened runtime)
 }
 
-// Identify walks the process tree rooted at panePID and returns the
-// foreground agent, or nil if panePID is zero/negative.
-// Errors from process reads are non-fatal: the function degrades to
-// argv/comm matching when env or tpgid are unavailable.
-func Identify(panePID int) (*AgentProcess, error) {
-	return IdentifyWith(panePID, OSReader{})
-}
-
 // IdentifyWith walks the process tree using the provided reader.
 // It inspects the foreground process first, then walks child processes
 // to depth 2 to catch wrappers (e.g., node → claude, sh → claude).

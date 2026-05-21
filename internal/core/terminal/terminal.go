@@ -48,8 +48,3 @@ type Integration interface {
 type AllPanesDiscoverer interface {
 	DiscoverAllPanes(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
 }
-
-// AllWindowsDiscoverer is implemented by integrations that can return all windows.
-type AllWindowsDiscoverer interface {
-	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
-}

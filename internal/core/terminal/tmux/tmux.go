@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
+	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
 )
 
@@ -27,6 +28,7 @@ type Integration struct {
 	availableOnce sync.Once
 	classifier    *classifier.Classifier
 	classCache    *classifier.Cache
+	processReader process.ProcessReader
 	lister        PaneLister
 	capture       classifier.ContentCapture
 }
@@ -109,25 +111,45 @@ func (sc *sessionCache) bestAgentPane() *cachedPane {
 	return best
 }
 
+// NewFromPreviewMatchers creates the production tmux integration from config matchers.
+func NewFromPreviewMatchers(previewMatchers []string) *Integration {
+	capture := TmuxCapture{}
+	reader := process.OSReader{}
+	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers), reader, capture, content.NewScorer())
+	return NewWithReader(cls, TmuxPaneLister{}, reader)
+}
+
 // New creates a new tmux integration.
 func New(cls *classifier.Classifier, lister PaneLister) *Integration {
+	return NewWithReader(cls, lister, process.OSReader{})
+}
+
+// NewWithReader creates a tmux integration with explicit dependencies for tests.
+func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process.ProcessReader) *Integration {
 	capture := TmuxCapture{}
+	if reader == nil {
+		reader = process.OSReader{}
+	}
 	if cls == nil {
-		cls = classifier.New(nil, process.OSReader{}, capture, nil)
+		cls = classifier.New(nil, reader, capture, nil)
 	}
 	if lister == nil {
 		lister = TmuxPaneLister{}
 	}
 	return &Integration{
-		cache:      make(map[string]*sessionCache),
-		trackers:   make(map[string]*terminal.StateTracker),
-		limiters:   make(map[string]*terminal.RateLimiter),
-		classifier: cls,
-		classCache: classifier.NewCache(),
-		lister:     lister,
-		capture:    capture,
+		cache:         make(map[string]*sessionCache),
+		trackers:      make(map[string]*terminal.StateTracker),
+		limiters:      make(map[string]*terminal.RateLimiter),
+		classifier:    cls,
+		classCache:    classifier.NewCache(),
+		processReader: reader,
+		lister:        lister,
+		capture:       capture,
 	}
 }
+
+// Classifier returns the pane classifier used by this integration.
+func (t *Integration) Classifier() *classifier.Classifier { return t.classifier }
 
 // Name returns "tmux".
 func (t *Integration) Name() string { return "tmux" }
@@ -178,10 +200,13 @@ func (t *Integration) RefreshCache() {
 		key := paneKey(input.SessionName, input.PaneID)
 		activeKeys[key] = true
 
-		result, ok := t.classCache.Get(input.PaneID, input.PanePID)
+		fingerprint := t.processFingerprint(input.PanePID)
+		result, ok := t.classCache.Get(input.PaneID, fingerprint)
 		if !ok {
 			result = t.classifier.Classify(context.Background(), input)
-			t.classCache.Set(input.PaneID, input.PanePID, result)
+			if result.IsAgent {
+				t.classCache.Set(input.PaneID, fingerprint, result)
+			}
 		}
 
 		var state paneState
@@ -205,6 +230,20 @@ func (t *Integration) RefreshCache() {
 	t.mu.Unlock()
 }
 
+func (t *Integration) processFingerprint(panePID int64) int64 {
+	if panePID <= 0 {
+		return 0
+	}
+	if t.processReader == nil {
+		return panePID
+	}
+	foregroundPID, err := t.processReader.TPGID(int(panePID))
+	if err == nil && foregroundPID > 0 {
+		return int64(foregroundPID)
+	}
+	return panePID
+}
+
 func (t *Integration) prunePaneKeysLocked(activeKeys map[string]bool) {
 	for key := range t.trackers {
 		if !activeKeys[key] {
@@ -221,7 +260,8 @@ func (t *Integration) prunePaneKeysLocked(activeKeys map[string]bool) {
 // SessionPathKey is the metadata key callers inject to pass session path.
 const SessionPathKey = "_session_path"
 
-// findSessionCache locates the sessionCache for a slug using metadata or exact match.
+// findSessionCache locates the sessionCache for a slug using metadata, exact match, or @hive-session tags.
+// Must be called with t.mu held (read or write).
 func (t *Integration) findSessionCache(slug string, metadata map[string]string) (string, *sessionCache) {
 	if name := metadata[session.MetaTmuxSession]; name != "" {
 		if sc, exists := t.cache[name]; exists {
@@ -230,6 +270,13 @@ func (t *Integration) findSessionCache(slug string, metadata map[string]string) 
 	}
 	if sc, exists := t.cache[slug]; exists {
 		return slug, sc
+	}
+	for sessionName, sc := range t.cache {
+		for _, pane := range sc.panes {
+			if pane.input.HiveSession == slug {
+				return sessionName, sc
+			}
+		}
 	}
 	return "", nil
 }
@@ -424,16 +471,10 @@ func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata 
 	return infos, nil
 }
 
-// DiscoverAllWindows delegates to DiscoverAllPanes for backward compatibility.
-func (t *Integration) DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error) {
-	return t.DiscoverAllPanes(ctx, slug, metadata)
-}
-
 func paneKey(sessionName, paneID string) string { return sessionName + ":" + paneID }
 
 // Ensure Integration implements terminal.Integration.
 var (
-	_ terminal.Integration          = (*Integration)(nil)
-	_ terminal.AllPanesDiscoverer   = (*Integration)(nil)
-	_ terminal.AllWindowsDiscoverer = (*Integration)(nil)
+	_ terminal.Integration        = (*Integration)(nil)
+	_ terminal.AllPanesDiscoverer = (*Integration)(nil)
 )

@@ -143,8 +143,6 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	var discErr error
 	if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
 		allInfos, discErr = disc.DiscoverAllPanes(ctx, sess.Slug, metadata)
-	} else if disc, ok := integration.(terminal.AllWindowsDiscoverer); ok {
-		allInfos, discErr = disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
 	}
 	if allInfos != nil || discErr != nil {
 		if discErr != nil {
@@ -178,6 +176,7 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 			IsAgent:     true,
 		}
 
+		// \x1f is an ASCII Unit Separator, which avoids collisions with printable tmux window names.
 		key := wi.WindowIndex + "\x1f" + wi.WindowName
 		idx, ok := byWindow[key]
 		if !ok {

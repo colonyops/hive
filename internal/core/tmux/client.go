@@ -155,7 +155,7 @@ func (c *Client) AttachOrSwitch(ctx context.Context, name string) error {
 }
 
 // OpenSession creates a session if it doesn't exist, or attaches to it.
-// If targetWindow is non-empty and the session already exists, select that window or pane.
+// If targetWindow is non-empty and the session already exists, select that legacy tmux target (window or pane).
 func (c *Client) OpenSession(ctx context.Context, name, workDir string, windows []RenderedWindow, background bool, targetWindow string) error {
 	if c.HasSession(ctx, name) {
 		if background {

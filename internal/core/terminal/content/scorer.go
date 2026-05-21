@@ -8,9 +8,10 @@ import (
 )
 
 const (
-	agentScoreThreshold      = 6
-	agentCategoriesThreshold = 3
-	unknownAgentTool         = "agent"
+	// AgentScoreThreshold requires at least two high-weight agent signals.
+	AgentScoreThreshold = 6
+	// AgentCategoriesThreshold guards against one repeated signal inflating the score.
+	AgentCategoriesThreshold = 3
 	shellTool                = "shell"
 )
 
@@ -31,7 +32,7 @@ type ScoreResult struct {
 
 // IsAgent reports whether the result meets the agent classification threshold.
 func (r ScoreResult) IsAgent() bool {
-	return r.Score >= agentScoreThreshold && r.Categories >= agentCategoriesThreshold
+	return r.Score >= AgentScoreThreshold && r.Categories >= AgentCategoriesThreshold
 }
 
 // Scorer evaluates terminal content for agent-like structural signals.

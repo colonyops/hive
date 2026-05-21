@@ -477,7 +477,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
 }
 
-// renderWindow renders a window sub-item nested under a session.
+// renderPane renders a pane sub-item nested under a window.
 func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 	var connector string
 	if item.IsLastPane {

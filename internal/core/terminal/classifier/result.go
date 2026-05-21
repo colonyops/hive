@@ -10,8 +10,6 @@ const (
 	ConfidenceHigh Confidence = "high"
 	// ConfidenceMedium indicates a moderate classification signal.
 	ConfidenceMedium Confidence = "medium"
-	// ConfidenceLow indicates a weak classification signal.
-	ConfidenceLow Confidence = "low"
 )
 
 // Result holds the classification output for a single pane.

@@ -18,9 +18,6 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/classifier"
-	"github.com/colonyops/hive/internal/core/terminal/content"
-	"github.com/colonyops/hive/internal/core/terminal/process"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -64,6 +61,9 @@ type pickItem struct {
 
 // DisplayName returns the display string for this item.
 func (p pickItem) DisplayName() string {
+	if p.PaneID != "" && p.WindowName != "" {
+		return p.Session.Name + "/" + p.WindowName + "/" + p.PaneID
+	}
 	if p.WindowName != "" {
 		return p.Session.Name + "/" + p.WindowName
 	}
@@ -453,8 +453,6 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 			var dErr error
 			if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
 				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata)
-			} else if disc, ok := integration.(terminal.AllWindowsDiscoverer); ok {
-				allInfos, dErr = disc.DiscoverAllWindows(ctx, item.Session.Slug, metadata)
 			} else {
 				statuses[item.Session.ID] = status
 				expanded = append(expanded, item)
@@ -562,9 +560,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
 			termMgr := terminal.NewManager([]string{"tmux"})
-			titlePatterns := classifier.TitlePatternsFromConfig(cmd.app.Config.Tmux.PreviewWindowMatcher)
-			cls := classifier.New(titlePatterns, process.OSReader{}, terminaltmux.TmuxCapture{}, content.NewScorer())
-			tmuxIntegration := terminaltmux.New(cls, terminaltmux.TmuxPaneLister{})
+			tmuxIntegration := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher)
 			if tmuxIntegration.Available() {
 				termMgr.Register(tmuxIntegration)
 			}
@@ -613,38 +609,54 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			}
 
 			slug := result.selected.Session.Slug
-			return switchTmux(slug, result.selected.WindowName)
+			target := result.selected.WindowIndex
+			if result.selected.PaneID != "" {
+				target = result.selected.PaneID
+			} else if target == "" {
+				target = result.selected.WindowName
+			}
+			return switchTmux(slug, target)
 		},
 	}
 }
 
 // switchTmux switches to or attaches the named tmux session.
-// If windowName is non-empty, it selects that window before attaching so the
-// correct window is visible on entry (attach-session blocks until detach, so
-// any post-attach select-window would never run outside tmux).
-func switchTmux(name string, windowName string) error {
-	target := name
-	if windowName != "" {
-		target = name + ":" + windowName
-	}
-
+// If target is non-empty, it selects that window name or pane ID before attaching
+// so the correct target is visible on entry (attach-session blocks until detach).
+func switchTmux(name string, target string) error {
 	if strings.TrimSpace(os.Getenv("TMUX")) != "" {
-		cmd := exec.Command("tmux", "switch-client", "-t", target)
+		cmd := exec.Command("tmux", "switch-client", "-t", name)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		selectTmuxTarget(name, target)
+		return nil
 	}
 
-	if windowName != "" {
-		// Select the window before attaching; attach-session blocks until detach.
-		cmd := exec.Command("tmux", "select-window", "-t", target)
-		_ = cmd.Run()
-	}
-
+	selectTmuxTarget(name, target)
 	cmd := exec.Command("tmux", "attach-session", "-t", name)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func selectTmuxTarget(sessionName, target string) {
+	if target == "" {
+		return
+	}
+	if strings.HasPrefix(target, "%") {
+		out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{session_name}:#{window_index}").Output()
+		if err == nil {
+			if windowTarget := strings.TrimSpace(string(out)); windowTarget != "" {
+				_ = exec.Command("tmux", "select-window", "-t", windowTarget).Run()
+			}
+		}
+		_ = exec.Command("tmux", "select-pane", "-t", target).Run()
+		return
+	}
+	_ = exec.Command("tmux", "select-window", "-t", sessionName+":"+target).Run()
 }

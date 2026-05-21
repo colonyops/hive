@@ -51,7 +51,7 @@ type Action struct {
 	SessionName   string // Session display name (for tmux actions)
 	SessionPath   string
 	SessionRemote string // Session remote URL (for tmux actions)
-	TmuxWindow    string // Target tmux window name (for tmux actions)
+	TmuxWindow    string // Legacy tmux target value: window name/index or pane ID (for tmux actions)
 	Silent        bool   // Skip loading popup for fast commands
 	Exit          bool   // Exit hive after command completes
 	Err           error  // Non-nil if action resolution failed (e.g., template error)
