@@ -22,22 +22,22 @@ const (
 
 func TestClassify_Tier1_TitleMatch(t *testing.T) {
 	tests := []struct {
-		name     string
-		titles   []classifier.TitlePattern
-		window   string
-		wantHit  bool
-		wantTool string
+		name      string
+		titles    []classifier.TitlePattern
+		paneTitle string
+		wantHit   bool
+		wantTool  string
 	}{
-		{name: "exact_match", titles: titlePatterns(testToolClaude, testToolClaude), window: testToolClaude, wantHit: true, wantTool: testToolClaude},
-		{name: "case_insensitive_match", titles: titlePatterns("(?i)claude", testToolClaude), window: "Claude Code", wantHit: true, wantTool: testToolClaude},
-		{name: "multiple_patterns", titles: append(titlePatterns(testToolCodex, testToolCodex), titlePattern(testToolGemini, testToolGemini)), window: testToolGemini, wantHit: true, wantTool: testToolGemini},
-		{name: "no_match_falls_through", titles: titlePatterns(testToolClaude, testToolClaude), window: testToolShell, wantHit: false},
+		{name: "exact_match", titles: titlePatterns(testToolClaude, testToolClaude), paneTitle: testToolClaude, wantHit: true, wantTool: testToolClaude},
+		{name: "case_insensitive_match", titles: titlePatterns("(?i)claude", testToolClaude), paneTitle: "Claude Code", wantHit: true, wantTool: testToolClaude},
+		{name: "multiple_patterns", titles: append(titlePatterns(testToolCodex, testToolCodex), titlePattern(testToolGemini, testToolGemini)), paneTitle: testToolGemini, wantHit: true, wantTool: testToolGemini},
+		{name: "no_match_falls_through", titles: titlePatterns(testToolClaude, testToolClaude), paneTitle: testToolShell, wantHit: false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := &fakeReader{}
 			cls := classifier.New(tt.titles, reader, nil, nil)
-			got := cls.Classify(context.Background(), classifier.PaneInput{WindowName: tt.window, PanePID: 0})
+			got := cls.Classify(context.Background(), classifier.PaneInput{PaneTitle: tt.paneTitle, PanePID: 0})
 			assertClassifiedAt(t, got)
 			assert.Equal(t, tt.wantHit, got.IsAgent)
 			if tt.wantHit {
@@ -50,6 +50,13 @@ func TestClassify_Tier1_TitleMatch(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestClassify_Tier1_DoesNotMatchWindowName(t *testing.T) {
+	cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil)
+	got := cls.Classify(context.Background(), classifier.PaneInput{WindowName: testToolClaude, PaneTitle: testToolShell})
+	assert.False(t, got.IsAgent)
+	assert.Equal(t, 0, got.Tier)
 }
 
 func TestClassify_Tier2_ProcessTree(t *testing.T) {
@@ -178,7 +185,7 @@ func TestClassify_CascadeOrder(t *testing.T) {
 		capture := &fakeCapture{content: testToolAgent}
 		scorer := &fakeScorer{score: 6, categories: 3}
 		cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), reader, capture, scorer)
-		got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100, WindowName: testToolClaude})
+		got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100, PaneTitle: testToolClaude})
 		assert.True(t, got.IsAgent)
 		assert.Equal(t, 1, got.Tier)
 		assert.Zero(t, reader.tpgidCalls)
@@ -217,7 +224,7 @@ func TestClassify_ConfidenceLevels(t *testing.T) {
 		input classifier.PaneInput
 		want  classifier.Confidence
 	}{
-		{name: "tier1_high", cls: classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil), input: classifier.PaneInput{WindowName: testToolClaude}, want: classifier.ConfidenceHigh},
+		{name: "tier1_high", cls: classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil), input: classifier.PaneInput{PaneTitle: testToolClaude}, want: classifier.ConfidenceHigh},
 		{name: "tier2_high", cls: classifier.New(nil, processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}}), nil, nil), input: classifier.PaneInput{PanePID: 100}, want: classifier.ConfidenceHigh},
 		{name: "tier3_medium", cls: classifier.New(nil, shellReader(), &fakeCapture{content: testToolAgent}, &fakeScorer{score: 6, categories: 3}), input: classifier.PaneInput{PaneID: "%1", PanePID: 100}, want: classifier.ConfidenceMedium},
 	}
@@ -235,6 +242,7 @@ func TestTitlePatternsFromConfig(t *testing.T) {
 	require.Len(t, patterns, 2)
 	assert.Equal(t, testToolClaude, patterns[0].Tool)
 	assert.True(t, patterns[0].Pattern.MatchString("Claude"))
+	assert.True(t, patterns[1].Pattern.MatchString("WORKER"))
 	assert.Equal(t, testToolAgent, patterns[1].Tool)
 }
 

@@ -14,7 +14,7 @@ var knownTools = []string{"claude", "gemini", "aider", "codex", "cursor", "openc
 func TitlePatternsFromConfig(patterns []string) []TitlePattern {
 	out := make([]TitlePattern, 0, len(patterns))
 	for _, pattern := range patterns {
-		compiled, err := regexp.Compile(pattern)
+		compiled, err := regexp.Compile("(?i)" + pattern)
 		if err != nil {
 			log.Warn().Err(err).Str("pattern", pattern).Msg("skipping invalid terminal title pattern")
 			continue

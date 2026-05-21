@@ -128,9 +128,15 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
 
-	// Discover all windows if the integration supports it.
-	if disc, ok := integration.(terminal.AllWindowsDiscoverer); ok {
-		allInfos, discErr := disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
+	// Discover all panes/windows if the integration supports it.
+	var allInfos []*terminal.SessionInfo
+	var discErr error
+	if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
+		allInfos, discErr = disc.DiscoverAllPanes(ctx, sess.Slug, metadata)
+	} else if disc, ok := integration.(terminal.AllWindowsDiscoverer); ok {
+		allInfos, discErr = disc.DiscoverAllWindows(ctx, sess.Slug, metadata)
+	}
+	if allInfos != nil || discErr != nil {
 		if discErr != nil {
 			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
 		} else if len(allInfos) > 1 {

@@ -44,6 +44,11 @@ type Integration interface {
 	GetStatus(ctx context.Context, info *SessionInfo) (Status, error)
 }
 
+// AllPanesDiscoverer is implemented by integrations that can return all agent panes.
+type AllPanesDiscoverer interface {
+	DiscoverAllPanes(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
+}
+
 // AllWindowsDiscoverer is implemented by integrations that can return all windows.
 type AllWindowsDiscoverer interface {
 	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)

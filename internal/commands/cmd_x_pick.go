@@ -18,6 +18,8 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/classifier"
+	"github.com/colonyops/hive/internal/core/terminal/process"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/core/tmux"
 	"github.com/colonyops/hive/pkg/iojson"
@@ -54,6 +56,7 @@ type pickItem struct {
 	Session     session.Session
 	WindowName  string // non-empty = window row (Phase 3)
 	WindowIndex string // tmux window index (Phase 3)
+	PaneID      string // tmux pane ID for pane rows
 	IsRecent    bool   // Phase 4
 	IsCurrent   bool   // current tmux session
 }
@@ -69,6 +72,9 @@ func (p pickItem) DisplayName() string {
 // statusKey returns the map key used for status lookups.
 // Window items use "sessionID/windowIndex", others use "sessionID".
 func (p pickItem) statusKey() string {
+	if p.PaneID != "" {
+		return p.Session.ID + "/" + p.PaneID
+	}
 	if p.WindowIndex != "" {
 		return p.Session.ID + "/" + p.WindowIndex
 	}
@@ -417,7 +423,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 
 		for _, item := range items {
 			// Skip window sub-items; we only expand from base session items
-			if item.WindowIndex != "" {
+			if item.WindowIndex != "" || item.PaneID != "" {
 				continue
 			}
 
@@ -441,15 +447,19 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 				status = terminal.StatusMissing
 			}
 
-			// Try multi-window expansion
-			disc, ok := integration.(terminal.AllWindowsDiscoverer)
-			if !ok {
+			// Try multi-pane expansion.
+			var allInfos []*terminal.SessionInfo
+			var dErr error
+			if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
+				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata)
+			} else if disc, ok := integration.(terminal.AllWindowsDiscoverer); ok {
+				allInfos, dErr = disc.DiscoverAllWindows(ctx, item.Session.Slug, metadata)
+			} else {
 				statuses[item.Session.ID] = status
 				expanded = append(expanded, item)
 				continue
 			}
 
-			allInfos, dErr := disc.DiscoverAllWindows(ctx, item.Session.Slug, metadata)
 			if dErr != nil || len(allInfos) <= 1 {
 				// Single window or error — keep as single item
 				statuses[item.Session.ID] = status
@@ -457,7 +467,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 				continue
 			}
 
-			// Multi-window: expand into individual window rows
+			// Multi-pane/window: expand into individual rows
 			for _, wi := range allInfos {
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
@@ -468,6 +478,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 					Session:     item.Session,
 					WindowName:  wi.WindowName,
 					WindowIndex: wi.WindowIndex,
+					PaneID:      wi.PaneID,
 					IsCurrent:   item.IsCurrent,
 					IsRecent:    item.IsRecent,
 				}
@@ -550,7 +561,9 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
 			termMgr := terminal.NewManager([]string{"tmux"})
-			tmuxIntegration := terminaltmux.New(cmd.app.Config.Tmux.PreviewWindowMatcher)
+			titlePatterns := classifier.TitlePatternsFromConfig(cmd.app.Config.Tmux.PreviewWindowMatcher)
+			cls := classifier.New(titlePatterns, process.OSReader{}, terminaltmux.TmuxCapture{}, nil)
+			tmuxIntegration := terminaltmux.New(cls, terminaltmux.TmuxPaneLister{})
 			if tmuxIntegration.Available() {
 				termMgr.Register(tmuxIntegration)
 			}

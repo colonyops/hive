@@ -34,10 +34,12 @@ type TitlePattern struct {
 
 // PaneInput holds the raw data for one pane from tmux list-panes.
 type PaneInput struct {
+	SessionName string
 	PaneID      string
 	PanePID     int64
 	WindowIndex string
 	WindowName  string
+	PaneTitle   string
 	WorkDir     string
 	Activity    int64
 }
@@ -66,7 +68,7 @@ func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCap
 // Classify runs the 3-tier cascade on a single pane.
 func (c *Classifier) Classify(ctx context.Context, input PaneInput) Result {
 	classifiedAt := time.Now()
-	if tool, ok := c.classifyTitle(input.WindowName); ok {
+	if tool, ok := c.classifyTitle(input.PaneTitle); ok {
 		return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceHigh, Tier: tierTitle, ClassifiedAt: classifiedAt}
 	}
 	if tool, ok := c.classifyProcess(input.PanePID); ok {
@@ -78,9 +80,9 @@ func (c *Classifier) Classify(ctx context.Context, input PaneInput) Result {
 	return Result{Tier: tierNone, ClassifiedAt: classifiedAt}
 }
 
-func (c *Classifier) classifyTitle(windowName string) (tool string, ok bool) {
+func (c *Classifier) classifyTitle(paneTitle string) (tool string, ok bool) {
 	for _, title := range c.titlePatterns {
-		if title.Pattern == nil || !title.Pattern.MatchString(windowName) {
+		if title.Pattern == nil || !title.Pattern.MatchString(paneTitle) {
 			continue
 		}
 		if title.Tool == "" {
