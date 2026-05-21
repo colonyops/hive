@@ -357,6 +357,11 @@ func TestDetectTool(t *testing.T) {
 			want:    "gemini",
 		},
 		{
+			name:    "aider version header",
+			content: "Aider v0.80.0\n\n> ",
+			want:    "aider",
+		},
+		{
 			name:    "opencode keyword",
 			content: "OpenCode v1.0",
 			want:    "opencode",
@@ -380,6 +385,11 @@ func TestDetectTool(t *testing.T) {
 			name:    "agent keyword",
 			content: "Starting Agent session",
 			want:    "agent",
+		},
+		{
+			name:    "aider word without version is not enough",
+			content: "grep aider README.md",
+			want:    "shell",
 		},
 		{
 			name:    "unknown - defaults to shell",

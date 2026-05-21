@@ -19,6 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
+	"github.com/colonyops/hive/internal/core/terminal/content"
 	"github.com/colonyops/hive/internal/core/terminal/process"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/core/tmux"
@@ -562,7 +563,7 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
 			termMgr := terminal.NewManager([]string{"tmux"})
 			titlePatterns := classifier.TitlePatternsFromConfig(cmd.app.Config.Tmux.PreviewWindowMatcher)
-			cls := classifier.New(titlePatterns, process.OSReader{}, terminaltmux.TmuxCapture{}, nil)
+			cls := classifier.New(titlePatterns, process.OSReader{}, terminaltmux.TmuxCapture{}, content.NewScorer())
 			tmuxIntegration := terminaltmux.New(cls, terminaltmux.TmuxPaneLister{})
 			if tmuxIntegration.Available() {
 				termMgr.Register(tmuxIntegration)

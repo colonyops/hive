@@ -1,0 +1,7 @@
+Claude Code
+
+Bash(go test ./...)
+● Needs permission
+Would you like to run the following command?
+❯ Yes, allow once
+  No, and tell Claude what to do differently

@@ -1,0 +1,5 @@
+Python 3.12.1 (main, Jan  1 2026, 00:00:00) [Clang]
+Type "help", "copyright", "credits" or "license" for more information.
+>>> print("hello")
+hello
+>>> 

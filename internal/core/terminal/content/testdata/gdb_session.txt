@@ -1,0 +1,5 @@
+GNU gdb (GDB) 15.1
+Reading symbols from ./app...
+(gdb) break main
+Breakpoint 1 at 0x1000
+(gdb) run

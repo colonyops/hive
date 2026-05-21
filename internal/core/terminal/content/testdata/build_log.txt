@@ -1,0 +1,5 @@
+=== RUN   TestScorer
+--- PASS: TestScorer (0.00s)
+PASS
+ok  	github.com/colonyops/hive/internal/core/terminal/content	0.123s
+--- PASS: TestOther (0.00s)

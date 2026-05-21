@@ -1,0 +1,4 @@
+user@host:~/project$ ls
+README.md go.mod internal
+user@host:~/project$ grep claude README.md
+user@host:~/project$ 
