@@ -44,9 +44,11 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 4) // new-session + 2 set-hook + select-window
+		// new-session + set-option (pane tag) + 2 set-hook + select-window
+		require.Len(t, rec.Commands, 5)
 		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess", "@hive-session", "sess"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[4].Args)
 	})
 
 	t.Run("two windows", func(t *testing.T) {
@@ -59,10 +61,12 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 5) // new-session + 2 set-hook + new-window + select-window
+		// new-session + set-option + 2 set-hook + new-window + set-option + select-window
+		require.Len(t, rec.Commands, 7)
 		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "shell", "-c", "/work"}, rec.Commands[3].Args)
-		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[4].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "shell", "-c", "/work"}, rec.Commands[4].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:shell", "@hive-session", "sess"}, rec.Commands[5].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[6].Args)
 	})
 
 	t.Run("three windows with dir override", func(t *testing.T) {
@@ -76,9 +80,10 @@ func TestClient_CreateSession(t *testing.T) {
 		}, true)
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 6) // new-session + 2 set-hook + 2*new-window + select-window
-		// Third window (index 4) uses custom dir
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "logs", "-c", "/var/log", "--", "sh", "-c", "tail -f /var/log/app.log"}, rec.Commands[4].Args)
+		// new-session + set-option + 2 set-hook + 2*(new-window + set-option) + select-window
+		require.Len(t, rec.Commands, 9)
+		// Third window (index 6) uses custom dir: new-window for "shell" is index 4, "logs" is index 6
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "logs", "-c", "/var/log", "--", "sh", "-c", "tail -f /var/log/app.log"}, rec.Commands[6].Args)
 	})
 
 	t.Run("focus second window", func(t *testing.T) {
@@ -223,6 +228,49 @@ func TestClient_OpenSession(t *testing.T) {
 		assert.Equal(t, []string{"attach-session", "-t", "sess"}, rec.Commands[2].Args)
 	})
 
+	t.Run("session exists with target pane", func(t *testing.T) {
+		orig := insideTmux
+		insideTmux = func() bool { return false }
+		defer func() { insideTmux = orig }()
+
+		rec := &executil.RecordingExecutor{Outputs: map[string][]byte{"tmux": []byte("sess:2\n")}}
+		c := New(rec, nopLog)
+
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Focus: true},
+		}, false, "%7")
+		require.NoError(t, err)
+
+		// has-session, resolve pane window, select-window, select-pane, attach
+		require.Len(t, rec.Commands, 5)
+		assert.Equal(t, []string{"has-session", "-t", "sess"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"display-message", "-p", "-t", "%7", "#{session_name}:#{window_index}"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:2"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"select-pane", "-t", "%7"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"attach-session", "-t", "sess"}, rec.Commands[4].Args)
+	})
+
+	t.Run("session exists with target pane inside tmux switches then selects", func(t *testing.T) {
+		orig := insideTmux
+		insideTmux = func() bool { return true }
+		defer func() { insideTmux = orig }()
+
+		rec := &executil.RecordingExecutor{Outputs: map[string][]byte{"tmux": []byte("sess:2\n")}}
+		c := New(rec, nopLog)
+
+		err := c.OpenSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{Name: "agent", Focus: true},
+		}, false, "%7")
+		require.NoError(t, err)
+
+		require.Len(t, rec.Commands, 5)
+		assert.Equal(t, []string{"has-session", "-t", "sess"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"switch-client", "-t", "sess"}, rec.Commands[1].Args)
+		assert.Equal(t, []string{"display-message", "-p", "-t", "%7", "#{session_name}:#{window_index}"}, rec.Commands[2].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:2"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"select-pane", "-t", "%7"}, rec.Commands[4].Args)
+	})
+
 	t.Run("session exists background is noop", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
 		c := New(rec, nopLog)
@@ -268,9 +316,12 @@ func TestClient_AddWindows(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 4) // 2 set-hook + 2 new-window
+		// 2 set-hook + 2*(new-window + set-option)
+		require.Len(t, rec.Commands, 6)
 		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w1", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[2].Args)
-		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-c", "/work"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:w1", "@hive-session", "sess"}, rec.Commands[3].Args)
+		assert.Equal(t, []string{"new-window", "-t", "sess", "-n", "w2", "-c", "/work"}, rec.Commands[4].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:w2", "@hive-session", "sess"}, rec.Commands[5].Args)
 	})
 
 	t.Run("selects focused window", func(t *testing.T) {
@@ -283,9 +334,9 @@ func TestClient_AddWindows(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		// 2 set-hook + 2 new-window + 1 select-window
-		require.Len(t, rec.Commands, 5)
-		assert.Equal(t, []string{"select-window", "-t", "sess:w2"}, rec.Commands[4].Args)
+		// 2 set-hook + 2*(new-window + set-option) + 1 select-window
+		require.Len(t, rec.Commands, 7)
+		assert.Equal(t, []string{"select-window", "-t", "sess:w2"}, rec.Commands[6].Args)
 	})
 
 	t.Run("window dir overrides session dir", func(t *testing.T) {
@@ -297,7 +348,8 @@ func TestClient_AddWindows(t *testing.T) {
 		})
 		require.NoError(t, err)
 
-		require.Len(t, rec.Commands, 3) // 2 set-hook + 1 new-window
+		// 2 set-hook + 1 new-window + 1 set-option
+		require.Len(t, rec.Commands, 4)
 		assert.Contains(t, rec.Commands[2].Args, "/custom")
 	})
 }

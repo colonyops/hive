@@ -381,7 +381,7 @@ func (m Model) quit() (Model, tea.Cmd) {
 
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.spinner.Tick}
+	var cmds []tea.Cmd
 	if m.bus != nil {
 		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
 	}
@@ -883,6 +883,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if !action.Silent {
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
+		return m, tea.Batch(m.spinner.Tick, m.executeAction(action))
 	}
 	return m, m.executeAction(action)
 }
@@ -1021,10 +1022,10 @@ func (m Model) showHiveDoctor() (tea.Model, tea.Cmd) {
 	m.state = stateLoading
 	m.loadingMessage = "Running health checks..."
 
-	return m, func() tea.Msg {
+	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
 		results := m.doctorService.RunChecks(context.Background(), m.configPath, false)
 		return doctorResultsMsg{results: results}
-	}
+	})
 }
 
 func (m Model) handleDoctorResults(msg doctorResultsMsg) (tea.Model, tea.Cmd) {
@@ -1202,11 +1203,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m, nil
 		}
 
-		// If a window sub-item is selected, override TmuxWindow for template rendering
-		if ti := m.selectedTreeItem(); ti != nil && ti.IsWindowItem {
-			m.handler.SetSelectedWindow(ti.WindowName)
+		// If a pane/window sub-item is selected, override the tmux target for template rendering.
+		if ti := m.selectedTreeItem(); ti != nil && ti.IsPaneItem {
+			m.handler.SetSelectedTarget(ti.PaneID)
+		} else if ti := m.selectedTreeItem(); ti != nil && ti.IsWindowItem {
+			m.handler.SetSelectedTarget(ti.WindowIndex)
 		} else {
-			m.handler.SetSelectedWindow("")
+			m.handler.SetSelectedTarget("")
 		}
 
 		// Resolve the user command to an Action

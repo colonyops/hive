@@ -280,6 +280,13 @@ func (d *Detector) DetectStatus(content string) Status {
 
 // DetectTool attempts to identify the AI tool from terminal content.
 func DetectTool(content string) string {
+	if looksLikeAiderContent(content) {
+		return "aider"
+	}
+	if looksLikePiContent(content) {
+		return "pi"
+	}
+
 	lower := strings.ToLower(content)
 
 	patterns := map[string][]string{
@@ -320,6 +327,32 @@ func DetectTool(content string) string {
 	}
 
 	return "shell"
+}
+
+func looksLikeAiderContent(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		fields := strings.Fields(strings.TrimSpace(line))
+		if len(fields) == 0 {
+			continue
+		}
+		if len(fields) < 2 || !strings.EqualFold(fields[0], "Aider") {
+			return false
+		}
+		version := strings.TrimPrefix(strings.ToLower(fields[1]), "v")
+		return version != "" && version[0] >= '0' && version[0] <= '9'
+	}
+	return false
+}
+
+func looksLikePiContent(content string) bool {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if trimmed == "" {
+			continue
+		}
+		return strings.HasPrefix(trimmed, "π - ") || strings.EqualFold(trimmed, "pi") || strings.HasPrefix(strings.ToLower(trimmed), "pi ")
+	}
+	return false
 }
 
 // getLastNonEmptyLines returns the last n non-empty lines from content.

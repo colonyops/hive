@@ -18,6 +18,7 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 		{IsWindowItem: true, ParentSession: sessA, WindowName: "aider", WindowIndex: "1", RepoPrefix: "repo1"},
 		{Session: sessB, RepoPrefix: "repo1"},
 		{IsRecycledPlaceholder: true, RepoPrefix: "repo1", RecycledCount: 2},
+		{IsPaneItem: true, ParentSession: sessA, ParentWindow: "0", PaneID: "%7", RepoPrefix: "repo1"},
 	}
 
 	tests := []struct {
@@ -94,6 +95,18 @@ func TestTreeSelection_SaveRestore(t *testing.T) {
 			selIdx:    5,
 			wantIdx:   5,
 			wantMatch: "recycled repo1",
+		},
+		{
+			name:   "pane by ID restores before parent window",
+			selIdx: 6,
+			newItems: []TreeItem{
+				{IsHeader: true, RepoName: "repo1"},
+				{Session: sessA, RepoPrefix: "repo1"},
+				{IsWindowItem: true, ParentSession: sessA, WindowName: "claude", WindowIndex: "0", RepoPrefix: "repo1"},
+				{IsPaneItem: true, ParentSession: sessA, ParentWindow: "0", PaneID: "%7", RepoPrefix: "repo1"},
+			},
+			wantIdx:   3,
+			wantMatch: "pane ID",
 		},
 		{
 			name:   "recycled placeholder after count change",

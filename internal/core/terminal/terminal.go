@@ -16,7 +16,8 @@ const (
 // SessionInfo holds information about a discovered terminal session.
 type SessionInfo struct {
 	Name         string // terminal session name (e.g., tmux session name)
-	Pane         string // pane identifier if applicable (window index for tmux)
+	WindowIndex  string // tmux window index (e.g., "0", "1")
+	PaneID       string // tmux pane ID in %N format
 	WindowName   string // window name (for display and template data)
 	Status       Status // current detected status
 	DetectedTool string // detected AI tool (claude, gemini, etc.)
@@ -43,7 +44,7 @@ type Integration interface {
 	GetStatus(ctx context.Context, info *SessionInfo) (Status, error)
 }
 
-// AllWindowsDiscoverer is implemented by integrations that can return all windows.
-type AllWindowsDiscoverer interface {
-	DiscoverAllWindows(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
+// AllPanesDiscoverer is implemented by integrations that can return all agent panes.
+type AllPanesDiscoverer interface {
+	DiscoverAllPanes(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
 }

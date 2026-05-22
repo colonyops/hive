@@ -22,8 +22,8 @@ type KeyResolver interface {
 	// ResolveFormCommand checks if a key maps to a user command with form fields.
 	ResolveFormCommand(key string, sess session.Session) (string, config.UserCommand, bool)
 
-	// SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
-	SetSelectedWindow(windowIndex string)
+	// SetSelectedTarget overrides the TmuxWindow template value with a window target or pane ID.
+	SetSelectedTarget(target string)
 
 	// HelpEntries returns formatted help strings for current view keybindings.
 	HelpEntries() []string

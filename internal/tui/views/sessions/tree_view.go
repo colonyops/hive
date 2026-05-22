@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image/color"
 	"io"
+	"strings"
 
 	"charm.land/bubbles/v2/list"
 	tea "charm.land/bubbletea/v2"
@@ -129,12 +130,20 @@ type TreeItem struct {
 	WindowName    string
 	ParentSession session.Session // Session this window belongs to
 	IsLastWindow  bool            // For └─ vs ├─ rendering within the window group
+
+	// Pane sub-item fields (only used when IsPaneItem is true)
+	IsPaneItem   bool
+	PaneID       string
+	PaneTool     string
+	PaneStatus   terminal.Status
+	ParentWindow string
+	IsLastPane   bool
 }
 
 // IsSession returns true when this item represents a regular session (not a
-// header, recycled placeholder, or window sub-item).
+// header, recycled placeholder, window sub-item, or pane sub-item).
 func (i TreeItem) IsSession() bool {
-	return !i.IsHeader && !i.IsRecycledPlaceholder && !i.IsWindowItem
+	return !i.IsHeader && !i.IsRecycledPlaceholder && !i.IsWindowItem && !i.IsPaneItem
 }
 
 // FilterValue returns the value used for filtering.
@@ -147,6 +156,9 @@ func (i TreeItem) FilterValue() string {
 	}
 	if i.IsRecycledPlaceholder {
 		return i.RepoPrefix + " recycled"
+	}
+	if i.IsPaneItem {
+		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.ParentWindow + " " + i.PaneID + " " + i.PaneTool
 	}
 	if i.IsWindowItem {
 		return i.RepoPrefix + " " + i.ParentSession.Name + " " + i.WindowName
@@ -325,6 +337,8 @@ func (d TreeDelegate) Render(w io.Writer, m list.Model, index int, item list.Ite
 		line = d.renderHeader(treeItem, isSelected, m, index)
 	case treeItem.IsRecycledPlaceholder:
 		line = d.renderRecycledPlaceholder(treeItem, isSelected)
+	case treeItem.IsPaneItem:
+		line = d.renderPane(treeItem, isSelected)
 	case treeItem.IsWindowItem:
 		line = d.renderWindow(treeItem, isSelected)
 	default:
@@ -463,7 +477,47 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
 }
 
-// renderWindow renders a window sub-item nested under a session.
+// renderPane renders a pane sub-item nested under a window.
+func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
+	var connector string
+	if item.IsLastPane {
+		connector = treeLast
+	} else {
+		connector = treeBranch
+	}
+
+	var parentLine string
+	if item.IsLastInRepo {
+		parentLine = "        "
+	} else {
+		parentLine = "│       "
+	}
+	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+
+	termStatus := &TerminalStatus{Status: item.PaneStatus}
+	statusStr := renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+
+	nameStyle := d.Styles.SessionName
+	if isSelected {
+		nameStyle = d.Styles.Selected
+	}
+
+	paneID := styles.TextMutedStyle.Render(displayPaneID(item.PaneID))
+	name := paneID
+	if item.PaneTool != "" {
+		name += " " + nameStyle.Render(item.PaneTool)
+	}
+
+	return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, name)
+}
+
+func displayPaneID(paneID string) string {
+	if strings.HasPrefix(paneID, "%") {
+		return "#" + strings.TrimPrefix(paneID, "%")
+	}
+	return paneID
+}
+
 func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	// Deeper indent: "│     ├─" or "│     └─" depending on position
 	var connector string

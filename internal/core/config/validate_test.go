@@ -1215,6 +1215,15 @@ func TestApplyDefaults_AgentsPreserved(t *testing.T) {
 	assert.NotContains(t, cfg.Agents.Profiles, "claude")
 }
 
+func TestApplyDefaults_PreviewWindowMatcherExcludesPi(t *testing.T) {
+	cfg := DefaultConfig()
+	cfg.DataDir = t.TempDir()
+	cfg.applyDefaults()
+
+	assert.NotContains(t, cfg.Tmux.PreviewWindowMatcher, "\\bpi\\b")
+	assert.NotContains(t, cfg.Tmux.PreviewWindowMatcher, "π")
+}
+
 func TestDefaultWindows(t *testing.T) {
 	windows := DefaultWindows()
 	require.Len(t, windows, 2)

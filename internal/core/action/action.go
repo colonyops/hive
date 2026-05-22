@@ -51,10 +51,13 @@ type Action struct {
 	SessionName   string // Session display name (for tmux actions)
 	SessionPath   string
 	SessionRemote string // Session remote URL (for tmux actions)
-	TmuxWindow    string // Target tmux window name (for tmux actions)
-	Silent        bool   // Skip loading popup for fast commands
-	Exit          bool   // Exit hive after command completes
-	Err           error  // Non-nil if action resolution failed (e.g., template error)
+	// TmuxWindow carries the resolved tmux target (window name/index or pane ID)
+	// for TmuxOpen and TmuxStart actions. The name predates pane-level targeting;
+	// SpawnWindowsPayload.TmuxTarget is preferred for new spawn actions.
+	TmuxWindow string
+	Silent     bool  // Skip loading popup for fast commands
+	Exit       bool  // Exit hive after command completes
+	Err        error // Non-nil if action resolution failed (e.g., template error)
 }
 
 // NeedsConfirm returns true if the action requires user confirmation.

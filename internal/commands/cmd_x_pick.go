@@ -52,14 +52,18 @@ func loadRecents(ctx context.Context, kvStore kv.KV) map[string]time.Time {
 // pickItem represents a selectable item in the session picker.
 type pickItem struct {
 	Session     session.Session
-	WindowName  string // non-empty = window row (Phase 3)
-	WindowIndex string // tmux window index (Phase 3)
+	WindowName  string // tmux window name for window or pane rows
+	WindowIndex string // tmux window index for window or pane rows
+	PaneID      string // tmux pane ID for pane rows
 	IsRecent    bool   // Phase 4
 	IsCurrent   bool   // current tmux session
 }
 
 // DisplayName returns the display string for this item.
 func (p pickItem) DisplayName() string {
+	if p.PaneID != "" && p.WindowName != "" {
+		return p.Session.Name + "/" + p.WindowName + "/" + p.PaneID
+	}
 	if p.WindowName != "" {
 		return p.Session.Name + "/" + p.WindowName
 	}
@@ -67,8 +71,12 @@ func (p pickItem) DisplayName() string {
 }
 
 // statusKey returns the map key used for status lookups.
-// Window items use "sessionID/windowIndex", others use "sessionID".
+// Pane items use "sessionID/paneID", window items use "sessionID/windowIndex",
+// and session items use "sessionID".
 func (p pickItem) statusKey() string {
+	if p.PaneID != "" {
+		return p.Session.ID + "/" + p.PaneID
+	}
 	if p.WindowIndex != "" {
 		return p.Session.ID + "/" + p.WindowIndex
 	}
@@ -88,7 +96,7 @@ type statusRefreshMsg struct {
 type pickModel struct {
 	input        textinput.Model
 	baseItems    []pickItem // original per-session items, used for polling
-	items        []pickItem // display items (may include expanded window sub-items)
+	items        []pickItem // display items (may include expanded terminal sub-items)
 	filtered     []pickItem
 	cursor       int
 	selected     *pickItem
@@ -403,7 +411,7 @@ func tickCmd(d time.Duration) tea.Cmd {
 }
 
 // refreshStatusCmd returns a command that refreshes terminal statuses for all items.
-// It also expands multi-window sessions into individual window rows.
+// It also expands multi-pane and multi-window sessions into terminal sub-items.
 func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 	return func() tea.Msg {
 		if mgr == nil || !mgr.HasEnabledIntegrations() {
@@ -416,8 +424,8 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 		ctx := context.Background()
 
 		for _, item := range items {
-			// Skip window sub-items; we only expand from base session items
-			if item.WindowIndex != "" {
+			// Skip terminal sub-items; we only expand from base session items.
+			if item.WindowIndex != "" || item.PaneID != "" {
 				continue
 			}
 
@@ -425,7 +433,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 			if item.Session.Path != "" {
 				metadata = make(map[string]string, len(item.Session.Metadata)+1)
 				maps.Copy(metadata, item.Session.Metadata)
-				metadata["_session_path"] = item.Session.Path
+				metadata[terminaltmux.SessionPathKey] = item.Session.Path
 			}
 
 			info, integration, err := mgr.DiscoverSession(ctx, item.Session.Slug, metadata)
@@ -441,15 +449,17 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 				status = terminal.StatusMissing
 			}
 
-			// Try multi-window expansion
-			disc, ok := integration.(terminal.AllWindowsDiscoverer)
-			if !ok {
+			// Try multi-pane expansion.
+			var allInfos []*terminal.SessionInfo
+			var dErr error
+			if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
+				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata)
+			} else {
 				statuses[item.Session.ID] = status
 				expanded = append(expanded, item)
 				continue
 			}
 
-			allInfos, dErr := disc.DiscoverAllWindows(ctx, item.Session.Slug, metadata)
 			if dErr != nil || len(allInfos) <= 1 {
 				// Single window or error — keep as single item
 				statuses[item.Session.ID] = status
@@ -457,7 +467,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 				continue
 			}
 
-			// Multi-window: expand into individual window rows
+			// Multi-pane/window: expand into individual rows
 			for _, wi := range allInfos {
 				wStatus, wErr := integration.GetStatus(ctx, wi)
 				if wErr != nil {
@@ -467,7 +477,8 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 				windowItem := pickItem{
 					Session:     item.Session,
 					WindowName:  wi.WindowName,
-					WindowIndex: wi.Pane,
+					WindowIndex: wi.WindowIndex,
+					PaneID:      wi.PaneID,
 					IsCurrent:   item.IsCurrent,
 					IsRecent:    item.IsRecent,
 				}
@@ -550,16 +561,15 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
 			termMgr := terminal.NewManager([]string{"tmux"})
-			tmuxIntegration := terminaltmux.New(cmd.app.Config.Tmux.PreviewWindowMatcher)
+			tmuxIntegration := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher)
 			if tmuxIntegration.Available() {
 				termMgr.Register(tmuxIntegration)
 			}
 
 			// Pre-fetch statuses synchronously so the first render has data.
 			// Keep baseItems as the original per-session slice; refreshStatusCmd
-			// uses these as polling inputs and must not receive window sub-items
-			// (it skips them, causing multi-window sessions to vanish after the
-			// first tick).
+			// uses these as polling inputs and must not receive terminal sub-items
+			// (it skips them, causing expanded sessions to vanish after the first tick).
 			baseItems := items
 			initialRefresh := refreshStatusCmd(termMgr, baseItems)().(statusRefreshMsg)
 			displayItems := baseItems
@@ -599,38 +609,55 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 			}
 
 			slug := result.selected.Session.Slug
-			return switchTmux(slug, result.selected.WindowName)
+			target := result.selected.WindowIndex
+			if result.selected.PaneID != "" {
+				target = result.selected.PaneID
+			} else if target == "" {
+				target = result.selected.WindowName
+			}
+			return switchTmux(slug, target)
 		},
 	}
 }
 
 // switchTmux switches to or attaches the named tmux session.
-// If windowName is non-empty, it selects that window before attaching so the
-// correct window is visible on entry (attach-session blocks until detach, so
-// any post-attach select-window would never run outside tmux).
-func switchTmux(name string, windowName string) error {
-	target := name
-	if windowName != "" {
-		target = name + ":" + windowName
-	}
-
+// If target is non-empty, it selects that window name or pane ID before attaching
+// so the correct target is visible on entry (attach-session blocks until detach).
+func switchTmux(name string, target string) error {
 	if strings.TrimSpace(os.Getenv("TMUX")) != "" {
-		cmd := exec.Command("tmux", "switch-client", "-t", target)
+		cmd := exec.Command("tmux", "switch-client", "-t", name)
 		cmd.Stdin = os.Stdin
 		cmd.Stdout = os.Stdout
 		cmd.Stderr = os.Stderr
-		return cmd.Run()
+		if err := cmd.Run(); err != nil {
+			return err
+		}
+		selectTmuxTarget(name, target)
+		return nil
 	}
 
-	if windowName != "" {
-		// Select the window before attaching; attach-session blocks until detach.
-		cmd := exec.Command("tmux", "select-window", "-t", target)
-		_ = cmd.Run()
-	}
-
+	selectTmuxTarget(name, target)
 	cmd := exec.Command("tmux", "attach-session", "-t", name)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	return cmd.Run()
+}
+
+func selectTmuxTarget(sessionName, target string) {
+	if target == "" {
+		return
+	}
+	// Best-effort: the target may have been renamed or closed since the picker opened.
+	if strings.HasPrefix(target, "%") {
+		out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{session_name}:#{window_index}").Output()
+		if err == nil {
+			if windowTarget := strings.TrimSpace(string(out)); windowTarget != "" {
+				_ = exec.Command("tmux", "select-window", "-t", windowTarget).Run()
+			}
+		}
+		_ = exec.Command("tmux", "select-pane", "-t", target).Run()
+		return
+	}
+	_ = exec.Command("tmux", "select-window", "-t", sessionName+":"+target).Run()
 }

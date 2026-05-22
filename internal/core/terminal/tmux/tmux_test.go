@@ -2,392 +2,529 @@ package tmux
 
 import (
 	"context"
+	"regexp"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/core/terminal/classifier"
+	"github.com/colonyops/hive/internal/core/terminal/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestSessionCache_FindWindow(t *testing.T) {
-	sc := &sessionCache{
-		agentWindows: []*agentWindow{
-			{windowIndex: "0", windowName: "bash"},
-			{windowIndex: "1", windowName: "claude"},
-			{windowIndex: "2", windowName: "vim"},
-		},
-	}
+const (
+	testToolClaude = "claude"
+	testToolCodex  = "codex"
+)
 
-	tests := []struct {
-		name    string
-		index   string
-		wantNil bool
-		want    string
-	}{
-		{"found", "1", false, "claude"},
-		{"not found", "5", true, ""},
-		{"first", "0", false, "bash"},
-	}
+func TestSessionCache_FindPane(t *testing.T) {
+	sc := &sessionCache{panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%0", WindowName: "bash"}},
+		{input: classifier.PaneInput{PaneID: "%1", WindowName: testToolClaude}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+	}}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			w := sc.findWindow(tt.index)
-			if tt.wantNil {
-				assert.Nil(t, w, "expected nil, got window")
-				return
+	pane := sc.findPane("%1")
+	require.NotNil(t, pane)
+	assert.Equal(t, testToolClaude, pane.input.WindowName)
+	assert.Nil(t, sc.findPane("%9"))
+}
+
+func TestSessionCache_BestAgentPane(t *testing.T) {
+	sc := &sessionCache{panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%0", Activity: 300}, result: classifier.Result{IsAgent: false}},
+		{input: classifier.PaneInput{PaneID: "%1", Activity: 100}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%2", Activity: 200}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
+	}}
+
+	pane := sc.bestAgentPane()
+	require.NotNil(t, pane)
+	assert.Equal(t, "%2", pane.input.PaneID)
+}
+
+func TestDisambiguatePane(t *testing.T) {
+	sc := &sessionCache{panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%0", WindowName: testToolClaude, WorkDir: "/a", Activity: 100}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%1", WindowName: "myslug-work", WorkDir: "/b", Activity: 200}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
+		{input: classifier.PaneInput{PaneID: "%2", WindowName: "bash", WorkDir: "/c", Activity: 300}, result: classifier.Result{IsAgent: false}},
+	}}
+
+	assert.Equal(t, "%1", disambiguatePane(sc, "/b", "other").input.PaneID)
+	assert.Equal(t, "%1", disambiguatePane(sc, "/missing", "myslug").input.PaneID)
+	assert.Equal(t, "%1", disambiguatePane(sc, "/missing", "none").input.PaneID)
+}
+
+func TestSessionInfoFromPane(t *testing.T) {
+	pane := &cachedPane{input: classifier.PaneInput{PaneID: "%5", WindowIndex: "2", WindowName: testToolClaude}, result: classifier.Result{Tool: testToolClaude}}
+	info := sessionInfoFromPane("mysess", pane)
+	require.NotNil(t, info)
+	assert.Equal(t, "mysess", info.Name)
+	assert.Equal(t, "2", info.WindowIndex)
+	assert.Equal(t, "%5", info.PaneID)
+	assert.Equal(t, testToolClaude, info.WindowName)
+	assert.Equal(t, testToolClaude, info.DetectedTool)
+	assert.Nil(t, sessionInfoFromPane("mysess", nil))
+}
+
+func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 100},
+		{SessionName: "sess", PaneID: "%2", PanePID: 102, WindowIndex: "0", WindowName: "bash", Activity: 200},
+	}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
+		state: paneState{paneContent: "old", cachedStatus: terminal.StatusReady, lastCaptureActive: 100},
+	}}}}
+	integ.trackers[paneKey("sess", "%old")] = terminal.NewStateTracker()
+	integ.limiters[paneKey("sess", "%old")] = terminal.NewRateLimiter(1)
+
+	integ.RefreshCache()
+
+	sc := integ.cache["sess"]
+	require.NotNil(t, sc)
+	require.Len(t, sc.panes, 2)
+	assert.True(t, sc.findPane("%1").result.IsAgent)
+	assert.False(t, sc.findPane("%2").result.IsAgent)
+	assert.Equal(t, "old", sc.findPane("%1").state.paneContent)
+	assert.Empty(t, integ.trackers)
+	assert.Empty(t, integ.limiters)
+}
+
+func TestRefreshCache_DoesNotClassifyShellPaneFromWindowName(t *testing.T) {
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude},
+		{SessionName: "sess", PaneID: "%2", PanePID: 102, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: "bash"},
+	}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+
+	integ.RefreshCache()
+
+	sc := integ.cache["sess"]
+	require.NotNil(t, sc)
+	assert.True(t, sc.findPane("%1").result.IsAgent)
+	assert.False(t, sc.findPane("%2").result.IsAgent)
+}
+
+func TestRefreshCache_ReclassifiesNegativeResult(t *testing.T) {
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "zsh"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	integ := NewWithReader(classifier.New(toolPatterns(testToolClaude), reader, nil, nil), lister, reader)
+
+	integ.RefreshCache()
+	assert.False(t, integ.cache["sess"].findPane("%1").result.IsAgent)
+
+	reader.comm[200] = testToolClaude
+	integ.RefreshCache()
+	assert.True(t, integ.cache["sess"].findPane("%1").result.IsAgent)
+}
+
+func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: testToolClaude, 201: testToolCodex}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	integ := NewWithReader(classifier.New(toolPatterns(testToolClaude, testToolCodex), reader, nil, nil), lister, reader)
+
+	integ.RefreshCache()
+	assert.Equal(t, testToolClaude, integ.cache["sess"].findPane("%1").result.Tool)
+
+	reader.tpgid = 201
+	integ.RefreshCache()
+	assert.Equal(t, testToolCodex, integ.cache["sess"].findPane("%1").result.Tool)
+}
+
+func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
+	// Verify that once the content limiter permits a re-check (simulated by
+	// clearing the limiter), changed content causes reclassification.
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "bash"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	capture := &fakeCapture{content: "agent content"}
+	scorer := &fakeScorer{scores: map[string]fakeScore{
+		"agent content": {score: 6, categories: 3, tool: testToolClaude},
+		"shell content": {score: 1, categories: 1},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, capture, scorer), lister, reader)
+
+	integ.RefreshCache()
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.True(t, pane.result.IsAgent)
+	assert.Equal(t, 3, pane.result.Tier)
+
+	// Reset the content limiter to simulate the interval expiring, then change
+	// the pane content so the next full Classify returns not-agent.
+	integ.contentLimiters = make(map[string]*terminal.RateLimiter)
+	capture.content = "shell content"
+	integ.RefreshCache()
+	pane = integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.False(t, pane.result.IsAgent)
+	assert.Equal(t, 2, capture.calls)
+}
+
+func TestRefreshCache_ContentLimiterSkipsTier3(t *testing.T) {
+	// After the first full Classify (which runs Tier 3), subsequent RefreshCache
+	// calls within contentCheckInterval must NOT call capture-pane again.
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "bash"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	capture := &fakeCapture{content: "agent content"}
+	scorer := &fakeScorer{scores: map[string]fakeScore{
+		"agent content": {score: 6, categories: 3, tool: testToolClaude},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, capture, scorer), lister, reader)
+
+	integ.RefreshCache() // first call: Tier 3 runs, capture.calls == 1
+	assert.Equal(t, 1, capture.calls)
+
+	integ.RefreshCache() // second call within interval: limiter blocks Tier 3
+	integ.RefreshCache() // third call
+	assert.Equal(t, 1, capture.calls, "capture-pane must not be called again within contentCheckInterval")
+}
+
+func TestRefreshCache_TryLockPreventsStorm(t *testing.T) {
+	// If RefreshCache is already running, a concurrent call must return
+	// immediately without calling list-panes a second time.
+	var listCalls atomic.Int32
+	blockRefresh := make(chan struct{})
+	lister := &blockingPaneLister{
+		listFn: func() ([]classifier.PaneInput, error) {
+			n := listCalls.Add(1)
+			if n == 1 {
+				<-blockRefresh // block the first call
 			}
-			require.NotNil(t, w, "expected window, got nil")
-			assert.Equal(t, tt.want, w.windowName)
-		})
-	}
-}
-
-func TestSessionCache_BestWindow(t *testing.T) {
-	tests := []struct {
-		name    string
-		windows []*agentWindow
-		want    string
-	}{
-		{
-			"single",
-			[]*agentWindow{{windowIndex: "0", activity: 100}},
-			"0",
-		},
-		{
-			"highest activity",
-			[]*agentWindow{
-				{windowIndex: "0", activity: 100},
-				{windowIndex: "1", activity: 200},
-				{windowIndex: "2", activity: 150},
-			},
-			"1",
-		},
-		{
-			"empty",
-			nil,
-			"",
+			return nil, nil
 		},
 	}
+	integ := New(nil, lister)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			sc := &sessionCache{agentWindows: tt.windows}
-			w := sc.bestWindow()
-			if tt.want == "" {
-				assert.Nil(t, w, "expected nil, got window")
-				return
-			}
-			require.NotNil(t, w, "expected window, got nil")
-			assert.Equal(t, tt.want, w.windowIndex)
-		})
+	// Start a refresh that will block inside ListAllPanes.
+	done := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(done)
+	}()
+
+	// Give the goroutine time to acquire the lock.
+	time.Sleep(10 * time.Millisecond)
+
+	// Second call should return immediately (TryLock fails).
+	integ.RefreshCache()
+	assert.Equal(t, int32(1), listCalls.Load(), "second RefreshCache must not call list-panes while first is running")
+
+	// Unblock the first refresh.
+	close(blockRefresh)
+	<-done
+}
+
+func TestRefreshCache_UsesSharedProcessSnapshot(t *testing.T) {
+	// Verify that process-tree children are queried once per RefreshCache call
+	// regardless of how many panes are classified. Before the snapshot fix,
+	// each ClassifyStable call would invoke Children() independently.
+	var childrenCalls int
+	reader := &countingProcessReader{
+		ProcessReader: &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "zsh"}},
+		onChildren:    func() { childrenCalls++ },
 	}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+		{SessionName: "sess", PaneID: "%2", PanePID: 101, WindowIndex: "1", WindowName: "work"},
+		{SessionName: "sess", PaneID: "%3", PanePID: 102, WindowIndex: "2", WindowName: "logs"},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, nil, nil), lister, reader)
+
+	integ.RefreshCache()
+
+	// SnapshotReader.Children is served from the in-memory map; only the
+	// snapshot construction itself calls the underlying reader. The fake reader
+	// always returns no children, so the snapshot map is built but returns nil
+	// for every lookup — the important thing is the base reader is not called
+	// again per-pane after snapshot construction.
+	assert.Equal(t, 0, childrenCalls, "base Children must not be called per-pane when snapshot is available")
 }
 
-func TestDisambiguateWindow_SingleWindow(t *testing.T) {
-	integ := New(nil)
-	sc := &sessionCache{
-		agentWindows: []*agentWindow{
-			{windowIndex: "0", windowName: "bash", workDir: "/home/user"},
-		},
-	}
+func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 202, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 200},
+	}}
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
+		state: paneState{paneContent: "old", cachedStatus: terminal.StatusReady, lastCaptureActive: 100},
+	}}}}
 
-	w := integ.disambiguateWindow(sc, "/other/path", "myslug")
-	require.NotNil(t, w, "single window should always be returned")
-	assert.Equal(t, "0", w.windowIndex)
+	integ.RefreshCache()
+
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.Empty(t, pane.state.paneContent)
+	assert.Empty(t, pane.state.cachedStatus)
+	assert.Zero(t, pane.state.lastCaptureActive)
 }
 
-func TestDisambiguateWindow_PathMatch(t *testing.T) {
-	integ := New(nil)
-	sc := &sessionCache{
-		agentWindows: []*agentWindow{
-			{windowIndex: "0", windowName: "claude", workDir: "/home/user/project-a"},
-			{windowIndex: "1", windowName: "claude", workDir: "/home/user/project-b"},
-		},
-	}
+func TestDiscoverSession(t *testing.T) {
+	integ := New(nil, nil)
+	integ.cache = map[string]*sessionCache{"my-session": {panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude, WorkDir: "/a", Activity: 100}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%2", WindowIndex: "1", WindowName: testToolCodex, WorkDir: "/b", Activity: 200}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
+	}}}
+	integ.cacheTime = time.Now()
 
-	w := integ.disambiguateWindow(sc, "/home/user/project-b", "myslug")
-	require.NotNil(t, w, "expected window 1 (path match), got nil")
-	assert.Equal(t, "1", w.windowIndex)
+	info, err := integ.DiscoverSession(context.Background(), "my-session", map[string]string{SessionPathKey: "/b"})
+	require.NoError(t, err)
+	require.NotNil(t, info)
+	assert.Equal(t, "%2", info.PaneID)
+
+	info, err = integ.DiscoverSession(context.Background(), "my-session", map[string]string{"tmux_window": "0"})
+	require.NoError(t, err)
+	require.NotNil(t, info)
+	assert.Equal(t, "%1", info.PaneID)
 }
 
-func TestDisambiguateWindow_NameMatch(t *testing.T) {
-	integ := New(nil)
-	sc := &sessionCache{
-		agentWindows: []*agentWindow{
-			{windowIndex: "0", windowName: "claude", workDir: "/a"},
-			{windowIndex: "1", windowName: "myslug-work", workDir: "/b"},
-		},
-	}
+func TestDiscoverAllPanes(t *testing.T) {
+	integ := New(nil, nil)
+	integ.cache = map[string]*sessionCache{"multi-sess": {panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%2", WindowIndex: "0", WindowName: "bash"}, result: classifier.Result{IsAgent: false}},
+		{input: classifier.PaneInput{PaneID: "%3", WindowIndex: "1", WindowName: testToolCodex}, result: classifier.Result{IsAgent: true, Tool: testToolCodex}},
+	}}}
+	integ.cacheTime = time.Now()
 
-	// No path match, should fall back to name match
-	w := integ.disambiguateWindow(sc, "/nonexistent", "myslug")
-	require.NotNil(t, w, "expected window 1 (name match), got nil")
-	assert.Equal(t, "1", w.windowIndex)
+	infos, err := integ.DiscoverAllPanes(context.Background(), "multi-sess", nil)
+	require.NoError(t, err)
+	require.Len(t, infos, 2)
+	assert.Equal(t, "%1", infos[0].PaneID)
+	assert.Equal(t, "%3", infos[1].PaneID)
 }
 
-func TestDisambiguateWindow_FallbackToActivity(t *testing.T) {
-	integ := New(nil)
-	sc := &sessionCache{
-		agentWindows: []*agentWindow{
-			{windowIndex: "0", windowName: "bash", workDir: "/a", activity: 100},
-			{windowIndex: "1", windowName: "zsh", workDir: "/b", activity: 200},
-		},
-	}
-
-	// No path match, no name match — should pick highest activity
-	w := integ.disambiguateWindow(sc, "/nonexistent", "notfound")
-	require.NotNil(t, w, "expected window 1 (highest activity), got nil")
-	assert.Equal(t, "1", w.windowIndex)
-}
-
-func TestSessionInfoFromWindow(t *testing.T) {
-	integ := New(nil)
-
-	t.Run("nil window", func(t *testing.T) {
-		sc := &sessionCache{}
-		info := integ.sessionInfoFromWindow("mysess", sc, nil)
-		assert.Equal(t, "mysess", info.Name)
-		assert.Empty(t, info.Pane)
-		assert.Empty(t, info.WindowName)
-	})
-
-	t.Run("single window sets WindowName", func(t *testing.T) {
-		w := &agentWindow{windowIndex: "2", windowName: "claude"}
-		sc := &sessionCache{agentWindows: []*agentWindow{w}}
-		info := integ.sessionInfoFromWindow("mysess", sc, w)
-		assert.Equal(t, "mysess", info.Name)
-		assert.Equal(t, "2", info.Pane)
-		assert.Equal(t, "claude", info.WindowName)
-	})
-
-	t.Run("multi window sets WindowName", func(t *testing.T) {
-		w1 := &agentWindow{windowIndex: "0", windowName: "claude"}
-		w2 := &agentWindow{windowIndex: "1", windowName: "aider"}
-		sc := &sessionCache{agentWindows: []*agentWindow{w1, w2}}
-		info := integ.sessionInfoFromWindow("mysess", sc, w2)
-		assert.Equal(t, "mysess", info.Name)
-		assert.Equal(t, "1", info.Pane)
-		assert.Equal(t, "aider", info.WindowName)
-	})
-}
-
-func TestDiscoverSession_MultiWindow(t *testing.T) {
-	integ := New([]string{"claude"})
-
-	// Manually populate cache with multi-window session
+func TestDiscoverAllPanes_Matching(t *testing.T) {
+	integ := New(nil, nil)
 	integ.cache = map[string]*sessionCache{
-		"my-session": {
-			agentWindows: []*agentWindow{
-				{windowIndex: "0", windowName: "claude", workDir: "/project-a"},
-				{windowIndex: "1", windowName: "claude", workDir: "/project-b"},
-			},
-		},
-	}
-	integ.cacheTime = timeNow() // fresh cache
-
-	ctx := context.Background()
-
-	t.Run("path match selects correct window", func(t *testing.T) {
-		info, err := integ.DiscoverSession(ctx, "my-session", map[string]string{
-			sessionPathKey: "/project-b",
-		})
-		require.NoError(t, err)
-		require.NotNil(t, info, "expected info")
-		assert.Equal(t, "1", info.Pane)
-		assert.Equal(t, "claude", info.WindowName)
-	})
-
-	t.Run("no path match falls to activity", func(t *testing.T) {
-		// Set different activities
-		integ.cache["my-session"].agentWindows[0].activity = 200
-		integ.cache["my-session"].agentWindows[1].activity = 100
-
-		info, err := integ.DiscoverSession(ctx, "my-session", map[string]string{
-			sessionPathKey: "/nonexistent",
-		})
-		require.NoError(t, err)
-		require.NotNil(t, info, "expected info")
-		// No path match, no name match for slug "my-session" in window names — should pick highest activity
-		assert.Equal(t, "0", info.Pane)
-	})
-}
-
-func TestMatchesPreferredWindow(t *testing.T) {
-	integ := New([]string{"claude", "aider", "codex"})
-
-	tests := []struct {
-		name string
-		want bool
-	}{
-		{"claude", true},
-		{"Claude-Work", true},
-		{"aider", true},
-		{"codex", true},
-		{"Codex-Agent", true},
-		{"bash", false},
-		{"vim", false},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := integ.matchesPreferredWindow(tt.name)
-			assert.Equal(t, tt.want, got, "matchesPreferredWindow(%q) = %v, want %v", tt.name, got, tt.want)
-		})
-	}
-}
-
-func TestDiscoverAllWindows(t *testing.T) {
-	integ := New([]string{"claude", "aider"})
-
-	// Populate cache with a multi-window session and a single-window session
-	integ.cache = map[string]*sessionCache{
-		"multi-sess": {
-			agentWindows: []*agentWindow{
-				{windowIndex: "0", windowName: "claude", workDir: "/project-a"},
-				{windowIndex: "1", windowName: "aider", workDir: "/project-b"},
-			},
-		},
-		"single-sess": {
-			agentWindows: []*agentWindow{
-				{windowIndex: "0", windowName: "claude", workDir: "/project-c"},
-			},
-		},
+		"multi-sess": {panes: []cachedPane{
+			agentCachedPane("%1", "0", testToolClaude),
+			agentCachedPane("%2", "1", testToolCodex),
+		}},
+		"foo-bar": {panes: []cachedPane{
+			agentCachedPane("%3", "0", testToolClaude),
+		}},
 	}
 	integ.cacheTime = time.Now()
+
 	ctx := context.Background()
 
-	t.Run("returns all windows for multi-window session", func(t *testing.T) {
-		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
+	t.Run("unknown session returns nil", func(t *testing.T) {
+		infos, err := integ.DiscoverAllPanes(ctx, "nonexistent", nil)
 		require.NoError(t, err)
-		require.Len(t, infos, 2, "expected 2 windows, got %d", len(infos))
-		assert.Equal(t, "0", infos[0].Pane)
-		assert.Equal(t, "claude", infos[0].WindowName)
-		assert.Equal(t, "1", infos[1].Pane)
-		assert.Equal(t, "aider", infos[1].WindowName)
+		assert.Nil(t, infos)
 	})
 
-	t.Run("returns single window for single-window session", func(t *testing.T) {
-		infos, err := integ.DiscoverAllWindows(ctx, "single-sess", nil)
-		require.NoError(t, err)
-		require.Len(t, infos, 1, "expected 1 window, got %d", len(infos))
-		assert.Equal(t, "0", infos[0].Pane)
-	})
-
-	t.Run("returns nil for unknown session", func(t *testing.T) {
-		infos, err := integ.DiscoverAllWindows(ctx, "nonexistent", nil)
-		require.NoError(t, err)
-		assert.Nil(t, infos, "expected nil, got %v", infos)
-	})
-
-	t.Run("returns nil with stale cache", func(t *testing.T) {
+	t.Run("stale cache returns nil", func(t *testing.T) {
 		integ.cacheTime = time.Now().Add(-5 * time.Second)
-		infos, err := integ.DiscoverAllWindows(ctx, "multi-sess", nil)
+		infos, err := integ.DiscoverAllPanes(ctx, "multi-sess", nil)
 		require.NoError(t, err)
-		assert.Nil(t, infos, "expected nil with stale cache, got %v", infos)
+		assert.Nil(t, infos)
+		integ.cacheTime = time.Now()
 	})
 
-	t.Run("does not cross-match similar slugs", func(t *testing.T) {
-		// Regression: tmux sessions with similar slug prefixes from different
-		// hive sessions must not be matched when the exact slug is missing.
-		// e.g. hive session "foo" (slug "foo") whose tmux session is gone must
-		// not pick up tmux session "foo-bar" belonging to hive session "foo bar".
-		integ.cache["foo-bar"] = &sessionCache{
-			agentWindows: []*agentWindow{
-				{windowIndex: "0", windowName: "claude"},
-			},
+	t.Run("similar slug does not cross match", func(t *testing.T) {
+		infos, err := integ.DiscoverAllPanes(ctx, "foo", nil)
+		require.NoError(t, err)
+		assert.Nil(t, infos, "slug foo must not match tmux session foo-bar")
+	})
+
+	t.Run("hyphenated exact slug still found", func(t *testing.T) {
+		infos, err := integ.DiscoverAllPanes(ctx, "foo-bar", nil)
+		require.NoError(t, err)
+		require.Len(t, infos, 1)
+		assert.Equal(t, "foo-bar", infos[0].Name)
+		assert.Equal(t, "%3", infos[0].PaneID)
+	})
+
+	t.Run("metadata tmux_session match returns named session", func(t *testing.T) {
+		infos, err := integ.DiscoverAllPanes(ctx, "myslug", map[string]string{"tmux_session": "multi-sess"})
+		require.NoError(t, err)
+		require.Len(t, infos, 2)
+		assert.Equal(t, "multi-sess", infos[0].Name)
+		assert.Equal(t, "%1", infos[0].PaneID)
+	})
+}
+
+func TestDiscoverSession_MetaTmuxSessionCompatibility(t *testing.T) {
+	ctx := context.Background()
+
+	t.Run("explicit display name differs from slug", func(t *testing.T) {
+		integ := New(nil, nil)
+		integ.cache = map[string]*sessionCache{
+			"My Feature": {panes: []cachedPane{agentCachedPane("%1", "0", testToolClaude)}},
 		}
 		integ.cacheTime = time.Now()
 
-		infos, err := integ.DiscoverAllWindows(ctx, "foo", nil)
-		require.NoError(t, err)
-		assert.Nil(t, infos, "expected nil — slug 'foo' must not match tmux session 'foo-bar'")
-	})
-
-	t.Run("hyphenated slug still found by exact match", func(t *testing.T) {
-		// Regression sibling: ensure removing the prefix-match fallback did not
-		// break the normal path where session "foo bar" (slug "foo-bar") finds
-		// its own tmux session "foo-bar".
-		integ.cacheTime = time.Now()
-		infos, err := integ.DiscoverAllWindows(ctx, "foo-bar", nil)
-		require.NoError(t, err)
-		require.Len(t, infos, 1, "expected 1 window for slug 'foo-bar'")
-		assert.Equal(t, "foo-bar", infos[0].Name)
-	})
-
-	t.Run("metadata match still works", func(t *testing.T) {
-		integ.cacheTime = time.Now()
-		infos, err := integ.DiscoverAllWindows(ctx, "myslug", map[string]string{
-			"tmux_session": "multi-sess",
-		})
-		require.NoError(t, err)
-		require.Len(t, infos, 2, "expected 2 windows, got %d", len(infos))
-		assert.Equal(t, "multi-sess", infos[0].Name)
-	})
-}
-
-// TestDiscoverSession_ExplicitTmuxSessionMeta tests that DiscoverSession finds a session
-// when MetaTmuxSession metadata is set and the tmux session name differs from the slug.
-// This covers the case where a session is created with a display name like "My Feature"
-// (tmux session = "My Feature") but the slug is "my-feature".
-func TestDiscoverSession_ExplicitTmuxSessionMeta(t *testing.T) {
-	integ := New(nil)
-	// Tmux session name uses the display name (with spaces/capitals), not the slug.
-	integ.cache = map[string]*sessionCache{
-		"My Feature": {
-			agentWindows: []*agentWindow{
-				{windowIndex: "0", windowName: "bash"},
-			},
-		},
-	}
-	integ.cacheTime = timeNow()
-
-	ctx := context.Background()
-
-	t.Run("slug lookup fails without metadata", func(t *testing.T) {
-		// Slug "my-feature" won't match tmux session "My Feature" without explicit metadata.
 		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{})
 		require.NoError(t, err)
 		assert.Nil(t, info, "slug lookup should fail when tmux session name differs from slug")
-	})
 
-	t.Run("explicit MetaTmuxSession metadata finds session", func(t *testing.T) {
-		// MetaTmuxSession stores the actual tmux session name used at creation.
-		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{
-			sessionPathKey: "/some/path",
+		info, err = integ.DiscoverSession(ctx, "my-feature", map[string]string{
+			SessionPathKey: "/some/path",
 			"tmux_session": "My Feature",
 		})
 		require.NoError(t, err)
-		require.NotNil(t, info, "session should be found via explicit MetaTmuxSession metadata")
+		require.NotNil(t, info)
 		assert.Equal(t, "My Feature", info.Name)
+		assert.Equal(t, "%1", info.PaneID)
+	})
+
+	t.Run("stale metadata falls back to slug lookup", func(t *testing.T) {
+		integ := New(nil, nil)
+		integ.cache = map[string]*sessionCache{
+			"new-name": {panes: []cachedPane{agentCachedPane("%2", "0", testToolClaude)}},
+		}
+		integ.cacheTime = time.Now()
+
+		info, err := integ.DiscoverSession(ctx, "new-name", map[string]string{"tmux_session": "old-name"})
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, "new-name", info.Name)
+		assert.Equal(t, "%2", info.PaneID)
+	})
+
+	t.Run("hive session tag maps renamed tmux session", func(t *testing.T) {
+		integ := New(nil, nil)
+		pane := agentCachedPane("%3", "0", testToolClaude)
+		pane.input.HiveSession = "my-feature"
+		integ.cache = map[string]*sessionCache{"My Feature": {panes: []cachedPane{pane}}}
+		integ.cacheTime = time.Now()
+
+		info, err := integ.DiscoverSession(ctx, "my-feature", map[string]string{})
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, "My Feature", info.Name)
+		assert.Equal(t, "%3", info.PaneID)
 	})
 }
 
-// TestDiscoverSession_StaleMetaTmuxSession tests that a stale MetaTmuxSession value
-// (e.g., after a rename) gracefully falls back to slug-based lookup.
-func TestDiscoverSession_StaleMetaTmuxSession(t *testing.T) {
-	integ := New(nil)
-	// After rename, tmux session was renamed to new slug "new-name".
-	integ.cache = map[string]*sessionCache{
-		"new-name": {
-			agentWindows: []*agentWindow{
-				{windowIndex: "0", windowName: "bash"},
-			},
-		},
-	}
-	integ.cacheTime = timeNow()
+func TestGetStatus_ExplicitNonAgentPaneMissing(t *testing.T) {
+	integ := New(nil, nil)
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%1"}, result: classifier.Result{IsAgent: false}},
+		{input: classifier.PaneInput{PaneID: "%2"}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+	}}}
+	integ.cacheTime = time.Now()
 
-	ctx := context.Background()
-
-	// MetaTmuxSession still holds the old name from before the rename.
-	info, err := integ.DiscoverSession(ctx, "new-name", map[string]string{
-		"tmux_session": "old-name", // stale — not in cache
-	})
+	status, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
 	require.NoError(t, err)
-	require.NotNil(t, info, "should fall back to slug lookup when MetaTmuxSession is stale")
-	assert.Equal(t, "new-name", info.Name)
+	assert.Equal(t, terminal.StatusMissing, status)
 }
 
-// timeNow returns a time that makes cache fresh for tests.
-func timeNow() (t time.Time) {
-	return time.Now()
+func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
+	capture := &fakeCapture{content: "❯"}
+	integ := New(nil, nil)
+	integ.capture = capture
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude, Activity: 10},
+		result: classifier.Result{IsAgent: true, Tool: testToolClaude},
+	}}}}
+	integ.cacheTime = time.Now()
+
+	info := &terminal.SessionInfo{Name: "sess", PaneID: "%1"}
+	status, err := integ.GetStatus(context.Background(), info)
+	require.NoError(t, err)
+	assert.Equal(t, terminal.StatusReady, status)
+	assert.Equal(t, "❯", info.PaneContent)
+	assert.Equal(t, testToolClaude, info.DetectedTool)
+	assert.NotNil(t, integ.trackers[paneKey("sess", "%1")])
+	assert.NotNil(t, integ.limiters[paneKey("sess", "%1")])
+	assert.Equal(t, 1, capture.calls)
+}
+
+func toolPatterns(tools ...string) []classifier.TitlePattern {
+	out := make([]classifier.TitlePattern, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, titlePattern(t, t))
+	}
+	return out
+}
+
+func titlePattern(pattern, tool string) classifier.TitlePattern {
+	return classifier.TitlePattern{Pattern: regexp.MustCompile(pattern), Tool: tool}
+}
+
+func agentCachedPane(paneID, windowIndex, tool string) cachedPane {
+	return cachedPane{
+		input: classifier.PaneInput{
+			PaneID:      paneID,
+			WindowIndex: windowIndex,
+			WindowName:  tool,
+		},
+		result: classifier.Result{IsAgent: true, Tool: tool},
+	}
+}
+
+type fakePaneLister struct{ panes []classifier.PaneInput }
+
+func (f *fakePaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return f.panes, nil }
+
+type blockingPaneLister struct {
+	listFn func() ([]classifier.PaneInput, error)
+}
+
+func (b *blockingPaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return b.listFn() }
+
+// countingProcessReader wraps a ProcessReader and invokes a callback on each
+// Children call so tests can assert how many times the OS is queried.
+type countingProcessReader struct {
+	process.ProcessReader
+	onChildren func()
+}
+
+func (c *countingProcessReader) Children(pid int) ([]int, error) {
+	c.onChildren()
+	return c.ProcessReader.Children(pid)
+}
+
+type fakeProcessReader struct {
+	tpgid int
+	comm  map[int]string
+}
+
+func (f *fakeProcessReader) TPGID(int) (int, error) { return f.tpgid, nil }
+func (f *fakeProcessReader) Comm(pid int) string    { return f.comm[pid] }
+func (f *fakeProcessReader) Cmdline(pid int) ([]string, error) {
+	if comm := f.comm[pid]; comm != "" {
+		return []string{comm}, nil
+	}
+	return nil, nil
+}
+func (f *fakeProcessReader) Environ(int) map[string]string { return nil }
+func (f *fakeProcessReader) Children(int) ([]int, error)   { return nil, nil }
+
+type fakeCapture struct {
+	content string
+	calls   int
+}
+
+func (f *fakeCapture) CapturePane(context.Context, string) (string, error) {
+	f.calls++
+	return f.content, nil
+}
+
+type fakeScore struct {
+	score      int
+	categories int
+	tool       string
+}
+
+type fakeScorer struct {
+	scores map[string]fakeScore
+}
+
+func (f *fakeScorer) Score(content string) (int, int, string) {
+	score := f.scores[content]
+	return score.score, score.categories, score.tool
 }

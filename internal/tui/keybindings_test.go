@@ -389,11 +389,11 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 		assert.Equal(t, "echo claude-window claude", action.ShellCmd)
 	})
 
-	t.Run("SetSelectedWindow overrides lookup", func(t *testing.T) {
+	t.Run("SetSelectedTarget overrides lookup", func(t *testing.T) {
 		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
-		handler.SetSelectedWindow("override-window")
+		handler.SetSelectedTarget("override-window")
 
 		action, ok := handler.Resolve("w", sess)
 		require.True(t, ok, "expected ok = true")
@@ -404,7 +404,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
-		handler.SetSelectedWindow("override-window")
+		handler.SetSelectedTarget("override-window")
 
 		// First resolve consumes the override
 		action, ok := handler.Resolve("w", sess)
@@ -421,7 +421,7 @@ func TestKeybindingResolver_TmuxWindowAndTool(t *testing.T) {
 		handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
 		handler.SetToolLookup(func(id string) string { return "claude" })
-		handler.SetSelectedWindow("override-window")
+		handler.SetSelectedTarget("override-window")
 
 		cmd := config.UserCommand{Sh: "echo {{ .TmuxWindow }}", Help: "test"}
 		action := handler.ResolveUserCommand("test", cmd, sess, nil, nil)
@@ -452,7 +452,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 	t.Run("TmuxOpen consumes window override", func(t *testing.T) {
 		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
 		handler.SetTmuxWindowLookup(func(id string) string { return "default-window" })
-		handler.SetSelectedWindow("editor")
+		handler.SetSelectedTarget("editor")
 
 		action, ok := handler.Resolve("enter", sess)
 		require.True(t, ok)
@@ -484,7 +484,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 
 	t.Run("TmuxStart also consumes window override", func(t *testing.T) {
 		handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
-		handler.SetSelectedWindow("editor")
+		handler.SetSelectedTarget("editor")
 
 		action, ok := handler.Resolve("s", sess)
 		require.True(t, ok)
@@ -494,7 +494,7 @@ func TestKeybindingResolver_TmuxActionConsumesWindowOverride(t *testing.T) {
 
 	t.Run("ResolveUserCommand TmuxOpen consumes override", func(t *testing.T) {
 		handler := NewKeybindingResolver(nil, plugins.NewCommandSet(nil, nil), testRenderer)
-		handler.SetSelectedWindow("editor")
+		handler.SetSelectedTarget("editor")
 
 		cmd := config.UserCommand{Action: act.TypeTmuxOpen, Help: "open"}
 		action := handler.ResolveUserCommand("TmuxOpen", cmd, sess, nil, nil)

@@ -257,11 +257,11 @@ views:
 	},
 	{
 		Version:     "0.2.5",
-		Title:       "Multi-window tmux sessions with TmuxWindow template variable",
-		Description: "When a tmux session has multiple agent windows (matched by preview_window_matcher), each window now appears as its own selectable tree item with independent status and preview. The new {{ .TmuxWindow }} template variable is available in user commands and resolves to the selected window name. If you use a custom script (like hive.sh) with an enter keybinding, you must update the template to pass the window name so that pressing enter on a window sub-item focuses the correct window.",
+		Title:       "Multi-pane tmux sessions with TmuxWindow target variable",
+		Description: "When a tmux session has multiple agent panes (matched by preview_window_matcher or process/content detection), each pane can appear as its own selectable tree item with independent status and preview. The legacy {{ .TmuxWindow }} template variable is available in user commands and resolves to the selected tmux target: a window name/index or a pane ID such as %7.",
 		Migration: `1. Add {{ .TmuxWindow }} to your tmux-open (or attach/enter) user command
-2. Update your spawn script to accept a window target flag (e.g., -w)
-3. Handle the window argument in your script to switch to the correct window`,
+2. Update your spawn script to accept a tmux target flag (e.g., -w)
+3. Handle the target argument in your script to switch to the correct window or pane`,
 		Before: `# config.yaml (old)
 usercommands:
   tmux-open:
@@ -277,10 +277,11 @@ usercommands:
     exit: $HIVE_POPUP
     silent: true
 
-# The -w flag tells your script which window to focus.
-# When a window sub-item is selected, .TmuxWindow = that window's name.
-# When a session row is selected, .TmuxWindow = best disambiguated window.
-# When empty (single window), the -w "" is ignored by the script.`,
+# The -w flag tells your script which tmux target to focus.
+# When a pane sub-item is selected, .TmuxWindow = that pane ID (e.g., %7).
+# When a window sub-item is selected, .TmuxWindow = that window target.
+# When a session row is selected, .TmuxWindow = best disambiguated target.
+# When empty (single target), the -w "" is ignored by the script.`,
 	},
 	{
 		Version:     "0.2.4",

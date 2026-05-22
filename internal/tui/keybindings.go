@@ -43,7 +43,7 @@ type KeybindingResolver struct {
 	commandSet             *plugins.CommandSet
 	renderer               *tmpl.Renderer
 	activeView             ViewType                      // current active view for scope checking
-	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux window name for a session
+	tmuxWindowLookup       func(sessionID string) string // optional: returns tmux target for a session
 	toolLookup             func(sessionID string) string // optional: returns detected tool name for a session
 	selectedWindowOverride string                        // if set, overrides tmuxWindowLookup for the next resolve
 }
@@ -88,8 +88,8 @@ func (h *KeybindingResolver) SetActiveView(view ViewType) {
 	h.rebuildEffective()
 }
 
-// SetTmuxWindowLookup sets a function that resolves tmux window names for sessions.
-// This enables the TmuxWindow field in shell command templates.
+// SetTmuxWindowLookup sets a function that resolves tmux window or pane targets for sessions.
+// This enables the legacy TmuxWindow field in shell command templates.
 func (h *KeybindingResolver) SetTmuxWindowLookup(fn func(sessionID string) string) {
 	h.tmuxWindowLookup = fn
 }
@@ -99,14 +99,22 @@ func (h *KeybindingResolver) SetToolLookup(fn func(sessionID string) string) {
 	h.toolLookup = fn
 }
 
-// SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
+// SetSelectedTarget overrides the legacy TmuxWindow template value for the next resolve call.
+// The target may be a tmux window name/index or a pane ID such as %7.
 // The override is consumed (cleared) after each Resolve or ResolveUserCommand call.
 // Pass empty string to clear the override and fall back to the lookup function.
-func (h *KeybindingResolver) SetSelectedWindow(windowName string) {
-	h.selectedWindowOverride = windowName
+func (h *KeybindingResolver) SetSelectedTarget(target string) {
+	h.selectedWindowOverride = target
 }
 
-// consumeWindowOverride returns the current selectedWindowOverride for a session,
+// SetSelectedWindow overrides the TmuxWindow template value for the next resolve call.
+//
+// Deprecated: use SetSelectedTarget.
+func (h *KeybindingResolver) SetSelectedWindow(windowName string) {
+	h.SetSelectedTarget(windowName)
+}
+
+// consumeWindowOverride returns the selected tmux target for a session,
 // falling back to the lookup function, and clears the override afterward.
 func (h *KeybindingResolver) consumeWindowOverride(sessionID string) string {
 	if h.selectedWindowOverride != "" {
@@ -307,7 +315,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 			a.Help = strings.ToLower(string(cmd.Action))
 		}
 
-		// Tmux actions need window override
+		// Tmux actions need the selected target override.
 		if cmd.Action == action.TypeTmuxOpen || cmd.Action == action.TypeTmuxStart {
 			a.TmuxWindow = h.consumeWindowOverride(sess.ID)
 		}

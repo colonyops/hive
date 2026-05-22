@@ -843,7 +843,7 @@ func (c *Config) applyDefaults() {
 		c.Tmux.PollInterval = 1500 * time.Millisecond
 	}
 	if len(c.Tmux.PreviewWindowMatcher) == 0 {
-		c.Tmux.PreviewWindowMatcher = []string{"claude", "aider", "codex", "cursor", "crush", "agent", "llm", "opencode"}
+		c.Tmux.PreviewWindowMatcher = []string{"claude", "gemini", "aider", "codex", "cursor", "crush", "cline", "opencode", "pi", "agent", "llm"}
 	}
 	if c.Database.MaxOpenConns == 0 {
 		c.Database.MaxOpenConns = 2
