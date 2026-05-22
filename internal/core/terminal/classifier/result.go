@@ -20,3 +20,9 @@ type Result struct {
 	Tier         int
 	ClassifiedAt time.Time
 }
+
+// StableForProcessCache reports whether this positive result can be reused
+// while the pane foreground process fingerprint is unchanged.
+func (r Result) StableForProcessCache() bool {
+	return r.IsAgent && r.Tier != tierContent
+}

@@ -1206,7 +1206,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		if ti := m.selectedTreeItem(); ti != nil && ti.IsPaneItem {
 			m.handler.SetSelectedTarget(ti.PaneID)
 		} else if ti := m.selectedTreeItem(); ti != nil && ti.IsWindowItem {
-			m.handler.SetSelectedTarget(ti.WindowName)
+			m.handler.SetSelectedTarget(ti.WindowIndex)
 		} else {
 			m.handler.SetSelectedTarget("")
 		}

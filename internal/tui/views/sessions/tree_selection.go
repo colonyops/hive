@@ -6,7 +6,7 @@ package sessions
 type TreeSelection struct {
 	sessionID    string // session ID (or parent session ID for window/pane items)
 	windowName   string // non-empty for window sub-items
-	windowIndex  string // fallback for window sub-items
+	windowIndex  string // window sub-item target, or parent window for pane sub-items
 	paneID       string // non-empty for pane sub-items
 	recycledRepo string // non-empty for recycled placeholders
 	index        int    // raw list index as last-resort fallback
@@ -39,12 +39,13 @@ func SaveTreeSelection(item *TreeItem, index int) TreeSelection {
 // restore returns the best matching index in items for the saved selection.
 //
 // Priority:
-//  1. Window sub-item by session ID + window index (unique within session)
-//  2. Window sub-item by session ID + window name
-//  3. Recycled placeholder by repo prefix
-//  4. Session by ID
-//  5. Original index (clamped to bounds)
-//  6. First non-header item
+//  1. Pane sub-item by session ID + pane ID
+//  2. Window sub-item by session ID + window index (unique within session)
+//  3. Window sub-item by session ID + window name
+//  4. Recycled placeholder by repo prefix
+//  5. Session by ID
+//  6. Original index (clamped to bounds)
+//  7. First non-header item
 func (s TreeSelection) Restore(items []TreeItem) int {
 	// 1. Pane by ID
 	if s.paneID != "" {

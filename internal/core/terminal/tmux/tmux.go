@@ -204,7 +204,7 @@ func (t *Integration) RefreshCache() {
 		result, ok := t.classCache.Get(input.PaneID, fingerprint)
 		if !ok {
 			result = t.classifier.Classify(context.Background(), input)
-			if result.IsAgent {
+			if result.StableForProcessCache() {
 				t.classCache.Set(input.PaneID, fingerprint, result)
 			}
 		}

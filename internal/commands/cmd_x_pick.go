@@ -52,8 +52,8 @@ func loadRecents(ctx context.Context, kvStore kv.KV) map[string]time.Time {
 // pickItem represents a selectable item in the session picker.
 type pickItem struct {
 	Session     session.Session
-	WindowName  string // non-empty = window row (Phase 3)
-	WindowIndex string // tmux window index (Phase 3)
+	WindowName  string // tmux window name for window or pane rows
+	WindowIndex string // tmux window index for window or pane rows
 	PaneID      string // tmux pane ID for pane rows
 	IsRecent    bool   // Phase 4
 	IsCurrent   bool   // current tmux session
@@ -71,7 +71,8 @@ func (p pickItem) DisplayName() string {
 }
 
 // statusKey returns the map key used for status lookups.
-// Window items use "sessionID/windowIndex", others use "sessionID".
+// Pane items use "sessionID/paneID", window items use "sessionID/windowIndex",
+// and session items use "sessionID".
 func (p pickItem) statusKey() string {
 	if p.PaneID != "" {
 		return p.Session.ID + "/" + p.PaneID
@@ -95,7 +96,7 @@ type statusRefreshMsg struct {
 type pickModel struct {
 	input        textinput.Model
 	baseItems    []pickItem // original per-session items, used for polling
-	items        []pickItem // display items (may include expanded window sub-items)
+	items        []pickItem // display items (may include expanded terminal sub-items)
 	filtered     []pickItem
 	cursor       int
 	selected     *pickItem
@@ -410,7 +411,7 @@ func tickCmd(d time.Duration) tea.Cmd {
 }
 
 // refreshStatusCmd returns a command that refreshes terminal statuses for all items.
-// It also expands multi-window sessions into individual window rows.
+// It also expands multi-pane and multi-window sessions into terminal sub-items.
 func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 	return func() tea.Msg {
 		if mgr == nil || !mgr.HasEnabledIntegrations() {
@@ -423,7 +424,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 		ctx := context.Background()
 
 		for _, item := range items {
-			// Skip window sub-items; we only expand from base session items
+			// Skip terminal sub-items; we only expand from base session items.
 			if item.WindowIndex != "" || item.PaneID != "" {
 				continue
 			}
@@ -567,9 +568,8 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			// Pre-fetch statuses synchronously so the first render has data.
 			// Keep baseItems as the original per-session slice; refreshStatusCmd
-			// uses these as polling inputs and must not receive window sub-items
-			// (it skips them, causing multi-window sessions to vanish after the
-			// first tick).
+			// uses these as polling inputs and must not receive terminal sub-items
+			// (it skips them, causing expanded sessions to vanish after the first tick).
 			baseItems := items
 			initialRefresh := refreshStatusCmd(termMgr, baseItems)().(statusRefreshMsg)
 			displayItems := baseItems
@@ -648,6 +648,7 @@ func selectTmuxTarget(sessionName, target string) {
 	if target == "" {
 		return
 	}
+	// Best-effort: the target may have been renamed or closed since the picker opened.
 	if strings.HasPrefix(target, "%") {
 		out, err := exec.Command("tmux", "display-message", "-p", "-t", target, "#{session_name}:#{window_index}").Output()
 		if err == nil {

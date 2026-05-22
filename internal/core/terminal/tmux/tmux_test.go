@@ -135,6 +135,32 @@ func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
 	assert.Equal(t, testToolCodex, integ.cache["sess"].findPane("%1").result.Tool)
 }
 
+func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "bash"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	capture := &fakeCapture{content: "agent content"}
+	scorer := &fakeScorer{scores: map[string]fakeScore{
+		"agent content": {score: 6, categories: 3, tool: testToolClaude},
+		"shell content": {score: 1, categories: 1},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, capture, scorer), lister, reader)
+
+	integ.RefreshCache()
+	pane := integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.True(t, pane.result.IsAgent)
+	assert.Equal(t, 3, pane.result.Tier)
+
+	capture.content = "shell content"
+	integ.RefreshCache()
+	pane = integ.cache["sess"].findPane("%1")
+	require.NotNil(t, pane)
+	assert.False(t, pane.result.IsAgent)
+	assert.Equal(t, 2, capture.calls)
+}
+
 func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 202, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 200},
@@ -371,4 +397,19 @@ type fakeCapture struct {
 func (f *fakeCapture) CapturePane(context.Context, string) (string, error) {
 	f.calls++
 	return f.content, nil
+}
+
+type fakeScore struct {
+	score      int
+	categories int
+	tool       string
+}
+
+type fakeScorer struct {
+	scores map[string]fakeScore
+}
+
+func (f *fakeScorer) Score(content string) (int, int, string) {
+	score := f.scores[content]
+	return score.score, score.categories, score.tool
 }

@@ -53,9 +53,9 @@ const (
 // Metadata keys for terminal integration.
 const (
 	MetaTmuxSession = "tmux_session" // tmux session name
-	// MetaTmuxWindow renamed from "tmux_pane" in this PR. DiscoverSession reads
-	// the legacy key as a fallback so sessions persisted before this rename
-	// remain discoverable; the fallback can be dropped after one release cycle.
+	// DiscoverSession reads legacy "tmux_pane" metadata as a fallback so sessions
+	// persisted before the tmux_window rename remain discoverable; the fallback can
+	// be dropped after one release cycle.
 	MetaTmuxWindow = "tmux_window"
 )
 

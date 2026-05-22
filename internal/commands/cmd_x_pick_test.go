@@ -29,6 +29,15 @@ func TestPickItem_DisplayName(t *testing.T) {
 			want: "my-session/claude",
 		},
 		{
+			name: "with pane ID",
+			item: pickItem{
+				Session:    session.Session{Name: "my-session"},
+				WindowName: "claude",
+				PaneID:     "%7",
+			},
+			want: "my-session/claude/%7",
+		},
+		{
 			name: "empty window name treated as session only",
 			item: pickItem{
 				Session:    session.Session{Name: "my-session"},
@@ -62,6 +71,15 @@ func TestPickItem_StatusKey(t *testing.T) {
 				WindowIndex: "2",
 			},
 			want: "abc123/2",
+		},
+		{
+			name: "pane item uses ID/paneID",
+			item: pickItem{
+				Session:     session.Session{ID: "abc123"},
+				WindowIndex: "2",
+				PaneID:      "%7",
+			},
+			want: "abc123/%7",
 		},
 	}
 	for _, tt := range tests {
