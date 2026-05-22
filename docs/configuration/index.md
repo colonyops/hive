@@ -73,6 +73,7 @@ Sessions can run multiple agents by opening additional tmux windows — use `tmu
 | ----------------------------- | ---------- | ----------------------------------- | ------------------------------------- |
 | `tmux.poll_interval`          | `duration` | `1.5s`                              | Status check frequency                |
 | `tmux.preview_window_matcher` | `[]string` | `["claude", "aider", "codex", ...]` | Regex patterns for agent window names |
+| `tmux.port_discovery`         | `bool`     | `true`                              | Discover listening TCP ports for non-agent panes (uses `lsof`); set `false` to opt out |
 
 ## TUI
 
@@ -128,6 +129,7 @@ View-specific settings (keybindings, layout, behavior) are configured per-view u
 | `views.sessions.preview_title`      | `string`   |               | Go template for preview panel title          |
 | `views.sessions.preview_status`     | `string`   |               | Go template for preview status line          |
 | `views.sessions.group_by`           | `string`   | `repo`        | Tree view grouping: `repo` or `group`        |
+| `views.sessions.tmux_items`         | `string`   | `all`         | Panes shown in tree: `agents` (agent panes only) or `all` (every tmux window/pane) |
 
 ### Tasks View
 

@@ -572,3 +572,17 @@ func (f *fakeScorer) Score(content string) (int, int, string) {
 	score := f.scores[content]
 	return score.score, score.categories, score.tool
 }
+
+func TestWithPortDiscovery_DisabledNilsPortLister(t *testing.T) {
+	integ := New(nil, nil)
+	assert.NotNil(t, integ.portLister, "port discovery should be on by default")
+
+	integ.WithPortDiscovery(false)
+	assert.Nil(t, integ.portLister, "port discovery should be disabled")
+}
+
+func TestWithPortDiscovery_EnabledKeepsPortLister(t *testing.T) {
+	integ := New(nil, nil)
+	integ.WithPortDiscovery(true)
+	assert.NotNil(t, integ.portLister, "port discovery should remain enabled")
+}

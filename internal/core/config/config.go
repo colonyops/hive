@@ -547,6 +547,13 @@ type MessagingConfig struct {
 type TmuxConfig struct {
 	PollInterval         time.Duration `json:"poll_interval"          yaml:"poll_interval"`          // status check frequency, default 1.5s
 	PreviewWindowMatcher []string      `json:"preview_window_matcher" yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
+	PortDiscovery        *bool         `json:"port_discovery"         yaml:"port_discovery"`         // discover listening TCP ports for non-agent panes; nil/true = enabled (default), false = opt-out
+}
+
+// IsPortDiscoveryEnabled reports whether lsof-based port discovery is enabled.
+// Port discovery is on by default; set tmux.port_discovery: false to opt out.
+func (t TmuxConfig) IsPortDiscoveryEnabled() bool {
+	return t.PortDiscovery == nil || *t.PortDiscovery
 }
 
 // PluginsConfig holds configuration for the plugin system.

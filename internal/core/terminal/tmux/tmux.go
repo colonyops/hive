@@ -162,6 +162,15 @@ func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process
 	}
 }
 
+// WithPortDiscovery enables or disables lsof-based port discovery for non-agent
+// panes. Disabled when the caller sets tmux.port_discovery: false in config.
+func (t *Integration) WithPortDiscovery(enabled bool) *Integration {
+	if !enabled {
+		t.portLister = nil
+	}
+	return t
+}
+
 // Classifier returns the pane classifier used by this integration.
 func (t *Integration) Classifier() *classifier.Classifier { return t.classifier }
 
