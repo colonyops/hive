@@ -17,20 +17,26 @@ import (
 	"github.com/colonyops/hive/internal/core/terminal/process"
 )
 
+// contentCheckInterval is the minimum time between Tier 3 content-capture
+// classification attempts for the same pane during RefreshCache.
+const contentCheckInterval = 10 * time.Second
+
 // Integration implements terminal.Integration for tmux.
 type Integration struct {
-	mu            sync.RWMutex
-	cache         map[string]*sessionCache
-	cacheTime     time.Time
-	trackers      map[string]*terminal.StateTracker
-	limiters      map[string]*terminal.RateLimiter
-	available     bool
-	availableOnce sync.Once
-	classifier    *classifier.Classifier
-	classCache    *classifier.Cache
-	processReader process.ProcessReader
-	lister        PaneLister
-	capture       classifier.ContentCapture
+	mu              sync.RWMutex
+	refreshMu       sync.Mutex // prevents concurrent RefreshCache runs
+	cache           map[string]*sessionCache
+	cacheTime       time.Time
+	trackers        map[string]*terminal.StateTracker
+	limiters        map[string]*terminal.RateLimiter
+	contentLimiters map[string]*terminal.RateLimiter // per-pane Tier 3 rate limiter
+	available       bool
+	availableOnce   sync.Once
+	classifier      *classifier.Classifier
+	classCache      *classifier.Cache
+	processReader   process.ProcessReader
+	lister          PaneLister
+	capture         classifier.ContentCapture
 }
 
 // sessionCache holds all panes for a single tmux session.
@@ -137,14 +143,15 @@ func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process
 		lister = TmuxPaneLister{}
 	}
 	return &Integration{
-		cache:         make(map[string]*sessionCache),
-		trackers:      make(map[string]*terminal.StateTracker),
-		limiters:      make(map[string]*terminal.RateLimiter),
-		classifier:    cls,
-		classCache:    classifier.NewCache(),
-		processReader: reader,
-		lister:        lister,
-		capture:       capture,
+		cache:           make(map[string]*sessionCache),
+		trackers:        make(map[string]*terminal.StateTracker),
+		limiters:        make(map[string]*terminal.RateLimiter),
+		contentLimiters: make(map[string]*terminal.RateLimiter),
+		classifier:      cls,
+		classCache:      classifier.NewCache(),
+		processReader:   reader,
+		lister:          lister,
+		capture:         capture,
 	}
 }
 
@@ -164,7 +171,17 @@ func (t *Integration) Available() bool {
 }
 
 // RefreshCache updates cached pane classifications. Call once per poll cycle.
+// A TryLock guard ensures that if a previous refresh is still running (e.g.
+// because Tier 3 capture-pane calls are slow), the new call returns immediately
+// rather than stacking up concurrent tmux subprocess storms.
 func (t *Integration) RefreshCache() {
+	if !t.refreshMu.TryLock() {
+		// A refresh is already in progress; skip this cycle.
+		log.Debug().Msg("tmux RefreshCache skipped: previous refresh still running")
+		return
+	}
+	defer t.refreshMu.Unlock()
+
 	panes, err := t.lister.ListAllPanes()
 	if err != nil {
 		log.Debug().Err(err).Msg("tmux list-panes failed, clearing cache")
@@ -203,7 +220,15 @@ func (t *Integration) RefreshCache() {
 		fingerprint := t.processFingerprint(input.PanePID)
 		result, ok := t.classCache.Get(input.PaneID, fingerprint)
 		if !ok {
-			result = t.classifier.Classify(context.Background(), input)
+			// Gate Tier 3 (content capture) behind a per-pane rate limiter so
+			// we never spawn more than one capture-pane per pane per interval.
+			// On the first call Allow() returns true; subsequent calls within
+			// contentCheckInterval use only Tiers 1 and 2.
+			if t.contentLimiterAllow(key) {
+				result = t.classifier.Classify(context.Background(), input)
+			} else {
+				result = t.classifier.ClassifyStable(input)
+			}
 			if result.StableForProcessCache() {
 				t.classCache.Set(input.PaneID, fingerprint, result)
 			}
@@ -230,6 +255,20 @@ func (t *Integration) RefreshCache() {
 	t.mu.Unlock()
 }
 
+// contentLimiterAllow returns true if Tier 3 content capture is allowed for
+// the given pane key at this moment, and records the attempt. The first call
+// for a new pane always returns true.
+func (t *Integration) contentLimiterAllow(key string) bool {
+	t.mu.Lock()
+	limiter, ok := t.contentLimiters[key]
+	if !ok {
+		limiter = terminal.NewRateLimiterWithInterval(contentCheckInterval)
+		t.contentLimiters[key] = limiter
+	}
+	t.mu.Unlock()
+	return limiter.Allow()
+}
+
 func (t *Integration) processFingerprint(panePID int64) int64 {
 	if panePID <= 0 {
 		return 0
@@ -253,6 +292,11 @@ func (t *Integration) prunePaneKeysLocked(activeKeys map[string]bool) {
 	for key := range t.limiters {
 		if !activeKeys[key] {
 			delete(t.limiters, key)
+		}
+	}
+	for paneID := range t.contentLimiters {
+		if !activeKeys[paneID] {
+			delete(t.contentLimiters, paneID)
 		}
 	}
 }

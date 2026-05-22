@@ -179,6 +179,36 @@ func TestClassify_Tier3_Disabled(t *testing.T) {
 	assert.Zero(t, capture.calls)
 }
 
+func TestClassifyStable_SkipsTier3(t *testing.T) {
+	capture := &fakeCapture{content: testToolAgent}
+	scorer := &fakeScorer{score: 6, categories: 3, tool: testToolClaude}
+	cls := classifier.New(nil, shellReader(), capture, scorer)
+
+	t.Run("no content call when tier1 and tier2 both miss", func(t *testing.T) {
+		got := cls.ClassifyStable(classifier.PaneInput{PaneID: "%1", PanePID: 100})
+		assert.False(t, got.IsAgent)
+		assert.Zero(t, got.Tier)
+		assert.Zero(t, capture.calls)
+	})
+
+	t.Run("tier1 hit still works", func(t *testing.T) {
+		cls2 := classifier.New(titlePatterns(testToolClaude, testToolClaude), shellReader(), capture, scorer)
+		got := cls2.ClassifyStable(classifier.PaneInput{PaneTitle: testToolClaude})
+		assert.True(t, got.IsAgent)
+		assert.Equal(t, 1, got.Tier)
+		assert.Zero(t, capture.calls)
+	})
+
+	t.Run("tier2 hit still works", func(t *testing.T) {
+		reader := processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}})
+		cls2 := classifier.New(nil, reader, capture, scorer)
+		got := cls2.ClassifyStable(classifier.PaneInput{PaneID: "%1", PanePID: 100})
+		assert.True(t, got.IsAgent)
+		assert.Equal(t, 2, got.Tier)
+		assert.Zero(t, capture.calls)
+	})
+}
+
 func TestClassify_CascadeOrder(t *testing.T) {
 	t.Run("tier1_short_circuits_process_and_content", func(t *testing.T) {
 		reader := &fakeReader{}

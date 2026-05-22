@@ -23,6 +23,14 @@ func NewRateLimiter(eventsPerSecond int) *RateLimiter {
 	}
 }
 
+// NewRateLimiterWithInterval creates a rate limiter with a fixed minimum interval between events.
+func NewRateLimiterWithInterval(interval time.Duration) *RateLimiter {
+	if interval <= 0 {
+		interval = time.Second
+	}
+	return &RateLimiter{interval: interval}
+}
+
 // Allow returns true if the event should be allowed based on the rate limit.
 func (rl *RateLimiter) Allow() bool {
 	rl.mu.Lock()

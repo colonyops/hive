@@ -136,6 +136,8 @@ func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
 }
 
 func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
+	// Verify that once the content limiter permits a re-check (simulated by
+	// clearing the limiter), changed content causes reclassification.
 	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "bash"}}
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
@@ -153,12 +155,71 @@ func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
 	assert.True(t, pane.result.IsAgent)
 	assert.Equal(t, 3, pane.result.Tier)
 
+	// Reset the content limiter to simulate the interval expiring, then change
+	// the pane content so the next full Classify returns not-agent.
+	integ.contentLimiters = make(map[string]*terminal.RateLimiter)
 	capture.content = "shell content"
 	integ.RefreshCache()
 	pane = integ.cache["sess"].findPane("%1")
 	require.NotNil(t, pane)
 	assert.False(t, pane.result.IsAgent)
 	assert.Equal(t, 2, capture.calls)
+}
+
+func TestRefreshCache_ContentLimiterSkipsTier3(t *testing.T) {
+	// After the first full Classify (which runs Tier 3), subsequent RefreshCache
+	// calls within contentCheckInterval must NOT call capture-pane again.
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "bash"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+	}}
+	capture := &fakeCapture{content: "agent content"}
+	scorer := &fakeScorer{scores: map[string]fakeScore{
+		"agent content": {score: 6, categories: 3, tool: testToolClaude},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, capture, scorer), lister, reader)
+
+	integ.RefreshCache() // first call: Tier 3 runs, capture.calls == 1
+	assert.Equal(t, 1, capture.calls)
+
+	integ.RefreshCache() // second call within interval: limiter blocks Tier 3
+	integ.RefreshCache() // third call
+	assert.Equal(t, 1, capture.calls, "capture-pane must not be called again within contentCheckInterval")
+}
+
+func TestRefreshCache_TryLockPreventsStorm(t *testing.T) {
+	// If RefreshCache is already running, a concurrent call must return
+	// immediately without calling list-panes a second time.
+	var listCalls int
+	blockRefresh := make(chan struct{})
+	lister := &blockingPaneLister{
+		listFn: func() ([]classifier.PaneInput, error) {
+			listCalls++
+			if listCalls == 1 {
+				<-blockRefresh // block the first call
+			}
+			return nil, nil
+		},
+	}
+	integ := New(nil, lister)
+
+	// Start a refresh that will block inside ListAllPanes.
+	done := make(chan struct{})
+	go func() {
+		integ.RefreshCache()
+		close(done)
+	}()
+
+	// Give the goroutine time to acquire the lock.
+	time.Sleep(10 * time.Millisecond)
+
+	// Second call should return immediately (TryLock fails).
+	integ.RefreshCache()
+	assert.Equal(t, 1, listCalls, "second RefreshCache must not call list-panes while first is running")
+
+	// Unblock the first refresh.
+	close(blockRefresh)
+	<-done
 }
 
 func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
@@ -372,6 +433,12 @@ func agentCachedPane(paneID, windowIndex, tool string) cachedPane {
 type fakePaneLister struct{ panes []classifier.PaneInput }
 
 func (f *fakePaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return f.panes, nil }
+
+type blockingPaneLister struct {
+	listFn func() ([]classifier.PaneInput, error)
+}
+
+func (b *blockingPaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return b.listFn() }
 
 type fakeProcessReader struct {
 	tpgid int

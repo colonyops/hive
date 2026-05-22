@@ -69,6 +69,17 @@ func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCap
 
 // Classify runs the 3-tier cascade on a single pane.
 func (c *Classifier) Classify(ctx context.Context, input PaneInput) Result {
+	return c.classify(ctx, input, true)
+}
+
+// ClassifyStable runs only Tier 1 (title) and Tier 2 (process) classification.
+// It skips Tier 3 content capture, which spawns external subprocesses. Use
+// this during periodic cache refresh when Tier 3 is gated by a rate limiter.
+func (c *Classifier) ClassifyStable(input PaneInput) Result {
+	return c.classify(context.Background(), input, false)
+}
+
+func (c *Classifier) classify(ctx context.Context, input PaneInput, allowContent bool) Result {
 	classifiedAt := time.Now()
 	if tool, ok := c.classifyTitle(input.PaneTitle); ok {
 		return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceHigh, Tier: tierTitle, ClassifiedAt: classifiedAt}
@@ -76,8 +87,10 @@ func (c *Classifier) Classify(ctx context.Context, input PaneInput) Result {
 	if tool, ok := c.classifyProcess(input.PanePID); ok {
 		return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceHigh, Tier: tierProcess, ClassifiedAt: classifiedAt}
 	}
-	if tool, ok := c.classifyContent(ctx, input.PaneID); ok {
-		return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceMedium, Tier: tierContent, ClassifiedAt: classifiedAt}
+	if allowContent {
+		if tool, ok := c.classifyContent(ctx, input.PaneID); ok {
+			return Result{IsAgent: true, Tool: tool, Confidence: ConfidenceMedium, Tier: tierContent, ClassifiedAt: classifiedAt}
+		}
 	}
 	return Result{Tier: tierNone, ClassifiedAt: classifiedAt}
 }
