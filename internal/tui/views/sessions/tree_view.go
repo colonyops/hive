@@ -399,14 +399,9 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 
 // renderSession renders a session entry.
 func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model, index int) string {
-	// Tree prefix
-	var prefix string
-	if item.IsLastInRepo {
-		prefix = treeLast
-	} else {
-		prefix = treeBranch
-	}
-	prefixStyled := d.Styles.TreeLine.Render(prefix)
+	// Session rows sit directly below the repo header; child tmux rows
+	// indent one level further to keep hierarchy clear.
+	prefixStyled := d.Styles.TreeLine.Render("")
 
 	// Get terminal status if available
 	var termStatus *TerminalStatus
@@ -489,17 +484,12 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	var sessionLine string
-	if item.IsLastInRepo {
-		sessionLine = "    "
-	} else {
-		sessionLine = "│   "
-	}
+	sessionLine := "  "
 	var windowLine string
 	if item.IsLastWindow {
-		windowLine = "    "
+		windowLine = "   "
 	} else {
-		windowLine = "│   "
+		windowLine = "│  "
 	}
 	prefixStyled := d.Styles.TreeLine.Render(sessionLine + windowLine + connector)
 
@@ -534,7 +524,7 @@ func displayPaneID(paneID string) string {
 }
 
 func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
-	// Deeper indent: "│     ├─" or "│     └─" depending on position
+	// Window rows sit one level under the session row.
 	var connector string
 	if item.IsLastWindow {
 		connector = treeLast
@@ -542,14 +532,7 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	// The parent session's tree line continues vertically
-	var parentLine string
-	if item.IsLastInRepo {
-		parentLine = "    " // parent was └─, no continuing line
-	} else {
-		parentLine = "│   " // parent was ├─, line continues
-	}
-	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+	prefixStyled := d.Styles.TreeLine.Render("  " + connector)
 
 	// Get per-window terminal status from the delegate's store
 	var windowStatus *WindowStatus

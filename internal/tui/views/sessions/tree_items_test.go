@@ -67,7 +67,7 @@ func TestRenderPanePrefixContinuesParentWindowLine(t *testing.T) {
 		IsLastWindow: false,
 	}, false))
 
-	wantPrefix := "│   │   ├─"
+	wantPrefix := "  │  ├─"
 	if got[:len(wantPrefix)] != wantPrefix {
 		t.Fatalf("renderPane prefix = %q, want prefix %q", got, wantPrefix)
 	}
@@ -85,7 +85,7 @@ func TestRenderPanePrefixStopsAtLastWindow(t *testing.T) {
 		IsLastWindow: true,
 	}, false))
 
-	wantPrefix := "│       ├─"
+	wantPrefix := "     ├─"
 	if got[:len(wantPrefix)] != wantPrefix {
 		t.Fatalf("renderPane prefix = %q, want prefix %q", got, wantPrefix)
 	}
