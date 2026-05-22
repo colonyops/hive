@@ -16,9 +16,9 @@ func TestGroupPaneStatuses(t *testing.T) {
 		"%3": terminal.StatusActive,
 	}}
 	infos := []*terminal.SessionInfo{
-		{WindowIndex: "0", WindowName: "main", PaneID: "%1", DetectedTool: "claude", PaneContent: "ready"},
-		{WindowIndex: "0", WindowName: "main", PaneID: "%2", DetectedTool: "codex", PaneContent: "approval"},
-		{WindowIndex: "1", WindowName: "main", PaneID: "%3", DetectedTool: "aider", PaneContent: "active"},
+		{WindowIndex: "0", WindowName: "main", PaneID: "%1", DetectedTool: "claude", IsAgent: true, PaneContent: "ready"},
+		{WindowIndex: "0", WindowName: "main", PaneID: "%2", DetectedTool: "codex", IsAgent: true, PaneContent: "approval"},
+		{WindowIndex: "1", WindowName: "main", PaneID: "%3", DetectedTool: "aider", IsAgent: true, PaneContent: "active"},
 	}
 
 	got := groupPaneStatuses(context.Background(), integration, "sess", infos)
@@ -29,6 +29,26 @@ func TestGroupPaneStatuses(t *testing.T) {
 	assert.Len(t, got[0].Panes, 2)
 	assert.Equal(t, "1", got[1].WindowIndex)
 	assert.Equal(t, terminal.StatusActive, got[1].Status)
+}
+
+func TestGroupPaneStatuses_NonAgentDoesNotAffectWindowStatus(t *testing.T) {
+	integration := &fakeTerminalIntegration{statuses: map[string]terminal.Status{
+		"%1": terminal.StatusReady,
+	}}
+	infos := []*terminal.SessionInfo{
+		{WindowIndex: "0", WindowName: "main", PaneID: "%1", DetectedTool: "claude", IsAgent: true},
+		{WindowIndex: "0", WindowName: "main", PaneID: "%2", PaneTitle: "zsh", IsAgent: false},
+	}
+
+	got := groupPaneStatuses(context.Background(), integration, "sess", infos)
+
+	require.Len(t, got, 1)
+	assert.True(t, got[0].HasAgent)
+	assert.Equal(t, terminal.StatusReady, got[0].Status)
+	require.Len(t, got[0].Panes, 2)
+	assert.False(t, got[0].Panes[1].IsAgent)
+	assert.Equal(t, terminal.Status(""), got[0].Panes[1].Status)
+	assert.Equal(t, "zsh", got[0].Panes[1].Tool)
 }
 
 func TestAggregateStatus(t *testing.T) {

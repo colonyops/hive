@@ -297,11 +297,28 @@ func TestDiscoverAllPanes(t *testing.T) {
 	}}}
 	integ.cacheTime = time.Now()
 
-	infos, err := integ.DiscoverAllPanes(context.Background(), "multi-sess", nil)
+	infos, err := integ.DiscoverAllPanes(context.Background(), "multi-sess", nil, false)
 	require.NoError(t, err)
 	require.Len(t, infos, 2)
 	assert.Equal(t, "%1", infos[0].PaneID)
+	assert.True(t, infos[0].IsAgent)
 	assert.Equal(t, "%3", infos[1].PaneID)
+}
+
+func TestDiscoverAllPanes_IncludesNonAgentsWhenRequested(t *testing.T) {
+	integ := New(nil, nil)
+	integ.cache = map[string]*sessionCache{"multi-sess": {panes: []cachedPane{
+		{input: classifier.PaneInput{PaneID: "%1", WindowIndex: "0", WindowName: testToolClaude}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
+		{input: classifier.PaneInput{PaneID: "%2", WindowIndex: "0", WindowName: "shell", PaneTitle: "zsh"}, result: classifier.Result{IsAgent: false}},
+	}}}
+	integ.cacheTime = time.Now()
+
+	infos, err := integ.DiscoverAllPanes(context.Background(), "multi-sess", nil, true)
+	require.NoError(t, err)
+	require.Len(t, infos, 2)
+	assert.Equal(t, "%2", infos[1].PaneID)
+	assert.Equal(t, "zsh", infos[1].PaneTitle)
+	assert.False(t, infos[1].IsAgent)
 }
 
 func TestDiscoverAllPanes_Matching(t *testing.T) {
@@ -320,27 +337,27 @@ func TestDiscoverAllPanes_Matching(t *testing.T) {
 	ctx := context.Background()
 
 	t.Run("unknown session returns nil", func(t *testing.T) {
-		infos, err := integ.DiscoverAllPanes(ctx, "nonexistent", nil)
+		infos, err := integ.DiscoverAllPanes(ctx, "nonexistent", nil, false)
 		require.NoError(t, err)
 		assert.Nil(t, infos)
 	})
 
 	t.Run("stale cache returns nil", func(t *testing.T) {
 		integ.cacheTime = time.Now().Add(-5 * time.Second)
-		infos, err := integ.DiscoverAllPanes(ctx, "multi-sess", nil)
+		infos, err := integ.DiscoverAllPanes(ctx, "multi-sess", nil, false)
 		require.NoError(t, err)
 		assert.Nil(t, infos)
 		integ.cacheTime = time.Now()
 	})
 
 	t.Run("similar slug does not cross match", func(t *testing.T) {
-		infos, err := integ.DiscoverAllPanes(ctx, "foo", nil)
+		infos, err := integ.DiscoverAllPanes(ctx, "foo", nil, false)
 		require.NoError(t, err)
 		assert.Nil(t, infos, "slug foo must not match tmux session foo-bar")
 	})
 
 	t.Run("hyphenated exact slug still found", func(t *testing.T) {
-		infos, err := integ.DiscoverAllPanes(ctx, "foo-bar", nil)
+		infos, err := integ.DiscoverAllPanes(ctx, "foo-bar", nil, false)
 		require.NoError(t, err)
 		require.Len(t, infos, 1)
 		assert.Equal(t, "foo-bar", infos[0].Name)
@@ -348,7 +365,7 @@ func TestDiscoverAllPanes_Matching(t *testing.T) {
 	})
 
 	t.Run("metadata tmux_session match returns named session", func(t *testing.T) {
-		infos, err := integ.DiscoverAllPanes(ctx, "myslug", map[string]string{"tmux_session": "multi-sess"})
+		infos, err := integ.DiscoverAllPanes(ctx, "myslug", map[string]string{"tmux_session": "multi-sess"}, false)
 		require.NoError(t, err)
 		require.Len(t, infos, 2)
 		assert.Equal(t, "multi-sess", infos[0].Name)

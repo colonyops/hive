@@ -6,6 +6,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/internal/core/config"
+
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
@@ -32,6 +34,7 @@ type WindowStatus struct {
 	Status      terminal.Status
 	Tool        string
 	PaneContent string
+	HasAgent    bool
 	Panes       []PaneStatus
 }
 
@@ -55,7 +58,7 @@ type TerminalStatusBatchCompleteMsg struct {
 type TerminalPollTickMsg struct{}
 
 // FetchTerminalStatusBatch returns a command that fetches terminal status for multiple sessions.
-func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int) tea.Cmd {
+func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int, tmuxItems string) tea.Cmd {
 	if len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
 		return nil
 	}
@@ -86,7 +89,7 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 				ctx, cancel := context.WithTimeout(context.Background(), terminalStatusTimeout)
 				defer cancel()
 
-				status := fetchTerminalStatusForSession(ctx, mgr, s)
+				status := fetchTerminalStatusForSession(ctx, mgr, s, tmuxItems)
 
 				mu.Lock()
 				results[s.ID] = status
@@ -100,7 +103,7 @@ func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session
 }
 
 // fetchTerminalStatusForSession fetches terminal status for a single session.
-func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session) TerminalStatus {
+func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, sess *session.Session, tmuxItems string) TerminalStatus {
 	status := TerminalStatus{
 		Status: terminal.StatusMissing,
 	}
@@ -122,6 +125,13 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	}
 
 	if info == nil || integration == nil {
+		if tmuxItems == config.TmuxItemsAll {
+			windows := discoverAllWindows(ctx, mgr, sess.Slug, metadata)
+			if len(windows) > 0 {
+				status.Status = terminal.StatusNeutral
+				status.Windows = windows
+			}
+		}
 		return status
 	}
 
@@ -142,14 +152,14 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	var allInfos []*terminal.SessionInfo
 	var discErr error
 	if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
-		allInfos, discErr = disc.DiscoverAllPanes(ctx, sess.Slug, metadata)
+		allInfos, discErr = disc.DiscoverAllPanes(ctx, sess.Slug, metadata, tmuxItems == config.TmuxItemsAll)
 	}
 	if allInfos != nil || discErr != nil {
 		if discErr != nil {
 			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
 		} else if len(allInfos) > 0 {
 			windows := groupPaneStatuses(ctx, integration, sess.Slug, allInfos)
-			if shouldExposeWindows(windows) {
+			if shouldExposeWindowsForMode(windows, tmuxItems) {
 				status.Windows = windows
 			}
 		}
@@ -158,22 +168,45 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	return status
 }
 
+func discoverAllWindows(ctx context.Context, mgr *terminal.Manager, slug string, metadata map[string]string) []WindowStatus {
+	for _, integration := range mgr.EnabledIntegrations() {
+		disc, ok := integration.(terminal.AllPanesDiscoverer)
+		if !ok {
+			continue
+		}
+		infos, err := disc.DiscoverAllPanes(ctx, slug, metadata, true)
+		if err != nil {
+			log.Debug().Err(err).Str("session", slug).Msg("all tmux item discovery failed")
+			continue
+		}
+		windows := groupPaneStatuses(ctx, integration, slug, infos)
+		if len(windows) > 0 {
+			return windows
+		}
+	}
+	return nil
+}
+
 func groupPaneStatuses(ctx context.Context, integration terminal.Integration, slug string, infos []*terminal.SessionInfo) []WindowStatus {
 	windows := make([]WindowStatus, 0, len(infos))
 	byWindow := make(map[string]int, len(infos))
 	for _, wi := range infos {
-		paneStatus, wErr := integration.GetStatus(ctx, wi)
-		if wErr != nil {
-			log.Debug().Err(wErr).Str("session", slug).Str("window", wi.WindowIndex).Str("pane", wi.PaneID).Msg("per-pane status failed, marking missing")
-			paneStatus = terminal.StatusMissing
+		paneStatus := terminal.Status("")
+		if wi.IsAgent {
+			var wErr error
+			paneStatus, wErr = integration.GetStatus(ctx, wi)
+			if wErr != nil {
+				log.Debug().Err(wErr).Str("session", slug).Str("window", wi.WindowIndex).Str("pane", wi.PaneID).Msg("per-pane status failed, marking missing")
+				paneStatus = terminal.StatusMissing
+			}
 		}
 
 		pane := PaneStatus{
 			PaneID:      wi.PaneID,
 			Status:      paneStatus,
-			Tool:        wi.DetectedTool,
+			Tool:        paneLabel(wi),
 			PaneContent: wi.PaneContent,
-			IsAgent:     true,
+			IsAgent:     wi.IsAgent,
 		}
 
 		// \x1f is an ASCII Unit Separator, which avoids collisions with printable tmux window names.
@@ -188,9 +221,11 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 				Status:      paneStatus,
 				Tool:        wi.DetectedTool,
 				PaneContent: wi.PaneContent,
+				HasAgent:    wi.IsAgent,
 			})
-		} else {
+		} else if wi.IsAgent {
 			windows[idx].Status = aggregateStatus(windows[idx].Status, paneStatus)
+			windows[idx].HasAgent = true
 			if windows[idx].Tool == "" {
 				windows[idx].Tool = wi.DetectedTool
 			}
@@ -203,11 +238,37 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 	return windows
 }
 
-func shouldExposeWindows(windows []WindowStatus) bool {
+func shouldExposeWindowsForMode(windows []WindowStatus, tmuxItems string) bool {
+	if len(windows) == 0 {
+		return false
+	}
+	if tmuxItems == config.TmuxItemsAll {
+		return shouldExposeAllTmuxItems(windows)
+	}
 	if len(windows) > 1 {
 		return true
 	}
 	return len(windows) == 1 && len(windows[0].Panes) > 1
+}
+
+func shouldExposeAllTmuxItems(windows []WindowStatus) bool {
+	if len(windows) > 1 {
+		return true
+	}
+	return len(windows) == 1 && len(windows[0].Panes) > 1
+}
+
+func paneLabel(info *terminal.SessionInfo) string {
+	if info == nil {
+		return ""
+	}
+	if info.DetectedTool != "" {
+		return info.DetectedTool
+	}
+	if info.PaneTitle != "" {
+		return info.PaneTitle
+	}
+	return "terminal"
 }
 
 func aggregateStatus(current, next terminal.Status) terminal.Status {

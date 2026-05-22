@@ -51,18 +51,18 @@ type cachedPane struct {
 	state  paneState
 }
 
-// agentPanes returns panes classified as agents.
-func (sc *sessionCache) agentPanes() []cachedPane {
+// matchingPanes returns panes eligible for tree expansion.
+func (sc *sessionCache) matchingPanes(includeNonAgents bool) []cachedPane {
 	if sc == nil {
 		return nil
 	}
-	agents := make([]cachedPane, 0, len(sc.panes))
+	panes := make([]cachedPane, 0, len(sc.panes))
 	for _, pane := range sc.panes {
-		if pane.result.IsAgent {
-			agents = append(agents, pane)
+		if includeNonAgents || pane.result.IsAgent {
+			panes = append(panes, pane)
 		}
 	}
-	return agents
+	return panes
 }
 
 // findPane returns the pane matching paneID.
@@ -392,7 +392,9 @@ func sessionInfoFromPane(sessionName string, pane *cachedPane) *terminal.Session
 		WindowIndex:  pane.input.WindowIndex,
 		PaneID:       pane.input.PaneID,
 		WindowName:   pane.input.WindowName,
+		PaneTitle:    pane.input.PaneTitle,
 		DetectedTool: pane.result.Tool,
+		IsAgent:      pane.result.IsAgent,
 	}
 }
 
@@ -498,8 +500,8 @@ func (t *Integration) updatePaneState(sessionName, paneID string, update func(*p
 	}
 }
 
-// DiscoverAllPanes returns a SessionInfo for every classified agent pane.
-func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error) {
+// DiscoverAllPanes returns SessionInfo values for panes tied to a hive session.
+func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata map[string]string, includeNonAgents bool) ([]*terminal.SessionInfo, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -512,13 +514,13 @@ func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata 
 		return nil, nil
 	}
 
-	agents := sc.agentPanes()
-	if len(agents) == 0 {
+	panes := sc.matchingPanes(includeNonAgents)
+	if len(panes) == 0 {
 		return nil, nil
 	}
-	infos := make([]*terminal.SessionInfo, 0, len(agents))
-	for i := range agents {
-		infos = append(infos, sessionInfoFromPane(sessionName, &agents[i]))
+	infos := make([]*terminal.SessionInfo, 0, len(panes))
+	for i := range panes {
+		infos = append(infos, sessionInfoFromPane(sessionName, &panes[i]))
 	}
 	return infos, nil
 }

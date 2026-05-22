@@ -256,7 +256,7 @@ func New(deps Deps, opts Opts) Model {
 	// Wire handler lookups through sessions view stores
 	handler.SetTmuxWindowLookup(func(sessionID string) string {
 		if status, ok := sessionsView.TerminalStatuses().Get(sessionID); ok {
-			return status.WindowName
+			return tmuxTargetForTerminalStatus(status)
 		}
 		return ""
 	})
@@ -1663,6 +1663,20 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 	m.modals.NewSession = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
 	m.state = stateCreatingSession
 	return m, m.modals.NewSession.Init()
+}
+
+func tmuxTargetForTerminalStatus(status sessions.TerminalStatus) string {
+	if status.WindowName != "" {
+		return status.WindowName
+	}
+	if len(status.Windows) != 1 {
+		return ""
+	}
+	window := status.Windows[0]
+	if len(window.Panes) == 1 && window.Panes[0].PaneID != "" {
+		return window.Panes[0].PaneID
+	}
+	return window.WindowIndex
 }
 
 // selectedTreeItem returns the currently selected tree item, or nil if none.

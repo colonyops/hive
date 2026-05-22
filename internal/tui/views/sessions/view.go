@@ -291,7 +291,7 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 		for i := range v.allSessions {
 			sessPtrs[i] = &v.allSessions[i]
 		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.tmuxItemsMode()))
 	}
 	return tea.Batch(cmds...)
 }
@@ -344,7 +344,7 @@ func (v *View) handleTerminalPollTick() tea.Cmd {
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers))
+	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.tmuxItemsMode()))
 	if v.terminalManager.HasEnabledIntegrations() {
 		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
 	}
@@ -750,7 +750,7 @@ func (v *View) rebuildWindowItems() {
 		if !ti.IsSession() {
 			continue
 		}
-		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && shouldExposeWindows(ts.Windows) {
+		if ts, ok := v.terminalStatuses.Get(ti.Session.ID); ok && shouldExposeWindowsForMode(ts.Windows, v.tmuxItemsMode()) {
 			for _, w := range ts.Windows {
 				expected["w\x1f"+ti.Session.ID+"\x1f"+w.WindowIndex+"\x1f"+w.WindowName] = struct{}{}
 				if len(w.Panes) > 1 {
@@ -807,7 +807,7 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 		}
 
 		ts, ok := v.terminalStatuses.Get(treeItem.Session.ID)
-		if !ok || !shouldExposeWindows(ts.Windows) {
+		if !ok || !shouldExposeWindowsForMode(ts.Windows, v.tmuxItemsMode()) {
 			continue
 		}
 
@@ -829,6 +829,7 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 						PaneID:        p.PaneID,
 						PaneTool:      p.Tool,
 						PaneStatus:    p.Status,
+						PaneIsAgent:   p.IsAgent,
 						ParentWindow:  w.WindowIndex,
 						ParentSession: treeItem.Session,
 						IsLastPane:    j == len(w.Panes)-1,
@@ -1515,6 +1516,13 @@ func (v *View) ToggleGroupBy() tea.Cmd {
 // GroupBy returns the current tree view grouping mode.
 func (v *View) GroupBy() string {
 	return v.groupBy
+}
+
+func (v *View) tmuxItemsMode() string {
+	if v.cfg == nil || v.cfg.Views.Sessions.TmuxItems == "" {
+		return config.TmuxItemsAgents
+	}
+	return v.cfg.Views.Sessions.TmuxItems
 }
 
 // ApplyTheme resets delegate styles and clears cached animation colors for a theme change.

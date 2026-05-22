@@ -453,7 +453,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 			var allInfos []*terminal.SessionInfo
 			var dErr error
 			if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
-				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata)
+				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata, false)
 			} else {
 				statuses[item.Session.ID] = status
 				expanded = append(expanded, item)

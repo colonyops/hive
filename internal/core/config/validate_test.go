@@ -22,7 +22,7 @@ func validConfig(t *testing.T) *Config {
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
 		TUI:     TUIConfig{Theme: styles.DefaultTheme},
-		Views:   ViewsConfig{Sessions: SessionsViewConfig{GroupBy: GroupByRepo}},
+		Views:   ViewsConfig{Sessions: SessionsViewConfig{GroupBy: GroupByRepo, TmuxItems: TmuxItemsAll}},
 		Agents: AgentsConfig{
 			Default:  "claude",
 			Profiles: map[string]AgentProfile{"claude": {}},
@@ -1530,6 +1530,27 @@ func TestValidate_GroupByValidModes(t *testing.T) {
 		t.Run(mode, func(t *testing.T) {
 			cfg := validConfig(t)
 			cfg.Views.Sessions.GroupBy = mode
+
+			err := cfg.Validate()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidate_TmuxItemsInvalid(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Views.Sessions.TmuxItems = "invalid"
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "views.sessions.tmux_items")
+}
+
+func TestValidate_TmuxItemsValidModes(t *testing.T) {
+	for _, mode := range ValidTmuxItemsModes {
+		t.Run(mode, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Views.Sessions.TmuxItems = mode
 
 			err := cfg.Validate()
 			assert.NoError(t, err)

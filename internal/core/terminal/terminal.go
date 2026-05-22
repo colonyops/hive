@@ -10,6 +10,7 @@ const (
 	StatusActive   Status = "active"   // agent is actively working (spinner/busy indicator)
 	StatusApproval Status = "approval" // agent needs permission (Yes/No dialog)
 	StatusReady    Status = "ready"    // agent finished, waiting for next input (❯ prompt)
+	StatusNeutral  Status = "neutral"  // terminal exists but is not an agent pane
 	StatusMissing  Status = "missing"  // terminal session not found
 )
 
@@ -19,8 +20,10 @@ type SessionInfo struct {
 	WindowIndex  string // tmux window index (e.g., "0", "1")
 	PaneID       string // tmux pane ID in %N format
 	WindowName   string // window name (for display and template data)
+	PaneTitle    string // pane title (for non-agent display)
 	Status       Status // current detected status
 	DetectedTool string // detected AI tool (claude, gemini, etc.)
+	IsAgent      bool   // true when this pane is a detected agent
 	PaneContent  string // captured pane content for preview
 }
 
@@ -44,7 +47,7 @@ type Integration interface {
 	GetStatus(ctx context.Context, info *SessionInfo) (Status, error)
 }
 
-// AllPanesDiscoverer is implemented by integrations that can return all agent panes.
+// AllPanesDiscoverer is implemented by integrations that can return session panes.
 type AllPanesDiscoverer interface {
-	DiscoverAllPanes(ctx context.Context, slug string, metadata map[string]string) ([]*SessionInfo, error)
+	DiscoverAllPanes(ctx context.Context, slug string, metadata map[string]string, includeNonAgents bool) ([]*SessionInfo, error)
 }

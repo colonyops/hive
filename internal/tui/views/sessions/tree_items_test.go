@@ -5,6 +5,7 @@ import (
 
 	"charm.land/bubbles/v2/list"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/terminal"
 )
 
 func TestIsSession(t *testing.T) {
@@ -51,6 +52,42 @@ func TestTreeItemsAll(t *testing.T) {
 	}
 	if !got[2].IsRecycledPlaceholder {
 		t.Error("third item should be recycled placeholder")
+	}
+}
+
+func TestRenderPanePrefixContinuesParentWindowLine(t *testing.T) {
+	delegate := NewTreeDelegate()
+	got := terminal.StripANSI(delegate.renderPane(TreeItem{
+		IsPaneItem:   true,
+		PaneID:       "%2",
+		PaneTool:     "claude",
+		PaneStatus:   terminal.StatusReady,
+		PaneIsAgent:  true,
+		IsLastInRepo: false,
+		IsLastWindow: false,
+	}, false))
+
+	wantPrefix := "│   │   ├─"
+	if got[:len(wantPrefix)] != wantPrefix {
+		t.Fatalf("renderPane prefix = %q, want prefix %q", got, wantPrefix)
+	}
+}
+
+func TestRenderPanePrefixStopsAtLastWindow(t *testing.T) {
+	delegate := NewTreeDelegate()
+	got := terminal.StripANSI(delegate.renderPane(TreeItem{
+		IsPaneItem:   true,
+		PaneID:       "%2",
+		PaneTool:     "claude",
+		PaneStatus:   terminal.StatusReady,
+		PaneIsAgent:  true,
+		IsLastInRepo: false,
+		IsLastWindow: true,
+	}, false))
+
+	wantPrefix := "│       ├─"
+	if got[:len(wantPrefix)] != wantPrefix {
+		t.Fatalf("renderPane prefix = %q, want prefix %q", got, wantPrefix)
 	}
 }
 

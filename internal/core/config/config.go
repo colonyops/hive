@@ -513,6 +513,14 @@ const (
 // ValidGroupByModes lists all valid group_by values.
 var ValidGroupByModes = []string{GroupByRepo, GroupByGroup}
 
+const (
+	TmuxItemsAgents = "agents" // Show only detected agent panes in the sessions tree.
+	TmuxItemsAll    = "all"    // Show all tmux windows and panes tied to a hive session.
+)
+
+// ValidTmuxItemsModes lists all valid tmux_items values.
+var ValidTmuxItemsModes = []string{TmuxItemsAgents, TmuxItemsAll}
+
 // TUIConfig holds TUI-related configuration.
 type TUIConfig struct {
 	Theme         string `json:"theme"          yaml:"theme"`          // built-in theme name (default: "tokyo-night")
@@ -738,6 +746,7 @@ func DefaultConfig() Config {
 			Sessions: SessionsViewConfig{
 				RefreshInterval: 15 * time.Second,
 				PreviewEnabled:  true,
+				TmuxItems:       TmuxItemsAll,
 			},
 		},
 		Messaging: MessagingConfig{
@@ -836,6 +845,9 @@ func (c *Config) applyDefaults() {
 	if c.Views.Sessions.GroupBy == "" {
 		c.Views.Sessions.GroupBy = GroupByRepo
 	}
+	if c.Views.Sessions.TmuxItems == "" {
+		c.Views.Sessions.TmuxItems = TmuxItemsAll
+	}
 	if c.CopyCommand == "" {
 		c.CopyCommand = defaultCopyCommand()
 	}
@@ -918,6 +930,7 @@ func (c *Config) Validate() error {
 		criterio.Run("database.busy_timeout", c.Database.BusyTimeout, criterio.Min(0)),
 		c.validateTheme(),
 		c.validateGroupBy(),
+		c.validateTmuxItems(),
 		c.validateKeybindingsBasic(),
 		c.validateUserCommandsBasic(),
 		c.validateMaxRecycled(),
@@ -1059,6 +1072,11 @@ func (c *Config) validateTheme() error {
 // validateGroupBy checks that the configured group_by value is valid.
 func (c *Config) validateGroupBy() error {
 	return criterio.Run("views.sessions.group_by", c.Views.Sessions.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
+}
+
+// validateTmuxItems checks that the configured tmux_items value is valid.
+func (c *Config) validateTmuxItems() error {
+	return criterio.Run("views.sessions.tmux_items", c.Views.Sessions.TmuxItems, criterio.StrOneOf(ValidTmuxItemsModes...))
 }
 
 // validateKeybindingsBasic performs basic keybinding validation for the Validate() method.

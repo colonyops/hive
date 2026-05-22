@@ -73,6 +73,8 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, tree
 			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
 		case terminal.StatusReady:
 			return treeStyles.StatusReady.Render(styles.StatusIndicatorReady)
+		case terminal.StatusNeutral:
+			return treeStyles.StatusUnknown.Render(styles.StatusIndicatorNeutral)
 		case terminal.StatusMissing:
 			return treeStyles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 		}
@@ -136,6 +138,7 @@ type TreeItem struct {
 	PaneID       string
 	PaneTool     string
 	PaneStatus   terminal.Status
+	PaneIsAgent  bool
 	ParentWindow string
 	IsLastPane   bool
 }
@@ -486,18 +489,30 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	var parentLine string
+	var sessionLine string
 	if item.IsLastInRepo {
-		parentLine = "        "
+		sessionLine = "    "
 	} else {
-		parentLine = "│       "
+		sessionLine = "│   "
 	}
-	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+	var windowLine string
+	if item.IsLastWindow {
+		windowLine = "    "
+	} else {
+		windowLine = "│   "
+	}
+	prefixStyled := d.Styles.TreeLine.Render(sessionLine + windowLine + connector)
 
-	termStatus := &TerminalStatus{Status: item.PaneStatus}
-	statusStr := renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	statusStr := renderStatusIndicator(session.StateActive, &TerminalStatus{Status: terminal.StatusNeutral}, d.Styles, d.AnimationFrame)
+	if item.PaneIsAgent {
+		termStatus := &TerminalStatus{Status: item.PaneStatus}
+		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	}
 
 	nameStyle := d.Styles.SessionName
+	if !item.PaneIsAgent {
+		nameStyle = d.Styles.SessionID
+	}
 	if isSelected {
 		nameStyle = d.Styles.Selected
 	}
@@ -551,10 +566,13 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 
 	// Status indicator
 	var statusStr string
-	if windowStatus != nil {
+	switch {
+	case windowStatus != nil && windowStatus.HasAgent:
 		termStatus := &TerminalStatus{Status: windowStatus.Status}
 		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
-	} else {
+	case windowStatus != nil:
+		statusStr = renderStatusIndicator(session.StateActive, &TerminalStatus{Status: terminal.StatusNeutral}, d.Styles, d.AnimationFrame)
+	default:
 		statusStr = d.Styles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 	}
 
