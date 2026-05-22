@@ -1,8 +1,0 @@
-Welcome to Claude Code
-
-● Completed the requested change
-```
-go test ./...
-```
-## Summary
-❯

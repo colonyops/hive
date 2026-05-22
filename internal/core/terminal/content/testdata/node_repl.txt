@@ -1,5 +1,0 @@
-Welcome to Node.js v24.0.0.
-Type ".help" for more information.
-> const x = 1
-undefined
-> 

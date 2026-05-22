@@ -9,7 +9,7 @@ import (
 
 func BenchmarkScorer_AgentContent(b *testing.B) {
 	scorer := content.NewScorer()
-	data := readFixture(b, "claude_busy.txt")
+	data := scorerFixtureContent("claude busy session")
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = scorer.ScoreDetails(data)
@@ -18,7 +18,7 @@ func BenchmarkScorer_AgentContent(b *testing.B) {
 
 func BenchmarkScorer_ShellContent(b *testing.B) {
 	scorer := content.NewScorer()
-	data := readFixture(b, "shell_session.txt")
+	data := scorerFixtureContent("normal shell")
 	b.ReportAllocs()
 	for b.Loop() {
 		_ = scorer.ScoreDetails(data)

@@ -1,6 +1,0 @@
-HIVE(1)                         Manual page                         HIVE(1)
-
-NAME
-       hive - manage agent sessions
-lines 1-50
-(END)

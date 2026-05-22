@@ -1,5 +1,0 @@
-npm init
-package name: (demo)
-version: (1.0.0)
-Proceed? [Y/n]
-> 

@@ -1,7 +1,0 @@
-Claude Code
-
-✳ thinking... (12s · 1.2k tokens)
-Read(internal/core/terminal/content/scorer.go)
-● Inspecting project files
-ctrl+c to interrupt
-## Plan

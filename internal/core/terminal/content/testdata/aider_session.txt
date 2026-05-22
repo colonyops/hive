@@ -1,9 +1,0 @@
-Aider v0.80.0
-
-✦ Editing files
-Edit(internal/core/terminal/content/rules.go)
-## Changes
-```diff
-+ new scorer
-```
-> 
