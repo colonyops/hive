@@ -54,6 +54,15 @@ type Classifier struct {
 	scorer        ContentScorer
 }
 
+// WithReader returns a shallow copy of the Classifier that uses r for process
+// identification instead of the original reader. Use this to inject a
+// per-refresh-cycle SnapshotReader without mutating the shared Classifier.
+func (c *Classifier) WithReader(r process.ProcessReader) *Classifier {
+	copy := *c
+	copy.reader = r
+	return &copy
+}
+
 // New creates a Classifier with the given dependencies.
 func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCapture, scorer ContentScorer) *Classifier {
 	if reader == nil {

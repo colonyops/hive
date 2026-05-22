@@ -8,6 +8,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/core/terminal/classifier"
+	"github.com/colonyops/hive/internal/core/terminal/process"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -220,6 +221,32 @@ func TestRefreshCache_TryLockPreventsStorm(t *testing.T) {
 	// Unblock the first refresh.
 	close(blockRefresh)
 	<-done
+}
+
+func TestRefreshCache_UsesSharedProcessSnapshot(t *testing.T) {
+	// Verify that process-tree children are queried once per RefreshCache call
+	// regardless of how many panes are classified. Before the snapshot fix,
+	// each ClassifyStable call would invoke Children() independently.
+	var childrenCalls int
+	reader := &countingProcessReader{
+		ProcessReader: &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "zsh"}},
+		onChildren:    func() { childrenCalls++ },
+	}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{
+		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
+		{SessionName: "sess", PaneID: "%2", PanePID: 101, WindowIndex: "1", WindowName: "work"},
+		{SessionName: "sess", PaneID: "%3", PanePID: 102, WindowIndex: "2", WindowName: "logs"},
+	}}
+	integ := NewWithReader(classifier.New(nil, reader, nil, nil), lister, reader)
+
+	integ.RefreshCache()
+
+	// SnapshotReader.Children is served from the in-memory map; only the
+	// snapshot construction itself calls the underlying reader. The fake reader
+	// always returns no children, so the snapshot map is built but returns nil
+	// for every lookup — the important thing is the base reader is not called
+	// again per-pane after snapshot construction.
+	assert.Equal(t, 0, childrenCalls, "base Children must not be called per-pane when snapshot is available")
 }
 
 func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
@@ -439,6 +466,18 @@ type blockingPaneLister struct {
 }
 
 func (b *blockingPaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return b.listFn() }
+
+// countingProcessReader wraps a ProcessReader and invokes a callback on each
+// Children call so tests can assert how many times the OS is queried.
+type countingProcessReader struct {
+	process.ProcessReader
+	onChildren func()
+}
+
+func (c *countingProcessReader) Children(pid int) ([]int, error) {
+	c.onChildren()
+	return c.ProcessReader.Children(pid)
+}
 
 type fakeProcessReader struct {
 	tpgid int

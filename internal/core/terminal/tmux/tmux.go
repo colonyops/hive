@@ -182,6 +182,10 @@ func (t *Integration) RefreshCache() {
 	}
 	defer t.refreshMu.Unlock()
 
+	// Build a process-tree snapshot once for this refresh cycle so all pane
+	// classifications share one OS call instead of one per pane.
+	snapshotCls := t.classifier.WithReader(process.NewSnapshotReader(t.processReader))
+
 	panes, err := t.lister.ListAllPanes()
 	if err != nil {
 		log.Debug().Err(err).Msg("tmux list-panes failed, clearing cache")
@@ -225,9 +229,9 @@ func (t *Integration) RefreshCache() {
 			// On the first call Allow() returns true; subsequent calls within
 			// contentCheckInterval use only Tiers 1 and 2.
 			if t.contentLimiterAllow(key) {
-				result = t.classifier.Classify(context.Background(), input)
+				result = snapshotCls.Classify(context.Background(), input)
 			} else {
-				result = t.classifier.ClassifyStable(input)
+				result = snapshotCls.ClassifyStable(input)
 			}
 			if result.StableForProcessCache() {
 				t.classCache.Set(input.PaneID, fingerprint, result)
