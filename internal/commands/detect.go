@@ -69,7 +69,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 
 	tmuxSessions := detectTmuxSessionNames(sess)
 
-	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
+	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {
 		if !tmuxSessions[pane.SessionName] {
