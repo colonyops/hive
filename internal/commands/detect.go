@@ -27,7 +27,8 @@ func NewDetectCmd(flags *Flags, app *hive.App) *DetectCmd {
 func (cmd *DetectCmd) Register(app *cli.Command) *cli.Command {
 	app.Commands = append(app.Commands, &cli.Command{
 		Name:      "detect",
-		Usage:     "Classify tmux panes for a session",
+		Hidden:    true,
+		Usage:     "Classify tmux panes for a session (development/diagnostic tool)",
 		UsageText: "hive detect <session-slug>",
 		Action:    cmd.run,
 	})
@@ -68,7 +69,7 @@ func (cmd *DetectCmd) run(ctx context.Context, c *cli.Command) error {
 
 	tmuxSessions := detectTmuxSessionNames(sess)
 
-	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
+	cls := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher, cmd.app.Config.Tmux.PreviewWindowMatcher).Classifier()
 	out := detectOutput{Session: sess.Slug}
 	for _, pane := range panes {
 		if !tmuxSessions[pane.SessionName] {

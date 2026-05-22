@@ -7,11 +7,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-var knownTools = []string{"claude", "gemini", "aider", "codex", "cursor", "opencode", "cline"}
-
 // TitlePatternsFromConfig compiles config regex strings into TitlePatterns.
-// Patterns that fail to compile are logged and skipped.
-func TitlePatternsFromConfig(patterns []string) []TitlePattern {
+// agentNames is the list of known tool names used to infer the tool label
+// from each pattern string (e.g. a pattern containing "claude" maps to tool
+// "claude"). Pass nil to fall back to the generic "agent" label for all
+// patterns. The list should come from config so no source-code change is
+// required when a new tool is added.
+func TitlePatternsFromConfig(patterns []string, agentNames []string) []TitlePattern {
 	out := make([]TitlePattern, 0, len(patterns))
 	for _, pattern := range patterns {
 		compiled, err := regexp.Compile("(?i)" + pattern)
@@ -19,19 +21,19 @@ func TitlePatternsFromConfig(patterns []string) []TitlePattern {
 			log.Warn().Err(err).Str("pattern", pattern).Msg("skipping invalid terminal title pattern")
 			continue
 		}
-		out = append(out, TitlePattern{Pattern: compiled, Tool: inferTool(pattern)})
+		out = append(out, TitlePattern{Pattern: compiled, Tool: inferTool(pattern, agentNames)})
 	}
 	return out
 }
 
-func inferTool(pattern string) string {
+func inferTool(pattern string, agentNames []string) string {
 	lower := strings.ToLower(pattern)
 	if isPiTitlePattern(lower) {
 		return "pi"
 	}
-	for _, tool := range knownTools {
-		if strings.Contains(lower, tool) {
-			return tool
+	for _, name := range agentNames {
+		if strings.Contains(lower, name) {
+			return name
 		}
 	}
 	return "agent"

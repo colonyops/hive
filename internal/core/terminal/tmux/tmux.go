@@ -117,11 +117,13 @@ func (sc *sessionCache) bestAgentPane() *cachedPane {
 	return best
 }
 
-// NewFromPreviewMatchers creates the production tmux integration from config matchers.
-func NewFromPreviewMatchers(previewMatchers []string) *Integration {
+// NewFromPreviewMatchers creates the production tmux integration from config
+// matchers. knownTools is the list of agent binary-name substrings used for
+// process detection; it is typically the same slice as previewMatchers.
+func NewFromPreviewMatchers(previewMatchers []string, knownTools []string) *Integration {
 	capture := TmuxCapture{}
 	reader := process.OSReader{}
-	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers), reader, capture, content.NewScorer())
+	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, knownTools), reader, capture, content.NewScorer(), knownTools)
 	return NewWithReader(cls, TmuxPaneLister{}, reader)
 }
 
@@ -137,7 +139,7 @@ func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process
 		reader = process.OSReader{}
 	}
 	if cls == nil {
-		cls = classifier.New(nil, reader, capture, nil)
+		cls = classifier.New(nil, reader, capture, nil, nil)
 	}
 	if lister == nil {
 		lister = TmuxPaneLister{}

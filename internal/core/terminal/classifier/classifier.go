@@ -14,7 +14,6 @@ const (
 	tierTitle   = 1
 	tierProcess = 2
 	tierContent = 3
-	shellTool   = "shell"
 )
 
 // ContentCapture abstracts pane content retrieval for Tier 3.
@@ -52,6 +51,7 @@ type Classifier struct {
 	reader        process.ProcessReader
 	capture       ContentCapture
 	scorer        ContentScorer
+	knownTools    []string // agent binary names from config; drives Tier 2 process matching
 }
 
 // WithReader returns a shallow copy of the Classifier that uses r for process
@@ -64,7 +64,11 @@ func (c *Classifier) WithReader(r process.ProcessReader) *Classifier {
 }
 
 // New creates a Classifier with the given dependencies.
-func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCapture, scorer ContentScorer) *Classifier {
+// knownTools is the list of agent binary-name substrings (e.g. ["claude",
+// "aider"]) used for Tier 2 process detection. Pass nil to disable process
+// detection. The list comes from the caller's config so no source-code change
+// is needed to support a new tool.
+func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCapture, scorer ContentScorer, knownTools []string) *Classifier {
 	if reader == nil {
 		reader = process.OSReader{}
 	}
@@ -73,6 +77,7 @@ func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCap
 		reader:        reader,
 		capture:       capture,
 		scorer:        scorer,
+		knownTools:    knownTools,
 	}
 }
 
@@ -121,8 +126,8 @@ func (c *Classifier) classifyProcess(panePID int64) (tool string, ok bool) {
 	if panePID <= 0 {
 		return "", false
 	}
-	proc, err := process.IdentifyWith(int(panePID), c.reader)
-	if err != nil || proc == nil || proc.Tool == "" || proc.Tool == shellTool {
+	proc, err := process.IdentifyWith(int(panePID), c.reader, c.knownTools)
+	if err != nil || proc == nil || proc.Tool == "" || proc.Tool == process.ToolShell {
 		return "", false
 	}
 	return proc.Tool, true
@@ -140,7 +145,7 @@ func (c *Classifier) classifyContent(ctx context.Context, paneID string) (tool s
 	if score < content.AgentScoreThreshold || categories < content.AgentCategoriesThreshold {
 		return "", false
 	}
-	if tool == "" || tool == shellTool {
+	if tool == "" || tool == process.ToolShell {
 		tool = "agent"
 	}
 	return tool, true

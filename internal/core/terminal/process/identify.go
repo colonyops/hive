@@ -7,14 +7,12 @@ import (
 )
 
 const (
-	toolAider     = "aider"
-	toolClaude    = "claude"
-	toolCodex     = "codex"
-	toolCursor    = "cursor"
-	toolGemini    = "gemini"
-	toolOpencode  = "opencode"
-	toolPi        = "pi"
-	toolShell     = "shell"
+	// ToolShell is the sentinel tool name returned when the foreground process is
+	// an interactive shell rather than a recognised agent.
+	ToolShell = "shell"
+
+	// envClaudeCode is injected by the Claude Code SDK (CLAUDECODE=1) and is
+	// used as a reliable signal even when argv is obscured (macOS hardened runtime).
 	envClaudeCode = "CLAUDECODE"
 )
 
@@ -30,7 +28,10 @@ type AgentProcess struct {
 // IdentifyWith walks the process tree using the provided reader.
 // It inspects the foreground process first, then walks child processes
 // to depth 2 to catch wrappers (e.g., node → claude, sh → claude).
-func IdentifyWith(panePID int, r ProcessReader) (*AgentProcess, error) {
+// knownTools is the list of agent binary-name substrings to recognise
+// (e.g. ["claude", "aider"]); it comes from the caller's config so no
+// source-code change is required to support a new tool.
+func IdentifyWith(panePID int, r ProcessReader, knownTools []string) (*AgentProcess, error) {
 	if panePID <= 0 {
 		return nil, nil
 	}
@@ -43,19 +44,19 @@ func IdentifyWith(panePID int, r ProcessReader) (*AgentProcess, error) {
 		tpgid = panePID
 	}
 
-	foreground := readProcess(tpgid, r)
-	if foreground.Tool != toolShell {
+	foreground := readProcess(tpgid, r, knownTools)
+	if foreground.Tool != ToolShell {
 		return foreground, nil
 	}
 
-	if agent := findAgentChild(tpgid, r, 2); agent != nil {
+	if agent := findAgentChild(tpgid, r, 2, knownTools); agent != nil {
 		return agent, nil
 	}
 
 	return foreground, nil
 }
 
-func findAgentChild(rootPID int, r ProcessReader, maxDepth int) *AgentProcess {
+func findAgentChild(rootPID int, r ProcessReader, maxDepth int, knownTools []string) *AgentProcess {
 	type queueItem struct {
 		pid   int
 		depth int
@@ -79,8 +80,8 @@ func findAgentChild(rootPID int, r ProcessReader, maxDepth int) *AgentProcess {
 				continue
 			}
 			visited[childPID] = true
-			proc := readProcess(childPID, r)
-			if proc.Tool != toolShell {
+			proc := readProcess(childPID, r, knownTools)
+			if proc.Tool != ToolShell {
 				return proc
 			}
 			queue = append(queue, queueItem{pid: childPID, depth: item.depth + 1})
@@ -89,21 +90,21 @@ func findAgentChild(rootPID int, r ProcessReader, maxDepth int) *AgentProcess {
 	return nil
 }
 
-func readProcess(pid int, r ProcessReader) *AgentProcess {
+func readProcess(pid int, r ProcessReader, knownTools []string) *AgentProcess {
 	comm := r.Comm(pid)
 	argv, _ := r.Cmdline(pid)
 	env := r.Environ(pid)
 
-	proc := &AgentProcess{PID: pid, Comm: comm, Argv: argv, Env: env, Tool: toolShell}
+	proc := &AgentProcess{PID: pid, Comm: comm, Argv: argv, Env: env, Tool: ToolShell}
 	if looksLikeClaude(env, argv) {
-		proc.Tool = toolClaude
+		proc.Tool = "claude"
 		return proc
 	}
-	if tool := toolFromArgv(argv); tool != "" {
+	if tool := toolFromArgv(argv, knownTools); tool != "" {
 		proc.Tool = tool
 		return proc
 	}
-	if tool := toolFromBasename(comm); tool != "" {
+	if tool := toolFromBasename(comm, knownTools); tool != "" {
 		proc.Tool = tool
 	}
 	return proc
@@ -126,65 +127,65 @@ func looksLikeClaude(env map[string]string, argv []string) bool {
 // invocations like "npx claude" or "python3 -m aider". Interactive shells are
 // intentionally not parsed here; shell-launched agents are detected by child
 // process walking so command strings like `bash -lc "echo claude"` do not match.
-func toolFromArgv(argv []string) string {
+func toolFromArgv(argv []string, tools []string) string {
 	if len(argv) == 0 {
 		return ""
 	}
 	base0 := strings.ToLower(filepath.Base(argv[0]))
-	if tool := toolFromBasename(base0); tool != "" {
+	if tool := toolFromBasename(base0, tools); tool != "" {
 		return tool
 	}
 
 	switch base0 {
 	case "node", "npx", "npm", "pnpm", "yarn", "bun", "uvx":
-		return toolFromExecutableArgs(argv[1:])
+		return toolFromExecutableArgs(argv[1:], tools)
 	case "python", "python2", "python3":
-		return toolFromPythonArgs(argv[1:])
+		return toolFromPythonArgs(argv[1:], tools)
 	case "mise":
-		return toolFromMiseArgs(argv[1:])
+		return toolFromMiseArgs(argv[1:], tools)
 	case "env":
-		return toolFromEnvArgs(argv[1:])
+		return toolFromEnvArgs(argv[1:], tools)
 	default:
 		return ""
 	}
 }
 
-func toolFromExecutableArgs(args []string) string {
+func toolFromExecutableArgs(args []string, tools []string) string {
 	for _, arg := range args {
 		if shouldSkipExecutableArg(arg) {
 			continue
 		}
-		if tool := toolFromBasename(filepath.Base(arg)); tool != "" {
+		if tool := toolFromBasename(filepath.Base(arg), tools); tool != "" {
 			return tool
 		}
 	}
 	return ""
 }
 
-func toolFromPythonArgs(args []string) string {
+func toolFromPythonArgs(args []string, tools []string) string {
 	for i, arg := range args {
 		if arg == "-m" && i+1 < len(args) {
-			return toolFromBasename(filepath.Base(args[i+1]))
+			return toolFromBasename(filepath.Base(args[i+1]), tools)
 		}
 	}
 	return ""
 }
 
-func toolFromMiseArgs(args []string) string {
+func toolFromMiseArgs(args []string, tools []string) string {
 	for i, arg := range args {
 		if arg == "--" && i+1 < len(args) {
-			return toolFromBasename(filepath.Base(args[i+1]))
+			return toolFromBasename(filepath.Base(args[i+1]), tools)
 		}
 	}
-	return toolFromExecutableArgs(args)
+	return toolFromExecutableArgs(args, tools)
 }
 
-func toolFromEnvArgs(args []string) string {
+func toolFromEnvArgs(args []string, tools []string) string {
 	for _, arg := range args {
 		if strings.Contains(arg, "=") || strings.HasPrefix(arg, "-") {
 			continue
 		}
-		return toolFromBasename(filepath.Base(arg))
+		return toolFromBasename(filepath.Base(arg), tools)
 	}
 	return ""
 }
@@ -193,27 +194,24 @@ func shouldSkipExecutableArg(arg string) bool {
 	return arg == "" || arg == "--" || strings.HasPrefix(arg, "-")
 }
 
-// toolFromBasename maps a process basename to an agent name.
-func toolFromBasename(comm string) string {
+// toolFromBasename matches a process basename against the caller-provided list
+// of known tool names. It accepts an exact match or a name that is a
+// hyphen/underscore-prefixed variant (e.g. "claude-code" matches "claude").
+func toolFromBasename(comm string, tools []string) string {
 	lower := strings.ToLower(comm)
-	switch {
-	case strings.Contains(lower, toolClaude):
-		return toolClaude
-	case strings.Contains(lower, toolGemini):
-		return toolGemini
-	case lower == toolAider:
-		return toolAider
-	case strings.Contains(lower, toolCodex):
-		return toolCodex
-	case strings.Contains(lower, toolCursor):
-		return toolCursor
-	case strings.Contains(lower, toolOpencode):
-		return toolOpencode
-	case lower == toolPi:
-		return toolPi
-	case strings.Contains(lower, "cline"):
-		return "cline"
-	default:
-		return ""
+	for _, tool := range tools {
+		if matchesToolName(lower, tool) {
+			return tool
+		}
 	}
+	return ""
+}
+
+// matchesToolName reports whether a process basename corresponds to tool.
+// Exact equality and hyphen/underscore-delimited variants are accepted so
+// that e.g. "claude-code" matches "claude" while "pip" does not match "pi".
+func matchesToolName(basename, tool string) bool {
+	return basename == tool ||
+		strings.HasPrefix(basename, tool+"-") ||
+		strings.HasPrefix(basename, tool+"_")
 }

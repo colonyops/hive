@@ -8,6 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// defaultTools is the list used by tests that exercise the full detection stack.
+var defaultTools = []string{"claude", "gemini", "aider", "codex", "cursor", "opencode", "cline", "pi"}
+
 func TestLooksLikeClaude(t *testing.T) {
 	tests := []struct {
 		name string
@@ -66,80 +69,24 @@ func TestToolFromArgv(t *testing.T) {
 		argv []string
 		want string
 	}{
-		{
-			name: "npx claude",
-			argv: []string{"npx", toolClaude},
-			want: toolClaude,
-		},
-		{
-			name: "node with gemini path",
-			argv: []string{"node", "/path/to/gemini"},
-			want: toolGemini,
-		},
-		{
-			name: "direct aider",
-			argv: []string{"/usr/local/bin/aider"},
-			want: toolAider,
-		},
-		{
-			name: "direct pi",
-			argv: []string{"/usr/local/bin/pi"},
-			want: toolPi,
-		},
-		{
-			name: "python module aider",
-			argv: []string{"python3", "-m", toolAider},
-			want: toolAider,
-		},
-		{
-			name: "empty argv",
-			argv: []string{},
-			want: "",
-		},
-		{
-			name: "nil argv",
-			argv: nil,
-			want: "",
-		},
-		{
-			name: "bash shell",
-			argv: []string{"/bin/bash"},
-			want: "",
-		},
-		{
-			name: "bash command string containing claude",
-			argv: []string{"bash", "-lc", "echo claude"},
-			want: "",
-		},
-		{
-			name: "zsh command string containing gemini",
-			argv: []string{"zsh", "-c", "grep gemini file"},
-			want: "",
-		},
-		{
-			name: "npx with unknown tool",
-			argv: []string{"npx", "some-unknown-tool"},
-			want: "",
-		},
-		{
-			name: "direct claude binary",
-			argv: []string{"/usr/local/bin/claude"},
-			want: toolClaude,
-		},
-		{
-			name: "env prefix claude",
-			argv: []string{"env", "DEBUG=1", "claude"},
-			want: toolClaude,
-		},
-		{
-			name: toolCodex,
-			argv: []string{"/usr/bin/codex"},
-			want: toolCodex,
-		},
+		{name: "npx claude", argv: []string{"npx", "claude"}, want: "claude"},
+		{name: "node with gemini path", argv: []string{"node", "/path/to/gemini"}, want: "gemini"},
+		{name: "direct aider", argv: []string{"/usr/local/bin/aider"}, want: "aider"},
+		{name: "direct pi", argv: []string{"/usr/local/bin/pi"}, want: "pi"},
+		{name: "python module aider", argv: []string{"python3", "-m", "aider"}, want: "aider"},
+		{name: "empty argv", argv: []string{}, want: ""},
+		{name: "nil argv", argv: nil, want: ""},
+		{name: "bash shell", argv: []string{"/bin/bash"}, want: ""},
+		{name: "bash command string containing claude", argv: []string{"bash", "-lc", "echo claude"}, want: ""},
+		{name: "zsh command string containing gemini", argv: []string{"zsh", "-c", "grep gemini file"}, want: ""},
+		{name: "npx with unknown tool", argv: []string{"npx", "some-unknown-tool"}, want: ""},
+		{name: "direct claude binary", argv: []string{"/usr/local/bin/claude"}, want: "claude"},
+		{name: "env prefix claude", argv: []string{"env", "DEBUG=1", "claude"}, want: "claude"},
+		{name: "codex", argv: []string{"/usr/bin/codex"}, want: "codex"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toolFromArgv(tt.argv)
+			got := toolFromArgv(tt.argv, defaultTools)
 			assert.Equal(t, tt.want, got)
 		})
 	}
@@ -160,22 +107,18 @@ func TestIdentifyWith(t *testing.T) {
 			panePID: 100,
 			reader: fakeReader{procs: map[int]fakeProc{
 				100: {tpgid: 200},
-				200: {comm: toolClaude, argv: []string{"/usr/local/bin/claude"}, env: map[string]string{envClaudeCode: "1"}},
+				200: {comm: "claude", argv: []string{"/usr/local/bin/claude"}, env: map[string]string{envClaudeCode: "1"}},
 			}},
-			wantPID:  200,
-			wantTool: toolClaude,
-			wantComm: toolClaude,
+			wantPID: 200, wantTool: "claude", wantComm: "claude",
 		},
 		{
 			name:    "direct pi binary",
 			panePID: 100,
 			reader: fakeReader{procs: map[int]fakeProc{
 				100: {tpgid: 200},
-				200: {comm: toolPi, argv: []string{"/usr/local/bin/pi"}},
+				200: {comm: "pi", argv: []string{"/usr/local/bin/pi"}},
 			}},
-			wantPID:  200,
-			wantTool: toolPi,
-			wantComm: toolPi,
+			wantPID: 200, wantTool: "pi", wantComm: "pi",
 		},
 		{
 			name:    "node wrapper claude child depth 1",
@@ -184,13 +127,11 @@ func TestIdentifyWith(t *testing.T) {
 				procs: map[int]fakeProc{
 					100: {tpgid: 200},
 					200: {comm: "node", argv: []string{"node", "wrapper.js"}},
-					201: {comm: toolClaude, argv: []string{"/opt/bin/claude"}},
+					201: {comm: "claude", argv: []string{"/opt/bin/claude"}},
 				},
 				children: map[int][]int{200: {201}},
 			},
-			wantPID:  201,
-			wantTool: toolClaude,
-			wantComm: toolClaude,
+			wantPID: 201, wantTool: "claude", wantComm: "claude",
 		},
 		{
 			name:    "sh bash claude depth 2",
@@ -200,13 +141,11 @@ func TestIdentifyWith(t *testing.T) {
 					100: {tpgid: 200},
 					200: {comm: "sh", argv: []string{"sh"}},
 					201: {comm: "bash", argv: []string{"bash"}},
-					202: {comm: toolClaude, argv: []string{toolClaude}},
+					202: {comm: "claude", argv: []string{"claude"}},
 				},
 				children: map[int][]int{200: {201}, 201: {202}},
 			},
-			wantPID:  202,
-			wantTool: toolClaude,
-			wantComm: toolClaude,
+			wantPID: 202, wantTool: "claude", wantComm: "claude",
 		},
 		{
 			name:    "shell with no agent children",
@@ -219,45 +158,33 @@ func TestIdentifyWith(t *testing.T) {
 				},
 				children: map[int][]int{200: {201}},
 			},
-			wantPID:  200,
-			wantTool: toolShell,
-			wantComm: "zsh",
+			wantPID: 200, wantTool: ToolShell, wantComm: "zsh",
 		},
 		{
 			name:    "bash command string containing claude with no agent child",
 			panePID: 100,
-			reader: fakeReader{
-				procs: map[int]fakeProc{
-					100: {tpgid: 200},
-					200: {comm: "bash", argv: []string{"bash", "-lc", "echo claude"}},
-				},
-			},
-			wantPID:  200,
-			wantTool: toolShell,
-			wantComm: "bash",
+			reader: fakeReader{procs: map[int]fakeProc{
+				100: {tpgid: 200},
+				200: {comm: "bash", argv: []string{"bash", "-lc", "echo claude"}},
+			}},
+			wantPID: 200, wantTool: ToolShell, wantComm: "bash",
 		},
 		{
 			name:    "zsh command string containing codex with no agent child",
 			panePID: 100,
-			reader: fakeReader{
-				procs: map[int]fakeProc{
-					100: {tpgid: 200},
-					200: {comm: "zsh", argv: []string{"zsh", "-c", "grep codex file"}},
-				},
-			},
-			wantPID:  200,
-			wantTool: toolShell,
-			wantComm: "zsh",
+			reader: fakeReader{procs: map[int]fakeProc{
+				100: {tpgid: 200},
+				200: {comm: "zsh", argv: []string{"zsh", "-c", "grep codex file"}},
+			}},
+			wantPID: 200, wantTool: ToolShell, wantComm: "zsh",
 		},
 		{
 			name:    "tpgid error fallback to pane pid",
 			panePID: 100,
 			reader: fakeReader{tpgidErr: errPermission, procs: map[int]fakeProc{
-				100: {comm: toolClaude, argv: []string{toolClaude}},
+				100: {comm: "claude", argv: []string{"claude"}},
 			}},
-			wantPID:  100,
-			wantTool: toolClaude,
-			wantComm: toolClaude,
+			wantPID: 100, wantTool: "claude", wantComm: "claude",
 		},
 		{
 			name:    "empty comm process exited between reads",
@@ -266,20 +193,16 @@ func TestIdentifyWith(t *testing.T) {
 				100: {tpgid: 200},
 				200: {comm: "", argv: nil},
 			}},
-			wantPID:  200,
-			wantTool: toolShell,
-			wantComm: "",
+			wantPID: 200, wantTool: ToolShell, wantComm: "",
 		},
 		{
 			name:    "cmdline error permission denied falls back to comm",
 			panePID: 100,
 			reader: fakeReader{procs: map[int]fakeProc{
 				100: {tpgid: 200},
-				200: {comm: toolCodex, argvErr: errPermission},
+				200: {comm: "codex", argvErr: errPermission},
 			}},
-			wantPID:  200,
-			wantTool: toolCodex,
-			wantComm: toolCodex,
+			wantPID: 200, wantTool: "codex", wantComm: "codex",
 		},
 		{
 			name:    "nil environ with argv fallback",
@@ -288,26 +211,22 @@ func TestIdentifyWith(t *testing.T) {
 				100: {tpgid: 200},
 				200: {comm: "node", argv: []string{"node", "/opt/claude"}, env: nil},
 			}},
-			wantPID:  200,
-			wantTool: toolClaude,
-			wantComm: "node",
+			wantPID: 200, wantTool: "claude", wantComm: "node",
 		},
 		{
 			name:    "mise shim argv names claude",
 			panePID: 100,
 			reader: fakeReader{procs: map[int]fakeProc{
 				100: {tpgid: 200},
-				200: {comm: "mise", argv: []string{"mise", "exec", "--", toolClaude}},
+				200: {comm: "mise", argv: []string{"mise", "exec", "--", "claude"}},
 			}},
-			wantPID:  200,
-			wantTool: toolClaude,
-			wantComm: "mise",
+			wantPID: 200, wantTool: "claude", wantComm: "mise",
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := IdentifyWith(tt.panePID, tt.reader)
+			got, err := IdentifyWith(tt.panePID, tt.reader, defaultTools)
 			require.NoError(t, err)
 			require.NotNil(t, got)
 			assert.Equal(t, tt.wantPID, got.PID)
@@ -318,7 +237,7 @@ func TestIdentifyWith(t *testing.T) {
 }
 
 func TestIdentifyWithInvalidPID(t *testing.T) {
-	got, err := IdentifyWith(0, fakeReader{})
+	got, err := IdentifyWith(0, fakeReader{}, nil)
 	require.NoError(t, err)
 	assert.Nil(t, got)
 }
@@ -365,80 +284,25 @@ func TestToolFromBasename(t *testing.T) {
 		input string
 		want  string
 	}{
-		{
-			name:  "claude exact",
-			input: toolClaude,
-			want:  toolClaude,
-		},
-		{
-			name:  "claude with version suffix",
-			input: "claude-3.5",
-			want:  toolClaude,
-		},
-		{
-			name:  toolAider,
-			input: toolAider,
-			want:  toolAider,
-		},
-		{
-			name:  toolGemini,
-			input: toolGemini,
-			want:  toolGemini,
-		},
-		{
-			name:  toolCodex,
-			input: toolCodex,
-			want:  toolCodex,
-		},
-		{
-			name:  "cursor",
-			input: "cursor",
-			want:  "cursor",
-		},
-		{
-			name:  "opencode",
-			input: "opencode",
-			want:  "opencode",
-		},
-		{
-			name:  "cline",
-			input: "cline",
-			want:  "cline",
-		},
-		{
-			name:  "pi exact",
-			input: "pi",
-			want:  toolPi,
-		},
-		{
-			name:  "pipeline does not match pi",
-			input: "pipeline",
-			want:  "",
-		},
-		{
-			name:  "bash returns empty",
-			input: "bash",
-			want:  "",
-		},
-		{
-			name:  "zsh returns empty",
-			input: "zsh",
-			want:  "",
-		},
-		{
-			name:  "empty string",
-			input: "",
-			want:  "",
-		},
-		{
-			name:  "uppercase CLAUDE",
-			input: "CLAUDE",
-			want:  toolClaude,
-		},
+		{name: "claude exact", input: "claude", want: "claude"},
+		{name: "claude with version suffix", input: "claude-3.5", want: "claude"},
+		{name: "aider", input: "aider", want: "aider"},
+		{name: "gemini", input: "gemini", want: "gemini"},
+		{name: "codex", input: "codex", want: "codex"},
+		{name: "cursor", input: "cursor", want: "cursor"},
+		{name: "opencode", input: "opencode", want: "opencode"},
+		{name: "cline", input: "cline", want: "cline"},
+		{name: "pi exact", input: "pi", want: "pi"},
+		{name: "pipeline does not match pi", input: "pipeline", want: ""},
+		{name: "pip does not match pi", input: "pip", want: ""},
+		{name: "bash returns empty", input: "bash", want: ""},
+		{name: "zsh returns empty", input: "zsh", want: ""},
+		{name: "empty string", input: "", want: ""},
+		{name: "uppercase CLAUDE", input: "CLAUDE", want: "claude"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got := toolFromBasename(tt.input)
+			got := toolFromBasename(tt.input, defaultTools)
 			assert.Equal(t, tt.want, got)
 		})
 	}
