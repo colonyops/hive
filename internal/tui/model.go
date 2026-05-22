@@ -381,7 +381,7 @@ func (m Model) quit() (Model, tea.Cmd) {
 
 // Init initializes the model.
 func (m Model) Init() tea.Cmd {
-	cmds := []tea.Cmd{m.spinner.Tick}
+	var cmds []tea.Cmd
 	if m.bus != nil {
 		m.bus.PublishTuiStarted(eventbus.TUIStartedPayload{})
 	}
@@ -883,6 +883,7 @@ func (m Model) dispatchAction(action Action) (Model, tea.Cmd) {
 	if !action.Silent {
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
+		return m, tea.Batch(m.spinner.Tick, m.executeAction(action))
 	}
 	return m, m.executeAction(action)
 }
@@ -1021,10 +1022,10 @@ func (m Model) showHiveDoctor() (tea.Model, tea.Cmd) {
 	m.state = stateLoading
 	m.loadingMessage = "Running health checks..."
 
-	return m, func() tea.Msg {
+	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
 		results := m.doctorService.RunChecks(context.Background(), m.configPath, false)
 		return doctorResultsMsg{results: results}
-	}
+	})
 }
 
 func (m Model) handleDoctorResults(msg doctorResultsMsg) (tea.Model, tea.Cmd) {

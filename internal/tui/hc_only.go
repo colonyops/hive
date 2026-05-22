@@ -92,7 +92,10 @@ func (m HoneycombOnlyModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case toastTickMsg:
 		m.toastController.Tick()
-		return m, scheduleToastTick()
+		if m.toastController.HasToasts() {
+			return m, scheduleToastTick()
+		}
+		return m, nil
 
 	case tasks.CommandPaletteRequestMsg:
 		m.commandPalette = NewCommandPalette(m.taskCommands(), nil, m.width, m.height, ViewTasks)

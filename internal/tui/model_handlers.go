@@ -1010,13 +1010,16 @@ func (m Model) handleKeyMsg(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 	var cmds []tea.Cmd
 
+	// Advance the main spinner and re-schedule only while the loading modal is
+	// visible. Returning nil here stops the idle tick loop; it is restarted by
+	// the code that transitions into stateLoading.
 	var cmd tea.Cmd
 	m.spinner, cmd = m.spinner.Update(msg)
-	if cmd != nil {
+	if cmd != nil && m.state == stateLoading {
 		cmds = append(cmds, cmd)
 	}
 
-	// Route spinner ticks to the output modal when active
+	// Drive the output modal's own spinner while streaming.
 	if m.state == stateStreaming {
 		s := m.modals.Output.Spinner()
 		s, cmd = s.Update(msg)
@@ -1278,7 +1281,7 @@ func (m Model) handleShowRiskLoading(msg showRiskLoadingMsg) (tea.Model, tea.Cmd
 	}
 	m.state = stateLoading
 	m.loadingMessage = "Checking for unsaved work..."
-	return m, nil
+	return m, m.spinner.Tick
 }
 
 // handleSessionRiskChecked continues the delete/recycle dispatch after the async
@@ -1330,6 +1333,7 @@ func (m Model) handleSessionRiskChecked(msg sessionRiskCheckedMsg) (tea.Model, t
 	if !action.Silent {
 		m.state = stateLoading
 		m.loadingMessage = "Processing..."
+		return m, tea.Batch(m.spinner.Tick, m.executeAction(action))
 	}
 	return m, m.executeAction(action)
 }
@@ -1399,6 +1403,7 @@ func (m Model) handleConfirmModalKey(keyStr string) (tea.Model, tea.Cmd) {
 			if !action.Silent {
 				m.state = stateLoading
 				m.loadingMessage = "Processing..."
+				return m, tea.Batch(m.spinner.Tick, m.executeAction(action))
 			}
 			return m, m.executeAction(action)
 		}
@@ -1440,6 +1445,7 @@ func (m Model) handleDangerousConfirmKey(keyStr string) (tea.Model, tea.Cmd) {
 		if !action.Silent {
 			m.state = stateLoading
 			m.loadingMessage = "Processing..."
+			return m, tea.Batch(m.spinner.Tick, m.executeAction(action))
 		}
 		return m, m.executeAction(action)
 	case "esc":
