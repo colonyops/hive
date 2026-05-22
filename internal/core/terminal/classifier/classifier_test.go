@@ -36,7 +36,7 @@ func TestClassify_Tier1_TitleMatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			reader := &fakeReader{}
-			cls := classifier.New(tt.titles, reader, nil, nil, nil)
+			cls := classifier.New(tt.titles, reader, nil, nil)
 			got := cls.Classify(context.Background(), classifier.PaneInput{PaneTitle: tt.paneTitle, PanePID: 0})
 			assertClassifiedAt(t, got)
 			assert.Equal(t, tt.wantHit, got.IsAgent)
@@ -53,7 +53,7 @@ func TestClassify_Tier1_TitleMatch(t *testing.T) {
 }
 
 func TestClassify_Tier1_DoesNotMatchWindowName(t *testing.T) {
-	cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil, nil)
+	cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil)
 	got := cls.Classify(context.Background(), classifier.PaneInput{WindowName: testToolClaude, PaneTitle: testToolShell})
 	assert.False(t, got.IsAgent)
 	assert.Equal(t, 0, got.Tier)
@@ -123,7 +123,7 @@ func TestClassify_Tier2_ProcessTree(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			capture := &fakeCapture{}
-			cls := classifier.New(nil, tt.reader, capture, nil, []string{testToolClaude, testToolGemini, testToolAider, testToolCodex})
+			cls := classifier.New(testToolPatterns(testToolClaude, testToolGemini, testToolAider, testToolCodex), tt.reader, capture, nil)
 			got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100, WindowName: testToolShell})
 			assertClassifiedAt(t, got)
 			assert.Equal(t, tt.wantHit, got.IsAgent)
@@ -156,7 +156,7 @@ func TestClassify_Tier3_ContentAnalysis(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			cls := classifier.New(nil, shellReader(), tt.capture, tt.scorer, nil)
+			cls := classifier.New(nil, shellReader(), tt.capture, tt.scorer)
 			got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100})
 			assertClassifiedAt(t, got)
 			assert.Equal(t, tt.wantHit, got.IsAgent)
@@ -173,7 +173,7 @@ func TestClassify_Tier3_ContentAnalysis(t *testing.T) {
 
 func TestClassify_Tier3_Disabled(t *testing.T) {
 	capture := &fakeCapture{content: testToolAgent}
-	cls := classifier.New(nil, shellReader(), capture, nil, nil)
+	cls := classifier.New(nil, shellReader(), capture, nil)
 	got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100})
 	assert.False(t, got.IsAgent)
 	assert.Zero(t, capture.calls)
@@ -182,7 +182,7 @@ func TestClassify_Tier3_Disabled(t *testing.T) {
 func TestClassifyStable_SkipsTier3(t *testing.T) {
 	capture := &fakeCapture{content: testToolAgent}
 	scorer := &fakeScorer{score: 6, categories: 3, tool: testToolClaude}
-	cls := classifier.New(nil, shellReader(), capture, scorer, nil)
+	cls := classifier.New(nil, shellReader(), capture, scorer)
 
 	t.Run("no content call when tier1 and tier2 both miss", func(t *testing.T) {
 		got := cls.ClassifyStable(classifier.PaneInput{PaneID: "%1", PanePID: 100})
@@ -192,7 +192,7 @@ func TestClassifyStable_SkipsTier3(t *testing.T) {
 	})
 
 	t.Run("tier1 hit still works", func(t *testing.T) {
-		cls2 := classifier.New(titlePatterns(testToolClaude, testToolClaude), shellReader(), capture, scorer, nil)
+		cls2 := classifier.New(titlePatterns(testToolClaude, testToolClaude), shellReader(), capture, scorer)
 		got := cls2.ClassifyStable(classifier.PaneInput{PaneTitle: testToolClaude})
 		assert.True(t, got.IsAgent)
 		assert.Equal(t, 1, got.Tier)
@@ -201,7 +201,7 @@ func TestClassifyStable_SkipsTier3(t *testing.T) {
 
 	t.Run("tier2 hit still works", func(t *testing.T) {
 		reader := processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}})
-		cls2 := classifier.New(nil, reader, capture, scorer, nil)
+		cls2 := classifier.New(testToolPatterns(testToolClaude), reader, capture, scorer)
 		got := cls2.ClassifyStable(classifier.PaneInput{PaneID: "%1", PanePID: 100})
 		assert.True(t, got.IsAgent)
 		assert.Equal(t, 2, got.Tier)
@@ -214,7 +214,7 @@ func TestClassify_CascadeOrder(t *testing.T) {
 		reader := &fakeReader{}
 		capture := &fakeCapture{content: testToolAgent}
 		scorer := &fakeScorer{score: 6, categories: 3}
-		cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), reader, capture, scorer, nil)
+		cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), reader, capture, scorer)
 		got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100, PaneTitle: testToolClaude})
 		assert.True(t, got.IsAgent)
 		assert.Equal(t, 1, got.Tier)
@@ -227,7 +227,7 @@ func TestClassify_CascadeOrder(t *testing.T) {
 		reader := processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}})
 		capture := &fakeCapture{content: testToolAgent}
 		scorer := &fakeScorer{score: 6, categories: 3}
-		cls := classifier.New(nil, reader, capture, scorer, nil)
+		cls := classifier.New(testToolPatterns(testToolClaude), reader, capture, scorer)
 		got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100})
 		assert.True(t, got.IsAgent)
 		assert.Equal(t, 2, got.Tier)
@@ -238,7 +238,7 @@ func TestClassify_CascadeOrder(t *testing.T) {
 }
 
 func TestClassify_AllTiersMiss(t *testing.T) {
-	cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), shellReader(), &fakeCapture{content: testToolShell}, &fakeScorer{score: 1, categories: 1}, nil)
+	cls := classifier.New(titlePatterns(testToolClaude, testToolClaude), shellReader(), &fakeCapture{content: testToolShell}, &fakeScorer{score: 1, categories: 1})
 	got := cls.Classify(context.Background(), classifier.PaneInput{PaneID: "%1", PanePID: 100, WindowName: testToolShell})
 	assert.False(t, got.IsAgent)
 	assert.Empty(t, got.Tool)
@@ -254,9 +254,9 @@ func TestClassify_ConfidenceLevels(t *testing.T) {
 		input classifier.PaneInput
 		want  classifier.Confidence
 	}{
-		{name: "tier1_high", cls: classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil, nil), input: classifier.PaneInput{PaneTitle: testToolClaude}, want: classifier.ConfidenceHigh},
-		{name: "tier2_high", cls: classifier.New(nil, processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}}), nil, nil, []string{testToolClaude}), input: classifier.PaneInput{PanePID: 100}, want: classifier.ConfidenceHigh},
-		{name: "tier3_medium", cls: classifier.New(nil, shellReader(), &fakeCapture{content: testToolAgent}, &fakeScorer{score: 6, categories: 3}, nil), input: classifier.PaneInput{PaneID: "%1", PanePID: 100}, want: classifier.ConfidenceMedium},
+		{name: "tier1_high", cls: classifier.New(titlePatterns(testToolClaude, testToolClaude), &fakeReader{}, nil, nil), input: classifier.PaneInput{PaneTitle: testToolClaude}, want: classifier.ConfidenceHigh},
+		{name: "tier2_high", cls: classifier.New(testToolPatterns(testToolClaude), processReader(map[int]fakeProc{100: {tpgid: 200}, 200: {comm: testToolClaude, argv: []string{testToolClaude}}}), nil, nil), input: classifier.PaneInput{PanePID: 100}, want: classifier.ConfidenceHigh},
+		{name: "tier3_medium", cls: classifier.New(nil, shellReader(), &fakeCapture{content: testToolAgent}, &fakeScorer{score: 6, categories: 3}), input: classifier.PaneInput{PaneID: "%1", PanePID: 100}, want: classifier.ConfidenceMedium},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -268,7 +268,7 @@ func TestClassify_ConfidenceLevels(t *testing.T) {
 }
 
 func TestClassify_WindowNamePiDoesNotMatchNonAgentPane(t *testing.T) {
-	cls := classifier.New(titlePatterns("\\bpi\\b", "pi"), shellReader(), nil, nil, nil)
+	cls := classifier.New(titlePatterns("\\bpi\\b", "pi"), shellReader(), nil, nil)
 	got := cls.Classify(context.Background(), classifier.PaneInput{
 		PaneID:     "%1",
 		PanePID:    100,
@@ -295,6 +295,19 @@ func TestTitlePatternsFromConfig(t *testing.T) {
 func assertClassifiedAt(t *testing.T, got classifier.Result) {
 	t.Helper()
 	assert.False(t, got.ClassifiedAt.IsZero())
+}
+
+// testToolPatterns returns compiled TitlePatterns for the given tool names so
+// Tier 2 process tests have patterns to match against.
+func testToolPatterns(tools ...string) []classifier.TitlePattern {
+	out := make([]classifier.TitlePattern, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, classifier.TitlePattern{
+			Pattern: regexp.MustCompile(t),
+			Tool:    t,
+		})
+	}
+	return out
 }
 
 func titlePatterns(pattern, tool string) []classifier.TitlePattern {

@@ -72,7 +72,7 @@ func TestRefreshCache_ClassifiesAndCarriesState(t *testing.T) {
 		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 100},
 		{SessionName: "sess", PaneID: "%2", PanePID: 102, WindowIndex: "0", WindowName: "bash", Activity: 200},
 	}}
-	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil, nil), lister)
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
 		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
 		state: paneState{paneContent: "old", cachedStatus: terminal.StatusReady, lastCaptureActive: 100},
@@ -97,7 +97,7 @@ func TestRefreshCache_DoesNotClassifyShellPaneFromWindowName(t *testing.T) {
 		{SessionName: "sess", PaneID: "%1", PanePID: 101, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude},
 		{SessionName: "sess", PaneID: "%2", PanePID: 102, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: "bash"},
 	}}
-	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil, nil), lister)
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
 
 	integ.RefreshCache()
 
@@ -112,7 +112,7 @@ func TestRefreshCache_ReclassifiesNegativeResult(t *testing.T) {
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
 	}}
-	integ := NewWithReader(classifier.New(nil, reader, nil, nil, nil), lister, reader)
+	integ := NewWithReader(classifier.New(toolPatterns(testToolClaude), reader, nil, nil), lister, reader)
 
 	integ.RefreshCache()
 	assert.False(t, integ.cache["sess"].findPane("%1").result.IsAgent)
@@ -127,7 +127,7 @@ func TestRefreshCache_InvalidatesOnForegroundPIDChange(t *testing.T) {
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 100, WindowIndex: "0", WindowName: "main"},
 	}}
-	integ := NewWithReader(classifier.New(nil, reader, nil, nil, []string{testToolClaude, testToolCodex}), lister, reader)
+	integ := NewWithReader(classifier.New(toolPatterns(testToolClaude, testToolCodex), reader, nil, nil), lister, reader)
 
 	integ.RefreshCache()
 	assert.Equal(t, testToolClaude, integ.cache["sess"].findPane("%1").result.Tool)
@@ -149,7 +149,7 @@ func TestRefreshCache_ReclassifiesContentBasedPositive(t *testing.T) {
 		"agent content": {score: 6, categories: 3, tool: testToolClaude},
 		"shell content": {score: 1, categories: 1},
 	}}
-	integ := NewWithReader(classifier.New(nil, reader, capture, scorer, nil), lister, reader)
+	integ := NewWithReader(classifier.New(nil, reader, capture, scorer), lister, reader)
 
 	integ.RefreshCache()
 	pane := integ.cache["sess"].findPane("%1")
@@ -179,7 +179,7 @@ func TestRefreshCache_ContentLimiterSkipsTier3(t *testing.T) {
 	scorer := &fakeScorer{scores: map[string]fakeScore{
 		"agent content": {score: 6, categories: 3, tool: testToolClaude},
 	}}
-	integ := NewWithReader(classifier.New(nil, reader, capture, scorer, nil), lister, reader)
+	integ := NewWithReader(classifier.New(nil, reader, capture, scorer), lister, reader)
 
 	integ.RefreshCache() // first call: Tier 3 runs, capture.calls == 1
 	assert.Equal(t, 1, capture.calls)
@@ -238,7 +238,7 @@ func TestRefreshCache_UsesSharedProcessSnapshot(t *testing.T) {
 		{SessionName: "sess", PaneID: "%2", PanePID: 101, WindowIndex: "1", WindowName: "work"},
 		{SessionName: "sess", PaneID: "%3", PanePID: 102, WindowIndex: "2", WindowName: "logs"},
 	}}
-	integ := NewWithReader(classifier.New(nil, reader, nil, nil, nil), lister, reader)
+	integ := NewWithReader(classifier.New(nil, reader, nil, nil), lister, reader)
 
 	integ.RefreshCache()
 
@@ -254,7 +254,7 @@ func TestRefreshCache_ResetsStateOnPIDChange(t *testing.T) {
 	lister := &fakePaneLister{panes: []classifier.PaneInput{
 		{SessionName: "sess", PaneID: "%1", PanePID: 202, WindowIndex: "0", WindowName: testToolClaude, PaneTitle: testToolClaude, Activity: 200},
 	}}
-	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil, nil), lister)
+	integ := New(classifier.New([]classifier.TitlePattern{titlePattern(testToolClaude, testToolClaude)}, nil, nil, nil), lister)
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
 		input: classifier.PaneInput{SessionName: "sess", PaneID: "%1", PanePID: 101},
 		state: paneState{paneContent: "old", cachedStatus: terminal.StatusReady, lastCaptureActive: 100},
@@ -441,6 +441,14 @@ func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
 	assert.NotNil(t, integ.trackers[paneKey("sess", "%1")])
 	assert.NotNil(t, integ.limiters[paneKey("sess", "%1")])
 	assert.Equal(t, 1, capture.calls)
+}
+
+func toolPatterns(tools ...string) []classifier.TitlePattern {
+	out := make([]classifier.TitlePattern, 0, len(tools))
+	for _, t := range tools {
+		out = append(out, titlePattern(t, t))
+	}
+	return out
 }
 
 func titlePattern(pattern, tool string) classifier.TitlePattern {

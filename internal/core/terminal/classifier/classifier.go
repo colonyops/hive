@@ -2,7 +2,9 @@ package classifier
 
 import (
 	"context"
+	"path/filepath"
 	"regexp"
+	"strings"
 	"time"
 
 	"github.com/colonyops/hive/internal/core/terminal/content"
@@ -14,6 +16,10 @@ const (
 	tierTitle   = 1
 	tierProcess = 2
 	tierContent = 3
+
+	// envClaudeCode is injected by the Claude Code SDK (CLAUDECODE=1). It is
+	// a reliable agent signal even when argv is obscured by macOS hardened runtime.
+	envClaudeCode = "CLAUDECODE"
 )
 
 // ContentCapture abstracts pane content retrieval for Tier 3.
@@ -51,7 +57,6 @@ type Classifier struct {
 	reader        process.ProcessReader
 	capture       ContentCapture
 	scorer        ContentScorer
-	knownTools    []string // agent binary names from config; drives Tier 2 process matching
 }
 
 // WithReader returns a shallow copy of the Classifier that uses r for process
@@ -64,11 +69,9 @@ func (c *Classifier) WithReader(r process.ProcessReader) *Classifier {
 }
 
 // New creates a Classifier with the given dependencies.
-// knownTools is the list of agent binary-name substrings (e.g. ["claude",
-// "aider"]) used for Tier 2 process detection. Pass nil to disable process
-// detection. The list comes from the caller's config so no source-code change
-// is needed to support a new tool.
-func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCapture, scorer ContentScorer, knownTools []string) *Classifier {
+// titlePatterns drives both Tier 1 (pane title) and Tier 2 (process binary
+// name) detection, so no separate tool-name list is required.
+func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCapture, scorer ContentScorer) *Classifier {
 	if reader == nil {
 		reader = process.OSReader{}
 	}
@@ -77,7 +80,6 @@ func New(titles []TitlePattern, reader process.ProcessReader, capture ContentCap
 		reader:        reader,
 		capture:       capture,
 		scorer:        scorer,
-		knownTools:    knownTools,
 	}
 }
 
@@ -122,15 +124,136 @@ func (c *Classifier) classifyTitle(paneTitle string) (tool string, ok bool) {
 	return "", false
 }
 
+// classifyProcess fetches the candidate processes for panePID and checks each
+// one against the compiled title patterns. Argv parsing (npx, python -m, etc.)
+// is handled here so the process package stays focused on OS introspection.
 func (c *Classifier) classifyProcess(panePID int64) (tool string, ok bool) {
 	if panePID <= 0 {
 		return "", false
 	}
-	proc, err := process.IdentifyWith(int(panePID), c.reader, c.knownTools)
-	if err != nil || proc == nil || proc.Tool == "" || proc.Tool == process.ToolShell {
+	candidates, err := process.Candidates(int(panePID), c.reader)
+	if err != nil || candidates == nil {
 		return "", false
 	}
-	return proc.Tool, true
+
+	if tool := c.matchProcessInfo(candidates.Foreground); tool != "" {
+		return tool, true
+	}
+	for _, child := range candidates.Children {
+		if tool := c.matchProcessInfo(child); tool != "" {
+			return tool, true
+		}
+	}
+	return "", false
+}
+
+// matchProcessInfo checks a single process against the classifier's patterns.
+func (c *Classifier) matchProcessInfo(info process.ProcessInfo) string {
+	// CLAUDECODE=1 is set by the Claude Code SDK; treat it as a definitive
+	// signal before pattern matching in case argv is obscured.
+	if info.Env[envClaudeCode] == "1" {
+		if tool := c.matchName("claude"); tool != "" {
+			return tool
+		}
+		return "claude"
+	}
+
+	// Match the binary name directly.
+	if tool := c.matchName(info.Comm); tool != "" {
+		return tool
+	}
+
+	// Match through argv: direct binary path, then launcher wrappers.
+	return c.matchArgv(info.Argv)
+}
+
+// matchName checks a single name (binary basename or module name) against
+// every compiled title pattern and returns the tool name on the first match.
+func (c *Classifier) matchName(name string) string {
+	lower := strings.ToLower(name)
+	for _, tp := range c.titlePatterns {
+		if tp.Pattern != nil && tp.Pattern.MatchString(lower) {
+			if tp.Tool == "" {
+				return "agent"
+			}
+			return tp.Tool
+		}
+	}
+	return ""
+}
+
+// matchArgv checks argv[0] basename and handles common launcher wrappers
+// (npx, python -m, mise, env) so that invocations like "npx claude" or
+// "python3 -m aider" are detected via the same title patterns.
+//
+// Interactive shells (bash -lc "…", zsh -c "…") are intentionally excluded:
+// any agent they launch will appear as a child process and be picked up by
+// the Candidates walk instead.
+func (c *Classifier) matchArgv(argv []string) string {
+	if len(argv) == 0 {
+		return ""
+	}
+	base0 := strings.ToLower(filepath.Base(argv[0]))
+
+	if tool := c.matchName(base0); tool != "" {
+		return tool
+	}
+
+	switch base0 {
+	case "node", "npx", "npm", "pnpm", "yarn", "bun", "uvx":
+		return c.matchExecutableArgs(argv[1:])
+	case "python", "python2", "python3":
+		return c.matchPythonArgs(argv[1:])
+	case "mise":
+		return c.matchMiseArgs(argv[1:])
+	case "env":
+		return c.matchEnvArgs(argv[1:])
+	}
+	return ""
+}
+
+func (c *Classifier) matchExecutableArgs(args []string) string {
+	for _, arg := range args {
+		if isArgvFlag(arg) {
+			continue
+		}
+		if tool := c.matchName(filepath.Base(arg)); tool != "" {
+			return tool
+		}
+	}
+	return ""
+}
+
+func (c *Classifier) matchPythonArgs(args []string) string {
+	for i, arg := range args {
+		if arg == "-m" && i+1 < len(args) {
+			return c.matchName(filepath.Base(args[i+1]))
+		}
+	}
+	return ""
+}
+
+func (c *Classifier) matchMiseArgs(args []string) string {
+	for i, arg := range args {
+		if arg == "--" && i+1 < len(args) {
+			return c.matchName(filepath.Base(args[i+1]))
+		}
+	}
+	return c.matchExecutableArgs(args)
+}
+
+func (c *Classifier) matchEnvArgs(args []string) string {
+	for _, arg := range args {
+		if strings.Contains(arg, "=") || strings.HasPrefix(arg, "-") {
+			continue
+		}
+		return c.matchName(filepath.Base(arg))
+	}
+	return ""
+}
+
+func isArgvFlag(arg string) bool {
+	return arg == "" || arg == "--" || strings.HasPrefix(arg, "-")
 }
 
 func (c *Classifier) classifyContent(ctx context.Context, paneID string) (tool string, ok bool) {
@@ -145,7 +268,7 @@ func (c *Classifier) classifyContent(ctx context.Context, paneID string) (tool s
 	if score < content.AgentScoreThreshold || categories < content.AgentCategoriesThreshold {
 		return "", false
 	}
-	if tool == "" || tool == process.ToolShell {
+	if tool == "" {
 		tool = "agent"
 	}
 	return tool, true

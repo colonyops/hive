@@ -124,8 +124,8 @@ func (sc *sessionCache) bestAgentPane() *cachedPane {
 func NewFromPreviewMatchers(previewMatchers []string) *Integration {
 	capture := TmuxCapture{}
 	reader := process.OSReader{}
-	knownTools := classifier.ToolNamesFromPatterns(previewMatchers)
-	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, knownTools), reader, capture, content.NewScorer(), knownTools)
+	agentNames := classifier.ToolNamesFromPatterns(previewMatchers)
+	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, capture, content.NewScorer())
 	return NewWithReader(cls, TmuxPaneLister{}, reader)
 }
 
@@ -141,7 +141,7 @@ func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process
 		reader = process.OSReader{}
 	}
 	if cls == nil {
-		cls = classifier.New(nil, reader, capture, nil, nil)
+		cls = classifier.New(nil, reader, capture, nil)
 	}
 	if lister == nil {
 		lister = TmuxPaneLister{}
