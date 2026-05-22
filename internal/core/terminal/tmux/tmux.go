@@ -19,7 +19,7 @@ import (
 
 // contentCheckInterval is the minimum time between Tier 3 content-capture
 // classification attempts for the same pane during RefreshCache.
-const contentCheckInterval = 10 * time.Second
+const contentCheckInterval = 5 * time.Second
 
 // Integration implements terminal.Integration for tmux.
 type Integration struct {
