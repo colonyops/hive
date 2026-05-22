@@ -555,7 +555,7 @@ func TestTmuxTargetForTerminalStatus(t *testing.T) {
 	}{
 		{name: "direct window name", status: sessions.TerminalStatus{WindowName: "pi"}, want: "pi"},
 		{name: "single pane fallback", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "0", Panes: []sessions.PaneStatus{{PaneID: "%7"}}}}}, want: "%7"},
-		{name: "single window fallback", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "2"}}}, want: "2"},
+		{name: "single window no panes", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "2"}}}, want: ""},
 		{name: "ambiguous windows", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "0"}, {WindowIndex: "1"}}}, want: ""},
 	}
 

@@ -1,11 +1,13 @@
 package sessions
 
 import (
+	"strings"
 	"testing"
 
 	"charm.land/bubbles/v2/list"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/pkg/kv"
 )
 
 func TestIsSession(t *testing.T) {
@@ -67,7 +69,8 @@ func TestRenderPanePrefixContinuesParentWindowLine(t *testing.T) {
 		IsLastWindow: false,
 	}, false))
 
-	wantPrefix := "  │  ├─"
+	// Session not last → "│   "; window not last → "│   "; then connector.
+	wantPrefix := "│   │   ├─"
 	if got[:len(wantPrefix)] != wantPrefix {
 		t.Fatalf("renderPane prefix = %q, want prefix %q", got, wantPrefix)
 	}
@@ -85,9 +88,43 @@ func TestRenderPanePrefixStopsAtLastWindow(t *testing.T) {
 		IsLastWindow: true,
 	}, false))
 
-	wantPrefix := "     ├─"
+	// Session not last → "│   "; window last → "    "; then connector.
+	wantPrefix := "│       ├─"
 	if got[:len(wantPrefix)] != wantPrefix {
 		t.Fatalf("renderPane prefix = %q, want prefix %q", got, wantPrefix)
+	}
+}
+
+func TestRenderSessionDoesNotShowAggregatePorts(t *testing.T) {
+	statuses := kv.New[string, TerminalStatus]()
+	statuses.Set("s1", TerminalStatus{Status: terminal.StatusReady, Ports: []int{3000, 8080}})
+	delegate := NewTreeDelegate()
+	delegate.TerminalStatuses = statuses
+	delegate.PreviewMode = true
+	item := TreeItem{Session: session.Session{ID: "s1", Name: "alpha", State: session.StateActive}}
+	model := list.New([]list.Item{item}, delegate, 80, 24)
+
+	got := terminal.StripANSI(delegate.renderSession(item, false, model, 0))
+	if strings.Contains(got, ":3000") || strings.Contains(got, ":8080") {
+		t.Fatalf("session row should not show aggregate ports: %q", got)
+	}
+}
+
+func TestRenderWindowAndPaneShowPorts(t *testing.T) {
+	statuses := kv.New[string, TerminalStatus]()
+	statuses.Set("s1", TerminalStatus{Windows: []WindowStatus{{WindowIndex: "0", WindowName: "main", Status: terminal.StatusReady, HasAgent: true, Ports: []int{3000}}}})
+	delegate := NewTreeDelegate()
+	delegate.TerminalStatuses = statuses
+	parent := session.Session{ID: "s1", Name: "alpha", State: session.StateActive}
+
+	window := terminal.StripANSI(delegate.renderWindow(TreeItem{IsWindowItem: true, WindowIndex: "0", WindowName: "main", ParentSession: parent}, false))
+	pane := terminal.StripANSI(delegate.renderPane(TreeItem{IsPaneItem: true, PaneID: "%2", PaneTool: "zsh", Ports: []int{8080}}, false))
+
+	if !strings.Contains(window, ":3000") {
+		t.Fatalf("window row should show ports: %q", window)
+	}
+	if !strings.Contains(pane, ":8080") {
+		t.Fatalf("pane row should show ports: %q", pane)
 	}
 }
 

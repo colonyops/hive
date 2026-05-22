@@ -305,6 +305,27 @@ func TestDiscoverAllPanes(t *testing.T) {
 	assert.Equal(t, "%3", infos[1].PaneID)
 }
 
+func TestRefreshCache_AttachesPortsToNonAgentPanes(t *testing.T) {
+	reader := &fakeProcessReader{tpgid: 200, comm: map[int]string{200: "zsh"}}
+	lister := &fakePaneLister{panes: []classifier.PaneInput{{
+		SessionName: "sess",
+		PaneID:      "%1",
+		PanePID:     100,
+		WindowIndex: "0",
+		WindowName:  "shell",
+	}}}
+	integ := NewWithReader(nil, lister, reader)
+	integ.portLister = fakePortLister{ports: map[int][]int{200: {3000, 8000}}}
+
+	integ.RefreshCache()
+	infos, err := integ.DiscoverAllPanes(context.Background(), "sess", nil, true)
+
+	require.NoError(t, err)
+	require.Len(t, infos, 1)
+	assert.False(t, infos[0].IsAgent)
+	assert.Equal(t, []int{3000, 8000}, infos[0].Ports)
+}
+
 func TestDiscoverAllPanes_IncludesNonAgentsWhenRequested(t *testing.T) {
 	integ := New(nil, nil)
 	integ.cache = map[string]*sessionCache{"multi-sess": {panes: []cachedPane{
@@ -486,6 +507,12 @@ func agentCachedPane(paneID, windowIndex, tool string) cachedPane {
 type fakePaneLister struct{ panes []classifier.PaneInput }
 
 func (f *fakePaneLister) ListAllPanes() ([]classifier.PaneInput, error) { return f.panes, nil }
+
+type fakePortLister struct{ ports map[int][]int }
+
+func (f fakePortLister) ListListeningPorts(_ context.Context, _ []int) (map[int][]int, error) {
+	return f.ports, nil
+}
 
 type blockingPaneLister struct {
 	listFn func() ([]classifier.PaneInput, error)

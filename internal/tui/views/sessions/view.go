@@ -74,11 +74,12 @@ type View struct {
 	gitWorkers  int
 
 	// Terminal integration
-	terminalManager    *terminal.Manager
-	terminalStatuses   *kv.Store[string, TerminalStatus]
-	previewEnabled     bool
-	previewTemplates   *PreviewTemplates
-	currentTmuxSession string
+	terminalManager      *terminal.Manager
+	terminalStatuses     *kv.Store[string, TerminalStatus]
+	terminalPollInFlight bool
+	previewEnabled       bool
+	previewTemplates     *PreviewTemplates
+	currentTmuxSession   string
 
 	// Plugin integration
 	pluginManager      *plugins.Manager
@@ -286,12 +287,8 @@ func (v *View) handleSessionsLoaded(msg sessionsLoadedMsg) tea.Cmd {
 	}
 	// Immediately fetch terminal status so newly created sessions are detected
 	// without waiting for the next scheduled poll tick (up to 1500ms delay).
-	if v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations() && len(v.allSessions) > 0 {
-		sessPtrs := make([]*session.Session, len(v.allSessions))
-		for i := range v.allSessions {
-			sessPtrs[i] = &v.allSessions[i]
-		}
-		cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.tmuxItemsMode()))
+	if cmd := v.startTerminalStatusBatch(); cmd != nil {
+		cmds = append(cmds, cmd)
 	}
 	return tea.Batch(cmds...)
 }
@@ -303,6 +300,7 @@ func (v *View) handleGitStatusComplete(msg GitStatusBatchCompleteMsg) tea.Cmd {
 }
 
 func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) tea.Cmd {
+	v.terminalPollInFlight = false
 	if v.terminalStatuses != nil {
 		for sessionID, newStatus := range msg.Results {
 			if newStatus.Error != nil {
@@ -339,16 +337,33 @@ func (v *View) handleTerminalStatusComplete(msg TerminalStatusBatchCompleteMsg) 
 
 func (v *View) handleTerminalPollTick() tea.Cmd {
 	var cmds []tea.Cmd
+	if cmd := v.startTerminalStatusBatch(); cmd != nil {
+		cmds = append(cmds, cmd)
+	}
+	if v.terminalManager != nil && v.terminalManager.HasEnabledIntegrations() {
+		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
+	}
+	return tea.Batch(cmds...)
+}
+
+// startTerminalStatusBatch dispatches a terminal status fetch for all sessions.
+// The terminalPollInFlight guard prevents overlapping fetches from queuing up
+// during slow poll cycles — only one batch runs at a time.
+func (v *View) startTerminalStatusBatch() tea.Cmd {
+	if v.terminalPollInFlight || v.terminalManager == nil || !v.terminalManager.HasEnabledIntegrations() || len(v.allSessions) == 0 {
+		return nil
+	}
 	allSess := v.allSessions
 	sessPtrs := make([]*session.Session, len(allSess))
 	for i := range allSess {
 		sessPtrs[i] = &v.allSessions[i]
 	}
-	cmds = append(cmds, FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.tmuxItemsMode()))
-	if v.terminalManager.HasEnabledIntegrations() {
-		cmds = append(cmds, StartTerminalPollTicker(v.cfg.Tmux.PollInterval))
+	cmd := FetchTerminalStatusBatch(v.terminalManager, sessPtrs, v.gitWorkers, v.tmuxItemsMode())
+	if cmd == nil {
+		return nil
 	}
-	return tea.Batch(cmds...)
+	v.terminalPollInFlight = true
+	return cmd
 }
 
 func (v *View) handlePluginWorkerStarted(msg pluginWorkerStartedMsg) tea.Cmd {
@@ -830,6 +845,7 @@ func (v *View) expandWindowItems(items []list.Item) []list.Item {
 						PaneTool:      p.Tool,
 						PaneStatus:    p.Status,
 						PaneIsAgent:   p.IsAgent,
+						Ports:         append([]int(nil), p.Ports...),
 						ParentWindow:  w.WindowIndex,
 						ParentSession: treeItem.Session,
 						IsLastPane:    j == len(w.Panes)-1,
@@ -1539,9 +1555,11 @@ func (v *View) LocalRemote() string {
 
 // --- Package-level utility functions ---
 
-// isActiveStatus returns true for any session with a live terminal (not missing).
+// isActiveStatus returns true for any session with a live agent terminal.
+// StatusNeutral is excluded because it indicates only non-agent (shell) panes,
+// which are not considered "active" for navigation purposes.
 func isActiveStatus(s terminal.Status) bool {
-	return s != terminal.StatusMissing && s != ""
+	return s != terminal.StatusMissing && s != "" && s != terminal.StatusNeutral
 }
 
 // IsFilterAction returns true if the action type is a filter action.

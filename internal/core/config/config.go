@@ -1074,7 +1074,6 @@ func (c *Config) validateGroupBy() error {
 	return criterio.Run("views.sessions.group_by", c.Views.Sessions.GroupBy, criterio.StrOneOf(ValidGroupByModes...))
 }
 
-// validateTmuxItems checks that the configured tmux_items value is valid.
 func (c *Config) validateTmuxItems() error {
 	return criterio.Run("views.sessions.tmux_items", c.Views.Sessions.TmuxItems, criterio.StrOneOf(ValidTmuxItemsModes...))
 }

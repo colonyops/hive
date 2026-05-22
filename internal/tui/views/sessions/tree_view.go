@@ -139,6 +139,7 @@ type TreeItem struct {
 	PaneTool     string
 	PaneStatus   terminal.Status
 	PaneIsAgent  bool
+	Ports        []int
 	ParentWindow string
 	IsLastPane   bool
 }
@@ -399,9 +400,14 @@ func (d TreeDelegate) renderRecycledPlaceholder(item TreeItem, isSelected bool) 
 
 // renderSession renders a session entry.
 func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model, index int) string {
-	// Session rows sit directly below the repo header; child tmux rows
-	// indent one level further to keep hierarchy clear.
-	prefixStyled := d.Styles.TreeLine.Render("")
+	// Tree prefix
+	var prefix string
+	if item.IsLastInRepo {
+		prefix = treeLast
+	} else {
+		prefix = treeBranch
+	}
+	prefixStyled := d.Styles.TreeLine.Render(prefix)
 
 	// Get terminal status if available
 	var termStatus *TerminalStatus
@@ -484,12 +490,18 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	sessionLine := "  "
+	// Continue the parent session's line, then the parent window's line.
+	var sessionLine string
+	if item.IsLastInRepo {
+		sessionLine = "    " // session used └─
+	} else {
+		sessionLine = "│   " // session used ├─
+	}
 	var windowLine string
 	if item.IsLastWindow {
-		windowLine = "   "
+		windowLine = "    "
 	} else {
-		windowLine = "│  "
+		windowLine = "│   "
 	}
 	prefixStyled := d.Styles.TreeLine.Render(sessionLine + windowLine + connector)
 
@@ -512,8 +524,24 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 	if item.PaneTool != "" {
 		name += " " + nameStyle.Render(item.PaneTool)
 	}
+	name += renderPorts(item.Ports)
 
 	return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, name)
+}
+
+func renderPorts(ports []int) string {
+	if len(ports) == 0 {
+		return ""
+	}
+	limit := min(len(ports), 2)
+	parts := make([]string, 0, limit+1)
+	for _, port := range ports[:limit] {
+		parts = append(parts, fmt.Sprintf(":%d", port))
+	}
+	if extra := len(ports) - limit; extra > 0 {
+		parts = append(parts, fmt.Sprintf("+%d", extra))
+	}
+	return styles.TextWarningStyle.Render(" " + strings.Join(parts, " "))
 }
 
 func displayPaneID(paneID string) string {
@@ -532,7 +560,15 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	prefixStyled := d.Styles.TreeLine.Render("  " + connector)
+	// Continue the parent session's vertical line when it is not the last
+	// sibling in the repo group.
+	var parentLine string
+	if item.IsLastInRepo {
+		parentLine = "    " // parent used └─, no continuation
+	} else {
+		parentLine = "│   " // parent used ├─, line continues
+	}
+	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
 	// Get per-window terminal status from the delegate's store
 	var windowStatus *WindowStatus
@@ -584,8 +620,12 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	if showIndex {
 		indexStr = d.Styles.SessionBranch.Render(fmt.Sprintf(" #%s", item.WindowIndex))
 	}
+	ports := ""
+	if windowStatus != nil {
+		ports = renderPorts(windowStatus.Ports)
+	}
 
-	return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, indexStr)
+	return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, indexStr, ports)
 }
 
 // renderGitStatus returns the formatted git status for a session path.

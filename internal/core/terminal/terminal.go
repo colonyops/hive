@@ -23,7 +23,8 @@ type SessionInfo struct {
 	PaneTitle    string // pane title (for non-agent display)
 	Status       Status // current detected status
 	DetectedTool string // detected AI tool (claude, gemini, etc.)
-	IsAgent      bool   // true when this pane is a detected agent
+	IsAgent      bool   // true when an AI agent was detected in this pane
+	Ports        []int  // listening TCP ports owned by pane processes
 	PaneContent  string // captured pane content for preview
 }
 

@@ -3,7 +3,9 @@ package sessions
 import (
 	"context"
 	"testing"
+	"time"
 
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,6 +77,44 @@ func TestStatusRank(t *testing.T) {
 	assert.Greater(t, statusRank(terminal.StatusActive), statusRank(terminal.StatusMissing))
 	assert.Greater(t, statusRank(terminal.StatusMissing), statusRank(terminal.StatusReady))
 	assert.Zero(t, statusRank(terminal.Status("unknown")))
+}
+
+func TestPaneLabel(t *testing.T) {
+	tests := []struct {
+		name string
+		info *terminal.SessionInfo
+		want string
+	}{
+		{name: "detected tool wins", info: &terminal.SessionInfo{DetectedTool: "pi", WindowName: "agent", PaneTitle: "host.local"}, want: "pi"},
+		{name: "custom title", info: &terminal.SessionInfo{WindowName: "Python", PaneTitle: "worker"}, want: "worker"},
+		{name: "local host title falls back to window", info: &terminal.SessionInfo{WindowName: "Python", PaneTitle: "Haydens-MacBook-Pro-2.local"}, want: "Python"},
+		{name: "empty title falls back to window", info: &terminal.SessionInfo{WindowName: "shell"}, want: "shell"},
+		{name: "empty fields", info: &terminal.SessionInfo{}, want: "terminal"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, paneLabel(tt.info))
+		})
+	}
+}
+
+func TestFetchTerminalStatusBatch_DefaultsInvalidWorkerCount(t *testing.T) {
+	mgr := terminal.NewManager([]string{"fake"})
+	mgr.Register(&fakeTerminalIntegration{})
+	cmd := FetchTerminalStatusBatch(mgr, []*session.Session{{ID: "s1", Slug: "s1", State: session.StateActive}}, 0, "")
+	require.NotNil(t, cmd)
+
+	done := make(chan struct{})
+	go func() {
+		_ = cmd()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(time.Second):
+		t.Fatal("terminal status batch deadlocked with zero workers")
+	}
 }
 
 type fakeTerminalIntegration struct {

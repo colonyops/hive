@@ -1673,10 +1673,12 @@ func tmuxTargetForTerminalStatus(status sessions.TerminalStatus) string {
 		return ""
 	}
 	window := status.Windows[0]
+	// Prefer the globally-unique pane ID when there is exactly one pane; a bare
+	// window index is ambiguous in multi-session tmux environments.
 	if len(window.Panes) == 1 && window.Panes[0].PaneID != "" {
 		return window.Panes[0].PaneID
 	}
-	return window.WindowIndex
+	return ""
 }
 
 // selectedTreeItem returns the currently selected tree item, or nil if none.

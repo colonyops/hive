@@ -3,6 +3,9 @@ package sessions
 import (
 	"context"
 	"maps"
+	"os"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +21,21 @@ import (
 
 const terminalStatusTimeout = 2 * time.Second
 
+// resolvedHostname caches os.Hostname() so the per-pane hot path avoids
+// repeated syscalls. Hostname is constant for the lifetime of the process.
+var (
+	hostnameOnce     sync.Once
+	resolvedHostname string
+)
+
+func getHostname() string {
+	hostnameOnce.Do(func() {
+		h, _ := os.Hostname()
+		resolvedHostname = strings.ToLower(strings.TrimSpace(h))
+	})
+	return resolvedHostname
+}
+
 // PaneStatus holds per-pane terminal status for agent panes.
 type PaneStatus struct {
 	PaneID      string
@@ -25,6 +43,7 @@ type PaneStatus struct {
 	Tool        string
 	PaneContent string
 	IsAgent     bool
+	Ports       []int
 }
 
 // WindowStatus holds per-window terminal status for multi-window sessions.
@@ -35,6 +54,7 @@ type WindowStatus struct {
 	Tool        string
 	PaneContent string
 	HasAgent    bool
+	Ports       []int
 	Panes       []PaneStatus
 }
 
@@ -44,6 +64,7 @@ type TerminalStatus struct {
 	Tool        string
 	WindowName  string
 	PaneContent string
+	Ports       []int
 	IsLoading   bool
 	Error       error
 	Windows     []WindowStatus // per-window statuses (populated only for multi-window sessions)
@@ -61,6 +82,9 @@ type TerminalPollTickMsg struct{}
 func FetchTerminalStatusBatch(mgr *terminal.Manager, sessions []*session.Session, workers int, tmuxItems string) tea.Cmd {
 	if len(sessions) == 0 || !mgr.HasEnabledIntegrations() {
 		return nil
+	}
+	if workers <= 0 {
+		workers = 1
 	}
 
 	return func() tea.Msg {
@@ -129,6 +153,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 			windows := discoverAllWindows(ctx, mgr, sess.Slug, metadata)
 			if len(windows) > 0 {
 				status.Status = terminal.StatusNeutral
+				status.Ports = portsForWindows(windows)
 				status.Windows = windows
 			}
 		}
@@ -147,6 +172,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 	status.Tool = info.DetectedTool
 	status.WindowName = info.WindowName
 	status.PaneContent = info.PaneContent
+	status.Ports = append([]int(nil), info.Ports...)
 
 	// Discover all panes/windows if the integration supports it.
 	var allInfos []*terminal.SessionInfo
@@ -159,6 +185,7 @@ func fetchTerminalStatusForSession(ctx context.Context, mgr *terminal.Manager, s
 			log.Debug().Err(discErr).Str("session", sess.Slug).Msg("multi-window discovery failed, using single-window mode")
 		} else if len(allInfos) > 0 {
 			windows := groupPaneStatuses(ctx, integration, sess.Slug, allInfos)
+			status.Ports = mergePorts(status.Ports, portsForWindows(windows))
 			if shouldExposeWindowsForMode(windows, tmuxItems) {
 				status.Windows = windows
 			}
@@ -207,6 +234,7 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 			Tool:        paneLabel(wi),
 			PaneContent: wi.PaneContent,
 			IsAgent:     wi.IsAgent,
+			Ports:       append([]int(nil), wi.Ports...),
 		}
 
 		// \x1f is an ASCII Unit Separator, which avoids collisions with printable tmux window names.
@@ -222,15 +250,19 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 				Tool:        wi.DetectedTool,
 				PaneContent: wi.PaneContent,
 				HasAgent:    wi.IsAgent,
+				Ports:       append([]int(nil), wi.Ports...),
 			})
-		} else if wi.IsAgent {
-			windows[idx].Status = aggregateStatus(windows[idx].Status, paneStatus)
-			windows[idx].HasAgent = true
-			if windows[idx].Tool == "" {
-				windows[idx].Tool = wi.DetectedTool
-			}
-			if windows[idx].PaneContent == "" {
-				windows[idx].PaneContent = wi.PaneContent
+		} else {
+			windows[idx].Ports = mergePorts(windows[idx].Ports, wi.Ports)
+			if wi.IsAgent {
+				windows[idx].Status = aggregateStatus(windows[idx].Status, paneStatus)
+				windows[idx].HasAgent = true
+				if windows[idx].Tool == "" {
+					windows[idx].Tool = wi.DetectedTool
+				}
+				if windows[idx].PaneContent == "" {
+					windows[idx].PaneContent = wi.PaneContent
+				}
 			}
 		}
 		windows[idx].Panes = append(windows[idx].Panes, pane)
@@ -238,26 +270,56 @@ func groupPaneStatuses(ctx context.Context, integration terminal.Integration, sl
 	return windows
 }
 
+// shouldExposeWindowsForMode reports whether the windows list should be
+// expanded into child rows in the session tree.
+//
+// In "agents" mode (default), windows are only shown when there are multiple
+// windows or multiple panes within a single window — the agent must be
+// identifiable among siblings. In "all" mode the same threshold applies
+// because a single-pane, single-window session has no hierarchy to show.
 func shouldExposeWindowsForMode(windows []WindowStatus, tmuxItems string) bool {
+	_ = tmuxItems // both modes share the same threshold today
 	if len(windows) == 0 {
 		return false
 	}
-	if tmuxItems == config.TmuxItemsAll {
-		return shouldExposeAllTmuxItems(windows)
-	}
 	if len(windows) > 1 {
 		return true
 	}
-	return len(windows) == 1 && len(windows[0].Panes) > 1
+	return len(windows[0].Panes) > 1
 }
 
-func shouldExposeAllTmuxItems(windows []WindowStatus) bool {
-	if len(windows) > 1 {
-		return true
+func portsForWindows(windows []WindowStatus) []int {
+	var ports []int
+	for _, window := range windows {
+		ports = mergePorts(ports, window.Ports)
+		for _, pane := range window.Panes {
+			ports = mergePorts(ports, pane.Ports)
+		}
 	}
-	return len(windows) == 1 && len(windows[0].Panes) > 1
+	return ports
 }
 
+func mergePorts(a, b []int) []int {
+	if len(a) == 0 && len(b) == 0 {
+		return nil
+	}
+	seen := make(map[int]bool, len(a)+len(b))
+	merged := make([]int, 0, len(a)+len(b))
+	for _, port := range append(append([]int(nil), a...), b...) {
+		if port <= 0 || seen[port] {
+			continue
+		}
+		seen[port] = true
+		merged = append(merged, port)
+	}
+	slices.Sort(merged)
+	return merged
+}
+
+// paneLabel returns the display label for a pane.
+// Priority: detected AI tool > custom pane title (non-default) > window name > "terminal".
+// Default pane titles (hostname, ".local" suffix) are suppressed so users see
+// meaningful names rather than OS-generated noise.
 func paneLabel(info *terminal.SessionInfo) string {
 	if info == nil {
 		return ""
@@ -265,10 +327,37 @@ func paneLabel(info *terminal.SessionInfo) string {
 	if info.DetectedTool != "" {
 		return info.DetectedTool
 	}
-	if info.PaneTitle != "" {
+	if info.PaneTitle != "" && !isDefaultPaneTitle(info.PaneTitle) {
 		return info.PaneTitle
 	}
+	if info.WindowName != "" {
+		return info.WindowName
+	}
 	return "terminal"
+}
+
+// isDefaultPaneTitle reports whether title is the default tmux pane title that
+// tmux sets automatically (process name or hostname). These should be suppressed
+// in favour of the window name so users see meaningful labels.
+func isDefaultPaneTitle(title string) bool {
+	title = strings.TrimSpace(title)
+	if title == "" {
+		return false
+	}
+	lowerTitle := strings.ToLower(title)
+	// tmux often sets the pane title to "hostname.local" on macOS.
+	if strings.HasSuffix(lowerTitle, ".local") {
+		return true
+	}
+	lowerHost := getHostname()
+	if lowerHost == "" {
+		return false
+	}
+	if lowerTitle == lowerHost {
+		return true
+	}
+	shortHost, _, _ := strings.Cut(lowerHost, ".")
+	return shortHost != "" && lowerTitle == shortHost
 }
 
 func aggregateStatus(current, next terminal.Status) terminal.Status {

@@ -464,6 +464,30 @@ func TestHandleSessionsLoaded_NoTerminalPollWithoutIntegrations(t *testing.T) {
 	assert.Equal(t, sessions, v.allSessions)
 }
 
+func TestStartTerminalStatusBatch_SkipsWhileInFlight(t *testing.T) {
+	sessions := []session.Session{
+		{ID: "s1", Name: "session", State: session.StateActive},
+	}
+	v := newViewWithTerminalMgr(sessions)
+
+	cmd := v.startTerminalStatusBatch()
+	assert.NotNil(t, cmd)
+	assert.True(t, v.terminalPollInFlight)
+
+	cmd = v.startTerminalStatusBatch()
+	assert.Nil(t, cmd, "must not start overlapping terminal status batches")
+}
+
+func TestHandleTerminalStatusComplete_ClearsInFlight(t *testing.T) {
+	v := newViewWithTerminalMgr(nil)
+	v.terminalPollInFlight = true
+
+	cmd := v.handleTerminalStatusComplete(TerminalStatusBatchCompleteMsg{})
+
+	assert.Nil(t, cmd)
+	assert.False(t, v.terminalPollInFlight)
+}
+
 func TestApplyFilter_GroupByGroup(t *testing.T) {
 	sessions := []session.Session{
 		{ID: "s1", Name: "alpha", Metadata: map[string]string{"group": "backend"}},
