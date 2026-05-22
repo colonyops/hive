@@ -3,6 +3,7 @@ package tmux
 import (
 	"context"
 	"regexp"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -191,12 +192,12 @@ func TestRefreshCache_ContentLimiterSkipsTier3(t *testing.T) {
 func TestRefreshCache_TryLockPreventsStorm(t *testing.T) {
 	// If RefreshCache is already running, a concurrent call must return
 	// immediately without calling list-panes a second time.
-	var listCalls int
+	var listCalls atomic.Int32
 	blockRefresh := make(chan struct{})
 	lister := &blockingPaneLister{
 		listFn: func() ([]classifier.PaneInput, error) {
-			listCalls++
-			if listCalls == 1 {
+			n := listCalls.Add(1)
+			if n == 1 {
 				<-blockRefresh // block the first call
 			}
 			return nil, nil
@@ -216,7 +217,7 @@ func TestRefreshCache_TryLockPreventsStorm(t *testing.T) {
 
 	// Second call should return immediately (TryLock fails).
 	integ.RefreshCache()
-	assert.Equal(t, 1, listCalls, "second RefreshCache must not call list-panes while first is running")
+	assert.Equal(t, int32(1), listCalls.Load(), "second RefreshCache must not call list-panes while first is running")
 
 	// Unblock the first refresh.
 	close(blockRefresh)
