@@ -2,7 +2,7 @@
 icon: lucide/list-todo
 ---
 
-# Todo Configuration (Experimental)
+# Todo Configuration <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>
 
 Configure how todo actions execute in the TUI, how aggressively todo creation is limited, and whether toast notifications are shown.
 
@@ -83,5 +83,5 @@ Hive does not auto-create todos when an agent finishes work.
 
 ## Related Docs
 
-- [Todos (Experimental)](../getting-started/todos.md)
+- [Todos](../getting-started/todos.md) <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>
 - [Configuration Overview](index.md)

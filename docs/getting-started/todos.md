@@ -2,7 +2,7 @@
 icon: lucide/list-todo
 ---
 
-# Todos (Experimental)
+# Todos <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>
 
 Hive includes an experimental todo workflow for tracking operator actions requested by agents.
 

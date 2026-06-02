@@ -91,7 +91,7 @@ views:
 | `enter`, `l` | Open detail pane         |
 | `h`, `esc`   | Back to tree             |
 
-For todo panel interaction keys (`enter`, `c`, `d`, `tab`, etc.), see [Todos (Experimental)](../getting-started/todos.md).
+For todo panel interaction keys (`enter`, `c`, `d`, `tab`, etc.), see [Todos](../getting-started/todos.md) <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>.
 
 ## Per-View Keybinding Resolution
 

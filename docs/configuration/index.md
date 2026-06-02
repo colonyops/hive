@@ -104,7 +104,7 @@ context:
 
 See [Git-backed Context](../recipes/git-backed-context.md) for a practical guide.
 
-## Todos (Experimental)
+## Todos <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>
 
 | Option                               | Type                | Default | Description |
 | ------------------------------------ | ------------------- | ------- | ----------- |
@@ -156,7 +156,7 @@ See [Keybindings](keybindings.md) for the full per-view configuration format and
 - **[Rules](rules.md)** — Repository-specific spawn, recycle, setup commands, and file copying
 - **[User Commands](commands.md)** — Custom commands for the vim-style command palette
 - **[Keybindings](keybindings.md)** — Per-view key mappings and palette commands
-- **[Todo Configuration (Experimental)](todos.md)** — Todo actions, limiter, notifications, and enter behavior
+- **[Todo Configuration](todos.md)** <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span> — Todo actions, limiter, notifications, and enter behavior
 - **[Plugins](plugins.md)** — External service integrations (tmux, Claude, GitHub, etc.)
 - **[Themes](themes.md)** — Built-in color palettes and custom theme creation
 
