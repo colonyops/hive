@@ -409,7 +409,7 @@ type Config struct {
 	Database            DatabaseConfig         `json:"database"              yaml:"database"`
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
-	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // directories containing git repositories for new session dialog
+	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
 	Views               ViewsConfig            `json:"views"                 yaml:"views"`
 	RepoDirsCompat      []string               `json:"-"                     yaml:"repo_dirs"` // deprecated: use workspaces instead (kept for backwards compatibility)
 	DataDir             string                 `json:"-"                     yaml:"-"`         // set by caller, not from config file
@@ -486,7 +486,7 @@ func (p AgentProfile) CommandOrDefault(key string) string {
 }
 
 // ShellFlags returns the flags as a space-joined string.
-// Individual flags are NOT quoted — the caller is responsible for quoting
+// Individual flags are NOT quoted; the caller is responsible for quoting
 // the entire value (e.g., via shq in templates) or relying on shell word
 // splitting when consuming the value.
 func (p AgentProfile) ShellFlags() string {

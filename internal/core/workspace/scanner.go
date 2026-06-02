@@ -19,7 +19,7 @@ type DiscoveredRepo struct {
 	Remote string // origin remote URL
 }
 
-// ScanRepoDirs scans the given directories for git repositories.
+// ScanRepoDirs scans parent directories for git repositories.
 // Each directory in dirs is expected to contain subdirectories that are git repos.
 // Repositories that fail to scan are silently skipped.
 func ScanRepoDirs(ctx context.Context, dirs []string, gitExec git.Git) ([]DiscoveredRepo, error) {

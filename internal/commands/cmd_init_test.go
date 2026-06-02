@@ -411,6 +411,31 @@ func TestExpandTilde(t *testing.T) {
 	}
 }
 
+func TestValidateWorkspaceParent(t *testing.T) {
+	t.Run("accepts parent directory", func(t *testing.T) {
+		parent := t.TempDir()
+		repo := filepath.Join(parent, "repo")
+		require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))
+
+		require.NoError(t, validateWorkspaceParent(parent))
+	})
+
+	t.Run("rejects individual git repository", func(t *testing.T) {
+		repo := t.TempDir()
+		require.NoError(t, os.MkdirAll(filepath.Join(repo, ".git"), 0o755))
+
+		err := validateWorkspaceParent(repo)
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "parent folder")
+	})
+
+	t.Run("rejects missing path", func(t *testing.T) {
+		err := validateWorkspaceParent(filepath.Join(t.TempDir(), "missing"))
+		require.Error(t, err)
+		assert.Contains(t, err.Error(), "path does not exist")
+	})
+}
+
 // TestDirSuggestions verifies directory completion behaviour.
 func TestDirSuggestions(t *testing.T) {
 	t.Run("empty input returns nil", func(t *testing.T) {
