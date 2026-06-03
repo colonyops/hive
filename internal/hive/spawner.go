@@ -104,7 +104,12 @@ func (s *Spawner) SpawnWindowsWith(ctx context.Context, windows []config.WindowC
 // OpenWindows renders window templates and opens (or creates) a tmux session.
 // If the session already exists, it attaches to it (optionally selecting targetWindow).
 func (s *Spawner) OpenWindows(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string) error {
-	rendered, err := RenderWindows(s.renderer, windows, data)
+	return s.OpenWindowsWith(ctx, windows, data, background, targetWindow, s.renderer)
+}
+
+// OpenWindowsWith renders window templates using the given renderer and opens (or creates) a tmux session.
+func (s *Spawner) OpenWindowsWith(ctx context.Context, windows []config.WindowConfig, data SpawnData, background bool, targetWindow string, renderer *tmpl.Renderer) error {
+	rendered, err := RenderWindows(renderer, windows, data)
 	if err != nil {
 		return err
 	}

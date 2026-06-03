@@ -338,19 +338,11 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	}
 
 	if !opts.SkipSpawn {
-		renderer := s.renderer
-		if opts.AgentKey != "" {
-			profile, ok := s.config.Agents.Profiles[opts.AgentKey]
-			if !ok {
-				return nil, fmt.Errorf("unknown agent %q", opts.AgentKey)
-			}
-			renderer = s.renderer.WithAgent(
-				profile.CommandOrDefault(opts.AgentKey),
-				opts.AgentKey,
-				profile.ShellFlags(),
-			)
-		}
 		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
+		renderer, err := s.rendererForAgent(firstNonEmpty(opts.AgentKey, strategy.Agent))
+		if err != nil {
+			return nil, err
+		}
 		switch {
 		case strategy.IsWindows():
 			if err := s.spawner.SpawnWindowsWith(ctx, strategy.Windows, data, opts.UseBatchSpawn || opts.Background, renderer); err != nil {
@@ -747,7 +739,36 @@ func (s *SessionService) OpenTmuxSession(ctx context.Context, name, path, remote
 		Repo:       repo,
 	}
 
-	return s.spawner.OpenWindows(ctx, strategy.Windows, data, background, targetWindow)
+	renderer, err := s.rendererForAgent(strategy.Agent)
+	if err != nil {
+		return err
+	}
+
+	return s.spawner.OpenWindowsWith(ctx, strategy.Windows, data, background, targetWindow, renderer)
+}
+
+func (s *SessionService) rendererForAgent(agentKey string) (*tmpl.Renderer, error) {
+	if agentKey == "" {
+		return s.renderer, nil
+	}
+	profile, ok := s.config.Agents.Profiles[agentKey]
+	if !ok {
+		return nil, fmt.Errorf("unknown agent %q", agentKey)
+	}
+	return s.renderer.WithAgent(
+		profile.CommandOrDefault(agentKey),
+		agentKey,
+		profile.ShellFlags(),
+	), nil
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // Git returns the git client for use in background operations.
