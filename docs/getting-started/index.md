@@ -116,4 +116,4 @@ workspaces:
 - [Task Tracking](task-tracking.md) — Built-in epics and tasks for multi-agent coordination
 - [Context](context.md) — Shared storage and the review tool
 - [Messaging](messaging.md) — Inter-agent pub/sub communication
-- [Todos (Experimental)](todos.md) — Operator todo lifecycle and CLI usage
+- [Todos](todos.md) <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span> — Operator todo lifecycle and CLI usage

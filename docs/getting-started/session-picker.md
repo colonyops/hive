@@ -2,7 +2,7 @@
 icon: lucide/search
 ---
 
-# Session Picker (Experimental)
+# Session Picker <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>
 
 !!! warning "Experimental"
     Session picker behavior, flags, and output formats are experimental and may change in future releases.

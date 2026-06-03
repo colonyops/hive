@@ -2,6 +2,40 @@
   color: var(--md-accent-fg-color) !important;
 }
 
+.hive-experimental-icon {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.25rem;
+  background-color: currentColor;
+  color: var(--md-accent-fg-color);
+  mask: url("../assets/experimental.svg") no-repeat center / contain;
+  -webkit-mask: url("../assets/experimental.svg") no-repeat center / contain;
+  vertical-align: -0.1em;
+}
+
+.md-nav .hive-experimental-icon {
+  width: 0.82em;
+  height: 0.82em;
+  margin-left: 0.18rem;
+  vertical-align: -0.08em;
+}
+
+.md-nav__link:is([href$="todos/"], [href$="session-picker/"]) .md-ellipsis::after,
+.md-nav__link:has(> svg.lucide-list-todo) .md-ellipsis::after,
+.md-nav__link:has(> svg.lucide-search) .md-ellipsis::after {
+  content: "";
+  display: inline-block;
+  width: 0.82em;
+  height: 0.82em;
+  margin-left: 0.18rem;
+  background-color: currentColor;
+  color: var(--md-accent-fg-color);
+  mask: url("../assets/experimental.svg") no-repeat center / contain;
+  -webkit-mask: url("../assets/experimental.svg") no-repeat center / contain;
+  vertical-align: -0.08em;
+}
+
 .md-main__inner:has(.hive-hero) {
   max-width: min(94vw, 86rem);
 }

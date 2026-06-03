@@ -33,7 +33,7 @@ Skills are loaded automatically when the agent detects relevant context — no s
 | `wait` | Blocking until a message arrives, timeouts, synchronization patterns |
 | `session-info` | Retrieving current session ID, inbox topic, and session state |
 
-## hive-hooks
+## hive-hooks <span class="hive-experimental-icon" title="Experimental" role="img" aria-label="Experimental"></span>
 
 !!! warning "Experimental"
     This plugin is experimental and may change in future releases.
