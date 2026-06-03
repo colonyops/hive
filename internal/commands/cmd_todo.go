@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/hive"
@@ -88,8 +89,8 @@ Examples:
 			&cli.StringFlag{
 				Name:        "source",
 				Aliases:     []string{"s"},
-				Usage:       "source (agent, human, system)",
-				Value:       "agent",
+				Usage:       fmt.Sprintf("source (%s)", strings.Join(todo.SourceNames(), ", ")),
+				Value:       todo.SourceAgent.String(),
 				Destination: &cmd.addSource,
 			},
 		},
@@ -110,7 +111,7 @@ Examples:
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "status",
-				Usage:       "filter by status (pending, acknowledged, completed, dismissed)",
+				Usage:       fmt.Sprintf("filter by status (%s)", strings.Join(todo.StatusNames(), ", ")),
 				Destination: &cmd.listStatus,
 			},
 		},
@@ -136,7 +137,7 @@ Examples:
 		Flags: []cli.Flag{
 			&cli.StringFlag{
 				Name:        "status",
-				Usage:       "new status (acknowledged, completed, dismissed)",
+				Usage:       fmt.Sprintf("new status (%s)", strings.Join(todo.StatusNames(), ", ")),
 				Required:    true,
 				Destination: &cmd.updateStatus,
 			},
@@ -148,7 +149,7 @@ Examples:
 func (cmd *TodoCmd) runAdd(ctx context.Context, c *cli.Command) error {
 	src, err := todo.ParseSource(cmd.addSource)
 	if err != nil {
-		return fmt.Errorf("invalid source %q: valid values are agent, human, system", cmd.addSource)
+		return fmt.Errorf("invalid source %q: valid values are %s", cmd.addSource, strings.Join(todo.SourceNames(), ", "))
 	}
 
 	// Auto-detect session ID (best-effort)
@@ -202,7 +203,7 @@ func (cmd *TodoCmd) runList(ctx context.Context, c *cli.Command) error {
 	if cmd.listStatus != "" {
 		status, err := todo.ParseStatus(cmd.listStatus)
 		if err != nil {
-			return fmt.Errorf("invalid status %q: valid values are pending, acknowledged, completed, dismissed", cmd.listStatus)
+			return fmt.Errorf("invalid status %q: valid values are %s", cmd.listStatus, strings.Join(todo.StatusNames(), ", "))
 		}
 		filter.Status = &status
 	}
@@ -229,7 +230,7 @@ func (cmd *TodoCmd) runUpdate(ctx context.Context, c *cli.Command) error {
 	id := c.Args().First()
 	status, err := todo.ParseStatus(cmd.updateStatus)
 	if err != nil {
-		return fmt.Errorf("invalid status %q: valid values are pending, acknowledged, completed, dismissed", cmd.updateStatus)
+		return fmt.Errorf("invalid status %q: valid values are %s", cmd.updateStatus, strings.Join(todo.StatusNames(), ", "))
 	}
 
 	var updated todo.Todo
