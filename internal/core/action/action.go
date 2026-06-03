@@ -1,5 +1,13 @@
 package action
 
+// PaneSpec is a fully-rendered pane definition carried in a SpawnWindows action.
+type PaneSpec struct {
+	Command string
+	Dir     string
+	Size    string
+	Split   string
+}
+
 // WindowSpec is a fully-rendered window definition carried in a SpawnWindows action.
 // Fields mirror coretmux.RenderedWindow to avoid a cross-package dependency on the tmux layer.
 type WindowSpec struct {
@@ -7,6 +15,7 @@ type WindowSpec struct {
 	Command string
 	Dir     string
 	Focus   bool
+	Panes   []PaneSpec
 }
 
 // NewSessionRequest carries parameters for creating a new Hive session before spawning windows.

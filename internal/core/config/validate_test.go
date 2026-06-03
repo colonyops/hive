@@ -552,6 +552,36 @@ func TestValidate_UserCommandWindowsOnly(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestValidate_UserCommandWindowCommandAndPanes(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"spawn": {
+			Windows: []WindowConfig{{Name: "agent", Command: "claude", Panes: []PaneConfig{{Command: "npm test"}}}},
+		},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "windows[0]")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "command and panes are mutually exclusive")
+}
+
+func TestValidate_UserCommandWindowInvalidPaneSplit(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.UserCommands = map[string]UserCommand{
+		"spawn": {
+			Windows: []WindowConfig{{Name: "agent", Panes: []PaneConfig{{Split: "diagonal"}}}},
+		},
+	}
+
+	err := cfg.Validate()
+	var fieldErrs criterio.FieldErrors
+	require.ErrorAs(t, err, &fieldErrs)
+	assert.Contains(t, fieldErrs[0].Field, "windows[0].panes[0].split")
+	assert.Contains(t, fieldErrs[0].Err.Error(), "must be one of: horizontal, vertical")
+}
+
 func TestValidate_UserCommandWindowsMissingName(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
@@ -617,8 +647,15 @@ func TestValidateDeep_UserCommandWindowTemplates(t *testing.T) {
 		cfg.UserCommands = map[string]UserCommand{
 			"spawn": {
 				Windows: []WindowConfig{
-					{Name: "{{ .Name }}-agent", Command: "claude --session {{ .ID }}"},
+					{
+						Name: "{{ .Name }}-agent",
+						Panes: []PaneConfig{
+							{Command: "claude --session {{ .ID }}"},
+							{Command: "npm test {{ .Form.target }}", Size: "30%"},
+						},
+					},
 				},
+				Form: []FormField{{Variable: "target", Label: "Target", Type: "text"}},
 			},
 		}
 
@@ -1390,6 +1427,29 @@ func TestValidate_WindowsMutualExclusive(t *testing.T) {
 			},
 		},
 		{
+			name: "window command and panes",
+			rule: Rule{
+				Pattern: "",
+				Windows: []WindowConfig{{
+					Name:    "agent",
+					Command: "claude",
+					Panes:   []PaneConfig{{Command: "npm test"}},
+				}},
+			},
+			wantErr: "command and panes are mutually exclusive",
+		},
+		{
+			name: "invalid pane split",
+			rule: Rule{
+				Pattern: "",
+				Windows: []WindowConfig{{
+					Name:  "agent",
+					Panes: []PaneConfig{{Command: "npm test", Split: "diagonal"}},
+				}},
+			},
+			wantErr: "must be one of: horizontal, vertical",
+		},
+		{
 			name: "spawn only is valid",
 			rule: Rule{
 				Pattern: "",
@@ -1440,7 +1500,14 @@ func TestValidateDeep_WindowTemplates(t *testing.T) {
 				Pattern: "",
 				Windows: []WindowConfig{
 					{Name: "claude", Command: "claude {{ .Name }}", Focus: true},
-					{Name: "shell", Dir: "{{ .Path }}"},
+					{
+						Name: "shell",
+						Dir:  "{{ .Path }}",
+						Panes: []PaneConfig{
+							{Command: "npm test {{ .Prompt }}", Size: "{{ .Name }}", Split: "horizontal"},
+							{Dir: "{{ .ContextDir }}"},
+						},
+					},
 				},
 			},
 		}
@@ -1498,6 +1565,23 @@ func TestValidateDeep_WindowTemplates(t *testing.T) {
 		var fieldErrs criterio.FieldErrors
 		require.ErrorAs(t, err, &fieldErrs)
 		assert.Contains(t, fieldErrs[0].Field, "windows[0].dir")
+	})
+
+	t.Run("invalid pane template", func(t *testing.T) {
+		cfg := validConfig(t)
+		cfg.Rules = []Rule{
+			{
+				Pattern: "",
+				Windows: []WindowConfig{
+					{Name: "agent", Panes: []PaneConfig{{Command: "{{ .Missing }}"}}},
+				},
+			},
+		}
+
+		err := cfg.ValidateDeep("")
+		var fieldErrs criterio.FieldErrors
+		require.ErrorAs(t, err, &fieldErrs)
+		assert.Contains(t, fieldErrs[0].Field, "windows[0].panes[0].command")
 	})
 
 	t.Run("Prompt template valid in windows", func(t *testing.T) {

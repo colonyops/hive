@@ -599,12 +599,21 @@ type GitConfig struct {
 	StatusWorkers int `json:"status_workers" yaml:"status_workers"`
 }
 
-// WindowConfig defines a tmux window to create when spawning a session.
-type WindowConfig struct {
-	Name    string `json:"name"              yaml:"name"`              // Window name (template string, required)
+// PaneConfig defines a tmux pane to create inside a window.
+type PaneConfig struct {
 	Command string `json:"command,omitempty" yaml:"command,omitempty"` // Command to run (template string, empty = shell)
 	Dir     string `json:"dir,omitempty"     yaml:"dir,omitempty"`     // Working directory override (template string)
-	Focus   bool   `json:"focus,omitempty"   yaml:"focus,omitempty"`   // Select this window after creation
+	Size    string `json:"size,omitempty"    yaml:"size,omitempty"`    // Pane size passed to tmux -l (for example "30%")
+	Split   string `json:"split,omitempty"   yaml:"split,omitempty"`   // Split direction: horizontal or vertical (default vertical)
+}
+
+// WindowConfig defines a tmux window to create when spawning a session.
+type WindowConfig struct {
+	Name    string       `json:"name"              yaml:"name"`              // Window name (template string, required)
+	Command string       `json:"command,omitempty" yaml:"command,omitempty"` // Command to run (template string, empty = shell); mutually exclusive with Panes
+	Dir     string       `json:"dir,omitempty"     yaml:"dir,omitempty"`     // Working directory override (template string)
+	Focus   bool         `json:"focus,omitempty"   yaml:"focus,omitempty"`   // Select this window after creation
+	Panes   []PaneConfig `json:"panes,omitempty"   yaml:"panes,omitempty"`   // Panes to create in this window; mutually exclusive with Command
 }
 
 // Rule defines actions to take for matching repositories.
@@ -1017,10 +1026,19 @@ func (c *Config) validateWindowsBasic() error {
 			errs = errs.Append(fmt.Sprintf("rules[%d]", i), fmt.Errorf("cannot have both windows and batch_spawn"))
 		}
 
-		// Each window must have a name
+		// Each window must have a name and cannot mix command with panes.
 		for j, w := range rule.Windows {
+			field := fmt.Sprintf("rules[%d].windows[%d]", i, j)
 			if w.Name == "" {
-				errs = errs.Append(fmt.Sprintf("rules[%d].windows[%d].name", i, j), fmt.Errorf("is required"))
+				errs = errs.Append(field+".name", fmt.Errorf("is required"))
+			}
+			if w.Command != "" && len(w.Panes) > 0 {
+				errs = errs.Append(field, fmt.Errorf("command and panes are mutually exclusive"))
+			}
+			for k, p := range w.Panes {
+				if p.Split != "" && p.Split != "horizontal" && p.Split != "vertical" {
+					errs = errs.Append(fmt.Sprintf("%s.panes[%d].split", field, k), fmt.Errorf("must be one of: horizontal, vertical"))
+				}
 			}
 		}
 	}

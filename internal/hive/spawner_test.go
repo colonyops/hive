@@ -28,6 +28,28 @@ func TestRenderWindowCommon(t *testing.T) {
 	assert.True(t, rw.Focus)
 }
 
+func TestRenderWindowCommon_Panes(t *testing.T) {
+	r := testRenderer()
+	w := config.WindowConfig{
+		Name: "agent",
+		Dir:  "{{ .Path }}",
+		Panes: []config.PaneConfig{
+			{Command: "claude --session {{ .Name }}"},
+			{Command: "npm test", Dir: "/tmp/tests", Size: "30%", Split: "horizontal"},
+		},
+	}
+
+	rw, err := renderWindow(r, w, SpawnData{Name: "test-session", Path: "/tmp/test"})
+	require.NoError(t, err)
+	require.Len(t, rw.Panes, 2)
+	assert.Equal(t, "/tmp/test", rw.Dir)
+	assert.Equal(t, "claude --session test-session", rw.Panes[0].Command)
+	assert.Equal(t, "npm test", rw.Panes[1].Command)
+	assert.Equal(t, "/tmp/tests", rw.Panes[1].Dir)
+	assert.Equal(t, "30%", rw.Panes[1].Size)
+	assert.Equal(t, "horizontal", rw.Panes[1].Split)
+}
+
 func TestRenderUserCommandWindows(t *testing.T) {
 	r := testRenderer()
 	windows := []config.WindowConfig{

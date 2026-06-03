@@ -59,12 +59,16 @@ rules:
 
 The `windows` field defines tmux windows declaratively. Each window has:
 
-| Field     | Type   | Required | Default       | Description                                    |
-| --------- | ------ | -------- | ------------- | ---------------------------------------------- |
-| `name`    | string | yes      | —             | Window name (supports templates)               |
-| `command` | string | no       | default shell | Command to run in the window (supports templates) |
-| `dir`     | string | no       | session path  | Working directory override (supports templates) |
-| `focus`   | bool   | no       | `false`       | Select this window after creation              |
+| Field     | Type         | Required | Default       | Description                                    |
+| --------- | ------------ | -------- | ------------- | ---------------------------------------------- |
+| `name`    | string       | yes      | —             | Window name (supports templates)               |
+| `command` | string       | no       | default shell | Command to run in the window (supports templates). Mutually exclusive with `panes`. |
+| `dir`     | string       | no       | session path  | Working directory override (supports templates) |
+| `focus`   | bool         | no       | `false`       | Select this window after creation              |
+| `panes`   | []PaneConfig | no       | single pane   | Panes to create in the window. Mutually exclusive with `command`. |
+
+!!! warning "`command` vs `panes`"
+    A window must use either `command` or `panes`, not both. Use `command` for a single-pane window. Use `panes` when you need splits inside the window.
 
 **Default window layout** (used when no rule specifies `windows` or `spawn`):
 
@@ -112,13 +116,38 @@ windows:
   - name: shell
 ```
 
+**Split panes inside a window:**
+
+```yaml
+windows:
+  - name: agent
+    focus: true
+    panes:
+      - command: "claude"
+      - command: "npm test -- --watch"
+        split: horizontal
+        size: 30%
+  - name: shell
+```
+
+## Pane Configuration
+
+The `panes` field defines tmux panes inside a window. The first pane becomes the initial pane for the window. Additional panes are created with `tmux split-window`.
+
+| Field     | Type   | Required | Default       | Description                                    |
+| --------- | ------ | -------- | ------------- | ---------------------------------------------- |
+| `command` | string | no       | default shell | Command to run in the pane (supports templates) |
+| `dir`     | string | no       | window/session path | Working directory override (supports templates) |
+| `size`    | string | no       | tmux default  | Size passed to `tmux split-window -l` (for example `30%`) |
+| `split`   | string | no       | `vertical`    | Split direction: `horizontal` or `vertical` |
+
 ## Template Variables
 
 Commands support Go templates with `{{ .Variable }}` syntax and `{{ .Variable | shq }}` for shell-safe quoting.
 
 | Context                | Variables                                                           |
 | ---------------------- | ------------------------------------------------------------------- |
-| `rules[].windows`      | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.Prompt` (batch) |
+| `rules[].windows` / `panes` | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.Prompt` (batch) |
 | `rules[].spawn`        | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`         |
 | `rules[].batch_spawn`  | Same as spawn, plus `.Prompt`                                       |
 | `rules[].commands`     | `.Path`, `.Name`, `.Slug`, `.ContextDir`, `.Owner`, `.Repo`, `.ID` |
