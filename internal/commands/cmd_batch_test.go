@@ -132,10 +132,12 @@ func TestBatchCmd_validateAgents(t *testing.T) {
 				Agents: config.AgentsConfig{
 					Profiles: map[string]config.AgentProfile{
 						"claude": {},
+						"aider":  {},
 					},
 				},
 			},
 		},
+		agent: "aider",
 	}
 
 	require.NoError(t, cmd.validateAgents(BatchInput{Sessions: []BatchSession{
@@ -149,6 +151,19 @@ func TestBatchCmd_validateAgents(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sessions[0].agent")
 	assert.Contains(t, err.Error(), `unknown agent "missing"`)
+
+	cmd.agent = "missing-default"
+	err = cmd.validateAgents(BatchInput{Sessions: []BatchSession{{Name: "task1"}}})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "agent")
+	assert.Contains(t, err.Error(), `unknown agent "missing-default"`)
+}
+
+func TestBatchCmd_agentForSession(t *testing.T) {
+	cmd := &BatchCmd{agent: "aider"}
+
+	assert.Equal(t, "aider", cmd.agentForSession(BatchSession{Name: "task1"}))
+	assert.Equal(t, "claude", cmd.agentForSession(BatchSession{Name: "task1", Agent: "claude"}))
 }
 
 func TestBatchOutput_JSON(t *testing.T) {

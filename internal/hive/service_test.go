@@ -253,6 +253,82 @@ func (c *capturingExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _
 	return nil
 }
 
+func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
+	store := newMockStore()
+	exec := &capturingStreamExec{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default: "claude",
+			Profiles: map[string]config.AgentProfile{
+				"claude": {Command: "claude"},
+				"aider":  {Command: "aider-bin", Flags: []string{"--yes", "--model", "sonnet"}},
+			},
+		},
+		Rules: []config.Rule{
+			{Pattern: "", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:     "agent override",
+		Remote:   testRemote,
+		AgentKey: "aider",
+	})
+	require.NoError(t, err)
+	require.Len(t, exec.streamCommands, 1)
+	assert.Equal(t, "aider-bin|aider|--yes --model sonnet", exec.streamCommands[0])
+}
+
+func TestCreateSession_UnknownAgentKey(t *testing.T) {
+	store := newMockStore()
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default:  "claude",
+			Profiles: map[string]config.AgentProfile{"claude": {Command: "claude"}},
+		},
+		Rules: []config.Rule{{Pattern: "", Spawn: []string{"{{ agentCommand }}"}}},
+	}
+	svc := newTestService(t, store, cfg)
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:     "missing agent",
+		Remote:   testRemote,
+		AgentKey: "missing",
+	})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), `unknown agent "missing"`)
+}
+
+type capturingStreamExec struct {
+	streamCommands []string
+}
+
+func (c *capturingStreamExec) Run(_ context.Context, _ string, _ ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (c *capturingStreamExec) RunDir(_ context.Context, _ string, _ string, _ ...string) ([]byte, error) {
+	return nil, nil
+}
+
+func (c *capturingStreamExec) RunStream(_ context.Context, _ io.Writer, _ io.Writer, cmd string, args ...string) error {
+	if cmd == "sh" && len(args) == 2 && args[0] == "-c" {
+		c.streamCommands = append(c.streamCommands, args[1])
+	}
+	return nil
+}
+
+func (c *capturingStreamExec) RunDirStream(_ context.Context, _ string, _ io.Writer, _ io.Writer, _ string, _ ...string) error {
+	return nil
+}
+
 func TestEnforceMaxRecycled(t *testing.T) {
 	intPtr := func(n int) *int { return &n }
 

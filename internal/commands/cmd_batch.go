@@ -19,6 +19,7 @@ type BatchCmd struct {
 	flags *Flags
 	app   *hive.App
 	fr    *iojson.FileReader[BatchInput]
+	agent string
 }
 
 func NewBatchCmd(flags *Flags, app *hive.App) *BatchCmd {
@@ -39,7 +40,10 @@ Read from stdin:
   echo '{"sessions":[{"name":"task1","prompt":"Do something"}]}' | hive batch
 
 Read from file:
-  hive batch -f sessions.json`,
+  hive batch -f sessions.json
+
+Use an agent profile for sessions without a per-session agent:
+  hive batch --agent claude -f sessions.json`,
 		Description: `Creates multiple agent sessions from a JSON specification.
 
 Each session in the input array is created sequentially. A terminal is
@@ -71,14 +75,23 @@ Fields:
   agent      - Optional. Agent profile key from agents config.
 
 Config example (in ~/.config/hive/config.yaml):
-  commands:
-    spawn:        # Used by hive new
-      - "wezterm cli spawn --cwd {{.Path}}"
-    batch_spawn:  # Used by hive batch (supports {{.Prompt}})
-      - "wezterm cli spawn --cwd {{.Path}} -- claude --prompt '{{.Prompt}}'"
+  rules:
+    - windows:
+        - name: "{{ agentWindow }}"
+          command: "{{ agentCommand }} {{ agentFlags }}{{- if .Prompt }} {{ .Prompt | shq }}{{ end }}"
+          focus: true
+        - name: shell
 
 Output is JSON with a batch ID, log file path, and results for each session.`,
-		Flags:  []cli.Flag{cmd.fr.Flag()},
+		Flags: []cli.Flag{
+			cmd.fr.Flag(),
+			&cli.StringFlag{
+				Name:        "agent",
+				Aliases:     []string{"a"},
+				Usage:       "default agent profile key for sessions without an agent field",
+				Destination: &cmd.agent,
+			},
+		},
 		Action: cmd.run,
 	})
 
@@ -159,6 +172,12 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 
 func (cmd *BatchCmd) validateAgents(input BatchInput) error {
 	var errs criterio.FieldErrorsBuilder
+	if cmd.agent != "" {
+		if _, ok := cmd.app.Config.Agents.Profiles[cmd.agent]; !ok {
+			errs = errs.Append("agent", fmt.Errorf("unknown agent %q", cmd.agent))
+		}
+	}
+
 	for i, sess := range input.Sessions {
 		if sess.Agent == "" {
 			continue
@@ -193,7 +212,7 @@ func (cmd *BatchCmd) createSession(ctx context.Context, sess BatchSession) Batch
 		Source:        source,
 		UseBatchSpawn: true,
 		CloneStrategy: sess.CloneStrategy,
-		AgentKey:      sess.Agent,
+		AgentKey:      cmd.agentForSession(sess),
 	}
 
 	created, err := cmd.app.Sessions.CreateSession(ctx, opts)
@@ -219,6 +238,13 @@ const (
 	StatusSkipped = "skipped" // StatusSkipped indicates the session was not attempted due to failure threshold.
 	maxFailures   = 3         // maxFailures is the number of failures before stopping batch processing.
 )
+
+func (cmd *BatchCmd) agentForSession(sess BatchSession) string {
+	if sess.Agent != "" {
+		return sess.Agent
+	}
+	return cmd.agent
+}
 
 // BatchInput is the JSON input schema for batch session creation.
 type BatchInput struct {
