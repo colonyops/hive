@@ -6,8 +6,8 @@
 package todo
 
 import (
-	"errors"
 	"fmt"
+	"strings"
 )
 
 const (
@@ -19,7 +19,20 @@ const (
 	SourceSystem Source = "system"
 )
 
-var ErrInvalidSource = errors.New("not a valid Source")
+var ErrInvalidSource = fmt.Errorf("not a valid Source, try [%s]", strings.Join(_SourceNames, ", "))
+
+var _SourceNames = []string{
+	string(SourceAgent),
+	string(SourceHuman),
+	string(SourceSystem),
+}
+
+// SourceNames returns a list of possible string values of Source.
+func SourceNames() []string {
+	tmp := make([]string, len(_SourceNames))
+	copy(tmp, _SourceNames)
+	return tmp
+}
 
 // String implements the Stringer interface.
 func (x Source) String() string {
@@ -44,7 +57,34 @@ func ParseSource(name string) (Source, error) {
 	if x, ok := _SourceValue[name]; ok {
 		return x, nil
 	}
+	// Case insensitive parse, do a separate lookup to prevent unnecessary cost of lowercasing a string if we don't need to.
+	if x, ok := _SourceValue[strings.ToLower(name)]; ok {
+		return x, nil
+	}
 	return Source(""), fmt.Errorf("%s is %w", name, ErrInvalidSource)
+}
+
+// MarshalText implements the text marshaller method.
+func (x Source) MarshalText() ([]byte, error) {
+	return []byte(string(x)), nil
+}
+
+// UnmarshalText implements the text unmarshaller method.
+func (x *Source) UnmarshalText(text []byte) error {
+	tmp, err := ParseSource(string(text))
+	if err != nil {
+		return err
+	}
+	*x = tmp
+	return nil
+}
+
+// AppendText appends the textual representation of itself to the end of b
+// (allocating a larger slice if necessary) and returns the updated slice.
+//
+// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+func (x *Source) AppendText(b []byte) ([]byte, error) {
+	return append(b, x.String()...), nil
 }
 
 const (
@@ -58,7 +98,21 @@ const (
 	StatusDismissed Status = "dismissed"
 )
 
-var ErrInvalidStatus = errors.New("not a valid Status")
+var ErrInvalidStatus = fmt.Errorf("not a valid Status, try [%s]", strings.Join(_StatusNames, ", "))
+
+var _StatusNames = []string{
+	string(StatusPending),
+	string(StatusAcknowledged),
+	string(StatusCompleted),
+	string(StatusDismissed),
+}
+
+// StatusNames returns a list of possible string values of Status.
+func StatusNames() []string {
+	tmp := make([]string, len(_StatusNames))
+	copy(tmp, _StatusNames)
+	return tmp
+}
 
 // String implements the Stringer interface.
 func (x Status) String() string {
@@ -84,5 +138,32 @@ func ParseStatus(name string) (Status, error) {
 	if x, ok := _StatusValue[name]; ok {
 		return x, nil
 	}
+	// Case insensitive parse, do a separate lookup to prevent unnecessary cost of lowercasing a string if we don't need to.
+	if x, ok := _StatusValue[strings.ToLower(name)]; ok {
+		return x, nil
+	}
 	return Status(""), fmt.Errorf("%s is %w", name, ErrInvalidStatus)
+}
+
+// MarshalText implements the text marshaller method.
+func (x Status) MarshalText() ([]byte, error) {
+	return []byte(string(x)), nil
+}
+
+// UnmarshalText implements the text unmarshaller method.
+func (x *Status) UnmarshalText(text []byte) error {
+	tmp, err := ParseStatus(string(text))
+	if err != nil {
+		return err
+	}
+	*x = tmp
+	return nil
+}
+
+// AppendText appends the textual representation of itself to the end of b
+// (allocating a larger slice if necessary) and returns the updated slice.
+//
+// Implementations must not retain b, nor mutate any bytes within b[:len(b)].
+func (x *Status) AppendText(b []byte) ([]byte, error) {
+	return append(b, x.String()...), nil
 }
