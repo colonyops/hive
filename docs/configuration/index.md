@@ -38,6 +38,9 @@ rules:
       - name: shell
     commands:
       - hive ctx init
+
+  - pattern: ".*/data-team/.*"
+    agent: aider
 ```
 
 !!! tip
@@ -56,7 +59,7 @@ rules:
 
 ## Agents
 
-Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session.
+Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session unless a matching rule sets `agent` or the session is created with `--agent`.
 
 | Option                    | Type       | Default        | Description                                                                    |
 | ------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------ |
@@ -65,7 +68,7 @@ Agent profiles define the AI tools available for spawning in sessions. The `defa
 | `agents.<name>.command`   | `string`   | profile name   | CLI binary to run (defaults to profile name if empty)                          |
 | `agents.<name>.flags`     | `[]string` | `[]`           | Extra CLI args appended to the command on spawn                                |
 
-Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
+Agent resolution order is: CLI `--agent`, then the last matching `rules[].agent`, then `agents.default`. Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
 
 ## Tmux
 
