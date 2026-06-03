@@ -17,6 +17,7 @@ type NewCmd struct {
 	source        string
 	background    bool
 	cloneStrategy string
+	agent         string
 }
 
 // NewNewCmd creates a new new command
@@ -40,6 +41,7 @@ command launches a terminal with the AI tool.
 
 Example:
   hive new Fix Auth Bug
+  hive new --agent claude Refactor Utils
   hive new bugfix --source /some/path`,
 		Flags: []cli.Flag{
 			&cli.StringFlag{
@@ -65,6 +67,12 @@ Example:
 				Usage:       "clone strategy: full or worktree",
 				Destination: &cmd.cloneStrategy,
 			},
+			&cli.StringFlag{
+				Name:        "agent",
+				Aliases:     []string{"a"},
+				Usage:       "agent profile key from agents config",
+				Destination: &cmd.agent,
+			},
 		},
 		Action: cmd.run,
 	})
@@ -78,6 +86,12 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("session name required\n\nUsage: hive new <name...>\n\nExample: hive new Fix Auth Bug")
 	}
 	name := strings.Join(args, " ")
+
+	if cmd.agent != "" {
+		if _, ok := cmd.app.Config.Agents.Profiles[cmd.agent]; !ok {
+			return fmt.Errorf("unknown agent %q", cmd.agent)
+		}
+	}
 
 	source := cmd.source
 	if source == "" {
@@ -94,6 +108,7 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		Source:        source,
 		Background:    cmd.background,
 		CloneStrategy: cmd.cloneStrategy,
+		AgentKey:      cmd.agent,
 	}
 
 	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)

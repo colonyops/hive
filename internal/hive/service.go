@@ -340,13 +340,15 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	if !opts.SkipSpawn {
 		renderer := s.renderer
 		if opts.AgentKey != "" {
-			if profile, ok := s.config.Agents.Profiles[opts.AgentKey]; ok {
-				renderer = s.renderer.WithAgent(
-					profile.CommandOrDefault(opts.AgentKey),
-					opts.AgentKey,
-					profile.ShellFlags(),
-				)
+			profile, ok := s.config.Agents.Profiles[opts.AgentKey]
+			if !ok {
+				return nil, fmt.Errorf("unknown agent %q", opts.AgentKey)
 			}
+			renderer = s.renderer.WithAgent(
+				profile.CommandOrDefault(opts.AgentKey),
+				opts.AgentKey,
+				profile.ShellFlags(),
+			)
 		}
 		strategy := config.ResolveSpawn(s.config.Rules, remote, opts.UseBatchSpawn)
 		switch {

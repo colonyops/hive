@@ -423,15 +423,15 @@ views:
 		Migration: `- Add "batch_spawn" to your config if you need prompt support
 - The "spawn" command no longer supports the "{{.Prompt}}" template variable`,
 		Before: `# config.yaml (old - spawn with prompt)
-commands:
-  spawn:
-    - "wezterm cli spawn --cwd {{.Path}} -- claude --prompt '{{.Prompt}}'"`,
+rules:
+  - spawn:
+      - "tmux new-session -d -c {{.Path | shq}} -- claude --prompt {{.Prompt | shq}}"`,
 		After: `# config.yaml (new - separate commands)
-commands:
-  spawn:        # For hive new (no prompt)
-    - "wezterm cli spawn --cwd {{.Path}}"
-  batch_spawn:  # For hive batch (with prompt)
-    - "wezterm cli spawn --cwd {{.Path}} -- claude --prompt '{{.Prompt}}'"`,
+rules:
+  - spawn:       # For hive new (no prompt)
+      - "tmux new-session -d -c {{.Path | shq}} -- claude"
+    batch_spawn: # For hive batch (with prompt)
+      - "tmux new-session -d -c {{.Path | shq}} -- claude --prompt {{.Prompt | shq}}"`,
 	},
 	{
 		Version:     "0.2.0",
