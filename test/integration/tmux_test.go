@@ -188,6 +188,36 @@ rules:
 	}
 }
 
+func TestTmuxWindowPanes(t *testing.T) {
+	config := `version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+rules:
+  - windows:
+      - name: agent
+        focus: true
+        panes:
+          - command: bash
+          - command: bash
+            split: horizontal
+            size: 30%
+      - name: shell
+`
+	h := NewHarness(t).WithConfig(config)
+	repo := createBareRepo(t, "tmux-pane-repo")
+	cleanupTmuxSession(t, "tmux-pane-test")
+
+	_, err := h.Run("new", "--background", "--remote", repo, "tmux-pane-test")
+	require.NoError(t, err)
+
+	assertTmuxWindowNames(t, "tmux-pane-test", []string{"agent", "shell"})
+	assertTmuxPaneCount(t, "tmux-pane-test:agent", 2)
+	assertTmuxPaneCount(t, "tmux-pane-test:shell", 1)
+}
+
 func TestTmuxListAll(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "tmux-list-repo")

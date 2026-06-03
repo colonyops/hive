@@ -157,7 +157,55 @@ func renderWindowCommon(w config.WindowConfig, render func(string) (string, erro
 		}
 	}
 
-	return coretmux.RenderedWindow{Name: name, Command: command, Dir: dir, Focus: w.Focus}, nil
+	panes, err := renderPanes(w.Panes, render)
+	if err != nil {
+		return coretmux.RenderedWindow{}, err
+	}
+
+	return coretmux.RenderedWindow{Name: name, Command: command, Dir: dir, Focus: w.Focus, Panes: panes}, nil
+}
+
+func renderPanes(panes []config.PaneConfig, render func(string) (string, error)) ([]coretmux.RenderedPane, error) {
+	rendered := make([]coretmux.RenderedPane, 0, len(panes))
+	for i, p := range panes {
+		rp, err := renderPane(p, render)
+		if err != nil {
+			return nil, fmt.Errorf("panes[%d]: %w", i, err)
+		}
+		rendered = append(rendered, rp)
+	}
+	return rendered, nil
+}
+
+func renderPane(p config.PaneConfig, render func(string) (string, error)) (coretmux.RenderedPane, error) {
+	var command string
+	if p.Command != "" {
+		rendered, err := render(p.Command)
+		if err != nil {
+			return coretmux.RenderedPane{}, fmt.Errorf("command template: %w", err)
+		}
+		command = strings.TrimSpace(rendered)
+	}
+
+	var dir string
+	if p.Dir != "" {
+		rendered, err := render(p.Dir)
+		if err != nil {
+			return coretmux.RenderedPane{}, fmt.Errorf("dir template: %w", err)
+		}
+		dir = rendered
+	}
+
+	var size string
+	if p.Size != "" {
+		rendered, err := render(p.Size)
+		if err != nil {
+			return coretmux.RenderedPane{}, fmt.Errorf("size template: %w", err)
+		}
+		size = strings.TrimSpace(rendered)
+	}
+
+	return coretmux.RenderedPane{Command: command, Dir: dir, Size: size, Split: p.Split}, nil
 }
 
 // renderWindow renders a single WindowConfig against SpawnData.

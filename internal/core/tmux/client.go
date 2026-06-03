@@ -14,12 +14,21 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+// RenderedPane is a fully-resolved tmux pane definition (no templates).
+type RenderedPane struct {
+	Command string // Command to run (empty = default shell)
+	Dir     string // Working directory (empty = window/session default)
+	Size    string // Pane size passed to tmux -l (empty = tmux default)
+	Split   string // Split direction: horizontal or vertical (default vertical)
+}
+
 // RenderedWindow is a fully-resolved tmux window definition (no templates).
 type RenderedWindow struct {
-	Name    string // Window name
-	Command string // Command to run (empty = default shell)
-	Dir     string // Working directory (empty = session default)
-	Focus   bool   // Select this window after creation
+	Name    string         // Window name
+	Command string         // Command to run (empty = default shell); ignored when Panes is non-empty
+	Dir     string         // Working directory (empty = session default)
+	Focus   bool           // Select this window after creation
+	Panes   []RenderedPane // Panes to create in this window; mutually exclusive with Command
 }
 
 // Client creates and manages tmux sessions from window definitions.
@@ -50,12 +59,7 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 	// Create session with the first window.
 	first := windows[0]
 	args := []string{"new-session", "-d", "-s", name, "-n", first.Name}
-	if dir := windowDir(first, workDir); dir != "" {
-		args = append(args, "-c", dir)
-	}
-	if first.Command != "" {
-		args = append(args, "--", "sh", "-c", first.Command)
-	}
+	args = appendInitialPaneArgs(args, first, workDir)
 
 	c.log.Debug().Strs("args", args).Msg("tmux new-session")
 	if out, err := c.exec.Run(ctx, "tmux", args...); err != nil {
@@ -70,22 +74,17 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 	// windows are created programmatically.
 	c.suppressInteractiveHooks(ctx, name)
 
+	if err := c.splitAdditionalPanes(ctx, name, workDir, first); err != nil {
+		_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
+		return err
+	}
+
 	// Create additional windows. On failure, kill the partial session.
 	for _, w := range windows[1:] {
-		args := []string{"new-window", "-t", name, "-n", w.Name}
-		if dir := windowDir(w, workDir); dir != "" {
-			args = append(args, "-c", dir)
-		}
-		if w.Command != "" {
-			args = append(args, "--", "sh", "-c", w.Command)
-		}
-
-		c.log.Debug().Strs("args", args).Msg("tmux new-window")
-		if out, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+		if err := c.createWindow(ctx, name, workDir, w); err != nil {
 			_, _ = c.exec.Run(ctx, "tmux", "kill-session", "-t", name)
-			return fmt.Errorf("tmux new-window %q: %w; output: %s", w.Name, err, strings.TrimSpace(string(out)))
+			return err
 		}
-		c.tagPanesWithSession(ctx, name+":"+w.Name, name)
 	}
 
 	// Select the focused window (default to first).
@@ -113,17 +112,9 @@ func (c *Client) CreateSession(ctx context.Context, name, workDir string, window
 func (c *Client) AddWindows(ctx context.Context, name, workDir string, windows []RenderedWindow) error {
 	c.suppressInteractiveHooks(ctx, name)
 	for _, w := range windows {
-		args := []string{"new-window", "-t", name, "-n", w.Name}
-		if dir := windowDir(w, workDir); dir != "" {
-			args = append(args, "-c", dir)
+		if err := c.createWindow(ctx, name, workDir, w); err != nil {
+			return err
 		}
-		if w.Command != "" {
-			args = append(args, "--", "sh", "-c", w.Command)
-		}
-		if _, err := c.exec.Run(ctx, "tmux", args...); err != nil {
-			return fmt.Errorf("tmux new-window %q: %w", w.Name, err)
-		}
-		c.tagPanesWithSession(ctx, name+":"+w.Name, name)
 	}
 	for _, w := range windows {
 		if w.Focus {
@@ -219,6 +210,79 @@ func (c *Client) suppressInteractiveHooks(ctx context.Context, session string) {
 			c.log.Debug().Err(err).Str("hook", h).Msg("failed to suppress hook")
 		}
 	}
+}
+
+func (c *Client) createWindow(ctx context.Context, sessionName, workDir string, w RenderedWindow) error {
+	args := []string{"new-window", "-t", sessionName, "-n", w.Name}
+	args = appendInitialPaneArgs(args, w, workDir)
+
+	c.log.Debug().Strs("args", args).Msg("tmux new-window")
+	if out, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+		return fmt.Errorf("tmux new-window %q: %w; output: %s", w.Name, err, strings.TrimSpace(string(out)))
+	}
+	c.tagPanesWithSession(ctx, sessionName+":"+w.Name, sessionName)
+	return c.splitAdditionalPanes(ctx, sessionName, workDir, w)
+}
+
+func (c *Client) splitAdditionalPanes(ctx context.Context, sessionName, workDir string, w RenderedWindow) error {
+	windowTarget := sessionName + ":" + w.Name
+	for _, pane := range additionalPanes(w) {
+		args := splitPaneArgs(windowTarget, pane, windowDir(w, workDir))
+		c.log.Debug().Strs("args", args).Msg("tmux split-window")
+		if out, err := c.exec.Run(ctx, "tmux", args...); err != nil {
+			return fmt.Errorf("tmux split-window %q: %w; output: %s", w.Name, err, strings.TrimSpace(string(out)))
+		}
+		c.tagPanesWithSession(ctx, windowTarget, sessionName)
+	}
+	return nil
+}
+
+func appendInitialPaneArgs(args []string, w RenderedWindow, sessionDir string) []string {
+	command := w.Command
+	dir := windowDir(w, sessionDir)
+	if len(w.Panes) > 0 {
+		command = w.Panes[0].Command
+		if w.Panes[0].Dir != "" {
+			dir = w.Panes[0].Dir
+		}
+	}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if command != "" {
+		args = append(args, "--", "sh", "-c", command)
+	}
+	return args
+}
+
+func splitPaneArgs(target string, p RenderedPane, fallbackDir string) []string {
+	args := []string{"split-window", "-t", target}
+	if p.Split == "horizontal" {
+		args = append(args, "-h")
+	} else {
+		args = append(args, "-v")
+	}
+	if p.Size != "" {
+		args = append(args, "-l", p.Size)
+	}
+	dir := p.Dir
+	if dir == "" {
+		dir = fallbackDir
+	}
+	if dir != "" {
+		args = append(args, "-c", dir)
+	}
+	if p.Command != "" {
+		args = append(args, "--", "sh", "-c", p.Command)
+	}
+	return args
+}
+
+func additionalPanes(w RenderedWindow) []RenderedPane {
+	if len(w.Panes) <= 1 {
+		return nil
+	}
+	return w.Panes[1:]
 }
 
 // windowDir returns the working directory for a window, falling back to the session default.

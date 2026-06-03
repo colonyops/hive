@@ -193,6 +193,12 @@ func renderUserCommandWindows(renderer *tmpl.Renderer, windows []config.WindowCo
 	specs := make([]action.WindowSpec, len(rws))
 	for i, rw := range rws {
 		specs[i] = action.WindowSpec{Name: rw.Name, Command: rw.Command, Dir: rw.Dir, Focus: rw.Focus}
+		if len(rw.Panes) > 0 {
+			specs[i].Panes = make([]action.PaneSpec, len(rw.Panes))
+			for j, p := range rw.Panes {
+				specs[i].Panes[j] = action.PaneSpec{Command: p.Command, Dir: p.Dir, Size: p.Size, Split: p.Split}
+			}
+		}
 	}
 	return specs, nil
 }

@@ -211,6 +211,24 @@ func (c *Config) validateRules() error {
 					errs = errs.Append(prefix+".dir", fmt.Errorf("template error: %w", err))
 				}
 			}
+			for k, p := range w.Panes {
+				panePrefix := fmt.Sprintf("%s.panes[%d]", prefix, k)
+				if p.Command != "" {
+					if err := validateTemplate(p.Command, BatchSpawnTemplateData{}); err != nil {
+						errs = errs.Append(panePrefix+".command", fmt.Errorf("template error: %w", err))
+					}
+				}
+				if p.Dir != "" {
+					if err := validateTemplate(p.Dir, BatchSpawnTemplateData{}); err != nil {
+						errs = errs.Append(panePrefix+".dir", fmt.Errorf("template error: %w", err))
+					}
+				}
+				if p.Size != "" {
+					if err := validateTemplate(p.Size, BatchSpawnTemplateData{}); err != nil {
+						errs = errs.Append(panePrefix+".size", fmt.Errorf("template error: %w", err))
+					}
+				}
+			}
 		}
 		// Validate branch_template
 		if rule.BranchTemplate != "" {

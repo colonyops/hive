@@ -146,6 +146,17 @@ func assertTmuxWindowNames(t *testing.T, session string, wantNames []string) {
 	}, 5*time.Second, 200*time.Millisecond)
 }
 
+// assertTmuxPaneCount waits for a tmux window to have exactly the expected number of panes.
+func assertTmuxPaneCount(t *testing.T, target string, want int) {
+	t.Helper()
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		out, err := exec.Command("tmux", "list-panes", "-t", target, "-F", "#{pane_id}").CombinedOutput()
+		assert.NoError(c, err, "tmux list-panes: %s", out)
+		got := strings.Fields(strings.TrimSpace(string(out)))
+		assert.Len(c, got, want)
+	}, 5*time.Second, 200*time.Millisecond)
+}
+
 // cleanupTmuxSession registers a t.Cleanup to kill a named tmux session.
 func cleanupTmuxSession(t *testing.T, name string) {
 	t.Helper()

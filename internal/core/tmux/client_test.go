@@ -69,6 +69,32 @@ func TestClient_CreateSession(t *testing.T) {
 		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[6].Args)
 	})
 
+	t.Run("window with panes", func(t *testing.T) {
+		rec := &executil.RecordingExecutor{}
+		c := New(rec, nopLog)
+
+		err := c.CreateSession(context.Background(), "sess", "/work", []RenderedWindow{
+			{
+				Name:  "agent",
+				Focus: true,
+				Panes: []RenderedPane{
+					{Command: "claude"},
+					{Command: "npm test", Size: "30%", Split: "horizontal"},
+					{Dir: "/logs", Split: "vertical"},
+				},
+			},
+		}, true)
+		require.NoError(t, err)
+
+		require.Len(t, rec.Commands, 9)
+		assert.Equal(t, []string{"new-session", "-d", "-s", "sess", "-n", "agent", "-c", "/work", "--", "sh", "-c", "claude"}, rec.Commands[0].Args)
+		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-h", "-l", "30%", "-c", "/work", "--", "sh", "-c", "npm test"}, rec.Commands[4].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:agent", "@hive-session", "sess"}, rec.Commands[5].Args)
+		assert.Equal(t, []string{"split-window", "-t", "sess:agent", "-v", "-c", "/logs"}, rec.Commands[6].Args)
+		assert.Equal(t, []string{"set-option", "-p", "-t", "sess:agent", "@hive-session", "sess"}, rec.Commands[7].Args)
+		assert.Equal(t, []string{"select-window", "-t", "sess:agent"}, rec.Commands[8].Args)
+	})
+
 	t.Run("three windows with dir override", func(t *testing.T) {
 		rec := &executil.RecordingExecutor{}
 		c := New(rec, nopLog)

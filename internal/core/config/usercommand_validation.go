@@ -38,6 +38,14 @@ func ValidateUserCommandBasic(field, name string, cmd UserCommand) criterio.Fiel
 		if w.Name == "" {
 			errs = errs.Append(wfield, fmt.Errorf("name is required"))
 		}
+		if w.Command != "" && len(w.Panes) > 0 {
+			errs = errs.Append(wfield, fmt.Errorf("command and panes are mutually exclusive"))
+		}
+		for j, p := range w.Panes {
+			if p.Split != "" && p.Split != "horizontal" && p.Split != "vertical" {
+				errs = errs.Append(fmt.Sprintf("%s.panes[%d].split", wfield, j), fmt.Errorf("must be one of: horizontal, vertical"))
+			}
+		}
 	}
 
 	if cmd.Options.Remote != "" && cmd.Options.SessionName == "" {
@@ -115,6 +123,21 @@ func ValidateUserCommandTemplates(field string, cmd UserCommand) criterio.FieldE
 			}
 			if err := validateTemplate(tmplStr, testData); err != nil {
 				errs = errs.Append(wfield+tname, err)
+			}
+		}
+		for j, p := range w.Panes {
+			pfield := fmt.Sprintf("%s.panes[%d]", wfield, j)
+			for tname, tmplStr := range map[string]string{
+				".command": p.Command,
+				".dir":     p.Dir,
+				".size":    p.Size,
+			} {
+				if tmplStr == "" {
+					continue
+				}
+				if err := validateTemplate(tmplStr, testData); err != nil {
+					errs = errs.Append(pfield+tname, err)
+				}
 			}
 		}
 	}

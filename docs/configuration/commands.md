@@ -122,12 +122,22 @@ The `windows` field opens one or more tmux windows in the current session after 
 
 ### Window Fields
 
+| Field     | Type         | Description                                             |
+| --------- | ------------ | ------------------------------------------------------- |
+| `name`    | string       | Window name (required, template string)                 |
+| `command` | string       | Command to run in a single-pane window (template string). Mutually exclusive with `panes`. |
+| `dir`     | string       | Working directory override (template string)            |
+| `focus`   | bool         | Select this window after creation                       |
+| `panes`   | []PaneConfig | Panes to create in the window. Mutually exclusive with `command`. |
+
+### Pane Fields
+
 | Field     | Type   | Description                                             |
 | --------- | ------ | ------------------------------------------------------- |
-| `name`    | string | Window name (required, template string)                 |
-| `command` | string | Command to run in the window (template string)          |
+| `command` | string | Command to run in the pane (template string)            |
 | `dir`     | string | Working directory override (template string)            |
-| `focus`   | bool   | Select this window after creation                       |
+| `size`    | string | Size passed to `tmux split-window -l` (for example `30%`) |
+| `split`   | string | Split direction: `horizontal` or `vertical` (default `vertical`) |
 
 ### Options Fields
 

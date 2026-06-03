@@ -950,11 +950,7 @@ func (s *SessionService) enforceMaxRecycled(ctx context.Context, remote, cloneSt
 // AddWindowsToTmuxSession adds windows to an existing tmux session, converting action.WindowSpec
 // to coretmux.RenderedWindow. Satisfies the command.WindowSpawner interface.
 func (s *SessionService) AddWindowsToTmuxSession(ctx context.Context, tmuxName, workDir string, windows []action.WindowSpec, background bool) error {
-	rendered := make([]coretmux.RenderedWindow, len(windows))
-	for i, w := range windows {
-		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
-	}
-	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, rendered, background)
+	return s.spawner.AddWindowsToTmuxSession(ctx, tmuxName, workDir, renderedWindowsFromSpecs(windows), background)
 }
 
 // CreateSessionWithWindows creates a new Hive session, optionally runs shCmd in its directory,
@@ -983,13 +979,23 @@ func (s *SessionService) CreateSessionWithWindows(ctx context.Context, req actio
 		}
 	}
 
-	rendered := make([]coretmux.RenderedWindow, len(windows))
-	for i, w := range windows {
-		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
-	}
-	if err := s.spawner.tmux.CreateSession(ctx, sess.Slug, sess.Path, rendered, background); err != nil {
+	if err := s.spawner.tmux.CreateSession(ctx, sess.Slug, sess.Path, renderedWindowsFromSpecs(windows), background); err != nil {
 		cleanup()
 		return fmt.Errorf("create tmux session: %w", err)
 	}
 	return nil
+}
+
+func renderedWindowsFromSpecs(windows []action.WindowSpec) []coretmux.RenderedWindow {
+	rendered := make([]coretmux.RenderedWindow, len(windows))
+	for i, w := range windows {
+		rendered[i] = coretmux.RenderedWindow{Name: w.Name, Command: w.Command, Dir: w.Dir, Focus: w.Focus}
+		if len(w.Panes) > 0 {
+			rendered[i].Panes = make([]coretmux.RenderedPane, len(w.Panes))
+			for j, p := range w.Panes {
+				rendered[i].Panes[j] = coretmux.RenderedPane{Command: p.Command, Dir: p.Dir, Size: p.Size, Split: p.Split}
+			}
+		}
+	}
+	return rendered
 }
