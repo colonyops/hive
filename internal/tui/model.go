@@ -70,7 +70,7 @@ const (
 
 // Deps holds all external dependencies for the TUI Model.
 type Deps struct {
-	// Required — nil causes a panic at construction time.
+	// Required; nil causes a panic at construction time.
 	Config          *config.Config
 	Service         *hive.SessionService
 	Renderer        *tmpl.Renderer
@@ -80,7 +80,7 @@ type Deps struct {
 	TodoService     *hive.TodoService
 	DB              *db.DB
 
-	// Optional — nil disables the corresponding feature.
+	// Optional; nil disables the corresponding feature.
 	MsgStore      *hive.MessageService
 	Bus           *eventbus.EventBus
 	KVStore       corekv.KV
@@ -113,10 +113,10 @@ type Model struct {
 	// Source directory for file copying during session creation
 	source string
 
-	// Modal coordinator — owns all modal components, pending state, recycle streaming
+	// Modal coordinator owns all modal components, pending state, recycle streaming
 	modals *ModalCoordinator
 
-	// Sessions view (sub-model) — owns all session-related state
+	// Sessions view (sub-model) owns all session-related state
 	sessionsView *sessions.View
 
 	activeView ViewType
@@ -394,11 +394,11 @@ func (m Model) Init() tea.Cmd {
 			cmds = append(cmds, cmd)
 		}
 	}
-	// Show toast if no repo dirs configured
+	// Show toast if no workspace parent folders are configured.
 	if len(m.cfg.Workspaces) == 0 {
 		m.toastController.Push(notify.Notification{
 			Level:   notify.LevelInfo,
-			Message: "No directories have been added for project start",
+			Message: "Add a parent folder containing Git repositories to start projects",
 		})
 	}
 	// Start messages view
@@ -1552,7 +1552,7 @@ func (m Model) executeRename(sessionID, newName string) tea.Cmd {
 			return renameCompleteMsg{err: err}
 		}
 
-		// Rename tmux session (best-effort — session may not have a tmux session)
+		// Rename tmux session (best-effort; session may not have a tmux session)
 		newSlug := session.Slugify(newName)
 		if oldTmuxName != "" && newSlug != "" && oldTmuxName != newSlug {
 			//nolint:gosec // arguments are slugified, not user-controlled shell input

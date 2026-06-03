@@ -63,7 +63,7 @@ type workspaceRepoOutput struct {
 func (cmd *WorkspaceCmd) runList(ctx context.Context, c *cli.Command) error {
 	dirs := cmd.app.Config.Workspaces
 	if len(dirs) == 0 {
-		fmt.Fprintln(os.Stderr, "No workspaces configured. Add workspace directories to your config.")
+		fmt.Fprintln(os.Stderr, "No workspaces configured. Add parent folders containing Git repositories to your config.")
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (cmd *WorkspaceCmd) runList(ctx context.Context, c *cli.Command) error {
 	}
 
 	if len(repos) == 0 {
-		_, _ = fmt.Fprintln(out, "No repositories found in configured workspaces.")
+		_, _ = fmt.Fprintln(out, "No repositories found in configured workspaces. Workspaces should be parent folders containing Git repository directories.")
 		return nil
 	}
 
