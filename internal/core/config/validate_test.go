@@ -1227,6 +1227,20 @@ func TestValidate_AgentsDefaultValid(t *testing.T) {
 	assert.NoError(t, err)
 }
 
+func TestValidate_RuleAgentMissing(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Agents = AgentsConfig{
+		Default:  "claude",
+		Profiles: map[string]AgentProfile{"claude": {}},
+	}
+	cfg.Rules = []Rule{{Pattern: "", Agent: "aider"}}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "rules[0].agent")
+	assert.Contains(t, err.Error(), "aider")
+}
+
 func TestApplyDefaults_AgentsEmpty(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.DataDir = t.TempDir()
@@ -1283,6 +1297,7 @@ func TestResolveSpawn(t *testing.T) {
 		batch        bool
 		wantWindows  bool
 		wantCommands []string
+		wantAgent    string
 	}{
 		{
 			name:        "no rules returns default windows",
@@ -1378,6 +1393,25 @@ func TestResolveSpawn(t *testing.T) {
 			remote:      "https://gitlab.com/some/repo",
 			wantWindows: true,
 		},
+		{
+			name: "agent-only matching rule uses default windows",
+			rules: []Rule{
+				{Pattern: "", Agent: "aider"},
+			},
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+			wantAgent:   "aider",
+		},
+		{
+			name: "last matching agent wins independently of windows",
+			rules: []Rule{
+				{Pattern: "", Agent: "claude", Windows: []WindowConfig{{Name: "default"}}},
+				{Pattern: "github.com/foo/.*", Agent: "aider"},
+			},
+			remote:      "https://github.com/foo/bar",
+			wantWindows: true,
+			wantAgent:   "aider",
+		},
 	}
 
 	for _, tt := range tests {
@@ -1387,6 +1421,7 @@ func TestResolveSpawn(t *testing.T) {
 
 			strategy := ResolveSpawn(cfg.Rules, tt.remote, tt.batch)
 			assert.Equal(t, tt.wantWindows, strategy.IsWindows(), "IsWindows mismatch")
+			assert.Equal(t, tt.wantAgent, strategy.Agent)
 
 			if tt.wantCommands != nil {
 				assert.Equal(t, tt.wantCommands, strategy.Commands)

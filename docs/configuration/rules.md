@@ -4,7 +4,7 @@ icon: lucide/regex
 
 # Rules
 
-Rules match repositories by regex pattern against the remote URL and configure how sessions are created, recycled, and set up. Rules are evaluated in order — the last matching rule with spawn/windows config wins. An empty pattern (`""`) matches all repositories.
+Rules match repositories by regex pattern against the remote URL and configure how sessions are created, recycled, and set up. Rules are evaluated in order — the last matching rule with spawn/windows config wins, and the last matching `agent` selects the agent profile. An empty pattern (`""`) matches all repositories.
 
 ```yaml
 rules:
@@ -19,11 +19,12 @@ rules:
     commands:
       - hive ctx init
 
-  # Override for work repos — custom agent flags
+  # Override for work repos — use the aider profile
   - pattern: ".*/my-org/.*"
+    agent: aider
     windows:
-      - name: claude
-        command: "claude --model opus"
+      - name: "{{ agentWindow }}"
+        command: "{{ agentCommand }} {{ agentFlags }}"
         focus: true
       - name: tests
         command: "npm run test:watch"
@@ -35,7 +36,7 @@ rules:
 ```
 
 !!! info "Last match wins"
-    Rules are evaluated in order — the **last** matching rule with spawn/windows config wins. Place general patterns before specific ones.
+    Rules are evaluated in order — the **last** matching rule with spawn/windows config wins, and the **last** matching rule with `agent` selects the agent profile. Place general patterns before specific ones.
 
 ## Rule Fields
 
@@ -44,6 +45,7 @@ rules:
 | `pattern`          | string         | `""`                         | Regex pattern to match remote URL                 |
 | `clone_strategy`   | string         | —                            | Override clone strategy for matching repos: `full` or `worktree` |
 | `branch_template`  | string         | `hive/{{ .Slug }}-{{ .ID }}` | Go template for the git branch name (worktree only). Variables: `.Name`, `.Slug`, `.Owner`, `.Repo`, `.ID`. The rendered value must be a valid git branch name (no spaces, colons, `~`, `^`, etc.) — session creation fails with a clear error if it isn't. |
+| `agent`            | string         | —                            | Agent profile override for matching repos. Must match a key under `agents`. |
 | `windows`          | []WindowConfig | see below                    | Declarative tmux window layout (recommended)      |
 | `spawn`            | []string       | —                            | Shell commands run after session creation (legacy) |
 | `batch_spawn`      | []string       | —                            | Shell commands for batch session creation (legacy) |
@@ -53,7 +55,45 @@ rules:
 | `max_recycled`     | *int           | `5`                          | Maximum recycled sessions to keep (0 = unlimited) |
 
 !!! warning "`windows` vs `spawn`/`batch_spawn`"
-    A rule must use either `windows` or `spawn`/`batch_spawn`, not both. If neither is set, the default window layout is used (agent window + shell window).
+    A rule must use either `windows` or `spawn`/`batch_spawn`, not both. If neither is set, the default window layout is used (agent window + shell window). A rule can set `agent` with or without custom `windows`/`spawn` config.
+
+## Agent Overrides
+
+Use `agent` to select a configured agent profile for repositories matching a rule. The value must match a profile under `agents`.
+
+```yaml
+agents:
+  default: claude
+  claude:
+    command: claude
+    flags: ["--model", "opus"]
+  aider:
+    command: aider
+    flags: ["--model", "sonnet"]
+
+rules:
+  - pattern: ""
+    max_recycled: 5
+
+  # Uses the default window layout, rendered with the aider profile.
+  - pattern: ".*/data-team/.*"
+    agent: aider
+
+  # Custom windows can still use the selected profile through template functions.
+  - pattern: ".*/infra/.*"
+    agent: aider
+    windows:
+      - name: "{{ agentWindow }}"
+        command: "{{ agentCommand }} {{ agentFlags }}"
+        focus: true
+      - name: shell
+```
+
+Agent resolution order is:
+
+1. CLI `--agent` flag
+2. Last matching rule with `agent`
+3. `agents.default`
 
 ## Window Configuration
 
@@ -70,7 +110,7 @@ The `windows` field defines tmux windows declaratively. Each window has:
 !!! warning "`command` vs `panes`"
     A window must use either `command` or `panes`, not both. Use `command` for a single-pane window. Use `panes` when you need splits inside the window.
 
-**Default window layout** (used when no rule specifies `windows` or `spawn`):
+**Default window layout** (used when no rule specifies `windows` or `spawn`). The template functions render from the resolved agent profile:
 
 ```yaml
 windows:
@@ -86,8 +126,8 @@ windows:
 
 ```yaml
 windows:
-  - name: claude
-    command: "claude"
+  - name: "{{ agentWindow }}"
+    command: "{{ agentCommand }} {{ agentFlags }}"
     focus: true
   - name: shell
 ```
@@ -96,8 +136,8 @@ windows:
 
 ```yaml
 windows:
-  - name: claude
-    command: "claude --model opus"
+  - name: "{{ agentWindow }}"
+    command: "{{ agentCommand }} {{ agentFlags }}"
     focus: true
   - name: tests
     command: "npm run test:watch"
@@ -108,8 +148,8 @@ windows:
 
 ```yaml
 windows:
-  - name: claude
-    command: "claude"
+  - name: "{{ agentWindow }}"
+    command: "{{ agentCommand }} {{ agentFlags }}"
     focus: true
   - name: aider
     command: "aider --model sonnet"
@@ -120,10 +160,10 @@ windows:
 
 ```yaml
 windows:
-  - name: agent
+  - name: "{{ agentWindow }}"
     focus: true
     panes:
-      - command: "claude"
+      - command: "{{ agentCommand }} {{ agentFlags }}"
       - command: "npm test -- --watch"
         split: horizontal
         size: 30%
@@ -188,6 +228,6 @@ If `.Name` renders to an invalid git branch name (e.g. contains a space), hive w
 | `join`      | Join string slice with separator              |
 | `hiveTmux`  | Path to bundled `hive-tmux` script            |
 | `agentSend` | Path to bundled `agent-send` script           |
-| `agentCommand` | Default agent command from `agents.default` profile |
-| `agentWindow`  | Default agent window/profile name (use for targets like `session:{{ agentWindow }}`) |
-| `agentFlags`   | Default agent flags from `agents.default` profile |
+| `agentCommand` | Command from the resolved agent profile |
+| `agentWindow`  | Resolved agent profile name/window name (use for targets like `session:{{ agentWindow }}`) |
+| `agentFlags`   | Flags from the resolved agent profile |

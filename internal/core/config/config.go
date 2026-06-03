@@ -620,6 +620,8 @@ type WindowConfig struct {
 type Rule struct {
 	// Pattern matches against remote URL (regex). Empty = matches all.
 	Pattern string `json:"pattern" yaml:"pattern"`
+	// Agent selects the agent profile used for matching repositories.
+	Agent string `json:"agent,omitempty" yaml:"agent,omitempty"`
 	// Commands to run in the session directory after clone/recycle.
 	Commands []string `json:"commands,omitempty" yaml:"commands,omitempty"`
 	// Copy are glob patterns to copy from source directory.
@@ -1058,12 +1060,21 @@ func (c *Config) validateMaxRecycled() error {
 	return errs.ToError()
 }
 
-// validateAgents checks that agents.default references an existing profile.
+// validateAgents checks that configured agent references point at existing profiles.
 func (c *Config) validateAgents() error {
+	var errs criterio.FieldErrorsBuilder
 	if _, ok := c.Agents.Profiles[c.Agents.Default]; !ok {
-		return criterio.NewFieldErrors("agents.default", fmt.Errorf("profile %q not found in agents config", c.Agents.Default))
+		errs = errs.Append("agents.default", fmt.Errorf("profile %q not found in agents config", c.Agents.Default))
 	}
-	return nil
+	for i, rule := range c.Rules {
+		if rule.Agent == "" {
+			continue
+		}
+		if _, ok := c.Agents.Profiles[rule.Agent]; !ok {
+			errs = errs.Append(fmt.Sprintf("rules[%d].agent", i), fmt.Errorf("profile %q not found in agents config", rule.Agent))
+		}
+	}
+	return errs.ToError()
 }
 
 // validateTheme checks that the configured theme name is a valid built-in theme.
@@ -1249,6 +1260,7 @@ func ValidateCloneStrategy(s string) error {
 type SpawnStrategy struct {
 	Windows  []WindowConfig
 	Commands []string
+	Agent    string
 }
 
 // IsWindows returns true if the strategy uses declarative window config.
@@ -1264,17 +1276,23 @@ func ResolveSpawn(rules []Rule, remote string, batch bool) SpawnStrategy {
 		if !rule.Matches(remote) {
 			continue
 		}
+		if rule.Agent != "" {
+			strategy.Agent = rule.Agent
+		}
 		switch {
 		case len(rule.Windows) > 0:
-			strategy = SpawnStrategy{Windows: rule.Windows}
+			strategy.Windows = rule.Windows
+			strategy.Commands = nil
 		case batch && len(rule.BatchSpawn) > 0:
-			strategy = SpawnStrategy{Commands: rule.BatchSpawn}
+			strategy.Windows = nil
+			strategy.Commands = rule.BatchSpawn
 		case !batch && len(rule.Spawn) > 0:
-			strategy = SpawnStrategy{Commands: rule.Spawn}
+			strategy.Windows = nil
+			strategy.Commands = rule.Spawn
 		}
 	}
 	if !strategy.IsWindows() && len(strategy.Commands) == 0 {
-		return SpawnStrategy{Windows: DefaultWindows()}
+		strategy.Windows = DefaultWindows()
 	}
 	return strategy
 }

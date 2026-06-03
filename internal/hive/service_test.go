@@ -284,6 +284,68 @@ func TestCreateSession_AgentKeyOverridesSpawnRenderer(t *testing.T) {
 	assert.Equal(t, "aider-bin|aider|--yes --model sonnet", exec.streamCommands[0])
 }
 
+func TestCreateSession_RuleAgentOverridesSpawnRenderer(t *testing.T) {
+	store := newMockStore()
+	exec := &capturingStreamExec{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default: "claude",
+			Profiles: map[string]config.AgentProfile{
+				"claude": {Command: "claude"},
+				"aider":  {Command: "aider-bin", Flags: []string{"--model", "sonnet"}},
+			},
+		},
+		Rules: []config.Rule{
+			{Pattern: "", Agent: "aider", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:   "rule agent override",
+		Remote: testRemote,
+	})
+	require.NoError(t, err)
+	require.Len(t, exec.streamCommands, 1)
+	assert.Equal(t, "aider-bin|aider|--model sonnet", exec.streamCommands[0])
+}
+
+func TestCreateSession_AgentKeyOverridesRuleAgent(t *testing.T) {
+	store := newMockStore()
+	exec := &capturingStreamExec{}
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Agents: config.AgentsConfig{
+			Default: "claude",
+			Profiles: map[string]config.AgentProfile{
+				"claude": {Command: "claude"},
+				"aider":  {Command: "aider-bin"},
+				"codex":  {Command: "codex-bin", Flags: []string{"--fast"}},
+			},
+		},
+		Rules: []config.Rule{
+			{Pattern: "", Agent: "aider", Spawn: []string{"{{ agentCommand }}|{{ agentWindow }}|{{ agentFlags }}"}},
+		},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{AgentCommand: "claude", AgentWindow: "claude"})
+	svc := NewSessionService(store, &mockGit{}, cfg, testbus.New(t).EventBus, exec, renderer, log, io.Discard, io.Discard)
+
+	_, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:     "cli agent override",
+		Remote:   testRemote,
+		AgentKey: "codex",
+	})
+	require.NoError(t, err)
+	require.Len(t, exec.streamCommands, 1)
+	assert.Equal(t, "codex-bin|codex|--fast", exec.streamCommands[0])
+}
+
 func TestCreateSession_UnknownAgentKey(t *testing.T) {
 	store := newMockStore()
 	cfg := &config.Config{
