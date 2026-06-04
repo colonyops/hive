@@ -3,7 +3,7 @@ package shared
 import (
 	"strings"
 
-	"github.com/charmbracelet/glamour"
+	"charm.land/glamour/v2"
 	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/styles"

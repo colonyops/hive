@@ -4,9 +4,9 @@ import (
 	"image/color"
 	"sort"
 
+	glamouransi "charm.land/glamour/v2/ansi"
+	glamourstyles "charm.land/glamour/v2/styles"
 	lipgloss "charm.land/lipgloss/v2"
-	glamouransi "github.com/charmbracelet/glamour/ansi"
-	glamourstyles "github.com/charmbracelet/glamour/styles"
 	"github.com/lucasb-eyer/go-colorful"
 )
 
