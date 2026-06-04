@@ -10,8 +10,8 @@ import (
 	"time"
 
 	tea "charm.land/bubbletea/v2"
+	"charm.land/glamour/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/charmbracelet/glamour"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/hc"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -403,7 +403,7 @@ func renderColoredTree(w io.Writer, items []hc.Item) {
 // falling back to plain text otherwise.
 func renderMarkdown(w io.Writer, markdown string) {
 	if f, ok := w.(*os.File); ok && term.IsTerminal(int(f.Fd())) {
-		if r, err := glamour.NewTermRenderer(glamour.WithAutoStyle()); err == nil {
+		if r, err := glamour.NewTermRenderer(glamour.WithEnvironmentConfig()); err == nil {
 			if rendered, err := r.Render(markdown); err == nil {
 				_, _ = fmt.Fprint(w, rendered)
 				return
