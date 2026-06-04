@@ -1,35 +1,22 @@
 // Package claude provides Claude Code integration for Hive.
-// It combines fork functionality and analytics in a single plugin.
 package claude
 
 import (
 	"context"
-	"fmt"
 	"os/exec"
-	"sync"
-	"time"
 
-	"charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/config"
-	"github.com/colonyops/hive/internal/core/kv"
-	"github.com/colonyops/hive/internal/core/session"
-	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive/plugins"
 )
 
-// Plugin implements Claude Code integration (fork + analytics).
+// Plugin implements Claude Code command integration.
 type Plugin struct {
-	cfg   config.ClaudePluginConfig
-	cache *kv.TypedKV[SessionAnalytics]
+	cfg config.ClaudePluginConfig
 }
 
-// New creates a new claude plugin.
-func New(cfg config.ClaudePluginConfig, kvStore kv.KV) *Plugin {
-	p := &Plugin{cfg: cfg}
-	if kvStore != nil {
-		p.cache = kv.Scoped[SessionAnalytics](kvStore, "claude.analytics")
-	}
-	return p
+// New creates a new Claude plugin.
+func New(cfg config.ClaudePluginConfig) *Plugin {
+	return &Plugin{cfg: cfg}
 }
 
 func (p *Plugin) Name() string {
@@ -37,11 +24,9 @@ func (p *Plugin) Name() string {
 }
 
 func (p *Plugin) Available() bool {
-	// Check if user explicitly disabled
 	if p.cfg.Enabled != nil && !*p.cfg.Enabled {
 		return false
 	}
-	// Check if claude CLI available
 	_, err := exec.LookPath("claude")
 	return err == nil
 }
@@ -73,135 +58,5 @@ tmux select-window -t "$window_name"
 }
 
 func (p *Plugin) StatusProvider() plugins.StatusProvider {
-	return p
-}
-
-// RefreshStatus implements plugins.StatusProvider
-func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session, pool *plugins.WorkerPool) (map[string]plugins.Status, error) {
-	results := make(map[string]plugins.Status)
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-
-	for _, sess := range sessions {
-		// Try to get Claude session ID from metadata first (fast)
-		claudeSessionID := sess.GetMeta("claude_session_id")
-
-		// If no metadata, try cache before expensive detection
-		if claudeSessionID == "" {
-			// Check if we have cached analytics - if so, session was detected before
-			if p.cache != nil {
-				if cached, err := p.cache.Get(ctx, sess.ID); err == nil {
-					mu.Lock()
-					results[sess.ID] = p.renderStatus(&cached)
-					mu.Unlock()
-					continue
-				}
-			}
-
-			// No cache - detect session ID.
-			// Use relaxed detection (no freshness cutoff) since even idle
-			// Claude sessions have valid analytics worth displaying.
-			claudeSessionID = DetectClaudeSessionID(sess.Path)
-			if claudeSessionID == "" {
-				continue
-			}
-		}
-
-		wg.Add(1)
-		go func(s *session.Session, sessionID string) {
-			defer wg.Done()
-
-			pool.Run(func() {
-				status := p.fetchAnalytics(ctx, s, sessionID)
-				if status.Label != "" || status.Icon != "" {
-					mu.Lock()
-					results[s.ID] = status
-					mu.Unlock()
-				}
-			})
-		}(sess, claudeSessionID)
-	}
-
-	wg.Wait()
-	return results, nil
-}
-
-func (p *Plugin) fetchAnalytics(ctx context.Context, s *session.Session, claudeSessionID string) plugins.Status {
-	// Check cache first
-	if p.cache != nil {
-		if cached, err := p.cache.Get(ctx, s.ID); err == nil {
-			return p.renderStatus(&cached)
-		}
-	}
-
-	// Get JSONL path
-	jsonlPath := GetClaudeJSONLPath(s.Path, claudeSessionID)
-	if jsonlPath == "" {
-		return plugins.Status{}
-	}
-
-	// Parse JSONL
-	analytics, err := ParseSessionJSONL(jsonlPath)
-	if err != nil {
-		return plugins.Status{}
-	}
-
-	// Cache result
-	if p.cache != nil {
-		_ = p.cache.SetTTL(ctx, s.ID, *analytics, p.StatusCacheDuration())
-	}
-
-	return p.renderStatus(analytics)
-}
-
-func (p *Plugin) renderStatus(a *SessionAnalytics) plugins.Status {
-	// Get model limit (default 200k for Sonnet)
-	modelLimit := 200000
-	if p.cfg.ModelLimit > 0 {
-		modelLimit = p.cfg.ModelLimit
-	}
-
-	percent := a.ContextPercent(modelLimit)
-
-	// Two-tier threshold system: yellow → red
-	yellowThreshold := 60 // Default: yellow at 60%
-	if p.cfg.YellowThreshold > 0 {
-		yellowThreshold = p.cfg.YellowThreshold
-	}
-
-	redThreshold := 80 // Default: red at 80%
-	if p.cfg.RedThreshold > 0 {
-		redThreshold = p.cfg.RedThreshold
-	}
-
-	// Format percentage label (always shown in preview)
-	label := fmt.Sprintf("%d%%", int(percent))
-
-	var style lipgloss.Style
-	switch {
-	case percent >= float64(redThreshold):
-		style = lipgloss.NewStyle().Foreground(styles.ColorError)
-	case percent >= float64(yellowThreshold):
-		style = lipgloss.NewStyle().Foreground(styles.ColorWarning)
-	default:
-		// Below threshold - still show label but no color change
-		return plugins.Status{
-			Label: label,
-			Icon:  "",
-			Style: lipgloss.NewStyle(),
-		}
-	}
-
-	return plugins.Status{
-		Label: label,
-		Icon:  "",
-		Style: style,
-	}
-}
-
-func (p *Plugin) StatusCacheDuration() time.Duration {
-	if p.cfg.CacheTTL > 0 {
-		return p.cfg.CacheTTL
-	}
-	return 30 * time.Second
+	return nil
 }
