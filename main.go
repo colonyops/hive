@@ -312,7 +312,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				{plugin: lazygit.New(cfg.Plugins.LazyGit), disabled: isDisabled(cfg.Plugins.LazyGit.Enabled)},
 				{plugin: neovim.New(cfg.Plugins.Neovim), disabled: isDisabled(cfg.Plugins.Neovim.Enabled)},
 				{plugin: contextdir.New(cfg.Plugins.ContextDir, cfg.DataDir), disabled: isDisabled(cfg.Plugins.ContextDir.Enabled)},
-				{plugin: claude.New(cfg.Plugins.Claude, kvStore), disabled: isDisabled(cfg.Plugins.Claude.Enabled)},
+				{plugin: claude.New(cfg.Plugins.Claude), disabled: isDisabled(cfg.Plugins.Claude.Enabled)},
 				{plugin: plugintmux.New(cfg.Plugins.Tmux), disabled: isDisabled(cfg.Plugins.Tmux.Enabled)},
 			}
 

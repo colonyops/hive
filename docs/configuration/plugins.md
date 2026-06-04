@@ -12,8 +12,6 @@ plugins:
     enabled: true
   claude:
     enabled: true
-    yellow_threshold: 60
-    red_threshold: 80
   github:
     enabled: true
     results_cache: 8m
@@ -45,16 +43,12 @@ plugins:
 
 ## Claude Plugin
 
-The Claude plugin provides integration with Claude Code sessions — forking sessions and monitoring context usage.
+The Claude plugin provides Claude Code commands.
 
 ```yaml
 plugins:
   claude:
     enabled: true # auto-detected (requires `claude` CLI)
-    cache_ttl: 30s # status cache duration
-    yellow_threshold: 60 # yellow warning above this % (default: 60)
-    red_threshold: 80 # red warning above this % (default: 80)
-    model_limit: 200000 # context token limit (default: 200000)
 ```
 
 ### Commands Provided
@@ -62,17 +56,6 @@ plugins:
 | Command      | Description                       | Default Key |
 | ------------ | --------------------------------- | ----------- |
 | `ClaudeFork` | Fork Claude session in new window | —           |
-
-### Context Analytics
-
-Session names are colored based on context usage:
-
-- **Default color** — Below 60% (no warning)
-- **Yellow** — 60-79% (approaching limit)
-- **Red** — 80%+ (at or near limit)
-
-!!! note
-    The plugin detects active session IDs by scanning `~/.claude/projects/{project-dir}/` for recently modified UUID session files (within 5 minutes). No manual metadata configuration needed.
 
 ### Usage
 

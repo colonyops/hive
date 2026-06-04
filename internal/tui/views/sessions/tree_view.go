@@ -424,20 +424,6 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 		matchStyle = d.Styles.SelectedMatch
 	}
 
-	// Apply Claude plugin style (context usage color) if present.
-	// Only show when the session has a live terminal session — context
-	// data is stale for sessions without an active tmux pane.
-	hasTerminal := termStatus != nil && termStatus.Status != terminal.StatusMissing
-	if hasTerminal && d.PluginStatuses != nil {
-		if claudeStore, ok := d.PluginStatuses[PluginClaude]; ok {
-			if status, ok := claudeStore.Get(item.Session.ID); ok {
-				if fg := status.Style.GetForeground(); fg != (lipgloss.NoColor{}) {
-					nameStyle = nameStyle.Foreground(fg)
-				}
-			}
-		}
-	}
-
 	// Get filter matches
 	matches := m.MatchesForItem(index)
 	matchSet := make(map[int]bool, len(matches))
@@ -472,7 +458,7 @@ func (d TreeDelegate) renderSession(item TreeItem, isSelected bool, m list.Model
 
 	// Full mode: show ID, git status, and plugin statuses
 	gitInfo := d.renderGitStatus(item.Session.Path)
-	pluginInfo := d.renderPluginStatuses(item.Session.ID, hasTerminal)
+	pluginInfo := d.renderPluginStatuses(item.Session.ID)
 
 	return fmt.Sprintf("%s %s %s%s%s%s%s", prefixStyled, statusStr, name, namePadding, id, gitInfo, pluginInfo)
 }
@@ -632,9 +618,7 @@ func (d TreeDelegate) renderGitStatus(path string) string {
 }
 
 // renderPluginStatuses returns formatted plugin status indicators for a session.
-// hasTerminal controls whether the Claude context plugin is included — context
-// data is stale for sessions without a live terminal pane.
-func (d TreeDelegate) renderPluginStatuses(sessionID string, hasTerminal bool) string {
+func (d TreeDelegate) renderPluginStatuses(sessionID string) string {
 	if len(d.PluginStatuses) == 0 {
 		return ""
 	}
@@ -643,11 +627,8 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string, hasTerminal bool) s
 	neutralStyle := lipgloss.NewStyle().Foreground(styles.ColorMuted)
 
 	var parts []string
-	pluginOrder := []string{PluginGitHub, PluginClaude}
+	pluginOrder := []string{PluginGitHub}
 	for _, name := range pluginOrder {
-		if name == PluginClaude && !hasTerminal {
-			continue
-		}
 		store, ok := d.PluginStatuses[name]
 		if !ok || store == nil {
 			continue
@@ -657,18 +638,9 @@ func (d TreeDelegate) renderPluginStatuses(sessionID string, hasTerminal bool) s
 			continue
 		}
 
-		var icon string
-		if d.IconsEnabled {
-			switch name {
-			case PluginGitHub:
-				icon = styles.IconGithub
-			case PluginClaude:
-				icon = styles.IconBrain
-			default:
-				icon = status.Icon
-			}
-		} else {
-			icon = status.Icon
+		icon := status.Icon
+		if d.IconsEnabled && name == PluginGitHub {
+			icon = styles.IconGithub
 		}
 
 		parts = append(parts, icon+neutralStyle.Render(status.Label))

@@ -14,7 +14,6 @@ type PreviewIcons struct {
 	CheckList string
 	Bee       string
 	Hive      string
-	Claude    string
 }
 
 // PreviewGitData holds git status data for templates.
@@ -28,7 +27,6 @@ type PreviewGitData struct {
 // PreviewPluginData holds plugin status data for templates.
 type PreviewPluginData struct {
 	Github string // e.g., "open", "draft", "merged"
-	Claude string // e.g., "65%" (context usage percentage)
 }
 
 // PreviewTemplateData holds all data available to preview templates.
@@ -65,7 +63,7 @@ const DefaultTitleTemplate = "{{ .Name }} • #{{ .ShortID }}"
 
 // DefaultStatusTemplate is the default Go template for the preview status line.
 // Shows git info with icons and plugin statuses.
-const DefaultStatusTemplate = "{{ if .Branch }}{{ .Icon.GitBranch }} {{ .Branch }} +{{ .GitStatus.Additions }} -{{ .GitStatus.Deletions }}{{ if .GitStatus.HasChanges }} {{ .Icon.Git }}{{ end }}{{ end }}{{ if .Plugin.Github }} | {{ .Icon.Github }} {{ .Plugin.Github }}{{ end }}{{ if .Plugin.Claude }} | {{ .Icon.Claude }} {{ .Plugin.Claude }}{{ end }}"
+const DefaultStatusTemplate = "{{ if .Branch }}{{ .Icon.GitBranch }} {{ .Branch }} +{{ .GitStatus.Additions }} -{{ .GitStatus.Deletions }}{{ if .GitStatus.HasChanges }} {{ .Icon.Git }}{{ end }}{{ end }}{{ if .Plugin.Github }} | {{ .Icon.Github }} {{ .Plugin.Github }}{{ end }}"
 
 // ParsePreviewTemplates parses the title and status templates.
 // Falls back to defaults if templates are empty or invalid.
