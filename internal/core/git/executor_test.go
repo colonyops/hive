@@ -2,7 +2,9 @@ package git
 
 import (
 	"context"
+	"fmt"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -195,6 +197,111 @@ func TestExecutor_DefaultBranch(t *testing.T) {
 			}
 			require.NoError(t, err)
 			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestExecutor_WorktreeResetUsesBareDefaultBranch(t *testing.T) {
+	var calls []string
+	mock := &mockExecutor{
+		runDirFunc: func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
+			calls = append(calls, dir+" "+cmd+" "+strings.Join(args, " "))
+			switch len(calls) {
+			case 1:
+				assert.Equal(t, "/bare", dir)
+				assert.Equal(t, []string{"--no-optional-locks", "symbolic-ref", "HEAD", "--short"}, args)
+				return []byte("main\n"), nil
+			case 2:
+				assert.Equal(t, "/worktree", dir)
+				assert.Equal(t, []string{"reset", "--hard", "main"}, args)
+				return nil, nil
+			case 3:
+				assert.Equal(t, "/worktree", dir)
+				assert.Equal(t, []string{"clean", "-fdx"}, args)
+				return nil, nil
+			default:
+				return nil, fmt.Errorf("unexpected call %d", len(calls))
+			}
+		},
+	}
+
+	e := NewExecutor("git", mock)
+	err := e.WorktreeReset(context.Background(), "/bare", "/worktree")
+
+	require.NoError(t, err)
+	assert.Len(t, calls, 3)
+}
+
+func TestExecutor_Fetch(t *testing.T) {
+	tests := []struct {
+		name       string
+		bareOut    string
+		wantFetch  []string
+		wantErr    bool
+		fetchError error
+	}{
+		{
+			name:      "normal repository fetches origin",
+			bareOut:   "false\n",
+			wantFetch: []string{"fetch", "origin"},
+		},
+		{
+			name:      "bare repository fetches default branch ref",
+			bareOut:   "true\n",
+			wantFetch: []string{"fetch", "origin", "+refs/heads/main:refs/heads/main", "--prune"},
+		},
+		{
+			name:       "fetch error is returned",
+			bareOut:    "true\n",
+			wantFetch:  []string{"fetch", "origin", "+refs/heads/main:refs/heads/main", "--prune"},
+			wantErr:    true,
+			fetchError: fmt.Errorf("network down"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			callCount := 0
+			mock := &mockExecutor{
+				runDirFunc: func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
+					callCount++
+					switch callCount {
+					case 1:
+						assert.Equal(t, "/repo", dir)
+						assert.Equal(t, []string{"--no-optional-locks", "rev-parse", "--is-bare-repository"}, args)
+						return []byte(tt.bareOut), nil
+					case 2:
+						assert.Equal(t, "/repo", dir)
+						if strings.TrimSpace(tt.bareOut) == "true" {
+							assert.Equal(t, []string{"--no-optional-locks", "symbolic-ref", "HEAD", "--short"}, args)
+							return []byte("main\n"), nil
+						}
+						assert.Equal(t, tt.wantFetch, args)
+						return nil, tt.fetchError
+					case 3:
+						assert.Equal(t, "/repo", dir)
+						assert.Equal(t, tt.wantFetch, args)
+						return nil, tt.fetchError
+					default:
+						return nil, fmt.Errorf("unexpected call %d", callCount)
+					}
+				},
+			}
+
+			e := NewExecutor("git", mock)
+			err := e.Fetch(context.Background(), "/repo")
+
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), "git fetch")
+				return
+			}
+			require.NoError(t, err)
+			if strings.TrimSpace(tt.bareOut) == "true" {
+				assert.Equal(t, 3, callCount)
+			} else {
+				assert.Equal(t, 2, callCount)
+			}
 		})
 	}
 }

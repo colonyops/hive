@@ -212,11 +212,11 @@ func (e *Executor) WorktreeRemove(ctx context.Context, repoDir, path, branch str
 }
 
 func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath string) error {
-	out, err := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
+	out, err := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
 	if err != nil {
-		return fmt.Errorf("get default branch: %w", err)
+		return fmt.Errorf("get bare default branch: %w", err)
 	}
-	ref := strings.TrimSpace(string(out)) // e.g., "origin/main"
+	ref := strings.TrimSpace(string(out)) // e.g., "main"
 	if _, err := e.exec.RunDir(ctx, worktreePath, e.gitPath, "reset", "--hard", ref); err != nil {
 		return fmt.Errorf("git reset --hard %s: %w", ref, err)
 	}
@@ -250,7 +250,21 @@ func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, er
 }
 
 func (e *Executor) Fetch(ctx context.Context, dir string) error {
-	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "fetch", "origin"); err != nil {
+	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--is-bare-repository")
+	if err != nil {
+		return fmt.Errorf("git rev-parse --is-bare-repository: %w", err)
+	}
+
+	args := []string{"fetch", "origin"}
+	if strings.TrimSpace(string(out)) == "true" {
+		branchOut, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
+		if err != nil {
+			return fmt.Errorf("get bare default branch: %w", err)
+		}
+		branch := strings.TrimSpace(string(branchOut))
+		args = append(args, "+refs/heads/"+branch+":refs/heads/"+branch, "--prune")
+	}
+	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, args...); err != nil {
 		return fmt.Errorf("git fetch: %w", err)
 	}
 	return nil
