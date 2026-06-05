@@ -68,3 +68,58 @@ func TestSessionLsJSON(t *testing.T) {
 	assert.Contains(t, entry, "repo")
 	assert.Contains(t, entry, "inbox")
 }
+
+func TestSessionDelete(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "delete-repo")
+
+	_, err := h.Run("new", "--remote", repo, "to-delete")
+	require.NoError(t, err)
+
+	lines, err := h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	id := lines[0]["id"].(string)
+
+	_, err = h.Run("session", "delete", id)
+	require.NoError(t, err)
+
+	lines, err = h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	assert.Empty(t, lines, "session should be gone after delete")
+}
+
+func TestSessionDeleteMissingID(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("session", "delete")
+	require.Error(t, err, "delete without ID should fail")
+}
+
+func TestSessionRecycle(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "recycle-repo")
+
+	_, err := h.Run("new", "--remote", repo, "to-recycle")
+	require.NoError(t, err)
+
+	lines, err := h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	id := lines[0]["id"].(string)
+
+	_, err = h.Run("session", "recycle", id)
+	require.NoError(t, err)
+
+	lines, err = h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	assert.Equal(t, "recycled", lines[0]["state"], "session state should be recycled")
+}
+
+func TestSessionRecycleMissingID(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("session", "recycle")
+	require.Error(t, err, "recycle without ID should fail")
+}

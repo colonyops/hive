@@ -45,6 +45,8 @@ Use 'hive session info' to get details about the current session.`,
 			Commands: []*cli.Command{
 				lsCommand,
 				cmd.infoCmd(),
+				cmd.deleteCmd(),
+				cmd.recycleCmd(),
 			},
 		},
 		// Top-level alias: "hive ls" -> "hive session list"
@@ -252,6 +254,58 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 		fmt.Fprintf(os.Stderr, "Run 'hive prune' to clean up\n")
 	}
 
+	return nil
+}
+
+func (cmd *SessionCmd) deleteCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "delete",
+		Usage:     "Delete a session and its directory",
+		UsageText: "hive session delete <id>",
+		Description: `Permanently removes a session, its cloned directory, and any associated tmux session.
+
+This action cannot be undone. Use 'hive session recycle' to preserve the directory for reuse.`,
+		Action: cmd.runDelete,
+	}
+}
+
+func (cmd *SessionCmd) runDelete(ctx context.Context, c *cli.Command) error {
+	id := c.Args().First()
+	if id == "" {
+		return fmt.Errorf("session ID required")
+	}
+
+	if err := cmd.app.Sessions.DeleteSession(ctx, id); err != nil {
+		return fmt.Errorf("delete session: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Session %s deleted\n", id)
+	return nil
+}
+
+func (cmd *SessionCmd) recycleCmd() *cli.Command {
+	return &cli.Command{
+		Name:      "recycle",
+		Usage:     "Recycle a session back to the pool",
+		UsageText: "hive session recycle <id>",
+		Description: `Marks a session as recycled so it can be reused for a new task.
+
+Runs any configured recycle commands (e.g. git reset) and kills the associated tmux session.`,
+		Action: cmd.runRecycle,
+	}
+}
+
+func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
+	id := c.Args().First()
+	if id == "" {
+		return fmt.Errorf("session ID required")
+	}
+
+	if err := cmd.app.Sessions.RecycleSession(ctx, id, os.Stderr); err != nil {
+		return fmt.Errorf("recycle session: %w", err)
+	}
+
+	fmt.Fprintf(os.Stderr, "Session %s recycled\n", id)
 	return nil
 }
 
