@@ -599,6 +599,11 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 		}
 	}
 
+	// Kill associated tmux session (best-effort)
+	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
+		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
+	}
+
 	// Remove directory
 	if err := os.RemoveAll(sess.Path); err != nil {
 		return fmt.Errorf("remove directory: %w", err)
