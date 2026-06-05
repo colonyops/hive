@@ -117,7 +117,7 @@ type sessionInfoOutput struct {
 	Path   string   `json:"path"`
 	Inbox  string   `json:"inbox"`
 	State  string   `json:"state"`
-	Tags   []string `json:"tags,omitempty"`
+	Tags   []string `json:"tags"`
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
@@ -145,6 +145,10 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	out := c.Root().Writer
 
 	if cmd.infoJSON {
+		tags := sess.Tags
+		if tags == nil {
+			tags = []string{}
+		}
 		info := sessionInfoOutput{
 			ID:     sess.ID,
 			Name:   sess.Name,
@@ -153,7 +157,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 			Path:   sess.Path,
 			Inbox:  sess.InboxTopic(),
 			State:  string(sess.State),
-			Tags:   sess.Tags,
+			Tags:   tags,
 		}
 		return iojson.WriteLine(out, info)
 	}
@@ -177,7 +181,7 @@ type lsSessionInfo struct {
 	Inbox  string   `json:"inbox"`
 	State  string   `json:"state"`
 	Unread int      `json:"unread"`
-	Tags   []string `json:"tags,omitempty"`
+	Tags   []string `json:"tags"`
 }
 
 func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
@@ -252,6 +256,10 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session) lsSessionInfo {
+	tags := s.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	info := lsSessionInfo{
 		ID:     s.ID,
 		Name:   s.Name,
@@ -259,7 +267,7 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 		Inbox:  s.InboxTopic(),
 		State:  string(s.State),
 		Unread: 0,
-		Tags:   s.Tags,
+		Tags:   tags,
 	}
 
 	// Count unread inbox messages
