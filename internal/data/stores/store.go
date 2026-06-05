@@ -72,6 +72,16 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		metadataJSON = sql.NullString{String: string(data), Valid: true}
 	}
 
+	// Marshal tags to JSON
+	var tagsJSON sql.NullString
+	if len(sess.Tags) > 0 {
+		data, err := json.Marshal(sess.Tags)
+		if err != nil {
+			return fmt.Errorf("failed to marshal tags: %w", err)
+		}
+		tagsJSON = sql.NullString{String: string(data), Valid: true}
+	}
+
 	strategy := sess.CloneStrategy
 	if strategy == "" {
 		strategy = session.CloneStrategyFull
@@ -86,6 +96,7 @@ func (s *SessionStore) Save(ctx context.Context, sess session.Session) error {
 		State:         string(sess.State),
 		CloneStrategy: strategy,
 		Metadata:      metadataJSON,
+		Tags:          tagsJSON,
 		CreatedAt:     sess.CreatedAt.UnixNano(),
 		UpdatedAt:     sess.UpdatedAt.UnixNano(),
 	})
@@ -125,6 +136,14 @@ func rowToSession(row db.Session) (session.Session, error) {
 		}
 	}
 
+	// Unmarshal tags from JSON
+	var tags []string
+	if row.Tags.Valid {
+		if err := json.Unmarshal([]byte(row.Tags.String), &tags); err != nil {
+			return session.Session{}, fmt.Errorf("failed to unmarshal tags: %w", err)
+		}
+	}
+
 	return session.Session{
 		ID:            row.ID,
 		Name:          row.Name,
@@ -133,6 +152,7 @@ func rowToSession(row db.Session) (session.Session, error) {
 		Remote:        row.Remote,
 		State:         session.State(row.State),
 		CloneStrategy: row.CloneStrategy,
+		Tags:          tags,
 		Metadata:      metadata,
 		CreatedAt:     time.Unix(0, row.CreatedAt),
 		UpdatedAt:     time.Unix(0, row.UpdatedAt),

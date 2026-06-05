@@ -45,6 +45,8 @@ type CreateOptions struct {
 	// When non-empty, the spawn templates use that profile's command/flags instead
 	// of the process-wide default. Must match a key in config.Agents.Profiles.
 	AgentKey string
+	// Tags are user-defined labels attached to the session for external provider tracking.
+	Tags []string
 	// Progress receives human-readable progress lines during session creation.
 	// When non-nil, service output (hooks, file copies) is also redirected here.
 	Progress io.Writer
@@ -231,6 +233,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		sess.Name = opts.Name
 		sess.Slug = slug
 		sess.State = session.StateActive
+		sess.Tags = opts.Tags
 		sess.UpdatedAt = time.Now()
 	} else {
 		// Create new session (either no recyclable found or it was corrupted)
@@ -260,6 +263,7 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 			Remote:        remote,
 			State:         session.StateActive,
 			CloneStrategy: cloneStrategy,
+			Tags:          opts.Tags,
 			CreatedAt:     now,
 			UpdatedAt:     now,
 		}
