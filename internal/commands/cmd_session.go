@@ -22,6 +22,7 @@ type SessionCmd struct {
 	// per-subcommand flags
 	infoJSON bool
 	lsJSON   bool
+	lsTags   []string
 }
 
 // NewSessionCmd creates a new session command
@@ -75,6 +76,12 @@ Use --json for LLM-friendly output with additional fields like inbox topic and u
 				Usage:       "output as JSON lines with inbox info",
 				Destination: &cmd.lsJSON,
 			},
+			&cli.StringSliceFlag{
+				Name:        "tags",
+				Aliases:     []string{"t"},
+				Usage:       "filter sessions by tag (repeatable, all tags must match)",
+				Destination: &cmd.lsTags,
+			},
 		},
 		Action: cmd.runLs,
 	}
@@ -103,13 +110,14 @@ Example output (--json):
 
 // sessionInfoOutput is the JSON output format for hive session info.
 type sessionInfoOutput struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Repo   string `json:"repo"`
-	Remote string `json:"remote"`
-	Path   string `json:"path"`
-	Inbox  string `json:"inbox"`
-	State  string `json:"state"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Repo   string   `json:"repo"`
+	Remote string   `json:"remote"`
+	Path   string   `json:"path"`
+	Inbox  string   `json:"inbox"`
+	State  string   `json:"state"`
+	Tags   []string `json:"tags"`
 }
 
 func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
@@ -137,6 +145,10 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 	out := c.Root().Writer
 
 	if cmd.infoJSON {
+		tags := sess.Tags
+		if tags == nil {
+			tags = []string{}
+		}
 		info := sessionInfoOutput{
 			ID:     sess.ID,
 			Name:   sess.Name,
@@ -145,6 +157,7 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 			Path:   sess.Path,
 			Inbox:  sess.InboxTopic(),
 			State:  string(sess.State),
+			Tags:   tags,
 		}
 		return iojson.WriteLine(out, info)
 	}
@@ -162,12 +175,13 @@ func (cmd *SessionCmd) runInfo(ctx context.Context, c *cli.Command) error {
 
 // lsSessionInfo is the JSON output format for hive session ls --json.
 type lsSessionInfo struct {
-	ID     string `json:"id"`
-	Name   string `json:"name"`
-	Repo   string `json:"repo"`
-	Inbox  string `json:"inbox"`
-	State  string `json:"state"`
-	Unread int    `json:"unread"`
+	ID     string   `json:"id"`
+	Name   string   `json:"name"`
+	Repo   string   `json:"repo"`
+	Inbox  string   `json:"inbox"`
+	State  string   `json:"state"`
+	Unread int      `json:"unread"`
+	Tags   []string `json:"tags"`
 }
 
 func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
@@ -183,14 +197,17 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 		return nil
 	}
 
-	// Separate normal and corrupted sessions
+	// Separate normal and corrupted sessions, applying tag filter if specified
 	var normal, corrupted []session.Session
 	for _, s := range sessions {
 		if s.State == session.StateCorrupted {
 			corrupted = append(corrupted, s)
-		} else {
-			normal = append(normal, s)
+			continue
 		}
+		if len(cmd.lsTags) > 0 && !sessionHasAllTags(s, cmd.lsTags) {
+			continue
+		}
+		normal = append(normal, s)
 	}
 
 	// Sort by repository name
@@ -239,6 +256,10 @@ func (cmd *SessionCmd) runLs(ctx context.Context, c *cli.Command) error {
 }
 
 func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session) lsSessionInfo {
+	tags := s.Tags
+	if tags == nil {
+		tags = []string{}
+	}
 	info := lsSessionInfo{
 		ID:     s.ID,
 		Name:   s.Name,
@@ -246,6 +267,7 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 		Inbox:  s.InboxTopic(),
 		State:  string(s.State),
 		Unread: 0,
+		Tags:   tags,
 	}
 
 	// Count unread inbox messages
@@ -254,4 +276,18 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 	}
 
 	return info
+}
+
+// sessionHasAllTags returns true if the session has every tag in required.
+func sessionHasAllTags(s session.Session, required []string) bool {
+	tagSet := make(map[string]struct{}, len(s.Tags))
+	for _, t := range s.Tags {
+		tagSet[t] = struct{}{}
+	}
+	for _, r := range required {
+		if _, ok := tagSet[r]; !ok {
+			return false
+		}
+	}
+	return true
 }

@@ -18,6 +18,7 @@ type NewCmd struct {
 	background    bool
 	cloneStrategy string
 	agent         string
+	tags          []string
 }
 
 // NewNewCmd creates a new new command
@@ -73,6 +74,12 @@ Example:
 				Usage:       "agent profile key from agents config",
 				Destination: &cmd.agent,
 			},
+			&cli.StringSliceFlag{
+				Name:        "tags",
+				Aliases:     []string{"t"},
+				Usage:       "tags to attach to the session (repeatable)",
+				Destination: &cmd.tags,
+			},
 		},
 		Action: cmd.run,
 	})
@@ -109,6 +116,7 @@ func (cmd *NewCmd) run(ctx context.Context, c *cli.Command) error {
 		Background:    cmd.background,
 		CloneStrategy: cmd.cloneStrategy,
 		AgentKey:      cmd.agent,
+		Tags:          cmd.tags,
 	}
 
 	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)
