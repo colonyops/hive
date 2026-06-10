@@ -389,6 +389,15 @@ var defaultUserCommands = map[string]UserCommand{
 // Increment this when making breaking changes to config format.
 const CurrentConfigVersion = "0.2.7"
 
+const (
+	// EnvDefaultAgent overrides agents.default when set.
+	EnvDefaultAgent = "HIVE_DEFAULT_AGENT"
+	// EnvContextBaseDir overrides context.base_dir when set.
+	EnvContextBaseDir = "HIVE_CONTEXT_BASE_DIR"
+	// EnvGitPath overrides git_path when set.
+	EnvGitPath = "HIVE_GIT_PATH"
+)
+
 // Config holds the application configuration.
 type Config struct {
 	Version             string                 `json:"version"               yaml:"version"`
@@ -817,6 +826,7 @@ func Load(configPath, dataDir string) (*Config, error) {
 
 	// Apply defaults for zero values
 	cfg.applyDefaults()
+	cfg.applyEnvironmentOverrides()
 
 	if err := cfg.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid config: %w", err)
@@ -874,6 +884,23 @@ func (c *Config) applyDefaults() {
 	}
 	if c.Agents.Default == "" {
 		c.Agents.Default = "claude"
+	}
+}
+
+func (c *Config) applyEnvironmentOverrides() {
+	overrides := []struct {
+		env    string
+		target *string
+	}{
+		{env: EnvDefaultAgent, target: &c.Agents.Default},
+		{env: EnvContextBaseDir, target: &c.Context.BaseDir},
+		{env: EnvGitPath, target: &c.GitPath},
+	}
+
+	for _, override := range overrides {
+		if value := os.Getenv(override.env); value != "" {
+			*override.target = value
+		}
 	}
 }
 

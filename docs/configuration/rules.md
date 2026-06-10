@@ -91,9 +91,11 @@ rules:
 
 Agent resolution order is:
 
-1. CLI `--agent` flag
-2. Last matching rule with `agent`
-3. `agents.default`
+1. CLI/session agent
+2. Batch `--agent`
+3. Last matching rule with `agent`
+4. `HIVE_DEFAULT_AGENT`
+5. `agents.default`
 
 ## Window Configuration
 
