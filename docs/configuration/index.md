@@ -53,13 +53,24 @@ rules:
 | Option                        | Type       | Default              | Description                                 |
 | ----------------------------- | ---------- | -------------------- | ------------------------------------------- |
 | `workspaces`                  | `[]string` | `[]`                 | Directories to scan for repositories        |
+| `git_path`                    | `string`   | `git`                | Git executable path                         |
 | `copy_command`                | `string`   | `pbcopy` (macOS)     | Command to copy to clipboard                |
 | `auto_delete_corrupted`       | `bool`     | `true`               | Auto-delete corrupted sessions on prune     |
 | `history.max_entries`         | `int`      | `100`                | Max command palette history entries         |
 
+## Environment Overrides
+
+Use environment overrides for machine-specific paths and defaults without maintaining separate config files. Empty environment variables are ignored. Run `hive config` to inspect the resolved values.
+
+| Environment variable    | Overrides           | Notes                                      |
+| ----------------------- | ------------------- | ------------------------------------------ |
+| `HIVE_DEFAULT_AGENT`    | `agents.default`    | Must match an existing agent profile key   |
+| `HIVE_CONTEXT_BASE_DIR` | `context.base_dir`  | Supports the same path rules as config     |
+| `HIVE_GIT_PATH`         | `git_path`          | Git executable path for this machine       |
+
 ## Agents
 
-Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session unless a matching rule sets `agent` or the session is created with `--agent`.
+Agent profiles define the AI tools available for spawning in sessions. The `default` key selects which profile to use when creating a new session unless a matching rule sets `agent`, the session is created with `--agent`, or `HIVE_DEFAULT_AGENT` is set.
 
 | Option                    | Type       | Default        | Description                                                                    |
 | ------------------------- | ---------- | -------------- | ------------------------------------------------------------------------------ |
@@ -68,7 +79,13 @@ Agent profiles define the AI tools available for spawning in sessions. The `defa
 | `agents.<name>.command`   | `string`   | profile name   | CLI binary to run (defaults to profile name if empty)                          |
 | `agents.<name>.flags`     | `[]string` | `[]`           | Extra CLI args appended to the command on spawn                                |
 
-Agent resolution order is: CLI `--agent`, then the last matching `rules[].agent`, then `agents.default`. Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
+Set `HIVE_DEFAULT_AGENT` to override `agents.default` for a single machine or shell session. The value must match an existing profile key in `agents`.
+
+```sh
+export HIVE_DEFAULT_AGENT=codex
+```
+
+Agent resolution order is: CLI/session agent, then batch `--agent`, then the last matching `rules[].agent`, then `HIVE_DEFAULT_AGENT`, then `agents.default`. Sessions can run multiple agents by opening additional tmux windows — use `tmux.preview_window_matcher` to control which windows the TUI monitors.
 
 ## Tmux
 
@@ -96,9 +113,9 @@ Agent resolution order is: CLI `--agent`, then the last matching `rules[].agent`
 | Option                 | Type     | Default                          | Description                                                                          |
 | ---------------------- | -------- | -------------------------------- | ------------------------------------------------------------------------------------ |
 | `context.symlink_name` | `string` | `.hive`                          | Symlink name created by `hive ctx init`                                              |
-| `context.base_dir`     | `string` | `$HIVE_DATA_DIR/context/`        | Override the base directory for all context storage. Accepts `~` and absolute paths. |
+| `context.base_dir`     | `string` | `$HIVE_DATA_DIR/context/`        | Override the base directory for all context storage. Accepts `~` and absolute paths. Can be overridden with `HIVE_CONTEXT_BASE_DIR`. |
 
-By default context documents are stored under hive's data directory (`~/.local/share/hive/context/`). Set `context.base_dir` to redirect them elsewhere — for example, into a git repository so plans and research are version-controlled alongside your code.
+By default context documents are stored under hive's data directory (`~/.local/share/hive/context/`). Set `context.base_dir` or `HIVE_CONTEXT_BASE_DIR` to redirect them elsewhere — for example, into a git repository so plans and research are version-controlled alongside your code.
 
 ```yaml
 context:
