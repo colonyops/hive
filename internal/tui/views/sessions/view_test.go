@@ -111,6 +111,37 @@ func TestExpandWindowItems_OneWindow(t *testing.T) {
 	assert.Len(t, got, 1, "session with 1 window should not be expanded (threshold is >1)")
 }
 
+func TestExpandWindowItems_AllTmuxItemsKeepsSinglePaneCollapsed(t *testing.T) {
+	tests := []struct {
+		name string
+		pane PaneStatus
+	}{
+		{name: "shell", pane: PaneStatus{PaneID: "%1", Tool: "zsh", Status: terminal.StatusNeutral}},
+		{name: "agent", pane: PaneStatus{PaneID: "%1", Tool: "claude", Status: terminal.StatusReady, IsAgent: true}},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ts := kv.New[string, TerminalStatus]()
+			ts.Set("s1", TerminalStatus{
+				Windows: []WindowStatus{{
+					WindowIndex: "0",
+					WindowName:  "main",
+					HasAgent:    tt.pane.IsAgent,
+					Panes:       []PaneStatus{tt.pane},
+				}},
+			})
+			cfg := config.DefaultConfig()
+			cfg.Views.Sessions.TmuxItems = config.TmuxItemsAll
+			v := &View{terminalStatuses: ts, cfg: &cfg}
+
+			items := []list.Item{TreeItem{Session: session.Session{ID: "s1"}}}
+			got := v.expandWindowItems(items)
+			assert.Len(t, got, 1, "all tmux items should keep a single pane collapsed")
+		})
+	}
+}
+
 func TestExpandWindowItems_OneWindowMultiplePanes(t *testing.T) {
 	ts := kv.New[string, TerminalStatus]()
 	ts.Set("s1", TerminalStatus{
@@ -188,6 +219,28 @@ func TestExpandWindowItems_MultipleWindows(t *testing.T) {
 	w1 := got[2].(TreeItem)
 	assert.True(t, w1.IsWindowItem)
 	assert.True(t, w1.IsLastWindow, "last window should be marked")
+}
+
+func TestExpandWindowItems_AllTmuxItemsMultipleSinglePaneWindowsDoesNotShowPanes(t *testing.T) {
+	ts := kv.New[string, TerminalStatus]()
+	ts.Set("s1", TerminalStatus{
+		Windows: []WindowStatus{
+			{WindowIndex: "0", WindowName: "pi", HasAgent: true, Panes: []PaneStatus{{PaneID: "%1", Tool: "pi", IsAgent: true, Status: terminal.StatusReady}}},
+			{WindowIndex: "1", WindowName: "shell", Panes: []PaneStatus{{PaneID: "%2", Tool: "zsh", Status: terminal.StatusNeutral}}},
+		},
+	})
+	cfg := config.DefaultConfig()
+	cfg.Views.Sessions.TmuxItems = config.TmuxItemsAll
+	v := &View{terminalStatuses: ts, cfg: &cfg}
+
+	items := []list.Item{TreeItem{Session: session.Session{ID: "s1"}, RepoPrefix: "repo"}}
+	got := v.expandWindowItems(items)
+
+	assert.Len(t, got, 3, "single-pane windows should render as window rows only")
+	for _, item := range got {
+		ti := item.(TreeItem)
+		assert.False(t, ti.IsPaneItem)
+	}
 }
 
 func TestExpandWindowItems_NonSessionPassthrough(t *testing.T) {
@@ -409,6 +462,30 @@ func TestHandleSessionsLoaded_NoTerminalPollWithoutIntegrations(t *testing.T) {
 	// Returns the applyFilter cmd (git status) but no terminal batch.
 	// We just verify it doesn't panic and allSessions is set.
 	assert.Equal(t, sessions, v.allSessions)
+}
+
+func TestStartTerminalStatusBatch_SkipsWhileInFlight(t *testing.T) {
+	sessions := []session.Session{
+		{ID: "s1", Name: "session", State: session.StateActive},
+	}
+	v := newViewWithTerminalMgr(sessions)
+
+	cmd := v.startTerminalStatusBatch()
+	assert.NotNil(t, cmd)
+	assert.True(t, v.terminalPollInFlight)
+
+	cmd = v.startTerminalStatusBatch()
+	assert.Nil(t, cmd, "must not start overlapping terminal status batches")
+}
+
+func TestHandleTerminalStatusComplete_ClearsInFlight(t *testing.T) {
+	v := newViewWithTerminalMgr(nil)
+	v.terminalPollInFlight = true
+
+	cmd := v.handleTerminalStatusComplete(TerminalStatusBatchCompleteMsg{})
+
+	assert.Nil(t, cmd)
+	assert.False(t, v.terminalPollInFlight)
 }
 
 func TestApplyFilter_GroupByGroup(t *testing.T) {

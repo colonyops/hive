@@ -81,7 +81,8 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 	// Create terminal integration manager (tmux always enabled)
 	termMgr := terminal.NewManager([]string{"tmux"})
-	tmuxIntegration := tmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher)
+	tmuxIntegration := tmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).
+		WithPortDiscovery(cmd.app.Config.Tmux.IsPortDiscoveryEnabled())
 	if tmuxIntegration.Available() {
 		termMgr.Register(tmuxIntegration)
 	}

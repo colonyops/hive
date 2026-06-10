@@ -453,7 +453,7 @@ func refreshStatusCmd(mgr *terminal.Manager, items []pickItem) tea.Cmd {
 			var allInfos []*terminal.SessionInfo
 			var dErr error
 			if disc, ok := integration.(terminal.AllPanesDiscoverer); ok {
-				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata)
+				allInfos, dErr = disc.DiscoverAllPanes(ctx, item.Session.Slug, metadata, false)
 			} else {
 				statuses[item.Session.ID] = status
 				expanded = append(expanded, item)
@@ -561,7 +561,8 @@ func (cmd *ExperimentalCmd) pickCmd() *cli.Command {
 
 			// Create terminal manager (same as TUI) since cmd.app.Terminal is nil at app level
 			termMgr := terminal.NewManager([]string{"tmux"})
-			tmuxIntegration := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher)
+			tmuxIntegration := terminaltmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher).
+				WithPortDiscovery(cmd.app.Config.Tmux.IsPortDiscoveryEnabled())
 			if tmuxIntegration.Available() {
 				termMgr.Register(tmuxIntegration)
 			}

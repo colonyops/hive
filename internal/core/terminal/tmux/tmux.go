@@ -37,6 +37,7 @@ type Integration struct {
 	processReader   process.ProcessReader
 	lister          PaneLister
 	capture         classifier.ContentCapture
+	portLister      PortLister
 }
 
 // sessionCache holds all panes for a single tmux session.
@@ -49,20 +50,21 @@ type cachedPane struct {
 	input  classifier.PaneInput
 	result classifier.Result
 	state  paneState
+	ports  []int
 }
 
-// agentPanes returns panes classified as agents.
-func (sc *sessionCache) agentPanes() []cachedPane {
+// matchingPanes returns panes eligible for tree expansion.
+func (sc *sessionCache) matchingPanes(includeNonAgents bool) []cachedPane {
 	if sc == nil {
 		return nil
 	}
-	agents := make([]cachedPane, 0, len(sc.panes))
+	panes := make([]cachedPane, 0, len(sc.panes))
 	for _, pane := range sc.panes {
-		if pane.result.IsAgent {
-			agents = append(agents, pane)
+		if includeNonAgents || pane.result.IsAgent {
+			panes = append(panes, pane)
 		}
 	}
-	return agents
+	return panes
 }
 
 // findPane returns the pane matching paneID.
@@ -156,7 +158,17 @@ func NewWithReader(cls *classifier.Classifier, lister PaneLister, reader process
 		processReader:   reader,
 		lister:          lister,
 		capture:         capture,
+		portLister:      LsofPortLister{},
 	}
+}
+
+// WithPortDiscovery enables or disables lsof-based port discovery for non-agent
+// panes. Disabled when the caller sets tmux.port_discovery: false in config.
+func (t *Integration) WithPortDiscovery(enabled bool) *Integration {
+	if !enabled {
+		t.portLister = nil
+	}
+	return t
 }
 
 // Classifier returns the pane classifier used by this integration.
@@ -187,8 +199,9 @@ func (t *Integration) RefreshCache() {
 	defer t.refreshMu.Unlock()
 
 	// Build a process-tree snapshot once for this refresh cycle so all pane
-	// classifications share one OS call instead of one per pane.
-	snapshotCls := t.classifier.WithReader(process.NewSnapshotReader(t.processReader))
+	// classifications and port discovery share one OS call instead of one per pane.
+	snapshotReader := process.NewSnapshotReader(t.processReader)
+	snapshotCls := t.classifier.WithReader(snapshotReader)
 
 	panes, err := t.lister.ListAllPanes()
 	if err != nil {
@@ -205,11 +218,16 @@ func (t *Integration) RefreshCache() {
 	type paneSnapshot struct {
 		pid   int64
 		state paneState
+		ports []int
 	}
 	oldStates := make(map[string]paneSnapshot)
 	for sessionName, sc := range t.cache {
 		for _, pane := range sc.panes {
-			oldStates[paneKey(sessionName, pane.input.PaneID)] = paneSnapshot{pid: pane.input.PanePID, state: pane.state}
+			oldStates[paneKey(sessionName, pane.input.PaneID)] = paneSnapshot{
+				pid:   pane.input.PanePID,
+				state: pane.state,
+				ports: append([]int(nil), pane.ports...),
+			}
 		}
 	}
 	t.mu.RUnlock()
@@ -217,6 +235,12 @@ func (t *Integration) RefreshCache() {
 	newCache := make(map[string]*sessionCache)
 	activePaneIDs := make(map[string]bool, len(panes))
 	activeKeys := make(map[string]bool, len(panes))
+	type panePortsInput struct {
+		key  string
+		pids []int
+	}
+	var portInputs []panePortsInput
+	var portPIDs []int
 	for _, input := range panes {
 		if input.SessionName == "" || input.PaneID == "" {
 			continue
@@ -243,16 +267,41 @@ func (t *Integration) RefreshCache() {
 		}
 
 		var state paneState
+		var ports []int
 		if snapshot, ok := oldStates[key]; ok && snapshot.pid == input.PanePID {
 			state = snapshot.state
+			ports = append([]int(nil), snapshot.ports...)
 		}
-		entry := cachedPane{input: input, result: result, state: state}
+		entry := cachedPane{input: input, result: result, state: state, ports: ports}
+		if !result.IsAgent {
+			pids := processPIDsForPane(input.PanePID, snapshotReader)
+			if len(pids) > 0 {
+				portInputs = append(portInputs, panePortsInput{key: key, pids: pids})
+				portPIDs = append(portPIDs, pids...)
+			}
+		}
 		sc := newCache[input.SessionName]
 		if sc == nil {
 			sc = &sessionCache{}
 			newCache[input.SessionName] = sc
 		}
 		sc.panes = append(sc.panes, entry)
+	}
+
+	portsByPID, portsOK := t.listPortsByPID(portPIDs)
+	if portsOK {
+		portsByPane := make(map[string][]int, len(portInputs))
+		for _, input := range portInputs {
+			portsByPane[input.key] = portsForPIDs(input.pids, portsByPID)
+		}
+		for sessionName, sc := range newCache {
+			for i := range sc.panes {
+				key := paneKey(sessionName, sc.panes[i].input.PaneID)
+				if ports, ok := portsByPane[key]; ok {
+					sc.panes[i].ports = ports
+				}
+			}
+		}
 	}
 
 	t.classCache.Prune(activePaneIDs)
@@ -289,6 +338,44 @@ func (t *Integration) processFingerprint(panePID int64) int64 {
 		return int64(foregroundPID)
 	}
 	return panePID
+}
+
+func (t *Integration) listPortsByPID(pids []int) (map[int][]int, bool) {
+	pids = uniquePositiveInts(pids)
+	if len(pids) == 0 || t.portLister == nil {
+		return nil, false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 500*time.Millisecond)
+	defer cancel()
+	portsByPID, err := t.portLister.ListListeningPorts(ctx, pids)
+	if err != nil {
+		log.Debug().Err(err).Msg("tmux listening port discovery failed")
+		return nil, false
+	}
+	return portsByPID, true
+}
+
+func processPIDsForPane(panePID int64, reader process.ProcessReader) []int {
+	if panePID <= 0 {
+		return nil
+	}
+	candidates, err := process.Candidates(int(panePID), reader)
+	if err != nil || candidates == nil {
+		return nil
+	}
+	pids := []int{candidates.Foreground.PID}
+	for _, child := range candidates.Children {
+		pids = append(pids, child.PID)
+	}
+	return uniquePositiveInts(pids)
+}
+
+func portsForPIDs(pids []int, portsByPID map[int][]int) []int {
+	var ports []int
+	for _, pid := range pids {
+		ports = append(ports, portsByPID[pid]...)
+	}
+	return uniqueSortedPorts(ports)
 }
 
 func (t *Integration) prunePaneKeysLocked(activeKeys map[string]bool) {
@@ -392,7 +479,10 @@ func sessionInfoFromPane(sessionName string, pane *cachedPane) *terminal.Session
 		WindowIndex:  pane.input.WindowIndex,
 		PaneID:       pane.input.PaneID,
 		WindowName:   pane.input.WindowName,
+		PaneTitle:    pane.input.PaneTitle,
 		DetectedTool: pane.result.Tool,
+		IsAgent:      pane.result.IsAgent,
+		Ports:        append([]int(nil), pane.ports...),
 	}
 }
 
@@ -498,8 +588,8 @@ func (t *Integration) updatePaneState(sessionName, paneID string, update func(*p
 	}
 }
 
-// DiscoverAllPanes returns a SessionInfo for every classified agent pane.
-func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata map[string]string) ([]*terminal.SessionInfo, error) {
+// DiscoverAllPanes returns SessionInfo values for panes tied to a hive session.
+func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata map[string]string, includeNonAgents bool) ([]*terminal.SessionInfo, error) {
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
@@ -512,13 +602,13 @@ func (t *Integration) DiscoverAllPanes(_ context.Context, slug string, metadata 
 		return nil, nil
 	}
 
-	agents := sc.agentPanes()
-	if len(agents) == 0 {
+	panes := sc.matchingPanes(includeNonAgents)
+	if len(panes) == 0 {
 		return nil, nil
 	}
-	infos := make([]*terminal.SessionInfo, 0, len(agents))
-	for i := range agents {
-		infos = append(infos, sessionInfoFromPane(sessionName, &agents[i]))
+	infos := make([]*terminal.SessionInfo, 0, len(panes))
+	for i := range panes {
+		infos = append(infos, sessionInfoFromPane(sessionName, &panes[i]))
 	}
 	return infos, nil
 }

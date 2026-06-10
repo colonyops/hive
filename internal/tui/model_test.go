@@ -546,3 +546,22 @@ func TestModalDismissalQIgnoresNormalModeOverride(t *testing.T) {
 		})
 	}
 }
+
+func TestTmuxTargetForTerminalStatus(t *testing.T) {
+	tests := []struct {
+		name   string
+		status sessions.TerminalStatus
+		want   string
+	}{
+		{name: "direct window name", status: sessions.TerminalStatus{WindowName: "pi"}, want: "pi"},
+		{name: "single pane fallback", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "0", Panes: []sessions.PaneStatus{{PaneID: "%7"}}}}}, want: "%7"},
+		{name: "single window no panes", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "2"}}}, want: ""},
+		{name: "ambiguous windows", status: sessions.TerminalStatus{Windows: []sessions.WindowStatus{{WindowIndex: "0"}, {WindowIndex: "1"}}}, want: ""},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tmuxTargetForTerminalStatus(tt.status))
+		})
+	}
+}

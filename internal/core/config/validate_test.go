@@ -22,7 +22,7 @@ func validConfig(t *testing.T) *Config {
 		DataDir: t.TempDir(),
 		Git:     GitConfig{StatusWorkers: 1},
 		TUI:     TUIConfig{Theme: styles.DefaultTheme},
-		Views:   ViewsConfig{Sessions: SessionsViewConfig{GroupBy: GroupByRepo}},
+		Views:   ViewsConfig{Sessions: SessionsViewConfig{GroupBy: GroupByRepo, TmuxItems: TmuxItemsAll}},
 		Agents: AgentsConfig{
 			Default:  "claude",
 			Profiles: map[string]AgentProfile{"claude": {}},
@@ -1652,6 +1652,47 @@ func TestValidate_GroupByValidModes(t *testing.T) {
 
 			err := cfg.Validate()
 			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestValidate_TmuxItemsInvalid(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Views.Sessions.TmuxItems = "invalid"
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "views.sessions.tmux_items")
+}
+
+func TestValidate_TmuxItemsValidModes(t *testing.T) {
+	for _, mode := range ValidTmuxItemsModes {
+		t.Run(mode, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Views.Sessions.TmuxItems = mode
+
+			err := cfg.Validate()
+			assert.NoError(t, err)
+		})
+	}
+}
+
+func TestIsPortDiscoveryEnabled(t *testing.T) {
+	true_ := true
+	false_ := false
+
+	tests := []struct {
+		name string
+		cfg  TmuxConfig
+		want bool
+	}{
+		{name: "nil (default)", cfg: TmuxConfig{PortDiscovery: nil}, want: true},
+		{name: "explicitly true", cfg: TmuxConfig{PortDiscovery: &true_}, want: true},
+		{name: "explicitly false", cfg: TmuxConfig{PortDiscovery: &false_}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, tt.cfg.IsPortDiscoveryEnabled())
 		})
 	}
 }
