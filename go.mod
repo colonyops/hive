@@ -5,23 +5,23 @@ go 1.26
 require (
 	charm.land/bubbles/v2 v2.1.0
 	charm.land/bubbletea/v2 v2.0.7
-	charm.land/glamour/v2 v2.0.0
+	charm.land/glamour/v2 v2.0.1
 	charm.land/huh/v2 v2.0.3
-	charm.land/lipgloss/v2 v2.0.3
+	charm.land/lipgloss/v2 v2.0.4
 	github.com/bmatcuk/doublestar/v4 v4.10.0
 	github.com/charmbracelet/x/ansi v0.11.7
-	github.com/charmbracelet/x/exp/golden v0.0.0-20260607010151-cd19a2bba55f
+	github.com/charmbracelet/x/exp/golden v0.0.0-20260614010340-86573f9427fd
 	github.com/fsnotify/fsnotify v1.10.1
 	github.com/google/uuid v1.6.0
 	github.com/hay-kot/criterio v1.0.0
 	github.com/lucasb-eyer/go-colorful v1.4.0
 	github.com/rs/zerolog v1.35.1
-	github.com/sahilm/fuzzy v0.1.2
+	github.com/sahilm/fuzzy v0.1.3
 	github.com/stretchr/testify v1.11.1
-	github.com/urfave/cli/v3 v3.9.0
-	golang.org/x/mod v0.36.0
-	golang.org/x/sys v0.45.0
-	golang.org/x/term v0.43.0
+	github.com/urfave/cli/v3 v3.10.0
+	golang.org/x/mod v0.37.0
+	golang.org/x/sys v0.46.0
+	golang.org/x/term v0.44.0
 	gopkg.in/yaml.v3 v3.0.1
 	modernc.org/sqlite v1.52.0
 )
