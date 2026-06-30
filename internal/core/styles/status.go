@@ -9,6 +9,7 @@ const (
 	StatusIndicatorReady    = "[>]"
 	StatusIndicatorMissing  = "[?]"
 	StatusIndicatorRecycled = "[○]"
+	StatusIndicatorNeutral  = "[·]"
 )
 
 // RenderStatusIndicator returns a colored status indicator string for the given terminal status.
@@ -20,6 +21,8 @@ func RenderStatusIndicator(status terminal.Status) string {
 		return TextWarningStyle.Render(StatusIndicatorApproval)
 	case terminal.StatusReady:
 		return TextSecondaryStyle.Render(StatusIndicatorReady)
+	case terminal.StatusNeutral:
+		return TextMutedStyle.Render(StatusIndicatorNeutral)
 	case terminal.StatusMissing:
 		return TextMutedStyle.Render(StatusIndicatorMissing)
 	default:

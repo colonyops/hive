@@ -73,6 +73,8 @@ func renderStatusIndicator(state session.State, termStatus *TerminalStatus, tree
 			return treeStyles.StatusApproval.Render(styles.StatusIndicatorApproval)
 		case terminal.StatusReady:
 			return treeStyles.StatusReady.Render(styles.StatusIndicatorReady)
+		case terminal.StatusNeutral:
+			return treeStyles.StatusUnknown.Render(styles.StatusIndicatorNeutral)
 		case terminal.StatusMissing:
 			return treeStyles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 		}
@@ -136,6 +138,8 @@ type TreeItem struct {
 	PaneID       string
 	PaneTool     string
 	PaneStatus   terminal.Status
+	PaneIsAgent  bool
+	Ports        []int
 	ParentWindow string
 	IsLastPane   bool
 }
@@ -472,18 +476,31 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	var parentLine string
+	// Continue the parent session's line, then the parent window's line.
+	var sessionLine string
 	if item.IsLastInRepo {
-		parentLine = "        "
+		sessionLine = "    " // session used └─
 	} else {
-		parentLine = "│       "
+		sessionLine = "│   " // session used ├─
 	}
-	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
+	var windowLine string
+	if item.IsLastWindow {
+		windowLine = "    "
+	} else {
+		windowLine = "│   "
+	}
+	prefixStyled := d.Styles.TreeLine.Render(sessionLine + windowLine + connector)
 
-	termStatus := &TerminalStatus{Status: item.PaneStatus}
-	statusStr := renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	statusStr := renderStatusIndicator(session.StateActive, &TerminalStatus{Status: terminal.StatusNeutral}, d.Styles, d.AnimationFrame)
+	if item.PaneIsAgent {
+		termStatus := &TerminalStatus{Status: item.PaneStatus}
+		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
+	}
 
 	nameStyle := d.Styles.SessionName
+	if !item.PaneIsAgent {
+		nameStyle = d.Styles.SessionID
+	}
 	if isSelected {
 		nameStyle = d.Styles.Selected
 	}
@@ -493,8 +510,24 @@ func (d TreeDelegate) renderPane(item TreeItem, isSelected bool) string {
 	if item.PaneTool != "" {
 		name += " " + nameStyle.Render(item.PaneTool)
 	}
+	name += renderPorts(item.Ports)
 
 	return fmt.Sprintf("%s %s %s", prefixStyled, statusStr, name)
+}
+
+func renderPorts(ports []int) string {
+	if len(ports) == 0 {
+		return ""
+	}
+	limit := min(len(ports), 2)
+	parts := make([]string, 0, limit+1)
+	for _, port := range ports[:limit] {
+		parts = append(parts, fmt.Sprintf(":%d", port))
+	}
+	if extra := len(ports) - limit; extra > 0 {
+		parts = append(parts, fmt.Sprintf("+%d", extra))
+	}
+	return styles.TextWarningStyle.Render(" " + strings.Join(parts, " "))
 }
 
 func displayPaneID(paneID string) string {
@@ -505,7 +538,7 @@ func displayPaneID(paneID string) string {
 }
 
 func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
-	// Deeper indent: "│     ├─" or "│     └─" depending on position
+	// Window rows sit one level under the session row.
 	var connector string
 	if item.IsLastWindow {
 		connector = treeLast
@@ -513,12 +546,13 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 		connector = treeBranch
 	}
 
-	// The parent session's tree line continues vertically
+	// Continue the parent session's vertical line when it is not the last
+	// sibling in the repo group.
 	var parentLine string
 	if item.IsLastInRepo {
-		parentLine = "    " // parent was └─, no continuing line
+		parentLine = "    " // parent used └─, no continuation
 	} else {
-		parentLine = "│   " // parent was ├─, line continues
+		parentLine = "│   " // parent used ├─, line continues
 	}
 	prefixStyled := d.Styles.TreeLine.Render(parentLine + connector)
 
@@ -537,10 +571,13 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 
 	// Status indicator
 	var statusStr string
-	if windowStatus != nil {
+	switch {
+	case windowStatus != nil && windowStatus.HasAgent:
 		termStatus := &TerminalStatus{Status: windowStatus.Status}
 		statusStr = renderStatusIndicator(session.StateActive, termStatus, d.Styles, d.AnimationFrame)
-	} else {
+	case windowStatus != nil:
+		statusStr = renderStatusIndicator(session.StateActive, &TerminalStatus{Status: terminal.StatusNeutral}, d.Styles, d.AnimationFrame)
+	default:
 		statusStr = d.Styles.StatusUnknown.Render(styles.StatusIndicatorMissing)
 	}
 
@@ -569,8 +606,12 @@ func (d TreeDelegate) renderWindow(item TreeItem, isSelected bool) string {
 	if showIndex {
 		indexStr = d.Styles.SessionBranch.Render(fmt.Sprintf(" #%s", item.WindowIndex))
 	}
+	ports := ""
+	if windowStatus != nil {
+		ports = renderPorts(windowStatus.Ports)
+	}
 
-	return fmt.Sprintf("%s %s %s%s", prefixStyled, statusStr, name, indexStr)
+	return fmt.Sprintf("%s %s %s%s%s", prefixStyled, statusStr, name, indexStr, ports)
 }
 
 // renderGitStatus returns the formatted git status for a session path.

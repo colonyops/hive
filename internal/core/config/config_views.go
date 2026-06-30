@@ -30,6 +30,7 @@ type SessionsViewConfig struct {
 	PreviewTitle    string                `json:"preview_title"    yaml:"preview_title"`
 	PreviewStatus   string                `json:"preview_status"   yaml:"preview_status"`
 	GroupBy         string                `json:"group_by"         yaml:"group_by"`
+	TmuxItems       string                `json:"tmux_items"       yaml:"tmux_items"`
 }
 
 // SplitRatioOrDefault returns the configured split ratio, or the given default if unset or invalid.
@@ -166,6 +167,7 @@ func mergeViewsConfig(defaults, user ViewsConfig) ViewsConfig {
 			PreviewTitle:    firstNonEmpty(user.Sessions.PreviewTitle, defaults.Sessions.PreviewTitle),
 			PreviewStatus:   firstNonEmpty(user.Sessions.PreviewStatus, defaults.Sessions.PreviewStatus),
 			GroupBy:         firstNonEmpty(user.Sessions.GroupBy, defaults.Sessions.GroupBy),
+			TmuxItems:       firstNonEmpty(user.Sessions.TmuxItems, defaults.Sessions.TmuxItems),
 		},
 		Tasks: TasksViewConfig{
 			Keybindings: mergeKeybindingMaps(defaults.Tasks.Keybindings, user.Tasks.Keybindings),
