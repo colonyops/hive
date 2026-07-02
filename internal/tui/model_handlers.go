@@ -783,6 +783,36 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 	return m, nil
 }
 
+// --- Connector Picker ---
+
+// handleConnectorPickerKey routes key events to the active ConnectorPicker.
+// Selection/cancellation currently just close the picker and return to the
+// normal state; wiring a selected item into session creation is added by a
+// later phase.
+func (m Model) handleConnectorPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.modals.ConnectorPicker == nil {
+		m.state = stateNormal
+		return m, nil
+	}
+
+	picker, cmd := m.modals.ConnectorPicker.Update(msg)
+	m.modals.ConnectorPicker = &picker
+
+	if picker.Cancelled() {
+		m.modals.ConnectorPicker = nil
+		m.state = stateNormal
+		return m, nil
+	}
+
+	if _, ok := picker.Selected(); ok {
+		m.modals.ConnectorPicker = nil
+		m.state = stateNormal
+		return m, nil
+	}
+
+	return m, cmd
+}
+
 // --- Repo Picker ---
 
 func (m Model) handleRepoPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
