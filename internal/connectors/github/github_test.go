@@ -10,6 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/connectors"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 )
 
 // fakeExecutor is a minimal executil.Executor test double that returns a
@@ -58,7 +61,7 @@ func TestSearchIssues(t *testing.T) {
 	exec := &fakeExecutor{
 		responses: []fakeResponse{
 			{out: []byte(`[
-				{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"},
+				{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"},{"name":"public"}],"url":"https://github.com/o/r/issues/1"},
 				{"number":2,"title":"Second issue","state":"CLOSED","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/issues/2"}
 			]`)},
 		},
@@ -90,6 +93,7 @@ func TestSearchIssues(t *testing.T) {
 		"state":  "OPEN",
 		"url":    "https://github.com/o/r/issues/1",
 		"author": "alice",
+		"labels": []string{"api", "public"},
 	}, result.Items[0].Fields)
 }
 
@@ -172,4 +176,50 @@ func TestSearchMalformedJSON(t *testing.T) {
 
 	_, err := c.Search(context.Background(), connectors.SearchParams{Scope: "o/r"})
 	require.Error(t, err)
+}
+
+// newTestKV returns a real SQLite-backed kv.KV in a temp dir, matching the
+// store the production wiring passes to New.
+func newTestKV(t *testing.T) kv.KV {
+	t.Helper()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = database.Close() })
+	return stores.NewKVStore(database)
+}
+
+func TestSearchUsesCache(t *testing.T) {
+	payload := []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`)
+	exec := &fakeExecutor{
+		responses: []fakeResponse{{out: payload}, {out: payload}, {out: payload}},
+	}
+	c := New(exec, newTestKV(t))
+	ctx := context.Background()
+
+	first, err := c.Search(ctx, connectors.SearchParams{Scope: "o/r", Query: "bug"})
+	require.NoError(t, err)
+	require.Len(t, exec.calls, 1)
+
+	second, err := c.Search(ctx, connectors.SearchParams{Scope: "o/r", Query: "bug"})
+	require.NoError(t, err)
+	assert.Len(t, exec.calls, 1, "identical search must be served from cache without a second gh call")
+	assert.Equal(t, first.Items, second.Items, "cached items must round-trip through the KV store unchanged")
+
+	_, err = c.Search(ctx, connectors.SearchParams{Scope: "o/r", Query: "feature"})
+	require.NoError(t, err)
+	assert.Len(t, exec.calls, 2, "a different query must miss the cache")
+
+	_, err = c.Search(ctx, connectors.SearchParams{Scope: "o/other", Query: "bug"})
+	require.NoError(t, err)
+	assert.Len(t, exec.calls, 3, "a different scope must miss the cache")
+}
+
+func TestFetchDetailRejectsNonNumericID(t *testing.T) {
+	exec := &fakeExecutor{}
+	c := New(exec, nil)
+
+	_, err := c.FetchDetail(context.Background(), connectors.FetchDetailParams{ID: "--web", Scope: "o/r"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "invalid issue id")
+	assert.Empty(t, exec.calls, "no gh call should be made for an invalid id")
 }
