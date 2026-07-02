@@ -49,6 +49,92 @@ type BranchTemplateData struct {
 	ID    string // Short random ID shared with the session directory
 }
 
+// ConnectorTemplateData defines available fields for connector session
+// templates (name/prompt/tags). Fields is a map because item field names are
+// dynamic per-connector; a missing .Fields.<key> is a render-time error, not
+// a config-time one.
+type ConnectorTemplateData struct {
+	ID       string
+	Title    string
+	Subtitle string
+	Detail   string
+	Fields   map[string]any
+}
+
+// connectorIDPattern matches valid connector ids: lowercase slug-style
+// identifiers starting with a letter or digit.
+var connectorIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// validateConnectors checks the top-level connectors config: external
+// connector id/command requirements, id uniqueness/format, and template
+// syntax for every enabled connector.
+func (c *Config) validateConnectors() error {
+	var errs criterio.FieldErrorsBuilder
+
+	if err := validateConnectorTemplateSet("connectors.github.templates", c.Connectors.GitHub.Templates); err != nil {
+		errs = errs.Append("connectors.github.templates", err)
+	}
+
+	seen := make(map[string]bool, len(c.Connectors.External))
+	for i, ext := range c.Connectors.External {
+		field := fmt.Sprintf("connectors.external[%d]", i)
+
+		switch {
+		case ext.ID == "":
+			errs = errs.Append(field+".id", fmt.Errorf("is required"))
+		case !connectorIDPattern.MatchString(ext.ID):
+			errs = errs.Append(field+".id", fmt.Errorf("invalid id %q: must be lowercase alphanumeric with hyphens", ext.ID))
+		case seen[ext.ID]:
+			errs = errs.Append(field+".id", fmt.Errorf("duplicate connector id %q", ext.ID))
+		default:
+			seen[ext.ID] = true
+		}
+
+		// A disabled entry is skipped for command validation.
+		disabled := ext.Enabled != nil && !*ext.Enabled
+		if !disabled && len(ext.Command) == 0 {
+			errs = errs.Append(field+".command", fmt.Errorf("is required unless enabled is explicitly false"))
+		}
+
+		if err := validateConnectorTemplateSet(field+".templates", ext.Templates); err != nil {
+			errs = errs.Append(field+".templates", err)
+		}
+	}
+
+	return errs.ToError()
+}
+
+// validateConnectorTemplateSet syntax-checks the name/prompt/tags templates
+// of a single connector's ConnectorTemplateConfig.
+func validateConnectorTemplateSet(field string, cfg ConnectorTemplateConfig) error {
+	if err := validateConnectorTemplate(cfg.Name); err != nil {
+		return fmt.Errorf("%s.name: %w", field, err)
+	}
+	if err := validateConnectorTemplate(cfg.Prompt); err != nil {
+		return fmt.Errorf("%s.prompt: %w", field, err)
+	}
+	for i, tag := range cfg.Tags {
+		if err := validateConnectorTemplate(tag); err != nil {
+			return fmt.Errorf("%s.tags[%d]: %w", field, i, err)
+		}
+	}
+	return nil
+}
+
+// validateConnectorTemplate syntax-checks a single connector template
+// string. Connector templates access dynamic per-item data through
+// .Fields.<key> (a map[string]any), whose keys aren't known until an item is
+// selected, so this checks parse validity only — not execution against
+// ConnectorTemplateData. Command resolvability and missing .Fields.<key>
+// references are runtime concerns (Available()=false, or a render-time
+// missingkey error surfaced by RenderSessionTemplates).
+func validateConnectorTemplate(tmplStr string) error {
+	if tmplStr == "" {
+		return nil
+	}
+	return validationRenderer.ValidateSyntax(tmplStr)
+}
+
 // ValidationWarning represents a non-fatal configuration issue.
 type ValidationWarning struct {
 	Category string `json:"category"`

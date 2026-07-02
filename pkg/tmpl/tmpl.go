@@ -100,3 +100,15 @@ func (r *Renderer) Render(tmpl string, data any) (string, error) {
 
 	return buf.String(), nil
 }
+
+// ValidateSyntax parses tmpl without executing it. Use this instead of Render
+// when the template's data shape includes dynamic map fields (e.g.
+// map[string]any) whose keys can't be known at validation time — executing
+// with missingkey=error would reject valid templates referencing keys that
+// only exist at render time.
+func (r *Renderer) ValidateSyntax(tmpl string) error {
+	if _, err := template.New("").Funcs(r.funcs).Parse(tmpl); err != nil {
+		return fmt.Errorf("parse template: %w", err)
+	}
+	return nil
+}
