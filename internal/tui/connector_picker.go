@@ -14,9 +14,10 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
-// connectorPickerMaxVisible bounds how many rows the left pane renders at
-// once; the remainder scrolls.
-const connectorPickerMaxVisible = 10
+// connectorPickerMinVisible is the floor on how many rows the left pane
+// renders even on a very short terminal, mirroring RepoPicker's
+// max(p.height/3, 5) convention.
+const connectorPickerMinVisible = 5
 
 // connectorItemsSource implements fuzzy.Source over item titles, for
 // local-mode filtering (mirrors commandEntries in command_palette.go).
@@ -72,8 +73,11 @@ type ConnectorPickerResult struct {
 
 // NewConnectorPicker constructs a picker for conn, using manifest to decide
 // layout/columns/search behavior and scope to constrain Search/FetchDetail
-// calls (e.g. a GitHub "owner/name" repo).
-func NewConnectorPicker(conn connectors.Connector, manifest connectors.Manifest, scope string) ConnectorPicker {
+// calls (e.g. a GitHub "owner/name" repo). width/height are the caller's
+// current terminal dimensions (mirrors NewRepoPicker(repos, currentRepo,
+// width, height)) so the picker renders at the real size instead of a fixed
+// default that can overflow a small terminal/tmux pane.
+func NewConnectorPicker(conn connectors.Connector, manifest connectors.Manifest, scope string, width, height int) ConnectorPicker {
 	input := textinput.New()
 	input.Placeholder = "search..."
 	input.Prompt = "/ "
@@ -84,6 +88,13 @@ func NewConnectorPicker(conn connectors.Connector, manifest connectors.Manifest,
 	input.SetStyles(inputStyles)
 	input.SetWidth(40)
 
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 {
+		height = 24
+	}
+
 	return ConnectorPicker{
 		conn:          conn,
 		manifest:      manifest,
@@ -92,8 +103,8 @@ func NewConnectorPicker(conn connectors.Connector, manifest connectors.Manifest,
 		detailCache:   make(map[string]connectors.Detail),
 		detailErr:     make(map[string]error),
 		detailPending: make(map[string]bool),
-		width:         80,
-		height:        24,
+		width:         width,
+		height:        height,
 	}
 }
 
@@ -295,8 +306,34 @@ func (p *ConnectorPicker) clampScroll() {
 	p.scrollOffset = min(max(p.scrollOffset, 0), maxOffset)
 }
 
+// visibleCount bounds how many rows the left pane renders at once; the
+// remainder scrolls. It scales with the picker's height (mirrors
+// RepoPicker.visibleCount: min(len(items), max(height/3, floor))) so a
+// short terminal gets a shorter list instead of a modal that overflows the
+// screen.
 func (p ConnectorPicker) visibleCount() int {
-	return min(len(p.items), connectorPickerMaxVisible)
+	return min(len(p.items), max(p.height/3, connectorPickerMinVisible))
+}
+
+// paneWidths splits the picker's available width between the list and
+// detail panes. It clamps to the actual terminal width (via p.width) rather
+// than only growing from floors, so a narrow terminal shrinks the detail
+// pane (down to a 20-column floor) before the modal overflows the screen.
+func (p ConnectorPicker) paneWidths() (listWidth, detailWidth int) {
+	total := p.width
+	if total <= 0 {
+		total = 80
+	}
+	// Reserve room for the inter-pane gap and modal frame/padding.
+	available := max(total-6, 20)
+
+	listWidth = max(available/3, p.minListWidth())
+	detailWidth = available - listWidth
+	if detailWidth < 20 {
+		detailWidth = 20
+		listWidth = max(available-detailWidth, 10)
+	}
+	return listWidth, detailWidth
 }
 
 // minListWidth returns the minimum left-pane width needed to render the
@@ -346,8 +383,7 @@ func (p ConnectorPicker) Cancelled() bool {
 func (p ConnectorPicker) View() string {
 	title := styles.ModalTitleStyle.Render(p.manifest.DisplayName)
 
-	listWidth := max(p.width/3, p.minListWidth())
-	detailWidth := max(p.width-listWidth-4, 20)
+	listWidth, detailWidth := p.paneWidths()
 
 	left := lipgloss.JoinVertical(lipgloss.Left,
 		p.input.View(),

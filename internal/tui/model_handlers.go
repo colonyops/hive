@@ -829,6 +829,12 @@ func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cm
 	m.state = stateLoading
 	m.loadingMessage = fmt.Sprintf("opening %s...", connectorID)
 
+	// Capture the current terminal size so the picker renders at the real
+	// dimensions instead of a fixed default that can overflow a small
+	// terminal/tmux pane (mirrors NewRepoPicker(msg.repos, currentRepo,
+	// m.width, m.height)).
+	width, height := m.width, m.height
+
 	return m, func() tea.Msg {
 		ctx := context.Background()
 		if !conn.Available(ctx) {
@@ -838,7 +844,7 @@ func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cm
 		if err != nil {
 			return connectorPickerErrorMsg{err: fmt.Errorf("connector %q: initialize: %w", connectorID, err)}
 		}
-		picker := NewConnectorPicker(conn, manifest, scope)
+		picker := NewConnectorPicker(conn, manifest, scope, width, height)
 		return connectorPickerReadyMsg{connectorID: connectorID, templates: tmplCfg, picker: picker}
 	}
 }
