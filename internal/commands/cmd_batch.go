@@ -4,14 +4,13 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/colonyops/hive/internal/core/validate"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/pkg/iojson"
-	"github.com/colonyops/hive/pkg/logutils"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/hay-kot/criterio"
+	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 )
 
@@ -84,7 +83,9 @@ Config example (in ~/.config/hive/config.yaml):
           focus: true
         - name: shell
 
-Output is JSON with a batch ID, log file path, and results for each session.`,
+Output is JSON with a batch ID, log file path, and results for each session.
+Log entries are written to the shared hive log file, tagged with a
+'batch=<id>' key for filtering.`,
 		Flags: []cli.Flag{
 			cmd.fr.Flag(),
 			&cli.StringFlag{
@@ -103,16 +104,9 @@ Output is JSON with a batch ID, log file path, and results for each session.`,
 func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 	batchID := randid.Generate(6)
 
-	logger, closer, err := logutils.New(
-		cmd.flags.LogLevel,
-		filepath.Join(cmd.app.Config.LogsDir(), "batch-"+batchID+".log"),
-	)
-	if err != nil {
-		return iojson.WriteError(fmt.Sprintf("setup logger: %s", err), nil)
-	}
-	defer closer()
+	logger := log.With().Str("batch", batchID).Logger()
 
-	logger.Info().Str("batch_id", batchID).Msg("starting batch processing")
+	logger.Info().Msg("starting batch processing")
 
 	input, err := cmd.fr.Read()
 	if err != nil {
@@ -132,7 +126,7 @@ func (cmd *BatchCmd) run(ctx context.Context, c *cli.Command) error {
 
 	output := BatchOutput{
 		BatchID: batchID,
-		LogFile: filepath.Join(cmd.app.Config.LogsDir(), fmt.Sprintf("batch-%s.log", batchID)),
+		LogFile: cmd.flags.ResolvedLogFile(),
 		Results: make([]BatchResult, 0, len(input.Sessions)),
 	}
 

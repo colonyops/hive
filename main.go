@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime/debug"
 	"strings"
 	"sync"
@@ -208,12 +207,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			// Always log to a file; use explicit path or default to <datadir>/hive.log
-			logFile := flags.LogFile
-			if logFile == "" {
-				logFile = filepath.Join(flags.DataDir, "hive.log")
-			}
-
-			logger, closer, err := logutils.New(flags.LogLevel, logFile)
+			logger, closer, err := logutils.New(flags.LogLevel, flags.ResolvedLogFile())
 			if err != nil {
 				return ctx, fmt.Errorf("setup logger: %w", err)
 			}
