@@ -1142,6 +1142,9 @@ func (m Model) handleMouseClick(msg tea.MouseClickMsg) (tea.Model, tea.Cmd) {
 // (tab bar click).
 func (m Model) switchToView(view ViewType) (tea.Model, tea.Cmd) {
 	m.lastClickTime = time.Time{} // reset double-click state across view changes
+	if m.activeView == ViewStore && view != ViewStore && m.kvView.IsFiltering() {
+		m.kvView.CancelFilter() // don't leave stale KV filter state behind
+	}
 	m.activeView = view
 	m.handler.SetActiveView(view)
 	m.sessionsView.SetActive(view == ViewSessions)
