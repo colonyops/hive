@@ -417,6 +417,7 @@ type Config struct {
 	Tmux                TmuxConfig             `json:"tmux"                  yaml:"tmux"`
 	Database            DatabaseConfig         `json:"database"              yaml:"database"`
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
+	Connectors          ConnectorsConfig       `json:"connectors"            yaml:"connectors"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
 	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
 	Views               ViewsConfig            `json:"views"                 yaml:"views"`
@@ -590,6 +591,37 @@ type ContextDirPluginConfig struct {
 // ClaudePluginConfig holds Claude Code plugin configuration.
 type ClaudePluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
+}
+
+// ConnectorsConfig holds configuration for the connectors system: browsable
+// external data sources (GitHub issues, external subprocess connectors) that
+// map a selected item into a new hive session.
+type ConnectorsConfig struct {
+	GitHub   GitHubConnectorConfig     `json:"github"   yaml:"github"`
+	External []ExternalConnectorConfig `json:"external" yaml:"external"`
+}
+
+// ConnectorTemplateConfig holds the Go templates used to render a selected
+// connector item into session Name/Prompt/Tags fields.
+type ConnectorTemplateConfig struct {
+	Name   string   `json:"name"   yaml:"name"`
+	Prompt string   `json:"prompt" yaml:"prompt"`
+	Tags   []string `json:"tags"   yaml:"tags"`
+}
+
+// GitHubConnectorConfig holds configuration for the built-in GitHub issues connector.
+type GitHubConnectorConfig struct {
+	Enabled   *bool                   `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
+	Templates ConnectorTemplateConfig `json:"templates" yaml:"templates"`
+}
+
+// ExternalConnectorConfig configures a connector implemented as an external
+// subprocess speaking the connector JSON-RPC protocol.
+type ExternalConnectorConfig struct {
+	ID        string                  `json:"id"        yaml:"id"`
+	Enabled   *bool                   `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
+	Command   []string                `json:"command"   yaml:"command"`
+	Templates ConnectorTemplateConfig `json:"templates" yaml:"templates"`
 }
 
 // DatabaseConfig holds SQLite database configuration.
@@ -769,6 +801,15 @@ func DefaultConfig() Config {
 				Toast: true,
 			},
 		},
+		Connectors: ConnectorsConfig{
+			GitHub: GitHubConnectorConfig{
+				Templates: ConnectorTemplateConfig{
+					Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
+					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}",
+					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+				},
+			},
+		},
 	}
 }
 
@@ -877,6 +918,15 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
+	if c.Connectors.GitHub.Templates.Name == "" {
+		c.Connectors.GitHub.Templates.Name = defaults.Connectors.GitHub.Templates.Name
+	}
+	if c.Connectors.GitHub.Templates.Prompt == "" {
+		c.Connectors.GitHub.Templates.Prompt = defaults.Connectors.GitHub.Templates.Prompt
+	}
+	if len(c.Connectors.GitHub.Templates.Tags) == 0 {
+		c.Connectors.GitHub.Templates.Tags = defaults.Connectors.GitHub.Templates.Tags
+	}
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -959,6 +1009,7 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
+		c.validateConnectors(),
 	)
 }
 
