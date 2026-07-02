@@ -1,13 +1,22 @@
-╭────────────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                        │
-│  Fake Table Connector                                                                  │
-│                                                                                        │
-│  / search...                                         (no detail available for this     │
-│                                                      item)                             │
-│  ▸ 1      Fix bug                        open                                          │
-│    2      Add feature                    closed                                        │
-│                                                                                        │
-│                                                                                        │
-│  ↑/↓ navigate  enter select  esc cancel                                                │
-│                                                                                        │
-╰────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                │
+│  Fake Table Connector                                                          │
+│                                                                                │
+│  / search...                                       │  Fix bug                  │
+│                                                    │  #1                       │
+│  󰅂 1      Fix bug                        open      │                           │
+│    2      Add feature                    closed    │  (no detail available     │
+│                                                    │  for                      │
+│                                                    │                           │
+│                                                    │                           │
+│                                                    │                           │
+│                                                    │                           │
+│                                                    │                           │
+│                                                    │                           │
+│                                                    │                           │
+│                                                    │                           │
+│                                                                                │
+│                                                                                │
+│  ↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel                │
+│                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────╯

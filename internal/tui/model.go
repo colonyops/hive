@@ -160,6 +160,7 @@ type Model struct {
 
 	connectorRegistry         *connectors.Registry
 	pendingConnectorID        string
+	pendingConnectorScope     connectorPickerScope
 	pendingConnectorTemplates connectors.TemplateConfig
 
 	// Startup warnings to show as toasts after init
@@ -200,6 +201,17 @@ type streamOutputMsg struct {
 // streamCompleteMsg is sent when a streaming operation finishes.
 type streamCompleteMsg struct {
 	err error
+}
+
+// bgStreamStartedMsg is sent when a streaming operation is moved to the
+// background, carrying the channels and cancel func needed to keep
+// consuming it.
+type bgStreamStartedMsg struct {
+	title  string
+	output <-chan string
+	done   <-chan error
+	cancel context.CancelFunc
+	result streamResult
 }
 
 // bgStreamCompleteMsg is sent when a backgrounded streaming operation finishes.
@@ -576,6 +588,8 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleStreamOutput(msg)
 	case streamCompleteMsg:
 		model, cmd = m.handleStreamComplete(msg)
+	case bgStreamStartedMsg:
+		model, cmd = m.handleBgStreamStarted(msg)
 	case bgStreamCompleteMsg:
 		model, cmd = m.handleBgStreamComplete(msg)
 
@@ -584,8 +598,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleConnectorPickerReady(msg)
 	case connectorPickerErrorMsg:
 		model, cmd = m.handleConnectorPickerError(msg)
-	case connectorSessionCreatedMsg:
-		model, cmd = m.handleConnectorSessionCreated(msg)
 	case connectorSearchResultMsg, connectorSearchErrorMsg, connectorSearchDebounceMsg,
 		connectorDetailResultMsg, connectorDetailErrorMsg:
 		model, cmd = m.forwardConnectorPickerMsg(msg)
@@ -762,6 +774,60 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m Model) connectorPickerScopeForSelection(selected *session.Session, args []string) connectorPickerScope {
+	scope := connectorPickerScope{}
+	if len(args) > 1 {
+		scope.Search = args[1]
+		return m.withDiscoveredRepoForScope(scope)
+	}
+
+	remote := ""
+	if ti := m.selectedTreeItem(); ti != nil {
+		switch {
+		case ti.IsHeader:
+			remote = ti.RepoRemote
+		case ti.IsWindowItem || ti.IsPaneItem:
+			remote = ti.ParentSession.Remote
+		case !ti.IsRecycledPlaceholder:
+			remote = ti.Session.Remote
+		}
+	} else if selected != nil {
+		remote = selected.Remote
+	}
+
+	if remote == "" {
+		return scope
+	}
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner != "" && repo != "" {
+		scope.Search = owner + "/" + repo
+	}
+	scope.Remote = remote
+	return m.withDiscoveredRepoForRemote(scope)
+}
+
+func (m Model) withDiscoveredRepoForScope(scope connectorPickerScope) connectorPickerScope {
+	for _, repo := range m.sessionsView.DiscoveredRepos() {
+		owner, name := git.ExtractOwnerRepo(repo.Remote)
+		if owner != "" && name != "" && owner+"/"+name == scope.Search {
+			scope.Remote = repo.Remote
+			scope.Source = repo.Path
+			return scope
+		}
+	}
+	return scope
+}
+
+func (m Model) withDiscoveredRepoForRemote(scope connectorPickerScope) connectorPickerScope {
+	for _, repo := range m.sessionsView.DiscoveredRepos() {
+		if repo.Remote == scope.Remote {
+			scope.Source = repo.Path
+			return scope
+		}
+	}
+	return scope
 }
 
 // docTemplateData returns the focused review-view document for user-command
@@ -1140,28 +1206,13 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		if entry.Command.Action == act.TypeOpenConnectorPicker {
 			m.state = stateNormal
 
-			connectorID := ""
-			if len(args) > 0 {
-				connectorID = args[0]
-			} else if m.connectorRegistry != nil {
-				if ids := m.connectorRegistry.IDs(); len(ids) == 1 {
-					connectorID = ids[0]
-				}
-			}
-			if connectorID == "" {
+			connectorID, ok := m.resolveConnectorID(args)
+			if !ok {
 				m.notifyErrorf("usage: OpenConnector <id> [scope] (id required: multiple connectors configured)")
 				return m, nil
 			}
 
-			scope := ""
-			if len(args) > 1 {
-				scope = args[1]
-			} else if selected != nil {
-				owner, repo := git.ExtractOwnerRepo(selected.Remote)
-				if owner != "" && repo != "" {
-					scope = owner + "/" + repo
-				}
-			}
+			scope := m.connectorPickerScopeForSelection(selected, args)
 			return m.openConnectorPicker(connectorID, scope)
 		}
 

@@ -1,12 +1,22 @@
-╭────────────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                        │
-│  Fake Connector                                                                        │
-│                                                                                        │
-│  / search...                    Heading                                                │
-│                                                                                        │
-│  ▸ Item with markdown detail   Some body text.                                         │
-│                                                                                        │
-│                                                                                        │
-│  ↑/↓ navigate  enter select  esc cancel                                                │
-│                                                                                        │
-╰────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                │
+│  Fake Connector                                                                │
+│                                                                                │
+│  / search...                    │  Item with markdown detail                   │
+│                                 │  #42  @alice  [docs]  [preview]              │
+│  󰅂 Item with markdown detail    │                                              │
+│    #42  @alice  [docs]  [preview│   Heading                                    │
+│                                 │                                              │
+│                                 │  Some body text.                             │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                                                                │
+│                                                                                │
+│  ↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel                │
+│                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────╯

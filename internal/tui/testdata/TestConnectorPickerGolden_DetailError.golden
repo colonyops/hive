@@ -1,12 +1,22 @@
-╭────────────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                        │
-│  Fake Connector                                                                        │
-│                                                                                        │
-│  / search...                   detail failed: network unreachable                      │
-│                                                                                        │
-│  ▸ Item whose detail fails to                                                          │
-│                                                                                        │
-│                                                                                        │
-│  ↑/↓ navigate  enter select  esc cancel                                                │
-│                                                                                        │
-╰────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                │
+│  Fake Connector                                                                │
+│                                                                                │
+│  / search...                    │  Item whose detail fails to load             │
+│                                 │                                              │
+│  󰅂 Item whose detail fails to lo│  detail failed: network unreachable          │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                                                                │
+│                                                                                │
+│  ↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel                │
+│                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────╯
