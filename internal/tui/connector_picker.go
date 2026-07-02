@@ -3,9 +3,11 @@ package tui
 import (
 	"fmt"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"charm.land/bubbles/v2/textinput"
+	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/sahilm/fuzzy"
@@ -14,10 +16,30 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
-// connectorPickerMinVisible is the floor on how many rows the left pane
-// renders even on a very short terminal, mirroring RepoPicker's
-// max(p.height/3, 5) convention.
-const connectorPickerMinVisible = 5
+// Fixed dialog sizing, mirroring components.InfoDialog: the modal's overall
+// width/height are a deterministic function of the terminal size (capped),
+// never of the current item/detail content, so navigating the list or
+// loading a longer/shorter detail body never resizes or shifts the dialog.
+// Content that doesn't fit the fixed content area scrolls instead.
+const (
+	connectorPickerMaxModalHeight = 36
+	connectorPickerModalMargin    = 2
+	connectorPickerMinModalWidth  = 72
+	// connectorPickerChrome counts the fixed rows View renders around the
+	// scrollable content area: ModalStyle border (2), ModalStyle vertical
+	// padding (2), title (1), the blank joiners above and below the body
+	// (2), and the help line including ModalHelpStyle's MarginTop (2). The
+	// search input row lives inside the body (contentHeight), not here.
+	// View's rendered height is contentHeight + connectorPickerChrome, so
+	// this must match the actual frame or the modal overflows the terminal.
+	connectorPickerChrome = 9
+)
+
+// connectorPickerGen issues a unique generation token per picker instance.
+// Async search/detail results carry the token of the picker that issued
+// them, so a late result from a closed picker (possibly for a different
+// scope) can never populate a newer picker's cache.
+var connectorPickerGen atomic.Int64
 
 // connectorItemsSource implements fuzzy.Source over item titles, for
 // local-mode filtering (mirrors commandEntries in command_palette.go).
@@ -35,6 +57,10 @@ type ConnectorPicker struct {
 	conn     connectors.Connector
 	manifest connectors.Manifest
 	scope    string
+
+	// gen identifies this picker instance in async result messages; see
+	// connectorPickerGen.
+	gen int64
 
 	input textinput.Model
 
@@ -62,7 +88,19 @@ type ConnectorPicker struct {
 	cancelled bool
 	selected  bool
 
-	width, height int
+	// width/height are the caller's terminal dimensions; modalWidth/
+	// modalHeight/listWidth/detailWidth/contentHeight are derived from them
+	// once (in NewConnectorPicker/SetSize) via computeConnectorPickerDims and
+	// never recomputed from content, so the dialog's frame stays a fixed
+	// size regardless of how many items match or how long a detail body is.
+	width, height                         int
+	modalWidth, modalHeight               int
+	listWidth, detailWidth, contentHeight int
+
+	// detailVP renders the right-pane detail content within a fixed
+	// contentHeight/detailWidth viewport; content longer than that scrolls
+	// instead of growing the dialog.
+	detailVP viewport.Model
 }
 
 // ConnectorPickerResult is the item and detail selected by the user, if any.
@@ -86,16 +124,12 @@ func NewConnectorPicker(conn connectors.Connector, manifest connectors.Manifest,
 	inputStyles.Focused.Prompt = styles.TextPrimaryStyle
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	input.SetStyles(inputStyles)
-	input.SetWidth(40)
 
-	if width <= 0 {
-		width = 80
-	}
-	if height <= 0 {
-		height = 24
-	}
+	modalWidth, modalHeight, listWidth, detailWidth, contentHeight := computeConnectorPickerDims(width, height, manifest)
+	input.SetWidth(connectorInputWidth(listWidth))
 
-	return ConnectorPicker{
+	p := ConnectorPicker{
+		gen:           connectorPickerGen.Add(1),
 		conn:          conn,
 		manifest:      manifest,
 		scope:         scope,
@@ -105,25 +139,86 @@ func NewConnectorPicker(conn connectors.Connector, manifest connectors.Manifest,
 		detailPending: make(map[string]bool),
 		width:         width,
 		height:        height,
+		modalWidth:    modalWidth,
+		modalHeight:   modalHeight,
+		listWidth:     listWidth,
+		detailWidth:   detailWidth,
+		contentHeight: contentHeight,
+		detailVP:      viewport.New(viewport.WithWidth(detailWidth), viewport.WithHeight(contentHeight)),
 	}
+	p.refreshDetailViewport()
+	return p
+}
+
+// computeConnectorPickerDims derives the picker's fixed modal/pane
+// dimensions from the caller's terminal size and the manifest's column
+// layout. The result depends only on width/height/manifest — never on the
+// current item count or detail content — so the dialog never resizes while
+// the user browses.
+func computeConnectorPickerDims(width, height int, manifest connectors.Manifest) (modalWidth, modalHeight, listWidth, detailWidth, contentHeight int) {
+	if width <= 0 {
+		width = 80
+	}
+	if height <= 0 {
+		height = 24
+	}
+
+	modalWidth = min(max(int(float64(width)*0.92), connectorPickerMinModalWidth), max(width-connectorPickerModalMargin, connectorPickerMinModalWidth))
+	modalHeight = min(max(height-connectorPickerModalMargin, connectorPickerChrome+3), connectorPickerMaxModalHeight)
+	contentHeight = max(modalHeight-connectorPickerChrome, 3)
+
+	// available excludes the ModalStyle border (2) and horizontal padding
+	// (4) plus the gap between panes.
+	available := max(modalWidth-8, 20)
+	listRatio := 34
+	if manifest.Picker.Layout == connectors.LayoutModeList {
+		// List-layout issue pickers use two-line cards, so give the scan
+		// column enough room for title + metadata while preserving preview
+		// space on the right.
+		listRatio = 42
+	}
+	listWidth = max(available*listRatio/100, minListWidthForManifest(manifest))
+	detailWidth = available - listWidth
+	if detailWidth < 20 {
+		detailWidth = 20
+		listWidth = max(available-detailWidth, 10)
+	}
+	return modalWidth, modalHeight, listWidth, detailWidth, contentHeight
 }
 
 // Init issues the initial (empty-query) Search call to populate the list.
-func (p ConnectorPicker) Init() tea.Cmd {
+// It takes a pointer receiver so the searchInFlight flag it sets survives
+// on the stored picker (a value receiver would mutate a discarded copy and
+// the list would render blank instead of "searching..." until the first
+// result lands).
+func (p *ConnectorPicker) Init() tea.Cmd {
 	return p.startSearch("")
+}
+
+// connectorInputWidth sizes the search input to fit inside the left pane
+// (accounting for the "/ " prompt) so long queries scroll within the input
+// instead of widening the pane and shifting the layout.
+func connectorInputWidth(listWidth int) int {
+	return max(listWidth-4, 10)
 }
 
 // startSearch marks a search in flight and returns the Cmd that performs it.
 func (p *ConnectorPicker) startSearch(query string) tea.Cmd {
 	p.searchInFlight = true
 	p.searchErr = nil
-	return connectorSearchCmd(p.conn, p.scope, query)
+	return connectorSearchCmd(p.gen, p.conn, p.scope, query)
 }
 
-// SetSize updates the picker's rendering dimensions.
+// SetSize updates the picker's rendering dimensions, recomputing the fixed
+// modal/pane sizes and resizing the detail viewport to match.
 func (p *ConnectorPicker) SetSize(width, height int) {
 	p.width = width
 	p.height = height
+	p.modalWidth, p.modalHeight, p.listWidth, p.detailWidth, p.contentHeight = computeConnectorPickerDims(width, height, p.manifest)
+	p.input.SetWidth(connectorInputWidth(p.listWidth))
+	p.detailVP.SetWidth(p.detailWidth)
+	p.detailVP.SetHeight(p.contentHeight)
+	p.refreshDetailViewport()
 }
 
 // Update handles key events and connector RPC result messages.
@@ -161,18 +256,32 @@ func (p ConnectorPicker) handleKey(msg tea.KeyPressMsg) (ConnectorPicker, tea.Cm
 		if p.cursor > 0 {
 			p.cursor--
 			p.clampScroll()
+			p.refreshDetailViewport()
 		}
 		return p, p.triggerDetailFetch()
 	case "down", "ctrl+j":
 		if p.cursor < len(p.items)-1 {
 			p.cursor++
 			p.clampScroll()
+			p.refreshDetailViewport()
 		}
 		return p, p.triggerDetailFetch()
+	case "pgdown", "ctrl+d":
+		p.detailVP.HalfPageDown()
+		return p, nil
+	case "pgup", "ctrl+u":
+		p.detailVP.HalfPageUp()
+		return p, nil
 	}
 
+	before := p.input.Value()
 	var inputCmd tea.Cmd
 	p.input, inputCmd = p.input.Update(msg)
+	if p.input.Value() == before {
+		// Non-editing keys (left/right/home/end, etc.) must not reset the
+		// list cursor or re-issue a remote search for an unchanged query.
+		return p, inputCmd
+	}
 	return p.handleQueryChanged(inputCmd)
 }
 
@@ -188,7 +297,7 @@ func (p ConnectorPicker) handleQueryChanged(inputCmd tea.Cmd) (ConnectorPicker, 
 	}
 
 	delay := connectorDebounceDelay(p.manifest)
-	return p, tea.Batch(inputCmd, connectorDebounceCmd(query, delay))
+	return p, tea.Batch(inputCmd, connectorDebounceCmd(p.gen, query, delay))
 }
 
 // applyLocalFilter narrows p.items to fuzzy matches of query against
@@ -196,26 +305,24 @@ func (p ConnectorPicker) handleQueryChanged(inputCmd tea.Cmd) (ConnectorPicker, 
 func (p *ConnectorPicker) applyLocalFilter(query string) {
 	if query == "" {
 		p.items = p.loaded
-		p.cursor = 0
-		p.scrollOffset = 0
-		return
+	} else {
+		matches := fuzzy.FindFrom(query, connectorItemsSource(p.loaded))
+		items := make([]connectors.Item, len(matches))
+		for i, match := range matches {
+			items[i] = p.loaded[match.Index]
+		}
+		p.items = items
 	}
-
-	matches := fuzzy.FindFrom(query, connectorItemsSource(p.loaded))
-	items := make([]connectors.Item, len(matches))
-	for i, match := range matches {
-		items[i] = p.loaded[match.Index]
-	}
-	p.items = items
 	p.cursor = 0
 	p.scrollOffset = 0
+	p.refreshDetailViewport()
 }
 
 // handleDebounce issues the actual remote Search call once the debounce
 // delay elapses, but only if the query hasn't changed since the debounce
 // was scheduled (otherwise this tick is stale and is dropped).
 func (p ConnectorPicker) handleDebounce(msg connectorSearchDebounceMsg) (ConnectorPicker, tea.Cmd) {
-	if msg.Query != p.input.Value() {
+	if msg.Gen != p.gen || msg.Query != p.input.Value() {
 		return p, nil
 	}
 	return p, p.startSearch(msg.Query)
@@ -225,7 +332,7 @@ func (p ConnectorPicker) handleDebounce(msg connectorSearchDebounceMsg) (Connect
 // the query it answers no longer matches the current input (a stale/
 // superseded response).
 func (p ConnectorPicker) handleSearchResult(msg connectorSearchResultMsg) (ConnectorPicker, tea.Cmd) {
-	if msg.Query != p.input.Value() {
+	if msg.Gen != p.gen || msg.Query != p.input.Value() {
 		return p, nil
 	}
 	p.searchInFlight = false
@@ -235,12 +342,13 @@ func (p ConnectorPicker) handleSearchResult(msg connectorSearchResultMsg) (Conne
 	p.items = msg.Items
 	p.cursor = 0
 	p.scrollOffset = 0
+	p.refreshDetailViewport()
 	return p, p.triggerDetailFetch()
 }
 
 // handleSearchError records a Search failure, discarding it if stale.
 func (p ConnectorPicker) handleSearchError(msg connectorSearchErrorMsg) (ConnectorPicker, tea.Cmd) {
-	if msg.Query != p.input.Value() {
+	if msg.Gen != p.gen || msg.Query != p.input.Value() {
 		return p, nil
 	}
 	p.searchInFlight = false
@@ -250,22 +358,46 @@ func (p ConnectorPicker) handleSearchError(msg connectorSearchErrorMsg) (Connect
 	p.items = nil
 	p.cursor = 0
 	p.scrollOffset = 0
+	p.refreshDetailViewport()
 	return p, nil
 }
 
-// handleDetailResult caches a completed FetchDetail response.
+// handleDetailResult caches a completed FetchDetail response. The viewport
+// only refreshes (resetting scroll to top) when this result is for the
+// currently highlighted item; a response for an item the user has since
+// moved past must not yank their scroll position on the item they're
+// reading now.
 func (p ConnectorPicker) handleDetailResult(msg connectorDetailResultMsg) (ConnectorPicker, tea.Cmd) {
+	if msg.Gen != p.gen {
+		return p, nil
+	}
 	delete(p.detailPending, msg.ID)
 	delete(p.detailErr, msg.ID)
 	p.detailCache[msg.ID] = msg.Detail
+	if p.isCurrentItemID(msg.ID) {
+		p.refreshDetailViewport()
+	}
 	return p, nil
 }
 
-// handleDetailError records a FetchDetail failure for the detail pane.
+// handleDetailError records a FetchDetail failure for the detail pane, same
+// current-item guard as handleDetailResult.
 func (p ConnectorPicker) handleDetailError(msg connectorDetailErrorMsg) (ConnectorPicker, tea.Cmd) {
+	if msg.Gen != p.gen {
+		return p, nil
+	}
 	delete(p.detailPending, msg.ID)
 	p.detailErr[msg.ID] = msg.Err
+	if p.isCurrentItemID(msg.ID) {
+		p.refreshDetailViewport()
+	}
 	return p, nil
+}
+
+// isCurrentItemID reports whether id is the ID of the currently highlighted
+// item.
+func (p ConnectorPicker) isCurrentItemID(id string) bool {
+	return p.cursor >= 0 && p.cursor < len(p.items) && p.items[p.cursor].ID == id
 }
 
 // triggerDetailFetch issues a lazy FetchDetail call for the currently
@@ -291,7 +423,7 @@ func (p ConnectorPicker) triggerDetailFetch() tea.Cmd {
 	}
 
 	p.detailPending[item.ID] = true
-	return connectorFetchDetailCmd(p.conn, p.scope, item)
+	return connectorFetchDetailCmd(p.gen, p.conn, p.scope, item)
 }
 
 // clampScroll keeps the cursor within the visible scroll window.
@@ -307,44 +439,33 @@ func (p *ConnectorPicker) clampScroll() {
 }
 
 // visibleCount bounds how many rows the left pane renders at once; the
-// remainder scrolls. It scales with the picker's height (mirrors
-// RepoPicker.visibleCount: min(len(items), max(height/3, floor))) so a
-// short terminal gets a shorter list instead of a modal that overflows the
-// screen.
+// remainder scrolls with the cursor. It is fixed to p.contentHeight (set
+// once from terminal size in computeConnectorPickerDims), not to the
+// current item count, so the list pane's rendered height never changes as
+// results come and go — renderList pads short lists to this height.
 func (p ConnectorPicker) visibleCount() int {
-	return min(len(p.items), max(p.height/3, connectorPickerMinVisible))
+	if p.manifest.Picker.Layout == connectors.LayoutModeList {
+		return min(len(p.items), max((p.listHeight()+1)/3, 1))
+	}
+	return min(len(p.items), p.listHeight())
 }
 
-// paneWidths splits the picker's available width between the list and
-// detail panes. It clamps to the actual terminal width (via p.width) rather
-// than only growing from floors, so a narrow terminal shrinks the detail
-// pane (down to a 20-column floor) before the modal overflows the screen.
-func (p ConnectorPicker) paneWidths() (listWidth, detailWidth int) {
-	total := p.width
-	if total <= 0 {
-		total = 80
-	}
-	// Reserve room for the inter-pane gap and modal frame/padding.
-	available := max(total-6, 20)
-
-	listWidth = max(available/3, p.minListWidth())
-	detailWidth = available - listWidth
-	if detailWidth < 20 {
-		detailWidth = 20
-		listWidth = max(available-detailWidth, 10)
-	}
-	return listWidth, detailWidth
+func (p ConnectorPicker) listHeight() int {
+	// The left pane body is input + blank separator + rows. Keep the whole
+	// pane exactly p.contentHeight rows so navigating items cannot resize the
+	// modal.
+	return max(p.contentHeight-2, 1)
 }
 
-// minListWidth returns the minimum left-pane width needed to render the
-// manifest's table columns without truncation, or a sane default for list
-// layout.
-func (p ConnectorPicker) minListWidth() int {
-	if p.manifest.Picker.Layout != connectors.LayoutModeTable || len(p.manifest.Picker.Columns) == 0 {
+// minListWidthForManifest returns the minimum left-pane width needed to
+// render the manifest's table columns without truncation, or a sane
+// default for list layout.
+func minListWidthForManifest(manifest connectors.Manifest) int {
+	if manifest.Picker.Layout != connectors.LayoutModeTable || len(manifest.Picker.Columns) == 0 {
 		return 28
 	}
 	total := 2 // leading cursor column
-	for i, col := range p.manifest.Picker.Columns {
+	for i, col := range manifest.Picker.Columns {
 		width := col.Width
 		if width <= 0 {
 			width = 12
@@ -379,52 +500,82 @@ func (p ConnectorPicker) Cancelled() bool {
 }
 
 // View renders the two-pane picker: item list on the left, detail on the
-// right.
+// right. The overall frame size (modalWidth/modalHeight) and both pane
+// sizes are fixed — derived only from terminal size, never from the current
+// item count or detail content — so browsing never shifts the dialog.
 func (p ConnectorPicker) View() string {
 	title := styles.ModalTitleStyle.Render(p.manifest.DisplayName)
-
-	listWidth, detailWidth := p.paneWidths()
 
 	left := lipgloss.JoinVertical(lipgloss.Left,
 		p.input.View(),
 		"",
-		p.renderList(listWidth),
+		p.renderList(p.listWidth),
 	)
-
-	right := p.renderDetailPane(detailWidth)
 
 	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(listWidth).Render(left),
-		lipgloss.NewStyle().Width(detailWidth).Padding(0, 0, 0, 2).Render(right),
+		lipgloss.NewStyle().Width(p.listWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Render(left),
+		renderConnectorPickerDivider(p.contentHeight),
+		lipgloss.NewStyle().Width(p.detailWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Padding(0, 0, 0, 2).Render(p.detailVP.View()),
 	)
 
-	help := styles.ModalHelpStyle.Render("↑/↓ navigate  enter select  esc cancel")
+	help := styles.ModalHelpStyle.Render("↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel")
 
 	content := lipgloss.JoinVertical(lipgloss.Left, title, "", body, "", help)
-	return styles.ModalStyle.Width(listWidth + detailWidth + 6).Render(content)
+	return styles.ModalStyle.Width(p.modalWidth).Render(content)
+}
+
+// renderConnectorPickerDivider renders the vertical divider between the
+// list and detail panes at the given height.
+func renderConnectorPickerDivider(height int) string {
+	if height <= 0 {
+		return ""
+	}
+	return styles.TextMutedStyle.Render(strings.Repeat("│\n", height-1) + "│")
 }
 
 // renderList renders the left-pane item rows, honoring the manifest's
-// layout (list vs table) and current search/loading state.
+// layout (list vs table) and current search/loading state. Output is
+// always p.listHeight() lines regardless of how many items match, so the
+// list pane never changes height as results come and go.
 func (p ConnectorPicker) renderList(width int) string {
+	rowHeight := p.listHeight()
+	lines := make([]string, 0, rowHeight)
+	appendStatus := func(line string) string {
+		lines = append(lines, line)
+		for len(lines) < rowHeight {
+			lines = append(lines, "")
+		}
+		return strings.Join(lines, "\n")
+	}
+
 	if p.searchErr != nil {
-		return styles.TextErrorStyle.Render("search failed: " + p.searchErr.Error())
+		return appendStatus(styles.TextErrorStyle.Render("search failed: " + p.searchErr.Error()))
 	}
 	if p.searchInFlight {
-		return styles.TextMutedStyle.Render("searching...")
+		return appendStatus(styles.TextMutedStyle.Render("searching..."))
 	}
 	if p.searchedOnce && len(p.items) == 0 {
-		return styles.TextMutedStyle.Render("no results")
+		return appendStatus(styles.TextMutedStyle.Render("no results"))
 	}
 
 	visible := p.visibleCount()
-	var lines []string
 	for i := range visible {
 		idx := i + p.scrollOffset
 		if idx >= len(p.items) {
 			break
 		}
-		lines = append(lines, p.renderRow(p.items[idx], idx == p.cursor, width))
+		for _, line := range strings.Split(p.renderRow(p.items[idx], idx == p.cursor, width), "\n") {
+			if len(lines) >= rowHeight {
+				break
+			}
+			lines = append(lines, line)
+		}
+		if p.manifest.Picker.Layout == connectors.LayoutModeList && idx < len(p.items)-1 && len(lines) < rowHeight {
+			lines = append(lines, "")
+		}
+	}
+	for len(lines) < rowHeight {
+		lines = append(lines, "")
 	}
 	return strings.Join(lines, "\n")
 }
@@ -435,22 +586,23 @@ func (p ConnectorPicker) renderRow(item connectors.Item, selected bool, width in
 	cursor := "  "
 	rowStyle := styles.TextForegroundStyle
 	if selected {
-		cursor = "▸ "
+		cursor = styles.TextPrimaryStyle.Render(styles.IconSelector + " ")
 		rowStyle = styles.TextPrimaryBoldStyle
 	}
 
-	var text string
 	if p.manifest.Picker.Layout == connectors.LayoutModeTable && len(p.manifest.Picker.Columns) > 0 {
-		text = renderConnectorTableRow(item, p.manifest.Picker.Columns)
-	} else {
-		text = item.Title
-		if item.Subtitle != "" {
-			text = fmt.Sprintf("%s  %s", item.Title, styles.TextMutedStyle.Render(item.Subtitle))
-		}
+		line := cursor + renderConnectorTableRow(item, p.manifest.Picker.Columns)
+		return lipgloss.NewStyle().MaxWidth(width).Render(rowStyle.Render(line))
 	}
 
-	line := cursor + text
-	return lipgloss.NewStyle().MaxWidth(width).Render(rowStyle.Render(line))
+	title := rowStyle.Render(item.Title)
+	row1 := lipgloss.NewStyle().MaxWidth(width).Render(cursor + title)
+
+	meta := renderConnectorListMeta(item, max(width-2, 1))
+	if meta == "" {
+		return row1
+	}
+	return row1 + "\n" + lipgloss.NewStyle().MaxWidth(width).Render("  "+meta)
 }
 
 // renderConnectorTableRow renders an item's Fields as a single row aligned
@@ -488,29 +640,120 @@ func connectorFieldString(item connectors.Item, key string) string {
 	return ""
 }
 
-// renderDetailPane renders the detail pane for the currently highlighted
+func connectorFieldStringSlice(item connectors.Item, key string) []string {
+	if item.Fields == nil {
+		return nil
+	}
+	value, ok := item.Fields[key]
+	if !ok {
+		return nil
+	}
+	switch typed := value.(type) {
+	case []string:
+		return nonEmptyStrings(typed)
+	case []any:
+		values := make([]string, 0, len(typed))
+		for _, v := range typed {
+			if s := strings.TrimSpace(fmt.Sprintf("%v", v)); s != "" {
+				values = append(values, s)
+			}
+		}
+		return values
+	default:
+		if s := strings.TrimSpace(fmt.Sprintf("%v", value)); s != "" {
+			return []string{s}
+		}
+		return nil
+	}
+}
+
+func nonEmptyStrings(values []string) []string {
+	out := make([]string, 0, len(values))
+	for _, value := range values {
+		if value = strings.TrimSpace(value); value != "" {
+			out = append(out, value)
+		}
+	}
+	return out
+}
+
+func renderConnectorListMeta(item connectors.Item, width int) string {
+	parts := connectorMetadataParts(item)
+	if len(parts) == 0 {
+		if item.Subtitle == "" {
+			return ""
+		}
+		return styles.TextMutedStyle.Render(item.Subtitle)
+	}
+	return lipgloss.NewStyle().MaxWidth(max(width, 1)).Render(strings.Join(parts, "  "))
+}
+
+func renderConnectorDetailMeta(item connectors.Item, width int) string {
+	parts := connectorMetadataParts(item)
+	if len(parts) == 0 {
+		return ""
+	}
+	return lipgloss.NewStyle().MaxWidth(max(width, 1)).Render(strings.Join(parts, "  "))
+}
+
+func connectorMetadataParts(item connectors.Item) []string {
+	parts := make([]string, 0, 6)
+	if number := connectorFieldString(item, "number"); number != "" {
+		parts = append(parts, styles.TextPrimaryStyle.Render("#"+number))
+	}
+	if author := connectorFieldString(item, "author"); author != "" {
+		parts = append(parts, styles.TextMutedStyle.Render("@"+author))
+	}
+	for _, label := range connectorFieldStringSlice(item, "labels") {
+		parts = append(parts, styles.TextSecondaryStyle.Render("["+label+"]"))
+	}
+	return parts
+}
+
+// detailContent computes the detail pane text for the currently highlighted
 // item, honoring inline item detail, cache, in-flight, and error states in
-// that priority order.
-func (p ConnectorPicker) renderDetailPane(width int) string {
+// that priority order. It does not itself bound the output to any
+// height/width — that's the detail viewport's job (see refreshDetailViewport).
+func (p ConnectorPicker) detailContent() string {
 	if len(p.items) == 0 || p.cursor < 0 || p.cursor >= len(p.items) {
-		return styles.TextMutedStyle.Render("")
+		return ""
 	}
 
 	item := p.items[p.cursor]
+	title := lipgloss.NewStyle().MaxWidth(p.detailWidth).Render(styles.TextForegroundBoldStyle.Render(item.Title))
+	meta := renderConnectorDetailMeta(item, p.detailWidth)
 
+	var body string
 	if item.Detail.Kind() != connectors.DetailKindNone {
-		return renderConnectorDetail(item.Detail, width)
+		body = renderConnectorDetail(item.Detail, p.detailWidth)
+	} else if err, ok := p.detailErr[item.ID]; ok {
+		body = styles.TextErrorStyle.Render("detail failed: " + err.Error())
+	} else if detail, ok := p.detailCache[item.ID]; ok {
+		body = renderConnectorDetail(detail, p.detailWidth)
+	} else if p.detailPending[item.ID] {
+		body = styles.TextMutedStyle.Render("loading detail...")
+	} else {
+		body = renderConnectorDetail(connectors.Detail{}, p.detailWidth)
 	}
-	if err, ok := p.detailErr[item.ID]; ok {
-		return styles.TextErrorStyle.Render("detail failed: " + err.Error())
+
+	header := title
+	if meta != "" {
+		header += "\n" + meta
 	}
-	if detail, ok := p.detailCache[item.ID]; ok {
-		return renderConnectorDetail(detail, width)
+	if strings.TrimSpace(body) == "" {
+		return header
 	}
-	if p.detailPending[item.ID] {
-		return styles.TextMutedStyle.Render("loading detail...")
-	}
-	return renderConnectorDetail(connectors.Detail{}, width)
+	return header + "\n\n" + body
+}
+
+// refreshDetailViewport recomputes the detail pane content for the
+// currently highlighted item and loads it into the fixed-size detail
+// viewport, resetting scroll to the top. Content longer than
+// p.contentHeight scrolls within the viewport instead of growing the
+// dialog.
+func (p *ConnectorPicker) refreshDetailViewport() {
+	p.detailVP.SetContent(p.detailContent())
+	p.detailVP.GotoTop()
 }
 
 // connectorDebounceDelay resolves the remote-search debounce delay from the

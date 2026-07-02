@@ -162,6 +162,14 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	if action.Type == act.TypeViewTasks {
 		return m.viewTasksForSelectedSession()
 	}
+	if action.Type == act.TypeOpenConnectorPicker {
+		connectorID, ok := m.resolveConnectorID(nil)
+		if !ok {
+			m.notifyErrorf("multiple connectors configured: use :OpenConnector <id>")
+			return m, nil
+		}
+		return m.openConnectorPicker(connectorID, m.connectorPickerScopeForSelection(m.selectedSession(), nil))
+	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter
 		m.sessionsView.ApplyStatusFilter(action.Type)
@@ -602,6 +610,17 @@ func (m Model) handleStreamStarted(msg streamStartedMsg) (tea.Model, tea.Cmd) {
 	)
 }
 
+func (m Model) handleBgStreamStarted(msg bgStreamStartedMsg) (tea.Model, tea.Cmd) {
+	m.state = stateNormal
+	m.modals.BgStreamOutput = msg.output
+	m.modals.BgStreamDone = msg.done
+	m.modals.BgStreamCancel = msg.cancel
+	m.modals.BgStreamResult = msg.result
+	m.modals.BgStreamTitle = msg.title
+	m.publishNotificationf(notify.LevelInfo, "Started in background: %s", msg.title)
+	return m, listenForBgStreamComplete(msg.output, msg.done, msg.result)
+}
+
 func (m Model) handleStreamOutput(msg streamOutputMsg) (tea.Model, tea.Cmd) {
 	m.modals.Output.AddLine(msg.line)
 	return m, listenForStreamingOutput(m.modals.StreamOutput, m.modals.StreamDone)
@@ -787,11 +806,18 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 
 // --- Connector Picker ---
 
+type connectorPickerScope struct {
+	Search string
+	Remote string
+	Source string
+}
+
 // connectorPickerReadyMsg carries a fully initialized ConnectorPicker back
 // to the model after openConnectorPicker's Initialize/Available checks
 // succeed.
 type connectorPickerReadyMsg struct {
 	connectorID string
+	scope       connectorPickerScope
 	templates   connectors.TemplateConfig
 	picker      ConnectorPicker
 }
@@ -802,11 +828,20 @@ type connectorPickerErrorMsg struct {
 	err error
 }
 
-// connectorSessionCreatedMsg carries the result of creating a session from a
-// selected connector item.
-type connectorSessionCreatedMsg struct {
-	name string
-	err  error
+// resolveConnectorID returns the connector to open: an explicit args[0]
+// when given, otherwise the sole registered connector. ok is false when no
+// id was given and zero or multiple connectors are registered, so callers
+// (keybinding and command-palette paths) share the same resolution rules.
+func (m Model) resolveConnectorID(args []string) (string, bool) {
+	if len(args) > 0 && args[0] != "" {
+		return args[0], true
+	}
+	if m.connectorRegistry != nil {
+		if ids := m.connectorRegistry.IDs(); len(ids) == 1 {
+			return ids[0], true
+		}
+	}
+	return "", false
 }
 
 // openConnectorPicker resolves connectorID from the registry and
@@ -814,7 +849,7 @@ type connectorSessionCreatedMsg struct {
 // the picker for scope. Errors (unknown id, unavailable connector,
 // Initialize failure) surface as a toast without leaving stateConnectorPicker
 // active.
-func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cmd) {
+func (m Model) openConnectorPicker(connectorID string, scope connectorPickerScope) (tea.Model, tea.Cmd) {
 	if m.connectorRegistry == nil {
 		m.notifyErrorf("no connectors are configured")
 		return m, nil
@@ -835,7 +870,9 @@ func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cm
 	// m.width, m.height)).
 	width, height := m.width, m.height
 
-	return m, func() tea.Msg {
+	// Batch spinner.Tick: entering stateLoading must restart the spinner
+	// tick loop (see handleSpinnerTick), or the loading indicator freezes.
+	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
 		ctx := context.Background()
 		if !conn.Available(ctx) {
 			return connectorPickerErrorMsg{err: fmt.Errorf("connector %q is not available", connectorID)}
@@ -844,9 +881,9 @@ func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cm
 		if err != nil {
 			return connectorPickerErrorMsg{err: fmt.Errorf("connector %q: initialize: %w", connectorID, err)}
 		}
-		picker := NewConnectorPicker(conn, manifest, scope, width, height)
-		return connectorPickerReadyMsg{connectorID: connectorID, templates: tmplCfg, picker: picker}
-	}
+		picker := NewConnectorPicker(conn, manifest, scope.Search, width, height)
+		return connectorPickerReadyMsg{connectorID: connectorID, scope: scope, templates: tmplCfg, picker: picker}
+	})
 }
 
 // handleConnectorPickerReady opens the picker modal and kicks off its
@@ -854,6 +891,7 @@ func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cm
 func (m Model) handleConnectorPickerReady(msg connectorPickerReadyMsg) (tea.Model, tea.Cmd) {
 	m.state = stateConnectorPicker
 	m.pendingConnectorID = msg.connectorID
+	m.pendingConnectorScope = msg.scope
 	m.pendingConnectorTemplates = msg.templates
 	picker := msg.picker
 	m.modals.ConnectorPicker = &picker
@@ -919,35 +957,33 @@ func (m Model) handleConnectorSelection(result ConnectorPickerResult) (tea.Model
 		return m, nil
 	}
 
-	m.state = stateLoading
-	m.loadingMessage = fmt.Sprintf("creating session %s...", rendered.Name)
-
-	source := m.source
-	return m, func() tea.Msg {
-		_, err := m.service.CreateSession(context.Background(), hive.CreateOptions{
-			Name:          rendered.Name,
-			Prompt:        rendered.Prompt,
-			Tags:          rendered.Tags,
-			Source:        source,
-			UseBatchSpawn: true,
-		})
-		if err != nil {
-			return connectorSessionCreatedMsg{name: rendered.Name, err: err}
-		}
-		return connectorSessionCreatedMsg{name: rendered.Name}
-	}
+	return m, m.startConnectorCreate(rendered, m.pendingConnectorScope.Remote, m.pendingConnectorScope.Source)
 }
 
-// handleConnectorSessionCreated reports the result of a connector-driven
-// session creation and refreshes the session list on success.
-func (m Model) handleConnectorSessionCreated(msg connectorSessionCreatedMsg) (tea.Model, tea.Cmd) {
-	m.state = stateNormal
-	if msg.err != nil {
-		m.notifyErrorf("create session %q failed: %v", msg.name, msg.err)
-		return m, nil
+func (m Model) startConnectorCreate(rendered connectors.RenderedSession, remote, source string) tea.Cmd {
+	return func() tea.Msg {
+		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
+			Name:          rendered.Name,
+			Prompt:        rendered.Prompt,
+			Remote:        remote,
+			Source:        source,
+			UseBatchSpawn: true,
+			Background:    true,
+			Tags:          rendered.Tags,
+		})
+
+		output, done, cancel := exec.Execute(context.Background())
+		return bgStreamStartedMsg{
+			title:  "Creating session...",
+			output: output,
+			done:   done,
+			cancel: cancel,
+			result: streamResult{
+				sessionID:   &exec.ResultSessionID,
+				sessionName: &exec.ResultSessionName,
+			},
+		}
 	}
-	m.publishNotificationf(notify.LevelInfo, "Created session %s", msg.name)
-	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
 // --- Repo Picker ---

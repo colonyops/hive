@@ -3,14 +3,17 @@ package tui
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
 	tea "charm.land/bubbletea/v2"
+	lipgloss "charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/connectors"
+	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
 )
 
@@ -245,7 +248,29 @@ func TestConnectorPicker_LazyDetailFetchIsCachedPerID(t *testing.T) {
 	p = drainPicker(t, next, cmd)
 	assert.Equal(t, 1, fake.detailCallCount("1"), "revisiting item 1 must use the cache, not refetch")
 
-	assert.Contains(t, terminal.StripANSI(p.renderDetailPane(40)), "alpha body")
+	assert.Contains(t, terminal.StripANSI(p.detailVP.View()), "alpha body")
+}
+
+func TestConnectorPicker_ListRowShowsMetadataWithoutState(t *testing.T) {
+	item := connectors.Item{
+		ID:    "1278",
+		Title: "feat: make expiring-exemptions endpoints public",
+		Fields: map[string]any{
+			"number": 1278,
+			"state":  "OPEN",
+			"author": "alice",
+			"labels": []string{"api", "public"},
+		},
+	}
+	p := NewConnectorPicker(newFakeTUIConnector(listManifest(), []connectors.Item{item}), listManifest(), "", 100, 30)
+
+	row := terminal.StripANSI(p.renderRow(item, true, 48))
+
+	assert.Contains(t, row, styles.IconSelector+" feat: make expiring-exemptions")
+	assert.Contains(t, row, "#1278")
+	assert.Contains(t, row, "@alice")
+	assert.Contains(t, row, "[api]")
+	assert.NotContains(t, row, "OPEN")
 }
 
 func TestConnectorPicker_EmptyResultsShowsMessageAndEnterIsNoop(t *testing.T) {
@@ -274,7 +299,7 @@ func TestConnectorPicker_NoDetailItemShowsPlaceholder(t *testing.T) {
 
 	assert.Equal(t, 0, fake.detailCallCount("1"), "FetchDetail must not be called when the manifest doesn't support it")
 	assert.NotPanics(t, func() {
-		out := terminal.StripANSI(p.renderDetailPane(40))
+		out := terminal.StripANSI(p.detailVP.View())
 		assert.Contains(t, out, "no detail available")
 	})
 }
@@ -287,7 +312,7 @@ func TestConnectorPicker_DetailFetchErrorRendersInPane(t *testing.T) {
 	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
-	out := terminal.StripANSI(p.renderDetailPane(40))
+	out := terminal.StripANSI(p.detailVP.View())
 	assert.Contains(t, out, "boom")
 }
 
@@ -302,4 +327,131 @@ func TestConnectorPicker_SearchErrorIsShownAndNonFatal(t *testing.T) {
 	assert.NotPanics(t, func() {
 		p.View()
 	})
+}
+
+// TestConnectorPicker_ViewFitsTerminal is the regression test for the
+// picker overflowing small terminals: the rendered view (including modal
+// border, padding, and the help line's margin) must never exceed the
+// terminal height the picker was sized for, and loading a long detail body
+// must not change the frame height.
+func TestConnectorPicker_ViewFitsTerminal(t *testing.T) {
+	sizes := []struct{ width, height int }{
+		{80, 24},
+		{90, 24},
+		{100, 30},
+		{120, 38},
+		{120, 50},
+	}
+	long := strings.Repeat("This is a long line of markdown detail content. ", 40) +
+		"\n\n" + strings.Repeat("Another paragraph. ", 60)
+
+	for _, size := range sizes {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			items := []connectors.Item{{ID: "1", Title: "Item one"}}
+			fake := newFakeTUIConnector(listManifest(), items)
+			fake.detail["1"] = connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: long}}
+
+			p := NewConnectorPicker(fake, listManifest(), "", size.width, size.height)
+			before := lipgloss.Height(p.View())
+			assert.LessOrEqual(t, before, size.height, "picker must fit the terminal before loading")
+
+			p = drainPicker(t, p, p.Init())
+
+			after := lipgloss.Height(p.View())
+			assert.Equal(t, before, after, "loading detail must not change the frame height")
+			assert.LessOrEqual(t, after, size.height, "picker must fit the terminal after loading")
+		})
+	}
+}
+
+// TestConnectorPicker_StaleGenerationMessagesAreDropped guards against a
+// late async result from a previously closed picker (possibly for a
+// different scope) poisoning the current picker's caches.
+func TestConnectorPicker_StaleGenerationMessagesAreDropped(t *testing.T) {
+	items := []connectors.Item{{ID: "1", Title: "alpha"}}
+	fake := newFakeTUIConnector(listManifest(), items)
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	stale := connectorDetailResultMsg{
+		Gen:    p.gen - 1,
+		ID:     "1",
+		Detail: connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "wrong repo body"}},
+	}
+	p = applyPickerMsg(t, p, stale)
+
+	assert.NotContains(t, terminal.StripANSI(p.detailVP.View()), "wrong repo body")
+
+	staleSearch := connectorSearchResultMsg{
+		Gen:   p.gen - 1,
+		Query: p.input.Value(),
+		Items: []connectors.Item{{ID: "9", Title: "poisoned"}},
+	}
+	p = applyPickerMsg(t, p, staleSearch)
+	require.Len(t, p.items, 1)
+	assert.Equal(t, "alpha", p.items[0].Title)
+}
+
+// TestConnectorPicker_NonEditingKeyDoesNotResetOrResearch verifies that
+// keys which don't change the query (e.g. left/right) neither reset the
+// cursor nor re-issue a remote search.
+func TestConnectorPicker_NonEditingKeyDoesNotResetOrResearch(t *testing.T) {
+	items := []connectors.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUIConnector(remoteManifest(), items)
+	p := NewConnectorPicker(fake, remoteManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+	require.Equal(t, 1, fake.searchCallCount())
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	p = drainPicker(t, next, cmd)
+	require.Equal(t, 1, p.cursor)
+
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
+	p = drainPicker(t, next, cmd)
+
+	assert.Equal(t, 1, p.cursor, "non-editing key must not reset the cursor")
+	assert.Equal(t, 1, fake.searchCallCount(), "non-editing key must not re-issue a remote search")
+}
+
+// TestConnectorPicker_ClearingFilterRefreshesDetailPane verifies the detail
+// pane follows the cursor back to item 0 when a local filter is cleared.
+func TestConnectorPicker_ClearingFilterRefreshesDetailPane(t *testing.T) {
+	items := []connectors.Item{
+		{ID: "1", Title: "alpha", Detail: connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "alpha body"}}},
+		{ID: "2", Title: "beta", Detail: connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "beta body"}}},
+	}
+	fake := newFakeTUIConnector(listManifest(), items)
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = typeKey(t, p, "beta")
+	require.Len(t, p.items, 1)
+	require.Contains(t, terminal.StripANSI(p.detailVP.View()), "beta body")
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	p = drainPicker(t, next, cmd)
+	for range 3 {
+		next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+		p = drainPicker(t, next, cmd)
+	}
+	require.Empty(t, p.input.Value())
+
+	require.Len(t, p.items, 2)
+	assert.Equal(t, 0, p.cursor)
+	assert.Contains(t, terminal.StripANSI(p.detailVP.View()), "alpha body", "detail pane must refresh to the item under the cursor")
+}
+
+// TestConnectorPicker_InitShowsSearching verifies the initial load renders
+// a "searching..." status instead of a blank list (Init must set
+// searchInFlight on the stored picker).
+func TestConnectorPicker_InitShowsSearching(t *testing.T) {
+	fake := newFakeTUIConnector(listManifest(), nil)
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
+	cmd := p.Init()
+	require.NotNil(t, cmd)
+
+	assert.Contains(t, terminal.StripANSI(p.renderList(40)), "searching...")
 }

@@ -1,13 +1,22 @@
-╭────────────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                        │
-│  Fake Connector                                                                        │
-│                                                                                        │
-│  / search...                   (no detail available for this item)                     │
-│                                                                                        │
-│  ▸ First reference item  stat                                                          │
-│    Second reference item  sta                                                          │
-│                                                                                        │
-│                                                                                        │
-│  ↑/↓ navigate  enter select  esc cancel                                                │
-│                                                                                        │
-╰────────────────────────────────────────────────────────────────────────────────────────╯
+╭────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                │
+│  Fake Connector                                                                │
+│                                                                                │
+│  / search...                    │  First reference item                        │
+│                                 │  #1278  @alice  [api]  [public]              │
+│  󰅂 First reference item         │                                              │
+│    #1278  @alice  [api]  [public│  (no detail available for this item)         │
+│                                 │                                              │
+│    Second reference item        │                                              │
+│    #1277  @bob  [backend]       │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                                                                │
+│                                                                                │
+│  ↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel                │
+│                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────╯

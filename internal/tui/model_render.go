@@ -76,7 +76,7 @@ func (m Model) renderTabView() string {
 	// Background operation indicator
 	bgIndicator := ""
 	if m.modals.BgStreamDone != nil {
-		bgIndicator = styles.TextWarningStyle.Render("⟳ " + m.modals.BgStreamTitle + " ")
+		bgIndicator = styles.TextWarningStyle.Render("⟳  " + m.modals.BgStreamTitle + " ")
 	}
 
 	// Todo indicator: right-aligned, warning when pending or counts are degraded.

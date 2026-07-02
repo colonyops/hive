@@ -21,8 +21,8 @@ func goldenPicker(t *testing.T, manifest connectors.Manifest, items []connectors
 
 func TestConnectorPickerGolden_ListLayout(t *testing.T) {
 	items := []connectors.Item{
-		{ID: "1", Title: "First reference item", Subtitle: "status: open"},
-		{ID: "2", Title: "Second reference item", Subtitle: "status: closed"},
+		{ID: "1", Title: "First reference item", Subtitle: "status: open", Fields: map[string]any{"number": 1278, "author": "alice", "labels": []string{"api", "public"}}},
+		{ID: "2", Title: "Second reference item", Subtitle: "status: closed", Fields: map[string]any{"number": 1277, "author": "bob", "labels": []string{"backend"}}},
 	}
 	p := goldenPicker(t, listManifest(), items)
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
@@ -55,7 +55,7 @@ func TestConnectorPickerGolden_TableLayout(t *testing.T) {
 
 func TestConnectorPickerGolden_MarkdownDetail(t *testing.T) {
 	items := []connectors.Item{
-		{ID: "1", Title: "Item with markdown detail"},
+		{ID: "1", Title: "Item with markdown detail", Fields: map[string]any{"number": 42, "author": "alice", "labels": []string{"docs", "preview"}}},
 	}
 	fake := newFakeTUIConnector(listManifest(), items)
 	fake.detail["1"] = connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "# Heading\n\nSome body text."}}
