@@ -335,3 +335,41 @@ func TestNewSubprocessConnector_Validation(t *testing.T) {
 	_, err = NewSubprocessConnector("id", []string{"cmd"}, nil, time.Second)
 	require.Error(t, err)
 }
+
+// TestSubprocessConnector_ErrorResponseWithNullID verifies that a
+// spec-compliant error response with a null id (mandated by JSON-RPC 2.0
+// when the server could not parse the request) surfaces the connector's
+// error message instead of an id-mismatch error.
+func TestSubprocessConnector_ErrorResponseWithNullID(t *testing.T) {
+	stdout := []byte(`{"jsonrpc":"2.0","id":null,"error":{"code":-32700,"message":"parse error: bad request line"}}` + "\n")
+	runner := &fakeProcessRunner{staticStdout: stdout}
+	conn, err := NewSubprocessConnector("ref", []string{"ref-connector"}, runner, time.Second)
+	require.NoError(t, err)
+
+	_, err = conn.Initialize(context.Background())
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "parse error: bad request line")
+	assert.NotContains(t, err.Error(), "does not match request id")
+}
+
+// TestCappedBuffer verifies child output capture is truncated at
+// maxCaptureBytes without erroring (which would kill the child mid-write).
+func TestCappedBuffer(t *testing.T) {
+	var b cappedBuffer
+
+	n, err := b.Write([]byte("hello"))
+	require.NoError(t, err)
+	assert.Equal(t, 5, n)
+	assert.Equal(t, "hello", b.buf.String())
+
+	big := make([]byte, maxCaptureBytes)
+	n, err = b.Write(big)
+	require.NoError(t, err, "a full capture buffer must not surface a write error")
+	assert.Equal(t, len(big), n, "Write must report full consumption to avoid breaking the child")
+	assert.Equal(t, maxCaptureBytes, b.buf.Len(), "capture must be capped")
+
+	n, err = b.Write([]byte("overflow"))
+	require.NoError(t, err)
+	assert.Equal(t, 8, n)
+	assert.Equal(t, maxCaptureBytes, b.buf.Len())
+}

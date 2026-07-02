@@ -19,6 +19,34 @@ import (
 // long markdown bodies) decode without a "token too long" error.
 const maxResponseLineBytes = 8 << 20 // 8MB
 
+// maxCaptureBytes caps how much child stdout/stderr is buffered in memory,
+// as a robustness bound against a runaway connector spewing output within
+// its timeout window. It is deliberately larger than maxResponseLineBytes
+// so a valid maximum-size response line is never truncated.
+const maxCaptureBytes = 16 << 20 // 16MB
+
+// execWaitDelay bounds how long Run waits for the child's stdout/stderr
+// pipes to close after the context is cancelled. Without it, a connector
+// that forks a background process inheriting stdout/stderr keeps the pipes
+// open after the direct child is killed, and Run — and therefore the
+// per-call timeout — would block forever (see exec.Cmd.WaitDelay).
+const execWaitDelay = 5 * time.Second
+
+// cappedBuffer is an io.Writer that appends to buf up to maxCaptureBytes
+// and silently discards the rest, so a misbehaving child cannot grow
+// memory without bound. Write never returns an error: the child must not
+// be killed by a full capture buffer (SIGPIPE), only truncated.
+type cappedBuffer struct {
+	buf bytes.Buffer
+}
+
+func (b *cappedBuffer) Write(p []byte) (int, error) {
+	if remaining := maxCaptureBytes - b.buf.Len(); remaining > 0 {
+		b.buf.Write(p[:min(len(p), remaining)])
+	}
+	return len(p), nil
+}
+
 // ProcessRunner starts a connector process for a single request/response
 // exchange: it writes stdin, waits for the process to exit, and returns the
 // captured stdout/stderr. The real implementation wraps exec.CommandContext;
@@ -41,16 +69,17 @@ func (ExecProcessRunner) Run(ctx context.Context, command []string, stdin []byte
 
 	c := exec.CommandContext(ctx, command[0], command[1:]...)
 	c.Stdin = bytes.NewReader(stdin)
+	c.WaitDelay = execWaitDelay
 
-	var stdoutBuf, stderrBuf bytes.Buffer
+	var stdoutBuf, stderrBuf cappedBuffer
 	c.Stdout = &stdoutBuf
 	c.Stderr = &stderrBuf
 
 	runErr := c.Run()
 	if runErr != nil {
-		return stdoutBuf.Bytes(), stderrBuf.Bytes(), fmt.Errorf("exec %s: %w", command[0], runErr)
+		return stdoutBuf.buf.Bytes(), stderrBuf.buf.Bytes(), fmt.Errorf("exec %s: %w", command[0], runErr)
 	}
-	return stdoutBuf.Bytes(), stderrBuf.Bytes(), nil
+	return stdoutBuf.buf.Bytes(), stderrBuf.buf.Bytes(), nil
 }
 
 // SubprocessConnector implements connectors.Connector by spawning an
@@ -201,12 +230,15 @@ func (c *SubprocessConnector) call(ctx context.Context, method string, params an
 	if resp.JSONRPC != Version {
 		return fmt.Errorf("connector %q: %s: unexpected jsonrpc version %q", c.id, method, resp.JSONRPC)
 	}
-	if resp.ID != id {
-		return fmt.Errorf("connector %q: %s: response id %d does not match request id %d", c.id, method, resp.ID, id)
-	}
 
+	// Check the error before the id: JSON-RPC 2.0 mandates a null id on
+	// error responses the server could not parse, and surfacing the
+	// connector's actual error message beats reporting an id mismatch.
 	if resp.Error != nil {
 		return fmt.Errorf("connector %q: %s: rpc error %d: %s", c.id, method, resp.Error.Code, resp.Error.Message)
+	}
+	if resp.ID != id {
+		return fmt.Errorf("connector %q: %s: response id %d does not match request id %d", c.id, method, resp.ID, id)
 	}
 	if resp.Result == nil {
 		return fmt.Errorf("connector %q: %s: response has neither result nor error", c.id, method)
