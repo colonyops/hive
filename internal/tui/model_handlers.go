@@ -14,6 +14,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/colonyops/hive/internal/connectors"
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/git"
@@ -21,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
@@ -785,10 +787,98 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 
 // --- Connector Picker ---
 
+// connectorPickerReadyMsg carries a fully initialized ConnectorPicker back
+// to the model after openConnectorPicker's Initialize/Available checks
+// succeed.
+type connectorPickerReadyMsg struct {
+	connectorID string
+	templates   connectors.TemplateConfig
+	picker      ConnectorPicker
+}
+
+// connectorPickerErrorMsg carries a connector lookup/availability/Initialize
+// failure back to the model.
+type connectorPickerErrorMsg struct {
+	err error
+}
+
+// connectorSessionCreatedMsg carries the result of creating a session from a
+// selected connector item.
+type connectorSessionCreatedMsg struct {
+	name string
+	err  error
+}
+
+// openConnectorPicker resolves connectorID from the registry and
+// asynchronously checks availability and fetches its manifest, then opens
+// the picker for scope. Errors (unknown id, unavailable connector,
+// Initialize failure) surface as a toast without leaving stateConnectorPicker
+// active.
+func (m Model) openConnectorPicker(connectorID, scope string) (tea.Model, tea.Cmd) {
+	if m.connectorRegistry == nil {
+		m.notifyErrorf("no connectors are configured")
+		return m, nil
+	}
+
+	conn, tmplCfg, ok := m.connectorRegistry.Get(connectorID)
+	if !ok {
+		m.notifyErrorf("unknown connector %q", connectorID)
+		return m, nil
+	}
+
+	m.state = stateLoading
+	m.loadingMessage = fmt.Sprintf("opening %s...", connectorID)
+
+	return m, func() tea.Msg {
+		ctx := context.Background()
+		if !conn.Available(ctx) {
+			return connectorPickerErrorMsg{err: fmt.Errorf("connector %q is not available", connectorID)}
+		}
+		manifest, err := conn.Initialize(ctx)
+		if err != nil {
+			return connectorPickerErrorMsg{err: fmt.Errorf("connector %q: initialize: %w", connectorID, err)}
+		}
+		picker := NewConnectorPicker(conn, manifest, scope)
+		return connectorPickerReadyMsg{connectorID: connectorID, templates: tmplCfg, picker: picker}
+	}
+}
+
+// handleConnectorPickerReady opens the picker modal and kicks off its
+// initial Search.
+func (m Model) handleConnectorPickerReady(msg connectorPickerReadyMsg) (tea.Model, tea.Cmd) {
+	m.state = stateConnectorPicker
+	m.pendingConnectorID = msg.connectorID
+	m.pendingConnectorTemplates = msg.templates
+	picker := msg.picker
+	m.modals.ConnectorPicker = &picker
+	return m, picker.Init()
+}
+
+// handleConnectorPickerError reports a connector open failure and returns to
+// the normal state.
+func (m Model) handleConnectorPickerError(msg connectorPickerErrorMsg) (tea.Model, tea.Cmd) {
+	m.state = stateNormal
+	m.notifyErrorf("%v", msg.err)
+	return m, nil
+}
+
+// forwardConnectorPickerMsg forwards a connector search/detail message to
+// the active ConnectorPicker. These messages arrive as top-level tea.Msg
+// values (not key presses), so they bypass handleConnectorPickerKey and must
+// be routed here from Model.Update.
+func (m Model) forwardConnectorPickerMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.modals.ConnectorPicker == nil {
+		return m, nil
+	}
+	picker, cmd := m.modals.ConnectorPicker.Update(msg)
+	m.modals.ConnectorPicker = &picker
+	return m, cmd
+}
+
 // handleConnectorPickerKey routes key events to the active ConnectorPicker.
-// Selection/cancellation currently just close the picker and return to the
-// normal state; wiring a selected item into session creation is added by a
-// later phase.
+// On cancellation the picker closes with no side effects; on selection the
+// picker closes and a session is created from the selected item's rendered
+// templates.
 func (m Model) handleConnectorPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.modals.ConnectorPicker == nil {
 		m.state = stateNormal
@@ -804,13 +894,54 @@ func (m Model) handleConnectorPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 		return m, nil
 	}
 
-	if _, ok := picker.Selected(); ok {
+	if result, ok := picker.Selected(); ok {
 		m.modals.ConnectorPicker = nil
-		m.state = stateNormal
-		return m, nil
+		return m.handleConnectorSelection(result)
 	}
 
 	return m, cmd
+}
+
+// handleConnectorSelection renders the pending connector's session templates
+// against the selected item and creates a session via the same
+// UseBatchSpawn:true path used by `hive batch`.
+func (m Model) handleConnectorSelection(result ConnectorPickerResult) (tea.Model, tea.Cmd) {
+	rendered, err := connectors.RenderSessionTemplates(m.pendingConnectorTemplates, result.Item, result.Detail)
+	if err != nil {
+		m.state = stateNormal
+		m.notifyErrorf("connector %q: %v", m.pendingConnectorID, err)
+		return m, nil
+	}
+
+	m.state = stateLoading
+	m.loadingMessage = fmt.Sprintf("creating session %s...", rendered.Name)
+
+	source := m.source
+	return m, func() tea.Msg {
+		_, err := m.service.CreateSession(context.Background(), hive.CreateOptions{
+			Name:          rendered.Name,
+			Prompt:        rendered.Prompt,
+			Tags:          rendered.Tags,
+			Source:        source,
+			UseBatchSpawn: true,
+		})
+		if err != nil {
+			return connectorSessionCreatedMsg{name: rendered.Name, err: err}
+		}
+		return connectorSessionCreatedMsg{name: rendered.Name}
+	}
+}
+
+// handleConnectorSessionCreated reports the result of a connector-driven
+// session creation and refreshes the session list on success.
+func (m Model) handleConnectorSessionCreated(msg connectorSessionCreatedMsg) (tea.Model, tea.Cmd) {
+	m.state = stateNormal
+	if msg.err != nil {
+		m.notifyErrorf("create session %q failed: %v", msg.name, msg.err)
+		return m, nil
+	}
+	m.publishNotificationf(notify.LevelInfo, "Created session %s", msg.name)
+	return m, func() tea.Msg { return sessions.RefreshSessionsMsg{} }
 }
 
 // --- Repo Picker ---

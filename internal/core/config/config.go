@@ -189,6 +189,12 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
+	"OpenConnector": {
+		Action: action.TypeOpenConnectorPicker,
+		Help:   "open a connector picker (usage: OpenConnector <id> [scope])",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
 	"ViewTasks": {
 		Action: action.TypeViewTasks,
 		Help:   "view tasks for repo",
