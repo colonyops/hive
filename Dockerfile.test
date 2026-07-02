@@ -28,7 +28,12 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy integration test files
+# Copy source needed to build and run integration tests, including
+# cmd/hive-reference-connector which some integration tests build and spawn
+# directly (internal/connectors).
+COPY cmd/ ./cmd/
+COPY internal/ ./internal/
+COPY pkg/ ./pkg/
 COPY test/integration/ ./test/integration/
 
 CMD ["go", "test", "-v", "-tags", "integration", "-count=1", "./test/integration/..."]
