@@ -1153,11 +1153,6 @@ func (c *Config) HistoryFile() string {
 	return filepath.Join(c.DataDir, "history.json")
 }
 
-// LogsDir returns the path to the logs directory.
-func (c *Config) LogsDir() string {
-	return filepath.Join(c.DataDir, "logs")
-}
-
 // ContextDir returns the base context directory path.
 func (c *Config) ContextDir() string {
 	if c.Context.BaseDir != "" {

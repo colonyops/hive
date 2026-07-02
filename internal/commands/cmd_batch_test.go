@@ -169,7 +169,7 @@ func TestBatchCmd_agentForSession(t *testing.T) {
 func TestBatchOutput_JSON(t *testing.T) {
 	output := BatchOutput{
 		BatchID: "abc123",
-		LogFile: "/tmp/logs/batch-abc123.log",
+		LogFile: "/tmp/data/hive.log",
 		Results: []BatchResult{
 			{Name: "task1", SessionID: "def456", Path: "/tmp/session", Status: StatusCreated},
 			{Name: "task2", Status: StatusFailed, Error: "clone failed"},
@@ -184,7 +184,7 @@ func TestBatchOutput_JSON(t *testing.T) {
 	require.NoError(t, json.Unmarshal(data, &decoded))
 
 	assert.Equal(t, "abc123", decoded.BatchID)
-	assert.Equal(t, "/tmp/logs/batch-abc123.log", decoded.LogFile)
+	assert.Equal(t, "/tmp/data/hive.log", decoded.LogFile)
 	assert.Len(t, decoded.Results, 3, "expected 3 results, got %d", len(decoded.Results))
 	assert.Equal(t, StatusCreated, decoded.Results[0].Status)
 	assert.Equal(t, "clone failed", decoded.Results[1].Error)
