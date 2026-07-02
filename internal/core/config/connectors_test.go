@@ -143,6 +143,27 @@ func TestValidateConnectors_ExternalDuplicateID(t *testing.T) {
 	assert.Contains(t, err.Error(), "duplicate")
 }
 
+func TestValidateConnectors_ExternalGitHubIDCollidesWithBuiltin(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Connectors.External = []ExternalConnectorConfig{
+		{ID: "github", Command: []string{"my-github"}},
+	}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "collides with the built-in github connector")
+}
+
+func TestValidateConnectors_ExternalGitHubIDAllowedWhenBuiltinDisabled(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Connectors.GitHub.Enabled = boolPtr(false)
+	cfg.Connectors.External = []ExternalConnectorConfig{
+		{ID: "github", Command: []string{"my-github"}},
+	}
+
+	require.NoError(t, cfg.Validate())
+}
+
 func TestValidateConnectors_ExternalMissingCommand(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Connectors.External = []ExternalConnectorConfig{

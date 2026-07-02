@@ -2,6 +2,8 @@ package connectors
 
 import (
 	"fmt"
+	"regexp"
+	"strings"
 
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -52,6 +54,13 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 	if err != nil {
 		return RenderedSession{}, fmt.Errorf("name template: %w", err)
 	}
+	// Connector item titles commonly contain punctuation (quotes, "!", "#",
+	// parens, etc.) that hive's session name validation
+	// (internal/core/session.ValidateName) rejects outright. Sanitize so a
+	// template like "gh-{{ .Fields.number }}-{{ .Title }}" always produces a
+	// creatable session name instead of surfacing "invalid session name" at
+	// CreateSession time, deep past template rendering.
+	name = sanitizeSessionName(name, item.ID)
 
 	prompt, err := renderer.Render(cfg.Prompt, data)
 	if err != nil {
@@ -72,6 +81,32 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 		Prompt: prompt,
 		Tags:   tags,
 	}, nil
+}
+
+var (
+	sessionNameNonAlnum        = regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	sessionNameRepeatedHyphens = regexp.MustCompile(`-{2,}`)
+)
+
+// sanitizeSessionName rewrites a rendered session Name into kebab-case so it
+// passes hive's session name validation and remains predictable for issue
+// titles. Separators and punctuation, including ':', become hyphens; repeated
+// hyphens collapse. If nothing usable remains, it falls back to the item's ID.
+func sanitizeSessionName(name, fallbackID string) string {
+	if normalized := kebabSessionName(name); normalized != "" {
+		return normalized
+	}
+	if normalized := kebabSessionName(fallbackID); normalized != "" {
+		return "session-" + normalized
+	}
+	return "session-item"
+}
+
+func kebabSessionName(name string) string {
+	name = strings.ToLower(strings.TrimSpace(name))
+	name = sessionNameNonAlnum.ReplaceAllString(name, "-")
+	name = sessionNameRepeatedHyphens.ReplaceAllString(name, "-")
+	return strings.Trim(name, "-")
 }
 
 // detailText returns a plain-text representation of a Detail for use as the

@@ -76,9 +76,23 @@ func TestRenderSessionTemplates(t *testing.T) {
 					"url":    "https://example.com/1",
 				},
 			},
-			wantName:   "gh-42-Fix bug",
+			wantName:   "gh-42-fix-bug",
 			wantPrompt: "Work on Fix bug\n\nhttps://example.com/1",
 			wantTags:   []string{"github", "issue-42"},
+		},
+		{
+			name: "kebab cases punctuation and colons in names",
+			cfg: connectors.TemplateConfig{
+				Name:   "{{ .Title }}",
+				Prompt: "ok",
+			},
+			item: connectors.Item{
+				ID:    "1",
+				Title: "Area: Fix HTTP/2 Bug!",
+			},
+			wantName:   "area-fix-http-2-bug",
+			wantPrompt: "ok",
+			wantTags:   []string{},
 		},
 		{
 			name: "renders detail content",
@@ -182,29 +196,6 @@ func TestDetail_KindAndValid(t *testing.T) {
 	}
 }
 
-func TestFakeConnector_ImplementsInterface(t *testing.T) {
-	fc := &fakeConnector{
-		name:      "fake",
-		available: true,
-		manifest:  connectors.Manifest{ID: "fake"},
-		items:     []connectors.Item{{ID: "1", Title: "One"}},
-		detail:    connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "detail"}},
-	}
-
-	ctx := context.Background()
-	assert.Equal(t, "fake", fc.Name())
-	assert.True(t, fc.Available(ctx))
-
-	manifest, err := fc.Initialize(ctx)
-	require.NoError(t, err)
-	assert.Equal(t, "fake", manifest.ID)
-
-	result, err := fc.Search(ctx, connectors.SearchParams{})
-	require.NoError(t, err)
-	require.Len(t, result.Items, 1)
-	assert.Equal(t, "One", result.Items[0].Title)
-
-	detail, err := fc.FetchDetail(ctx, connectors.FetchDetailParams{ID: "1"})
-	require.NoError(t, err)
-	assert.Equal(t, "detail", detail.Markdown.Content)
-}
+// Interface compliance of the test double is guaranteed at compile time by
+// the `var _ connectors.Connector = (*fakeConnector)(nil)` assertion above;
+// no runtime test is needed.

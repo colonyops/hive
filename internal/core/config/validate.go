@@ -75,6 +75,12 @@ func (c *Config) validateConnectors() error {
 		errs = errs.Append("connectors.github.templates", err)
 	}
 
+	// The built-in GitHub connector registers under "github" unless
+	// explicitly disabled; an external connector reusing that id would
+	// silently lose the registration race at startup, so surface the
+	// collision as a config error instead.
+	githubEnabled := c.Connectors.GitHub.Enabled == nil || *c.Connectors.GitHub.Enabled
+
 	seen := make(map[string]bool, len(c.Connectors.External))
 	for i, ext := range c.Connectors.External {
 		field := fmt.Sprintf("connectors.external[%d]", i)
@@ -86,6 +92,8 @@ func (c *Config) validateConnectors() error {
 			errs = errs.Append(field+".id", fmt.Errorf("invalid id %q: must be lowercase alphanumeric with hyphens", ext.ID))
 		case seen[ext.ID]:
 			errs = errs.Append(field+".id", fmt.Errorf("duplicate connector id %q", ext.ID))
+		case ext.ID == "github" && githubEnabled:
+			errs = errs.Append(field+".id", fmt.Errorf("id %q collides with the built-in github connector: set connectors.github.enabled: false to replace it", ext.ID))
 		default:
 			seen[ext.ID] = true
 		}
