@@ -61,6 +61,7 @@ const (
 	stateFormInput
 	stateShowingTodos
 	stateSelectingRepo
+	stateConnectorPicker
 )
 
 // Key constants for event handling.
@@ -699,6 +700,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 	if m.state == stateSelectingRepo {
 		return m.handleRepoPickerKey(msg)
+	}
+	if m.state == stateConnectorPicker {
+		return m.handleConnectorPickerKey(msg)
 	}
 
 	// When filtering in either list, pass most keys except quit. The KV
