@@ -150,9 +150,15 @@ Always commit the generated `*.sql.go` and `models.go` alongside the SQL changes
 
 Integration tests live in `test/integration/` and require a compiled binary. They use the `integration` build tag and are excluded from the standard `mise run test` run.
 
+**CRITICAL: NEVER run integration tests directly on the host** (e.g. `go test -tags integration ./test/integration/...` or `mise run test -- -tags integration` run outside a container). These tests spawn real tmux sessions and subprocesses that have crashed host tmux/dev environments. Integration tests exercise tmux session lifecycle and are only safe inside the isolated Docker environment.
+
+Always run integration tests via the Docker-based task instead:
+
 ```bash
-mise run test -- -tags integration    # run integration tests
+mise run integration    # builds the project and runs integration tests inside Docker
 ```
+
+Use `mise container` for interactive manual testing in the same isolated environment (see "Manual Testing" above).
 
 **Key rules:**
 - Every test calls `NewHarness(t)` which creates isolated `dataDir` and `homeDir` per test — no shared state between tests.
