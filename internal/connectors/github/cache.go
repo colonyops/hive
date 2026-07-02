@@ -2,7 +2,11 @@ package github
 
 import (
 	"context"
+	"database/sql"
+	"errors"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/colonyops/hive/internal/core/kv"
 )
@@ -36,6 +40,12 @@ func (c searchCache) get(ctx context.Context, key string) ([]issueListItem, bool
 	}
 	items, err := c.typed.Get(ctx, key)
 	if err != nil {
+		// A missing/expired key is a normal miss; anything else (DB
+		// failure, corrupt JSON) is still served as a miss but logged so
+		// it doesn't vanish silently.
+		if !errors.Is(err, sql.ErrNoRows) {
+			log.Debug().Err(err).Str("key", key).Msg("github connector: search cache read failed")
+		}
 		return nil, false
 	}
 	return items, true
@@ -47,5 +57,7 @@ func (c searchCache) set(ctx context.Context, key string, items []issueListItem)
 	if c.typed == nil {
 		return
 	}
-	_ = c.typed.SetTTL(ctx, key, items, searchCacheTTL)
+	if err := c.typed.SetTTL(ctx, key, items, searchCacheTTL); err != nil {
+		log.Debug().Err(err).Str("key", key).Msg("github connector: search cache write failed")
+	}
 }

@@ -120,8 +120,14 @@ func (c *Connector) FetchDetail(ctx context.Context, params connectors.FetchDeta
 	}
 	scope := owner + "/" + name
 
+	// Validate the ID is a bare issue number before passing it as a
+	// positional argument to gh, so a crafted ID (e.g. "--web") can never
+	// be parsed as a flag.
 	if params.ID == "" {
 		return connectors.Detail{}, fmt.Errorf("github connector: fetchDetail requires an id")
+	}
+	if _, err := strconv.Atoi(params.ID); err != nil {
+		return connectors.Detail{}, fmt.Errorf("github connector: invalid issue id %q: expected an issue number", params.ID)
 	}
 
 	out, err := c.exec.Run(ctx, "gh", "issue", "view", params.ID,
@@ -172,6 +178,13 @@ func itemsFromList(list []issueListItem) []connectors.Item {
 // load-bearing: default connector session templates reference
 // .Fields.number and .Fields.url.
 func itemFromListEntry(li issueListItem) connectors.Item {
+	labels := make([]string, 0, len(li.Labels))
+	for _, label := range li.Labels {
+		if label.Name != "" {
+			labels = append(labels, label.Name)
+		}
+	}
+
 	return connectors.Item{
 		ID:       strconv.Itoa(li.Number),
 		Title:    li.Title,
@@ -183,6 +196,7 @@ func itemFromListEntry(li issueListItem) connectors.Item {
 			"state":  li.State,
 			"url":    li.URL,
 			"author": li.Author.Login,
+			"labels": labels,
 		},
 	}
 }
