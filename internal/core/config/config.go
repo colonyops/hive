@@ -191,7 +191,7 @@ var defaultUserCommands = map[string]UserCommand{
 	},
 	"OpenConnector": {
 		Action: action.TypeOpenConnectorPicker,
-		Help:   "open a connector picker (usage: OpenConnector <id> [scope])",
+		Help:   "open a connector picker (id/scope auto-detected when omittable; usage: OpenConnector [id] [scope])",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},

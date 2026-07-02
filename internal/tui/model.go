@@ -1131,18 +1131,36 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m, nil
 		}
 
-		// OpenConnectorPicker doesn't require a session; args are the
-		// connector id and an optional scope (e.g. GitHub "owner/name").
+		// OpenConnectorPicker doesn't require a session. Both args are
+		// optional and are auto-filled from context to keep this fast to
+		// invoke: the connector id defaults to the sole configured connector
+		// when there's only one, and scope defaults to the owner/repo of the
+		// currently selected session's git remote (e.g. GitHub "owner/name").
+		// Either can still be typed explicitly to override.
 		if entry.Command.Action == act.TypeOpenConnectorPicker {
 			m.state = stateNormal
-			if len(args) == 0 {
-				m.notifyErrorf("usage: OpenConnector <id> [scope]")
+
+			connectorID := ""
+			if len(args) > 0 {
+				connectorID = args[0]
+			} else if m.connectorRegistry != nil {
+				if ids := m.connectorRegistry.IDs(); len(ids) == 1 {
+					connectorID = ids[0]
+				}
+			}
+			if connectorID == "" {
+				m.notifyErrorf("usage: OpenConnector <id> [scope] (id required: multiple connectors configured)")
 				return m, nil
 			}
-			connectorID := args[0]
+
 			scope := ""
 			if len(args) > 1 {
 				scope = args[1]
+			} else if selected != nil {
+				owner, repo := git.ExtractOwnerRepo(selected.Remote)
+				if owner != "" && repo != "" {
+					scope = owner + "/" + repo
+				}
 			}
 			return m.openConnectorPicker(connectorID, scope)
 		}

@@ -169,7 +169,7 @@ func TestConnectorPicker_LocalFilterDoesNotCallSearch(t *testing.T) {
 		{ID: "2", Title: "beta"},
 	}
 	fake := newFakeTUIConnector(listManifest(), items)
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	require.Equal(t, 1, fake.searchCallCount(), "initial load issues exactly one Search")
@@ -188,7 +188,7 @@ func TestConnectorPicker_RemoteSearchDebouncesAndCallsWithQuery(t *testing.T) {
 		{ID: "2", Title: "beta"},
 	}
 	fake := newFakeTUIConnector(remoteManifest(), items)
-	p := NewConnectorPicker(fake, remoteManifest(), "")
+	p := NewConnectorPicker(fake, remoteManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 	require.Equal(t, 1, fake.searchCallCount())
 
@@ -203,7 +203,7 @@ func TestConnectorPicker_RemoteSearchDebouncesAndCallsWithQuery(t *testing.T) {
 func TestConnectorPicker_SelectionAndCancel(t *testing.T) {
 	items := []connectors.Item{{ID: "1", Title: "alpha"}}
 	fake := newFakeTUIConnector(listManifest(), items)
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -214,7 +214,7 @@ func TestConnectorPicker_SelectionAndCancel(t *testing.T) {
 	assert.Equal(t, "1", result.Item.ID)
 	assert.False(t, p.Cancelled())
 
-	p2 := NewConnectorPicker(fake, listManifest(), "")
+	p2 := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p2 = drainPicker(t, p2, p2.Init())
 	next2, cmd2 := p2.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	p2 = drainPicker(t, next2, cmd2)
@@ -232,7 +232,7 @@ func TestConnectorPicker_LazyDetailFetchIsCachedPerID(t *testing.T) {
 	fake.detail["1"] = connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "alpha body"}}
 	fake.detail["2"] = connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "beta body"}}
 
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	assert.Equal(t, 1, fake.detailCallCount("1"), "cursor starts on first item, fetching its detail once")
@@ -250,7 +250,7 @@ func TestConnectorPicker_LazyDetailFetchIsCachedPerID(t *testing.T) {
 
 func TestConnectorPicker_EmptyResultsShowsMessageAndEnterIsNoop(t *testing.T) {
 	fake := newFakeTUIConnector(listManifest(), nil)
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	require.Empty(t, p.items)
@@ -269,7 +269,7 @@ func TestConnectorPicker_NoDetailItemShowsPlaceholder(t *testing.T) {
 	items := []connectors.Item{{ID: "1", Title: "alpha"}}
 	fake := newFakeTUIConnector(manifest, items)
 
-	p := NewConnectorPicker(fake, manifest, "")
+	p := NewConnectorPicker(fake, manifest, "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	assert.Equal(t, 0, fake.detailCallCount("1"), "FetchDetail must not be called when the manifest doesn't support it")
@@ -284,7 +284,7 @@ func TestConnectorPicker_DetailFetchErrorRendersInPane(t *testing.T) {
 	fake := newFakeTUIConnector(listManifest(), items)
 	fake.detailErr["1"] = fmt.Errorf("boom")
 
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	out := terminal.StripANSI(p.renderDetailPane(40))
@@ -295,7 +295,7 @@ func TestConnectorPicker_SearchErrorIsShownAndNonFatal(t *testing.T) {
 	fake := newFakeTUIConnector(listManifest(), nil)
 	fake.searchErr = fmt.Errorf("gh: unauthenticated")
 
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	assert.Contains(t, terminal.StripANSI(p.renderList(40)), "gh: unauthenticated")

@@ -14,7 +14,7 @@ import (
 func goldenPicker(t *testing.T, manifest connectors.Manifest, items []connectors.Item) ConnectorPicker {
 	t.Helper()
 	fake := newFakeTUIConnector(manifest, items)
-	p := NewConnectorPicker(fake, manifest, "")
+	p := NewConnectorPicker(fake, manifest, "", 80, 24)
 	p.SetSize(90, 24)
 	return drainPicker(t, p, p.Init())
 }
@@ -59,7 +59,7 @@ func TestConnectorPickerGolden_MarkdownDetail(t *testing.T) {
 	}
 	fake := newFakeTUIConnector(listManifest(), items)
 	fake.detail["1"] = connectors.Detail{Markdown: &connectors.MarkdownDetail{Content: "# Heading\n\nSome body text."}}
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p.SetSize(90, 24)
 	p = drainPicker(t, p, p.Init())
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
@@ -81,7 +81,7 @@ func TestConnectorPickerGolden_KVDetail(t *testing.T) {
 			},
 		},
 	}}
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p.SetSize(90, 24)
 	p = drainPicker(t, p, p.Init())
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
@@ -98,7 +98,7 @@ func TestConnectorPickerGolden_DetailError(t *testing.T) {
 	}
 	fake := newFakeTUIConnector(listManifest(), items)
 	fake.detailErr["1"] = errGoldenDetail
-	p := NewConnectorPicker(fake, listManifest(), "")
+	p := NewConnectorPicker(fake, listManifest(), "", 80, 24)
 	p.SetSize(90, 24)
 	p = drainPicker(t, p, p.Init())
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
