@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -18,22 +19,44 @@ import (
 	"github.com/colonyops/hive/internal/connectors/rpc"
 )
 
-// buildReferenceConnector compiles cmd/hive-reference-connector once into a
-// temp directory and returns the binary path. Building rather than using
-// `go run` avoids paying Go's build overhead on every one-shot RPC call.
+var (
+	refConnectorOnce sync.Once
+	refConnectorPath string
+	refConnectorErr  error
+)
+
+// buildReferenceConnector compiles cmd/hive-reference-connector once per
+// test process (shared across all tests that need it) and returns the
+// binary path. Building rather than using `go run` avoids paying Go's
+// build overhead on every one-shot RPC call.
 func buildReferenceConnector(t *testing.T) string {
 	t.Helper()
 
-	repoRoot, err := filepath.Abs("../..")
-	require.NoError(t, err)
+	refConnectorOnce.Do(func() {
+		repoRoot, err := filepath.Abs("../..")
+		if err != nil {
+			refConnectorErr = err
+			return
+		}
 
-	binPath := filepath.Join(t.TempDir(), "hive-reference-connector")
-	cmd := exec.Command("go", "build", "-o", binPath, "./cmd/hive-reference-connector")
-	cmd.Dir = repoRoot
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, "build reference connector: %s", out)
+		dir, err := os.MkdirTemp("", "hive-reference-connector-*")
+		if err != nil {
+			refConnectorErr = err
+			return
+		}
 
-	return binPath
+		binPath := filepath.Join(dir, "hive-reference-connector")
+		cmd := exec.Command("go", "build", "-o", binPath, "./cmd/hive-reference-connector")
+		cmd.Dir = repoRoot
+		if out, err := cmd.CombinedOutput(); err != nil {
+			refConnectorErr = fmt.Errorf("build reference connector: %w: %s", err, out)
+			return
+		}
+		refConnectorPath = binPath
+	})
+
+	require.NoError(t, refConnectorErr)
+	return refConnectorPath
 }
 
 func TestConnectorRPCAdapterReferenceConnector(t *testing.T) {

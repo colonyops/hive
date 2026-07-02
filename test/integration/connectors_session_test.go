@@ -93,3 +93,58 @@ func TestConnectorOpen_UnknownItemID(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, sessions, "no session should be created for an unknown item id")
 }
+
+func TestConnectorOpen_UnknownConnectorID(t *testing.T) {
+	binPath := buildReferenceConnector(t)
+	promptFile := filepath.Join(t.TempDir(), "prompt.txt")
+
+	h := NewHarness(t).WithConfig(referenceConnectorConfig(binPath, promptFile))
+
+	out, err := h.Run("connector", "open", "does-not-exist", "--pick", "ref-1")
+	require.Error(t, err, "output: %s", out)
+	assert.Contains(t, out, "unknown connector")
+}
+
+func TestConnectorOpen_MissingConnectorID(t *testing.T) {
+	binPath := buildReferenceConnector(t)
+	promptFile := filepath.Join(t.TempDir(), "prompt.txt")
+
+	h := NewHarness(t).WithConfig(referenceConnectorConfig(binPath, promptFile))
+
+	out, err := h.Run("connector", "open", "--pick", "ref-1")
+	require.Error(t, err, "output: %s", out)
+	assert.Contains(t, out, "connector id is required")
+}
+
+// badTemplateConnectorConfig registers the reference connector with a name
+// template referencing a Fields key the connector never emits, which is a
+// documented render-time error (missingkey=error for .Fields lookups).
+func badTemplateConnectorConfig(binPath string) string {
+	return fmt.Sprintf(`version: "0.2.4"
+git_path: git
+agents:
+  default: testbash
+  testbash:
+    command: bash
+connectors:
+  external:
+    - id: reference
+      command: [%q]
+      templates:
+        name: "{{ .Fields.does_not_exist }}"
+`, binPath)
+}
+
+func TestConnectorOpen_TemplateRenderFailureCreatesNoSession(t *testing.T) {
+	binPath := buildReferenceConnector(t)
+	repo := createBareRepo(t, "connector-repo")
+
+	h := NewHarness(t).WithConfig(badTemplateConnectorConfig(binPath))
+
+	out, err := h.Run("connector", "open", "reference", "--pick", "ref-1", "--remote", repo)
+	require.Error(t, err, "output: %s", out)
+
+	sessions, err := h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	assert.Empty(t, sessions, "no session should be created when template rendering fails")
+}

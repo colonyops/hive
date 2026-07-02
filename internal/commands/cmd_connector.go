@@ -115,6 +115,11 @@ func (cmd *ConnectorCmd) runOpen(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("connector %q is not available", connectorID)
 	}
 
+	manifest, err := conn.Initialize(ctx)
+	if err != nil {
+		return fmt.Errorf("connector %q: initialize: %w", connectorID, err)
+	}
+
 	result, err := conn.Search(ctx, connectors.SearchParams{
 		Query: cmd.query,
 		Scope: cmd.scope,
@@ -128,8 +133,11 @@ func (cmd *ConnectorCmd) runOpen(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("connector %q: no item with id %q in search results", connectorID, cmd.pick)
 	}
 
+	// Detail is optional template data: only fetch it when the connector
+	// declares the capability (mirrors the TUI picker's gate), and never
+	// fail session creation over it being absent.
 	detail := item.Detail
-	if detail.Kind() == connectors.DetailKindNone {
+	if detail.Kind() == connectors.DetailKindNone && manifest.Capabilities.FetchDetail {
 		fetched, err := conn.FetchDetail(ctx, connectors.FetchDetailParams{
 			ID:    item.ID,
 			Scope: cmd.scope,
