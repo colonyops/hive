@@ -700,8 +700,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m.handleRepoPickerKey(msg)
 	}
 
-	// When filtering in either list, pass most keys except quit
-	if m.sessionsView.IsSettingFilter() || m.kvView.IsFiltering() || m.sessionsView.FocusMode() {
+	// When filtering in either list, pass most keys except quit. The KV
+	// filter only captures keys while the Store view is active so it cannot
+	// swallow keys on other views.
+	if m.sessionsView.IsSettingFilter() || (m.activeView == ViewStore && m.kvView.IsFiltering()) || m.sessionsView.FocusMode() {
 		return m.handleFilteringKey(msg, keyStr)
 	}
 

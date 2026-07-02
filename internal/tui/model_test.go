@@ -455,6 +455,45 @@ func TestFilterModeSwallowsKeys(t *testing.T) {
 	assert.Equal(t, stateNormal, m.state)
 }
 
+func TestKVFilterDoesNotLeakAcrossViews(t *testing.T) {
+	newModel := func(t *testing.T) Model {
+		return newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
+			cfg.UserCommands["SentinelTodoPanel"] = config.UserCommand{
+				Action: act.TypeTodoPanel,
+				Help:   "sentinel todo panel",
+				Scope:  []string{"sessions"},
+			}
+			cfg.Views.Sessions.Keybindings["g"] = config.Keybinding{Cmd: "SentinelTodoPanel"}
+		})
+	}
+
+	t.Run("switching away from store cancels the filter", func(t *testing.T) {
+		m := newModel(t)
+		m = switchTestView(t, m, ViewStore)
+		m.kvView.StartFilter()
+		require.True(t, m.kvView.IsFiltering())
+
+		m = switchTestView(t, m, ViewSessions)
+		assert.False(t, m.kvView.IsFiltering())
+
+		// Keybindings resolve normally on the sessions view after switching.
+		m = driveKeyUpdate(t, m, "g")
+		assert.Equal(t, stateShowingTodos, m.state)
+	})
+
+	t.Run("active kv filter does not capture keys on other views", func(t *testing.T) {
+		m := newModel(t)
+		m = switchTestView(t, m, ViewSessions)
+
+		// Simulate stale KV filter state while another view is active.
+		m.kvView.StartFilter()
+		require.True(t, m.kvView.IsFiltering())
+
+		m = driveKeyUpdate(t, m, "g")
+		assert.Equal(t, stateShowingTodos, m.state, "key must resolve via keybindings, not the KV filter")
+	})
+}
+
 func TestUnknownCommandDoesNotFallBack(t *testing.T) {
 	tests := []struct {
 		name string
