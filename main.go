@@ -353,6 +353,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				Commit:  resolvedCommit,
 				Date:    resolvedDate,
 			}
+			hiveApp.Connectors = buildConnectorRegistry(cfg, exec, kvStore, svcLogger)
 
 			return ctx, nil
 		},
@@ -409,6 +410,7 @@ Run 'hive new' to create a new session from the current repository.`,
 	app = commands.NewWorkspaceCmd(flags, hiveApp).Register(app)
 	app = commands.NewInitCmd(flags, hiveApp).Register(app)
 	app = commands.NewExperimentalCmd(flags, hiveApp).Register(app)
+	app = commands.NewConnectorCmd(flags, hiveApp).Register(app)
 
 	// Register TUI flags on root command
 	app.Flags = append(app.Flags, tuiCmd.Flags()...)

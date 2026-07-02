@@ -1,6 +1,7 @@
 package hive
 
 import (
+	"github.com/colonyops/hive/internal/connectors"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
 	"github.com/colonyops/hive/internal/core/eventbus"
@@ -41,6 +42,7 @@ type App struct {
 	KV         kv.KV
 	Renderer   *tmpl.Renderer
 	Build      BuildInfo
+	Connectors *connectors.Registry
 }
 
 // NewApp constructs an App from explicit dependencies.

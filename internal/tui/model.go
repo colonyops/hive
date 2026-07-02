@@ -17,6 +17,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
+	"github.com/colonyops/hive/internal/connectors"
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
@@ -89,6 +90,7 @@ type Deps struct {
 	BuildInfo     BuildInfo
 	DoctorService *hive.DoctorService
 	Honeycomb     *hive.HoneycombService
+	Connectors    *connectors.Registry
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -155,6 +157,10 @@ type Model struct {
 	updateInfo    *updatecheck.Result
 	doctorService *hive.DoctorService
 	configPath    string
+
+	connectorRegistry         *connectors.Registry
+	pendingConnectorID        string
+	pendingConnectorTemplates connectors.TemplateConfig
 
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
@@ -336,36 +342,37 @@ func New(deps Deps, opts Opts) Model {
 	updateChecker := updatecheck.New(deps.KVStore, nil)
 
 	return Model{
-		cfg:             cfg,
-		service:         service,
-		cmdService:      cmdService,
-		handler:         handler,
-		state:           stateNormal,
-		spinner:         s,
-		source:          opts.Source,
-		modals:          NewModalCoordinator(),
-		sessionsView:    sessionsView,
-		msgView:         msgView,
-		activeView:      ViewSessions,
-		copyCommand:     cfg.CopyCommand,
-		commandSet:      deps.CommandSet,
-		reviewView:      &reviewView,
-		kvStore:         deps.KVStore,
-		kvView:          kvView,
-		tasksView:       tasksView,
-		notifyStore:     notifyStore,
-		notifyBuffer:    notifyBuffer,
-		toastController: toastCtrl,
-		toastView:       toastView,
-		bus:             deps.Bus,
-		todoService:     deps.TodoService,
-		todoCh:          todoCh,
-		renderer:        deps.Renderer,
-		buildInfo:       deps.BuildInfo,
-		updateChecker:   updateChecker,
-		doctorService:   deps.DoctorService,
-		configPath:      opts.ConfigPath,
-		startupWarnings: opts.Warnings,
+		cfg:               cfg,
+		service:           service,
+		cmdService:        cmdService,
+		handler:           handler,
+		state:             stateNormal,
+		spinner:           s,
+		source:            opts.Source,
+		modals:            NewModalCoordinator(),
+		sessionsView:      sessionsView,
+		msgView:           msgView,
+		activeView:        ViewSessions,
+		copyCommand:       cfg.CopyCommand,
+		commandSet:        deps.CommandSet,
+		reviewView:        &reviewView,
+		kvStore:           deps.KVStore,
+		kvView:            kvView,
+		tasksView:         tasksView,
+		notifyStore:       notifyStore,
+		notifyBuffer:      notifyBuffer,
+		toastController:   toastCtrl,
+		toastView:         toastView,
+		bus:               deps.Bus,
+		todoService:       deps.TodoService,
+		todoCh:            todoCh,
+		renderer:          deps.Renderer,
+		buildInfo:         deps.BuildInfo,
+		updateChecker:     updateChecker,
+		doctorService:     deps.DoctorService,
+		configPath:        opts.ConfigPath,
+		startupWarnings:   opts.Warnings,
+		connectorRegistry: deps.Connectors,
 	}
 }
 
@@ -571,6 +578,17 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleStreamComplete(msg)
 	case bgStreamCompleteMsg:
 		model, cmd = m.handleBgStreamComplete(msg)
+
+	// Connector picker
+	case connectorPickerReadyMsg:
+		model, cmd = m.handleConnectorPickerReady(msg)
+	case connectorPickerErrorMsg:
+		model, cmd = m.handleConnectorPickerError(msg)
+	case connectorSessionCreatedMsg:
+		model, cmd = m.handleConnectorSessionCreated(msg)
+	case connectorSearchResultMsg, connectorSearchErrorMsg, connectorSearchDebounceMsg,
+		connectorDetailResultMsg, connectorDetailErrorMsg:
+		model, cmd = m.forwardConnectorPickerMsg(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -1111,6 +1129,22 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			m.state = stateShowingNotifications
 			m.modals.ShowNotifications(m.notifyStore)
 			return m, nil
+		}
+
+		// OpenConnectorPicker doesn't require a session; args are the
+		// connector id and an optional scope (e.g. GitHub "owner/name").
+		if entry.Command.Action == act.TypeOpenConnectorPicker {
+			m.state = stateNormal
+			if len(args) == 0 {
+				m.notifyErrorf("usage: OpenConnector <id> [scope]")
+				return m, nil
+			}
+			connectorID := args[0]
+			scope := ""
+			if len(args) > 1 {
+				scope = args[1]
+			}
+			return m.openConnectorPicker(connectorID, scope)
 		}
 
 		// TodoPanel doesn't require a session
