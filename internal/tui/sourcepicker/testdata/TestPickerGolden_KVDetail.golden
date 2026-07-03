@@ -1,0 +1,22 @@
+╭────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                │
+│  Fake Source                                                                   │
+│                                                                                │
+│  / search...                    │  Item with kv detail                         │
+│                                 │                                              │
+│  󰅂 Item with kv detail          │  Metadata                                    │
+│                                 │  status: open                                │
+│                                 │  owner: alice                                │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                                                                │
+│                                                                                │
+│  j/k navigate  / search  O open  enter select  esc cancel                      │
+│                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────╯

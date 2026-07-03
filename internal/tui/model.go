@@ -17,7 +17,6 @@ import (
 	tea "charm.land/bubbletea/v2"
 	"github.com/rs/zerolog/log"
 
-	"github.com/colonyops/hive/internal/connectors"
 	act "github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/doctor"
@@ -28,7 +27,8 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/tui/connectorpicker"
+	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/tui/sourcepicker"
 
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -63,7 +63,7 @@ const (
 	stateFormInput
 	stateShowingTodos
 	stateSelectingRepo
-	stateConnectorPicker
+	stateSourcePicker
 )
 
 // Key constants for event handling.
@@ -91,7 +91,7 @@ type Deps struct {
 	BuildInfo     BuildInfo
 	DoctorService *hive.DoctorService
 	Honeycomb     *hive.HoneycombService
-	Connectors    *connectors.Registry
+	Sources       *sources.Registry
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -159,10 +159,10 @@ type Model struct {
 	doctorService *hive.DoctorService
 	configPath    string
 
-	connectorRegistry         *connectors.Registry
-	pendingConnectorID        string
-	pendingConnectorScope     connectorPickerScope
-	pendingConnectorTemplates connectors.TemplateConfig
+	sourceRegistry         *sources.Registry
+	pendingSourceID        string
+	pendingSourceScope     sourcePickerScope
+	pendingSourceTemplates sources.TemplateConfig
 
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
@@ -357,37 +357,37 @@ func New(deps Deps, opts Opts) Model {
 	updateChecker := updatecheck.New(deps.KVStore, nil)
 
 	return Model{
-		cfg:               cfg,
-		service:           service,
-		cmdService:        cmdService,
-		handler:           handler,
-		state:             stateNormal,
-		spinner:           s,
-		source:            opts.Source,
-		modals:            NewModalCoordinator(),
-		sessionsView:      sessionsView,
-		msgView:           msgView,
-		activeView:        ViewSessions,
-		copyCommand:       cfg.CopyCommand,
-		commandSet:        deps.CommandSet,
-		reviewView:        &reviewView,
-		kvStore:           deps.KVStore,
-		kvView:            kvView,
-		tasksView:         tasksView,
-		notifyStore:       notifyStore,
-		notifyBuffer:      notifyBuffer,
-		toastController:   toastCtrl,
-		toastView:         toastView,
-		bus:               deps.Bus,
-		todoService:       deps.TodoService,
-		todoCh:            todoCh,
-		renderer:          deps.Renderer,
-		buildInfo:         deps.BuildInfo,
-		updateChecker:     updateChecker,
-		doctorService:     deps.DoctorService,
-		configPath:        opts.ConfigPath,
-		startupWarnings:   opts.Warnings,
-		connectorRegistry: deps.Connectors,
+		cfg:             cfg,
+		service:         service,
+		cmdService:      cmdService,
+		handler:         handler,
+		state:           stateNormal,
+		spinner:         s,
+		source:          opts.Source,
+		modals:          NewModalCoordinator(),
+		sessionsView:    sessionsView,
+		msgView:         msgView,
+		activeView:      ViewSessions,
+		copyCommand:     cfg.CopyCommand,
+		commandSet:      deps.CommandSet,
+		reviewView:      &reviewView,
+		kvStore:         deps.KVStore,
+		kvView:          kvView,
+		tasksView:       tasksView,
+		notifyStore:     notifyStore,
+		notifyBuffer:    notifyBuffer,
+		toastController: toastCtrl,
+		toastView:       toastView,
+		bus:             deps.Bus,
+		todoService:     deps.TodoService,
+		todoCh:          todoCh,
+		renderer:        deps.Renderer,
+		buildInfo:       deps.BuildInfo,
+		updateChecker:   updateChecker,
+		doctorService:   deps.DoctorService,
+		configPath:      opts.ConfigPath,
+		startupWarnings: opts.Warnings,
+		sourceRegistry:  deps.Sources,
 	}
 }
 
@@ -596,13 +596,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case bgStreamCompleteMsg:
 		model, cmd = m.handleBgStreamComplete(msg)
 
-	// Connector picker
-	case connectorPickerReadyMsg:
-		model, cmd = m.handleConnectorPickerReady(msg)
-	case connectorPickerErrorMsg:
-		model, cmd = m.handleConnectorPickerError(msg)
-	case connectorpicker.Msg:
-		model, cmd = m.forwardConnectorPickerMsg(msg)
+	// Source picker
+	case sourcePickerReadyMsg:
+		model, cmd = m.handleSourcePickerReady(msg)
+	case sourcePickerErrorMsg:
+		model, cmd = m.handleSourcePickerError(msg)
+	case sourcepicker.Msg:
+		model, cmd = m.forwardSourcePickerMsg(msg)
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -733,8 +733,8 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateSelectingRepo {
 		return m.handleRepoPickerKey(msg)
 	}
-	if m.state == stateConnectorPicker {
-		return m.handleConnectorPickerKey(msg)
+	if m.state == stateSourcePicker {
+		return m.handleSourcePickerKey(msg)
 	}
 
 	// When filtering in either list, pass most keys except quit. The KV
@@ -778,8 +778,8 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-func (m Model) connectorPickerScopeForSelection(selected *session.Session, args []string) connectorPickerScope {
-	scope := connectorPickerScope{}
+func (m Model) sourcePickerScopeForSelection(selected *session.Session, args []string) sourcePickerScope {
+	scope := sourcePickerScope{}
 	if len(args) > 1 {
 		scope.Search = args[1]
 		return m.withDiscoveredRepoForScope(scope)
@@ -810,7 +810,7 @@ func (m Model) connectorPickerScopeForSelection(selected *session.Session, args 
 	return m.withDiscoveredRepoForRemote(scope)
 }
 
-func (m Model) withDiscoveredRepoForScope(scope connectorPickerScope) connectorPickerScope {
+func (m Model) withDiscoveredRepoForScope(scope sourcePickerScope) sourcePickerScope {
 	for _, repo := range m.sessionsView.DiscoveredRepos() {
 		owner, name := git.ExtractOwnerRepo(repo.Remote)
 		if owner != "" && name != "" && owner+"/"+name == scope.Search {
@@ -822,7 +822,7 @@ func (m Model) withDiscoveredRepoForScope(scope connectorPickerScope) connectorP
 	return scope
 }
 
-func (m Model) withDiscoveredRepoForRemote(scope connectorPickerScope) connectorPickerScope {
+func (m Model) withDiscoveredRepoForRemote(scope sourcePickerScope) sourcePickerScope {
 	for _, repo := range m.sessionsView.DiscoveredRepos() {
 		if repo.Remote == scope.Remote {
 			scope.Source = repo.Path
@@ -1179,7 +1179,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 	if entry, args, ok := m.modals.CommandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 
-		// Preset command args (e.g. ConnectorIssues -> ["issues"]) come
+		// Preset command args (e.g. SourceIssues -> ["issues"]) come
 		// first; anything the user typed after the command name follows.
 		if len(entry.Command.Args) > 0 {
 			args = append(slices.Clone(entry.Command.Args), args...)
@@ -1199,23 +1199,23 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			return m, nil
 		}
 
-		// OpenConnectorPicker doesn't require a session. Both args are
+		// OpenSourcePicker doesn't require a session. Both args are
 		// optional and are auto-filled from context to keep this fast to
-		// invoke: the connector id defaults to the sole configured connector
+		// invoke: the source id defaults to the sole configured source
 		// when there's only one, and scope defaults to the owner/repo of the
 		// currently selected session's git remote (e.g. GitHub "owner/name").
 		// Either can still be typed explicitly to override.
-		if entry.Command.Action == act.TypeOpenConnectorPicker {
+		if entry.Command.Action == act.TypeOpenSourcePicker {
 			m.state = stateNormal
 
-			connectorID, ok := m.resolveConnectorID(args)
+			sourceID, ok := m.resolveSourceID(args)
 			if !ok {
-				m.notifyErrorf("usage: OpenConnector <id> [scope] (id required: multiple connectors configured)")
+				m.notifyErrorf("usage: OpenSource <id> [scope] (id required: multiple sources configured)")
 				return m, nil
 			}
 
-			scope := m.connectorPickerScopeForSelection(selected, args)
-			return m.openConnectorPicker(connectorID, scope)
+			scope := m.sourcePickerScopeForSelection(selected, args)
+			return m.openSourcePicker(sourceID, scope)
 		}
 
 		// TodoPanel doesn't require a session
