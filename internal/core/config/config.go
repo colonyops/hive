@@ -195,6 +195,20 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
+	"ConnectorIssues": {
+		Action: action.TypeOpenConnectorPicker,
+		Args:   []string{"issues"},
+		Help:   "browse GitHub issues and create a session (usage: ConnectorIssues [scope])",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"ConnectorPRs": {
+		Action: action.TypeOpenConnectorPicker,
+		Args:   []string{"prs"},
+		Help:   "browse GitHub pull requests and create a session (usage: ConnectorPRs [scope])",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
 	"ViewTasks": {
 		Action: action.TypeViewTasks,
 		Help:   "view tasks for repo",
@@ -603,7 +617,8 @@ type ClaudePluginConfig struct {
 // external data sources (GitHub issues, external subprocess connectors) that
 // map a selected item into a new hive session.
 type ConnectorsConfig struct {
-	GitHub   GitHubConnectorConfig     `json:"github"   yaml:"github"`
+	Issues   BuiltinConnectorConfig    `json:"issues"   yaml:"issues"`
+	PRs      BuiltinConnectorConfig    `json:"prs"      yaml:"prs"`
 	External []ExternalConnectorConfig `json:"external" yaml:"external"`
 }
 
@@ -615,8 +630,10 @@ type ConnectorTemplateConfig struct {
 	Tags   []string `json:"tags"   yaml:"tags"`
 }
 
-// GitHubConnectorConfig holds configuration for the built-in GitHub issues connector.
-type GitHubConnectorConfig struct {
+// BuiltinConnectorConfig holds configuration for one built-in connector
+// (issues, prs). Mirrors the per-plugin config convention: nil Enabled
+// means auto-detect.
+type BuiltinConnectorConfig struct {
 	Enabled   *bool                   `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
 	Templates ConnectorTemplateConfig `json:"templates" yaml:"templates"`
 }
@@ -711,6 +728,7 @@ type UserCommandOptions struct {
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
 	Action  action.Type        `json:"action,omitempty"  yaml:"action,omitempty"`  // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
+	Args    []string           `json:"args,omitempty"    yaml:"args,omitempty"`    // preset args for action commands; typed palette args are appended after these
 	Sh      string             `json:"sh"                yaml:"sh"`                // shell command template - mutually exclusive with action
 	Windows []WindowConfig     `json:"windows,omitempty" yaml:"windows,omitempty"` // Tmux windows to open after sh: completes
 	Options UserCommandOptions `json:"options,omitempty" yaml:"options,omitempty"` // Execution options for window-based commands
@@ -808,11 +826,18 @@ func DefaultConfig() Config {
 			},
 		},
 		Connectors: ConnectorsConfig{
-			GitHub: GitHubConnectorConfig{
+			Issues: BuiltinConnectorConfig{
 				Templates: ConnectorTemplateConfig{
 					Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
 					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}",
 					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+				},
+			},
+			PRs: BuiltinConnectorConfig{
+				Templates: ConnectorTemplateConfig{
+					Name:   "gh-pr-{{ .Fields.number }}-{{ .Title }}",
+					Prompt: "Review pull request {{ .Title }}\n\n{{ .Fields.url }}",
+					Tags:   []string{"github", "pr-{{ .Fields.number }}"},
 				},
 			},
 		},
@@ -924,15 +949,8 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
-	if c.Connectors.GitHub.Templates.Name == "" {
-		c.Connectors.GitHub.Templates.Name = defaults.Connectors.GitHub.Templates.Name
-	}
-	if c.Connectors.GitHub.Templates.Prompt == "" {
-		c.Connectors.GitHub.Templates.Prompt = defaults.Connectors.GitHub.Templates.Prompt
-	}
-	if len(c.Connectors.GitHub.Templates.Tags) == 0 {
-		c.Connectors.GitHub.Templates.Tags = defaults.Connectors.GitHub.Templates.Tags
-	}
+	applyConnectorTemplateDefaults(&c.Connectors.Issues.Templates, defaults.Connectors.Issues.Templates)
+	applyConnectorTemplateDefaults(&c.Connectors.PRs.Templates, defaults.Connectors.PRs.Templates)
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -1411,4 +1429,18 @@ func matchesPattern(pattern, remote string) bool {
 		return false
 	}
 	return re.MatchString(remote)
+}
+
+// applyConnectorTemplateDefaults fills unset builtin-connector template
+// fields from defaults, preserving any user-provided values.
+func applyConnectorTemplateDefaults(templates *ConnectorTemplateConfig, defaults ConnectorTemplateConfig) {
+	if templates.Name == "" {
+		templates.Name = defaults.Name
+	}
+	if templates.Prompt == "" {
+		templates.Prompt = defaults.Prompt
+	}
+	if len(templates.Tags) == 0 {
+		templates.Tags = defaults.Tags
+	}
 }

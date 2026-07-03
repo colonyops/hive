@@ -4,7 +4,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/connectors"
-	connectorgithub "github.com/colonyops/hive/internal/connectors/github"
+	"github.com/colonyops/hive/internal/connectors/ghcli"
 	"github.com/colonyops/hive/internal/connectors/rpc"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/kv"
@@ -16,19 +16,43 @@ import (
 // connector subprocess.
 const defaultExternalConnectorTimeout = 30 * time.Second
 
+// builtinConnectors declares the gh-CLI-backed builtins: each entry pairs
+// a declarative ghcli.Spec with the config section controlling it. Adding
+// a new builtin means adding a Spec (see ghcli/issues.go, ghcli/prs.go), a
+// config section, and one row here.
+func builtinConnectors(cfg *config.Config) []struct {
+	Spec   ghcli.Spec
+	Config config.BuiltinConnectorConfig
+} {
+	return []struct {
+		Spec   ghcli.Spec
+		Config config.BuiltinConnectorConfig
+	}{
+		{Spec: ghcli.IssuesSpec(), Config: cfg.Connectors.Issues},
+		{Spec: ghcli.PRsSpec(), Config: cfg.Connectors.PRs},
+	}
+}
+
 // buildConnectorRegistry constructs the connectors.Registry from cfg: the
-// built-in GitHub issues connector (when enabled) and any configured
-// external subprocess connectors. Registration failures (e.g. a duplicate
-// external id) are logged and the offending entry is skipped rather than
-// failing startup.
+// built-in gh-CLI connectors (when enabled) and any configured external
+// subprocess connectors. Registration failures (e.g. a duplicate external
+// id) are logged and the offending entry is skipped rather than failing
+// startup.
 func buildConnectorRegistry(cfg *config.Config, exec executil.Executor, kvStore kv.KV, logger zerolog.Logger) *connectors.Registry {
 	registry := connectors.NewRegistry()
 
-	if isConnectorEnabled(cfg.Connectors.GitHub.Enabled) {
-		conn := connectorgithub.New(exec, kvStore)
-		templates := connectorTemplateConfig(cfg.Connectors.GitHub.Templates)
+	for _, builtin := range builtinConnectors(cfg) {
+		if !isConnectorEnabled(builtin.Config.Enabled) {
+			continue
+		}
+		conn, err := ghcli.New(builtin.Spec, exec, kvStore)
+		if err != nil {
+			logger.Warn().Err(err).Str("connector", builtin.Spec.ID).Msg("connectors: failed to construct builtin connector")
+			continue
+		}
+		templates := connectorTemplateConfig(builtin.Config.Templates)
 		if err := registry.Register(conn.Name(), conn, templates); err != nil {
-			logger.Warn().Err(err).Msg("connectors: failed to register github connector")
+			logger.Warn().Err(err).Str("connector", builtin.Spec.ID).Msg("connectors: failed to register builtin connector")
 		}
 	}
 

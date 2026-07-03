@@ -21,32 +21,48 @@ func TestBuildConnectorRegistry(t *testing.T) {
 		wantIDs []string
 	}{
 		{
-			name:    "github enabled by default (nil)",
+			name:    "builtins enabled by default (nil)",
 			cfg:     config.ConnectorsConfig{},
-			wantIDs: []string{"github"},
+			wantIDs: []string{"issues", "prs"},
 		},
 		{
-			name: "github explicitly enabled",
+			name: "builtins explicitly enabled",
 			cfg: config.ConnectorsConfig{
-				GitHub: config.GitHubConnectorConfig{Enabled: boolPtr(true)},
+				Issues: config.BuiltinConnectorConfig{Enabled: boolPtr(true)},
+				PRs:    config.BuiltinConnectorConfig{Enabled: boolPtr(true)},
 			},
-			wantIDs: []string{"github"},
+			wantIDs: []string{"issues", "prs"},
 		},
 		{
-			name: "github disabled",
+			name: "issues disabled leaves prs",
 			cfg: config.ConnectorsConfig{
-				GitHub: config.GitHubConnectorConfig{Enabled: boolPtr(false)},
+				Issues: config.BuiltinConnectorConfig{Enabled: boolPtr(false)},
+			},
+			wantIDs: []string{"prs"},
+		},
+		{
+			name: "prs disabled leaves issues",
+			cfg: config.ConnectorsConfig{
+				PRs: config.BuiltinConnectorConfig{Enabled: boolPtr(false)},
+			},
+			wantIDs: []string{"issues"},
+		},
+		{
+			name: "all builtins disabled",
+			cfg: config.ConnectorsConfig{
+				Issues: config.BuiltinConnectorConfig{Enabled: boolPtr(false)},
+				PRs:    config.BuiltinConnectorConfig{Enabled: boolPtr(false)},
 			},
 			wantIDs: []string{},
 		},
 		{
-			name: "external connector registered",
+			name: "external connector registered alongside builtins",
 			cfg: config.ConnectorsConfig{
 				External: []config.ExternalConnectorConfig{
 					{ID: "jira", Command: []string{"jira-connector"}},
 				},
 			},
-			wantIDs: []string{"github", "jira"},
+			wantIDs: []string{"issues", "jira", "prs"},
 		},
 		{
 			name: "disabled external connector skipped",
@@ -55,26 +71,26 @@ func TestBuildConnectorRegistry(t *testing.T) {
 					{ID: "jira", Enabled: boolPtr(false), Command: []string{"jira-connector"}},
 				},
 			},
-			wantIDs: []string{"github"},
+			wantIDs: []string{"issues", "prs"},
 		},
 		{
-			name: "external id colliding with built-in github is skipped, not fatal",
+			name: "external id colliding with builtin is skipped, not fatal",
 			cfg: config.ConnectorsConfig{
 				External: []config.ExternalConnectorConfig{
-					{ID: "github", Command: []string{"my-github"}},
+					{ID: "issues", Command: []string{"my-issues"}},
 				},
 			},
-			wantIDs: []string{"github"},
+			wantIDs: []string{"issues", "prs"},
 		},
 		{
-			name: "external github replaces built-in when built-in disabled",
+			name: "external issues replaces builtin when builtin disabled",
 			cfg: config.ConnectorsConfig{
-				GitHub: config.GitHubConnectorConfig{Enabled: boolPtr(false)},
+				Issues: config.BuiltinConnectorConfig{Enabled: boolPtr(false)},
 				External: []config.ExternalConnectorConfig{
-					{ID: "github", Command: []string{"my-github"}},
+					{ID: "issues", Command: []string{"my-issues"}},
 				},
 			},
-			wantIDs: []string{"github"},
+			wantIDs: []string{"issues", "prs"},
 		},
 		{
 			name: "invalid external entry (empty command) skipped without failing others",
@@ -84,7 +100,7 @@ func TestBuildConnectorRegistry(t *testing.T) {
 					{ID: "jira", Command: []string{"jira-connector"}},
 				},
 			},
-			wantIDs: []string{"github", "jira"},
+			wantIDs: []string{"issues", "jira", "prs"},
 		},
 	}
 
