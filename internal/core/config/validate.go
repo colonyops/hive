@@ -71,15 +71,21 @@ var connectorIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
 func (c *Config) validateConnectors() error {
 	var errs criterio.FieldErrorsBuilder
 
-	if err := validateConnectorTemplateSet("connectors.github.templates", c.Connectors.GitHub.Templates); err != nil {
-		errs = errs.Append("connectors.github.templates", err)
+	if err := validateConnectorTemplateSet("connectors.issues.templates", c.Connectors.Issues.Templates); err != nil {
+		errs = errs.Append("connectors.issues.templates", err)
+	}
+	if err := validateConnectorTemplateSet("connectors.prs.templates", c.Connectors.PRs.Templates); err != nil {
+		errs = errs.Append("connectors.prs.templates", err)
 	}
 
-	// The built-in GitHub connector registers under "github" unless
-	// explicitly disabled; an external connector reusing that id would
+	// Built-in connectors register under fixed ids unless explicitly
+	// disabled; an external connector reusing one of those ids would
 	// silently lose the registration race at startup, so surface the
 	// collision as a config error instead.
-	githubEnabled := c.Connectors.GitHub.Enabled == nil || *c.Connectors.GitHub.Enabled
+	reservedIDs := map[string]bool{
+		"issues": c.Connectors.Issues.Enabled == nil || *c.Connectors.Issues.Enabled,
+		"prs":    c.Connectors.PRs.Enabled == nil || *c.Connectors.PRs.Enabled,
+	}
 
 	seen := make(map[string]bool, len(c.Connectors.External))
 	for i, ext := range c.Connectors.External {
@@ -92,8 +98,8 @@ func (c *Config) validateConnectors() error {
 			errs = errs.Append(field+".id", fmt.Errorf("invalid id %q: must be lowercase alphanumeric with hyphens", ext.ID))
 		case seen[ext.ID]:
 			errs = errs.Append(field+".id", fmt.Errorf("duplicate connector id %q", ext.ID))
-		case ext.ID == "github" && githubEnabled:
-			errs = errs.Append(field+".id", fmt.Errorf("id %q collides with the built-in github connector: set connectors.github.enabled: false to replace it", ext.ID))
+		case reservedIDs[ext.ID]:
+			errs = errs.Append(field+".id", fmt.Errorf("id %q collides with the built-in %s connector: set connectors.%s.enabled: false to replace it", ext.ID, ext.ID, ext.ID))
 		default:
 			seen[ext.ID] = true
 		}

@@ -10,19 +10,22 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
-func TestApplyDefaults_ConnectorGitHubTemplates(t *testing.T) {
+func TestApplyDefaults_ConnectorBuiltinTemplates(t *testing.T) {
 	cfg := &Config{}
 	cfg.applyDefaults()
 
-	assert.NotEmpty(t, cfg.Connectors.GitHub.Templates.Name)
-	assert.NotEmpty(t, cfg.Connectors.GitHub.Templates.Prompt)
-	assert.NotEmpty(t, cfg.Connectors.GitHub.Templates.Tags)
+	assert.NotEmpty(t, cfg.Connectors.Issues.Templates.Name)
+	assert.NotEmpty(t, cfg.Connectors.Issues.Templates.Prompt)
+	assert.NotEmpty(t, cfg.Connectors.Issues.Templates.Tags)
+	assert.NotEmpty(t, cfg.Connectors.PRs.Templates.Name)
+	assert.NotEmpty(t, cfg.Connectors.PRs.Templates.Prompt)
+	assert.NotEmpty(t, cfg.Connectors.PRs.Templates.Tags)
 }
 
-func TestApplyDefaults_ConnectorGitHubTemplatesPreservesUserValues(t *testing.T) {
+func TestApplyDefaults_ConnectorBuiltinTemplatesPreserveUserValues(t *testing.T) {
 	cfg := &Config{
 		Connectors: ConnectorsConfig{
-			GitHub: GitHubConnectorConfig{
+			Issues: BuiltinConnectorConfig{
 				Templates: ConnectorTemplateConfig{
 					Name:   "custom-{{ .Title }}",
 					Prompt: "custom prompt",
@@ -33,19 +36,22 @@ func TestApplyDefaults_ConnectorGitHubTemplatesPreservesUserValues(t *testing.T)
 	}
 	cfg.applyDefaults()
 
-	assert.Equal(t, "custom-{{ .Title }}", cfg.Connectors.GitHub.Templates.Name)
-	assert.Equal(t, "custom prompt", cfg.Connectors.GitHub.Templates.Prompt)
-	assert.Equal(t, []string{"custom"}, cfg.Connectors.GitHub.Templates.Tags)
+	assert.Equal(t, "custom-{{ .Title }}", cfg.Connectors.Issues.Templates.Name)
+	assert.Equal(t, "custom prompt", cfg.Connectors.Issues.Templates.Prompt)
+	assert.Equal(t, []string{"custom"}, cfg.Connectors.Issues.Templates.Tags)
+	assert.NotEqual(t, cfg.Connectors.Issues.Templates.Name, cfg.Connectors.PRs.Templates.Name, "prs defaults are independent")
 }
 
 func TestConfigLoadsTopLevelConnectors(t *testing.T) {
 	yamlSrc := `
 connectors:
-  github:
+  issues:
     enabled: true
     templates:
       name: "gh-{{ .Fields.number }}"
       prompt: "work on {{ .Title }}"
+  prs:
+    enabled: false
   external:
     - id: reference
       command: ["hive-reference-connector"]
@@ -57,8 +63,9 @@ connectors:
 	var cfg Config
 	require.NoError(t, yaml.Unmarshal([]byte(yamlSrc), &cfg))
 
-	assert.True(t, *cfg.Connectors.GitHub.Enabled)
-	assert.Equal(t, "gh-{{ .Fields.number }}", cfg.Connectors.GitHub.Templates.Name)
+	assert.True(t, *cfg.Connectors.Issues.Enabled)
+	assert.False(t, *cfg.Connectors.PRs.Enabled)
+	assert.Equal(t, "gh-{{ .Fields.number }}", cfg.Connectors.Issues.Templates.Name)
 	require.Len(t, cfg.Connectors.External, 1)
 	assert.Equal(t, "reference", cfg.Connectors.External[0].ID)
 	assert.Equal(t, []string{"hive-reference-connector"}, cfg.Connectors.External[0].Command)
@@ -79,18 +86,27 @@ plugins:
 	require.NoError(t, yaml.Unmarshal([]byte(yamlSrc), &cfg))
 
 	assert.Empty(t, cfg.Connectors.External)
-	assert.Nil(t, cfg.Connectors.GitHub.Enabled)
+	assert.Nil(t, cfg.Connectors.Issues.Enabled)
+	assert.Nil(t, cfg.Connectors.PRs.Enabled)
 }
 
-func TestValidateConnectors_ValidGitHubAndExternal(t *testing.T) {
+func TestValidateConnectors_ValidBuiltinsAndExternal(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Connectors = ConnectorsConfig{
-		GitHub: GitHubConnectorConfig{
+		Issues: BuiltinConnectorConfig{
 			Enabled: boolPtr(true),
 			Templates: ConnectorTemplateConfig{
 				Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
 				Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}",
 				Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+			},
+		},
+		PRs: BuiltinConnectorConfig{
+			Enabled: boolPtr(true),
+			Templates: ConnectorTemplateConfig{
+				Name:   "gh-pr-{{ .Fields.number }}",
+				Prompt: "Review {{ .Title }}",
+				Tags:   []string{"pr"},
 			},
 		},
 		External: []ExternalConnectorConfig{
@@ -143,22 +159,26 @@ func TestValidateConnectors_ExternalDuplicateID(t *testing.T) {
 	assert.Contains(t, err.Error(), "duplicate")
 }
 
-func TestValidateConnectors_ExternalGitHubIDCollidesWithBuiltin(t *testing.T) {
-	cfg := validConfig(t)
-	cfg.Connectors.External = []ExternalConnectorConfig{
-		{ID: "github", Command: []string{"my-github"}},
-	}
+func TestValidateConnectors_ExternalIDCollidesWithBuiltin(t *testing.T) {
+	for _, id := range []string{"issues", "prs"} {
+		t.Run(id, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Connectors.External = []ExternalConnectorConfig{
+				{ID: id, Command: []string{"my-connector"}},
+			}
 
-	err := cfg.Validate()
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "collides with the built-in github connector")
+			err := cfg.Validate()
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "collides with the built-in")
+		})
+	}
 }
 
-func TestValidateConnectors_ExternalGitHubIDAllowedWhenBuiltinDisabled(t *testing.T) {
+func TestValidateConnectors_ExternalBuiltinIDAllowedWhenBuiltinDisabled(t *testing.T) {
 	cfg := validConfig(t)
-	cfg.Connectors.GitHub.Enabled = boolPtr(false)
+	cfg.Connectors.Issues.Enabled = boolPtr(false)
 	cfg.Connectors.External = []ExternalConnectorConfig{
-		{ID: "github", Command: []string{"my-github"}},
+		{ID: "issues", Command: []string{"my-issues"}},
 	}
 
 	require.NoError(t, cfg.Validate())

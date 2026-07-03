@@ -5,21 +5,21 @@ icon: lucide/plug
 # Connectors
 
 !!! warning "Vertical slice"
-    Connectors are an early vertical slice: one built-in connector (GitHub
-    issues), a custom JSON-RPC subprocess protocol for external connectors,
-    and a two-pane picker. Scope is intentionally minimal — see the plan
-    referenced from the epic for what's out of scope.
+    Connectors are an early vertical slice: two built-in connectors (GitHub
+    issues and pull requests), a custom JSON-RPC subprocess protocol for
+    external connectors, and a searchable picker. Scope is intentionally
+    minimal — see the plan referenced from the epic for what's out of scope.
 
-Connectors let hive browse an external system (GitHub issues, or a custom
-subprocess speaking the connector protocol), search/filter items, and create
-a session from a selected item using the same batch-spawn path as `hive
-batch`.
+Connectors let hive browse an external system (GitHub issues/PRs, or a
+custom subprocess speaking the connector protocol), search/filter items, and
+create a session from a selected item using the same batch-spawn path as
+`hive batch`.
 
 ## Configuration
 
 ```yaml
 connectors:
-  github:
+  issues:
     enabled: true
     templates:
       name: "gh-{{ .Fields.number }}-{{ .Title }}"
@@ -27,6 +27,14 @@ connectors:
       tags:
         - "github"
         - "issue-{{ .Fields.number }}"
+  prs:
+    enabled: true
+    templates:
+      name: "gh-pr-{{ .Fields.number }}-{{ .Title }}"
+      prompt: "Review pull request {{ .Title }}\n\n{{ .Fields.url }}"
+      tags:
+        - "github"
+        - "pr-{{ .Fields.number }}"
   external:
     - id: reference
       command: ["hive-reference-connector"]
@@ -38,14 +46,15 @@ connectors:
 ```
 
 - `enabled` follows the same convention as plugins: `nil`/omitted auto-detects
-  (the GitHub connector activates only if `gh` is on `PATH`), `true`/`false`
+  (the built-in connectors activate only if `gh` is on `PATH`), `true`/`false`
   force it on or off.
 - Every connector configures `templates.name`, `templates.prompt`, and
   optional `templates.tags` — Go templates rendered against the selected
   item just before session creation. `.ID`, `.Title`, `.Subtitle`, and
   `.Detail` (plain text) are always available; `.Fields.<key>` exposes
-  connector-specific data (e.g. `.Fields.number`, `.Fields.url` for GitHub
-  issues). A template referencing a `.Fields` key the item doesn't have
+  connector-specific data (e.g. `.Fields.number`, `.Fields.url` for issues;
+  PRs additionally expose `.Fields.branch`, `.Fields.draft`, and
+  `.Fields.review`). A template referencing a `.Fields` key the item doesn't have
   fails at render time (not at config load time), since field names are
   connector-specific.
 - `external` connectors declare a `command` — the subprocess hive spawns
@@ -54,25 +63,34 @@ connectors:
   implements the client side; `cmd/hive-reference-connector` is a canned
   example server useful for testing and as a protocol reference.
 
-## GitHub issues
+## Built-in connectors
 
-The built-in GitHub connector shells out to `gh issue list`/`gh issue view`
-and requires a scope in `owner/name` form (there is no default — you supply
-it when opening the connector). It needs `gh` installed and authenticated.
+Both built-ins shell out to the `gh` CLI and require a scope in
+`owner/name` form (auto-detected from the selected session's git remote, or
+supplied explicitly). They need `gh` installed and authenticated.
+
+- **`issues`** — `gh issue list`/`gh issue view`. Two-pane picker: issue
+  list on the left, markdown detail on the right.
+- **`prs`** — `gh pr list`. Single-pane, full-width table (number, title,
+  author, review state) with no detail preview.
+
+Built-ins are declared as specs in `internal/connectors/ghcli` — a small
+struct describing the picker layout and the gh invocation — executed by a
+shared engine, so new gh-backed connectors are mostly declarative.
 
 ## Opening a connector
 
-In the TUI, run `:OpenConnector <id> [scope]` from the command palette (e.g.
-`:OpenConnector github cli/cli`). This opens a two-pane picker: matching
-items on the left, detail (markdown or key/value) on the right. Press enter
-to create a session from the highlighted item, using the connector's
-configured templates.
+In the TUI, run `:ConnectorIssues [scope]` or `:ConnectorPRs [scope]` from
+the command palette (scope defaults to the selected session's repo), or the
+generic `:OpenConnector <id> [scope]`. The default `i` keybinding in the
+sessions view opens the issues picker. Press enter to create a session from
+the highlighted item, using the connector's configured templates.
 
 There's a noninteractive CLI equivalent, primarily intended for scripting
 and testing:
 
 ```bash
-hive connector open github --scope cli/cli --pick 12345 --json
+hive connector open issues --scope cli/cli --pick 12345 --json
 ```
 
 `--pick` selects an item by ID from the connector's search results (an empty
