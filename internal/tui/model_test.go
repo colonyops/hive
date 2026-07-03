@@ -127,6 +127,47 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	assert.Equal(t, "pi", opened.modals.NewSession.agent.keys[opened.modals.NewSession.agent.selected])
 }
 
+func TestHandleBgStreamCompleteIgnoresStaleCompletion(t *testing.T) {
+	firstDone := make(chan error)
+	var secondDone <-chan error = make(chan error)
+	var secondOutput <-chan string = make(chan string)
+	secondCancel := func() {}
+	m := Model{modals: NewModalCoordinator()}
+	m.modals.BgStreamOutput = secondOutput
+	m.modals.BgStreamDone = secondDone
+	m.modals.BgStreamCancel = secondCancel
+	m.modals.BgStreamTitle = "second"
+
+	model, _ := m.handleBgStreamComplete(bgStreamCompleteMsg{title: "first", done: firstDone})
+	next := model.(Model)
+
+	assert.Equal(t, secondOutput, next.modals.BgStreamOutput)
+	assert.Equal(t, secondDone, next.modals.BgStreamDone)
+	assert.NotNil(t, next.modals.BgStreamCancel)
+	assert.Equal(t, "second", next.modals.BgStreamTitle)
+}
+
+func TestHandleStreamingModalKeyDoesNotOverwriteActiveBackgroundStream(t *testing.T) {
+	var activeDone <-chan error = make(chan error)
+	var streamDone <-chan error = make(chan error)
+	var streamOutput <-chan string = make(chan string)
+	m := Model{modals: NewModalCoordinator()}
+	m.modals.ShowOutputModal("foreground")
+	m.modals.BgStreamDone = activeDone
+	m.modals.BgStreamTitle = "active"
+	m.modals.StreamOutput = streamOutput
+	m.modals.StreamDone = streamDone
+	m.modals.StreamCancel = func() {}
+
+	model, cmd := m.handleStreamingModalKey("b")
+	next := model.(Model)
+
+	assert.Nil(t, cmd)
+	assert.Equal(t, activeDone, next.modals.BgStreamDone)
+	assert.Equal(t, "active", next.modals.BgStreamTitle)
+	assert.Equal(t, streamDone, next.modals.StreamDone)
+}
+
 func keyPressMsg(key string) tea.KeyPressMsg {
 	switch key {
 	case "up":

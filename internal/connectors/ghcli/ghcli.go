@@ -9,6 +9,7 @@
 package ghcli
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -81,6 +82,10 @@ type Connector struct {
 	cache searchCache
 }
 
+type outputExecutor interface {
+	RunOutput(ctx context.Context, cmd string, args ...string) (stdout, stderr []byte, err error)
+}
+
 var _ connectors.Connector = (*Connector)(nil)
 
 // New constructs a Connector for spec. exec is used to shell out to gh;
@@ -147,9 +152,9 @@ func (c *Connector) Search(ctx context.Context, params connectors.SearchParams) 
 			limit = defaultSearchLimit
 		}
 		args := c.spec.ListArgs(scope, params.Query, limit)
-		out, err = c.exec.Run(ctx, "gh", args...)
+		out, err = c.runGHJSON(ctx, args)
 		if err != nil {
-			return connectors.SearchResult{}, fmt.Errorf("%s connector: gh %s: %w", c.spec.ID, args[0], err)
+			return connectors.SearchResult{}, err
 		}
 		c.cache.set(ctx, cacheKey, out)
 	}
@@ -183,9 +188,9 @@ func (c *Connector) FetchDetail(ctx context.Context, params connectors.FetchDeta
 		return connectors.Detail{}, fmt.Errorf("%s connector: invalid id %q: expected a number", c.spec.ID, params.ID)
 	}
 
-	out, err := c.exec.Run(ctx, "gh", c.spec.DetailArgs(scope, params.ID)...)
+	out, err := c.runGHJSON(ctx, c.spec.DetailArgs(scope, params.ID))
 	if err != nil {
-		return connectors.Detail{}, fmt.Errorf("%s connector: gh: %w", c.spec.ID, err)
+		return connectors.Detail{}, err
 	}
 
 	detail, err := c.spec.ParseDetail(out)
@@ -193,6 +198,29 @@ func (c *Connector) FetchDetail(ctx context.Context, params connectors.FetchDeta
 		return connectors.Detail{}, fmt.Errorf("%s connector: decode gh output: %w", c.spec.ID, err)
 	}
 	return detail, nil
+}
+
+func (c *Connector) runGHJSON(ctx context.Context, args []string) ([]byte, error) {
+	if len(args) == 0 {
+		return nil, fmt.Errorf("%s connector: gh: missing arguments", c.spec.ID)
+	}
+	if exec, ok := c.exec.(outputExecutor); ok {
+		stdout, stderr, err := exec.RunOutput(ctx, "gh", args...)
+		if err != nil {
+			msg := strings.TrimSpace(string(stderr))
+			if msg != "" {
+				return nil, fmt.Errorf("%s connector: gh %s: %w: %s", c.spec.ID, args[0], err, msg)
+			}
+			return nil, fmt.Errorf("%s connector: gh %s: %w", c.spec.ID, args[0], err)
+		}
+		return stdout, nil
+	}
+
+	out, err := c.exec.Run(ctx, "gh", args...)
+	if err != nil {
+		return nil, fmt.Errorf("%s connector: gh %s: %w", c.spec.ID, args[0], err)
+	}
+	return bytes.TrimSpace(out), nil
 }
 
 // parseScope validates that scope has the shape "owner/name" and returns it
