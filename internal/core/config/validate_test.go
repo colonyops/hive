@@ -217,8 +217,9 @@ func TestValidateDeep_UserCommandInvalidAction(t *testing.T) {
 func TestValidateDeep_UserCommandValidAction(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.UserCommands = map[string]UserCommand{
-		"my-recycle": {Action: action.TypeRecycle, Help: "custom recycle"},
-		"my-delete":  {Action: action.TypeDelete, Help: "custom delete"},
+		"my-recycle":   {Action: action.TypeRecycle, Help: "custom recycle"},
+		"my-delete":    {Action: action.TypeDelete, Help: "custom delete"},
+		"my-connector": {Action: action.TypeOpenConnectorPicker, Args: []string{"issues"}, Help: "custom connector"},
 	}
 
 	err := cfg.ValidateDeep("")

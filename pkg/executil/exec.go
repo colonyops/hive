@@ -84,6 +84,19 @@ func (e *RealExecutor) Run(ctx context.Context, cmd string, args ...string) ([]b
 	return out, nil
 }
 
+// RunOutput executes a command and returns stdout and stderr separately.
+func (e *RealExecutor) RunOutput(ctx context.Context, cmd string, args ...string) ([]byte, []byte, error) {
+	c := exec.CommandContext(ctx, cmd, args...)
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	c.Stdout = &stdout
+	c.Stderr = &stderr
+	if err := c.Run(); err != nil {
+		return stdout.Bytes(), stderr.Bytes(), fmt.Errorf("exec %s: %w", cmd, err)
+	}
+	return stdout.Bytes(), stderr.Bytes(), nil
+}
+
 // RunDir executes a command in a specific directory.
 func (e *RealExecutor) RunDir(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
 	c := exec.CommandContext(ctx, cmd, args...)

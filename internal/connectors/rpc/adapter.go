@@ -260,23 +260,30 @@ func decodeResponseLine(stdout []byte) (Response, error) {
 	scanner := bufio.NewScanner(bytes.NewReader(stdout))
 	scanner.Buffer(make([]byte, 0, 64*1024), maxResponseLineBytes)
 
+	var resp Response
+	seenResponse := false
 	for scanner.Scan() {
 		line := bytes.TrimSpace(scanner.Bytes())
 		if len(line) == 0 {
 			continue
 		}
+		if seenResponse {
+			return Response{}, fmt.Errorf("multiple response lines on stdout")
+		}
 
-		var resp Response
 		if err := json.Unmarshal(line, &resp); err != nil {
 			return Response{}, fmt.Errorf("decode response line: %w", err)
 		}
-		return resp, nil
+		seenResponse = true
 	}
 	if err := scanner.Err(); err != nil {
 		return Response{}, fmt.Errorf("read response: %w", err)
 	}
+	if !seenResponse {
+		return Response{}, fmt.Errorf("no response line on stdout")
+	}
 
-	return Response{}, fmt.Errorf("no response line on stdout")
+	return resp, nil
 }
 
 // manifestFromWire converts the wire Manifest shape into the domain type.

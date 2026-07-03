@@ -613,13 +613,21 @@ func (m Model) handleStreamStarted(msg streamStartedMsg) (tea.Model, tea.Cmd) {
 
 func (m Model) handleBgStreamStarted(msg bgStreamStartedMsg) (tea.Model, tea.Cmd) {
 	m.state = stateNormal
+	if m.modals.BgStreamDone != nil {
+		if msg.cancel != nil {
+			msg.cancel()
+		}
+		m.publishNotificationf(notify.LevelError, "Already running in background: %s", m.modals.BgStreamTitle)
+		return m, listenForBgStreamComplete(msg.title, msg.output, msg.done, msg.result)
+	}
+
 	m.modals.BgStreamOutput = msg.output
 	m.modals.BgStreamDone = msg.done
 	m.modals.BgStreamCancel = msg.cancel
 	m.modals.BgStreamResult = msg.result
 	m.modals.BgStreamTitle = msg.title
 	m.publishNotificationf(notify.LevelInfo, "Started in background: %s", msg.title)
-	return m, listenForBgStreamComplete(msg.output, msg.done, msg.result)
+	return m, listenForBgStreamComplete(msg.title, msg.output, msg.done, msg.result)
 }
 
 func (m Model) handleStreamOutput(msg streamOutputMsg) (tea.Model, tea.Cmd) {
@@ -671,6 +679,10 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		if !m.modals.Output.IsRunning() {
 			return m, nil
 		}
+		if m.modals.BgStreamDone != nil {
+			m.publishNotificationf(notify.LevelError, "Already running in background: %s", m.modals.BgStreamTitle)
+			return m, nil
+		}
 		// Move the running operation to background.
 		m.modals.BgStreamOutput = m.modals.StreamOutput
 		m.modals.BgStreamDone = m.modals.StreamDone
@@ -686,7 +698,7 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		m.modals.Pending = Action{}
 		m.publishNotificationf(notify.LevelInfo, "Moved to background: %s", m.modals.BgStreamTitle)
-		return m, listenForBgStreamComplete(m.modals.BgStreamOutput, m.modals.BgStreamDone, m.modals.BgStreamResult)
+		return m, listenForBgStreamComplete(m.modals.BgStreamTitle, m.modals.BgStreamOutput, m.modals.BgStreamDone, m.modals.BgStreamResult)
 	case keyEnter:
 		if !m.modals.Output.IsRunning() {
 			m.state = stateNormal
@@ -699,22 +711,28 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 
 // handleBgStreamComplete handles completion of a backgrounded streaming operation.
 func (m Model) handleBgStreamComplete(msg bgStreamCompleteMsg) (tea.Model, tea.Cmd) {
-	title := m.modals.BgStreamTitle
-	m.modals.BgStreamOutput = nil
-	m.modals.BgStreamDone = nil
-	m.modals.BgStreamCancel = nil
-	m.modals.BgStreamResult = streamResult{}
-	m.modals.BgStreamTitle = ""
+	active := msg.done == m.modals.BgStreamDone
+	if active {
+		m.modals.BgStreamOutput = nil
+		m.modals.BgStreamDone = nil
+		m.modals.BgStreamCancel = nil
+		m.modals.BgStreamResult = streamResult{}
+		m.modals.BgStreamTitle = ""
+	}
 
 	if msg.err == nil {
-		m.publishNotificationf(notify.LevelInfo, "Complete: %s", title)
+		if active {
+			m.publishNotificationf(notify.LevelInfo, "Complete: %s", msg.title)
+		}
 		if msg.result.sessionID != nil && *msg.result.sessionID != "" {
 			m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
 		}
 		return m, m.refreshSessions()
 	}
 
-	m.publishNotificationf(notify.LevelError, "Failed: %s — %v", title, msg.err)
+	if active {
+		m.publishNotificationf(notify.LevelError, "Failed: %s — %v", msg.title, msg.err)
+	}
 	return m, nil
 }
 
@@ -951,6 +969,12 @@ func (m Model) handleConnectorPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 // against the selected item and creates a session via the same
 // UseBatchSpawn:true path used by `hive batch`.
 func (m Model) handleConnectorSelection(result connectorpicker.Result) (tea.Model, tea.Cmd) {
+	if m.modals.BgStreamDone != nil {
+		m.state = stateNormal
+		m.notifyErrorf("already running in background: %s", m.modals.BgStreamTitle)
+		return m, nil
+	}
+
 	rendered, err := connectors.RenderSessionTemplates(m.pendingConnectorTemplates, result.Item, result.Detail)
 	if err != nil {
 		m.state = stateNormal

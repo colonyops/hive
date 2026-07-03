@@ -29,17 +29,29 @@ type fakeCall struct {
 }
 
 type fakeResponse struct {
-	out []byte
-	err error
+	out    []byte
+	stderr []byte
+	err    error
 }
 
 func (f *fakeExecutor) Run(_ context.Context, cmd string, args ...string) ([]byte, error) {
 	f.calls = append(f.calls, fakeCall{cmd: cmd, args: args})
 	idx := len(f.calls) - 1
 	if idx < len(f.responses) {
-		return f.responses[idx].out, f.responses[idx].err
+		resp := f.responses[idx]
+		return append(append([]byte{}, resp.out...), resp.stderr...), resp.err
 	}
 	return nil, nil
+}
+
+func (f *fakeExecutor) RunOutput(_ context.Context, cmd string, args ...string) ([]byte, []byte, error) {
+	f.calls = append(f.calls, fakeCall{cmd: cmd, args: args})
+	idx := len(f.calls) - 1
+	if idx < len(f.responses) {
+		resp := f.responses[idx]
+		return resp.out, resp.stderr, resp.err
+	}
+	return nil, nil, nil
 }
 
 func (f *fakeExecutor) RunDir(ctx context.Context, _ string, cmd string, args ...string) ([]byte, error) {
@@ -158,6 +170,35 @@ func TestSearchIssues(t *testing.T) {
 		"author": "alice",
 		"labels": []string{"api", "public"},
 	}, result.Items[0].Fields)
+}
+
+func TestSearchIgnoresSuccessfulGhStderr(t *testing.T) {
+	exec := &fakeExecutor{
+		responses: []fakeResponse{
+			{
+				out:    []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`),
+				stderr: []byte("warning: extension update available\n"),
+			},
+		},
+	}
+	c := newIssues(t, exec, nil)
+
+	result, err := c.Search(context.Background(), connectors.SearchParams{Scope: "o/r"})
+	require.NoError(t, err)
+	require.Len(t, result.Items, 1)
+	assert.Equal(t, "First issue", result.Items[0].Title)
+}
+
+func TestSearchIncludesGhStderrOnFailure(t *testing.T) {
+	exec := &fakeExecutor{
+		responses: []fakeResponse{{stderr: []byte("authentication required\n"), err: fmt.Errorf("exit status 1")}},
+	}
+	c := newIssues(t, exec, nil)
+
+	_, err := c.Search(context.Background(), connectors.SearchParams{Scope: "o/r"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 1")
+	assert.Contains(t, err.Error(), "authentication required")
 }
 
 func TestSearchPRs(t *testing.T) {

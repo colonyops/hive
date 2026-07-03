@@ -218,6 +218,8 @@ type bgStreamStartedMsg struct {
 
 // bgStreamCompleteMsg is sent when a backgrounded streaming operation finishes.
 type bgStreamCompleteMsg struct {
+	title  string
+	done   <-chan error
 	err    error
 	result streamResult
 }
@@ -2062,13 +2064,13 @@ func listenForStreamingOutput(output <-chan string, done <-chan error) tea.Cmd {
 // listenForBgStreamComplete drains any remaining output and waits for the done
 // signal from a backgrounded streaming operation. Individual output lines are
 // discarded since the modal is no longer visible.
-func listenForBgStreamComplete(output <-chan string, done <-chan error, result streamResult) tea.Cmd {
+func listenForBgStreamComplete(title string, output <-chan string, done <-chan error, result streamResult) tea.Cmd {
 	return func() tea.Msg {
 		// Drain output channel until closed.
 		for range output {
 		}
 		err := <-done
-		return bgStreamCompleteMsg{err: err, result: result}
+		return bgStreamCompleteMsg{title: title, done: done, err: err, result: result}
 	}
 }
 

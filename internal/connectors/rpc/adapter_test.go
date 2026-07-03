@@ -34,6 +34,7 @@ type fakeProcessRunner struct {
 	// honorCtx makes Run block until ctx is done and return ctx.Err(),
 	// simulating a hung subprocess for timeout/cancellation tests.
 	honorCtx bool
+	started  chan struct{}
 }
 
 func (f *fakeProcessRunner) Run(ctx context.Context, command []string, stdin []byte) ([]byte, []byte, error) {
@@ -43,6 +44,9 @@ func (f *fakeProcessRunner) Run(ctx context.Context, command []string, stdin []b
 	f.calls = append(f.calls, call)
 
 	if f.honorCtx {
+		if f.started != nil {
+			close(f.started)
+		}
 		<-ctx.Done()
 		return nil, nil, ctx.Err()
 	}
@@ -230,6 +234,11 @@ func TestSubprocessConnector_MalformedResponses(t *testing.T) {
 			stdout:  []byte(""),
 			wantErr: "no response line",
 		},
+		{
+			name:    "extra stdout line",
+			stdout:  []byte(`{"jsonrpc":"2.0","id":1,"result":{}}` + "\n" + `{"jsonrpc":"2.0","id":1,"result":{}}` + "\n"),
+			wantErr: "multiple response lines",
+		},
 	}
 
 	for _, tt := range tests {
@@ -288,18 +297,23 @@ func TestSubprocessConnector_ContextTimeout(t *testing.T) {
 }
 
 func TestSubprocessConnector_ContextCancellation(t *testing.T) {
-	runner := &fakeProcessRunner{honorCtx: true}
+	started := make(chan struct{})
+	runner := &fakeProcessRunner{honorCtx: true, started: started}
 
 	conn, err := NewSubprocessConnector("ref", []string{"ref-connector"}, runner, time.Minute)
 	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan error, 1)
 	go func() {
-		time.Sleep(10 * time.Millisecond)
-		cancel()
+		_, err := conn.Initialize(ctx)
+		done <- err
 	}()
 
-	_, err = conn.Initialize(ctx)
+	<-started
+	cancel()
+
+	err = <-done
 	require.Error(t, err)
 	assert.ErrorIs(t, err, context.Canceled)
 }
