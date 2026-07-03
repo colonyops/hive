@@ -141,7 +141,10 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 			"",
 			mc.RenameInput.View(),
 			"",
-			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel"),
+			styles.ModalHelpStyle.Render(components.KeyHints(
+				components.HelpEntry{Key: "enter", Desc: "confirm"},
+				components.HelpEntry{Key: "esc", Desc: "cancel"},
+			)),
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(renameContent), w, h)
 
@@ -152,7 +155,11 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 			"",
 			mc.GroupInput.View(),
 			"",
-			styles.ModalHelpStyle.Render("enter: confirm • esc: cancel • empty: clear group"),
+			styles.ModalHelpStyle.Render(components.KeyHints(
+				components.HelpEntry{Key: "enter", Desc: "confirm"},
+				components.HelpEntry{Key: "esc", Desc: "cancel"},
+				components.HelpEntry{Key: "empty", Desc: "clear group"},
+			)),
 		)
 		return centeredOverlay(bg, styles.ModalStyle.Width(50).Render(groupContent), w, h)
 

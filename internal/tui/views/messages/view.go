@@ -436,9 +436,17 @@ func (v *View) dualPaneHelp() string {
 		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
 			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
 		}
-		return styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"c copy"+components.HelpSep+"esc back", scrollInfo))
+		return components.KeyHints(
+			components.HelpEntry{Key: "j/k", Desc: "scroll" + scrollInfo},
+			components.HelpEntry{Key: "c", Desc: "copy"},
+			components.HelpEntry{Key: "esc", Desc: "back"},
+		)
 	default:
-		return styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "enter preview")
+		return components.KeyHints(
+			components.HintNav,
+			components.HintFilter,
+			components.HelpEntry{Key: "enter", Desc: "preview"},
+		)
 	}
 }
 
@@ -718,7 +726,7 @@ func (v *View) renderCompactList() string {
 	}
 
 	bar := components.StatusBar{Width: v.width}
-	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter)
+	help := components.KeyHints(components.HintNav, components.HintFilter)
 	b.WriteString(bar.Rule())
 	b.WriteString("\n")
 	b.WriteString(bar.Render(help, ""))

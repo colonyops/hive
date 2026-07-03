@@ -3,6 +3,7 @@ package tui
 import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // Modal represents a confirmation dialog.
@@ -104,7 +105,10 @@ func (m Modal) render() string {
 			inputLine = styles.ModalInputStyle.Render(inputContent)
 		}
 
-		helpText := styles.ModalHelpStyle.Render("enter confirm  esc cancel")
+		helpText := styles.ModalHelpStyle.Render(components.KeyHints(
+			components.HelpEntry{Key: "enter", Desc: "confirm"},
+			components.HelpEntry{Key: "esc", Desc: "cancel"},
+		))
 		actionRow = lipgloss.JoinVertical(lipgloss.Left,
 			styles.ModalHelpStyle.Render(promptLine),
 			inputLine,
@@ -122,7 +126,11 @@ func (m Modal) render() string {
 		buttons := lipgloss.JoinHorizontal(lipgloss.Center, confirmBtn, "  ", cancelBtn)
 		actionRow = lipgloss.JoinVertical(lipgloss.Left,
 			buttons,
-			styles.ModalHelpStyle.Render("←/→ select  enter confirm  esc cancel"),
+			styles.ModalHelpStyle.Render(components.KeyHints(
+				components.HelpEntry{Key: "←/→", Desc: "select"},
+				components.HelpEntry{Key: "enter", Desc: "confirm"},
+				components.HelpEntry{Key: "esc", Desc: "cancel"},
+			)),
 		)
 	}
 

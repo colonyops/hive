@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/workspace"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // agentPicker is a compact inline selector for a small set of agent names.
@@ -363,7 +364,11 @@ func (f *NewSessionForm) View() string {
 	}
 	sections = append(sections, "", inputBorderStyle.Render(nameContent))
 
-	helpText := styles.TextMutedStyle.Render("tab: switch fields • enter: submit • esc: cancel")
+	helpText := components.KeyHints(
+		components.HelpEntry{Key: "tab", Desc: "switch fields"},
+		components.HelpEntry{Key: "enter", Desc: "submit"},
+		components.HelpEntry{Key: "esc", Desc: "cancel"},
+	)
 	sections = append(sections, "", helpText)
 
 	return lipgloss.JoinVertical(lipgloss.Left, sections...)

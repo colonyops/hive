@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/sahilm/fuzzy"
 )
 
@@ -286,7 +287,13 @@ func (p *CommandPalette) View() string {
 		strings.Join(suggestions, "\n"),
 	)
 
-	help := styles.ModalHelpStyle.Render("↑/k up  ↓/j down  tab fill  enter select  esc cancel")
+	help := styles.ModalHelpStyle.Render(components.KeyHints(
+		components.HelpEntry{Key: "↑/k", Desc: "up"},
+		components.HelpEntry{Key: "↓/j", Desc: "down"},
+		components.HelpEntry{Key: "tab", Desc: "fill"},
+		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HelpEntry{Key: "esc", Desc: "cancel"},
+	))
 	content = lipgloss.JoinVertical(lipgloss.Left, content, help)
 
 	return styles.ModalStyle.Width(contentWidth).Render(content)

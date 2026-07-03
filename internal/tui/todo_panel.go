@@ -13,6 +13,7 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 const (
@@ -389,7 +390,15 @@ func (p *TodoPanel) Overlay(background string, width, height int) string {
 		titleBar,
 		divider,
 		p.viewport.View(),
-		styles.ModalHelpStyle.Render("j/k navigate · tab filter · enter open · c done · d dismiss · r reopen · esc close"),
+		styles.ModalHelpStyle.Render(components.KeyHints(
+			components.HelpEntry{Key: "j/k", Desc: "navigate"},
+			components.HelpEntry{Key: "tab", Desc: "filter"},
+			components.HelpEntry{Key: "enter", Desc: "open"},
+			components.HelpEntry{Key: "c", Desc: "done"},
+			components.HelpEntry{Key: "d", Desc: "dismiss"},
+			components.HelpEntry{Key: "r", Desc: "reopen"},
+			components.HelpEntry{Key: "esc", Desc: "close"},
+		)),
 	)
 
 	modal := styles.ModalStyle.

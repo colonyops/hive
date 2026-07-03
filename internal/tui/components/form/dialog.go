@@ -3,7 +3,8 @@ package form
 import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
-	"github.com/colonyops/hive/internal/core/styles"
+
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // filterer is an optional interface for fields that support list filtering.
@@ -74,7 +75,12 @@ func (d *Dialog) View() string {
 		parts = append(parts, field.View())
 	}
 
-	help := styles.TextMutedStyle.Render("tab: next  shift+tab: prev  enter: submit  esc: cancel")
+	help := components.KeyHints(
+		components.HelpEntry{Key: "tab", Desc: "next"},
+		components.HelpEntry{Key: "shift+tab", Desc: "prev"},
+		components.HelpEntry{Key: "enter", Desc: "submit"},
+		components.HelpEntry{Key: "esc", Desc: "cancel"},
+	)
 	parts = append(parts, "", help)
 
 	return lipgloss.JoinVertical(lipgloss.Left, parts...)
