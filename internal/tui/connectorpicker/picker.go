@@ -663,7 +663,13 @@ func renderConnectorTableRow(item connectors.Item, columns []connectors.Column, 
 	cells := make([]string, 0, len(columns))
 	for i, col := range columns {
 		w := max(widths[i], 1)
-		value := ansi.Truncate(connectorFieldString(item, col.Key), w, "…")
+		value := connectorFieldString(item, col.Key)
+		// Number columns render as "#42", matching the list layout's
+		// metadata convention.
+		if col.Key == "number" && value != "" {
+			value = "#" + value
+		}
+		value = ansi.Truncate(value, w, "…")
 		style := tableCellStyle(col.Key, value)
 		if selected {
 			// The highlighted row stays a uniform primary-bold bar so the
