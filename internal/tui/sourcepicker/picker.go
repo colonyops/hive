@@ -17,6 +17,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // Fixed dialog sizing: the modal's overall width/height are a deterministic
@@ -26,10 +27,10 @@ const (
 	sourcePickerModalMargin    = 2
 	sourcePickerMinModalWidth  = 72
 	// sourcePickerChrome counts the fixed rows View renders around the
-	// scrollable content area: border (2), vertical padding (0), tab
-	// bar (1), separator line (1), blank line above help (1), and the
-	// help line including ModalHelpStyle's MarginTop (2).
-	sourcePickerChrome = 7
+	// scrollable list area: border (2), tab bar (1), separator (1),
+	// filter line (1), separator (1), and the help line including
+	// ModalHelpStyle's MarginTop (2).
+	sourcePickerChrome = 8
 )
 
 // sourcePickerGen issues a unique generation token per picker instance.
@@ -496,8 +497,8 @@ func (p *Picker) clampScroll(tab *tabState) {
 }
 
 func (p Picker) listHeight() int {
-	// content area minus the two dividers and filter input row.
-	return max(p.contentHeight-3, 1)
+	// The body is exactly the list area; all other rows are chrome.
+	return max(p.contentHeight, 1)
 }
 
 // Selected returns the highlighted item if the user pressed enter.
@@ -524,18 +525,18 @@ func (p Picker) Cancelled() bool {
 // --- View ---
 
 func (p Picker) View() string {
-	tabBar := p.renderTabBar()
-	sep := styles.TextMutedStyle.Render(strings.Repeat("─", p.contentWidth))
+	sep := styles.TextSurfaceStyle.Render(strings.Repeat("─", p.contentWidth))
 	body := p.renderBody()
 	help := styles.ModalHelpStyle.Render(p.helpText())
 
 	// Pad sections that need inset; dividers span the full inner width.
 	pad := lipgloss.NewStyle().Padding(0, 2)
 	content := lipgloss.JoinVertical(lipgloss.Left,
-		pad.Render(tabBar),
+		pad.Render(p.renderTabBar()),
+		sep,
+		pad.Render(p.renderFilterLine(p.activeState())),
 		sep,
 		body,
-		"",
 		pad.Render(help),
 	)
 
@@ -548,6 +549,9 @@ func (p Picker) View() string {
 }
 
 func (p Picker) renderTabBar() string {
+	// Active and inactive tabs MUST have identical horizontal padding:
+	// each tab occupies the same width regardless of which one is
+	// active, so switching tabs never shifts the bar layout.
 	activeStyle := lipgloss.NewStyle().
 		Background(styles.ColorSurface).
 		Foreground(styles.ColorPrimary).
@@ -555,7 +559,7 @@ func (p Picker) renderTabBar() string {
 		Padding(0, 1)
 	inactiveStyle := lipgloss.NewStyle().
 		Foreground(styles.ColorMuted).
-		Padding(0, 2)
+		Padding(0, 1)
 
 	var parts []string
 	for _, tab := range p.tabs {
@@ -570,7 +574,7 @@ func (p Picker) renderTabBar() string {
 		}
 	}
 
-	tabRow := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+	tabRow := strings.Join(parts, " ")
 
 	// Repo context badge on the right using the git branch icon.
 	badge := ""
@@ -605,7 +609,10 @@ func (p Picker) renderBody() string {
 		return p.renderCenteredState(
 			styles.TextErrorStyle.Render("[!]"),
 			styles.TextErrorStyle.Render(tab.searchErr.Error()),
-			styles.TextMutedStyle.Render("r to retry · tab to switch source"),
+			components.KeyHints(
+				components.HelpEntry{Key: "r", Desc: "retry"},
+				components.HelpEntry{Key: "tab", Desc: "switch source"},
+			),
 		)
 	}
 
@@ -625,17 +632,16 @@ func (p Picker) renderBody() string {
 		)
 	}
 
-	// List state: filter input + dividers + item rows.
+	// List state: item rows only; the filter line and dividers are
+	// rendered by View as fixed chrome.
 	pad := lipgloss.NewStyle().Padding(0, 2)
-	filterLine := pad.Render(p.renderFilterLine(tab))
-	div := styles.TextMutedStyle.Render(strings.Repeat("─", p.contentWidth))
 	list := pad.Render(p.renderList(tab))
 
 	return lipgloss.NewStyle().
 		Width(p.contentWidth).
 		Height(p.contentHeight).
 		MaxHeight(p.contentHeight).
-		Render(lipgloss.JoinVertical(lipgloss.Left, div, filterLine, div, list))
+		Render(list)
 }
 
 func (p Picker) renderCenteredState(icon, message, hint string) string {
@@ -691,28 +697,41 @@ func (p Picker) renderList(tab *tabState) string {
 	return strings.Join(lines, "\n")
 }
 
+// renderRow renders one list row.
+//
+// Selected rows are composed as PLAIN text (no inner ANSI sequences) and
+// then painted once by applyRowStyle. This is deliberate: any styled cell
+// inside the row ends with an SGR reset, and that reset terminates the
+// highlight background for the rest of the line — producing a row where
+// only the trailing padding is highlighted. Do not "restore" per-cell
+// styling on selected rows unless every cell and every padding space
+// carries the highlight background itself.
 func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState) string {
 	width := p.innerWidth
+	innerWidth := max(width-2, 10) // account for the left border+space / padding
 
-	// For table layout sources, use the manifest columns.
+	var content string
 	if tab.tab.Manifest.Picker.Layout == sources.LayoutModeTable && len(tab.tab.Manifest.Picker.Columns) > 0 {
-		line := renderSourceTableRow(item, tab.tab.Manifest.Picker.Columns, max(width-1, 1), selected)
-		return p.applyRowStyle(line, selected, width)
+		content = renderSourceTableRow(item, tab.tab.Manifest.Picker.Columns, innerWidth, !selected)
+	} else {
+		content = p.renderSingleLineContent(item, !selected, innerWidth)
 	}
-
-	// Single-line list layout.
-	return p.renderSingleLineRow(item, selected, width)
+	return p.applyRowStyle(content, selected, width)
 }
 
 // applyRowStyle wraps content with selected/normal styling: selected rows
-// get a left border accent and surface background; unselected rows get a
-// two-space indent to keep alignment with the border+space of selected rows.
+// get a left border accent and a full-width highlight background;
+// unselected rows get a two-space indent to keep alignment with the
+// border+space of selected rows. Selected content must be plain text —
+// see renderRow.
 func (p Picker) applyRowStyle(content string, selected bool, width int) string {
 	if selected {
 		return lipgloss.NewStyle().
 			Border(lipgloss.ThickBorder(), false, false, false, true).
 			BorderForeground(styles.ColorPrimary).
 			Background(rowHighlightBg).
+			Foreground(styles.ColorPrimary).
+			Bold(true).
 			PaddingLeft(1).
 			Width(width).
 			MaxWidth(width).
@@ -727,7 +746,10 @@ func (p Picker) applyRowStyle(content string, selected bool, width int) string {
 		Render(content)
 }
 
-func (p Picker) renderSingleLineRow(item sources.Item, selected bool, width int) string {
+// renderSingleLineContent composes a list-layout row. When styled is
+// false the result contains no ANSI sequences (used for selected rows —
+// see renderRow).
+func (p Picker) renderSingleLineContent(item sources.Item, styled bool, innerWidth int) string {
 	var parts []string
 
 	// CI status icon if present.
@@ -736,22 +758,20 @@ func (p Picker) renderSingleLineRow(item sources.Item, selected bool, width int)
 	}
 
 	// Number.
-	numStyle := styles.TextMutedStyle
-	if selected {
-		numStyle = styles.TextPrimaryStyle
-	}
 	if number := sourceFieldString(item, "number"); number != "" {
-		parts = append(parts, numStyle.Render("#"+number))
+		num := "#" + number
+		if styled {
+			num = styles.TextMutedStyle.Render(num)
+		}
+		parts = append(parts, num)
 	}
 
 	// Title.
-	titleStyle := styles.TextForegroundStyle
-	if selected {
-		titleStyle = lipgloss.NewStyle().
-			Foreground(styles.ColorPrimary).
-			Bold(true)
+	title := item.Title
+	if styled {
+		title = styles.TextForegroundStyle.Render(title)
 	}
-	parts = append(parts, titleStyle.Render(item.Title))
+	parts = append(parts, title)
 
 	// Labels (first 2).
 	labels := sourceFieldStringSlice(item, "labels")
@@ -759,62 +779,68 @@ func (p Picker) renderSingleLineRow(item sources.Item, selected bool, width int)
 		if i >= 2 {
 			break
 		}
-		parts = append(parts, styles.TextSecondaryStyle.Render("["+label+"]"))
+		tag := "[" + label + "]"
+		if styled {
+			tag = styles.TextSecondaryStyle.Render(tag)
+		}
+		parts = append(parts, tag)
 	}
 
 	// Right-aligned metadata: author.
-	var rightParts []string
+	right := ""
 	if author := sourceFieldString(item, "author"); author != "" {
-		rightParts = append(rightParts, styles.TextMutedStyle.Render("@"+author))
+		right = "@" + author
+		if styled {
+			right = styles.TextMutedStyle.Render(right)
+		}
 	}
 
 	left := strings.Join(parts, " ")
-	right := strings.Join(rightParts, "  ")
-
-	// Build the inner content, then wrap with the row style.
-	innerWidth := max(width-2, 10) // account for the left border+space / padding
 	leftWidth := ansi.StringWidth(left)
 	rightWidth := ansi.StringWidth(right)
 
-	var row string
 	if right == "" {
-		row = ansi.Truncate(left, innerWidth, "…")
-	} else {
-		gap := max(innerWidth-leftWidth-rightWidth, 1)
-		if leftWidth+1+rightWidth > innerWidth {
-			available := max(innerWidth-rightWidth-1, 10)
-			left = ansi.Truncate(left, available, "…")
-			gap = max(innerWidth-ansi.StringWidth(left)-rightWidth, 1)
-		}
-		row = left + strings.Repeat(" ", gap) + right
+		return ansi.Truncate(left, innerWidth, "…")
 	}
-
-	return p.applyRowStyle(row, selected, width)
+	gap := max(innerWidth-leftWidth-rightWidth, 1)
+	if leftWidth+1+rightWidth > innerWidth {
+		available := max(innerWidth-rightWidth-1, 10)
+		left = ansi.Truncate(left, available, "…")
+		gap = max(innerWidth-ansi.StringWidth(left)-rightWidth, 1)
+	}
+	return left + strings.Repeat(" ", gap) + right
 }
 
 func (p Picker) helpText() string {
 	tab := p.activeState()
 
 	if tab.loading {
-		return helpLine("tab", "switch source", "esc", "close")
+		return components.KeyHints(
+			components.HelpEntry{Key: "tab", Desc: "switch source"},
+			components.HelpEntry{Key: "esc", Desc: "close"},
+		)
 	}
 	if tab.searchErr != nil {
-		return helpLine("r", "retry", "tab", "switch source", "esc", "close")
+		return components.KeyHints(
+			components.HelpEntry{Key: "r", Desc: "retry"},
+			components.HelpEntry{Key: "tab", Desc: "switch source"},
+			components.HelpEntry{Key: "esc", Desc: "close"},
+		)
 	}
 	if p.searchMode {
-		return helpLine("↑↓", "navigate", "enter", "select", "esc", "done")
+		return components.KeyHints(
+			components.HelpEntry{Key: "↑↓", Desc: "navigate"},
+			components.HelpEntry{Key: "enter", Desc: "select"},
+			components.HelpEntry{Key: "esc", Desc: "done"},
+		)
 	}
-	return helpLine("tab", "switch source", "/", "filter", "j/k", "navigate", "enter", "select", "esc", "close")
-}
-
-// helpLine builds a help string from alternating key/description pairs.
-func helpLine(pairs ...string) string {
-	parts := make([]string, 0, len(pairs)/2)
-	for i := 0; i+1 < len(pairs); i += 2 {
-		key := styles.TextForegroundBoldStyle.Render(pairs[i])
-		parts = append(parts, key+" "+pairs[i+1])
-	}
-	return strings.Join(parts, " · ")
+	return components.KeyHints(
+		components.HelpEntry{Key: "tab", Desc: "switch source"},
+		components.HintFilter,
+		components.HintNav,
+		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HelpEntry{Key: "esc", Desc: "close"},
+	)
 }
 
 // --- Table helpers (preserved from original) ---
@@ -848,21 +874,26 @@ func resolveSourceColumnWidths(columns []sources.Column, total int) []int {
 	return widths
 }
 
-func renderSourceTableRow(item sources.Item, columns []sources.Column, width int, selected bool) string {
+// renderSourceTableRow composes a table-layout row. When styled is false
+// the result contains no ANSI sequences (used for selected rows — see
+// renderRow); cell padding is plain spaces either way so widths are
+// identical in both modes.
+func renderSourceTableRow(item sources.Item, columns []sources.Column, width int, styled bool) string {
 	widths := resolveSourceColumnWidths(columns, width)
 	cells := make([]string, 0, len(columns))
 	for i, col := range columns {
 		w := max(widths[i], 1)
-		value := sourceFieldString(item, col.Key)
+		raw := sourceFieldString(item, col.Key)
+		value := raw
 		if col.Key == "number" && value != "" {
 			value = "#" + value
 		}
-		style := tableCellStyle(col.Key, value)
-		if selected {
-			style = styles.TextPrimaryBoldStyle
+		value = ansi.Truncate(statusIcon(raw)+value, w, "…")
+		value += strings.Repeat(" ", max(w-ansi.StringWidth(value), 0))
+		if styled {
+			value = tableCellStyle(col.Key, raw).Render(value)
 		}
-		value = ansi.Truncate(statusIcon(value)+value, w, "…")
-		cells = append(cells, lipgloss.NewStyle().Width(w).MaxHeight(1).Render(style.Render(value)))
+		cells = append(cells, value)
 	}
 	return strings.Join(cells, " ")
 }

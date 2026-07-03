@@ -503,13 +503,20 @@ func TestSourceTableRowColors(t *testing.T) {
 		"number": 10, "title": "Add feature", "review": "approved",
 	}}
 
-	unselected := renderSourceTableRow(item, columns, 60, false)
-	assert.Contains(t, unselected, styles.TextPrimaryStyle.Render("#10"))
-	assert.Contains(t, unselected, styles.TextSuccessStyle.Render("approved"))
+	styled := renderSourceTableRow(item, columns, 60, true)
+	plain := renderSourceTableRow(item, columns, 60, false)
 
-	selected := renderSourceTableRow(item, columns, 60, true)
-	assert.Contains(t, selected, styles.TextPrimaryBoldStyle.Render("approved"))
-	assert.NotContains(t, selected, styles.TextSuccessStyle.Render("approved"))
+	// Styled cells keep their semantic colors (padding is inside the
+	// styled span so widths match the plain variant).
+	assert.Contains(t, styled, styles.TextPrimaryStyle.Render("#10   "))
+	assert.Contains(t, styled, styles.TextSuccessStyle.Render("approved"+strings.Repeat(" ", 10)))
+
+	// The plain variant is used for selected rows: it must contain no
+	// ANSI sequences at all, otherwise embedded SGR resets terminate the
+	// full-row highlight background mid-line. Text layout must be
+	// identical between the two variants.
+	assert.Equal(t, plain, terminal.StripANSI(plain), "plain table row must be ANSI-free")
+	assert.Equal(t, plain, terminal.StripANSI(styled))
 }
 
 func TestStatusIcon(t *testing.T) {
@@ -529,8 +536,25 @@ func TestSourceTableRowCIIcons(t *testing.T) {
 		"title": "Add feature", "ci": "failing",
 	}}
 
-	row := renderSourceTableRow(item, columns, 50, false)
-	assert.Contains(t, row, styles.TextErrorStyle.Render("✗ failing"))
+	row := renderSourceTableRow(item, columns, 50, true)
+	assert.Contains(t, row, styles.TextErrorStyle.Render("✗ failing "))
+
+	plain := renderSourceTableRow(item, columns, 50, false)
+	assert.Contains(t, plain, "✗ failing")
+	assert.Equal(t, plain, terminal.StripANSI(plain), "plain table row must be ANSI-free")
+}
+
+func TestRenderSingleLineContent_PlainIsANSIFree(t *testing.T) {
+	p := newTestPicker(newFakeTUISource(listManifest(), nil), listManifest(), "test-repo", 90, 24)
+	item := sources.Item{ID: "1", Title: "First reference item", Fields: map[string]any{
+		"number": 1278, "author": "alice", "labels": []string{"api", "public"}, "ci_status": "passing",
+	}}
+
+	plain := p.renderSingleLineContent(item, false, 60)
+	styled := p.renderSingleLineContent(item, true, 60)
+
+	assert.Equal(t, plain, terminal.StripANSI(plain), "plain list row must be ANSI-free")
+	assert.Equal(t, plain, terminal.StripANSI(styled))
 }
 
 func TestPicker_ScopeShownInTabBar(t *testing.T) {
