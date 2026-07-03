@@ -536,3 +536,52 @@ func TestPicker_HidePreviewSinglePane(t *testing.T) {
 	assert.NotContains(t, view, "ctrl+u/d", "help must not advertise detail scrolling")
 	assert.LessOrEqual(t, lipgloss.Height(p.View()), 30, "single-pane view must fit the terminal")
 }
+
+// TestTableCellStyle covers the semantic column/value → style mapping.
+func TestTableCellStyle(t *testing.T) {
+	tests := []struct {
+		name  string
+		key   string
+		value string
+		want  lipgloss.Style
+	}{
+		{"number column is primary", "number", "1315", styles.TextPrimaryStyle},
+		{"id column is primary", "id", "42", styles.TextPrimaryStyle},
+		{"author column is muted", "author", "alice", styles.TextMutedStyle},
+		{"approved is success", "review", "approved", styles.TextSuccessStyle},
+		{"open state is success (case-insensitive)", "state", "OPEN", styles.TextSuccessStyle},
+		{"changes requested is error", "review", "changes requested", styles.TextErrorStyle},
+		{"closed is error", "state", "CLOSED", styles.TextErrorStyle},
+		{"review required is warning", "review", "review required", styles.TextWarningStyle},
+		{"draft is muted", "review", "draft", styles.TextMutedStyle},
+		{"merged is secondary", "state", "MERGED", styles.TextSecondaryStyle},
+		{"plain title is foreground", "title", "fix a bug", styles.TextForegroundStyle},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := tableCellStyle(tt.key, tt.value)
+			assert.Equal(t, tt.want.Render(tt.value), got.Render(tt.value))
+		})
+	}
+}
+
+// TestConnectorTableRowColors verifies semantic colors appear on unselected
+// rows and that the selected row renders as a uniform primary-bold bar.
+func TestConnectorTableRowColors(t *testing.T) {
+	columns := []connectors.Column{
+		{Key: "number", Width: 6},
+		{Key: "title", Flex: 1},
+		{Key: "review", Width: 18},
+	}
+	item := connectors.Item{ID: "10", Title: "Add feature", Fields: map[string]any{
+		"number": 10, "title": "Add feature", "review": "approved",
+	}}
+
+	unselected := renderConnectorTableRow(item, columns, 60, false)
+	assert.Contains(t, unselected, styles.TextPrimaryStyle.Render("10"), "number cell must use the primary accent")
+	assert.Contains(t, unselected, styles.TextSuccessStyle.Render("approved"), "approved must render in the success color")
+
+	selected := renderConnectorTableRow(item, columns, 60, true)
+	assert.Contains(t, selected, styles.TextPrimaryBoldStyle.Render("approved"), "selected row must be a uniform primary-bold bar")
+	assert.NotContains(t, selected, styles.TextSuccessStyle.Render("approved"))
+}
