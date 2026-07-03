@@ -146,6 +146,18 @@ func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote strin
 }
 
 // repoIdx returns the focusedField value for the repo field.
+func (f *NewSessionForm) selectAgent(key string) {
+	if !f.hasAgentSelector || key == "" {
+		return
+	}
+	for i, agentKey := range f.agent.keys {
+		if agentKey == key {
+			f.agent.selected = i
+			return
+		}
+	}
+}
+
 func (f *NewSessionForm) repoIdx() int {
 	if f.hasAgentSelector {
 		return repoFieldWithAgent

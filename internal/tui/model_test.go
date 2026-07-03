@@ -2,6 +2,8 @@ package tui
 
 import (
 	"io"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -72,6 +74,57 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	}, Opts{})
 
 	return m
+}
+
+func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
+	dataDir := t.TempDir()
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(`agents:
+  agent_selector: true
+  default: claude
+  claude: {}
+  pi: {}
+`), 0o600))
+	t.Setenv(config.EnvDefaultAgent, "pi")
+
+	cfg, err := config.Load(configPath, dataDir)
+	require.NoError(t, err)
+	require.Equal(t, "pi", cfg.Agents.Default)
+
+	database, err := db.Open(dataDir, db.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, database.Close())
+	})
+
+	tb := testbus.New(t)
+	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
+	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
+	todoService := hive.NewTodoService(
+		stores.NewTodoStore(database),
+		tb.EventBus,
+		cfg,
+		zerolog.New(io.Discard),
+	)
+
+	m := New(Deps{
+		Config:          cfg,
+		Service:         newMouseTestSessionService(t),
+		Renderer:        testRenderer,
+		TerminalManager: terminal.NewManager(nil),
+		PluginManager:   pluginManager,
+		CommandSet:      commandSet,
+		TodoService:     todoService,
+		DB:              database,
+		Bus:             tb.EventBus,
+	}, Opts{})
+
+	model, _ := m.openNewSessionForm()
+	opened := model.(Model)
+	require.NotNil(t, opened.modals.NewSession)
+	require.True(t, opened.modals.NewSession.hasAgentSelector)
+	require.NotEmpty(t, opened.modals.NewSession.agent.keys)
+	assert.Equal(t, "pi", opened.modals.NewSession.agent.keys[opened.modals.NewSession.agent.selected])
 }
 
 func keyPressMsg(key string) tea.KeyPressMsg {

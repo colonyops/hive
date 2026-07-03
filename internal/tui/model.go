@@ -1662,7 +1662,9 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	m.modals.NewSession = NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
+	newSessionForm := NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
+	newSessionForm.selectAgent(m.cfg.Agents.Default)
+	m.modals.NewSession = newSessionForm
 	m.state = stateCreatingSession
 	return m, m.modals.NewSession.Init()
 }
