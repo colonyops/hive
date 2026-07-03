@@ -298,8 +298,9 @@ func manifestFromWire(wire Manifest) connectors.Manifest {
 			FetchDetail: wire.Capabilities.FetchDetail,
 		},
 		Picker: connectors.PickerManifest{
-			Layout:  connectors.LayoutMode(wire.Picker.Layout),
-			Columns: columns,
+			Layout:      connectors.LayoutMode(wire.Picker.Layout),
+			Columns:     columns,
+			HidePreview: wire.Picker.HidePreview,
 			Search: connectors.SearchManifest{
 				Mode:       connectors.SearchMode(wire.Picker.Search.Mode),
 				DebounceMS: wire.Picker.Search.DebounceMS,

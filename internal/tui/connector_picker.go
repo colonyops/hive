@@ -10,6 +10,7 @@ import (
 	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/colonyops/hive/internal/connectors"
@@ -170,6 +171,13 @@ func computeConnectorPickerDims(width, height int, manifest connectors.Manifest)
 	// available excludes the ModalStyle border (2) and horizontal padding
 	// (4) plus the gap between panes.
 	available := max(modalWidth-8, 20)
+
+	if manifest.Picker.HidePreview {
+		// Single-pane mode: the list/table gets the full modal width and
+		// no detail pane is rendered.
+		return modalWidth, modalHeight, available, 0, contentHeight
+	}
+
 	listRatio := 34
 	if manifest.Picker.Layout == connectors.LayoutModeList {
 		// List-layout issue pickers use two-line cards, so give the scan
@@ -512,13 +520,18 @@ func (p ConnectorPicker) View() string {
 		p.renderList(p.listWidth),
 	)
 
-	body := lipgloss.JoinHorizontal(lipgloss.Top,
-		lipgloss.NewStyle().Width(p.listWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Render(left),
-		renderConnectorPickerDivider(p.contentHeight),
-		lipgloss.NewStyle().Width(p.detailWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Padding(0, 0, 0, 2).Render(p.detailVP.View()),
-	)
+	body := lipgloss.NewStyle().Width(p.listWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Render(left)
+	helpText := "↑/↓ navigate  enter select  esc cancel"
+	if !p.manifest.Picker.HidePreview {
+		body = lipgloss.JoinHorizontal(lipgloss.Top,
+			body,
+			renderConnectorPickerDivider(p.contentHeight),
+			lipgloss.NewStyle().Width(p.detailWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Padding(0, 0, 0, 2).Render(p.detailVP.View()),
+		)
+		helpText = "↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel"
+	}
 
-	help := styles.ModalHelpStyle.Render("↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel")
+	help := styles.ModalHelpStyle.Render(helpText)
 
 	content := lipgloss.JoinVertical(lipgloss.Left, title, "", body, "", help)
 	return styles.ModalStyle.Width(p.modalWidth).Render(content)
@@ -591,7 +604,7 @@ func (p ConnectorPicker) renderRow(item connectors.Item, selected bool, width in
 	}
 
 	if p.manifest.Picker.Layout == connectors.LayoutModeTable && len(p.manifest.Picker.Columns) > 0 {
-		line := cursor + renderConnectorTableRow(item, p.manifest.Picker.Columns)
+		line := cursor + renderConnectorTableRow(item, p.manifest.Picker.Columns, max(width-2, 1))
 		return lipgloss.NewStyle().MaxWidth(width).Render(rowStyle.Render(line))
 	}
 
@@ -605,17 +618,53 @@ func (p ConnectorPicker) renderRow(item connectors.Item, selected bool, width in
 	return row1 + "\n" + lipgloss.NewStyle().MaxWidth(width).Render("  "+meta)
 }
 
-// renderConnectorTableRow renders an item's Fields as a single row aligned
-// to the manifest's column widths.
-func renderConnectorTableRow(item connectors.Item, columns []connectors.Column) string {
-	var cells []string
-	for _, col := range columns {
-		value := connectorFieldString(item, col.Key)
-		width := col.Width
-		if width <= 0 {
-			width = 12
+// connectorFlexColumnMinWidth is the floor a Flex column can be squeezed
+// to before the row simply truncates at the pane edge.
+const connectorFlexColumnMinWidth = 8
+
+// resolveConnectorColumnWidths assigns single-line rendering widths to
+// columns within total: declared fixed widths are kept as-is (defaulting
+// to 12 when a column declares neither Width nor Flex), and Flex columns
+// share whatever space remains proportionally to their weights.
+func resolveConnectorColumnWidths(columns []connectors.Column, total int) []int {
+	widths := make([]int, len(columns))
+	remaining := total - max(len(columns)-1, 0) // inter-column spaces
+	flexTotal := 0
+	for i, col := range columns {
+		switch {
+		case col.Flex > 0:
+			flexTotal += col.Flex
+		case col.Width > 0:
+			widths[i] = col.Width
+			remaining -= col.Width
+		default:
+			widths[i] = 12
+			remaining -= 12
 		}
-		cells = append(cells, lipgloss.NewStyle().Width(width).MaxWidth(width).Render(value))
+	}
+	if flexTotal == 0 {
+		return widths
+	}
+	for i, col := range columns {
+		if col.Flex > 0 {
+			widths[i] = max(remaining*col.Flex/flexTotal, connectorFlexColumnMinWidth)
+		}
+	}
+	return widths
+}
+
+// renderConnectorTableRow renders an item's Fields as a single row: fixed
+// columns at their declared widths, Flex columns sharing the remaining
+// space. Cell content is truncated (never wrapped) so a long title cannot
+// turn one table row into several lines and break the picker's fixed-height
+// layout.
+func renderConnectorTableRow(item connectors.Item, columns []connectors.Column, width int) string {
+	widths := resolveConnectorColumnWidths(columns, width)
+	cells := make([]string, 0, len(columns))
+	for i, col := range columns {
+		w := max(widths[i], 1)
+		value := ansi.Truncate(connectorFieldString(item, col.Key), w, "…")
+		cells = append(cells, lipgloss.NewStyle().Width(w).MaxHeight(1).Render(value))
 	}
 	return strings.Join(cells, " ")
 }
@@ -752,6 +801,9 @@ func (p ConnectorPicker) detailContent() string {
 // p.contentHeight scrolls within the viewport instead of growing the
 // dialog.
 func (p *ConnectorPicker) refreshDetailViewport() {
+	if p.manifest.Picker.HidePreview {
+		return
+	}
 	p.detailVP.SetContent(p.detailContent())
 	p.detailVP.GotoTop()
 }
