@@ -1197,3 +1197,42 @@ func TestKeybindingResolver_ResolveReadsLive(t *testing.T) {
 	require.True(t, ok)
 	assert.Contains(t, a.ShellCmd, "echo updated")
 }
+
+// TestKeybindingHandler_PresetArgsReachAction is the regression test for
+// preset command args (e.g. ConnectorIssues -> ["issues"]) being dropped on
+// the keybinding paths: Resolve and ResolveAction build Actions inline
+// (they do not go through ResolveUserCommand) and must carry cmd.Args, or
+// keys like the default 'i' binding dispatch OpenConnectorPicker with no
+// connector id.
+func TestKeybindingHandler_PresetArgsReachAction(t *testing.T) {
+	commands := map[string]config.UserCommand{
+		"ConnectorIssues": {
+			Action: act.TypeOpenConnectorPicker,
+			Args:   []string{"issues"},
+			Help:   "browse issues",
+		},
+	}
+	keybindings := map[string]config.Keybinding{
+		"i": {Cmd: "ConnectorIssues"},
+	}
+	handler := NewKeybindingResolver(sessionsKBs(keybindings), commandSetFromMap(commands), testRenderer)
+
+	t.Run("Resolve carries preset args", func(t *testing.T) {
+		action, ok := handler.Resolve("i", session.Session{ID: "s1", State: session.StateActive})
+		require.True(t, ok)
+		assert.Equal(t, act.TypeOpenConnectorPicker, action.Type)
+		assert.Equal(t, []string{"issues"}, action.Args)
+	})
+
+	t.Run("ResolveAction carries preset args", func(t *testing.T) {
+		action, ok := handler.ResolveAction("i")
+		require.True(t, ok)
+		assert.Equal(t, act.TypeOpenConnectorPicker, action.Type)
+		assert.Equal(t, []string{"issues"}, action.Args)
+	})
+
+	t.Run("ResolveUserCommand appends typed args after preset args", func(t *testing.T) {
+		action := handler.ResolveUserCommand("ConnectorIssues", commands["ConnectorIssues"], session.Session{ID: "s1"}, []string{"owner/repo"}, nil)
+		assert.Equal(t, []string{"issues", "owner/repo"}, action.Args)
+	})
+}
