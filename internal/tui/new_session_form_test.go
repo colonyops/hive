@@ -125,4 +125,14 @@ func TestNewNewSessionForm(t *testing.T) {
 		updated, _ := form.Update(keyPress(tea.KeyEnter))
 		assert.Equal(t, 1, updated.focusedField)
 	})
+
+	t.Run("selectAgent chooses configured default even when not first", func(t *testing.T) {
+		form := NewNewSessionForm(repos, "", nil, []string{"claude", "codex", "pi"})
+		form.selectAgent("pi")
+		form.nameInput.SetValue("my-session")
+		form.submitted = true
+
+		result := form.Result()
+		assert.Equal(t, "pi", result.AgentKey)
+	})
 }
