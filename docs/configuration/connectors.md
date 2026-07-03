@@ -76,7 +76,8 @@ supplied explicitly). They need `gh` installed and authenticated.
 - **`issues`** — `gh issue list`/`gh issue view`. Two-pane picker: issue
   list on the left, markdown detail on the right.
 - **`prs`** — `gh pr list`. Single-pane, full-width table (number, title,
-  author, review state) with no detail preview.
+  author, review state, CI status) with no detail preview. CI status rides
+  along in the same `gh` call (`statusCheckRollup`) — no extra requests.
 
 Built-ins are declared as specs in `internal/connectors/ghcli` — a small
 struct describing the picker layout and the gh invocation — executed by a
@@ -86,9 +87,14 @@ shared engine, so new gh-backed connectors are mostly declarative.
 
 In the TUI, run `:ConnectorIssues [scope]` or `:ConnectorPRs [scope]` from
 the command palette (scope defaults to the selected session's repo), or the
-generic `:OpenConnector <id> [scope]`. The default `i` keybinding in the
-sessions view opens the issues picker. Press enter to create a session from
-the highlighted item, using the connector's configured templates.
+generic `:OpenConnector <id> [scope]`. The default `i`/`p` keybindings in
+the sessions view open the issues and PRs pickers.
+
+The picker opens in **navigate mode**: `j`/`k` (or arrows) move the
+selection, `/` enters search mode (esc returns to navigate, keeping the
+filter), `O` opens the highlighted item in your browser, and enter creates
+a session from it using the connector's configured templates. Arrow keys
+navigate in both modes.
 
 Custom commands can pin a connector id and scope via preset `args`, and
 keybindings can reference them — this is exactly how the built-in

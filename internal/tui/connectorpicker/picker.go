@@ -2,6 +2,8 @@ package connectorpicker
 
 import (
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -11,6 +13,7 @@ import (
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
+	"github.com/rs/zerolog/log"
 	"github.com/sahilm/fuzzy"
 
 	"github.com/colonyops/hive/internal/connectors"
@@ -74,6 +77,10 @@ type Picker struct {
 	cursor       int
 	scrollOffset int
 
+	// searchMode is true while "/" has focused the query input; in the
+	// default navigate mode j/k move the cursor and typing is swallowed.
+	searchMode bool
+
 	searchInFlight bool
 	searchedOnce   bool
 	searchErr      error
@@ -120,7 +127,6 @@ func New(conn connectors.Connector, manifest connectors.Manifest, scope string, 
 	input := textinput.New()
 	input.Placeholder = "search..."
 	input.Prompt = "/ "
-	input.Focus()
 	inputStyles := textinput.DefaultStyles(true)
 	inputStyles.Focused.Prompt = styles.TextPrimaryStyle
 	inputStyles.Cursor.Color = styles.ColorPrimary
@@ -251,8 +257,17 @@ func (p Picker) Update(msg tea.Msg) (Picker, tea.Cmd) {
 // handleKey dispatches navigation/selection keys, then falls through to the
 // text input for query editing.
 func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
+	// Keys shared by both modes: arrows always navigate, enter always
+	// selects, and detail scrolling stays available while typing.
 	switch msg.String() {
 	case "esc":
+		if p.searchMode {
+			// Leave search mode, keeping the current query/filter; a
+			// second esc (in navigate mode) dismisses the picker.
+			p.searchMode = false
+			p.input.Blur()
+			return p, nil
+		}
 		p.cancelled = true
 		return p, nil
 	case "enter":
@@ -261,25 +276,19 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		}
 		return p, nil
 	case "up", "ctrl+k":
-		if p.cursor > 0 {
-			p.cursor--
-			p.clampScroll()
-			p.refreshDetailViewport()
-		}
-		return p, p.triggerDetailFetch()
+		return p.moveCursor(-1)
 	case "down", "ctrl+j":
-		if p.cursor < len(p.items)-1 {
-			p.cursor++
-			p.clampScroll()
-			p.refreshDetailViewport()
-		}
-		return p, p.triggerDetailFetch()
+		return p.moveCursor(1)
 	case "pgdown", "ctrl+d":
 		p.detailVP.HalfPageDown()
 		return p, nil
 	case "pgup", "ctrl+u":
 		p.detailVP.HalfPageUp()
 		return p, nil
+	}
+
+	if !p.searchMode {
+		return p.handleNavigateKey(msg)
 	}
 
 	before := p.input.Value()
@@ -291,6 +300,66 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		return p, inputCmd
 	}
 	return p.handleQueryChanged(inputCmd)
+}
+
+// handleNavigateKey handles keys in navigate mode (the default): j/k move
+// the cursor, "/" enters search mode, "O" opens the highlighted item's URL
+// in the browser. Anything else is swallowed so stray typing can't mutate
+// the query.
+func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
+	switch msg.String() {
+	case "j":
+		return p.moveCursor(1)
+	case "k":
+		return p.moveCursor(-1)
+	case "/":
+		p.searchMode = true
+		return p, p.input.Focus()
+	case "O":
+		return p, p.openCurrentItemURL()
+	}
+	return p, nil
+}
+
+// moveCursor moves the highlight by delta, keeping it in range, and
+// triggers the lazy detail fetch for the newly highlighted item.
+func (p Picker) moveCursor(delta int) (Picker, tea.Cmd) {
+	next := p.cursor + delta
+	if next >= 0 && next < len(p.items) {
+		p.cursor = next
+		p.clampScroll()
+		p.refreshDetailViewport()
+	}
+	return p, p.triggerDetailFetch()
+}
+
+// openCurrentItemURL returns a Cmd that opens the highlighted item's URI in
+// the OS browser, or nil when there is no item or it carries no URI.
+func (p Picker) openCurrentItemURL() tea.Cmd {
+	if p.cursor < 0 || p.cursor >= len(p.items) {
+		return nil
+	}
+	uri := p.items[p.cursor].URI
+	if uri == "" {
+		return nil
+	}
+	return func() tea.Msg {
+		if err := browserOpenCmd(uri).Run(); err != nil {
+			log.Debug().Err(err).Str("uri", uri).Msg("connector picker: open url failed")
+		}
+		return nil
+	}
+}
+
+// browserOpenCmd builds the OS-specific command to open uri in the default
+// browser.
+func browserOpenCmd(uri string) *exec.Cmd {
+	switch runtime.GOOS {
+	case "darwin":
+		return exec.Command("open", uri)
+	default:
+		return exec.Command("xdg-open", uri)
+	}
 }
 
 // handleQueryChanged reacts to a query edit according to the manifest's
@@ -521,20 +590,29 @@ func (p Picker) View() string {
 	)
 
 	body := lipgloss.NewStyle().Width(p.listWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Render(left)
-	helpText := "↑/↓ navigate  enter select  esc cancel"
 	if !p.manifest.Picker.HidePreview {
 		body = lipgloss.JoinHorizontal(lipgloss.Top,
 			body,
 			renderPickerDivider(p.contentHeight),
 			lipgloss.NewStyle().Width(p.detailWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Padding(0, 0, 0, 2).Render(p.detailVP.View()),
 		)
-		helpText = "↑/↓ navigate  ctrl+u/d scroll detail  enter select  esc cancel"
 	}
 
-	help := styles.ModalHelpStyle.Render(helpText)
+	help := styles.ModalHelpStyle.Render(p.helpText())
 
 	content := lipgloss.JoinVertical(lipgloss.Left, title, "", body, "", help)
 	return styles.ModalStyle.Width(p.modalWidth).Render(content)
+}
+
+// helpText returns the mode-appropriate key hints for the help line. Kept
+// short enough for an 80-column terminal; less-common keys (ctrl+u/d
+// detail scrolling, pgup/pgdn) stay undocumented rather than pushing
+// "esc cancel" past the modal edge.
+func (p Picker) helpText() string {
+	if p.searchMode {
+		return "type to search  ↑/↓ navigate  enter select  esc done"
+	}
+	return "j/k navigate  / search  O open  enter select  esc cancel"
 }
 
 // renderPickerDivider renders the vertical divider between the
@@ -669,7 +747,6 @@ func renderConnectorTableRow(item connectors.Item, columns []connectors.Column, 
 		if col.Key == "number" && value != "" {
 			value = "#" + value
 		}
-		value = ansi.Truncate(value, w, "…")
 		style := tableCellStyle(col.Key, value)
 		if selected {
 			// The highlighted row stays a uniform primary-bold bar so the
@@ -677,9 +754,25 @@ func renderConnectorTableRow(item connectors.Item, columns []connectors.Column, 
 			// rest of the table.
 			style = styles.TextPrimaryBoldStyle
 		}
+		value = ansi.Truncate(statusIcon(value)+value, w, "…")
 		cells = append(cells, lipgloss.NewStyle().Width(w).MaxHeight(1).Render(style.Render(value)))
 	}
 	return strings.Join(cells, " ")
+}
+
+// statusIcon returns a glyph prefix for CI status vocabulary so pass/fail
+// state is scannable without reading the words. Styled by the same
+// tableCellStyle color as the text.
+func statusIcon(value string) string {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "passing":
+		return "✓ "
+	case "failing":
+		return "✗ "
+	case "pending":
+		return "● "
+	}
+	return ""
 }
 
 // tableCellStyle picks a semantic style for a table cell from its column
@@ -698,7 +791,7 @@ func tableCellStyle(key, value string) lipgloss.Style {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "approved", "open", "success", "passing":
 		return styles.TextSuccessStyle
-	case "changes requested", "closed", "failure", "failed":
+	case "changes requested", "closed", "failure", "failed", "failing":
 		return styles.TextErrorStyle
 	case "review required", "pending":
 		return styles.TextWarningStyle
