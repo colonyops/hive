@@ -315,6 +315,7 @@ func (h *KeybindingResolver) Resolve(key string, sess session.Session) (Action, 
 	// Resolve action type from command
 	if cmd.Action != "" {
 		a.Type = cmd.Action
+		a.Args = slices.Clone(cmd.Args)
 
 		// Default help for actions that need it
 		if a.Help == "" {
@@ -389,6 +390,7 @@ func (h *KeybindingResolver) ResolveAction(key string) (Action, bool) {
 	a := Action{
 		Key:    key,
 		Type:   cmd.Action,
+		Args:   slices.Clone(cmd.Args),
 		Help:   kb.Help,
 		Silent: cmd.Silent,
 	}
