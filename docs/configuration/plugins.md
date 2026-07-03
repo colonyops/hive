@@ -37,7 +37,7 @@ plugins:
 | `TmuxOpen`       | Open/attach tmux session        | `enter`     |
 | `TmuxStart`      | Start tmux session (background) | —           |
 | `TmuxKill`       | Kill tmux session               | `ctrl+d`    |
-| `TmuxPopUp`      | Popup tmux session              | `p`         |
+| `TmuxPopUp`      | Popup tmux session              | `o`         |
 | `AgentSend`      | Send Enter to agent             | `A`         |
 | `AgentSendClear` | Send /clear to agent            | —           |
 
