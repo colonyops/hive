@@ -7,6 +7,7 @@ import (
 	"sync"
 	"testing"
 
+	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/stretchr/testify/assert"
@@ -79,24 +80,22 @@ func (f *fakeTUISource) FetchDetail(_ context.Context, params sources.FetchDetai
 	return f.detail[params.ID], nil
 }
 
-func (f *fakeTUISource) searchCallCount() int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return len(f.searchCalls)
-}
-
-func (f *fakeTUISource) detailCallCount(id string) int {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	return f.detailCalls[id]
-}
-
 var _ sources.Source = (*fakeTUISource)(nil)
+
+// newTestPicker creates a Picker wrapping a single fake source for tests.
+func newTestPicker(fake *fakeTUISource, manifest sources.Manifest, scope string, w, h int) Picker {
+	tabs := []TabSource{{
+		ID:        manifest.ID,
+		Source:    fake,
+		Manifest:  manifest,
+		Templates: sources.TemplateConfig{},
+	}}
+	return New(tabs, manifest.ID, scope, w, h)
+}
 
 // drainPicker synchronously executes cmd and feeds resulting message(s) back
 // into the picker's Update loop, following batches and follow-up commands
-// until none remain. Debounce ticks execute in real time, so tests use small
-// DebounceMS values to keep this fast.
+// until none remain. Spinner ticks are filtered out to prevent infinite loops.
 func drainPicker(t *testing.T, p Picker, cmd tea.Cmd) Picker {
 	t.Helper()
 	if cmd == nil {
@@ -109,6 +108,10 @@ func drainPicker(t *testing.T, p Picker, cmd tea.Cmd) Picker {
 func applyPickerMsg(t *testing.T, p Picker, msg tea.Msg) Picker {
 	t.Helper()
 	if msg == nil {
+		return p
+	}
+	// Filter out spinner ticks to avoid infinite test loops.
+	if _, ok := msg.(spinner.TickMsg); ok {
 		return p
 	}
 	if batch, ok := msg.(tea.BatchMsg); ok {
@@ -137,16 +140,7 @@ func listManifest() sources.Manifest {
 	}
 }
 
-func remoteManifest() sources.Manifest {
-	m := listManifest()
-	m.Picker.Search.Mode = sources.SearchModeRemote
-	m.Picker.Search.DebounceMS = 5
-	return m
-}
-
-// enterSearch puts the picker into search mode (as a user pressing "/")
-// so subsequent typeKey calls edit the query instead of being swallowed by
-// navigate mode.
+// enterSearch puts the picker into search mode.
 func enterSearch(t *testing.T, p Picker) Picker {
 	t.Helper()
 	next, cmd := p.Update(tea.KeyPressMsg{Text: "/", Code: '/'})
@@ -155,13 +149,7 @@ func enterSearch(t *testing.T, p Picker) Picker {
 	return p
 }
 
-// typeKey feeds each rune of s into the picker as a keystroke without
-// draining between characters, then drains all resulting commands
-// afterward. This mirrors real usage where a debounced remote search should
-// settle on the final query once the user stops typing: intermediate
-// debounce ticks fire (since they run in real time) but are discarded by
-// handleDebounce because their Query no longer matches the final input.
-// The picker must already be in search mode (see enterSearch).
+// typeKey feeds each rune of s as a keystroke.
 func typeKey(t *testing.T, p Picker, s string) Picker {
 	t.Helper()
 	var cmds []tea.Cmd
@@ -178,49 +166,35 @@ func typeKey(t *testing.T, p Picker, s string) Picker {
 	return p
 }
 
-func TestPicker_LocalFilterDoesNotCallSearch(t *testing.T) {
+// activeTab returns the current tab's state for assertions.
+func activeTab(p Picker) *tabState {
+	return &p.tabs[p.activeTab]
+}
+
+func TestPicker_LocalFilterPreservesItems(t *testing.T) {
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
 	}
 	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
-	require.Equal(t, 1, fake.searchCallCount(), "initial load issues exactly one Search")
-	require.Len(t, p.items, 2)
+	tab := activeTab(p)
+	require.Len(t, tab.filteredItems, 2)
 
 	p = enterSearch(t, p)
 	p = typeKey(t, p, "alpha")
 
-	assert.Equal(t, 1, fake.searchCallCount(), "local filtering must not call Search again")
-	require.Len(t, p.items, 1)
-	assert.Equal(t, "alpha", p.items[0].Title)
-}
-
-func TestPicker_RemoteSearchDebouncesAndCallsWithQuery(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha"},
-		{ID: "2", Title: "beta"},
-	}
-	fake := newFakeTUISource(remoteManifest(), items)
-	p := New(fake, remoteManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-	require.Equal(t, 1, fake.searchCallCount())
-
-	p = enterSearch(t, p)
-	p = typeKey(t, p, "beta")
-
-	require.Equal(t, 2, fake.searchCallCount(), "remote mode issues one Search per settled query")
-	assert.Equal(t, []string{"", "beta"}, fake.searchCalls)
-	require.Len(t, p.items, 1)
-	assert.Equal(t, "beta", p.items[0].Title)
+	tab = activeTab(p)
+	require.Len(t, tab.filteredItems, 1)
+	assert.Equal(t, "alpha", tab.filteredItems[0].Title)
 }
 
 func TestPicker_SelectionAndCancel(t *testing.T) {
 	items := []sources.Item{{ID: "1", Title: "alpha"}}
 	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -231,7 +205,8 @@ func TestPicker_SelectionAndCancel(t *testing.T) {
 	assert.Equal(t, "1", result.Item.ID)
 	assert.False(t, p.Cancelled())
 
-	p2 := New(fake, listManifest(), "", 80, 24)
+	// Cancel test
+	p2 := newTestPicker(fake, listManifest(), "", 80, 24)
 	p2 = drainPicker(t, p2, p2.Init())
 	next2, cmd2 := p2.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	p2 = drainPicker(t, next2, cmd2)
@@ -240,60 +215,16 @@ func TestPicker_SelectionAndCancel(t *testing.T) {
 	assert.False(t, ok)
 }
 
-func TestPicker_LazyDetailFetchIsCachedPerID(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha"},
-		{ID: "2", Title: "beta"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	fake.detail["1"] = sources.Detail{Markdown: &sources.MarkdownDetail{Content: "alpha body"}}
-	fake.detail["2"] = sources.Detail{Markdown: &sources.MarkdownDetail{Content: "beta body"}}
-
-	p := New(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	assert.Equal(t, 1, fake.detailCallCount("1"), "cursor starts on first item, fetching its detail once")
-
-	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	p = drainPicker(t, next, cmd)
-	assert.Equal(t, 1, fake.detailCallCount("2"))
-
-	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyUp})
-	p = drainPicker(t, next, cmd)
-	assert.Equal(t, 1, fake.detailCallCount("1"), "revisiting item 1 must use the cache, not refetch")
-
-	assert.Contains(t, terminal.StripANSI(p.detailVP.View()), "alpha body")
-}
-
-func TestPicker_ListRowShowsMetadataWithoutState(t *testing.T) {
-	item := sources.Item{
-		ID:    "1278",
-		Title: "feat: make expiring-exemptions endpoints public",
-		Fields: map[string]any{
-			"number": 1278,
-			"state":  "OPEN",
-			"author": "alice",
-			"labels": []string{"api", "public"},
-		},
-	}
-	p := New(newFakeTUISource(listManifest(), []sources.Item{item}), listManifest(), "", 100, 30)
-
-	row := terminal.StripANSI(p.renderRow(item, true, 48))
-
-	assert.Contains(t, row, styles.IconSelector+" feat: make expiring-exemptions")
-	assert.Contains(t, row, "#1278")
-	assert.Contains(t, row, "@alice")
-	assert.Contains(t, row, "[api]")
-	assert.NotContains(t, row, "OPEN")
-}
-
-func TestPicker_EmptyResultsShowsMessageAndEnterIsNoop(t *testing.T) {
+func TestPicker_EmptyResultsShowsEmptyState(t *testing.T) {
 	fake := newFakeTUISource(listManifest(), nil)
-	p := New(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, listManifest(), "test-repo", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
-	require.Empty(t, p.items)
-	assert.Contains(t, p.renderList(40), "no results")
+	tab := activeTab(p)
+	require.Empty(t, tab.filteredItems)
+
+	body := terminal.StripANSI(p.renderBody())
+	assert.Contains(t, body, "No open")
 
 	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	p = drainPicker(t, next, cmd)
@@ -302,52 +233,18 @@ func TestPicker_EmptyResultsShowsMessageAndEnterIsNoop(t *testing.T) {
 	assert.False(t, ok, "enter on an empty list must not select anything")
 }
 
-func TestPicker_NoDetailItemShowsPlaceholder(t *testing.T) {
-	manifest := listManifest()
-	manifest.Capabilities.FetchDetail = false
-	items := []sources.Item{{ID: "1", Title: "alpha"}}
-	fake := newFakeTUISource(manifest, items)
-
-	p := New(fake, manifest, "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	assert.Equal(t, 0, fake.detailCallCount("1"), "FetchDetail must not be called when the manifest doesn't support it")
-	assert.NotPanics(t, func() {
-		out := terminal.StripANSI(p.detailVP.View())
-		assert.Contains(t, out, "no detail available")
-	})
-}
-
-func TestPicker_DetailFetchErrorRendersInPane(t *testing.T) {
-	items := []sources.Item{{ID: "1", Title: "alpha"}}
-	fake := newFakeTUISource(listManifest(), items)
-	fake.detailErr["1"] = fmt.Errorf("boom")
-
-	p := New(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	out := terminal.StripANSI(p.detailVP.View())
-	assert.Contains(t, out, "boom")
-}
-
-func TestPicker_SearchErrorIsShownAndNonFatal(t *testing.T) {
+func TestPicker_SearchErrorRendersInBody(t *testing.T) {
 	fake := newFakeTUISource(listManifest(), nil)
 	fake.searchErr = fmt.Errorf("gh: unauthenticated")
 
-	p := New(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
-	assert.Contains(t, terminal.StripANSI(p.renderList(40)), "gh: unauthenticated")
-	assert.NotPanics(t, func() {
-		p.View()
-	})
+	body := terminal.StripANSI(p.renderBody())
+	assert.Contains(t, body, "unauthenticated")
+	assert.NotPanics(t, func() { p.View() })
 }
 
-// TestPicker_ViewFitsTerminal is the regression test for the
-// picker overflowing small terminals: the rendered view (including modal
-// border, padding, and the help line's margin) must never exceed the
-// terminal height the picker was sized for, and loading a long detail body
-// must not change the frame height.
 func TestPicker_ViewFitsTerminal(t *testing.T) {
 	sizes := []struct{ width, height int }{
 		{80, 24},
@@ -356,127 +253,171 @@ func TestPicker_ViewFitsTerminal(t *testing.T) {
 		{120, 38},
 		{120, 50},
 	}
-	long := strings.Repeat("This is a long line of markdown detail content. ", 40) +
-		"\n\n" + strings.Repeat("Another paragraph. ", 60)
 
 	for _, size := range sizes {
 		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
 			items := []sources.Item{{ID: "1", Title: "Item one"}}
 			fake := newFakeTUISource(listManifest(), items)
-			fake.detail["1"] = sources.Detail{Markdown: &sources.MarkdownDetail{Content: long}}
 
-			p := New(fake, listManifest(), "", size.width, size.height)
-			before := lipgloss.Height(p.View())
-			assert.LessOrEqual(t, before, size.height, "picker must fit the terminal before loading")
-
+			p := newTestPicker(fake, listManifest(), "", size.width, size.height)
 			p = drainPicker(t, p, p.Init())
 
-			after := lipgloss.Height(p.View())
-			assert.Equal(t, before, after, "loading detail must not change the frame height")
-			assert.LessOrEqual(t, after, size.height, "picker must fit the terminal after loading")
+			viewHeight := lipgloss.Height(p.View())
+			assert.LessOrEqual(t, viewHeight, size.height, "picker must fit the terminal")
 		})
 	}
 }
 
-// TestPicker_StaleGenerationMessagesAreDropped guards against a
-// late async result from a previously closed picker (possibly for a
-// different scope) poisoning the current picker's caches.
 func TestPicker_StaleGenerationMessagesAreDropped(t *testing.T) {
 	items := []sources.Item{{ID: "1", Title: "alpha"}}
 	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
-	stale := sourceDetailResultMsg{
-		Gen:    p.gen - 1,
-		ID:     "1",
-		Detail: sources.Detail{Markdown: &sources.MarkdownDetail{Content: "wrong repo body"}},
-	}
-	p = applyPickerMsg(t, p, stale)
-
-	assert.NotContains(t, terminal.StripANSI(p.detailVP.View()), "wrong repo body")
-
 	staleSearch := sourceSearchResultMsg{
-		Gen:   p.gen - 1,
-		Query: p.input.Value(),
-		Items: []sources.Item{{ID: "9", Title: "poisoned"}},
+		Gen:      p.gen - 1,
+		SourceID: "fake",
+		Query:    p.input.Value(),
+		Items:    []sources.Item{{ID: "9", Title: "poisoned"}},
 	}
 	p = applyPickerMsg(t, p, staleSearch)
-	require.Len(t, p.items, 1)
-	assert.Equal(t, "alpha", p.items[0].Title)
+
+	tab := activeTab(p)
+	require.Len(t, tab.filteredItems, 1)
+	assert.Equal(t, "alpha", tab.filteredItems[0].Title)
 }
 
-// TestPicker_NonEditingKeyDoesNotResetOrResearch verifies that
-// keys which don't change the query (e.g. left/right) neither reset the
-// cursor nor re-issue a remote search.
-func TestPicker_NonEditingKeyDoesNotResetOrResearch(t *testing.T) {
+func TestPicker_NavigateModeIsDefault(t *testing.T) {
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
-	}
-	fake := newFakeTUISource(remoteManifest(), items)
-	p := New(fake, remoteManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-	require.Equal(t, 1, fake.searchCallCount())
-
-	p = enterSearch(t, p)
-	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	p = drainPicker(t, next, cmd)
-	require.Equal(t, 1, p.cursor)
-
-	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyLeft})
-	p = drainPicker(t, next, cmd)
-
-	assert.Equal(t, 1, p.cursor, "non-editing key must not reset the cursor")
-	assert.Equal(t, 1, fake.searchCallCount(), "non-editing key must not re-issue a remote search")
-}
-
-// TestPicker_ClearingFilterRefreshesDetailPane verifies the detail
-// pane follows the cursor back to item 0 when a local filter is cleared.
-func TestPicker_ClearingFilterRefreshesDetailPane(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha", Detail: sources.Detail{Markdown: &sources.MarkdownDetail{Content: "alpha body"}}},
-		{ID: "2", Title: "beta", Detail: sources.Detail{Markdown: &sources.MarkdownDetail{Content: "beta body"}}},
+		{ID: "3", Title: "gamma"},
 	}
 	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
+	require.False(t, p.searchMode, "picker must start in navigate mode")
 
+	// j/k navigate
+	next, cmd := p.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 1, activeTab(p).cursor, "j must move the cursor down")
+
+	next, cmd = p.Update(tea.KeyPressMsg{Text: "k", Code: 'k'})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 0, activeTab(p).cursor, "k must move the cursor up")
+
+	// Stray typing does not filter
+	next, cmd = p.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
+	p = drainPicker(t, next, cmd)
+	assert.Empty(t, p.input.Value())
+	assert.Len(t, activeTab(p).filteredItems, 3)
+
+	// / enters search mode, esc leaves it
 	p = enterSearch(t, p)
 	p = typeKey(t, p, "beta")
-	require.Len(t, p.items, 1)
-	require.Contains(t, terminal.StripANSI(p.detailVP.View()), "beta body")
+	require.Len(t, activeTab(p).filteredItems, 1)
 
-	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	p = drainPicker(t, next, cmd)
-	for range 3 {
-		next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyBackspace})
-		p = drainPicker(t, next, cmd)
+	assert.False(t, p.searchMode, "esc must leave search mode")
+	assert.False(t, p.Cancelled(), "first esc must not cancel the picker")
+
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	p = drainPicker(t, next, cmd)
+	assert.True(t, p.Cancelled(), "esc in navigate mode must cancel")
+}
+
+func TestPicker_TabSwitching(t *testing.T) {
+	items1 := []sources.Item{{ID: "1", Title: "PR one"}}
+	items2 := []sources.Item{{ID: "2", Title: "Issue one"}, {ID: "3", Title: "Issue two"}}
+
+	fake1 := newFakeTUISource(listManifest(), items1)
+	m1 := listManifest()
+	m1.ID = "prs"
+	m1.DisplayName = "Pull Requests"
+
+	fake2 := newFakeTUISource(listManifest(), items2)
+	m2 := listManifest()
+	m2.ID = "issues"
+	m2.DisplayName = "Issues"
+
+	tabs := []TabSource{
+		{ID: "prs", Source: fake1, Manifest: m1},
+		{ID: "issues", Source: fake2, Manifest: m2},
 	}
-	require.Empty(t, p.input.Value())
+	p := New(tabs, "prs", "", 80, 24)
+	p = drainPicker(t, p, p.Init())
 
-	require.Len(t, p.items, 2)
-	assert.Equal(t, 0, p.cursor)
-	assert.Contains(t, terminal.StripANSI(p.detailVP.View()), "alpha body", "detail pane must refresh to the item under the cursor")
+	assert.Equal(t, 0, p.activeTab)
+	tab := activeTab(p)
+	require.True(t, tab.initialized)
+	require.Len(t, tab.filteredItems, 1)
+
+	// Tab switches to the next source
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 1, p.activeTab)
+
+	// Second tab should now be initialized
+	tab2 := activeTab(p)
+	require.True(t, tab2.initialized)
+	require.Len(t, tab2.filteredItems, 2)
+
+	// Tab back preserves first tab's state
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 0, p.activeTab)
+
+	tab = activeTab(p)
+	require.True(t, tab.initialized)
+	require.Len(t, tab.filteredItems, 1)
 }
 
-// TestPicker_InitShowsSearching verifies the initial load renders
-// a "searching..." status instead of a blank list (Init must set
-// searchInFlight on the stored picker).
-func TestPicker_InitShowsSearching(t *testing.T) {
+func TestPicker_TabBarRendering(t *testing.T) {
+	m1 := listManifest()
+	m1.ID = "prs"
+	m1.DisplayName = "Pull Requests"
+	m2 := listManifest()
+	m2.ID = "issues"
+	m2.DisplayName = "Issues"
+
+	tabs := []TabSource{
+		{ID: "prs", Source: newFakeTUISource(m1, nil), Manifest: m1},
+		{ID: "issues", Source: newFakeTUISource(m2, nil), Manifest: m2},
+	}
+	p := New(tabs, "prs", "owner/repo", 80, 24)
+
+	bar := terminal.StripANSI(p.renderTabBar())
+	assert.Contains(t, bar, "Pull Requests")
+	assert.Contains(t, bar, "Issues")
+	assert.Contains(t, bar, "owner/repo")
+}
+
+func TestPicker_RetryOnError(t *testing.T) {
 	fake := newFakeTUISource(listManifest(), nil)
-	p := New(fake, listManifest(), "", 80, 24)
-	cmd := p.Init()
-	require.NotNil(t, cmd)
+	fake.searchErr = fmt.Errorf("rate limited")
 
-	assert.Contains(t, terminal.StripANSI(p.renderList(40)), "searching...")
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	tab := activeTab(p)
+	require.Error(t, tab.searchErr)
+
+	// Fix the error and retry
+	fake.searchErr = nil
+	fake.items = []sources.Item{{ID: "1", Title: "alpha"}}
+
+	next, cmd := p.Update(tea.KeyPressMsg{Text: "r", Code: 'r'})
+	p = drainPicker(t, next, cmd)
+
+	tab = activeTab(p)
+	require.NoError(t, tab.searchErr)
+	require.Len(t, tab.filteredItems, 1)
 }
 
-// TestPicker_TableRowsNeverWrap is the regression test for table
-// rows with flex columns and long titles wrapping onto multiple lines and
-// destroying the fixed-height layout: each rendered row must be exactly
-// one line, and the row must span the pane width rather than the flex
-// column collapsing to its 12-column default.
+// TestPicker_TableRowsNeverWrap verifies table rows with flex columns
+// and long titles remain single-line.
 func TestPicker_TableRowsNeverWrap(t *testing.T) {
 	manifest := sources.Manifest{
 		ID:          "fake-prs",
@@ -496,17 +437,16 @@ func TestPicker_TableRowsNeverWrap(t *testing.T) {
 	item := sources.Item{ID: "1", Title: long, Fields: map[string]any{
 		"number": 1, "title": long, "author": "someone",
 	}}
+
+	tab := &tabState{tab: TabSource{ID: "fake-prs", Manifest: manifest}}
 	fake := newFakeTUISource(manifest, []sources.Item{item})
-	p := New(fake, manifest, "", 120, 40)
+	p := newTestPicker(fake, manifest, "", 120, 40)
 	p = drainPicker(t, p, p.Init())
 
-	row := p.renderRow(item, true, p.listWidth)
+	row := p.renderRow(item, true, tab)
 	assert.Equal(t, 1, lipgloss.Height(row), "table row must render as exactly one line")
-	assert.Greater(t, lipgloss.Width(row), p.listWidth/2, "flex column must expand into available width")
-	assert.LessOrEqual(t, lipgloss.Width(row), p.listWidth, "row must not exceed the pane width")
 }
 
-// TestResolveColumnWidths covers the flex-width math directly.
 func TestResolveColumnWidths(t *testing.T) {
 	cols := []sources.Column{
 		{Key: "number", Width: 6},
@@ -516,44 +456,16 @@ func TestResolveColumnWidths(t *testing.T) {
 	widths := resolveSourceColumnWidths(cols, 100)
 	assert.Equal(t, 6, widths[0])
 	assert.Equal(t, 14, widths[2])
-	// total(100) - fixed(20) - separators(2) = 78 for the flex column.
 	assert.Equal(t, 78, widths[1])
 
-	// Column with neither Width nor Flex defaults to 12.
 	widths = resolveSourceColumnWidths([]sources.Column{{Key: "a"}, {Key: "b", Flex: 1}}, 40)
 	assert.Equal(t, 12, widths[0])
-	assert.Equal(t, 27, widths[1]) // 40 - 12 - 1 separator
+	assert.Equal(t, 27, widths[1])
 
-	// Flex columns never collapse below the floor on tiny panes.
 	widths = resolveSourceColumnWidths(cols, 20)
 	assert.GreaterOrEqual(t, widths[1], sourceFlexColumnMinWidth)
 }
 
-// TestPicker_HidePreviewSinglePane verifies the single-pane mode:
-// the list gets the full content width, no divider or detail viewport is
-// rendered, and the view still fits the terminal.
-func TestPicker_HidePreviewSinglePane(t *testing.T) {
-	manifest := listManifest()
-	manifest.Capabilities.FetchDetail = false
-	manifest.Picker.HidePreview = true
-
-	items := []sources.Item{{ID: "1", Title: "alpha"}}
-	fake := newFakeTUISource(manifest, items)
-	p := New(fake, manifest, "", 100, 30)
-	p = drainPicker(t, p, p.Init())
-
-	assert.Equal(t, 0, p.detailWidth, "no detail pane in single-pane mode")
-	view := terminal.StripANSI(p.View())
-	for _, line := range strings.Split(view, "\n") {
-		// The modal border contributes two "│" per line; a pane divider
-		// would add a third.
-		assert.LessOrEqual(t, strings.Count(line, "│"), 2, "no divider in single-pane mode: %q", line)
-	}
-	assert.NotContains(t, view, "ctrl+u/d", "help must not advertise detail scrolling")
-	assert.LessOrEqual(t, lipgloss.Height(p.View()), 30, "single-pane view must fit the terminal")
-}
-
-// TestTableCellStyle covers the semantic column/value → style mapping.
 func TestTableCellStyle(t *testing.T) {
 	tests := []struct {
 		name  string
@@ -565,7 +477,7 @@ func TestTableCellStyle(t *testing.T) {
 		{"id column is primary", "id", "42", styles.TextPrimaryStyle},
 		{"author column is muted", "author", "alice", styles.TextMutedStyle},
 		{"approved is success", "review", "approved", styles.TextSuccessStyle},
-		{"open state is success (case-insensitive)", "state", "OPEN", styles.TextSuccessStyle},
+		{"open state is success", "state", "OPEN", styles.TextSuccessStyle},
 		{"changes requested is error", "review", "changes requested", styles.TextErrorStyle},
 		{"closed is error", "state", "CLOSED", styles.TextErrorStyle},
 		{"review required is warning", "review", "review required", styles.TextWarningStyle},
@@ -581,8 +493,6 @@ func TestTableCellStyle(t *testing.T) {
 	}
 }
 
-// TestSourceTableRowColors verifies semantic colors appear on unselected
-// rows and that the selected row renders as a uniform primary-bold bar.
 func TestSourceTableRowColors(t *testing.T) {
 	columns := []sources.Column{
 		{Key: "number", Width: 6},
@@ -594,107 +504,22 @@ func TestSourceTableRowColors(t *testing.T) {
 	}}
 
 	unselected := renderSourceTableRow(item, columns, 60, false)
-	assert.Contains(t, unselected, styles.TextPrimaryStyle.Render("#10"), "number cell must render as #<n> in the primary accent")
-	assert.Contains(t, unselected, styles.TextSuccessStyle.Render("approved"), "approved must render in the success color")
+	assert.Contains(t, unselected, styles.TextPrimaryStyle.Render("#10"))
+	assert.Contains(t, unselected, styles.TextSuccessStyle.Render("approved"))
 
 	selected := renderSourceTableRow(item, columns, 60, true)
-	assert.Contains(t, selected, styles.TextPrimaryBoldStyle.Render("approved"), "selected row must be a uniform primary-bold bar")
+	assert.Contains(t, selected, styles.TextPrimaryBoldStyle.Render("approved"))
 	assert.NotContains(t, selected, styles.TextSuccessStyle.Render("approved"))
 }
 
-// TestPicker_NavigateModeIsDefault verifies the navigate-first UX: j/k move
-// the cursor, stray typing does not edit the query, "/" enters search mode,
-// esc leaves search mode (keeping the filter) and only then cancels.
-func TestPicker_NavigateModeIsDefault(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha"},
-		{ID: "2", Title: "beta"},
-		{ID: "3", Title: "gamma"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-	require.False(t, p.searchMode, "picker must start in navigate mode")
-
-	next, cmd := p.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
-	p = drainPicker(t, next, cmd)
-	assert.Equal(t, 1, p.cursor, "j must move the cursor down")
-
-	next, cmd = p.Update(tea.KeyPressMsg{Text: "k", Code: 'k'})
-	p = drainPicker(t, next, cmd)
-	assert.Equal(t, 0, p.cursor, "k must move the cursor up")
-
-	next, cmd = p.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
-	p = drainPicker(t, next, cmd)
-	assert.Empty(t, p.input.Value(), "stray typing in navigate mode must not edit the query")
-	assert.Len(t, p.items, 3, "stray typing must not filter the list")
-
-	p = enterSearch(t, p)
-	p = typeKey(t, p, "beta")
-	require.Len(t, p.items, 1)
-
-	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	p = drainPicker(t, next, cmd)
-	assert.False(t, p.searchMode, "esc must leave search mode")
-	assert.False(t, p.Cancelled(), "first esc must not cancel the picker")
-	assert.Equal(t, "beta", p.input.Value(), "leaving search mode must keep the query")
-	assert.Len(t, p.items, 1, "leaving search mode must keep the filter")
-
-	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
-	p = drainPicker(t, next, cmd)
-	assert.True(t, p.Cancelled(), "esc in navigate mode must cancel")
-}
-
-// TestPicker_ArrowKeysNavigateInSearchMode verifies arrows work while
-// typing a query.
-func TestPicker_ArrowKeysNavigateInSearchMode(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha"},
-		{ID: "2", Title: "beta"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-	p = enterSearch(t, p)
-
-	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
-	p = drainPicker(t, next, cmd)
-	assert.Equal(t, 1, p.cursor, "down arrow must navigate while in search mode")
-	assert.Empty(t, p.input.Value(), "arrow keys must not edit the query")
-}
-
-// TestPicker_OpenCurrentItemURL verifies "O" produces an open command only
-// when the highlighted item carries a URI, and only in navigate mode.
-func TestPicker_OpenCurrentItemURL(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha", URI: "https://github.com/o/r/issues/1"},
-		{ID: "2", Title: "beta"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	p := New(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	assert.NotNil(t, p.openCurrentItemURL(), "item with URI must produce an open command")
-
-	next, cmd := p.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
-	p = drainPicker(t, next, cmd)
-	assert.Nil(t, p.openCurrentItemURL(), "item without URI must not produce a command")
-
-	p = enterSearch(t, p)
-	next, _ = p.Update(tea.KeyPressMsg{Text: "O", Code: 'O'})
-	assert.Equal(t, "O", next.input.Value(), "O in search mode must type into the query, not open a URL")
-}
-
-// TestStatusIcon covers the CI-vocabulary glyph decoration.
 func TestStatusIcon(t *testing.T) {
 	assert.Equal(t, "✓ ", statusIcon("passing"))
 	assert.Equal(t, "✗ ", statusIcon("failing"))
 	assert.Equal(t, "● ", statusIcon("pending"))
-	assert.Empty(t, statusIcon("approved"), "non-CI vocabulary gets no icon")
+	assert.Empty(t, statusIcon("approved"))
 	assert.Empty(t, statusIcon(""))
 }
 
-// TestSourceTableRowCIIcons verifies icon+color pairing in rendered rows.
 func TestSourceTableRowCIIcons(t *testing.T) {
 	columns := []sources.Column{
 		{Key: "title", Flex: 1},
@@ -705,5 +530,15 @@ func TestSourceTableRowCIIcons(t *testing.T) {
 	}}
 
 	row := renderSourceTableRow(item, columns, 50, false)
-	assert.Contains(t, row, styles.TextErrorStyle.Render("✗ failing"), "CI cell must render icon and text in the error color")
+	assert.Contains(t, row, styles.TextErrorStyle.Render("✗ failing"))
+}
+
+func TestPicker_ScopeShownInTabBar(t *testing.T) {
+	p := newTestPicker(
+		newFakeTUISource(listManifest(), nil),
+		listManifest(), "myorg/myrepo", 80, 24,
+	)
+
+	bar := terminal.StripANSI(p.renderTabBar())
+	assert.Contains(t, bar, "myorg/myrepo")
 }

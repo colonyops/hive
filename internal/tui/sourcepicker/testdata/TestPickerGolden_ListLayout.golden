@@ -1,22 +1,22 @@
 ╭────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                │
-│  Fake Source                                                                   │
-│                                                                                │
-│  / search...                    │  First reference item                        │
-│                                 │  #1278  @alice  [api]  [public]              │
-│  󰅂 First reference item         │                                              │
-│    #1278  @alice  [api]  [public│  (no detail available for this item)         │
-│                                 │                                              │
-│    Second reference item        │                                              │
-│    #1277  @bob  [backend]       │                                              │
-│                                 │                                              │
-│                                 │                                              │
-│                                 │                                              │
-│                                 │                                              │
-│                                 │                                              │
-│                                 │                                              │
+│   Fake Source                                                      test-repo  │
+│────────────────────────────────────────────────────────────────────────────────│
+│────────────────────────────────────────────────────────────────────────────────│
+│  / filter fake source…                                                      2  │
+│────────────────────────────────────────────────────────────────────────────────│
+│  ┃ #1278 First reference item [api] [public]                           @alice  │
+│    #1277 Second reference item [backend]                                 @bob  │
 │                                                                                │
 │                                                                                │
-│  j/k navigate  / search  O open  enter select  esc cancel                      │
 │                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│                                                                                │
+│  tab switch source · / filter · j/k navigate · enter select · esc close        │
 ╰────────────────────────────────────────────────────────────────────────────────╯

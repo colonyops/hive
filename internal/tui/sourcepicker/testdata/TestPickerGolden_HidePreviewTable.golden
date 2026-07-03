@@ -1,14 +1,12 @@
 ╭────────────────────────────────────────────────────────────────────────────────╮
-│                                                                                │
-│  Fake Pull Requests                                                            │
-│                                                                                │
-│  / search...                                                                   │
-│                                                                                │
-│  󰅂 #1315  feat(adaptivelogsap… Johngeorgesam… approved           ✓ passing     │
-│    #1313  [DRAFT] OTel fleet … MasslessParti… draft              ● pending     │
-│    #1312  feat(fleet-otel): w… MasslessParti… open               ✗ failing     │
-│                                                                                │
-│                                                                                │
+│   Fake Pull Requests                                               test-repo  │
+│────────────────────────────────────────────────────────────────────────────────│
+│────────────────────────────────────────────────────────────────────────────────│
+│  / filter fake pull requests…                                               3  │
+│────────────────────────────────────────────────────────────────────────────────│
+│  ┃ #1315  feat(adaptivelogsapi):… Johngeorgesam… approved           ✓ passing  │
+│    #1313  [DRAFT] OTel fleet pip… MasslessParti… draft              ● pending  │
+│    #1312  feat(fleet-otel): warn… MasslessParti… open               ✗ failing  │
 │                                                                                │
 │                                                                                │
 │                                                                                │
@@ -17,6 +15,8 @@
 │                                                                                │
 │                                                                                │
 │                                                                                │
-│  j/k navigate  / search  O open  enter select  esc cancel                      │
 │                                                                                │
+│                                                                                │
+│                                                                                │
+│  tab switch source · / filter · j/k navigate · enter select · esc close        │
 ╰────────────────────────────────────────────────────────────────────────────────╯

@@ -42,7 +42,7 @@ func buildSourceRegistry(cfg *config.Config, exec executil.Executor, kvStore kv.
 			continue
 		}
 		templates := sourceTemplateConfig(builtin.Config.Templates)
-		if err := registry.Register(source.Name(), source, templates); err != nil {
+		if err := registry.Register(source.Name(), source, templates, builtin.Spec.DisplayName); err != nil {
 			logger.Warn().Err(err).Str("source", builtin.Spec.ID).Msg("sources: failed to register builtin source")
 		}
 	}

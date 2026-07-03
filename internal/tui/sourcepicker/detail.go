@@ -11,8 +11,10 @@ import (
 )
 
 // renderSourceDetail renders a source item's detail pane at the given
-// width, dispatching on the detail's kind. A DetailKindNone detail renders a
-// clear placeholder rather than a blank pane.
+// width, dispatching on the detail's kind. Retained for future preview
+// pane support (V2).
+//
+//nolint:unused
 func renderSourceDetail(detail sources.Detail, width int) string {
 	switch detail.Kind() {
 	case sources.DetailKindMarkdown:
@@ -26,8 +28,7 @@ func renderSourceDetail(detail sources.Detail, width int) string {
 	}
 }
 
-// renderSourceKVDetail renders a KVDetail as a heading + key/value sheet
-// per section, using the shared modal text styles.
+//nolint:unused
 func renderSourceKVDetail(detail sources.KVDetail, width int) string {
 	if len(detail.Sections) == 0 {
 		return styles.TextMutedStyle.Render("(no detail available for this item)")
@@ -40,8 +41,7 @@ func renderSourceKVDetail(detail sources.KVDetail, width int) string {
 	return strings.Join(sections, "\n\n")
 }
 
-// renderSourceKVSection renders a single KVSection: an optional heading
-// followed by "key: value" rows.
+//nolint:unused
 func renderSourceKVSection(section sources.KVSection, width int) string {
 	var lines []string
 	if section.Heading != "" {

@@ -160,10 +160,8 @@ type Model struct {
 	doctorService *hive.DoctorService
 	configPath    string
 
-	sourceRegistry         *sources.Registry
-	pendingSourceID        string
-	pendingSourceScope     sourcePickerScope
-	pendingSourceTemplates sources.TemplateConfig
+	sourceRegistry     *sources.Registry
+	pendingSourceScope sourcePickerScope
 
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
@@ -598,10 +596,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleBgStreamComplete(msg)
 
 	// Source picker
-	case sourcePickerReadyMsg:
-		model, cmd = m.handleSourcePickerReady(msg)
-	case sourcePickerErrorMsg:
-		model, cmd = m.handleSourcePickerError(msg)
 	case sourcepicker.Msg:
 		model, cmd = m.forwardSourcePickerMsg(msg)
 

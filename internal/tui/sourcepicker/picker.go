@@ -6,10 +6,9 @@ import (
 	"runtime"
 	"strings"
 	"sync/atomic"
-	"time"
 
+	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
-	"charm.land/bubbles/v2/viewport"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
@@ -20,110 +19,93 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 )
 
-// Fixed dialog sizing, mirroring components.InfoDialog: the modal's overall
-// width/height are a deterministic function of the terminal size (capped),
-// never of the current item/detail content, so navigating the list or
-// loading a longer/shorter detail body never resizes or shifts the dialog.
-// Content that doesn't fit the fixed content area scrolls instead.
+// Fixed dialog sizing: the modal's overall width/height are a deterministic
+// function of the terminal size, never of the current item/detail content.
 const (
 	sourcePickerMaxModalHeight = 36
 	sourcePickerModalMargin    = 2
 	sourcePickerMinModalWidth  = 72
 	// sourcePickerChrome counts the fixed rows View renders around the
-	// scrollable content area: ModalStyle border (2), ModalStyle vertical
-	// padding (2), title (1), the blank joiners above and below the body
-	// (2), and the help line including ModalHelpStyle's MarginTop (2). The
-	// search input row lives inside the body (contentHeight), not here.
-	// View's rendered height is contentHeight + sourcePickerChrome, so
-	// this must match the actual frame or the modal overflows the terminal.
-	sourcePickerChrome = 9
+	// scrollable content area: border (2), vertical padding (0), tab
+	// bar (1), separator line (1), blank line above help (1), and the
+	// help line including ModalHelpStyle's MarginTop (2).
+	sourcePickerChrome = 7
 )
 
 // sourcePickerGen issues a unique generation token per picker instance.
-// Async search/detail results carry the token of the picker that issued
-// them, so a late result from a closed picker (possibly for a different
-// scope) can never populate a newer picker's cache.
 var sourcePickerGen atomic.Int64
 
-// sourceItemsSource implements fuzzy.Source over item titles, for
-// local-mode filtering (mirrors commandEntries in command_palette.go).
+// rowHighlightBg is a subtle background for the selected row — just a
+// small lift above the terminal background so the row is visible without
+// being distracting.
+var rowHighlightBg = lipgloss.Color("#232433")
+
+// sourceItemsSource implements fuzzy.Source over item titles.
 type sourceItemsSource []sources.Item
 
 func (c sourceItemsSource) String(i int) string { return c[i].Title }
 func (c sourceItemsSource) Len() int            { return len(c) }
 
-// Picker is a two-pane modal: a searchable/filterable item list on
-// the left and a detail pane on the right. It reuses the textinput +
-// sahilm/fuzzy pattern from CommandPalette for local-mode filtering rather
-// than a hand-rolled substring loop; remote-mode search debounces a real
-// Source.Search call per manifest configuration.
-type Picker struct {
-	conn     sources.Source
-	manifest sources.Manifest
-	scope    string
+// TabSource pairs a source with its configuration for one picker tab.
+type TabSource struct {
+	ID        string
+	Source    sources.Source
+	Manifest  sources.Manifest
+	Templates sources.TemplateConfig
+}
 
-	// gen identifies this picker instance in async result messages; see
-	// sourcePickerGen.
-	gen int64
+// tabState tracks the per-tab lifecycle: uninit → loading → loaded/error.
+type tabState struct {
+	tab TabSource
 
-	input textinput.Model
+	initialized   bool
+	loading       bool
+	loadingMsg    string
+	items         []sources.Item
+	filteredItems []sources.Item
+	searchErr     error
+	searchedOnce  bool
 
-	// loaded holds the full result set from the last completed Search call;
-	// items is the currently displayed set (loaded, or a local-filtered
-	// subset of it).
-	loaded []sources.Item
-	items  []sources.Item
-
+	// cursor/scroll per tab so switching back preserves position.
 	cursor       int
 	scrollOffset int
+	filterQuery  string
+}
 
-	// searchMode is true while "/" has focused the query input; in the
-	// default navigate mode j/k move the cursor and typing is swallowed.
+// Picker is a tabbed, searchable modal for browsing external sources.
+// Each tab corresponds to a registered source (PRs, issues, etc.) with
+// lazy initialization and per-tab result caching.
+type Picker struct {
+	gen int64
+
+	tabs      []tabState
+	activeTab int
+	scope     string
+
+	input      textinput.Model
 	searchMode bool
-
-	searchInFlight bool
-	searchedOnce   bool
-	searchErr      error
-
-	// detailCache/detailErr/detailPending are keyed by item ID. Reads and
-	// writes to these maps are safe from value-receiver methods because a
-	// map is a reference type; only the map header itself must not be
-	// reassigned, and it never is here.
-	detailCache   map[string]sources.Detail
-	detailErr     map[string]error
-	detailPending map[string]bool
+	spinner    spinner.Model
 
 	cancelled bool
 	selected  bool
 
-	// width/height are the caller's terminal dimensions; modalWidth/
-	// modalHeight/listWidth/detailWidth/contentHeight are derived from them
-	// once (in New/SetSize) via computePickerDims and
-	// never recomputed from content, so the dialog's frame stays a fixed
-	// size regardless of how many items match or how long a detail body is.
-	width, height                         int
-	modalWidth, modalHeight               int
-	listWidth, detailWidth, contentHeight int
-
-	// detailVP renders the right-pane detail content within a fixed
-	// contentHeight/detailWidth viewport; content longer than that scrolls
-	// instead of growing the dialog.
-	detailVP viewport.Model
+	// Sizing.
+	width, height               int
+	modalWidth, modalHeight     int
+	contentWidth, contentHeight int
+	innerWidth                  int // contentWidth minus horizontal padding (for padded sections)
 }
 
-// Result is the item and detail selected by the user, if any.
+// Result is the item selected by the user, if any.
 type Result struct {
-	Item   sources.Item
-	Detail sources.Detail
+	Item      sources.Item
+	SourceID  string
+	Templates sources.TemplateConfig
 }
 
-// New constructs a picker for conn, using manifest to decide
-// layout/columns/search behavior and scope to constrain Search/FetchDetail
-// calls (e.g. a GitHub "owner/name" repo). width/height are the caller's
-// current terminal dimensions (mirrors NewRepoPicker(repos, currentRepo,
-// width, height)) so the picker renders at the real size instead of a fixed
-// default that can overflow a small terminal/tmux pane.
-func New(conn sources.Source, manifest sources.Manifest, scope string, width, height int) Picker {
+// New constructs a tabbed picker. initialTab selects the initially active
+// tab by source ID; if not found the first tab is used.
+func New(tabSources []TabSource, initialTab, scope string, width, height int) Picker {
 	input := textinput.New()
 	input.Placeholder = "search..."
 	input.Prompt = "/ "
@@ -132,37 +114,40 @@ func New(conn sources.Source, manifest sources.Manifest, scope string, width, he
 	inputStyles.Cursor.Color = styles.ColorPrimary
 	input.SetStyles(inputStyles)
 
-	modalWidth, modalHeight, listWidth, detailWidth, contentHeight := computePickerDims(width, height, manifest)
-	input.SetWidth(sourceInputWidth(listWidth))
+	s := spinner.New()
+	s.Spinner = spinner.Meter
+	s.Style = lipgloss.NewStyle().Foreground(styles.ColorPrimary)
 
-	p := Picker{
+	modalWidth, modalHeight, contentWidth, innerW, contentHeight := computePickerDims(width, height)
+	input.SetWidth(max(innerW-4, 10))
+
+	tabs := make([]tabState, len(tabSources))
+	activeIdx := 0
+	for i, ts := range tabSources {
+		tabs[i] = tabState{tab: ts}
+		if ts.ID == initialTab {
+			activeIdx = i
+		}
+	}
+
+	return Picker{
 		gen:           sourcePickerGen.Add(1),
-		conn:          conn,
-		manifest:      manifest,
+		tabs:          tabs,
+		activeTab:     activeIdx,
 		scope:         scope,
 		input:         input,
-		detailCache:   make(map[string]sources.Detail),
-		detailErr:     make(map[string]error),
-		detailPending: make(map[string]bool),
+		spinner:       s,
 		width:         width,
 		height:        height,
 		modalWidth:    modalWidth,
 		modalHeight:   modalHeight,
-		listWidth:     listWidth,
-		detailWidth:   detailWidth,
+		contentWidth:  contentWidth,
+		innerWidth:    innerW,
 		contentHeight: contentHeight,
-		detailVP:      viewport.New(viewport.WithWidth(detailWidth), viewport.WithHeight(contentHeight)),
 	}
-	p.refreshDetailViewport()
-	return p
 }
 
-// computePickerDims derives the picker's fixed modal/pane
-// dimensions from the caller's terminal size and the manifest's column
-// layout. The result depends only on width/height/manifest — never on the
-// current item count or detail content — so the dialog never resizes while
-// the user browses.
-func computePickerDims(width, height int, manifest sources.Manifest) (modalWidth, modalHeight, listWidth, detailWidth, contentHeight int) {
+func computePickerDims(width, height int) (modalWidth, modalHeight, contentWidth, innerWidth, contentHeight int) {
 	if width <= 0 {
 		width = 80
 	}
@@ -174,96 +159,142 @@ func computePickerDims(width, height int, manifest sources.Manifest) (modalWidth
 	modalHeight = min(max(height-sourcePickerModalMargin, sourcePickerChrome+3), sourcePickerMaxModalHeight)
 	contentHeight = max(modalHeight-sourcePickerChrome, 3)
 
-	// available excludes the ModalStyle border (2) and horizontal padding
-	// (4) plus the gap between panes.
-	available := max(modalWidth-8, 20)
+	// contentWidth excludes the border (2); innerWidth also excludes
+	// the per-section horizontal padding (4).
+	contentWidth = max(modalWidth-2, 20)
+	innerWidth = max(contentWidth-4, 16)
 
-	if manifest.Picker.HidePreview {
-		// Single-pane mode: the list/table gets the full modal width and
-		// no detail pane is rendered.
-		return modalWidth, modalHeight, available, 0, contentHeight
-	}
-
-	listRatio := 34
-	if manifest.Picker.Layout == sources.LayoutModeList {
-		// List-layout issue pickers use two-line cards, so give the scan
-		// column enough room for title + metadata while preserving preview
-		// space on the right.
-		listRatio = 42
-	}
-	listWidth = max(available*listRatio/100, minListWidthForManifest(manifest))
-	detailWidth = available - listWidth
-	if detailWidth < 20 {
-		detailWidth = 20
-		listWidth = max(available-detailWidth, 10)
-	}
-	return modalWidth, modalHeight, listWidth, detailWidth, contentHeight
+	return modalWidth, modalHeight, contentWidth, innerWidth, contentHeight
 }
 
-// Init issues the initial (empty-query) Search call to populate the list.
-// It takes a pointer receiver so the searchInFlight flag it sets survives
-// on the stored picker (a value receiver would mutate a discarded copy and
-// the list would render blank instead of "searching..." until the first
-// result lands).
+// Init kicks off the initial tab: checks availability, initializes, and
+// searches.
 func (p *Picker) Init() tea.Cmd {
-	return p.startSearch("")
+	return tea.Batch(p.spinner.Tick, p.initTab(p.activeTab))
 }
 
-// sourceInputWidth sizes the search input to fit inside the left pane
-// (accounting for the "/ " prompt) so long queries scroll within the input
-// instead of widening the pane and shifting the layout.
-func sourceInputWidth(listWidth int) int {
-	return max(listWidth-4, 10)
+// initTab starts the async Available+Initialize+Search pipeline for a tab.
+func (p *Picker) initTab(idx int) tea.Cmd {
+	tab := &p.tabs[idx]
+	if tab.initialized {
+		return nil
+	}
+	tab.loading = true
+	tab.loadingMsg = fmt.Sprintf("Fetching %s...", tab.tab.Manifest.DisplayName)
+
+	gen := p.gen
+	conn := tab.tab.Source
+	scope := p.scope
+	sourceID := tab.tab.ID
+
+	return func() tea.Msg {
+		ctx := contextBackground()
+		if !conn.Available(ctx) {
+			return sourceTabErrorMsg{Gen: gen, SourceID: sourceID, Err: fmt.Errorf("source %q is not available", sourceID)}
+		}
+		manifest, err := conn.Initialize(ctx)
+		if err != nil {
+			return sourceTabErrorMsg{Gen: gen, SourceID: sourceID, Err: fmt.Errorf("initialize: %w", err)}
+		}
+		result, err := conn.Search(ctx, sources.SearchParams{Scope: scope})
+		if err != nil {
+			return sourceTabErrorMsg{Gen: gen, SourceID: sourceID, Err: err}
+		}
+		return sourceTabReadyMsg{
+			Gen:      gen,
+			SourceID: sourceID,
+			Manifest: manifest,
+			Items:    result.Items,
+		}
+	}
 }
 
-// startSearch marks a search in flight and returns the Cmd that performs it.
-func (p *Picker) startSearch(query string) tea.Cmd {
-	p.searchInFlight = true
-	p.searchErr = nil
-	return sourceSearchCmd(p.gen, p.conn, p.scope, query)
-}
-
-// SetSize updates the picker's rendering dimensions, recomputing the fixed
-// modal/pane sizes and resizing the detail viewport to match.
+// SetSize updates rendering dimensions.
 func (p *Picker) SetSize(width, height int) {
 	p.width = width
 	p.height = height
-	p.modalWidth, p.modalHeight, p.listWidth, p.detailWidth, p.contentHeight = computePickerDims(width, height, p.manifest)
-	p.input.SetWidth(sourceInputWidth(p.listWidth))
-	p.detailVP.SetWidth(p.detailWidth)
-	p.detailVP.SetHeight(p.contentHeight)
-	p.refreshDetailViewport()
+	p.modalWidth, p.modalHeight, p.contentWidth, p.innerWidth, p.contentHeight = computePickerDims(width, height)
+	p.input.SetWidth(max(p.innerWidth-4, 10))
 }
 
-// Update handles key events and source RPC result messages.
+// Update handles messages.
 func (p Picker) Update(msg tea.Msg) (Picker, tea.Cmd) {
 	switch m := msg.(type) {
 	case tea.KeyPressMsg:
 		return p.handleKey(m)
+	case spinner.TickMsg:
+		var cmd tea.Cmd
+		p.spinner, cmd = p.spinner.Update(msg)
+		return p, cmd
+	case sourceTabReadyMsg:
+		return p.handleTabReady(m)
+	case sourceTabErrorMsg:
+		return p.handleTabError(m)
 	case sourceSearchResultMsg:
 		return p.handleSearchResult(m)
 	case sourceSearchErrorMsg:
 		return p.handleSearchError(m)
 	case sourceSearchDebounceMsg:
 		return p.handleDebounce(m)
-	case sourceDetailResultMsg:
-		return p.handleDetailResult(m)
-	case sourceDetailErrorMsg:
-		return p.handleDetailError(m)
 	}
 	return p, nil
 }
 
-// handleKey dispatches navigation/selection keys, then falls through to the
-// text input for query editing.
+func (p Picker) handleTabReady(msg sourceTabReadyMsg) (Picker, tea.Cmd) {
+	if msg.Gen != p.gen {
+		return p, nil
+	}
+	idx := p.tabIndex(msg.SourceID)
+	if idx < 0 {
+		return p, nil
+	}
+	tab := &p.tabs[idx]
+	tab.initialized = true
+	tab.loading = false
+	tab.searchedOnce = true
+	tab.searchErr = nil
+	tab.tab.Manifest = msg.Manifest
+	tab.items = msg.Items
+	tab.filteredItems = msg.Items
+	tab.cursor = 0
+	tab.scrollOffset = 0
+	return p, nil
+}
+
+func (p Picker) handleTabError(msg sourceTabErrorMsg) (Picker, tea.Cmd) {
+	if msg.Gen != p.gen {
+		return p, nil
+	}
+	idx := p.tabIndex(msg.SourceID)
+	if idx < 0 {
+		return p, nil
+	}
+	tab := &p.tabs[idx]
+	tab.loading = false
+	tab.searchedOnce = true
+	tab.searchErr = msg.Err
+	tab.items = nil
+	tab.filteredItems = nil
+	return p, nil
+}
+
+func (p Picker) tabIndex(sourceID string) int {
+	for i := range p.tabs {
+		if p.tabs[i].tab.ID == sourceID {
+			return i
+		}
+	}
+	return -1
+}
+
+func (p Picker) activeState() *tabState {
+	return &p.tabs[p.activeTab]
+}
+
 func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
-	// Keys shared by both modes: arrows always navigate, enter always
-	// selects, and detail scrolling stays available while typing.
 	switch msg.String() {
 	case "esc":
 		if p.searchMode {
-			// Leave search mode, keeping the current query/filter; a
-			// second esc (in navigate mode) dismisses the picker.
 			p.searchMode = false
 			p.input.Blur()
 			return p, nil
@@ -271,20 +302,23 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		p.cancelled = true
 		return p, nil
 	case "enter":
-		if len(p.items) > 0 && p.cursor < len(p.items) {
+		tab := p.activeState()
+		if len(tab.filteredItems) > 0 && tab.cursor < len(tab.filteredItems) {
 			p.selected = true
 		}
 		return p, nil
+	case "tab":
+		return p.switchTab(1)
+	case "shift+tab":
+		return p.switchTab(-1)
 	case "up", "ctrl+k":
-		return p.moveCursor(-1)
+		return p.moveCursor(-1), nil
 	case "down", "ctrl+j":
-		return p.moveCursor(1)
-	case "pgdown", "ctrl+d":
-		p.detailVP.HalfPageDown()
-		return p, nil
-	case "pgup", "ctrl+u":
-		p.detailVP.HalfPageUp()
-		return p, nil
+		return p.moveCursor(1), nil
+	case "r":
+		if !p.searchMode {
+			return p.retryTab()
+		}
 	}
 
 	if !p.searchMode {
@@ -294,24 +328,18 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 	before := p.input.Value()
 	var inputCmd tea.Cmd
 	p.input, inputCmd = p.input.Update(msg)
-	if p.input.Value() == before {
-		// Non-editing keys (left/right/home/end, etc.) must not reset the
-		// list cursor or re-issue a remote search for an unchanged query.
-		return p, inputCmd
+	if p.input.Value() != before {
+		p.applyLocalFilter()
 	}
-	return p.handleQueryChanged(inputCmd)
+	return p, inputCmd
 }
 
-// handleNavigateKey handles keys in navigate mode (the default): j/k move
-// the cursor, "/" enters search mode, "O" opens the highlighted item's URL
-// in the browser. Anything else is swallowed so stray typing can't mutate
-// the query.
 func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 	switch msg.String() {
 	case "j":
-		return p.moveCursor(1)
+		return p.moveCursor(1), nil
 	case "k":
-		return p.moveCursor(-1)
+		return p.moveCursor(-1), nil
 	case "/":
 		p.searchMode = true
 		return p, p.input.Focus()
@@ -321,25 +349,75 @@ func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 	return p, nil
 }
 
-// moveCursor moves the highlight by delta, keeping it in range, and
-// triggers the lazy detail fetch for the newly highlighted item.
-func (p Picker) moveCursor(delta int) (Picker, tea.Cmd) {
-	next := p.cursor + delta
-	if next >= 0 && next < len(p.items) {
-		p.cursor = next
-		p.clampScroll()
-		p.refreshDetailViewport()
+func (p Picker) switchTab(delta int) (Picker, tea.Cmd) {
+	if len(p.tabs) <= 1 {
+		return p, nil
 	}
-	return p, p.triggerDetailFetch()
+
+	// Save current filter state.
+	p.activeState().filterQuery = p.input.Value()
+
+	next := (p.activeTab + delta + len(p.tabs)) % len(p.tabs)
+	p.activeTab = next
+
+	// Restore the target tab's filter.
+	tab := p.activeState()
+	p.input.SetValue(tab.filterQuery)
+
+	// Leave search mode on tab switch.
+	p.searchMode = false
+	p.input.Blur()
+
+	if !tab.initialized && !tab.loading {
+		return p, p.initTab(next)
+	}
+	return p, nil
 }
 
-// openCurrentItemURL returns a Cmd that opens the highlighted item's URI in
-// the OS browser, or nil when there is no item or it carries no URI.
+func (p Picker) retryTab() (Picker, tea.Cmd) {
+	tab := p.activeState()
+	if tab.searchErr == nil {
+		return p, nil
+	}
+	tab.searchErr = nil
+	tab.searchedOnce = false
+	tab.initialized = false
+	return p, p.initTab(p.activeTab)
+}
+
+func (p Picker) moveCursor(delta int) Picker {
+	tab := p.activeState()
+	next := tab.cursor + delta
+	if next >= 0 && next < len(tab.filteredItems) {
+		tab.cursor = next
+		p.clampScroll(tab)
+	}
+	return p
+}
+
+func (p Picker) applyLocalFilter() {
+	tab := p.activeState()
+	query := p.input.Value()
+	if query == "" {
+		tab.filteredItems = tab.items
+	} else {
+		matches := fuzzy.FindFrom(query, sourceItemsSource(tab.items))
+		items := make([]sources.Item, len(matches))
+		for i, match := range matches {
+			items[i] = tab.items[match.Index]
+		}
+		tab.filteredItems = items
+	}
+	tab.cursor = 0
+	tab.scrollOffset = 0
+}
+
 func (p Picker) openCurrentItemURL() tea.Cmd {
-	if p.cursor < 0 || p.cursor >= len(p.items) {
+	tab := p.activeState()
+	if tab.cursor < 0 || tab.cursor >= len(tab.filteredItems) {
 		return nil
 	}
-	uri := p.items[p.cursor].URI
+	uri := tab.filteredItems[tab.cursor].URI
 	if uri == "" {
 		return nil
 	}
@@ -351,8 +429,6 @@ func (p Picker) openCurrentItemURL() tea.Cmd {
 	}
 }
 
-// browserOpenCmd builds the OS-specific command to open uri in the default
-// browser.
 func browserOpenCmd(uri string) *exec.Cmd {
 	switch runtime.GOOS {
 	case "darwin":
@@ -362,213 +438,82 @@ func browserOpenCmd(uri string) *exec.Cmd {
 	}
 }
 
-// handleQueryChanged reacts to a query edit according to the manifest's
-// search mode: local mode re-filters already-loaded items in memory; remote
-// mode schedules a debounced Search call.
-func (p Picker) handleQueryChanged(inputCmd tea.Cmd) (Picker, tea.Cmd) {
-	query := p.input.Value()
-
-	if p.manifest.Picker.Search.Mode != sources.SearchModeRemote {
-		p.applyLocalFilter(query)
-		return p, tea.Batch(inputCmd, p.triggerDetailFetch())
+// handleSearchResult applies a completed remote Search response.
+func (p Picker) handleSearchResult(msg sourceSearchResultMsg) (Picker, tea.Cmd) {
+	if msg.Gen != p.gen {
+		return p, nil
 	}
-
-	delay := sourceDebounceDelay(p.manifest)
-	return p, tea.Batch(inputCmd, sourceDebounceCmd(p.gen, query, delay))
+	idx := p.tabIndex(msg.SourceID)
+	if idx < 0 {
+		return p, nil
+	}
+	tab := &p.tabs[idx]
+	tab.loading = false
+	tab.searchedOnce = true
+	tab.searchErr = nil
+	tab.items = msg.Items
+	tab.filteredItems = msg.Items
+	tab.cursor = 0
+	tab.scrollOffset = 0
+	return p, nil
 }
 
-// applyLocalFilter narrows p.items to fuzzy matches of query against
-// p.loaded. An empty query resets to the full loaded set.
-func (p *Picker) applyLocalFilter(query string) {
-	if query == "" {
-		p.items = p.loaded
-	} else {
-		matches := fuzzy.FindFrom(query, sourceItemsSource(p.loaded))
-		items := make([]sources.Item, len(matches))
-		for i, match := range matches {
-			items[i] = p.loaded[match.Index]
-		}
-		p.items = items
+func (p Picker) handleSearchError(msg sourceSearchErrorMsg) (Picker, tea.Cmd) {
+	if msg.Gen != p.gen {
+		return p, nil
 	}
-	p.cursor = 0
-	p.scrollOffset = 0
-	p.refreshDetailViewport()
+	idx := p.tabIndex(msg.SourceID)
+	if idx < 0 {
+		return p, nil
+	}
+	tab := &p.tabs[idx]
+	tab.loading = false
+	tab.searchedOnce = true
+	tab.searchErr = msg.Err
+	tab.items = nil
+	tab.filteredItems = nil
+	return p, nil
 }
 
-// handleDebounce issues the actual remote Search call once the debounce
-// delay elapses, but only if the query hasn't changed since the debounce
-// was scheduled (otherwise this tick is stale and is dropped).
 func (p Picker) handleDebounce(msg sourceSearchDebounceMsg) (Picker, tea.Cmd) {
 	if msg.Gen != p.gen || msg.Query != p.input.Value() {
 		return p, nil
 	}
-	return p, p.startSearch(msg.Query)
+	tab := p.activeState()
+	tab.loading = true
+	return p, sourceSearchCmd(p.gen, tab.tab.Source, tab.tab.ID, p.scope, msg.Query)
 }
 
-// handleSearchResult applies a completed Search response, discarding it if
-// the query it answers no longer matches the current input (a stale/
-// superseded response).
-func (p Picker) handleSearchResult(msg sourceSearchResultMsg) (Picker, tea.Cmd) {
-	if msg.Gen != p.gen || msg.Query != p.input.Value() {
-		return p, nil
+func (p *Picker) clampScroll(tab *tabState) {
+	visible := p.listHeight()
+	if tab.cursor < tab.scrollOffset {
+		tab.scrollOffset = tab.cursor
+	} else if tab.cursor >= tab.scrollOffset+visible {
+		tab.scrollOffset = tab.cursor - visible + 1
 	}
-	p.searchInFlight = false
-	p.searchedOnce = true
-	p.searchErr = nil
-	p.loaded = msg.Items
-	p.items = msg.Items
-	p.cursor = 0
-	p.scrollOffset = 0
-	p.refreshDetailViewport()
-	return p, p.triggerDetailFetch()
-}
-
-// handleSearchError records a Search failure, discarding it if stale.
-func (p Picker) handleSearchError(msg sourceSearchErrorMsg) (Picker, tea.Cmd) {
-	if msg.Gen != p.gen || msg.Query != p.input.Value() {
-		return p, nil
-	}
-	p.searchInFlight = false
-	p.searchedOnce = true
-	p.searchErr = msg.Err
-	p.loaded = nil
-	p.items = nil
-	p.cursor = 0
-	p.scrollOffset = 0
-	p.refreshDetailViewport()
-	return p, nil
-}
-
-// handleDetailResult caches a completed FetchDetail response. The viewport
-// only refreshes (resetting scroll to top) when this result is for the
-// currently highlighted item; a response for an item the user has since
-// moved past must not yank their scroll position on the item they're
-// reading now.
-func (p Picker) handleDetailResult(msg sourceDetailResultMsg) (Picker, tea.Cmd) {
-	if msg.Gen != p.gen {
-		return p, nil
-	}
-	delete(p.detailPending, msg.ID)
-	delete(p.detailErr, msg.ID)
-	p.detailCache[msg.ID] = msg.Detail
-	if p.isCurrentItemID(msg.ID) {
-		p.refreshDetailViewport()
-	}
-	return p, nil
-}
-
-// handleDetailError records a FetchDetail failure for the detail pane, same
-// current-item guard as handleDetailResult.
-func (p Picker) handleDetailError(msg sourceDetailErrorMsg) (Picker, tea.Cmd) {
-	if msg.Gen != p.gen {
-		return p, nil
-	}
-	delete(p.detailPending, msg.ID)
-	p.detailErr[msg.ID] = msg.Err
-	if p.isCurrentItemID(msg.ID) {
-		p.refreshDetailViewport()
-	}
-	return p, nil
-}
-
-// isCurrentItemID reports whether id is the ID of the currently highlighted
-// item.
-func (p Picker) isCurrentItemID(id string) bool {
-	return p.cursor >= 0 && p.cursor < len(p.items) && p.items[p.cursor].ID == id
-}
-
-// triggerDetailFetch issues a lazy FetchDetail call for the currently
-// highlighted item if the source supports detail, the item doesn't
-// already carry inline detail, and it isn't already cached or in flight.
-func (p Picker) triggerDetailFetch() tea.Cmd {
-	if !p.manifest.Capabilities.FetchDetail {
-		return nil
-	}
-	if p.cursor < 0 || p.cursor >= len(p.items) {
-		return nil
-	}
-
-	item := p.items[p.cursor]
-	if item.Detail.Kind() != sources.DetailKindNone {
-		return nil
-	}
-	if _, cached := p.detailCache[item.ID]; cached {
-		return nil
-	}
-	if p.detailPending[item.ID] {
-		return nil
-	}
-
-	p.detailPending[item.ID] = true
-	return sourceFetchDetailCmd(p.gen, p.conn, p.scope, item)
-}
-
-// clampScroll keeps the cursor within the visible scroll window.
-func (p *Picker) clampScroll() {
-	visible := p.visibleCount()
-	if p.cursor < p.scrollOffset {
-		p.scrollOffset = p.cursor
-	} else if p.cursor >= p.scrollOffset+visible {
-		p.scrollOffset = p.cursor - visible + 1
-	}
-	maxOffset := max(len(p.items)-visible, 0)
-	p.scrollOffset = min(max(p.scrollOffset, 0), maxOffset)
-}
-
-// visibleCount bounds how many rows the left pane renders at once; the
-// remainder scrolls with the cursor. It is fixed to p.contentHeight (set
-// once from terminal size in computePickerDims), not to the
-// current item count, so the list pane's rendered height never changes as
-// results come and go — renderList pads short lists to this height.
-func (p Picker) visibleCount() int {
-	if p.manifest.Picker.Layout == sources.LayoutModeList {
-		return min(len(p.items), max((p.listHeight()+1)/3, 1))
-	}
-	return min(len(p.items), p.listHeight())
+	maxOffset := max(len(tab.filteredItems)-visible, 0)
+	tab.scrollOffset = min(max(tab.scrollOffset, 0), maxOffset)
 }
 
 func (p Picker) listHeight() int {
-	// The left pane body is input + blank separator + rows. Keep the whole
-	// pane exactly p.contentHeight rows so navigating items cannot resize the
-	// modal.
-	return max(p.contentHeight-2, 1)
+	// content area minus the two dividers and filter input row.
+	return max(p.contentHeight-3, 1)
 }
 
-// minListWidthForManifest returns the minimum left-pane width needed to
-// render the manifest's table columns without truncation, or a sane
-// default for list layout.
-func minListWidthForManifest(manifest sources.Manifest) int {
-	if manifest.Picker.Layout != sources.LayoutModeTable || len(manifest.Picker.Columns) == 0 {
-		return 28
-	}
-	total := 2 // leading cursor column
-	for i, col := range manifest.Picker.Columns {
-		width := col.Width
-		if width <= 0 {
-			width = 12
-		}
-		total += width
-		if i > 0 {
-			total++ // inter-column space
-		}
-	}
-	return total
-}
-
-// Selected returns the highlighted item and its best-known detail, if the
-// user pressed enter on a non-empty list.
+// Selected returns the highlighted item if the user pressed enter.
 func (p Picker) Selected() (Result, bool) {
-	if !p.selected || p.cursor < 0 || p.cursor >= len(p.items) {
+	if !p.selected {
 		return Result{}, false
 	}
-	item := p.items[p.cursor]
-	detail := item.Detail
-	if detail.Kind() == sources.DetailKindNone {
-		if cached, ok := p.detailCache[item.ID]; ok {
-			detail = cached
-		}
+	tab := p.activeState()
+	if tab.cursor < 0 || tab.cursor >= len(tab.filteredItems) {
+		return Result{}, false
 	}
-	return Result{Item: item, Detail: detail}, true
+	return Result{
+		Item:      tab.filteredItems[tab.cursor],
+		SourceID:  tab.tab.ID,
+		Templates: tab.tab.Templates,
+	}, true
 }
 
 // Cancelled reports whether the user dismissed the picker.
@@ -576,137 +521,309 @@ func (p Picker) Cancelled() bool {
 	return p.cancelled
 }
 
-// View renders the two-pane picker: item list on the left, detail on the
-// right. The overall frame size (modalWidth/modalHeight) and both pane
-// sizes are fixed — derived only from terminal size, never from the current
-// item count or detail content — so browsing never shifts the dialog.
-func (p Picker) View() string {
-	title := styles.ModalTitleStyle.Render(p.manifest.DisplayName)
+// --- View ---
 
-	left := lipgloss.JoinVertical(lipgloss.Left,
-		p.input.View(),
+func (p Picker) View() string {
+	tabBar := p.renderTabBar()
+	sep := styles.TextMutedStyle.Render(strings.Repeat("─", p.contentWidth))
+	body := p.renderBody()
+	help := styles.ModalHelpStyle.Render(p.helpText())
+
+	// Pad sections that need inset; dividers span the full inner width.
+	pad := lipgloss.NewStyle().Padding(0, 2)
+	content := lipgloss.JoinVertical(lipgloss.Left,
+		pad.Render(tabBar),
+		sep,
+		body,
 		"",
-		p.renderList(p.listWidth),
+		pad.Render(help),
 	)
 
-	body := lipgloss.NewStyle().Width(p.listWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Render(left)
-	if !p.manifest.Picker.HidePreview {
-		body = lipgloss.JoinHorizontal(lipgloss.Top,
-			body,
-			renderPickerDivider(p.contentHeight),
-			lipgloss.NewStyle().Width(p.detailWidth).Height(p.contentHeight).MaxHeight(p.contentHeight).Padding(0, 0, 0, 2).Render(p.detailVP.View()),
+	// No padding on the modal itself so dividers reach the border edges.
+	modalStyle := lipgloss.NewStyle().
+		Border(lipgloss.RoundedBorder()).
+		BorderForeground(styles.ColorPrimary)
+
+	return modalStyle.Width(p.modalWidth).Render(content)
+}
+
+func (p Picker) renderTabBar() string {
+	activeStyle := lipgloss.NewStyle().
+		Background(styles.ColorSurface).
+		Foreground(styles.ColorPrimary).
+		Bold(true).
+		Padding(0, 1)
+	inactiveStyle := lipgloss.NewStyle().
+		Foreground(styles.ColorMuted).
+		Padding(0, 2)
+
+	var parts []string
+	for _, tab := range p.tabs {
+		name := tab.tab.Manifest.DisplayName
+		if name == "" {
+			name = tab.tab.ID
+		}
+		if tab.tab.ID == p.tabs[p.activeTab].tab.ID {
+			parts = append(parts, activeStyle.Render(name))
+		} else {
+			parts = append(parts, inactiveStyle.Render(name))
+		}
+	}
+
+	tabRow := lipgloss.JoinHorizontal(lipgloss.Center, parts...)
+
+	// Repo context badge on the right using the git branch icon.
+	badge := ""
+	if p.scope != "" {
+		badge = styles.TextPrimaryStyle.Render(styles.IconGitBranch + " " + p.scope)
+	}
+
+	if badge != "" {
+		tabRowWidth := lipgloss.Width(tabRow)
+		badgeWidth := lipgloss.Width(badge)
+		gap := max(p.innerWidth-tabRowWidth-badgeWidth, 1)
+		return tabRow + strings.Repeat(" ", gap) + badge
+	}
+	return tabRow
+}
+
+func (p Picker) renderBody() string {
+	tab := p.activeState()
+
+	// Loading state: centered spinner with primary color.
+	if tab.loading {
+		spinnerLine := p.spinner.View()
+		return p.renderCenteredState(
+			spinnerLine,
+			"",
+			styles.TextPrimaryStyle.Render(tab.loadingMsg),
 		)
 	}
 
-	help := styles.ModalHelpStyle.Render(p.helpText())
+	// Error state: centered error.
+	if tab.searchErr != nil {
+		return p.renderCenteredState(
+			styles.TextErrorStyle.Render("[!]"),
+			styles.TextErrorStyle.Render(tab.searchErr.Error()),
+			styles.TextMutedStyle.Render("r to retry · tab to switch source"),
+		)
+	}
 
-	content := lipgloss.JoinVertical(lipgloss.Left, title, "", body, "", help)
-	return styles.ModalStyle.Width(p.modalWidth).Render(content)
+	// Empty state: centered message.
+	if tab.searchedOnce && len(tab.filteredItems) == 0 {
+		name := tab.tab.Manifest.DisplayName
+		if name == "" {
+			name = tab.tab.ID
+		}
+		return p.renderCenteredState(
+			styles.TextMutedStyle.Render("○"),
+			fmt.Sprintf("%s %s.",
+				styles.TextMutedStyle.Render("No open "+strings.ToLower(name)+" in"),
+				styles.TextPrimaryStyle.Render(p.scope),
+			),
+			"",
+		)
+	}
+
+	// List state: filter input + dividers + item rows.
+	pad := lipgloss.NewStyle().Padding(0, 2)
+	filterLine := pad.Render(p.renderFilterLine(tab))
+	div := styles.TextMutedStyle.Render(strings.Repeat("─", p.contentWidth))
+	list := pad.Render(p.renderList(tab))
+
+	return lipgloss.NewStyle().
+		Width(p.contentWidth).
+		Height(p.contentHeight).
+		MaxHeight(p.contentHeight).
+		Render(lipgloss.JoinVertical(lipgloss.Left, div, filterLine, div, list))
 }
 
-// helpText returns the mode-appropriate key hints for the help line. Kept
-// short enough for an 80-column terminal; less-common keys (ctrl+u/d
-// detail scrolling, pgup/pgdn) stay undocumented rather than pushing
-// "esc cancel" past the modal edge.
-func (p Picker) helpText() string {
+func (p Picker) renderCenteredState(icon, message, hint string) string {
+	lines := []string{icon, message}
+	if hint != "" {
+		lines = append(lines, hint)
+	}
+	block := lipgloss.JoinVertical(lipgloss.Center, lines...)
+
+	return lipgloss.Place(
+		p.contentWidth, p.contentHeight,
+		lipgloss.Center, lipgloss.Center,
+		block,
+	)
+}
+
+func (p Picker) renderFilterLine(tab *tabState) string {
 	if p.searchMode {
-		return "type to search  ↑/↓ navigate  enter select  esc done"
+		return p.input.View()
 	}
-	return "j/k navigate  / search  O open  enter select  esc cancel"
+
+	name := tab.tab.Manifest.DisplayName
+	if name == "" {
+		name = tab.tab.ID
+	}
+	placeholder := styles.TextPrimaryStyle.Render("/") + " " + styles.TextMutedStyle.Render(fmt.Sprintf("filter %s…", strings.ToLower(name)))
+
+	countStr := styles.TextMutedStyle.Render(fmt.Sprintf("%d", len(tab.filteredItems)))
+
+	gap := max(p.innerWidth-lipgloss.Width(placeholder)-lipgloss.Width(countStr), 1)
+	return placeholder + strings.Repeat(" ", gap) + countStr
 }
 
-// renderPickerDivider renders the vertical divider between the
-// list and detail panes at the given height.
-func renderPickerDivider(height int) string {
-	if height <= 0 {
-		return ""
-	}
-	return styles.TextMutedStyle.Render(strings.Repeat("│\n", height-1) + "│")
-}
-
-// renderList renders the left-pane item rows, honoring the manifest's
-// layout (list vs table) and current search/loading state. Output is
-// always p.listHeight() lines regardless of how many items match, so the
-// list pane never changes height as results come and go.
-func (p Picker) renderList(width int) string {
+func (p Picker) renderList(tab *tabState) string {
 	rowHeight := p.listHeight()
 	lines := make([]string, 0, rowHeight)
-	appendStatus := func(line string) string {
-		lines = append(lines, line)
-		for len(lines) < rowHeight {
-			lines = append(lines, "")
-		}
-		return strings.Join(lines, "\n")
-	}
 
-	if p.searchErr != nil {
-		return appendStatus(styles.TextErrorStyle.Render("search failed: " + p.searchErr.Error()))
-	}
-	if p.searchInFlight {
-		return appendStatus(styles.TextMutedStyle.Render("searching..."))
-	}
-	if p.searchedOnce && len(p.items) == 0 {
-		return appendStatus(styles.TextMutedStyle.Render("no results"))
-	}
-
-	visible := p.visibleCount()
+	visible := min(len(tab.filteredItems), rowHeight)
 	for i := range visible {
-		idx := i + p.scrollOffset
-		if idx >= len(p.items) {
+		idx := i + tab.scrollOffset
+		if idx >= len(tab.filteredItems) {
 			break
 		}
-		for _, line := range strings.Split(p.renderRow(p.items[idx], idx == p.cursor, width), "\n") {
-			if len(lines) >= rowHeight {
-				break
-			}
-			lines = append(lines, line)
-		}
-		if p.manifest.Picker.Layout == sources.LayoutModeList && idx < len(p.items)-1 && len(lines) < rowHeight {
-			lines = append(lines, "")
-		}
+		item := tab.filteredItems[idx]
+		selected := idx == tab.cursor
+		line := p.renderRow(item, selected, tab)
+		lines = append(lines, line)
 	}
+
 	for len(lines) < rowHeight {
 		lines = append(lines, "")
 	}
 	return strings.Join(lines, "\n")
 }
 
-// renderRow renders a single item row, using table columns when the
-// manifest declares a table layout, or title/subtitle otherwise.
-func (p Picker) renderRow(item sources.Item, selected bool, width int) string {
-	cursor := "  "
-	rowStyle := styles.TextForegroundStyle
-	if selected {
-		cursor = styles.TextPrimaryStyle.Render(styles.IconSelector + " ")
-		rowStyle = styles.TextPrimaryBoldStyle
+func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState) string {
+	width := p.innerWidth
+
+	// For table layout sources, use the manifest columns.
+	if tab.tab.Manifest.Picker.Layout == sources.LayoutModeTable && len(tab.tab.Manifest.Picker.Columns) > 0 {
+		line := renderSourceTableRow(item, tab.tab.Manifest.Picker.Columns, max(width-1, 1), selected)
+		return p.applyRowStyle(line, selected, width)
 	}
 
-	if p.manifest.Picker.Layout == sources.LayoutModeTable && len(p.manifest.Picker.Columns) > 0 {
-		line := cursor + renderSourceTableRow(item, p.manifest.Picker.Columns, max(width-2, 1), selected)
-		return lipgloss.NewStyle().MaxWidth(width).Render(line)
-	}
-
-	title := rowStyle.Render(item.Title)
-	row1 := lipgloss.NewStyle().MaxWidth(width).Render(cursor + title)
-
-	meta := renderSourceListMeta(item, max(width-2, 1))
-	if meta == "" {
-		return row1
-	}
-	return row1 + "\n" + lipgloss.NewStyle().MaxWidth(width).Render("  "+meta)
+	// Single-line list layout.
+	return p.renderSingleLineRow(item, selected, width)
 }
 
-// sourceFlexColumnMinWidth is the floor a Flex column can be squeezed
-// to before the row simply truncates at the pane edge.
+// applyRowStyle wraps content with selected/normal styling: selected rows
+// get a left border accent and surface background; unselected rows get a
+// two-space indent to keep alignment with the border+space of selected rows.
+func (p Picker) applyRowStyle(content string, selected bool, width int) string {
+	if selected {
+		return lipgloss.NewStyle().
+			Border(lipgloss.ThickBorder(), false, false, false, true).
+			BorderForeground(styles.ColorPrimary).
+			Background(rowHighlightBg).
+			PaddingLeft(1).
+			Width(width).
+			MaxWidth(width).
+			MaxHeight(1).
+			Render(content)
+	}
+	return lipgloss.NewStyle().
+		PaddingLeft(2).
+		Width(width).
+		MaxWidth(width).
+		MaxHeight(1).
+		Render(content)
+}
+
+func (p Picker) renderSingleLineRow(item sources.Item, selected bool, width int) string {
+	var parts []string
+
+	// CI status icon if present.
+	if ciStatus := sourceFieldString(item, "ci_status"); ciStatus != "" {
+		parts = append(parts, statusIcon(ciStatus))
+	}
+
+	// Number.
+	numStyle := styles.TextMutedStyle
+	if selected {
+		numStyle = styles.TextPrimaryStyle
+	}
+	if number := sourceFieldString(item, "number"); number != "" {
+		parts = append(parts, numStyle.Render("#"+number))
+	}
+
+	// Title.
+	titleStyle := styles.TextForegroundStyle
+	if selected {
+		titleStyle = lipgloss.NewStyle().
+			Foreground(styles.ColorPrimary).
+			Bold(true)
+	}
+	parts = append(parts, titleStyle.Render(item.Title))
+
+	// Labels (first 2).
+	labels := sourceFieldStringSlice(item, "labels")
+	for i, label := range labels {
+		if i >= 2 {
+			break
+		}
+		parts = append(parts, styles.TextSecondaryStyle.Render("["+label+"]"))
+	}
+
+	// Right-aligned metadata: author.
+	var rightParts []string
+	if author := sourceFieldString(item, "author"); author != "" {
+		rightParts = append(rightParts, styles.TextMutedStyle.Render("@"+author))
+	}
+
+	left := strings.Join(parts, " ")
+	right := strings.Join(rightParts, "  ")
+
+	// Build the inner content, then wrap with the row style.
+	innerWidth := max(width-2, 10) // account for the left border+space / padding
+	leftWidth := ansi.StringWidth(left)
+	rightWidth := ansi.StringWidth(right)
+
+	var row string
+	if right == "" {
+		row = ansi.Truncate(left, innerWidth, "…")
+	} else {
+		gap := max(innerWidth-leftWidth-rightWidth, 1)
+		if leftWidth+1+rightWidth > innerWidth {
+			available := max(innerWidth-rightWidth-1, 10)
+			left = ansi.Truncate(left, available, "…")
+			gap = max(innerWidth-ansi.StringWidth(left)-rightWidth, 1)
+		}
+		row = left + strings.Repeat(" ", gap) + right
+	}
+
+	return p.applyRowStyle(row, selected, width)
+}
+
+func (p Picker) helpText() string {
+	tab := p.activeState()
+
+	if tab.loading {
+		return helpLine("tab", "switch source", "esc", "close")
+	}
+	if tab.searchErr != nil {
+		return helpLine("r", "retry", "tab", "switch source", "esc", "close")
+	}
+	if p.searchMode {
+		return helpLine("↑↓", "navigate", "enter", "select", "esc", "done")
+	}
+	return helpLine("tab", "switch source", "/", "filter", "j/k", "navigate", "enter", "select", "esc", "close")
+}
+
+// helpLine builds a help string from alternating key/description pairs.
+func helpLine(pairs ...string) string {
+	parts := make([]string, 0, len(pairs)/2)
+	for i := 0; i+1 < len(pairs); i += 2 {
+		key := styles.TextForegroundBoldStyle.Render(pairs[i])
+		parts = append(parts, key+" "+pairs[i+1])
+	}
+	return strings.Join(parts, " · ")
+}
+
+// --- Table helpers (preserved from original) ---
+
 const sourceFlexColumnMinWidth = 8
 
-// resolveSourceColumnWidths assigns single-line rendering widths to
-// columns within total: declared fixed widths are kept as-is (defaulting
-// to 12 when a column declares neither Width nor Flex), and Flex columns
-// share whatever space remains proportionally to their weights.
 func resolveSourceColumnWidths(columns []sources.Column, total int) []int {
 	widths := make([]int, len(columns))
-	remaining := total - max(len(columns)-1, 0) // inter-column spaces
+	remaining := total - max(len(columns)-1, 0)
 	flexTotal := 0
 	for i, col := range columns {
 		switch {
@@ -731,27 +848,17 @@ func resolveSourceColumnWidths(columns []sources.Column, total int) []int {
 	return widths
 }
 
-// renderSourceTableRow renders an item's Fields as a single row: fixed
-// columns at their declared widths, Flex columns sharing the remaining
-// space. Cell content is truncated (never wrapped) so a long title cannot
-// turn one table row into several lines and break the picker's fixed-height
-// layout.
 func renderSourceTableRow(item sources.Item, columns []sources.Column, width int, selected bool) string {
 	widths := resolveSourceColumnWidths(columns, width)
 	cells := make([]string, 0, len(columns))
 	for i, col := range columns {
 		w := max(widths[i], 1)
 		value := sourceFieldString(item, col.Key)
-		// Number columns render as "#42", matching the list layout's
-		// metadata convention.
 		if col.Key == "number" && value != "" {
 			value = "#" + value
 		}
 		style := tableCellStyle(col.Key, value)
 		if selected {
-			// The highlighted row stays a uniform primary-bold bar so the
-			// cursor position is scannable; semantic colors show on the
-			// rest of the table.
 			style = styles.TextPrimaryBoldStyle
 		}
 		value = ansi.Truncate(statusIcon(value)+value, w, "…")
@@ -760,9 +867,6 @@ func renderSourceTableRow(item sources.Item, columns []sources.Column, width int
 	return strings.Join(cells, " ")
 }
 
-// statusIcon returns a glyph prefix for CI status vocabulary so pass/fail
-// state is scannable without reading the words. Styled by the same
-// tableCellStyle color as the text.
 func statusIcon(value string) string {
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "passing":
@@ -775,11 +879,6 @@ func statusIcon(value string) string {
 	return ""
 }
 
-// tableCellStyle picks a semantic style for a table cell from its column
-// key and value. Identifier columns render in the primary accent, authors
-// muted, and well-known status vocabulary (shared by issues/PRs and usable
-// by external sources emitting the same terms) gets state colors. This
-// is a presentation concern, so it lives here rather than in manifests.
 func tableCellStyle(key, value string) lipgloss.Style {
 	switch key {
 	case "number", "id", "index":
@@ -787,7 +886,6 @@ func tableCellStyle(key, value string) lipgloss.Style {
 	case "author":
 		return styles.TextMutedStyle
 	}
-
 	switch strings.ToLower(strings.TrimSpace(value)) {
 	case "approved", "open", "success", "passing":
 		return styles.TextSuccessStyle
@@ -803,8 +901,6 @@ func tableCellStyle(key, value string) lipgloss.Style {
 	return styles.TextForegroundStyle
 }
 
-// sourceFieldString resolves a column key against an item's well-known
-// fields (id/title/subtitle) or its Fields map, returning "" if absent.
 func sourceFieldString(item sources.Item, key string) string {
 	switch key {
 	case "id":
@@ -833,7 +929,7 @@ func sourceFieldStringSlice(item sources.Item, key string) []string {
 	}
 	switch typed := value.(type) {
 	case []string:
-		return nonEmptyStrings(typed)
+		return typed
 	case []any:
 		values := make([]string, 0, len(typed))
 		for _, v := range typed {
@@ -848,105 +944,4 @@ func sourceFieldStringSlice(item sources.Item, key string) []string {
 		}
 		return nil
 	}
-}
-
-func nonEmptyStrings(values []string) []string {
-	out := make([]string, 0, len(values))
-	for _, value := range values {
-		if value = strings.TrimSpace(value); value != "" {
-			out = append(out, value)
-		}
-	}
-	return out
-}
-
-func renderSourceListMeta(item sources.Item, width int) string {
-	parts := sourceMetadataParts(item)
-	if len(parts) == 0 {
-		if item.Subtitle == "" {
-			return ""
-		}
-		return styles.TextMutedStyle.Render(item.Subtitle)
-	}
-	return lipgloss.NewStyle().MaxWidth(max(width, 1)).Render(strings.Join(parts, "  "))
-}
-
-func renderSourceDetailMeta(item sources.Item, width int) string {
-	parts := sourceMetadataParts(item)
-	if len(parts) == 0 {
-		return ""
-	}
-	return lipgloss.NewStyle().MaxWidth(max(width, 1)).Render(strings.Join(parts, "  "))
-}
-
-func sourceMetadataParts(item sources.Item) []string {
-	parts := make([]string, 0, 6)
-	if number := sourceFieldString(item, "number"); number != "" {
-		parts = append(parts, styles.TextPrimaryStyle.Render("#"+number))
-	}
-	if author := sourceFieldString(item, "author"); author != "" {
-		parts = append(parts, styles.TextMutedStyle.Render("@"+author))
-	}
-	for _, label := range sourceFieldStringSlice(item, "labels") {
-		parts = append(parts, styles.TextSecondaryStyle.Render("["+label+"]"))
-	}
-	return parts
-}
-
-// detailContent computes the detail pane text for the currently highlighted
-// item, honoring inline item detail, cache, in-flight, and error states in
-// that priority order. It does not itself bound the output to any
-// height/width — that's the detail viewport's job (see refreshDetailViewport).
-func (p Picker) detailContent() string {
-	if len(p.items) == 0 || p.cursor < 0 || p.cursor >= len(p.items) {
-		return ""
-	}
-
-	item := p.items[p.cursor]
-	title := lipgloss.NewStyle().MaxWidth(p.detailWidth).Render(styles.TextForegroundBoldStyle.Render(item.Title))
-	meta := renderSourceDetailMeta(item, p.detailWidth)
-
-	var body string
-	if item.Detail.Kind() != sources.DetailKindNone {
-		body = renderSourceDetail(item.Detail, p.detailWidth)
-	} else if err, ok := p.detailErr[item.ID]; ok {
-		body = styles.TextErrorStyle.Render("detail failed: " + err.Error())
-	} else if detail, ok := p.detailCache[item.ID]; ok {
-		body = renderSourceDetail(detail, p.detailWidth)
-	} else if p.detailPending[item.ID] {
-		body = styles.TextMutedStyle.Render("loading detail...")
-	} else {
-		body = renderSourceDetail(sources.Detail{}, p.detailWidth)
-	}
-
-	header := title
-	if meta != "" {
-		header += "\n" + meta
-	}
-	if strings.TrimSpace(body) == "" {
-		return header
-	}
-	return header + "\n\n" + body
-}
-
-// refreshDetailViewport recomputes the detail pane content for the
-// currently highlighted item and loads it into the fixed-size detail
-// viewport, resetting scroll to the top. Content longer than
-// p.contentHeight scrolls within the viewport instead of growing the
-// dialog.
-func (p *Picker) refreshDetailViewport() {
-	if p.manifest.Picker.HidePreview {
-		return
-	}
-	p.detailVP.SetContent(p.detailContent())
-	p.detailVP.GotoTop()
-}
-
-// sourceDebounceDelay resolves the remote-search debounce delay from the
-// manifest, falling back to defaultSourceSearchDebounce when unset.
-func sourceDebounceDelay(manifest sources.Manifest) time.Duration {
-	if manifest.Picker.Search.DebounceMS <= 0 {
-		return defaultSourceSearchDebounce
-	}
-	return time.Duration(manifest.Picker.Search.DebounceMS) * time.Millisecond
 }

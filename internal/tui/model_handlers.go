@@ -831,22 +831,6 @@ type sourcePickerScope struct {
 	Source string
 }
 
-// sourcePickerReadyMsg carries a fully initialized SourcePicker back
-// to the model after openSourcePicker's Initialize/Available checks
-// succeed.
-type sourcePickerReadyMsg struct {
-	sourceID  string
-	scope     sourcePickerScope
-	templates sources.TemplateConfig
-	picker    sourcepicker.Picker
-}
-
-// sourcePickerErrorMsg carries a source lookup/availability/Initialize
-// failure back to the model.
-type sourcePickerErrorMsg struct {
-	err error
-}
-
 // resolveSourceID returns the source to open: an explicit args[0]
 // when given, otherwise the sole registered source. ok is false when no
 // id was given and zero or multiple sources are registered, so callers
@@ -863,72 +847,45 @@ func (m Model) resolveSourceID(args []string) (string, bool) {
 	return "", false
 }
 
-// openSourcePicker resolves sourceID from the registry and
-// asynchronously checks availability and fetches its manifest, then opens
-// the picker for scope. Errors (unknown id, unavailable source,
-// Initialize failure) surface as a toast without leaving stateSourcePicker
-// active.
+// openSourcePicker opens the tabbed source picker with all registered
+// sources, starting on the tab identified by sourceID. The picker handles
+// lazy initialization, loading, and error states internally.
 func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.Model, tea.Cmd) {
 	if m.sourceRegistry == nil {
 		m.notifyErrorf("no sources are configured")
 		return m, nil
 	}
 
-	conn, tmplCfg, ok := m.sourceRegistry.Get(sourceID)
-	if !ok {
+	// Verify the requested source exists.
+	if _, _, ok := m.sourceRegistry.Get(sourceID); !ok {
 		m.notifyErrorf("unknown source %q", sourceID)
 		return m, nil
 	}
 
-	m.state = stateLoading
-	m.loadingMessage = fmt.Sprintf("opening %s...", sourceID)
-
-	// Capture the current terminal size so the picker renders at the real
-	// dimensions instead of a fixed default that can overflow a small
-	// terminal/tmux pane (mirrors NewRepoPicker(msg.repos, currentRepo,
-	// m.width, m.height)).
-	width, height := m.width, m.height
-
-	// Batch spinner.Tick: entering stateLoading must restart the spinner
-	// tick loop (see handleSpinnerTick), or the loading indicator freezes.
-	return m, tea.Batch(m.spinner.Tick, func() tea.Msg {
-		ctx := context.Background()
-		if !conn.Available(ctx) {
-			return sourcePickerErrorMsg{err: fmt.Errorf("source %q is not available", sourceID)}
+	// Build tab entries from all registered sources.
+	entries := m.sourceRegistry.All()
+	tabs := make([]sourcepicker.TabSource, len(entries))
+	for i, entry := range entries {
+		tabs[i] = sourcepicker.TabSource{
+			ID:        entry.ID,
+			Source:    entry.Source,
+			Templates: entry.Templates,
+			Manifest: sources.Manifest{
+				ID:          entry.ID,
+				DisplayName: entry.DisplayName,
+			},
 		}
-		manifest, err := conn.Initialize(ctx)
-		if err != nil {
-			return sourcePickerErrorMsg{err: fmt.Errorf("source %q: initialize: %w", sourceID, err)}
-		}
-		picker := sourcepicker.New(conn, manifest, scope.Search, width, height)
-		return sourcePickerReadyMsg{sourceID: sourceID, scope: scope, templates: tmplCfg, picker: picker}
-	})
-}
+	}
 
-// handleSourcePickerReady opens the picker modal and kicks off its
-// initial Search.
-func (m Model) handleSourcePickerReady(msg sourcePickerReadyMsg) (tea.Model, tea.Cmd) {
+	m.pendingSourceScope = scope
+	picker := sourcepicker.New(tabs, sourceID, scope.Search, m.width, m.height)
 	m.state = stateSourcePicker
-	m.pendingSourceID = msg.sourceID
-	m.pendingSourceScope = msg.scope
-	m.pendingSourceTemplates = msg.templates
-	picker := msg.picker
 	m.modals.SourcePicker = &picker
 	return m, picker.Init()
 }
 
-// handleSourcePickerError reports a source open failure and returns to
-// the normal state.
-func (m Model) handleSourcePickerError(msg sourcePickerErrorMsg) (tea.Model, tea.Cmd) {
-	m.state = stateNormal
-	m.notifyErrorf("%v", msg.err)
-	return m, nil
-}
-
-// forwardSourcePickerMsg forwards a source search/detail message to
-// the active SourcePicker. These messages arrive as top-level tea.Msg
-// values (not key presses), so they bypass handleSourcePickerKey and must
-// be routed here from Model.Update.
+// forwardSourcePickerMsg forwards a source search/detail/spinner message
+// to the active SourcePicker.
 func (m Model) forwardSourcePickerMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.modals.SourcePicker == nil {
 		return m, nil
@@ -965,7 +922,7 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// handleSourceSelection renders the pending source's session templates
+// handleSourceSelection renders the selected source's session templates
 // against the selected item and creates a session via the same
 // UseBatchSpawn:true path used by `hive batch`.
 func (m Model) handleSourceSelection(result sourcepicker.Result) (tea.Model, tea.Cmd) {
@@ -975,10 +932,10 @@ func (m Model) handleSourceSelection(result sourcepicker.Result) (tea.Model, tea
 		return m, nil
 	}
 
-	rendered, err := sources.RenderSessionTemplates(m.pendingSourceTemplates, result.Item, result.Detail)
+	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, sources.Detail{})
 	if err != nil {
 		m.state = stateNormal
-		m.notifyErrorf("source %q: %v", m.pendingSourceID, err)
+		m.notifyErrorf("source %q: %v", result.SourceID, err)
 		return m, nil
 	}
 
@@ -1245,6 +1202,15 @@ func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 	m.spinner, cmd = m.spinner.Update(msg)
 	if cmd != nil && m.state == stateLoading {
 		cmds = append(cmds, cmd)
+	}
+
+	// Drive the source picker's internal spinner while the picker is active.
+	if m.state == stateSourcePicker && m.modals.SourcePicker != nil {
+		picker, pickerCmd := m.modals.SourcePicker.Update(msg)
+		m.modals.SourcePicker = &picker
+		if pickerCmd != nil {
+			cmds = append(cmds, pickerCmd)
+		}
 	}
 
 	// Drive the output modal's own spinner while streaming.

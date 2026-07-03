@@ -14,8 +14,7 @@ import (
 func goldenPicker(t *testing.T, manifest sources.Manifest, items []sources.Item) Picker {
 	t.Helper()
 	fake := newFakeTUISource(manifest, items)
-	p := New(fake, manifest, "", 80, 24)
-	p.SetSize(90, 24)
+	p := newTestPicker(fake, manifest, "test-repo", 90, 24)
 	return drainPicker(t, p, p.Init())
 }
 
@@ -53,53 +52,15 @@ func TestPickerGolden_TableLayout(t *testing.T) {
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
 }
 
-func TestPickerGolden_MarkdownDetail(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "Item with markdown detail", Fields: map[string]any{"number": 42, "author": "alice", "labels": []string{"docs", "preview"}}},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	fake.detail["1"] = sources.Detail{Markdown: &sources.MarkdownDetail{Content: "# Heading\n\nSome body text."}}
-	p := New(fake, listManifest(), "", 80, 24)
-	p.SetSize(90, 24)
-	p = drainPicker(t, p, p.Init())
-	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
-}
-
-func TestPickerGolden_KVDetail(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "Item with kv detail"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	fake.detail["1"] = sources.Detail{KV: &sources.KVDetail{
-		Sections: []sources.KVSection{
-			{
-				Heading: "Metadata",
-				Pairs: []sources.KVPair{
-					{Key: "status", Value: "open"},
-					{Key: "owner", Value: "alice"},
-				},
-			},
-		},
-	}}
-	p := New(fake, listManifest(), "", 80, 24)
-	p.SetSize(90, 24)
-	p = drainPicker(t, p, p.Init())
-	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
-}
-
 func TestPickerGolden_EmptyResults(t *testing.T) {
 	p := goldenPicker(t, listManifest(), nil)
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
 }
 
-func TestPickerGolden_DetailError(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "Item whose detail fails to load"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	fake.detailErr["1"] = errGoldenDetail
-	p := New(fake, listManifest(), "", 80, 24)
-	p.SetSize(90, 24)
+func TestPickerGolden_ErrorState(t *testing.T) {
+	fake := newFakeTUISource(listManifest(), nil)
+	fake.searchErr = errGoldenDetail
+	p := newTestPicker(fake, listManifest(), "test-repo", 90, 24)
 	p = drainPicker(t, p, p.Init())
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
 }
@@ -110,10 +71,6 @@ type goldenDetailError string
 
 func (e goldenDetailError) Error() string { return string(e) }
 
-// TestPickerGolden_HidePreviewTable snapshots the single-pane
-// (HidePreview) table layout used by the built-in PR source: the table
-// gets the full modal width, flex columns absorb the remaining space, and
-// long titles truncate on one line instead of wrapping.
 func TestPickerGolden_HidePreviewTable(t *testing.T) {
 	manifest := sources.Manifest{
 		ID:          "fake-prs",
