@@ -4,9 +4,9 @@
 │                                                                                │
 │  / search...                                                                   │
 │                                                                                │
-│  󰅂 #1315  feat(adaptivelogsapi): add pat… Johngeorgesam… approved              │
-│    #1313  [DRAFT] OTel fleet pipeline in… MasslessParti… draft                 │
-│    #1312  feat(fleet-otel): warn and emi… MasslessParti… open                  │
+│  󰅂 #1315  feat(adaptivelogsap… Johngeorgesam… approved           ✓ passing     │
+│    #1313  [DRAFT] OTel fleet … MasslessParti… draft              ● pending     │
+│    #1312  feat(fleet-otel): w… MasslessParti… open               ✗ failing     │
 │                                                                                │
 │                                                                                │
 │                                                                                │
@@ -17,6 +17,6 @@
 │                                                                                │
 │                                                                                │
 │                                                                                │
-│  ↑/↓ navigate  enter select  esc cancel                                        │
+│  j/k navigate  / search  O open  enter select  esc cancel                      │
 │                                                                                │
 ╰────────────────────────────────────────────────────────────────────────────────╯

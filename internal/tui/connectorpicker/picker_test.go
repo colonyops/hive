@@ -144,12 +144,24 @@ func remoteManifest() connectors.Manifest {
 	return m
 }
 
+// enterSearch puts the picker into search mode (as a user pressing "/")
+// so subsequent typeKey calls edit the query instead of being swallowed by
+// navigate mode.
+func enterSearch(t *testing.T, p Picker) Picker {
+	t.Helper()
+	next, cmd := p.Update(tea.KeyPressMsg{Text: "/", Code: '/'})
+	p = drainPicker(t, next, cmd)
+	require.True(t, p.searchMode, "pressing / must enter search mode")
+	return p
+}
+
 // typeKey feeds each rune of s into the picker as a keystroke without
 // draining between characters, then drains all resulting commands
 // afterward. This mirrors real usage where a debounced remote search should
 // settle on the final query once the user stops typing: intermediate
 // debounce ticks fire (since they run in real time) but are discarded by
 // handleDebounce because their Query no longer matches the final input.
+// The picker must already be in search mode (see enterSearch).
 func typeKey(t *testing.T, p Picker, s string) Picker {
 	t.Helper()
 	var cmds []tea.Cmd
@@ -178,6 +190,7 @@ func TestPicker_LocalFilterDoesNotCallSearch(t *testing.T) {
 	require.Equal(t, 1, fake.searchCallCount(), "initial load issues exactly one Search")
 	require.Len(t, p.items, 2)
 
+	p = enterSearch(t, p)
 	p = typeKey(t, p, "alpha")
 
 	assert.Equal(t, 1, fake.searchCallCount(), "local filtering must not call Search again")
@@ -195,6 +208,7 @@ func TestPicker_RemoteSearchDebouncesAndCallsWithQuery(t *testing.T) {
 	p = drainPicker(t, p, p.Init())
 	require.Equal(t, 1, fake.searchCallCount())
 
+	p = enterSearch(t, p)
 	p = typeKey(t, p, "beta")
 
 	require.Equal(t, 2, fake.searchCallCount(), "remote mode issues one Search per settled query")
@@ -405,6 +419,7 @@ func TestPicker_NonEditingKeyDoesNotResetOrResearch(t *testing.T) {
 	p = drainPicker(t, p, p.Init())
 	require.Equal(t, 1, fake.searchCallCount())
 
+	p = enterSearch(t, p)
 	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
 	p = drainPicker(t, next, cmd)
 	require.Equal(t, 1, p.cursor)
@@ -427,6 +442,7 @@ func TestPicker_ClearingFilterRefreshesDetailPane(t *testing.T) {
 	p := New(fake, listManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
+	p = enterSearch(t, p)
 	p = typeKey(t, p, "beta")
 	require.Len(t, p.items, 1)
 	require.Contains(t, terminal.StripANSI(p.detailVP.View()), "beta body")
@@ -584,4 +600,110 @@ func TestConnectorTableRowColors(t *testing.T) {
 	selected := renderConnectorTableRow(item, columns, 60, true)
 	assert.Contains(t, selected, styles.TextPrimaryBoldStyle.Render("approved"), "selected row must be a uniform primary-bold bar")
 	assert.NotContains(t, selected, styles.TextSuccessStyle.Render("approved"))
+}
+
+// TestPicker_NavigateModeIsDefault verifies the navigate-first UX: j/k move
+// the cursor, stray typing does not edit the query, "/" enters search mode,
+// esc leaves search mode (keeping the filter) and only then cancels.
+func TestPicker_NavigateModeIsDefault(t *testing.T) {
+	items := []connectors.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+		{ID: "3", Title: "gamma"},
+	}
+	fake := newFakeTUIConnector(listManifest(), items)
+	p := New(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+	require.False(t, p.searchMode, "picker must start in navigate mode")
+
+	next, cmd := p.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 1, p.cursor, "j must move the cursor down")
+
+	next, cmd = p.Update(tea.KeyPressMsg{Text: "k", Code: 'k'})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 0, p.cursor, "k must move the cursor up")
+
+	next, cmd = p.Update(tea.KeyPressMsg{Text: "x", Code: 'x'})
+	p = drainPicker(t, next, cmd)
+	assert.Empty(t, p.input.Value(), "stray typing in navigate mode must not edit the query")
+	assert.Len(t, p.items, 3, "stray typing must not filter the list")
+
+	p = enterSearch(t, p)
+	p = typeKey(t, p, "beta")
+	require.Len(t, p.items, 1)
+
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	p = drainPicker(t, next, cmd)
+	assert.False(t, p.searchMode, "esc must leave search mode")
+	assert.False(t, p.Cancelled(), "first esc must not cancel the picker")
+	assert.Equal(t, "beta", p.input.Value(), "leaving search mode must keep the query")
+	assert.Len(t, p.items, 1, "leaving search mode must keep the filter")
+
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	p = drainPicker(t, next, cmd)
+	assert.True(t, p.Cancelled(), "esc in navigate mode must cancel")
+}
+
+// TestPicker_ArrowKeysNavigateInSearchMode verifies arrows work while
+// typing a query.
+func TestPicker_ArrowKeysNavigateInSearchMode(t *testing.T) {
+	items := []connectors.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUIConnector(listManifest(), items)
+	p := New(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+	p = enterSearch(t, p)
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyDown})
+	p = drainPicker(t, next, cmd)
+	assert.Equal(t, 1, p.cursor, "down arrow must navigate while in search mode")
+	assert.Empty(t, p.input.Value(), "arrow keys must not edit the query")
+}
+
+// TestPicker_OpenCurrentItemURL verifies "O" produces an open command only
+// when the highlighted item carries a URI, and only in navigate mode.
+func TestPicker_OpenCurrentItemURL(t *testing.T) {
+	items := []connectors.Item{
+		{ID: "1", Title: "alpha", URI: "https://github.com/o/r/issues/1"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUIConnector(listManifest(), items)
+	p := New(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	assert.NotNil(t, p.openCurrentItemURL(), "item with URI must produce an open command")
+
+	next, cmd := p.Update(tea.KeyPressMsg{Text: "j", Code: 'j'})
+	p = drainPicker(t, next, cmd)
+	assert.Nil(t, p.openCurrentItemURL(), "item without URI must not produce a command")
+
+	p = enterSearch(t, p)
+	next, _ = p.Update(tea.KeyPressMsg{Text: "O", Code: 'O'})
+	assert.Equal(t, "O", next.input.Value(), "O in search mode must type into the query, not open a URL")
+}
+
+// TestStatusIcon covers the CI-vocabulary glyph decoration.
+func TestStatusIcon(t *testing.T) {
+	assert.Equal(t, "✓ ", statusIcon("passing"))
+	assert.Equal(t, "✗ ", statusIcon("failing"))
+	assert.Equal(t, "● ", statusIcon("pending"))
+	assert.Empty(t, statusIcon("approved"), "non-CI vocabulary gets no icon")
+	assert.Empty(t, statusIcon(""))
+}
+
+// TestConnectorTableRowCIIcons verifies icon+color pairing in rendered rows.
+func TestConnectorTableRowCIIcons(t *testing.T) {
+	columns := []connectors.Column{
+		{Key: "title", Flex: 1},
+		{Key: "ci", Width: 10},
+	}
+	item := connectors.Item{ID: "1", Title: "Add feature", Fields: map[string]any{
+		"title": "Add feature", "ci": "failing",
+	}}
+
+	row := renderConnectorTableRow(item, columns, 50, false)
+	assert.Contains(t, row, styles.TextErrorStyle.Render("✗ failing"), "CI cell must render icon and text in the error color")
 }

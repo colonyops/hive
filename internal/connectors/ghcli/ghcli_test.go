@@ -164,8 +164,8 @@ func TestSearchPRs(t *testing.T) {
 	exec := &fakeExecutor{
 		responses: []fakeResponse{
 			{out: []byte(`[
-				{"number":10,"title":"Add feature","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"}],"url":"https://github.com/o/r/pull/10","isDraft":false,"reviewDecision":"APPROVED","headRefName":"feat/add"},
-				{"number":11,"title":"WIP thing","state":"OPEN","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/pull/11","isDraft":true,"reviewDecision":"","headRefName":"wip/thing"}
+				{"number":10,"title":"Add feature","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"}],"url":"https://github.com/o/r/pull/10","isDraft":false,"reviewDecision":"APPROVED","headRefName":"feat/add","statusCheckRollup":[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"}]},
+				{"number":11,"title":"WIP thing","state":"OPEN","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/pull/11","isDraft":true,"reviewDecision":"","headRefName":"wip/thing","statusCheckRollup":[]}
 			]`)},
 		},
 	}
@@ -180,7 +180,7 @@ func TestSearchPRs(t *testing.T) {
 	assert.Equal(t, []string{
 		"pr", "list",
 		"--repo", "o/r",
-		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName",
+		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup",
 		"--limit", "30",
 		"--search", "feat",
 	}, call.args)
@@ -198,11 +198,37 @@ func TestSearchPRs(t *testing.T) {
 		"labels": []string{"api"},
 		"draft":  false,
 		"review": "approved",
+		"ci":     "passing",
 		"branch": "feat/add",
 	}, result.Items[0].Fields)
 
 	assert.Equal(t, "#11 · draft", result.Items[1].Subtitle, "draft wins over reviewDecision")
 	assert.Equal(t, "draft", result.Items[1].Fields["review"])
+	assert.Empty(t, result.Items[1].Fields["ci"], "no checks renders a blank CI cell")
+}
+
+func TestCILabel(t *testing.T) {
+	tests := []struct {
+		name   string
+		checks []prCheck
+		want   string
+	}{
+		{"no checks", nil, ""},
+		{"all passed", []prCheck{{Status: "COMPLETED", Conclusion: "SUCCESS"}, {State: "SUCCESS"}}, "passing"},
+		{"skipped and neutral count as passing", []prCheck{{Status: "COMPLETED", Conclusion: "SKIPPED"}, {Status: "COMPLETED", Conclusion: "NEUTRAL"}}, "passing"},
+		{"check run failure wins", []prCheck{{Status: "COMPLETED", Conclusion: "SUCCESS"}, {Status: "COMPLETED", Conclusion: "FAILURE"}}, "failing"},
+		{"status context failure wins", []prCheck{{State: "FAILURE"}}, "failing"},
+		{"failure beats pending", []prCheck{{Status: "IN_PROGRESS"}, {Status: "COMPLETED", Conclusion: "TIMED_OUT"}}, "failing"},
+		{"in progress is pending", []prCheck{{Status: "COMPLETED", Conclusion: "SUCCESS"}, {Status: "IN_PROGRESS"}}, "pending"},
+		{"queued is pending", []prCheck{{Status: "QUEUED"}}, "pending"},
+		{"status context pending", []prCheck{{State: "PENDING"}}, "pending"},
+		{"cancelled is failing", []prCheck{{Status: "COMPLETED", Conclusion: "CANCELLED"}}, "failing"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, ciLabel(tt.checks))
+		})
+	}
 }
 
 func TestReviewLabel(t *testing.T) {

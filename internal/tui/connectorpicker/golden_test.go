@@ -126,19 +126,20 @@ func TestPickerGolden_HidePreviewTable(t *testing.T) {
 				{Key: "title", Label: "Title", Flex: 1},
 				{Key: "author", Label: "Author", Width: 14},
 				{Key: "review", Label: "Review", Width: 18},
+				{Key: "ci", Label: "CI", Width: 10},
 			},
 			Search: connectors.SearchManifest{Mode: connectors.SearchModeLocal},
 		},
 	}
 	items := []connectors.Item{
 		{ID: "1315", Title: "feat(adaptivelogsapi): add pattern-match endpoint with a very long descriptive title that must not wrap", Fields: map[string]any{
-			"number": 1315, "title": "feat(adaptivelogsapi): add pattern-match endpoint with a very long descriptive title that must not wrap", "author": "Johngeorgesample", "review": "approved",
+			"number": 1315, "title": "feat(adaptivelogsapi): add pattern-match endpoint with a very long descriptive title that must not wrap", "author": "Johngeorgesample", "review": "approved", "ci": "passing",
 		}},
 		{ID: "1313", Title: "[DRAFT] OTel fleet pipeline indexed-label conversion parity with the gateway", Fields: map[string]any{
-			"number": 1313, "title": "[DRAFT] OTel fleet pipeline indexed-label conversion parity with the gateway", "author": "MasslessParticle", "review": "draft",
+			"number": 1313, "title": "[DRAFT] OTel fleet pipeline indexed-label conversion parity with the gateway", "author": "MasslessParticle", "review": "draft", "ci": "pending",
 		}},
 		{ID: "1312", Title: "feat(fleet-otel): warn and emit a metric for unsupported regex index_label config", Fields: map[string]any{
-			"number": 1312, "title": "feat(fleet-otel): warn and emit a metric for unsupported regex index_label config", "author": "MasslessParticle", "review": "open",
+			"number": 1312, "title": "feat(fleet-otel): warn and emit a metric for unsupported regex index_label config", "author": "MasslessParticle", "review": "open", "ci": "failing",
 		}},
 	}
 	p := goldenPicker(t, manifest, items)
