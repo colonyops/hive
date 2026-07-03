@@ -828,8 +828,12 @@ func DefaultConfig() Config {
 		Connectors: ConnectorsConfig{
 			Issues: BuiltinConnectorConfig{
 				Templates: ConnectorTemplateConfig{
-					Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
-					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}",
+					Name: "gh-{{ .Fields.number }}-{{ .Title }}",
+					// .Detail is the issue body when it was fetched before
+					// selection (always in the CLI path, best-effort in the
+					// TUI); rendered prompts are trimmed, so an empty detail
+					// leaves no dangling blank lines.
+					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}\n\n{{ .Detail }}",
 					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
 				},
 			},

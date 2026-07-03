@@ -50,7 +50,11 @@ connectors:
   force it on or off.
 - Every connector configures `templates.name`, `templates.prompt`, and
   optional `templates.tags` — Go templates rendered against the selected
-  item just before session creation. `.ID`, `.Title`, `.Subtitle`, and
+  item just before session creation. The rendered **name is automatically
+  kebab-cased** (punctuation becomes hyphens) so issue/PR titles always
+  produce a valid session name — templates don't need to sanitize. Rendered
+  **tags** are stored on the session and usable for filtering (`hive ls
+  --tag <tag>`). `.ID`, `.Title`, `.Subtitle`, and
   `.Detail` (plain text) are always available; `.Fields.<key>` exposes
   connector-specific data (e.g. `.Fields.number`, `.Fields.url` for issues;
   PRs additionally expose `.Fields.branch`, `.Fields.draft`, and
@@ -86,6 +90,22 @@ generic `:OpenConnector <id> [scope]`. The default `i` keybinding in the
 sessions view opens the issues picker. Press enter to create a session from
 the highlighted item, using the connector's configured templates.
 
+Custom commands can pin a connector id and scope via preset `args`, and
+keybindings can reference them — this is exactly how the built-in
+`ConnectorIssues`/`ConnectorPRs` commands are defined:
+
+```yaml
+commands:
+  LokiPRs:
+    action: OpenConnectorPicker
+    args: ["prs", "grafana/loki"]
+    help: "browse Loki PRs"
+views:
+  sessions:
+    keybindings:
+      "P": { cmd: "LokiPRs" }
+```
+
 There's a noninteractive CLI equivalent, primarily intended for scripting
 and testing:
 
@@ -98,7 +118,11 @@ hive connector open issues --scope cli/cli --pick 12345 --json
 the created session as JSON and exits 0; an unknown `--pick` ID exits
 non-zero with an error and creates no session.
 
-## Manual testing with the reference connector
+## For connector developers: the reference connector
+
+`cmd/hive-reference-connector` is a canned protocol server used by hive's
+integration tests and as a reference implementation for writing your own
+external connector. To exercise the protocol by hand:
 
 ```bash
 go build -o /usr/local/bin/hive-reference-connector ./cmd/hive-reference-connector
