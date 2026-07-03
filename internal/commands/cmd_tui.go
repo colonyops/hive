@@ -105,7 +105,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		},
 		DoctorService: cmd.app.Doctor,
 		Honeycomb:     cmd.app.Honeycomb,
-		Connectors:    cmd.app.Connectors,
+		Sources:       cmd.app.Sources,
 	}
 	opts := tui.Opts{
 		LocalRemote: localRemote,

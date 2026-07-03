@@ -1,0 +1,22 @@
+╭────────────────────────────────────────────────────────────────────────────────╮
+│                                                                                │
+│  Fake Source                                                                   │
+│                                                                                │
+│  / search...                    │  First reference item                        │
+│                                 │  #1278  @alice  [api]  [public]              │
+│  󰅂 First reference item         │                                              │
+│    #1278  @alice  [api]  [public│  (no detail available for this item)         │
+│                                 │                                              │
+│    Second reference item        │                                              │
+│    #1277  @bob  [backend]       │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                 │                                              │
+│                                                                                │
+│                                                                                │
+│  j/k navigate  / search  O open  enter select  esc cancel                      │
+│                                                                                │
+╰────────────────────────────────────────────────────────────────────────────────╯

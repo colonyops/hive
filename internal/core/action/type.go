@@ -57,7 +57,7 @@ package action
 //	GoToBottom
 //	Quit
 //	ShowHelp
-//	OpenConnectorPicker
+//	OpenSourcePicker
 //
 // )
 type Type string

@@ -189,23 +189,23 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
-	"OpenConnector": {
-		Action: action.TypeOpenConnectorPicker,
-		Help:   "open a connector picker (id/scope auto-detected when omittable; usage: OpenConnector [id] [scope])",
+	"OpenSource": {
+		Action: action.TypeOpenSourcePicker,
+		Help:   "open a source picker (id/scope auto-detected when omittable; usage: OpenSource [id] [scope])",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
-	"ConnectorIssues": {
-		Action: action.TypeOpenConnectorPicker,
+	"SourceIssues": {
+		Action: action.TypeOpenSourcePicker,
 		Args:   []string{"issues"},
-		Help:   "browse GitHub issues and create a session (usage: ConnectorIssues [scope])",
+		Help:   "browse GitHub issues and create a session (usage: SourceIssues [scope])",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
-	"ConnectorPRs": {
-		Action: action.TypeOpenConnectorPicker,
+	"SourcePRs": {
+		Action: action.TypeOpenSourcePicker,
 		Args:   []string{"prs"},
-		Help:   "browse GitHub pull requests and create a session (usage: ConnectorPRs [scope])",
+		Help:   "browse GitHub pull requests and create a session (usage: SourcePRs [scope])",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
@@ -437,7 +437,7 @@ type Config struct {
 	Tmux                TmuxConfig             `json:"tmux"                  yaml:"tmux"`
 	Database            DatabaseConfig         `json:"database"              yaml:"database"`
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
-	Connectors          ConnectorsConfig       `json:"connectors"            yaml:"connectors"`
+	Sources             SourcesConfig          `json:"sources"               yaml:"sources"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
 	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
 	Views               ViewsConfig            `json:"views"                 yaml:"views"`
@@ -613,38 +613,28 @@ type ClaudePluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
-// ConnectorsConfig holds configuration for the connectors system: browsable
-// external data sources (GitHub issues, external subprocess connectors) that
-// map a selected item into a new hive session.
-type ConnectorsConfig struct {
-	Issues   BuiltinConnectorConfig    `json:"issues"   yaml:"issues"`
-	PRs      BuiltinConnectorConfig    `json:"prs"      yaml:"prs"`
-	External []ExternalConnectorConfig `json:"external" yaml:"external"`
+// SourcesConfig holds configuration for the sources system: browsable
+// external data sources (GitHub issues and pull requests) that map a
+// selected item into a new hive session.
+type SourcesConfig struct {
+	Issues BuiltinSourceConfig `json:"issues" yaml:"issues"`
+	PRs    BuiltinSourceConfig `json:"prs"    yaml:"prs"`
 }
 
-// ConnectorTemplateConfig holds the Go templates used to render a selected
-// connector item into session Name/Prompt/Tags fields.
-type ConnectorTemplateConfig struct {
+// SourceTemplateConfig holds the Go templates used to render a selected
+// source item into session Name/Prompt/Tags fields.
+type SourceTemplateConfig struct {
 	Name   string   `json:"name"   yaml:"name"`
 	Prompt string   `json:"prompt" yaml:"prompt"`
 	Tags   []string `json:"tags"   yaml:"tags"`
 }
 
-// BuiltinConnectorConfig holds configuration for one built-in connector
+// BuiltinSourceConfig holds configuration for one built-in source
 // (issues, prs). Mirrors the per-plugin config convention: nil Enabled
 // means auto-detect.
-type BuiltinConnectorConfig struct {
-	Enabled   *bool                   `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
-	Templates ConnectorTemplateConfig `json:"templates" yaml:"templates"`
-}
-
-// ExternalConnectorConfig configures a connector implemented as an external
-// subprocess speaking the connector JSON-RPC protocol.
-type ExternalConnectorConfig struct {
-	ID        string                  `json:"id"        yaml:"id"`
-	Enabled   *bool                   `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
-	Command   []string                `json:"command"   yaml:"command"`
-	Templates ConnectorTemplateConfig `json:"templates" yaml:"templates"`
+type BuiltinSourceConfig struct {
+	Enabled   *bool                `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
+	Templates SourceTemplateConfig `json:"templates" yaml:"templates"`
 }
 
 // DatabaseConfig holds SQLite database configuration.
@@ -825,9 +815,9 @@ func DefaultConfig() Config {
 				Toast: true,
 			},
 		},
-		Connectors: ConnectorsConfig{
-			Issues: BuiltinConnectorConfig{
-				Templates: ConnectorTemplateConfig{
+		Sources: SourcesConfig{
+			Issues: BuiltinSourceConfig{
+				Templates: SourceTemplateConfig{
 					Name: "gh-{{ .Fields.number }}-{{ .Title }}",
 					// .Detail is the issue body when it was fetched before
 					// selection (always in the CLI path, best-effort in the
@@ -837,8 +827,8 @@ func DefaultConfig() Config {
 					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
 				},
 			},
-			PRs: BuiltinConnectorConfig{
-				Templates: ConnectorTemplateConfig{
+			PRs: BuiltinSourceConfig{
+				Templates: SourceTemplateConfig{
 					Name:   "gh-pr-{{ .Fields.number }}-{{ .Title }}",
 					Prompt: "Review pull request {{ .Title }}\n\n{{ .Fields.url }}",
 					Tags:   []string{"github", "pr-{{ .Fields.number }}"},
@@ -953,8 +943,8 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
-	applyConnectorTemplateDefaults(&c.Connectors.Issues.Templates, defaults.Connectors.Issues.Templates)
-	applyConnectorTemplateDefaults(&c.Connectors.PRs.Templates, defaults.Connectors.PRs.Templates)
+	applySourceTemplateDefaults(&c.Sources.Issues.Templates, defaults.Sources.Issues.Templates)
+	applySourceTemplateDefaults(&c.Sources.PRs.Templates, defaults.Sources.PRs.Templates)
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -1037,7 +1027,7 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
-		c.validateConnectors(),
+		c.validateSources(),
 	)
 }
 
@@ -1435,9 +1425,9 @@ func matchesPattern(pattern, remote string) bool {
 	return re.MatchString(remote)
 }
 
-// applyConnectorTemplateDefaults fills unset builtin-connector template
+// applySourceTemplateDefaults fills unset builtin-source template
 // fields from defaults, preserving any user-provided values.
-func applyConnectorTemplateDefaults(templates *ConnectorTemplateConfig, defaults ConnectorTemplateConfig) {
+func applySourceTemplateDefaults(templates *SourceTemplateConfig, defaults SourceTemplateConfig) {
 	if templates.Name == "" {
 		templates.Name = defaults.Name
 	}

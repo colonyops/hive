@@ -57,8 +57,8 @@ views:
 | `K`        | PrevActive           | Jump to previous active session      |
 | `t`        | TodoPanel            | Open todo panel                      |
 | `o`        | TmuxPopUp            | Popup tmux session                   |
-| `i`        | ConnectorIssues      | Browse GitHub issues                 |
-| `p`        | ConnectorPRs         | Browse GitHub pull requests          |
+| `i`        | SourceIssues      | Browse GitHub issues                 |
+| `p`        | SourcePRs         | Browse GitHub pull requests          |
 
 ### Tasks View
 
