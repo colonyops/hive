@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os/exec"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -1175,6 +1176,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 	// Check if user selected a command
 	if entry, args, ok := m.modals.CommandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
+
+		// Preset command args (e.g. ConnectorIssues -> ["issues"]) come
+		// first; anything the user typed after the command name follows.
+		if len(entry.Command.Args) > 0 {
+			args = append(slices.Clone(entry.Command.Args), args...)
+		}
 
 		// Check if this is a doc review action (doesn't require a session)
 		if entry.Command.Action == act.TypeDocReview {

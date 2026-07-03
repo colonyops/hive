@@ -499,6 +499,7 @@ func (h *KeybindingResolver) ResolveUserCommand(name string, cmd config.UserComm
 	// Handle built-in actions
 	if cmd.Action != "" {
 		a.Type = cmd.Action
+		a.Args = append(slices.Clone(cmd.Args), args...)
 
 		if a.Help == "" {
 			a.Help = strings.ToLower(string(cmd.Action))
