@@ -76,6 +76,25 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	return m
 }
 
+func TestOpenNewSessionFormReadsEnvironmentDefaultAgentAtOpen(t *testing.T) {
+	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
+		cfg.Agents.AgentSelector = true
+		cfg.Agents.Default = "claude"
+		cfg.Agents.Profiles = map[string]config.AgentProfile{
+			"claude": {},
+			"pi":     {},
+		}
+	})
+	t.Setenv(config.EnvDefaultAgent, "pi")
+
+	model, _ := m.openNewSessionForm()
+	opened := model.(Model)
+	require.NotNil(t, opened.modals.NewSession)
+	require.True(t, opened.modals.NewSession.hasAgentSelector)
+	require.NotEmpty(t, opened.modals.NewSession.agent.keys)
+	assert.Equal(t, "pi", opened.modals.NewSession.agent.keys[opened.modals.NewSession.agent.selected])
+}
+
 func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	dataDir := t.TempDir()
 	configPath := filepath.Join(t.TempDir(), "config.yaml")

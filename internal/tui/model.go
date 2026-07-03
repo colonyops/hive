@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
 	"runtime"
 	"sort"
@@ -1642,6 +1643,8 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		existingNames[s.Name] = true
 	}
 
+	defaultAgent := m.defaultAgentKey()
+
 	var agentKeys []string
 	if m.cfg.Agents.AgentSelector && len(m.cfg.Agents.Profiles) > 1 {
 		// Sort alphabetically, then rotate so the configured default is first
@@ -1652,21 +1655,29 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		}
 		sort.Strings(all)
 		// Put the default first so it is pre-selected.
-		def := m.cfg.Agents.Default
 		agentKeys = make([]string, 0, len(all))
-		agentKeys = append(agentKeys, def)
+		agentKeys = append(agentKeys, defaultAgent)
 		for _, k := range all {
-			if k != def {
+			if k != defaultAgent {
 				agentKeys = append(agentKeys, k)
 			}
 		}
 	}
 
 	newSessionForm := NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
-	newSessionForm.selectAgent(m.cfg.Agents.Default)
+	newSessionForm.selectAgent(defaultAgent)
 	m.modals.NewSession = newSessionForm
 	m.state = stateCreatingSession
 	return m, m.modals.NewSession.Init()
+}
+
+func (m Model) defaultAgentKey() string {
+	if envDefault := os.Getenv(config.EnvDefaultAgent); envDefault != "" {
+		if _, ok := m.cfg.Agents.Profiles[envDefault]; ok {
+			return envDefault
+		}
+	}
+	return m.cfg.Agents.Default
 }
 
 // selectedTreeItem returns the currently selected tree item, or nil if none.
