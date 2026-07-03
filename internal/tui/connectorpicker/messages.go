@@ -1,4 +1,4 @@
-package tui
+package connectorpicker
 
 import (
 	"context"
@@ -95,3 +95,15 @@ func connectorDebounceCmd(gen int64, query string, delay time.Duration) tea.Cmd 
 		return connectorSearchDebounceMsg{Gen: gen, Query: query}
 	})
 }
+
+// Msg marks the picker's async result messages (search/detail results,
+// errors, debounce ticks) so the parent model can route top-level tea.Msg
+// values to the active picker with a single type-switch case, without
+// importing the individual message types.
+type Msg interface{ isPickerMsg() }
+
+func (connectorSearchResultMsg) isPickerMsg()   {}
+func (connectorSearchErrorMsg) isPickerMsg()    {}
+func (connectorSearchDebounceMsg) isPickerMsg() {}
+func (connectorDetailResultMsg) isPickerMsg()   {}
+func (connectorDetailErrorMsg) isPickerMsg()    {}

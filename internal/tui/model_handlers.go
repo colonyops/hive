@@ -24,6 +24,7 @@ import (
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/command"
+	"github.com/colonyops/hive/internal/tui/connectorpicker"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/internal/tui/views/tasks"
@@ -819,7 +820,7 @@ type connectorPickerReadyMsg struct {
 	connectorID string
 	scope       connectorPickerScope
 	templates   connectors.TemplateConfig
-	picker      ConnectorPicker
+	picker      connectorpicker.Picker
 }
 
 // connectorPickerErrorMsg carries a connector lookup/availability/Initialize
@@ -881,7 +882,7 @@ func (m Model) openConnectorPicker(connectorID string, scope connectorPickerScop
 		if err != nil {
 			return connectorPickerErrorMsg{err: fmt.Errorf("connector %q: initialize: %w", connectorID, err)}
 		}
-		picker := NewConnectorPicker(conn, manifest, scope.Search, width, height)
+		picker := connectorpicker.New(conn, manifest, scope.Search, width, height)
 		return connectorPickerReadyMsg{connectorID: connectorID, scope: scope, templates: tmplCfg, picker: picker}
 	})
 }
@@ -949,7 +950,7 @@ func (m Model) handleConnectorPickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd
 // handleConnectorSelection renders the pending connector's session templates
 // against the selected item and creates a session via the same
 // UseBatchSpawn:true path used by `hive batch`.
-func (m Model) handleConnectorSelection(result ConnectorPickerResult) (tea.Model, tea.Cmd) {
+func (m Model) handleConnectorSelection(result connectorpicker.Result) (tea.Model, tea.Cmd) {
 	rendered, err := connectors.RenderSessionTemplates(m.pendingConnectorTemplates, result.Item, result.Detail)
 	if err != nil {
 		m.state = stateNormal
