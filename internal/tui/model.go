@@ -29,6 +29,7 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/tui/connectorpicker"
 
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -599,8 +600,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleConnectorPickerReady(msg)
 	case connectorPickerErrorMsg:
 		model, cmd = m.handleConnectorPickerError(msg)
-	case connectorSearchResultMsg, connectorSearchErrorMsg, connectorSearchDebounceMsg,
-		connectorDetailResultMsg, connectorDetailErrorMsg:
+	case connectorpicker.Msg:
 		model, cmd = m.forwardConnectorPickerMsg(msg)
 
 	// Review delegation

@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
+	"github.com/colonyops/hive/internal/tui/connectorpicker"
 )
 
 // ModalCoordinator owns all modal component references, pending action state,
@@ -29,7 +30,7 @@ type ModalCoordinator struct {
 	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
 	RepoPicker      *RepoPicker
-	ConnectorPicker *ConnectorPicker
+	ConnectorPicker *connectorpicker.Picker
 	DocsRepoEntries []docsRepoEntry
 	TodoPanel       *TodoPanel
 	RenameInput     textinput.Model
