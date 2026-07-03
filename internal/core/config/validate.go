@@ -61,7 +61,13 @@ type SourceTemplateData struct {
 	Fields   map[string]any
 }
 
-// validateSources checks the top-level sources config template syntax.
+// sourceIDPattern matches valid source ids: lowercase slug-style
+// identifiers starting with a letter or digit.
+var sourceIDPattern = regexp.MustCompile(`^[a-z0-9][a-z0-9-]*$`)
+
+// validateSources checks the top-level sources config: external source
+// id/command requirements, id uniqueness/format, and template syntax for
+// every enabled source.
 func (c *Config) validateSources() error {
 	var errs criterio.FieldErrorsBuilder
 
@@ -70,6 +76,38 @@ func (c *Config) validateSources() error {
 	}
 	if err := validateSourceTemplateSet("sources.prs.templates", c.Sources.PRs.Templates); err != nil {
 		errs = errs.Append("sources.prs.templates", err)
+	}
+
+	reservedIDs := map[string]bool{
+		"issues": c.Sources.Issues.Enabled == nil || *c.Sources.Issues.Enabled,
+		"prs":    c.Sources.PRs.Enabled == nil || *c.Sources.PRs.Enabled,
+	}
+
+	seen := make(map[string]bool, len(c.Sources.External))
+	for i, ext := range c.Sources.External {
+		field := fmt.Sprintf("sources.external[%d]", i)
+
+		switch {
+		case ext.ID == "":
+			errs = errs.Append(field+".id", fmt.Errorf("is required"))
+		case !sourceIDPattern.MatchString(ext.ID):
+			errs = errs.Append(field+".id", fmt.Errorf("invalid id %q: must be lowercase alphanumeric with hyphens", ext.ID))
+		case seen[ext.ID]:
+			errs = errs.Append(field+".id", fmt.Errorf("duplicate source id %q", ext.ID))
+		case reservedIDs[ext.ID]:
+			errs = errs.Append(field+".id", fmt.Errorf("id %q collides with the built-in %s source: set sources.%s.enabled: false to replace it", ext.ID, ext.ID, ext.ID))
+		default:
+			seen[ext.ID] = true
+		}
+
+		disabled := ext.Enabled != nil && !*ext.Enabled
+		if !disabled && len(ext.Command) == 0 {
+			errs = errs.Append(field+".command", fmt.Errorf("is required unless enabled is explicitly false"))
+		}
+
+		if err := validateSourceTemplateSet(field+".templates", ext.Templates); err != nil {
+			errs = errs.Append(field+".templates", err)
+		}
 	}
 
 	return errs.ToError()

@@ -5,8 +5,9 @@
     requests, session templates, and a searchable picker. The API and config
     names may still change while source integrations mature.
 
-Sources let hive browse GitHub issues/PRs, search/filter items, and create a
-session from a selected item using the same batch-spawn path as `hive batch`.
+Sources let hive browse GitHub issues/PRs or a custom external source,
+search/filter items, and create a session from a selected item using the same
+batch-spawn path as `hive batch`.
 
 ## Configuration
 
@@ -32,6 +33,14 @@ sources:
 
         {{ .Fields.url }}
       tags: ["github", "pr-{{ .Fields.number }}"]
+  external:
+    - id: reference
+      enabled: true
+      command: ["hive-reference-source"]
+      templates:
+        name: "ref-{{ .ID }}"
+        prompt: "Work on {{ .Title }}\n\n{{ .Detail }}"
+        tags: ["reference"]
 ```
 
 Rules:
@@ -41,6 +50,10 @@ Rules:
   explicitly enables/disables registration.
 - Every source configures `templates.name`, `templates.prompt`, and optional
   `templates.tags` — Go templates rendered against the selected item.
+- `external` sources declare a command. Hive spawns that command once per RPC
+  call (`initialize`, `search`, or `fetchDetail`) and exchanges one newline-
+  delimited JSON-RPC 2.0 request/response on stdio. Diagnostics must go to
+  stderr; stdout is reserved for the response line.
 - Template data:
   - `.ID`, `.Title`, `.Subtitle`
   - `.Detail` — fetched markdown/detail content when available
@@ -90,6 +103,20 @@ views:
     keybindings:
       I: { cmd: MyRepoIssues }
 ```
+
+## External source protocol
+
+`cmd/hive-reference-source` is a minimal protocol server used by tests and as
+an example. It reads one JSON-RPC request line from stdin and writes one response
+line to stdout:
+
+```bash
+go run ./cmd/hive-reference-source <<<'{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}'
+```
+
+The client adapter lives in `internal/sources/rpc` and intentionally starts a
+fresh process per method call. This keeps external sources stateless and avoids
+long-running process lifecycle management in the base TUI flow.
 
 ## Noninteractive CLI seam
 

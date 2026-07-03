@@ -1,13 +1,20 @@
 package main
 
 import (
+	"time"
+
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/sources/ghcli"
+	"github.com/colonyops/hive/internal/sources/rpc"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/rs/zerolog"
 )
+
+// defaultExternalSourceTimeout bounds each RPC call made to an external
+// source subprocess.
+const defaultExternalSourceTimeout = 30 * time.Second
 
 // builtinSources declares the gh-CLI-backed builtins: each entry pairs a
 // declarative ghcli.Spec with the config section controlling it. Adding a
@@ -44,6 +51,21 @@ func buildSourceRegistry(cfg *config.Config, exec executil.Executor, kvStore kv.
 		templates := sourceTemplateConfig(builtin.Config.Templates)
 		if err := registry.Register(source.Name(), source, templates); err != nil {
 			logger.Warn().Err(err).Str("source", builtin.Spec.ID).Msg("sources: failed to register builtin source")
+		}
+	}
+
+	for _, ext := range cfg.Sources.External {
+		if !isSourceEnabled(ext.Enabled) {
+			continue
+		}
+		source, err := rpc.NewSubprocessSource(ext.ID, ext.Command, rpc.ExecProcessRunner{}, defaultExternalSourceTimeout)
+		if err != nil {
+			logger.Warn().Err(err).Str("source", ext.ID).Msg("sources: failed to construct external source")
+			continue
+		}
+		templates := sourceTemplateConfig(ext.Templates)
+		if err := registry.Register(ext.ID, source, templates); err != nil {
+			logger.Warn().Err(err).Str("source", ext.ID).Msg("sources: failed to register external source")
 		}
 	}
 

@@ -617,8 +617,9 @@ type ClaudePluginConfig struct {
 // external data sources (GitHub issues and pull requests) that map a
 // selected item into a new hive session.
 type SourcesConfig struct {
-	Issues BuiltinSourceConfig `json:"issues" yaml:"issues"`
-	PRs    BuiltinSourceConfig `json:"prs"    yaml:"prs"`
+	Issues   BuiltinSourceConfig    `json:"issues"   yaml:"issues"`
+	PRs      BuiltinSourceConfig    `json:"prs"      yaml:"prs"`
+	External []ExternalSourceConfig `json:"external" yaml:"external"`
 }
 
 // SourceTemplateConfig holds the Go templates used to render a selected
@@ -634,6 +635,15 @@ type SourceTemplateConfig struct {
 // means auto-detect.
 type BuiltinSourceConfig struct {
 	Enabled   *bool                `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
+	Templates SourceTemplateConfig `json:"templates" yaml:"templates"`
+}
+
+// ExternalSourceConfig configures a source implemented as an external
+// subprocess speaking the source JSON-RPC protocol.
+type ExternalSourceConfig struct {
+	ID        string               `json:"id"        yaml:"id"`
+	Enabled   *bool                `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
+	Command   []string             `json:"command"   yaml:"command"`
 	Templates SourceTemplateConfig `json:"templates" yaml:"templates"`
 }
 

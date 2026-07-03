@@ -55,6 +55,53 @@ func TestBuildSourceRegistry(t *testing.T) {
 			},
 			wantIDs: []string{},
 		},
+		{
+			name: "external source registered alongside builtins",
+			cfg: config.SourcesConfig{
+				External: []config.ExternalSourceConfig{
+					{ID: "jira", Command: []string{"jira-source"}},
+				},
+			},
+			wantIDs: []string{"issues", "jira", "prs"},
+		},
+		{
+			name: "disabled external source skipped",
+			cfg: config.SourcesConfig{
+				External: []config.ExternalSourceConfig{
+					{ID: "jira", Enabled: boolPtr(false), Command: []string{"jira-source"}},
+				},
+			},
+			wantIDs: []string{"issues", "prs"},
+		},
+		{
+			name: "external id colliding with builtin is skipped, not fatal",
+			cfg: config.SourcesConfig{
+				External: []config.ExternalSourceConfig{
+					{ID: "issues", Command: []string{"my-issues"}},
+				},
+			},
+			wantIDs: []string{"issues", "prs"},
+		},
+		{
+			name: "external issues replaces builtin when builtin disabled",
+			cfg: config.SourcesConfig{
+				Issues: config.BuiltinSourceConfig{Enabled: boolPtr(false)},
+				External: []config.ExternalSourceConfig{
+					{ID: "issues", Command: []string{"my-issues"}},
+				},
+			},
+			wantIDs: []string{"issues", "prs"},
+		},
+		{
+			name: "invalid external entry (empty command) skipped without failing others",
+			cfg: config.SourcesConfig{
+				External: []config.ExternalSourceConfig{
+					{ID: "broken"},
+					{ID: "jira", Command: []string{"jira-source"}},
+				},
+			},
+			wantIDs: []string{"issues", "jira", "prs"},
+		},
 	}
 
 	for _, tt := range tests {
