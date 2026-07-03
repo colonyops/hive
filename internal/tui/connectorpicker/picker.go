@@ -604,8 +604,8 @@ func (p Picker) renderRow(item connectors.Item, selected bool, width int) string
 	}
 
 	if p.manifest.Picker.Layout == connectors.LayoutModeTable && len(p.manifest.Picker.Columns) > 0 {
-		line := cursor + renderConnectorTableRow(item, p.manifest.Picker.Columns, max(width-2, 1))
-		return lipgloss.NewStyle().MaxWidth(width).Render(rowStyle.Render(line))
+		line := cursor + renderConnectorTableRow(item, p.manifest.Picker.Columns, max(width-2, 1), selected)
+		return lipgloss.NewStyle().MaxWidth(width).Render(line)
 	}
 
 	title := rowStyle.Render(item.Title)
@@ -658,15 +658,50 @@ func resolveConnectorColumnWidths(columns []connectors.Column, total int) []int 
 // space. Cell content is truncated (never wrapped) so a long title cannot
 // turn one table row into several lines and break the picker's fixed-height
 // layout.
-func renderConnectorTableRow(item connectors.Item, columns []connectors.Column, width int) string {
+func renderConnectorTableRow(item connectors.Item, columns []connectors.Column, width int, selected bool) string {
 	widths := resolveConnectorColumnWidths(columns, width)
 	cells := make([]string, 0, len(columns))
 	for i, col := range columns {
 		w := max(widths[i], 1)
 		value := ansi.Truncate(connectorFieldString(item, col.Key), w, "…")
-		cells = append(cells, lipgloss.NewStyle().Width(w).MaxHeight(1).Render(value))
+		style := tableCellStyle(col.Key, value)
+		if selected {
+			// The highlighted row stays a uniform primary-bold bar so the
+			// cursor position is scannable; semantic colors show on the
+			// rest of the table.
+			style = styles.TextPrimaryBoldStyle
+		}
+		cells = append(cells, lipgloss.NewStyle().Width(w).MaxHeight(1).Render(style.Render(value)))
 	}
 	return strings.Join(cells, " ")
+}
+
+// tableCellStyle picks a semantic style for a table cell from its column
+// key and value. Identifier columns render in the primary accent, authors
+// muted, and well-known status vocabulary (shared by issues/PRs and usable
+// by external connectors emitting the same terms) gets state colors. This
+// is a presentation concern, so it lives here rather than in manifests.
+func tableCellStyle(key, value string) lipgloss.Style {
+	switch key {
+	case "number", "id", "index":
+		return styles.TextPrimaryStyle
+	case "author":
+		return styles.TextMutedStyle
+	}
+
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "approved", "open", "success", "passing":
+		return styles.TextSuccessStyle
+	case "changes requested", "closed", "failure", "failed":
+		return styles.TextErrorStyle
+	case "review required", "pending":
+		return styles.TextWarningStyle
+	case "draft":
+		return styles.TextMutedStyle
+	case "merged":
+		return styles.TextSecondaryStyle
+	}
+	return styles.TextForegroundStyle
 }
 
 // connectorFieldString resolves a column key against an item's well-known
