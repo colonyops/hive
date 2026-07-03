@@ -578,7 +578,7 @@ func TestConnectorTableRowColors(t *testing.T) {
 	}}
 
 	unselected := renderConnectorTableRow(item, columns, 60, false)
-	assert.Contains(t, unselected, styles.TextPrimaryStyle.Render("10"), "number cell must use the primary accent")
+	assert.Contains(t, unselected, styles.TextPrimaryStyle.Render("#10"), "number cell must render as #<n> in the primary accent")
 	assert.Contains(t, unselected, styles.TextSuccessStyle.Render("approved"), "approved must render in the success color")
 
 	selected := renderConnectorTableRow(item, columns, 60, true)
