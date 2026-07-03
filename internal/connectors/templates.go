@@ -2,9 +2,9 @@ package connectors
 
 import (
 	"fmt"
-	"regexp"
 	"strings"
 
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -66,6 +66,9 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 	if err != nil {
 		return RenderedSession{}, fmt.Errorf("prompt template: %w", err)
 	}
+	// Trim so templates that reference optional data (e.g. a trailing
+	// {{ .Detail }} that rendered empty) don't leave dangling blank lines.
+	prompt = strings.TrimSpace(prompt)
 
 	tags := make([]string, 0, len(cfg.Tags))
 	for i, tagTmpl := range cfg.Tags {
@@ -83,30 +86,18 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 	}, nil
 }
 
-var (
-	sessionNameNonAlnum        = regexp.MustCompile(`[^a-zA-Z0-9]+`)
-	sessionNameRepeatedHyphens = regexp.MustCompile(`-{2,}`)
-)
-
-// sanitizeSessionName rewrites a rendered session Name into kebab-case so it
-// passes hive's session name validation and remains predictable for issue
-// titles. Separators and punctuation, including ':', become hyphens; repeated
-// hyphens collapse. If nothing usable remains, it falls back to the item's ID.
+// sanitizeSessionName rewrites a rendered session Name into kebab-case (via
+// session.Slugify) so it passes hive's session name validation and remains
+// predictable for issue titles. If nothing usable remains, it falls back to
+// the item's ID.
 func sanitizeSessionName(name, fallbackID string) string {
-	if normalized := kebabSessionName(name); normalized != "" {
+	if normalized := session.Slugify(name); normalized != "" {
 		return normalized
 	}
-	if normalized := kebabSessionName(fallbackID); normalized != "" {
+	if normalized := session.Slugify(fallbackID); normalized != "" {
 		return "session-" + normalized
 	}
 	return "session-item"
-}
-
-func kebabSessionName(name string) string {
-	name = strings.ToLower(strings.TrimSpace(name))
-	name = sessionNameNonAlnum.ReplaceAllString(name, "-")
-	name = sessionNameRepeatedHyphens.ReplaceAllString(name, "-")
-	return strings.Trim(name, "-")
 }
 
 // detailText returns a plain-text representation of a Detail for use as the
