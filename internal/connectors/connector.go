@@ -42,6 +42,10 @@ type PickerManifest struct {
 	Layout  LayoutMode
 	Columns []Column
 	Search  SearchManifest
+	// HidePreview collapses the picker to a single full-width pane for
+	// connectors whose items have no useful detail body (e.g. a PR
+	// table). The zero value keeps the two-pane list+preview layout.
+	HidePreview bool
 }
 
 // LayoutMode selects between a single-column list and a multi-column table.

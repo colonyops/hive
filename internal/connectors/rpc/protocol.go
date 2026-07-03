@@ -92,9 +92,10 @@ type Capabilities struct {
 
 // Picker is the wire shape of connectors.PickerManifest.
 type Picker struct {
-	Layout  string   `json:"layout"`
-	Columns []Column `json:"columns,omitempty"`
-	Search  Search   `json:"search"`
+	Layout      string   `json:"layout"`
+	Columns     []Column `json:"columns,omitempty"`
+	Search      Search   `json:"search"`
+	HidePreview bool     `json:"hidePreview,omitempty"`
 }
 
 // Column is the wire shape of connectors.Column.

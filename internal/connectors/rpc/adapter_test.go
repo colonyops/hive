@@ -71,7 +71,8 @@ func TestSubprocessConnector_Initialize_HappyPath(t *testing.T) {
 					Columns: []Column{
 						{Key: "title", Label: "Title"},
 					},
-					Search: Search{Mode: "remote", DebounceMS: 100},
+					Search:      Search{Mode: "remote", DebounceMS: 100},
+					HidePreview: true,
 				},
 			}
 			raw, err := json.Marshal(manifest)
@@ -91,6 +92,7 @@ func TestSubprocessConnector_Initialize_HappyPath(t *testing.T) {
 	assert.Equal(t, "list", string(manifest.Picker.Layout))
 	assert.Equal(t, "remote", string(manifest.Picker.Search.Mode))
 	assert.Equal(t, 100, manifest.Picker.Search.DebounceMS)
+	assert.True(t, manifest.Picker.HidePreview, "hidePreview must survive the wire mapping")
 
 	require.Len(t, runner.calls, 1)
 	req := runner.calls[0].request

@@ -455,3 +455,84 @@ func TestConnectorPicker_InitShowsSearching(t *testing.T) {
 
 	assert.Contains(t, terminal.StripANSI(p.renderList(40)), "searching...")
 }
+
+// TestConnectorPicker_TableRowsNeverWrap is the regression test for table
+// rows with flex columns and long titles wrapping onto multiple lines and
+// destroying the fixed-height layout: each rendered row must be exactly
+// one line, and the row must span the pane width rather than the flex
+// column collapsing to its 12-column default.
+func TestConnectorPicker_TableRowsNeverWrap(t *testing.T) {
+	manifest := connectors.Manifest{
+		ID:          "fake-prs",
+		DisplayName: "Fake Pull Requests",
+		Picker: connectors.PickerManifest{
+			Layout:      connectors.LayoutModeTable,
+			HidePreview: true,
+			Columns: []connectors.Column{
+				{Key: "number", Label: "#", Width: 6},
+				{Key: "title", Label: "Title", Flex: 1},
+				{Key: "author", Label: "Author", Width: 14},
+			},
+			Search: connectors.SearchManifest{Mode: connectors.SearchModeLocal},
+		},
+	}
+	long := strings.Repeat("very long pull request title ", 10)
+	item := connectors.Item{ID: "1", Title: long, Fields: map[string]any{
+		"number": 1, "title": long, "author": "someone",
+	}}
+	fake := newFakeTUIConnector(manifest, []connectors.Item{item})
+	p := NewConnectorPicker(fake, manifest, "", 120, 40)
+	p = drainPicker(t, p, p.Init())
+
+	row := p.renderRow(item, true, p.listWidth)
+	assert.Equal(t, 1, lipgloss.Height(row), "table row must render as exactly one line")
+	assert.Greater(t, lipgloss.Width(row), p.listWidth/2, "flex column must expand into available width")
+	assert.LessOrEqual(t, lipgloss.Width(row), p.listWidth, "row must not exceed the pane width")
+}
+
+// TestResolveConnectorColumnWidths covers the flex-width math directly.
+func TestResolveConnectorColumnWidths(t *testing.T) {
+	cols := []connectors.Column{
+		{Key: "number", Width: 6},
+		{Key: "title", Flex: 1},
+		{Key: "author", Width: 14},
+	}
+	widths := resolveConnectorColumnWidths(cols, 100)
+	assert.Equal(t, 6, widths[0])
+	assert.Equal(t, 14, widths[2])
+	// total(100) - fixed(20) - separators(2) = 78 for the flex column.
+	assert.Equal(t, 78, widths[1])
+
+	// Column with neither Width nor Flex defaults to 12.
+	widths = resolveConnectorColumnWidths([]connectors.Column{{Key: "a"}, {Key: "b", Flex: 1}}, 40)
+	assert.Equal(t, 12, widths[0])
+	assert.Equal(t, 27, widths[1]) // 40 - 12 - 1 separator
+
+	// Flex columns never collapse below the floor on tiny panes.
+	widths = resolveConnectorColumnWidths(cols, 20)
+	assert.GreaterOrEqual(t, widths[1], connectorFlexColumnMinWidth)
+}
+
+// TestConnectorPicker_HidePreviewSinglePane verifies the single-pane mode:
+// the list gets the full content width, no divider or detail viewport is
+// rendered, and the view still fits the terminal.
+func TestConnectorPicker_HidePreviewSinglePane(t *testing.T) {
+	manifest := listManifest()
+	manifest.Capabilities.FetchDetail = false
+	manifest.Picker.HidePreview = true
+
+	items := []connectors.Item{{ID: "1", Title: "alpha"}}
+	fake := newFakeTUIConnector(manifest, items)
+	p := NewConnectorPicker(fake, manifest, "", 100, 30)
+	p = drainPicker(t, p, p.Init())
+
+	assert.Equal(t, 0, p.detailWidth, "no detail pane in single-pane mode")
+	view := terminal.StripANSI(p.View())
+	for _, line := range strings.Split(view, "\n") {
+		// The modal border contributes two "│" per line; a pane divider
+		// would add a third.
+		assert.LessOrEqual(t, strings.Count(line, "│"), 2, "no divider in single-pane mode: %q", line)
+	}
+	assert.NotContains(t, view, "ctrl+u/d", "help must not advertise detail scrolling")
+	assert.LessOrEqual(t, lipgloss.Height(p.View()), 30, "single-pane view must fit the terminal")
+}
