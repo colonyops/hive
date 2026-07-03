@@ -6,7 +6,9 @@ import (
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
 	lipgloss "charm.land/lipgloss/v2"
+
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // FinalizationModal collects an optional general note before saving the review
@@ -70,7 +72,10 @@ func (m FinalizationModal) View() string {
 	content.WriteString(styles.TextMutedStyle.Render("General Notes") + "\n")
 	content.WriteString(m.generalNote.View())
 	content.WriteString("\n\n")
-	content.WriteString(styles.TextMutedStyle.Render("ctrl+s: save & copy to clipboard  •  esc: cancel"))
+	content.WriteString(components.KeyHints(
+		components.HelpEntry{Key: "ctrl+s", Desc: "save & copy to clipboard"},
+		components.HelpEntry{Key: "esc", Desc: "cancel"},
+	))
 
 	return styles.ReviewFinalizeModalStyle.Width(contentWidth).Render(content.String())
 }

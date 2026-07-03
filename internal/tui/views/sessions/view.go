@@ -920,7 +920,12 @@ func (v *View) View() string {
 
 	// Common footer: rule + help bar
 	bar := components.StatusBar{Width: v.width}
-	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "enter select" + components.HelpSep + components.HelpHelp)
+	help := components.KeyHints(
+		components.HintNav,
+		components.HintFilter,
+		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HintHelp,
+	)
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
 }

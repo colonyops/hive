@@ -7,6 +7,7 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // RepoPicker is a simple modal for selecting a repository scope.
@@ -140,7 +141,11 @@ func (p *RepoPicker) View() string {
 	}
 
 	listView := strings.Join(lines, "\n")
-	help := styles.ModalHelpStyle.Render("↑/↓ navigate  enter select  esc/q cancel")
+	help := styles.ModalHelpStyle.Render(components.KeyHints(
+		components.HelpEntry{Key: "↑/↓", Desc: "navigate"},
+		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HelpEntry{Key: "esc/q", Desc: "cancel"},
+	))
 
 	content := lipgloss.JoinVertical(
 		lipgloss.Left,

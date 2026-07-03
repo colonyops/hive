@@ -225,7 +225,11 @@ func (v *KVView) View() string {
 
 	// Rule + help bar
 	bar := components.StatusBar{Width: v.width}
-	help := styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + components.HelpFilter + components.HelpSep + "shift+j/k scroll preview")
+	help := components.KeyHints(
+		components.HintNav,
+		components.HintFilter,
+		components.HelpEntry{Key: "shift+j/k", Desc: "scroll preview"},
+	)
 
 	return content + "\n" + bar.Rule() + "\n" + bar.Render(help, "")
 }

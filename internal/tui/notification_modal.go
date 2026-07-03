@@ -11,6 +11,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 const (
@@ -136,7 +137,11 @@ func (m *NotificationModal) Overlay(background string, width, height int) string
 		styles.ModalTitleStyle.Render("Notifications"+scrollInfo),
 		divider,
 		m.viewport.View(),
-		styles.ModalHelpStyle.Render("[j/k] scroll  [D] clear all  [esc] close"),
+		styles.ModalHelpStyle.Render(components.KeyHints(
+			components.HelpEntry{Key: "j/k", Desc: "scroll"},
+			components.HelpEntry{Key: "D", Desc: "clear all"},
+			components.HelpEntry{Key: "esc", Desc: "close"},
+		)),
 	)
 
 	modal := styles.ModalStyle.

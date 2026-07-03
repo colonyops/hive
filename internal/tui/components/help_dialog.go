@@ -106,9 +106,12 @@ func (d *HelpDialog) Overlay(background string, width, height int) string {
 
 	divider := styles.TextSurfaceStyle.Render(strings.Repeat("─", max(modalWidth-6, 1)))
 
-	helpText := "esc/? close"
+	helpText := KeyHints(HelpEntry{Key: "esc/?", Desc: "close"})
 	if d.viewport.TotalLineCount() > d.viewport.VisibleLineCount() {
-		helpText = "[j/k] scroll  esc/? close"
+		helpText = KeyHints(
+			HelpEntry{Key: "j/k", Desc: "scroll"},
+			HelpEntry{Key: "esc/?", Desc: "close"},
+		)
 	}
 
 	modalContent := lipgloss.JoinVertical(

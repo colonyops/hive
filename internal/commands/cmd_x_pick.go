@@ -20,6 +20,7 @@ import (
 	"github.com/colonyops/hive/internal/core/terminal"
 	terminaltmux "github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/core/tmux"
+	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/pkg/iojson"
 	"github.com/urfave/cli/v3"
 )
@@ -396,7 +397,12 @@ func (m pickModel) View() tea.View {
 
 	// Help line
 	b.WriteString("\n")
-	b.WriteString(styles.TextMutedStyle.Render("  ↑↓ navigate · tab filter · enter select · esc cancel"))
+	b.WriteString("  " + components.KeyHints(
+		components.HelpEntry{Key: "↑↓", Desc: "navigate"},
+		components.HelpEntry{Key: "tab", Desc: "filter"},
+		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HelpEntry{Key: "esc", Desc: "cancel"},
+	))
 
 	v := tea.NewView(b.String())
 	v.AltScreen = true

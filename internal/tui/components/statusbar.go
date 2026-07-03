@@ -8,13 +8,15 @@ import (
 	"github.com/colonyops/hive/internal/core/styles"
 )
 
-// Common help hint fragments for StatusBar footers. Combine with HelpSep to
-// build context-specific help lines while keeping wording consistent.
-const (
-	HelpNav    = "j/k navigate"
-	HelpFilter = "/ filter"
-	HelpHelp   = "? help"
-	HelpSep    = " • "
+// HelpSep separates individual shortcut hints in a footer bar.
+const HelpSep = " • "
+
+// Common shortcut hints for StatusBar footers. Combine with KeyHints to build
+// context-specific help lines while keeping wording consistent.
+var (
+	HintNav    = HelpEntry{Key: "j/k", Desc: "navigate"}
+	HintFilter = HelpEntry{Key: "/", Desc: "filter"}
+	HintHelp   = HelpEntry{Key: "?", Desc: "help"}
 )
 
 // StatusBar renders full-width bar lines. Callers pre-style their own text;
@@ -51,5 +53,5 @@ func (s StatusBar) Rule() string {
 	if s.Width <= 0 {
 		return ""
 	}
-	return styles.TextMutedStyle.Render(strings.Repeat("─", s.Width))
+	return styles.TextSurfaceStyle.Render(strings.Repeat("─", s.Width))
 }

@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+
+	"github.com/colonyops/hive/internal/core/terminal"
 )
 
 func TestOutputModal_NewOutputModal(t *testing.T) {
@@ -83,7 +85,7 @@ func TestOutputModal_Overlay(t *testing.T) {
 		assert.Contains(t, result, "Running Task")
 		assert.Contains(t, result, "output line")
 		assert.Contains(t, result, "● Running")
-		assert.Contains(t, result, "[esc] cancel")
+		assert.Contains(t, terminal.StripANSI(result), "esc cancel")
 	})
 
 	t.Run("renders complete state", func(t *testing.T) {
@@ -93,7 +95,7 @@ func TestOutputModal_Overlay(t *testing.T) {
 		result := m.Overlay("background", 80, 24)
 
 		assert.Contains(t, result, "Complete")
-		assert.Contains(t, result, "[enter/esc] close")
+		assert.Contains(t, terminal.StripANSI(result), "enter/esc close")
 	})
 
 	t.Run("renders error state", func(t *testing.T) {

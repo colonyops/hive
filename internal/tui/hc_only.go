@@ -345,7 +345,7 @@ func (m HoneycombOnlyModel) renderHeader() string {
 	if w <= 0 {
 		w = 80
 	}
-	rule := styles.TextMutedStyle.Render(strings.Repeat("─", w))
+	rule := styles.TextSurfaceStyle.Render(strings.Repeat("─", w))
 
 	tab := styles.ViewSelectedStyle.Render("Tasks")
 	branding := styles.TabBrandingStyle.Render(styles.IconHive + " Honeycomb")

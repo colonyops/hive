@@ -252,9 +252,17 @@ func (v *View) View() string {
 		if v.viewport.TotalLineCount() > v.viewport.VisibleLineCount() {
 			scrollInfo = fmt.Sprintf(" (%.0f%%)", v.viewport.ScrollPercent()*100)
 		}
-		help = styles.TextMutedStyle.Render(fmt.Sprintf("j/k scroll%s"+components.HelpSep+"h/esc back to tree", scrollInfo))
+		help = components.KeyHints(
+			components.HelpEntry{Key: "j/k", Desc: "scroll" + scrollInfo},
+			components.HelpEntry{Key: "h/esc", Desc: "back to tree"},
+		)
 	} else {
-		help = styles.TextMutedStyle.Render(components.HelpNav + components.HelpSep + "space expand" + components.HelpSep + "enter detail" + components.HelpSep + components.HelpHelp)
+		help = components.KeyHints(
+			components.HintNav,
+			components.HelpEntry{Key: "space", Desc: "expand"},
+			components.HelpEntry{Key: "enter", Desc: "detail"},
+			components.HintHelp,
+		)
 	}
 
 	return body + "\n" + bar.Rule() + "\n" + bar.Render(help, "")

@@ -65,7 +65,7 @@ func (m Model) renderTabView() string {
 		tabs = append(tabs, renderTab("Store", ViewStore))
 	}
 
-	tabsLeft := strings.Join(tabs, " | ")
+	tabsLeft := strings.Join(tabs, styles.TextSurfaceStyle.Render(" | "))
 
 	// Add filter indicator if active
 	if statusFilter := m.sessionsView.StatusFilter(); statusFilter != "" {
@@ -122,8 +122,8 @@ func (m Model) renderTabView() string {
 	if dividerWidth < 1 {
 		dividerWidth = 80 // default width before WindowSizeMsg
 	}
-	topDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
-	headerDivider := styles.TextMutedStyle.Render(strings.Repeat("─", dividerWidth))
+	topDivider := styles.TextSurfaceStyle.Render(strings.Repeat("─", dividerWidth))
+	headerDivider := styles.TextSurfaceStyle.Render(strings.Repeat("─", dividerWidth))
 
 	// Calculate content height: total - top divider (1) - header (1) - bottom divider (1)
 	contentHeight := max(m.height-3, 1)

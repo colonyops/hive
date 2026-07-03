@@ -1011,7 +1011,10 @@ func (m Model) showHiveInfo() (tea.Model, tea.Cmd) {
 		},
 	}
 
-	m.modals.ShowInfo("Hive Info", sections, "", "[j/k] scroll  [esc] close")
+	m.modals.ShowInfo("Hive Info", sections, "", components.KeyHints(
+		components.HelpEntry{Key: "j/k", Desc: "scroll"},
+		components.HelpEntry{Key: "esc", Desc: "close"},
+	))
 	m.state = stateShowingInfo
 	return m, nil
 }
@@ -1033,7 +1036,10 @@ func (m Model) showHiveDoctor() (tea.Model, tea.Cmd) {
 
 func (m Model) handleDoctorResults(msg doctorResultsMsg) (tea.Model, tea.Cmd) {
 	sections, footer := buildDoctorDialogContent(msg.results)
-	m.modals.ShowInfo("Hive Doctor", sections, footer, "[j/k] scroll  [esc] close")
+	m.modals.ShowInfo("Hive Doctor", sections, footer, components.KeyHints(
+		components.HelpEntry{Key: "j/k", Desc: "scroll"},
+		components.HelpEntry{Key: "esc", Desc: "close"},
+	))
 	m.state = stateShowingInfo
 	return m, nil
 }

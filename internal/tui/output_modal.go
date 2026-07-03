@@ -6,6 +6,7 @@ import (
 	"charm.land/bubbles/v2/spinner"
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // Output modal layout constants.
@@ -153,9 +154,12 @@ func (m OutputModal) Overlay(background string, width, height int) string {
 	// Build help line
 	var help string
 	if m.running {
-		help = "[b] background • [esc] cancel"
+		help = components.KeyHints(
+			components.HelpEntry{Key: "b", Desc: "background"},
+			components.HelpEntry{Key: "esc", Desc: "cancel"},
+		)
 	} else {
-		help = "[enter/esc] close"
+		help = components.KeyHints(components.HelpEntry{Key: "enter/esc", Desc: "close"})
 	}
 
 	// Assemble modal content

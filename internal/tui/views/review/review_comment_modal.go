@@ -6,7 +6,9 @@ import (
 
 	"charm.land/bubbles/v2/textarea"
 	tea "charm.land/bubbletea/v2"
+
 	"github.com/colonyops/hive/internal/core/styles"
+	"github.com/colonyops/hive/internal/tui/components"
 )
 
 // CommentModal handles multiline comment entry for selected text.
@@ -107,7 +109,10 @@ func (m CommentModal) View() string {
 		styles.ReviewCommentLabelStyle.Render(m.lineRange),
 		styles.ReviewCommentContextStyle.Render(m.contextPreview),
 		m.textArea.View(),
-		styles.ReviewCommentHelpStyle.Render("ctrl+s: submit • esc: cancel"),
+		styles.ReviewCommentHelpStyle.Render(components.KeyHints(
+			components.HelpEntry{Key: "ctrl+s", Desc: "submit"},
+			components.HelpEntry{Key: "esc", Desc: "cancel"},
+		)),
 	}, "\n")
 
 	return content

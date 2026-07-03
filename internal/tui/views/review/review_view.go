@@ -1084,9 +1084,18 @@ func (v View) View() string {
 		case v.searchMode:
 			helpLeft = badge + "  " + styles.TextMutedStyle.Render("/") + v.searchInput.View()
 		case v.selectionMode:
-			helpLeft = badge + "  " + styles.TextMutedStyle.Render("c:comment"+components.HelpSep+"v/esc:exit visual")
+			helpLeft = badge + "  " + components.KeyHints(
+				components.HelpEntry{Key: "c", Desc: "comment"},
+				components.HelpEntry{Key: "v/esc", Desc: "exit visual"},
+			)
 		default:
-			helpLeft = badge + "  " + styles.TextMutedStyle.Render("j/k scroll"+components.HelpSep+"n/N comments"+components.HelpSep+"f: copy"+components.HelpSep+"esc back"+components.HelpSep+"? help")
+			helpLeft = badge + "  " + components.KeyHints(
+				components.HelpEntry{Key: "j/k", Desc: "scroll"},
+				components.HelpEntry{Key: "n/N", Desc: "comments"},
+				components.HelpEntry{Key: "f", Desc: "copy"},
+				components.HelpEntry{Key: "esc", Desc: "back"},
+				components.HintHelp,
+			)
 		}
 		if v.selectedDoc != nil {
 			if v.searchQuery != "" && len(v.searchMatches) > 0 {
@@ -1097,7 +1106,13 @@ func (v View) View() string {
 			}
 		}
 	default:
-		helpLeft = styles.TextMutedStyle.Render("j/k navigate" + components.HelpSep + "space expand" + components.HelpSep + "enter focus" + components.HelpSep + "/ search" + components.HelpSep + "? help")
+		helpLeft = components.KeyHints(
+			components.HelpEntry{Key: "j/k", Desc: "navigate"},
+			components.HelpEntry{Key: "space", Desc: "expand"},
+			components.HelpEntry{Key: "enter", Desc: "focus"},
+			components.HelpEntry{Key: "/", Desc: "search"},
+			components.HintHelp,
+		)
 	}
 
 	baseView := body + "\n" + bar.Rule() + "\n" + bar.Render(helpLeft, helpRight)
