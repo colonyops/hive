@@ -113,7 +113,7 @@ var defaultViewsConfig = ViewsConfig{
 			"K":      {Cmd: "PrevActive"},
 			"t":      {Cmd: "TodoPanel"},
 			"T":      {Cmd: "ViewTasks"},
-			"i":      {Cmd: "OpenConnector"},
+			"i":      {Cmd: "ConnectorIssues"},
 		},
 	},
 	Tasks: TasksViewConfig{

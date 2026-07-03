@@ -163,12 +163,12 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		return m.viewTasksForSelectedSession()
 	}
 	if action.Type == act.TypeOpenConnectorPicker {
-		connectorID, ok := m.resolveConnectorID(nil)
+		connectorID, ok := m.resolveConnectorID(action.Args)
 		if !ok {
 			m.notifyErrorf("multiple connectors configured: use :OpenConnector <id>")
 			return m, nil
 		}
-		return m.openConnectorPicker(connectorID, m.connectorPickerScopeForSelection(m.selectedSession(), nil))
+		return m.openConnectorPicker(connectorID, m.connectorPickerScopeForSelection(m.selectedSession(), action.Args))
 	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter

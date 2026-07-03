@@ -49,7 +49,11 @@ type SpawnWindowsPayload struct {
 
 // Action represents a resolved keybinding or command action ready for execution.
 type Action struct {
-	Type          Type
+	Type Type
+	// Args carries the command's preset args (config.UserCommand.Args) for
+	// built-in actions that accept arguments (e.g. OpenConnectorPicker's
+	// connector id/scope).
+	Args          []string
 	Key           string
 	Help          string
 	Confirm       string               // Non-empty if confirmation required
