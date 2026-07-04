@@ -647,3 +647,129 @@ func TestPicker_ScopeShownInTabBar(t *testing.T) {
 	bar := terminal.StripANSI(p.renderTabBar())
 	assert.Contains(t, bar, "myorg/myrepo")
 }
+
+// cardManifest is the two-line card layout used by the issues/PRs sources:
+// title on line one, a status strip (ci · review · author · labels) beneath.
+func cardManifest() sources.Manifest {
+	return sources.Manifest{
+		ID:          "fake-card",
+		DisplayName: "Fake Card Source",
+		Picker: sources.PickerManifest{
+			Layout:      sources.LayoutModeCard,
+			HidePreview: true,
+			Columns: []sources.Column{
+				{Key: "number", Label: "#", Width: 6},
+				{Key: "title", Label: "Title", Flex: 1},
+				{Key: "ci", Label: "CI", Width: 10},
+				{Key: "review", Label: "Review", Width: 18},
+				{Key: "author", Label: "Author", Width: 14},
+			},
+			Search: sources.SearchManifest{Mode: sources.SearchModeLocal},
+		},
+	}
+}
+
+func cardItems(n int) []sources.Item {
+	items := make([]sources.Item, n)
+	for i := range items {
+		items[i] = sources.Item{
+			ID:    fmt.Sprintf("%d", i+1),
+			Title: fmt.Sprintf("card item number %d with enough words to fill a line", i+1),
+			Fields: map[string]any{
+				"number": i + 1, "author": "octocat", "review": "approved", "ci": "passing",
+				"age": "3d", "linked_issue": 1, "assignee": "octocat", "assignee_count": 1,
+			},
+		}
+	}
+	return items
+}
+
+func TestPicker_CardRowIsTwoLines(t *testing.T) {
+	manifest := cardManifest()
+	item := sources.Item{ID: "1", Title: strings.Repeat("long title ", 20), Fields: map[string]any{
+		"number": 1, "author": "octocat", "review": "changes requested", "ci": "failing",
+		"labels": []string{"a", "b", "c"},
+	}}
+	tab := &tabState{tab: TabSource{ID: manifest.ID, Manifest: manifest}}
+
+	p := newTestPicker(newFakeTUISource(manifest, []sources.Item{item}), manifest, "", 120, 40)
+	p = drainPicker(t, p, p.Init())
+
+	numWidth := numberColumnWidth([]sources.Item{item})
+	for _, selected := range []bool{true, false} {
+		row := p.renderRow(item, selected, tab, numWidth)
+		assert.Equal(t, rowsPerItemCard, lipgloss.Height(row),
+			"card row must render as exactly two lines (selected=%v)", selected)
+	}
+}
+
+func TestRenderCardContent_PlainIsANSIFree(t *testing.T) {
+	manifest := cardManifest()
+	p := newTestPicker(newFakeTUISource(manifest, nil), manifest, "test-repo", 90, 24)
+	item := sources.Item{ID: "1", Title: "First reference item", Fields: map[string]any{
+		"number": 1278, "author": "alice", "review": "approved", "ci": "passing",
+		"labels": []string{"api", "public"}, "age": "3d", "linked_issue": 2,
+		"assignee": "bob", "assignee_count": 2,
+	}}
+
+	plain := p.renderCardContent(item, false, 60, 5)
+	styled := p.renderCardContent(item, true, 60, 5)
+
+	assert.Equal(t, plain, terminal.StripANSI(plain), "plain card row must be ANSI-free")
+	assert.Equal(t, plain, terminal.StripANSI(styled), "styled and plain must match once ANSI is stripped")
+}
+
+func TestPicker_CardLayoutFitsTerminal(t *testing.T) {
+	sizes := []struct{ width, height int }{
+		{80, 24}, {90, 24}, {100, 30}, {120, 38}, {120, 50}, {200, 60},
+	}
+	manifest := cardManifest()
+	items := cardItems(40)
+	for _, size := range sizes {
+		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
+			p := newTestPicker(newFakeTUISource(manifest, items), manifest, "", size.width, size.height)
+			p = drainPicker(t, p, p.Init())
+
+			assert.LessOrEqual(t, lipgloss.Height(p.View()), size.height, "card picker must fit the terminal height")
+			assert.LessOrEqual(t, lipgloss.Width(p.View()), size.width, "card picker must fit the terminal width")
+		})
+	}
+}
+
+func TestPicker_WideTerminalCapsModalWidth(t *testing.T) {
+	manifest := cardManifest()
+	p := newTestPicker(newFakeTUISource(manifest, cardItems(3)), manifest, "", 240, 60)
+	p = drainPicker(t, p, p.Init())
+
+	assert.Equal(t, sourcePickerMaxModalWidth, p.modalWidth,
+		"on a very wide terminal the modal caps at the max width instead of ~92%")
+}
+
+func TestPicker_CardScrollFollowsCursorByItem(t *testing.T) {
+	manifest := cardManifest()
+	items := cardItems(12)
+	// Small height keeps the item capacity below the item count so
+	// navigating to the end must scroll the two-line rows.
+	p := newTestPicker(newFakeTUISource(manifest, items), manifest, "", 100, 18)
+	p = drainPicker(t, p, p.Init())
+
+	tab := activeTab(p)
+	require.Len(t, tab.filteredItems, len(items))
+	require.Equal(t, rowsPerItemCard, p.rowsPerItem(tab))
+
+	capacity := p.itemCapacity(tab)
+	require.Positive(t, capacity)
+	require.Less(t, capacity, len(items), "test needs more items than fit to force scrolling")
+
+	for range len(items) - 1 {
+		p = p.moveCursor(1)
+	}
+
+	tab = activeTab(p)
+	assert.Equal(t, len(items)-1, tab.cursor, "cursor reaches the last item")
+	assert.GreaterOrEqual(t, tab.cursor, tab.scrollOffset, "cursor stays at or below the top of the window")
+	assert.Less(t, tab.cursor, tab.scrollOffset+capacity, "cursor stays within the visible window")
+	assert.LessOrEqual(t, tab.scrollOffset, len(items)-capacity, "window never scrolls past the last page")
+	assert.LessOrEqual(t, lipgloss.Height(p.renderList(tab)), p.listHeight(),
+		"two-line rows must not overflow the fixed body height")
+}

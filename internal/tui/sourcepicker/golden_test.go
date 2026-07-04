@@ -102,3 +102,38 @@ func TestPickerGolden_HidePreviewTable(t *testing.T) {
 	p := goldenPicker(t, manifest, items)
 	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
 }
+
+func TestPickerGolden_CardLayout(t *testing.T) {
+	manifest := sources.Manifest{
+		ID:          "fake-prs-card",
+		DisplayName: "Fake Pull Requests",
+		Picker: sources.PickerManifest{
+			Layout:      sources.LayoutModeCard,
+			HidePreview: true,
+			Columns: []sources.Column{
+				{Key: "number", Label: "#", Width: 6},
+				{Key: "title", Label: "Title", Flex: 1},
+				{Key: "ci", Label: "CI", Width: 10},
+				{Key: "review", Label: "Review", Width: 18},
+				{Key: "author", Label: "Author", Width: 14},
+			},
+			Search: sources.SearchManifest{Mode: sources.SearchModeLocal},
+		},
+	}
+	items := []sources.Item{
+		{ID: "366", Title: "feat: connectors vertical slice with a title long enough to truncate on line one", Fields: map[string]any{
+			"number": 366, "author": "hay-kot", "review": "draft", "ci": "pending", "labels": []string{"tui", "sources"},
+			"age": "3w", "linked_issue": 342, "linked_issue_count": 1, "assignee": "hay-kot", "assignee_count": 1,
+		}},
+		{ID: "359", Title: "fix: stop KV filter from swallowing keys on other views", Fields: map[string]any{
+			"number": 359, "author": "hay-kot", "review": "approved", "ci": "passing", "labels": []string{"bug"},
+			"age": "5d",
+		}},
+		{ID: "351", Title: "refactor: source registry ordering", Fields: map[string]any{
+			"number": 351, "author": "contributor", "review": "changes requested", "ci": "failing",
+			"age": "2d", "assignee": "alice", "assignee_count": 3,
+		}},
+	}
+	p := goldenPicker(t, manifest, items)
+	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
+}
