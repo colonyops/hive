@@ -213,9 +213,6 @@ func (c *Source) FetchDetail(ctx context.Context, params sources.FetchDetailPara
 	if err != nil {
 		return sources.Detail{}, fmt.Errorf("%s source: decode gh output: %w", c.cfg.ID, err)
 	}
-	if !detail.Valid() {
-		return sources.Detail{}, fmt.Errorf("%s source: detail has both markdown and kv variants set", c.cfg.ID)
-	}
 	return detail, nil
 }
 

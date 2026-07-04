@@ -118,65 +118,17 @@ type Item struct {
 	Subtitle string
 	// URI is a stable identifier echoed back on FetchDetail; optional.
 	URI    string
-	Detail Detail
 	Fields map[string]any
 }
 
-// Detail is a discriminated union: at most one of Markdown or KV is
-// non-nil. Kind reports which (or DetailKindNone when the item has no
-// detail — e.g. an alert with only labels), so the picker renders a
-// placeholder rather than a blank or panicking pane. Valid rejects the
-// both-set state.
+// Detail is an item's optional detail body, fetched via Source.FetchDetail.
+// A nil Markdown means the item has no detail (a PR row, or a fetch that
+// failed), so consumers render an empty body rather than panicking.
 type Detail struct {
 	Markdown *MarkdownDetail
-	KV       *KVDetail
-}
-
-// DetailKind identifies which variant, if any, a Detail holds.
-type DetailKind string
-
-// Detail kinds.
-const (
-	DetailKindNone     DetailKind = "none"
-	DetailKindMarkdown DetailKind = "markdown"
-	DetailKindKV       DetailKind = "kv"
-)
-
-// Kind reports which detail variant is populated.
-func (d Detail) Kind() DetailKind {
-	switch {
-	case d.Markdown != nil:
-		return DetailKindMarkdown
-	case d.KV != nil:
-		return DetailKindKV
-	default:
-		return DetailKindNone
-	}
-}
-
-// Valid reports whether the Detail has at most one variant populated.
-func (d Detail) Valid() bool {
-	return d.Markdown == nil || d.KV == nil
 }
 
 // MarkdownDetail renders as markdown via the shared glamour renderer.
 type MarkdownDetail struct {
 	Content string
-}
-
-// KVDetail renders as a generic key/value metadata sheet.
-type KVDetail struct {
-	Sections []KVSection
-}
-
-// KVSection groups related key/value pairs under a heading.
-type KVSection struct {
-	Heading string
-	Pairs   []KVPair
-}
-
-// KVPair is a single key/value row within a KVSection.
-type KVPair struct {
-	Key   string
-	Value string
 }

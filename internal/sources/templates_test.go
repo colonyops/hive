@@ -152,50 +152,6 @@ func TestRenderSessionTemplates(t *testing.T) {
 	}
 }
 
-func TestDetail_KindAndValid(t *testing.T) {
-	tests := []struct {
-		name      string
-		detail    sources.Detail
-		wantKind  sources.DetailKind
-		wantValid bool
-	}{
-		{
-			name:      "none",
-			detail:    sources.Detail{},
-			wantKind:  sources.DetailKindNone,
-			wantValid: true,
-		},
-		{
-			name:      "markdown",
-			detail:    sources.Detail{Markdown: &sources.MarkdownDetail{Content: "x"}},
-			wantKind:  sources.DetailKindMarkdown,
-			wantValid: true,
-		},
-		{
-			name:      "kv",
-			detail:    sources.Detail{KV: &sources.KVDetail{}},
-			wantKind:  sources.DetailKindKV,
-			wantValid: true,
-		},
-		{
-			name: "both set is invalid",
-			detail: sources.Detail{
-				Markdown: &sources.MarkdownDetail{Content: "x"},
-				KV:       &sources.KVDetail{},
-			},
-			wantKind:  sources.DetailKindMarkdown,
-			wantValid: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.wantKind, tt.detail.Kind())
-			assert.Equal(t, tt.wantValid, tt.detail.Valid())
-		})
-	}
-}
-
 // Interface compliance of the test double is guaranteed at compile time by
 // the `var _ sources.Source = (*fakeSource)(nil)` assertion above;
 // no runtime test is needed.

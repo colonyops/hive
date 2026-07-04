@@ -86,24 +86,16 @@ func TestFetchSourceDetail(t *testing.T) {
 		assert.Equal(t, body, got)
 	})
 
-	t.Run("existing item detail short-circuits", func(t *testing.T) {
-		inline := sources.Detail{Markdown: &sources.MarkdownDetail{Content: "inline"}}
-		result := sourcepickerResult(stubSource{id: "issues", detail: body}, capable)
-		result.Item.Detail = inline
-		got := fetchSourceDetail(ctx, result, "o/r")
-		assert.Equal(t, inline, got)
-	})
-
 	t.Run("no capability skips fetch", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "prs", detail: body}, sources.Manifest{})
 		got := fetchSourceDetail(ctx, result, "o/r")
-		assert.Equal(t, sources.DetailKindNone, got.Kind())
+		assert.Equal(t, sources.Detail{}, got)
 	})
 
 	t.Run("fetch failure degrades to empty detail", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "issues", detailErr: assert.AnError}, capable)
 		got := fetchSourceDetail(ctx, result, "o/r")
-		assert.Equal(t, sources.DetailKindNone, got.Kind(), "detail errors must not block session creation")
+		assert.Equal(t, sources.Detail{}, got, "detail errors must not block session creation")
 	})
 }
 

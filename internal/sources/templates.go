@@ -101,9 +101,8 @@ func sanitizeSessionName(name, fallbackID string) string {
 }
 
 // detailText returns a plain-text representation of a Detail for use as the
-// .Detail template field. Markdown content is used verbatim; KV details are
-// not rendered (they have no single plain-text form), and DetailKindNone
-// yields an empty string.
+// .Detail template field: the markdown content verbatim, or an empty string
+// when the item has no detail.
 func detailText(detail Detail) string {
 	if detail.Markdown != nil {
 		return detail.Markdown.Content
