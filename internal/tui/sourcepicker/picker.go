@@ -687,7 +687,7 @@ func (p Picker) renderList(tab *tabState) string {
 		}
 		item := tab.filteredItems[idx]
 		selected := idx == tab.cursor
-		line := p.renderRow(item, selected, tab)
+		line := p.renderRow(item, selected, tab, numberColumnWidth(tab.filteredItems))
 		lines = append(lines, line)
 	}
 
@@ -706,7 +706,7 @@ func (p Picker) renderList(tab *tabState) string {
 // only the trailing padding is highlighted. Do not "restore" per-cell
 // styling on selected rows unless every cell and every padding space
 // carries the highlight background itself.
-func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState) string {
+func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState, numWidth int) string {
 	width := p.innerWidth
 	innerWidth := max(width-2, 10) // account for the left border+space / padding
 
@@ -714,9 +714,22 @@ func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState) strin
 	if tab.tab.Manifest.Picker.Layout == sources.LayoutModeTable && len(tab.tab.Manifest.Picker.Columns) > 0 {
 		content = renderSourceTableRow(item, tab.tab.Manifest.Picker.Columns, innerWidth, !selected)
 	} else {
-		content = p.renderSingleLineContent(item, !selected, innerWidth)
+		content = p.renderSingleLineContent(item, !selected, innerWidth, numWidth)
 	}
 	return p.applyRowStyle(content, selected, width)
+}
+
+// numberColumnWidth returns the display width of the widest "#<number>"
+// among items, so list-layout rows can pad numbers to a common column and
+// keep titles vertically aligned.
+func numberColumnWidth(items []sources.Item) int {
+	widest := 0
+	for i := range items {
+		if number := sourceFieldString(items[i], "number"); number != "" {
+			widest = max(widest, len(number)+1)
+		}
+	}
+	return widest
 }
 
 // applyRowStyle wraps content with selected/normal styling: selected rows
@@ -748,8 +761,9 @@ func (p Picker) applyRowStyle(content string, selected bool, width int) string {
 
 // renderSingleLineContent composes a list-layout row. When styled is
 // false the result contains no ANSI sequences (used for selected rows —
-// see renderRow).
-func (p Picker) renderSingleLineContent(item sources.Item, styled bool, innerWidth int) string {
+// see renderRow). numWidth is the shared "#<number>" column width; zero
+// disables padding.
+func (p Picker) renderSingleLineContent(item sources.Item, styled bool, innerWidth, numWidth int) string {
 	var parts []string
 
 	// CI status icon if present.
@@ -757,9 +771,12 @@ func (p Picker) renderSingleLineContent(item sources.Item, styled bool, innerWid
 		parts = append(parts, statusIcon(ciStatus))
 	}
 
-	// Number.
+	// Number, padded to the shared column width so titles align.
 	if number := sourceFieldString(item, "number"); number != "" {
 		num := "#" + number
+		if pad := numWidth - len(num); pad > 0 {
+			num += strings.Repeat(" ", pad)
+		}
 		if styled {
 			num = styles.TextMutedStyle.Render(num)
 		}
@@ -914,7 +931,9 @@ func statusIcon(value string) string {
 func tableCellStyle(key, value string) lipgloss.Style {
 	switch key {
 	case "number", "id", "index":
-		return styles.TextPrimaryStyle
+		// Match the list layout (issues): numbers are muted so titles
+		// carry the visual weight.
+		return styles.TextMutedStyle
 	case "author":
 		return styles.TextMutedStyle
 	}

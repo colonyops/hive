@@ -443,7 +443,7 @@ func TestPicker_TableRowsNeverWrap(t *testing.T) {
 	p := newTestPicker(fake, manifest, "", 120, 40)
 	p = drainPicker(t, p, p.Init())
 
-	row := p.renderRow(item, true, tab)
+	row := p.renderRow(item, true, tab, 0)
 	assert.Equal(t, 1, lipgloss.Height(row), "table row must render as exactly one line")
 }
 
@@ -473,8 +473,8 @@ func TestTableCellStyle(t *testing.T) {
 		value string
 		want  lipgloss.Style
 	}{
-		{"number column is primary", "number", "1315", styles.TextPrimaryStyle},
-		{"id column is primary", "id", "42", styles.TextPrimaryStyle},
+		{"number column is muted", "number", "1315", styles.TextMutedStyle},
+		{"id column is muted", "id", "42", styles.TextMutedStyle},
 		{"author column is muted", "author", "alice", styles.TextMutedStyle},
 		{"approved is success", "review", "approved", styles.TextSuccessStyle},
 		{"open state is success", "state", "OPEN", styles.TextSuccessStyle},
@@ -508,7 +508,7 @@ func TestSourceTableRowColors(t *testing.T) {
 
 	// Styled cells keep their semantic colors (padding is inside the
 	// styled span so widths match the plain variant).
-	assert.Contains(t, styled, styles.TextPrimaryStyle.Render("#10   "))
+	assert.Contains(t, styled, styles.TextMutedStyle.Render("#10   "))
 	assert.Contains(t, styled, styles.TextSuccessStyle.Render("approved"+strings.Repeat(" ", 10)))
 
 	// The plain variant is used for selected rows: it must contain no
@@ -550,11 +550,26 @@ func TestRenderSingleLineContent_PlainIsANSIFree(t *testing.T) {
 		"number": 1278, "author": "alice", "labels": []string{"api", "public"}, "ci_status": "passing",
 	}}
 
-	plain := p.renderSingleLineContent(item, false, 60)
-	styled := p.renderSingleLineContent(item, true, 60)
+	plain := p.renderSingleLineContent(item, false, 60, 5)
+	styled := p.renderSingleLineContent(item, true, 60, 5)
 
 	assert.Equal(t, plain, terminal.StripANSI(plain), "plain list row must be ANSI-free")
 	assert.Equal(t, plain, terminal.StripANSI(styled))
+}
+
+func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
+	items := []sources.Item{
+		{ID: "9", Title: "Short", Fields: map[string]any{"number": 9}},
+		{ID: "1315", Title: "Long", Fields: map[string]any{"number": 1315}},
+	}
+	w := numberColumnWidth(items)
+	assert.Equal(t, 5, w) // "#1315"
+
+	p := newTestPicker(newFakeTUISource(listManifest(), nil), listManifest(), "test-repo", 90, 24)
+	short := p.renderSingleLineContent(items[0], false, 60, w)
+	long := p.renderSingleLineContent(items[1], false, 60, w)
+	assert.Equal(t, strings.Index(short, "Short"), strings.Index(long, "Long"),
+		"titles must start at the same column regardless of number width")
 }
 
 func TestPicker_ScopeShownInTabBar(t *testing.T) {
