@@ -19,7 +19,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/hive/plugins"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
-	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/executil/executiltest"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
 
@@ -55,28 +55,9 @@ func (g *mouseTestGit) HasUnpushedCommits(_ context.Context, _ string) (bool, er
 	return false, nil
 }
 
-type mouseTestExec struct{}
-
-func (e *mouseTestExec) Run(_ context.Context, _ string, _ ...string) ([]byte, error) {
-	return nil, nil
-}
-
-func (e *mouseTestExec) RunDir(_ context.Context, _, _ string, _ ...string) ([]byte, error) {
-	return nil, nil
-}
-
-func (e *mouseTestExec) RunStream(_ context.Context, _, _ io.Writer, _ string, _ ...string) error {
-	return nil
-}
-
-func (e *mouseTestExec) RunDirStream(_ context.Context, _ string, _, _ io.Writer, _ string, _ ...string) error {
-	return nil
-}
-
 var (
-	_ session.Store     = (*mouseTestStore)(nil)
-	_ git.Git           = (*mouseTestGit)(nil)
-	_ executil.Executor = (*mouseTestExec)(nil)
+	_ session.Store = (*mouseTestStore)(nil)
+	_ git.Git       = (*mouseTestGit)(nil)
 )
 
 // newMouseTestSessionService creates a minimal SessionService for mouse tests.
@@ -90,7 +71,7 @@ func newMouseTestSessionService(t *testing.T) *hive.SessionService {
 		&mouseTestGit{},
 		&config.Config{DataDir: t.TempDir(), GitPath: "git"},
 		tb.EventBus,
-		&mouseTestExec{},
+		&executiltest.Exec{},
 		r,
 		log,
 		io.Discard,

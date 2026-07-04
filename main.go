@@ -353,6 +353,7 @@ Run 'hive new' to create a new session from the current repository.`,
 				Commit:  resolvedCommit,
 				Date:    resolvedDate,
 			}
+			hiveApp.Sources = hive.BuildSourceRegistry(cfg, exec, kvStore, svcLogger)
 
 			return ctx, nil
 		},

@@ -21,7 +21,10 @@ import (
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/tui/command"
+	"github.com/colonyops/hive/internal/tui/sourcepicker"
 	"github.com/colonyops/hive/internal/tui/views/review"
 	"github.com/colonyops/hive/internal/tui/views/sessions"
 	"github.com/colonyops/hive/internal/tui/views/tasks"
@@ -159,6 +162,14 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 	}
 	if action.Type == act.TypeViewTasks {
 		return m.viewTasksForSelectedSession()
+	}
+	if action.Type == act.TypeOpenSourcePicker {
+		sourceID, err := m.resolveSourceID(action.Args)
+		if err != nil {
+			m.notifyErrorf("%v", err)
+			return m, nil
+		}
+		return m.openSourcePicker(sourceID, m.sourcePickerScopeForSelection(m.selectedSession(), action.Args))
 	}
 	if sessions.IsFilterAction(action.Type) {
 		// Tell sessionsView to apply the filter
@@ -600,6 +611,25 @@ func (m Model) handleStreamStarted(msg streamStartedMsg) (tea.Model, tea.Cmd) {
 	)
 }
 
+func (m Model) handleBgStreamStarted(msg bgStreamStartedMsg) (tea.Model, tea.Cmd) {
+	m.state = stateNormal
+	if m.modals.BgStreamDone != nil {
+		if msg.cancel != nil {
+			msg.cancel()
+		}
+		m.publishNotificationf(notify.LevelError, "Already running in background: %s", m.modals.BgStreamTitle)
+		return m, listenForBgStreamComplete(msg.title, msg.output, msg.done, msg.result)
+	}
+
+	m.modals.BgStreamOutput = msg.output
+	m.modals.BgStreamDone = msg.done
+	m.modals.BgStreamCancel = msg.cancel
+	m.modals.BgStreamResult = msg.result
+	m.modals.BgStreamTitle = msg.title
+	m.publishNotificationf(notify.LevelInfo, "Started in background: %s", msg.title)
+	return m, listenForBgStreamComplete(msg.title, msg.output, msg.done, msg.result)
+}
+
 func (m Model) handleStreamOutput(msg streamOutputMsg) (tea.Model, tea.Cmd) {
 	m.modals.Output.AddLine(msg.line)
 	return m, listenForStreamingOutput(m.modals.StreamOutput, m.modals.StreamDone)
@@ -649,6 +679,10 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		if !m.modals.Output.IsRunning() {
 			return m, nil
 		}
+		if m.modals.BgStreamDone != nil {
+			m.publishNotificationf(notify.LevelError, "Already running in background: %s", m.modals.BgStreamTitle)
+			return m, nil
+		}
 		// Move the running operation to background.
 		m.modals.BgStreamOutput = m.modals.StreamOutput
 		m.modals.BgStreamDone = m.modals.StreamDone
@@ -664,7 +698,7 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 		m.state = stateNormal
 		m.modals.Pending = Action{}
 		m.publishNotificationf(notify.LevelInfo, "Moved to background: %s", m.modals.BgStreamTitle)
-		return m, listenForBgStreamComplete(m.modals.BgStreamOutput, m.modals.BgStreamDone, m.modals.BgStreamResult)
+		return m, listenForBgStreamComplete(m.modals.BgStreamTitle, m.modals.BgStreamOutput, m.modals.BgStreamDone, m.modals.BgStreamResult)
 	case keyEnter:
 		if !m.modals.Output.IsRunning() {
 			m.state = stateNormal
@@ -677,22 +711,28 @@ func (m Model) handleStreamingModalKey(keyStr string) (tea.Model, tea.Cmd) {
 
 // handleBgStreamComplete handles completion of a backgrounded streaming operation.
 func (m Model) handleBgStreamComplete(msg bgStreamCompleteMsg) (tea.Model, tea.Cmd) {
-	title := m.modals.BgStreamTitle
-	m.modals.BgStreamOutput = nil
-	m.modals.BgStreamDone = nil
-	m.modals.BgStreamCancel = nil
-	m.modals.BgStreamResult = streamResult{}
-	m.modals.BgStreamTitle = ""
+	active := msg.done == m.modals.BgStreamDone
+	if active {
+		m.modals.BgStreamOutput = nil
+		m.modals.BgStreamDone = nil
+		m.modals.BgStreamCancel = nil
+		m.modals.BgStreamResult = streamResult{}
+		m.modals.BgStreamTitle = ""
+	}
 
 	if msg.err == nil {
-		m.publishNotificationf(notify.LevelInfo, "Complete: %s", title)
+		if active {
+			m.publishNotificationf(notify.LevelInfo, "Complete: %s", msg.title)
+		}
 		if msg.result.sessionID != nil && *msg.result.sessionID != "" {
 			m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
 		}
 		return m, m.refreshSessions()
 	}
 
-	m.publishNotificationf(notify.LevelError, "Failed: %s — %v", title, msg.err)
+	if active {
+		m.publishNotificationf(notify.LevelError, "Failed: %s — %v", msg.title, msg.err)
+	}
 	return m, nil
 }
 
@@ -781,6 +821,189 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 	m.updateInfo = msg.result
 	m.publishNotificationf(notify.LevelInfo, "Update available: %s -> %s", msg.result.Current, msg.result.Latest)
 	return m, nil
+}
+
+// --- Source Picker ---
+
+type sourcePickerScope struct {
+	Search string
+	Remote string
+	Source string
+}
+
+// resolveSourceID returns the source to open: an explicit args[0]
+// when given, otherwise the sole registered source. The returned error
+// distinguishes "nothing to open" from "ambiguous" so callers
+// (keybinding and command-palette paths) share the same resolution rules
+// and report the right problem.
+func (m Model) resolveSourceID(args []string) (string, error) {
+	if len(args) > 0 && args[0] != "" {
+		return args[0], nil
+	}
+	if m.sourceRegistry == nil {
+		return "", fmt.Errorf("no sources are configured")
+	}
+	ids := m.sourceRegistry.IDs()
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("no sources are configured")
+	case 1:
+		return ids[0], nil
+	default:
+		return "", fmt.Errorf("multiple sources configured: use :Sources <id>")
+	}
+}
+
+// openSourcePicker opens the tabbed source picker with all registered
+// sources, starting on the tab identified by sourceID. The picker handles
+// lazy initialization, loading, and error states internally.
+func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.Model, tea.Cmd) {
+	if m.sourceRegistry == nil {
+		m.notifyErrorf("no sources are configured")
+		return m, nil
+	}
+
+	// Verify the requested source exists.
+	if _, _, ok := m.sourceRegistry.Get(sourceID); !ok {
+		m.notifyErrorf("unknown source %q", sourceID)
+		return m, nil
+	}
+
+	// Build tab entries from all registered sources.
+	entries := m.sourceRegistry.All()
+	tabs := make([]sourcepicker.TabSource, len(entries))
+	for i, entry := range entries {
+		tabs[i] = sourcepicker.TabSource{
+			ID:        entry.ID,
+			Source:    entry.Source,
+			Templates: entry.Templates,
+			Manifest: sources.Manifest{
+				ID:          entry.ID,
+				DisplayName: entry.DisplayName,
+			},
+		}
+	}
+
+	m.pendingSourceScope = scope
+	picker := sourcepicker.New(tabs, sourceID, scope.Search, m.width, m.height)
+	m.state = stateSourcePicker
+	m.modals.SourcePicker = &picker
+	return m, picker.Init()
+}
+
+// forwardSourcePickerMsg forwards a source search/detail/spinner message
+// to the active SourcePicker.
+func (m Model) forwardSourcePickerMsg(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.modals.SourcePicker == nil {
+		return m, nil
+	}
+	picker, cmd := m.modals.SourcePicker.Update(msg)
+	m.modals.SourcePicker = &picker
+	return m, cmd
+}
+
+// handleSourcePickerKey routes key events to the active SourcePicker.
+// On cancellation the picker closes with no side effects; on selection the
+// picker closes and a session is created from the selected item's rendered
+// templates.
+func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
+	if m.modals.SourcePicker == nil {
+		m.state = stateNormal
+		return m, nil
+	}
+
+	picker, cmd := m.modals.SourcePicker.Update(msg)
+	m.modals.SourcePicker = &picker
+
+	if picker.Cancelled() {
+		m.modals.SourcePicker = nil
+		m.state = stateNormal
+		return m, nil
+	}
+
+	if result, ok := picker.Selected(); ok {
+		m.modals.SourcePicker = nil
+		return m.handleSourceSelection(result)
+	}
+
+	return m, cmd
+}
+
+// handleSourceSelection fetches the selected item's detail (best-effort,
+// capability-gated), renders the source's session templates against the
+// item, and creates a session via the same UseBatchSpawn:true path used
+// by `hive batch`. The detail fetch and render run inside the returned
+// command so a slow `gh` call never blocks the UI.
+func (m Model) handleSourceSelection(result sourcepicker.Result) (tea.Model, tea.Cmd) {
+	if m.modals.BgStreamDone != nil {
+		m.state = stateNormal
+		m.notifyErrorf("already running in background: %s", m.modals.BgStreamTitle)
+		return m, nil
+	}
+
+	return m, m.startSourceCreate(result, m.pendingSourceScope)
+}
+
+// sourceSelectionErrorMsg reports an async template-render failure from
+// startSourceCreate back to the model.
+type sourceSelectionErrorMsg struct {
+	SourceID string
+	Err      error
+}
+
+// fetchSourceDetail returns the item's detail for template rendering.
+// Detail is optional template data: it is fetched only when the source
+// declares the capability, and fetch failures degrade to an empty detail
+// (with a log) rather than blocking session creation.
+func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope string) sources.Detail {
+	if !result.Manifest.Capabilities.FetchDetail || result.Source == nil {
+		return sources.Detail{}
+	}
+	fetched, err := result.Source.FetchDetail(ctx, sources.FetchDetailParams{
+		ID:    result.Item.ID,
+		Scope: scope,
+		URI:   result.Item.URI,
+	})
+	if err != nil {
+		log.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
+			Msg("source picker: fetch detail failed; creating session without detail")
+		return sources.Detail{}
+	}
+	return fetched
+}
+
+func (m Model) startSourceCreate(result sourcepicker.Result, scope sourcePickerScope) tea.Cmd {
+	return func() tea.Msg {
+		ctx := context.Background()
+		detail := fetchSourceDetail(ctx, result, scope.Search)
+
+		rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
+		if err != nil {
+			return sourceSelectionErrorMsg{SourceID: result.SourceID, Err: err}
+		}
+
+		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
+			Name:          rendered.Name,
+			Prompt:        rendered.Prompt,
+			Remote:        scope.Remote,
+			Source:        scope.Source,
+			UseBatchSpawn: true,
+			Background:    true,
+			Tags:          rendered.Tags,
+		})
+
+		output, done, cancel := exec.Execute(ctx)
+		return bgStreamStartedMsg{
+			title:  "Creating session...",
+			output: output,
+			done:   done,
+			cancel: cancel,
+			result: streamResult{
+				sessionID:   &exec.ResultSessionID,
+				sessionName: &exec.ResultSessionName,
+			},
+		}
+	}
 }
 
 // --- Repo Picker ---
@@ -1017,6 +1240,15 @@ func (m Model) handleSpinnerTick(msg spinner.TickMsg) (tea.Model, tea.Cmd) {
 	m.spinner, cmd = m.spinner.Update(msg)
 	if cmd != nil && m.state == stateLoading {
 		cmds = append(cmds, cmd)
+	}
+
+	// Drive the source picker's internal spinner while the picker is active.
+	if m.state == stateSourcePicker && m.modals.SourcePicker != nil {
+		picker, pickerCmd := m.modals.SourcePicker.Update(msg)
+		m.modals.SourcePicker = &picker
+		if pickerCmd != nil {
+			cmds = append(cmds, pickerCmd)
+		}
 	}
 
 	// Drive the output modal's own spinner while streaming.

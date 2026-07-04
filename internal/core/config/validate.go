@@ -49,6 +49,59 @@ type BranchTemplateData struct {
 	ID    string // Short random ID shared with the session directory
 }
 
+// SourceTemplateData defines available fields for source session
+// templates (name/prompt/tags). Fields is a map because item field names are
+// dynamic per-source; a missing .Fields.<key> is a render-time error, not
+// a config-time one.
+type SourceTemplateData struct {
+	ID       string
+	Title    string
+	Subtitle string
+	Detail   string
+	Fields   map[string]any
+}
+
+// validateSources checks the top-level sources config template syntax.
+func (c *Config) validateSources() error {
+	var errs criterio.FieldErrorsBuilder
+
+	if err := validateSourceTemplateSet("sources.issues.templates", c.Sources.Issues.Templates); err != nil {
+		errs = errs.Append("sources.issues.templates", err)
+	}
+	if err := validateSourceTemplateSet("sources.prs.templates", c.Sources.PRs.Templates); err != nil {
+		errs = errs.Append("sources.prs.templates", err)
+	}
+
+	return errs.ToError()
+}
+
+// validateSourceTemplateSet syntax-checks the name/prompt/tags templates
+// of a single source's SourceTemplateConfig.
+func validateSourceTemplateSet(field string, cfg SourceTemplateConfig) error {
+	if err := validateSourceTemplate(cfg.Name); err != nil {
+		return fmt.Errorf("%s.name: %w", field, err)
+	}
+	if err := validateSourceTemplate(cfg.Prompt); err != nil {
+		return fmt.Errorf("%s.prompt: %w", field, err)
+	}
+	for i, tag := range cfg.Tags {
+		if err := validateSourceTemplate(tag); err != nil {
+			return fmt.Errorf("%s.tags[%d]: %w", field, i, err)
+		}
+	}
+	return nil
+}
+
+// validateSourceTemplate syntax-checks a single source template.
+// Item data (.Fields.<key>) is only known at selection time, so missing
+// keys are a render-time concern, not a config error.
+func validateSourceTemplate(tmplStr string) error {
+	if tmplStr == "" {
+		return nil
+	}
+	return validationRenderer.ValidateSyntax(tmplStr)
+}
+
 // ValidationWarning represents a non-fatal configuration issue.
 type ValidationWarning struct {
 	Category string `json:"category"`

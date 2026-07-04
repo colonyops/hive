@@ -117,6 +117,8 @@ const (
 	TypeQuit Type = "Quit"
 	// TypeShowHelp is a Type of type ShowHelp.
 	TypeShowHelp Type = "ShowHelp"
+	// TypeOpenSourcePicker is a Type of type OpenSourcePicker.
+	TypeOpenSourcePicker Type = "OpenSourcePicker"
 )
 
 var ErrInvalidType = fmt.Errorf("not a valid Type, try [%s]", strings.Join(_TypeNames, ", "))
@@ -175,6 +177,7 @@ var _TypeNames = []string{
 	string(TypeGoToBottom),
 	string(TypeQuit),
 	string(TypeShowHelp),
+	string(TypeOpenSourcePicker),
 }
 
 // TypeNames returns a list of possible string values of Type.
@@ -303,6 +306,8 @@ var _TypeValue = map[string]Type{
 	"quit":                       TypeQuit,
 	"ShowHelp":                   TypeShowHelp,
 	"showhelp":                   TypeShowHelp,
+	"OpenSourcePicker":           TypeOpenSourcePicker,
+	"opensourcepicker":           TypeOpenSourcePicker,
 }
 
 // ParseType attempts to convert a string to a Type.

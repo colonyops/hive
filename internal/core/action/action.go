@@ -49,7 +49,11 @@ type SpawnWindowsPayload struct {
 
 // Action represents a resolved keybinding or command action ready for execution.
 type Action struct {
-	Type          Type
+	Type Type
+	// Args carries the command's preset args (config.UserCommand.Args) for
+	// built-in actions that accept arguments (e.g. OpenSourcePicker's
+	// source id/scope).
+	Args          []string
 	Key           string
 	Help          string
 	Confirm       string               // Non-empty if confirmation required
@@ -77,26 +81,27 @@ func (a Action) NeedsConfirm() bool {
 // configActions are action types that can be set via the YAML config action field.
 // Shell, None, and DeleteRecycledBatch are internal-only.
 var configActions = map[Type]bool{
-	TypeRecycle:        true,
-	TypeDelete:         true,
-	TypeTmuxOpen:       true,
-	TypeTmuxStart:      true,
-	TypeFilterAll:      true,
-	TypeFilterActive:   true,
-	TypeFilterApproval: true,
-	TypeFilterReady:    true,
-	TypeDocReview:      true,
-	TypeNewSession:     true,
-	TypeSetTheme:       true,
-	TypeNotifications:  true,
-	TypeRenameSession:  true,
-	TypeNextActive:     true,
-	TypePrevActive:     true,
-	TypeHiveInfo:       true,
-	TypeHiveDoctor:     true,
-	TypeGroupSet:       true,
-	TypeGroupToggle:    true,
-	TypeTodoPanel:      true,
+	TypeRecycle:          true,
+	TypeDelete:           true,
+	TypeTmuxOpen:         true,
+	TypeTmuxStart:        true,
+	TypeFilterAll:        true,
+	TypeFilterActive:     true,
+	TypeFilterApproval:   true,
+	TypeFilterReady:      true,
+	TypeDocReview:        true,
+	TypeNewSession:       true,
+	TypeSetTheme:         true,
+	TypeNotifications:    true,
+	TypeRenameSession:    true,
+	TypeNextActive:       true,
+	TypePrevActive:       true,
+	TypeHiveInfo:         true,
+	TypeHiveDoctor:       true,
+	TypeGroupSet:         true,
+	TypeGroupToggle:      true,
+	TypeTodoPanel:        true,
+	TypeOpenSourcePicker: true,
 
 	TypeTasksRefresh:       true,
 	TypeTasksFilter:        true,

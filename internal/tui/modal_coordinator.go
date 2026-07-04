@@ -14,6 +14,7 @@ import (
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui/components"
 	"github.com/colonyops/hive/internal/tui/components/form"
+	"github.com/colonyops/hive/internal/tui/sourcepicker"
 )
 
 // ModalCoordinator owns all modal component references, pending action state,
@@ -29,6 +30,7 @@ type ModalCoordinator struct {
 	InfoDialog      *components.InfoDialog
 	FormDialog      *form.Dialog
 	RepoPicker      *RepoPicker
+	SourcePicker    *sourcepicker.Picker
 	DocsRepoEntries []docsRepoEntry
 	TodoPanel       *TodoPanel
 	RenameInput     textinput.Model
@@ -169,6 +171,9 @@ func (mc *ModalCoordinator) Overlay(state UIState, bg string, s spinner.Model, l
 	case state == stateSelectingRepo && mc.RepoPicker != nil:
 		return mc.RepoPicker.Overlay(bg, w, h)
 
+	case state == stateSourcePicker && mc.SourcePicker != nil:
+		return centeredOverlay(bg, mc.SourcePicker.View(), w, h)
+
 	default:
 		return bg
 	}
@@ -241,7 +246,7 @@ func (mc *ModalCoordinator) ClearFormState() {
 // HasEditorFocus returns true if a modal with text input is active.
 func (mc *ModalCoordinator) HasEditorFocus(state UIState) bool {
 	switch state { //nolint:exhaustive // only editor-bearing states return true
-	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateFormInput, stateSelectingRepo:
+	case stateCommandPalette, stateCreatingSession, stateRenaming, stateSettingGroup, stateFormInput, stateSelectingRepo, stateSourcePicker:
 		return true
 	}
 	return false

@@ -56,7 +56,9 @@ views:
 | `J`        | NextActive           | Jump to next active session          |
 | `K`        | PrevActive           | Jump to previous active session      |
 | `t`        | TodoPanel            | Open todo panel                      |
-| `p`        | TmuxPopUp            | Popup tmux session                   |
+| `o`        | TmuxPopUp            | Popup tmux session                   |
+| `i`        | SourceIssues      | Browse GitHub issues                 |
+| `p`        | SourcePRs         | Browse GitHub pull requests          |
 
 ### Tasks View
 

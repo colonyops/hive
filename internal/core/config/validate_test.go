@@ -219,6 +219,7 @@ func TestValidateDeep_UserCommandValidAction(t *testing.T) {
 	cfg.UserCommands = map[string]UserCommand{
 		"my-recycle": {Action: action.TypeRecycle, Help: "custom recycle"},
 		"my-delete":  {Action: action.TypeDelete, Help: "custom delete"},
+		"my-source":  {Action: action.TypeOpenSourcePicker, Args: []string{"issues"}, Help: "custom source"},
 	}
 
 	err := cfg.ValidateDeep("")

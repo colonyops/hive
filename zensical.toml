@@ -25,6 +25,7 @@ nav = [
     "configuration/keybindings.md",
     "configuration/todos.md",
     "configuration/plugins.md",
+    "configuration/sources.md",
     "configuration/themes.md",
   ]},
   { "Recipes" = [

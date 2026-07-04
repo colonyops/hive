@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -27,6 +28,8 @@ import (
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
+	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/tui/sourcepicker"
 
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
@@ -61,6 +64,7 @@ const (
 	stateFormInput
 	stateShowingTodos
 	stateSelectingRepo
+	stateSourcePicker
 )
 
 // Key constants for event handling.
@@ -88,6 +92,7 @@ type Deps struct {
 	BuildInfo     BuildInfo
 	DoctorService *hive.DoctorService
 	Honeycomb     *hive.HoneycombService
+	Sources       *sources.Registry
 }
 
 // Opts holds runtime options that are not service dependencies.
@@ -155,6 +160,9 @@ type Model struct {
 	doctorService *hive.DoctorService
 	configPath    string
 
+	sourceRegistry     *sources.Registry
+	pendingSourceScope sourcePickerScope
+
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
 
@@ -195,8 +203,21 @@ type streamCompleteMsg struct {
 	err error
 }
 
+// bgStreamStartedMsg is sent when a streaming operation is moved to the
+// background, carrying the channels and cancel func needed to keep
+// consuming it.
+type bgStreamStartedMsg struct {
+	title  string
+	output <-chan string
+	done   <-chan error
+	cancel context.CancelFunc
+	result streamResult
+}
+
 // bgStreamCompleteMsg is sent when a backgrounded streaming operation finishes.
 type bgStreamCompleteMsg struct {
+	title  string
+	done   <-chan error
 	err    error
 	result streamResult
 }
@@ -365,6 +386,7 @@ func New(deps Deps, opts Opts) Model {
 		doctorService:   deps.DoctorService,
 		configPath:      opts.ConfigPath,
 		startupWarnings: opts.Warnings,
+		sourceRegistry:  deps.Sources,
 	}
 }
 
@@ -568,8 +590,18 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		model, cmd = m.handleStreamOutput(msg)
 	case streamCompleteMsg:
 		model, cmd = m.handleStreamComplete(msg)
+	case bgStreamStartedMsg:
+		model, cmd = m.handleBgStreamStarted(msg)
 	case bgStreamCompleteMsg:
 		model, cmd = m.handleBgStreamComplete(msg)
+
+	// Source picker
+	case sourcepicker.Msg:
+		model, cmd = m.forwardSourcePickerMsg(msg)
+	case sourceSelectionErrorMsg:
+		m.state = stateNormal
+		m.notifyErrorf("source %q: %v", msg.SourceID, msg.Err)
+		model, cmd = m, nil
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -700,6 +732,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	if m.state == stateSelectingRepo {
 		return m.handleRepoPickerKey(msg)
 	}
+	if m.state == stateSourcePicker {
+		return m.handleSourcePickerKey(msg)
+	}
 
 	// When filtering in either list, pass most keys except quit. The KV
 	// filter only captures keys while the Store view is active so it cannot
@@ -740,6 +775,66 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, cmd
+}
+
+func (m Model) sourcePickerScopeForSelection(selected *session.Session, args []string) sourcePickerScope {
+	scope := sourcePickerScope{}
+	if len(args) > 1 {
+		scope.Search = args[1]
+		return m.withDiscoveredRepoForScope(scope)
+	}
+
+	remote := ""
+	if ti := m.selectedTreeItem(); ti != nil {
+		switch {
+		case ti.IsHeader:
+			remote = ti.RepoRemote
+		case ti.IsWindowItem || ti.IsPaneItem:
+			remote = ti.ParentSession.Remote
+		case !ti.IsRecycledPlaceholder:
+			remote = ti.Session.Remote
+		}
+	} else if selected != nil {
+		remote = selected.Remote
+	}
+
+	if remote == "" {
+		return scope
+	}
+	owner, repo := git.ExtractOwnerRepo(remote)
+	if owner != "" && repo != "" {
+		scope.Search = owner + "/" + repo
+	}
+	scope.Remote = remote
+	return m.withDiscoveredRepoForRemote(scope)
+}
+
+func (m Model) withDiscoveredRepoForScope(scope sourcePickerScope) sourcePickerScope {
+	if m.sessionsView == nil {
+		return scope
+	}
+	for _, repo := range m.sessionsView.DiscoveredRepos() {
+		owner, name := git.ExtractOwnerRepo(repo.Remote)
+		if owner != "" && name != "" && owner+"/"+name == scope.Search {
+			scope.Remote = repo.Remote
+			scope.Source = repo.Path
+			return scope
+		}
+	}
+	return scope
+}
+
+func (m Model) withDiscoveredRepoForRemote(scope sourcePickerScope) sourcePickerScope {
+	if m.sessionsView == nil {
+		return scope
+	}
+	for _, repo := range m.sessionsView.DiscoveredRepos() {
+		if repo.Remote == scope.Remote {
+			scope.Source = repo.Path
+			return scope
+		}
+	}
+	return scope
 }
 
 // docTemplateData returns the focused review-view document for user-command
@@ -1095,6 +1190,12 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 	if entry, args, ok := m.modals.CommandPalette.SelectedCommand(); ok {
 		selected := m.selectedSession()
 
+		// Preset command args (e.g. SourceIssues -> ["issues"]) come
+		// first; anything the user typed after the command name follows.
+		if len(entry.Command.Args) > 0 {
+			args = append(slices.Clone(entry.Command.Args), args...)
+		}
+
 		// Check if this is a doc review action (doesn't require a session)
 		if entry.Command.Action == act.TypeDocReview {
 			m.state = stateNormal
@@ -1107,6 +1208,25 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 			m.state = stateShowingNotifications
 			m.modals.ShowNotifications(m.notifyStore)
 			return m, nil
+		}
+
+		// OpenSourcePicker doesn't require a session. Both args are
+		// optional and are auto-filled from context to keep this fast to
+		// invoke: the source id defaults to the sole configured source
+		// when there's only one, and scope defaults to the owner/repo of the
+		// currently selected session's git remote (e.g. GitHub "owner/name").
+		// Either can still be typed explicitly to override.
+		if entry.Command.Action == act.TypeOpenSourcePicker {
+			m.state = stateNormal
+
+			sourceID, err := m.resolveSourceID(args)
+			if err != nil {
+				m.notifyErrorf("Sources: %v", err)
+				return m, nil
+			}
+
+			scope := m.sourcePickerScopeForSelection(selected, args)
+			return m.openSourcePicker(sourceID, scope)
 		}
 
 		// TodoPanel doesn't require a session
@@ -1948,13 +2068,13 @@ func listenForStreamingOutput(output <-chan string, done <-chan error) tea.Cmd {
 // listenForBgStreamComplete drains any remaining output and waits for the done
 // signal from a backgrounded streaming operation. Individual output lines are
 // discarded since the modal is no longer visible.
-func listenForBgStreamComplete(output <-chan string, done <-chan error, result streamResult) tea.Cmd {
+func listenForBgStreamComplete(title string, output <-chan string, done <-chan error, result streamResult) tea.Cmd {
 	return func() tea.Msg {
 		// Drain output channel until closed.
 		for range output {
 		}
 		err := <-done
-		return bgStreamCompleteMsg{err: err, result: result}
+		return bgStreamCompleteMsg{title: title, done: done, err: err, result: result}
 	}
 }
 

@@ -15,6 +15,7 @@ import (
 	"github.com/colonyops/hive/internal/core/eventbus/testbus"
 	"github.com/colonyops/hive/internal/core/git"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/pkg/executil/executiltest"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -58,23 +59,6 @@ func (m *mockStore) Delete(_ context.Context, id string) error {
 	return nil
 }
 
-// mockExec implements executil.Executor for testing.
-type mockExec struct{}
-
-func (m *mockExec) Run(context.Context, string, ...string) ([]byte, error) { return nil, nil }
-
-func (m *mockExec) RunDir(context.Context, string, string, ...string) ([]byte, error) {
-	return nil, nil
-}
-
-func (m *mockExec) RunStream(context.Context, io.Writer, io.Writer, string, ...string) error {
-	return nil
-}
-
-func (m *mockExec) RunDirStream(context.Context, string, io.Writer, io.Writer, string, ...string) error {
-	return nil
-}
-
 // mockGit implements git.Git for testing.
 type mockGit struct{}
 
@@ -112,7 +96,7 @@ func newTestServiceWithBus(t *testing.T, store session.Store, cfg *config.Config
 	}
 	log := zerolog.New(io.Discard)
 	renderer := tmpl.New(tmpl.Config{})
-	return NewSessionService(store, &mockGit{}, cfg, bus, &mockExec{}, renderer, log, io.Discard, io.Discard)
+	return NewSessionService(store, &mockGit{}, cfg, bus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard)
 }
 
 func TestRenameSession(t *testing.T) {
@@ -1210,7 +1194,7 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 		}
 		log := zerolog.New(io.Discard)
 		renderer := tmpl.New(tmpl.Config{})
-		return NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &mockExec{}, renderer, log, io.Discard, io.Discard)
+		return NewSessionService(store, gitImpl, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard)
 	}
 
 	t.Run("valid template uses rendered branch", func(t *testing.T) {

@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/internal/core/todo"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/hive/plugins"
+	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/rs/zerolog"
 )
@@ -41,6 +42,7 @@ type App struct {
 	KV         kv.KV
 	Renderer   *tmpl.Renderer
 	Build      BuildInfo
+	Sources    *sources.Registry
 }
 
 // NewApp constructs an App from explicit dependencies.

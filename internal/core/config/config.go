@@ -189,6 +189,26 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
+	"Sources": {
+		Action: action.TypeOpenSourcePicker,
+		Help:   "open a source picker (id/scope auto-detected when omittable; usage: Sources [id] [scope])",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SourceIssues": {
+		Action: action.TypeOpenSourcePicker,
+		Args:   []string{"issues"},
+		Help:   "browse GitHub issues and create a session (usage: SourceIssues [scope])",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
+	"SourcePRs": {
+		Action: action.TypeOpenSourcePicker,
+		Args:   []string{"prs"},
+		Help:   "browse GitHub pull requests and create a session (usage: SourcePRs [scope])",
+		Silent: true,
+		Scope:  []string{"sessions"},
+	},
 	"ViewTasks": {
 		Action: action.TypeViewTasks,
 		Help:   "view tasks for repo",
@@ -417,6 +437,7 @@ type Config struct {
 	Tmux                TmuxConfig             `json:"tmux"                  yaml:"tmux"`
 	Database            DatabaseConfig         `json:"database"              yaml:"database"`
 	Plugins             PluginsConfig          `json:"plugins"               yaml:"plugins"`
+	Sources             SourcesConfig          `json:"sources"               yaml:"sources"`
 	Todos               TodosConfig            `json:"todos"                 yaml:"todos"`
 	Workspaces          []string               `json:"workspaces"            yaml:"workspaces"` // parent directories containing git repository folders for new session dialog
 	Views               ViewsConfig            `json:"views"                 yaml:"views"`
@@ -592,6 +613,29 @@ type ClaudePluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
+// SourcesConfig configures the sources system (GitHub issues and pull
+// requests browsable from the picker).
+type SourcesConfig struct {
+	SearchLimit int                 `json:"search_limit" yaml:"search_limit"` // max items per search (default: 30)
+	CacheTTL    time.Duration       `json:"cache_ttl"    yaml:"cache_ttl"`    // search result cache TTL (default: 30s)
+	Issues      BuiltinSourceConfig `json:"issues"       yaml:"issues"`
+	PRs         BuiltinSourceConfig `json:"prs"          yaml:"prs"`
+}
+
+// SourceTemplateConfig holds the templates rendering a selected item
+// into session Name/Prompt/Tags.
+type SourceTemplateConfig struct {
+	Name   string   `json:"name"   yaml:"name"`
+	Prompt string   `json:"prompt" yaml:"prompt"`
+	Tags   []string `json:"tags"   yaml:"tags"`
+}
+
+// BuiltinSourceConfig configures one built-in source (issues, prs).
+type BuiltinSourceConfig struct {
+	Enabled   *bool                `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
+	Templates SourceTemplateConfig `json:"templates" yaml:"templates"`
+}
+
 // DatabaseConfig holds SQLite database configuration.
 type DatabaseConfig struct {
 	MaxOpenConns int `json:"max_open_conns" yaml:"max_open_conns"` // max open connections (default: 2)
@@ -673,6 +717,7 @@ type UserCommandOptions struct {
 // UserCommand defines a named command accessible via command palette or keybindings.
 type UserCommand struct {
 	Action  action.Type        `json:"action,omitempty"  yaml:"action,omitempty"`  // built-in action (Recycle, Delete, etc.) - mutually exclusive with sh
+	Args    []string           `json:"args,omitempty"    yaml:"args,omitempty"`    // preset args for action commands; typed palette args are appended after these
 	Sh      string             `json:"sh"                yaml:"sh"`                // shell command template - mutually exclusive with action
 	Windows []WindowConfig     `json:"windows,omitempty" yaml:"windows,omitempty"` // Tmux windows to open after sh: completes
 	Options UserCommandOptions `json:"options,omitempty" yaml:"options,omitempty"` // Execution options for window-based commands
@@ -767,6 +812,27 @@ func DefaultConfig() Config {
 			},
 			Notifications: TodosNotifyConfig{
 				Toast: true,
+			},
+		},
+		Sources: SourcesConfig{
+			Issues: BuiltinSourceConfig{
+				Templates: SourceTemplateConfig{
+					Name: "gh-{{ .Fields.number }}-{{ .Title }}",
+					// .Detail is the issue body, fetched at selection time
+					// in both the CLI and TUI paths. The CLI fails hard on
+					// fetch errors; the TUI is best-effort and falls back to
+					// an empty detail. Rendered prompts are trimmed, so an
+					// empty detail leaves no dangling blank lines.
+					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}\n\n{{ .Detail }}",
+					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
+				},
+			},
+			PRs: BuiltinSourceConfig{
+				Templates: SourceTemplateConfig{
+					Name:   "gh-pr-{{ .Fields.number }}-{{ .Title }}",
+					Prompt: "Review pull request {{ .Title }}\n\n{{ .Fields.url }}",
+					Tags:   []string{"github", "pr-{{ .Fields.number }}"},
+				},
 			},
 		},
 	}
@@ -959,6 +1025,7 @@ func (c *Config) Validate() error {
 		c.validateWindowsBasic(),
 		c.validateTodos(),
 		c.validateCloneStrategies(),
+		c.validateSources(),
 	)
 }
 
