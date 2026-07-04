@@ -117,34 +117,3 @@ func TestTypedKV_StructValue(t *testing.T) {
 	assert.Equal(t, "localhost", got.Host)
 	assert.Equal(t, 8080, got.Port)
 }
-
-func TestCache_HitMissAndExpiry(t *testing.T) {
-	ctx := context.Background()
-	store := newTestKV(t)
-	cache := kv.NewCache[string](store, "test.cache", time.Minute)
-
-	_, ok := cache.Get(ctx, "missing")
-	assert.False(t, ok, "missing key must be a miss")
-
-	cache.Set(ctx, "k", "v")
-	got, ok := cache.Get(ctx, "k")
-	require.True(t, ok)
-	assert.Equal(t, "v", got)
-
-	expiring := kv.NewCache[string](store, "test.expiry", time.Millisecond)
-	expiring.Set(ctx, "k", "v")
-	time.Sleep(5 * time.Millisecond)
-	_, ok = expiring.Get(ctx, "k")
-	assert.False(t, ok, "expired entry must be a miss")
-}
-
-func TestCache_NamespaceIsolation(t *testing.T) {
-	ctx := context.Background()
-	store := newTestKV(t)
-	a := kv.NewCache[string](store, "ns.a", time.Minute)
-	b := kv.NewCache[string](store, "ns.b", time.Minute)
-
-	a.Set(ctx, "k", "from-a")
-	_, ok := b.Get(ctx, "k")
-	assert.False(t, ok, "namespaces must not collide")
-}

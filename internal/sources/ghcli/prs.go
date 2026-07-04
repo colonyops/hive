@@ -96,22 +96,18 @@ type prListItem struct {
 	StatusCheckRollup []prCheck `json:"statusCheckRollup"`
 }
 
-// prCheck is one node of gh's statusCheckRollup. The rollup mixes two
-// GraphQL shapes: CheckRun (Status/Conclusion) and StatusContext (State);
-// unused fields stay empty per node.
+// prCheck is one node of gh's statusCheckRollup, which mixes two GraphQL
+// shapes: CheckRun and StatusContext; unused fields stay empty per node.
 type prCheck struct {
 	State      string `json:"state"`      // StatusContext: SUCCESS/FAILURE/ERROR/PENDING/EXPECTED
 	Status     string `json:"status"`     // CheckRun: COMPLETED/IN_PROGRESS/QUEUED/...
 	Conclusion string `json:"conclusion"` // CheckRun: SUCCESS/FAILURE/SKIPPED/CANCELLED/...
 }
 
-// ciLabel condenses a PR's check rollup into one table cell: any failed
-// check wins, otherwise any unfinished or non-passing check reports
-// pending, otherwise everything passed. Completed check runs only count
-// as passed for the known-good conclusions (SUCCESS/SKIPPED/NEUTRAL);
-// anything else — STALE, empty, or future enum values — is treated as
-// pending rather than silently reported green. An empty rollup (no CI
-// configured) renders blank.
+// ciLabel condenses a PR's check rollup into one table cell:
+// failing > pending > passing. Unknown completed conclusions (STALE,
+// empty, future values) count as pending, never passing. An empty
+// rollup (no CI configured) renders blank.
 func ciLabel(checks []prCheck) string {
 	if len(checks) == 0 {
 		return ""
