@@ -839,6 +839,7 @@ func (p Picker) helpText() string {
 		components.HintFilter,
 		components.HintNav,
 		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HelpEntry{Key: "O", Desc: "open"},
 		components.HelpEntry{Key: "esc", Desc: "close"},
 	)
 }
