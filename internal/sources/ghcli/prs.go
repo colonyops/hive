@@ -2,12 +2,15 @@ package ghcli
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/colonyops/hive/internal/sources"
 )
 
-// prsDriver is the built-in GitHub pull requests source: a full-width
-// table (no detail view) of open PRs, backed by `gh pr list`.
+// prsDriver is the built-in GitHub pull requests source: a two-line card
+// list (no detail view) of open PRs, backed by `gh pr list`. The status
+// strip beneath each title reads CI, then review, then author — the order
+// of the columns below (number and title are consumed by the title line).
 type prsDriver struct{}
 
 // PRs returns the built-in GitHub pull requests driver.
@@ -17,14 +20,14 @@ func (prsDriver) Config() Config {
 	return Config{
 		ID:          "prs",
 		DisplayName: "GitHub Pull Requests",
-		Layout:      sources.LayoutModeTable,
+		Layout:      sources.LayoutModeCard,
 		HidePreview: true,
 		Columns: []sources.Column{
 			{Key: "number", Label: "#", Width: 6},
 			{Key: "title", Label: "Title", Flex: 1},
-			{Key: "author", Label: "Author", Width: 14},
-			{Key: "review", Label: "Review", Width: 18},
 			{Key: "ci", Label: "CI", Width: 10},
+			{Key: "review", Label: "Review", Width: 18},
+			{Key: "author", Label: "Author", Width: 14},
 		},
 	}
 }
@@ -35,7 +38,7 @@ func (prsDriver) ListArgs(scope, query string, limit int) []string {
 	args := []string{
 		"pr", "list",
 		"--repo", scope,
-		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup",
+		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup,createdAt,assignees,closingIssuesReferences",
 		"--limit", strconv.Itoa(limit),
 	}
 	if query != "" {
@@ -57,24 +60,31 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 	for _, pr := range entries {
 		// Fields keys number/title/url/author/branch/ci are load-bearing:
 		// default source session templates reference .Fields.number,
-		// .Fields.url, and .Fields.branch; the picker's CI column reads
-		// .Fields.ci.
+		// .Fields.url, and .Fields.branch; the card layout reads
+		// ci/review/age/linked_issue/assignee.
+		assignee, assigneeCount := assigneeSummary(pr.Assignees)
+		linkedIssue, linkedIssueCount := firstRef(pr.LinkedIssues)
 		items = append(items, sources.Item{
 			ID:       strconv.Itoa(pr.Number),
 			Title:    pr.Title,
 			Subtitle: "#" + strconv.Itoa(pr.Number) + " · " + reviewLabel(pr),
 			URI:      pr.URL,
 			Fields: map[string]any{
-				"number": pr.Number,
-				"title":  pr.Title,
-				"state":  pr.State,
-				"url":    pr.URL,
-				"author": pr.Author.Login,
-				"labels": labelNames(pr.Labels),
-				"draft":  pr.IsDraft,
-				"review": reviewLabel(pr),
-				"ci":     ciLabel(pr.StatusCheckRollup),
-				"branch": pr.HeadRefName,
+				"number":             pr.Number,
+				"title":              pr.Title,
+				"state":              pr.State,
+				"url":                pr.URL,
+				"author":             pr.Author.Login,
+				"labels":             labelNames(pr.Labels),
+				"draft":              pr.IsDraft,
+				"review":             reviewLabel(pr),
+				"ci":                 ciLabel(pr.StatusCheckRollup),
+				"branch":             pr.HeadRefName,
+				"age":                shortAge(pr.CreatedAt),
+				"linked_issue":       linkedIssue,
+				"linked_issue_count": linkedIssueCount,
+				"assignee":           assignee,
+				"assignee_count":     assigneeCount,
 			},
 		})
 	}
@@ -82,18 +92,21 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 }
 
 // prListItem is the JSON shape of a single entry returned by
-// `gh pr list --json number,title,state,author,labels,url,isDraft,reviewDecision,headRefName`.
+// `gh pr list --json number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup,createdAt,assignees,closingIssuesReferences`.
 type prListItem struct {
-	Number            int       `json:"number"`
-	Title             string    `json:"title"`
-	State             string    `json:"state"`
-	Author            ghAuthor  `json:"author"`
-	Labels            []ghLabel `json:"labels"`
-	URL               string    `json:"url"`
-	IsDraft           bool      `json:"isDraft"`
-	ReviewDecision    string    `json:"reviewDecision"`
-	HeadRefName       string    `json:"headRefName"`
-	StatusCheckRollup []prCheck `json:"statusCheckRollup"`
+	Number            int        `json:"number"`
+	Title             string     `json:"title"`
+	State             string     `json:"state"`
+	Author            ghAuthor   `json:"author"`
+	Labels            []ghLabel  `json:"labels"`
+	URL               string     `json:"url"`
+	IsDraft           bool       `json:"isDraft"`
+	ReviewDecision    string     `json:"reviewDecision"`
+	HeadRefName       string     `json:"headRefName"`
+	StatusCheckRollup []prCheck  `json:"statusCheckRollup"`
+	CreatedAt         time.Time  `json:"createdAt"`
+	Assignees         []ghAuthor `json:"assignees"`
+	LinkedIssues      []ghRef    `json:"closingIssuesReferences"`
 }
 
 // prCheck is one node of gh's statusCheckRollup, which mixes two GraphQL

@@ -276,6 +276,58 @@ func labelNames(labels []ghLabel) []string {
 	return names
 }
 
+// ghRef is a minimal issue/PR cross-reference: the PRs that would close an
+// issue (closedByPullRequestsReferences) or the issues a PR closes
+// (closingIssuesReferences).
+type ghRef struct {
+	Number int `json:"number"`
+}
+
+// assigneeSummary returns the first assignee login and the total count.
+func assigneeSummary(assignees []ghAuthor) (login string, count int) {
+	if len(assignees) == 0 {
+		return "", 0
+	}
+	return assignees[0].Login, len(assignees)
+}
+
+// firstRef returns the first cross-reference's number and the total count.
+// A zero number means there are no references.
+func firstRef(refs []ghRef) (number, count int) {
+	if len(refs) == 0 {
+		return 0, 0
+	}
+	return refs[0].Number, len(refs)
+}
+
+// timeNow is overridable in tests so age formatting is deterministic.
+var timeNow = time.Now
+
+// shortAge renders a compact age like "3w", "5d", "2mo", or "1y" relative
+// to timeNow. It returns "" for a zero or future timestamp.
+func shortAge(t time.Time) string {
+	if t.IsZero() {
+		return ""
+	}
+	d := timeNow().Sub(t)
+	switch {
+	case d < 0:
+		return ""
+	case d < time.Hour:
+		return fmt.Sprintf("%dm", int(d.Minutes()))
+	case d < 24*time.Hour:
+		return fmt.Sprintf("%dh", int(d.Hours()))
+	case d < 7*24*time.Hour:
+		return fmt.Sprintf("%dd", int(d.Hours()/24))
+	case d < 30*24*time.Hour:
+		return fmt.Sprintf("%dw", int(d.Hours()/(24*7)))
+	case d < 365*24*time.Hour:
+		return fmt.Sprintf("%dmo", int(d.Hours()/(24*30)))
+	default:
+		return fmt.Sprintf("%dy", int(d.Hours()/(24*365)))
+	}
+}
+
 // decodeList unmarshals gh's JSON array stdout into T entries.
 func decodeList[T any](out []byte) ([]T, error) {
 	var entries []T

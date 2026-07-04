@@ -47,13 +47,16 @@ type PickerManifest struct {
 	HidePreview bool
 }
 
-// LayoutMode selects between a single-column list and a multi-column table.
+// LayoutMode selects how the picker lays out each item: a single-line
+// list, a multi-column table, or a two-line card (title on its own line
+// with a status strip beneath it).
 type LayoutMode string
 
 // Picker layout modes.
 const (
 	LayoutModeList  LayoutMode = "list"
 	LayoutModeTable LayoutMode = "table"
+	LayoutModeCard  LayoutMode = "card"
 )
 
 // Column describes one table column when Layout is LayoutModeTable.

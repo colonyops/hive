@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -14,6 +15,14 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
+
+// fixClock pins timeNow so shortAge output is deterministic in tests.
+func fixClock(t *testing.T, now time.Time) {
+	t.Helper()
+	prev := timeNow
+	timeNow = func() time.Time { return now }
+	t.Cleanup(func() { timeNow = prev })
+}
 
 // newIssues constructs the issues source for tests. A nil store gets a
 // fresh per-test KV (New requires one).
@@ -87,7 +96,7 @@ func TestIssuesManifest(t *testing.T) {
 	assert.Equal(t, "issues", manifest.ID)
 	assert.True(t, manifest.Capabilities.FetchDetail)
 	assert.False(t, manifest.Picker.HidePreview)
-	assert.Equal(t, sources.LayoutModeList, manifest.Picker.Layout)
+	assert.Equal(t, sources.LayoutModeCard, manifest.Picker.Layout)
 	assert.Equal(t, sources.SearchModeRemote, manifest.Picker.Search.Mode)
 }
 
@@ -99,16 +108,17 @@ func TestPRsManifest(t *testing.T) {
 	assert.Equal(t, "prs", manifest.ID)
 	assert.False(t, manifest.Capabilities.FetchDetail, "prs source has no detail view")
 	assert.True(t, manifest.Picker.HidePreview)
-	assert.Equal(t, sources.LayoutModeTable, manifest.Picker.Layout)
+	assert.Equal(t, sources.LayoutModeCard, manifest.Picker.Layout)
 	assert.NotEmpty(t, manifest.Picker.Columns)
 }
 
 func TestSearchIssues(t *testing.T) {
+	fixClock(t, time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC))
 	exec := &executiltest.Exec{
 		Responses: []executiltest.Response{
 			{Out: []byte(`[
-				{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"},{"name":"public"}],"url":"https://github.com/o/r/issues/1"},
-				{"number":2,"title":"Second issue","state":"CLOSED","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/issues/2"}
+				{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"},{"name":"public"}],"url":"https://github.com/o/r/issues/1","createdAt":"2026-07-01T00:00:00Z","assignees":[{"login":"carol"}],"closedByPullRequestsReferences":[{"number":42}]},
+				{"number":2,"title":"Second issue","state":"CLOSED","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/issues/2","createdAt":"2026-07-03T00:00:00Z","assignees":[],"closedByPullRequestsReferences":[]}
 			]`)},
 		},
 	}
@@ -123,7 +133,7 @@ func TestSearchIssues(t *testing.T) {
 	assert.Equal(t, []string{
 		"issue", "list",
 		"--repo", "o/r",
-		"--json", "number,title,state,author,labels,url",
+		"--json", "number,title,state,author,labels,url,createdAt,assignees,closedByPullRequestsReferences",
 		"--limit", "30",
 		"--search", "bug",
 	}, call.Args)
@@ -134,13 +144,22 @@ func TestSearchIssues(t *testing.T) {
 	assert.Equal(t, "#1 · OPEN", result.Items[0].Subtitle)
 	assert.Equal(t, "https://github.com/o/r/issues/1", result.Items[0].URI)
 	assert.Equal(t, map[string]any{
-		"number": 1,
-		"title":  "First issue",
-		"state":  "OPEN",
-		"url":    "https://github.com/o/r/issues/1",
-		"author": "alice",
-		"labels": []string{"api", "public"},
+		"number":          1,
+		"title":           "First issue",
+		"state":           "OPEN",
+		"url":             "https://github.com/o/r/issues/1",
+		"author":          "alice",
+		"labels":          []string{"api", "public"},
+		"age":             "3d",
+		"linked_pr":       42,
+		"linked_pr_count": 1,
+		"assignee":        "carol",
+		"assignee_count":  1,
 	}, result.Items[0].Fields)
+
+	assert.Equal(t, "1d", result.Items[1].Fields["age"])
+	assert.Equal(t, 0, result.Items[1].Fields["linked_pr"])
+	assert.Empty(t, result.Items[1].Fields["assignee"])
 }
 
 func TestSearchIgnoresSuccessfulGhStderr(t *testing.T) {
@@ -173,11 +192,12 @@ func TestSearchIncludesGhStderrOnFailure(t *testing.T) {
 }
 
 func TestSearchPRs(t *testing.T) {
+	fixClock(t, time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC))
 	exec := &executiltest.Exec{
 		Responses: []executiltest.Response{
 			{Out: []byte(`[
-				{"number":10,"title":"Add feature","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"}],"url":"https://github.com/o/r/pull/10","isDraft":false,"reviewDecision":"APPROVED","headRefName":"feat/add","statusCheckRollup":[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"}]},
-				{"number":11,"title":"WIP thing","state":"OPEN","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/pull/11","isDraft":true,"reviewDecision":"","headRefName":"wip/thing","statusCheckRollup":[]}
+				{"number":10,"title":"Add feature","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"}],"url":"https://github.com/o/r/pull/10","isDraft":false,"reviewDecision":"APPROVED","headRefName":"feat/add","statusCheckRollup":[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"}],"createdAt":"2026-06-29T00:00:00Z","assignees":[{"login":"dave"}],"closingIssuesReferences":[{"number":13}]},
+				{"number":11,"title":"WIP thing","state":"OPEN","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/pull/11","isDraft":true,"reviewDecision":"","headRefName":"wip/thing","statusCheckRollup":[],"createdAt":"2026-07-02T00:00:00Z","assignees":[],"closingIssuesReferences":[]}
 			]`)},
 		},
 	}
@@ -192,7 +212,7 @@ func TestSearchPRs(t *testing.T) {
 	assert.Equal(t, []string{
 		"pr", "list",
 		"--repo", "o/r",
-		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup",
+		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup,createdAt,assignees,closingIssuesReferences",
 		"--limit", "30",
 		"--search", "feat",
 	}, call.Args)
@@ -202,16 +222,21 @@ func TestSearchPRs(t *testing.T) {
 	assert.Equal(t, "Add feature", result.Items[0].Title)
 	assert.Equal(t, "#10 · approved", result.Items[0].Subtitle)
 	assert.Equal(t, map[string]any{
-		"number": 10,
-		"title":  "Add feature",
-		"state":  "OPEN",
-		"url":    "https://github.com/o/r/pull/10",
-		"author": "alice",
-		"labels": []string{"api"},
-		"draft":  false,
-		"review": "approved",
-		"ci":     "passing",
-		"branch": "feat/add",
+		"number":             10,
+		"title":              "Add feature",
+		"state":              "OPEN",
+		"url":                "https://github.com/o/r/pull/10",
+		"author":             "alice",
+		"labels":             []string{"api"},
+		"draft":              false,
+		"review":             "approved",
+		"ci":                 "passing",
+		"branch":             "feat/add",
+		"age":                "5d",
+		"linked_issue":       13,
+		"linked_issue_count": 1,
+		"assignee":           "dave",
+		"assignee_count":     1,
 	}, result.Items[0].Fields)
 
 	assert.Equal(t, "#11 · draft", result.Items[1].Subtitle, "draft wins over reviewDecision")
