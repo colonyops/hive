@@ -9,8 +9,7 @@ import (
 
 // prsDriver is the built-in GitHub pull requests source: a two-line card
 // list (no detail view) of open PRs, backed by `gh pr list`. The status
-// strip beneath each title reads CI, then review, then author — the order
-// of the columns below (number and title are consumed by the title line).
+// strip beneath each title reads CI, then review, then author.
 type prsDriver struct{}
 
 // PRs returns the built-in GitHub pull requests driver.
@@ -20,15 +19,6 @@ func (prsDriver) Config() Config {
 	return Config{
 		ID:          "prs",
 		DisplayName: "GitHub Pull Requests",
-		Layout:      sources.LayoutModeCard,
-		HidePreview: true,
-		Columns: []sources.Column{
-			{Key: "number", Label: "#", Width: 6},
-			{Key: "title", Label: "Title", Flex: 1},
-			{Key: "ci", Label: "CI", Width: 10},
-			{Key: "review", Label: "Review", Width: 18},
-			{Key: "author", Label: "Author", Width: 14},
-		},
 	}
 }
 

@@ -36,52 +36,17 @@ type Capabilities struct {
 	FetchDetail bool
 }
 
-// PickerManifest configures how the TUI picker lays out and searches items.
+// PickerManifest configures how the TUI picker searches a source's items.
 type PickerManifest struct {
-	Layout  LayoutMode
-	Columns []Column
-	Search  SearchManifest
-	// HidePreview collapses the picker to a single full-width pane for
-	// sources whose items have no useful detail body (e.g. a PR
-	// table). The zero value keeps the two-pane list+preview layout.
-	HidePreview bool
-}
-
-// LayoutMode selects how the picker lays out each item: a single-line
-// list, a multi-column table, or a two-line card (title on its own line
-// with a status strip beneath it).
-type LayoutMode string
-
-// Picker layout modes.
-const (
-	LayoutModeList  LayoutMode = "list"
-	LayoutModeTable LayoutMode = "table"
-	LayoutModeCard  LayoutMode = "card"
-)
-
-// Column describes one table column when Layout is LayoutModeTable.
-type Column struct {
-	Key   string
-	Label string
-	Width int
-	Flex  int
+	Search SearchManifest
 }
 
 // SearchManifest configures how the picker issues search queries.
 type SearchManifest struct {
-	Mode       SearchMode
+	// DebounceMS is the delay before a query change issues a remote search;
+	// zero uses the picker's default debounce.
 	DebounceMS int
 }
-
-// SearchMode selects between filtering already-loaded items locally and
-// issuing a remote Search call per query change.
-type SearchMode string
-
-// Picker search modes.
-const (
-	SearchModeLocal  SearchMode = "local"
-	SearchModeRemote SearchMode = "remote"
-)
 
 // SearchParams carries a search query and scope to a source.
 type SearchParams struct {

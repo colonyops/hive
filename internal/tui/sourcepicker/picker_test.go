@@ -124,30 +124,21 @@ func applyPickerMsg(t *testing.T, p Picker, msg tea.Msg) Picker {
 	return drainPicker(t, next, cmd)
 }
 
-func listManifest() sources.Manifest {
+func fakeManifest() sources.Manifest {
 	return sources.Manifest{
 		ID:          "fake",
 		DisplayName: "Fake Source",
 		Capabilities: sources.Capabilities{
 			FetchDetail: true,
 		},
-		Picker: sources.PickerManifest{
-			Layout: sources.LayoutModeList,
-			Search: sources.SearchManifest{
-				Mode: sources.SearchModeLocal,
-			},
-		},
 	}
 }
 
-// remoteManifest is listManifest with remote search mode and a tiny
-// debounce so tests exercise the real tick path without slow sleeps.
+// remoteManifest sets a tiny debounce so tests exercise the real search
+// tick path without slow sleeps.
 func remoteManifest() sources.Manifest {
-	m := listManifest()
-	m.Picker.Search = sources.SearchManifest{
-		Mode:       sources.SearchModeRemote,
-		DebounceMS: 1,
-	}
+	m := fakeManifest()
+	m.Picker.Search.DebounceMS = 1
 	return m
 }
 
@@ -180,28 +171,6 @@ func typeKey(t *testing.T, p Picker, s string) Picker {
 // activeTab returns the current tab's state for assertions.
 func activeTab(p Picker) *tabState {
 	return &p.tabs[p.activeTab]
-}
-
-func TestPicker_LocalFilterPreservesItems(t *testing.T) {
-	items := []sources.Item{
-		{ID: "1", Title: "alpha"},
-		{ID: "2", Title: "beta"},
-	}
-	fake := newFakeTUISource(listManifest(), items)
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	tab := activeTab(p)
-	require.Len(t, tab.filteredItems, 2)
-
-	p = enterSearch(t, p)
-	p = typeKey(t, p, "alpha")
-
-	tab = activeTab(p)
-	require.Len(t, tab.filteredItems, 1)
-	assert.Equal(t, "alpha", tab.filteredItems[0].Title)
-	assert.Equal(t, []string{""}, fake.searchCalls,
-		"local mode must never issue remote searches beyond the initial load")
 }
 
 func TestPicker_RemoteSearchDispatchesDebouncedQuery(t *testing.T) {
@@ -267,8 +236,8 @@ func TestPicker_StaleSearchResultsAreDropped(t *testing.T) {
 
 func TestPicker_SelectionAndCancel(t *testing.T) {
 	items := []sources.Item{{ID: "1", Title: "alpha"}}
-	fake := newFakeTUISource(listManifest(), items)
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
@@ -280,7 +249,7 @@ func TestPicker_SelectionAndCancel(t *testing.T) {
 	assert.False(t, p.Cancelled())
 
 	// Cancel test
-	p2 := newTestPicker(fake, listManifest(), "", 80, 24)
+	p2 := newTestPicker(fake, fakeManifest(), "", 80, 24)
 	p2 = drainPicker(t, p2, p2.Init())
 	next2, cmd2 := p2.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
 	p2 = drainPicker(t, next2, cmd2)
@@ -290,8 +259,8 @@ func TestPicker_SelectionAndCancel(t *testing.T) {
 }
 
 func TestPicker_EmptyResultsShowsEmptyState(t *testing.T) {
-	fake := newFakeTUISource(listManifest(), nil)
-	p := newTestPicker(fake, listManifest(), "test-repo", 80, 24)
+	fake := newFakeTUISource(fakeManifest(), nil)
+	p := newTestPicker(fake, fakeManifest(), "test-repo", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	tab := activeTab(p)
@@ -308,10 +277,10 @@ func TestPicker_EmptyResultsShowsEmptyState(t *testing.T) {
 }
 
 func TestPicker_SearchErrorRendersInBody(t *testing.T) {
-	fake := newFakeTUISource(listManifest(), nil)
+	fake := newFakeTUISource(fakeManifest(), nil)
 	fake.searchErr = fmt.Errorf("gh: unauthenticated")
 
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	body := terminal.StripANSI(p.renderBody())
@@ -331,9 +300,9 @@ func TestPicker_ViewFitsTerminal(t *testing.T) {
 	for _, size := range sizes {
 		t.Run(fmt.Sprintf("%dx%d", size.width, size.height), func(t *testing.T) {
 			items := []sources.Item{{ID: "1", Title: "Item one"}}
-			fake := newFakeTUISource(listManifest(), items)
+			fake := newFakeTUISource(fakeManifest(), items)
 
-			p := newTestPicker(fake, listManifest(), "", size.width, size.height)
+			p := newTestPicker(fake, fakeManifest(), "", size.width, size.height)
 			p = drainPicker(t, p, p.Init())
 
 			viewHeight := lipgloss.Height(p.View())
@@ -348,8 +317,8 @@ func TestPicker_NavigateModeIsDefault(t *testing.T) {
 		{ID: "2", Title: "beta"},
 		{ID: "3", Title: "gamma"},
 	}
-	fake := newFakeTUISource(listManifest(), items)
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 	require.False(t, p.searchMode, "picker must start in navigate mode")
 
@@ -387,13 +356,13 @@ func TestPicker_TabSwitching(t *testing.T) {
 	items1 := []sources.Item{{ID: "1", Title: "PR one"}}
 	items2 := []sources.Item{{ID: "2", Title: "Issue one"}, {ID: "3", Title: "Issue two"}}
 
-	fake1 := newFakeTUISource(listManifest(), items1)
-	m1 := listManifest()
+	fake1 := newFakeTUISource(fakeManifest(), items1)
+	m1 := fakeManifest()
 	m1.ID = "prs"
 	m1.DisplayName = "Pull Requests"
 
-	fake2 := newFakeTUISource(listManifest(), items2)
-	m2 := listManifest()
+	fake2 := newFakeTUISource(fakeManifest(), items2)
+	m2 := fakeManifest()
 	m2.ID = "issues"
 	m2.DisplayName = "Issues"
 
@@ -430,10 +399,10 @@ func TestPicker_TabSwitching(t *testing.T) {
 }
 
 func TestPicker_TabBarRendering(t *testing.T) {
-	m1 := listManifest()
+	m1 := fakeManifest()
 	m1.ID = "prs"
 	m1.DisplayName = "Pull Requests"
-	m2 := listManifest()
+	m2 := fakeManifest()
 	m2.ID = "issues"
 	m2.DisplayName = "Issues"
 
@@ -450,10 +419,10 @@ func TestPicker_TabBarRendering(t *testing.T) {
 }
 
 func TestPicker_RetryOnError(t *testing.T) {
-	fake := newFakeTUISource(listManifest(), nil)
+	fake := newFakeTUISource(fakeManifest(), nil)
 	fake.searchErr = fmt.Errorf("rate limited")
 
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	tab := activeTab(p)
@@ -469,56 +438,6 @@ func TestPicker_RetryOnError(t *testing.T) {
 	tab = activeTab(p)
 	require.NoError(t, tab.searchErr)
 	require.Len(t, tab.filteredItems, 1)
-}
-
-// TestPicker_TableRowsNeverWrap verifies table rows with flex columns
-// and long titles remain single-line.
-func TestPicker_TableRowsNeverWrap(t *testing.T) {
-	manifest := sources.Manifest{
-		ID:          "fake-prs",
-		DisplayName: "Fake Pull Requests",
-		Picker: sources.PickerManifest{
-			Layout:      sources.LayoutModeTable,
-			HidePreview: true,
-			Columns: []sources.Column{
-				{Key: "number", Label: "#", Width: 6},
-				{Key: "title", Label: "Title", Flex: 1},
-				{Key: "author", Label: "Author", Width: 14},
-			},
-			Search: sources.SearchManifest{Mode: sources.SearchModeLocal},
-		},
-	}
-	long := strings.Repeat("very long pull request title ", 10)
-	item := sources.Item{ID: "1", Title: long, Fields: map[string]any{
-		"number": 1, "title": long, "author": "someone",
-	}}
-
-	tab := &tabState{tab: TabSource{ID: "fake-prs", Manifest: manifest}}
-	fake := newFakeTUISource(manifest, []sources.Item{item})
-	p := newTestPicker(fake, manifest, "", 120, 40)
-	p = drainPicker(t, p, p.Init())
-
-	row := p.renderRow(item, true, tab, 0)
-	assert.Equal(t, 1, lipgloss.Height(row), "table row must render as exactly one line")
-}
-
-func TestResolveColumnWidths(t *testing.T) {
-	cols := []sources.Column{
-		{Key: "number", Width: 6},
-		{Key: "title", Flex: 1},
-		{Key: "author", Width: 14},
-	}
-	widths := resolveSourceColumnWidths(cols, 100)
-	assert.Equal(t, 6, widths[0])
-	assert.Equal(t, 14, widths[2])
-	assert.Equal(t, 78, widths[1])
-
-	widths = resolveSourceColumnWidths([]sources.Column{{Key: "a"}, {Key: "b", Flex: 1}}, 40)
-	assert.Equal(t, 12, widths[0])
-	assert.Equal(t, 27, widths[1])
-
-	widths = resolveSourceColumnWidths(cols, 20)
-	assert.GreaterOrEqual(t, widths[1], sourceFlexColumnMinWidth)
 }
 
 func TestTableCellStyle(t *testing.T) {
@@ -548,56 +467,6 @@ func TestTableCellStyle(t *testing.T) {
 	}
 }
 
-func TestSourceTableRowColors(t *testing.T) {
-	columns := []sources.Column{
-		{Key: "number", Width: 6},
-		{Key: "title", Flex: 1},
-		{Key: "review", Width: 18},
-		{Key: "ci", Width: 10},
-	}
-	item := sources.Item{ID: "10", Title: "Add feature", Fields: map[string]any{
-		"number": 10, "title": "Add feature", "review": "approved", "ci": "failing",
-	}}
-
-	styled := renderSourceTableRow(item, columns, 70, true)
-	plain := renderSourceTableRow(item, columns, 70, false)
-
-	// Styled cells keep their semantic colors (padding is inside the
-	// styled span so widths match the plain variant), and CI cells carry
-	// their status icon.
-	assert.Contains(t, styled, styles.TextMutedStyle.Render("#10   "))
-	assert.Contains(t, styled, styles.TextSuccessStyle.Render("approved"+strings.Repeat(" ", 10)))
-	assert.Contains(t, styled, styles.TextErrorStyle.Render("✗ failing "))
-
-	// The plain variant is used for selected rows: it must contain no
-	// ANSI sequences at all, otherwise embedded SGR resets terminate the
-	// full-row highlight background mid-line. Text layout must be
-	// identical between the two variants.
-	assert.Equal(t, plain, terminal.StripANSI(plain), "plain table row must be ANSI-free")
-	assert.Equal(t, plain, terminal.StripANSI(styled))
-}
-
-func TestStatusIcon(t *testing.T) {
-	assert.Equal(t, "✓ ", statusIcon("passing"))
-	assert.Equal(t, "✗ ", statusIcon("failing"))
-	assert.Equal(t, "● ", statusIcon("pending"))
-	assert.Empty(t, statusIcon("approved"))
-	assert.Empty(t, statusIcon(""))
-}
-
-func TestRenderSingleLineContent_PlainIsANSIFree(t *testing.T) {
-	p := newTestPicker(newFakeTUISource(listManifest(), nil), listManifest(), "test-repo", 90, 24)
-	item := sources.Item{ID: "1", Title: "First reference item", Fields: map[string]any{
-		"number": 1278, "author": "alice", "labels": []string{"api", "public"}, "ci_status": "passing",
-	}}
-
-	plain := p.renderSingleLineContent(item, false, 60, 5)
-	styled := p.renderSingleLineContent(item, true, 60, 5)
-
-	assert.Equal(t, plain, terminal.StripANSI(plain), "plain list row must be ANSI-free")
-	assert.Equal(t, plain, terminal.StripANSI(styled))
-}
-
 func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
 	items := []sources.Item{
 		{ID: "9", Title: "Short", Fields: map[string]any{"number": 9}},
@@ -606,9 +475,11 @@ func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
 	w := numberColumnWidth(items)
 	assert.Equal(t, 5, w) // "#1315"
 
-	p := newTestPicker(newFakeTUISource(listManifest(), nil), listManifest(), "test-repo", 90, 24)
-	short := p.renderSingleLineContent(items[0], false, 60, w)
-	long := p.renderSingleLineContent(items[1], false, 60, w)
+	// The card title line pads "#<number>" to the shared width, so titles
+	// start at the same column regardless of number width.
+	p := newTestPicker(newFakeTUISource(fakeManifest(), nil), fakeManifest(), "test-repo", 90, 24)
+	short := strings.SplitN(p.renderCardContent(items[0], false, 60, w), "\n", 2)[0]
+	long := strings.SplitN(p.renderCardContent(items[1], false, 60, w), "\n", 2)[0]
 	assert.Equal(t, strings.Index(short, "Short"), strings.Index(long, "Long"),
 		"titles must start at the same column regardless of number width")
 }
@@ -618,8 +489,8 @@ func TestPicker_ActiveFilterVisibleOutsideSearchMode(t *testing.T) {
 		{ID: "1", Title: "alpha"},
 		{ID: "2", Title: "beta"},
 	}
-	fake := newFakeTUISource(listManifest(), items)
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
 	p = drainPicker(t, p, p.Init())
 
 	p = enterSearch(t, p)
@@ -640,8 +511,8 @@ func TestPicker_ActiveFilterVisibleOutsideSearchMode(t *testing.T) {
 
 func TestPicker_ScopeShownInTabBar(t *testing.T) {
 	p := newTestPicker(
-		newFakeTUISource(listManifest(), nil),
-		listManifest(), "myorg/myrepo", 80, 24,
+		newFakeTUISource(fakeManifest(), nil),
+		fakeManifest(), "myorg/myrepo", 80, 24,
 	)
 
 	bar := terminal.StripANSI(p.renderTabBar())
@@ -654,18 +525,6 @@ func cardManifest() sources.Manifest {
 	return sources.Manifest{
 		ID:          "fake-card",
 		DisplayName: "Fake Card Source",
-		Picker: sources.PickerManifest{
-			Layout:      sources.LayoutModeCard,
-			HidePreview: true,
-			Columns: []sources.Column{
-				{Key: "number", Label: "#", Width: 6},
-				{Key: "title", Label: "Title", Flex: 1},
-				{Key: "ci", Label: "CI", Width: 10},
-				{Key: "review", Label: "Review", Width: 18},
-				{Key: "author", Label: "Author", Width: 14},
-			},
-			Search: sources.SearchManifest{Mode: sources.SearchModeLocal},
-		},
 	}
 }
 
@@ -690,14 +549,13 @@ func TestPicker_CardRowIsTwoLines(t *testing.T) {
 		"number": 1, "author": "octocat", "review": "changes requested", "ci": "failing",
 		"labels": []string{"a", "b", "c"},
 	}}
-	tab := &tabState{tab: TabSource{ID: manifest.ID, Manifest: manifest}}
 
 	p := newTestPicker(newFakeTUISource(manifest, []sources.Item{item}), manifest, "", 120, 40)
 	p = drainPicker(t, p, p.Init())
 
 	numWidth := numberColumnWidth([]sources.Item{item})
 	for _, selected := range []bool{true, false} {
-		row := p.renderRow(item, selected, tab, numWidth)
+		row := p.renderRow(item, selected, numWidth)
 		assert.Equal(t, rowsPerItemCard, lipgloss.Height(row),
 			"card row must render as exactly two lines (selected=%v)", selected)
 	}
@@ -755,9 +613,8 @@ func TestPicker_CardScrollFollowsCursorByItem(t *testing.T) {
 
 	tab := activeTab(p)
 	require.Len(t, tab.filteredItems, len(items))
-	require.Equal(t, rowsPerItemCard, p.rowsPerItem(tab))
 
-	capacity := p.itemCapacity(tab)
+	capacity := p.itemCapacity()
 	require.Positive(t, capacity)
 	require.Less(t, capacity, len(items), "test needs more items than fit to force scrolling")
 

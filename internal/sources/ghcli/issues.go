@@ -19,12 +19,6 @@ func (issuesDriver) Config() Config {
 	return Config{
 		ID:          "issues",
 		DisplayName: "GitHub Issues",
-		Layout:      sources.LayoutModeCard,
-		Columns: []sources.Column{
-			{Key: "number", Label: "#", Width: 6},
-			{Key: "title", Label: "Title", Flex: 1},
-			{Key: "state", Label: "State", Width: 10},
-		},
 	}
 }
 

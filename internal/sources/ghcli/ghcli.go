@@ -27,18 +27,12 @@ const (
 	defaultCacheTTL    = 30 * time.Second
 )
 
-// Config declares a driver's static identity and picker layout.
+// Config declares a driver's static identity.
 type Config struct {
 	// ID is the source's registry id and config key (e.g. "issues").
 	ID string
 	// DisplayName is the picker's tab title.
 	DisplayName string
-	// Layout selects the row rendering (list cards vs table rows).
-	Layout sources.LayoutMode
-	// Columns describes the table columns when Layout is table.
-	Columns []sources.Column
-	// HidePreview collapses the picker to a single full-width pane.
-	HidePreview bool
 }
 
 // Driver defines one gh-CLI-backed source.
@@ -133,8 +127,8 @@ func (c *Source) Available(_ context.Context) bool {
 	return err == nil
 }
 
-// Initialize returns the source's picker manifest, derived entirely from
-// the driver's Config. Search is always remote: every query re-invokes gh.
+// Initialize returns the source's picker manifest, derived from the
+// driver's Config. Every query re-invokes gh, so search is always remote.
 func (c *Source) Initialize(_ context.Context) (sources.Manifest, error) {
 	_, hasDetail := c.driver.(DetailDriver)
 	return sources.Manifest{
@@ -142,14 +136,6 @@ func (c *Source) Initialize(_ context.Context) (sources.Manifest, error) {
 		DisplayName: c.cfg.DisplayName,
 		Capabilities: sources.Capabilities{
 			FetchDetail: hasDetail,
-		},
-		Picker: sources.PickerManifest{
-			Layout:      c.cfg.Layout,
-			Columns:     c.cfg.Columns,
-			HidePreview: c.cfg.HidePreview,
-			Search: sources.SearchManifest{
-				Mode: sources.SearchModeRemote,
-			},
 		},
 	}, nil
 }

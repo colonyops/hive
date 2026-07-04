@@ -15,7 +15,6 @@ import (
 	lipgloss "charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 	"github.com/rs/zerolog/log"
-	"github.com/sahilm/fuzzy"
 
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/sources"
@@ -49,12 +48,6 @@ const defaultSearchDebounce = 300 * time.Millisecond
 
 // sourcePickerGen issues a unique generation token per picker instance.
 var sourcePickerGen atomic.Int64
-
-// sourceItemsSource implements fuzzy.Source over item titles.
-type sourceItemsSource []sources.Item
-
-func (c sourceItemsSource) String(i int) string { return c[i].Title }
-func (c sourceItemsSource) Len() int            { return len(c) }
 
 // TabSource pairs a source with its configuration for one picker tab.
 type TabSource struct {
@@ -105,11 +98,8 @@ type Picker struct {
 	contentWidth, contentHeight int
 	innerWidth                  int // contentWidth minus horizontal padding (for padded sections)
 
-	// Row styles, precomputed per size change so View doesn't rebuild
-	// them for every visible row on every frame. The card variants are
-	// identical but allow two lines for the title + status strip.
-	selectedRowStyle  lipgloss.Style
-	normalRowStyle    lipgloss.Style
+	// Card row styles, precomputed per size change so View doesn't rebuild
+	// them for every visible row on every frame.
 	selectedCardStyle lipgloss.Style
 	normalCardStyle   lipgloss.Style
 }
@@ -191,8 +181,6 @@ func (p *Picker) rebuildRowStyles() {
 		Width(width).
 		MaxWidth(width)
 
-	p.selectedRowStyle = selected.MaxHeight(1)
-	p.normalRowStyle = normal.MaxHeight(1)
 	p.selectedCardStyle = selected.MaxHeight(rowsPerItemCard)
 	p.normalCardStyle = normal.MaxHeight(rowsPerItemCard)
 }
@@ -384,12 +372,7 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		return p, inputCmd
 	}
 
-	tab := p.activeState()
-	if tab.tab.Manifest.Picker.Search.Mode == sources.SearchModeRemote {
-		return p, tea.Batch(inputCmd, p.debounceSearch(tab))
-	}
-	p.applyLocalFilter()
-	return p, inputCmd
+	return p, tea.Batch(inputCmd, p.debounceSearch(p.activeState()))
 }
 
 // debounceSearch schedules a remote search for the active tab's current
@@ -468,23 +451,6 @@ func (p Picker) moveCursor(delta int) Picker {
 		p.clampScroll(tab)
 	}
 	return p
-}
-
-func (p Picker) applyLocalFilter() {
-	tab := p.activeState()
-	query := p.input.Value()
-	if query == "" {
-		tab.filteredItems = tab.items
-	} else {
-		matches := fuzzy.FindFrom(query, sourceItemsSource(tab.items))
-		items := make([]sources.Item, len(matches))
-		for i, match := range matches {
-			items[i] = tab.items[match.Index]
-		}
-		tab.filteredItems = items
-	}
-	tab.cursor = 0
-	tab.scrollOffset = 0
 }
 
 func (p Picker) openCurrentItemURL() tea.Cmd {
@@ -576,7 +542,7 @@ func (p Picker) tabQuery(idx int) string {
 }
 
 func (p *Picker) clampScroll(tab *tabState) {
-	capacity := p.itemCapacity(tab)
+	capacity := p.itemCapacity()
 	if tab.cursor < tab.scrollOffset {
 		tab.scrollOffset = tab.cursor
 	} else if tab.cursor >= tab.scrollOffset+capacity {
@@ -591,20 +557,9 @@ func (p Picker) listHeight() int {
 	return max(p.contentHeight, 1)
 }
 
-// rowsPerItem is the number of terminal rows one item occupies in the
-// given tab's layout: two for the card layout (title + status strip),
-// one for the single-line list and table layouts.
-func (p Picker) rowsPerItem(tab *tabState) int {
-	if tab.tab.Manifest.Picker.Layout == sources.LayoutModeCard {
-		return rowsPerItemCard
-	}
-	return 1
-}
-
-// itemCapacity is how many whole items fit in the list area for this tab,
-// accounting for multi-row card layouts.
-func (p Picker) itemCapacity(tab *tabState) int {
-	return max(p.listHeight()/p.rowsPerItem(tab), 1)
+// itemCapacity is how many whole two-line card items fit in the list area.
+func (p Picker) itemCapacity() int {
+	return max(p.listHeight()/rowsPerItemCard, 1)
 }
 
 // Selected returns the highlighted item if the user pressed enter.
@@ -792,8 +747,7 @@ func (p Picker) renderFilterLine(tab *tabState) string {
 
 func (p Picker) renderList(tab *tabState) string {
 	totalRows := p.listHeight()
-	perItem := p.rowsPerItem(tab)
-	capacity := p.itemCapacity(tab)
+	capacity := p.itemCapacity()
 
 	numWidth := numberColumnWidth(tab.filteredItems)
 	visible := min(len(tab.filteredItems)-tab.scrollOffset, capacity)
@@ -803,49 +757,34 @@ func (p Picker) renderList(tab *tabState) string {
 		idx := tab.scrollOffset + i
 		item := tab.filteredItems[idx]
 		selected := idx == tab.cursor
-		// A card row is two lines joined by "\n"; a list/table row is one.
-		lines = append(lines, p.renderRow(item, selected, tab, numWidth))
+		// Each card row is two lines joined by "\n".
+		lines = append(lines, p.renderRow(item, selected, numWidth))
 	}
 
 	// Pad with blank lines so the body box keeps a fixed height. Each
-	// rendered item already contributes perItem display lines.
-	for rendered := visible * perItem; rendered < totalRows; rendered++ {
+	// rendered card already contributes rowsPerItemCard display lines.
+	for rendered := visible * rowsPerItemCard; rendered < totalRows; rendered++ {
 		lines = append(lines, "")
 	}
 	return strings.Join(lines, "\n")
 }
 
-// renderRow renders one list row.
+// renderRow renders one two-line card row.
 //
 // Selected rows are composed as PLAIN text (no inner ANSI sequences) and
-// then painted once by applyRowStyle. This is deliberate: any styled cell
+// then painted once by the card style. This is deliberate: any styled cell
 // inside the row ends with an SGR reset, and that reset terminates the
 // highlight background for the rest of the line — producing a row where
 // only the trailing padding is highlighted. Do not "restore" per-cell
 // styling on selected rows unless every cell and every padding space
 // carries the highlight background itself.
-func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState, numWidth int) string {
+func (p Picker) renderRow(item sources.Item, selected bool, numWidth int) string {
 	innerWidth := max(p.innerWidth-2, 10) // account for the left border+space / padding
-	manifest := tab.tab.Manifest.Picker
-
-	if manifest.Layout == sources.LayoutModeCard {
-		content := p.renderCardContent(item, !selected, innerWidth, numWidth)
-		if selected {
-			return p.selectedCardStyle.Render(content)
-		}
-		return p.normalCardStyle.Render(content)
-	}
-
-	var content string
-	if manifest.Layout == sources.LayoutModeTable && len(manifest.Columns) > 0 {
-		content = renderSourceTableRow(item, manifest.Columns, innerWidth, !selected)
-	} else {
-		content = p.renderSingleLineContent(item, !selected, innerWidth, numWidth)
-	}
+	content := p.renderCardContent(item, !selected, innerWidth, numWidth)
 	if selected {
-		return p.selectedRowStyle.Render(content)
+		return p.selectedCardStyle.Render(content)
 	}
-	return p.normalRowStyle.Render(content)
+	return p.normalCardStyle.Render(content)
 }
 
 // numberColumnWidth returns the display width of the widest "#<number>"
@@ -859,75 +798,6 @@ func numberColumnWidth(items []sources.Item) int {
 		}
 	}
 	return widest
-}
-
-// renderSingleLineContent composes a list-layout row. When styled is
-// false the result contains no ANSI sequences (used for selected rows —
-// see renderRow). numWidth is the shared "#<number>" column width; zero
-// disables padding.
-func (p Picker) renderSingleLineContent(item sources.Item, styled bool, innerWidth, numWidth int) string {
-	var parts []string
-
-	// CI status icon if present.
-	if ciStatus := sourceFieldString(item, "ci_status"); ciStatus != "" {
-		parts = append(parts, statusIcon(ciStatus))
-	}
-
-	// Number, padded to the shared column width so titles align.
-	if number := sourceFieldString(item, "number"); number != "" {
-		num := "#" + number
-		if pad := numWidth - len(num); pad > 0 {
-			num += strings.Repeat(" ", pad)
-		}
-		if styled {
-			num = styles.TextMutedStyle.Render(num)
-		}
-		parts = append(parts, num)
-	}
-
-	// Title.
-	title := item.Title
-	if styled {
-		title = styles.TextForegroundStyle.Render(title)
-	}
-	parts = append(parts, title)
-
-	// Labels (first 2).
-	labels := sourceFieldStringSlice(item, "labels")
-	for i, label := range labels {
-		if i >= 2 {
-			break
-		}
-		tag := "[" + label + "]"
-		if styled {
-			tag = styles.TextSecondaryStyle.Render(tag)
-		}
-		parts = append(parts, tag)
-	}
-
-	// Right-aligned metadata: author.
-	right := ""
-	if author := sourceFieldString(item, "author"); author != "" {
-		right = "@" + author
-		if styled {
-			right = styles.TextMutedStyle.Render(right)
-		}
-	}
-
-	left := strings.Join(parts, " ")
-	leftWidth := ansi.StringWidth(left)
-	rightWidth := ansi.StringWidth(right)
-
-	if right == "" {
-		return ansi.Truncate(left, innerWidth, "…")
-	}
-	gap := max(innerWidth-leftWidth-rightWidth, 1)
-	if leftWidth+1+rightWidth > innerWidth {
-		available := max(innerWidth-rightWidth-1, 10)
-		left = ansi.Truncate(left, available, "…")
-		gap = max(innerWidth-ansi.StringWidth(left)-rightWidth, 1)
-	}
-	return left + strings.Repeat(" ", gap) + right
 }
 
 // renderCardContent composes a two-line card row. Line 1 is the number and
@@ -1158,73 +1028,9 @@ func (p Picker) helpText() string {
 	)
 }
 
-// --- Table helpers ---
-
-const sourceFlexColumnMinWidth = 8
-
-func resolveSourceColumnWidths(columns []sources.Column, total int) []int {
-	widths := make([]int, len(columns))
-	remaining := total - max(len(columns)-1, 0)
-	flexTotal := 0
-	for i, col := range columns {
-		switch {
-		case col.Flex > 0:
-			flexTotal += col.Flex
-		case col.Width > 0:
-			widths[i] = col.Width
-			remaining -= col.Width
-		default:
-			widths[i] = 12
-			remaining -= 12
-		}
-	}
-	if flexTotal == 0 {
-		return widths
-	}
-	for i, col := range columns {
-		if col.Flex > 0 {
-			widths[i] = max(remaining*col.Flex/flexTotal, sourceFlexColumnMinWidth)
-		}
-	}
-	return widths
-}
-
-// renderSourceTableRow composes a table-layout row. When styled is false
-// the result contains no ANSI sequences (used for selected rows — see
-// renderRow); cell padding is plain spaces either way so widths are
-// identical in both modes.
-func renderSourceTableRow(item sources.Item, columns []sources.Column, width int, styled bool) string {
-	widths := resolveSourceColumnWidths(columns, width)
-	cells := make([]string, 0, len(columns))
-	for i, col := range columns {
-		w := max(widths[i], 1)
-		raw := sourceFieldString(item, col.Key)
-		value := raw
-		if col.Key == "number" && value != "" {
-			value = "#" + value
-		}
-		value = ansi.Truncate(statusIcon(raw)+value, w, "…")
-		value += strings.Repeat(" ", max(w-ansi.StringWidth(value), 0))
-		if styled {
-			value = tableCellStyle(col.Key, raw).Render(value)
-		}
-		cells = append(cells, value)
-	}
-	return strings.Join(cells, " ")
-}
-
-func statusIcon(value string) string {
-	switch strings.ToLower(strings.TrimSpace(value)) {
-	case "passing":
-		return "✓ "
-	case "failing":
-		return "✗ "
-	case "pending":
-		return "● "
-	}
-	return ""
-}
-
+// tableCellStyle maps a field key/value to a semantic color for the card
+// metadata strip: ids/authors are muted, and status-like values
+// (review/CI/state) take success/error/warning colors.
 func tableCellStyle(key, value string) lipgloss.Style {
 	switch key {
 	case "number", "id", "index":

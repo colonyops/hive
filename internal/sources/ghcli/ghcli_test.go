@@ -94,10 +94,8 @@ func TestIssuesManifest(t *testing.T) {
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "issues", manifest.ID)
+	assert.Equal(t, "GitHub Issues", manifest.DisplayName)
 	assert.True(t, manifest.Capabilities.FetchDetail)
-	assert.False(t, manifest.Picker.HidePreview)
-	assert.Equal(t, sources.LayoutModeCard, manifest.Picker.Layout)
-	assert.Equal(t, sources.SearchModeRemote, manifest.Picker.Search.Mode)
 }
 
 func TestPRsManifest(t *testing.T) {
@@ -106,10 +104,8 @@ func TestPRsManifest(t *testing.T) {
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "prs", manifest.ID)
+	assert.Equal(t, "GitHub Pull Requests", manifest.DisplayName)
 	assert.False(t, manifest.Capabilities.FetchDetail, "prs source has no detail view")
-	assert.True(t, manifest.Picker.HidePreview)
-	assert.Equal(t, sources.LayoutModeCard, manifest.Picker.Layout)
-	assert.NotEmpty(t, manifest.Picker.Columns)
 }
 
 func TestSearchIssues(t *testing.T) {
