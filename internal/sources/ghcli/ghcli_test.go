@@ -264,6 +264,9 @@ func TestCILabel(t *testing.T) {
 		{"queued is pending", []prCheck{{Status: "QUEUED"}}, "pending"},
 		{"status context pending", []prCheck{{State: "PENDING"}}, "pending"},
 		{"cancelled is failing", []prCheck{{Status: "COMPLETED", Conclusion: "CANCELLED"}}, "failing"},
+		{"stale is pending, not passing", []prCheck{{Status: "COMPLETED", Conclusion: "STALE"}}, "pending"},
+		{"completed without conclusion is pending", []prCheck{{Status: "COMPLETED"}}, "pending"},
+		{"unknown future conclusion is pending", []prCheck{{Status: "COMPLETED", Conclusion: "SOMETHING_NEW"}}, "pending"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -428,11 +431,15 @@ func TestCacheIsolatedPerSource(t *testing.T) {
 }
 
 func TestFetchDetailRejectsNonNumericID(t *testing.T) {
-	exec := &fakeExecutor{}
-	c := newIssues(t, exec, nil)
+	for _, id := range []string{"--web", "-1", "0", "+1x"} {
+		t.Run(id, func(t *testing.T) {
+			exec := &fakeExecutor{}
+			c := newIssues(t, exec, nil)
 
-	_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "--web", Scope: "o/r"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "invalid id")
-	assert.Empty(t, exec.calls, "no gh call should be made for an invalid id")
+			_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: id, Scope: "o/r"})
+			require.Error(t, err)
+			assert.Contains(t, err.Error(), "invalid id")
+			assert.Empty(t, exec.calls, "no gh call should be made for an invalid id")
+		})
+	}
 }

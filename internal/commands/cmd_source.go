@@ -15,8 +15,8 @@ import (
 // SourceCmd exposes a noninteractive entry point onto the source
 // registry: resolve a source, search it, select an item by ID, render
 // its session templates, and create a session through the same
-// UseBatchSpawn:true path the TUI picker uses. This is the seam integration
-// tests drive without a live TUI.
+// UseBatchSpawn:true path the TUI picker uses. It is intended for
+// scripting and as a TUI-free seam onto the source pipeline.
 type SourceCmd struct {
 	flags *Flags
 	app   *hive.App
@@ -99,59 +99,14 @@ type sourceOpenResult struct {
 }
 
 func (cmd *SourceCmd) runOpen(ctx context.Context, c *cli.Command) error {
-	sourceID := c.Args().First()
-	if sourceID == "" {
-		return fmt.Errorf("source id is required: hive source open <id> --pick <item-id>")
-	}
-
-	if cmd.app.Sources == nil {
-		return fmt.Errorf("no sources are configured")
-	}
-	conn, tmplCfg, ok := cmd.app.Sources.Get(sourceID)
-	if !ok {
-		return fmt.Errorf("unknown source %q", sourceID)
-	}
-	if !conn.Available(ctx) {
-		return fmt.Errorf("source %q is not available", sourceID)
-	}
-
-	manifest, err := conn.Initialize(ctx)
-	if err != nil {
-		return fmt.Errorf("source %q: initialize: %w", sourceID, err)
-	}
-
-	result, err := conn.Search(ctx, sources.SearchParams{
-		Query: cmd.query,
-		Scope: cmd.scope,
+	rendered, err := resolveSourceSession(ctx, cmd.app.Sources, sourceOpenParams{
+		SourceID: c.Args().First(),
+		Pick:     cmd.pick,
+		Query:    cmd.query,
+		Scope:    cmd.scope,
 	})
 	if err != nil {
-		return fmt.Errorf("source %q: search: %w", sourceID, err)
-	}
-
-	item, ok := findItemByID(result.Items, cmd.pick)
-	if !ok {
-		return fmt.Errorf("source %q: no item with id %q in search results", sourceID, cmd.pick)
-	}
-
-	// Detail is optional template data: only fetch it when the source
-	// declares the capability (mirrors the TUI picker's gate), and never
-	// fail session creation over it being absent.
-	detail := item.Detail
-	if detail.Kind() == sources.DetailKindNone && manifest.Capabilities.FetchDetail {
-		fetched, err := conn.FetchDetail(ctx, sources.FetchDetailParams{
-			ID:    item.ID,
-			Scope: cmd.scope,
-			URI:   item.URI,
-		})
-		if err != nil {
-			return fmt.Errorf("source %q: fetch detail for %q: %w", sourceID, item.ID, err)
-		}
-		detail = fetched
-	}
-
-	rendered, err := sources.RenderSessionTemplates(tmplCfg, item, detail)
-	if err != nil {
-		return fmt.Errorf("source %q: %w", sourceID, err)
+		return err
 	}
 
 	created, err := cmd.app.Sessions.CreateSession(ctx, hive.CreateOptions{
@@ -178,6 +133,76 @@ func (cmd *SourceCmd) runOpen(ctx context.Context, c *cli.Command) error {
 		return fmt.Errorf("write output: %w", err)
 	}
 	return nil
+}
+
+// sourceOpenParams carries the resolved `source open` arguments into
+// resolveSourceSession.
+type sourceOpenParams struct {
+	SourceID string
+	Pick     string
+	Query    string
+	Scope    string
+}
+
+// resolveSourceSession runs the noninteractive source pipeline up to (but
+// not including) session creation: resolve the source from the registry,
+// search it, select the item matching params.Pick, fetch its detail when
+// the source supports it, and render the source's session templates.
+func resolveSourceSession(ctx context.Context, registry *sources.Registry, params sourceOpenParams) (sources.RenderedSession, error) {
+	if params.SourceID == "" {
+		return sources.RenderedSession{}, fmt.Errorf("source id is required: hive source open <id> --pick <item-id>")
+	}
+
+	if registry == nil {
+		return sources.RenderedSession{}, fmt.Errorf("no sources are configured")
+	}
+	conn, tmplCfg, ok := registry.Get(params.SourceID)
+	if !ok {
+		return sources.RenderedSession{}, fmt.Errorf("unknown source %q", params.SourceID)
+	}
+	if !conn.Available(ctx) {
+		return sources.RenderedSession{}, fmt.Errorf("source %q is not available", params.SourceID)
+	}
+
+	manifest, err := conn.Initialize(ctx)
+	if err != nil {
+		return sources.RenderedSession{}, fmt.Errorf("source %q: initialize: %w", params.SourceID, err)
+	}
+
+	result, err := conn.Search(ctx, sources.SearchParams{
+		Query: params.Query,
+		Scope: params.Scope,
+	})
+	if err != nil {
+		return sources.RenderedSession{}, fmt.Errorf("source %q: search: %w", params.SourceID, err)
+	}
+
+	item, ok := findItemByID(result.Items, params.Pick)
+	if !ok {
+		return sources.RenderedSession{}, fmt.Errorf("source %q: no item with id %q in search results", params.SourceID, params.Pick)
+	}
+
+	// Detail is optional template data: only fetch it when the item does
+	// not already carry one and the source declares the capability
+	// (mirrors the TUI picker's gate).
+	detail := item.Detail
+	if detail.Kind() == sources.DetailKindNone && manifest.Capabilities.FetchDetail {
+		fetched, err := conn.FetchDetail(ctx, sources.FetchDetailParams{
+			ID:    item.ID,
+			Scope: params.Scope,
+			URI:   item.URI,
+		})
+		if err != nil {
+			return sources.RenderedSession{}, fmt.Errorf("source %q: fetch detail for %q: %w", params.SourceID, item.ID, err)
+		}
+		detail = fetched
+	}
+
+	rendered, err := sources.RenderSessionTemplates(tmplCfg, item, detail)
+	if err != nil {
+		return sources.RenderedSession{}, fmt.Errorf("source %q: %w", params.SourceID, err)
+	}
+	return rendered, nil
 }
 
 // findItemByID returns the item in items whose ID matches id.

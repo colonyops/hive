@@ -164,9 +164,9 @@ func (m Model) handleSessionAction(msg sessions.ActionRequestMsg) (tea.Model, te
 		return m.viewTasksForSelectedSession()
 	}
 	if action.Type == act.TypeOpenSourcePicker {
-		sourceID, ok := m.resolveSourceID(action.Args)
-		if !ok {
-			m.notifyErrorf("multiple sources configured: use :OpenSource <id>")
+		sourceID, err := m.resolveSourceID(action.Args)
+		if err != nil {
+			m.notifyErrorf("%v", err)
 			return m, nil
 		}
 		return m.openSourcePicker(sourceID, m.sourcePickerScopeForSelection(m.selectedSession(), action.Args))
@@ -832,19 +832,26 @@ type sourcePickerScope struct {
 }
 
 // resolveSourceID returns the source to open: an explicit args[0]
-// when given, otherwise the sole registered source. ok is false when no
-// id was given and zero or multiple sources are registered, so callers
-// (keybinding and command-palette paths) share the same resolution rules.
-func (m Model) resolveSourceID(args []string) (string, bool) {
+// when given, otherwise the sole registered source. The returned error
+// distinguishes "nothing to open" from "ambiguous" so callers
+// (keybinding and command-palette paths) share the same resolution rules
+// and report the right problem.
+func (m Model) resolveSourceID(args []string) (string, error) {
 	if len(args) > 0 && args[0] != "" {
-		return args[0], true
+		return args[0], nil
 	}
-	if m.sourceRegistry != nil {
-		if ids := m.sourceRegistry.IDs(); len(ids) == 1 {
-			return ids[0], true
-		}
+	if m.sourceRegistry == nil {
+		return "", fmt.Errorf("no sources are configured")
 	}
-	return "", false
+	ids := m.sourceRegistry.IDs()
+	switch len(ids) {
+	case 0:
+		return "", fmt.Errorf("no sources are configured")
+	case 1:
+		return ids[0], nil
+	default:
+		return "", fmt.Errorf("multiple sources configured: use :OpenSource <id>")
+	}
 }
 
 // openSourcePicker opens the tabbed source picker with all registered
@@ -922,9 +929,11 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	return m, cmd
 }
 
-// handleSourceSelection renders the selected source's session templates
-// against the selected item and creates a session via the same
-// UseBatchSpawn:true path used by `hive batch`.
+// handleSourceSelection fetches the selected item's detail (best-effort,
+// capability-gated), renders the source's session templates against the
+// item, and creates a session via the same UseBatchSpawn:true path used
+// by `hive batch`. The detail fetch and render run inside the returned
+// command so a slow `gh` call never blocks the UI.
 func (m Model) handleSourceSelection(result sourcepicker.Result) (tea.Model, tea.Cmd) {
 	if m.modals.BgStreamDone != nil {
 		m.state = stateNormal
@@ -932,29 +941,61 @@ func (m Model) handleSourceSelection(result sourcepicker.Result) (tea.Model, tea
 		return m, nil
 	}
 
-	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, sources.Detail{})
-	if err != nil {
-		m.state = stateNormal
-		m.notifyErrorf("source %q: %v", result.SourceID, err)
-		return m, nil
-	}
-
-	return m, m.startSourceCreate(rendered, m.pendingSourceScope.Remote, m.pendingSourceScope.Source)
+	return m, m.startSourceCreate(result, m.pendingSourceScope)
 }
 
-func (m Model) startSourceCreate(rendered sources.RenderedSession, remote, source string) tea.Cmd {
+// sourceSelectionErrorMsg reports an async template-render failure from
+// startSourceCreate back to the model.
+type sourceSelectionErrorMsg struct {
+	SourceID string
+	Err      error
+}
+
+// fetchSourceDetail returns the item's detail for template rendering.
+// Detail is optional template data: it is only fetched when the item does
+// not already carry one and the source declares the capability, and fetch
+// failures degrade to an empty detail (with a log) rather than blocking
+// session creation. This mirrors cmd_source.go's gate, except the CLI
+// path fails hard where the TUI stays best-effort.
+func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope string) sources.Detail {
+	detail := result.Item.Detail
+	if detail.Kind() != sources.DetailKindNone || !result.Manifest.Capabilities.FetchDetail || result.Source == nil {
+		return detail
+	}
+	fetched, err := result.Source.FetchDetail(ctx, sources.FetchDetailParams{
+		ID:    result.Item.ID,
+		Scope: scope,
+		URI:   result.Item.URI,
+	})
+	if err != nil {
+		log.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
+			Msg("source picker: fetch detail failed; creating session without detail")
+		return sources.Detail{}
+	}
+	return fetched
+}
+
+func (m Model) startSourceCreate(result sourcepicker.Result, scope sourcePickerScope) tea.Cmd {
 	return func() tea.Msg {
+		ctx := context.Background()
+		detail := fetchSourceDetail(ctx, result, scope.Search)
+
+		rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
+		if err != nil {
+			return sourceSelectionErrorMsg{SourceID: result.SourceID, Err: err}
+		}
+
 		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
 			Name:          rendered.Name,
 			Prompt:        rendered.Prompt,
-			Remote:        remote,
-			Source:        source,
+			Remote:        scope.Remote,
+			Source:        scope.Source,
 			UseBatchSpawn: true,
 			Background:    true,
 			Tags:          rendered.Tags,
 		})
 
-		output, done, cancel := exec.Execute(context.Background())
+		output, done, cancel := exec.Execute(ctx)
 		return bgStreamStartedMsg{
 			title:  "Creating session...",
 			output: output,

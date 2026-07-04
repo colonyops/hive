@@ -1,11 +1,13 @@
 package sourcepicker
 
 import (
+	"context"
 	"fmt"
 	"os/exec"
 	"runtime"
 	"strings"
 	"sync/atomic"
+	"time"
 
 	"charm.land/bubbles/v2/spinner"
 	"charm.land/bubbles/v2/textinput"
@@ -32,6 +34,11 @@ const (
 	// ModalHelpStyle's MarginTop (2).
 	sourcePickerChrome = 8
 )
+
+// defaultSearchDebounce is used when a remote-search manifest does not
+// set its own DebounceMS: long enough to coalesce normal typing, short
+// enough to feel immediate once the user pauses.
+const defaultSearchDebounce = 300 * time.Millisecond
 
 // sourcePickerGen issues a unique generation token per picker instance.
 var sourcePickerGen atomic.Int64
@@ -97,10 +104,14 @@ type Picker struct {
 	innerWidth                  int // contentWidth minus horizontal padding (for padded sections)
 }
 
-// Result is the item selected by the user, if any.
+// Result is the item selected by the user, if any. Source and Manifest
+// let the parent fetch the item's detail (capability-gated) before
+// rendering session templates.
 type Result struct {
 	Item      sources.Item
 	SourceID  string
+	Source    sources.Source
+	Manifest  sources.Manifest
 	Templates sources.TemplateConfig
 }
 
@@ -189,7 +200,7 @@ func (p *Picker) initTab(idx int) tea.Cmd {
 	sourceID := tab.tab.ID
 
 	return func() tea.Msg {
-		ctx := contextBackground()
+		ctx := context.Background()
 		if !conn.Available(ctx) {
 			return sourceTabErrorMsg{Gen: gen, SourceID: sourceID, Err: fmt.Errorf("source %q is not available", sourceID)}
 		}
@@ -329,10 +340,33 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 	before := p.input.Value()
 	var inputCmd tea.Cmd
 	p.input, inputCmd = p.input.Update(msg)
-	if p.input.Value() != before {
-		p.applyLocalFilter()
+	if p.input.Value() == before {
+		return p, inputCmd
 	}
+
+	tab := p.activeState()
+	if tab.tab.Manifest.Picker.Search.Mode == sources.SearchModeRemote {
+		return p, tea.Batch(inputCmd, p.debounceSearch(tab))
+	}
+	p.applyLocalFilter()
 	return p, inputCmd
+}
+
+// debounceSearch schedules a remote search for the active tab's current
+// query after the manifest's debounce delay. The resulting message
+// carries the query so stale timers (the user kept typing) are dropped
+// in handleDebounce.
+func (p Picker) debounceSearch(tab *tabState) tea.Cmd {
+	delay := time.Duration(tab.tab.Manifest.Picker.Search.DebounceMS) * time.Millisecond
+	if delay <= 0 {
+		delay = defaultSearchDebounce
+	}
+	gen := p.gen
+	sourceID := tab.tab.ID
+	query := p.input.Value()
+	return tea.Tick(delay, func(time.Time) tea.Msg {
+		return sourceSearchDebounceMsg{Gen: gen, SourceID: sourceID, Query: query}
+	})
 }
 
 func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
@@ -439,13 +473,15 @@ func browserOpenCmd(uri string) *exec.Cmd {
 	}
 }
 
-// handleSearchResult applies a completed remote Search response.
+// handleSearchResult applies a completed remote Search response,
+// dropping results whose query no longer matches what the user has
+// typed (a newer search is already in flight or scheduled).
 func (p Picker) handleSearchResult(msg sourceSearchResultMsg) (Picker, tea.Cmd) {
 	if msg.Gen != p.gen {
 		return p, nil
 	}
 	idx := p.tabIndex(msg.SourceID)
-	if idx < 0 {
+	if idx < 0 || msg.Query != p.tabQuery(idx) {
 		return p, nil
 	}
 	tab := &p.tabs[idx]
@@ -477,12 +513,26 @@ func (p Picker) handleSearchError(msg sourceSearchErrorMsg) (Picker, tea.Cmd) {
 }
 
 func (p Picker) handleDebounce(msg sourceSearchDebounceMsg) (Picker, tea.Cmd) {
-	if msg.Gen != p.gen || msg.Query != p.input.Value() {
+	if msg.Gen != p.gen {
 		return p, nil
 	}
-	tab := p.activeState()
+	idx := p.tabIndex(msg.SourceID)
+	if idx < 0 || msg.Query != p.tabQuery(idx) {
+		return p, nil
+	}
+	tab := &p.tabs[idx]
 	tab.loading = true
+	tab.loadingMsg = fmt.Sprintf("Searching %s...", tab.tab.Manifest.DisplayName)
 	return p, sourceSearchCmd(p.gen, tab.tab.Source, tab.tab.ID, p.scope, msg.Query)
+}
+
+// tabQuery returns the tab's current effective search query: the live
+// input for the active tab, the saved filter for background tabs.
+func (p Picker) tabQuery(idx int) string {
+	if idx == p.activeTab {
+		return p.input.Value()
+	}
+	return p.tabs[idx].filterQuery
 }
 
 func (p *Picker) clampScroll(tab *tabState) {
@@ -513,6 +563,8 @@ func (p Picker) Selected() (Result, bool) {
 	return Result{
 		Item:      tab.filteredItems[tab.cursor],
 		SourceID:  tab.tab.ID,
+		Source:    tab.tab.Source,
+		Manifest:  tab.tab.Manifest,
 		Templates: tab.tab.Templates,
 	}, true
 }
@@ -667,7 +719,14 @@ func (p Picker) renderFilterLine(tab *tabState) string {
 	if name == "" {
 		name = tab.tab.ID
 	}
-	placeholder := styles.TextPrimaryStyle.Render("/") + " " + styles.TextMutedStyle.Render(fmt.Sprintf("filter %s…", strings.ToLower(name)))
+	// Keep an applied filter visible outside search mode so a reduced
+	// item list is never unexplained.
+	var placeholder string
+	if query := p.input.Value(); query != "" {
+		placeholder = styles.TextPrimaryStyle.Render("/") + " " + styles.TextForegroundStyle.Render(query)
+	} else {
+		placeholder = styles.TextPrimaryStyle.Render("/") + " " + styles.TextMutedStyle.Render(fmt.Sprintf("filter %s…", strings.ToLower(name)))
+	}
 
 	countStr := styles.TextMutedStyle.Render(fmt.Sprintf("%d", len(tab.filteredItems)))
 
@@ -679,6 +738,7 @@ func (p Picker) renderList(tab *tabState) string {
 	rowHeight := p.listHeight()
 	lines := make([]string, 0, rowHeight)
 
+	numWidth := numberColumnWidth(tab.filteredItems)
 	visible := min(len(tab.filteredItems), rowHeight)
 	for i := range visible {
 		idx := i + tab.scrollOffset
@@ -687,8 +747,7 @@ func (p Picker) renderList(tab *tabState) string {
 		}
 		item := tab.filteredItems[idx]
 		selected := idx == tab.cursor
-		line := p.renderRow(item, selected, tab, numberColumnWidth(tab.filteredItems))
-		lines = append(lines, line)
+		lines = append(lines, p.renderRow(item, selected, tab, numWidth))
 	}
 
 	for len(lines) < rowHeight {
@@ -861,7 +920,7 @@ func (p Picker) helpText() string {
 	)
 }
 
-// --- Table helpers (preserved from original) ---
+// --- Table helpers ---
 
 const sourceFlexColumnMinWidth = 8
 

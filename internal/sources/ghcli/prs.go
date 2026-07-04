@@ -65,8 +65,12 @@ type prCheck struct {
 }
 
 // ciLabel condenses a PR's check rollup into one table cell: any failed
-// check wins, otherwise any unfinished check reports pending, otherwise
-// everything passed. An empty rollup (no CI configured) renders blank.
+// check wins, otherwise any unfinished or non-passing check reports
+// pending, otherwise everything passed. Completed check runs only count
+// as passed for the known-good conclusions (SUCCESS/SKIPPED/NEUTRAL);
+// anything else — STALE, empty, or future enum values — is treated as
+// pending rather than silently reported green. An empty rollup (no CI
+// configured) renders blank.
 func ciLabel(checks []prCheck) string {
 	if len(checks) == 0 {
 		return ""
@@ -86,6 +90,12 @@ func ciLabel(checks []prCheck) string {
 		switch c.Status {
 		case "IN_PROGRESS", "QUEUED", "PENDING", "WAITING", "REQUESTED":
 			pending = true
+		case "COMPLETED":
+			switch c.Conclusion {
+			case "SUCCESS", "SKIPPED", "NEUTRAL":
+			default:
+				pending = true
+			}
 		}
 	}
 	if pending {

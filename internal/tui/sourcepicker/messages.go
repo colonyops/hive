@@ -9,9 +9,6 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 )
 
-// contextBackground is a var so tests can override it.
-var contextBackground = context.Background
-
 // --- Tab lifecycle messages ---
 
 // sourceTabReadyMsg carries a fully initialized tab (manifest + initial
@@ -47,9 +44,13 @@ type sourceSearchErrorMsg struct {
 	Err      error
 }
 
+// sourceSearchDebounceMsg fires after the remote-search debounce delay;
+// the picker only dispatches a Search when Gen, SourceID, and Query still
+// match the tab's current state (i.e. the user stopped typing).
 type sourceSearchDebounceMsg struct {
-	Gen   int64
-	Query string
+	Gen      int64
+	SourceID string
+	Query    string
 }
 
 func sourceSearchCmd(gen int64, conn sources.Source, sourceID, scope, query string) tea.Cmd {

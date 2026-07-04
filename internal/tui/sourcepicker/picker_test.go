@@ -140,6 +140,17 @@ func listManifest() sources.Manifest {
 	}
 }
 
+// remoteManifest is listManifest with remote search mode and a tiny
+// debounce so tests exercise the real tick path without slow sleeps.
+func remoteManifest() sources.Manifest {
+	m := listManifest()
+	m.Picker.Search = sources.SearchManifest{
+		Mode:       sources.SearchModeRemote,
+		DebounceMS: 1,
+	}
+	return m
+}
+
 // enterSearch puts the picker into search mode.
 func enterSearch(t *testing.T, p Picker) Picker {
 	t.Helper()
@@ -189,6 +200,50 @@ func TestPicker_LocalFilterPreservesItems(t *testing.T) {
 	tab = activeTab(p)
 	require.Len(t, tab.filteredItems, 1)
 	assert.Equal(t, "alpha", tab.filteredItems[0].Title)
+	assert.Equal(t, []string{""}, fake.searchCalls,
+		"local mode must never issue remote searches beyond the initial load")
+}
+
+func TestPicker_RemoteSearchDispatchesDebouncedQuery(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUISource(remoteManifest(), items)
+	p := newTestPicker(fake, remoteManifest(), "o/r", 80, 24)
+	p = drainPicker(t, p, p.Init())
+	require.Equal(t, []string{""}, fake.searchCalls, "init must issue the unfiltered search")
+
+	p = enterSearch(t, p)
+	p = typeKey(t, p, "beta")
+
+	// Only the final query survives debouncing: intermediate ticks carry
+	// stale queries and are dropped by handleDebounce.
+	assert.Equal(t, []string{"", "beta"}, fake.searchCalls)
+
+	tab := activeTab(p)
+	require.Len(t, tab.filteredItems, 1)
+	assert.Equal(t, "beta", tab.filteredItems[0].Title)
+}
+
+func TestPicker_RemoteSearchResultWithStaleQueryIsDropped(t *testing.T) {
+	items := []sources.Item{{ID: "1", Title: "alpha"}}
+	fake := newFakeTUISource(remoteManifest(), items)
+	p := newTestPicker(fake, remoteManifest(), "o/r", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	stale := sourceSearchResultMsg{
+		Gen:      p.gen,
+		SourceID: "fake",
+		Query:    "outdated",
+		Items:    []sources.Item{{ID: "9", Title: "poisoned"}},
+	}
+	p = applyPickerMsg(t, p, stale)
+
+	tab := activeTab(p)
+	require.Len(t, tab.filteredItems, 1)
+	assert.Equal(t, "alpha", tab.filteredItems[0].Title,
+		"a result for a query the user has since changed must be dropped")
 }
 
 func TestPicker_SelectionAndCancel(t *testing.T) {
@@ -570,6 +625,31 @@ func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
 	long := p.renderSingleLineContent(items[1], false, 60, w)
 	assert.Equal(t, strings.Index(short, "Short"), strings.Index(long, "Long"),
 		"titles must start at the same column regardless of number width")
+}
+
+func TestPicker_ActiveFilterVisibleOutsideSearchMode(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUISource(listManifest(), items)
+	p := newTestPicker(fake, listManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = enterSearch(t, p)
+	p = typeKey(t, p, "beta")
+
+	// esc leaves search mode but keeps the filter applied; the filter
+	// line must still show the active query so the reduced list is
+	// explained.
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEscape})
+	p = drainPicker(t, next, cmd)
+	require.False(t, p.searchMode)
+	require.Len(t, activeTab(p).filteredItems, 1)
+
+	line := terminal.StripANSI(p.renderFilterLine(activeTab(p)))
+	assert.Contains(t, line, "beta", "applied filter query must stay visible")
+	assert.NotContains(t, line, "filter ", "placeholder must not mask an active filter")
 }
 
 func TestPicker_ScopeShownInTabBar(t *testing.T) {

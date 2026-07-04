@@ -178,14 +178,15 @@ func (c *Source) FetchDetail(ctx context.Context, params sources.FetchDetailPara
 		return sources.Detail{}, fmt.Errorf("%s source: %w", c.spec.ID, err)
 	}
 
-	// Validate the ID is a bare number before passing it as a positional
-	// argument to gh, so a crafted ID (e.g. "--web") can never be parsed
-	// as a flag. All gh-backed builtins key items by issue/PR number.
+	// Validate the ID is a bare positive number before passing it as a
+	// positional argument to gh, so a crafted ID (e.g. "--web" or "-1")
+	// can never be parsed as a flag. All gh-backed builtins key items by
+	// issue/PR number.
 	if params.ID == "" {
 		return sources.Detail{}, fmt.Errorf("%s source: fetchDetail requires an id", c.spec.ID)
 	}
-	if _, err := strconv.Atoi(params.ID); err != nil {
-		return sources.Detail{}, fmt.Errorf("%s source: invalid id %q: expected a number", c.spec.ID, params.ID)
+	if n, err := strconv.Atoi(params.ID); err != nil || n <= 0 {
+		return sources.Detail{}, fmt.Errorf("%s source: invalid id %q: expected a positive number", c.spec.ID, params.ID)
 	}
 
 	out, err := c.runGHJSON(ctx, c.spec.DetailArgs(scope, params.ID))
@@ -196,6 +197,9 @@ func (c *Source) FetchDetail(ctx context.Context, params sources.FetchDetailPara
 	detail, err := c.spec.ParseDetail(out)
 	if err != nil {
 		return sources.Detail{}, fmt.Errorf("%s source: decode gh output: %w", c.spec.ID, err)
+	}
+	if !detail.Valid() {
+		return sources.Detail{}, fmt.Errorf("%s source: detail has both markdown and kv variants set", c.spec.ID)
 	}
 	return detail, nil
 }

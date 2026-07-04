@@ -34,6 +34,17 @@ sources:
       tags: ["github", "pr-{{ .Fields.number }}"]
 ```
 
+!!! warning "Remote content in templates"
+    Source items put **remote-authored** text (issue/PR titles and bodies)
+    into `.Title`, `.Detail`, and the rendered `.Prompt`. Any spawn or
+    window command template that interpolates `.Prompt` runs through a
+    shell, so it must quote it with `shq` (the defaults do) — see the
+    [rules documentation](rules.md) for details. Also note the rendered
+    prompt is handed to your agent verbatim: opening a session from a
+    public-repo issue feeds that issue's body to the agent, which is a
+    prompt-injection surface. Prefer scoping sources to repositories you
+    trust.
+
 Rules:
 
 - `enabled` follows the plugin convention: omitted means auto-detect (the

@@ -819,10 +819,11 @@ func DefaultConfig() Config {
 			Issues: BuiltinSourceConfig{
 				Templates: SourceTemplateConfig{
 					Name: "gh-{{ .Fields.number }}-{{ .Title }}",
-					// .Detail is the issue body when it was fetched before
-					// selection (always in the CLI path, best-effort in the
-					// TUI); rendered prompts are trimmed, so an empty detail
-					// leaves no dangling blank lines.
+					// .Detail is the issue body, fetched at selection time
+					// in both the CLI and TUI paths. The CLI fails hard on
+					// fetch errors; the TUI is best-effort and falls back to
+					// an empty detail. Rendered prompts are trimmed, so an
+					// empty detail leaves no dangling blank lines.
 					Prompt: "Work on {{ .Title }}\n\n{{ .Fields.url }}\n\n{{ .Detail }}",
 					Tags:   []string{"github", "issue-{{ .Fields.number }}"},
 				},

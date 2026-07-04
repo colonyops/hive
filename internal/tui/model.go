@@ -598,6 +598,10 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Source picker
 	case sourcepicker.Msg:
 		model, cmd = m.forwardSourcePickerMsg(msg)
+	case sourceSelectionErrorMsg:
+		m.state = stateNormal
+		m.notifyErrorf("source %q: %v", msg.SourceID, msg.Err)
+		model, cmd = m, nil
 
 	// Review delegation
 	case review.DocumentChangeMsg:
@@ -806,6 +810,9 @@ func (m Model) sourcePickerScopeForSelection(selected *session.Session, args []s
 }
 
 func (m Model) withDiscoveredRepoForScope(scope sourcePickerScope) sourcePickerScope {
+	if m.sessionsView == nil {
+		return scope
+	}
 	for _, repo := range m.sessionsView.DiscoveredRepos() {
 		owner, name := git.ExtractOwnerRepo(repo.Remote)
 		if owner != "" && name != "" && owner+"/"+name == scope.Search {
@@ -818,6 +825,9 @@ func (m Model) withDiscoveredRepoForScope(scope sourcePickerScope) sourcePickerS
 }
 
 func (m Model) withDiscoveredRepoForRemote(scope sourcePickerScope) sourcePickerScope {
+	if m.sessionsView == nil {
+		return scope
+	}
 	for _, repo := range m.sessionsView.DiscoveredRepos() {
 		if repo.Remote == scope.Remote {
 			scope.Source = repo.Path
@@ -1209,9 +1219,9 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 		if entry.Command.Action == act.TypeOpenSourcePicker {
 			m.state = stateNormal
 
-			sourceID, ok := m.resolveSourceID(args)
-			if !ok {
-				m.notifyErrorf("usage: OpenSource <id> [scope] (id required: multiple sources configured)")
+			sourceID, err := m.resolveSourceID(args)
+			if err != nil {
+				m.notifyErrorf("OpenSource: %v", err)
 				return m, nil
 			}
 
