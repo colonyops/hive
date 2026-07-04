@@ -372,8 +372,11 @@ func getLastNonEmptyLines(content string, n int) []string {
 
 // StripANSI removes ANSI escape codes from content.
 func StripANSI(content string) string {
-	// Fast path: if no escape chars, return as-is
-	if !strings.Contains(content, "\x1b") && !strings.Contains(content, "\x9B") {
+	// Fast path: if no escape chars, return as-is. The 8-bit CSI control
+	// (U+009B) is the two UTF-8 bytes \xc2\x9b — a lone 0x9B byte is always
+	// a UTF-8 continuation byte (e.g. inside a nerd-font glyph), never a
+	// real CSI, so we must not treat it as one.
+	if !strings.Contains(content, "\x1b") && !strings.Contains(content, "\xc2\x9b") {
 		return content
 	}
 
@@ -417,8 +420,9 @@ func StripANSI(content string) string {
 				continue
 			}
 		}
-		if content[i] == '\x9B' {
-			j := i + 1
+		// 8-bit CSI: U+009B, encoded in UTF-8 as the two bytes \xc2\x9b.
+		if content[i] == '\xc2' && i+1 < len(content) && content[i+1] == '\x9b' {
+			j := i + 2
 			for j < len(content) {
 				c := content[j]
 				if (c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z') {
