@@ -1,11 +1,11 @@
 // Package ghcli implements hive's built-in sources backed by the gh CLI.
 //
-// Each built-in source is declared as a Spec — a small, mostly
-// declarative struct describing its picker manifest, the gh command to run,
-// and how to parse gh's JSON output — and executed by the shared Source
-// engine in this file. This mirrors how hive plugins are structured: adding
-// a new gh-backed source means writing a new Spec (see issues.go and
-// prs.go), not a new source implementation.
+// Each built-in source is a Driver: static identity/picker properties
+// plus the gh argv construction and JSON parsing behind Search (and,
+// for DetailDrivers, FetchDetail). The shared Source engine executes
+// drivers — shelling out to gh, caching search output, and validating
+// scope/ID inputs — so adding a new gh-backed source means writing a new
+// driver (see issues.go and prs.go), not a new source implementation.
 package ghcli
 
 import (
@@ -16,70 +16,71 @@ import (
 	"os/exec"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
-// defaultSearchLimit bounds how many items a single Search call returns
-// when a Spec does not set its own limit.
-const defaultSearchLimit = 30
+// Defaults for Options zero values.
+const (
+	defaultSearchLimit = 30
+	defaultCacheTTL    = 30 * time.Second
+)
 
-// Spec declares one gh-CLI-backed source: its identity, picker layout,
-// and how to build and parse the gh invocations behind Search and
-// FetchDetail. Detail support is optional — a Spec with a nil DetailArgs
-// advertises no fetchDetail capability and the picker renders accordingly.
-type Spec struct {
+// Config declares a driver's static identity and picker layout.
+type Config struct {
 	// ID is the source's registry id and config key (e.g. "issues").
 	ID string
-	// DisplayName is the picker's modal title.
+	// DisplayName is the picker's tab title.
 	DisplayName string
-	// Layout selects the left-pane rendering (list cards vs table rows).
+	// Layout selects the row rendering (list cards vs table rows).
 	Layout sources.LayoutMode
 	// Columns describes the table columns when Layout is table.
 	Columns []sources.Column
-	// HidePreview collapses the picker to a single full-width pane for
-	// sources whose items have no useful detail body.
+	// HidePreview collapses the picker to a single full-width pane.
 	HidePreview bool
-	// SearchLimit caps Search results; 0 means defaultSearchLimit.
-	SearchLimit int
+}
 
-	// ListArgs builds the gh argv (without the leading "gh") for a Search
-	// call against scope ("owner/name"), optionally filtered by query.
-	ListArgs func(scope, query string, limit int) []string
+// Driver defines one gh-CLI-backed source.
+type Driver interface {
+	// Config returns the driver's static identity and picker layout.
+	Config() Config
+	// ListArgs builds the gh argv (without the leading "gh") for a
+	// Search against scope ("owner/name"), optionally filtered by query.
+	ListArgs(scope, query string, limit int) []string
 	// ParseList maps gh's JSON stdout into source items.
-	ParseList func(out []byte) ([]sources.Item, error)
-
-	// DetailArgs builds the gh argv for a FetchDetail call, or nil when
-	// the source has no detail view.
-	DetailArgs func(scope, id string) []string
-	// ParseDetail maps gh's JSON stdout into a Detail. Required when
-	// DetailArgs is set.
-	ParseDetail func(out []byte) (sources.Detail, error)
+	ParseList(out []byte) ([]sources.Item, error)
 }
 
-// validate reports Spec construction errors early (at wiring time) instead
-// of surfacing them as confusing runtime failures.
-func (s Spec) validate() error {
-	switch {
-	case s.ID == "":
-		return fmt.Errorf("ghcli spec: id is required")
-	case s.ListArgs == nil || s.ParseList == nil:
-		return fmt.Errorf("ghcli spec %q: ListArgs and ParseList are required", s.ID)
-	case (s.DetailArgs == nil) != (s.ParseDetail == nil):
-		return fmt.Errorf("ghcli spec %q: DetailArgs and ParseDetail must be set together", s.ID)
-	}
-	return nil
+// DetailDriver is implemented by drivers whose items have a detail view.
+type DetailDriver interface {
+	Driver
+	// DetailArgs builds the gh argv for a FetchDetail call.
+	DetailArgs(scope, id string) []string
+	// ParseDetail maps gh's JSON stdout into a Detail.
+	ParseDetail(out []byte) (sources.Detail, error)
 }
 
-// Source is the shared engine executing a Spec: it shells out to gh via
-// an injected executor, optionally caches raw Search output, and converts
-// gh JSON into source domain types using the Spec's parsers.
+// Options tunes the engine. Zero values use package defaults.
+type Options struct {
+	// SearchLimit caps items per Search call (default 30).
+	SearchLimit int
+	// CacheTTL bounds how long raw Search output is cached per
+	// (scope, query) key (default 30s).
+	CacheTTL time.Duration
+}
+
+// Source is the shared engine executing a Driver: it shells out to gh
+// via an injected executor, caches raw Search output, and converts gh
+// JSON into source domain types using the driver's parsers.
 type Source struct {
-	spec  Spec
-	exec  executil.Executor
-	cache searchCache
+	driver Driver
+	cfg    Config
+	exec   executil.Executor
+	cache  *kv.Cache[json.RawMessage]
+	limit  int
 }
 
 type outputExecutor interface {
@@ -88,25 +89,41 @@ type outputExecutor interface {
 
 var _ sources.Source = (*Source)(nil)
 
-// New constructs a Source for spec. exec is used to shell out to gh;
-// store may be nil to disable Search result caching.
-func New(spec Spec, exec executil.Executor, store kv.KV) (*Source, error) {
-	if err := spec.validate(); err != nil {
-		return nil, err
+// New constructs a Source executing driver. exec is used to shell out to
+// gh; store backs the search cache and is required.
+func New(driver Driver, exec executil.Executor, store kv.KV, opts Options) (*Source, error) {
+	cfg := driver.Config()
+	if cfg.ID == "" {
+		return nil, fmt.Errorf("ghcli driver: id is required")
 	}
+	if store == nil {
+		return nil, fmt.Errorf("ghcli driver %q: kv store is required", cfg.ID)
+	}
+
+	limit := opts.SearchLimit
+	if limit <= 0 {
+		limit = defaultSearchLimit
+	}
+	ttl := opts.CacheTTL
+	if ttl <= 0 {
+		ttl = defaultCacheTTL
+	}
+
 	return &Source{
-		spec: spec,
-		exec: exec,
+		driver: driver,
+		cfg:    cfg,
+		exec:   exec,
 		// Cache raw gh stdout (not parsed items) so cached entries
 		// round-trip through JSON storage without mutating Field value
 		// types (e.g. int -> float64).
-		cache: newSearchCache(store, "sources."+spec.ID+".search"),
+		cache: kv.NewCache[json.RawMessage](store, "sources."+cfg.ID+".search", ttl),
+		limit: limit,
 	}, nil
 }
 
 // Name returns the source's stable identifier.
 func (c *Source) Name() string {
-	return c.spec.ID
+	return c.cfg.ID
 }
 
 // Available reports whether the gh CLI is resolvable on PATH.
@@ -116,18 +133,19 @@ func (c *Source) Available(_ context.Context) bool {
 }
 
 // Initialize returns the source's picker manifest, derived entirely from
-// the Spec. Search is always remote: every query re-invokes gh.
+// the driver's Config. Search is always remote: every query re-invokes gh.
 func (c *Source) Initialize(_ context.Context) (sources.Manifest, error) {
+	_, hasDetail := c.driver.(DetailDriver)
 	return sources.Manifest{
-		ID:          c.spec.ID,
-		DisplayName: c.spec.DisplayName,
+		ID:          c.cfg.ID,
+		DisplayName: c.cfg.DisplayName,
 		Capabilities: sources.Capabilities{
-			FetchDetail: c.spec.DetailArgs != nil,
+			FetchDetail: hasDetail,
 		},
 		Picker: sources.PickerManifest{
-			Layout:      c.spec.Layout,
-			Columns:     c.spec.Columns,
-			HidePreview: c.spec.HidePreview,
+			Layout:      c.cfg.Layout,
+			Columns:     c.cfg.Columns,
+			HidePreview: c.cfg.HidePreview,
 			Search: sources.SearchManifest{
 				Mode: sources.SearchModeRemote,
 			},
@@ -141,27 +159,23 @@ func (c *Source) Initialize(_ context.Context) (sources.Manifest, error) {
 func (c *Source) Search(ctx context.Context, params sources.SearchParams) (sources.SearchResult, error) {
 	scope, err := parseScope(params.Scope)
 	if err != nil {
-		return sources.SearchResult{}, fmt.Errorf("%s source: %w", c.spec.ID, err)
+		return sources.SearchResult{}, fmt.Errorf("%s source: %w", c.cfg.ID, err)
 	}
 
 	cacheKey := scope + "|" + params.Query
-	out, cached := c.cache.get(ctx, cacheKey)
+	out, cached := c.cache.Get(ctx, cacheKey)
 	if !cached {
-		limit := c.spec.SearchLimit
-		if limit <= 0 {
-			limit = defaultSearchLimit
-		}
-		args := c.spec.ListArgs(scope, params.Query, limit)
+		args := c.driver.ListArgs(scope, params.Query, c.limit)
 		out, err = c.runGHJSON(ctx, args)
 		if err != nil {
 			return sources.SearchResult{}, err
 		}
-		c.cache.set(ctx, cacheKey, out)
+		c.cache.Set(ctx, cacheKey, out)
 	}
 
-	items, err := c.spec.ParseList(out)
+	items, err := c.driver.ParseList(out)
 	if err != nil {
-		return sources.SearchResult{}, fmt.Errorf("%s source: decode gh output: %w", c.spec.ID, err)
+		return sources.SearchResult{}, fmt.Errorf("%s source: decode gh output: %w", c.cfg.ID, err)
 	}
 	return sources.SearchResult{Items: items}, nil
 }
@@ -169,13 +183,14 @@ func (c *Source) Search(ctx context.Context, params sources.SearchParams) (sourc
 // FetchDetail returns the detail view for a single item. params.Scope
 // ("owner/name") and params.ID (a bare item number) are required.
 func (c *Source) FetchDetail(ctx context.Context, params sources.FetchDetailParams) (sources.Detail, error) {
-	if c.spec.DetailArgs == nil {
-		return sources.Detail{}, fmt.Errorf("%s source: fetchDetail is not supported", c.spec.ID)
+	detailDriver, ok := c.driver.(DetailDriver)
+	if !ok {
+		return sources.Detail{}, fmt.Errorf("%s source: fetchDetail is not supported", c.cfg.ID)
 	}
 
 	scope, err := parseScope(params.Scope)
 	if err != nil {
-		return sources.Detail{}, fmt.Errorf("%s source: %w", c.spec.ID, err)
+		return sources.Detail{}, fmt.Errorf("%s source: %w", c.cfg.ID, err)
 	}
 
 	// Validate the ID is a bare positive number before passing it as a
@@ -183,46 +198,46 @@ func (c *Source) FetchDetail(ctx context.Context, params sources.FetchDetailPara
 	// can never be parsed as a flag. All gh-backed builtins key items by
 	// issue/PR number.
 	if params.ID == "" {
-		return sources.Detail{}, fmt.Errorf("%s source: fetchDetail requires an id", c.spec.ID)
+		return sources.Detail{}, fmt.Errorf("%s source: fetchDetail requires an id", c.cfg.ID)
 	}
 	if n, err := strconv.Atoi(params.ID); err != nil || n <= 0 {
-		return sources.Detail{}, fmt.Errorf("%s source: invalid id %q: expected a positive number", c.spec.ID, params.ID)
+		return sources.Detail{}, fmt.Errorf("%s source: invalid id %q: expected a positive number", c.cfg.ID, params.ID)
 	}
 
-	out, err := c.runGHJSON(ctx, c.spec.DetailArgs(scope, params.ID))
+	out, err := c.runGHJSON(ctx, detailDriver.DetailArgs(scope, params.ID))
 	if err != nil {
 		return sources.Detail{}, err
 	}
 
-	detail, err := c.spec.ParseDetail(out)
+	detail, err := detailDriver.ParseDetail(out)
 	if err != nil {
-		return sources.Detail{}, fmt.Errorf("%s source: decode gh output: %w", c.spec.ID, err)
+		return sources.Detail{}, fmt.Errorf("%s source: decode gh output: %w", c.cfg.ID, err)
 	}
 	if !detail.Valid() {
-		return sources.Detail{}, fmt.Errorf("%s source: detail has both markdown and kv variants set", c.spec.ID)
+		return sources.Detail{}, fmt.Errorf("%s source: detail has both markdown and kv variants set", c.cfg.ID)
 	}
 	return detail, nil
 }
 
 func (c *Source) runGHJSON(ctx context.Context, args []string) ([]byte, error) {
 	if len(args) == 0 {
-		return nil, fmt.Errorf("%s source: gh: missing arguments", c.spec.ID)
+		return nil, fmt.Errorf("%s source: gh: missing arguments", c.cfg.ID)
 	}
 	if exec, ok := c.exec.(outputExecutor); ok {
 		stdout, stderr, err := exec.RunOutput(ctx, "gh", args...)
 		if err != nil {
 			msg := strings.TrimSpace(string(stderr))
 			if msg != "" {
-				return nil, fmt.Errorf("%s source: gh %s: %w: %s", c.spec.ID, args[0], err, msg)
+				return nil, fmt.Errorf("%s source: gh %s: %w: %s", c.cfg.ID, args[0], err, msg)
 			}
-			return nil, fmt.Errorf("%s source: gh %s: %w", c.spec.ID, args[0], err)
+			return nil, fmt.Errorf("%s source: gh %s: %w", c.cfg.ID, args[0], err)
 		}
 		return stdout, nil
 	}
 
 	out, err := c.exec.Run(ctx, "gh", args...)
 	if err != nil {
-		return nil, fmt.Errorf("%s source: gh %s: %w", c.spec.ID, args[0], err)
+		return nil, fmt.Errorf("%s source: gh %s: %w", c.cfg.ID, args[0], err)
 	}
 	return bytes.TrimSpace(out), nil
 }

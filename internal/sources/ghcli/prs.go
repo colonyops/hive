@@ -6,11 +6,15 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 )
 
-// PRsSpec declares the built-in GitHub pull requests source: a
-// full-width table (no detail preview) of open PRs in the scoped repo,
-// backed by `gh pr list`.
-func PRsSpec() Spec {
-	return Spec{
+// prsDriver is the built-in GitHub pull requests source: a full-width
+// table (no detail view) of open PRs, backed by `gh pr list`.
+type prsDriver struct{}
+
+// PRs returns the built-in GitHub pull requests driver.
+func PRs() Driver { return prsDriver{} }
+
+func (prsDriver) Config() Config {
+	return Config{
 		ID:          "prs",
 		DisplayName: "GitHub Pull Requests",
 		Layout:      sources.LayoutModeTable,
@@ -22,22 +26,59 @@ func PRsSpec() Spec {
 			{Key: "review", Label: "Review", Width: 18},
 			{Key: "ci", Label: "CI", Width: 10},
 		},
-		ListArgs: func(scope, query string, limit int) []string {
-			// statusCheckRollup rides along in the same gh call (one
-			// GraphQL query) — CI status costs no extra requests.
-			args := []string{
-				"pr", "list",
-				"--repo", scope,
-				"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup",
-				"--limit", strconv.Itoa(limit),
-			}
-			if query != "" {
-				args = append(args, "--search", query)
-			}
-			return args
-		},
-		ParseList: parsePRList,
 	}
+}
+
+func (prsDriver) ListArgs(scope, query string, limit int) []string {
+	// statusCheckRollup rides along in the same gh call (one GraphQL
+	// query) — CI status costs no extra requests.
+	args := []string{
+		"pr", "list",
+		"--repo", scope,
+		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup",
+		"--limit", strconv.Itoa(limit),
+	}
+	if query != "" {
+		args = append(args, "--search", query)
+	}
+	return args
+}
+
+func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
+	entries, err := decodeList[prListItem](out)
+	if err != nil {
+		return nil, err
+	}
+	if len(entries) == 0 {
+		return nil, nil
+	}
+
+	items := make([]sources.Item, 0, len(entries))
+	for _, pr := range entries {
+		// Fields keys number/title/url/author/branch/ci are load-bearing:
+		// default source session templates reference .Fields.number,
+		// .Fields.url, and .Fields.branch; the picker's CI column reads
+		// .Fields.ci.
+		items = append(items, sources.Item{
+			ID:       strconv.Itoa(pr.Number),
+			Title:    pr.Title,
+			Subtitle: "#" + strconv.Itoa(pr.Number) + " · " + reviewLabel(pr),
+			URI:      pr.URL,
+			Fields: map[string]any{
+				"number": pr.Number,
+				"title":  pr.Title,
+				"state":  pr.State,
+				"url":    pr.URL,
+				"author": pr.Author.Login,
+				"labels": labelNames(pr.Labels),
+				"draft":  pr.IsDraft,
+				"review": reviewLabel(pr),
+				"ci":     ciLabel(pr.StatusCheckRollup),
+				"branch": pr.HeadRefName,
+			},
+		})
+	}
+	return items, nil
 }
 
 // prListItem is the JSON shape of a single entry returned by
@@ -122,41 +163,4 @@ func reviewLabel(pr prListItem) string {
 	default:
 		return pr.ReviewDecision
 	}
-}
-
-func parsePRList(out []byte) ([]sources.Item, error) {
-	entries, err := decodeList[prListItem](out)
-	if err != nil {
-		return nil, err
-	}
-	if len(entries) == 0 {
-		return nil, nil
-	}
-
-	items := make([]sources.Item, 0, len(entries))
-	for _, pr := range entries {
-		// Fields keys number/title/url/author/branch/ci are load-bearing:
-		// default source session templates reference .Fields.number,
-		// .Fields.url, and .Fields.branch; the picker's CI column reads
-		// .Fields.ci.
-		items = append(items, sources.Item{
-			ID:       strconv.Itoa(pr.Number),
-			Title:    pr.Title,
-			Subtitle: "#" + strconv.Itoa(pr.Number) + " · " + reviewLabel(pr),
-			URI:      pr.URL,
-			Fields: map[string]any{
-				"number": pr.Number,
-				"title":  pr.Title,
-				"state":  pr.State,
-				"url":    pr.URL,
-				"author": pr.Author.Login,
-				"labels": labelNames(pr.Labels),
-				"draft":  pr.IsDraft,
-				"review": reviewLabel(pr),
-				"ci":     ciLabel(pr.StatusCheckRollup),
-				"branch": pr.HeadRefName,
-			},
-		})
-	}
-	return items, nil
 }

@@ -19,6 +19,7 @@ var (
 	ColorMuted      color.Color
 	ColorBackground color.Color
 	ColorSurface    color.Color
+	ColorSurfaceLow color.Color
 	ColorSuccess    color.Color
 	ColorWarning    color.Color
 	ColorError      color.Color
@@ -136,6 +137,10 @@ func SetTheme(p Palette) {
 	ColorMuted = p.Muted
 	ColorBackground = p.Background
 	ColorSurface = p.Surface
+	ColorSurfaceLow = p.SurfaceLow
+	if ColorSurfaceLow == nil {
+		ColorSurfaceLow = p.Surface
+	}
 	ColorSuccess = p.Success
 	ColorWarning = p.Warning
 	ColorError = p.Error

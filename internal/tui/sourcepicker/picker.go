@@ -43,11 +43,6 @@ const defaultSearchDebounce = 300 * time.Millisecond
 // sourcePickerGen issues a unique generation token per picker instance.
 var sourcePickerGen atomic.Int64
 
-// rowHighlightBg is a subtle background for the selected row — just a
-// small lift above the terminal background so the row is visible without
-// being distracting.
-var rowHighlightBg = lipgloss.Color("#232433")
-
 // sourceItemsSource implements fuzzy.Source over item titles.
 type sourceItemsSource []sources.Item
 
@@ -102,6 +97,11 @@ type Picker struct {
 	modalWidth, modalHeight     int
 	contentWidth, contentHeight int
 	innerWidth                  int // contentWidth minus horizontal padding (for padded sections)
+
+	// Row styles, precomputed per size change so View doesn't rebuild
+	// them for every visible row on every frame.
+	selectedRowStyle lipgloss.Style
+	normalRowStyle   lipgloss.Style
 }
 
 // Result is the item selected by the user, if any. Source and Manifest
@@ -142,7 +142,7 @@ func New(tabSources []TabSource, initialTab, scope string, width, height int) Pi
 		}
 	}
 
-	return Picker{
+	p := Picker{
 		gen:           sourcePickerGen.Add(1),
 		tabs:          tabs,
 		activeTab:     activeIdx,
@@ -157,6 +157,31 @@ func New(tabSources []TabSource, initialTab, scope string, width, height int) Pi
 		innerWidth:    innerW,
 		contentHeight: contentHeight,
 	}
+	p.rebuildRowStyles()
+	return p
+}
+
+// rebuildRowStyles recomputes the width-bound row styles. Selected rows
+// get a left border accent and a full-width subtle highlight background;
+// unselected rows get a two-space indent to keep alignment with the
+// border+space of selected rows.
+func (p *Picker) rebuildRowStyles() {
+	width := p.innerWidth
+	p.selectedRowStyle = lipgloss.NewStyle().
+		Border(lipgloss.ThickBorder(), false, false, false, true).
+		BorderForeground(styles.ColorPrimary).
+		Background(styles.ColorSurfaceLow).
+		Foreground(styles.ColorPrimary).
+		Bold(true).
+		PaddingLeft(1).
+		Width(width).
+		MaxWidth(width).
+		MaxHeight(1)
+	p.normalRowStyle = lipgloss.NewStyle().
+		PaddingLeft(2).
+		Width(width).
+		MaxWidth(width).
+		MaxHeight(1)
 }
 
 func computePickerDims(width, height int) (modalWidth, modalHeight, contentWidth, innerWidth, contentHeight int) {
@@ -227,6 +252,7 @@ func (p *Picker) SetSize(width, height int) {
 	p.height = height
 	p.modalWidth, p.modalHeight, p.contentWidth, p.innerWidth, p.contentHeight = computePickerDims(width, height)
 	p.input.SetWidth(max(p.innerWidth-4, 10))
+	p.rebuildRowStyles()
 }
 
 // Update handles messages.
@@ -766,8 +792,7 @@ func (p Picker) renderList(tab *tabState) string {
 // styling on selected rows unless every cell and every padding space
 // carries the highlight background itself.
 func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState, numWidth int) string {
-	width := p.innerWidth
-	innerWidth := max(width-2, 10) // account for the left border+space / padding
+	innerWidth := max(p.innerWidth-2, 10) // account for the left border+space / padding
 
 	var content string
 	if tab.tab.Manifest.Picker.Layout == sources.LayoutModeTable && len(tab.tab.Manifest.Picker.Columns) > 0 {
@@ -775,7 +800,10 @@ func (p Picker) renderRow(item sources.Item, selected bool, tab *tabState, numWi
 	} else {
 		content = p.renderSingleLineContent(item, !selected, innerWidth, numWidth)
 	}
-	return p.applyRowStyle(content, selected, width)
+	if selected {
+		return p.selectedRowStyle.Render(content)
+	}
+	return p.normalRowStyle.Render(content)
 }
 
 // numberColumnWidth returns the display width of the widest "#<number>"
@@ -789,33 +817,6 @@ func numberColumnWidth(items []sources.Item) int {
 		}
 	}
 	return widest
-}
-
-// applyRowStyle wraps content with selected/normal styling: selected rows
-// get a left border accent and a full-width highlight background;
-// unselected rows get a two-space indent to keep alignment with the
-// border+space of selected rows. Selected content must be plain text —
-// see renderRow.
-func (p Picker) applyRowStyle(content string, selected bool, width int) string {
-	if selected {
-		return lipgloss.NewStyle().
-			Border(lipgloss.ThickBorder(), false, false, false, true).
-			BorderForeground(styles.ColorPrimary).
-			Background(rowHighlightBg).
-			Foreground(styles.ColorPrimary).
-			Bold(true).
-			PaddingLeft(1).
-			Width(width).
-			MaxWidth(width).
-			MaxHeight(1).
-			Render(content)
-	}
-	return lipgloss.NewStyle().
-		PaddingLeft(2).
-		Width(width).
-		MaxWidth(width).
-		MaxHeight(1).
-		Render(content)
 }
 
 // renderSingleLineContent composes a list-layout row. When styled is

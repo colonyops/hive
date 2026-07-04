@@ -850,7 +850,7 @@ func (m Model) resolveSourceID(args []string) (string, error) {
 	case 1:
 		return ids[0], nil
 	default:
-		return "", fmt.Errorf("multiple sources configured: use :OpenSource <id>")
+		return "", fmt.Errorf("multiple sources configured: use :Sources <id>")
 	}
 }
 
@@ -955,8 +955,7 @@ type sourceSelectionErrorMsg struct {
 // Detail is optional template data: it is only fetched when the item does
 // not already carry one and the source declares the capability, and fetch
 // failures degrade to an empty detail (with a log) rather than blocking
-// session creation. This mirrors cmd_source.go's gate, except the CLI
-// path fails hard where the TUI stays best-effort.
+// session creation.
 func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope string) sources.Detail {
 	detail := result.Item.Detail
 	if detail.Kind() != sources.DetailKindNone || !result.Manifest.Capabilities.FetchDetail || result.Source == nil {

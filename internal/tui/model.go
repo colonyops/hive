@@ -1221,7 +1221,7 @@ func (m Model) handleCommandPaletteKey(msg tea.KeyPressMsg, keyStr string) (tea.
 
 			sourceID, err := m.resolveSourceID(args)
 			if err != nil {
-				m.notifyErrorf("OpenSource: %v", err)
+				m.notifyErrorf("Sources: %v", err)
 				return m, nil
 			}
 

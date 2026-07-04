@@ -189,9 +189,9 @@ var defaultUserCommands = map[string]UserCommand{
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
-	"OpenSource": {
+	"Sources": {
 		Action: action.TypeOpenSourcePicker,
-		Help:   "open a source picker (id/scope auto-detected when omittable; usage: OpenSource [id] [scope])",
+		Help:   "open a source picker (id/scope auto-detected when omittable; usage: Sources [id] [scope])",
 		Silent: true,
 		Scope:  []string{"sessions"},
 	},
@@ -613,25 +613,24 @@ type ClaudePluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
-// SourcesConfig holds configuration for the sources system: browsable
-// external data sources (GitHub issues and pull requests) that map a
-// selected item into a new hive session.
+// SourcesConfig configures the sources system (GitHub issues and pull
+// requests browsable from the picker).
 type SourcesConfig struct {
-	Issues BuiltinSourceConfig `json:"issues" yaml:"issues"`
-	PRs    BuiltinSourceConfig `json:"prs"    yaml:"prs"`
+	SearchLimit int                 `json:"search_limit" yaml:"search_limit"` // max items per search (default: 30)
+	CacheTTL    time.Duration       `json:"cache_ttl"    yaml:"cache_ttl"`    // search result cache TTL (default: 30s)
+	Issues      BuiltinSourceConfig `json:"issues"       yaml:"issues"`
+	PRs         BuiltinSourceConfig `json:"prs"          yaml:"prs"`
 }
 
-// SourceTemplateConfig holds the Go templates used to render a selected
-// source item into session Name/Prompt/Tags fields.
+// SourceTemplateConfig holds the templates rendering a selected item
+// into session Name/Prompt/Tags.
 type SourceTemplateConfig struct {
 	Name   string   `json:"name"   yaml:"name"`
 	Prompt string   `json:"prompt" yaml:"prompt"`
 	Tags   []string `json:"tags"   yaml:"tags"`
 }
 
-// BuiltinSourceConfig holds configuration for one built-in source
-// (issues, prs). Mirrors the per-plugin config convention: nil Enabled
-// means auto-detect.
+// BuiltinSourceConfig configures one built-in source (issues, prs).
 type BuiltinSourceConfig struct {
 	Enabled   *bool                `json:"enabled"   yaml:"enabled"` // nil = auto-detect, true/false = override
 	Templates SourceTemplateConfig `json:"templates" yaml:"templates"`
@@ -944,8 +943,6 @@ func (c *Config) applyDefaults() {
 	if c.Plugins.GitHub.ResultsCache == 0 {
 		c.Plugins.GitHub.ResultsCache = 8 * time.Minute
 	}
-	applySourceTemplateDefaults(&c.Sources.Issues.Templates, defaults.Sources.Issues.Templates)
-	applySourceTemplateDefaults(&c.Sources.PRs.Templates, defaults.Sources.PRs.Templates)
 	if len(c.Agents.Profiles) == 0 {
 		c.Agents.Profiles = map[string]AgentProfile{
 			"claude": {},
@@ -1424,18 +1421,4 @@ func matchesPattern(pattern, remote string) bool {
 		return false
 	}
 	return re.MatchString(remote)
-}
-
-// applySourceTemplateDefaults fills unset builtin-source template
-// fields from defaults, preserving any user-provided values.
-func applySourceTemplateDefaults(templates *SourceTemplateConfig, defaults SourceTemplateConfig) {
-	if templates.Name == "" {
-		templates.Name = defaults.Name
-	}
-	if templates.Prompt == "" {
-		templates.Prompt = defaults.Prompt
-	}
-	if len(templates.Tags) == 0 {
-		templates.Tags = defaults.Tags
-	}
 }

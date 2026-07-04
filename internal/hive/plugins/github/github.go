@@ -20,7 +20,7 @@ import (
 // Plugin implements the GitHub plugin for Hive.
 type Plugin struct {
 	cfg   config.GitHubPluginConfig
-	cache *kv.TypedKV[prInfo]
+	cache *kv.Cache[prInfo]
 }
 
 // New creates a new GitHub plugin.
@@ -28,7 +28,7 @@ type Plugin struct {
 func New(cfg config.GitHubPluginConfig, kvStore kv.KV) *Plugin {
 	p := &Plugin{cfg: cfg}
 	if kvStore != nil {
-		p.cache = kv.Scoped[prInfo](kvStore, "github.pr")
+		p.cache = kv.NewCache[prInfo](kvStore, "github.pr", p.StatusCacheDuration())
 	}
 	return p
 }
@@ -93,23 +93,20 @@ func (p *Plugin) RefreshStatus(ctx context.Context, sessions []*session.Session,
 	return results, nil
 }
 
-// fetchPRInfo returns PR info, checking the cache first.
+// fetchPRInfo returns PR info, checking the cache first. Empty results
+// are cached too, to avoid repeated gh calls for sessions without a PR.
 func (p *Plugin) fetchPRInfo(ctx context.Context, sessionID, path string) prInfo {
-	// Try cache first
 	if p.cache != nil {
-		if cached, err := p.cache.Get(ctx, sessionID); err == nil {
+		if cached, ok := p.cache.Get(ctx, sessionID); ok {
 			return cached
 		}
 	}
 
-	// Cache miss - fetch from gh CLI
 	info := p.fetchFromGH(ctx, path)
 
-	// Store in cache with TTL (including empty results to avoid repeated gh calls)
 	if p.cache != nil {
-		_ = p.cache.SetTTL(ctx, sessionID, info, p.StatusCacheDuration())
+		p.cache.Set(ctx, sessionID, info)
 	}
-
 	return info
 }
 

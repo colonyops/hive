@@ -1,4 +1,4 @@
-package main
+package hive
 
 import (
 	"sort"
@@ -9,10 +9,21 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/kv"
+	"github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
 func boolPtr(b bool) *bool { return &b }
+
+func newSourcesTestKV(t *testing.T) kv.KV {
+	t.Helper()
+	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = database.Close() })
+	return stores.NewKVStore(database)
+}
 
 func TestBuildSourceRegistry(t *testing.T) {
 	tests := []struct {
@@ -60,7 +71,7 @@ func TestBuildSourceRegistry(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			cfg := &config.Config{Sources: tt.cfg}
-			registry := buildSourceRegistry(cfg, &executil.RealExecutor{}, nil, zerolog.Nop())
+			registry := BuildSourceRegistry(cfg, &executil.RealExecutor{}, newSourcesTestKV(t), zerolog.Nop())
 			require.NotNil(t, registry)
 
 			ids := registry.IDs()

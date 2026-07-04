@@ -7,11 +7,15 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 )
 
-// IssuesSpec declares the built-in GitHub issues source: a two-line
-// card list with a markdown detail preview, backed by `gh issue list` /
-// `gh issue view`.
-func IssuesSpec() Spec {
-	return Spec{
+// issuesDriver is the built-in GitHub issues source: a card list with a
+// markdown detail body, backed by `gh issue list` / `gh issue view`.
+type issuesDriver struct{}
+
+// Issues returns the built-in GitHub issues driver.
+func Issues() DetailDriver { return issuesDriver{} }
+
+func (issuesDriver) Config() Config {
+	return Config{
 		ID:          "issues",
 		DisplayName: "GitHub Issues",
 		Layout:      sources.LayoutModeList,
@@ -20,52 +24,23 @@ func IssuesSpec() Spec {
 			{Key: "title", Label: "Title", Flex: 1},
 			{Key: "state", Label: "State", Width: 10},
 		},
-		ListArgs: func(scope, query string, limit int) []string {
-			args := []string{
-				"issue", "list",
-				"--repo", scope,
-				"--json", "number,title,state,author,labels,url",
-				"--limit", strconv.Itoa(limit),
-			}
-			if query != "" {
-				args = append(args, "--search", query)
-			}
-			return args
-		},
-		ParseList: parseIssueList,
-		DetailArgs: func(scope, id string) []string {
-			return []string{
-				"issue", "view", id,
-				"--repo", scope,
-				"--json", "number,title,body,url,state",
-			}
-		},
-		ParseDetail: parseIssueDetail,
 	}
 }
 
-// issueListItem is the JSON shape of a single entry returned by
-// `gh issue list --json number,title,state,author,labels,url`.
-type issueListItem struct {
-	Number int       `json:"number"`
-	Title  string    `json:"title"`
-	State  string    `json:"state"`
-	Author ghAuthor  `json:"author"`
-	Labels []ghLabel `json:"labels"`
-	URL    string    `json:"url"`
+func (issuesDriver) ListArgs(scope, query string, limit int) []string {
+	args := []string{
+		"issue", "list",
+		"--repo", scope,
+		"--json", "number,title,state,author,labels,url",
+		"--limit", strconv.Itoa(limit),
+	}
+	if query != "" {
+		args = append(args, "--search", query)
+	}
+	return args
 }
 
-// issueDetail is the JSON shape returned by
-// `gh issue view <id> --json number,title,body,url,state`.
-type issueDetail struct {
-	Number int    `json:"number"`
-	Title  string `json:"title"`
-	Body   string `json:"body"`
-	URL    string `json:"url"`
-	State  string `json:"state"`
-}
-
-func parseIssueList(out []byte) ([]sources.Item, error) {
+func (issuesDriver) ParseList(out []byte) ([]sources.Item, error) {
 	entries, err := decodeList[issueListItem](out)
 	if err != nil {
 		return nil, err
@@ -97,7 +72,15 @@ func parseIssueList(out []byte) ([]sources.Item, error) {
 	return items, nil
 }
 
-func parseIssueDetail(out []byte) (sources.Detail, error) {
+func (issuesDriver) DetailArgs(scope, id string) []string {
+	return []string{
+		"issue", "view", id,
+		"--repo", scope,
+		"--json", "number,title,body,url,state",
+	}
+}
+
+func (issuesDriver) ParseDetail(out []byte) (sources.Detail, error) {
 	var detail issueDetail
 	if err := decodeJSON(out, &detail); err != nil {
 		return sources.Detail{}, err
@@ -105,4 +88,25 @@ func parseIssueDetail(out []byte) (sources.Detail, error) {
 	return sources.Detail{
 		Markdown: &sources.MarkdownDetail{Content: detail.Body},
 	}, nil
+}
+
+// issueListItem is the JSON shape of a single entry returned by
+// `gh issue list --json number,title,state,author,labels,url`.
+type issueListItem struct {
+	Number int       `json:"number"`
+	Title  string    `json:"title"`
+	State  string    `json:"state"`
+	Author ghAuthor  `json:"author"`
+	Labels []ghLabel `json:"labels"`
+	URL    string    `json:"url"`
+}
+
+// issueDetail is the JSON shape returned by
+// `gh issue view <id> --json number,title,body,url,state`.
+type issueDetail struct {
+	Number int    `json:"number"`
+	Title  string `json:"title"`
+	Body   string `json:"body"`
+	URL    string `json:"url"`
+	State  string `json:"state"`
 }

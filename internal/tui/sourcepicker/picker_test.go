@@ -226,24 +226,43 @@ func TestPicker_RemoteSearchDispatchesDebouncedQuery(t *testing.T) {
 	assert.Equal(t, "beta", tab.filteredItems[0].Title)
 }
 
-func TestPicker_RemoteSearchResultWithStaleQueryIsDropped(t *testing.T) {
-	items := []sources.Item{{ID: "1", Title: "alpha"}}
-	fake := newFakeTUISource(remoteManifest(), items)
-	p := newTestPicker(fake, remoteManifest(), "o/r", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	stale := sourceSearchResultMsg{
-		Gen:      p.gen,
-		SourceID: "fake",
-		Query:    "outdated",
-		Items:    []sources.Item{{ID: "9", Title: "poisoned"}},
+// TestPicker_StaleSearchResultsAreDropped covers both staleness guards:
+// results from a previous picker instance (generation) and results for a
+// query the user has since changed.
+func TestPicker_StaleSearchResultsAreDropped(t *testing.T) {
+	tests := []struct {
+		name string
+		msg  func(p Picker) sourceSearchResultMsg
+	}{
+		{
+			name: "stale generation",
+			msg: func(p Picker) sourceSearchResultMsg {
+				return sourceSearchResultMsg{Gen: p.gen - 1, SourceID: "fake", Query: p.input.Value()}
+			},
+		},
+		{
+			name: "stale query",
+			msg: func(p Picker) sourceSearchResultMsg {
+				return sourceSearchResultMsg{Gen: p.gen, SourceID: "fake", Query: "outdated"}
+			},
+		},
 	}
-	p = applyPickerMsg(t, p, stale)
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			items := []sources.Item{{ID: "1", Title: "alpha"}}
+			fake := newFakeTUISource(remoteManifest(), items)
+			p := newTestPicker(fake, remoteManifest(), "o/r", 80, 24)
+			p = drainPicker(t, p, p.Init())
 
-	tab := activeTab(p)
-	require.Len(t, tab.filteredItems, 1)
-	assert.Equal(t, "alpha", tab.filteredItems[0].Title,
-		"a result for a query the user has since changed must be dropped")
+			stale := tt.msg(p)
+			stale.Items = []sources.Item{{ID: "9", Title: "poisoned"}}
+			p = applyPickerMsg(t, p, stale)
+
+			tab := activeTab(p)
+			require.Len(t, tab.filteredItems, 1)
+			assert.Equal(t, "alpha", tab.filteredItems[0].Title)
+		})
+	}
 }
 
 func TestPicker_SelectionAndCancel(t *testing.T) {
@@ -321,25 +340,6 @@ func TestPicker_ViewFitsTerminal(t *testing.T) {
 			assert.LessOrEqual(t, viewHeight, size.height, "picker must fit the terminal")
 		})
 	}
-}
-
-func TestPicker_StaleGenerationMessagesAreDropped(t *testing.T) {
-	items := []sources.Item{{ID: "1", Title: "alpha"}}
-	fake := newFakeTUISource(listManifest(), items)
-	p := newTestPicker(fake, listManifest(), "", 80, 24)
-	p = drainPicker(t, p, p.Init())
-
-	staleSearch := sourceSearchResultMsg{
-		Gen:      p.gen - 1,
-		SourceID: "fake",
-		Query:    p.input.Value(),
-		Items:    []sources.Item{{ID: "9", Title: "poisoned"}},
-	}
-	p = applyPickerMsg(t, p, staleSearch)
-
-	tab := activeTab(p)
-	require.Len(t, tab.filteredItems, 1)
-	assert.Equal(t, "alpha", tab.filteredItems[0].Title)
 }
 
 func TestPicker_NavigateModeIsDefault(t *testing.T) {
@@ -553,18 +553,21 @@ func TestSourceTableRowColors(t *testing.T) {
 		{Key: "number", Width: 6},
 		{Key: "title", Flex: 1},
 		{Key: "review", Width: 18},
+		{Key: "ci", Width: 10},
 	}
 	item := sources.Item{ID: "10", Title: "Add feature", Fields: map[string]any{
-		"number": 10, "title": "Add feature", "review": "approved",
+		"number": 10, "title": "Add feature", "review": "approved", "ci": "failing",
 	}}
 
-	styled := renderSourceTableRow(item, columns, 60, true)
-	plain := renderSourceTableRow(item, columns, 60, false)
+	styled := renderSourceTableRow(item, columns, 70, true)
+	plain := renderSourceTableRow(item, columns, 70, false)
 
 	// Styled cells keep their semantic colors (padding is inside the
-	// styled span so widths match the plain variant).
+	// styled span so widths match the plain variant), and CI cells carry
+	// their status icon.
 	assert.Contains(t, styled, styles.TextMutedStyle.Render("#10   "))
 	assert.Contains(t, styled, styles.TextSuccessStyle.Render("approved"+strings.Repeat(" ", 10)))
+	assert.Contains(t, styled, styles.TextErrorStyle.Render("✗ failing "))
 
 	// The plain variant is used for selected rows: it must contain no
 	// ANSI sequences at all, otherwise embedded SGR resets terminate the
@@ -580,23 +583,6 @@ func TestStatusIcon(t *testing.T) {
 	assert.Equal(t, "● ", statusIcon("pending"))
 	assert.Empty(t, statusIcon("approved"))
 	assert.Empty(t, statusIcon(""))
-}
-
-func TestSourceTableRowCIIcons(t *testing.T) {
-	columns := []sources.Column{
-		{Key: "title", Flex: 1},
-		{Key: "ci", Width: 10},
-	}
-	item := sources.Item{ID: "1", Title: "Add feature", Fields: map[string]any{
-		"title": "Add feature", "ci": "failing",
-	}}
-
-	row := renderSourceTableRow(item, columns, 50, true)
-	assert.Contains(t, row, styles.TextErrorStyle.Render("✗ failing "))
-
-	plain := renderSourceTableRow(item, columns, 50, false)
-	assert.Contains(t, plain, "✗ failing")
-	assert.Equal(t, plain, terminal.StripANSI(plain), "plain table row must be ANSI-free")
 }
 
 func TestRenderSingleLineContent_PlainIsANSIFree(t *testing.T) {

@@ -92,13 +92,9 @@ func validateSourceTemplateSet(field string, cfg SourceTemplateConfig) error {
 	return nil
 }
 
-// validateSourceTemplate syntax-checks a single source template
-// string. Source templates access dynamic per-item data through
-// .Fields.<key> (a map[string]any), whose keys aren't known until an item is
-// selected, so this checks parse validity only — not execution against
-// SourceTemplateData. Command resolvability and missing .Fields.<key>
-// references are runtime concerns (Available()=false, or a render-time
-// missingkey error surfaced by RenderSessionTemplates).
+// validateSourceTemplate syntax-checks a single source template.
+// Item data (.Fields.<key>) is only known at selection time, so missing
+// keys are a render-time concern, not a config error.
 func validateSourceTemplate(tmplStr string) error {
 	if tmplStr == "" {
 		return nil

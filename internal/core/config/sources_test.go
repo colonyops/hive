@@ -10,36 +10,24 @@ import (
 
 func boolPtr(b bool) *bool { return &b }
 
-func TestApplyDefaults_SourceBuiltinTemplates(t *testing.T) {
-	cfg := &Config{}
-	cfg.applyDefaults()
-
-	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Name)
-	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Prompt)
-	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Tags)
-	assert.NotEmpty(t, cfg.Sources.PRs.Templates.Name)
-	assert.NotEmpty(t, cfg.Sources.PRs.Templates.Prompt)
-	assert.NotEmpty(t, cfg.Sources.PRs.Templates.Tags)
-}
-
-func TestApplyDefaults_SourceBuiltinTemplatesPreserveUserValues(t *testing.T) {
-	cfg := &Config{
-		Sources: SourcesConfig{
-			Issues: BuiltinSourceConfig{
-				Templates: SourceTemplateConfig{
-					Name:   "custom-{{ .Title }}",
-					Prompt: "custom prompt",
-					Tags:   []string{"custom"},
-				},
-			},
-		},
-	}
-	cfg.applyDefaults()
+// TestPartialSourceConfigKeepsDefaults guards the assumption that lets
+// sources config skip a post-unmarshal defaults pass: yaml decoding into
+// the DefaultConfig-populated struct only touches keys present in the
+// document, so a partial templates override keeps the other defaults.
+func TestPartialSourceConfigKeepsDefaults(t *testing.T) {
+	cfg := DefaultConfig()
+	yamlSrc := `
+sources:
+  issues:
+    templates:
+      name: "custom-{{ .Title }}"
+`
+	require.NoError(t, yaml.Unmarshal([]byte(yamlSrc), &cfg))
 
 	assert.Equal(t, "custom-{{ .Title }}", cfg.Sources.Issues.Templates.Name)
-	assert.Equal(t, "custom prompt", cfg.Sources.Issues.Templates.Prompt)
-	assert.Equal(t, []string{"custom"}, cfg.Sources.Issues.Templates.Tags)
-	assert.NotEqual(t, cfg.Sources.Issues.Templates.Name, cfg.Sources.PRs.Templates.Name, "prs defaults are independent")
+	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Prompt, "unset prompt must keep its default")
+	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Tags, "unset tags must keep their defaults")
+	assert.NotEmpty(t, cfg.Sources.PRs.Templates.Name, "untouched source must keep its defaults")
 }
 
 func TestConfigLoadsTopLevelSources(t *testing.T) {

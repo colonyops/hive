@@ -1,9 +1,7 @@
 # Sources
 
 !!! warning "Experimental"
-    Sources are an early vertical slice: built-in GitHub issues and pull
-    requests, session templates, and a searchable picker. The API and config
-    names may still change while source integrations mature.
+    Sources are experimental — the API and config names may still change.
 
 Sources let hive browse GitHub issues/PRs, search/filter items, and create a
 session from a selected item using the same batch-spawn path as `hive batch`.
@@ -12,6 +10,8 @@ session from a selected item using the same batch-spawn path as `hive batch`.
 
 ```yaml
 sources:
+  search_limit: 30 # max items per search (default: 30)
+  cache_ttl: 30s # search result cache TTL (default: 30s)
   issues:
     enabled: true # nil/omitted = auto, true/false = override
     templates:
@@ -68,15 +68,14 @@ for that CLI.
 | `issues` | `gh issue list` / `gh issue view` | two-line list + preview | yes    |
 | `prs`    | `gh pr list`                    | table                   | no     |
 
-Built-ins are declared as specs in `internal/sources/ghcli` — a small
-declarative shape with gh argv builders and JSON parsers executed by the
-shared engine.
+Built-ins are drivers in `internal/sources/ghcli`: gh argv builders and
+JSON parsers executed by a shared engine.
 
 ## Opening a source
 
 In the TUI, run `:SourceIssues [scope]` or `:SourcePRs [scope]` from the
 command palette (scope defaults to the selected session's repo), or the
-generic `:OpenSource <id> [scope]`. The default `i`/`p` keybindings in the
+generic `:Sources <id> [scope]`. The default `i`/`p` keybindings in the
 sessions view open issues/PRs respectively.
 
 Picker keys: `j/k` or arrows move selection, `/` enters search mode (esc
@@ -101,14 +100,3 @@ views:
     keybindings:
       I: { cmd: MyRepoIssues }
 ```
-
-## Noninteractive CLI seam
-
-```bash
-hive source open issues --scope cli/cli --pick 12345 --json
-```
-
-`--pick` selects an item by ID from the source's search results (an empty
-`--query` returns the source's default listing). On success this prints the
-created session as JSON when `--json` is set; otherwise it prints a short
-human-readable confirmation.

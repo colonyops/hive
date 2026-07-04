@@ -3,7 +3,6 @@ package ghcli
 import (
 	"context"
 	"fmt"
-	"io"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -13,72 +12,29 @@ import (
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
-// fakeExecutor is a minimal executil.Executor test double that returns a
-// caller-configured response per call, in call order, and records every
-// invocation's args for assertion.
-type fakeExecutor struct {
-	calls     []fakeCall
-	responses []fakeResponse
-}
-
-type fakeCall struct {
-	cmd  string
-	args []string
-}
-
-type fakeResponse struct {
-	out    []byte
-	stderr []byte
-	err    error
-}
-
-func (f *fakeExecutor) Run(_ context.Context, cmd string, args ...string) ([]byte, error) {
-	f.calls = append(f.calls, fakeCall{cmd: cmd, args: args})
-	idx := len(f.calls) - 1
-	if idx < len(f.responses) {
-		resp := f.responses[idx]
-		return append(append([]byte{}, resp.out...), resp.stderr...), resp.err
-	}
-	return nil, nil
-}
-
-func (f *fakeExecutor) RunOutput(_ context.Context, cmd string, args ...string) ([]byte, []byte, error) {
-	f.calls = append(f.calls, fakeCall{cmd: cmd, args: args})
-	idx := len(f.calls) - 1
-	if idx < len(f.responses) {
-		resp := f.responses[idx]
-		return resp.out, resp.stderr, resp.err
-	}
-	return nil, nil, nil
-}
-
-func (f *fakeExecutor) RunDir(ctx context.Context, _ string, cmd string, args ...string) ([]byte, error) {
-	return f.Run(ctx, cmd, args...)
-}
-
-func (f *fakeExecutor) RunStream(context.Context, io.Writer, io.Writer, string, ...string) error {
-	return fmt.Errorf("not implemented")
-}
-
-func (f *fakeExecutor) RunDirStream(context.Context, string, io.Writer, io.Writer, string, ...string) error {
-	return fmt.Errorf("not implemented")
-}
-
-// newIssues constructs the issues source for tests, failing on spec
-// errors.
-func newIssues(t *testing.T, exec *fakeExecutor, store kv.KV) *Source {
+// newIssues constructs the issues source for tests. A nil store gets a
+// fresh per-test KV (New requires one).
+func newIssues(t *testing.T, exec *executiltest.Exec, store kv.KV) *Source {
 	t.Helper()
-	c, err := New(IssuesSpec(), exec, store)
+	if store == nil {
+		store = newTestKV(t)
+	}
+	c, err := New(Issues(), exec, store, Options{})
 	require.NoError(t, err)
 	return c
 }
 
-// newPRs constructs the prs source for tests, failing on spec errors.
-func newPRs(t *testing.T, exec *fakeExecutor, store kv.KV) *Source {
+// newPRs constructs the prs source for tests. A nil store gets a fresh
+// per-test KV (New requires one).
+func newPRs(t *testing.T, exec *executiltest.Exec, store kv.KV) *Source {
 	t.Helper()
-	c, err := New(PRsSpec(), exec, store)
+	if store == nil {
+		store = newTestKV(t)
+	}
+	c, err := New(PRs(), exec, store, Options{})
 	require.NoError(t, err)
 	return c
 }
@@ -93,23 +49,38 @@ func newTestKV(t *testing.T) kv.KV {
 	return stores.NewKVStore(database)
 }
 
-func TestSpecValidation(t *testing.T) {
-	exec := &fakeExecutor{}
+// emptyIDDriver is a Driver whose Config carries no ID, for New
+// validation tests.
+type emptyIDDriver struct{ Driver }
 
-	_, err := New(Spec{}, exec, nil)
+func (emptyIDDriver) Config() Config { return Config{} }
+
+func TestNewValidation(t *testing.T) {
+	exec := &executiltest.Exec{}
+
+	_, err := New(emptyIDDriver{}, exec, newTestKV(t), Options{})
 	require.Error(t, err, "missing id")
 
-	_, err = New(Spec{ID: "x"}, exec, nil)
-	require.Error(t, err, "missing ListArgs/ParseList")
+	_, err = New(Issues(), exec, nil, Options{})
+	require.Error(t, err, "missing kv store")
+}
 
-	spec := IssuesSpec()
-	spec.ParseDetail = nil
-	_, err = New(spec, exec, nil)
-	require.Error(t, err, "DetailArgs without ParseDetail")
+func TestOptionsOverrideDefaults(t *testing.T) {
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{{Out: []byte(`[]`)}},
+	}
+	c, err := New(Issues(), exec, newTestKV(t), Options{SearchLimit: 5})
+	require.NoError(t, err)
+
+	_, err = c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
+	require.NoError(t, err)
+	require.Len(t, exec.Calls(), 1)
+	assert.Contains(t, exec.Calls()[0].Args, "5", "configured search limit must reach the gh argv")
+	assert.NotContains(t, exec.Calls()[0].Args, "30")
 }
 
 func TestIssuesManifest(t *testing.T) {
-	c := newIssues(t, &fakeExecutor{}, nil)
+	c := newIssues(t, &executiltest.Exec{}, nil)
 
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
@@ -121,7 +92,7 @@ func TestIssuesManifest(t *testing.T) {
 }
 
 func TestPRsManifest(t *testing.T) {
-	c := newPRs(t, &fakeExecutor{}, nil)
+	c := newPRs(t, &executiltest.Exec{}, nil)
 
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
@@ -133,9 +104,9 @@ func TestPRsManifest(t *testing.T) {
 }
 
 func TestSearchIssues(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
-			{out: []byte(`[
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
+			{Out: []byte(`[
 				{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"},{"name":"public"}],"url":"https://github.com/o/r/issues/1"},
 				{"number":2,"title":"Second issue","state":"CLOSED","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/issues/2"}
 			]`)},
@@ -145,17 +116,17 @@ func TestSearchIssues(t *testing.T) {
 
 	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r", Query: "bug"})
 	require.NoError(t, err)
-	require.Len(t, exec.calls, 1)
+	require.Len(t, exec.Calls(), 1)
 
-	call := exec.calls[0]
-	assert.Equal(t, "gh", call.cmd)
+	call := exec.Calls()[0]
+	assert.Equal(t, "gh", call.Cmd)
 	assert.Equal(t, []string{
 		"issue", "list",
 		"--repo", "o/r",
 		"--json", "number,title,state,author,labels,url",
 		"--limit", "30",
 		"--search", "bug",
-	}, call.args)
+	}, call.Args)
 
 	require.Len(t, result.Items, 2)
 	assert.Equal(t, "1", result.Items[0].ID)
@@ -173,11 +144,11 @@ func TestSearchIssues(t *testing.T) {
 }
 
 func TestSearchIgnoresSuccessfulGhStderr(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
 			{
-				out:    []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`),
-				stderr: []byte("warning: extension update available\n"),
+				Out:    []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`),
+				Stderr: []byte("warning: extension update available\n"),
 			},
 		},
 	}
@@ -190,8 +161,8 @@ func TestSearchIgnoresSuccessfulGhStderr(t *testing.T) {
 }
 
 func TestSearchIncludesGhStderrOnFailure(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{{stderr: []byte("authentication required\n"), err: fmt.Errorf("exit status 1")}},
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{{Stderr: []byte("authentication required\n"), Err: fmt.Errorf("exit status 1")}},
 	}
 	c := newIssues(t, exec, nil)
 
@@ -202,9 +173,9 @@ func TestSearchIncludesGhStderrOnFailure(t *testing.T) {
 }
 
 func TestSearchPRs(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
-			{out: []byte(`[
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
+			{Out: []byte(`[
 				{"number":10,"title":"Add feature","state":"OPEN","author":{"login":"alice"},"labels":[{"name":"api"}],"url":"https://github.com/o/r/pull/10","isDraft":false,"reviewDecision":"APPROVED","headRefName":"feat/add","statusCheckRollup":[{"__typename":"CheckRun","status":"COMPLETED","conclusion":"SUCCESS"}]},
 				{"number":11,"title":"WIP thing","state":"OPEN","author":{"login":"bob"},"labels":[],"url":"https://github.com/o/r/pull/11","isDraft":true,"reviewDecision":"","headRefName":"wip/thing","statusCheckRollup":[]}
 			]`)},
@@ -214,17 +185,17 @@ func TestSearchPRs(t *testing.T) {
 
 	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r", Query: "feat"})
 	require.NoError(t, err)
-	require.Len(t, exec.calls, 1)
+	require.Len(t, exec.Calls(), 1)
 
-	call := exec.calls[0]
-	assert.Equal(t, "gh", call.cmd)
+	call := exec.Calls()[0]
+	assert.Equal(t, "gh", call.Cmd)
 	assert.Equal(t, []string{
 		"pr", "list",
 		"--repo", "o/r",
 		"--json", "number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup",
 		"--limit", "30",
 		"--search", "feat",
-	}, call.args)
+	}, call.Args)
 
 	require.Len(t, result.Items, 2)
 	assert.Equal(t, "10", result.Items[0].ID)
@@ -296,9 +267,9 @@ func TestReviewLabel(t *testing.T) {
 }
 
 func TestFetchDetailIssues(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
-			{out: []byte(`{"number":1,"title":"First issue","body":"issue body text","url":"https://github.com/o/r/issues/1","state":"OPEN"}`)},
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
+			{Out: []byte(`{"number":1,"title":"First issue","body":"issue body text","url":"https://github.com/o/r/issues/1","state":"OPEN"}`)},
 		},
 	}
 	c := newIssues(t, exec, nil)
@@ -308,26 +279,26 @@ func TestFetchDetailIssues(t *testing.T) {
 	require.NotNil(t, detail.Markdown)
 	assert.Equal(t, "issue body text", detail.Markdown.Content)
 
-	require.Len(t, exec.calls, 1)
+	require.Len(t, exec.Calls(), 1)
 	assert.Equal(t, []string{
 		"issue", "view", "1",
 		"--repo", "o/r",
 		"--json", "number,title,body,url,state",
-	}, exec.calls[0].args)
+	}, exec.Calls()[0].Args)
 }
 
 func TestFetchDetailUnsupportedForPRs(t *testing.T) {
-	exec := &fakeExecutor{}
+	exec := &executiltest.Exec{}
 	c := newPRs(t, exec, nil)
 
 	_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "1", Scope: "o/r"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
-	assert.Empty(t, exec.calls)
+	assert.Empty(t, exec.Calls())
 }
 
 func TestAvailableChecksGH(t *testing.T) {
-	c := newIssues(t, &fakeExecutor{}, nil)
+	c := newIssues(t, &executiltest.Exec{}, nil)
 
 	t.Setenv("PATH", t.TempDir())
 	assert.False(t, c.Available(context.Background()))
@@ -338,20 +309,20 @@ func TestSearchRequiresOwnerRepoScope(t *testing.T) {
 
 	for _, scope := range cases {
 		t.Run(scope, func(t *testing.T) {
-			exec := &fakeExecutor{}
+			exec := &executiltest.Exec{}
 			c := newIssues(t, exec, nil)
 
 			_, err := c.Search(context.Background(), sources.SearchParams{Scope: scope})
 			require.Error(t, err)
-			assert.Empty(t, exec.calls, "no gh call should be made for an invalid scope")
+			assert.Empty(t, exec.Calls(), "no gh call should be made for an invalid scope")
 		})
 	}
 }
 
 func TestSearchGHNonZeroExit(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
-			{out: []byte(""), err: fmt.Errorf("exec gh: exit status 1")},
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
+			{Out: []byte(""), Err: fmt.Errorf("exec gh: exit status 1")},
 		},
 	}
 	c := newIssues(t, exec, nil)
@@ -362,9 +333,9 @@ func TestSearchGHNonZeroExit(t *testing.T) {
 }
 
 func TestSearchEmptyResults(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
-			{out: []byte(`[]`)},
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
+			{Out: []byte(`[]`)},
 		},
 	}
 	c := newIssues(t, exec, nil)
@@ -375,9 +346,9 @@ func TestSearchEmptyResults(t *testing.T) {
 }
 
 func TestSearchMalformedJSON(t *testing.T) {
-	exec := &fakeExecutor{
-		responses: []fakeResponse{
-			{out: []byte("not json")},
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{
+			{Out: []byte("not json")},
 		},
 	}
 	c := newIssues(t, exec, nil)
@@ -388,28 +359,28 @@ func TestSearchMalformedJSON(t *testing.T) {
 
 func TestSearchUsesCache(t *testing.T) {
 	payload := []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`)
-	exec := &fakeExecutor{
-		responses: []fakeResponse{{out: payload}, {out: payload}, {out: payload}},
+	exec := &executiltest.Exec{
+		Responses: []executiltest.Response{{Out: payload}, {Out: payload}, {Out: payload}},
 	}
 	c := newIssues(t, exec, newTestKV(t))
 	ctx := context.Background()
 
 	first, err := c.Search(ctx, sources.SearchParams{Scope: "o/r", Query: "bug"})
 	require.NoError(t, err)
-	require.Len(t, exec.calls, 1)
+	require.Len(t, exec.Calls(), 1)
 
 	second, err := c.Search(ctx, sources.SearchParams{Scope: "o/r", Query: "bug"})
 	require.NoError(t, err)
-	assert.Len(t, exec.calls, 1, "identical search must be served from cache without a second gh call")
+	assert.Len(t, exec.Calls(), 1, "identical search must be served from cache without a second gh call")
 	assert.Equal(t, first.Items, second.Items, "cached raw output must parse to identical items (including Field types)")
 
 	_, err = c.Search(ctx, sources.SearchParams{Scope: "o/r", Query: "feature"})
 	require.NoError(t, err)
-	assert.Len(t, exec.calls, 2, "a different query must miss the cache")
+	assert.Len(t, exec.Calls(), 2, "a different query must miss the cache")
 
 	_, err = c.Search(ctx, sources.SearchParams{Scope: "o/other", Query: "bug"})
 	require.NoError(t, err)
-	assert.Len(t, exec.calls, 3, "a different scope must miss the cache")
+	assert.Len(t, exec.Calls(), 3, "a different scope must miss the cache")
 }
 
 func TestCacheIsolatedPerSource(t *testing.T) {
@@ -417,8 +388,8 @@ func TestCacheIsolatedPerSource(t *testing.T) {
 	issuesPayload := []byte(`[{"number":1,"title":"An issue","state":"OPEN","author":{"login":"a"},"labels":[],"url":"u"}]`)
 	prsPayload := []byte(`[{"number":2,"title":"A PR","state":"OPEN","author":{"login":"b"},"labels":[],"url":"u","isDraft":false,"reviewDecision":"","headRefName":"x"}]`)
 
-	issues := newIssues(t, &fakeExecutor{responses: []fakeResponse{{out: issuesPayload}}}, store)
-	prs := newPRs(t, &fakeExecutor{responses: []fakeResponse{{out: prsPayload}}}, store)
+	issues := newIssues(t, &executiltest.Exec{Responses: []executiltest.Response{{Out: issuesPayload}}}, store)
+	prs := newPRs(t, &executiltest.Exec{Responses: []executiltest.Response{{Out: prsPayload}}}, store)
 	ctx := context.Background()
 
 	issuesResult, err := issues.Search(ctx, sources.SearchParams{Scope: "o/r"})
@@ -433,13 +404,13 @@ func TestCacheIsolatedPerSource(t *testing.T) {
 func TestFetchDetailRejectsNonNumericID(t *testing.T) {
 	for _, id := range []string{"--web", "-1", "0", "+1x"} {
 		t.Run(id, func(t *testing.T) {
-			exec := &fakeExecutor{}
+			exec := &executiltest.Exec{}
 			c := newIssues(t, exec, nil)
 
 			_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: id, Scope: "o/r"})
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), "invalid id")
-			assert.Empty(t, exec.calls, "no gh call should be made for an invalid id")
+			assert.Empty(t, exec.Calls(), "no gh call should be made for an invalid id")
 		})
 	}
 }
