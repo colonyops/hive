@@ -9,7 +9,6 @@
 package ghcli
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -20,7 +19,6 @@ import (
 
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/sources"
-	"github.com/colonyops/hive/pkg/executil"
 )
 
 // Defaults for Options zero values.
@@ -78,12 +76,15 @@ type Options struct {
 type Source struct {
 	driver Driver
 	cfg    Config
-	exec   executil.Executor
+	exec   Executor
 	cache  *kv.Cache[json.RawMessage]
 	limit  int
 }
 
-type outputExecutor interface {
+// Executor shells out to gh, returning stdout and stderr separately: stdout
+// is parsed as JSON and stderr becomes the error message on failure.
+// *executil.RealExecutor satisfies it.
+type Executor interface {
 	RunOutput(ctx context.Context, cmd string, args ...string) (stdout, stderr []byte, err error)
 }
 
@@ -91,7 +92,7 @@ var _ sources.Source = (*Source)(nil)
 
 // New constructs a Source executing driver. exec is used to shell out to
 // gh; store backs the search cache and is required.
-func New(driver Driver, exec executil.Executor, store kv.KV, opts Options) (*Source, error) {
+func New(driver Driver, exec Executor, store kv.KV, opts Options) (*Source, error) {
 	cfg := driver.Config()
 	if cfg.ID == "" {
 		return nil, fmt.Errorf("ghcli driver: id is required")
@@ -220,23 +221,14 @@ func (c *Source) runGHJSON(ctx context.Context, args []string) ([]byte, error) {
 	if len(args) == 0 {
 		return nil, fmt.Errorf("%s source: gh: missing arguments", c.cfg.ID)
 	}
-	if exec, ok := c.exec.(outputExecutor); ok {
-		stdout, stderr, err := exec.RunOutput(ctx, "gh", args...)
-		if err != nil {
-			msg := strings.TrimSpace(string(stderr))
-			if msg != "" {
-				return nil, fmt.Errorf("%s source: gh %s: %w: %s", c.cfg.ID, args[0], err, msg)
-			}
-			return nil, fmt.Errorf("%s source: gh %s: %w", c.cfg.ID, args[0], err)
-		}
-		return stdout, nil
-	}
-
-	out, err := c.exec.Run(ctx, "gh", args...)
+	stdout, stderr, err := c.exec.RunOutput(ctx, "gh", args...)
 	if err != nil {
+		if msg := strings.TrimSpace(string(stderr)); msg != "" {
+			return nil, fmt.Errorf("%s source: gh %s: %w: %s", c.cfg.ID, args[0], err, msg)
+		}
 		return nil, fmt.Errorf("%s source: gh %s: %w", c.cfg.ID, args[0], err)
 	}
-	return bytes.TrimSpace(out), nil
+	return stdout, nil
 }
 
 // parseScope validates that scope has the shape "owner/name" and returns it

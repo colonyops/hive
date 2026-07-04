@@ -5,7 +5,6 @@ import (
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/sources/ghcli"
-	"github.com/colonyops/hive/pkg/executil"
 	"github.com/rs/zerolog"
 )
 
@@ -28,7 +27,7 @@ func builtinSources(cfg *config.Config) []struct {
 // BuildSourceRegistry constructs the sources.Registry from cfg.
 // Registration failures are logged and the offending entry is skipped
 // rather than failing startup.
-func BuildSourceRegistry(cfg *config.Config, exec executil.Executor, kvStore kv.KV, logger zerolog.Logger) *sources.Registry {
+func BuildSourceRegistry(cfg *config.Config, exec ghcli.Executor, kvStore kv.KV, logger zerolog.Logger) *sources.Registry {
 	registry := sources.NewRegistry()
 
 	opts := ghcli.Options{
