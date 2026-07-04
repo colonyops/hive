@@ -161,9 +161,9 @@ func computePickerDims(width, height int) (modalWidth, modalHeight, contentWidth
 	contentHeight = max(modalHeight-sourcePickerChrome, 3)
 
 	// contentWidth excludes the border (2); innerWidth also excludes
-	// the per-section horizontal padding (4).
+	// the per-section horizontal padding (2).
 	contentWidth = max(modalWidth-2, 20)
-	innerWidth = max(contentWidth-4, 16)
+	innerWidth = max(contentWidth-2, 16)
 
 	return modalWidth, modalHeight, contentWidth, innerWidth, contentHeight
 }
@@ -530,7 +530,7 @@ func (p Picker) View() string {
 	help := styles.ModalHelpStyle.Render(p.helpText())
 
 	// Pad sections that need inset; dividers span the full inner width.
-	pad := lipgloss.NewStyle().Padding(0, 2)
+	pad := lipgloss.NewStyle().Padding(0, 1)
 	content := lipgloss.JoinVertical(lipgloss.Left,
 		pad.Render(p.renderTabBar()),
 		sep,
@@ -634,7 +634,7 @@ func (p Picker) renderBody() string {
 
 	// List state: item rows only; the filter line and dividers are
 	// rendered by View as fixed chrome.
-	pad := lipgloss.NewStyle().Padding(0, 2)
+	pad := lipgloss.NewStyle().Padding(0, 1)
 	list := pad.Render(p.renderList(tab))
 
 	return lipgloss.NewStyle().
