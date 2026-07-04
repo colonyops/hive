@@ -1,17 +1,14 @@
 package sources
 
-import (
-	"fmt"
-	"sort"
-)
+import "fmt"
 
 // registeredSource pairs a source implementation with the session
 // template configuration used to map its selected items into hive sessions.
 type registeredSource struct {
+	id          string
 	source      Source
 	templates   TemplateConfig
 	displayName string
-	order       int // registration order for stable tab ordering
 }
 
 // RegistryEntry exposes a registered source's public fields for the picker.
@@ -22,16 +19,17 @@ type RegistryEntry struct {
 	Templates   TemplateConfig
 }
 
-// Registry holds the set of sources configured for this hive instance,
-// keyed by source id (e.g. "issues" or "prs").
+// Registry holds the set of sources configured for this hive instance in
+// registration order, indexed by source id (e.g. "issues" or "prs") for
+// lookup.
 type Registry struct {
-	sources map[string]registeredSource
-	nextOrd int
+	entries []registeredSource
+	index   map[string]int // source id -> entries index
 }
 
 // NewRegistry constructs an empty Registry.
 func NewRegistry() *Registry {
-	return &Registry{sources: make(map[string]registeredSource)}
+	return &Registry{index: make(map[string]int)}
 }
 
 // Register adds a source under id along with the template configuration
@@ -45,58 +43,47 @@ func (r *Registry) Register(id string, source Source, templates TemplateConfig, 
 	if source == nil {
 		return fmt.Errorf("source registry: source %q is nil", id)
 	}
-	if _, exists := r.sources[id]; exists {
+	if _, exists := r.index[id]; exists {
 		return fmt.Errorf("source registry: %q is already registered", id)
 	}
 	name := displayName
 	if name == "" {
 		name = id
 	}
-	r.sources[id] = registeredSource{source: source, templates: templates, displayName: name, order: r.nextOrd}
-	r.nextOrd++
+	r.index[id] = len(r.entries)
+	r.entries = append(r.entries, registeredSource{id: id, source: source, templates: templates, displayName: name})
 	return nil
 }
 
 // Get returns the source and template configuration registered under id.
 func (r *Registry) Get(id string) (Source, TemplateConfig, bool) {
-	entry, ok := r.sources[id]
+	i, ok := r.index[id]
 	if !ok {
 		return nil, TemplateConfig{}, false
 	}
+	entry := r.entries[i]
 	return entry.source, entry.templates, true
 }
 
-// IDs returns the ids of all registered sources.
+// IDs returns the ids of all registered sources in registration order.
 func (r *Registry) IDs() []string {
-	ids := make([]string, 0, len(r.sources))
-	for id := range r.sources {
-		ids = append(ids, id)
+	ids := make([]string, 0, len(r.entries))
+	for _, e := range r.entries {
+		ids = append(ids, e.id)
 	}
 	return ids
 }
 
 // All returns all registered sources in registration order.
 func (r *Registry) All() []RegistryEntry {
-	entries := make([]RegistryEntry, 0, len(r.sources))
-	type ordered struct {
-		entry RegistryEntry
-		order int
-	}
-	var ords []ordered
-	for id, rs := range r.sources {
-		ords = append(ords, ordered{
-			entry: RegistryEntry{
-				ID:          id,
-				DisplayName: rs.displayName,
-				Source:      rs.source,
-				Templates:   rs.templates,
-			},
-			order: rs.order,
+	entries := make([]RegistryEntry, 0, len(r.entries))
+	for _, e := range r.entries {
+		entries = append(entries, RegistryEntry{
+			ID:          e.id,
+			DisplayName: e.displayName,
+			Source:      e.source,
+			Templates:   e.templates,
 		})
-	}
-	sort.Slice(ords, func(i, j int) bool { return ords[i].order < ords[j].order })
-	for _, o := range ords {
-		entries = append(entries, o.entry)
 	}
 	return entries
 }
