@@ -23,7 +23,7 @@ import (
 // Fixed dialog sizing: the modal's overall width/height are a deterministic
 // function of the terminal size, never of the current item/detail content.
 const (
-	sourcePickerMaxModalHeight = 36
+	sourcePickerMaxModalHeight = 28
 	sourcePickerModalMargin    = 2
 	sourcePickerMinModalWidth  = 72
 	// sourcePickerChrome counts the fixed rows View renders around the
