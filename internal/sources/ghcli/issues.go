@@ -18,7 +18,7 @@ func Issues() DetailDriver { return issuesDriver{} }
 func (issuesDriver) Config() Config {
 	return Config{
 		ID:          "issues",
-		DisplayName: "GitHub Issues",
+		DisplayName: "Issues",
 	}
 }
 

@@ -94,7 +94,7 @@ func TestIssuesManifest(t *testing.T) {
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "issues", manifest.ID)
-	assert.Equal(t, "GitHub Issues", manifest.DisplayName)
+	assert.Equal(t, "Issues", manifest.DisplayName)
 	assert.True(t, manifest.Capabilities.FetchDetail)
 }
 
@@ -104,7 +104,7 @@ func TestPRsManifest(t *testing.T) {
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
 	assert.Equal(t, "prs", manifest.ID)
-	assert.Equal(t, "GitHub Pull Requests", manifest.DisplayName)
+	assert.Equal(t, "Pull Requests", manifest.DisplayName)
 	assert.False(t, manifest.Capabilities.FetchDetail, "prs source has no detail view")
 }
 

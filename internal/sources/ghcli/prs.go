@@ -18,7 +18,7 @@ func PRs() Driver { return prsDriver{} }
 func (prsDriver) Config() Config {
 	return Config{
 		ID:          "prs",
-		DisplayName: "GitHub Pull Requests",
+		DisplayName: "Pull Requests",
 	}
 }
 
