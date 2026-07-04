@@ -65,8 +65,8 @@ for that CLI.
 
 | ID       | Data                            | Layout                  | Detail |
 | -------- | ------------------------------- | ----------------------- | ------ |
-| `issues` | `gh issue list` / `gh issue view` | two-line list + preview | yes    |
-| `prs`    | `gh pr list`                    | table                   | no     |
+| `issues` | `gh issue list` / `gh issue view` | two-line card + preview | yes    |
+| `prs`    | `gh pr list`                    | two-line card           | no     |
 
 Built-ins are drivers in `internal/sources/ghcli`: gh argv builders and
 JSON parsers executed by a shared engine.
