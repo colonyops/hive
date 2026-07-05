@@ -857,23 +857,26 @@ func (m Model) resolveSourceID(args []string) (string, error) {
 	}
 }
 
-// openSourcePicker opens the tabbed source picker with all registered
-// sources, starting on the tab identified by sourceID. The picker handles
-// lazy initialization, loading, and error states internally.
+// openSourcePicker opens the tabbed source picker with the sources registered
+// for the repo's detected forge backend, starting on the tab identified by
+// sourceID. The picker handles lazy initialization, loading, and error states
+// internally.
 func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.Model, tea.Cmd) {
 	if m.sourceRegistry == nil {
 		m.notifyErrorf("no sources are configured")
 		return m, nil
 	}
 
-	// Verify the requested source exists.
-	if _, _, ok := m.sourceRegistry.Get(sourceID); !ok {
-		m.notifyErrorf("unknown source %q", sourceID)
+	backend := m.detectSourceBackend(scope.Remote)
+
+	// Verify the requested source exists for this backend.
+	if _, _, ok := m.sourceRegistry.Get(sourceID, backend); !ok {
+		m.notifyErrorf("source %q is not available for %s repositories", sourceID, backend)
 		return m, nil
 	}
 
-	// Build tab entries from all registered sources.
-	entries := m.sourceRegistry.All()
+	// Build tab entries from the sources registered for this backend.
+	entries := m.sourceRegistry.All(backend)
 	tabs := make([]sourcepicker.TabSource, len(entries))
 	for i, entry := range entries {
 		tabs[i] = sourcepicker.TabSource{
@@ -888,10 +891,29 @@ func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.M
 	}
 
 	m.pendingSourceScope = scope
-	picker := sourcepicker.New(tabs, sourceID, scope.Search, m.width, m.height)
+	picker := sourcepicker.New(tabs, sourceID, scope.Search, scope.Source, m.width, m.height)
 	m.state = stateSourcePicker
 	m.modals.SourcePicker = &picker
 	return m, picker.Init()
+}
+
+// detectSourceBackend resolves the forge backend for a git remote using the
+// remote's host and any configured sources.hosts overrides. An empty remote
+// falls back to the default backend (GitHub).
+func (m Model) detectSourceBackend(remote string) sources.Backend {
+	host := git.ExtractHost(remote)
+	var overrides map[string]sources.Backend
+	if len(m.cfg.Sources.Hosts) > 0 {
+		overrides = make(map[string]sources.Backend, len(m.cfg.Sources.Hosts))
+		for h, b := range m.cfg.Sources.Hosts {
+			backend, err := sources.ParseBackend(b)
+			if err != nil {
+				continue // values are validated at config load; skip defensively
+			}
+			overrides[strings.ToLower(h)] = backend
+		}
+	}
+	return sources.DetectBackend(host, overrides)
 }
 
 // forwardSourcePickerMsg forwards a source search/detail/spinner message
@@ -947,24 +969,39 @@ func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, 
 }
 
 // fetchSourceDetail returns the item's detail for template rendering.
-// Detail is optional template data: it is fetched only when the source
-// declares the capability, and fetch failures degrade to an empty detail
-// (with a log) rather than blocking session creation.
-func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope string) sources.Detail {
+// Detail is optional template data: it is fetched via the source only when the
+// source declares the capability, and fetch failures degrade to an empty
+// detail (with a log) rather than blocking session creation. When the source
+// has no detail capability but the item already carries a "body" field (e.g.
+// tea, which has no single-issue view but returns the body in its list), that
+// body is used directly.
+func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope, dir string) sources.Detail {
 	if !result.Manifest.Capabilities.FetchDetail || result.Source == nil {
-		return sources.Detail{}
+		return detailFromBodyField(result.Item)
 	}
 	fetched, err := result.Source.FetchDetail(ctx, sources.FetchDetailParams{
 		ID:    result.Item.ID,
 		Scope: scope,
 		URI:   result.Item.URI,
+		Dir:   dir,
 	})
 	if err != nil {
 		log.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
 			Msg("source picker: fetch detail failed; creating session without detail")
-		return sources.Detail{}
+		return detailFromBodyField(result.Item)
 	}
 	return fetched
+}
+
+// detailFromBodyField synthesizes a markdown detail from an item's "body"
+// field when present, so .Detail templates work for sources that carry the
+// body inline instead of via FetchDetail.
+func detailFromBodyField(item sources.Item) sources.Detail {
+	body, ok := item.Fields["body"].(string)
+	if !ok || body == "" {
+		return sources.Detail{}
+	}
+	return sources.Detail{Markdown: &sources.MarkdownDetail{Content: body}}
 }
 
 // startSourceCreate starts one background stream that creates a session
@@ -1061,7 +1098,7 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 // creation output onto the shared stream. It returns the created session's
 // ID and name.
 func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Result, scope sourcePickerScope, out chan<- string) (id, name string, err error) {
-	detail := fetchSourceDetail(ctx, result, scope.Search)
+	detail := fetchSourceDetail(ctx, result, scope.Search, scope.Source)
 
 	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
 	if err != nil {

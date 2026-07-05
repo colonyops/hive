@@ -52,6 +52,11 @@ type SearchManifest struct {
 type SearchParams struct {
 	Query string
 	Scope string
+	// Dir is the local repository working directory, when one is known. CLI
+	// backends run their binary here so it can resolve the target host/login
+	// from the checkout's git remote (e.g. tea's login, gh's GHE host).
+	// Empty when there is no local checkout.
+	Dir string
 	// Cursor is an opaque pagination cursor; empty for the first page.
 	// Remote sources may ignore it.
 	Cursor string
@@ -74,6 +79,9 @@ type FetchDetailParams struct {
 	Scope string
 	// URI is the stable item URI when the source supplies one; optional.
 	URI string
+	// Dir is the local repository working directory, when one is known; see
+	// SearchParams.Dir.
+	Dir string
 }
 
 // Item is a single browsable/selectable record returned by Search.

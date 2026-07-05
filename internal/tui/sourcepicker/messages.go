@@ -53,11 +53,12 @@ type sourceSearchDebounceMsg struct {
 	Query    string
 }
 
-func sourceSearchCmd(gen int64, conn sources.Source, sourceID, scope, query string) tea.Cmd {
+func sourceSearchCmd(gen int64, conn sources.Source, sourceID, scope, dir, query string) tea.Cmd {
 	return func() tea.Msg {
 		result, err := conn.Search(context.Background(), sources.SearchParams{
 			Query: query,
 			Scope: scope,
+			Dir:   dir,
 		})
 		if err != nil {
 			return sourceSearchErrorMsg{Gen: gen, SourceID: sourceID, Query: query, Err: err}

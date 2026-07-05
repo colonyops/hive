@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/sources/cliengine"
 )
 
 // issuesDriver is the built-in GitHub issues source: a two-line card list
@@ -13,12 +14,13 @@ import (
 type issuesDriver struct{}
 
 // Issues returns the built-in GitHub issues driver.
-func Issues() DetailDriver { return issuesDriver{} }
+func Issues() cliengine.DetailDriver { return issuesDriver{} }
 
-func (issuesDriver) Config() Config {
-	return Config{
+func (issuesDriver) Config() cliengine.Config {
+	return cliengine.Config{
 		ID:          "issues",
 		DisplayName: "Issues",
+		Binary:      "gh",
 	}
 }
 
@@ -36,7 +38,7 @@ func (issuesDriver) ListArgs(scope, query string, limit int) []string {
 }
 
 func (issuesDriver) ParseList(out []byte) ([]sources.Item, error) {
-	entries, err := decodeList[issueListItem](out)
+	entries, err := cliengine.DecodeList[issueListItem](out)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func (issuesDriver) ParseList(out []byte) ([]sources.Item, error) {
 				"url":             li.URL,
 				"author":          li.Author.Login,
 				"labels":          labelNames(li.Labels),
-				"age":             shortAge(li.CreatedAt),
+				"age":             cliengine.ShortAge(li.CreatedAt),
 				"linked_pr":       linkedPR,
 				"linked_pr_count": linkedPRCount,
 				"assignee":        assignee,
@@ -84,7 +86,7 @@ func (issuesDriver) DetailArgs(scope, id string) []string {
 
 func (issuesDriver) ParseDetail(out []byte) (sources.Detail, error) {
 	var detail issueDetail
-	if err := decodeJSON(out, &detail); err != nil {
+	if err := cliengine.DecodeJSON(out, &detail); err != nil {
 		return sources.Detail{}, err
 	}
 	return sources.Detail{

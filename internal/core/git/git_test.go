@@ -6,6 +6,30 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func TestExtractHost(t *testing.T) {
+	tests := []struct {
+		remote string
+		want   string
+	}{
+		{"git@github.com:hay-kot/hive.git", "github.com"},
+		{"https://github.com/hay-kot/hive.git", "github.com"},
+		{"git@gitea.example.com:owner/repo.git", "gitea.example.com"},
+		{"https://gitea.example.com/owner/repo", "gitea.example.com"},
+		{"ssh://git@git.example.com:2222/owner/repo.git", "git.example.com"},
+		{"https://git.example.com:8443/owner/repo", "git.example.com"},
+		{"git://github.com/owner/repo.git", "github.com"},
+		{"https://user:token@git.example.com/owner/repo", "git.example.com"},
+		{"ssh://git.example.com/owner/repo", "git.example.com"},
+		{"", ""},
+		{"not-a-url", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.remote, func(t *testing.T) {
+			assert.Equal(t, tt.want, ExtractHost(tt.remote), "ExtractHost(%q)", tt.remote)
+		})
+	}
+}
+
 func TestExtractOwnerRepo(t *testing.T) {
 	tests := []struct {
 		remote    string

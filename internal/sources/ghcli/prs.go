@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/sources/cliengine"
 )
 
 // prsDriver is the built-in GitHub pull requests source: a two-line card
@@ -13,12 +14,13 @@ import (
 type prsDriver struct{}
 
 // PRs returns the built-in GitHub pull requests driver.
-func PRs() Driver { return prsDriver{} }
+func PRs() cliengine.Driver { return prsDriver{} }
 
-func (prsDriver) Config() Config {
-	return Config{
+func (prsDriver) Config() cliengine.Config {
+	return cliengine.Config{
 		ID:          "prs",
 		DisplayName: "Pull Requests",
+		Binary:      "gh",
 	}
 }
 
@@ -38,7 +40,7 @@ func (prsDriver) ListArgs(scope, query string, limit int) []string {
 }
 
 func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
-	entries, err := decodeList[prListItem](out)
+	entries, err := cliengine.DecodeList[prListItem](out)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +72,7 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 				"review":             reviewLabel(pr),
 				"ci":                 ciLabel(pr.StatusCheckRollup),
 				"branch":             pr.HeadRefName,
-				"age":                shortAge(pr.CreatedAt),
+				"age":                cliengine.ShortAge(pr.CreatedAt),
 				"linked_issue":       linkedIssue,
 				"linked_issue_count": linkedIssueCount,
 				"assignee":           assignee,

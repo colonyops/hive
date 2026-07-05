@@ -65,6 +65,13 @@ func (e *Exec) RunOutput(_ context.Context, cmd string, args ...string) ([]byte,
 	return resp.Out, resp.Stderr, resp.Err
 }
 
+// RunOutputDir returns the scripted response's stdout and stderr separately
+// and records the directory.
+func (e *Exec) RunOutputDir(_ context.Context, dir, cmd string, args ...string) ([]byte, []byte, error) {
+	resp := e.record(cmd, dir, args)
+	return resp.Out, resp.Stderr, resp.Err
+}
+
 // RunDir behaves like Run and records the directory.
 func (e *Exec) RunDir(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
 	resp := e.record(cmd, dir, args)
