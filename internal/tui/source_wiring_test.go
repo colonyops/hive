@@ -2,13 +2,17 @@ package tui
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/sourcepicker"
 )
 
@@ -106,6 +110,90 @@ func sourcepickerResult(src sources.Source, manifest sources.Manifest) sourcepic
 		Source:   src,
 		Manifest: manifest,
 	}
+}
+
+// fakeSessionCreator records CreateSession calls for fan-out tests.
+type fakeSessionCreator struct {
+	created []hive.CreateOptions
+}
+
+func (f *fakeSessionCreator) CreateSession(_ context.Context, opts hive.CreateOptions) (*session.Session, error) {
+	f.created = append(f.created, opts)
+	return &session.Session{ID: fmt.Sprintf("id-%d", len(f.created)), Slug: opts.Name}, nil
+}
+
+func multiResult(id, nameTemplate string) sourcepicker.Result {
+	return sourcepicker.Result{
+		Item:      sources.Item{ID: id, Title: "item " + id},
+		SourceID:  "issues",
+		Source:    stubSource{id: "issues"},
+		Templates: sources.TemplateConfig{Name: nameTemplate},
+	}
+}
+
+func TestCreateSourceSessions_FanOut(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	m := Model{cmdService: command.NewService(nil, nil, nil, nil, creator)}
+	out := make(chan string, 100)
+
+	results := []sourcepicker.Result{
+		multiResult("1", "session-{{ .ID }}"),
+		multiResult("2", "session-{{ .ID }}"),
+	}
+
+	var firstID, firstName string
+	err := m.createSourceSessions(context.Background(), results, sourcePickerScope{}, out, &firstID, &firstName)
+	require.NoError(t, err)
+
+	require.Len(t, creator.created, 2, "every selected item spawns a session")
+	assert.Equal(t, "session-1", creator.created[0].Name)
+	assert.Equal(t, "session-2", creator.created[1].Name)
+	assert.Equal(t, "id-1", firstID, "first created session is recorded for selection")
+	assert.Equal(t, "session-1", firstName)
+}
+
+func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	m := Model{cmdService: command.NewService(nil, nil, nil, nil, creator)}
+	out := make(chan string, 100)
+
+	results := []sourcepicker.Result{
+		multiResult("1", "session-{{ .ID }}"),
+		multiResult("2", "{{ .Nope }}"), // render failure
+		multiResult("3", "session-{{ .ID }}"),
+	}
+
+	var firstID, firstName string
+	err := m.createSourceSessions(context.Background(), results, sourcePickerScope{}, out, &firstID, &firstName)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "1 of 3 sessions failed")
+
+	require.Len(t, creator.created, 2, "items after a failure must still spawn")
+	assert.Equal(t, "session-1", creator.created[0].Name)
+	assert.Equal(t, "session-3", creator.created[1].Name)
+
+	close(out)
+	var lines []string
+	for line := range out {
+		lines = append(lines, line)
+	}
+	joined := strings.Join(lines, "\n")
+	assert.Contains(t, joined, "[2/3] failed:", "per-item failure is reported on the stream")
+}
+
+func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	m := Model{cmdService: command.NewService(nil, nil, nil, nil, creator)}
+	out := make(chan string, 100)
+
+	var firstID, firstName string
+	err := m.createSourceSessions(context.Background(),
+		[]sourcepicker.Result{multiResult("1", "{{ .Nope }}")},
+		sourcePickerScope{}, out, &firstID, &firstName)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "name template", "single-item batches surface the underlying error")
+	assert.Empty(t, creator.created)
 }
 
 func TestSourcePickerScopeForSelection(t *testing.T) {

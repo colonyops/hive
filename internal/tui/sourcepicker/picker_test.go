@@ -243,9 +243,10 @@ func TestPicker_SelectionAndCancel(t *testing.T) {
 	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
 	p = drainPicker(t, next, cmd)
 
-	result, ok := p.Selected()
+	results, ok := p.Selected()
 	require.True(t, ok)
-	assert.Equal(t, "1", result.Item.ID)
+	require.Len(t, results, 1, "enter without marks selects the cursor item")
+	assert.Equal(t, "1", results[0].Item.ID)
 	assert.False(t, p.Cancelled())
 
 	// Cancel test
@@ -256,6 +257,165 @@ func TestPicker_SelectionAndCancel(t *testing.T) {
 	assert.True(t, p2.Cancelled())
 	_, ok = p2.Selected()
 	assert.False(t, ok)
+}
+
+// pressSpace toggles the mark on the cursor item.
+func pressSpace(t *testing.T, p Picker) Picker {
+	t.Helper()
+	next, cmd := p.Update(tea.KeyPressMsg{Text: " ", Code: tea.KeySpace})
+	return drainPicker(t, next, cmd)
+}
+
+func TestPicker_SpaceTogglesMark(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = pressSpace(t, p)
+	tab := activeTab(p)
+	require.Len(t, tab.marked, 1)
+	assert.Equal(t, "1", tab.marked[0].ID)
+	assert.Equal(t, 0, tab.cursor, "marking must not move the cursor")
+
+	// Mark the second item, then move back and unmark the first.
+	p = p.moveCursor(1)
+	p = pressSpace(t, p)
+	require.Len(t, activeTab(p).marked, 2)
+
+	p = p.moveCursor(-1)
+	p = pressSpace(t, p)
+	tab = activeTab(p)
+	require.Len(t, tab.marked, 1)
+	assert.Equal(t, "2", tab.marked[0].ID, "unmarking removes only the toggled item")
+}
+
+func TestPicker_EnterSpawnsMarkedItems(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+		{ID: "3", Title: "gamma"},
+	}
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = pressSpace(t, p)
+	p = p.moveCursor(1)
+	p = pressSpace(t, p)
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	p = drainPicker(t, next, cmd)
+
+	results, ok := p.Selected()
+	require.True(t, ok)
+	require.Len(t, results, 2, "enter returns every marked item, not the cursor item")
+	assert.Equal(t, "1", results[0].Item.ID)
+	assert.Equal(t, "2", results[1].Item.ID)
+}
+
+func TestPicker_MarksSurviveRemoteSearch(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUISource(remoteManifest(), items)
+	p := newTestPicker(fake, remoteManifest(), "o/r", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = pressSpace(t, p) // mark "alpha"
+
+	// Search narrows the list to "beta"; the mark on "alpha" must survive.
+	p = enterSearch(t, p)
+	p = typeKey(t, p, "beta")
+	require.Len(t, activeTab(p).filteredItems, 1)
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	p = drainPicker(t, next, cmd)
+
+	results, ok := p.Selected()
+	require.True(t, ok)
+	require.Len(t, results, 1)
+	assert.Equal(t, "1", results[0].Item.ID, "marked item spawns even when filtered out of view")
+}
+
+func TestPicker_MarksAcrossTabs(t *testing.T) {
+	m1 := fakeManifest()
+	m1.ID = "prs"
+	m2 := fakeManifest()
+	m2.ID = "issues"
+
+	tabs := []TabSource{
+		{ID: "prs", Source: newFakeTUISource(m1, []sources.Item{{ID: "p1", Title: "PR one"}}), Manifest: m1},
+		{ID: "issues", Source: newFakeTUISource(m2, []sources.Item{{ID: "i1", Title: "Issue one"}}), Manifest: m2},
+	}
+	p := New(tabs, "prs", "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = pressSpace(t, p)
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyTab})
+	p = drainPicker(t, next, cmd)
+	p = pressSpace(t, p)
+
+	next, cmd = p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	p = drainPicker(t, next, cmd)
+
+	results, ok := p.Selected()
+	require.True(t, ok)
+	require.Len(t, results, 2)
+	assert.Equal(t, "prs", results[0].SourceID)
+	assert.Equal(t, "p1", results[0].Item.ID)
+	assert.Equal(t, "issues", results[1].SourceID)
+	assert.Equal(t, "i1", results[1].Item.ID)
+}
+
+func TestPicker_MarkCapRefusesFurtherMarks(t *testing.T) {
+	items := make([]sources.Item, maxMarkedItems+2)
+	for i := range items {
+		items[i] = sources.Item{ID: fmt.Sprintf("%d", i+1), Title: fmt.Sprintf("item %d", i+1)}
+	}
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 40)
+	p = drainPicker(t, p, p.Init())
+
+	for range items {
+		p = pressSpace(t, p)
+		p = p.moveCursor(1)
+	}
+	assert.Equal(t, maxMarkedItems, p.totalMarked(), "marks stop at the cap")
+
+	// Unmarking below the cap frees a slot.
+	activeTab(p).cursor = 0
+	p = pressSpace(t, p) // unmark first item
+	assert.Equal(t, maxMarkedItems-1, p.totalMarked())
+}
+
+func TestPicker_MarkedRowRendersGlyphAndCount(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+
+	p = pressSpace(t, p)
+
+	list := terminal.StripANSI(p.renderList(activeTab(p)))
+	require.Contains(t, list, markGlyph, "marked row must show the mark glyph")
+	firstLine := strings.SplitN(list, "\n", 2)[0]
+	assert.Less(t, strings.Index(firstLine, markGlyph), strings.Index(firstLine, "alpha"),
+		"mark glyph sits in the gutter before the title")
+
+	filterLine := terminal.StripANSI(p.renderFilterLine(activeTab(p)))
+	assert.Contains(t, filterLine, markGlyph+" 1", "filter line shows the marked count")
+
+	help := terminal.StripANSI(p.helpText())
+	assert.Contains(t, help, "spawn 1", "enter hint reflects the marked count")
 }
 
 func TestPicker_EmptyResultsShowsEmptyState(t *testing.T) {
@@ -478,8 +638,8 @@ func TestNumberColumnWidth_AlignsShortAndLongNumbers(t *testing.T) {
 	// The card title line pads "#<number>" to the shared width, so titles
 	// start at the same column regardless of number width.
 	p := newTestPicker(newFakeTUISource(fakeManifest(), nil), fakeManifest(), "test-repo", 90, 24)
-	short := strings.SplitN(p.renderCardContent(items[0], false, 60, w), "\n", 2)[0]
-	long := strings.SplitN(p.renderCardContent(items[1], false, 60, w), "\n", 2)[0]
+	short := strings.SplitN(p.renderCardContent(items[0], false, false, 60, w), "\n", 2)[0]
+	long := strings.SplitN(p.renderCardContent(items[1], false, false, 60, w), "\n", 2)[0]
 	assert.Equal(t, strings.Index(short, "Short"), strings.Index(long, "Long"),
 		"titles must start at the same column regardless of number width")
 }
@@ -555,9 +715,11 @@ func TestPicker_CardRowIsTwoLines(t *testing.T) {
 
 	numWidth := numberColumnWidth([]sources.Item{item})
 	for _, selected := range []bool{true, false} {
-		row := p.renderRow(item, selected, numWidth)
-		assert.Equal(t, rowsPerItemCard, lipgloss.Height(row),
-			"card row must render as exactly two lines (selected=%v)", selected)
+		for _, marked := range []bool{true, false} {
+			row := p.renderRow(item, selected, marked, numWidth)
+			assert.Equal(t, rowsPerItemCard, lipgloss.Height(row),
+				"card row must render as exactly two lines (selected=%v marked=%v)", selected, marked)
+		}
 	}
 }
 
@@ -570,8 +732,8 @@ func TestRenderCardContent_PlainIsANSIFree(t *testing.T) {
 		"assignee": "bob", "assignee_count": 2,
 	}}
 
-	plain := p.renderCardContent(item, false, 60, 5)
-	styled := p.renderCardContent(item, true, 60, 5)
+	plain := p.renderCardContent(item, false, false, 60, 5)
+	styled := p.renderCardContent(item, true, false, 60, 5)
 
 	assert.Equal(t, plain, terminal.StripANSI(plain), "plain card row must be ANSI-free")
 	assert.Equal(t, plain, terminal.StripANSI(styled), "styled and plain must match once ANSI is stripped")

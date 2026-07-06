@@ -83,6 +83,13 @@ returns to navigate, keeping the filter), `O` opens the highlighted item in
 your browser, and enter creates a session from it using the source's configured
 templates.
 
+Space marks items for batch spawning: enter then creates one session per
+marked item instead of the highlighted one. Marks survive filtering, tab
+switches, and re-searches, and are capped at 10 across all tabs. Session
+creation runs on a single background stream; if some items fail (e.g. a
+template error), the rest still spawn and the completion notice reports how
+many failed.
+
 Custom commands can pin a source id and scope via preset `args`, and keybindings
 can reference those commands. This is how the built-in `SourceIssues`/`SourcePRs`
 commands are defined:

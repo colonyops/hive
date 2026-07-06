@@ -39,7 +39,18 @@ const (
 	// rowsPerItemCard is the terminal-row height of one card item: the
 	// title line plus the status strip beneath it.
 	rowsPerItemCard = 2
+	// markCellWidth is the fixed multi-select gutter at the start of every
+	// card row. Reserving it unconditionally keeps rows aligned whether or
+	// not anything is marked.
+	markCellWidth = 2
+	// maxMarkedItems caps how many items can be marked for batch spawning
+	// across all tabs, so one enter can't fan out an unbounded number of
+	// session creations.
+	maxMarkedItems = 10
 )
+
+// markGlyph indicates a marked (multi-selected) row in the mark gutter.
+const markGlyph = "✓"
 
 // defaultSearchDebounce is used when a remote-search manifest does not
 // set its own DebounceMS: long enough to coalesce normal typing, short
@@ -73,6 +84,20 @@ type tabState struct {
 	cursor       int
 	scrollOffset int
 	filterQuery  string
+
+	// marked holds the items toggled for batch spawning, in toggle order.
+	// Full items (not indexes) so marks survive re-filtering and remote
+	// re-searching that replace filteredItems.
+	marked []sources.Item
+}
+
+func (t *tabState) isMarked(id string) bool {
+	for i := range t.marked {
+		if t.marked[i].ID == id {
+			return true
+		}
+	}
+	return false
 }
 
 // Picker is a tabbed, searchable modal for browsing external sources.
@@ -343,7 +368,7 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		return p, nil
 	case "enter":
 		tab := p.activeState()
-		if len(tab.filteredItems) > 0 && tab.cursor < len(tab.filteredItems) {
+		if p.totalMarked() > 0 || (len(tab.filteredItems) > 0 && tab.cursor < len(tab.filteredItems)) {
 			p.selected = true
 		}
 		return p, nil
@@ -398,6 +423,8 @@ func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		return p.moveCursor(1), nil
 	case "k":
 		return p.moveCursor(-1), nil
+	case "space":
+		return p.toggleMark(), nil
 	case "/":
 		p.searchMode = true
 		return p, p.input.Focus()
@@ -405,6 +432,38 @@ func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 		return p, p.openCurrentItemURL()
 	}
 	return p, nil
+}
+
+// toggleMark toggles multi-select on the cursor item. Marking is refused
+// past maxMarkedItems; the filter line renders the count in a warning
+// style at the cap so the refusal is visible.
+func (p Picker) toggleMark() Picker {
+	tab := p.activeState()
+	if tab.cursor < 0 || tab.cursor >= len(tab.filteredItems) {
+		return p
+	}
+	item := tab.filteredItems[tab.cursor]
+	for i := range tab.marked {
+		if tab.marked[i].ID == item.ID {
+			tab.marked = append(tab.marked[:i], tab.marked[i+1:]...)
+			return p
+		}
+	}
+	if p.totalMarked() >= maxMarkedItems {
+		log.Debug().Int("max", maxMarkedItems).Msg("source picker: mark limit reached")
+		return p
+	}
+	tab.marked = append(tab.marked, item)
+	return p
+}
+
+// totalMarked counts marked items across all tabs.
+func (p Picker) totalMarked() int {
+	n := 0
+	for i := range p.tabs {
+		n += len(p.tabs[i].marked)
+	}
+	return n
 }
 
 func (p Picker) switchTab(delta int) (Picker, tea.Cmd) {
@@ -562,22 +621,40 @@ func (p Picker) itemCapacity() int {
 	return max(p.listHeight()/rowsPerItemCard, 1)
 }
 
-// Selected returns the highlighted item if the user pressed enter.
-func (p Picker) Selected() (Result, bool) {
+// Selected returns the items to spawn if the user pressed enter: every
+// marked item across all tabs (in toggle order, tab by tab), or the
+// highlighted item when nothing is marked.
+func (p Picker) Selected() ([]Result, bool) {
 	if !p.selected {
-		return Result{}, false
+		return nil, false
 	}
+
+	var results []Result
+	for i := range p.tabs {
+		tab := &p.tabs[i]
+		for _, item := range tab.marked {
+			results = append(results, tabResult(tab, item))
+		}
+	}
+	if len(results) > 0 {
+		return results, true
+	}
+
 	tab := p.activeState()
 	if tab.cursor < 0 || tab.cursor >= len(tab.filteredItems) {
-		return Result{}, false
+		return nil, false
 	}
+	return []Result{tabResult(tab, tab.filteredItems[tab.cursor])}, true
+}
+
+func tabResult(tab *tabState, item sources.Item) Result {
 	return Result{
-		Item:      tab.filteredItems[tab.cursor],
+		Item:      item,
 		SourceID:  tab.tab.ID,
 		Source:    tab.tab.Source,
 		Manifest:  tab.tab.Manifest,
 		Templates: tab.tab.Templates,
-	}, true
+	}
 }
 
 // Cancelled reports whether the user dismissed the picker.
@@ -740,6 +817,16 @@ func (p Picker) renderFilterLine(tab *tabState) string {
 	}
 
 	countStr := styles.TextMutedStyle.Render(fmt.Sprintf("%d", len(tab.filteredItems)))
+	// Surface the marked total (across tabs) next to the item count; at
+	// the cap it turns warning-colored since further marks are refused.
+	if n := p.totalMarked(); n > 0 {
+		markStyle := styles.TextSuccessStyle
+		if n >= maxMarkedItems {
+			markStyle = styles.TextWarningStyle
+		}
+		countStr = markStyle.Render(fmt.Sprintf("%s %d", markGlyph, n)) +
+			" " + styles.TextMutedStyle.Render("·") + " " + countStr
+	}
 
 	gap := max(p.innerWidth-lipgloss.Width(placeholder)-lipgloss.Width(countStr), 1)
 	return placeholder + strings.Repeat(" ", gap) + countStr
@@ -758,7 +845,7 @@ func (p Picker) renderList(tab *tabState) string {
 		item := tab.filteredItems[idx]
 		selected := idx == tab.cursor
 		// Each card row is two lines joined by "\n".
-		lines = append(lines, p.renderRow(item, selected, numWidth))
+		lines = append(lines, p.renderRow(item, selected, tab.isMarked(item.ID), numWidth))
 	}
 
 	// Pad with blank lines so the body box keeps a fixed height. Each
@@ -778,9 +865,9 @@ func (p Picker) renderList(tab *tabState) string {
 // only the trailing padding is highlighted. Do not "restore" per-cell
 // styling on selected rows unless every cell and every padding space
 // carries the highlight background itself.
-func (p Picker) renderRow(item sources.Item, selected bool, numWidth int) string {
+func (p Picker) renderRow(item sources.Item, selected, marked bool, numWidth int) string {
 	innerWidth := max(p.innerWidth-2, 10) // account for the left border+space / padding
-	content := p.renderCardContent(item, !selected, innerWidth, numWidth)
+	content := p.renderCardContent(item, !selected, marked, innerWidth, numWidth)
 	if selected {
 		return p.selectedCardStyle.Render(content)
 	}
@@ -800,17 +887,32 @@ func numberColumnWidth(items []sources.Item) int {
 	return widest
 }
 
-// renderCardContent composes a two-line card row. Line 1 is the number and
-// title (left) with the author right-aligned; line 2 is the metadata strip
-// (left, aligned under the title) with labels right-aligned. When styled is
-// false the result carries no ANSI (used for selected rows — see the
-// comment on renderRow).
-func (p Picker) renderCardContent(item sources.Item, styled bool, innerWidth, numWidth int) string {
-	line1 := p.renderCardLine1(item, styled, innerWidth, numWidth)
+// renderCardContent composes a two-line card row. Line 1 leads with the
+// multi-select mark gutter, then the number and title (left) with the
+// author right-aligned; line 2 is the metadata strip (left, aligned under
+// the title) with labels right-aligned. When styled is false the result
+// carries no ANSI (used for selected rows — see the comment on renderRow).
+func (p Picker) renderCardContent(item sources.Item, styled, marked bool, innerWidth, numWidth int) string {
+	bodyWidth := max(innerWidth-markCellWidth, 10)
+	line1 := p.markCell(marked, styled) + p.renderCardLine1(item, styled, bodyWidth, numWidth)
 
 	indent := numWidth + 1 // align the meta strip under the title, past "#<n> "
-	line2 := strings.Repeat(" ", indent) + p.renderCardLine2(item, styled, max(innerWidth-indent, 1))
+	line2 := strings.Repeat(" ", markCellWidth+indent) + p.renderCardLine2(item, styled, max(bodyWidth-indent, 1))
 	return line1 + "\n" + line2
+}
+
+// markCell renders the fixed-width multi-select gutter: a mark glyph for
+// marked rows, blank space otherwise. On cursor rows (styled=false) the
+// glyph stays plain so the card highlight paints it.
+func (p Picker) markCell(marked, styled bool) string {
+	if !marked {
+		return strings.Repeat(" ", markCellWidth)
+	}
+	glyph := markGlyph
+	if styled {
+		glyph = styles.TextSuccessStyle.Render(glyph)
+	}
+	return glyph + " "
 }
 
 // renderCardLine1 renders "#<number> <title>" on the left with the author
@@ -1018,11 +1120,17 @@ func (p Picker) helpText() string {
 			components.HelpEntry{Key: "esc", Desc: "done"},
 		)
 	}
+	enterDesc := "select"
+	if n := p.totalMarked(); n > 0 {
+		enterDesc = fmt.Sprintf("spawn %d", n)
+	}
+	// No nav hint here: j/k/arrows are the expected defaults, and the help
+	// line must stay a single row at the modal's minimum width.
 	return components.KeyHints(
 		components.HelpEntry{Key: "tab", Desc: "switch source"},
 		components.HintFilter,
-		components.HintNav,
-		components.HelpEntry{Key: "enter", Desc: "select"},
+		components.HelpEntry{Key: "space", Desc: "mark"},
+		components.HelpEntry{Key: "enter", Desc: enterDesc},
 		components.HelpEntry{Key: "O", Desc: "open"},
 		components.HelpEntry{Key: "esc", Desc: "close"},
 	)
