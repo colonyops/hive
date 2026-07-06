@@ -1,16 +1,14 @@
 // Package teacli implements hive's built-in Gitea/Forgejo sources as
 // cliengine drivers backed by the tea CLI.
 //
-// tea's list commands emit JSON as an array of flat, string-valued objects
-// (every field is a string, including numbers and comma-joined lists), which
-// is thinner than gh's GraphQL output. The drivers here parse that shape and
-// map it into the same source Item fields the picker renders, leaving
-// unavailable fields (CI status, review decision) blank.
+// tea's list JSON is stringly-typed: every field is a string, including
+// numbers and comma-joined lists. Fields gh provides but tea doesn't (CI
+// status, review decision) stay blank.
 //
 // tea resolves which instance/login to talk to from the checkout's git
-// remote, so the engine runs tea in the session's repo directory
-// (SearchParams.Dir). Without a local checkout tea falls back to its default
-// login, which may target the wrong host.
+// remote, so the engine runs tea in the repo directory (SearchParams.Dir).
+// Without a local checkout tea falls back to its default login, which may
+// target the wrong host.
 package teacli
 
 import (
@@ -36,8 +34,6 @@ func splitCSV(s string) []string {
 	return out
 }
 
-// firstCSV returns the first entry of a comma-joined value and the total
-// count.
 func firstCSV(s string) (first string, count int) {
 	parts := splitCSV(s)
 	if len(parts) == 0 {
@@ -46,8 +42,8 @@ func firstCSV(s string) (first string, count int) {
 	return parts[0], len(parts)
 }
 
-// teaAge parses tea's RFC3339 timestamp string and renders it as a compact
-// age. An empty or unparseable value renders blank.
+// teaAge renders tea's RFC3339 timestamp string as a compact age; an
+// unparseable value renders blank.
 func teaAge(s string) string {
 	if strings.TrimSpace(s) == "" {
 		return ""

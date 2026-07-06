@@ -8,9 +8,8 @@ import (
 	"github.com/colonyops/hive/internal/sources/cliengine"
 )
 
-// prsDriver is the built-in GitHub pull requests source: a two-line card
-// list (no detail view) of open PRs, backed by `gh pr list`. The status
-// strip beneath each title reads CI, then review, then author.
+// prsDriver is the built-in GitHub pull requests source, backed by
+// `gh pr list` (no detail view).
 type prsDriver struct{}
 
 // PRs returns the built-in GitHub pull requests driver.
@@ -50,10 +49,9 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 
 	items := make([]sources.Item, 0, len(entries))
 	for _, pr := range entries {
-		// Fields keys number/title/url/author/branch/ci are load-bearing:
-		// default source session templates reference .Fields.number,
-		// .Fields.url, and .Fields.branch; the card layout reads
-		// ci/review/age/linked_issue/assignee.
+		// Fields keys are load-bearing: default session templates reference
+		// .Fields.number, .Fields.url, and .Fields.branch; the card layout
+		// reads the rest.
 		assignee, assigneeCount := assigneeSummary(pr.Assignees)
 		linkedIssue, linkedIssueCount := firstRef(pr.LinkedIssues)
 		items = append(items, sources.Item{
@@ -83,8 +81,7 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 	return items, nil
 }
 
-// prListItem is the JSON shape of a single entry returned by
-// `gh pr list --json number,title,state,author,labels,url,isDraft,reviewDecision,headRefName,statusCheckRollup,createdAt,assignees,closingIssuesReferences`.
+// prListItem is one `gh pr list --json` entry.
 type prListItem struct {
 	Number            int        `json:"number"`
 	Title             string     `json:"title"`
@@ -146,8 +143,6 @@ func ciLabel(checks []prCheck) string {
 	return "passing"
 }
 
-// reviewLabel condenses gh's draft flag and reviewDecision enum into one
-// human-scannable table cell.
 func reviewLabel(pr prListItem) string {
 	if pr.IsDraft {
 		return "draft"

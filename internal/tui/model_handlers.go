@@ -834,11 +834,8 @@ type sourcePickerScope struct {
 	Source string // local repo checkout dir; the CLI cwd and CreateOptions.Source (file-copy source)
 }
 
-// resolveSourceID returns the source to open: an explicit args[0]
-// when given, otherwise the sole registered source. The returned error
-// distinguishes "nothing to open" from "ambiguous" so callers
-// (keybinding and command-palette paths) share the same resolution rules
-// and report the right problem.
+// resolveSourceID returns the source to open: an explicit args[0] when
+// given, otherwise the sole registered source.
 func (m Model) resolveSourceID(args []string) (string, error) {
 	if len(args) > 0 && args[0] != "" {
 		return args[0], nil
@@ -869,13 +866,11 @@ func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.M
 
 	backend := m.detectSourceBackend(scope.Remote)
 
-	// Verify the requested source exists for this backend.
 	if _, _, ok := m.sourceRegistry.Get(sourceID, backend); !ok {
 		m.notifyErrorf("source %q is not available for %s repositories", sourceID, backend)
 		return m, nil
 	}
 
-	// Build tab entries from the sources registered for this backend.
 	entries := m.sourceRegistry.All(backend)
 	tabs := make([]sourcepicker.TabSource, len(entries))
 	for i, entry := range entries {
@@ -897,9 +892,8 @@ func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.M
 	return m, picker.Init()
 }
 
-// detectSourceBackend resolves the forge backend for a git remote using the
-// remote's host and any configured sources.hosts overrides. An empty remote
-// falls back to the default backend (GitHub).
+// detectSourceBackend resolves the forge backend from the remote's host and
+// any configured sources.hosts overrides.
 func (m Model) detectSourceBackend(remote string) sources.Backend {
 	host := git.ExtractHost(remote)
 	var overrides map[string]sources.Backend
@@ -968,13 +962,10 @@ func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, 
 	return m, m.startSourceCreate(results, m.pendingSourceScope)
 }
 
-// fetchSourceDetail returns the item's detail for template rendering.
-// Detail is optional template data: it is fetched via the source only when the
-// source declares the capability, and fetch failures degrade to an empty
-// detail (with a log) rather than blocking session creation. When the source
-// has no detail capability but the item already carries a "body" field (e.g.
-// tea, which has no single-issue view but returns the body in its list), that
-// body is used directly.
+// fetchSourceDetail returns the item's detail for template rendering. Detail
+// is optional: sources without the capability fall back to the item's inline
+// "body" field, and fetch failures degrade the same way (with a log) rather
+// than blocking session creation.
 func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope, dir string) sources.Detail {
 	if !result.Manifest.Capabilities.FetchDetail || result.Source == nil {
 		return detailFromBodyField(result.Item)

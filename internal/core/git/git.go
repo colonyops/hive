@@ -78,11 +78,9 @@ func ExtractHost(remote string) string {
 	// Scheme-based URLs: ssh://, https://, http://, git://.
 	if idx := strings.Index(remote, "://"); idx != -1 {
 		rest := remote[idx+3:]
-		// Strip any userinfo (git@) before the host.
 		if at := strings.LastIndex(rest, "@"); at != -1 {
 			rest = rest[at+1:]
 		}
-		// Host runs until the first '/' (path) or ':' (port).
 		host := rest
 		if slash := strings.IndexAny(host, "/"); slash != -1 {
 			host = host[:slash]
@@ -107,7 +105,6 @@ func stripPort(host string) string {
 	if host == "" {
 		return ""
 	}
-	// Leave bracketed IPv6 literals ([::1]) untouched.
 	if strings.HasPrefix(host, "[") {
 		return host
 	}

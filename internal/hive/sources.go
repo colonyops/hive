@@ -10,18 +10,14 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// builtinSource pairs a built-in source id with its per-backend drivers and
-// the config section controlling it. Adding a new builtin means adding a
-// driver per forge (see ghcli/ and teacli/), a config section, and one row
-// here.
+// builtinSource pairs a built-in source's config section with its per-forge
+// drivers. The same source id resolves to gh or tea at picker-open time based
+// on the repo's detected backend.
 type builtinSource struct {
 	config  config.BuiltinSourceConfig
 	drivers map[sources.Backend]cliengine.Driver
 }
 
-// builtinSources returns the built-in sources with a driver for each forge
-// backend. The same source id (issues, prs) resolves to gh or tea at
-// picker-open time based on the repo's detected backend.
 func builtinSources(cfg *config.Config) []builtinSource {
 	return []builtinSource{
 		{
@@ -73,15 +69,12 @@ func BuildSourceRegistry(cfg *config.Config, exec cliengine.Executor, kvStore kv
 	return registry
 }
 
-// isSourceEnabled implements the nil = auto-detect, true/false = override
-// convention used by plugin config: a nil Enabled defaults to enabled, and
-// runtime availability is checked separately via Source.Available.
+// isSourceEnabled treats nil as enabled; runtime availability is checked
+// separately via Source.Available.
 func isSourceEnabled(enabled *bool) bool {
 	return enabled == nil || *enabled
 }
 
-// sourceTemplateConfig converts a config.SourceTemplateConfig into the
-// sources.TemplateConfig shape used by RenderSessionTemplates.
 func sourceTemplateConfig(cfg config.SourceTemplateConfig) sources.TemplateConfig {
 	return sources.TemplateConfig{
 		Name:   cfg.Name,

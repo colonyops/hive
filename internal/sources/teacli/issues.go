@@ -8,15 +8,12 @@ import (
 	"github.com/colonyops/hive/internal/sources/cliengine"
 )
 
-// issuesFields is the tea --fields set the issues driver requests. Order is
-// irrelevant (tea keys the JSON by name); body rides along so a selected
-// issue's context is available without a second call — tea has no
-// single-issue JSON view, and the body is already in tea's list response.
+// body rides along in issuesFields because tea has no single-issue JSON view;
+// carrying it in the list response avoids needing a detail capability.
 const issuesFields = "index,title,state,author,url,created,assignees,labels,body"
 
 // issuesDriver is the built-in Gitea/Forgejo issues source, backed by
-// `tea issues list`. It carries the issue body in Fields["body"] (there is no
-// tea single-issue JSON view) rather than exposing a detail capability.
+// `tea issues list`.
 type issuesDriver struct{}
 
 // Issues returns the built-in Gitea issues driver.
@@ -57,10 +54,9 @@ func (issuesDriver) ParseList(out []byte) ([]sources.Item, error) {
 	for _, li := range entries {
 		number, _ := strconv.Atoi(li.Index)
 		assignee, assigneeCount := firstCSV(li.Assignees)
-		// Fields keys number/title/state/url/body are load-bearing: default
-		// source session templates reference .Fields.number and .Fields.url,
-		// and the body feeds .Detail on selection. The card layout reads
-		// age/assignee/labels.
+		// Fields keys are load-bearing: default session templates reference
+		// .Fields.number and .Fields.url, body feeds .Detail on selection,
+		// and the card layout reads the rest.
 		items = append(items, sources.Item{
 			ID:       li.Index,
 			Title:    li.Title,
@@ -83,9 +79,7 @@ func (issuesDriver) ParseList(out []byte) ([]sources.Item, error) {
 	return items, nil
 }
 
-// teaIssue is the JSON shape of a single entry from
-// `tea issues list --output json --fields index,title,state,author,url,created,assignees,labels,body`.
-// Every value is a string (tea's JSON is stringly-typed).
+// teaIssue is one `tea issues list --output json` entry.
 type teaIssue struct {
 	Index     string `json:"index"`
 	Title     string `json:"title"`

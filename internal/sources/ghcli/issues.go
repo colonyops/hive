@@ -9,8 +9,8 @@ import (
 	"github.com/colonyops/hive/internal/sources/cliengine"
 )
 
-// issuesDriver is the built-in GitHub issues source: a two-line card list
-// with a markdown detail body, backed by `gh issue list` / `gh issue view`.
+// issuesDriver is the built-in GitHub issues source, backed by
+// `gh issue list` / `gh issue view`.
 type issuesDriver struct{}
 
 // Issues returns the built-in GitHub issues driver.
@@ -48,9 +48,8 @@ func (issuesDriver) ParseList(out []byte) ([]sources.Item, error) {
 
 	items := make([]sources.Item, 0, len(entries))
 	for _, li := range entries {
-		// Fields keys number/title/state/url/author are load-bearing:
-		// default source session templates reference .Fields.number
-		// and .Fields.url. The card layout reads age/linked_pr/assignee.
+		// Fields keys are load-bearing: default session templates reference
+		// .Fields.number and .Fields.url; the card layout reads the rest.
 		assignee, assigneeCount := assigneeSummary(li.Assignees)
 		linkedPR, linkedPRCount := firstRef(li.LinkedPRs)
 		items = append(items, sources.Item{
@@ -94,8 +93,7 @@ func (issuesDriver) ParseDetail(out []byte) (sources.Detail, error) {
 	}, nil
 }
 
-// issueListItem is the JSON shape of a single entry returned by
-// `gh issue list --json number,title,state,author,labels,url,createdAt,assignees,closedByPullRequestsReferences`.
+// issueListItem is one `gh issue list --json` entry.
 type issueListItem struct {
 	Number    int        `json:"number"`
 	Title     string     `json:"title"`
@@ -108,8 +106,7 @@ type issueListItem struct {
 	LinkedPRs []ghRef    `json:"closedByPullRequestsReferences"`
 }
 
-// issueDetail is the JSON shape returned by
-// `gh issue view <id> --json number,title,body,url,state`.
+// issueDetail is the `gh issue view --json` response.
 type issueDetail struct {
 	Number int    `json:"number"`
 	Title  string `json:"title"`

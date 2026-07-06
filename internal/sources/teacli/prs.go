@@ -8,13 +8,10 @@ import (
 	"github.com/colonyops/hive/internal/sources/cliengine"
 )
 
-// prsFields is the tea --fields set the pulls driver requests.
 const prsFields = "index,title,state,author,url,created,labels,head,base,mergeable"
 
 // prsDriver is the built-in Gitea/Forgejo pull requests source, backed by
-// `tea pulls list`. Gitea exposes no review-decision or CI rollup via tea's
-// list output, so those card cells stay blank; the head branch feeds
-// .Fields.branch for branch templates.
+// `tea pulls list`.
 type prsDriver struct{}
 
 // PRs returns the built-in Gitea pull requests driver.
@@ -54,11 +51,9 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 	items := make([]sources.Item, 0, len(entries))
 	for _, pr := range entries {
 		number, _ := strconv.Atoi(pr.Index)
-		// Fields keys number/title/url/branch are load-bearing: default source
-		// session templates reference .Fields.number, .Fields.url, and
-		// .Fields.branch. The card layout reads age/review/labels; review
-		// condenses Gitea's state + mergeability since tea exposes no review
-		// decision.
+		// Fields keys are load-bearing: default session templates reference
+		// .Fields.number, .Fields.url, and .Fields.branch; the card layout
+		// reads the rest.
 		items = append(items, sources.Item{
 			ID:       pr.Index,
 			Title:    pr.Title,
@@ -81,10 +76,8 @@ func (prsDriver) ParseList(out []byte) ([]sources.Item, error) {
 	return items, nil
 }
 
-// reviewLabel condenses a Gitea PR's state and mergeability into one
-// human-scannable card cell. tea's list output carries no review decision, so
-// this reflects merge status instead: merged/closed states pass through, and
-// an open-but-unmergeable PR reads "conflict".
+// reviewLabel fills the review card cell from PR state and mergeability —
+// tea's list output carries no review decision.
 func reviewLabel(pr teaPull) string {
 	switch pr.State {
 	case "merged":
@@ -98,9 +91,7 @@ func reviewLabel(pr teaPull) string {
 	return "open"
 }
 
-// teaPull is the JSON shape of a single entry from
-// `tea pulls list --output json --fields index,title,state,author,url,created,labels,head,base,mergeable`.
-// Every value is a string (tea's JSON is stringly-typed).
+// teaPull is one `tea pulls list --output json` entry.
 type teaPull struct {
 	Index     string `json:"index"`
 	Title     string `json:"title"`

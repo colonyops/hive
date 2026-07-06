@@ -2,8 +2,6 @@ package sources
 
 import "fmt"
 
-// registeredSource pairs a source implementation with the session
-// template configuration used to map its selected items into hive sessions.
 type registeredSource struct {
 	id          string
 	backend     Backend
@@ -12,8 +10,6 @@ type registeredSource struct {
 	displayName string
 }
 
-// regKey indexes a registered source by its id and backend, so the same
-// source id (e.g. "issues") can have a distinct implementation per forge.
 type regKey struct {
 	id      string
 	backend Backend
@@ -32,7 +28,7 @@ type RegistryEntry struct {
 // by a different driver depending on the repo's forge.
 type Registry struct {
 	entries []registeredSource
-	index   map[regKey]int // (id, backend) -> entries index
+	index   map[regKey]int
 }
 
 // NewRegistry constructs an empty Registry.
@@ -40,10 +36,9 @@ func NewRegistry() *Registry {
 	return &Registry{index: make(map[regKey]int)}
 }
 
-// Register adds a source under (id, backend) along with the template
-// configuration used to render its selected items into session fields.
-// displayName is shown in the picker tab bar; if empty, id is used. It returns
-// an error if id is empty or the (id, backend) pair is already registered.
+// Register adds a source under (id, backend). displayName defaults to id.
+// It returns an error if id is empty, source is nil, or the (id, backend)
+// pair is already registered.
 func (r *Registry) Register(id string, backend Backend, source Source, templates TemplateConfig, displayName string) error {
 	if id == "" {
 		return fmt.Errorf("source registry: id is required")

@@ -1,11 +1,8 @@
 // Package cliengine is the shared execution engine behind hive's CLI-backed
-// sources (GitHub via gh, Gitea/Forgejo via tea).
-//
-// Each source is a Driver: static identity/picker properties plus the argv
-// construction and JSON parsing behind Search (and, for DetailDrivers,
-// FetchDetail). The engine executes drivers — shelling out to the driver's
-// binary, caching search output, and validating scope/ID inputs — so adding a
-// new CLI-backed source means writing a new Driver, not a new engine.
+// sources (GitHub via gh, Gitea/Forgejo via tea). A Driver supplies argv
+// construction and JSON parsing; the engine handles execution, caching, and
+// input validation, so adding a new CLI-backed source means writing a new
+// Driver, not a new engine.
 package cliengine
 
 import (
@@ -21,7 +18,6 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 )
 
-// Defaults for Options zero values.
 const (
 	defaultSearchLimit = 30
 	defaultCacheTTL    = 30 * time.Second
@@ -30,18 +26,13 @@ const (
 // Config declares a driver's static identity and the CLI binary that services
 // it.
 type Config struct {
-	// ID is the source's registry id and config key (e.g. "issues").
-	ID string
-	// DisplayName is the picker's tab title.
-	DisplayName string
-	// Binary is the CLI executable the engine shells out to (e.g. "gh" or
-	// "tea").
-	Binary string
+	ID          string // registry id and config key (e.g. "issues")
+	DisplayName string // picker tab title
+	Binary      string // CLI executable (e.g. "gh", "tea")
 }
 
 // Driver defines one CLI-backed source.
 type Driver interface {
-	// Config returns the driver's static identity, binary, and picker layout.
 	Config() Config
 	// ListArgs builds the argv (without the leading binary) for a Search
 	// against scope ("owner/name"), optionally filtered by query.
@@ -53,24 +44,18 @@ type Driver interface {
 // DetailDriver is implemented by drivers whose items have a detail view.
 type DetailDriver interface {
 	Driver
-	// DetailArgs builds the argv for a FetchDetail call.
 	DetailArgs(scope, id string) []string
-	// ParseDetail maps the CLI's JSON stdout into a Detail.
 	ParseDetail(out []byte) (sources.Detail, error)
 }
 
 // Options tunes the engine. Zero values use package defaults.
 type Options struct {
-	// SearchLimit caps items per Search call (default 30).
-	SearchLimit int
-	// CacheTTL bounds how long raw Search output is cached per
-	// (scope, dir, query) key (default 30s).
-	CacheTTL time.Duration
+	SearchLimit int           // max items per Search (default 30)
+	CacheTTL    time.Duration // search cache TTL (default 30s)
 }
 
-// Source is the shared engine executing a Driver: it shells out to the
-// driver's binary via an injected executor, caches raw Search output, and
-// converts CLI JSON into source domain types using the driver's parsers.
+// Source is the shared engine executing a Driver against its CLI binary. It
+// implements sources.Source.
 type Source struct {
 	driver Driver
 	cfg    Config
@@ -90,8 +75,8 @@ type Executor interface {
 
 var _ sources.Source = (*Source)(nil)
 
-// New constructs a Source executing driver. exec is used to shell out to the
-// driver's binary; store backs the search cache and is required.
+// New constructs a Source executing driver. store backs the search cache and
+// is required.
 func New(driver Driver, exec Executor, store kv.KV, opts Options) (*Source, error) {
 	cfg := driver.Config()
 	if cfg.ID == "" {
@@ -137,8 +122,7 @@ func (c *Source) Available(_ context.Context) bool {
 	return err == nil
 }
 
-// Initialize returns the source's picker manifest, derived from the driver's
-// Config. Every query re-invokes the CLI, so search is always remote.
+// Initialize returns the source's picker manifest.
 func (c *Source) Initialize(_ context.Context) (sources.Manifest, error) {
 	_, hasDetail := c.driver.(DetailDriver)
 	return sources.Manifest{
