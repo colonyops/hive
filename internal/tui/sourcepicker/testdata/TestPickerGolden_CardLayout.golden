@@ -3,12 +3,12 @@
 │────────────────────────────────────────────────────────────────────────────────│
 │ / filter fake pull requests…                                                 3 │
 │────────────────────────────────────────────────────────────────────────────────│
-│ ┃ #366 feat: connectors vertical slice with a title long enough to t… @hay-kot │
-│ ┃       · draft · 3w ·  #342 ·  @hay-kot                    [tui] [sources] │
-│   #359 fix: stop KV filter from swallowing keys on other views        @hay-kot │
-│         · approved · 5d                                                 [bug] │
-│   #351 refactor: source registry ordering                         @contributor │
-│         · changes requested · 2d ·  @alice +2                                │
+│ ┃   #366 feat: connectors vertical slice with a title long enough to… @hay-kot │
+│ ┃         · draft · 3w ·  #342 ·  @hay-kot                  [tui] [sources] │
+│     #359 fix: stop KV filter from swallowing keys on other views      @hay-kot │
+│           · approved · 5d                                               [bug] │
+│     #351 refactor: source registry ordering                       @contributor │
+│           · changes requested · 2d ·  @alice +2                              │
 │                                                                                │
 │                                                                                │
 │                                                                                │
@@ -18,5 +18,5 @@
 │                                                                                │
 │                                                                                │
 │                                                                                │
-│ tab switch source • / filter • j/k navigate • enter select • O open • esc close│
+│ tab switch source • / filter • space mark • enter select • O open • esc close  │
 ╰────────────────────────────────────────────────────────────────────────────────╯

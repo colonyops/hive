@@ -720,20 +720,23 @@ func (m Model) handleBgStreamComplete(msg bgStreamCompleteMsg) (tea.Model, tea.C
 		m.modals.BgStreamTitle = ""
 	}
 
-	if msg.err == nil {
-		if active {
+	if active {
+		if msg.err == nil {
 			m.publishNotificationf(notify.LevelInfo, "Complete: %s", msg.title)
+		} else {
+			m.publishNotificationf(notify.LevelError, "Failed: %s — %v", msg.title, msg.err)
 		}
-		if msg.result.sessionID != nil && *msg.result.sessionID != "" {
-			m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
-		}
-		return m, m.refreshSessions()
 	}
 
-	if active {
-		m.publishNotificationf(notify.LevelError, "Failed: %s — %v", msg.title, msg.err)
+	// A batch can fail partially: an error with a populated session ID means
+	// some sessions were still created, so they must appear (and be
+	// selected) without waiting for a manual or periodic refresh.
+	if msg.result.sessionID != nil && *msg.result.sessionID != "" {
+		m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
+	} else if msg.err != nil {
+		return m, nil
 	}
-	return m, nil
+	return m, m.refreshSessions()
 }
 
 // --- Review delegation ---
@@ -921,34 +924,26 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 		return m, nil
 	}
 
-	if result, ok := picker.Selected(); ok {
+	if results, ok := picker.Selected(); ok {
 		m.modals.SourcePicker = nil
-		return m.handleSourceSelection(result)
+		return m.handleSourceSelection(results)
 	}
 
 	return m, cmd
 }
 
-// handleSourceSelection fetches the selected item's detail (best-effort,
-// capability-gated), renders the source's session templates against the
-// item, and creates a session via the same UseBatchSpawn:true path used
-// by `hive batch`. The detail fetch and render run inside the returned
-// command so a slow `gh` call never blocks the UI.
-func (m Model) handleSourceSelection(result sourcepicker.Result) (tea.Model, tea.Cmd) {
+// handleSourceSelection spawns one session per selected item via the same
+// UseBatchSpawn:true path used by `hive batch`, all on a single background
+// stream. Detail fetches and template rendering run inside the stream so a
+// slow `gh` call never blocks the UI.
+func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, tea.Cmd) {
 	if m.modals.BgStreamDone != nil {
 		m.state = stateNormal
 		m.notifyErrorf("already running in background: %s", m.modals.BgStreamTitle)
 		return m, nil
 	}
 
-	return m, m.startSourceCreate(result, m.pendingSourceScope)
-}
-
-// sourceSelectionErrorMsg reports an async template-render failure from
-// startSourceCreate back to the model.
-type sourceSelectionErrorMsg struct {
-	SourceID string
-	Err      error
+	return m, m.startSourceCreate(results, m.pendingSourceScope)
 }
 
 // fetchSourceDetail returns the item's detail for template rendering.
@@ -972,37 +967,134 @@ func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope st
 	return fetched
 }
 
-func (m Model) startSourceCreate(result sourcepicker.Result, scope sourcePickerScope) tea.Cmd {
+// startSourceCreate starts one background stream that creates a session
+// for every result in order. Background stream output is discarded (see
+// listenForBgStreamComplete), so the user-visible record of per-item
+// failures is the summarized completion error plus the log; remaining
+// items still spawn.
+func (m Model) startSourceCreate(results []sourcepicker.Result, scope sourcePickerScope) tea.Cmd {
 	return func() tea.Msg {
-		ctx := context.Background()
-		detail := fetchSourceDetail(ctx, result, scope.Search)
+		ctx, cancel := context.WithCancel(context.Background())
+		output := make(chan string, 100)
+		done := make(chan error, 1)
 
-		rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
-		if err != nil {
-			return sourceSelectionErrorMsg{SourceID: result.SourceID, Err: err}
+		// Populated with the first created session before done fires, for
+		// post-completion selection (same contract as CreateExecutor).
+		firstID := new(string)
+		firstName := new(string)
+
+		go func() {
+			defer close(output)
+			defer close(done)
+			done <- m.createSourceSessions(ctx, results, scope, output, firstID, firstName)
+		}()
+
+		title := "Creating session..."
+		if len(results) > 1 {
+			title = fmt.Sprintf("Creating %d sessions...", len(results))
 		}
-
-		exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
-			Name:          rendered.Name,
-			Prompt:        rendered.Prompt,
-			Remote:        scope.Remote,
-			Source:        scope.Source,
-			UseBatchSpawn: true,
-			Background:    true,
-			Tags:          rendered.Tags,
-		})
-
-		output, done, cancel := exec.Execute(ctx)
 		return bgStreamStartedMsg{
-			title:  "Creating session...",
+			title:  title,
 			output: output,
 			done:   done,
 			cancel: cancel,
 			result: streamResult{
-				sessionID:   &exec.ResultSessionID,
-				sessionName: &exec.ResultSessionName,
+				sessionID:   firstID,
+				sessionName: firstName,
 			},
 		}
+	}
+}
+
+// createSourceSessions renders and creates one session per result, writing
+// progress lines to out (discarded while the stream runs in background —
+// the summary error and the log are the user-visible record). A failed
+// item is logged, then the loop moves on; only cancellation aborts the
+// batch. The returned error is the lone item's error for a single-item
+// batch, or a partial-failure summary otherwise. The first created
+// session is written to firstID/firstName for post-completion selection.
+func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.Result, scope sourcePickerScope, out chan<- string, firstID, firstName *string) error {
+	var failedIDs []string
+	var firstErr error
+	for i, result := range results {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		if len(results) > 1 {
+			streamLine(ctx, out, fmt.Sprintf("[%d/%d] %s", i+1, len(results), result.Item.Title))
+		}
+		id, name, err := m.createSourceSession(ctx, result, scope, out)
+		if err == nil {
+			if *firstID == "" {
+				*firstID = id
+				*firstName = name
+			}
+			continue
+		}
+		if ctx.Err() != nil {
+			return err
+		}
+		failedIDs = append(failedIDs, result.Item.ID)
+		if firstErr == nil {
+			firstErr = err
+		}
+		streamLine(ctx, out, fmt.Sprintf("[%d/%d] failed: %v", i+1, len(results), err))
+		log.Warn().Err(err).Str("source", result.SourceID).Str("item", result.Item.ID).
+			Msg("source picker: session create failed")
+	}
+
+	switch {
+	case len(failedIDs) == 0:
+		return nil
+	case len(results) == 1:
+		return firstErr
+	default:
+		// Name the failed items (IDs are short — issue/PR numbers) so the
+		// completion notification tells the user what to retry; full causes
+		// stay in the log.
+		return fmt.Errorf("%d of %d sessions failed (#%s)", len(failedIDs), len(results), strings.Join(failedIDs, ", #"))
+	}
+}
+
+// createSourceSession fetches the item's detail (best-effort), renders the
+// source's session templates, and creates the session, forwarding its
+// creation output onto the shared stream. It returns the created session's
+// ID and name.
+func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Result, scope sourcePickerScope, out chan<- string) (id, name string, err error) {
+	detail := fetchSourceDetail(ctx, result, scope.Search)
+
+	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
+	if err != nil {
+		return "", "", err
+	}
+
+	exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
+		Name:          rendered.Name,
+		Prompt:        rendered.Prompt,
+		Remote:        scope.Remote,
+		Source:        scope.Source,
+		UseBatchSpawn: true,
+		Background:    true,
+		Tags:          rendered.Tags,
+	})
+
+	output, done, cancel := exec.Execute(ctx)
+	defer cancel()
+	for line := range output {
+		streamLine(ctx, out, line)
+	}
+	if err := <-done; err != nil {
+		return "", "", err
+	}
+	return exec.ResultSessionID, exec.ResultSessionName, nil
+}
+
+// streamLine sends a line to a stream output channel without blocking past
+// cancellation.
+func streamLine(ctx context.Context, out chan<- string, line string) {
+	select {
+	case out <- line:
+	case <-ctx.Done():
 	}
 }
 

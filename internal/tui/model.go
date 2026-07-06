@@ -598,10 +598,6 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	// Source picker
 	case sourcepicker.Msg:
 		model, cmd = m.forwardSourcePickerMsg(msg)
-	case sourceSelectionErrorMsg:
-		m.state = stateNormal
-		m.notifyErrorf("source %q: %v", msg.SourceID, msg.Err)
-		model, cmd = m, nil
 
 	// Review delegation
 	case review.DocumentChangeMsg:

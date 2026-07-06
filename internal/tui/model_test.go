@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -164,6 +165,37 @@ func TestHandleBgStreamCompleteIgnoresStaleCompletion(t *testing.T) {
 	assert.Equal(t, secondDone, next.modals.BgStreamDone)
 	assert.NotNil(t, next.modals.BgStreamCancel)
 	assert.Equal(t, "second", next.modals.BgStreamTitle)
+}
+
+func TestHandleBgStreamCompletePartialFailureStillRefreshes(t *testing.T) {
+	var done <-chan error = make(chan error)
+	m := Model{modals: NewModalCoordinator(), sessionsView: &sessions.View{}}
+	m.modals.BgStreamDone = done
+
+	id, name := "sess-1", "sess-one"
+	_, cmd := m.handleBgStreamComplete(bgStreamCompleteMsg{
+		title:  "Creating 3 sessions...",
+		done:   done,
+		err:    errors.New("1 of 3 sessions failed (#2)"),
+		result: streamResult{sessionID: &id, sessionName: &name},
+	})
+
+	// A partial failure still created sessions: the completion must trigger
+	// a refresh so they appear without manual action.
+	require.NotNil(t, cmd)
+	assert.IsType(t, sessions.RefreshSessionsMsg{}, cmd())
+
+	// A failed batch that created nothing keeps the old no-refresh behavior.
+	m2 := Model{modals: NewModalCoordinator()}
+	m2.modals.BgStreamDone = done
+	empty := ""
+	_, cmd = m2.handleBgStreamComplete(bgStreamCompleteMsg{
+		title:  "Creating session...",
+		done:   done,
+		err:    errors.New("boom"),
+		result: streamResult{sessionID: &empty, sessionName: &empty},
+	})
+	assert.Nil(t, cmd)
 }
 
 func TestHandleStreamingModalKeyDoesNotOverwriteActiveBackgroundStream(t *testing.T) {
