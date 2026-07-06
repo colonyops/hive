@@ -84,11 +84,6 @@ func (e *RealExecutor) Run(ctx context.Context, cmd string, args ...string) ([]b
 	return out, nil
 }
 
-// RunOutput executes a command and returns stdout and stderr separately.
-func (e *RealExecutor) RunOutput(ctx context.Context, cmd string, args ...string) ([]byte, []byte, error) {
-	return e.RunOutputDir(ctx, "", cmd, args...)
-}
-
 // RunOutputDir executes a command in dir (empty means inherit cwd) and returns
 // stdout and stderr separately. Keeping the streams apart lets callers parse
 // stdout as JSON while surfacing stderr as the error message.
