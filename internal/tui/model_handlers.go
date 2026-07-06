@@ -829,9 +829,9 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 // --- Source Picker ---
 
 type sourcePickerScope struct {
-	Search string
-	Remote string
-	Source string
+	Search string // "owner/name" — the CLI --repo scope and initial search text
+	Remote string // git remote URL — drives backend detection and CreateOptions.Remote
+	Source string // local repo checkout dir; the CLI cwd and CreateOptions.Source (file-copy source)
 }
 
 // resolveSourceID returns the source to open: an explicit args[0]
