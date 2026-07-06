@@ -1011,7 +1011,7 @@ func (m Model) startSourceCreate(results []sourcepicker.Result, scope sourcePick
 // batch, or a partial-failure summary otherwise. The first created
 // session is written to firstID/firstName for post-completion selection.
 func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.Result, scope sourcePickerScope, out chan<- string, firstID, firstName *string) error {
-	failed := 0
+	var failedIDs []string
 	var firstErr error
 	for i, result := range results {
 		if err := ctx.Err(); err != nil {
@@ -1031,7 +1031,7 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 		if ctx.Err() != nil {
 			return err
 		}
-		failed++
+		failedIDs = append(failedIDs, result.Item.ID)
 		if firstErr == nil {
 			firstErr = err
 		}
@@ -1041,12 +1041,15 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 	}
 
 	switch {
-	case failed == 0:
+	case len(failedIDs) == 0:
 		return nil
 	case len(results) == 1:
 		return firstErr
 	default:
-		return fmt.Errorf("%d of %d sessions failed", failed, len(results))
+		// Name the failed items (IDs are short — issue/PR numbers) so the
+		// completion notification tells the user what to retry; full causes
+		// stay in the log.
+		return fmt.Errorf("%d of %d sessions failed (#%s)", len(failedIDs), len(results), strings.Join(failedIDs, ", #"))
 	}
 }
 

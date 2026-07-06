@@ -166,7 +166,8 @@ func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
 	var firstID, firstName string
 	err := m.createSourceSessions(context.Background(), results, sourcePickerScope{}, out, &firstID, &firstName)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "1 of 3 sessions failed")
+	assert.Contains(t, err.Error(), "1 of 3 sessions failed (#2)",
+		"summary names the failed items so the user knows what to retry")
 
 	require.Len(t, creator.created, 2, "items after a failure must still spawn")
 	assert.Equal(t, "session-1", creator.created[0].Name)
