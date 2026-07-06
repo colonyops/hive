@@ -2,13 +2,17 @@ package sources
 
 import "fmt"
 
-// registeredSource pairs a source implementation with the session
-// template configuration used to map its selected items into hive sessions.
 type registeredSource struct {
 	id          string
+	backend     Backend
 	source      Source
 	templates   TemplateConfig
 	displayName string
+}
+
+type regKey struct {
+	id      string
+	backend Backend
 }
 
 // RegistryEntry exposes a registered source's public fields for the picker.
@@ -20,44 +24,45 @@ type RegistryEntry struct {
 }
 
 // Registry holds the set of sources configured for this hive instance in
-// registration order, indexed by source id (e.g. "issues" or "prs") for
-// lookup.
+// registration order, indexed by (id, backend) so a source id can be serviced
+// by a different driver depending on the repo's forge.
 type Registry struct {
 	entries []registeredSource
-	index   map[string]int // source id -> entries index
+	index   map[regKey]int
 }
 
 // NewRegistry constructs an empty Registry.
 func NewRegistry() *Registry {
-	return &Registry{index: make(map[string]int)}
+	return &Registry{index: make(map[regKey]int)}
 }
 
-// Register adds a source under id along with the template configuration
-// used to render its selected items into session fields. displayName is
-// shown in the picker tab bar; if empty, id is used. It returns an error
-// if id is empty or already registered.
-func (r *Registry) Register(id string, source Source, templates TemplateConfig, displayName string) error {
+// Register adds a source under (id, backend). displayName defaults to id.
+// It returns an error if id is empty, source is nil, or the (id, backend)
+// pair is already registered.
+func (r *Registry) Register(id string, backend Backend, source Source, templates TemplateConfig, displayName string) error {
 	if id == "" {
 		return fmt.Errorf("source registry: id is required")
 	}
 	if source == nil {
 		return fmt.Errorf("source registry: source %q is nil", id)
 	}
-	if _, exists := r.index[id]; exists {
-		return fmt.Errorf("source registry: %q is already registered", id)
+	key := regKey{id: id, backend: backend}
+	if _, exists := r.index[key]; exists {
+		return fmt.Errorf("source registry: %q (%s) is already registered", id, backend)
 	}
 	name := displayName
 	if name == "" {
 		name = id
 	}
-	r.index[id] = len(r.entries)
-	r.entries = append(r.entries, registeredSource{id: id, source: source, templates: templates, displayName: name})
+	r.index[key] = len(r.entries)
+	r.entries = append(r.entries, registeredSource{id: id, backend: backend, source: source, templates: templates, displayName: name})
 	return nil
 }
 
-// Get returns the source and template configuration registered under id.
-func (r *Registry) Get(id string) (Source, TemplateConfig, bool) {
-	i, ok := r.index[id]
+// Get returns the source and template configuration registered under
+// (id, backend).
+func (r *Registry) Get(id string, backend Backend) (Source, TemplateConfig, bool) {
+	i, ok := r.index[regKey{id: id, backend: backend}]
 	if !ok {
 		return nil, TemplateConfig{}, false
 	}
@@ -65,19 +70,28 @@ func (r *Registry) Get(id string) (Source, TemplateConfig, bool) {
 	return entry.source, entry.templates, true
 }
 
-// IDs returns the ids of all registered sources in registration order.
+// IDs returns the distinct ids of all registered sources in registration
+// order, deduplicated across backends.
 func (r *Registry) IDs() []string {
+	seen := make(map[string]struct{}, len(r.entries))
 	ids := make([]string, 0, len(r.entries))
 	for _, e := range r.entries {
+		if _, ok := seen[e.id]; ok {
+			continue
+		}
+		seen[e.id] = struct{}{}
 		ids = append(ids, e.id)
 	}
 	return ids
 }
 
-// All returns all registered sources in registration order.
-func (r *Registry) All() []RegistryEntry {
+// All returns the registered sources for backend in registration order.
+func (r *Registry) All(backend Backend) []RegistryEntry {
 	entries := make([]RegistryEntry, 0, len(r.entries))
 	for _, e := range r.entries {
+		if e.backend != backend {
+			continue
+		}
 		entries = append(entries, RegistryEntry{
 			ID:          e.id,
 			DisplayName: e.displayName,

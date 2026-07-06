@@ -2,7 +2,6 @@ package ghcli
 
 import (
 	"context"
-	"fmt"
 	"testing"
 	"time"
 
@@ -13,43 +12,18 @@ import (
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/sources"
+	"github.com/colonyops/hive/internal/sources/cliengine"
 	"github.com/colonyops/hive/pkg/executil/executiltest"
 )
 
-// fixClock pins timeNow so shortAge output is deterministic in tests.
+// fixClock pins cliengine.TimeNow so ShortAge output is deterministic.
 func fixClock(t *testing.T, now time.Time) {
 	t.Helper()
-	prev := timeNow
-	timeNow = func() time.Time { return now }
-	t.Cleanup(func() { timeNow = prev })
+	prev := cliengine.TimeNow
+	cliengine.TimeNow = func() time.Time { return now }
+	t.Cleanup(func() { cliengine.TimeNow = prev })
 }
 
-// newIssues constructs the issues source for tests. A nil store gets a
-// fresh per-test KV (New requires one).
-func newIssues(t *testing.T, exec *executiltest.Exec, store kv.KV) *Source {
-	t.Helper()
-	if store == nil {
-		store = newTestKV(t)
-	}
-	c, err := New(Issues(), exec, store, Options{})
-	require.NoError(t, err)
-	return c
-}
-
-// newPRs constructs the prs source for tests. A nil store gets a fresh
-// per-test KV (New requires one).
-func newPRs(t *testing.T, exec *executiltest.Exec, store kv.KV) *Source {
-	t.Helper()
-	if store == nil {
-		store = newTestKV(t)
-	}
-	c, err := New(PRs(), exec, store, Options{})
-	require.NoError(t, err)
-	return c
-}
-
-// newTestKV returns a real SQLite-backed kv.KV in a temp dir, matching the
-// store the production wiring passes to New.
 func newTestKV(t *testing.T) kv.KV {
 	t.Helper()
 	database, err := db.Open(t.TempDir(), db.DefaultOpenOptions())
@@ -58,38 +32,22 @@ func newTestKV(t *testing.T) kv.KV {
 	return stores.NewKVStore(database)
 }
 
-// emptyIDDriver is a Driver whose Config carries no ID, for New
-// validation tests.
-type emptyIDDriver struct{ Driver }
-
-func (emptyIDDriver) Config() Config { return Config{} }
-
-func TestNewValidation(t *testing.T) {
-	exec := &executiltest.Exec{}
-
-	_, err := New(emptyIDDriver{}, exec, newTestKV(t), Options{})
-	require.Error(t, err, "missing id")
-
-	_, err = New(Issues(), exec, nil, Options{})
-	require.Error(t, err, "missing kv store")
+func newIssues(t *testing.T, exec *executiltest.Exec) *cliengine.Source {
+	t.Helper()
+	c, err := cliengine.New(Issues(), exec, newTestKV(t), cliengine.Options{})
+	require.NoError(t, err)
+	return c
 }
 
-func TestOptionsOverrideDefaults(t *testing.T) {
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{{Out: []byte(`[]`)}},
-	}
-	c, err := New(Issues(), exec, newTestKV(t), Options{SearchLimit: 5})
+func newPRs(t *testing.T, exec *executiltest.Exec) *cliengine.Source {
+	t.Helper()
+	c, err := cliengine.New(PRs(), exec, newTestKV(t), cliengine.Options{})
 	require.NoError(t, err)
-
-	_, err = c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
-	require.NoError(t, err)
-	require.Len(t, exec.Calls(), 1)
-	assert.Contains(t, exec.Calls()[0].Args, "5", "configured search limit must reach the gh argv")
-	assert.NotContains(t, exec.Calls()[0].Args, "30")
+	return c
 }
 
 func TestIssuesManifest(t *testing.T) {
-	c := newIssues(t, &executiltest.Exec{}, nil)
+	c := newIssues(t, &executiltest.Exec{})
 
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
@@ -99,7 +57,7 @@ func TestIssuesManifest(t *testing.T) {
 }
 
 func TestPRsManifest(t *testing.T) {
-	c := newPRs(t, &executiltest.Exec{}, nil)
+	c := newPRs(t, &executiltest.Exec{})
 
 	manifest, err := c.Initialize(context.Background())
 	require.NoError(t, err)
@@ -118,7 +76,7 @@ func TestSearchIssues(t *testing.T) {
 			]`)},
 		},
 	}
-	c := newIssues(t, exec, nil)
+	c := newIssues(t, exec)
 
 	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r", Query: "bug"})
 	require.NoError(t, err)
@@ -158,35 +116,6 @@ func TestSearchIssues(t *testing.T) {
 	assert.Empty(t, result.Items[1].Fields["assignee"])
 }
 
-func TestSearchIgnoresSuccessfulGhStderr(t *testing.T) {
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{
-			{
-				Out:    []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`),
-				Stderr: []byte("warning: extension update available\n"),
-			},
-		},
-	}
-	c := newIssues(t, exec, nil)
-
-	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
-	require.NoError(t, err)
-	require.Len(t, result.Items, 1)
-	assert.Equal(t, "First issue", result.Items[0].Title)
-}
-
-func TestSearchIncludesGhStderrOnFailure(t *testing.T) {
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{{Stderr: []byte("authentication required\n"), Err: fmt.Errorf("exit status 1")}},
-	}
-	c := newIssues(t, exec, nil)
-
-	_, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "exit status 1")
-	assert.Contains(t, err.Error(), "authentication required")
-}
-
 func TestSearchPRs(t *testing.T) {
 	fixClock(t, time.Date(2026, 7, 4, 0, 0, 0, 0, time.UTC))
 	exec := &executiltest.Exec{
@@ -197,7 +126,7 @@ func TestSearchPRs(t *testing.T) {
 			]`)},
 		},
 	}
-	c := newPRs(t, exec, nil)
+	c := newPRs(t, exec)
 
 	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r", Query: "feat"})
 	require.NoError(t, err)
@@ -293,7 +222,7 @@ func TestFetchDetailIssues(t *testing.T) {
 			{Out: []byte(`{"number":1,"title":"First issue","body":"issue body text","url":"https://github.com/o/r/issues/1","state":"OPEN"}`)},
 		},
 	}
-	c := newIssues(t, exec, nil)
+	c := newIssues(t, exec)
 
 	detail, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "1", Scope: "o/r"})
 	require.NoError(t, err)
@@ -306,132 +235,4 @@ func TestFetchDetailIssues(t *testing.T) {
 		"--repo", "o/r",
 		"--json", "number,title,body,url,state",
 	}, exec.Calls()[0].Args)
-}
-
-func TestFetchDetailUnsupportedForPRs(t *testing.T) {
-	exec := &executiltest.Exec{}
-	c := newPRs(t, exec, nil)
-
-	_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "1", Scope: "o/r"})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not supported")
-	assert.Empty(t, exec.Calls())
-}
-
-func TestAvailableChecksGH(t *testing.T) {
-	c := newIssues(t, &executiltest.Exec{}, nil)
-
-	t.Setenv("PATH", t.TempDir())
-	assert.False(t, c.Available(context.Background()))
-}
-
-func TestSearchRequiresOwnerRepoScope(t *testing.T) {
-	cases := []string{"", "no-slash", "too/many/slashes", "/name", "owner/"}
-
-	for _, scope := range cases {
-		t.Run(scope, func(t *testing.T) {
-			exec := &executiltest.Exec{}
-			c := newIssues(t, exec, nil)
-
-			_, err := c.Search(context.Background(), sources.SearchParams{Scope: scope})
-			require.Error(t, err)
-			assert.Empty(t, exec.Calls(), "no gh call should be made for an invalid scope")
-		})
-	}
-}
-
-func TestSearchGHNonZeroExit(t *testing.T) {
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{
-			{Out: []byte(""), Err: fmt.Errorf("exec gh: exit status 1")},
-		},
-	}
-	c := newIssues(t, exec, nil)
-
-	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
-	require.Error(t, err)
-	assert.Nil(t, result.Items)
-}
-
-func TestSearchEmptyResults(t *testing.T) {
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{
-			{Out: []byte(`[]`)},
-		},
-	}
-	c := newIssues(t, exec, nil)
-
-	result, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
-	require.NoError(t, err)
-	assert.Nil(t, result.Items)
-}
-
-func TestSearchMalformedJSON(t *testing.T) {
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{
-			{Out: []byte("not json")},
-		},
-	}
-	c := newIssues(t, exec, nil)
-
-	_, err := c.Search(context.Background(), sources.SearchParams{Scope: "o/r"})
-	require.Error(t, err)
-}
-
-func TestSearchUsesCache(t *testing.T) {
-	payload := []byte(`[{"number":1,"title":"First issue","state":"OPEN","author":{"login":"alice"},"labels":[],"url":"https://github.com/o/r/issues/1"}]`)
-	exec := &executiltest.Exec{
-		Responses: []executiltest.Response{{Out: payload}, {Out: payload}, {Out: payload}},
-	}
-	c := newIssues(t, exec, newTestKV(t))
-	ctx := context.Background()
-
-	first, err := c.Search(ctx, sources.SearchParams{Scope: "o/r", Query: "bug"})
-	require.NoError(t, err)
-	require.Len(t, exec.Calls(), 1)
-
-	second, err := c.Search(ctx, sources.SearchParams{Scope: "o/r", Query: "bug"})
-	require.NoError(t, err)
-	assert.Len(t, exec.Calls(), 1, "identical search must be served from cache without a second gh call")
-	assert.Equal(t, first.Items, second.Items, "cached raw output must parse to identical items (including Field types)")
-
-	_, err = c.Search(ctx, sources.SearchParams{Scope: "o/r", Query: "feature"})
-	require.NoError(t, err)
-	assert.Len(t, exec.Calls(), 2, "a different query must miss the cache")
-
-	_, err = c.Search(ctx, sources.SearchParams{Scope: "o/other", Query: "bug"})
-	require.NoError(t, err)
-	assert.Len(t, exec.Calls(), 3, "a different scope must miss the cache")
-}
-
-func TestCacheIsolatedPerSource(t *testing.T) {
-	store := newTestKV(t)
-	issuesPayload := []byte(`[{"number":1,"title":"An issue","state":"OPEN","author":{"login":"a"},"labels":[],"url":"u"}]`)
-	prsPayload := []byte(`[{"number":2,"title":"A PR","state":"OPEN","author":{"login":"b"},"labels":[],"url":"u","isDraft":false,"reviewDecision":"","headRefName":"x"}]`)
-
-	issues := newIssues(t, &executiltest.Exec{Responses: []executiltest.Response{{Out: issuesPayload}}}, store)
-	prs := newPRs(t, &executiltest.Exec{Responses: []executiltest.Response{{Out: prsPayload}}}, store)
-	ctx := context.Background()
-
-	issuesResult, err := issues.Search(ctx, sources.SearchParams{Scope: "o/r"})
-	require.NoError(t, err)
-	prsResult, err := prs.Search(ctx, sources.SearchParams{Scope: "o/r"})
-	require.NoError(t, err)
-
-	assert.Equal(t, "An issue", issuesResult.Items[0].Title)
-	assert.Equal(t, "A PR", prsResult.Items[0].Title, "same scope+query must not collide across source caches")
-}
-
-func TestFetchDetailRejectsNonNumericID(t *testing.T) {
-	for _, id := range []string{"--web", "-1", "0", "+1x"} {
-		t.Run(id, func(t *testing.T) {
-			exec := &executiltest.Exec{}
-			c := newIssues(t, exec, nil)
-
-			_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: id, Scope: "o/r"})
-			require.Error(t, err)
-			assert.Contains(t, err.Error(), "invalid id")
-			assert.Empty(t, exec.Calls(), "no gh call should be made for an invalid id")
-		})
-	}
 }

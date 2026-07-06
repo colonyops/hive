@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/sources"
@@ -44,7 +45,7 @@ func registryWith(t *testing.T, ids ...string) *sources.Registry {
 	t.Helper()
 	reg := sources.NewRegistry()
 	for _, id := range ids {
-		require.NoError(t, reg.Register(id, stubSource{id: id}, sources.TemplateConfig{}, id))
+		require.NoError(t, reg.Register(id, sources.BackendGithub, stubSource{id: id}, sources.TemplateConfig{}, id))
 	}
 	return reg
 }
@@ -86,19 +87,27 @@ func TestFetchSourceDetail(t *testing.T) {
 
 	t.Run("fetches when capable and item has no detail", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "issues", detail: body}, capable)
-		got := fetchSourceDetail(ctx, result, "o/r")
+		got := fetchSourceDetail(ctx, result, "o/r", "")
 		assert.Equal(t, body, got)
 	})
 
-	t.Run("no capability skips fetch", func(t *testing.T) {
+	t.Run("no capability falls back to body field", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "prs", detail: body}, sources.Manifest{})
-		got := fetchSourceDetail(ctx, result, "o/r")
+		result.Item.Fields = map[string]any{"body": "field body"}
+		got := fetchSourceDetail(ctx, result, "o/r", "")
+		require.NotNil(t, got.Markdown)
+		assert.Equal(t, "field body", got.Markdown.Content, "sources without detail capability use the body field")
+	})
+
+	t.Run("no capability and no body field yields empty detail", func(t *testing.T) {
+		result := sourcepickerResult(stubSource{id: "prs", detail: body}, sources.Manifest{})
+		got := fetchSourceDetail(ctx, result, "o/r", "")
 		assert.Equal(t, sources.Detail{}, got)
 	})
 
 	t.Run("fetch failure degrades to empty detail", func(t *testing.T) {
 		result := sourcepickerResult(stubSource{id: "issues", detailErr: assert.AnError}, capable)
-		got := fetchSourceDetail(ctx, result, "o/r")
+		got := fetchSourceDetail(ctx, result, "o/r", "")
 		assert.Equal(t, sources.Detail{}, got, "detail errors must not block session creation")
 	})
 }
@@ -195,6 +204,30 @@ func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "name template", "single-item batches surface the underlying error")
 	assert.Empty(t, creator.created)
+}
+
+func TestDetectSourceBackend(t *testing.T) {
+	t.Run("github remote", func(t *testing.T) {
+		m := Model{cfg: &config.Config{}}
+		assert.Equal(t, sources.BackendGithub, m.detectSourceBackend("git@github.com:o/r.git"))
+	})
+
+	t.Run("gitea host heuristic", func(t *testing.T) {
+		m := Model{cfg: &config.Config{}}
+		assert.Equal(t, sources.BackendGitea, m.detectSourceBackend("https://gitea.example.com/o/r"))
+	})
+
+	t.Run("config override wins", func(t *testing.T) {
+		m := Model{cfg: &config.Config{Sources: config.SourcesConfig{
+			Hosts: map[string]string{"git.acme.com": "gitea"},
+		}}}
+		assert.Equal(t, sources.BackendGitea, m.detectSourceBackend("git@git.acme.com:o/r.git"))
+	})
+
+	t.Run("empty remote defaults to github", func(t *testing.T) {
+		m := Model{cfg: &config.Config{}}
+		assert.Equal(t, sources.BackendGithub, m.detectSourceBackend(""))
+	})
 }
 
 func TestSourcePickerScopeForSelection(t *testing.T) {

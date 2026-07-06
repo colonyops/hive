@@ -618,6 +618,7 @@ type ClaudePluginConfig struct {
 type SourcesConfig struct {
 	SearchLimit int                 `json:"search_limit" yaml:"search_limit"` // max items per search (default: 30)
 	CacheTTL    time.Duration       `json:"cache_ttl"    yaml:"cache_ttl"`    // search result cache TTL (default: 30s)
+	Hosts       map[string]string   `json:"hosts"        yaml:"hosts"`        // git remote host -> backend ("github"|"gitea"); overrides auto-detection
 	Issues      BuiltinSourceConfig `json:"issues"       yaml:"issues"`
 	PRs         BuiltinSourceConfig `json:"prs"          yaml:"prs"`
 }

@@ -3,8 +3,10 @@
 !!! warning "Experimental"
     Sources are experimental — the API and config names may still change.
 
-Sources let hive browse GitHub issues/PRs, search/filter items, and create a
-session from a selected item using the same batch-spawn path as `hive batch`.
+Sources let hive browse issues/PRs from GitHub **and** Gitea/Forgejo,
+search/filter items, and create a session from a selected item using the same
+batch-spawn path as `hive batch`. The forge backend is detected from the
+repository's git remote host (see [Backends](#backends)).
 
 ## Configuration
 
@@ -12,6 +14,9 @@ session from a selected item using the same batch-spawn path as `hive batch`.
 sources:
   search_limit: 30 # max items per search (default: 30)
   cache_ttl: 30s # search result cache TTL (default: 30s)
+  hosts: # optional: override backend auto-detection per git remote host
+    git.example.com: gitea
+    github.acme.com: github
   issues:
     enabled: true # nil/omitted = auto, true/false = override
     templates:
@@ -48,28 +53,54 @@ sources:
 Rules:
 
 - `enabled` follows the plugin convention: omitted means auto-detect (the
-  built-in sources activate only if `gh` is on `PATH`), `true`/`false`
-  explicitly enables/disables registration.
+  built-in sources activate only if the backend's CLI — `gh` or `tea` — is on
+  `PATH`), `true`/`false` explicitly enables/disables registration. The
+  `enabled` flag applies to a source id across both backends.
 - Every source configures `templates.name`, `templates.prompt`, and optional
-  `templates.tags` — Go templates rendered against the selected item.
+  `templates.tags` — Go templates rendered against the selected item. Templates
+  are shared across backends, so keep them forge-neutral (all backends populate
+  `.Fields.number`, `.Fields.url`, and `.Detail`).
 - Template data:
   - `.ID`, `.Title`, `.Subtitle`
   - `.Detail` — fetched markdown/detail content when available
   - `.Fields` — source-specific data (e.g. `.Fields.number`, `.Fields.url`
     for issues; `.Fields.review`, `.Fields.ci`, `.Fields.branch` for PRs)
 
+## Backends
+
+The forge backend for a repository is derived from its git remote host:
+
+- `github.com` and hosts matching `github` → the **GitHub** backend (`gh`).
+  Unrecognized hosts also default here, so GitHub Enterprise hosts reuse `gh`.
+- `codeberg.org` and hosts matching `gitea`/`forgejo` → the **Gitea** backend
+  (`tea`).
+- `sources.hosts` overrides the detection for a specific host (`github` or
+  `gitea`), for mirrored or ambiguously named self-hosted instances.
+
+The picker only shows the backend that matches the selected session's remote,
+and each backend requires its CLI to be installed and authenticated:
+
+- **GitHub** — `gh auth login` (supports GitHub Enterprise via `gh`'s host
+  config).
+- **Gitea/Forgejo** — `tea login add` for the instance. hive runs `tea` in the
+  session's local checkout so it resolves the matching login from the repo's
+  remote; without a local checkout `tea` falls back to its default login.
+
 ## Built-in sources
 
-Built-ins use the GitHub CLI (`gh`) and the current auth/session configured
-for that CLI.
+| ID       | GitHub (`gh`)                     | Gitea (`tea`)      | Detail |
+| -------- | --------------------------------- | ------------------ | ------ |
+| `issues` | `gh issue list` / `gh issue view` | `tea issues list`  | yes¹   |
+| `prs`    | `gh pr list`                      | `tea pulls list`   | no     |
 
-| ID       | Data                            | Layout                  | Detail |
-| -------- | ------------------------------- | ----------------------- | ------ |
-| `issues` | `gh issue list` / `gh issue view` | two-line card | yes    |
-| `prs`    | `gh pr list`                    | two-line card | no     |
+¹ GitHub issues fetch the body via `gh issue view`; Gitea has no single-issue
+JSON view, so `tea` returns the body inline and the picker uses it directly.
 
-Built-ins are drivers in `internal/sources/ghcli`: gh argv builders and
-JSON parsers executed by a shared engine.
+Built-ins are drivers (`internal/sources/ghcli`, `internal/sources/teacli`):
+per-forge argv builders and JSON parsers executed by a shared engine
+(`internal/sources/cliengine`). Gitea's `tea` list output is thinner than
+GitHub's — it carries no CI rollup or review decision, so those card cells stay
+blank for Gitea PRs.
 
 ## Opening a source
 

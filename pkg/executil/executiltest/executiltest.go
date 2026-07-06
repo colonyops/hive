@@ -26,7 +26,7 @@ type Response struct {
 // Exec is a scripted executil.Executor: every invocation records a Call
 // and consumes the next Response (zero-value results once the script runs
 // out, so an unscripted Exec is a silent no-op stub). It also implements
-// the optional RunOutput seam for separated stdout/stderr. Safe for
+// the RunOutputDir seam for separated stdout/stderr. Safe for
 // concurrent use.
 type Exec struct {
 	mu        sync.Mutex
@@ -59,9 +59,10 @@ func (e *Exec) Run(_ context.Context, cmd string, args ...string) ([]byte, error
 	return append(append([]byte{}, resp.Out...), resp.Stderr...), resp.Err
 }
 
-// RunOutput returns the scripted response's stdout and stderr separately.
-func (e *Exec) RunOutput(_ context.Context, cmd string, args ...string) ([]byte, []byte, error) {
-	resp := e.record(cmd, "", args)
+// RunOutputDir returns the scripted response's stdout and stderr separately
+// and records the directory.
+func (e *Exec) RunOutputDir(_ context.Context, dir, cmd string, args ...string) ([]byte, []byte, error) {
+	resp := e.record(cmd, dir, args)
 	return resp.Out, resp.Stderr, resp.Err
 }
 

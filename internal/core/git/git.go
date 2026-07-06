@@ -65,6 +65,55 @@ func ExtractRepoName(remote string) string {
 	return remote
 }
 
+// ExtractHost extracts the host (without port) from a git remote URL.
+// Handles SCP-style SSH (git@github.com:owner/repo.git), ssh:// and https://
+// URLs, and hosts with non-standard ports (git.example.com:2222). Returns an
+// empty string when no host can be determined.
+func ExtractHost(remote string) string {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		return ""
+	}
+
+	// Scheme-based URLs: ssh://, https://, http://, git://.
+	if idx := strings.Index(remote, "://"); idx != -1 {
+		rest := remote[idx+3:]
+		if at := strings.LastIndex(rest, "@"); at != -1 {
+			rest = rest[at+1:]
+		}
+		host := rest
+		if slash := strings.IndexAny(host, "/"); slash != -1 {
+			host = host[:slash]
+		}
+		return stripPort(host)
+	}
+
+	// SCP-style SSH: [user@]host:owner/repo.git
+	if at := strings.LastIndex(remote, "@"); at != -1 {
+		remote = remote[at+1:]
+	}
+	if colon := strings.Index(remote, ":"); colon != -1 {
+		return stripPort(remote[:colon])
+	}
+
+	return ""
+}
+
+// stripPort removes a trailing ":port" from a host, leaving IPv6 literals and
+// bare hosts intact.
+func stripPort(host string) string {
+	if host == "" {
+		return ""
+	}
+	if strings.HasPrefix(host, "[") {
+		return host
+	}
+	if colon := strings.LastIndex(host, ":"); colon != -1 {
+		return host[:colon]
+	}
+	return host
+}
+
 // ExtractOwnerRepo extracts owner and repo from a git remote URL.
 // Handles SSH (git@github.com:owner/repo.git) and HTTPS (https://github.com/owner/repo.git).
 // Returns empty strings if parsing fails.

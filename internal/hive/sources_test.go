@@ -12,6 +12,7 @@ import (
 	"github.com/colonyops/hive/internal/core/kv"
 	"github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
+	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/executil"
 )
 
@@ -78,6 +79,25 @@ func TestBuildSourceRegistry(t *testing.T) {
 			sort.Strings(ids)
 			assert.Equal(t, tt.wantIDs, ids)
 		})
+	}
+}
+
+func TestBuildSourceRegistryRegistersBothBackends(t *testing.T) {
+	cfg := &config.Config{Sources: config.SourcesConfig{}}
+	registry := BuildSourceRegistry(cfg, &executil.RealExecutor{}, newSourcesTestKV(t), zerolog.Nop())
+
+	for _, backend := range []sources.Backend{sources.BackendGithub, sources.BackendGitea} {
+		entries := registry.All(backend)
+		ids := make([]string, 0, len(entries))
+		for _, e := range entries {
+			ids = append(ids, e.ID)
+		}
+		assert.Equal(t, []string{"issues", "prs"}, ids, "backend %s should service both builtins", backend)
+
+		for _, id := range []string{"issues", "prs"} {
+			_, _, ok := registry.Get(id, backend)
+			assert.True(t, ok, "%s must be registered for backend %s", id, backend)
+		}
 	}
 }
 

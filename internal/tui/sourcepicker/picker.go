@@ -109,6 +109,7 @@ type Picker struct {
 	tabs      []tabState
 	activeTab int
 	scope     string
+	dir       string
 
 	input      textinput.Model
 	searchMode bool
@@ -141,8 +142,9 @@ type Result struct {
 }
 
 // New constructs a tabbed picker. initialTab selects the initially active
-// tab by source ID; if not found the first tab is used.
-func New(tabSources []TabSource, initialTab, scope string, width, height int) Picker {
+// tab by source ID; if not found the first tab is used. dir is the local repo
+// working directory sources run their CLI in (empty when no local checkout).
+func New(tabSources []TabSource, initialTab, scope, dir string, width, height int) Picker {
 	input := textinput.New()
 	input.Placeholder = "search..."
 	input.Prompt = "/ "
@@ -172,6 +174,7 @@ func New(tabSources []TabSource, initialTab, scope string, width, height int) Pi
 		tabs:          tabs,
 		activeTab:     activeIdx,
 		scope:         scope,
+		dir:           dir,
 		input:         input,
 		spinner:       s,
 		width:         width,
@@ -249,6 +252,7 @@ func (p *Picker) initTab(idx int) tea.Cmd {
 	gen := p.gen
 	conn := tab.tab.Source
 	scope := p.scope
+	dir := p.dir
 	sourceID := tab.tab.ID
 
 	return func() tea.Msg {
@@ -260,7 +264,7 @@ func (p *Picker) initTab(idx int) tea.Cmd {
 		if err != nil {
 			return sourceTabErrorMsg{Gen: gen, SourceID: sourceID, Err: fmt.Errorf("initialize: %w", err)}
 		}
-		result, err := conn.Search(ctx, sources.SearchParams{Scope: scope})
+		result, err := conn.Search(ctx, sources.SearchParams{Scope: scope, Dir: dir})
 		if err != nil {
 			return sourceTabErrorMsg{Gen: gen, SourceID: sourceID, Err: err}
 		}
@@ -588,7 +592,7 @@ func (p Picker) handleDebounce(msg sourceSearchDebounceMsg) (Picker, tea.Cmd) {
 	tab := &p.tabs[idx]
 	tab.loading = true
 	tab.loadingMsg = fmt.Sprintf("Searching %s...", tab.tab.Manifest.DisplayName)
-	return p, sourceSearchCmd(p.gen, tab.tab.Source, tab.tab.ID, p.scope, msg.Query)
+	return p, sourceSearchCmd(p.gen, tab.tab.Source, tab.tab.ID, p.scope, p.dir, msg.Query)
 }
 
 // tabQuery returns the tab's current effective search query: the live

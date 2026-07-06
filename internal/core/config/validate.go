@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 
+	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/pathutil"
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/hay-kot/criterio"
@@ -61,7 +62,8 @@ type SourceTemplateData struct {
 	Fields   map[string]any
 }
 
-// validateSources checks the top-level sources config template syntax.
+// validateSources checks the top-level sources config template syntax and
+// host-backend overrides.
 func (c *Config) validateSources() error {
 	var errs criterio.FieldErrorsBuilder
 
@@ -70,6 +72,11 @@ func (c *Config) validateSources() error {
 	}
 	if err := validateSourceTemplateSet("sources.prs.templates", c.Sources.PRs.Templates); err != nil {
 		errs = errs.Append("sources.prs.templates", err)
+	}
+	for host, backend := range c.Sources.Hosts {
+		if _, err := sources.ParseBackend(backend); err != nil {
+			errs = errs.Append("sources.hosts."+host, fmt.Errorf("invalid backend %q: expected one of %v", backend, sources.BackendNames()))
+		}
 	}
 
 	return errs.ToError()

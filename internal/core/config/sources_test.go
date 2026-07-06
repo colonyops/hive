@@ -87,6 +87,26 @@ func TestValidateSources_ValidBuiltins(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 }
 
+func TestValidateSources_ValidHostOverrides(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Sources.Hosts = map[string]string{
+		"git.acme.com":   "gitea",
+		"github.acme.io": "github",
+	}
+
+	require.NoError(t, cfg.Validate())
+}
+
+func TestValidateSources_InvalidHostBackend(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Sources.Hosts = map[string]string{"git.acme.com": "bitbucket"}
+
+	err := cfg.Validate()
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "sources.hosts.git.acme.com")
+	assert.Contains(t, err.Error(), "invalid backend")
+}
+
 func TestValidateSources_InvalidTemplateSyntax(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Sources.Issues.Templates.Name = "{{ .Title"
