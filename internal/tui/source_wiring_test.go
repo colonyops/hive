@@ -178,7 +178,7 @@ func TestCreateSourceSessions_PartialFailureContinues(t *testing.T) {
 		lines = append(lines, line)
 	}
 	joined := strings.Join(lines, "\n")
-	assert.Contains(t, joined, "[2/3] failed:", "per-item failure is reported on the stream")
+	assert.Contains(t, joined, "[2/3] failed:", "per-item failure is written to the stream (discarded while backgrounded)")
 }
 
 func TestCreateSourceSessions_SingleItemErrorPassesThrough(t *testing.T) {

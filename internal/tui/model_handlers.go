@@ -934,10 +934,6 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 // stream. Detail fetches and template rendering run inside the stream so a
 // slow `gh` call never blocks the UI.
 func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, tea.Cmd) {
-	if len(results) == 0 {
-		m.state = stateNormal
-		return m, nil
-	}
 	if m.modals.BgStreamDone != nil {
 		m.state = stateNormal
 		m.notifyErrorf("already running in background: %s", m.modals.BgStreamTitle)
@@ -969,8 +965,10 @@ func fetchSourceDetail(ctx context.Context, result sourcepicker.Result, scope st
 }
 
 // startSourceCreate starts one background stream that creates a session
-// for every result in order. Per-item failures are reported on the stream
-// and summarized in the completion error; remaining items still spawn.
+// for every result in order. Background stream output is discarded (see
+// listenForBgStreamComplete), so the user-visible record of per-item
+// failures is the summarized completion error plus the log; remaining
+// items still spawn.
 func (m Model) startSourceCreate(results []sourcepicker.Result, scope sourcePickerScope) tea.Cmd {
 	return func() tea.Msg {
 		ctx, cancel := context.WithCancel(context.Background())
@@ -1005,11 +1003,13 @@ func (m Model) startSourceCreate(results []sourcepicker.Result, scope sourcePick
 	}
 }
 
-// createSourceSessions renders and creates one session per result,
-// streaming progress lines into out. A failed item is reported on the
-// stream and logged, then the loop moves on; only cancellation aborts the
+// createSourceSessions renders and creates one session per result, writing
+// progress lines to out (discarded while the stream runs in background —
+// the summary error and the log are the user-visible record). A failed
+// item is logged, then the loop moves on; only cancellation aborts the
 // batch. The returned error is the lone item's error for a single-item
-// batch, or a partial-failure summary otherwise.
+// batch, or a partial-failure summary otherwise. The first created
+// session is written to firstID/firstName for post-completion selection.
 func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.Result, scope sourcePickerScope, out chan<- string, firstID, firstName *string) error {
 	failed := 0
 	var firstErr error
@@ -1020,8 +1020,12 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 		if len(results) > 1 {
 			streamLine(ctx, out, fmt.Sprintf("[%d/%d] %s", i+1, len(results), result.Item.Title))
 		}
-		err := m.createSourceSession(ctx, result, scope, out, firstID, firstName)
+		id, name, err := m.createSourceSession(ctx, result, scope, out)
 		if err == nil {
+			if *firstID == "" {
+				*firstID = id
+				*firstName = name
+			}
 			continue
 		}
 		if ctx.Err() != nil {
@@ -1048,13 +1052,14 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 
 // createSourceSession fetches the item's detail (best-effort), renders the
 // source's session templates, and creates the session, forwarding its
-// creation output onto the shared stream.
-func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Result, scope sourcePickerScope, out chan<- string, firstID, firstName *string) error {
+// creation output onto the shared stream. It returns the created session's
+// ID and name.
+func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Result, scope sourcePickerScope, out chan<- string) (id, name string, err error) {
 	detail := fetchSourceDetail(ctx, result, scope.Search)
 
 	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
 	if err != nil {
-		return err
+		return "", "", err
 	}
 
 	exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
@@ -1073,13 +1078,9 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		streamLine(ctx, out, line)
 	}
 	if err := <-done; err != nil {
-		return err
+		return "", "", err
 	}
-	if *firstID == "" {
-		*firstID = exec.ResultSessionID
-		*firstName = exec.ResultSessionName
-	}
-	return nil
+	return exec.ResultSessionID, exec.ResultSessionName, nil
 }
 
 // streamLine sends a line to a stream output channel without blocking past
