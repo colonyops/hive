@@ -720,20 +720,23 @@ func (m Model) handleBgStreamComplete(msg bgStreamCompleteMsg) (tea.Model, tea.C
 		m.modals.BgStreamTitle = ""
 	}
 
-	if msg.err == nil {
-		if active {
+	if active {
+		if msg.err == nil {
 			m.publishNotificationf(notify.LevelInfo, "Complete: %s", msg.title)
+		} else {
+			m.publishNotificationf(notify.LevelError, "Failed: %s — %v", msg.title, msg.err)
 		}
-		if msg.result.sessionID != nil && *msg.result.sessionID != "" {
-			m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
-		}
-		return m, m.refreshSessions()
 	}
 
-	if active {
-		m.publishNotificationf(notify.LevelError, "Failed: %s — %v", msg.title, msg.err)
+	// A batch can fail partially: an error with a populated session ID means
+	// some sessions were still created, so they must appear (and be
+	// selected) without waiting for a manual or periodic refresh.
+	if msg.result.sessionID != nil && *msg.result.sessionID != "" {
+		m.sessionsView.SelectOnNextRefresh(*msg.result.sessionID)
+	} else if msg.err != nil {
+		return m, nil
 	}
-	return m, nil
+	return m, m.refreshSessions()
 }
 
 // --- Review delegation ---
