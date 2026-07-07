@@ -214,6 +214,26 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 				s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("worktree reset failed, marking corrupted")
 				s.markCorrupted(ctx, recyclable)
 				recyclable = nil
+			} else {
+				// Create a fresh branch for the new session; the worktree is still on the old branch.
+				dirID = generateID()
+				branch, err := s.worktreeBranchName(remote, opts.Name, slug, dirID)
+				if err != nil {
+					return nil, err
+				}
+				writeProgressf(progress, "Creating branch %s...", branch)
+				if err := s.git.CheckoutNewBranch(ctx, recyclable.Path, branch); err != nil {
+					s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("branch creation failed, marking corrupted")
+					s.markCorrupted(ctx, recyclable)
+					recyclable = nil
+				} else {
+					if old := recyclable.GetMeta(session.MetaWorktreeBranch); old != "" && old != branch {
+						if err := s.git.DeleteBranch(ctx, bareDir, old); err != nil {
+							s.log.Debug().Err(err).Str("branch", old).Msg("failed to delete old worktree branch")
+						}
+					}
+					recyclable.SetMeta(session.MetaWorktreeBranch, branch)
+				}
 			}
 		} else {
 			// Pull latest changes before running hooks
@@ -274,23 +294,9 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 				return nil, fmt.Errorf("ensure bare clone: %w", err)
 			}
 			writeProgressf(progress, "Adding worktree...")
-			branch := "hive/" + slug + "-" + dirID
-			if tmplStr := s.config.GetBranchTemplate(remote); tmplStr != "" {
-				owner, repo := git.ExtractOwnerRepo(remote)
-				rendered, err := s.renderer.Render(tmplStr, config.BranchTemplateData{
-					Name:  opts.Name,
-					Slug:  slug,
-					Owner: owner,
-					Repo:  repo,
-					ID:    dirID,
-				})
-				if err != nil {
-					return nil, fmt.Errorf("branch_template render failed: %w", err)
-				}
-				if err := git.ValidateBranchName(rendered); err != nil {
-					return nil, fmt.Errorf("branch_template %q rendered to invalid git branch name %q: %w", tmplStr, rendered, err)
-				}
-				branch = rendered
+			branch, err := s.worktreeBranchName(remote, opts.Name, slug, dirID)
+			if err != nil {
+				return nil, err
 			}
 			if err := s.git.WorktreeAdd(ctx, bareDir, path, branch); err != nil {
 				return nil, fmt.Errorf("worktree add: %w", err)
@@ -367,6 +373,32 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 	s.bus.PublishSessionCreated(eventbus.SessionCreatedPayload{Session: &sess})
 
 	return &sess, nil
+}
+
+// worktreeBranchName returns the branch name for a worktree session, applying
+// the configured branch template for the remote when one is set.
+func (s *SessionService) worktreeBranchName(remote, name, slug, dirID string) (string, error) {
+	branch := "hive/" + slug + "-" + dirID
+	tmplStr := s.config.GetBranchTemplate(remote)
+	if tmplStr == "" {
+		return branch, nil
+	}
+
+	owner, repo := git.ExtractOwnerRepo(remote)
+	rendered, err := s.renderer.Render(tmplStr, config.BranchTemplateData{
+		Name:  name,
+		Slug:  slug,
+		Owner: owner,
+		Repo:  repo,
+		ID:    dirID,
+	})
+	if err != nil {
+		return "", fmt.Errorf("branch_template render failed: %w", err)
+	}
+	if err := git.ValidateBranchName(rendered); err != nil {
+		return "", fmt.Errorf("branch_template %q rendered to invalid git branch name %q: %w", tmplStr, rendered, err)
+	}
+	return rendered, nil
 }
 
 // writeProgressf writes a formatted progress line when w is non-nil.
