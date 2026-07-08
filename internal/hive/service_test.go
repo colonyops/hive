@@ -73,6 +73,8 @@ func (m *mockGit) CloneBare(_ context.Context, _, _ string) error               
 func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error          { return nil }
 func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error       { return nil }
 func (m *mockGit) WorktreeReset(_ context.Context, _, _ string) error           { return nil }
+func (m *mockGit) CheckoutNewBranch(_ context.Context, _, _ string) error       { return nil }
+func (m *mockGit) DeleteBranch(_ context.Context, _, _ string) error            { return nil }
 func (m *mockGit) Fetch(_ context.Context, _ string) error                      { return nil }
 func (m *mockGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) { return false, nil }
 func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
@@ -1261,15 +1263,78 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 	})
 }
 
+func TestCreateSession_RecycledWorktreeCreatesNewBranch(t *testing.T) {
+	store := newMockStore()
+	remote := "https://github.com/example/repo.git"
+	store.sessions["wt-1"] = session.Session{
+		ID:            "wt-1",
+		Name:          "old-session",
+		Slug:          "old-session",
+		Remote:        remote,
+		State:         session.StateRecycled,
+		CloneStrategy: config.CloneStrategyWorktree,
+		Path:          t.TempDir(),
+		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive/old-session-abc123"},
+	}
+
+	var newBranch, deletedBranch string
+	spy := &capturingMockGit{}
+	spy.CheckoutNewBranchFn = func(_ context.Context, _, branch string) error {
+		newBranch = branch
+		return nil
+	}
+	spy.DeleteBranchFn = func(_ context.Context, _, branch string) error {
+		deletedBranch = branch
+		return nil
+	}
+
+	cfg := &config.Config{
+		DataDir: t.TempDir(),
+		GitPath: "git",
+		Rules:   []config.Rule{{Pattern: "", CloneStrategy: config.CloneStrategyWorktree}},
+	}
+	log := zerolog.New(io.Discard)
+	renderer := tmpl.New(tmpl.Config{})
+	svc := NewSessionService(store, spy, cfg, testbus.New(t).EventBus, &executiltest.Exec{}, renderer, log, io.Discard, io.Discard)
+
+	sess, err := svc.CreateSession(context.Background(), CreateOptions{
+		Name:      "new-feature",
+		Remote:    remote,
+		SkipSpawn: true,
+	})
+	require.NoError(t, err)
+
+	assert.Equal(t, "wt-1", sess.ID, "recycled session should be reused")
+	assert.Regexp(t, `^hive/new-feature-[a-z0-9]+$`, newBranch)
+	assert.Equal(t, newBranch, sess.GetMeta(session.MetaWorktreeBranch))
+	assert.Equal(t, "hive/old-session-abc123", deletedBranch, "old branch should be deleted")
+}
+
 // capturingMockGit extends mockGit with optional function overrides for capturing calls.
 type capturingMockGit struct {
 	mockGit
-	WorktreeAddFn func(ctx context.Context, repoDir, path, branch string) error
+	WorktreeAddFn       func(ctx context.Context, repoDir, path, branch string) error
+	CheckoutNewBranchFn func(ctx context.Context, dir, branch string) error
+	DeleteBranchFn      func(ctx context.Context, dir, branch string) error
 }
 
 func (m *capturingMockGit) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {
 	if m.WorktreeAddFn != nil {
 		return m.WorktreeAddFn(ctx, repoDir, path, branch)
+	}
+	return nil
+}
+
+func (m *capturingMockGit) CheckoutNewBranch(ctx context.Context, dir, branch string) error {
+	if m.CheckoutNewBranchFn != nil {
+		return m.CheckoutNewBranchFn(ctx, dir, branch)
+	}
+	return nil
+}
+
+func (m *capturingMockGit) DeleteBranch(ctx context.Context, dir, branch string) error {
+	if m.DeleteBranchFn != nil {
+		return m.DeleteBranchFn(ctx, dir, branch)
 	}
 	return nil
 }

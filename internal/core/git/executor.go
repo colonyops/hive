@@ -226,6 +226,20 @@ func (e *Executor) WorktreeReset(ctx context.Context, bareDir, worktreePath stri
 	return nil
 }
 
+func (e *Executor) CheckoutNewBranch(ctx context.Context, dir, branch string) error {
+	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "checkout", "-b", branch); err != nil {
+		return fmt.Errorf("git checkout -b %s: %w", branch, err)
+	}
+	return nil
+}
+
+func (e *Executor) DeleteBranch(ctx context.Context, dir, branch string) error {
+	if _, err := e.exec.RunDir(ctx, dir, e.gitPath, "branch", "-D", branch); err != nil {
+		return fmt.Errorf("git branch -D %s: %w", branch, err)
+	}
+	return nil
+}
+
 func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, error) {
 	// Try the upstream tracking branch first (set via "git push -u" or "git branch --set-upstream-to").
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-list", "--count", "@{upstream}..HEAD")

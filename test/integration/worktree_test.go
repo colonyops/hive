@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -159,6 +160,40 @@ func TestWorktreeBareRootCreated(t *testing.T) {
 	headPath := filepath.Join(bareDir, "HEAD")
 	_, err = os.Stat(headPath)
 	require.NoError(t, err, "bare root must contain HEAD at %s", headPath)
+}
+
+func TestWorktreeRecycleReuseCreatesNewBranch(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "wt-recycle-repo")
+
+	out, err := h.Run("new", "--clone-strategy", "worktree", "--remote", repo, "first-session")
+	require.NoError(t, err, "first session: %s", out)
+	path := parseCreatedSessionPath(t, out)
+
+	oldBranch := strings.TrimSpace(runInDir(t, path, "git", "branch", "--show-current"))
+	require.Contains(t, oldBranch, "first-session", "worktree should start on the first session's branch")
+
+	lines, err := h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	require.Len(t, lines, 1)
+	id := lines[0]["id"].(string)
+
+	_, err = h.Run("session", "recycle", id)
+	require.NoError(t, err)
+
+	out, err = h.Run("new", "--clone-strategy", "worktree", "--remote", repo, "second-session")
+	require.NoError(t, err, "second session: %s", out)
+	reusedPath := parseCreatedSessionPath(t, out)
+	require.Equal(t, path, reusedPath, "recycled worktree session should be reused")
+
+	newBranch := strings.TrimSpace(runInDir(t, reusedPath, "git", "branch", "--show-current"))
+	assert.Contains(t, newBranch, "second-session", "reused worktree must be on a fresh branch for the new session")
+	assert.NotEqual(t, oldBranch, newBranch)
+
+	bareDir := worktreeBareDir(t, reusedPath)
+	branches := runInDir(t, bareDir, "git", "branch", "--list")
+	assert.NotContains(t, branches, oldBranch, "old session branch should be deleted from the bare repo")
+	assert.Contains(t, branches, newBranch)
 }
 
 func TestWorktreeTwoSessionsSameBare(t *testing.T) {
