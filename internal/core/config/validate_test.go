@@ -306,6 +306,33 @@ func TestWarnings_EmptyRule(t *testing.T) {
 	assert.True(t, hasWarning, "expected warning about empty rule")
 }
 
+func TestWarnings_SourceViewsWithoutGH(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+	t.Setenv(EnvDefaultAgent, "")
+	configPath := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(configPath, []byte(`
+sources:
+  views:
+    - name: triage
+      base: issues
+      query: "label:triage"
+    - name: my-reviews
+      base: prs
+      query: "review-requested:@me"
+`), 0o600))
+
+	cfg, err := Load(configPath, t.TempDir())
+	require.NoError(t, err, "missing gh must not prevent config loading")
+	require.NoError(t, cfg.Validate(), "missing gh must not fail validation")
+
+	warnings := cfg.Warnings()
+	require.Len(t, warnings, 1)
+	assert.Equal(t, "Sources", warnings[0].Category)
+	assert.Equal(t, "views", warnings[0].Item)
+	assert.Contains(t, warnings[0].Message, "gh executable not found")
+	assert.Contains(t, warnings[0].Message, "triage, my-reviews")
+}
+
 func TestValidateDeep_ValidRulesWithCopy(t *testing.T) {
 	cfg := validConfig(t)
 	cfg.Rules = []Rule{

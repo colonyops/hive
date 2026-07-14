@@ -621,6 +621,17 @@ type SourcesConfig struct {
 	Hosts       map[string]string   `json:"hosts"        yaml:"hosts"`        // git remote host -> backend ("github"|"gitea"); overrides auto-detection
 	Issues      BuiltinSourceConfig `json:"issues"       yaml:"issues"`
 	PRs         BuiltinSourceConfig `json:"prs"          yaml:"prs"`
+	Views       []SourceViewConfig  `json:"views"        yaml:"views"`
+}
+
+// SourceViewConfig declares one saved-search view over a built-in source.
+// Name identifies the view, Base selects issues or pull requests, Query holds
+// GitHub search qualifiers, and Scope optionally limits results to owner/repo.
+type SourceViewConfig struct {
+	Name  string `json:"name"            yaml:"name"`
+	Base  string `json:"base"            yaml:"base"`
+	Query string `json:"query"           yaml:"query"`
+	Scope string `json:"scope,omitempty" yaml:"scope,omitempty"`
 }
 
 // SourceTemplateConfig holds the templates rendering a selected item

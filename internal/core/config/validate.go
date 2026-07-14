@@ -6,6 +6,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"strings"
+	"unicode"
 
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/pkg/pathutil"
@@ -62,8 +64,54 @@ type SourceTemplateData struct {
 	Fields   map[string]any
 }
 
-// validateSources checks the top-level sources config template syntax and
-// host-backend overrides.
+var sourceViewScopePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+
+// Validate checks that a saved source view has valid name, base, query, and
+// optional scope fields.
+func (v SourceViewConfig) Validate() error {
+	if strings.TrimSpace(v.Name) == "" {
+		return fmt.Errorf("source view %q name: must not be empty", v.Name)
+	}
+	if !isValidCommandName(v.Name) {
+		return fmt.Errorf("source view %q name: must contain only alphanumeric characters, dashes, and underscores", v.Name)
+	}
+	if v.Name == "issues" || v.Name == "prs" {
+		return fmt.Errorf("source view %q name: conflicts with built-in source %q", v.Name, v.Name)
+	}
+	if v.Base != "issues" && v.Base != "prs" {
+		return fmt.Errorf("source view %q base: must be either %q or %q", v.Name, "issues", "prs")
+	}
+	if strings.TrimSpace(v.Query) == "" {
+		return fmt.Errorf("source view %q query: must not be empty", v.Name)
+	}
+	if err := rejectControlChars("query", v.Query); err != nil {
+		return fmt.Errorf("source view %q: %w", v.Name, err)
+	}
+	if v.Scope == "" {
+		return nil
+	}
+	if err := rejectControlChars("scope", v.Scope); err != nil {
+		return fmt.Errorf("source view %q: %w", v.Name, err)
+	}
+	if !sourceViewScopePattern.MatchString(v.Scope) {
+		return fmt.Errorf("source view %q scope: must have owner/repo format", v.Name)
+	}
+	return nil
+}
+
+// rejectControlChars rejects strings containing control characters so source
+// view values remain safe to pass as command arguments.
+func rejectControlChars(field, value string) error {
+	for _, r := range value {
+		if unicode.IsControl(r) {
+			return fmt.Errorf("%s contains control character %U", field, r)
+		}
+	}
+	return nil
+}
+
+// validateSources checks the top-level sources config template syntax, host
+// overrides, and saved views.
 func (c *Config) validateSources() error {
 	var errs criterio.FieldErrorsBuilder
 
@@ -76,6 +124,19 @@ func (c *Config) validateSources() error {
 	for host, backend := range c.Sources.Hosts {
 		if _, err := sources.ParseBackend(backend); err != nil {
 			errs = errs.Append("sources.hosts."+host, fmt.Errorf("invalid backend %q: expected one of %v", backend, sources.BackendNames()))
+		}
+	}
+
+	viewNames := make(map[string]int, len(c.Sources.Views))
+	for i, view := range c.Sources.Views {
+		field := fmt.Sprintf("sources.views[%d]", i)
+		if err := view.Validate(); err != nil {
+			errs = errs.Append(field, err)
+		}
+		if first, duplicate := viewNames[view.Name]; duplicate {
+			errs = errs.Append(field+".name", fmt.Errorf("duplicate source view name %q (first declared at sources.views[%d])", view.Name, first))
+		} else {
+			viewNames[view.Name] = i
 		}
 	}
 
@@ -154,7 +215,29 @@ func (c *Config) Warnings() []ValidationWarning {
 		}
 	}
 
+	warnings = append(warnings, c.sourceViewWarnings()...)
 	return warnings
+}
+
+// sourceViewWarnings reports configured views that cannot run because gh is
+// unavailable without making configuration validation fail.
+func (c *Config) sourceViewWarnings() []ValidationWarning {
+	if len(c.Sources.Views) == 0 {
+		return nil
+	}
+	if _, err := exec.LookPath("gh"); err == nil {
+		return nil
+	}
+
+	names := make([]string, 0, len(c.Sources.Views))
+	for _, view := range c.Sources.Views {
+		names = append(names, view.Name)
+	}
+	return []ValidationWarning{{
+		Category: "Sources",
+		Item:     "views",
+		Message:  fmt.Sprintf("gh executable not found on PATH; affected source views: %s", strings.Join(names, ", ")),
+	}}
 }
 
 // validateFileAccess checks config file, data directory, and git executable.
