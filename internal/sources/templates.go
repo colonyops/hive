@@ -86,18 +86,36 @@ func RenderSessionTemplates(cfg TemplateConfig, item Item, detail Detail) (Rende
 	}, nil
 }
 
+// maxSessionNameLength caps sanitized session names so long issue/PR titles
+// don't produce unwieldy directory, branch, and tmux session names.
+const maxSessionNameLength = 60
+
 // sanitizeSessionName rewrites a rendered session Name into kebab-case (via
 // session.Slugify) so it passes hive's session name validation and remains
-// predictable for issue titles. If nothing usable remains, it falls back to
-// the item's ID.
+// predictable for issue titles. Long names are truncated at a word boundary
+// to maxSessionNameLength. If nothing usable remains, it falls back to the
+// item's ID.
 func sanitizeSessionName(name, fallbackID string) string {
 	if normalized := session.Slugify(name); normalized != "" {
-		return normalized
+		return truncateSlug(normalized, maxSessionNameLength)
 	}
 	if normalized := session.Slugify(fallbackID); normalized != "" {
-		return "session-" + normalized
+		return truncateSlug("session-"+normalized, maxSessionNameLength)
 	}
 	return "session-item"
+}
+
+// truncateSlug shortens a kebab-case slug to at most max characters,
+// preferring to cut at a hyphen boundary so words aren't split mid-way.
+func truncateSlug(slug string, max int) string {
+	if len(slug) <= max {
+		return slug
+	}
+	truncated := slug[:max]
+	if idx := strings.LastIndex(truncated, "-"); idx > 0 {
+		truncated = truncated[:idx]
+	}
+	return strings.Trim(truncated, "-")
 }
 
 // detailText returns a plain-text representation of a Detail for use as the

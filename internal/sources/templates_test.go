@@ -95,6 +95,37 @@ func TestRenderSessionTemplates(t *testing.T) {
 			wantTags:   []string{},
 		},
 		{
+			name: "truncates long names at a word boundary",
+			cfg: sources.TemplateConfig{
+				Name:   "gh-{{ .Fields.number }}-{{ .Title }}",
+				Prompt: "ok",
+			},
+			item: sources.Item{
+				ID:    "1",
+				Title: "Add support for configuring session name truncation behavior when creating sessions from external sources",
+				Fields: map[string]any{
+					"number": 1234,
+				},
+			},
+			wantName:   "gh-1234-add-support-for-configuring-session-name-truncation",
+			wantPrompt: "ok",
+			wantTags:   []string{},
+		},
+		{
+			name: "truncates hard at limit when no hyphen boundary exists",
+			cfg: sources.TemplateConfig{
+				Name:   "{{ .Title }}",
+				Prompt: "ok",
+			},
+			item: sources.Item{
+				ID:    "1",
+				Title: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+			},
+			wantName:   "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"[:60],
+			wantPrompt: "ok",
+			wantTags:   []string{},
+		},
+		{
 			name: "renders detail content",
 			cfg: sources.TemplateConfig{
 				Name:   "{{ .ID }}",
