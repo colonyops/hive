@@ -4,9 +4,36 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/stretchr/testify/assert"
 )
+
+func TestCommandSet_SystemCommandsIncludesGeneratedViewsAndUserOverride(t *testing.T) {
+	cfg := &config.Config{
+		Sources: config.SourcesConfig{Views: []config.SourceViewConfig{{
+			Name:  "review-queue",
+			Base:  "prs",
+			Query: "review-requested:@me",
+		}}},
+	}
+
+	set := NewCommandSet(cfg.SystemCommands(), cfg.UserCommands)
+	generated, ok := set.Lookup("SourceReviewQueue")
+	assert.True(t, ok)
+	assert.Equal(t, action.TypeOpenSourcePicker, generated.Action)
+	assert.Equal(t, []string{"review-queue"}, generated.Args)
+	assert.Equal(t, generated, set.All()["SourceReviewQueue"])
+
+	cfg.UserCommands = map[string]config.UserCommand{
+		"SourceReviewQueue": {Sh: "custom-review-queue"},
+	}
+	set = NewCommandSet(cfg.SystemCommands(), cfg.UserCommands)
+	override, ok := set.Lookup("SourceReviewQueue")
+	assert.True(t, ok)
+	assert.Equal(t, "custom-review-queue", override.Sh)
+	assert.Equal(t, override, set.All()["SourceReviewQueue"])
+}
 
 func TestCommandSet_PrecedenceOrdering(t *testing.T) {
 	system := map[string]config.UserCommand{"Foo": {Sh: "S"}}

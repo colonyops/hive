@@ -53,7 +53,7 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	})
 
 	tb := testbus.New(t)
-	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
+	commandSet := plugins.NewCommandSet(cfg.SystemCommands(), cfg.UserCommands)
 	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
 	todoService := hive.NewTodoService(
 		stores.NewTodoStore(database),
@@ -75,6 +75,21 @@ func newKeybindingPrecedenceModel(t *testing.T, mutate func(*config.Config)) Mod
 	}, Opts{})
 
 	return m
+}
+
+func TestModelCommandSetIncludesGeneratedSourceCommands(t *testing.T) {
+	m := newKeybindingPrecedenceModel(t, func(cfg *config.Config) {
+		cfg.Sources.Views = []config.SourceViewConfig{{
+			Name:  "review-queue",
+			Base:  "prs",
+			Query: "review-requested:@me",
+		}}
+	})
+
+	command, ok := m.commandSet.Lookup("SourceReviewQueue")
+	require.True(t, ok)
+	assert.Equal(t, []string{"review-queue"}, command.Args)
+	assert.Equal(t, command, m.commandSet.All()["SourceReviewQueue"])
 }
 
 func TestOpenNewSessionFormReadsEnvironmentDefaultAgentAtOpen(t *testing.T) {
@@ -118,7 +133,7 @@ func TestOpenNewSessionFormUsesEnvironmentDefaultAgent(t *testing.T) {
 	})
 
 	tb := testbus.New(t)
-	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
+	commandSet := plugins.NewCommandSet(cfg.SystemCommands(), cfg.UserCommands)
 	pluginManager := plugins.NewManager(plugins.NewWorkerPool(0), commandSet)
 	todoService := hive.NewTodoService(
 		stores.NewTodoStore(database),

@@ -3,6 +3,7 @@ package config
 import (
 	"testing"
 
+	"github.com/colonyops/hive/internal/core/action"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gopkg.in/yaml.v3"
@@ -250,4 +251,165 @@ func TestValidateSources_DuplicateViewNames(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sources.views[1].name")
 	assert.Contains(t, err.Error(), `duplicate source view name "triage"`)
+}
+
+func TestNormalizeViewCommandName(t *testing.T) {
+	tests := []struct {
+		name string
+		view string
+		want string
+	}{
+		{name: "hyphens", view: "my-review-queue", want: "SourceMyReviewQueue"},
+		{name: "underscores", view: "my_review_queue", want: "SourceMyReviewQueue"},
+		{name: "spaces", view: "my review queue", want: "SourceMyReviewQueue"},
+		{name: "mixed separators", view: "my-review_queue view", want: "SourceMyReviewQueueView"},
+		{name: "mixed case", view: "myReviewQueue", want: "SourceMyReviewQueue"},
+		{name: "acronym transition", view: "HTTPReviewQueue", want: "SourceHttpReviewQueue"},
+		{name: "digits", view: "queue2Review", want: "SourceQueue2Review"},
+		{name: "no words", view: "---", want: "SourceView"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, normalizeViewCommandName(tt.view))
+		})
+	}
+}
+
+func TestDefaultUserCommandsCompatibility(t *testing.T) {
+	assert.Equal(t, defaultUserCommands, DefaultUserCommands())
+}
+
+func TestSystemCommands_GeneratedCommandShape(t *testing.T) {
+	cfg := &Config{Sources: SourcesConfig{Views: []SourceViewConfig{{
+		Name:  "my-review-queue",
+		Base:  "prs",
+		Query: "review-requested:@me",
+	}}}}
+
+	commands := cfg.SystemCommands()
+	assert.Equal(t, UserCommand{
+		Action: action.TypeOpenSourcePicker,
+		Args:   []string{"my-review-queue"},
+		Scope:  []string{"sessions"},
+		Silent: true,
+		Help:   "browse prs matching review-requested:@me",
+	}, commands["SourceMyReviewQueue"])
+}
+
+func TestSystemCommands_CollisionResolution(t *testing.T) {
+	t.Run("built-in wins", func(t *testing.T) {
+		cfg := &Config{Sources: SourcesConfig{Views: []SourceViewConfig{{
+			Name:  "Issues",
+			Base:  "prs",
+			Query: "author:@me",
+		}}}}
+
+		assert.Equal(t, defaultUserCommands["SourceIssues"], cfg.SystemCommands()["SourceIssues"])
+	})
+
+	t.Run("first normalized view wins", func(t *testing.T) {
+		cfg := &Config{Sources: SourcesConfig{Views: []SourceViewConfig{
+			{Name: "review-queue", Base: "prs", Query: "review-requested:@me"},
+			{Name: "review_queue", Base: "issues", Query: "label:review"},
+		}}}
+
+		command := cfg.SystemCommands()["SourceReviewQueue"]
+		assert.Equal(t, []string{"review-queue"}, command.Args)
+		assert.Equal(t, "browse prs matching review-requested:@me", command.Help)
+	})
+}
+
+func TestSystemCommands_ReturnsDefensiveBuiltInMap(t *testing.T) {
+	cfg := &Config{}
+	commands := cfg.SystemCommands()
+	delete(commands, "Recycle")
+
+	sourceIssues := commands["SourceIssues"]
+	sourceIssues.Args[0] = "changed"
+	commands["SourceIssues"] = sourceIssues
+
+	assert.Contains(t, cfg.SystemCommands(), "Recycle")
+	assert.Equal(t, []string{"issues"}, defaultUserCommands["SourceIssues"].Args)
+}
+
+func TestViewCommandWarnings(t *testing.T) {
+	tests := []struct {
+		name         string
+		cfg          Config
+		wantItem     string
+		wantMessages []string
+	}{
+		{
+			name: "user command wins",
+			cfg: Config{
+				Sources: SourcesConfig{Views: []SourceViewConfig{{Name: "triage", Base: "issues", Query: "label:triage"}}},
+				UserCommands: map[string]UserCommand{
+					"SourceTriage": {Sh: "custom"},
+				},
+			},
+			wantItem:     "triage",
+			wantMessages: []string{`generated command "SourceTriage"`, `source view "triage"`, "user command wins"},
+		},
+		{
+			name: "built-in command wins",
+			cfg: Config{Sources: SourcesConfig{Views: []SourceViewConfig{{
+				Name: "Issues", Base: "issues", Query: "state:open",
+			}}}},
+			wantItem:     "Issues",
+			wantMessages: []string{`generated command "SourceIssues"`, `source view "Issues"`, "built-in command wins"},
+		},
+		{
+			name: "first normalized view wins",
+			cfg: Config{Sources: SourcesConfig{Views: []SourceViewConfig{
+				{Name: "review-queue", Base: "prs", Query: "review-requested:@me"},
+				{Name: "review_queue", Base: "issues", Query: "label:review"},
+			}}},
+			wantItem:     "review_queue",
+			wantMessages: []string{`generated command "SourceReviewQueue"`, `source view "review_queue"`, `source view "review-queue"`, `first declared view "review-queue" wins`},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			warnings := tt.cfg.viewCommandWarnings()
+			require.Len(t, warnings, 1)
+			assert.Equal(t, "Sources", warnings[0].Category)
+			assert.Equal(t, tt.wantItem, warnings[0].Item)
+			for _, message := range tt.wantMessages {
+				assert.Contains(t, warnings[0].Message, message)
+			}
+		})
+	}
+}
+
+func TestWarningsIncludesViewCommandWarnings(t *testing.T) {
+	cfg := Config{
+		Sources: SourcesConfig{Views: []SourceViewConfig{{Name: "triage", Base: "issues", Query: "label:triage"}}},
+		UserCommands: map[string]UserCommand{
+			"SourceTriage": {Sh: "custom"},
+		},
+	}
+
+	warnings := cfg.Warnings()
+	assert.Contains(t, warnings, ValidationWarning{
+		Category: "Sources",
+		Item:     "triage",
+		Message:  `generated command "SourceTriage" for source view "triage" conflicts with a user command; user command wins`,
+	})
+}
+
+func TestViewCommandWarnings_PrioritizesNormalizationCollisionForDroppedView(t *testing.T) {
+	cfg := Config{
+		Sources: SourcesConfig{Views: []SourceViewConfig{
+			{Name: "review-queue", Base: "prs", Query: "review-requested:@me"},
+			{Name: "review_queue", Base: "issues", Query: "label:review"},
+		}},
+		UserCommands: map[string]UserCommand{"SourceReviewQueue": {Sh: "custom"}},
+	}
+
+	warnings := cfg.viewCommandWarnings()
+	require.Len(t, warnings, 2)
+	assert.Contains(t, warnings[0].Message, "user command wins")
+	assert.Contains(t, warnings[1].Message, "first declared view")
 }

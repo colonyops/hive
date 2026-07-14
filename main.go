@@ -299,7 +299,7 @@ Run 'hive new' to create a new session from the current repository.`,
 			}
 
 			shellPool := plugins.NewWorkerPool(cfg.Plugins.ShellWorkers)
-			commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
+			commandSet := plugins.NewCommandSet(cfg.SystemCommands(), cfg.UserCommands)
 
 			allPlugins := []configuredPlugin{
 				{plugin: github.New(cfg.Plugins.GitHub, kvStore), disabled: isDisabled(cfg.Plugins.GitHub.Enabled)},

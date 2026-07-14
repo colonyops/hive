@@ -8,9 +8,11 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/colonyops/hive/internal/core/styles"
@@ -1011,6 +1013,97 @@ func mergeUserCommands(defaults, user map[string]UserCommand) map[string]UserCom
 // System defaults (Recycle, Delete) can be overridden by user config.
 func (c *Config) MergedUserCommands() map[string]UserCommand {
 	return mergeUserCommands(defaultUserCommands, c.UserCommands)
+}
+
+// normalizeViewCommandName maps a source view name to a Source-prefixed
+// PascalCase palette command name.
+func normalizeViewCommandName(view string) string {
+	words := splitViewCommandWords(view)
+	if len(words) == 0 {
+		return "SourceView"
+	}
+
+	var name strings.Builder
+	name.WriteString("Source")
+	for _, word := range words {
+		runes := []rune(strings.ToLower(word))
+		runes[0] = unicode.ToUpper(runes[0])
+		name.WriteString(string(runes))
+	}
+	return name.String()
+}
+
+func splitViewCommandWords(view string) []string {
+	runes := []rune(view)
+	words := make([]string, 0, 4)
+	word := make([]rune, 0, len(runes))
+	flush := func() {
+		if len(word) == 0 {
+			return
+		}
+		words = append(words, string(word))
+		word = word[:0]
+	}
+
+	for i, current := range runes {
+		if !unicode.IsLetter(current) && !unicode.IsDigit(current) {
+			flush()
+			continue
+		}
+
+		if len(word) > 0 {
+			previous := runes[i-1]
+			nextIsLower := i+1 < len(runes) && unicode.IsLower(runes[i+1])
+			caseBoundary := unicode.IsUpper(current) && (unicode.IsLower(previous) ||
+				unicode.IsUpper(previous) && nextIsLower)
+			digitBoundary := unicode.IsDigit(current) != unicode.IsDigit(previous)
+			if caseBoundary || digitBoundary {
+				flush()
+			}
+		}
+		word = append(word, current)
+	}
+	flush()
+	return words
+}
+
+// SystemCommands returns a defensive copy of the built-in system commands plus
+// one source-picker command per configured source view. Built-ins win command
+// name collisions, and the first declared view wins normalization collisions.
+func (c *Config) SystemCommands() map[string]UserCommand {
+	commands := make(map[string]UserCommand, len(defaultUserCommands)+len(c.Sources.Views))
+	for name, command := range defaultUserCommands {
+		commands[name] = cloneUserCommand(command)
+	}
+
+	for _, view := range c.Sources.Views {
+		name := normalizeViewCommandName(view.Name)
+		if _, exists := commands[name]; exists {
+			continue
+		}
+		commands[name] = UserCommand{
+			Action: action.TypeOpenSourcePicker,
+			Args:   []string{view.Name},
+			Scope:  []string{"sessions"},
+			Silent: true,
+			Help:   fmt.Sprintf("browse %s matching %s", view.Base, view.Query),
+		}
+	}
+	return commands
+}
+
+func cloneUserCommand(command UserCommand) UserCommand {
+	command.Args = slices.Clone(command.Args)
+	command.Scope = slices.Clone(command.Scope)
+	command.Windows = slices.Clone(command.Windows)
+	for i := range command.Windows {
+		command.Windows[i].Panes = slices.Clone(command.Windows[i].Panes)
+	}
+	command.Form = slices.Clone(command.Form)
+	for i := range command.Form {
+		command.Form[i].Options = slices.Clone(command.Form[i].Options)
+	}
+	return command
 }
 
 // DefaultUserCommands returns the built-in system commands.

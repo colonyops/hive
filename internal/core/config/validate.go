@@ -215,7 +215,46 @@ func (c *Config) Warnings() []ValidationWarning {
 		}
 	}
 
+	warnings = append(warnings, c.viewCommandWarnings()...)
 	warnings = append(warnings, c.sourceViewWarnings()...)
+	return warnings
+}
+
+// viewCommandWarnings reports source view command collisions in declaration
+// order, matching SystemCommands and CommandSet precedence.
+func (c *Config) viewCommandWarnings() []ValidationWarning {
+	warnings := make([]ValidationWarning, 0)
+	generated := make(map[string]string, len(c.Sources.Views))
+
+	for _, view := range c.Sources.Views {
+		commandName := normalizeViewCommandName(view.Name)
+		if _, collides := defaultUserCommands[commandName]; collides {
+			warnings = append(warnings, ValidationWarning{
+				Category: "Sources",
+				Item:     view.Name,
+				Message:  fmt.Sprintf("generated command %q for source view %q conflicts with a built-in command; built-in command wins", commandName, view.Name),
+			})
+			continue
+		}
+		if firstView, collides := generated[commandName]; collides {
+			warnings = append(warnings, ValidationWarning{
+				Category: "Sources",
+				Item:     view.Name,
+				Message:  fmt.Sprintf("generated command %q for source view %q conflicts with source view %q; first declared view %q wins", commandName, view.Name, firstView, firstView),
+			})
+			continue
+		}
+
+		generated[commandName] = view.Name
+		if _, collides := c.UserCommands[commandName]; collides {
+			warnings = append(warnings, ValidationWarning{
+				Category: "Sources",
+				Item:     view.Name,
+				Message:  fmt.Sprintf("generated command %q for source view %q conflicts with a user command; user command wins", commandName, view.Name),
+			})
+		}
+	}
+
 	return warnings
 }
 

@@ -59,7 +59,7 @@ func NewHoneycombOnly(opts HoneycombOnlyOptions) HoneycombOnlyModel {
 	}
 	// Standalone honeycomb mode bypasses the plugin manager. Build a CommandSet
 	// directly so the resolver has a canonical registry to query.
-	commandSet := plugins.NewCommandSet(config.DefaultUserCommands(), cfg.UserCommands)
+	commandSet := plugins.NewCommandSet(cfg.SystemCommands(), cfg.UserCommands)
 	handler := NewKeybindingResolver(viewKBs, commandSet, opts.Renderer)
 	handler.SetActiveView(ViewTasks)
 
