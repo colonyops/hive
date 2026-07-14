@@ -1,0 +1,14 @@
+[
+  {
+    "number": 456,
+    "title": "Cross-repo change",
+    "state": "OPEN",
+    "author": {"login": "bob"},
+    "labels": [{"name": "dependencies"}],
+    "url": "https://github.com/other/service/pull/456",
+    "createdAt": "2026-06-29T00:00:00Z",
+    "assignees": [],
+    "isDraft": true,
+    "repository": {"nameWithOwner": "other/service"}
+  }
+]

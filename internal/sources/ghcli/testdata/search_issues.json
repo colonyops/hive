@@ -1,0 +1,13 @@
+[
+  {
+    "number": 123,
+    "title": "Global issue",
+    "state": "OPEN",
+    "author": {"login": "alice"},
+    "labels": [{"name": "bug"}, {"name": "triage"}],
+    "url": "https://github.com/owner/widgets/issues/123",
+    "createdAt": "2026-07-01T00:00:00Z",
+    "assignees": [{"login": "carol"}],
+    "repository": {"nameWithOwner": "owner/widgets"}
+  }
+]

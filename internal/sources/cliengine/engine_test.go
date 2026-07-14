@@ -20,12 +20,18 @@ import (
 // stubDriver is a minimal cliengine.Driver for engine-behavior tests. It
 // echoes a fixed argv and decodes a simple {id,title} JSON list.
 type stubDriver struct {
-	id     string
-	binary string
+	id            string
+	binary        string
+	scopeOptional bool
 }
 
 func (d stubDriver) Config() cliengine.Config {
-	return cliengine.Config{ID: d.id, DisplayName: d.id, Binary: d.binary}
+	return cliengine.Config{
+		ID:            d.id,
+		DisplayName:   d.id,
+		Binary:        d.binary,
+		ScopeOptional: d.scopeOptional,
+	}
 }
 
 func (stubDriver) ListArgs(scope, query string, limit int) []string {
@@ -168,6 +174,33 @@ func TestSearchRequiresOwnerRepoScope(t *testing.T) {
 	}
 }
 
+func TestSearchAllowsEmptyScopeWhenOptional(t *testing.T) {
+	exec := &executiltest.Exec{Responses: []executiltest.Response{{Out: []byte(`[]`)}}}
+	driver := stubDriver{id: "global-issues", binary: "stub", scopeOptional: true}
+	c, err := cliengine.New(driver, exec, newTestKV(t), cliengine.Options{})
+	require.NoError(t, err)
+
+	_, err = c.Search(context.Background(), sources.SearchParams{Query: "label:bug"})
+	require.NoError(t, err)
+	require.Len(t, exec.Calls(), 1)
+	assert.Equal(t, []string{"list", "--repo", "", "--limit", "30", "--query", "label:bug"}, exec.Calls()[0].Args)
+}
+
+func TestOptionalScopeSearchIncludesStderrOnFailure(t *testing.T) {
+	exec := &executiltest.Exec{Responses: []executiltest.Response{{
+		Stderr: []byte("search rate limit exceeded\n"),
+		Err:    fmt.Errorf("exit status 1"),
+	}}}
+	driver := stubDriver{id: "global-prs", binary: "stub", scopeOptional: true}
+	c, err := cliengine.New(driver, exec, newTestKV(t), cliengine.Options{})
+	require.NoError(t, err)
+
+	_, err = c.Search(context.Background(), sources.SearchParams{Query: "review-requested:@me"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "exit status 1")
+	assert.Contains(t, err.Error(), "search rate limit exceeded")
+}
+
 func TestSearchMalformedJSON(t *testing.T) {
 	exec := &executiltest.Exec{Responses: []executiltest.Response{{Out: []byte("not json")}}}
 	c := newStub(t, exec, nil, cliengine.Options{})
@@ -241,6 +274,18 @@ func TestFetchDetailUnsupported(t *testing.T) {
 	_, err := c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "1", Scope: "o/r"})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "not supported")
+	assert.Empty(t, exec.Calls())
+}
+
+func TestFetchDetailRequiresScopeWhenSearchScopeIsOptional(t *testing.T) {
+	exec := &executiltest.Exec{}
+	driver := stubDetailDriver{stubDriver{id: "global-issues", binary: "stub", scopeOptional: true}}
+	c, err := cliengine.New(driver, exec, newTestKV(t), cliengine.Options{})
+	require.NoError(t, err)
+
+	_, err = c.FetchDetail(context.Background(), sources.FetchDetailParams{ID: "1"})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "scope is required")
 	assert.Empty(t, exec.Calls())
 }
 

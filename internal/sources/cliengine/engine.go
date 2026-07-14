@@ -26,9 +26,10 @@ const (
 // Config declares a driver's static identity and the CLI binary that services
 // it.
 type Config struct {
-	ID          string // registry id and config key (e.g. "issues")
-	DisplayName string // picker tab title
-	Binary      string // CLI executable (e.g. "gh", "tea")
+	ID            string // registry id and config key (e.g. "issues")
+	DisplayName   string // picker tab title
+	Binary        string // CLI executable (e.g. "gh", "tea")
+	ScopeOptional bool   // allow Search to run without an owner/name scope
 }
 
 // Driver defines one CLI-backed source.
@@ -134,13 +135,17 @@ func (c *Source) Initialize(_ context.Context) (sources.Manifest, error) {
 	}, nil
 }
 
-// Search returns items in the repository identified by params.Scope
-// ("owner/name"), optionally filtered by params.Query. params.Scope is
-// required; params.Dir is the working directory the CLI runs in.
+// Search returns items optionally filtered by params.Query. params.Scope must
+// identify an "owner/name" repository unless the driver allows global search;
+// params.Dir is the working directory the CLI runs in.
 func (c *Source) Search(ctx context.Context, params sources.SearchParams) (sources.SearchResult, error) {
-	scope, err := parseScope(params.Scope)
-	if err != nil {
-		return sources.SearchResult{}, fmt.Errorf("%s source: %w", c.cfg.ID, err)
+	scope := ""
+	var err error
+	if params.Scope != "" || !c.cfg.ScopeOptional {
+		scope, err = parseScope(params.Scope)
+		if err != nil {
+			return sources.SearchResult{}, fmt.Errorf("%s source: %w", c.cfg.ID, err)
+		}
 	}
 
 	cacheKey := scope + "|" + params.Dir + "|" + params.Query
