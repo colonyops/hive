@@ -672,6 +672,13 @@ func tabResult(tab *tabState, item sources.Item) Result {
 	}
 }
 
+// Resume clears a completed selection so the picker can be shown again with
+// its cursor and marks intact (for example, after cancelling a follow-up form).
+func (p *Picker) Resume() {
+	p.selected = false
+	p.cancelled = false
+}
+
 // Cancelled reports whether the user dismissed the picker.
 func (p Picker) Cancelled() bool {
 	return p.cancelled

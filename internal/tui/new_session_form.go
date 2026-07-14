@@ -95,11 +95,13 @@ type NewSessionFormResult struct {
 
 // NewNewSessionForm creates a new session form with the given repos.
 // If preselectedRemote is non-empty, the matching repo will be pre-selected.
+// If initialName is non-empty, it pre-fills the editable session name input;
+// otherwise the existing placeholder behavior is retained.
 // existingNames is used to validate that the session name is unique.
 // agentKeys, when non-empty, adds a compact agent selector at the top of the form.
 // The default agent (index 0 in agentKeys) is pre-selected; it is skipped in the
 // forward tab cycle and reachable via shift+tab from the repo field.
-func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote string, existingNames map[string]bool, agentKeys []string) *NewSessionForm {
+func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote, initialName string, existingNames map[string]bool, agentKeys []string) *NewSessionForm {
 	selectedIdx := 0
 	for i, r := range repos {
 		if r.Remote == preselectedRemote {
@@ -122,6 +124,9 @@ func NewNewSessionForm(repos []workspace.DiscoveredRepo, preselectedRemote strin
 	nameInput.Prompt = ""
 	nameInput.SetWidth(40)
 	nameInput.KeyMap.Paste.SetEnabled(true)
+	if initialName != "" {
+		nameInput.SetValue(initialName)
+	}
 
 	inputStyles := textinput.DefaultStyles(true)
 	inputStyles.Cursor.Color = styles.ColorPrimary

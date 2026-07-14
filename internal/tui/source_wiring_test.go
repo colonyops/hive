@@ -12,17 +12,20 @@ import (
 
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/tui/command"
 	"github.com/colonyops/hive/internal/tui/sourcepicker"
+	sessionsview "github.com/colonyops/hive/internal/tui/views/sessions"
 )
 
 // stubSource is a minimal sources.Source for registry-backed wiring tests.
 type stubSource struct {
-	id        string
-	detail    sources.Detail
-	detailErr error
+	id          string
+	detail      sources.Detail
+	detailErr   error
+	fetchParams *[]sources.FetchDetailParams
 }
 
 func (s stubSource) Name() string                   { return s.id }
@@ -35,7 +38,10 @@ func (s stubSource) Search(context.Context, sources.SearchParams) (sources.Searc
 	return sources.SearchResult{}, nil
 }
 
-func (s stubSource) FetchDetail(context.Context, sources.FetchDetailParams) (sources.Detail, error) {
+func (s stubSource) FetchDetail(_ context.Context, params sources.FetchDetailParams) (sources.Detail, error) {
+	if s.fetchParams != nil {
+		*s.fetchParams = append(*s.fetchParams, params)
+	}
 	if s.detailErr != nil {
 		return sources.Detail{}, s.detailErr
 	}
@@ -108,6 +114,249 @@ func TestOpenSourcePicker_ConfiguredViewTab(t *testing.T) {
 	picker, searchCmd := opened.modals.SourcePicker.Update(tea.KeyPressMsg{Text: "/", Code: '/'})
 	assert.Nil(t, searchCmd, "configured view tabs disable search")
 	assert.Contains(t, picker.View(), "search disabled for saved views")
+}
+
+func TestHandleSourceSelection_InstantVsGlobalForm(t *testing.T) {
+	global := sourcepicker.Result{
+		Item: sources.Item{
+			ID: "42", URI: "https://git.example.com/acme/widgets/issues/42",
+			Fields: map[string]any{"repo": "acme/widgets", "number": 42},
+		},
+		SourceID:  "cross-repo",
+		Templates: sources.TemplateConfig{Name: "issue-{{ .Fields.number }}"},
+	}
+	builtin := global
+	builtin.SourceID = "issues"
+	scoped := global
+	scoped.SourceID = "triage"
+
+	newModel := func() Model {
+		return Model{
+			cfg: &config.Config{Sources: config.SourcesConfig{Views: []config.SourceViewConfig{
+				{Name: "cross-repo", Base: "issues", Query: "org:acme"},
+				{Name: "triage", Base: "issues", Query: "label:triage", Scope: "acme/widgets"},
+			}}},
+			modals:             NewModalCoordinator(),
+			pendingSourceScope: sourcePickerScope{Search: "fallback/repo", Remote: "git@github.com:fallback/repo.git"},
+		}
+	}
+
+	t.Run("built-in stays on instant background path", func(t *testing.T) {
+		m := newModel()
+		picker := sourcepicker.New(nil, "", "", "", 80, 24)
+		m.modals.SourcePicker = &picker
+		model, cmd := m.handleSourceSelection([]sourcepicker.Result{builtin})
+		updated := model.(Model)
+		require.NotNil(t, cmd)
+		assert.Nil(t, updated.modals.SourcePicker)
+		assert.Nil(t, updated.pendingSourceForm)
+	})
+
+	t.Run("repo-scoped view stays on instant background path", func(t *testing.T) {
+		m := newModel()
+		model, cmd := m.handleSourceSelection([]sourcepicker.Result{scoped})
+		updated := model.(Model)
+		require.NotNil(t, cmd)
+		assert.Nil(t, updated.pendingSourceForm)
+	})
+
+	t.Run("global view opens form with synthetic repo and rendered name", func(t *testing.T) {
+		m := newModel()
+		picker := sourcepicker.New(nil, "", "", "", 80, 24)
+		m.modals.SourcePicker = &picker
+		model, cmd := m.handleSourceSelection([]sourcepicker.Result{global})
+		updated := model.(Model)
+		assert.Nil(t, cmd)
+		assert.Equal(t, stateCreatingSession, updated.state)
+		require.NotNil(t, updated.pendingSourceForm)
+		require.NotNil(t, updated.modals.NewSession)
+		formResult := updated.modals.NewSession.Result()
+		assert.Equal(t, "https://git.example.com/acme/widgets", formResult.Repo.Remote)
+		assert.Equal(t, "acme/widgets", formResult.Repo.Name)
+		assert.Equal(t, "issue-42", updated.modals.NewSession.nameInput.Value())
+	})
+
+	t.Run("multiple global marks are retained for one-at-a-time selection", func(t *testing.T) {
+		m := newModel()
+		picker := sourcepicker.New(nil, "", "", "", 80, 24)
+		m.modals.SourcePicker = &picker
+		second := global
+		second.Item.ID = "43"
+		model, cmd := m.handleSourceSelection([]sourcepicker.Result{global, second})
+		updated := model.(Model)
+		assert.Nil(t, cmd)
+		assert.Equal(t, stateSourcePicker, updated.state)
+		assert.NotNil(t, updated.modals.SourcePicker, "picker and its marks remain available")
+		assert.Nil(t, updated.pendingSourceForm)
+	})
+}
+
+func TestOpenSourceSessionForm_UsesExistingOrSyntheticRepo(t *testing.T) {
+	view := &sessionsview.View{}
+	repos := []workspace.DiscoveredRepo{
+		{Path: "/work/other", Name: "other", Remote: "git@github.com:acme/other.git"},
+		{Path: "/work/widgets", Name: "widgets", Remote: "git@git.example.com:acme/widgets.git"},
+	}
+	setUnexportedField(t, view, "discoveredRepos", repos)
+
+	result := sourcepicker.Result{
+		Item:      sources.Item{ID: "7", URI: "https://git.example.com/acme/widgets/pulls/7", Fields: map[string]any{"repo": "acme/widgets"}},
+		SourceID:  "global",
+		Templates: sources.TemplateConfig{Name: "pr-{{ .ID }}"},
+	}
+	m := Model{cfg: &config.Config{}, modals: NewModalCoordinator(), sessionsView: view}
+
+	model, _ := m.openSourceSessionForm(result)
+	form := model.(Model).modals.NewSession
+	require.NotNil(t, form)
+	assert.Len(t, form.repos, 2, "an existing exact remote is not duplicated")
+	assert.Equal(t, 1, form.repoSelect.SelectedIndex())
+	assert.Equal(t, "git@git.example.com:acme/widgets.git", form.Result().Repo.Remote)
+
+	result.Item.Fields["repo"] = "acme/new-repo"
+	result.Item.URI = "https://git.example.com/acme/new-repo/issues/7"
+	model, _ = m.openSourceSessionForm(result)
+	form = model.(Model).modals.NewSession
+	require.NotNil(t, form)
+	assert.Len(t, form.repos, 3)
+	assert.Equal(t, 0, form.repoSelect.SelectedIndex(), "synthetic item repo is prepended and selected")
+	assert.Equal(t, "acme/new-repo", form.Result().Repo.Name)
+}
+
+func TestResolveItemRemote(t *testing.T) {
+	view := &sessionsview.View{}
+	setUnexportedField(t, view, "discoveredRepos", []workspace.DiscoveredRepo{
+		{Path: "/work/widgets", Remote: "git@git.example.com:acme/widgets.git"},
+	})
+	setUnexportedField(t, view, "allSessions", []session.Session{
+		{Name: "session-repo", Path: "/sessions/repo", Remote: "ssh://git@code.example.net/acme/session-repo.git"},
+	})
+	m := Model{sessionsView: view}
+
+	tests := []struct {
+		name string
+		item sources.Item
+		want string
+		ok   bool
+	}{
+		{
+			name: "reuses exact discovered SSH remote",
+			item: sources.Item{URI: "https://git.example.com/acme/widgets/issues/1", Fields: map[string]any{"repo": "acme/widgets"}},
+			want: "git@git.example.com:acme/widgets.git", ok: true,
+		},
+		{
+			name: "reuses exact session SSH remote",
+			item: sources.Item{URI: "https://code.example.net/acme/session-repo/issues/1", Fields: map[string]any{"repo": "acme/session-repo"}},
+			want: "ssh://git@code.example.net/acme/session-repo.git", ok: true,
+		},
+		{
+			name: "same repo on another host constructs distinct HTTPS remote",
+			item: sources.Item{URI: "https://other.example.com/acme/widgets/issues/1", Fields: map[string]any{"repo": "acme/widgets"}},
+			want: "https://other.example.com/acme/widgets", ok: true,
+		},
+		{
+			name: "missing repo rejected",
+			item: sources.Item{URI: "https://git.example.com/acme/widgets/issues/1"},
+			ok:   false,
+		},
+		{
+			name: "malformed repo rejected",
+			item: sources.Item{URI: "https://git.example.com/acme/widgets/issues/1", Fields: map[string]any{"repo": "acme/widgets/extra"}},
+			ok:   false,
+		},
+		{
+			name: "malformed host rejected",
+			item: sources.Item{URI: "not a URL", Fields: map[string]any{"repo": "acme/widgets"}},
+			ok:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, ok := m.resolveItemRemote(tt.item)
+			assert.Equal(t, tt.ok, ok)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestSourceItemScope(t *testing.T) {
+	assert.Equal(t, "item/repo", sourceItemScope(sources.Item{Fields: map[string]any{"repo": "item/repo"}}, "picker/repo"))
+	assert.Equal(t, "picker/repo", sourceItemScope(sources.Item{Fields: map[string]any{"repo": ""}}, "picker/repo"))
+	assert.Equal(t, "picker/repo", sourceItemScope(sources.Item{Fields: map[string]any{"repo": 42}}, "picker/repo"))
+}
+
+func TestSourceFormSubmit_PreservesRenderedPromptTagsAndEditedInputs(t *testing.T) {
+	creator := &fakeSessionCreator{}
+	var fetched []sources.FetchDetailParams
+	src := stubSource{
+		id: "global", detail: sources.Detail{Markdown: &sources.MarkdownDetail{Content: "full detail"}}, fetchParams: &fetched,
+	}
+	result := sourcepicker.Result{
+		Item:      sources.Item{ID: "9", URI: "https://git.example.com/acme/widgets/issues/9", Fields: map[string]any{"repo": "acme/widgets"}},
+		SourceID:  "global",
+		Source:    src,
+		Manifest:  sources.Manifest{Capabilities: sources.Capabilities{FetchDetail: true}},
+		Templates: sources.TemplateConfig{Name: "generated-{{ .ID }}", Prompt: "Work {{ .Detail }}", Tags: []string{"source", "{{ .Fields.repo }}"}},
+	}
+	picker := sourcepicker.New(nil, "", "", "", 80, 24)
+	form := NewNewSessionForm([]workspace.DiscoveredRepo{{
+		Path: "/work/chosen", Name: "chosen", Remote: "git@chosen.example.com:acme/chosen.git",
+	}}, "git@chosen.example.com:acme/chosen.git", "generated-9", nil, []string{"claude", "pi"})
+	form.nameInput.SetValue("edited-session")
+	form.selectAgent("pi")
+	form.submitted = true
+
+	m := Model{
+		cmdService: command.NewService(nil, nil, nil, nil, creator),
+		modals:     NewModalCoordinator(),
+		state:      stateCreatingSession,
+		pendingSourceForm: &pendingSourceForm{
+			result: result, remote: "https://git.example.com/acme/widgets", scope: "acme/widgets",
+		},
+	}
+	m.modals.NewSession = form
+	m.modals.SourcePicker = &picker
+
+	model, cmd := m.updateNewSessionForm(tea.WindowSizeMsg{})
+	updated := model.(Model)
+	require.NotNil(t, cmd)
+	assert.Nil(t, updated.pendingSourceForm)
+	assert.Nil(t, updated.modals.SourcePicker)
+
+	started, ok := cmd().(bgStreamStartedMsg)
+	require.True(t, ok)
+	for range started.output {
+	}
+	require.NoError(t, <-started.done)
+
+	require.Len(t, creator.created, 1)
+	created := creator.created[0]
+	assert.Equal(t, "edited-session", created.Name)
+	assert.Equal(t, "git@chosen.example.com:acme/chosen.git", created.Remote)
+	assert.Equal(t, "/work/chosen", created.Source)
+	assert.Equal(t, "pi", created.AgentKey)
+	assert.Equal(t, "Work full detail", created.Prompt)
+	assert.Equal(t, []string{"source", "acme/widgets"}, created.Tags)
+	assert.True(t, created.UseBatchSpawn)
+	require.Len(t, fetched, 1)
+	assert.Equal(t, "acme/widgets", fetched[0].Scope, "detail fetch uses the result repo, not picker scope")
+}
+
+func TestSourceFormCancel_ReturnsToPicker(t *testing.T) {
+	picker := sourcepicker.New(nil, "", "", "", 80, 24)
+	form := NewNewSessionForm(nil, "", "name", nil, nil)
+	form.cancelled = true
+	m := Model{modals: NewModalCoordinator(), state: stateCreatingSession, pendingSourceForm: &pendingSourceForm{}}
+	m.modals.NewSession = form
+	m.modals.SourcePicker = &picker
+
+	model, cmd := m.updateNewSessionForm(tea.WindowSizeMsg{})
+	updated := model.(Model)
+	assert.Nil(t, cmd)
+	assert.Equal(t, stateSourcePicker, updated.state)
+	assert.Nil(t, updated.pendingSourceForm)
+	assert.Nil(t, updated.modals.NewSession)
+	assert.NotNil(t, updated.modals.SourcePicker)
 }
 
 func TestFetchSourceDetail(t *testing.T) {

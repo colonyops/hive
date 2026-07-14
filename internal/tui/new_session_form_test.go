@@ -22,27 +22,40 @@ func TestNewNewSessionForm(t *testing.T) {
 	}
 
 	t.Run("creates form with repos", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		require.NotNil(t, form)
 		assert.False(t, form.Submitted())
 		assert.False(t, form.Cancelled())
 	})
 
 	t.Run("preselects matching remote", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "git@github.com:user/beta.git", nil, nil)
+		form := NewNewSessionForm(repos, "git@github.com:user/beta.git", "", nil, nil)
 		// The second repo (index 1) should be selected
 		idx := form.repoSelect.SelectedIndex()
 		assert.Equal(t, 1, idx)
 	})
 
 	t.Run("defaults to first repo when no match", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "git@github.com:user/unknown.git", nil, nil)
+		form := NewNewSessionForm(repos, "git@github.com:user/unknown.git", "", nil, nil)
 		idx := form.repoSelect.SelectedIndex()
 		assert.Equal(t, 0, idx)
 	})
 
+	t.Run("initial name is prefilled and editable", func(t *testing.T) {
+		form := NewNewSessionForm(repos, "", "generated-name", nil, nil)
+		assert.Equal(t, "generated-name", form.nameInput.Value())
+		form.nameInput.SetValue("edited-name")
+		assert.Equal(t, "edited-name", form.nameInput.Value())
+	})
+
+	t.Run("empty initial name retains placeholder", func(t *testing.T) {
+		form := NewNewSessionForm(repos, "", "", nil, nil)
+		assert.Empty(t, form.nameInput.Value())
+		assert.Equal(t, "my-feature-branch", form.nameInput.Placeholder)
+	})
+
 	t.Run("result returns selected repo", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "git@github.com:user/gamma.git", nil, nil)
+		form := NewNewSessionForm(repos, "git@github.com:user/gamma.git", "", nil, nil)
 		// Simulate typing a session name
 		form.focusedField = 1 // Focus name input
 		form.nameInput.SetValue("my-session")
@@ -54,21 +67,21 @@ func TestNewNewSessionForm(t *testing.T) {
 	})
 
 	t.Run("tracks submitted state", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		assert.False(t, form.Submitted())
 		form.submitted = true
 		assert.True(t, form.Submitted())
 	})
 
 	t.Run("tracks cancelled state", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		assert.False(t, form.Cancelled())
 		form.cancelled = true
 		assert.True(t, form.Cancelled())
 	})
 
 	t.Run("validates empty session name", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		form.focusedField = 1 // Focus name input
 		// Empty name - try to submit
 		updated, _ := form.Update(keyPress(tea.KeyEnter))
@@ -77,7 +90,7 @@ func TestNewNewSessionForm(t *testing.T) {
 	})
 
 	t.Run("validates session name characters", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		form.focusedField = 1
 		form.nameInput.SetValue("bad~name")
 		updated, _ := form.Update(keyPress(tea.KeyEnter))
@@ -87,7 +100,7 @@ func TestNewNewSessionForm(t *testing.T) {
 
 	t.Run("validates duplicate session name", func(t *testing.T) {
 		existingNames := map[string]bool{"existing-session": true}
-		form := NewNewSessionForm(repos, "", existingNames, nil)
+		form := NewNewSessionForm(repos, "", "", existingNames, nil)
 		form.focusedField = 1 // Focus name input
 		form.nameInput.SetValue("existing-session")
 		// Try to submit with duplicate name
@@ -97,14 +110,14 @@ func TestNewNewSessionForm(t *testing.T) {
 	})
 
 	t.Run("esc cancels form", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		form.focusedField = 1 // Focus name input (not filtering)
 		updated, _ := form.Update(keyPress(tea.KeyEscape))
 		assert.True(t, updated.Cancelled())
 	})
 
 	t.Run("tab switches focus", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		assert.Equal(t, 0, form.focusedField)
 		updated, _ := form.Update(keyPress(tea.KeyTab))
 		assert.Equal(t, 1, updated.focusedField)
@@ -113,21 +126,21 @@ func TestNewNewSessionForm(t *testing.T) {
 	})
 
 	t.Run("Result returns zero value for empty repos", func(t *testing.T) {
-		form := NewNewSessionForm([]workspace.DiscoveredRepo{}, "", nil, nil)
+		form := NewNewSessionForm([]workspace.DiscoveredRepo{}, "", "", nil, nil)
 		result := form.Result()
 		assert.Empty(t, result.Repo.Name)
 		assert.Empty(t, result.Repo.Remote)
 	})
 
 	t.Run("enter on repo select moves to name input", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, nil)
+		form := NewNewSessionForm(repos, "", "", nil, nil)
 		assert.Equal(t, 0, form.focusedField)
 		updated, _ := form.Update(keyPress(tea.KeyEnter))
 		assert.Equal(t, 1, updated.focusedField)
 	})
 
 	t.Run("selectAgent chooses configured default even when not first", func(t *testing.T) {
-		form := NewNewSessionForm(repos, "", nil, []string{"claude", "codex", "pi"})
+		form := NewNewSessionForm(repos, "", "", nil, []string{"claude", "codex", "pi"})
 		form.selectAgent("pi")
 		form.nameInput.SetValue("my-session")
 		form.submitted = true

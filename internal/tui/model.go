@@ -162,6 +162,7 @@ type Model struct {
 
 	sourceRegistry     *sources.Registry
 	pendingSourceScope sourcePickerScope
+	pendingSourceForm  *pendingSourceForm
 
 	// Startup warnings to show as toasts after init
 	startupWarnings []string
@@ -761,12 +762,24 @@ func (m Model) updateNewSessionForm(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if m.modals.NewSession.Submitted() {
 		result := m.modals.NewSession.Result()
 		m.modals.NewSession = nil
+		if pending := m.pendingSourceForm; pending != nil {
+			m.pendingSourceForm = nil
+			m.modals.SourcePicker = nil
+			return m, m.startSourceFormCreate(*pending, result)
+		}
 		return m, m.startCreate(result.SessionName, result.Repo.Remote, result.AgentKey)
 	}
 
 	if m.modals.NewSession.Cancelled() {
-		m.state = stateNormal
 		m.modals.NewSession = nil
+		if m.pendingSourceForm != nil && m.modals.SourcePicker != nil {
+			m.pendingSourceForm = nil
+			m.modals.SourcePicker.Resume()
+			m.state = stateSourcePicker
+			return m, nil
+		}
+		m.pendingSourceForm = nil
+		m.state = stateNormal
 		return m, nil
 	}
 
@@ -1786,7 +1799,7 @@ func (m Model) openNewSessionForm() (tea.Model, tea.Cmd) {
 		}
 	}
 
-	newSessionForm := NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, existingNames, agentKeys)
+	newSessionForm := NewNewSessionForm(m.sessionsView.DiscoveredRepos(), preselectedRemote, "", existingNames, agentKeys)
 	newSessionForm.selectAgent(defaultAgent)
 	m.modals.NewSession = newSessionForm
 	m.state = stateCreatingSession

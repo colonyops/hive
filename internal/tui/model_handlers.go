@@ -3,13 +3,16 @@ package tui
 import (
 	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"charm.land/bubbles/v2/spinner"
 	tea "charm.land/bubbletea/v2"
@@ -22,6 +25,7 @@ import (
 	"github.com/colonyops/hive/internal/core/notify"
 	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/core/todo"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/tui/command"
@@ -835,6 +839,14 @@ type sourcePickerScope struct {
 	Source string // local repo checkout dir; the CLI cwd and CreateOptions.Source (file-copy source)
 }
 
+// pendingSourceForm holds one global-view selection while the user confirms
+// its repository, editable name, and agent in NewSessionForm.
+type pendingSourceForm struct {
+	result sourcepicker.Result
+	remote string
+	scope  string
+}
+
 // resolveSourceID returns the registered source to open: an explicit args[0]
 // when given, otherwise the sole registered source.
 func (m Model) resolveSourceID(args []string) (string, error) {
@@ -960,25 +972,227 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	if results, ok := picker.Selected(); ok {
-		m.modals.SourcePicker = nil
 		return m.handleSourceSelection(results)
 	}
 
 	return m, cmd
 }
 
-// handleSourceSelection spawns one session per selected item via the same
-// UseBatchSpawn:true path used by `hive batch`, all on a single background
-// stream. Detail fetches and template rendering run inside the stream so a
-// slow `gh` call never blocks the UI.
+// handleSourceSelection keeps built-in and scoped-view selections on the
+// instant batch path, while a single global-view result opens NewSessionForm.
+// Global views intentionally accept one marked result at a time: when marks
+// include a global result, the picker remains open with every mark preserved
+// and a visible error asks the user to unmark all but one.
 func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, tea.Cmd) {
 	if m.modals.BgStreamDone != nil {
+		m.modals.SourcePicker = nil
 		m.state = stateNormal
 		m.notifyErrorf("already running in background: %s", m.modals.BgStreamTitle)
 		return m, nil
 	}
 
+	hasGlobal := false
+	for _, result := range results {
+		if m.isGlobalViewResult(result) {
+			hasGlobal = true
+			break
+		}
+	}
+	if hasGlobal && len(results) != 1 {
+		if m.modals.SourcePicker != nil {
+			m.modals.SourcePicker.Resume()
+			m.state = stateSourcePicker
+		}
+		m.notifyErrorf("global source views create one session at a time; unmark all but one result")
+		return m, nil
+	}
+	if hasGlobal {
+		return m.openSourceSessionForm(results[0])
+	}
+
+	m.modals.SourcePicker = nil
 	return m, m.startSourceCreate(results, m.pendingSourceScope)
+}
+
+// isGlobalViewResult reports whether a result belongs to a configured view
+// whose empty scope permits cross-repository results.
+func (m Model) isGlobalViewResult(result sourcepicker.Result) bool {
+	if m.cfg == nil {
+		return false
+	}
+	for _, view := range m.cfg.Sources.Views {
+		if view.Name == result.SourceID {
+			return strings.TrimSpace(view.Scope) == ""
+		}
+	}
+	return false
+}
+
+// openSourceSessionForm opens NewSessionForm for one global-view result. All
+// work here is in-memory; detail fetching remains in the background create
+// command after form submission.
+func (m Model) openSourceSessionForm(result sourcepicker.Result) (tea.Model, tea.Cmd) {
+	remote, ok := m.resolveItemRemote(result.Item)
+	if !ok {
+		if m.modals.SourcePicker != nil {
+			m.modals.SourcePicker.Resume()
+			m.state = stateSourcePicker
+		}
+		m.notifyErrorf("source result does not identify a valid repository remote")
+		return m, nil
+	}
+
+	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, sources.Detail{})
+	if err != nil {
+		if m.modals.SourcePicker != nil {
+			m.modals.SourcePicker.Resume()
+			m.state = stateSourcePicker
+		}
+		m.notifyErrorf("source templates: %v", err)
+		return m, nil
+	}
+
+	itemScope := sourceItemScope(result.Item, m.pendingSourceScope.Search)
+	repos := m.sourceFormRepos()
+	if !containsRepoRemote(repos, remote) {
+		repos = append([]workspace.DiscoveredRepo{{Name: itemScope, Remote: remote}}, repos...)
+	}
+
+	existingNames, agentKeys, defaultAgent := m.sourceFormDefaults()
+	form := NewNewSessionForm(repos, remote, rendered.Name, existingNames, agentKeys)
+	form.selectAgent(defaultAgent)
+	if m.modals.SourcePicker != nil {
+		m.modals.SourcePicker.Resume()
+	}
+	m.pendingSourceForm = &pendingSourceForm{result: result, remote: remote, scope: itemScope}
+	m.modals.NewSession = form
+	m.state = stateCreatingSession
+	return m, form.Init()
+}
+
+// resolveItemRemote resolves an item's host-qualified owner/repo to a clone
+// remote. An exact known host+owner/repo match preserves its SSH/HTTPS form;
+// otherwise a deterministic HTTPS remote is constructed.
+func (m Model) resolveItemRemote(item sources.Item) (string, bool) {
+	repoScope := sourceItemScope(item, "")
+	if !validSourceRepoScope(repoScope) {
+		return "", false
+	}
+
+	rawURI := strings.TrimSpace(item.URI)
+	parsed, err := url.ParseRequestURI(rawURI)
+	if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" || parsed.User != nil {
+		return "", false
+	}
+	host := git.ExtractHost(rawURI)
+	if !validSourceHost(host) || !strings.EqualFold(host, parsed.Hostname()) {
+		return "", false
+	}
+
+	for _, repo := range m.knownSourceRepos() {
+		knownHost := git.ExtractHost(repo.Remote)
+		owner, name := git.ExtractOwnerRepo(repo.Remote)
+		if strings.EqualFold(knownHost, host) && strings.EqualFold(owner+"/"+name, repoScope) {
+			return repo.Remote, true
+		}
+	}
+
+	return (&url.URL{Scheme: "https", Host: host, Path: "/" + repoScope}).String(), true
+}
+
+// sourceItemScope prefers a result's explicit repo field and falls back to the
+// picker scope used for built-in and repo-scoped sources.
+func sourceItemScope(item sources.Item, fallback string) string {
+	if repo, ok := item.Fields["repo"].(string); ok && strings.TrimSpace(repo) != "" {
+		return strings.TrimSpace(repo)
+	}
+	return fallback
+}
+
+func (m Model) knownSourceRepos() []workspace.DiscoveredRepo {
+	if m.sessionsView == nil {
+		return nil
+	}
+	repos := append([]workspace.DiscoveredRepo(nil), m.sessionsView.DiscoveredRepos()...)
+	for _, sess := range m.sessionsView.AllSessions() {
+		repos = append(repos, workspace.DiscoveredRepo{Path: sess.Path, Name: sess.Name, Remote: sess.Remote})
+	}
+	return repos
+}
+
+func (m Model) sourceFormRepos() []workspace.DiscoveredRepo {
+	if m.sessionsView == nil {
+		return nil
+	}
+	return append([]workspace.DiscoveredRepo(nil), m.sessionsView.DiscoveredRepos()...)
+}
+
+func (m Model) sourceFormDefaults() (map[string]bool, []string, string) {
+	existingNames := map[string]bool{}
+	if m.sessionsView != nil {
+		for _, sess := range m.sessionsView.AllSessions() {
+			existingNames[sess.Name] = true
+		}
+	}
+
+	if m.cfg == nil {
+		return existingNames, nil, ""
+	}
+	defaultAgent := m.defaultAgentKey()
+	if !m.cfg.Agents.AgentSelector || len(m.cfg.Agents.Profiles) <= 1 {
+		return existingNames, nil, defaultAgent
+	}
+	keys := make([]string, 0, len(m.cfg.Agents.Profiles))
+	for key := range m.cfg.Agents.Profiles {
+		if key != defaultAgent {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	return existingNames, append([]string{defaultAgent}, keys...), defaultAgent
+}
+
+func containsRepoRemote(repos []workspace.DiscoveredRepo, remote string) bool {
+	for _, repo := range repos {
+		if repo.Remote == remote {
+			return true
+		}
+	}
+	return false
+}
+
+func validSourceRepoScope(scope string) bool {
+	parts := strings.Split(scope, "/")
+	return len(parts) == 2 && validSourceRepoPart(parts[0]) && validSourceRepoPart(parts[1])
+}
+
+func validSourceRepoPart(part string) bool {
+	if part == "" || part == "." || part == ".." {
+		return false
+	}
+	for _, r := range part {
+		if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '.' && r != '_' && r != '-' {
+			return false
+		}
+	}
+	return true
+}
+
+func validSourceHost(host string) bool {
+	if host == "" || strings.TrimSpace(host) != host || strings.HasPrefix(host, ".") || strings.HasSuffix(host, ".") {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if label == "" || strings.HasPrefix(label, "-") || strings.HasSuffix(label, "-") {
+			return false
+		}
+		for _, r := range label {
+			if !unicode.IsLetter(r) && !unicode.IsDigit(r) && r != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // fetchSourceDetail returns the item's detail for template rendering. Detail
@@ -1053,6 +1267,47 @@ func (m Model) startSourceCreate(results []sourcepicker.Result, scope sourcePick
 	}
 }
 
+// startSourceFormCreate starts the existing background source-create path
+// with the repository, edited name, and agent confirmed by NewSessionForm.
+func (m Model) startSourceFormCreate(pending pendingSourceForm, form NewSessionFormResult) tea.Cmd {
+	return func() tea.Msg {
+		ctx, cancel := context.WithCancel(context.Background())
+		output := make(chan string, 100)
+		done := make(chan error, 1)
+		resultID := new(string)
+		resultName := new(string)
+
+		remote := form.Repo.Remote
+		if remote == "" {
+			remote = pending.remote
+		}
+		scope := sourcePickerScope{Search: pending.scope, Remote: remote, Source: form.Repo.Path}
+		go func() {
+			defer close(output)
+			defer close(done)
+			id, name, err := m.createSourceSessionWithForm(
+				ctx, pending.result, scope, output, form.SessionName, form.AgentKey,
+			)
+			if err == nil {
+				*resultID = id
+				*resultName = name
+			} else {
+				log.Warn().Err(err).Str("source", pending.result.SourceID).Str("item", pending.result.Item.ID).
+					Msg("source picker: session create failed")
+			}
+			done <- err
+		}()
+
+		return bgStreamStartedMsg{
+			title:  "Creating session...",
+			output: output,
+			done:   done,
+			cancel: cancel,
+			result: streamResult{sessionID: resultID, sessionName: resultName},
+		}
+	}
+}
+
 // createSourceSessions renders and creates one session per result, writing
 // progress lines to out (discarded while the stream runs in background —
 // the summary error and the log are the user-visible record). A failed
@@ -1108,11 +1363,25 @@ func (m Model) createSourceSessions(ctx context.Context, results []sourcepicker.
 // creation output onto the shared stream. It returns the created session's
 // ID and name.
 func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Result, scope sourcePickerScope, out chan<- string) (id, name string, err error) {
-	detail := fetchSourceDetail(ctx, result, scope.Search, scope.Source)
+	return m.createSourceSessionWithForm(ctx, result, scope, out, "", "")
+}
+
+func (m Model) createSourceSessionWithForm(
+	ctx context.Context,
+	result sourcepicker.Result,
+	scope sourcePickerScope,
+	out chan<- string,
+	nameOverride, agentKey string,
+) (id, name string, err error) {
+	detailScope := sourceItemScope(result.Item, scope.Search)
+	detail := fetchSourceDetail(ctx, result, detailScope, scope.Source)
 
 	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)
 	if err != nil {
 		return "", "", err
+	}
+	if nameOverride != "" {
+		rendered.Name = nameOverride
 	}
 
 	exec := m.cmdService.NewCreateExecutor(hive.CreateOptions{
@@ -1123,6 +1392,7 @@ func (m Model) createSourceSession(ctx context.Context, result sourcepicker.Resu
 		UseBatchSpawn: true,
 		Background:    true,
 		Tags:          rendered.Tags,
+		AgentKey:      agentKey,
 	})
 
 	output, done, cancel := exec.Execute(ctx)

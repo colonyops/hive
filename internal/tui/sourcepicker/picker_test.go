@@ -360,6 +360,31 @@ func TestPicker_EnterSpawnsMarkedItems(t *testing.T) {
 	assert.Equal(t, "2", results[1].Item.ID)
 }
 
+func TestPicker_ResumePreservesMarksForOneAtATimeFlow(t *testing.T) {
+	items := []sources.Item{
+		{ID: "1", Title: "alpha"},
+		{ID: "2", Title: "beta"},
+	}
+	fake := newFakeTUISource(fakeManifest(), items)
+	p := newTestPicker(fake, fakeManifest(), "", 80, 24)
+	p = drainPicker(t, p, p.Init())
+	p = pressSpace(t, p)
+	p = p.moveCursor(1)
+	p = pressSpace(t, p)
+
+	next, cmd := p.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+	p = drainPicker(t, next, cmd)
+	_, ok := p.Selected()
+	require.True(t, ok)
+
+	p.Resume()
+	_, ok = p.Selected()
+	assert.False(t, ok, "resumed picker waits for another explicit enter")
+	require.Len(t, activeTab(p).marked, 2, "resume must not silently discard marked results")
+	assert.Equal(t, "1", activeTab(p).marked[0].ID)
+	assert.Equal(t, "2", activeTab(p).marked[1].ID)
+}
+
 func TestPicker_MarksSurviveRemoteSearch(t *testing.T) {
 	items := []sources.Item{
 		{ID: "1", Title: "alpha"},
