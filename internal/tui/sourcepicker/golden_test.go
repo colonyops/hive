@@ -37,6 +37,40 @@ type goldenDetailError string
 
 func (e goldenDetailError) Error() string { return string(e) }
 
+func TestPickerGolden_ViewCardLayout(t *testing.T) {
+	viewManifest := sources.Manifest{ID: "review-queue", DisplayName: "Review Queue"}
+	items := []sources.Item{{
+		ID:    "412",
+		Title: "feat: make source views available across repositories",
+		URI:   "https://github.com/colonyops/hive/pull/412",
+		Fields: map[string]any{
+			"number": 412, "author": "contributor", "labels": []string{"sources", "tui"},
+			"age": "4h", "assignee": "reviewer", "assignee_count": 1, "repo": "colonyops/hive",
+		},
+	}}
+	viewSource := newFakeTUISource(viewManifest, items)
+	tabs := []TabSource{
+		{ID: "issues", Source: newFakeTUISource(sources.Manifest{ID: "issues", DisplayName: "Issues"}, nil), Manifest: sources.Manifest{ID: "issues", DisplayName: "Issues"}},
+		{ID: "prs", Source: newFakeTUISource(sources.Manifest{ID: "prs", DisplayName: "Pull Requests"}, nil), Manifest: sources.Manifest{ID: "prs", DisplayName: "Pull Requests"}},
+		{ID: viewManifest.ID, Source: viewSource, Manifest: viewManifest, SearchDisabled: true},
+	}
+	p := New(tabs, viewManifest.ID, "test-repo", "", 100, 24)
+	p = drainPicker(t, p, p.Init())
+	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
+}
+
+func TestPickerGolden_EmptyViewResults(t *testing.T) {
+	viewManifest := sources.Manifest{ID: "triage", DisplayName: "Triage"}
+	tabs := []TabSource{
+		{ID: "issues", Source: newFakeTUISource(sources.Manifest{ID: "issues", DisplayName: "Issues"}, nil), Manifest: sources.Manifest{ID: "issues", DisplayName: "Issues"}},
+		{ID: "prs", Source: newFakeTUISource(sources.Manifest{ID: "prs", DisplayName: "Pull Requests"}, nil), Manifest: sources.Manifest{ID: "prs", DisplayName: "Pull Requests"}},
+		{ID: viewManifest.ID, Source: newFakeTUISource(viewManifest, nil), Manifest: viewManifest, SearchDisabled: true},
+	}
+	p := New(tabs, viewManifest.ID, "test-repo", "", 100, 24)
+	p = drainPicker(t, p, p.Init())
+	golden.RequireEqual(t, []byte(terminal.StripANSI(p.View())))
+}
+
 func TestPickerGolden_CardLayout(t *testing.T) {
 	manifest := sources.Manifest{
 		ID:          "fake-prs-card",

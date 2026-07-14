@@ -7,6 +7,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"time"
 
@@ -834,11 +835,15 @@ type sourcePickerScope struct {
 	Source string // local repo checkout dir; the CLI cwd and CreateOptions.Source (file-copy source)
 }
 
-// resolveSourceID returns the source to open: an explicit args[0] when
-// given, otherwise the sole registered source.
+// resolveSourceID returns the registered source to open: an explicit args[0]
+// when given, otherwise the sole registered source.
 func (m Model) resolveSourceID(args []string) (string, error) {
 	if len(args) > 0 && args[0] != "" {
-		return args[0], nil
+		id := args[0]
+		if m.sourceRegistry != nil && !slices.Contains(m.sourceRegistry.IDs(), id) {
+			return "", fmt.Errorf("source %q is not configured", id)
+		}
+		return id, nil
 	}
 	if m.sourceRegistry == nil {
 		return "", fmt.Errorf("no sources are configured")
@@ -875,9 +880,10 @@ func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.M
 	tabs := make([]sourcepicker.TabSource, len(entries))
 	for i, entry := range entries {
 		tabs[i] = sourcepicker.TabSource{
-			ID:        entry.ID,
-			Source:    entry.Source,
-			Templates: entry.Templates,
+			ID:             entry.ID,
+			Source:         entry.Source,
+			Templates:      entry.Templates,
+			SearchDisabled: m.isViewSource(entry.ID),
 			Manifest: sources.Manifest{
 				ID:          entry.ID,
 				DisplayName: entry.DisplayName,
@@ -890,6 +896,19 @@ func (m Model) openSourcePicker(sourceID string, scope sourcePickerScope) (tea.M
 	m.state = stateSourcePicker
 	m.modals.SourcePicker = &picker
 	return m, picker.Init()
+}
+
+// isViewSource reports whether id identifies a configured saved-search view.
+func (m Model) isViewSource(id string) bool {
+	if m.cfg == nil {
+		return false
+	}
+	for _, view := range m.cfg.Sources.Views {
+		if view.Name == id {
+			return true
+		}
+	}
+	return false
 }
 
 // detectSourceBackend resolves the forge backend from the remote's host and

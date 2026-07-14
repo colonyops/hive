@@ -151,6 +151,49 @@ func enterSearch(t *testing.T, p Picker) Picker {
 	return p
 }
 
+func TestPicker_SearchModeRespectsDisabledTab(t *testing.T) {
+	tests := []struct {
+		name           string
+		searchDisabled bool
+		wantSearchMode bool
+	}{
+		{name: "enabled tab enters search", wantSearchMode: true},
+		{name: "disabled tab ignores slash", searchDisabled: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			manifest := remoteManifest()
+			fake := newFakeTUISource(manifest, nil)
+			p := newTestPicker(fake, manifest, "o/r", 80, 24)
+			p.tabs[0].tab.SearchDisabled = tt.searchDisabled
+			p = drainPicker(t, p, p.Init())
+
+			next, cmd := p.Update(tea.KeyPressMsg{Text: "/", Code: '/'})
+			assert.Equal(t, tt.wantSearchMode, next.searchMode)
+			if tt.searchDisabled {
+				assert.Nil(t, cmd)
+				assert.Nil(t, next.debounceSearch(next.activeState()), "disabled tabs never schedule refinement")
+			}
+		})
+	}
+}
+
+func TestPicker_DisabledTabDropsDebounceMessage(t *testing.T) {
+	manifest := remoteManifest()
+	fake := newFakeTUISource(manifest, nil)
+	p := newTestPicker(fake, manifest, "o/r", 80, 24)
+	p.tabs[0].tab.SearchDisabled = true
+	p = drainPicker(t, p, p.Init())
+	require.Equal(t, []string{""}, fake.searchCalls)
+
+	msg := sourceSearchDebounceMsg{Gen: p.gen, SourceID: manifest.ID, Query: ""}
+	next, cmd := p.Update(msg)
+	assert.Nil(t, cmd)
+	assert.False(t, activeTab(next).loading)
+	assert.Equal(t, []string{""}, fake.searchCalls, "disabled tabs never dispatch remote refinement")
+}
+
 // typeKey feeds each rune of s as a keystroke.
 func typeKey(t *testing.T, p Picker, s string) Picker {
 	t.Helper()

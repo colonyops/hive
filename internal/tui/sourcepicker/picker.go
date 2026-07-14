@@ -62,10 +62,11 @@ var sourcePickerGen atomic.Int64
 
 // TabSource pairs a source with its configuration for one picker tab.
 type TabSource struct {
-	ID        string
-	Source    sources.Source
-	Manifest  sources.Manifest
-	Templates sources.TemplateConfig
+	ID             string
+	Source         sources.Source
+	Manifest       sources.Manifest
+	Templates      sources.TemplateConfig
+	SearchDisabled bool
 }
 
 // tabState tracks the per-tab lifecycle: uninit → loading → loaded/error.
@@ -409,6 +410,10 @@ func (p Picker) handleKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 // carries the query so stale timers (the user kept typing) are dropped
 // in handleDebounce.
 func (p Picker) debounceSearch(tab *tabState) tea.Cmd {
+	if tab.tab.SearchDisabled {
+		return nil
+	}
+
 	delay := time.Duration(tab.tab.Manifest.Picker.Search.DebounceMS) * time.Millisecond
 	if delay <= 0 {
 		delay = defaultSearchDebounce
@@ -430,6 +435,9 @@ func (p Picker) handleNavigateKey(msg tea.KeyPressMsg) (Picker, tea.Cmd) {
 	case "space":
 		return p.toggleMark(), nil
 	case "/":
+		if p.activeState().tab.SearchDisabled {
+			return p, nil
+		}
 		p.searchMode = true
 		return p, p.input.Focus()
 	case "O":
@@ -590,6 +598,9 @@ func (p Picker) handleDebounce(msg sourceSearchDebounceMsg) (Picker, tea.Cmd) {
 		return p, nil
 	}
 	tab := &p.tabs[idx]
+	if tab.tab.SearchDisabled {
+		return p, nil
+	}
 	tab.loading = true
 	tab.loadingMsg = fmt.Sprintf("Searching %s...", tab.tab.Manifest.DisplayName)
 	return p, sourceSearchCmd(p.gen, tab.tab.Source, tab.tab.ID, p.scope, p.dir, msg.Query)
@@ -807,17 +818,21 @@ func (p Picker) renderFilterLine(tab *tabState) string {
 		return p.input.View()
 	}
 
-	name := tab.tab.Manifest.DisplayName
-	if name == "" {
-		name = tab.tab.ID
-	}
-	// Keep an applied filter visible outside search mode so a reduced
-	// item list is never unexplained.
 	var placeholder string
-	if query := p.input.Value(); query != "" {
-		placeholder = styles.TextPrimaryStyle.Render("/") + " " + styles.TextForegroundStyle.Render(query)
+	if tab.tab.SearchDisabled {
+		placeholder = styles.TextMutedStyle.Render("search disabled for saved views")
 	} else {
-		placeholder = styles.TextPrimaryStyle.Render("/") + " " + styles.TextMutedStyle.Render(fmt.Sprintf("filter %s…", strings.ToLower(name)))
+		name := tab.tab.Manifest.DisplayName
+		if name == "" {
+			name = tab.tab.ID
+		}
+		// Keep an applied filter visible outside search mode so a reduced
+		// item list is never unexplained.
+		if query := p.input.Value(); query != "" {
+			placeholder = styles.TextPrimaryStyle.Render("/") + " " + styles.TextForegroundStyle.Render(query)
+		} else {
+			placeholder = styles.TextPrimaryStyle.Render("/") + " " + styles.TextMutedStyle.Render(fmt.Sprintf("filter %s…", strings.ToLower(name)))
+		}
 	}
 
 	countStr := styles.TextMutedStyle.Render(fmt.Sprintf("%d", len(tab.filteredItems)))
@@ -1130,14 +1145,17 @@ func (p Picker) helpText() string {
 	}
 	// No nav hint here: j/k/arrows are the expected defaults, and the help
 	// line must stay a single row at the modal's minimum width.
-	return components.KeyHints(
-		components.HelpEntry{Key: "tab", Desc: "switch source"},
-		components.HintFilter,
+	entries := []components.HelpEntry{{Key: "tab", Desc: "switch source"}}
+	if !tab.tab.SearchDisabled {
+		entries = append(entries, components.HintFilter)
+	}
+	entries = append(entries,
 		components.HelpEntry{Key: "space", Desc: "mark"},
 		components.HelpEntry{Key: "enter", Desc: enterDesc},
 		components.HelpEntry{Key: "O", Desc: "open"},
 		components.HelpEntry{Key: "esc", Desc: "close"},
 	)
+	return components.KeyHints(entries...)
 }
 
 // tableCellStyle maps a field key/value to a semantic color for the card

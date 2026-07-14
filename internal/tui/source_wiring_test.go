@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	tea "charm.land/bubbletea/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
@@ -59,6 +60,8 @@ func TestResolveSourceID(t *testing.T) {
 		wantErr string
 	}{
 		{"explicit arg wins", registryWith(t, "issues", "prs"), []string{"prs"}, "prs", ""},
+		{"explicit view resolves", registryWith(t, "issues", "prs", "triage"), []string{"triage"}, "triage", ""},
+		{"unknown explicit id errors", registryWith(t, "issues", "prs", "triage"), []string{"missing"}, "", "source \"missing\" is not configured"},
 		{"explicit arg without registry", nil, []string{"issues"}, "issues", ""},
 		{"sole source defaults", registryWith(t, "issues"), nil, "issues", ""},
 		{"nil registry", nil, nil, "", "no sources are configured"},
@@ -78,6 +81,33 @@ func TestResolveSourceID(t *testing.T) {
 			assert.Equal(t, tt.want, got)
 		})
 	}
+}
+
+func TestOpenSourcePicker_ConfiguredViewTab(t *testing.T) {
+	m := Model{
+		cfg: &config.Config{Sources: config.SourcesConfig{Views: []config.SourceViewConfig{{
+			Name: "triage", Base: "issues", Query: "label:triage",
+		}}}},
+		sourceRegistry: registryWith(t, "issues", "prs", "triage"),
+		modals:         NewModalCoordinator(),
+		width:          100,
+		height:         24,
+	}
+
+	model, cmd := m.openSourcePicker("triage", sourcePickerScope{Remote: "https://github.com/colonyops/hive"})
+	require.NotNil(t, cmd)
+	opened := model.(Model)
+	require.Equal(t, stateSourcePicker, opened.state)
+	require.NotNil(t, opened.modals.SourcePicker)
+
+	view := opened.modals.SourcePicker.View()
+	assert.Contains(t, view, "issues")
+	assert.Contains(t, view, "prs")
+	assert.Contains(t, view, "triage")
+
+	picker, searchCmd := opened.modals.SourcePicker.Update(tea.KeyPressMsg{Text: "/", Code: '/'})
+	assert.Nil(t, searchCmd, "configured view tabs disable search")
+	assert.Contains(t, picker.View(), "search disabled for saved views")
 }
 
 func TestFetchSourceDetail(t *testing.T) {
