@@ -6,11 +6,15 @@ import (
 
 	"github.com/charmbracelet/x/exp/golden"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/core/terminal"
 )
 
 func TestMain(m *testing.M) {
+	// Tests that exercise the override set it explicitly with t.Setenv.
+	_ = os.Unsetenv(config.EnvDefaultAgent)
+
 	// Use a fixed theme so golden output is deterministic across machines.
 	p, ok := styles.GetPalette("tokyo-night")
 	if !ok {
