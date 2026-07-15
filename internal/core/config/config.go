@@ -615,15 +615,27 @@ type ClaudePluginConfig struct {
 	Enabled *bool `json:"enabled" yaml:"enabled"` // nil = auto-detect, true/false = override
 }
 
-// SourcesConfig configures the sources system (GitHub issues and pull
-// requests browsable from the picker).
+// SourcesConfig configures built-in, saved-view, and external sources browsable
+// from the picker.
 type SourcesConfig struct {
-	SearchLimit int                 `json:"search_limit" yaml:"search_limit"` // max items per search (default: 30)
-	CacheTTL    time.Duration       `json:"cache_ttl"    yaml:"cache_ttl"`    // search result cache TTL (default: 30s)
-	Hosts       map[string]string   `json:"hosts"        yaml:"hosts"`        // git remote host -> backend ("github"|"gitea"); overrides auto-detection
-	Issues      BuiltinSourceConfig `json:"issues"       yaml:"issues"`
-	PRs         BuiltinSourceConfig `json:"prs"          yaml:"prs"`
-	Views       []SourceViewConfig  `json:"views"        yaml:"views"`
+	SearchLimit int                    `json:"search_limit"       yaml:"search_limit"` // max items per search (default: 30)
+	CacheTTL    time.Duration          `json:"cache_ttl"          yaml:"cache_ttl"`    // search result cache TTL (default: 30s)
+	Hosts       map[string]string      `json:"hosts"              yaml:"hosts"`        // git remote host -> backend ("github"|"gitea"); overrides auto-detection
+	Issues      BuiltinSourceConfig    `json:"issues"             yaml:"issues"`
+	PRs         BuiltinSourceConfig    `json:"prs"                yaml:"prs"`
+	Views       []SourceViewConfig     `json:"views"              yaml:"views"`
+	External    []ExternalSourceConfig `json:"external,omitempty" yaml:"external,omitempty"`
+}
+
+// ExternalSourceConfig declares an external source subprocess. Command is an
+// argv vector and is executed directly without shell evaluation. A zero Timeout
+// asks the runtime to use its default timeout.
+type ExternalSourceConfig struct {
+	Name      string               `json:"name"                yaml:"name"`
+	Command   []string             `json:"command"             yaml:"command"`
+	Env       map[string]string    `json:"env,omitempty"       yaml:"env,omitempty"`
+	Timeout   time.Duration        `json:"timeout,omitempty"   yaml:"timeout,omitempty"`
+	Templates SourceTemplateConfig `json:"templates,omitempty" yaml:"templates,omitempty"`
 }
 
 // SourceViewConfig declares one saved-search view over a built-in source.

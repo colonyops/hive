@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/colonyops/hive/internal/sources"
@@ -64,7 +65,12 @@ type SourceTemplateData struct {
 	Fields   map[string]any
 }
 
-var sourceViewScopePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+const maxExternalSourceTimeout = 24 * time.Hour
+
+var (
+	sourceViewScopePattern = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	environmentNamePattern = regexp.MustCompile(`^[A-Za-z_][A-Za-z0-9_]*$`)
+)
 
 // Validate checks that a saved source view has valid name, base, query, and
 // optional scope fields.
@@ -140,7 +146,85 @@ func (c *Config) validateSources() error {
 		}
 	}
 
+	validateExternalSources(&errs, c.Sources.External, viewNames)
 	return errs.ToError()
+}
+
+func validateExternalSources(errs *criterio.FieldErrorsBuilder, external []ExternalSourceConfig, viewNames map[string]int) {
+	declared := make(map[string]int, len(external))
+	for i, source := range external {
+		validateExternalSource(errs, i, source)
+
+		field := fmt.Sprintf("sources.external[%d].name", i)
+		if source.Name == "issues" || source.Name == "prs" {
+			appendExternalSourceError(errs, field, source.Name, fmt.Errorf("conflicts with built-in source %q", source.Name))
+		}
+		if viewIndex, collision := viewNames[source.Name]; collision {
+			appendExternalSourceError(errs, field, source.Name, fmt.Errorf("conflicts with source view declared at sources.views[%d]", viewIndex))
+		}
+		if first, duplicate := declared[source.Name]; duplicate && source.Name != "" {
+			appendExternalSourceError(errs, field, source.Name, fmt.Errorf("duplicate external source name (first declared at sources.external[%d])", first))
+		} else if source.Name != "" {
+			declared[source.Name] = i
+		}
+	}
+}
+
+func validateExternalSource(errs *criterio.FieldErrorsBuilder, index int, source ExternalSourceConfig) {
+	prefix := fmt.Sprintf("sources.external[%d]", index)
+	appendError := func(field string, err error) {
+		appendExternalSourceError(errs, prefix+"."+field, source.Name, err)
+	}
+
+	switch {
+	case strings.TrimSpace(source.Name) == "":
+		appendError("name", fmt.Errorf("must not be empty"))
+	case !isValidCommandName(source.Name):
+		appendError("name", fmt.Errorf("must contain only alphanumeric characters, dashes, and underscores"))
+	}
+
+	if len(source.Command) == 0 {
+		appendError("command", fmt.Errorf("must contain an executable"))
+	} else {
+		for i, arg := range source.Command {
+			field := fmt.Sprintf("command[%d]", i)
+			switch {
+			case arg == "":
+				appendError(field, fmt.Errorf("must not be empty"))
+			case i == 0 && strings.TrimSpace(arg) == "":
+				appendError(field, fmt.Errorf("executable must not be empty"))
+			default:
+				if err := rejectControlChars("argument", arg); err != nil {
+					appendError(field, err)
+				}
+			}
+		}
+	}
+
+	for name, value := range source.Env {
+		field := fmt.Sprintf("env[%q]", name)
+		if !environmentNamePattern.MatchString(name) {
+			appendError(field, fmt.Errorf("name must match %s", environmentNamePattern.String()))
+		}
+		if err := rejectControlChars("value", value); err != nil {
+			appendError(field, err)
+		}
+	}
+
+	switch {
+	case source.Timeout < 0:
+		appendError("timeout", fmt.Errorf("must be nonnegative"))
+	case source.Timeout > maxExternalSourceTimeout:
+		appendError("timeout", fmt.Errorf("must not exceed %s", maxExternalSourceTimeout))
+	}
+
+	if err := validateSourceTemplateSet("templates", source.Templates); err != nil {
+		appendError("templates", err)
+	}
+}
+
+func appendExternalSourceError(errs *criterio.FieldErrorsBuilder, field, name string, err error) {
+	*errs = errs.Append(field, fmt.Errorf("external source %q: %w", name, err))
 }
 
 // validateSourceTemplateSet syntax-checks the name/prompt/tags templates

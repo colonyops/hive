@@ -1,7 +1,10 @@
 package config
 
 import (
+	"encoding/json"
+	"fmt"
 	"testing"
+	"time"
 
 	"github.com/colonyops/hive/internal/core/action"
 	"github.com/stretchr/testify/assert"
@@ -29,6 +32,7 @@ sources:
 	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Prompt, "unset prompt must keep its default")
 	assert.NotEmpty(t, cfg.Sources.Issues.Templates.Tags, "unset tags must keep their defaults")
 	assert.NotEmpty(t, cfg.Sources.PRs.Templates.Name, "untouched source must keep its defaults")
+	assert.Empty(t, cfg.Sources.External, "existing configs must not gain external sources")
 }
 
 func TestConfigLoadsTopLevelSources(t *testing.T) {
@@ -251,6 +255,132 @@ func TestValidateSources_DuplicateViewNames(t *testing.T) {
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "sources.views[1].name")
 	assert.Contains(t, err.Error(), `duplicate source view name "triage"`)
+}
+
+func TestConfigLoadsExternalSourcesInDeclarationOrder(t *testing.T) {
+	yamlSrc := `
+sources:
+  external:
+    - name: alerts
+      command: [gcx, alerts, --format=json]
+      env:
+        GCX_PROFILE: production
+      timeout: 45s
+      templates:
+        name: "alert-{{ .ID }}"
+        prompt: "Investigate {{ .Title }}"
+        tags: [alert, "service-{{ .Fields.service }}"]
+    - name: incidents
+      command: [incidentctl, list]
+`
+	var cfg Config
+	require.NoError(t, yaml.Unmarshal([]byte(yamlSrc), &cfg))
+	require.Len(t, cfg.Sources.External, 2)
+	assert.Equal(t, "alerts", cfg.Sources.External[0].Name)
+	assert.Equal(t, []string{"gcx", "alerts", "--format=json"}, cfg.Sources.External[0].Command)
+	assert.Equal(t, map[string]string{"GCX_PROFILE": "production"}, cfg.Sources.External[0].Env)
+	assert.Equal(t, 45*time.Second, cfg.Sources.External[0].Timeout)
+	assert.Equal(t, "alert-{{ .ID }}", cfg.Sources.External[0].Templates.Name)
+	assert.Equal(t, "incidents", cfg.Sources.External[1].Name)
+	assert.Zero(t, cfg.Sources.External[1].Timeout, "zero timeout delegates the default to runtime")
+}
+
+func TestConfigLoadsExternalSourcesFromJSONKey(t *testing.T) {
+	var cfg Config
+	require.NoError(t, json.Unmarshal([]byte(`{
+		"sources": {"external": [{"name": "alerts", "command": ["gcx", "alerts"]}]}
+	}`), &cfg))
+
+	require.Len(t, cfg.Sources.External, 1)
+	assert.Equal(t, "alerts", cfg.Sources.External[0].Name)
+	assert.Equal(t, []string{"gcx", "alerts"}, cfg.Sources.External[0].Command)
+}
+
+func TestValidateSources_ValidExternalSources(t *testing.T) {
+	cfg := validConfig(t)
+	cfg.Sources.External = []ExternalSourceConfig{
+		{
+			Name:    "alerts-prod_2",
+			Command: []string{"gcx", "alerts", "--query", "state: firing", "$HOME", "$(not-executed)"},
+			Env: map[string]string{
+				"GCX_PROFILE": "${PROFILE}",
+				"_TRACE":      "enabled",
+			},
+			Templates: SourceTemplateConfig{
+				Name:   "alert-{{ .ID }}",
+				Prompt: "Investigate {{ .Title }}: {{ .Detail }}",
+				Tags:   []string{"alert", "service-{{ .Fields.service }}"},
+			},
+		},
+		{Name: "incidents", Command: []string{"incidentctl"}, Timeout: maxExternalSourceTimeout},
+	}
+
+	require.NoError(t, cfg.Validate())
+}
+
+func TestValidateSources_InvalidExternalSources(t *testing.T) {
+	validSource := func() ExternalSourceConfig {
+		return ExternalSourceConfig{Name: "alerts", Command: []string{"gcx", "alerts"}}
+	}
+
+	tests := []struct {
+		name      string
+		external  []ExternalSourceConfig
+		views     []SourceViewConfig
+		wantIndex int
+		wantName  string
+		wantField string
+		wantError string
+	}{
+		{name: "empty name", external: []ExternalSourceConfig{{Command: []string{"gcx"}}}, wantName: "", wantField: "name", wantError: "must not be empty"},
+		{name: "whitespace name", external: []ExternalSourceConfig{{Name: "  ", Command: []string{"gcx"}}}, wantName: "  ", wantField: "name", wantError: "must not be empty"},
+		{name: "unsafe name", external: []ExternalSourceConfig{{Name: "bad source", Command: []string{"gcx"}}}, wantName: "bad source", wantField: "name", wantError: "alphanumeric"},
+		{name: "built-in collision", external: []ExternalSourceConfig{{Name: "issues", Command: []string{"gcx"}}}, wantName: "issues", wantField: "name", wantError: "built-in source"},
+		{
+			name:      "view collision",
+			external:  []ExternalSourceConfig{{Name: "triage", Command: []string{"gcx"}}},
+			views:     []SourceViewConfig{{Name: "triage", Base: "issues", Query: "label:triage"}},
+			wantName:  "triage",
+			wantField: "name",
+			wantError: "sources.views[0]",
+		},
+		{
+			name:      "duplicate external name",
+			external:  []ExternalSourceConfig{validSource(), validSource()},
+			wantIndex: 1,
+			wantName:  "alerts",
+			wantField: "name",
+			wantError: "sources.external[0]",
+		},
+		{name: "missing argv", external: []ExternalSourceConfig{{Name: "alerts"}}, wantName: "alerts", wantField: "command", wantError: "executable"},
+		{name: "empty executable", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{""}}}, wantName: "alerts", wantField: "command[0]", wantError: "must not be empty"},
+		{name: "whitespace executable", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"  "}}}, wantName: "alerts", wantField: "command[0]", wantError: "executable must not be empty"},
+		{name: "empty argument", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx", ""}}}, wantName: "alerts", wantField: "command[1]", wantError: "must not be empty"},
+		{name: "control character in argument", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx", "alerts\nall"}}}, wantName: "alerts", wantField: "command[1]", wantError: "control character"},
+		{name: "invalid env name", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Env: map[string]string{"2PROFILE": "prod"}}}, wantName: "alerts", wantField: `env["2PROFILE"]`, wantError: "must match"},
+		{name: "control character in env value", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Env: map[string]string{"PROFILE": "prod\x00secret"}}}, wantName: "alerts", wantField: `env["PROFILE"]`, wantError: "control character"},
+		{name: "negative timeout", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Timeout: -time.Second}}, wantName: "alerts", wantField: "timeout", wantError: "nonnegative"},
+		{name: "excessive timeout", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Timeout: maxExternalSourceTimeout + time.Nanosecond}}, wantName: "alerts", wantField: "timeout", wantError: "24h0m0s"},
+		{name: "invalid name template", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Templates: SourceTemplateConfig{Name: "{{ .Title"}}}, wantName: "alerts", wantField: "templates", wantError: "templates.name"},
+		{name: "invalid prompt template", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Templates: SourceTemplateConfig{Prompt: "{{ .Detail"}}}, wantName: "alerts", wantField: "templates", wantError: "templates.prompt"},
+		{name: "invalid tag template", external: []ExternalSourceConfig{{Name: "alerts", Command: []string{"gcx"}, Templates: SourceTemplateConfig{Tags: []string{"{{ .ID"}}}}, wantName: "alerts", wantField: "templates", wantError: "templates.tags[0]"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			cfg := validConfig(t)
+			cfg.Sources.Views = tt.views
+			cfg.Sources.External = tt.external
+
+			err := cfg.Validate()
+			require.Error(t, err)
+			message := err.Error()
+			assert.Contains(t, message, fmt.Sprintf("sources.external[%d]", tt.wantIndex))
+			assert.Contains(t, message, fmt.Sprintf("external source %q", tt.wantName))
+			assert.Contains(t, message, tt.wantField)
+			assert.Contains(t, message, tt.wantError)
+		})
+	}
 }
 
 func TestNormalizeViewCommandName(t *testing.T) {
