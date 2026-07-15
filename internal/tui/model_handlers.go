@@ -834,17 +834,19 @@ func (m Model) handleUpdateAvailable(msg updateAvailableMsg) (tea.Model, tea.Cmd
 // --- Source Picker ---
 
 type sourcePickerScope struct {
-	Search string // "owner/name" — the CLI --repo scope and initial search text
-	Remote string // git remote URL — drives backend detection and CreateOptions.Remote
-	Source string // local repo checkout dir; the CLI cwd and CreateOptions.Source (file-copy source)
+	Search      string // "owner/name" — the CLI --repo scope and initial search text
+	Remote      string // git remote URL — drives backend detection and CreateOptions.Remote
+	Source      string // local repo checkout dir; the CLI cwd and CreateOptions.Source (file-copy source)
+	ExactSearch bool   // use Search for detail instead of trusting the item's Fields.repo
 }
 
-// pendingSourceForm holds one global-view selection while the user confirms
-// its repository, editable name, and agent in NewSessionForm.
+// pendingSourceForm holds one source selection while the user confirms its
+// repository, editable name, and agent in NewSessionForm.
 type pendingSourceForm struct {
-	result sourcepicker.Result
-	remote string
-	scope  string
+	result          sourcepicker.Result
+	remote          string
+	scope           string
+	useSelectedRepo bool
 }
 
 // resolveSourceID returns the registered source to open: an explicit args[0]
@@ -923,6 +925,19 @@ func (m Model) isViewSource(id string) bool {
 	return false
 }
 
+// isExternalSource reports whether id identifies a configured subprocess source.
+func (m Model) isExternalSource(id string) bool {
+	if m.cfg == nil {
+		return false
+	}
+	for _, external := range m.cfg.Sources.External {
+		if external.Name == id {
+			return true
+		}
+	}
+	return false
+}
+
 // detectSourceBackend resolves the forge backend from the remote's host and
 // any configured sources.hosts overrides.
 func (m Model) detectSourceBackend(remote string) sources.Backend {
@@ -979,10 +994,9 @@ func (m Model) handleSourcePickerKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 }
 
 // handleSourceSelection keeps built-in and scoped-view selections on the
-// instant batch path, while a single global-view result opens NewSessionForm.
-// Global views intentionally accept one marked result at a time: when marks
-// include a global result, the picker remains open with every mark preserved
-// and a visible error asks the user to unmark all but one.
+// instant batch path. Global views and external sources require repository
+// confirmation and accept one marked result at a time, preserving all marks
+// when the user must narrow a multi-selection.
 func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, tea.Cmd) {
 	if m.modals.BgStreamDone != nil {
 		m.modals.SourcePicker = nil
@@ -992,19 +1006,25 @@ func (m Model) handleSourceSelection(results []sourcepicker.Result) (tea.Model, 
 	}
 
 	hasGlobal := false
+	hasExternal := false
 	for _, result := range results {
-		if m.isGlobalViewResult(result) {
-			hasGlobal = true
-			break
-		}
+		hasGlobal = hasGlobal || m.isGlobalViewResult(result)
+		hasExternal = hasExternal || m.isExternalSource(result.SourceID)
 	}
-	if hasGlobal && len(results) != 1 {
+	if (hasGlobal || hasExternal) && len(results) != 1 {
 		if m.modals.SourcePicker != nil {
 			m.modals.SourcePicker.Resume()
 			m.state = stateSourcePicker
 		}
-		m.notifyErrorf("global source views create one session at a time; unmark all but one result")
+		if hasExternal {
+			m.notifyErrorf("external sources create one session at a time; unmark all but one result")
+		} else {
+			m.notifyErrorf("global source views create one session at a time; unmark all but one result")
+		}
 		return m, nil
+	}
+	if hasExternal {
+		return m.openExternalSourceSessionForm(results[0])
 	}
 	if hasGlobal {
 		return m.openSourceSessionForm(results[0])
@@ -1068,6 +1088,45 @@ func (m Model) openSourceSessionForm(result sourcepicker.Result) (tea.Model, tea
 	m.modals.NewSession = form
 	m.state = stateCreatingSession
 	return m, form.Init()
+}
+
+// openExternalSourceSessionForm opens NewSessionForm over only discovered
+// repositories. Item-provided repo/URI values never create or preselect a
+// synthetic repository for external sources.
+func (m Model) openExternalSourceSessionForm(result sourcepicker.Result) (tea.Model, tea.Cmd) {
+	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, sources.Detail{})
+	if err != nil {
+		return m.resumeSourcePickerWithError("source templates: %v", err)
+	}
+
+	repos := m.sourceFormRepos()
+	if len(repos) == 0 {
+		return m.resumeSourcePickerWithError("no repositories are available to select for external source %q", result.SourceID)
+	}
+
+	preselectedRemote := m.pendingSourceScope.Remote
+	if !containsRepoRemote(repos, preselectedRemote) {
+		preselectedRemote = ""
+	}
+	existingNames, agentKeys, defaultAgent := m.sourceFormDefaults()
+	form := NewNewSessionForm(repos, preselectedRemote, rendered.Name, existingNames, agentKeys)
+	form.selectAgent(defaultAgent)
+	if m.modals.SourcePicker != nil {
+		m.modals.SourcePicker.Resume()
+	}
+	m.pendingSourceForm = &pendingSourceForm{result: result, useSelectedRepo: true}
+	m.modals.NewSession = form
+	m.state = stateCreatingSession
+	return m, form.Init()
+}
+
+func (m Model) resumeSourcePickerWithError(format string, args ...any) (tea.Model, tea.Cmd) {
+	if m.modals.SourcePicker != nil {
+		m.modals.SourcePicker.Resume()
+		m.state = stateSourcePicker
+	}
+	m.notifyErrorf(format, args...)
+	return m, nil
 }
 
 // resolveItemRemote resolves an item's host-qualified owner/repo to a clone
@@ -1278,10 +1337,20 @@ func (m Model) startSourceFormCreate(pending pendingSourceForm, form NewSessionF
 		resultName := new(string)
 
 		remote := form.Repo.Remote
-		if remote == "" {
+		detailScope := pending.scope
+		exactSearch := false
+		if pending.useSelectedRepo {
+			owner, repo := git.ExtractOwnerRepo(remote)
+			if owner != "" && repo != "" {
+				detailScope = owner + "/" + repo
+			}
+			exactSearch = true
+		} else if remote == "" {
 			remote = pending.remote
 		}
-		scope := sourcePickerScope{Search: pending.scope, Remote: remote, Source: form.Repo.Path}
+		scope := sourcePickerScope{
+			Search: detailScope, Remote: remote, Source: form.Repo.Path, ExactSearch: exactSearch,
+		}
 		go func() {
 			defer close(output)
 			defer close(done)
@@ -1373,7 +1442,10 @@ func (m Model) createSourceSessionWithForm(
 	out chan<- string,
 	nameOverride, agentKey string,
 ) (id, name string, err error) {
-	detailScope := sourceItemScope(result.Item, scope.Search)
+	detailScope := scope.Search
+	if !scope.ExactSearch {
+		detailScope = sourceItemScope(result.Item, detailScope)
+	}
 	detail := fetchSourceDetail(ctx, result, detailScope, scope.Source)
 
 	rendered, err := sources.RenderSessionTemplates(result.Templates, result.Item, detail)

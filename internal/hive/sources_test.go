@@ -109,10 +109,14 @@ func TestConfigSourceEntriesOrder(t *testing.T) {
 			{Name: "triage", Base: "issues", Query: "label:triage"},
 			{Name: "reviews", Base: "prs", Query: "review-requested:@me"},
 		},
+		External: []config.ExternalSourceConfig{
+			{Name: "alerts", Command: []string{"alerts-source"}},
+			{Name: "incidents", Command: []string{"incident-source"}},
+		},
 	}}
 
 	entries := configSourceEntries(cfg)
-	require.Len(t, entries, 4)
+	require.Len(t, entries, 6)
 
 	issues, ok := entries[0].(builtinEntry)
 	require.True(t, ok)
@@ -127,6 +131,83 @@ func TestConfigSourceEntriesOrder(t *testing.T) {
 	reviews, ok := entries[3].(viewEntry)
 	require.True(t, ok)
 	assert.Equal(t, "reviews", reviews.name)
+	alerts, ok := entries[4].(externalEntry)
+	require.True(t, ok)
+	assert.Equal(t, "alerts", alerts.cfg.Name)
+	incidents, ok := entries[5].(externalEntry)
+	require.True(t, ok)
+	assert.Equal(t, "incidents", incidents.cfg.Name)
+}
+
+func TestBuildSourceRegistryRegistersExternalSourcesForBothBackends(t *testing.T) {
+	cfg := &config.Config{Sources: config.SourcesConfig{
+		Views: []config.SourceViewConfig{{Name: "triage", Base: "issues", Query: "label:triage"}},
+		External: []config.ExternalSourceConfig{
+			{
+				Name:    "alerts",
+				Command: []string{"alerts-source"},
+				Templates: config.SourceTemplateConfig{
+					Name: "alert-{{ .ID }}", Prompt: "investigate {{ .Title }}", Tags: []string{"alert"},
+				},
+			},
+			{Name: "incidents", Command: []string{"incident-source"}},
+		},
+	}}
+
+	runner := &sourcesTestProcessRunner{}
+	registry := buildSourceRegistry(
+		cfg, &executil.RealExecutor{}, newSourcesTestKV(t), zerolog.Nop(), runner,
+	)
+
+	for _, backend := range []sources.Backend{sources.BackendGithub, sources.BackendGitea} {
+		entries := registry.All(backend)
+		wantIDs := []string{"issues", "prs", "alerts", "incidents"}
+		if backend == sources.BackendGithub {
+			wantIDs = []string{"issues", "prs", "triage", "alerts", "incidents"}
+		}
+		assert.Equal(t, wantIDs, registryEntryIDs(entries))
+
+		_, templates, ok := registry.Get("alerts", backend)
+		require.True(t, ok)
+		assert.Equal(t, sources.TemplateConfig{
+			Name: "alert-{{ .ID }}", Prompt: "investigate {{ .Title }}", Tags: []string{"alert"},
+		}, templates)
+	}
+
+	githubSource, _, ok := registry.Get("alerts", sources.BackendGithub)
+	require.True(t, ok)
+	giteaSource, _, ok := registry.Get("alerts", sources.BackendGitea)
+	require.True(t, ok)
+	assert.NotSame(t, githubSource, giteaSource, "backend registrations must not share mutable RPC source state")
+
+	manifest, err := githubSource.Initialize(context.Background())
+	require.NoError(t, err)
+	assert.Equal(t, "alerts", manifest.ID)
+	assert.Equal(t, "Alerts", manifest.DisplayName)
+	assert.Equal(t, 1, runner.calls, "private registry seam injects the subprocess runner")
+}
+
+func TestBuildSourceRegistrySkipsInvalidExternalSources(t *testing.T) {
+	cfg := &config.Config{Sources: config.SourcesConfig{External: []config.ExternalSourceConfig{
+		{Name: "broken"},
+		{Name: "working", Command: []string{"working-source"}},
+	}}}
+
+	registry := buildSourceRegistry(
+		cfg, &executil.RealExecutor{}, newSourcesTestKV(t), zerolog.Nop(), &sourcesTestProcessRunner{},
+	)
+	assert.Equal(t, []string{"issues", "prs", "working"}, registry.IDs())
+	_, _, ok := registry.Get("broken", sources.BackendGithub)
+	assert.False(t, ok)
+}
+
+type sourcesTestProcessRunner struct {
+	calls int
+}
+
+func (r *sourcesTestProcessRunner) Run(context.Context, []string, []string, []byte) ([]byte, []byte, error) {
+	r.calls++
+	return []byte(`{"jsonrpc":"2.0","id":1,"result":{"displayName":"Alerts"}}` + "\n"), nil, nil
 }
 
 func TestBuildSourceRegistryRegistersGithubViews(t *testing.T) {

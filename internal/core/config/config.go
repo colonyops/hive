@@ -1027,10 +1027,35 @@ func (c *Config) MergedUserCommands() map[string]UserCommand {
 	return mergeUserCommands(defaultUserCommands, c.UserCommands)
 }
 
-// normalizeViewCommandName maps a source view name to a Source-prefixed
-// PascalCase palette command name.
-func normalizeViewCommandName(view string) string {
-	words := splitViewCommandWords(view)
+type sourceCommandSpec struct {
+	name string
+	kind string
+	help string
+}
+
+func (c *Config) sourceCommandSpecs() []sourceCommandSpec {
+	specs := make([]sourceCommandSpec, 0, len(c.Sources.Views)+len(c.Sources.External))
+	for _, view := range c.Sources.Views {
+		specs = append(specs, sourceCommandSpec{
+			name: view.Name,
+			kind: "source view",
+			help: fmt.Sprintf("browse %s matching %s", view.Base, view.Query),
+		})
+	}
+	for _, external := range c.Sources.External {
+		specs = append(specs, sourceCommandSpec{
+			name: external.Name,
+			kind: "external source",
+			help: fmt.Sprintf("browse %s", external.Name),
+		})
+	}
+	return specs
+}
+
+// normalizeSourceCommandName maps a configured source name to a
+// Source-prefixed PascalCase palette command name.
+func normalizeSourceCommandName(source string) string {
+	words := splitSourceCommandWords(source)
 	if len(words) == 0 {
 		return "SourceView"
 	}
@@ -1045,8 +1070,8 @@ func normalizeViewCommandName(view string) string {
 	return name.String()
 }
 
-func splitViewCommandWords(view string) []string {
-	runes := []rune(view)
+func splitSourceCommandWords(source string) []string {
+	runes := []rune(source)
 	words := make([]string, 0, 4)
 	word := make([]rune, 0, len(runes))
 	flush := func() {
@@ -1080,25 +1105,26 @@ func splitViewCommandWords(view string) []string {
 }
 
 // SystemCommands returns a defensive copy of the built-in system commands plus
-// one source-picker command per configured source view. Built-ins win command
-// name collisions, and the first declared view wins normalization collisions.
+// one source-picker command per configured view and external source. Built-ins
+// win command-name collisions, followed by the first generated source in
+// views-then-external declaration order.
 func (c *Config) SystemCommands() map[string]UserCommand {
-	commands := make(map[string]UserCommand, len(defaultUserCommands)+len(c.Sources.Views))
+	commands := make(map[string]UserCommand, len(defaultUserCommands)+len(c.Sources.Views)+len(c.Sources.External))
 	for name, command := range defaultUserCommands {
 		commands[name] = cloneUserCommand(command)
 	}
 
-	for _, view := range c.Sources.Views {
-		name := normalizeViewCommandName(view.Name)
+	for _, spec := range c.sourceCommandSpecs() {
+		name := normalizeSourceCommandName(spec.name)
 		if _, exists := commands[name]; exists {
 			continue
 		}
 		commands[name] = UserCommand{
 			Action: action.TypeOpenSourcePicker,
-			Args:   []string{view.Name},
+			Args:   []string{spec.name},
 			Scope:  []string{"sessions"},
 			Silent: true,
-			Help:   fmt.Sprintf("browse %s matching %s", view.Base, view.Query),
+			Help:   spec.help,
 		}
 	}
 	return commands

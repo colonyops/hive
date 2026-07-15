@@ -151,6 +151,34 @@ func enterSearch(t *testing.T, p Picker) Picker {
 	return p
 }
 
+func TestInitializedManifestControlsExternalCapabilitiesAndDebounce(t *testing.T) {
+	initialized := sources.Manifest{
+		ID:          "alerts",
+		DisplayName: "Adaptive Alerts",
+		Capabilities: sources.Capabilities{
+			FetchDetail: true,
+		},
+		Picker: sources.PickerManifest{Search: sources.SearchManifest{DebounceMS: 725}},
+	}
+	fake := newFakeTUISource(initialized, []sources.Item{{ID: "1", Title: "alert"}})
+	p := New([]TabSource{{
+		ID: "alerts", Source: fake, Manifest: sources.Manifest{ID: "alerts", DisplayName: "alerts"},
+	}}, "alerts", "", "", 80, 24)
+
+	msg := p.initTab(0)()
+	p, cmd := p.Update(msg)
+	assert.Nil(t, cmd)
+	assert.False(t, p.tabs[0].tab.SearchDisabled)
+	assert.Equal(t, initialized, p.tabs[0].tab.Manifest)
+
+	p.selected = true
+	results, ok := p.Selected()
+	require.True(t, ok)
+	require.Len(t, results, 1)
+	assert.True(t, results[0].Manifest.Capabilities.FetchDetail)
+	assert.Equal(t, 725, results[0].Manifest.Picker.Search.DebounceMS)
+}
+
 func TestPicker_SearchModeRespectsDisabledTab(t *testing.T) {
 	tests := []struct {
 		name           string

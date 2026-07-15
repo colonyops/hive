@@ -299,42 +299,49 @@ func (c *Config) Warnings() []ValidationWarning {
 		}
 	}
 
-	warnings = append(warnings, c.viewCommandWarnings()...)
+	warnings = append(warnings, c.sourceCommandWarnings()...)
 	warnings = append(warnings, c.sourceViewWarnings()...)
 	return warnings
 }
 
-// viewCommandWarnings reports source view command collisions in declaration
-// order, matching SystemCommands and CommandSet precedence.
-func (c *Config) viewCommandWarnings() []ValidationWarning {
+// sourceCommandWarnings reports generated source command collisions in the
+// same views-then-external declaration order used by SystemCommands.
+func (c *Config) sourceCommandWarnings() []ValidationWarning {
 	warnings := make([]ValidationWarning, 0)
-	generated := make(map[string]string, len(c.Sources.Views))
+	generated := make(map[string]sourceCommandSpec, len(c.Sources.Views)+len(c.Sources.External))
 
-	for _, view := range c.Sources.Views {
-		commandName := normalizeViewCommandName(view.Name)
+	for _, spec := range c.sourceCommandSpecs() {
+		commandName := normalizeSourceCommandName(spec.name)
 		if _, collides := defaultUserCommands[commandName]; collides {
 			warnings = append(warnings, ValidationWarning{
 				Category: "Sources",
-				Item:     view.Name,
-				Message:  fmt.Sprintf("generated command %q for source view %q conflicts with a built-in command; built-in command wins", commandName, view.Name),
+				Item:     spec.name,
+				Message:  fmt.Sprintf("generated command %q for %s %q conflicts with a built-in command; built-in command wins", commandName, spec.kind, spec.name),
 			})
 			continue
 		}
-		if firstView, collides := generated[commandName]; collides {
+		if first, collides := generated[commandName]; collides {
+			winnerKind := first.kind
+			if winnerKind == "source view" {
+				winnerKind = "view"
+			}
 			warnings = append(warnings, ValidationWarning{
 				Category: "Sources",
-				Item:     view.Name,
-				Message:  fmt.Sprintf("generated command %q for source view %q conflicts with source view %q; first declared view %q wins", commandName, view.Name, firstView, firstView),
+				Item:     spec.name,
+				Message: fmt.Sprintf(
+					"generated command %q for %s %q conflicts with %s %q; first declared %s %q wins",
+					commandName, spec.kind, spec.name, first.kind, first.name, winnerKind, first.name,
+				),
 			})
 			continue
 		}
 
-		generated[commandName] = view.Name
+		generated[commandName] = spec
 		if _, collides := c.UserCommands[commandName]; collides {
 			warnings = append(warnings, ValidationWarning{
 				Category: "Sources",
-				Item:     view.Name,
-				Message:  fmt.Sprintf("generated command %q for source view %q conflicts with a user command; user command wins", commandName, view.Name),
+				Item:     spec.name,
+				Message:  fmt.Sprintf("generated command %q for %s %q conflicts with a user command; user command wins", commandName, spec.kind, spec.name),
 			})
 		}
 	}

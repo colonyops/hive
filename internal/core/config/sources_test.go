@@ -383,7 +383,7 @@ func TestValidateSources_InvalidExternalSources(t *testing.T) {
 	}
 }
 
-func TestNormalizeViewCommandName(t *testing.T) {
+func TestNormalizeSourceCommandName(t *testing.T) {
 	tests := []struct {
 		name string
 		view string
@@ -401,7 +401,7 @@ func TestNormalizeViewCommandName(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			assert.Equal(t, tt.want, normalizeViewCommandName(tt.view))
+			assert.Equal(t, tt.want, normalizeSourceCommandName(tt.view))
 		})
 	}
 }
@@ -427,6 +427,20 @@ func TestSystemCommands_GeneratedCommandShape(t *testing.T) {
 	}, commands["SourceMyReviewQueue"])
 }
 
+func TestSystemCommands_GeneratesExternalSourceCommand(t *testing.T) {
+	cfg := &Config{Sources: SourcesConfig{External: []ExternalSourceConfig{{
+		Name: "adaptive-alerts", Command: []string{"gcx", "alerts"},
+	}}}}
+
+	assert.Equal(t, UserCommand{
+		Action: action.TypeOpenSourcePicker,
+		Args:   []string{"adaptive-alerts"},
+		Scope:  []string{"sessions"},
+		Silent: true,
+		Help:   "browse adaptive-alerts",
+	}, cfg.SystemCommands()["SourceAdaptiveAlerts"])
+}
+
 func TestSystemCommands_CollisionResolution(t *testing.T) {
 	t.Run("built-in wins", func(t *testing.T) {
 		cfg := &Config{Sources: SourcesConfig{Views: []SourceViewConfig{{
@@ -447,6 +461,27 @@ func TestSystemCommands_CollisionResolution(t *testing.T) {
 		command := cfg.SystemCommands()["SourceReviewQueue"]
 		assert.Equal(t, []string{"review-queue"}, command.Args)
 		assert.Equal(t, "browse prs matching review-requested:@me", command.Help)
+	})
+
+	t.Run("view wins normalized external collision", func(t *testing.T) {
+		cfg := &Config{Sources: SourcesConfig{
+			Views:    []SourceViewConfig{{Name: "alert-queue", Base: "issues", Query: "label:alert"}},
+			External: []ExternalSourceConfig{{Name: "alert_queue", Command: []string{"alerts"}}},
+		}}
+
+		command := cfg.SystemCommands()["SourceAlertQueue"]
+		assert.Equal(t, []string{"alert-queue"}, command.Args)
+		assert.Equal(t, "browse issues matching label:alert", command.Help)
+	})
+
+	t.Run("first normalized external source wins", func(t *testing.T) {
+		cfg := &Config{Sources: SourcesConfig{External: []ExternalSourceConfig{
+			{Name: "adaptive-alerts", Command: []string{"alerts-a"}},
+			{Name: "adaptive_alerts", Command: []string{"alerts-b"}},
+		}}}
+
+		command := cfg.SystemCommands()["SourceAdaptiveAlerts"]
+		assert.Equal(t, []string{"adaptive-alerts"}, command.Args)
 	})
 }
 
@@ -502,7 +537,7 @@ func TestViewCommandWarnings(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			warnings := tt.cfg.viewCommandWarnings()
+			warnings := tt.cfg.sourceCommandWarnings()
 			require.Len(t, warnings, 1)
 			assert.Equal(t, "Sources", warnings[0].Category)
 			assert.Equal(t, tt.wantItem, warnings[0].Item)
@@ -511,6 +546,29 @@ func TestViewCommandWarnings(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExternalSourceCommandWarnings(t *testing.T) {
+	cfg := Config{
+		Sources: SourcesConfig{
+			Views: []SourceViewConfig{{Name: "alert-queue", Base: "issues", Query: "label:alert"}},
+			External: []ExternalSourceConfig{
+				{Name: "alert_queue", Command: []string{"alerts"}},
+				{Name: "incidents", Command: []string{"incidents"}},
+			},
+		},
+		UserCommands: map[string]UserCommand{"SourceIncidents": {Sh: "custom"}},
+	}
+
+	warnings := cfg.sourceCommandWarnings()
+	require.Len(t, warnings, 2)
+	assert.Equal(t, "alert_queue", warnings[0].Item)
+	assert.Contains(t, warnings[0].Message, `external source "alert_queue"`)
+	assert.Contains(t, warnings[0].Message, `source view "alert-queue"`)
+	assert.Contains(t, warnings[0].Message, `first declared view "alert-queue" wins`)
+	assert.Equal(t, "incidents", warnings[1].Item)
+	assert.Contains(t, warnings[1].Message, `external source "incidents"`)
+	assert.Contains(t, warnings[1].Message, "user command wins")
 }
 
 func TestWarningsIncludesViewCommandWarnings(t *testing.T) {
@@ -538,7 +596,7 @@ func TestViewCommandWarnings_PrioritizesNormalizationCollisionForDroppedView(t *
 		UserCommands: map[string]UserCommand{"SourceReviewQueue": {Sh: "custom"}},
 	}
 
-	warnings := cfg.viewCommandWarnings()
+	warnings := cfg.sourceCommandWarnings()
 	require.Len(t, warnings, 2)
 	assert.Contains(t, warnings[0].Message, "user command wins")
 	assert.Contains(t, warnings[1].Message, "first declared view")

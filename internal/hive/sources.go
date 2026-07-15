@@ -9,6 +9,7 @@ import (
 	"github.com/colonyops/hive/internal/sources"
 	"github.com/colonyops/hive/internal/sources/cliengine"
 	"github.com/colonyops/hive/internal/sources/ghcli"
+	"github.com/colonyops/hive/internal/sources/rpc"
 	"github.com/colonyops/hive/internal/sources/teacli"
 	"github.com/rs/zerolog"
 )
@@ -27,13 +28,13 @@ type sourceEntry interface {
 	registrations(deps registryDeps) ([]registration, error)
 }
 
-// registryDeps contains the dependencies needed by the current CLI-backed
-// source entries. This dependency bag is provisional for future non-CLI source
-// kinds; downstream registration remains expressed only in sources.Source.
+// registryDeps contains the dependencies needed to construct configured
+// sources; downstream registration remains expressed only in sources.Source.
 type registryDeps struct {
-	opts    cliengine.Options
-	exec    cliengine.Executor
-	kvStore kv.KV
+	opts          cliengine.Options
+	exec          cliengine.Executor
+	kvStore       kv.KV
+	processRunner rpc.ProcessRunner
 }
 
 // builtinEntry pairs a built-in source's config section with its per-forge
@@ -108,8 +109,33 @@ func (e viewEntry) registrations(deps registryDeps) ([]registration, error) {
 	}}, nil
 }
 
-// configSourceEntries returns built-ins first, followed by views in declaration
-// order.
+// externalEntry describes one configured JSON-RPC subprocess source.
+type externalEntry struct {
+	cfg config.ExternalSourceConfig
+}
+
+func (e externalEntry) registrations(deps registryDeps) ([]registration, error) {
+	registrations := make([]registration, 0, 2)
+	for _, backend := range []sources.Backend{sources.BackendGithub, sources.BackendGitea} {
+		// Construct one Source per backend rather than sharing a Source with a
+		// mutable request counter (or an injectable runner) across picker flows.
+		source, err := rpc.NewWithRunner(e.cfg, deps.processRunner)
+		if err != nil {
+			return nil, err
+		}
+		registrations = append(registrations, registration{
+			id:          e.cfg.Name,
+			backend:     backend,
+			source:      source,
+			templates:   sourceTemplateConfig(e.cfg.Templates),
+			displayName: e.cfg.Name,
+		})
+	}
+	return registrations, nil
+}
+
+// configSourceEntries returns built-ins first, followed by views and external
+// sources in their respective config declaration order.
 func configSourceEntries(cfg *config.Config) []sourceEntry {
 	entries := []sourceEntry{
 		builtinEntry{
@@ -135,20 +161,36 @@ func configSourceEntries(cfg *config.Config) []sourceEntry {
 		}
 		entries = append(entries, viewEntry{name: view.Name, cfg: view, base: base})
 	}
+	for _, external := range cfg.Sources.External {
+		entries = append(entries, externalEntry{cfg: external})
+	}
 	return entries
 }
 
 // BuildSourceRegistry constructs the sources.Registry from cfg. Construction
 // and registration failures are logged and skipped rather than failing startup.
 func BuildSourceRegistry(cfg *config.Config, exec cliengine.Executor, kvStore kv.KV, logger zerolog.Logger) *sources.Registry {
+	return buildSourceRegistry(cfg, exec, kvStore, logger, rpc.ExecProcessRunner{})
+}
+
+// buildSourceRegistry keeps subprocess injection private to registry tests so
+// the public startup seam does not grow another dependency.
+func buildSourceRegistry(
+	cfg *config.Config,
+	exec cliengine.Executor,
+	kvStore kv.KV,
+	logger zerolog.Logger,
+	processRunner rpc.ProcessRunner,
+) *sources.Registry {
 	registry := sources.NewRegistry()
 	deps := registryDeps{
 		opts: cliengine.Options{
 			SearchLimit: cfg.Sources.SearchLimit,
 			CacheTTL:    cfg.Sources.CacheTTL,
 		},
-		exec:    exec,
-		kvStore: kvStore,
+		exec:          exec,
+		kvStore:       kvStore,
+		processRunner: processRunner,
 	}
 
 	for _, entry := range configSourceEntries(cfg) {
