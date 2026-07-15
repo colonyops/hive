@@ -3,10 +3,11 @@
 !!! warning "Experimental"
     Sources are experimental — the API and config names may still change.
 
-Sources let hive browse issues/PRs from GitHub **and** Gitea/Forgejo,
-search/filter items, and create a session from a selected item using the same
-batch-spawn path as `hive batch`. The forge backend is detected from the
-repository's git remote host (see [Backends](#backends)).
+Sources let hive browse issues/PRs from GitHub **and** Gitea/Forgejo, as well
+as records supplied by configured external subprocesses. You can search/filter
+items and create a session from a selected item. The forge backend for built-in
+sources is detected from the repository's git remote host (see
+[Backends](#backends)).
 
 ## Configuration
 
@@ -101,6 +102,130 @@ per-forge argv builders and JSON parsers executed by a shared engine
 (`internal/sources/cliengine`). Gitea's `tea` list output is thinner than
 GitHub's — it carries no CI rollup or review decision, so those card cells stay
 blank for Gitea PRs.
+
+## External subprocess sources
+
+`sources.external` is an ordered YAML list of one-shot JSON-RPC source
+adapters. Declaration order is preserved, and external tabs follow built-ins
+and saved views.
+
+```yaml
+sources:
+  external:
+    - name: firing-alerts
+      command: [hive-source-gcx-alerts]
+      env:
+        # Only ${NAME} references are expanded from hive's environment.
+        GCX_CONTEXT: "${GCX_CONTEXT}"
+      timeout: 30s
+      templates:
+        name: "alert-{{ .ID }}-{{ .Fields.target }}"
+        prompt: |
+          Investigate {{ .Title }}.
+          State: {{ .Fields.state }}
+          Service: {{ .Fields.service }}
+          URL: {{ .Fields.url }}
+          Labels: {{ .Fields.labels }}
+        tags: [alert, "{{ .Fields.signal_slug }}"]
+```
+
+This example expects `hive-source-gcx-alerts` to translate a gcx-style firing
+alert query into the protocol below. The adapter, rather than hive, owns the
+gcx command and response schema. It should invoke gcx with a direct argument
+vector, not by interpolating alert data into a shell command.
+
+Each external entry has:
+
+- `name` — unique source id. It may contain letters, numbers, dashes, and
+  underscores, and must not collide with `issues`, `prs`, or a saved view.
+- `command` — nonempty argv list. hive executes `command[0]` directly with the
+  remaining entries as arguments; it does not invoke a shell.
+- `env` — optional environment overrides. The child inherits hive's complete
+  environment. In override values, `${NAME}` references expand from hive's
+  parent environment and missing variables become empty. `$NAME`, command
+  substitution, and other shell syntax are not evaluated.
+- `timeout` — optional duration for each request. The default is 15 seconds;
+  the maximum configured value is 24 hours. The example uses 30 seconds for a
+  remote CLI query.
+- `templates` — the same `name`, `prompt`, and `tags` Go templates used by
+  built-ins. External item `.Fields` are adapter-defined.
+
+External sources are registered for both GitHub and Gitea/Forgejo backends, so
+they remain visible regardless of the selected repository's forge. Availability
+only checks whether `command[0]` is on `PATH`; authentication and service errors
+are reported when the adapter handles a request.
+
+### One-shot JSON-RPC protocol
+
+hive starts a fresh subprocess for every method call. It writes exactly one
+newline-terminated JSON-RPC 2.0 request to stdin and closes stdin. The adapter
+must write exactly one newline-terminated JSON-RPC 2.0 response to stdout.
+Extra stdout lines, a missing final newline, a mismatched integer id, or a
+response containing both/neither `result` and `error` are protocol errors. Put
+human-readable diagnostics and logs on stderr, never stdout.
+
+The methods are:
+
+- `initialize` with `{}` params. Its result is a manifest:
+
+  ```json
+  {"id":"firing-alerts","displayName":"Firing alerts","capabilities":{"fetchDetail":false},"picker":{"search":{"debounceMS":500}}}
+  ```
+
+  hive enforces the configured source `name` as the final manifest id. A zero
+  or omitted `debounceMS` uses the picker's default.
+
+- `search` with `query`, `scope`, `dir`, and `cursor` string params. Its result
+  contains `items` and an optional `nextCursor`:
+
+  ```json
+  {"items":[{"id":"alert-123","title":"Error budget burn","subtitle":"Alerting · api","uri":"https://alerts.example/items/123","fields":{"state":"Alerting","service":"api","target":"api"}}],"nextCursor":""}
+  ```
+
+  Item `id` values must be stable. `title`, `subtitle`, and `uri` are strings;
+  `uri` may be empty; and `fields` is an arbitrary JSON object exposed to
+  templates as `.Fields`. The picker performs an initial search and sends
+  interactive query changes after the manifest's debounce interval. Adapters
+  choose whether to pass the query to their backend or filter locally. They may
+  ignore `scope`, `dir`, and `cursor` when those concepts do not apply.
+
+- `fetchDetail` with `id`, `scope`, `uri`, and `dir` string params. Implement it
+  only when `capabilities.fetchDetail` is true. Its result is
+  `{"markdown":{"content":"..."}}`; use a JSON-RPC method-not-found error
+  when unsupported.
+
+Adapters should return standard JSON-RPC error objects for invalid methods or
+params and a server error for dependency failures, timeouts, or malformed
+backend data. hive also bounds subprocess stdout/stderr and surfaces nonzero
+exit status and stderr without treating it as protocol output.
+
+### Picker and repository behavior
+
+Unlike repository-scoped built-ins, an external item never chooses the clone
+remote, even if its fields or URI resemble a repository. Selecting one opens
+the New Session form and requires manual confirmation from repositories already
+discovered in configured workspaces. If there are no discovered repositories,
+hive returns to the picker with an error.
+
+External results can be marked, but session creation is deliberately
+one-at-a-time because each result needs repository confirmation. If multiple
+items are marked, hive preserves the marks and asks you to unmark all but one.
+Interactive search remains enabled for external tabs.
+
+### Security
+
+Treat adapters as trusted local executables: they receive hive's inherited
+environment, working context in request params, and any configured overrides.
+Use an absolute or otherwise controlled executable on `PATH`, keep argv fixed,
+and avoid shells. Do not put credentials directly in YAML; reference a narrowly
+scoped environment variable instead. Adapters should validate remote data,
+bound errors, reserve stdout for the single protocol response, and allow-list
+URLs before returning them.
+
+External titles, fields, detail, and rendered prompts are also remote-content
+and prompt-injection surfaces. Apply the same trust guidance as built-in
+sources, and remember that labels or annotations included in a prompt are fed
+to the selected agent verbatim.
 
 ## Views (saved searches)
 
