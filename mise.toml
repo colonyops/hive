@@ -60,11 +60,13 @@ run = "goreleaser build --snapshot --clean"
 
 [tasks.test]
 description = "Run all go tests"
+env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test ./..."
 
 [tasks.coverage]
 description = "Run tests with race detection and coverage"
 quiet = true
+env = { HIVE_DEFAULT_AGENT = "" }
 run = "go test -race -coverprofile=coverage.out -covermode=atomic ./... -v -cover"
 
 [tasks.lint]
