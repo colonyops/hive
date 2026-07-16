@@ -96,19 +96,19 @@ rules:
 ```
 
 !!! note
-    Recycled worktree sessions are reset by fetching from the bare clone and resetting the worktree branch. Worktree sessions cannot be recycled into full-clone sessions or vice versa — hive only reuses sessions with a matching strategy.
+    Recycling a worktree session removes its checkout and session record, just like deleting it. The next session gets a fresh path and branch while continuing to reuse the shared bare clone. This keeps the usual recycle workflow without retaining stale worktree state.
 
 ## Session Lifecycle
 
 Sessions move through a managed lifecycle:
 
 1. **Create** — A new session starts as `active`. Hive clones the repository (or reuses a recycled clone) and spawns a tmux session.
-2. **Recycle** — When you're done, recycle the session instead of deleting it. Recycling resets the git repository to a clean state and makes it available for reuse. The next `hive new` for the same repository will reuse a recycled session, avoiding a fresh clone.
+2. **Recycle** — When you're done, recycle the session instead of deleting it. Full-clone sessions are reset and retained for reuse. Worktree sessions are removed because the shared bare clone already makes the next worktree inexpensive to create.
 3. **Delete** — Permanently removes the session directory and all associated data.
 4. **Corrupted** — If hive detects an invalid state (e.g., missing directory, broken git repo), the session is marked corrupted and can only be deleted.
 
 !!! tip "Prefer recycling over deleting"
-    Recycled sessions are reused on the next `hive new`, skipping a fresh `git clone`. This saves time and disk I/O, especially for large repositories.
+    You can use the same recycle workflow with either clone strategy. Full-clone sessions are retained to avoid another clone; worktree sessions are deleted while their shared bare clone remains available for fast future sessions.
 
 ## Status Indicators
 

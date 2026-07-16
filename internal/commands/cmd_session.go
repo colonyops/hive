@@ -288,9 +288,9 @@ func (cmd *SessionCmd) recycleCmd() *cli.Command {
 		Name:      "recycle",
 		Usage:     "Recycle a session back to the pool",
 		UsageText: "hive session recycle <id>",
-		Description: `Marks a session as recycled so it can be reused for a new task.
+		Description: `Recycles a full-clone session so its checkout can be reused for a new task.
 
-Runs any configured recycle commands (e.g. git reset) and kills the associated tmux session.`,
+For worktree sessions, removes the checkout and session record while retaining the shared bare clone. This keeps future worktree creation fast without retaining stale session state.`,
 		Action: cmd.runRecycle,
 	}
 }

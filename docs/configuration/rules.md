@@ -49,10 +49,10 @@ rules:
 | `windows`          | []WindowConfig | see below                    | Declarative tmux window layout (recommended)      |
 | `spawn`            | []string       | —                            | Shell commands run after session creation (legacy) |
 | `batch_spawn`      | []string       | —                            | Shell commands for batch session creation (legacy) |
-| `recycle`          | []string       | git fetch/checkout/reset/clean | Commands run when recycling a session           |
+| `recycle`          | []string       | git fetch/checkout/reset/clean | Commands run when recycling a full-clone session; worktree sessions are deleted |
 | `commands`         | []string       | `[]`                         | Setup commands run after clone                    |
 | `copy`             | []string       | `[]`                         | Glob patterns for files to copy from parent repo  |
-| `max_recycled`     | *int           | `5`                          | Maximum recycled sessions to keep (0 = unlimited) |
+| `max_recycled`     | *int           | `5`                          | Maximum recycled full-clone sessions to keep (0 = unlimited) |
 
 !!! warning "`windows` vs `spawn`/`batch_spawn`"
     A rule must use either `windows` or `spawn`/`batch_spawn`, not both. If neither is set, the default window layout is used (agent window + shell window). A rule can set `agent` with or without custom `windows`/`spawn` config.

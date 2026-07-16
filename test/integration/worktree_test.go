@@ -162,13 +162,14 @@ func TestWorktreeBareRootCreated(t *testing.T) {
 	require.NoError(t, err, "bare root must contain HEAD at %s", headPath)
 }
 
-func TestWorktreeRecycleReuseCreatesNewBranch(t *testing.T) {
+func TestWorktreeRecycleDeletesSessionAndNextCreateIsFresh(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "wt-recycle-repo")
 
 	out, err := h.Run("new", "--clone-strategy", "worktree", "--remote", repo, "first-session")
 	require.NoError(t, err, "first session: %s", out)
 	path := parseCreatedSessionPath(t, out)
+	bareDir := worktreeBareDir(t, path)
 
 	oldBranch := strings.TrimSpace(runInDir(t, path, "git", "branch", "--show-current"))
 	require.Contains(t, oldBranch, "first-session", "worktree should start on the first session's branch")
@@ -180,17 +181,22 @@ func TestWorktreeRecycleReuseCreatesNewBranch(t *testing.T) {
 
 	_, err = h.Run("session", "recycle", id)
 	require.NoError(t, err)
+	_, err = os.Stat(path)
+	require.ErrorIs(t, err, os.ErrNotExist, "recycling a worktree should remove its checkout")
+
+	lines, err = h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	require.Empty(t, lines, "recycling a worktree should delete its session record")
 
 	out, err = h.Run("new", "--clone-strategy", "worktree", "--remote", repo, "second-session")
 	require.NoError(t, err, "second session: %s", out)
-	reusedPath := parseCreatedSessionPath(t, out)
-	require.Equal(t, path, reusedPath, "recycled worktree session should be reused")
+	newPath := parseCreatedSessionPath(t, out)
+	require.NotEqual(t, path, newPath, "the next worktree session should use a fresh path")
 
-	newBranch := strings.TrimSpace(runInDir(t, reusedPath, "git", "branch", "--show-current"))
-	assert.Contains(t, newBranch, "second-session", "reused worktree must be on a fresh branch for the new session")
+	newBranch := strings.TrimSpace(runInDir(t, newPath, "git", "branch", "--show-current"))
+	assert.Contains(t, newBranch, "second-session", "the new worktree must use the new session branch")
 	assert.NotEqual(t, oldBranch, newBranch)
 
-	bareDir := worktreeBareDir(t, reusedPath)
 	branches := runInDir(t, bareDir, "git", "branch", "--list")
 	assert.NotContains(t, branches, oldBranch, "old session branch should be deleted from the bare repo")
 	assert.Contains(t, branches, newBranch)

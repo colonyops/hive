@@ -32,15 +32,8 @@ type Git interface {
 	CloneBare(ctx context.Context, url, dest string) error
 	// WorktreeAdd creates a new worktree at path on a new branch named branch.
 	WorktreeAdd(ctx context.Context, repoDir, path, branch string) error
-	// WorktreeRemove removes the worktree at path and deletes the branch from repoDir.
+	// WorktreeRemove removes the worktree at path and deletes branch from repoDir when provided.
 	WorktreeRemove(ctx context.Context, repoDir, path, branch string) error
-	// WorktreeReset resets the worktree at worktreePath to origin's default branch.
-	// It fetches the default branch ref from bareDir, then resets the worktree.
-	WorktreeReset(ctx context.Context, bareDir, worktreePath string) error
-	// CheckoutNewBranch creates and switches to a new branch from the current HEAD in dir.
-	CheckoutNewBranch(ctx context.Context, dir, branch string) error
-	// DeleteBranch force-deletes a branch in dir.
-	DeleteBranch(ctx context.Context, dir, branch string) error
 	// Fetch fetches all remotes in dir.
 	Fetch(ctx context.Context, dir string) error
 	// HasUnpushedCommits returns true if there are local commits not yet pushed to a remote.

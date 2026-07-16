@@ -193,58 +193,27 @@ func (s *SessionService) CreateSession(ctx context.Context, opts CreateOptions) 
 		}
 	}
 
-	// Try to find and validate a recyclable session with matching strategy
-	writeProgressf(progress, "Looking for recyclable session...")
-	recyclable := s.findValidRecyclable(ctx, remote, cloneStrategy)
+	// Full clones retain their checkout when recycled and can be reused. Worktree
+	// recycling deletes the checkout and session record because the shared bare
+	// clone already provides the performance benefit.
+	var recyclable *session.Session
+	if cloneStrategy == config.CloneStrategyFull {
+		writeProgressf(progress, "Looking for recyclable session...")
+		recyclable = s.findValidRecyclable(ctx, remote, cloneStrategy)
+	}
 
 	if recyclable != nil {
-		// Reuse existing recycled session (already cleaned up when marked for recycle)
 		s.log.Debug().Str("session_id", recyclable.ID).Msg("found valid recyclable session")
 		writeProgressf(progress, "Recycling session %s...", recyclable.ID)
 
-		if cloneStrategy == config.CloneStrategyWorktree {
-			// Worktrees are linked to a bare clone with no origin remote — use fetch+reset instead of pull.
-			bareDir := s.bareDirForRemote(remote)
-			writeProgressf(progress, "Fetching latest changes...")
-			if err := s.git.Fetch(ctx, bareDir); err != nil {
-				s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("fetch failed, marking corrupted")
-				s.markCorrupted(ctx, recyclable)
-				recyclable = nil
-			} else if err := s.git.WorktreeReset(ctx, bareDir, recyclable.Path); err != nil {
-				s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("worktree reset failed, marking corrupted")
-				s.markCorrupted(ctx, recyclable)
-				recyclable = nil
-			} else {
-				// Create a fresh branch for the new session; the worktree is still on the old branch.
-				dirID = generateID()
-				branch, err := s.worktreeBranchName(remote, opts.Name, slug, dirID)
-				if err != nil {
-					return nil, err
-				}
-				writeProgressf(progress, "Creating branch %s...", branch)
-				if err := s.git.CheckoutNewBranch(ctx, recyclable.Path, branch); err != nil {
-					s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("branch creation failed, marking corrupted")
-					s.markCorrupted(ctx, recyclable)
-					recyclable = nil
-				} else {
-					if old := recyclable.GetMeta(session.MetaWorktreeBranch); old != "" && old != branch {
-						if err := s.git.DeleteBranch(ctx, bareDir, old); err != nil {
-							s.log.Debug().Err(err).Str("branch", old).Msg("failed to delete old worktree branch")
-						}
-					}
-					recyclable.SetMeta(session.MetaWorktreeBranch, branch)
-				}
-			}
-		} else {
-			// Pull latest changes before running hooks
-			s.log.Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
-			writeProgressf(progress, "Pulling latest changes...")
-			if err := s.git.Pull(ctx, recyclable.Path); err != nil {
-				// Pull failed - mark as corrupted and fall through to clone
-				s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("pull failed, marking corrupted")
-				s.markCorrupted(ctx, recyclable)
-				recyclable = nil
-			}
+		// Pull latest changes before running hooks.
+		s.log.Debug().Str("path", recyclable.Path).Msg("pulling latest changes")
+		writeProgressf(progress, "Pulling latest changes...")
+		if err := s.git.Pull(ctx, recyclable.Path); err != nil {
+			// Pull failed - mark as corrupted and fall through to clone.
+			s.log.Warn().Err(err).Str("session_id", recyclable.ID).Msg("pull failed, marking corrupted")
+			s.markCorrupted(ctx, recyclable)
+			recyclable = nil
 		}
 	}
 
@@ -433,7 +402,8 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 	}
 
 	if sess.CloneStrategy == config.CloneStrategyWorktree {
-		return s.recycleWorktreeSession(ctx, &sess)
+		s.log.Info().Str("session_id", id).Msg("deleting worktree session instead of retaining recycled state")
+		return s.DeleteSession(ctx, id)
 	}
 
 	// Full-clone recycle: validate, reset, and mark recycled.
@@ -478,43 +448,6 @@ func (s *SessionService) RecycleSession(ctx context.Context, id string, w io.Wri
 	s.log.Info().Str("session_id", id).Str("path", sess.Path).Msg("session recycled")
 
 	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: &sess})
-
-	return nil
-}
-
-// recycleWorktreeSession resets the worktree to origin's default branch and marks the session recycled.
-// The worktree directory is kept on disk so it can be reused without re-cloning.
-func (s *SessionService) recycleWorktreeSession(ctx context.Context, sess *session.Session) error {
-	branch := sess.GetMeta(session.MetaWorktreeBranch)
-	if branch == "" {
-		s.log.Warn().Str("session_id", sess.ID).Msg("worktree session has no branch metadata, skipping git reset")
-	} else {
-		bareDir := s.bareDirForRemote(sess.Remote)
-		if err := s.git.WorktreeReset(ctx, bareDir, sess.Path); err != nil {
-			s.log.Warn().Err(err).Str("session_id", sess.ID).Msg("worktree reset failed during recycle")
-			// Continue — session is still marked recycled; findValidRecyclable will validate on reuse
-		}
-	}
-
-	// Kill associated tmux session (best-effort)
-	if _, err := s.executor.Run(ctx, "tmux", "kill-session", "-t", sess.Slug); err != nil {
-		s.log.Debug().Err(err).Str("session", sess.Slug).Msg("no tmux session to kill")
-	}
-
-	sess.MarkRecycled(time.Now())
-
-	if err := s.sessions.Save(ctx, *sess); err != nil {
-		return fmt.Errorf("save session: %w", err)
-	}
-
-	// Enforce max recycled limit
-	if err := s.enforceMaxRecycled(ctx, sess.Remote, sess.CloneStrategy); err != nil {
-		s.log.Warn().Err(err).Str("remote", sess.Remote).Msg("failed to enforce max recycled limit")
-	}
-
-	s.log.Info().Str("session_id", sess.ID).Str("path", sess.Path).Msg("worktree session recycled")
-
-	s.bus.PublishSessionRecycled(eventbus.SessionRecycledPayload{Session: sess})
 
 	return nil
 }
@@ -625,13 +558,9 @@ func (s *SessionService) DeleteSession(ctx context.Context, id string) error {
 	// the bare repo's internal worktree tracking stays consistent.
 	if sess.CloneStrategy == config.CloneStrategyWorktree {
 		branch := sess.GetMeta(session.MetaWorktreeBranch)
-		if branch == "" {
-			s.log.Warn().Str("session_id", id).Msg("worktree session has no branch metadata, skipping git cleanup")
-		} else {
-			bareDir := s.bareDirForRemote(sess.Remote)
-			if err := s.git.WorktreeRemove(ctx, bareDir, sess.Path, branch); err != nil {
-				s.log.Warn().Err(err).Str("session_id", id).Msg("worktree remove failed during delete, proceeding with RemoveAll")
-			}
+		bareDir := s.bareDirForRemote(sess.Remote)
+		if err := s.git.WorktreeRemove(ctx, bareDir, sess.Path, branch); err != nil {
+			s.log.Warn().Err(err).Str("session_id", id).Msg("worktree remove failed during delete, proceeding with RemoveAll")
 		}
 	}
 
