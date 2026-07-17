@@ -213,6 +213,42 @@ func TestSessionUpdateNoFlags(t *testing.T) {
 	require.Error(t, err, "update without modification flags should fail")
 }
 
+func TestSessionDeleteRiskGateUnpushed(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "unpushed-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--clone-strategy", "worktree", "--remote", repo, "unpushed-wt")
+	require.NoError(t, err)
+	id := created["id"].(string)
+	path := created["path"].(string)
+
+	// Commit without pushing — the risk gate must detect unpushed commits even
+	// in worktree sessions, where the bare clone has no refs/remotes/origin/*.
+	require.NoError(t, os.WriteFile(filepath.Join(path, "work.txt"), []byte("done"), 0o644))
+	runInDir(t, path, "git", "add", ".")
+	runInDir(t, path, "git", "-c", "user.name=Test", "-c", "user.email=test@test.com", "commit", "-m", "unpushed work")
+
+	out, err := h.Run("session", "delete", id)
+	require.Error(t, err, "delete of session with unpushed commits should fail: %s", out)
+	assert.Contains(t, out, "unpushed commits")
+
+	entry, err := h.RunJSON("session", "delete", id, "--force", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, true, entry["deleted"])
+}
+
+func TestSessionUpdateGroupFlagConflict(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "conflict-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "conflicted")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	_, err = h.Run("session", "update", id, "--group", "x", "--clear-group")
+	require.Error(t, err, "--group and --clear-group together should fail")
+}
+
 func TestSessionDeleteRiskGate(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "risk-repo")

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,13 +29,8 @@ type SessionCmd struct {
 
 	showJSON bool
 
-	createJSON          bool
-	createRemote        string
-	createSource        string
-	createBackground    bool
-	createCloneStrategy string
-	createAgent         string
-	createTags          []string
+	createJSON  bool
+	createFlags createSessionFlags
 
 	updateJSON       bool
 	updateName       string
@@ -276,48 +272,13 @@ stdout while progress output goes to stderr.
 
 Example:
   hive session create --json --background --remote <url> worker-1`,
-		Flags: []cli.Flag{
-			&cli.StringFlag{
-				Name:        "remote",
-				Aliases:     []string{"r"},
-				Usage:       "git remote URL (defaults to current directory's origin)",
-				Destination: &cmd.createRemote,
-			},
-			&cli.StringFlag{
-				Name:        "source",
-				Aliases:     []string{"s"},
-				Usage:       "source directory for file copying (defaults to current directory)",
-				Destination: &cmd.createSource,
-			},
-			&cli.BoolFlag{
-				Name:        "background",
-				Aliases:     []string{"bg"},
-				Usage:       "create session without attaching to tmux",
-				Destination: &cmd.createBackground,
-			},
-			&cli.StringFlag{
-				Name:        "clone-strategy",
-				Usage:       "clone strategy: full or worktree",
-				Destination: &cmd.createCloneStrategy,
-			},
-			&cli.StringFlag{
-				Name:        "agent",
-				Aliases:     []string{"a"},
-				Usage:       "agent profile key from agents config",
-				Destination: &cmd.createAgent,
-			},
-			&cli.StringSliceFlag{
-				Name:        "tags",
-				Aliases:     []string{"t"},
-				Usage:       "tags to attach to the session (repeatable)",
-				Destination: &cmd.createTags,
-			},
+		Flags: append(sessionCreateFlags(&cmd.createFlags),
 			&cli.BoolFlag{
 				Name:        "json",
 				Usage:       "write the created session as JSON to stdout",
 				Destination: &cmd.createJSON,
 			},
-		},
+		),
 		Action: cmd.runCreate,
 	}
 }
@@ -329,36 +290,10 @@ func (cmd *SessionCmd) runCreate(ctx context.Context, c *cli.Command) error {
 	}
 	name := strings.Join(args, " ")
 
-	if cmd.createAgent != "" {
-		if _, ok := cmd.app.Config.Agents.Profiles[cmd.createAgent]; !ok {
-			return fmt.Errorf("unknown agent %q", cmd.createAgent)
-		}
-	}
-
-	source := cmd.createSource
-	if source == "" {
-		var err error
-		source, err = os.Getwd()
-		if err != nil {
-			return fmt.Errorf("determine source directory: %w", err)
-		}
-	}
-
-	opts := hive.CreateOptions{
-		Name:          name,
-		Remote:        cmd.createRemote,
-		Source:        source,
-		Background:    cmd.createBackground,
-		CloneStrategy: cmd.createCloneStrategy,
-		AgentKey:      cmd.createAgent,
-		Tags:          cmd.createTags,
-		// Keep stdout clean for --json output; progress goes to stderr.
-		Progress: os.Stderr,
-	}
-
-	sess, err := cmd.app.Sessions.CreateSession(ctx, opts)
+	// Keep stdout clean for --json output; progress goes to stderr.
+	sess, err := createSessionFromFlags(ctx, cmd.app, name, &cmd.createFlags, os.Stderr)
 	if err != nil {
-		return fmt.Errorf("create session: %w", err)
+		return err
 	}
 
 	if cmd.createJSON {
@@ -540,7 +475,10 @@ func (cmd *SessionCmd) deleteCmd() *cli.Command {
 		Description: `Permanently removes a session, its cloned directory, and any associated tmux session.
 
 If the session has uncommitted changes or unpushed commits, the delete is
-refused unless --force is passed.
+refused unless --force is passed. For worktree sessions the check can report
+false positives: the shared bare clone has no remote-tracking refs, so a
+feature branch that was pushed but not merged still counts as unpushed. Use
+--force after verifying the push.
 
 This action cannot be undone. Use 'hive session recycle' to preserve the directory for reuse.`,
 		Flags: []cli.Flag{
@@ -594,7 +532,10 @@ func (cmd *SessionCmd) recycleCmd() *cli.Command {
 For worktree sessions, removes the checkout and session record while retaining the shared bare clone. This keeps future worktree creation fast without retaining stale session state.
 
 If the session has uncommitted changes or unpushed commits, the recycle is
-refused unless --force is passed.`,
+refused unless --force is passed. For worktree sessions the check can report
+false positives: the shared bare clone has no remote-tracking refs, so a
+feature branch that was pushed but not merged still counts as unpushed. Use
+--force after verifying the push.`,
 		Flags: []cli.Flag{
 			&cli.BoolFlag{
 				Name:        "force",
@@ -631,8 +572,11 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 	if cmd.recycleJSON {
 		// Worktree sessions are deleted on recycle, so the record may be gone.
 		sess, err := cmd.app.Sessions.GetSession(ctx, id)
-		if err != nil {
+		switch {
+		case errors.Is(err, session.ErrNotFound):
 			return iojson.WriteLine(c.Root().Writer, map[string]any{"id": id, "deleted": true})
+		case err != nil:
+			return fmt.Errorf("get session after recycle: %w", err)
 		}
 		return iojson.WriteLine(c.Root().Writer, buildSessionJSON(sess))
 	}

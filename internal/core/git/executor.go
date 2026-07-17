@@ -92,12 +92,18 @@ func (e *Executor) DefaultBranch(ctx context.Context, dir string) (string, error
 	if err != nil {
 		// Bare clones (worktree sessions) have no refs/remotes/origin/*; the bare
 		// repo's own HEAD tracks the remote default branch, so resolve it via the
-		// common git dir.
+		// common git dir. Only bare repos qualify: in a non-bare repo the common
+		// dir's HEAD is the checked-out branch, not the default branch.
 		commonDir, cerr := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--path-format=absolute", "--git-common-dir")
 		if cerr != nil {
 			return "", fmt.Errorf("git symbolic-ref: %w", err)
 		}
-		head, herr := e.exec.RunDir(ctx, strings.TrimSpace(string(commonDir)), e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
+		bareDir := strings.TrimSpace(string(commonDir))
+		bare, berr := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "rev-parse", "--is-bare-repository")
+		if berr != nil || strings.TrimSpace(string(bare)) != "true" {
+			return "", fmt.Errorf("git symbolic-ref: %w", err)
+		}
+		head, herr := e.exec.RunDir(ctx, bareDir, e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
 		if herr != nil {
 			return "", fmt.Errorf("git symbolic-ref: %w", err)
 		}
