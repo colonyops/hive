@@ -37,6 +37,7 @@ type Integration struct {
 	processReader   process.ProcessReader
 	lister          PaneLister
 	capture         classifier.ContentCapture
+	recorder        CaptureRecorder
 }
 
 // sessionCache holds all panes for a single tmux session.
@@ -117,16 +118,30 @@ func (sc *sessionCache) bestAgentPane() *cachedPane {
 	return best
 }
 
+// Option configures a tmux Integration.
+type Option func(*Integration)
+
+// WithCaptureRecorder records fresh agent-pane captures using recorder.
+func WithCaptureRecorder(recorder CaptureRecorder) Option {
+	return func(integration *Integration) {
+		integration.recorder = recorder
+	}
+}
+
 // NewFromPreviewMatchers creates the production tmux integration from config
 // matchers. Tool names for process detection are derived automatically from
 // the pattern strings (e.g. "^pi$" → "pi"), so callers only need to pass
 // the single PreviewWindowMatcher slice from config.
-func NewFromPreviewMatchers(previewMatchers []string) *Integration {
+func NewFromPreviewMatchers(previewMatchers []string, options ...Option) *Integration {
 	capture := TmuxCapture{}
 	reader := process.OSReader{}
 	agentNames := classifier.ToolNamesFromPatterns(previewMatchers)
 	cls := classifier.New(classifier.TitlePatternsFromConfig(previewMatchers, agentNames), reader, capture, content.NewScorer())
-	return NewWithReader(cls, TmuxPaneLister{}, reader)
+	integration := NewWithReader(cls, TmuxPaneLister{}, reader)
+	for _, option := range options {
+		option(integration)
+	}
+	return integration
 }
 
 // New creates a new tmux integration.
@@ -446,6 +461,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	t.mu.Unlock()
 
 	var content string
+	freshCapture := false
 	switch {
 	case prevContent != "" && activity == lastCaptureActive:
 		content = prevContent
@@ -457,6 +473,7 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 		if err != nil {
 			return terminal.StatusMissing, err
 		}
+		freshCapture = true
 		t.updatePaneState(sessionName, paneID, func(state *paneState) {
 			state.paneContent = content
 			state.lastCaptureActive = activity
@@ -484,6 +501,18 @@ func (t *Integration) GetStatus(ctx context.Context, info *terminal.SessionInfo)
 	}
 	status := tracker.Update(content, activity, terminal.NewDetector(tool))
 	t.updatePaneState(sessionName, paneID, func(state *paneState) { state.cachedStatus = status })
+
+	if freshCapture && t.recorder != nil {
+		if err := t.recorder.Record(CaptureObservation{
+			SessionName: sessionName,
+			PaneID:      paneID,
+			Tool:        tool,
+			Content:     content,
+			Status:      status,
+		}); err != nil {
+			log.Warn().Err(err).Str("pane_id", paneID).Msg("failed to record tmux pane capture")
+		}
+	}
 
 	return status, nil
 }

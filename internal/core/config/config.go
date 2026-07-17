@@ -567,8 +567,14 @@ type MessagingConfig struct {
 
 // TmuxConfig holds tmux integration configuration.
 type TmuxConfig struct {
-	PollInterval         time.Duration `json:"poll_interval"          yaml:"poll_interval"`          // status check frequency, default 1.5s
-	PreviewWindowMatcher []string      `json:"preview_window_matcher" yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
+	PollInterval         time.Duration              `json:"poll_interval"          yaml:"poll_interval"`          // status check frequency, default 1.5s
+	PreviewWindowMatcher []string                   `json:"preview_window_matcher" yaml:"preview_window_matcher"` // regex patterns for preferred window names (e.g., ["claude", "aider"])
+	CaptureRecording     TmuxCaptureRecordingConfig `json:"capture_recording"      yaml:"capture_recording"`
+}
+
+// TmuxCaptureRecordingConfig controls opt-in local pane capture recording.
+type TmuxCaptureRecordingConfig struct {
+	Enabled bool `json:"enabled" yaml:"enabled"`
 }
 
 // PluginsConfig holds configuration for the plugin system.
@@ -1219,6 +1225,11 @@ func (c *Config) ReposDir() string {
 // HistoryFile returns the path to the command history JSON file.
 func (c *Config) HistoryFile() string {
 	return filepath.Join(c.DataDir, "history.json")
+}
+
+// TmuxCaptureRecordingsDir returns the local tmux capture recording directory.
+func (c *Config) TmuxCaptureRecordingsDir() string {
+	return filepath.Join(c.DataDir, "recordings", "tmux")
 }
 
 // ContextDir returns the base context directory path.

@@ -24,6 +24,8 @@ agents:
 tmux:
   poll_interval: 1.5s
   preview_window_matcher: ["claude", "aider"]
+  capture_recording:
+    enabled: false
 
 tui:
   theme: tokyo-night
@@ -91,8 +93,18 @@ Agent resolution order is: CLI/session agent, then batch `--agent`, then the las
 
 | Option                        | Type       | Default                             | Description                           |
 | ----------------------------- | ---------- | ----------------------------------- | ------------------------------------- |
-| `tmux.poll_interval`          | `duration` | `1.5s`                              | Status check frequency                |
-| `tmux.preview_window_matcher` | `[]string` | `["claude", "aider", "codex", ...]` | Regex patterns for agent window names |
+| `tmux.poll_interval`                  | `duration` | `1.5s`                              | Status check frequency                         |
+| `tmux.preview_window_matcher`         | `[]string` | `["claude", "aider", "codex", ...]` | Regex patterns for agent window names          |
+| `tmux.capture_recording.enabled`      | `bool`     | `false`                             | Record changed agent-pane captures for training |
+
+### Pane capture recording
+
+Pane capture recording is disabled by default. When explicitly enabled, Hive records only fresh captures it already reads from classified agent panes; it does not install agent hooks or trigger extra tmux captures.
+
+Recordings are newline-delimited JSON under `$HIVE_DATA_DIR/recordings/tmux` (normally `~/.local/share/hive/recordings/tmux`). Directories use mode `0700` and files use mode `0600`. Each record contains up to the last 8 KiB of terminal content, an opaque session/pane key, detected tool, and Hive's current state-tracker result as a **weak label**. Weak labels are useful for bootstrapping a training corpus but are not human-verified ground truth. A private `.identity.key` keeps opaque grouping keys stable across Hive processes; exclude that key from any corpus export.
+
+!!! warning
+    Terminal panes can contain source code, prompts, command output, file paths, and secrets. Hive does not redact, upload, rotate, or delete these recordings. Review and remove local files yourself when they are no longer needed. Enabling recording is an explicit privacy opt-in.
 
 ## TUI
 

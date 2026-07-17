@@ -11,7 +11,6 @@ import (
 	"github.com/urfave/cli/v3"
 
 	"github.com/colonyops/hive/internal/core/terminal"
-	"github.com/colonyops/hive/internal/core/terminal/tmux"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui"
 	"github.com/colonyops/hive/pkg/profiler"
@@ -81,7 +80,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 
 	// Create terminal integration manager (tmux always enabled)
 	termMgr := terminal.NewManager([]string{"tmux"})
-	tmuxIntegration := tmux.NewFromPreviewMatchers(cmd.app.Config.Tmux.PreviewWindowMatcher)
+	tmuxIntegration := newTmuxIntegration(cmd.app.Config)
 	if tmuxIntegration.Available() {
 		termMgr.Register(tmuxIntegration)
 	}

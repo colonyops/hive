@@ -2,6 +2,7 @@ package tmux
 
 import (
 	"context"
+	"errors"
 	"regexp"
 	"sync/atomic"
 	"testing"
@@ -410,7 +411,9 @@ func TestDiscoverSession_MetaTmuxSessionCompatibility(t *testing.T) {
 }
 
 func TestGetStatus_ExplicitNonAgentPaneMissing(t *testing.T) {
+	recorder := &fakeCaptureRecorder{}
 	integ := New(nil, nil)
+	integ.recorder = recorder
 	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{
 		{input: classifier.PaneInput{PaneID: "%1"}, result: classifier.Result{IsAgent: false}},
 		{input: classifier.PaneInput{PaneID: "%2"}, result: classifier.Result{IsAgent: true, Tool: testToolClaude}},
@@ -420,6 +423,7 @@ func TestGetStatus_ExplicitNonAgentPaneMissing(t *testing.T) {
 	status, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
 	require.NoError(t, err)
 	assert.Equal(t, terminal.StatusMissing, status)
+	assert.Empty(t, recorder.observations)
 }
 
 func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
@@ -441,6 +445,48 @@ func TestGetStatus_UsesPaneKeysAndCapture(t *testing.T) {
 	assert.NotNil(t, integ.trackers[paneKey("sess", "%1")])
 	assert.NotNil(t, integ.limiters[paneKey("sess", "%1")])
 	assert.Equal(t, 1, capture.calls)
+}
+
+func TestGetStatus_RecordsFreshCapture(t *testing.T) {
+	capture := &fakeCapture{content: "❯"}
+	recorder := &fakeCaptureRecorder{}
+	integ := New(nil, nil)
+	integ.capture = capture
+	integ.recorder = recorder
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{PaneID: "%1", Activity: 10},
+		result: classifier.Result{IsAgent: true, Tool: testToolClaude},
+	}}}}
+
+	status, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+	require.NoError(t, err)
+	assert.Equal(t, terminal.StatusReady, status)
+	require.Len(t, recorder.observations, 1)
+	assert.Equal(t, CaptureObservation{
+		SessionName: "sess",
+		PaneID:      "%1",
+		Tool:        testToolClaude,
+		Content:     "❯",
+		Status:      terminal.StatusReady,
+	}, recorder.observations[0])
+
+	_, err = integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+	require.NoError(t, err)
+	assert.Len(t, recorder.observations, 1, "cached content must not be recorded again")
+}
+
+func TestGetStatus_RecorderErrorIsNonFatal(t *testing.T) {
+	integ := New(nil, nil)
+	integ.capture = &fakeCapture{content: "❯"}
+	integ.recorder = &fakeCaptureRecorder{err: errors.New("disk full")}
+	integ.cache = map[string]*sessionCache{"sess": {panes: []cachedPane{{
+		input:  classifier.PaneInput{PaneID: "%1", Activity: 10},
+		result: classifier.Result{IsAgent: true, Tool: testToolClaude},
+	}}}}
+
+	status, err := integ.GetStatus(context.Background(), &terminal.SessionInfo{Name: "sess", PaneID: "%1"})
+	require.NoError(t, err)
+	assert.Equal(t, terminal.StatusReady, status)
 }
 
 func toolPatterns(tools ...string) []classifier.TitlePattern {
@@ -512,6 +558,16 @@ type fakeCapture struct {
 func (f *fakeCapture) CapturePane(context.Context, string) (string, error) {
 	f.calls++
 	return f.content, nil
+}
+
+type fakeCaptureRecorder struct {
+	observations []CaptureObservation
+	err          error
+}
+
+func (f *fakeCaptureRecorder) Record(observation CaptureObservation) error {
+	f.observations = append(f.observations, observation)
+	return f.err
 }
 
 type fakeScore struct {
