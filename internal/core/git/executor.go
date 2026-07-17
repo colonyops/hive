@@ -90,7 +90,18 @@ func (e *Executor) DefaultBranch(ctx context.Context, dir string) (string, error
 	// Get the default branch from origin's HEAD reference
 	out, err := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "symbolic-ref", "refs/remotes/origin/HEAD", "--short")
 	if err != nil {
-		return "", fmt.Errorf("git symbolic-ref: %w", err)
+		// Bare clones (worktree sessions) have no refs/remotes/origin/*; the bare
+		// repo's own HEAD tracks the remote default branch, so resolve it via the
+		// common git dir.
+		commonDir, cerr := e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-parse", "--path-format=absolute", "--git-common-dir")
+		if cerr != nil {
+			return "", fmt.Errorf("git symbolic-ref: %w", err)
+		}
+		head, herr := e.exec.RunDir(ctx, strings.TrimSpace(string(commonDir)), e.gitPath, "--no-optional-locks", "symbolic-ref", "HEAD", "--short")
+		if herr != nil {
+			return "", fmt.Errorf("git symbolic-ref: %w", err)
+		}
+		return strings.TrimSpace(string(head)), nil
 	}
 
 	// Output is "origin/main" or "origin/master", strip the "origin/" prefix
@@ -229,7 +240,12 @@ func (e *Executor) HasUnpushedCommits(ctx context.Context, dir string) (bool, er
 
 	out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-list", "--count", "origin/"+defaultBranch+"..HEAD")
 	if err != nil {
-		return false, fmt.Errorf("rev-list unpushed: %w", err)
+		// Bare clones (worktree sessions) have no refs/remotes/origin/*; their
+		// local default branch mirrors the remote, so compare against it instead.
+		out, err = e.exec.RunDir(ctx, dir, e.gitPath, "--no-optional-locks", "rev-list", "--count", defaultBranch+"..HEAD")
+		if err != nil {
+			return false, fmt.Errorf("rev-list unpushed: %w", err)
+		}
 	}
 
 	n, _ := parseInt(strings.TrimSpace(string(out)))

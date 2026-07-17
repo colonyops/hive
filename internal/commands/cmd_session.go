@@ -44,7 +44,8 @@ type SessionCmd struct {
 	deleteJSON  bool
 	deleteForce bool
 
-	recycleJSON bool
+	recycleJSON  bool
+	recycleForce bool
 }
 
 // NewSessionCmd creates a new session command
@@ -566,19 +567,8 @@ func (cmd *SessionCmd) runDelete(ctx context.Context, c *cli.Command) error {
 	}
 
 	if !cmd.deleteForce {
-		risk, err := cmd.app.Sessions.CheckSessionRisk(ctx, id)
-		if err != nil {
-			return fmt.Errorf("check session risk: %w", err)
-		}
-		if risk.HasRisk() {
-			var reasons []string
-			if risk.UncommittedChanges {
-				reasons = append(reasons, "uncommitted changes")
-			}
-			if risk.UnpushedCommits {
-				reasons = append(reasons, "unpushed commits")
-			}
-			return fmt.Errorf("session %s has %s; use --force to delete anyway", id, strings.Join(reasons, " and "))
+		if err := cmd.checkRisk(ctx, id, "delete"); err != nil {
+			return err
 		}
 	}
 
@@ -601,8 +591,17 @@ func (cmd *SessionCmd) recycleCmd() *cli.Command {
 		UsageText: "hive session recycle <id>",
 		Description: `Recycles a full-clone session so its checkout can be reused for a new task.
 
-For worktree sessions, removes the checkout and session record while retaining the shared bare clone. This keeps future worktree creation fast without retaining stale session state.`,
+For worktree sessions, removes the checkout and session record while retaining the shared bare clone. This keeps future worktree creation fast without retaining stale session state.
+
+If the session has uncommitted changes or unpushed commits, the recycle is
+refused unless --force is passed.`,
 		Flags: []cli.Flag{
+			&cli.BoolFlag{
+				Name:        "force",
+				Aliases:     []string{"f"},
+				Usage:       "recycle even if the session has uncommitted or unpushed work",
+				Destination: &cmd.recycleForce,
+			},
 			&cli.BoolFlag{
 				Name:        "json",
 				Usage:       "write the recycle result as JSON to stdout",
@@ -617,6 +616,12 @@ func (cmd *SessionCmd) runRecycle(ctx context.Context, c *cli.Command) error {
 	id := c.Args().First()
 	if id == "" {
 		return fmt.Errorf("session ID required")
+	}
+
+	if !cmd.recycleForce {
+		if err := cmd.checkRisk(ctx, id, "recycle"); err != nil {
+			return err
+		}
 	}
 
 	if err := cmd.app.Sessions.RecycleSession(ctx, id, os.Stderr); err != nil {
@@ -657,6 +662,26 @@ func (cmd *SessionCmd) buildLsSessionInfo(ctx context.Context, s session.Session
 	}
 
 	return info
+}
+
+// checkRisk returns an error describing uncommitted or unpushed work that
+// would be lost if the session were destroyed by the given action.
+func (cmd *SessionCmd) checkRisk(ctx context.Context, id, action string) error {
+	risk, err := cmd.app.Sessions.CheckSessionRisk(ctx, id)
+	if err != nil {
+		return fmt.Errorf("check session risk: %w", err)
+	}
+	if !risk.HasRisk() {
+		return nil
+	}
+	var reasons []string
+	if risk.UncommittedChanges {
+		reasons = append(reasons, "uncommitted changes")
+	}
+	if risk.UnpushedCommits {
+		reasons = append(reasons, "unpushed commits")
+	}
+	return fmt.Errorf("session %s has %s; use --force to %s anyway", id, strings.Join(reasons, " and "), action)
 }
 
 // sessionHasAllTags returns true if the session has every tag in required.

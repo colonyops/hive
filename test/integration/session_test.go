@@ -237,6 +237,48 @@ func TestSessionDeleteRiskGate(t *testing.T) {
 	assert.Empty(t, lines, "session should be gone after forced delete")
 }
 
+func TestSessionRecycleRiskGate(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "recycle-risk-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "risky-recycle")
+	require.NoError(t, err)
+	id := created["id"].(string)
+	path := created["path"].(string)
+
+	// Introduce uncommitted changes.
+	require.NoError(t, os.WriteFile(filepath.Join(path, "dirty.txt"), []byte("wip"), 0o644))
+
+	_, err = h.Run("session", "recycle", id)
+	require.Error(t, err, "recycle of dirty session without --force should fail")
+
+	entry, err := h.RunJSON("session", "recycle", id, "--force", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "recycled", entry["state"])
+}
+
+func TestSessionRecycleRiskGateWorktree(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "recycle-risk-wt-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--clone-strategy", "worktree", "--remote", repo, "risky-wt")
+	require.NoError(t, err)
+	id := created["id"].(string)
+	path := created["path"].(string)
+
+	// Introduce uncommitted changes. (The clean-worktree case — recycle without
+	// --force succeeding despite bare clones lacking origin/* refs — is covered
+	// by TestWorktreeRecycleDeletesSessionAndNextCreateIsFresh.)
+	require.NoError(t, os.WriteFile(filepath.Join(path, "dirty.txt"), []byte("wip"), 0o644))
+
+	_, err = h.Run("session", "recycle", id)
+	require.Error(t, err, "recycle of dirty worktree session without --force should fail")
+
+	entry, err := h.RunJSON("session", "recycle", id, "--force", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, true, entry["deleted"], "worktree sessions are deleted on recycle")
+}
+
 func TestSessionRecycleJSON(t *testing.T) {
 	h := NewHarness(t)
 	repo := createBareRepo(t, "recycle-json-repo")
