@@ -3,6 +3,8 @@
 package integration
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -122,4 +124,129 @@ func TestSessionRecycleMissingID(t *testing.T) {
 
 	_, err := h.Run("session", "recycle")
 	require.Error(t, err, "recycle without ID should fail")
+}
+
+func TestSessionCreateSubcommandJSON(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "create-json-repo")
+
+	entry, err := h.RunJSON("session", "create", "--json", "--remote", repo, "orchestrated")
+	require.NoError(t, err)
+
+	assert.Equal(t, "orchestrated", entry["name"])
+	assert.Equal(t, "active", entry["state"])
+	assert.NotEmpty(t, entry["id"])
+	assert.NotEmpty(t, entry["path"])
+	assert.NotEmpty(t, entry["inbox"])
+	assert.NotEmpty(t, entry["slug"])
+
+	// The created session must be discoverable by the returned ID.
+	id := entry["id"].(string)
+	shown, err := h.RunJSON("session", "show", id, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, id, shown["id"])
+}
+
+func TestSessionShow(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "show-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "show-me", "--tags", "a", "--tags", "b")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	entry, err := h.RunJSON("session", "show", id, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "show-me", entry["name"])
+	assert.Equal(t, "active", entry["state"])
+	assert.ElementsMatch(t, []any{"a", "b"}, entry["tags"])
+}
+
+func TestSessionShowUnknownID(t *testing.T) {
+	h := NewHarness(t)
+
+	_, err := h.Run("session", "show", "nonexistent")
+	require.Error(t, err, "show with unknown ID should fail")
+}
+
+func TestSessionUpdateName(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "update-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "old-name")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	entry, err := h.RunJSON("session", "update", id, "--name", "new-name", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "new-name", entry["name"])
+	assert.Equal(t, "new-name", entry["slug"])
+}
+
+func TestSessionUpdateGroup(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "group-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "grouped")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	entry, err := h.RunJSON("session", "update", id, "--group", "backend", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "backend", entry["group"])
+
+	entry, err = h.RunJSON("session", "update", id, "--clear-group", "--json")
+	require.NoError(t, err)
+	_, hasGroup := entry["group"]
+	assert.False(t, hasGroup, "group should be omitted after clearing")
+}
+
+func TestSessionUpdateNoFlags(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "noflags-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "noop")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	_, err = h.Run("session", "update", id)
+	require.Error(t, err, "update without modification flags should fail")
+}
+
+func TestSessionDeleteRiskGate(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "risk-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "risky")
+	require.NoError(t, err)
+	id := created["id"].(string)
+	path := created["path"].(string)
+
+	// Introduce uncommitted changes.
+	require.NoError(t, os.WriteFile(filepath.Join(path, "dirty.txt"), []byte("wip"), 0o644))
+
+	_, err = h.Run("session", "delete", id)
+	require.Error(t, err, "delete of dirty session without --force should fail")
+
+	entry, err := h.RunJSON("session", "delete", id, "--force", "--json")
+	require.NoError(t, err)
+	assert.Equal(t, true, entry["deleted"])
+
+	lines, err := h.RunJSONLines("ls", "--json")
+	require.NoError(t, err)
+	assert.Empty(t, lines, "session should be gone after forced delete")
+}
+
+func TestSessionRecycleJSON(t *testing.T) {
+	h := NewHarness(t)
+	repo := createBareRepo(t, "recycle-json-repo")
+
+	created, err := h.RunJSON("session", "create", "--json", "--remote", repo, "recycle-json")
+	require.NoError(t, err)
+	id := created["id"].(string)
+
+	entry, err := h.RunJSON("session", "recycle", id, "--json")
+	require.NoError(t, err)
+	assert.Equal(t, "recycled", entry["state"])
+	assert.Equal(t, id, entry["id"])
 }
