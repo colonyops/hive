@@ -49,9 +49,6 @@ func (g *mouseTestGit) IsValidRepo(_ context.Context, _ string) error           
 func (g *mouseTestGit) CloneBare(_ context.Context, _, _ string) error            { return nil }
 func (g *mouseTestGit) WorktreeAdd(_ context.Context, _, _, _ string) error       { return nil }
 func (g *mouseTestGit) WorktreeRemove(_ context.Context, _, _, _ string) error    { return nil }
-func (g *mouseTestGit) WorktreeReset(_ context.Context, _, _ string) error        { return nil }
-func (g *mouseTestGit) CheckoutNewBranch(_ context.Context, _, _ string) error    { return nil }
-func (g *mouseTestGit) DeleteBranch(_ context.Context, _, _ string) error         { return nil }
 func (g *mouseTestGit) Fetch(_ context.Context, _ string) error                   { return nil }
 func (g *mouseTestGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) {
 	return false, nil

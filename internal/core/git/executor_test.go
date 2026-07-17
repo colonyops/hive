@@ -201,35 +201,40 @@ func TestExecutor_DefaultBranch(t *testing.T) {
 	}
 }
 
-func TestExecutor_WorktreeResetUsesBareDefaultBranch(t *testing.T) {
-	var calls []string
-	mock := &mockExecutor{
-		runDirFunc: func(ctx context.Context, dir, cmd string, args ...string) ([]byte, error) {
-			calls = append(calls, dir+" "+cmd+" "+strings.Join(args, " "))
-			switch len(calls) {
-			case 1:
-				assert.Equal(t, "/bare", dir)
-				assert.Equal(t, []string{"--no-optional-locks", "symbolic-ref", "HEAD", "--short"}, args)
-				return []byte("main\n"), nil
-			case 2:
-				assert.Equal(t, "/worktree", dir)
-				assert.Equal(t, []string{"reset", "--hard", "main"}, args)
-				return nil, nil
-			case 3:
-				assert.Equal(t, "/worktree", dir)
-				assert.Equal(t, []string{"clean", "-fdx"}, args)
-				return nil, nil
-			default:
-				return nil, fmt.Errorf("unexpected call %d", len(calls))
-			}
-		},
+func TestExecutor_WorktreeRemove(t *testing.T) {
+	tests := []struct {
+		name       string
+		branch     string
+		wantCalls  int
+		wantBranch bool
+	}{
+		{name: "removes worktree and branch", branch: "hive/session", wantCalls: 2, wantBranch: true},
+		{name: "removes worktree without branch metadata", wantCalls: 1},
 	}
 
-	e := NewExecutor("git", mock)
-	err := e.WorktreeReset(context.Background(), "/bare", "/worktree")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var calls [][]string
+			mock := &mockExecutor{
+				runDirFunc: func(_ context.Context, dir, cmd string, args ...string) ([]byte, error) {
+					require.Equal(t, "/bare", dir)
+					require.Equal(t, "git", cmd)
+					calls = append(calls, args)
+					return nil, nil
+				},
+			}
 
-	require.NoError(t, err)
-	assert.Len(t, calls, 3)
+			e := NewExecutor("git", mock)
+			err := e.WorktreeRemove(context.Background(), "/bare", "/worktree", tt.branch)
+
+			require.NoError(t, err)
+			require.Len(t, calls, tt.wantCalls)
+			assert.Equal(t, []string{"worktree", "remove", "--force", "/worktree"}, calls[0])
+			if tt.wantBranch {
+				assert.Equal(t, []string{"branch", "-D", tt.branch}, calls[1])
+			}
+		})
+	}
 }
 
 func TestExecutor_Fetch(t *testing.T) {

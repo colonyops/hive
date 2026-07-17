@@ -72,9 +72,6 @@ func (m *mockGit) Branch(_ context.Context, _ string) (string, error)           
 func (m *mockGit) CloneBare(_ context.Context, _, _ string) error               { return nil }
 func (m *mockGit) WorktreeAdd(_ context.Context, _, _, _ string) error          { return nil }
 func (m *mockGit) WorktreeRemove(_ context.Context, _, _, _ string) error       { return nil }
-func (m *mockGit) WorktreeReset(_ context.Context, _, _ string) error           { return nil }
-func (m *mockGit) CheckoutNewBranch(_ context.Context, _, _ string) error       { return nil }
-func (m *mockGit) DeleteBranch(_ context.Context, _, _ string) error            { return nil }
 func (m *mockGit) Fetch(_ context.Context, _ string) error                      { return nil }
 func (m *mockGit) HasUnpushedCommits(_ context.Context, _ string) (bool, error) { return false, nil }
 func (m *mockGit) DefaultBranch(_ context.Context, _ string) (string, error) {
@@ -1031,67 +1028,56 @@ func TestSetSessionGroup_TrimWhitespace(t *testing.T) {
 	assert.Equal(t, "backend", updated.Group())
 }
 
-func TestRecycleWorktreeSession_KeepsPath(t *testing.T) {
-	store := newMockStore()
-	cfg := &config.Config{
-		DataDir: t.TempDir(),
-		GitPath: "git",
+func TestRecycleWorktreeSession_DeletesSession(t *testing.T) {
+	tests := []struct {
+		name     string
+		metadata map[string]string
+	}{
+		{
+			name:     "with branch metadata",
+			metadata: map[string]string{session.MetaWorktreeBranch: "hive-abc123"},
+		},
+		{
+			name: "without branch metadata",
+		},
 	}
-	svc := newTestService(t, store, cfg)
 
-	sessDir := filepath.Join(cfg.ReposDir(), "repo-wt-abc123")
-	require.NoError(t, os.MkdirAll(sessDir, 0o755))
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			store := newMockStore()
+			tb := testbus.New(t)
+			cfg := &config.Config{
+				DataDir: t.TempDir(),
+				GitPath: "git",
+			}
+			svc := newTestServiceWithBus(t, store, cfg, tb.EventBus)
 
-	sess := session.Session{
-		ID:            "wt1",
-		Name:          "worktree-session",
-		Slug:          "worktree-session",
-		State:         session.StateActive,
-		Path:          sessDir,
-		Remote:        "https://github.com/example/repo.git",
-		CloneStrategy: config.CloneStrategyWorktree,
-		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive-abc123"},
+			sessDir := filepath.Join(cfg.ReposDir(), "repo-wt-abc123")
+			require.NoError(t, os.MkdirAll(sessDir, 0o755))
+
+			sess := session.Session{
+				ID:            "wt1",
+				Name:          "worktree-session",
+				Slug:          "worktree-session",
+				State:         session.StateActive,
+				Path:          sessDir,
+				Remote:        "https://github.com/example/repo.git",
+				CloneStrategy: config.CloneStrategyWorktree,
+				Metadata:      tt.metadata,
+			}
+			require.NoError(t, store.Save(context.Background(), sess))
+
+			err := svc.RecycleSession(context.Background(), "wt1", io.Discard)
+			require.NoError(t, err)
+
+			_, err = store.Get(context.Background(), "wt1")
+			require.ErrorIs(t, err, session.ErrNotFound)
+			_, err = os.Stat(sessDir)
+			require.ErrorIs(t, err, os.ErrNotExist)
+			deleted := testbus.FindPayload[eventbus.SessionDeletedPayload](tb, t, eventbus.EventSessionDeleted)
+			assert.Equal(t, "wt1", deleted.SessionID)
+		})
 	}
-	require.NoError(t, store.Save(context.Background(), sess))
-
-	err := svc.RecycleSession(context.Background(), "wt1", io.Discard)
-	require.NoError(t, err)
-
-	recycled, err := store.Get(context.Background(), "wt1")
-	require.NoError(t, err)
-	assert.Equal(t, session.StateRecycled, recycled.State)
-	assert.Equal(t, sessDir, recycled.Path, "worktree path must be preserved on recycle")
-}
-
-func TestRecycleWorktreeSession_NoMetadata(t *testing.T) {
-	store := newMockStore()
-	cfg := &config.Config{
-		DataDir: t.TempDir(),
-		GitPath: "git",
-	}
-	svc := newTestService(t, store, cfg)
-
-	sessDir := filepath.Join(cfg.ReposDir(), "repo-wt-nometa")
-	require.NoError(t, os.MkdirAll(sessDir, 0o755))
-
-	sess := session.Session{
-		ID:            "wt-nometa",
-		Name:          "worktree-nometa",
-		Slug:          "worktree-nometa",
-		State:         session.StateActive,
-		Path:          sessDir,
-		Remote:        "https://github.com/example/repo.git",
-		CloneStrategy: config.CloneStrategyWorktree,
-		// No MetaWorktreeBranch
-	}
-	require.NoError(t, store.Save(context.Background(), sess))
-
-	err := svc.RecycleSession(context.Background(), "wt-nometa", io.Discard)
-	require.NoError(t, err)
-
-	recycled, err := store.Get(context.Background(), "wt-nometa")
-	require.NoError(t, err)
-	assert.Equal(t, session.StateRecycled, recycled.State)
 }
 
 func TestDeleteWorktreeSession(t *testing.T) {
@@ -1263,7 +1249,7 @@ func TestCreateSession_BranchTemplate(t *testing.T) {
 	})
 }
 
-func TestCreateSession_RecycledWorktreeCreatesNewBranch(t *testing.T) {
+func TestCreateSession_DoesNotReuseRecycledWorktree(t *testing.T) {
 	store := newMockStore()
 	remote := "https://github.com/example/repo.git"
 	store.sessions["wt-1"] = session.Session{
@@ -1277,14 +1263,10 @@ func TestCreateSession_RecycledWorktreeCreatesNewBranch(t *testing.T) {
 		Metadata:      map[string]string{session.MetaWorktreeBranch: "hive/old-session-abc123"},
 	}
 
-	var newBranch, deletedBranch string
+	var addedBranch string
 	spy := &capturingMockGit{}
-	spy.CheckoutNewBranchFn = func(_ context.Context, _, branch string) error {
-		newBranch = branch
-		return nil
-	}
-	spy.DeleteBranchFn = func(_ context.Context, _, branch string) error {
-		deletedBranch = branch
+	spy.WorktreeAddFn = func(_ context.Context, _, _, branch string) error {
+		addedBranch = branch
 		return nil
 	}
 
@@ -1304,37 +1286,20 @@ func TestCreateSession_RecycledWorktreeCreatesNewBranch(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	assert.Equal(t, "wt-1", sess.ID, "recycled session should be reused")
-	assert.Regexp(t, `^hive/new-feature-[a-z0-9]+$`, newBranch)
-	assert.Equal(t, newBranch, sess.GetMeta(session.MetaWorktreeBranch))
-	assert.Equal(t, "hive/old-session-abc123", deletedBranch, "old branch should be deleted")
+	assert.NotEqual(t, "wt-1", sess.ID)
+	assert.Regexp(t, `^hive/new-feature-[a-z0-9]+$`, addedBranch)
+	assert.Equal(t, addedBranch, sess.GetMeta(session.MetaWorktreeBranch))
 }
 
 // capturingMockGit extends mockGit with optional function overrides for capturing calls.
 type capturingMockGit struct {
 	mockGit
-	WorktreeAddFn       func(ctx context.Context, repoDir, path, branch string) error
-	CheckoutNewBranchFn func(ctx context.Context, dir, branch string) error
-	DeleteBranchFn      func(ctx context.Context, dir, branch string) error
+	WorktreeAddFn func(ctx context.Context, repoDir, path, branch string) error
 }
 
 func (m *capturingMockGit) WorktreeAdd(ctx context.Context, repoDir, path, branch string) error {
 	if m.WorktreeAddFn != nil {
 		return m.WorktreeAddFn(ctx, repoDir, path, branch)
-	}
-	return nil
-}
-
-func (m *capturingMockGit) CheckoutNewBranch(ctx context.Context, dir, branch string) error {
-	if m.CheckoutNewBranchFn != nil {
-		return m.CheckoutNewBranchFn(ctx, dir, branch)
-	}
-	return nil
-}
-
-func (m *capturingMockGit) DeleteBranch(ctx context.Context, dir, branch string) error {
-	if m.DeleteBranchFn != nil {
-		return m.DeleteBranchFn(ctx, dir, branch)
 	}
 	return nil
 }
