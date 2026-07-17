@@ -11,16 +11,13 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/colonyops/hive/internal/core/terminal"
 )
 
 const (
-	captureRecordSchemaVersion = 1
-	maxRecordedContentBytes    = 8 * 1024
+	captureRecordSchemaVersion = 2
 	weakLabelSource            = "hive_state_tracker_v1"
 	identityKeyFilename        = ".identity.key"
 )
@@ -39,31 +36,28 @@ type CaptureRecorder interface {
 	Record(observation CaptureObservation) error
 }
 
-// JSONLCaptureRecorder writes privacy-conscious pane captures to a local JSONL file.
-type JSONLCaptureRecorder struct {
-	mu          sync.Mutex
-	path        string
+// JSONCaptureRecorder writes content-addressed pane captures to local JSON files.
+type JSONCaptureRecorder struct {
+	dir         string
 	runID       string
 	identityKey []byte
-	lastHash    map[string][sha256.Size]byte
 }
 
 type captureRecord struct {
-	SchemaVersion    int             `json:"schema_version"`
-	CapturedAt       time.Time       `json:"captured_at"`
-	RunID            string          `json:"run_id"`
-	SessionKey       string          `json:"session_key"`
-	PaneKey          string          `json:"pane_key"`
-	Tool             string          `json:"tool,omitempty"`
-	Content          string          `json:"content"`
-	ContentSHA256    string          `json:"content_sha256"`
-	ContentTruncated bool            `json:"content_truncated"`
-	WeakLabel        terminal.Status `json:"weak_label"`
-	WeakLabelSource  string          `json:"weak_label_source"`
+	SchemaVersion   int             `json:"schema_version"`
+	CapturedAt      time.Time       `json:"captured_at"`
+	RunID           string          `json:"run_id"`
+	SessionKey      string          `json:"session_key"`
+	PaneKey         string          `json:"pane_key"`
+	Tool            string          `json:"tool,omitempty"`
+	Content         string          `json:"content"`
+	ContentSHA256   string          `json:"content_sha256"`
+	WeakLabel       terminal.Status `json:"weak_label"`
+	WeakLabelSource string          `json:"weak_label_source"`
 }
 
-// NewJSONLCaptureRecorder creates a recorder with a unique output file.
-func NewJSONLCaptureRecorder(dir string) (*JSONLCaptureRecorder, error) {
+// NewJSONCaptureRecorder creates a content-addressed capture recorder.
+func NewJSONCaptureRecorder(dir string) (*JSONCaptureRecorder, error) {
 	if dir == "" {
 		return nil, fmt.Errorf("capture recording directory is required")
 	}
@@ -79,72 +73,55 @@ func NewJSONLCaptureRecorder(dir string) (*JSONLCaptureRecorder, error) {
 	if err != nil {
 		return nil, fmt.Errorf("generate capture recording run ID: %w", err)
 	}
-	filename := fmt.Sprintf("captures-%s-%d-%s.jsonl", time.Now().UTC().Format("20060102T150405Z"), os.Getpid(), runID[:8])
-	path := filepath.Join(dir, filename)
-	file, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-	if err != nil {
-		return nil, fmt.Errorf("create capture recording: %w", err)
-	}
-	if err := file.Close(); err != nil {
-		return nil, fmt.Errorf("close new capture recording: %w", err)
-	}
-
-	return &JSONLCaptureRecorder{
-		path:        path,
-		runID:       runID,
-		identityKey: identityKey,
-		lastHash:    make(map[string][sha256.Size]byte),
-	}, nil
+	return &JSONCaptureRecorder{dir: dir, runID: runID, identityKey: identityKey}, nil
 }
 
-// Path returns the recorder's local JSONL output path.
-func (r *JSONLCaptureRecorder) Path() string {
+// Dir returns the recorder's local capture directory.
+func (r *JSONCaptureRecorder) Dir() string {
 	if r == nil {
 		return ""
 	}
-	return r.path
+	return r.dir
 }
 
-// Record appends a changed capture to the recorder's JSONL file.
-func (r *JSONLCaptureRecorder) Record(observation CaptureObservation) error {
+// Record writes a capture unless its content hash already exists in the directory.
+// Metadata belongs to the first observation of unique content; later observations
+// with identical bytes are intentionally not sampled.
+func (r *JSONCaptureRecorder) Record(observation CaptureObservation) error {
 	if r == nil {
 		return nil
 	}
 
 	fullHash := sha256.Sum256([]byte(observation.Content))
-	paneIdentity := observation.SessionName + "\x00" + observation.PaneID
-
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if previous, ok := r.lastHash[paneIdentity]; ok && previous == fullHash {
+	hash := hex.EncodeToString(fullHash[:])
+	path := filepath.Join(r.dir, hash+".json")
+	exists, err := privateRegularFileExists(path)
+	if err != nil {
+		return err
+	}
+	if exists {
 		return nil
 	}
 
-	content, truncated := boundRecordedContent(observation.Content)
 	record := captureRecord{
-		SchemaVersion:    captureRecordSchemaVersion,
-		CapturedAt:       time.Now().UTC(),
-		RunID:            r.runID,
-		SessionKey:       r.opaqueKey("session", observation.SessionName),
-		PaneKey:          r.opaqueKey("pane", observation.SessionName, observation.PaneID),
-		Tool:             observation.Tool,
-		Content:          content,
-		ContentSHA256:    hex.EncodeToString(fullHash[:]),
-		ContentTruncated: truncated,
-		WeakLabel:        observation.Status,
-		WeakLabelSource:  weakLabelSource,
+		SchemaVersion:   captureRecordSchemaVersion,
+		CapturedAt:      time.Now().UTC(),
+		RunID:           r.runID,
+		SessionKey:      r.opaqueKey("session", observation.SessionName),
+		PaneKey:         r.opaqueKey("pane", observation.SessionName, observation.PaneID),
+		Tool:            observation.Tool,
+		Content:         observation.Content,
+		ContentSHA256:   hash,
+		WeakLabel:       observation.Status,
+		WeakLabelSource: weakLabelSource,
 	}
-	line, err := json.Marshal(record)
+	data, err := json.Marshal(record)
 	if err != nil {
 		return fmt.Errorf("encode capture record: %w", err)
 	}
-	line = append(line, '\n')
-	if err := appendJSONLine(r.path, line); err != nil {
-		return err
-	}
-
-	r.lastHash[paneIdentity] = fullHash
-	return nil
+	data = append(data, '\n')
+	_, err = installPrivateFile(r.dir, path, data)
+	return err
 }
 
 func ensurePrivateRecordingDir(dir string) error {
@@ -191,46 +168,23 @@ func loadOrCreateIdentityKey(dir string) ([]byte, error) {
 	if _, err := rand.Read(key); err != nil {
 		return nil, fmt.Errorf("generate capture recording identity key: %w", err)
 	}
-	temp, err := os.CreateTemp(dir, ".identity-*.tmp")
+	created, err := installPrivateFile(dir, path, key)
 	if err != nil {
-		return nil, fmt.Errorf("create capture recording identity key: %w", err)
+		return nil, fmt.Errorf("install capture recording identity key: %w", err)
 	}
-	tempPath := temp.Name()
-	defer func() { _ = os.Remove(tempPath) }()
-	if err := temp.Chmod(0o600); err != nil {
-		_ = temp.Close()
-		return nil, fmt.Errorf("secure capture recording identity key: %w", err)
-	}
-	if _, err := temp.Write(key); err != nil {
-		_ = temp.Close()
-		return nil, fmt.Errorf("write capture recording identity key: %w", err)
-	}
-	if err := temp.Close(); err != nil {
-		return nil, fmt.Errorf("close capture recording identity key: %w", err)
-	}
-
-	if err := os.Link(tempPath, path); err != nil {
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("install capture recording identity key: %w", err)
-		}
+	if !created {
 		return readIdentityKey(path)
 	}
 	return key, nil
 }
 
 func readIdentityKey(path string) ([]byte, error) {
-	info, err := os.Lstat(path)
+	exists, err := privateRegularFileExists(path)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, os.ErrNotExist
-		}
-		return nil, fmt.Errorf("inspect capture recording identity key: %w", err)
+		return nil, err
 	}
-	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return nil, fmt.Errorf("capture recording identity key is not a regular file: %s", path)
-	}
-	if err := os.Chmod(path, 0o600); err != nil {
-		return nil, fmt.Errorf("secure capture recording identity key: %w", err)
+	if !exists {
+		return nil, os.ErrNotExist
 	}
 	key, err := os.ReadFile(path)
 	if err != nil {
@@ -242,40 +196,55 @@ func readIdentityKey(path string) ([]byte, error) {
 	return key, nil
 }
 
-func appendJSONLine(path string, line []byte) error {
+func privateRegularFileExists(path string) (bool, error) {
 	info, err := os.Lstat(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return false, nil
+	}
 	if err != nil {
-		return fmt.Errorf("inspect capture recording: %w", err)
+		return false, fmt.Errorf("inspect private recording file: %w", err)
 	}
 	if info.Mode()&os.ModeSymlink != 0 || !info.Mode().IsRegular() {
-		return fmt.Errorf("capture recording is not a regular file: %s", path)
+		return false, fmt.Errorf("private recording path is not a regular file: %s", path)
 	}
-
-	file, err := os.OpenFile(path, os.O_WRONLY|os.O_APPEND, 0o600)
-	if err != nil {
-		return fmt.Errorf("open capture recording: %w", err)
+	if err := os.Chmod(path, 0o600); err != nil {
+		return false, fmt.Errorf("secure private recording file: %w", err)
 	}
-	offset, err := file.Seek(0, io.SeekEnd)
-	if err != nil {
-		_ = file.Close()
-		return fmt.Errorf("seek capture recording: %w", err)
-	}
-	written, writeErr := file.Write(line)
-	if writeErr == nil && written != len(line) {
-		writeErr = io.ErrShortWrite
-	}
-	if writeErr != nil {
-		truncateErr := file.Truncate(offset)
-		closeErr := file.Close()
-		return errors.Join(fmt.Errorf("append capture recording: %w", writeErr), truncateErr, closeErr)
-	}
-	if err := file.Close(); err != nil {
-		return fmt.Errorf("close capture recording: %w", err)
-	}
-	return nil
+	return true, nil
 }
 
-func (r *JSONLCaptureRecorder) opaqueKey(namespace string, values ...string) string {
+// installPrivateFile atomically creates finalPath without replacing existing data.
+func installPrivateFile(dir, finalPath string, data []byte) (bool, error) {
+	temp, err := os.CreateTemp(dir, ".capture-*.tmp")
+	if err != nil {
+		return false, fmt.Errorf("create temporary recording file: %w", err)
+	}
+	tempPath := temp.Name()
+	defer func() { _ = os.Remove(tempPath) }()
+	if err := temp.Chmod(0o600); err != nil {
+		_ = temp.Close()
+		return false, fmt.Errorf("secure temporary recording file: %w", err)
+	}
+	if _, err := temp.Write(data); err != nil {
+		_ = temp.Close()
+		return false, fmt.Errorf("write temporary recording file: %w", err)
+	}
+	if err := temp.Close(); err != nil {
+		return false, fmt.Errorf("close temporary recording file: %w", err)
+	}
+	if err := os.Link(tempPath, finalPath); err != nil {
+		if !errors.Is(err, os.ErrExist) {
+			return false, fmt.Errorf("install recording file: %w", err)
+		}
+		if _, err := privateRegularFileExists(finalPath); err != nil {
+			return false, err
+		}
+		return false, nil
+	}
+	return true, nil
+}
+
+func (r *JSONCaptureRecorder) opaqueKey(namespace string, values ...string) string {
 	mac := hmac.New(sha256.New, r.identityKey)
 	_, _ = io.WriteString(mac, namespace)
 	for _, value := range values {
@@ -291,15 +260,4 @@ func randomHex(size int) (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(value), nil
-}
-
-func boundRecordedContent(content string) (string, bool) {
-	if len(content) <= maxRecordedContentBytes {
-		return content, false
-	}
-	start := len(content) - maxRecordedContentBytes
-	for start < len(content) && !utf8.RuneStart(content[start]) {
-		start++
-	}
-	return content[start:], true
 }
