@@ -9,6 +9,11 @@ jobs:
     steps:
       - uses: actions/checkout@v7
 
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+
       - name: Set up Go
         uses: actions/setup-go@v6
         with:
@@ -34,3 +39,23 @@ jobs:
 
       - name: Test
         run: go test ./... -race
+
+  desktop-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: desktop/frontend
+        run: npm run build
