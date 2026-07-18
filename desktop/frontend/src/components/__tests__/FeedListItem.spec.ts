@@ -47,6 +47,18 @@ describe('FeedListItem', () => {
     expect(read.find('[data-testid="unread-dot"]').exists()).toBe(false)
   })
 
+  it('renders the notification reason as a chip before the labels, humanized', () => {
+    const wrapper = mountItem({ reason: 'review_requested', labels: ['bug'] })
+    expect(wrapper.find('[data-testid="reason-chip"]').text()).toBe('review requested')
+    expect(wrapper.findAll('span.bg-chip').map((chip) => chip.text())).toEqual(['review requested', 'bug'])
+  })
+
+  it('omits the reason chip when the item has no reason', () => {
+    const wrapper = mountItem()
+    expect(wrapper.find('[data-testid="reason-chip"]').exists()).toBe(false)
+    expect(wrapper.findAll('span.bg-chip').map((chip) => chip.text())).toEqual(['frontend'])
+  })
+
   it('applies selected styling', () => {
     const wrapper = mountItem({}, true)
     expect(wrapper.find('button.feed-item').classes()).toContain('selected')

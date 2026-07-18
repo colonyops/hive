@@ -1,7 +1,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
-import { ActionsFor, CreateProfile, Items, MarkRead, Profiles, Refresh } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
-import type { Action, FeedItem, Profile, SidebarSelection } from '../types/feed'
+import { ActionsFor, Config, ConfigPrompt, CreateFeed, CreateProfile, CreateSource, DeleteFeed, DeleteProfile, FeedDefFor, Items, MarkRead, Profiles, Refresh, Sources, UpdateFeed } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
+import type { Action, ConfigInfo, FeedDef, FeedItem, Profile, SidebarSelection, SourceDef } from '../types/feed'
+import type { ToastInstance, ToastOptions } from '../types/toast'
 
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
@@ -20,13 +21,41 @@ export function useFeedState() {
   const loadError = ref<string | null>(null)
   const selectedId = ref<string | null>(null)
   const actions = ref<Action[]>([])
-  const toast = ref<string | null>(null)
+  // Stacked toasts (design spec "6a Toasts"): bottom-right, up to ~4 visible,
+  // each with its own auto-dismiss timer. Error-severity toasts never
+  // auto-dismiss — they sit until the user clears them or resolves the
+  // underlying failure.
+  const toasts = ref<ToastInstance[]>([])
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
-  let toastTimeout: ReturnType<typeof setTimeout> | undefined
+  const deletingProfile = ref(false)
+  // Top-level source definitions for the feed editor's picker; loaded when
+  // the editor opens.
+  const sources = ref<SourceDef[]>([])
+  const creatingSource = ref(false)
+  const createSourceError = ref<string | null>(null)
+  // One busy/error pair covers create and update: the editor sheet only ever
+  // runs one save at a time.
+  const savingFeed = ref(false)
+  const saveFeedError = ref<string | null>(null)
+  // The profiles config file (path, content, validity) for the
+  // feeds-as-code sheet; null until first loaded.
+  const config = ref<ConfigInfo | null>(null)
+  // The config-error overlay (design spec "6b") is dismissible: the user can
+  // keep working on the last-good config. Dismissal is cleared whenever a
+  // *new* invalid state arrives (fresh error text, or a valid→invalid
+  // transition) so an unresolved edit that fails again still interrupts.
+  const configErrorDismissed = ref(false)
+  let nextToastId = 1
+  const toastTimers = new Map<number, ReturnType<typeof setTimeout>>()
+  const defaultToastDuration = 4000
   // Monotonic token: loadItems responses arriving out of order (slow feed
   // switch, live backend latency) must not clobber the newest request.
   let loadSeq = 0
+  // Re-entry guard for deleteFeed: the sheet's confirm button collapses back
+  // to the plain "Delete feed" button synchronously on emit, so a fast
+  // second click could otherwise fire a second delete mid-flight.
+  let deletingFeed = false
 
   const activeProfile = computed(() => profiles.value.find((profile) => profile.id === activeProfileId.value) ?? null)
   const selectedItem = computed(() => items.value.find((item) => item.id === selectedId.value) ?? null)
@@ -36,11 +65,40 @@ export function useFeedState() {
     return unreadOnly.value ? 'Unread' : 'All items'
   })
   const countLabel = computed(() => activeProfile.value ? `${activeProfile.value.totalCount} · ${activeProfile.value.unreadCount} unread` : '')
+  // Full-app blocking overlay (design spec "6b"): shown whenever the loaded
+  // config is invalid and the user hasn't dismissed *this* error.
+  const configErrorOverlayOpen = computed(() => !!config.value && !config.value.valid && !configErrorDismissed.value)
 
-  function showToast(message: string) {
-    toast.value = message
-    if (toastTimeout) clearTimeout(toastTimeout)
-    toastTimeout = setTimeout(() => { toast.value = null }, 2000)
+  function showToast(message: string, options: ToastOptions = {}): number {
+    const severity = options.severity ?? 'info'
+    const id = nextToastId++
+    // Error toasts persist until manually cleared or resolved — auto-dismiss
+    // would hide a failure the user hasn't necessarily seen yet.
+    const duration = severity === 'error' ? null : options.duration ?? defaultToastDuration
+    toasts.value = [...toasts.value, { id, message, body: options.body, severity, actions: options.actions ?? [], duration }]
+    if (duration !== null) {
+      toastTimers.set(id, setTimeout(() => dismissToast(id), duration))
+    }
+    return id
+  }
+
+  function dismissToast(id: number) {
+    const timer = toastTimers.get(id)
+    if (timer !== undefined) {
+      clearTimeout(timer)
+      toastTimers.delete(id)
+    }
+    toasts.value = toasts.value.filter((t) => t.id !== id)
+  }
+
+  function clearToasts() {
+    for (const timer of toastTimers.values()) clearTimeout(timer)
+    toastTimers.clear()
+    toasts.value = []
+  }
+
+  function dismissConfigError() {
+    configErrorDismissed.value = true
   }
 
   async function loadActions(item: FeedItem | null) {
@@ -116,6 +174,130 @@ export function useFeedState() {
     } finally {
       creatingProfile.value = false
     }
+  }
+
+  // Deletes the active profile (the sidebar only exposes this for the
+  // active one). On success the modal always closes (see App.vue); errors
+  // surface as a toast rather than blocking the confirm flow.
+  async function deleteProfile(profileID: string): Promise<boolean> {
+    if (deletingProfile.value) return false
+    deletingProfile.value = true
+    try {
+      await DeleteProfile(profileID)
+    } catch (error) {
+      console.warn('Unable to delete profile', error)
+      showToast(error instanceof Error && error.message ? error.message : 'Could not delete the profile.', { severity: 'error' })
+      return false
+    } finally {
+      deletingProfile.value = false
+    }
+    showToast('Profile deleted', { severity: 'success' })
+    await reloadProfilesQuietly()
+    if (activeProfileId.value === profileID) {
+      const next = profiles.value[0]
+      if (next) {
+        await selectProfile(next.id)
+      } else {
+        // No profiles left: same shape as a fresh install — profilesLoaded
+        // stays true, so App's needsWorkspace computed routes to the
+        // existing "create your first workspace" onboarding step.
+        activeProfileId.value = ''
+        items.value = []
+        selectedId.value = null
+        actions.value = []
+      }
+    }
+    return true
+  }
+
+  async function loadSources() {
+    try {
+      sources.value = (await Sources()) ?? []
+    } catch (error) {
+      // Keep whatever list we had; the editor's ≥1-source rule still guards
+      // saves, and a retry happens on the next open.
+      console.warn('Unable to load sources', error)
+    }
+  }
+
+  async function createSource(def: SourceDef): Promise<SourceDef | null> {
+    if (creatingSource.value) return null
+    creatingSource.value = true
+    createSourceError.value = null
+    try {
+      const created = await CreateSource(def)
+      sources.value = [...sources.value, created]
+      return created
+    } catch (error) {
+      console.warn('Unable to create source', error)
+      createSourceError.value = error instanceof Error && error.message ? error.message : 'Could not create the source.'
+      return null
+    } finally {
+      creatingSource.value = false
+    }
+  }
+
+  async function loadFeedDef(profileID: string, feedID: string): Promise<FeedDef | null> {
+    try {
+      return await FeedDefFor(profileID, feedID)
+    } catch (error) {
+      console.warn('Unable to load feed definition', error)
+      saveFeedError.value = error instanceof Error && error.message ? error.message : 'Could not load the feed.'
+      return null
+    }
+  }
+
+  async function createFeed(profileID: string, def: FeedDef): Promise<boolean> {
+    return saveFeed(async () => { await CreateFeed(profileID, def) }, 'Feed created')
+  }
+
+  async function updateFeed(profileID: string, feedID: string, def: FeedDef): Promise<boolean> {
+    return saveFeed(async () => { await UpdateFeed(profileID, feedID, def) }, 'Feed updated')
+  }
+
+  // The config:updated event that follows a successful write also refreshes
+  // state, but it rides fsnotify; reload optimistically so the sidebar shows
+  // the new feed the moment the sheet closes.
+  async function saveFeed(write: () => Promise<void>, toastMessage: string): Promise<boolean> {
+    if (savingFeed.value) return false // re-entry guard: Enter-key can double-submit
+    savingFeed.value = true
+    saveFeedError.value = null
+    try {
+      await write()
+    } catch (error) {
+      console.warn('Unable to save feed', error)
+      saveFeedError.value = error instanceof Error && error.message ? error.message : 'Could not save the feed.'
+      return false
+    } finally {
+      savingFeed.value = false
+    }
+    showToast(toastMessage, { severity: 'success' })
+    await reloadProfilesQuietly()
+    return true
+  }
+
+  // The sheet stays open on failure (error surfaces as a toast, not the
+  // inline saveFeedError callout — delete has no form to point the error
+  // at); the caller closes it on success.
+  async function deleteFeed(profileID: string, feedID: string): Promise<boolean> {
+    if (deletingFeed) return false
+    deletingFeed = true
+    try {
+      await DeleteFeed(profileID, feedID)
+    } catch (error) {
+      console.warn('Unable to delete feed', error)
+      showToast(error instanceof Error && error.message ? error.message : 'Could not delete the feed.', { severity: 'error' })
+      return false
+    } finally {
+      deletingFeed = false
+    }
+    showToast('Feed deleted', { severity: 'success' })
+    // The deleted feed can no longer anchor the sidebar selection.
+    if (selection.value.type === 'feed' && selection.value.feedId === feedID) {
+      await selectSidebar({ type: 'all' })
+    }
+    await reloadProfilesQuietly()
+    return true
   }
 
   async function selectProfile(profileID: string) {
@@ -210,6 +392,95 @@ export function useFeedState() {
     showToast('Not wired up yet')
   }
 
+  async function loadConfig() {
+    try {
+      const info = await Config()
+      // A fresh invalid state (first sight of this error, or a valid→invalid
+      // transition) always re-opens the overlay even if an earlier, now-
+      // resolved error was dismissed; an unchanged still-broken error
+      // respects an existing dismissal so re-opening the sheet doesn't
+      // re-interrupt the user.
+      if (!info.valid && (!config.value || config.value.valid || config.value.error !== info.error)) {
+        configErrorDismissed.value = false
+      }
+      config.value = info
+    } catch (error) {
+      console.warn('Unable to load feeds config', error)
+      config.value = null
+    }
+  }
+
+  // The feeds-as-code handoff: put a schema-complete prompt on the
+  // clipboard for the user to paste into a coding agent, which edits the
+  // YAML the app then hot-reloads.
+  async function copyConfigPrompt() {
+    try {
+      const prompt = await ConfigPrompt()
+      await navigator.clipboard.writeText(prompt)
+      showToast('Prompt copied — paste it into a coding agent', { severity: 'success' })
+    } catch (error) {
+      console.warn('Unable to copy config prompt', error)
+      showToast('Could not copy the prompt', { severity: 'error' })
+    }
+  }
+
+  async function copyConfigPath() {
+    const path = config.value?.path
+    if (!path) return
+    try {
+      await navigator.clipboard.writeText(path)
+      showToast('Path copied', { severity: 'success' })
+    } catch (error) {
+      console.warn('Unable to copy config path', error)
+      showToast('Could not copy the path', { severity: 'error' })
+    }
+  }
+
+  // Copies the raw validation error text shown in the config-error overlay —
+  // the "Copy" affordance next to its VALIDATION DETAIL list.
+  async function copyConfigErrors() {
+    const text = config.value?.error
+    if (!text) return
+    try {
+      await navigator.clipboard.writeText(text)
+      showToast('Errors copied', { severity: 'success' })
+    } catch (error) {
+      console.warn('Unable to copy config errors', error)
+      showToast('Could not copy the errors', { severity: 'error' })
+    }
+  }
+
+  // A config hot-reload can rename or remove the active profile or the
+  // selected feed; re-anchor rather than showing items of a definition that
+  // no longer exists. Errors keep the last-good data on the backend; the
+  // config-error overlay (driven by config.valid, refreshed above) is the
+  // signal now, not a toast — it needs the user's attention, not a 4s blip.
+  async function onConfigUpdated(status: string) {
+    await loadConfig()
+    if (status !== 'ok') return
+    showToast('Feeds config reloaded', { severity: 'success' })
+    await reloadProfilesQuietly()
+    profilesLoaded.value = true
+    const active = profiles.value.find((profile) => profile.id === activeProfileId.value) ?? profiles.value[0]
+    if (!active) {
+      activeProfileId.value = ''
+      items.value = []
+      selectedId.value = null
+      actions.value = []
+      return
+    }
+    if (active.id !== activeProfileId.value) {
+      await selectProfile(active.id)
+      return
+    }
+    const currentSelection = selection.value
+    if (currentSelection.type === 'feed' && !active.feeds?.some((feed) => feed.id === currentSelection.feedId)) {
+      await selectSidebar({ type: 'all' })
+      return
+    }
+    await loadItems(currentFeedId())
+  }
+
   async function hideWindow() {
     try {
       if (typeof Window !== 'undefined' && typeof Window.Hide === 'function') await Window.Hide()
@@ -230,17 +501,27 @@ export function useFeedState() {
   }
 
   let unsubscribeFeed: (() => void) | undefined
+  let unsubscribeConfig: (() => void) | undefined
 
   onMounted(() => {
     unsubscribeFeed = Events.On('feed:updated', (event) => {
       const profileID = Array.isArray(event.data) ? event.data[0] : event.data
       void onFeedUpdated(typeof profileID === 'string' ? profileID : '')
     })
+    unsubscribeConfig = Events.On('config:updated', (event) => {
+      const status = Array.isArray(event.data) ? event.data[0] : event.data
+      void onConfigUpdated(typeof status === 'string' ? status : 'ok')
+    })
     void loadProfiles()
+    // Loaded eagerly (not just when the config sheet/feed editor opens) so a
+    // broken config surfaces the blocking overlay right at startup.
+    void loadConfig()
   })
 
   onUnmounted(() => {
     unsubscribeFeed?.()
+    unsubscribeConfig?.()
+    clearToasts()
   })
 
   return {
@@ -258,11 +539,34 @@ export function useFeedState() {
     unreadOnly,
     title,
     countLabel,
-    toast,
+    toasts,
+    showToast,
+    dismissToast,
+    clearToasts,
     creatingProfile,
     createProfileError,
+    deletingProfile,
+    sources,
+    creatingSource,
+    createSourceError,
+    savingFeed,
+    saveFeedError,
+    loadSources,
+    createSource,
+    loadFeedDef,
+    createFeed,
+    updateFeed,
+    deleteFeed,
+    config,
+    configErrorOverlayOpen,
+    dismissConfigError,
+    loadConfig,
+    copyConfigPrompt,
+    copyConfigPath,
+    copyConfigErrors,
     loadProfiles,
     createProfile,
+    deleteProfile,
     selectProfile,
     selectSidebar,
     selectUnreadView,

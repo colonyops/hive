@@ -14,6 +14,78 @@ export interface Action {
 }
 
 /**
+ * ConfigInfo describes the profiles config file for the frontend: where it
+ * lives, what it contains, and whether it currently parses.
+ */
+export interface ConfigInfo {
+    "path": string;
+    "exists": boolean;
+
+    /**
+     * YAML is the raw file content, or the example template when the file
+     * does not exist yet, so the UI and the copy-prompt always have a
+     * concrete config to show.
+     */
+    "yaml": string;
+    "valid": boolean;
+    "error": string;
+}
+
+/**
+ * FeedDef is a feed inside a profile: a client-side filtered view over one or
+ * more top-level sources. Feeds never cost API requests of their own.
+ */
+export interface FeedDef {
+    "id": string;
+    "name": string;
+    "sources": string[] | null;
+    "filters": FilterDef;
+}
+
+/**
+ * FilterDef is a feed's client-side filter block. Filters run after the
+ * feed's source items are merged, so they change what is shown, not what is
+ * requested — filtering is free of API cost. Groups AND together; values
+ * within a group OR; exclude groups win over includes.
+ */
+export interface FilterDef {
+    /**
+     * Repos/ExcludeRepos are doublestar globs matched against "owner/repo"
+     * (e.g. "colonyops/*").
+     */
+    "repos"?: string[] | null;
+    "exclude_repos"?: string[] | null;
+
+    /**
+     * Authors/ExcludeAuthors are globs matched against the item author
+     * case-insensitively, with "[" and "]" taken literally (bot logins end
+     * in a literal "[bot]"; a character class over login characters has no
+     * realistic use).
+     */
+    "authors"?: string[] | null;
+    "exclude_authors"?: string[] | null;
+
+    /**
+     * Labels keeps items where ANY item label matches ANY glob;
+     * ExcludeLabels drops items where any label matches.
+     */
+    "labels"?: string[] | null;
+    "exclude_labels"?: string[] | null;
+
+    /**
+     * Types matches the item kind: "pr" or "issue" (case-insensitive).
+     */
+    "types"?: string[] | null;
+
+    /**
+     * Reasons matches the notification reason. Items without a reason —
+     * search results that are not also in the notifications inbox — never
+     * match, so a reasons filter excludes them.
+     */
+    "reasons"?: string[] | null;
+}
+
+/**
  * Item is an item from a profile feed.
  */
 export interface Item {
@@ -29,6 +101,12 @@ export interface Item {
     "author": string;
     "age": string;
     "unread": boolean;
+
+    /**
+     * Reason is the GitHub notification reason (e.g. "review_requested"),
+     * empty for items known only from search.
+     */
+    "reason"?: string;
     "labels": string[] | null;
     "branch": string;
     "body": string;
@@ -58,4 +136,25 @@ export interface Source {
     "name": string;
     "count": number;
     "newCount": number;
+}
+
+/**
+ * SourceDef is a top-level data source: one GitHub API acquisition, shared by
+ * any number of feeds. Sources are the only part of the config that costs API
+ * requests; feeds are free client-side views over them.
+ */
+export interface SourceDef {
+    "id": string;
+
+    /**
+     * "search" | "notifications"
+     */
+    "kind": string;
+    "query"?: string;
+
+    /**
+     * Limit bounds items per fetch. Search: default 50, max 100 (API page
+     * cap). Notifications: default 50, max 50 (API page cap).
+     */
+    "limit"?: number;
 }

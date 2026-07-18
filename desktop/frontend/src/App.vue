@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -13,11 +13,19 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import ConfigErrorOverlay from './components/ConfigErrorOverlay.vue'
+import ConfigSheet from './components/ConfigSheet.vue'
+import FeedEditorSheet from './components/FeedEditorSheet.vue'
+import DeleteProfileModal from './components/DeleteProfileModal.vue'
+import NewProfileModal from './components/NewProfileModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
+import ToastStack from './components/ToastStack.vue'
 import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
+import { parseConfigErrors } from './lib/configErrors'
+import type { FeedDef, SourceDef } from './types/feed'
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -26,11 +34,93 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
-  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toast,
-  creatingProfile, createProfileError, loadProfiles, createProfile,
+  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toasts, dismissToast, clearToasts,
+  creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
+  config, configErrorOverlayOpen, dismissConfigError, loadConfig, copyConfigPrompt, copyConfigPath, copyConfigErrors,
+  sources, creatingSource, createSourceError, savingFeed, saveFeedError,
+  loadSources, createSource, loadFeedDef, createFeed, updateFeed, deleteFeed,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
+
+// The overlay only ever gets the shape the backend actually provides today
+// (see internal/desktop/feed/config.go ConfigInfo.Error — a single string);
+// parseConfigErrors is the seam where richer per-problem data would plug in
+// without touching the template.
+const configErrors = computed(() => parseConfigErrors(config.value?.error ?? ''))
+
+// ── Config sheet & profile creation overlays ─────────────────────────────────
+
+const configSheetOpen = ref(false)
+const newProfileOpen = ref(false)
+
+function openConfigSheet() {
+  configSheetOpen.value = true
+  void loadConfig()
+}
+
+function openNewProfile() {
+  createProfileError.value = null // a stale failure must not greet the reopen
+  newProfileOpen.value = true
+}
+
+async function submitNewProfile(name: string) {
+  await createProfile(name)
+  if (!createProfileError.value) newProfileOpen.value = false
+}
+
+// ── Feed editor sheet ────────────────────────────────────────────────────────
+
+const feedEditorOpen = ref(false)
+// Non-null while editing an existing feed; null in create mode.
+const editingFeedId = ref<string | null>(null)
+// The edit-mode prefill, loaded async after the sheet opens.
+const editingFeedDef = ref<FeedDef | null>(null)
+
+function openFeedEditor(feedId?: string) {
+  editingFeedId.value = feedId ?? null
+  editingFeedDef.value = null
+  createSourceError.value = null // stale failures must not greet the reopen
+  saveFeedError.value = null
+  feedEditorOpen.value = true
+  void loadSources()
+  void loadConfig() // the sheet shows the config path row
+  if (feedId && activeProfileId.value) {
+    void loadFeedDef(activeProfileId.value, feedId).then((def) => { editingFeedDef.value = def })
+  }
+}
+
+async function submitFeedSave(def: FeedDef) {
+  if (!activeProfileId.value) return
+  const saved = editingFeedId.value
+    ? await updateFeed(activeProfileId.value, editingFeedId.value, def)
+    : await createFeed(activeProfileId.value, def)
+  if (saved) feedEditorOpen.value = false
+}
+
+async function submitFeedDelete(feedId: string) {
+  if (!activeProfileId.value) return
+  const deleted = await deleteFeed(activeProfileId.value, feedId)
+  if (deleted) feedEditorOpen.value = false
+}
+
+function submitNewSource(def: SourceDef) {
+  void createSource(def)
+}
+
+// ── Delete profile confirm modal ─────────────────────────────────────────────
+
+const deleteProfileOpen = ref(false)
+
+function openDeleteProfile() {
+  deleteProfileOpen.value = true
+}
+
+async function confirmDeleteProfile() {
+  if (!activeProfileId.value) return
+  await deleteProfile(activeProfileId.value)
+  deleteProfileOpen.value = false
+}
 
 // Booting while signed out leaves profiles unloaded (or the live backend
 // erroring); re-load the moment auth lands — and when the login changes, so
@@ -82,7 +172,22 @@ useCommands(computed(() => {
       hint: profileName,
       run: () => selectSidebar({ type: 'feed', feedId: f.id }),
     })
+    cmds.push({
+      id: `feed:edit:${f.id}`,
+      title: `Edit feed: ${f.name}`,
+      group: 'Feeds',
+      keywords: ['editor', 'filters'],
+      run: () => openFeedEditor(f.id),
+    })
   }
+
+  cmds.push({
+    id: 'feed:new',
+    title: 'New feed…',
+    group: 'Feeds',
+    keywords: ['create', 'editor', 'source'],
+    run: () => openFeedEditor(),
+  })
 
   cmds.push({
     id: 'feed:toggle-unread',
@@ -99,6 +204,30 @@ useCommands(computed(() => {
     keywords: ['reload', 'sync'],
     icon: IconRefreshCw,
     run: refresh,
+  })
+
+  cmds.push({
+    id: 'profile:new',
+    title: 'New profile…',
+    group: 'Profiles',
+    keywords: ['workspace', 'create'],
+    run: openNewProfile,
+  })
+
+  cmds.push({
+    id: 'feed:edit-config',
+    title: 'Edit feeds as code…',
+    group: 'Feeds',
+    keywords: ['config', 'yaml', 'profiles'],
+    run: openConfigSheet,
+  })
+
+  cmds.push({
+    id: 'feed:copy-config-prompt',
+    title: 'Copy feeds config prompt',
+    group: 'Feeds',
+    keywords: ['config', 'yaml', 'agent', 'prompt'],
+    run: copyConfigPrompt,
   })
 
   // Themes
@@ -154,7 +283,10 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 </script>
 
 <template>
-  <main class="h-screen w-screen overflow-hidden bg-app text-text">
+  <main
+    class="h-screen w-screen overflow-hidden bg-app text-text"
+    :class="{ 'pointer-events-none blur-[3px] opacity-40 transition-[filter,opacity] duration-200': configErrorOverlayOpen }"
+  >
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
@@ -176,7 +308,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         @create-workspace="createProfile"
       />
       <div v-else class="flex min-h-0 flex-1">
-        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" />
+        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
         <SideBar
           v-if="activeProfile"
           :profile="activeProfile"
@@ -184,6 +316,9 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           :unread-only="unreadOnly"
           @select="selectSidebar"
           @select-unread="selectUnreadView"
+          @edit-feeds="openConfigSheet"
+          @edit-feed="openFeedEditor"
+          @delete-profile="openDeleteProfile"
         />
         <section v-if="activeProfile" class="flex min-w-0 flex-1">
           <FeedList
@@ -208,14 +343,54 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         </div>
       </div>
     </div>
-    <Transition name="toast">
-      <div v-if="toast" class="fixed bottom-5 right-5 rounded-lg border border-strong bg-chip px-4 py-2.5 font-mono text-xs text-text shadow-2xl" data-testid="toast">{{ toast }}</div>
-    </Transition>
+    <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
+    <ConfigSheet
+      v-if="configSheetOpen"
+      :config="config"
+      @close="configSheetOpen = false"
+      @copy-prompt="copyConfigPrompt"
+      @copy-path="copyConfigPath"
+    />
+    <FeedEditorSheet
+      v-if="feedEditorOpen"
+      :feed-id="editingFeedId"
+      :initial-def="editingFeedDef"
+      :sources="sources"
+      :config="config"
+      :busy="savingFeed"
+      :error="saveFeedError"
+      :source-busy="creatingSource"
+      :source-error="createSourceError"
+      @close="feedEditorOpen = false"
+      @save="submitFeedSave"
+      @delete="submitFeedDelete"
+      @create-source="submitNewSource"
+      @copy-prompt="copyConfigPrompt"
+      @copy-path="copyConfigPath"
+    />
+    <NewProfileModal
+      v-if="newProfileOpen"
+      :busy="creatingProfile"
+      :error="createProfileError"
+      @close="newProfileOpen = false"
+      @create="submitNewProfile"
+    />
+    <DeleteProfileModal
+      v-if="deleteProfileOpen && activeProfile"
+      :profile-name="activeProfile.name"
+      :busy="deletingProfile"
+      @close="deleteProfileOpen = false"
+      @confirm="confirmDeleteProfile"
+    />
   </main>
+  <ConfigErrorOverlay
+    v-if="configErrorOverlayOpen"
+    :path="config?.path ?? ''"
+    :errors="configErrors"
+    @retry="loadConfig"
+    @dismiss="dismissConfigError"
+    @copy-path="copyConfigPath"
+    @copy-errors="copyConfigErrors"
+  />
 </template>
-
-<style scoped>
-.toast-enter-active, .toast-leave-active { transition: opacity .16s ease, transform .16s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(5px); }
-</style>

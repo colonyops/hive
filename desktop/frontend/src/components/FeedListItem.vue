@@ -30,6 +30,7 @@ const emit = defineEmits<{ select: [] }>()
           <span v-if="item.unread" data-testid="unread-dot" class="size-[7px] shrink-0 rounded-full bg-accent" />
         </div>
         <div class="flex max-w-[150px] flex-wrap items-center justify-end gap-[5px]">
+          <span v-if="item.reason" data-testid="reason-chip" class="rounded border border-card bg-chip px-1.5 py-px font-mono text-[10px] text-text-2">{{ item.reason.replaceAll('_', ' ') }}</span>
           <span v-for="label in item.labels ?? []" :key="label" class="rounded border border-card bg-chip px-1.5 py-px font-mono text-[10px] text-text-2">{{ label }}</span>
         </div>
       </div>

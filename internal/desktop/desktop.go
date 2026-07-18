@@ -15,13 +15,17 @@ import (
 // "onboarding" starts signed out with a self-granting fake device flow.
 const EnvMockMode = "HIVE_DESKTOP_MOCK"
 
+// EnvConfigPath overrides the profiles config file location, mirroring how
+// HIVE_CONFIG overrides the CLI config file.
+const EnvConfigPath = "HIVE_DESKTOP_CONFIG"
+
 // MockMode returns the requested mock mode, or "" for live backends.
 func MockMode() string {
 	return os.Getenv(EnvMockMode)
 }
 
-// StateDir is where the desktop app persists its state (profiles,
-// read-state). It follows the CLI's data-dir convention: HIVE_DATA_DIR,
+// StateDir is where the desktop app persists its app-local state
+// (read-state). It follows the CLI's data-dir convention: HIVE_DATA_DIR,
 // then XDG_DATA_HOME, then ~/.local/share — with a desktop/ subdirectory
 // keeping app state apart from CLI state.
 func StateDir() string {
@@ -34,4 +38,20 @@ func StateDir() string {
 		dataHome = filepath.Join(home, ".local", "share")
 	}
 	return filepath.Join(dataHome, "hive", "desktop")
+}
+
+// ConfigPath is the profiles config file — user-editable, dotfiles-managed
+// YAML, deliberately separate from StateDir so config can live in a dotfiles
+// repo while state stays local. It follows the CLI's config convention:
+// XDG_CONFIG_HOME, then ~/.config, with a desktop/ subdirectory.
+func ConfigPath() string {
+	if path := os.Getenv(EnvConfigPath); path != "" {
+		return path
+	}
+	configHome := os.Getenv("XDG_CONFIG_HOME")
+	if configHome == "" {
+		home, _ := os.UserHomeDir()
+		configHome = filepath.Join(home, ".config")
+	}
+	return filepath.Join(configHome, "hive", "desktop", "profiles.yaml")
 }

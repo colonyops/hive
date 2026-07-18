@@ -9,6 +9,7 @@ declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
             "auth:updated": string;
+            "config:updated": string;
             "feed:updated": string;
         }
     }

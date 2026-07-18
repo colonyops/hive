@@ -106,21 +106,58 @@ func (c *Client) SearchIssues(ctx context.Context, query string, limit int) (Sea
 	return result, nil
 }
 
+// NotificationsResult is one notifications poll. When NotModified is true the
+// inbox has not changed since the ifModifiedSince timestamp and Items is nil —
+// the caller keeps its cached copy. LastModified echoes the response's
+// Last-Modified header for the next conditional request, and PollInterval is
+// the server-mandated minimum seconds between polls (X-Poll-Interval, 0 when
+// the header is absent).
+type NotificationsResult struct {
+	Items        []Notification
+	NotModified  bool
+	LastModified string
+	PollInterval int
+}
+
 // Notifications lists the user's notification inbox, including read threads,
-// so the app can mirror the full inbox and keep triage state locally.
-func (c *Client) Notifications(ctx context.Context, limit int) ([]Notification, error) {
+// so the app can mirror the full inbox and keep triage state locally. A
+// non-empty ifModifiedSince makes the request conditional: authenticated 304
+// responses are free of rate-limit cost, so polling an unchanged inbox costs
+// nothing.
+func (c *Client) Notifications(ctx context.Context, limit int, ifModifiedSince string) (NotificationsResult, error) {
 	params := url.Values{}
 	params.Set("all", "true")
 	params.Set("per_page", strconv.Itoa(limit))
 
 	var notifications []Notification
-	if err := c.getJSON(ctx, "/notifications", params, &notifications); err != nil {
-		return nil, err
+	meta, err := c.getJSONConditional(ctx, "/notifications", params, ifModifiedSince, &notifications)
+	if err != nil {
+		return NotificationsResult{}, err
 	}
-	return notifications, nil
+	return NotificationsResult{
+		Items:        notifications,
+		NotModified:  meta.notModified,
+		LastModified: meta.lastModified,
+		PollInterval: meta.pollInterval,
+	}, nil
 }
 
 func (c *Client) getJSON(ctx context.Context, path string, params url.Values, out any) error {
+	_, err := c.getJSONConditional(ctx, path, params, "", out)
+	return err
+}
+
+// condMeta carries the conditional-request metadata of a response.
+type condMeta struct {
+	notModified  bool
+	lastModified string
+	pollInterval int
+}
+
+// getJSONConditional performs a GET, optionally conditional on
+// ifModifiedSince. A 304 response is a success with notModified set and out
+// untouched; every other non-2xx status maps through statusError.
+func (c *Client) getJSONConditional(ctx context.Context, path string, params url.Values, ifModifiedSince string, out any) (condMeta, error) {
 	endpoint := c.apiBase + path
 	if len(params) > 0 {
 		endpoint += "?" + params.Encode()
@@ -128,28 +165,53 @@ func (c *Client) getJSON(ctx context.Context, path string, params url.Values, ou
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpoint, nil)
 	if err != nil {
-		return fmt.Errorf("github: build request: %w", err)
+		return condMeta{}, fmt.Errorf("github: build request: %w", err)
 	}
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
 	if c.token != "" {
 		req.Header.Set("Authorization", "Bearer "+c.token)
 	}
+	if ifModifiedSince != "" {
+		req.Header.Set("If-Modified-Since", ifModifiedSince)
+	}
 
 	resp, err := c.httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("%w: %w", ErrUnreachable, err)
+		return condMeta{}, fmt.Errorf("%w: %w", ErrUnreachable, err)
 	}
 	defer resp.Body.Close() //nolint:errcheck // read-only body close
 
+	meta := condMeta{
+		lastModified: resp.Header.Get("Last-Modified"),
+		pollInterval: parsePollInterval(resp.Header.Get("X-Poll-Interval")),
+	}
+	if resp.StatusCode == http.StatusNotModified {
+		meta.notModified = true
+		return meta, nil
+	}
 	if err := statusError(resp); err != nil {
-		return err
+		return condMeta{}, err
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(out); err != nil {
-		return fmt.Errorf("github: decode %s: %w", path, err)
+		return condMeta{}, fmt.Errorf("github: decode %s: %w", path, err)
 	}
-	return nil
+	return meta, nil
+}
+
+// parsePollInterval parses the X-Poll-Interval header. A missing or
+// non-numeric value reads as 0 ("no server mandate"): the header is advisory
+// input, not a failure the caller could act on.
+func parsePollInterval(value string) int {
+	if value == "" {
+		return 0
+	}
+	seconds, err := strconv.Atoi(value)
+	if err != nil || seconds < 0 {
+		return 0
+	}
+	return seconds
 }
 
 func statusError(resp *http.Response) error {

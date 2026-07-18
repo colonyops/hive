@@ -42,8 +42,65 @@ func (s *FeedService) CreateProfile(name string) (feed.Profile, error) {
 	return s.provider.CreateProfile(context.Background(), name)
 }
 
-// Refresh refetches the profile's feeds, bypassing the cache TTL, and
-// reports whether anything changed. Backs the manual "Refresh now" action.
+// Refresh refetches the sources the profile's feeds reference, bypassing the
+// search cache TTL, and reports whether anything changed. Backs the manual
+// "Refresh now" action.
 func (s *FeedService) Refresh(profileID string) (bool, error) {
 	return s.provider.Refresh(context.Background(), profileID)
+}
+
+// Sources returns the top-level source definitions, for the feed editor's
+// source picker.
+func (s *FeedService) Sources() ([]feed.SourceDef, error) {
+	return s.provider.Sources(context.Background())
+}
+
+// FeedDefFor returns one feed's definition, for edit prefill.
+func (s *FeedService) FeedDefFor(profileID, feedID string) (feed.FeedDef, error) {
+	return s.provider.FeedDefFor(context.Background(), profileID, feedID)
+}
+
+// CreateSource persists a new top-level source and returns it with its
+// assigned ID.
+func (s *FeedService) CreateSource(def feed.SourceDef) (feed.SourceDef, error) {
+	return s.provider.CreateSource(context.Background(), def)
+}
+
+// CreateFeed persists a new feed in the profile (ID derived from the name)
+// and returns the feed's materialized summary.
+func (s *FeedService) CreateFeed(profileID string, def feed.FeedDef) (feed.Source, error) {
+	return s.provider.CreateFeed(context.Background(), profileID, def)
+}
+
+// UpdateFeed replaces the feed's definition; the feed keeps its ID.
+func (s *FeedService) UpdateFeed(profileID, feedID string, def feed.FeedDef) error {
+	return s.provider.UpdateFeed(context.Background(), profileID, feedID, def)
+}
+
+// DeleteFeed removes the feed from the profile; the profile and its other
+// feeds are untouched.
+func (s *FeedService) DeleteFeed(profileID, feedID string) error {
+	return s.provider.DeleteFeed(context.Background(), profileID, feedID)
+}
+
+// DeleteProfile removes the profile and its feeds. Sources are left
+// untouched: they are shared, decoupled definitions other profiles may
+// still reference.
+func (s *FeedService) DeleteProfile(profileID string) error {
+	return s.provider.DeleteProfile(context.Background(), profileID)
+}
+
+// Config describes the profiles config file: path, content, validity.
+func (s *FeedService) Config() (feed.ConfigInfo, error) {
+	return s.provider.Config(context.Background())
+}
+
+// ConfigPrompt returns a paste-ready prompt for a coding agent to edit the
+// profiles config on the user's behalf.
+func (s *FeedService) ConfigPrompt() (string, error) {
+	info, err := s.provider.Config(context.Background())
+	if err != nil {
+		return "", err
+	}
+	return feed.BuildConfigPrompt(info), nil
 }

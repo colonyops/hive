@@ -4,7 +4,7 @@ import IconPlus from '~icons/lucide/plus'
 import type { Profile } from '../types/feed'
 
 defineProps<{ profiles: Profile[]; activeProfileId: string }>()
-const emit = defineEmits<{ select: [profileId: string] }>()
+const emit = defineEmits<{ select: [profileId: string]; add: [] }>()
 </script>
 
 <template>
@@ -22,7 +22,7 @@ const emit = defineEmits<{ select: [profileId: string] }>()
       <span v-if="profile.id === activeProfileId" class="absolute bottom-2 left-[-13px] top-2 w-[3px] rounded-sm bg-accent" />
       {{ profile.letter }}
     </button>
-    <button class="flex size-[38px] cursor-default items-center justify-center rounded-[10px] border border-dashed border-card text-text-4 hover:border-strong hover:text-text-2" aria-label="Add profile"><IconPlus class="size-4" /></button>
+    <button class="flex size-[38px] cursor-pointer items-center justify-center rounded-[10px] border border-dashed border-card text-text-4 hover:border-strong hover:text-text-2" aria-label="Add profile" data-testid="profile-add" @click="emit('add')"><IconPlus class="size-4" /></button>
     <div class="flex-1" />
     <span class="flex size-[38px] items-center justify-center text-text-4"><IconClock class="size-4" /></span>
     <span class="flex size-[30px] items-center justify-center rounded-full bg-accent-tint font-mono text-xs font-semibold text-accent">hy</span>

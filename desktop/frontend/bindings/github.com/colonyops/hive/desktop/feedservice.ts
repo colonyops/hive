@@ -23,10 +23,65 @@ export function ActionsFor(kind: string): $CancellablePromise<feed$0.Action[] | 
 }
 
 /**
+ * Config describes the profiles config file: path, content, validity.
+ */
+export function Config(): $CancellablePromise<feed$0.ConfigInfo> {
+    return $Call.ByID(3084968143);
+}
+
+/**
+ * ConfigPrompt returns a paste-ready prompt for a coding agent to edit the
+ * profiles config on the user's behalf.
+ */
+export function ConfigPrompt(): $CancellablePromise<string> {
+    return $Call.ByID(3108030981);
+}
+
+/**
+ * CreateFeed persists a new feed in the profile (ID derived from the name)
+ * and returns the feed's materialized summary.
+ */
+export function CreateFeed(profileID: string, def: feed$0.FeedDef): $CancellablePromise<feed$0.Source> {
+    return $Call.ByID(2859570357, profileID, def);
+}
+
+/**
  * CreateProfile creates a workspace seeded with the default feeds.
  */
 export function CreateProfile(name: string): $CancellablePromise<feed$0.Profile> {
     return $Call.ByID(2100022366, name);
+}
+
+/**
+ * CreateSource persists a new top-level source and returns it with its
+ * assigned ID.
+ */
+export function CreateSource(def: feed$0.SourceDef): $CancellablePromise<feed$0.SourceDef> {
+    return $Call.ByID(3542744264, def);
+}
+
+/**
+ * DeleteFeed removes the feed from the profile; the profile and its other
+ * feeds are untouched.
+ */
+export function DeleteFeed(profileID: string, feedID: string): $CancellablePromise<void> {
+    return $Call.ByID(3635964346, profileID, feedID);
+}
+
+/**
+ * DeleteProfile removes the profile and its feeds. Sources are left
+ * untouched: they are shared, decoupled definitions other profiles may
+ * still reference.
+ */
+export function DeleteProfile(profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(388918543, profileID);
+}
+
+/**
+ * FeedDefFor returns one feed's definition, for edit prefill.
+ */
+export function FeedDefFor(profileID: string, feedID: string): $CancellablePromise<feed$0.FeedDef> {
+    return $Call.ByID(3622655147, profileID, feedID);
 }
 
 /**
@@ -52,9 +107,25 @@ export function Profiles(): $CancellablePromise<feed$0.Profile[] | null> {
 }
 
 /**
- * Refresh refetches the profile's feeds, bypassing the cache TTL, and
- * reports whether anything changed. Backs the manual "Refresh now" action.
+ * Refresh refetches the sources the profile's feeds reference, bypassing the
+ * search cache TTL, and reports whether anything changed. Backs the manual
+ * "Refresh now" action.
  */
 export function Refresh(profileID: string): $CancellablePromise<boolean> {
     return $Call.ByID(2193367500, profileID);
+}
+
+/**
+ * Sources returns the top-level source definitions, for the feed editor's
+ * source picker.
+ */
+export function Sources(): $CancellablePromise<feed$0.SourceDef[] | null> {
+    return $Call.ByID(1179368585);
+}
+
+/**
+ * UpdateFeed replaces the feed's definition; the feed keeps its ID.
+ */
+export function UpdateFeed(profileID: string, feedID: string, def: feed$0.FeedDef): $CancellablePromise<void> {
+    return $Call.ByID(3440431000, profileID, feedID, def);
 }

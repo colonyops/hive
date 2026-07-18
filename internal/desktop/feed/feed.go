@@ -7,14 +7,17 @@ import "context"
 
 // Item is an item from a profile feed.
 type Item struct {
-	ID     string   `json:"id"`
-	Kind   string   `json:"kind"` // "PR" | "Issue"
-	Repo   string   `json:"repo"`
-	Num    int      `json:"num"`
-	Title  string   `json:"title"`
-	Author string   `json:"author"`
-	Age    string   `json:"age"`
-	Unread bool     `json:"unread"`
+	ID     string `json:"id"`
+	Kind   string `json:"kind"` // "PR" | "Issue"
+	Repo   string `json:"repo"`
+	Num    int    `json:"num"`
+	Title  string `json:"title"`
+	Author string `json:"author"`
+	Age    string `json:"age"`
+	Unread bool   `json:"unread"`
+	// Reason is the GitHub notification reason (e.g. "review_requested"),
+	// empty for items known only from search.
+	Reason string   `json:"reason,omitempty"`
 	Labels []string `json:"labels"`
 	Branch string   `json:"branch"`
 	Body   string   `json:"body"`
@@ -65,10 +68,34 @@ type Provider interface {
 	// CreateProfile persists a new profile ("workspace") seeded with the
 	// default feeds — onboarding step 2.
 	CreateProfile(ctx context.Context, name string) (Profile, error)
-	// Refresh refetches the profile's feeds bypassing any cache, so a manual
-	// "Refresh now" is a real fetch. It reports whether anything changed and
-	// fails only when every feed fails.
+	// Refresh refetches the distinct sources the profile's feeds reference,
+	// bypassing the search cache TTL, so a manual "Refresh now" is a real
+	// fetch. It reports whether anything changed and fails only when every
+	// source fails.
 	Refresh(ctx context.Context, profileID string) (bool, error)
+	// Config describes the profiles config file backing the provider —
+	// path, content, and validity — for the feeds-as-code UI.
+	Config(ctx context.Context) (ConfigInfo, error)
+	// Sources returns the top-level source definitions, for the feed
+	// editor's source picker.
+	Sources(ctx context.Context) ([]SourceDef, error)
+	// FeedDefFor returns one feed's definition, for edit prefill.
+	FeedDefFor(ctx context.Context, profileID, feedID string) (FeedDef, error)
+	// CreateSource persists a new top-level source and returns it with its
+	// assigned ID.
+	CreateSource(ctx context.Context, def SourceDef) (SourceDef, error)
+	// CreateFeed persists a new feed in the profile — its ID is derived
+	// from the name — and returns the feed's materialized summary.
+	CreateFeed(ctx context.Context, profileID string, def FeedDef) (Source, error)
+	// UpdateFeed replaces the feed's definition; the feed keeps its ID.
+	UpdateFeed(ctx context.Context, profileID, feedID string, def FeedDef) error
+	// DeleteFeed removes the feed from the profile; the profile and its
+	// other feeds are untouched.
+	DeleteFeed(ctx context.Context, profileID, feedID string) error
+	// DeleteProfile removes the profile and its feeds. Sources are left
+	// untouched: they are shared, decoupled definitions other profiles may
+	// still reference. Deleting the last profile is allowed.
+	DeleteProfile(ctx context.Context, profileID string) error
 }
 
 // ActionsFor returns the actions available for a PR or issue. Shared by

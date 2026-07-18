@@ -5,22 +5,40 @@ import type { FeedItem, Profile } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   ActionsFor: vi.fn(),
+  Config: vi.fn(),
+  ConfigPrompt: vi.fn(),
+  CreateFeed: vi.fn(),
   CreateProfile: vi.fn(),
+  CreateSource: vi.fn(),
+  DeleteFeed: vi.fn(),
+  DeleteProfile: vi.fn(),
+  FeedDefFor: vi.fn(),
   Hide: vi.fn(),
   Items: vi.fn(),
   MarkRead: vi.fn(),
   On: vi.fn(),
   Profiles: vi.fn(),
   Refresh: vi.fn(),
+  Sources: vi.fn(),
+  UpdateFeed: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/feedservice', () => ({
   ActionsFor: mocks.ActionsFor,
+  Config: mocks.Config,
+  ConfigPrompt: mocks.ConfigPrompt,
+  CreateFeed: mocks.CreateFeed,
   CreateProfile: mocks.CreateProfile,
+  CreateSource: mocks.CreateSource,
+  DeleteFeed: mocks.DeleteFeed,
+  DeleteProfile: mocks.DeleteProfile,
+  FeedDefFor: mocks.FeedDefFor,
   Items: mocks.Items,
   MarkRead: mocks.MarkRead,
   Profiles: mocks.Profiles,
   Refresh: mocks.Refresh,
+  Sources: mocks.Sources,
+  UpdateFeed: mocks.UpdateFeed,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -103,6 +121,8 @@ describe('useFeedState', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.Profiles.mockResolvedValue(profiles)
+    mocks.Config.mockResolvedValue({ path: '/cfg/profiles.yaml', exists: true, yaml: 'profiles:\n', valid: true, error: '' })
+    mocks.ConfigPrompt.mockResolvedValue('the prompt')
     // Clone so markItemRead's in-place `item.unread = false` on one test never
     // leaks into the shared fixture arrays seen by later tests.
     mocks.Items.mockImplementation((profileID: string, feedID: string) =>
@@ -112,6 +132,16 @@ describe('useFeedState', () => {
     mocks.On.mockReturnValue(() => {})
     mocks.MarkRead.mockResolvedValue(undefined)
     mocks.Refresh.mockResolvedValue(false)
+    mocks.Sources.mockResolvedValue([
+      { id: 'my-prs', kind: 'search', query: 'is:open is:pr author:@me' },
+      { id: 'inbox', kind: 'notifications' },
+    ])
+    mocks.CreateSource.mockImplementation((def: object) => Promise.resolve({ ...def }))
+    mocks.CreateFeed.mockResolvedValue({ id: 'team-prs', name: 'Team PRs', count: 0, newCount: 0 })
+    mocks.UpdateFeed.mockResolvedValue(undefined)
+    mocks.FeedDefFor.mockResolvedValue({ id: 'desktop', name: 'Desktop UI', sources: ['my-prs'], filters: {} })
+    mocks.DeleteFeed.mockResolvedValue(undefined)
+    mocks.DeleteProfile.mockResolvedValue(undefined)
   })
 
   it('loads profiles on mount and switches profiles by resetting selection and reloading items', async () => {
@@ -467,6 +497,421 @@ describe('useFeedState', () => {
 
     expect(state.loadError.value).toContain('rate limit')
     expect(mocks.Items).not.toHaveBeenCalled()
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('loads the config and copies the agent prompt to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.loadConfig()
+    expect(state.config.value?.path).toBe('/cfg/profiles.yaml')
+
+    await state.copyConfigPrompt()
+    expect(writeText).toHaveBeenCalledWith('the prompt')
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: expect.stringContaining('Prompt copied'), severity: 'success' })
+
+    await state.copyConfigPath()
+    expect(writeText).toHaveBeenCalledWith('/cfg/profiles.yaml')
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: 'Path copied', severity: 'success' })
+
+    vi.unstubAllGlobals()
+    wrapper.unmount()
+  })
+
+  it('reloads profiles and re-anchors the selection when config:updated fires', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'config:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectSidebar({ type: 'feed', feedId: 'desktop' })
+
+    // The reloaded profile no longer has the selected feed: scope resets.
+    mocks.Profiles.mockResolvedValue([
+      { ...profiles[0], feeds: [{ id: 'backend', name: 'Backend', count: 1, newCount: 0 }] },
+    ])
+    mocks.Items.mockClear()
+
+    handler?.({ data: 'ok' })
+    await flushPromises()
+
+    expect(state.selection.value).toEqual({ type: 'all' })
+    expect(mocks.Items).toHaveBeenCalledWith('personal', '')
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: expect.stringContaining('reloaded'), severity: 'success' })
+    expect(mocks.Config).toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('switches to the first profile when config:updated removed the active one', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'config:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+    expect(state.activeProfileId.value).toBe('personal')
+
+    mocks.Profiles.mockResolvedValue([profiles[1]])
+
+    handler?.({ data: 'ok' })
+    await flushPromises()
+
+    expect(state.activeProfileId.value).toBe('work')
+
+    wrapper.unmount()
+  })
+
+  it('keeps data and opens the config-error overlay (not a toast) when config:updated reports an error', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'config:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Profiles.mockClear()
+    mocks.Config.mockResolvedValueOnce({ path: '/cfg/profiles.yaml', exists: true, yaml: 'profiles:\n', valid: false, error: 'profiles.yaml: parse error' })
+
+    handler?.({ data: 'profiles.yaml: parse error' })
+    await flushPromises()
+
+    expect(state.configErrorOverlayOpen.value).toBe(true)
+    expect(state.config.value?.error).toBe('profiles.yaml: parse error')
+    expect(state.toasts.value).toHaveLength(0)
+    expect(mocks.Profiles).not.toHaveBeenCalled()
+    expect(state.items.value).not.toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it('closes the config-error overlay on dismiss and re-opens it once for a fresh error', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    mocks.Config.mockResolvedValueOnce({ path: '/cfg/profiles.yaml', exists: true, yaml: '', valid: false, error: 'boom 1' })
+    await state.loadConfig()
+    expect(state.configErrorOverlayOpen.value).toBe(true)
+
+    state.dismissConfigError()
+    expect(state.configErrorOverlayOpen.value).toBe(false)
+
+    // Reloading with the *same* unresolved error respects the dismissal.
+    mocks.Config.mockResolvedValueOnce({ path: '/cfg/profiles.yaml', exists: true, yaml: '', valid: false, error: 'boom 1' })
+    await state.loadConfig()
+    expect(state.configErrorOverlayOpen.value).toBe(false)
+
+    // A *new* error re-opens it even though the old one was dismissed.
+    mocks.Config.mockResolvedValueOnce({ path: '/cfg/profiles.yaml', exists: true, yaml: '', valid: false, error: 'boom 2' })
+    await state.loadConfig()
+    expect(state.configErrorOverlayOpen.value).toBe(true)
+
+    // Fixing the file (valid again) closes it too.
+    mocks.Config.mockResolvedValueOnce({ path: '/cfg/profiles.yaml', exists: true, yaml: 'profiles:\n', valid: true, error: '' })
+    await state.loadConfig()
+    expect(state.configErrorOverlayOpen.value).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('copies the config error text to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Config.mockResolvedValueOnce({ path: '/cfg/profiles.yaml', exists: true, yaml: '', valid: false, error: 'boom' })
+    await state.loadConfig()
+
+    await state.copyConfigErrors()
+
+    expect(writeText).toHaveBeenCalledWith('boom')
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: 'Errors copied', severity: 'success' })
+
+    vi.unstubAllGlobals()
+    wrapper.unmount()
+  })
+
+  describe('showToast', () => {
+    it('stacks multiple toasts and lets each be dismissed independently', async () => {
+      const { state, wrapper } = await mountLoadedState()
+
+      const firstId = state.showToast('First')
+      const secondId = state.showToast('Second', { severity: 'success' })
+
+      expect(state.toasts.value.map((t) => t.message)).toEqual(['First', 'Second'])
+
+      state.dismissToast(firstId)
+
+      expect(state.toasts.value.map((t) => t.id)).toEqual([secondId])
+
+      wrapper.unmount()
+    })
+
+    // Fake timers are only enabled after the initial mount settles: mounting
+    // calls @vue/test-utils' flushPromises(), which itself schedules through
+    // setImmediate/setTimeout — faking timers first would make that hang.
+    it('auto-dismisses a default-severity toast after its duration elapses', async () => {
+      const { state, wrapper } = await mountLoadedState()
+      vi.useFakeTimers()
+      try {
+        state.showToast('Feed refreshed')
+        expect(state.toasts.value).toHaveLength(1)
+
+        vi.advanceTimersByTime(3999)
+        expect(state.toasts.value).toHaveLength(1)
+
+        vi.advanceTimersByTime(1)
+        expect(state.toasts.value).toHaveLength(0)
+      } finally {
+        vi.useRealTimers()
+        wrapper.unmount()
+      }
+    })
+
+    it('never auto-dismisses an error toast', async () => {
+      const { state, wrapper } = await mountLoadedState()
+      vi.useFakeTimers()
+      try {
+        const id = state.showToast("Couldn't reach GitHub", { severity: 'error' })
+        expect(state.toasts.value[0].duration).toBeNull()
+
+        vi.advanceTimersByTime(60_000)
+        expect(state.toasts.value.map((t) => t.id)).toEqual([id])
+      } finally {
+        vi.useRealTimers()
+        wrapper.unmount()
+      }
+    })
+
+    it('clearToasts removes every toast and cancels their timers', async () => {
+      const { state, wrapper } = await mountLoadedState()
+      vi.useFakeTimers()
+      try {
+        state.showToast('One')
+        state.showToast('Two', { severity: 'error' })
+        expect(state.toasts.value).toHaveLength(2)
+
+        state.clearToasts()
+        expect(state.toasts.value).toHaveLength(0)
+
+        // No stray timer fires later and resurrects/crashes on a removed toast.
+        vi.advanceTimersByTime(60_000)
+        expect(state.toasts.value).toHaveLength(0)
+      } finally {
+        vi.useRealTimers()
+        wrapper.unmount()
+      }
+    })
+
+    it('passes actions through to the toast instance', async () => {
+      const { state, wrapper } = await mountLoadedState()
+      const onClick = vi.fn()
+
+      state.showToast('Automatic action taken', { severity: 'auto-action', actions: [{ label: 'Undo', onClick }] })
+
+      expect(state.toasts.value[0].actions).toEqual([{ label: 'Undo', onClick }])
+
+      wrapper.unmount()
+    })
+  })
+
+  it('loads sources for the feed editor', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.loadSources()
+
+    expect(state.sources.value.map((source) => source.id)).toEqual(['my-prs', 'inbox'])
+
+    wrapper.unmount()
+  })
+
+  it('keeps the previous sources when loading fails', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    await state.loadSources()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.Sources.mockRejectedValueOnce(new Error('boom'))
+
+    await state.loadSources()
+
+    expect(state.sources.value.map((source) => source.id)).toEqual(['my-prs', 'inbox'])
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('creates a source and appends the backend-assigned definition', async () => {
+    mocks.CreateSource.mockResolvedValue({ id: 'team-prs-2', kind: 'search', query: 'org:acme' })
+    const { state, wrapper } = await mountLoadedState()
+    await state.loadSources()
+
+    const created = await state.createSource({ id: 'team-prs', kind: 'search', query: 'org:acme' })
+
+    expect(mocks.CreateSource).toHaveBeenCalledWith({ id: 'team-prs', kind: 'search', query: 'org:acme' })
+    expect(created?.id).toBe('team-prs-2')
+    expect(state.sources.value.map((source) => source.id)).toEqual(['my-prs', 'inbox', 'team-prs-2'])
+    expect(state.createSourceError.value).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('surfaces source creation failures', async () => {
+    mocks.CreateSource.mockRejectedValue(new Error('source "x": kind "search" requires a query'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, wrapper } = await mountLoadedState()
+
+    const created = await state.createSource({ id: 'x', kind: 'search' })
+
+    expect(created).toBeNull()
+    expect(state.createSourceError.value).toContain('requires a query')
+    expect(state.creatingSource.value).toBe(false)
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('loads a feed definition for edit prefill', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    const def = await state.loadFeedDef('personal', 'desktop')
+
+    expect(mocks.FeedDefFor).toHaveBeenCalledWith('personal', 'desktop')
+    expect(def?.name).toBe('Desktop UI')
+
+    wrapper.unmount()
+  })
+
+  it('creates a feed, toasts, and optimistically reloads profiles', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Profiles.mockClear()
+
+    const def = { id: '', name: 'Team PRs', sources: ['my-prs'], filters: {} }
+    const saved = await state.createFeed('personal', def)
+
+    expect(saved).toBe(true)
+    expect(mocks.CreateFeed).toHaveBeenCalledWith('personal', def)
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: 'Feed created', severity: 'success' })
+    expect(mocks.Profiles).toHaveBeenCalled()
+    expect(state.saveFeedError.value).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('updates a feed and reports failures without a toast', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    const def = { id: 'desktop', name: 'Desktop UI', sources: ['my-prs'], filters: { types: ['pr'] } }
+    const saved = await state.updateFeed('personal', 'desktop', def)
+
+    expect(saved).toBe(true)
+    expect(mocks.UpdateFeed).toHaveBeenCalledWith('personal', 'desktop', def)
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: 'Feed updated', severity: 'success' })
+
+    mocks.UpdateFeed.mockRejectedValueOnce(new Error('feed: unknown source "gone"'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const failed = await state.updateFeed('personal', 'desktop', def)
+
+    expect(failed).toBe(false)
+    expect(state.saveFeedError.value).toContain('unknown source')
+    expect(state.savingFeed.value).toBe(false)
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('deletes a feed, toasts, and falls back to All when it was selected', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectSidebar({ type: 'feed', feedId: 'desktop' })
+    mocks.Items.mockClear()
+
+    const deleted = await state.deleteFeed('personal', 'desktop')
+
+    expect(deleted).toBe(true)
+    expect(mocks.DeleteFeed).toHaveBeenCalledWith('personal', 'desktop')
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: 'Feed deleted', severity: 'success' })
+    expect(state.selection.value).toEqual({ type: 'all' })
+    expect(mocks.Items).toHaveBeenCalledWith('personal', '')
+
+    wrapper.unmount()
+  })
+
+  it('deletes a feed without touching selection when a different feed was selected', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectSidebar({ type: 'all' })
+    mocks.Items.mockClear()
+
+    await state.deleteFeed('personal', 'backend')
+
+    expect(state.selection.value).toEqual({ type: 'all' })
+    // No feed selection to fall back from, so selectSidebar never re-fires.
+    expect(mocks.Items).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('surfaces feed deletion failures as an error toast', async () => {
+    mocks.DeleteFeed.mockRejectedValue(new Error('feed: unknown feed "gone"'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, wrapper } = await mountLoadedState()
+
+    const deleted = await state.deleteFeed('personal', 'gone')
+
+    expect(deleted).toBe(false)
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: expect.stringContaining('unknown feed'), severity: 'error' })
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('deletes a profile, toasts, and switches to the first remaining profile', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    expect(state.activeProfileId.value).toBe('personal')
+
+    mocks.Profiles.mockResolvedValue([profiles[1]])
+
+    const deleted = await state.deleteProfile('personal')
+
+    expect(deleted).toBe(true)
+    expect(mocks.DeleteProfile).toHaveBeenCalledWith('personal')
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: 'Profile deleted', severity: 'success' })
+    expect(state.activeProfileId.value).toBe('work')
+
+    wrapper.unmount()
+  })
+
+  it('clears active profile and items when the last profile is deleted', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    mocks.Profiles.mockResolvedValue([])
+
+    await state.deleteProfile('personal')
+
+    expect(state.activeProfileId.value).toBe('')
+    expect(state.items.value).toEqual([])
+    expect(state.selectedId.value).toBeNull()
+    // profilesLoaded stays true: this is the "no workspaces yet" shape,
+    // which App's needsWorkspace computed routes into onboarding for.
+    expect(state.profilesLoaded.value).toBe(true)
+    expect(state.profiles.value).toEqual([])
+
+    wrapper.unmount()
+  })
+
+  it('surfaces profile deletion failures as an error toast and keeps the active profile', async () => {
+    mocks.DeleteProfile.mockRejectedValue(new Error('feed: unknown profile "gone"'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, wrapper } = await mountLoadedState()
+
+    const deleted = await state.deleteProfile('personal')
+
+    expect(deleted).toBe(false)
+    expect(state.toasts.value.at(-1)).toMatchObject({ message: expect.stringContaining('unknown profile'), severity: 'error' })
+    expect(state.activeProfileId.value).toBe('personal')
 
     warn.mockRestore()
     wrapper.unmount()

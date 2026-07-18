@@ -32,30 +32,55 @@ var _ = registerEvents()
 
 func registerEvents() struct{} {
 	// feed:updated carries the profile ID whose data changed; auth:updated
-	// carries the new auth state string. Both are wake-up signals: the
-	// frontend re-reads the relevant service on receipt.
+	// carries the new auth state string; config:updated carries "ok" or the
+	// config error text after a profiles-config reload. All are wake-up
+	// signals: the frontend re-reads the relevant service on receipt.
 	application.RegisterEvent[string]("feed:updated")
 	application.RegisterEvent[string]("auth:updated")
+	application.RegisterEvent[string]("config:updated")
 	return struct{}{}
 }
 
 // buildFeedProvider returns the provider plus, in live mode, a poller that
-// pushes feed:updated when a background refresh finds changes. Mock modes
-// serve static fixtures and need no poller.
-func buildFeedProvider() (feed.Provider, *feed.Poller) {
+// pushes feed:updated when a background refresh finds changes and a watcher
+// that hot-reloads the profiles config on external edits. Mock modes serve
+// static fixtures and need neither.
+func buildFeedProvider() (feed.Provider, *feed.Poller, *feed.ConfigWatcher) {
 	switch desktop.MockMode() {
 	case "feed":
-		return feed.NewMockProvider(), nil
+		return feed.NewMockProvider(), nil, nil
 	case "onboarding":
 		// Empty start so e2e walks the whole first run: auth, then
 		// workspace creation, then the fixture feed.
-		return feed.NewEmptyMockProvider(), nil
+		return feed.NewEmptyMockProvider(), nil, nil
 	default:
 		logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-		store := feed.NewStore(desktop.StateDir())
+		store := feed.NewStore(desktop.ConfigPath(), desktop.StateDir())
 		provider := feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
 		poller := feed.NewPoller(provider, feed.DefaultPollInterval, emitFeedUpdated, logger)
-		return provider, poller
+		watcher, err := feed.NewConfigWatcher(desktop.ConfigPath(), func() {
+			reloadConfig(store, provider)
+		}, logger)
+		if err != nil {
+			// The app works without hot reload; edits then need a restart.
+			logger.Warn().Err(err).Msg("profiles config hot-reload unavailable")
+		}
+		return provider, poller, watcher
+	}
+}
+
+// reloadConfig re-reads the profiles config after an on-disk change, drops
+// the fetch cache (feed definitions may have changed), and wakes the
+// frontend with the outcome. A broken config keeps the last-good profiles;
+// the error text rides the event so the UI can say what is wrong.
+func reloadConfig(store *feed.Store, provider *feed.LiveProvider) {
+	status := "ok"
+	if err := store.Reload(); err != nil {
+		status = err.Error()
+	}
+	provider.Invalidate()
+	if app := application.Get(); app != nil {
+		app.Event.Emit("config:updated", status)
 	}
 }
 
@@ -87,11 +112,15 @@ func emitAuthUpdated() {
 }
 
 func main() {
-	// The poller lives for the whole process; it dies with it, so there is
-	// no Stop call here (and log.Fatal below would skip a defer anyway).
-	provider, poller := buildFeedProvider()
+	// The poller and watcher live for the whole process; they die with it,
+	// so there are no Stop/Close calls here (and log.Fatal below would skip
+	// a defer anyway).
+	provider, poller, watcher := buildFeedProvider()
 	if poller != nil {
 		poller.Start()
+	}
+	if watcher != nil {
+		watcher.Start()
 	}
 
 	// Every auth transition drops the feed cache before the frontend is

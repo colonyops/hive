@@ -3,7 +3,11 @@
 
 export type {
     Action,
+    ConfigInfo,
+    FeedDef,
+    FilterDef,
     Item,
     Profile,
-    Source
+    Source,
+    SourceDef
 } from "./models.js";
