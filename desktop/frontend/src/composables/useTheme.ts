@@ -1,10 +1,22 @@
 import { ref, type Ref } from 'vue'
 
-export type Theme = 'dark' | 'light'
+export const themes = ['dark', 'light', 'midnight', 'gruvbox'] as const
+export type Theme = (typeof themes)[number]
+
+export const themeLabels: Record<Theme, string> = {
+  dark: 'Dark',
+  light: 'Light',
+  midnight: 'Midnight',
+  gruvbox: 'Gruvbox',
+}
 
 const storageKey = 'hive.theme'
 const theme = ref<Theme>('dark')
 let initialized = false
+
+function isTheme(value: string | null): value is Theme {
+  return themes.includes(value as Theme)
+}
 
 function applyTheme(nextTheme: Theme): void {
   theme.value = nextTheme
@@ -16,16 +28,16 @@ function initializeTheme(): void {
   if (initialized) return
 
   const storedTheme = localStorage.getItem(storageKey)
-  applyTheme(storedTheme === 'light' ? 'light' : 'dark')
+  applyTheme(isTheme(storedTheme) ? storedTheme : 'dark')
   initialized = true
 }
 
-export function toggleTheme(): void {
+export function setTheme(nextTheme: Theme): void {
   initializeTheme()
-  applyTheme(theme.value === 'dark' ? 'light' : 'dark')
+  applyTheme(nextTheme)
 }
 
-export function useTheme(): { theme: Ref<Theme>; toggleTheme: () => void } {
+export function useTheme(): { theme: Ref<Theme>; setTheme: (nextTheme: Theme) => void } {
   initializeTheme()
-  return { theme, toggleTheme }
+  return { theme, setTheme }
 }

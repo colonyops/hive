@@ -28,14 +28,14 @@ function mountItem(overrides: Partial<FeedItem> = {}, selected = false) {
 }
 
 describe('FeedListItem', () => {
-  it('maps pull requests and issues to their badge classes', () => {
+  it('maps pull requests and issues to their kind icon classes', () => {
     const pr = mountItem({ kind: 'PR' })
-    expect(pr.find('.kind-badge').classes()).toContain('text-kind-pr')
-    expect(pr.find('.kind-badge').classes()).toContain('border-kind-pr')
+    expect(pr.find('[data-testid="kind-badge"]').classes()).toContain('kind-icon-pr')
+    expect(pr.find('[data-testid="kind-badge"]').attributes('data-kind')).toBe('PR')
 
     const issue = mountItem({ kind: 'Issue' })
-    expect(issue.find('.kind-badge').classes()).toContain('text-kind-issue')
-    expect(issue.find('.kind-badge').classes()).toContain('border-kind-issue')
+    expect(issue.find('[data-testid="kind-badge"]').classes()).toContain('kind-icon-issue')
+    expect(issue.find('[data-testid="kind-badge"]').attributes('data-kind')).toBe('Issue')
   })
 
   it('shows the unread dot only for unread items', () => {

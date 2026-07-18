@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import IconClock from '~icons/lucide/clock'
+import IconPlus from '~icons/lucide/plus'
 import type { Profile } from '../types/feed'
 
 defineProps<{ profiles: Profile[]; activeProfileId: string }>()
@@ -6,7 +8,7 @@ const emit = defineEmits<{ select: [profileId: string] }>()
 </script>
 
 <template>
-  <aside class="flex w-[58px] shrink-0 flex-col items-center gap-2.5 border-r border-border bg-app py-3">
+  <aside class="flex w-[58px] shrink-0 flex-col items-center gap-2.5 border-r border-border bg-raised py-3">
     <button
       v-for="profile in profiles"
       :key="profile.id"
@@ -20,9 +22,9 @@ const emit = defineEmits<{ select: [profileId: string] }>()
       <span v-if="profile.id === activeProfileId" class="absolute bottom-2 left-[-13px] top-2 w-[3px] rounded-sm bg-accent" />
       {{ profile.letter }}
     </button>
-    <button class="flex size-[38px] cursor-default items-center justify-center rounded-[10px] border border-dashed border-card text-xl text-text-4 hover:border-strong hover:text-text-2" aria-label="Add profile">+</button>
+    <button class="flex size-[38px] cursor-default items-center justify-center rounded-[10px] border border-dashed border-card text-text-4 hover:border-strong hover:text-text-2" aria-label="Add profile"><IconPlus class="size-4" /></button>
     <div class="flex-1" />
-    <span class="flex size-[38px] items-center justify-center text-base text-text-4">◔</span>
-    <span class="flex size-[30px] items-center justify-center rounded-full bg-accent/15 font-mono text-xs font-semibold text-accent">hy</span>
+    <span class="flex size-[38px] items-center justify-center text-text-4"><IconClock class="size-4" /></span>
+    <span class="flex size-[30px] items-center justify-center rounded-full bg-accent-tint font-mono text-xs font-semibold text-accent">hy</span>
   </aside>
 </template>

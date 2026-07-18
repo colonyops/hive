@@ -10,13 +10,13 @@ export default defineConfig({
   expect: { timeout: 10_000 },
   outputDir: 'test-results',
   use: {
-    baseURL: 'http://localhost:8080',
+    baseURL: 'http://127.0.0.1:8931',
     viewport: { width: 1360, height: 864 },
   },
   webServer: {
     command: './scripts/serve.sh',
     cwd: here,
-    url: 'http://localhost:8080',
+    url: 'http://127.0.0.1:8931',
     timeout: 180_000,
     reuseExistingServer: !process.env.CI,
   },

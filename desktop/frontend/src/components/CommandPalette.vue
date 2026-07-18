@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
+import IconSearch from '~icons/lucide/search'
 import { useCommandPalette, type Command } from '../composables/useCommands'
 
 const { open, query, results, toggle, run } = useCommandPalette()
@@ -92,7 +93,7 @@ function onKeydown(e: KeyboardEvent): void {
         >
           <!-- Input row -->
           <div class="palette-input-row">
-            <span class="palette-search-icon">⌕</span>
+            <IconSearch class="palette-search-icon size-3.5" />
             <input
               ref="inputRef"
               v-model="query"

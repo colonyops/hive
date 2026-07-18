@@ -8,7 +8,7 @@ import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
-import { useTheme } from './composables/useTheme'
+import { setTheme, themeLabels, themes } from './composables/useTheme'
 
 const {
   profiles, activeProfile, activeProfileId, selection, items, selectedId, selectedItem,
@@ -19,7 +19,6 @@ const {
 // ── Command palette ──────────────────────────────────────────────────────────
 
 const { open: paletteOpen, toggle: togglePalette } = useCommandPalette()
-const { toggleTheme } = useTheme()
 
 // Seed commands — reactive getter so they update when profiles/feeds load
 useCommands(computed(() => {
@@ -59,15 +58,18 @@ useCommands(computed(() => {
     run: toggleUnread,
   })
 
-  // Window
-  cmds.push({
-    id: 'window:toggle-theme',
-    title: 'Toggle light/dark theme',
-    group: 'Window',
-    keywords: ['theme', 'appearance', 'light', 'dark'],
-    run: toggleTheme,
-  })
+  // Themes
+  for (const t of themes) {
+    cmds.push({
+      id: `theme:${t}`,
+      title: `Theme: ${themeLabels[t]}`,
+      group: 'Theme',
+      keywords: ['theme', 'appearance', t],
+      run: () => setTheme(t),
+    })
+  }
 
+  // Window
   cmds.push({
     id: 'window:hide',
     title: 'Hide window',
@@ -107,9 +109,9 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 </script>
 
 <template>
-  <main class="h-screen w-screen overflow-hidden border border-card bg-app text-text">
-    <div class="flex h-full min-h-0 flex-col overflow-hidden rounded-[10px]">
-      <TitleBar :profile-name="activeProfile?.name ?? 'Loading'" @hide="hideWindow" />
+  <main class="h-screen w-screen overflow-hidden bg-app text-text">
+    <div class="flex h-full min-h-0 flex-col overflow-hidden">
+      <TitleBar :profile-name="activeProfile?.name ?? 'Loading'" />
       <div class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" />
         <SideBar

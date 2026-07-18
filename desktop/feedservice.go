@@ -152,17 +152,17 @@ func (s *FeedService) Items(profileID, feedID string) []FeedItem {
 func (s *FeedService) ActionsFor(kind string) []Action {
 	if kind == "PR" {
 		return []Action{
-			{ID: "review-pr", Icon: "▷", Color: "#34d399", Title: "Review PR", Sub: "sonnet · read the diff, leave inline comments", Primary: true},
-			{ID: "rethink-approach", Icon: "⟲", Color: "#a78bfa", Title: "Rethink approach", Sub: "opus · re-evaluate design, propose an alternative"},
-			{ID: "summarize-changes", Icon: "≣", Color: "#60a5fa", Title: "Summarize changes", Sub: "haiku · post a plain-language summary comment"},
-			{ID: "reproduce-and-fix", Icon: "✦", Color: "#fb7185", Title: "Reproduce & fix", Sub: "sonnet · check out branch, reproduce, patch"},
+			{ID: "review-pr", Icon: "play", Color: "#34d399", Title: "Review PR", Sub: "sonnet · read the diff, leave inline comments", Primary: true},
+			{ID: "rethink-approach", Icon: "rotate-ccw", Color: "#a78bfa", Title: "Rethink approach", Sub: "opus · re-evaluate design, propose an alternative"},
+			{ID: "summarize-changes", Icon: "list", Color: "#60a5fa", Title: "Summarize changes", Sub: "haiku · post a plain-language summary comment"},
+			{ID: "reproduce-and-fix", Icon: "sparkles", Color: "#fb7185", Title: "Reproduce & fix", Sub: "sonnet · check out branch, reproduce, patch"},
 		}
 	}
 
 	return []Action{
-		{ID: "start-implementation", Icon: "▷", Color: "#34d399", Title: "Start implementation", Sub: "sonnet · new branch, implement from the issue", Primary: true},
-		{ID: "investigate", Icon: "⌕", Color: "#60a5fa", Title: "Investigate", Sub: "sonnet · research and write a findings doc"},
-		{ID: "rethink-spec", Icon: "⟲", Color: "#a78bfa", Title: "Rethink / spec", Sub: "opus · draft a plan before writing code"},
-		{ID: "create-hc-task", Icon: "◆", Color: "#f59e0b", Title: "Create hc task", Sub: "turn this into a Honeycomb epic"},
+		{ID: "start-implementation", Icon: "play", Color: "#34d399", Title: "Start implementation", Sub: "sonnet · new branch, implement from the issue", Primary: true},
+		{ID: "investigate", Icon: "search", Color: "#60a5fa", Title: "Investigate", Sub: "sonnet · research and write a findings doc"},
+		{ID: "rethink-spec", Icon: "rotate-ccw", Color: "#a78bfa", Title: "Rethink / spec", Sub: "opus · draft a plan before writing code"},
+		{ID: "create-hc-task", Icon: "diamond", Color: "#f59e0b", Title: "Create hc task", Sub: "turn this into a Honeycomb epic"},
 	}
 }

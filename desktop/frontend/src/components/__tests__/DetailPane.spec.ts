@@ -21,7 +21,7 @@ const item: FeedItem = {
 const actions: Action[] = [
   {
     id: 'summarize',
-    icon: '✦',
+    icon: 'sparkles',
     color: '#f59e0b',
     title: 'Summarize thread',
     sub: 'Generate a concise summary',
@@ -29,7 +29,7 @@ const actions: Action[] = [
   },
   {
     id: 'draft',
-    icon: '✎',
+    icon: 'list',
     color: '#38bdf8',
     title: 'Draft reply',
     sub: 'Write a response',
@@ -41,8 +41,8 @@ describe('DetailPane', () => {
   it('renders primary and non-primary action controls', () => {
     const wrapper = mount(DetailPane, { props: { item, actions } })
 
-    expect(wrapper.text()).toContain('Run ↵')
-    expect(wrapper.text()).toContain('▷')
+    expect(wrapper.find('[data-testid="primary-action"]').text()).toContain('Run')
+    expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(2)
   })
 
   it('emits run-action with the action id', async () => {

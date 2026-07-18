@@ -8,4 +8,4 @@ cd ../../
 )
 mkdir -p desktop/bin
 go build -tags server -o desktop/bin/hive-desktop-server ./desktop
-exec desktop/bin/hive-desktop-server
+exec env WAILS_SERVER_PORT="${WAILS_SERVER_PORT:-8931}" desktop/bin/hive-desktop-server

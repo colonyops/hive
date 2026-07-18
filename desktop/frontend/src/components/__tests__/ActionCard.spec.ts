@@ -5,7 +5,7 @@ import type { Action } from '../../types/feed'
 
 const baseAction: Action = {
   id: 'summarize',
-  icon: '✦',
+  icon: 'sparkles',
   color: '#f59e0b',
   title: 'Summarize thread',
   sub: 'Generate a concise summary',
@@ -22,8 +22,12 @@ function mountAction(overrides: Partial<Action> = {}) {
 
 describe('ActionCard', () => {
   it('renders the primary and non-primary action affordances', () => {
-    expect(mountAction({ primary: true }).text()).toContain('Run ↵')
-    expect(mountAction({ primary: false }).text()).toContain('▷')
+    const primary = mountAction({ primary: true })
+    expect(primary.find('[data-testid="primary-action"]').text()).toContain('Run')
+
+    const secondary = mountAction({ primary: false })
+    expect(secondary.find('[data-testid="primary-action"]').exists()).toBe(false)
+    expect(secondary.find('svg').exists()).toBe(true)
   })
 
   it('emits run when clicked', async () => {

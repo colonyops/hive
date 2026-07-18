@@ -23,7 +23,7 @@ test('renders the mock feed with pr2841 selected by default', async ({ page }) =
   expect(await feedItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-id')))).toEqual(
     expectedItems.map(([id]) => id),
   )
-  expect(await feedItems.locator('[data-testid="kind-badge"]').allTextContents()).toEqual(
+  expect(await feedItems.locator('[data-testid="kind-badge"]').evaluateAll((badges) => badges.map((badge) => badge.getAttribute('data-kind')))).toEqual(
     expectedItems.map(([, kind]) => kind),
   )
   await expect(page.getByTestId('detail-pane')).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
@@ -37,7 +37,7 @@ test('updates the detail pane and actions for PRs and issues', async ({ page }) 
   await expect(page.getByTestId('detail-pane')).toContainText('hive/desktop #2838')
   await expect(page.getByTestId('detail-pane')).toContainText('feat/2838-oauth-device-flow')
   await expect(page.getByTestId('action-card')).toHaveCount(4)
-  await expect(page.getByTestId('primary-action')).toHaveText('Run ↵')
+  await expect(page.getByTestId('primary-action')).toHaveText('Run')
   await expect(page.getByTestId('action-card').first()).toContainText('Review PR')
 
   await page.locator('[data-testid="feed-item"][data-id="iss1190"]').click()
@@ -45,7 +45,7 @@ test('updates the detail pane and actions for PRs and issues', async ({ page }) 
   await expect(page.getByTestId('detail-pane')).toContainText('hive/desktop #1190')
   await expect(page.getByTestId('detail-pane')).toContainText('feat/1190-notifications-feed')
   await expect(page.getByTestId('action-card')).toHaveCount(4)
-  await expect(page.getByTestId('primary-action')).toHaveText('Run ↵')
+  await expect(page.getByTestId('primary-action')).toHaveText('Run')
   await expect(page.getByTestId('action-card').first()).toContainText('Start implementation')
 })
 
