@@ -116,7 +116,13 @@ run = "wails3 generate bindings -clean=true -ts -i"
 
 [tasks."desktop:serve"]
 description = "Build and run the desktop app as a headless HTTP server (server build)"
-run = ["go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop", "./desktop/bin/hive-desktop-server"]
+# The server binary embeds frontend/dist, so the frontend must be built first —
+# a fresh clone's dist contains only .gitkeep. Port override: WAILS_SERVER_PORT.
+run = [
+  "cd desktop/frontend && npm run build",
+  "go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop",
+  "./desktop/bin/hive-desktop-server",
+]
 
 [tasks."desktop:test"]
 description = "Run desktop frontend + Go tests"
