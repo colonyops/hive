@@ -36,3 +36,8 @@ func (s *FeedService) ActionsFor(kind string) []feed.Action {
 func (s *FeedService) MarkRead(profileID, itemID string) error {
 	return s.provider.MarkRead(context.Background(), profileID, itemID)
 }
+
+// CreateProfile creates a workspace seeded with the default feeds.
+func (s *FeedService) CreateProfile(name string) (feed.Profile, error) {
+	return s.provider.CreateProfile(context.Background(), name)
+}

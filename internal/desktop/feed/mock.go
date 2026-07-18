@@ -1,6 +1,9 @@
 package feed
 
-import "context"
+import (
+	"context"
+	"fmt"
+)
 
 // MockProvider serves the fixture data the e2e suite snapshots. It is the
 // provider in HIVE_DESKTOP_MOCK modes; MarkRead is a no-op so repeated e2e
@@ -94,4 +97,10 @@ func (p *MockProvider) ActionsFor(kind string) []Action {
 
 func (p *MockProvider) MarkRead(context.Context, string, string) error {
 	return nil
+}
+
+// CreateProfile is unsupported in mock mode: the fixture profile always
+// exists, so onboarding step 2 is unreachable there.
+func (p *MockProvider) CreateProfile(context.Context, string) (Profile, error) {
+	return Profile{}, fmt.Errorf("feed: mock provider cannot create profiles")
 }

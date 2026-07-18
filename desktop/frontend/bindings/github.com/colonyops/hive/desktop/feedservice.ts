@@ -23,6 +23,13 @@ export function ActionsFor(kind: string): $CancellablePromise<feed$0.Action[] | 
 }
 
 /**
+ * CreateProfile creates a workspace seeded with the default feeds.
+ */
+export function CreateProfile(name: string): $CancellablePromise<feed$0.Profile> {
+    return $Call.ByID(2100022366, name);
+}
+
+/**
  * Items returns the items of one feed, or of every feed in the profile when
  * feedID is empty.
  */

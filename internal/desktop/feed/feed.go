@@ -62,6 +62,9 @@ type Provider interface {
 	// MarkRead records the item as read app-locally. Implementations must
 	// not touch GitHub: triage state stays local until the user acts.
 	MarkRead(ctx context.Context, profileID, itemID string) error
+	// CreateProfile persists a new profile ("workspace") seeded with the
+	// default feeds — onboarding step 2.
+	CreateProfile(ctx context.Context, name string) (Profile, error)
 }
 
 // ActionsFor returns the actions available for a PR or issue. Shared by

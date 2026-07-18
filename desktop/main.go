@@ -3,6 +3,9 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
+
+	"github.com/rs/zerolog"
 
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/auth"
@@ -36,10 +39,13 @@ func registerEvents() struct{} {
 	return struct{}{}
 }
 
-// buildFeedProvider returns the mock fixtures in every mode until the live
-// GitHub-backed provider lands; the seam is what this phase establishes.
 func buildFeedProvider() feed.Provider {
-	return feed.NewMockProvider()
+	if desktop.MockMode() != "" {
+		return feed.NewMockProvider()
+	}
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	store := feed.NewStore(desktop.StateDir())
+	return feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
 }
 
 func buildAuthBackend(onChange func()) auth.Backend {
