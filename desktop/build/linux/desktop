@@ -1,0 +1,13 @@
+[Desktop Entry]
+Version=1.0
+Name=My Product
+Comment=A hive-desktop application
+# The Exec line includes %u to pass the URL to the application
+Exec=/usr/local/bin/hive-desktop %u
+Terminal=false
+Type=Application
+Icon=hive-desktop
+Categories=Utility;
+StartupWMClass=hive-desktop
+
+ 
