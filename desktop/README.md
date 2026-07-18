@@ -3,33 +3,37 @@
 This directory is a Wails v3 Vue + TypeScript shell for Hive. It is deliberately
 minimal while the desktop UI is developed in later phases.
 
-## Tray-resident shell
+## Native shell
 
 On macOS, the shell uses `application.MacOptions.ActivationPolicy` set to
-`application.ActivationPolicyAccessory`, so Hive has no Dock icon. It also sets
-`ApplicationShouldTerminateAfterLastWindowClosed: false`, keeping the
-application alive while its window is hidden or closed.
+`application.ActivationPolicyRegular`, so Hive is a regular app with a Dock
+icon. It also sets `ApplicationShouldTerminateAfterLastWindowClosed: false`,
+keeping the application alive after its window closes.
 
-The hidden, frameless 1360×864 Hive window is attached with
-`SystemTray.AttachWindow(window)` and has `HideOnFocusLost: true`. During
-`wails3 dev`, Wails sets `FRONTEND_DEVSERVER_URL`; when that is present, the
-shell starts the same frameless tray-attached window visible and disables
-focus-loss hiding so it behaves like a persistent development window.
+The visible 1360×864 Hive window uses native hidden-inset titlebar chrome: a
+`MacTitleBar` with `AppearsTransparent`, `HideTitle`, `FullSizeContent`,
+`UseToolbar`, and `HideToolbarSeparator`, pinned to
+`MacToolbarStyleUnifiedCompact` so AppKit cannot drift the toolbar height
+across macOS versions, and `InvisibleTitleBarHeight: 42` so the traffic
+lights center on the 42px HTML titlebar.
 
-In the pinned Wails alpha, `SystemTray.SetTemplateIcon` accepts exactly one
-`[]byte` PNG; it has no paired `@2x` argument or filename-based asset lookup.
-Both committed template PNGs are embedded, and the shell supplies the 36×36
-`@2x` PNG as the single raster to preserve the best available detail.
+Closing the window hides it rather than destroying it, via a `WindowClosing`
+hook registered with `RegisterHook`. It must be a hook, not `OnWindowEvent`:
+hooks run synchronously before listeners, so `Cancel()` reliably aborts
+Wails' internal window-destroy listener, which otherwise races the callback
+in a separate goroutine. The app keeps running; reopen the window from the
+Dock (`ApplicationShouldHandleReopen` calls `Show`) or from the tray menu.
 
-The alpha's macOS tray implementation gives an attached window left-click
-routing and a tray menu right-click routing when both are configured. Thus a
-left click toggles the Hive window, while a right click opens the menu with
-**Show Hive** and **Quit**. **Show Hive** uses `SystemTray.ShowWindow()` to
-position, show, and focus the window; **Quit** calls `app.Quit()`.
+The tray is a template icon with a menu: **Show Hive** calls `window.Show()`
+and `window.Focus()`, and **Quit** calls `app.Quit()`. In the pinned Wails
+alpha, `SystemTray.SetTemplateIcon` accepts exactly one `[]byte` PNG, so the
+shell embeds only the retina `tray-templateTemplate@2x.png`; the 1x PNG is
+still generated and committed as an asset but not embedded.
 
-Manual Phase 2 verification remains required: check template-icon tinting in
-light and dark menu bars, absence of a Dock icon, left-click toggle,
-blur-to-hide, window-close persistence, and the Show Hive/Quit tray menu.
+Manual Phase 2 verification remains required: check the Dock icon, native
+traffic lights centered on the 42px titlebar, close-hides-window, reopening
+from the Dock and from the tray menu, template-icon tinting in light and dark
+menu bars, and Quit from the tray menu.
 
 ## Pinned versions
 
@@ -88,9 +92,11 @@ wails3 generate bindings -clean=true -ts -i
 
 The frontend Vite plugin requires generated typed-event bindings. The shell
 registers the future-facing `feed:updated` event solely to generate those
-bindings. It uses package-variable initialization rather than an `init()`
-function, because this repository enables `gochecknoinits`. `FeedService` is
-otherwise an empty registered placeholder with only `NewFeedService()`.
+bindings, using package-variable initialization rather than an `init()`
+function because this repository enables `gochecknoinits` (main.go carries a
+comment saying the same). `FeedService` serves mock `Profiles`, `Items`, and
+`ActionsFor` data over the generated TS bindings; the data stays placeholder
+until the real data layer lands in a later phase.
 
 `build/config.yml` keeps `dev_mode.root_path: .`; when `wails3 dev` is started
 from `desktop/`, Wails watches `desktop/` rather than the whole repository.
@@ -110,10 +116,13 @@ mise run desktop:dev      # Start Wails development mode.
 `desktop:dev` runs `wails3 dev -config ./build/config.yml` from the desktop
 application directory. The equivalent Taskfile command is `wails3 task dev`.
 
-The alpha supports server builds. `desktop:serve` compiles the pure HTTP-server
-variant without GUI dependencies to `desktop/bin/hive-desktop-server` and runs
-it. The server defaults to `localhost:8080` unless `application.Options.Server`
-configures another host or port.
+The alpha supports server builds. `desktop:serve` builds the frontend, then
+compiles the pure HTTP-server variant without GUI dependencies to
+`desktop/bin/hive-desktop-server` and runs it. The assets are `//go:embed`ded,
+so frontend edits require re-running the task; the fast frontend loop is
+`desktop:dev` with Vite HMR. The server defaults to `localhost:8080`; if that
+port is taken, override it with the Wails-native `WAILS_SERVER_PORT` env var
+(e.g. `WAILS_SERVER_PORT=9000 mise run desktop:serve`).
 
 ## Icons
 
@@ -135,10 +144,10 @@ scaffold's `appicon.icon` and `Assets.car` inputs were removed, so the template
 icon generator is not part of any desktop build. `CFBundleIconFile` continues
 to point at `icons.icns`. The Linux AppImage consumes the 512px
 `build/appicon.png`; nFPM consumes the generated
-`build/linux/icon-128.png` for its 128px hicolor installation path. Windows
-uses the generated multi-resolution `build/windows/icon.ico`. The generated
-`tray-templateTemplate.png` and `tray-templateTemplate@2x.png` retain the
-macOS `Template` suffix for automatic tinting.
+`build/linux/icon-128.png` for its 128px hicolor installation path. The build
+targets are macOS and Linux only, so no Windows assets are generated. The
+generated `tray-templateTemplate.png` and `tray-templateTemplate@2x.png`
+retain the macOS `Template` suffix for automatic tinting.
 
 ## Agent-driven UI verification
 
@@ -150,13 +159,15 @@ mise run desktop:serve
 
 Drive and inspect the app at `http://localhost:8080` with Playwright or browser
 tooling, read the screenshots in `desktop/e2e/screenshots`, edit, and repeat.
-Run `mise run desktop:e2e` as the regression gate. Before the first local run,
-install the browsers with:
+Run `mise run desktop:e2e` as the regression gate. Its harness
+(`desktop/e2e/scripts/serve.sh` and `playwright.config.ts`) deliberately runs
+its own fresh build on port 8931, so the gate never reuses a stale interactive
+server. Before the first local run, install the browsers with:
 
 ```sh
 cd desktop/e2e
 npx playwright install chromium webkit
 ```
 
-Native shell behavior, including the tray and hide-on-blur behavior, remains a
-manual verification concern.
+Native shell behavior — the tray, the Dock, and close-hides-window — remains
+a manual verification concern.

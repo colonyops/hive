@@ -1,9 +1,10 @@
 <script setup lang="ts">
 defineProps<{ profileName: string }>()
 
-// macOS renders its native traffic lights over the top-left of the titlebar
-// (MacTitleBarHiddenInset). Pad past them, and match the 42px
-// UnifiedCompact toolbar height (measured on macOS Tahoe) macOS vertically centers the buttons in.
+// macOS draws its native traffic lights over the top-left of this bar
+// (hidden-inset chrome configured in desktop/main.go). Pad past them and keep
+// the height in sync with InvisibleTitleBarHeight (42) in main.go so the
+// buttons stay vertically centered.
 const isMac = navigator.userAgent.includes('Mac')
 </script>
 

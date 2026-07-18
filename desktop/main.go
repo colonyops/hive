@@ -19,6 +19,8 @@ var appIcon []byte
 //go:embed build/icons/tray-templateTemplate@2x.png
 var trayIcon []byte
 
+// Package-variable initialization instead of init(): this repo enables
+// gochecknoinits. The event exists solely so typed-event TS bindings generate.
 var _ = registerEvents()
 
 func registerEvents() struct{} {
