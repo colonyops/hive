@@ -19,7 +19,7 @@ release: "1"
 contents:
   - src: "./bin/hive-desktop"
     dst: "/usr/local/bin/hive-desktop"
-  - src: "./build/appicon.png"
+  - src: "./build/linux/icon-128.png"
     dst: "/usr/share/icons/hicolor/128x128/apps/hive-desktop.png"
   - src: "./build/linux/hive-desktop.desktop"
     dst: "/usr/share/applications/hive-desktop.desktop"

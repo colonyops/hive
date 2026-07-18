@@ -93,5 +93,31 @@ go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop
 The server defaults to `localhost:8080` unless `application.Options.Server`
 configures another host or port.
 
-No custom icon assets were added in this phase; the scaffold retains the
-Wails template's default build assets.
+## Icons
+
+The desktop icon masters live in `build/icons/`: `hive-mark.svg` is the
+1024px amber Hive mark on its dark rounded-square field, and
+`tray-template.svg` is the separate black-only 18px macOS template mark.
+Regenerate every committed desktop icon with:
+
+```sh
+./desktop/build/icons/generate.sh
+```
+
+The script requires librsvg (`rsvg-convert`), ImageMagick (`magick`), and
+macOS `iconutil`; install the first two with `brew install librsvg imagemagick`.
+The authoring toolchain was `rsvg-convert 2.62.3` and ImageMagick
+`7.1.2-27`; inspect local versions with `rsvg-convert --version` and
+`magick --version`. It strips volatile PNG metadata. Output is byte-stable when
+regenerated on this authoring toolchain, but that guarantee does not extend to
+other renderer or ImageMagick versions.
+
+`build/darwin/icons.icns` is copied directly into macOS bundles; the Wails
+scaffold's `appicon.icon` and `Assets.car` inputs were removed, so the template
+icon generator is not part of any desktop build. `CFBundleIconFile` continues
+to point at `icons.icns`. The Linux AppImage consumes the 512px
+`build/appicon.png`; nFPM consumes the generated
+`build/linux/icon-128.png` for its 128px hicolor installation path. Windows
+uses the generated multi-resolution `build/windows/icon.ico`. The generated
+`tray-templateTemplate.png` and `tray-templateTemplate@2x.png` retain the
+macOS `Template` suffix for automatic tinting.
