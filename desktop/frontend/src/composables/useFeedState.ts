@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
-import { ActionsFor, CreateProfile, Items, MarkRead, Profiles, Refresh } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
-import type { Action, FeedItem, Profile, SidebarSelection } from '../types/feed'
+import { ActionsFor, Config, ConfigPrompt, CreateProfile, Items, MarkRead, Profiles, Refresh } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
+import type { Action, ConfigInfo, FeedItem, Profile, SidebarSelection } from '../types/feed'
 
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
@@ -23,6 +23,9 @@ export function useFeedState() {
   const toast = ref<string | null>(null)
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
+  // The profiles config file (path, content, validity) for the
+  // feeds-as-code sheet; null until first loaded.
+  const config = ref<ConfigInfo | null>(null)
   let toastTimeout: ReturnType<typeof setTimeout> | undefined
   // Monotonic token: loadItems responses arriving out of order (slow feed
   // switch, live backend latency) must not clobber the newest request.
@@ -210,6 +213,74 @@ export function useFeedState() {
     showToast('Not wired up yet')
   }
 
+  async function loadConfig() {
+    try {
+      config.value = await Config()
+    } catch (error) {
+      console.warn('Unable to load feeds config', error)
+      config.value = null
+    }
+  }
+
+  // The feeds-as-code handoff: put a schema-complete prompt on the
+  // clipboard for the user to paste into a coding agent, which edits the
+  // YAML the app then hot-reloads.
+  async function copyConfigPrompt() {
+    try {
+      const prompt = await ConfigPrompt()
+      await navigator.clipboard.writeText(prompt)
+      showToast('Prompt copied — paste it into a coding agent')
+    } catch (error) {
+      console.warn('Unable to copy config prompt', error)
+      showToast('Could not copy the prompt')
+    }
+  }
+
+  async function copyConfigPath() {
+    const path = config.value?.path
+    if (!path) return
+    try {
+      await navigator.clipboard.writeText(path)
+      showToast('Path copied')
+    } catch (error) {
+      console.warn('Unable to copy config path', error)
+      showToast('Could not copy the path')
+    }
+  }
+
+  // A config hot-reload can rename or remove the active profile or the
+  // selected feed; re-anchor rather than showing items of a definition that
+  // no longer exists. Errors keep the last-good data on the backend, so the
+  // toast is the only change the user sees.
+  async function onConfigUpdated(status: string) {
+    await loadConfig()
+    if (status !== 'ok') {
+      showToast('Feeds config has an error — open Feeds as code')
+      return
+    }
+    showToast('Feeds config reloaded')
+    await reloadProfilesQuietly()
+    profilesLoaded.value = true
+    const active = profiles.value.find((profile) => profile.id === activeProfileId.value) ?? profiles.value[0]
+    if (!active) {
+      activeProfileId.value = ''
+      items.value = []
+      selectedId.value = null
+      actions.value = []
+      return
+    }
+    if (active.id !== activeProfileId.value) {
+      await selectProfile(active.id)
+      return
+    }
+    const currentSelection = selection.value
+    if (currentSelection.type === 'feed' && !active.feeds?.some((feed) => feed.id === currentSelection.feedId)) {
+      await selectSidebar({ type: 'all' })
+      return
+    }
+    await loadItems(currentFeedId())
+  }
+
   async function hideWindow() {
     try {
       if (typeof Window !== 'undefined' && typeof Window.Hide === 'function') await Window.Hide()
@@ -230,17 +301,23 @@ export function useFeedState() {
   }
 
   let unsubscribeFeed: (() => void) | undefined
+  let unsubscribeConfig: (() => void) | undefined
 
   onMounted(() => {
     unsubscribeFeed = Events.On('feed:updated', (event) => {
       const profileID = Array.isArray(event.data) ? event.data[0] : event.data
       void onFeedUpdated(typeof profileID === 'string' ? profileID : '')
     })
+    unsubscribeConfig = Events.On('config:updated', (event) => {
+      const status = Array.isArray(event.data) ? event.data[0] : event.data
+      void onConfigUpdated(typeof status === 'string' ? status : 'ok')
+    })
     void loadProfiles()
   })
 
   onUnmounted(() => {
     unsubscribeFeed?.()
+    unsubscribeConfig?.()
   })
 
   return {
@@ -261,6 +338,10 @@ export function useFeedState() {
     toast,
     creatingProfile,
     createProfileError,
+    config,
+    loadConfig,
+    copyConfigPrompt,
+    copyConfigPath,
     loadProfiles,
     createProfile,
     selectProfile,

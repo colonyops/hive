@@ -14,6 +14,24 @@ export interface Action {
 }
 
 /**
+ * ConfigInfo describes the profiles config file for the frontend: where it
+ * lives, what it contains, and whether it currently parses.
+ */
+export interface ConfigInfo {
+    "path": string;
+    "exists": boolean;
+
+    /**
+     * YAML is the raw file content, or the example template when the file
+     * does not exist yet, so the UI and the copy-prompt always have a
+     * concrete config to show.
+     */
+    "yaml": string;
+    "valid": boolean;
+    "error": string;
+}
+
+/**
  * Item is an item from a profile feed.
  */
 export interface Item {

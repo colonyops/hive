@@ -5,6 +5,8 @@ import type { FeedItem, Profile } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   ActionsFor: vi.fn(),
+  Config: vi.fn(),
+  ConfigPrompt: vi.fn(),
   CreateProfile: vi.fn(),
   Hide: vi.fn(),
   Items: vi.fn(),
@@ -16,6 +18,8 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/feedservice', () => ({
   ActionsFor: mocks.ActionsFor,
+  Config: mocks.Config,
+  ConfigPrompt: mocks.ConfigPrompt,
   CreateProfile: mocks.CreateProfile,
   Items: mocks.Items,
   MarkRead: mocks.MarkRead,
@@ -103,6 +107,8 @@ describe('useFeedState', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.Profiles.mockResolvedValue(profiles)
+    mocks.Config.mockResolvedValue({ path: '/cfg/profiles.yaml', exists: true, yaml: 'profiles:\n', valid: true, error: '' })
+    mocks.ConfigPrompt.mockResolvedValue('the prompt')
     // Clone so markItemRead's in-place `item.unread = false` on one test never
     // leaks into the shared fixture arrays seen by later tests.
     mocks.Items.mockImplementation((profileID: string, feedID: string) =>
@@ -469,6 +475,90 @@ describe('useFeedState', () => {
     expect(mocks.Items).not.toHaveBeenCalled()
 
     warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('loads the config and copies the agent prompt to the clipboard', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } })
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.loadConfig()
+    expect(state.config.value?.path).toBe('/cfg/profiles.yaml')
+
+    await state.copyConfigPrompt()
+    expect(writeText).toHaveBeenCalledWith('the prompt')
+    expect(state.toast.value).toContain('Prompt copied')
+
+    await state.copyConfigPath()
+    expect(writeText).toHaveBeenCalledWith('/cfg/profiles.yaml')
+
+    vi.unstubAllGlobals()
+    wrapper.unmount()
+  })
+
+  it('reloads profiles and re-anchors the selection when config:updated fires', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'config:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectSidebar({ type: 'feed', feedId: 'desktop' })
+
+    // The reloaded profile no longer has the selected feed: scope resets.
+    mocks.Profiles.mockResolvedValue([
+      { ...profiles[0], feeds: [{ id: 'backend', name: 'Backend', count: 1, newCount: 0 }] },
+    ])
+    mocks.Items.mockClear()
+
+    handler?.({ data: 'ok' })
+    await flushPromises()
+
+    expect(state.selection.value).toEqual({ type: 'all' })
+    expect(mocks.Items).toHaveBeenCalledWith('personal', '')
+    expect(state.toast.value).toContain('reloaded')
+    expect(mocks.Config).toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('switches to the first profile when config:updated removed the active one', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'config:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+    expect(state.activeProfileId.value).toBe('personal')
+
+    mocks.Profiles.mockResolvedValue([profiles[1]])
+
+    handler?.({ data: 'ok' })
+    await flushPromises()
+
+    expect(state.activeProfileId.value).toBe('work')
+
+    wrapper.unmount()
+  })
+
+  it('keeps data and surfaces a toast when config:updated reports an error', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'config:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Profiles.mockClear()
+
+    handler?.({ data: 'profiles.yaml: parse error' })
+    await flushPromises()
+
+    expect(state.toast.value).toContain('error')
+    expect(mocks.Profiles).not.toHaveBeenCalled()
+    expect(state.items.value).not.toHaveLength(0)
+
     wrapper.unmount()
   })
 

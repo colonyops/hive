@@ -47,3 +47,18 @@ func (s *FeedService) CreateProfile(name string) (feed.Profile, error) {
 func (s *FeedService) Refresh(profileID string) (bool, error) {
 	return s.provider.Refresh(context.Background(), profileID)
 }
+
+// Config describes the profiles config file: path, content, validity.
+func (s *FeedService) Config() (feed.ConfigInfo, error) {
+	return s.provider.Config(context.Background())
+}
+
+// ConfigPrompt returns a paste-ready prompt for a coding agent to edit the
+// profiles config on the user's behalf.
+func (s *FeedService) ConfigPrompt() (string, error) {
+	info, err := s.provider.Config(context.Background())
+	if err != nil {
+		return "", err
+	}
+	return feed.BuildConfigPrompt(info), nil
+}

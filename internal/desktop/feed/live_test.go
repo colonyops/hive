@@ -3,6 +3,8 @@ package feed
 import (
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -77,7 +79,7 @@ func newLiveProviderForTest(t *testing.T) (*LiveProvider, *Store, *atomic.Int32)
 	t.Helper()
 	server, searchCalls := liveAPIServer(t)
 	client := github.NewClient(github.WithAPIBase(server.URL))
-	store := NewStore(t.TempDir())
+	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
 	now, err := time.Parse(time.RFC3339, testNow)
 	require.NoError(t, err)
@@ -250,7 +252,7 @@ func TestLiveProviderStaleCacheOnTransientError(t *testing.T) {
 
 	server, failStatus := flakyAPIServer(t)
 	client := github.NewClient(github.WithAPIBase(server.URL))
-	store := NewStore(t.TempDir())
+	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
 	current, err := time.Parse(time.RFC3339, testNow)
 	require.NoError(t, err)
@@ -281,7 +283,7 @@ func TestLiveProviderRequiresToken(t *testing.T) {
 
 	server, _ := liveAPIServer(t)
 	client := github.NewClient(github.WithAPIBase(server.URL))
-	store := NewStore(t.TempDir())
+	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore(""), store, zerolog.Nop())
 	def := createTestProfile(t, store)
 
@@ -301,4 +303,29 @@ func TestSlugifyAndShortAge(t *testing.T) {
 	assert.Equal(t, "2h", shortAge(2*time.Hour))
 	assert.Equal(t, "3d", shortAge(3*24*time.Hour))
 	assert.Equal(t, "2w", shortAge(15*24*time.Hour))
+}
+
+func TestLiveProviderRepoFilters(t *testing.T) {
+	t.Parallel()
+
+	server, _ := liveAPIServer(t)
+	client := github.NewClient(github.WithAPIBase(server.URL))
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "profiles.yaml"), []byte(`profiles:
+  - id: work
+    name: Work
+    feeds:
+      - id: prs
+        name: My PRs
+        kind: search
+        query: "is:open is:pr author:@me archived:false"
+        exclude_repos: ["colonyops/docs"]
+`), 0o600))
+	store := newStoreAt(dir)
+	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
+
+	items, err := provider.Items(t.Context(), "work", "prs")
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "colonyops/hive#42", items[0].ID)
 }

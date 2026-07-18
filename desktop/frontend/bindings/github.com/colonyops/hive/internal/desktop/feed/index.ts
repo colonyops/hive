@@ -3,6 +3,7 @@
 
 export type {
     Action,
+    ConfigInfo,
     Item,
     Profile,
     Source

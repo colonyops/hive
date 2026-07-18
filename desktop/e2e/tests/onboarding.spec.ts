@@ -58,4 +58,16 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await expect(page.getByTestId('feed-item')).toHaveCount(6, { timeout: 15_000 })
   await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage')
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
+
+  // A second profile through the rail modal — this server is ours to
+  // mutate, unlike the shared feed-mode instance.
+  await page.getByTestId('profile-add').click()
+  const modal = page.getByTestId('new-profile-modal')
+  await expect(modal).toBeVisible()
+  await page.getByTestId('new-profile-input').fill('Backend Triage')
+  await page.getByTestId('new-profile-submit').click()
+
+  await expect(modal).toBeHidden()
+  await expect(page.getByTestId('profile-tile')).toHaveCount(2)
+  await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Backend Triage')
 })

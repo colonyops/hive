@@ -91,13 +91,15 @@ wails3 generate bindings -clean=true -ts -i
 ```
 
 The frontend Vite plugin requires generated typed-event bindings. The shell
-registers the `feed:updated` and `auth:updated` events using package-variable
-initialization rather than an `init()` function because this repository
-enables `gochecknoinits` (main.go carries a comment saying the same). Both
-events are wake-up signals: `auth:updated` makes the frontend re-read auth
-Status (device-flow grants land in a Go goroutine), and `feed:updated`
-carries the profile ID whose data changed so the frontend re-reads counts
-and, when it is the active profile, items.
+registers the `feed:updated`, `auth:updated`, and `config:updated` events
+using package-variable initialization rather than an `init()` function
+because this repository enables `gochecknoinits` (main.go carries a comment
+saying the same). All are wake-up signals: `auth:updated` makes the frontend
+re-read auth Status (device-flow grants land in a Go goroutine),
+`feed:updated` carries the profile ID whose data changed so the frontend
+re-reads counts and, when it is the active profile, items, and
+`config:updated` carries `"ok"` or the config error text after a
+profiles-config reload.
 
 The feed service delegates to a `feed.Provider`: mock fixtures in
 `HIVE_DESKTOP_MOCK` modes, or the GitHub-backed `LiveProvider` (search-query
@@ -106,6 +108,46 @@ cache, app-local read state under the hive data dir's `desktop/`
 subdirectory). In live mode a poller refreshes every profile each 60s and
 emits `feed:updated` on change; the titlebar's polling indicator reflects
 the active profile's unread count.
+
+## Profiles and feeds as code
+
+Profiles ("workspaces") and their feeds are defined in a user-editable YAML
+file at `$XDG_CONFIG_HOME/hive/desktop/profiles.yaml` (`~/.config` fallback;
+`HIVE_DESKTOP_CONFIG` overrides the path) — deliberately in the config dir,
+not the data dir, so it can live in a dotfiles repo. App-local state
+(read-state) stays in the data dir.
+
+```yaml
+profiles:
+  - id: triage            # stable slug; renaming makes it a new profile
+    name: Triage
+    feeds:
+      - id: my-open-prs
+        name: My open PRs
+        kind: search      # "search" | "notifications"
+        query: "is:open is:pr author:@me archived:false"
+      - id: notifications-inbox
+        name: Notifications inbox
+        kind: notifications
+        repos: ["colonyops/*"]        # optional owner/repo globs (doublestar)
+        exclude_repos: ["colonyops/x"]
+```
+
+Parsing is strict (unknown keys are errors) and validated: unique ids,
+kind-specific query rules, glob syntax, and a 30-feed cap — each feed is one
+GitHub API request per poll cycle, and more would exceed the authenticated
+search rate limit (30 requests/min). `repos`/`exclude_repos` filter fetched
+items client-side, so filters never add API requests.
+
+A `ConfigWatcher` (fsnotify on the config's parent directory, debounced)
+hot-reloads the file on external edits: the store re-parses (keeping the
+last-good profiles when the new content is broken), the provider cache is
+invalidated, and `config:updated` wakes the frontend. Creating a profile in
+the app appends to the YAML via node-tree surgery so hand-written comments
+survive. The "Feeds as code" sheet (sidebar FEEDS `+`, or ⌘K → "Edit feeds
+as code…") shows the file, its validity, and a **Copy prompt** button that
+puts a schema-complete prompt on the clipboard for a coding agent to edit
+the config on the user's behalf.
 
 Desktop-only Go code lives under `internal/desktop/**`; the `desktop/`
 package is thin Wails wiring. `internal/desktop/auth` implements GitHub

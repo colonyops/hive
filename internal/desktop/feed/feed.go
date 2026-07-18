@@ -69,6 +69,9 @@ type Provider interface {
 	// "Refresh now" is a real fetch. It reports whether anything changed and
 	// fails only when every feed fails.
 	Refresh(ctx context.Context, profileID string) (bool, error)
+	// Config describes the profiles config file backing the provider —
+	// path, content, and validity — for the feeds-as-code UI.
+	Config(ctx context.Context) (ConfigInfo, error)
 }
 
 // ActionsFor returns the actions available for a PR or issue. Shared by

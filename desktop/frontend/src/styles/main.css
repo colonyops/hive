@@ -30,6 +30,9 @@
   --color-feeds: var(--hv-feeds);
   --color-selection: var(--hv-selection);
   --color-backdrop: var(--hv-backdrop);
+  --color-code-key: var(--hv-code-key);
+  --color-code-string: var(--hv-code-string);
+  --color-code-comment: var(--hv-code-comment);
 }
 
 @theme {
@@ -68,6 +71,9 @@
   --hv-feeds: #34d399;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.5);
+  --hv-code-key: #7dcfff;
+  --hv-code-string: #9ece6a;
+  --hv-code-comment: #565f89;
 }
 
 [data-theme="light"] {
@@ -95,6 +101,9 @@
   --hv-accent-tint: #f5e6c8;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(24, 24, 27, 0.25);
+  --hv-code-key: #0f6bb8;
+  --hv-code-string: #4d7c0f;
+  --hv-code-comment: #a8a59d;
 }
 
 [data-theme="midnight"] {
@@ -122,6 +131,9 @@
   --hv-accent-tint: #3a2f18;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-code-key: #7dcfff;
+  --hv-code-string: #9ece6a;
+  --hv-code-comment: #4a5480;
 }
 
 [data-theme="gruvbox"] {
@@ -149,6 +161,9 @@
   --hv-accent-tint: #3a2f18;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-code-key: #83a598;
+  --hv-code-string: #b8bb26;
+  --hv-code-comment: #928374;
 }
 
 @keyframes hivePulse {

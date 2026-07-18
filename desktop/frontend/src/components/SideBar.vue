@@ -7,7 +7,7 @@ import IconRss from '~icons/lucide/rss'
 import type { Profile, SidebarSelection } from '../types/feed'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
-const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': [] }>()
+const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'edit-feeds': [] }>()
 
 // "All items" and "Unread" are both all-scope; the unread filter picks
 // which entry lights up. A feed entry highlights regardless of the filter.
@@ -44,7 +44,10 @@ function feedSelected(feedId: string): boolean {
     </div>
 
     <section class="px-2.5 pb-1.5 pt-2">
-      <div class="section-label"><IconRss class="size-3 text-feeds" />FEEDS <IconPlus class="ml-auto size-3.5 text-strong" /></div>
+      <div class="section-label">
+        <IconRss class="size-3 text-feeds" />FEEDS
+        <button class="ml-auto cursor-pointer text-strong hover:text-text-2" aria-label="Edit feeds" data-testid="sidebar-edit-feeds" @click="emit('edit-feeds')"><IconPlus class="size-3.5" /></button>
+      </div>
       <button
         v-for="feed in profile.feeds ?? []"
         :key="feed.id"

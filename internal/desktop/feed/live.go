@@ -141,6 +141,11 @@ func (p *LiveProvider) MarkRead(_ context.Context, profileID, itemID string) err
 	return p.store.MarkRead(itemID, updatedAt)
 }
 
+// Config reports the profiles config file's location and current state.
+func (p *LiveProvider) Config(context.Context) (ConfigInfo, error) {
+	return p.store.ConfigInfo(), nil
+}
+
 // Invalidate drops the fetch cache so the next call refetches.
 func (p *LiveProvider) Invalidate() {
 	p.mu.Lock()
@@ -357,16 +362,32 @@ func (p *LiveProvider) fetchFeed(ctx context.Context, def FeedDef) ([]liveItem, 
 		if err != nil {
 			return nil, err
 		}
-		return p.notificationItems(notifications), nil
+		return filterByRepo(def, p.notificationItems(notifications)), nil
 	case "search":
 		result, err := client.SearchIssues(ctx, def.Query, searchLimit)
 		if err != nil {
 			return nil, err
 		}
-		return p.searchItems(result.Items), nil
+		return filterByRepo(def, p.searchItems(result.Items)), nil
 	default:
 		return nil, fmt.Errorf("feed: unknown feed kind %q", def.Kind)
 	}
+}
+
+// filterByRepo applies the feed's include/exclude repo globs. Filtering
+// happens after the fetch, so it changes what is shown, not what is
+// requested — a filtered feed still costs exactly one API call.
+func filterByRepo(def FeedDef, items []liveItem) []liveItem {
+	if len(def.Repos) == 0 && len(def.ExcludeRepos) == 0 {
+		return items
+	}
+	out := make([]liveItem, 0, len(items))
+	for _, li := range items {
+		if def.matchesRepo(li.item.Repo) {
+			out = append(out, li)
+		}
+	}
+	return out
 }
 
 func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {

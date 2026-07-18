@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -13,6 +13,8 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import ConfigSheet from './components/ConfigSheet.vue'
+import NewProfileModal from './components/NewProfileModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
@@ -28,9 +30,30 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
   selectedId, selectedItem, actions, unreadOnly, title, countLabel, toast,
   creatingProfile, createProfileError, loadProfiles, createProfile,
+  config, loadConfig, copyConfigPrompt, copyConfigPath,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
+
+// ── Config sheet & profile creation overlays ─────────────────────────────────
+
+const configSheetOpen = ref(false)
+const newProfileOpen = ref(false)
+
+function openConfigSheet() {
+  configSheetOpen.value = true
+  void loadConfig()
+}
+
+function openNewProfile() {
+  createProfileError.value = null // a stale failure must not greet the reopen
+  newProfileOpen.value = true
+}
+
+async function submitNewProfile(name: string) {
+  await createProfile(name)
+  if (!createProfileError.value) newProfileOpen.value = false
+}
 
 // Booting while signed out leaves profiles unloaded (or the live backend
 // erroring); re-load the moment auth lands — and when the login changes, so
@@ -99,6 +122,30 @@ useCommands(computed(() => {
     keywords: ['reload', 'sync'],
     icon: IconRefreshCw,
     run: refresh,
+  })
+
+  cmds.push({
+    id: 'profile:new',
+    title: 'New profile…',
+    group: 'Profiles',
+    keywords: ['workspace', 'create'],
+    run: openNewProfile,
+  })
+
+  cmds.push({
+    id: 'feed:edit-config',
+    title: 'Edit feeds as code…',
+    group: 'Feeds',
+    keywords: ['config', 'yaml', 'profiles'],
+    run: openConfigSheet,
+  })
+
+  cmds.push({
+    id: 'feed:copy-config-prompt',
+    title: 'Copy feeds config prompt',
+    group: 'Feeds',
+    keywords: ['config', 'yaml', 'agent', 'prompt'],
+    run: copyConfigPrompt,
   })
 
   // Themes
@@ -176,7 +223,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         @create-workspace="createProfile"
       />
       <div v-else class="flex min-h-0 flex-1">
-        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" />
+        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
         <SideBar
           v-if="activeProfile"
           :profile="activeProfile"
@@ -184,6 +231,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           :unread-only="unreadOnly"
           @select="selectSidebar"
           @select-unread="selectUnreadView"
+          @edit-feeds="openConfigSheet"
         />
         <section v-if="activeProfile" class="flex min-w-0 flex-1">
           <FeedList
@@ -212,6 +260,20 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       <div v-if="toast" class="fixed bottom-5 right-5 rounded-lg border border-strong bg-chip px-4 py-2.5 font-mono text-xs text-text shadow-2xl" data-testid="toast">{{ toast }}</div>
     </Transition>
     <CommandPalette />
+    <ConfigSheet
+      v-if="configSheetOpen"
+      :config="config"
+      @close="configSheetOpen = false"
+      @copy-prompt="copyConfigPrompt"
+      @copy-path="copyConfigPath"
+    />
+    <NewProfileModal
+      v-if="newProfileOpen"
+      :busy="creatingProfile"
+      :error="createProfileError"
+      @close="newProfileOpen = false"
+      @create="submitNewProfile"
+    />
   </main>
 </template>
 

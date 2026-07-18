@@ -124,6 +124,17 @@ func (p *MockProvider) Refresh(context.Context, string) (bool, error) {
 	return false, nil
 }
 
+// Config returns a fixture config so the feeds-as-code sheet is walkable
+// offline. The stable path keeps e2e snapshots deterministic.
+func (p *MockProvider) Config(context.Context) (ConfigInfo, error) {
+	return ConfigInfo{
+		Path:   "~/.config/hive/desktop/profiles.yaml",
+		Exists: true,
+		YAML:   ExampleConfig(),
+		Valid:  true,
+	}, nil
+}
+
 // CreateProfile appends a fixture-backed profile with the given name.
 // Deterministic ID: e2e asserts against a stable snapshot.
 func (p *MockProvider) CreateProfile(_ context.Context, name string) (Profile, error) {

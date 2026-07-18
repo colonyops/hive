@@ -23,6 +23,21 @@ export function ActionsFor(kind: string): $CancellablePromise<feed$0.Action[] | 
 }
 
 /**
+ * Config describes the profiles config file: path, content, validity.
+ */
+export function Config(): $CancellablePromise<feed$0.ConfigInfo> {
+    return $Call.ByID(3084968143);
+}
+
+/**
+ * ConfigPrompt returns a paste-ready prompt for a coding agent to edit the
+ * profiles config on the user's behalf.
+ */
+export function ConfigPrompt(): $CancellablePromise<string> {
+    return $Call.ByID(3108030981);
+}
+
+/**
  * CreateProfile creates a workspace seeded with the default feeds.
  */
 export function CreateProfile(name: string): $CancellablePromise<feed$0.Profile> {

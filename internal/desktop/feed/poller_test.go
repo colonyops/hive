@@ -65,7 +65,7 @@ func newPollerFixture(t *testing.T) (*LiveProvider, *mutableAPIServer, ProfileDe
 	t.Cleanup(server.Close)
 
 	client := github.NewClient(github.WithAPIBase(server.URL))
-	store := NewStore(t.TempDir())
+	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
 	def, err := store.CreateProfile("Triage")
 	require.NoError(t, err)
