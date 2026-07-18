@@ -12,7 +12,8 @@ minimal while the desktop UI is developed in later phases.
 The `vue-ts` template alias was not available in alpha2.116; `wails3 init -t
 vue -n hive-desktop` is that release's Vue + TypeScript template.
 
-Install the matching CLI with:
+From the repository root, `mise install` provisions the matching Wails CLI.
+The manual equivalent is:
 
 ```sh
 go install github.com/wailsapp/wails/v3/cmd/wails3@v3.0.0-alpha2.116
@@ -68,29 +69,22 @@ from `desktop/`, Wails watches `desktop/` rather than the whole repository.
 
 ## Development and builds
 
-```sh
-# Install frontend dependencies and build the embedded assets.
-cd desktop/frontend
-npm install
-npm run build
-
-# From the repository root, compile the desktop package.
-go build -o ./desktop/bin/hive-desktop ./desktop
-
-# Or start Wails development mode from the desktop application directory.
-cd desktop
-wails3 dev -config ./build/config.yml
-# Equivalent Taskfile command: wails3 task dev
-```
-
-The alpha supports server builds. The following compiles the pure HTTP-server
-variant without GUI dependencies:
+Use the root mise tasks as the canonical entry points:
 
 ```sh
-go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop
+mise run desktop:generate # Regenerate frontend TS bindings.
+mise run desktop:icons    # Regenerate committed icon assets.
+mise run desktop:build    # Build the desktop app; on macOS emits desktop/bin/hive-desktop.
+mise run desktop:serve    # Build and run the headless server build.
+mise run desktop:dev      # Start Wails development mode.
 ```
 
-The server defaults to `localhost:8080` unless `application.Options.Server`
+`desktop:dev` runs `wails3 dev -config ./build/config.yml` from the desktop
+application directory. The equivalent Taskfile command is `wails3 task dev`.
+
+The alpha supports server builds. `desktop:serve` compiles the pure HTTP-server
+variant without GUI dependencies to `desktop/bin/hive-desktop-server` and runs
+it. The server defaults to `localhost:8080` unless `application.Options.Server`
 configures another host or port.
 
 ## Icons
@@ -98,11 +92,7 @@ configures another host or port.
 The desktop icon masters live in `build/icons/`: `hive-mark.svg` is the
 1024px amber Hive mark on its dark rounded-square field, and
 `tray-template.svg` is the separate black-only 18px macOS template mark.
-Regenerate every committed desktop icon with:
-
-```sh
-./desktop/build/icons/generate.sh
-```
+Regenerate every committed desktop icon with `mise run desktop:icons`.
 
 The script requires librsvg (`rsvg-convert`), ImageMagick (`magick`), and
 macOS `iconutil`; install the first two with `brew install librsvg imagemagick`.
