@@ -80,3 +80,28 @@ func TestMockProviderProfilesContract(t *testing.T) {
 		}
 	}
 }
+
+func TestEmptyMockProviderCreatesWorkspace(t *testing.T) {
+	t.Parallel()
+
+	provider := NewEmptyMockProvider()
+
+	profiles, err := provider.Profiles(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, profiles)
+
+	_, err = provider.CreateProfile(t.Context(), "  ")
+	require.Error(t, err)
+
+	created, err := provider.CreateProfile(t.Context(), "My Triage")
+	require.NoError(t, err)
+	assert.Equal(t, "workspace-1", created.ID)
+	assert.Equal(t, "My Triage", created.Name)
+	assert.Equal(t, "M", created.Letter)
+	require.NotEmpty(t, created.Feeds)
+
+	profiles, err = provider.Profiles(t.Context())
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	assert.Equal(t, "workspace-1", profiles[0].ID)
+}

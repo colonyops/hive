@@ -1,12 +1,15 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { Browser } from '@wailsio/runtime'
+import IconCheck from '~icons/lucide/check'
 import IconGithub from '~icons/lucide/github'
+import IconLayoutGrid from '~icons/lucide/layout-grid'
 import type { DeviceFlowInfo } from '../types/auth'
 import type { OnboardingCard } from '../composables/useAuth'
 
 const props = defineProps<{
-  card: OnboardingCard
+  // 'workspace' is step 2, shown once authenticated with no workspaces yet.
+  card: OnboardingCard | 'workspace'
   deviceFlow: DeviceFlowInfo | null
   error: string | null
   busy: boolean
@@ -17,15 +20,18 @@ const emit = defineEmits<{
   useTokenInstead: []
   backToStart: []
   submitToken: [token: string]
+  createWorkspace: [name: string]
 }>()
 
 const tokenInput = ref('')
+const workspaceInput = ref('')
 const copied = ref(false)
 
+const activeStep = computed(() => props.card === 'workspace' ? 2 : 1)
 const steps = [
-  { label: 'Connect GitHub', active: true },
-  { label: 'Create your first workspace', active: false },
-  { label: 'Add feeds & tasks', active: false },
+  { label: 'Connect GitHub', step: 1 },
+  { label: 'Create your first workspace', step: 2 },
+  { label: 'Add feeds & tasks', step: 3 },
 ]
 
 async function openVerification() {
@@ -53,6 +59,10 @@ async function copyCode() {
 function submit() {
   if (tokenInput.value.trim()) emit('submitToken', tokenInput.value.trim())
 }
+
+function submitWorkspace() {
+  if (workspaceInput.value.trim()) emit('createWorkspace', workspaceInput.value.trim())
+}
 </script>
 
 <template>
@@ -66,12 +76,12 @@ function submit() {
       <h1 class="mb-3 text-[26px] font-semibold leading-[1.25] tracking-[-.02em]">Triage GitHub and<br>spin up sessions.</h1>
       <p class="mb-11 max-w-[330px] text-sm leading-relaxed text-text-3">Connect your account to pull PRs, issues, and notifications into workspaces you control.</p>
       <ol class="flex flex-col gap-5">
-        <li v-for="(step, index) in steps" :key="step.label" class="flex items-center gap-3.5">
+        <li v-for="step in steps" :key="step.label" class="flex items-center gap-3.5">
           <span
             class="flex size-[30px] shrink-0 items-center justify-center rounded-full text-[13px] font-semibold"
-            :class="step.active ? 'bg-accent text-accent-contrast' : 'border border-strong bg-chip text-text-3'"
-          >{{ index + 1 }}</span>
-          <span class="text-sm" :class="step.active ? 'font-medium text-text' : 'text-text-3'">{{ step.label }}</span>
+            :class="step.step === activeStep ? 'bg-accent text-accent-contrast' : step.step < activeStep ? 'border border-accent-tint bg-chip text-accent' : 'border border-strong bg-chip text-text-3'"
+          ><IconCheck v-if="step.step < activeStep" class="size-3.5" /><template v-else>{{ step.step }}</template></span>
+          <span class="text-sm" :class="step.step === activeStep ? 'font-medium text-text' : 'text-text-3'">{{ step.label }}</span>
         </li>
       </ol>
       <div class="flex-1" />
@@ -82,12 +92,33 @@ function submit() {
     <section class="flex flex-1 items-center justify-center bg-pane p-10">
       <div class="w-[420px] text-center">
         <div class="mx-auto mb-5 flex size-[60px] items-center justify-center rounded-[15px] border border-strong bg-chip text-text">
-          <IconGithub class="size-[30px]" />
+          <IconLayoutGrid v-if="card === 'workspace'" class="size-[30px]" />
+          <IconGithub v-else class="size-[30px]" />
         </div>
-        <h2 class="mb-2 text-xl font-semibold tracking-[-.01em]">Connect to GitHub</h2>
+        <h2 class="mb-2 text-xl font-semibold tracking-[-.01em]">{{ card === 'workspace' ? 'Create your first workspace' : 'Connect to GitHub' }}</h2>
+
+        <!-- workspace: step 2, once authenticated with no workspaces -->
+        <template v-if="card === 'workspace'">
+          <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">A workspace groups your feeds. It starts with your open PRs, the notifications inbox, and cross-repo assignments.</p>
+          <input
+            v-model="workspaceInput"
+            type="text"
+            placeholder="Frontend Triage"
+            class="mb-3 w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+            data-testid="onboarding-workspace-input"
+            @keydown.enter="submitWorkspace"
+          >
+          <button
+            class="primary-button"
+            :disabled="busy || !workspaceInput.trim()"
+            data-testid="onboarding-workspace-submit"
+            @click="submitWorkspace"
+          >Create workspace</button>
+          <p v-if="error" class="mt-4 text-xs text-kind-issue" data-testid="onboarding-error">{{ error }}</p>
+        </template>
 
         <!-- idle: not started -->
-        <template v-if="card === 'idle'">
+        <template v-else-if="card === 'idle'">
           <p class="mb-6 text-[13.5px] leading-relaxed text-text-3">Sign in from this device to pull your PRs, issues, and notifications into Hive.</p>
           <button
             class="primary-button"

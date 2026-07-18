@@ -45,6 +45,17 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await mkdir(screenshots, { recursive: true })
   await page.screenshot({ path: join(screenshots, `onboarding-device-flow-${testInfo.project.name}.png`), fullPage: true })
 
+  // Step 2: authenticated with no workspaces — create the first one.
+  const workspaceInput = page.getByTestId('onboarding-workspace-input')
+  await expect(workspaceInput).toBeVisible({ timeout: 15_000 })
+  await expect(onboarding).toContainText('Create your first workspace')
+  await expect(page.getByTestId('onboarding-workspace-submit')).toBeDisabled()
+  await page.screenshot({ path: join(screenshots, `onboarding-workspace-${testInfo.project.name}.png`), fullPage: true })
+
+  await workspaceInput.fill('Frontend Triage')
+  await page.getByTestId('onboarding-workspace-submit').click()
+
   await expect(page.getByTestId('feed-item')).toHaveCount(6, { timeout: 15_000 })
   await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage')
+  await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
 })

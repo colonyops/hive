@@ -3,33 +3,53 @@ package feed
 import (
 	"context"
 	"fmt"
+	"strings"
+	"sync"
 )
 
 // MockProvider serves the fixture data the e2e suite snapshots. It is the
-// provider in HIVE_DESKTOP_MOCK modes; MarkRead is a no-op so repeated e2e
-// interactions never mutate the fixtures.
-type MockProvider struct{}
+// provider in HIVE_DESKTOP_MOCK modes; MarkRead is a no-op and Items are
+// static so repeated e2e interactions never mutate the fixtures. Profiles
+// are the one mutable piece: the onboarding variant starts empty so e2e can
+// walk workspace creation.
+type MockProvider struct {
+	mu       sync.Mutex
+	profiles []Profile
+}
 
+// NewMockProvider starts with the fixture profile (mock mode "feed").
 func NewMockProvider() *MockProvider {
+	return &MockProvider{profiles: []Profile{fixtureProfile("hive-core", "Frontend Triage")}}
+}
+
+// NewEmptyMockProvider starts with no profiles (mock mode "onboarding"), so
+// the workspace-creation step is reachable offline.
+func NewEmptyMockProvider() *MockProvider {
 	return &MockProvider{}
 }
 
-func (p *MockProvider) Profiles(context.Context) ([]Profile, error) {
-	return []Profile{
-		{
-			ID:            "hive-core",
-			Letter:        "H",
-			Name:          "Frontend Triage",
-			SourceSummary: "GitHub · 3 sources",
-			TotalCount:    23,
-			UnreadCount:   4,
-			Feeds: []Source{
-				{ID: "my-open-prs", Name: "My open PRs", Count: 12, NewCount: 0},
-				{ID: "notifications-inbox", Name: "Notifications inbox", Count: 3, NewCount: 3},
-				{ID: "assigned-across-org", Name: "Assigned across org", Count: 8, NewCount: 0},
-			},
+func fixtureProfile(id, name string) Profile {
+	return Profile{
+		ID:            id,
+		Letter:        ProfileLetter(name),
+		Name:          name,
+		SourceSummary: "GitHub · 3 sources",
+		TotalCount:    23,
+		UnreadCount:   4,
+		Feeds: []Source{
+			{ID: "my-open-prs", Name: "My open PRs", Count: 12, NewCount: 0},
+			{ID: "notifications-inbox", Name: "Notifications inbox", Count: 3, NewCount: 3},
+			{ID: "assigned-across-org", Name: "Assigned across org", Count: 8, NewCount: 0},
 		},
-	}, nil
+	}
+}
+
+func (p *MockProvider) Profiles(context.Context) ([]Profile, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	out := make([]Profile, len(p.profiles))
+	copy(out, p.profiles)
+	return out, nil
 }
 
 func (p *MockProvider) Items(_ context.Context, _, _ string) ([]Item, error) {
@@ -99,8 +119,16 @@ func (p *MockProvider) MarkRead(context.Context, string, string) error {
 	return nil
 }
 
-// CreateProfile is unsupported in mock mode: the fixture profile always
-// exists, so onboarding step 2 is unreachable there.
-func (p *MockProvider) CreateProfile(context.Context, string) (Profile, error) {
-	return Profile{}, fmt.Errorf("feed: mock provider cannot create profiles")
+// CreateProfile appends a fixture-backed profile with the given name.
+// Deterministic ID: e2e asserts against a stable snapshot.
+func (p *MockProvider) CreateProfile(_ context.Context, name string) (Profile, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Profile{}, fmt.Errorf("feed: profile name is empty")
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	profile := fixtureProfile(fmt.Sprintf("workspace-%d", len(p.profiles)+1), name)
+	p.profiles = append(p.profiles, profile)
+	return profile, nil
 }

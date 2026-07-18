@@ -5,7 +5,8 @@
 // names stable across that move.
 export type { Action, Item as FeedItem, Source as FeedSource, Profile } from '../../bindings/github.com/colonyops/hive/internal/desktop/feed/models'
 
+// Scope only: the unread filter is an independent axis (unreadOnly in
+// useFeedState). The sidebar "Unread" view is all-scope + filter on.
 export type SidebarSelection =
   | { type: 'all' }
-  | { type: 'unread' }
   | { type: 'feed'; feedId: string }

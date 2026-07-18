@@ -40,12 +40,18 @@ func registerEvents() struct{} {
 }
 
 func buildFeedProvider() feed.Provider {
-	if desktop.MockMode() != "" {
+	switch desktop.MockMode() {
+	case "feed":
 		return feed.NewMockProvider()
+	case "onboarding":
+		// Empty start so e2e walks the whole first run: auth, then
+		// workspace creation, then the fixture feed.
+		return feed.NewEmptyMockProvider()
+	default:
+		logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+		store := feed.NewStore(desktop.StateDir())
+		return feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
 	}
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	store := feed.NewStore(desktop.StateDir())
-	return feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
 }
 
 func buildAuthBackend(onChange func()) auth.Backend {

@@ -5,6 +5,7 @@ import type { FeedItem, Profile } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
   ActionsFor: vi.fn(),
+  CreateProfile: vi.fn(),
   Hide: vi.fn(),
   Items: vi.fn(),
   Profiles: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/feedservice', () => ({
   ActionsFor: mocks.ActionsFor,
+  CreateProfile: mocks.CreateProfile,
   Items: mocks.Items,
   Profiles: mocks.Profiles,
 }))
@@ -146,7 +148,7 @@ describe('useFeedState', () => {
   it('exits the sidebar Unread view when the filter is toggled off', async () => {
     const { state, wrapper } = await mountLoadedState()
 
-    await state.selectSidebar({ type: 'unread' })
+    await state.selectUnreadView()
     expect(state.unreadOnly.value).toBe(true)
     expect(state.title.value).toBe('Unread')
 
@@ -217,12 +219,98 @@ describe('useFeedState', () => {
     const { state, wrapper } = await mountLoadedState()
     expect(state.selectedId.value).toBe('pr-1')
 
-    await state.selectSidebar({ type: 'unread' })
+    await state.selectUnreadView()
 
     expect(state.unreadOnly.value).toBe(true)
     expect(state.title.value).toBe('Unread')
     expect(state.selectedId.value).toBe('issue-1')
 
+    wrapper.unmount()
+  })
+
+  it('drops stale item loads that resolve after a newer request', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    let resolveSlow!: (items: FeedItem[]) => void
+    const slow = new Promise<FeedItem[]>((resolve) => { resolveSlow = resolve })
+    mocks.Items.mockReturnValueOnce(slow)
+
+    const slowLoad = state.selectSidebar({ type: 'feed', feedId: 'desktop' })
+    await state.selectSidebar({ type: 'all' })
+    expect(state.items.value.map((item) => item.id)).toEqual(['pr-1', 'issue-1'])
+
+    resolveSlow([feedItem('stale-1', 'PR', 'Stale PR')])
+    await slowLoad
+    await flushPromises()
+
+    expect(state.items.value.map((item) => item.id)).toEqual(['pr-1', 'issue-1'])
+    expect(state.selectedId.value).toBe('pr-1')
+
+    wrapper.unmount()
+  })
+
+  it('classifies load failures into user-facing messages and clears them on success', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    mocks.Items.mockRejectedValueOnce(new Error('github: rate limited'))
+    await state.refresh()
+    expect(state.loadError.value).toContain('rate limit')
+
+    mocks.Items.mockRejectedValueOnce(new Error('github: unreachable: dial tcp'))
+    await state.refresh()
+    expect(state.loadError.value).toBe("Can't reach GitHub right now.")
+
+    await state.refresh()
+    expect(state.loadError.value).toBeNull()
+    expect(state.items.value).not.toHaveLength(0)
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('reports profilesLoaded with no active profile when none exist', async () => {
+    mocks.Profiles.mockResolvedValue([])
+    const { state, wrapper } = await mountLoadedState()
+
+    expect(state.profilesLoaded.value).toBe(true)
+    expect(state.profiles.value).toEqual([])
+    expect(state.activeProfileId.value).toBe('')
+
+    wrapper.unmount()
+  })
+
+  it('creates a profile and selects it', async () => {
+    mocks.Profiles.mockResolvedValue([])
+    mocks.CreateProfile.mockImplementation((name: string) => Promise.resolve({
+      ...profiles[0],
+      id: 'created-1',
+      name,
+    }))
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.createProfile('My Triage')
+
+    expect(mocks.CreateProfile).toHaveBeenCalledWith('My Triage')
+    expect(state.profiles.value.map((profile) => profile.id)).toEqual(['created-1'])
+    expect(state.activeProfileId.value).toBe('created-1')
+    expect(state.createProfileError.value).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('surfaces profile creation failures', async () => {
+    mocks.Profiles.mockResolvedValue([])
+    mocks.CreateProfile.mockRejectedValue(new Error('boom'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.createProfile('My Triage')
+
+    expect(state.createProfileError.value).toContain('boom')
+    expect(state.creatingProfile.value).toBe(false)
+
+    warn.mockRestore()
     wrapper.unmount()
   })
 
