@@ -2,7 +2,15 @@
   <!-- Dock icons are not masked by the system: the rounded-square body must be
        drawn at the Apple icon-grid inset (824px centered on a 1024 canvas)
        with transparent margins, or the icon renders oversized in the Dock. -->
-  <rect x="100" y="100" width="824" height="824" rx="195" fill="#0a0a0b"/>
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#232228"/>
+      <stop offset="1" stop-color="#0f0f13"/>
+    </linearGradient>
+  </defs>
+  <rect x="100" y="100" width="824" height="824" rx="210" fill="url(#tile)"/>
+  <!-- Rim light: subtle inset stroke so the tile edge reads against a dark dock. -->
+  <rect x="106" y="106" width="812" height="812" rx="204" fill="none" stroke="#ffffff" stroke-opacity="0.17" stroke-width="7"/>
   <g transform="translate(512 512) scale(0.8) translate(-512 -512)">
     <path d="M512 166 780 320v384L512 858 244 704V320z" fill="none" stroke="#f59e0b" stroke-linejoin="round" stroke-width="64"/>
     <path d="M388 420 500 512 388 604" fill="none" stroke="#f59e0b" stroke-linecap="round" stroke-linejoin="round" stroke-width="58"/>
