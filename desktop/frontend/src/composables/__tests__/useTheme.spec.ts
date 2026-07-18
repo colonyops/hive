@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { initializeTheme, setTheme } from '../useTheme'
 
 function memoryStorage(): Storage {
   const values = new Map<string, string>()
@@ -19,40 +20,33 @@ beforeEach(() => {
 afterEach(() => {
   delete document.documentElement.dataset.theme
   vi.unstubAllGlobals()
-  vi.resetModules()
 })
 
 describe('useTheme', () => {
-  it('initializes from localStorage and applies the saved theme', async () => {
+  it('initializes from localStorage and applies the saved theme', () => {
     localStorage.setItem('hive.theme', 'midnight')
-    const { useTheme } = await import('../useTheme')
 
-    const { theme } = useTheme()
+    initializeTheme()
 
-    expect(theme.value).toBe('midnight')
     expect(document.documentElement.dataset.theme).toBe('midnight')
   })
 
-  it('falls back to dark for unknown stored themes', async () => {
+  it('falls back to dark for unknown stored themes', () => {
     localStorage.setItem('hive.theme', 'solarized')
-    const { useTheme } = await import('../useTheme')
 
-    const { theme } = useTheme()
+    initializeTheme()
 
-    expect(theme.value).toBe('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
+    expect(localStorage.getItem('hive.theme')).toBe('dark')
   })
 
-  it('defaults to dark and persists a selected theme', async () => {
-    const { useTheme } = await import('../useTheme')
-    const { theme, setTheme } = useTheme()
+  it('defaults to dark and persists a selected theme', () => {
+    initializeTheme()
 
-    expect(theme.value).toBe('dark')
     expect(document.documentElement.dataset.theme).toBe('dark')
 
     setTheme('gruvbox')
 
-    expect(theme.value).toBe('gruvbox')
     expect(document.documentElement.dataset.theme).toBe('gruvbox')
     expect(localStorage.getItem('hive.theme')).toBe('gruvbox')
   })
