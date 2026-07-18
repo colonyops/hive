@@ -69,6 +69,8 @@ function onKeydown(e: KeyboardEvent): void {
     e.preventDefault()
     selectedIndex.value = len ? (selectedIndex.value - 1 + len) % len : 0
   } else if (e.key === 'Enter') {
+    // preventDefault so a focused row button doesn't also fire its click.
+    e.preventDefault()
     const cmd = results.value[selectedIndex.value]
     if (cmd) run(cmd)
   } else if (e.key === 'Escape') {
@@ -84,12 +86,15 @@ function onKeydown(e: KeyboardEvent): void {
         <!-- Dimmed backdrop — click outside to close -->
         <div class="palette-backdrop-fill" @click="toggle" />
         <!-- Panel -->
+        <!-- Keydown lives on the panel (not the input) so navigation and
+             Escape keep working when focus moves to a result row. -->
         <div
           class="palette-panel"
           data-testid="command-palette"
           role="dialog"
           aria-label="Command palette"
           aria-modal="true"
+          @keydown="onKeydown"
         >
           <!-- Input row -->
           <div class="palette-input-row">
@@ -103,7 +108,6 @@ function onKeydown(e: KeyboardEvent): void {
               data-testid="command-palette-input"
               autocomplete="off"
               spellcheck="false"
-              @keydown="onKeydown"
             />
             <kbd class="palette-kbd">⌘K</kbd>
           </div>

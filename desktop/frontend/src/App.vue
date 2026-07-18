@@ -131,7 +131,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @toggle-unread="toggleUnread"
             @refresh="refresh"
           />
-          <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" />
+          <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
         </section>
         <div v-else class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Loading feed…</div>
       </div>

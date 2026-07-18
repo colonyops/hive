@@ -9,7 +9,7 @@ import IconSettings from '~icons/lucide/settings'
 import type { Action, FeedItem } from '../types/feed'
 
 defineProps<{ item: FeedItem | null; actions: Action[] }>()
-const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': [] }>()
+const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; edit: [] }>()
 </script>
 
 <template>
@@ -37,7 +37,7 @@ const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': [] 
           <span class="font-mono text-[10.5px] tracking-[.12em] text-accent">ACTIONS</span>
           <span class="font-mono text-[10.5px] text-text-4">· for {{ item.kind }}</span>
           <span class="flex-1" />
-          <button class="edit-button"><IconSettings class="size-3" /> Edit</button>
+          <button class="edit-button" @click="emit('edit')"><IconSettings class="size-3" /> Edit</button>
         </div>
         <div class="flex flex-col gap-[9px]">
           <ActionCard v-for="action in actions" :key="action.id" :action="action" @run="emit('run-action', action.id)" />
