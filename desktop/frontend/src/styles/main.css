@@ -1,27 +1,84 @@
 @import "tailwindcss";
 
-@theme static {
-  --color-app: #0a0a0b;
-  --color-raised: #0e0e10;
-  --color-sidebar: #121215;
-  --color-pane: #0c0c0e;
-  --color-chip: #17171a;
-  --color-hover: #1c1c20;
-  --color-border: #1c1c20;
-  --color-card: #26262b;
-  --color-strong: #2a2a30;
-  --color-text: #fafafa;
-  --color-text-2: #a1a1aa;
-  --color-text-3: #71717a;
-  --color-text-4: #52525b;
-  --color-accent: #f59e0b;
-  --color-accent-hover: #fbbf24;
-  --color-kind-pr: #34d399;
-  --color-kind-issue: #60a5fa;
-  --color-tasks: #a78bfa;
-  --color-docs: #60a5fa;
+@theme inline {
+  --color-app: var(--hv-app);
+  --color-raised: var(--hv-raised);
+  --color-sidebar: var(--hv-sidebar);
+  --color-pane: var(--hv-pane);
+  --color-chip: var(--hv-chip);
+  --color-hover: var(--hv-hover);
+  --color-border: var(--hv-border);
+  --color-card: var(--hv-card);
+  --color-strong: var(--hv-strong);
+  --color-text: var(--hv-text);
+  --color-text-2: var(--hv-text-2);
+  --color-text-3: var(--hv-text-3);
+  --color-text-4: var(--hv-text-4);
+  --color-accent: var(--hv-accent);
+  --color-accent-hover: var(--hv-accent-hover);
+  --color-kind-pr: var(--hv-kind-pr);
+  --color-kind-issue: var(--hv-kind-issue);
+  --color-tasks: var(--hv-tasks);
+  --color-docs: var(--hv-docs);
+  --color-dot: var(--hv-dot);
+  --color-selection: var(--hv-selection);
+  --color-backdrop: var(--hv-backdrop);
+}
+
+@theme {
   --font-sans: "IBM Plex Sans", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
+}
+
+:root,
+[data-theme="dark"] {
+  --hv-app: #0a0a0b;
+  --hv-raised: #16161b;
+  --hv-sidebar: #141419;
+  --hv-pane: #101015;
+  --hv-chip: #1b1b21;
+  --hv-hover: #22222a;
+  --hv-border: #26262c;
+  --hv-card: #2e2e36;
+  --hv-strong: #33333b;
+  --hv-text: #fafafa;
+  --hv-text-2: #b4b4bd;
+  --hv-text-3: #85858e;
+  --hv-text-4: #64646e;
+  --hv-accent: #f59e0b;
+  --hv-accent-hover: #fbbf24;
+  --hv-kind-pr: #34d399;
+  --hv-kind-issue: #60a5fa;
+  --hv-tasks: #a78bfa;
+  --hv-docs: #60a5fa;
+  --hv-dot: #3a3a40;
+  --hv-selection: rgba(245, 158, 11, 0.07);
+  --hv-backdrop: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] {
+  --hv-app: #ececef;
+  --hv-raised: #f7f7f8;
+  --hv-sidebar: #f1f1f3;
+  --hv-pane: #fafafa;
+  --hv-chip: #e7e7ea;
+  --hv-hover: #e2e2e6;
+  --hv-border: #d9d9de;
+  --hv-card: #d4d4da;
+  --hv-strong: #c9c9d0;
+  --hv-text: #18181b;
+  --hv-text-2: #52525b;
+  --hv-text-3: #71717a;
+  --hv-text-4: #a1a1aa;
+  --hv-accent: #d97706;
+  --hv-accent-hover: #b45309;
+  --hv-kind-pr: #059669;
+  --hv-kind-issue: #2563eb;
+  --hv-tasks: #7c3aed;
+  --hv-docs: #2563eb;
+  --hv-dot: #a1a1aa;
+  --hv-selection: rgba(217, 119, 6, 0.1);
+  --hv-backdrop: rgba(24, 24, 27, 0.25);
 }
 
 @keyframes hivePulse {
@@ -40,7 +97,7 @@
 }
 
 .hive-scroll::-webkit-scrollbar-thumb {
-  background: #2a2a30;
+  background: var(--color-strong);
   border: 2px solid transparent;
   border-radius: 6px;
   background-clip: content-box;

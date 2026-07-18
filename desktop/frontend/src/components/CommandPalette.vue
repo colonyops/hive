@@ -152,7 +152,7 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-backdrop-fill {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: var(--color-backdrop);
 }
 
 /* Panel */
@@ -167,7 +167,7 @@ function onKeydown(e: KeyboardEvent): void {
   border-radius: 12px;
   border: 1px solid var(--color-strong);
   background: var(--color-chip);
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.65), 0 0 0 1px rgba(255, 255, 255, 0.04);
+  box-shadow: 0 25px 60px var(--color-backdrop), 0 0 0 1px var(--color-border);
 }
 
 /* Input row */

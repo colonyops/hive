@@ -8,6 +8,7 @@ import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
+import { useTheme } from './composables/useTheme'
 
 const {
   profiles, activeProfile, activeProfileId, selection, items, selectedId, selectedItem,
@@ -18,6 +19,7 @@ const {
 // ── Command palette ──────────────────────────────────────────────────────────
 
 const { open: paletteOpen, toggle: togglePalette } = useCommandPalette()
+const { toggleTheme } = useTheme()
 
 // Seed commands — reactive getter so they update when profiles/feeds load
 useCommands(computed(() => {
@@ -58,6 +60,14 @@ useCommands(computed(() => {
   })
 
   // Window
+  cmds.push({
+    id: 'window:toggle-theme',
+    title: 'Toggle light/dark theme',
+    group: 'Window',
+    keywords: ['theme', 'appearance', 'light', 'dark'],
+    run: toggleTheme,
+  })
+
   cmds.push({
     id: 'window:hide',
     title: 'Hide window',
