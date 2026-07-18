@@ -11,7 +11,7 @@
   <rect x="100" y="100" width="824" height="824" rx="210" fill="url(#tile)"/>
   <!-- Rim light: subtle inset stroke so the tile edge reads against a dark dock. -->
   <rect x="106" y="106" width="812" height="812" rx="204" fill="none" stroke="#ffffff" stroke-opacity="0.17" stroke-width="7"/>
-  <g transform="translate(512 512) scale(0.8) translate(-512 -512)">
+  <g transform="translate(512 512) scale(0.7) translate(-512 -512)">
     <path d="M512 166 780 320v384L512 858 244 704V320z" fill="none" stroke="#f59e0b" stroke-linejoin="round" stroke-width="64"/>
     <path d="M388 420 500 512 388 604" fill="none" stroke="#f59e0b" stroke-linecap="round" stroke-linejoin="round" stroke-width="58"/>
     <rect x="544" y="576" width="128" height="50" rx="25" fill="#f59e0b"/>
