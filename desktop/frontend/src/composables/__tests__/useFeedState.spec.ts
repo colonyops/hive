@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   CreateProfile: vi.fn(),
   Hide: vi.fn(),
   Items: vi.fn(),
+  On: vi.fn(),
   Profiles: vi.fn(),
 }))
 
@@ -19,6 +20,9 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/feedservice', () =>
 }))
 
 vi.mock('@wailsio/runtime', () => ({
+  Events: {
+    On: mocks.On,
+  },
   Window: {
     Hide: mocks.Hide,
   },
@@ -98,6 +102,7 @@ describe('useFeedState', () => {
     mocks.Items.mockImplementation((profileID: string, feedID: string) => Promise.resolve(itemSets[`${profileID}:${feedID}`] ?? []))
     mocks.ActionsFor.mockImplementation((kind: string) => Promise.resolve([{ id: `action-${kind}`, title: kind }]))
     mocks.Hide.mockResolvedValue(undefined)
+    mocks.On.mockReturnValue(() => {})
   })
 
   it('loads profiles on mount and switches profiles by resetting selection and reloading items', async () => {
@@ -224,6 +229,32 @@ describe('useFeedState', () => {
     expect(state.unreadOnly.value).toBe(true)
     expect(state.title.value).toBe('Unread')
     expect(state.selectedId.value).toBe('issue-1')
+
+    wrapper.unmount()
+  })
+
+  it('refreshes counts and active items when feed:updated fires', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'feed:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Items.mockClear()
+    mocks.Profiles.mockClear()
+    mocks.Profiles.mockResolvedValue([{ ...profiles[0], unreadCount: 9 }, profiles[1]])
+
+    handler?.({ data: 'personal' })
+    await flushPromises()
+
+    expect(mocks.Profiles).toHaveBeenCalled()
+    expect(state.profiles.value[0]?.unreadCount).toBe(9)
+    expect(mocks.Items).toHaveBeenCalledWith('personal', '')
+
+    mocks.Items.mockClear()
+    handler?.({ data: 'work' })
+    await flushPromises()
+    expect(mocks.Items).not.toHaveBeenCalled()
 
     wrapper.unmount()
   })

@@ -141,12 +141,65 @@ func (p *LiveProvider) MarkRead(_ context.Context, profileID, itemID string) err
 	return p.store.MarkRead(itemID, updatedAt)
 }
 
-// Invalidate drops the fetch cache so the next call refetches; the poller
-// uses it to force fresh data.
+// Invalidate drops the fetch cache so the next call refetches.
 func (p *LiveProvider) Invalidate() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cache = make(map[string]*cachedFeed)
+}
+
+// Refresh refetches every feed of the profile, bypassing the TTL, and
+// reports whether anything changed versus the cached state. The poller uses
+// it to decide when to push feed:updated. It returns an error only when
+// every feed fails.
+func (p *LiveProvider) Refresh(ctx context.Context, profileID string) (bool, error) {
+	def, err := p.profileDef(profileID)
+	if err != nil {
+		return false, err
+	}
+
+	var (
+		changed bool
+		lastErr error
+		fetched int
+	)
+	for _, feedDef := range def.Feeds {
+		items, err := p.fetchFeed(ctx, feedDef)
+		if err != nil {
+			lastErr = err
+			p.logger.Debug().Err(err).Str("profile", def.Name).Str("feed", feedDef.ID).Msg("poll fetch failed")
+			continue
+		}
+		fetched++
+
+		key := def.ID + "\x00" + feedDef.ID
+		p.mu.Lock()
+		if prev, ok := p.cache[key]; !ok || !sameItems(prev.items, items) {
+			changed = true
+		}
+		p.cache[key] = &cachedFeed{items: items, fetchedAt: p.now()}
+		p.mu.Unlock()
+	}
+	if fetched == 0 && lastErr != nil {
+		return false, lastErr
+	}
+	return changed, nil
+}
+
+// sameItems reports whether two fetches carry the same feed state: same
+// items, same order, same update times and native unread flags.
+func sameItems(a, b []liveItem) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		if a[i].item.ID != b[i].item.ID ||
+			!a[i].updatedAt.Equal(b[i].updatedAt) ||
+			a[i].item.Unread != b[i].item.Unread {
+			return false
+		}
+	}
+	return true
 }
 
 // ── Materialization ──────────────────────────────────────────────────────────

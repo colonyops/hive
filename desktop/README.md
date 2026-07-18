@@ -93,10 +93,19 @@ wails3 generate bindings -clean=true -ts -i
 The frontend Vite plugin requires generated typed-event bindings. The shell
 registers the `feed:updated` and `auth:updated` events using package-variable
 initialization rather than an `init()` function because this repository
-enables `gochecknoinits` (main.go carries a comment saying the same).
-`FeedService` serves mock `Profiles`, `Items`, and `ActionsFor` data over the
-generated TS bindings; the data stays placeholder until the real feed
-provider lands.
+enables `gochecknoinits` (main.go carries a comment saying the same). Both
+events are wake-up signals: `auth:updated` makes the frontend re-read auth
+Status (device-flow grants land in a Go goroutine), and `feed:updated`
+carries the profile ID whose data changed so the frontend re-reads counts
+and, when it is the active profile, items.
+
+The feed service delegates to a `feed.Provider`: mock fixtures in
+`HIVE_DESKTOP_MOCK` modes, or the GitHub-backed `LiveProvider` (search-query
+feeds plus the notifications inbox, deduplicated by `repo#num`, 30s fetch
+cache, app-local read state under the hive data dir's `desktop/`
+subdirectory). In live mode a poller refreshes every profile each 60s and
+emits `feed:updated` on change; the titlebar's polling indicator reflects
+the active profile's unread count.
 
 Desktop-only Go code lives under `internal/desktop/**`; the `desktop/`
 package is thin Wails wiring. `internal/desktop/auth` implements GitHub

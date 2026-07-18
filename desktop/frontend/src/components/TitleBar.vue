@@ -1,6 +1,7 @@
 <script setup lang="ts">
 // profileName is empty during onboarding: the bar shows just the wordmark.
-defineProps<{ profileName?: string }>()
+// unreadCount drives the "N new" tally next to the polling indicator.
+defineProps<{ profileName?: string; unreadCount?: number }>()
 
 // macOS draws its native traffic lights over the top-left of this bar
 // (hidden-inset chrome configured in desktop/main.go). Pad past them and keep
@@ -21,9 +22,9 @@ const isMac = navigator.userAgent.includes('Mac')
       <span class="text-[13px] text-text-2" data-testid="breadcrumb-profile-name">{{ profileName }}</span>
     </template>
     <div class="flex-1" />
-    <div v-if="profileName" class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2">
+    <div v-if="profileName" class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2" data-testid="polling-indicator">
       <span class="size-[7px] rounded-full bg-accent [animation:hivePulse_2.4s_ease-in-out_infinite]" />
-      <span>polling github · <span class="text-accent">3 new</span></span>
+      <span>polling github<template v-if="unreadCount"> · <span class="text-accent">{{ unreadCount }} new</span></template></span>
     </div>
   </header>
 </template>

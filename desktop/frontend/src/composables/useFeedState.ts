@@ -1,5 +1,5 @@
-import { computed, onMounted, ref } from 'vue'
-import { Window } from '@wailsio/runtime'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { Events, Window } from '@wailsio/runtime'
 import { ActionsFor, CreateProfile, Items, Profiles } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
 import type { Action, FeedItem, Profile, SidebarSelection } from '../types/feed'
 
@@ -157,7 +157,32 @@ export function useFeedState() {
     }
   }
 
-  onMounted(loadProfiles)
+  // A push refresh must not disturb what the user is looking at: it swaps
+  // the profiles list in place (counts) and re-fetches items only for the
+  // active profile; the staleness token handles any race with a manual
+  // navigation happening at the same moment.
+  async function onFeedUpdated(profileID: string) {
+    try {
+      profiles.value = (await Profiles()) ?? []
+    } catch (error) {
+      console.warn('Unable to refresh profiles after feed update', error)
+    }
+    if (profileID === activeProfileId.value) await refresh()
+  }
+
+  let unsubscribeFeed: (() => void) | undefined
+
+  onMounted(() => {
+    unsubscribeFeed = Events.On('feed:updated', (event) => {
+      const profileID = Array.isArray(event.data) ? event.data[0] : event.data
+      void onFeedUpdated(typeof profileID === 'string' ? profileID : '')
+    })
+    void loadProfiles()
+  })
+
+  onUnmounted(() => {
+    unsubscribeFeed?.()
+  })
 
   return {
     profiles,

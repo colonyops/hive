@@ -39,18 +39,31 @@ func registerEvents() struct{} {
 	return struct{}{}
 }
 
-func buildFeedProvider() feed.Provider {
+// buildFeedProvider returns the provider plus, in live mode, a poller that
+// pushes feed:updated when a background refresh finds changes. Mock modes
+// serve static fixtures and need no poller.
+func buildFeedProvider() (feed.Provider, *feed.Poller) {
 	switch desktop.MockMode() {
 	case "feed":
-		return feed.NewMockProvider()
+		return feed.NewMockProvider(), nil
 	case "onboarding":
 		// Empty start so e2e walks the whole first run: auth, then
 		// workspace creation, then the fixture feed.
-		return feed.NewEmptyMockProvider()
+		return feed.NewEmptyMockProvider(), nil
 	default:
 		logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 		store := feed.NewStore(desktop.StateDir())
-		return feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
+		provider := feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
+		poller := feed.NewPoller(provider, feed.DefaultPollInterval, emitFeedUpdated, logger)
+		return provider, poller
+	}
+}
+
+// emitFeedUpdated pushes the changed profile's ID to the frontend. Safe to
+// call from the poller goroutine once the app is running.
+func emitFeedUpdated(profileID string) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("feed:updated", profileID)
 	}
 }
 
@@ -74,12 +87,19 @@ func emitAuthUpdated() {
 }
 
 func main() {
+	// The poller lives for the whole process; it dies with it, so there is
+	// no Stop call here (and log.Fatal below would skip a defer anyway).
+	provider, poller := buildFeedProvider()
+	if poller != nil {
+		poller.Start()
+	}
+
 	options := application.Options{
 		Name:        "Hive",
 		Description: "Hive desktop application",
 		Icon:        appIcon,
 		Services: []application.Service{
-			application.NewService(NewFeedService(buildFeedProvider())),
+			application.NewService(NewFeedService(provider)),
 			application.NewService(auth.NewService(buildAuthBackend(emitAuthUpdated))),
 		},
 		Assets: application.AssetOptions{

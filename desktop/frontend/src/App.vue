@@ -129,7 +129,10 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 <template>
   <main class="h-screen w-screen overflow-hidden bg-app text-text">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <TitleBar :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined" />
+      <TitleBar
+        :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
+        :unread-count="activeProfile?.unreadCount ?? 0"
+      />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
       <div v-if="authStatus === null" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">Loading…</div>
