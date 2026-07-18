@@ -5,8 +5,12 @@
   --color-raised: var(--hv-raised);
   --color-sidebar: var(--hv-sidebar);
   --color-pane: var(--hv-pane);
+  --color-list: var(--hv-list);
   --color-chip: var(--hv-chip);
   --color-hover: var(--hv-hover);
+  --color-action-card: var(--hv-action-card);
+  --color-action-hover: var(--hv-action-hover);
+  --color-action-hover-border: var(--hv-action-hover-border);
   --color-border: var(--hv-border);
   --color-card: var(--hv-card);
   --color-strong: var(--hv-strong);
@@ -32,19 +36,23 @@
 
 :root,
 [data-theme="dark"] {
-  --hv-app: #0a0a0b;
-  --hv-raised: #16161b;
-  --hv-sidebar: #141419;
-  --hv-pane: #101015;
-  --hv-chip: #1b1b21;
-  --hv-hover: #22222a;
-  --hv-border: #26262c;
-  --hv-card: #2e2e36;
-  --hv-strong: #33333b;
+  --hv-app: #141416;
+  --hv-raised: #232327;
+  --hv-sidebar: #1b1b1e;
+  --hv-pane: #1e1e21;
+  --hv-list: #202023;
+  --hv-chip: #2a2a2e;
+  --hv-hover: #2e2e33;
+  --hv-action-card: #27272b;
+  --hv-action-hover: #2e2e33;
+  --hv-action-hover-border: #3f3f46;
+  --hv-border: #313136;
+  --hv-card: #3a3a40;
+  --hv-strong: #3f3f46;
   --hv-text: #fafafa;
   --hv-text-2: #b4b4bd;
-  --hv-text-3: #85858e;
-  --hv-text-4: #64646e;
+  --hv-text-3: #7f7f8a;
+  --hv-text-4: #5c5c66;
   --hv-accent: #f59e0b;
   --hv-accent-hover: #fbbf24;
   --hv-kind-pr: #34d399;
@@ -52,20 +60,24 @@
   --hv-tasks: #a78bfa;
   --hv-docs: #60a5fa;
   --hv-dot: #3a3a40;
-  --hv-selection: rgba(245, 158, 11, 0.07);
+  --hv-selection: rgba(245, 158, 11, 0.09);
   --hv-backdrop: rgba(0, 0, 0, 0.5);
 }
 
 [data-theme="light"] {
-  --hv-app: #ececef;
-  --hv-raised: #f7f7f8;
-  --hv-sidebar: #f1f1f3;
-  --hv-pane: #fafafa;
-  --hv-chip: #e7e7ea;
-  --hv-hover: #e2e2e6;
-  --hv-border: #d9d9de;
-  --hv-card: #d4d4da;
-  --hv-strong: #c9c9d0;
+  --hv-app: #fafafa;
+  --hv-raised: #ffffff;
+  --hv-sidebar: #fcfcfd;
+  --hv-pane: #ffffff;
+  --hv-list: #ffffff;
+  --hv-chip: #f4f4f5;
+  --hv-hover: #f4f4f5;
+  --hv-action-card: #ffffff;
+  --hv-action-hover: #f8f8f9;
+  --hv-action-hover-border: #d4d4d8;
+  --hv-border: #e4e4e7;
+  --hv-card: #e4e4e7;
+  --hv-strong: #d4d4d8;
   --hv-text: #18181b;
   --hv-text-2: #52525b;
   --hv-text-3: #71717a;
@@ -77,7 +89,7 @@
   --hv-tasks: #7c3aed;
   --hv-docs: #2563eb;
   --hv-dot: #a1a1aa;
-  --hv-selection: rgba(217, 119, 6, 0.1);
+  --hv-selection: rgba(245, 158, 11, 0.06);
   --hv-backdrop: rgba(24, 24, 27, 0.25);
 }
 

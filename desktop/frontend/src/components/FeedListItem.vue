@@ -20,7 +20,7 @@ const emit = defineEmits<{ select: [] }>()
         <div class="mb-1.5 text-left text-[13.5px] leading-[1.35] text-text">{{ item.title }}</div>
         <div class="flex flex-wrap items-center gap-1.5">
           <span class="text-[11.5px] text-text-3">{{ item.author }}</span>
-          <span v-for="label in item.labels ?? []" :key="label" class="rounded border border-card bg-chip px-1.5 py-px font-mono text-[10px] text-text-2">{{ label }}</span>
+          <span v-for="label in item.labels ?? []" :key="label" class="feed-label rounded border border-card bg-chip px-1.5 py-px font-mono text-[10px] text-text-2">{{ label }}</span>
         </div>
       </div>
     </div>
@@ -33,4 +33,6 @@ const emit = defineEmits<{ select: [] }>()
 .feed-item.selected { border-left: 2px solid var(--color-accent); padding-left: 14px; background: var(--color-selection); }
 .source-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 22px; height: 22px; border: 1px solid var(--color-strong); border-radius: 6px; background: var(--color-chip); color: var(--color-text-2); font-family: var(--font-mono); font-size: 9px; font-weight: 700; }
 .kind-badge { border-width: 1px; border-radius: 3px; padding: 1px 5px; font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; opacity: .95; }
+[data-theme="light"] .kind-badge { background: color-mix(in srgb, currentColor 6%, white); }
+[data-theme="light"] .feed-label { border-color: var(--color-border); }
 </style>

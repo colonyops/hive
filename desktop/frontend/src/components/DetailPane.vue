@@ -43,6 +43,7 @@ const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': [] 
 <style scoped>
 .source-icon { display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--color-strong); border-radius: 5px; background: var(--color-chip); color: var(--color-text-2); font-family: var(--font-mono); font-size: 8px; font-weight: 700; }
 .kind-badge { border-width: 1px; border-radius: 3px; padding: 1px 5px; font-family: var(--font-mono); font-size: 9px; letter-spacing: .06em; }
+[data-theme="light"] .kind-badge { background: color-mix(in srgb, currentColor 6%, white); }
 .open-button, .edit-button { cursor: pointer; border: 1px solid var(--color-card); border-radius: 4px; padding: 2px 7px; color: var(--color-text-2); font-family: var(--font-mono); font-size: 11px; }
 .edit-button { border-radius: 5px; padding: 3px 8px; font-family: var(--font-sans); }
 .open-button:hover, .edit-button:hover { border-color: var(--color-strong); color: var(--color-text); }

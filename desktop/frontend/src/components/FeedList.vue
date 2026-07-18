@@ -39,7 +39,7 @@ const visibleItems = computed(() => props.unreadOnly ? props.items.filter((item)
 </template>
 
 <style scoped>
-.feed-list { background: color-mix(in srgb, var(--color-app) 58%, var(--color-raised)); }
+.feed-list { background: var(--color-list); }
 .source-icon { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; border: 1px solid var(--color-strong); border-radius: 5px; background: var(--color-chip); color: var(--color-text-2); font-family: var(--font-mono); font-size: 9px; font-weight: 700; }
 .unread-chip, .refresh-chip { cursor: pointer; border: 1px solid var(--color-card); border-radius: 5px; color: var(--color-text-2); font-size: 11px; }
 .unread-chip { padding: 3px 9px; }
