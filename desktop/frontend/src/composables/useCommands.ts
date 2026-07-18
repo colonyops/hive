@@ -11,8 +11,6 @@ export interface Command {
   group?: string
   /** Extra match terms */
   keywords?: string[]
-  /** Display-only shortcut hint, e.g. "⌘K" */
-  kbd?: string
   run: () => void | Promise<void>
 }
 

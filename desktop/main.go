@@ -14,24 +14,16 @@ var assets embed.FS
 //go:embed build/appicon.png
 var appIcon []byte
 
-//go:embed build/icons/tray-templateTemplate.png
-var trayIcon []byte
-
+// Wails accepts a single PNG for template icons; embed the retina asset.
+//
 //go:embed build/icons/tray-templateTemplate@2x.png
-var trayIcon2x []byte
+var trayIcon []byte
 
 var _ = registerEvents()
 
 func registerEvents() struct{} {
 	application.RegisterEvent[string]("feed:updated")
 	return struct{}{}
-}
-
-func templateTrayIcon() []byte {
-	if len(trayIcon2x) > 0 {
-		return trayIcon2x
-	}
-	return trayIcon
 }
 
 func main() {
@@ -100,8 +92,7 @@ func main() {
 		app.Quit()
 	})
 
-	// Wails accepts one PNG for template icons. Prefer the retina asset.
-	app.SystemTray.New().SetTemplateIcon(templateTrayIcon()).SetMenu(trayMenu)
+	app.SystemTray.New().SetTemplateIcon(trayIcon).SetMenu(trayMenu)
 
 	if err := app.Run(); err != nil {
 		log.Fatal(err)

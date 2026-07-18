@@ -82,9 +82,8 @@ function onKeydown(e: KeyboardEvent): void {
 <template>
   <Teleport to="body">
     <Transition name="palette">
+      <!-- Dimmed backdrop — click outside the panel to close -->
       <div v-if="open" class="palette-backdrop" @click.self="toggle">
-        <!-- Dimmed backdrop — click outside to close -->
-        <div class="palette-backdrop-fill" @click="toggle" />
         <!-- Panel -->
         <!-- Keydown lives on the panel (not the input) so navigation and
              Escape keep working when focus moves to a result row. -->
@@ -128,7 +127,6 @@ function onKeydown(e: KeyboardEvent): void {
                 @mousemove="selectedIndex = entry.index"
               >
                 <span class="min-w-0 flex-1 truncate text-left">{{ entry.cmd.title }}</span>
-                <kbd v-if="entry.cmd.kbd" class="palette-row-kbd">{{ entry.cmd.kbd }}</kbd>
               </button>
             </template>
 
@@ -152,11 +150,6 @@ function onKeydown(e: KeyboardEvent): void {
   align-items: flex-start;
   justify-content: center;
   padding-top: 20vh;
-}
-
-.palette-backdrop-fill {
-  position: absolute;
-  inset: 0;
   background: var(--color-backdrop);
 }
 
@@ -261,18 +254,6 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-row-selected {
   background: var(--color-hover);
   color: var(--color-text);
-}
-
-.palette-row-kbd {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--color-text-4);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 2px 6px;
-  background: var(--color-app);
-  flex-shrink: 0;
-  line-height: 1.6;
 }
 
 /* Empty state */

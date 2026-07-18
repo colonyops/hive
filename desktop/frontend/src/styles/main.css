@@ -21,7 +21,6 @@
   --color-text-3: var(--hv-text-3);
   --color-text-4: var(--hv-text-4);
   --color-accent: var(--hv-accent);
-  --color-accent-hover: var(--hv-accent-hover);
   --color-accent-contrast: var(--hv-accent-contrast);
   --color-accent-tint: var(--hv-accent-tint);
   --color-kind-pr: var(--hv-kind-pr);
@@ -62,7 +61,6 @@
   --hv-text-3: #71717a;
   --hv-text-4: #52525b;
   --hv-accent: #f59e0b;
-  --hv-accent-hover: #fbbf24;
   --hv-accent-contrast: #181a1f;
   --hv-accent-tint: #3a2f18;
   --hv-kind-pr: #4ade80;
@@ -97,7 +95,6 @@
   --hv-text-3: #7a776f;
   --hv-text-4: #a8a59d;
   --hv-accent: #f59e0b;
-  --hv-accent-hover: #d97706;
   --hv-accent-contrast: #ffffff;
   --hv-accent-tint: #f5e6c8;
   --hv-selection: rgba(245, 158, 11, 0.1);
@@ -125,7 +122,6 @@
   --hv-text-3: #6b76a0;
   --hv-text-4: #4a5480;
   --hv-accent: #f59e0b;
-  --hv-accent-hover: #fbbf24;
   --hv-accent-contrast: #0b0d17;
   --hv-accent-tint: #3a2f18;
   --hv-selection: rgba(245, 158, 11, 0.1);
@@ -153,7 +149,6 @@
   --hv-text-3: #a89984;
   --hv-text-4: #928374;
   --hv-accent: #f59e0b;
-  --hv-accent-hover: #fbbf24;
   --hv-accent-contrast: #1d2021;
   --hv-accent-tint: #3a2f18;
   --hv-selection: rgba(245, 158, 11, 0.1);
