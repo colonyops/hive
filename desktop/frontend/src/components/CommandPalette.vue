@@ -2,6 +2,7 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import type { ComponentPublicInstance } from 'vue'
 import IconSearch from '~icons/lucide/search'
+import IconZap from '~icons/lucide/zap'
 import { useCommandPalette, type Command } from '../composables/useCommands'
 
 const { open, query, results, toggle, run } = useCommandPalette()
@@ -40,11 +41,28 @@ function setRowRef(el: Element | ComponentPublicInstance | null, index: number):
 
 // ── Display list (section headers + commands interleaved) ──────────────────────
 
+interface TitleParts { pre: string; match: string; post: string }
 interface HeaderEntry { kind: 'header'; group: string }
-interface CmdEntry { kind: 'cmd'; cmd: Command; index: number }
+interface CmdEntry { kind: 'cmd'; cmd: Command; index: number; parts: TitleParts }
 type DisplayEntry = HeaderEntry | CmdEntry
 
+/** Split a title around the first case-insensitive occurrence of the query. */
+function titleParts(title: string, query: string): TitleParts {
+  if (query) {
+    const idx = title.toLowerCase().indexOf(query.toLowerCase())
+    if (idx >= 0) {
+      return {
+        pre: title.slice(0, idx),
+        match: title.slice(idx, idx + query.length),
+        post: title.slice(idx + query.length),
+      }
+    }
+  }
+  return { pre: title, match: '', post: '' }
+}
+
 const displayList = computed<DisplayEntry[]>(() => {
+  const q = query.value.trim()
   const entries: DisplayEntry[] = []
   let lastGroup: string | undefined = undefined
   results.value.forEach((cmd, i) => {
@@ -53,7 +71,7 @@ const displayList = computed<DisplayEntry[]>(() => {
       if (group) entries.push({ kind: 'header', group })
       lastGroup = group
     }
-    entries.push({ kind: 'cmd', cmd, index: i })
+    entries.push({ kind: 'cmd', cmd, index: i, parts: titleParts(cmd.title, q) })
   })
   return entries
 })
@@ -97,7 +115,7 @@ function onKeydown(e: KeyboardEvent): void {
         >
           <!-- Input row -->
           <div class="palette-input-row">
-            <IconSearch class="palette-search-icon size-3.5" />
+            <IconSearch class="palette-search-icon" />
             <input
               ref="inputRef"
               v-model="query"
@@ -108,7 +126,7 @@ function onKeydown(e: KeyboardEvent): void {
               autocomplete="off"
               spellcheck="false"
             />
-            <kbd class="palette-kbd">⌘K</kbd>
+            <kbd class="palette-kbd">esc</kbd>
           </div>
 
           <!-- Results list -->
@@ -126,13 +144,24 @@ function onKeydown(e: KeyboardEvent): void {
                 @click="run(entry.cmd)"
                 @mousemove="selectedIndex = entry.index"
               >
-                <span class="min-w-0 flex-1 truncate text-left">{{ entry.cmd.title }}</span>
+                <span class="palette-chip" aria-hidden="true">
+                  <component :is="entry.cmd.icon ?? IconZap" />
+                </span>
+                <span class="palette-title">{{ entry.parts.pre }}<span class="palette-title-match">{{ entry.parts.match }}</span>{{ entry.parts.post }}</span>
+                <span v-if="entry.cmd.hint" class="palette-hint">{{ entry.cmd.hint }}</span>
+                <span v-if="entry.index === selectedIndex" class="palette-enter-badge" aria-hidden="true">↵</span>
               </button>
             </template>
 
             <div v-if="results.length === 0 && query" class="palette-empty">
               No results for "{{ query }}"
             </div>
+          </div>
+
+          <!-- Footer key hints -->
+          <div class="palette-footer">
+            <span><span class="palette-footer-key">↑↓</span> navigate</span>
+            <span><span class="palette-footer-key">↵</span> run</span>
           </div>
         </div>
       </div>
@@ -149,7 +178,7 @@ function onKeydown(e: KeyboardEvent): void {
   display: flex;
   align-items: flex-start;
   justify-content: center;
-  padding-top: 20vh;
+  padding-top: 12vh;
   background: var(--color-backdrop);
 }
 
@@ -157,34 +186,34 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-panel {
   position: relative;
   z-index: 1;
-  width: 440px;
-  max-height: 480px;
+  width: 660px;
+  max-width: calc(100vw - 48px);
+  max-height: min(608px, 76vh);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: 14px;
   border: 1px solid var(--color-strong);
-  background: var(--color-chip);
-  box-shadow: 0 25px 60px var(--color-backdrop), 0 0 0 1px var(--color-border);
+  background: var(--color-pane);
+  box-shadow: 0 40px 90px -20px var(--color-backdrop);
 }
 
 /* Input row */
 .palette-input-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  border-bottom: 1px solid var(--color-border);
-  padding: 12px 16px;
+  gap: 12px;
+  border-bottom: 1px solid var(--color-row);
+  padding: 16px 18px;
   flex-shrink: 0;
 }
 
 .palette-search-icon {
-  color: var(--color-text-4);
-  font-family: var(--font-mono);
-  font-size: 15px;
+  width: 18px;
+  height: 18px;
+  color: var(--color-text-3);
   flex-shrink: 0;
   user-select: none;
-  line-height: 1;
 }
 
 .palette-input {
@@ -192,8 +221,8 @@ function onKeydown(e: KeyboardEvent): void {
   background: transparent;
   border: none;
   outline: none;
-  font-family: var(--font-mono);
-  font-size: 13px;
+  font-family: var(--font-sans);
+  font-size: 17px;
   color: var(--color-text);
   min-width: 0;
   caret-color: var(--color-accent);
@@ -206,31 +235,30 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-kbd {
   flex-shrink: 0;
   font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--color-text-4);
-  border: 1px solid var(--color-border);
-  border-radius: 4px;
-  padding: 2px 6px;
-  background: var(--color-app);
+  font-size: 11px;
+  color: var(--color-text-3);
+  border: 1px solid var(--color-card);
+  border-radius: 5px;
+  padding: 2px 7px;
   user-select: none;
-  line-height: 1.6;
+  line-height: 1.5;
 }
 
 /* Results */
 .palette-results {
   flex: 1;
   overflow-y: auto;
-  padding: 6px 0;
+  padding: 0 8px 8px;
 }
 
-/* Section header — amber mono uppercase, like sidebar section labels */
+/* Section header — muted mono uppercase */
 .palette-group-header {
-  padding: 10px 16px 4px;
+  padding: 12px 6px 4px;
   font-family: var(--font-mono);
   font-size: 10px;
   font-weight: 600;
   letter-spacing: 0.12em;
-  color: var(--color-accent);
+  color: var(--color-text-3);
   text-transform: uppercase;
   user-select: none;
 }
@@ -239,10 +267,11 @@ function onKeydown(e: KeyboardEvent): void {
 .palette-row {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   width: 100%;
-  padding: 8px 16px;
-  font-size: 13px;
+  padding: 9px 10px;
+  border-radius: 9px;
+  font-size: 14px;
   color: var(--color-text-2);
   cursor: pointer;
   border: none;
@@ -250,10 +279,66 @@ function onKeydown(e: KeyboardEvent): void {
   text-align: left;
 }
 
-.palette-row:hover,
-.palette-row-selected {
-  background: var(--color-hover);
+.palette-row:hover {
+  background: var(--color-row);
+}
+
+.palette-row-selected,
+.palette-row-selected:hover {
+  background: var(--color-selection);
   color: var(--color-text);
+}
+
+/* Leading icon chip */
+.palette-chip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--color-chip);
+  color: var(--color-text-2);
+  flex-shrink: 0;
+}
+
+.palette-chip svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* Title with matched-substring highlight */
+.palette-title {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.palette-title-match {
+  color: var(--color-accent);
+  font-weight: 600;
+}
+
+/* Right-aligned hint */
+.palette-hint {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-3);
+}
+
+/* Enter badge on the selected row */
+.palette-enter-badge {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--color-accent-contrast);
+  background: var(--color-accent);
+  border-radius: 6px;
+  padding: 4px 9px;
+  line-height: 1;
 }
 
 /* Empty state */
@@ -263,6 +348,25 @@ function onKeydown(e: KeyboardEvent): void {
   font-size: 12px;
   color: var(--color-text-4);
   text-align: center;
+}
+
+/* Footer key hints */
+.palette-footer {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-row);
+  background: var(--color-raised);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-3);
+  flex-shrink: 0;
+  user-select: none;
+}
+
+.palette-footer-key {
+  color: var(--color-text-2);
 }
 
 /* Transition */

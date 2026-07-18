@@ -1,5 +1,5 @@
 import { computed, onScopeDispose, ref, toValue } from 'vue'
-import type { ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
+import type { Component, ComputedRef, MaybeRefOrGetter, Ref } from 'vue'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -11,6 +11,10 @@ export interface Command {
   group?: string
   /** Extra match terms */
   keywords?: string[]
+  /** Icon shown in the row's leading chip; palette falls back to a default */
+  icon?: Component
+  /** Right-aligned mono hint, e.g. a shortcut or context label */
+  hint?: string
   run: () => void | Promise<void>
 }
 

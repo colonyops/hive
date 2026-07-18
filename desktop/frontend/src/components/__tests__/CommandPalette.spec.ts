@@ -60,6 +60,12 @@ describe('CommandPalette', () => {
     return wrapper!.find('[data-testid="command-palette"]')
   }
 
+  // Row text is read from .palette-title: rows also contain an icon chip, an
+  // optional hint, and the ↵ badge on the selected row.
+  function rowTitle(row: ReturnType<typeof panel>) {
+    return row.find('.palette-title').text()
+  }
+
   function selectedRows() {
     return wrapper!.findAll('.palette-row').filter((row) => row.classes().includes('palette-row-selected'))
   }
@@ -71,7 +77,7 @@ describe('CommandPalette', () => {
 
     const entries = wrapper!.findAll('.palette-results > *').map((node) => ({
       header: node.classes().includes('palette-group-header'),
-      text: node.text(),
+      text: node.classes().includes('palette-group-header') ? node.text() : rowTitle(node),
     }))
     expect(entries).toEqual([
       { header: true, text: 'Feeds' },
@@ -84,19 +90,19 @@ describe('CommandPalette', () => {
 
   it('moves the selection with ArrowDown/ArrowUp and wraps at both ends', async () => {
     await openPalette()
-    expect(selectedRows().map((row) => row.text())).toEqual(['Open backend feed'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Open backend feed'])
 
     await panel().trigger('keydown', { key: 'ArrowDown' })
-    expect(selectedRows().map((row) => row.text())).toEqual(['Open desktop feed'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Open desktop feed'])
 
     await panel().trigger('keydown', { key: 'ArrowDown' })
-    expect(selectedRows().map((row) => row.text())).toEqual(['Switch to personal'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Switch to personal'])
 
     await panel().trigger('keydown', { key: 'ArrowDown' })
-    expect(selectedRows().map((row) => row.text())).toEqual(['Open backend feed'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Open backend feed'])
 
     await panel().trigger('keydown', { key: 'ArrowUp' })
-    expect(selectedRows().map((row) => row.text())).toEqual(['Switch to personal'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Switch to personal'])
   })
 
   it('runs the selected command on Enter, closes the palette, and clears the query', async () => {
@@ -147,14 +153,23 @@ describe('CommandPalette', () => {
 
     await panel().trigger('keydown', { key: 'ArrowDown' })
     await panel().trigger('keydown', { key: 'ArrowDown' })
-    expect(selectedRows().map((row) => row.text())).toEqual(['Switch to personal'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Switch to personal'])
 
     await wrapper!.find('[data-testid="command-palette-input"]').setValue('open')
 
-    expect(wrapper!.findAll('.palette-row').map((row) => row.text())).toEqual([
+    expect(wrapper!.findAll('.palette-row').map((row) => rowTitle(row))).toEqual([
       'Open backend feed',
       'Open desktop feed',
     ])
-    expect(selectedRows().map((row) => row.text())).toEqual(['Open backend feed'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Open backend feed'])
+  })
+
+  it('highlights the matched substring in result titles, case-insensitively', async () => {
+    await openPalette()
+
+    await wrapper!.find('[data-testid="command-palette-input"]').setValue('open')
+
+    expect(wrapper!.findAll('.palette-title-match').map((node) => node.text())).toEqual(['Open', 'Open'])
+    expect(selectedRows().map((row) => rowTitle(row))).toEqual(['Open backend feed'])
   })
 })

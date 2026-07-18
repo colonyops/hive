@@ -1,5 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, watch } from 'vue'
+import IconEye from '~icons/lucide/eye'
+import IconLayoutGrid from '~icons/lucide/layout-grid'
+import IconList from '~icons/lucide/list'
+import IconMinus from '~icons/lucide/minus'
+import IconPalette from '~icons/lucide/palette'
+import IconRefreshCw from '~icons/lucide/refresh-cw'
+import IconRss from '~icons/lucide/rss'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
 import SideBar from './components/SideBar.vue'
@@ -49,15 +56,20 @@ useCommands(computed(() => {
       id: `profile:${p.id}`,
       title: `Switch to profile: ${p.name}`,
       group: 'Profiles',
+      icon: IconLayoutGrid,
       run: () => selectProfile(p.id),
     })
   }
 
   // Feeds — All items always first, then individual feeds
+  const profileName = activeProfile.value?.name
+
   cmds.push({
     id: 'feed:all',
     title: 'Select feed: All items',
     group: 'Feeds',
+    icon: IconList,
+    hint: profileName,
     run: () => selectSidebar({ type: 'all' }),
   })
 
@@ -66,6 +78,8 @@ useCommands(computed(() => {
       id: `feed:${f.id}`,
       title: `Select feed: ${f.name}`,
       group: 'Feeds',
+      icon: IconRss,
+      hint: profileName,
       run: () => selectSidebar({ type: 'feed', feedId: f.id }),
     })
   }
@@ -74,7 +88,17 @@ useCommands(computed(() => {
     id: 'feed:toggle-unread',
     title: 'Toggle unread filter',
     group: 'Feeds',
+    icon: IconEye,
     run: toggleUnread,
+  })
+
+  cmds.push({
+    id: 'feed:refresh',
+    title: 'Refresh feeds',
+    group: 'Feeds',
+    keywords: ['reload', 'sync'],
+    icon: IconRefreshCw,
+    run: refresh,
   })
 
   // Themes
@@ -84,6 +108,7 @@ useCommands(computed(() => {
       title: `Theme: ${themeLabels[t]}`,
       group: 'Theme',
       keywords: ['theme', 'appearance', t],
+      icon: IconPalette,
       run: () => setTheme(t),
     })
   }
@@ -93,6 +118,7 @@ useCommands(computed(() => {
     id: 'window:hide',
     title: 'Hide window',
     group: 'Window',
+    icon: IconMinus,
     run: hideWindow,
   })
 
