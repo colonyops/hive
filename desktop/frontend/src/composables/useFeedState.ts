@@ -1,7 +1,6 @@
 import { computed, onMounted, ref } from 'vue'
 import { Window } from '@wailsio/runtime'
 import { ActionsFor, Items, Profiles } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
-import type { Action as BindingAction, FeedItem as BindingFeedItem, Profile as BindingProfile } from '../../bindings/github.com/colonyops/hive/desktop/models'
 import type { Action, FeedItem, Profile, SidebarSelection } from '../types/feed'
 
 export function useFeedState() {
@@ -37,7 +36,7 @@ export function useFeedState() {
       return
     }
     try {
-      actions.value = ((await ActionsFor(item.kind)) ?? []) as BindingAction[] as Action[]
+      actions.value = (await ActionsFor(item.kind)) ?? []
     } catch (error) {
       console.warn('Unable to load actions', error)
       actions.value = []
@@ -47,7 +46,7 @@ export function useFeedState() {
   async function loadItems(feedID = '') {
     if (!activeProfileId.value) return
     try {
-      items.value = ((await Items(activeProfileId.value, feedID)) ?? []) as BindingFeedItem[] as FeedItem[]
+      items.value = (await Items(activeProfileId.value, feedID)) ?? []
       const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
       selectedId.value = first?.id ?? null
       await loadActions(first)
@@ -61,9 +60,7 @@ export function useFeedState() {
 
   async function selectProfile(profileID: string) {
     activeProfileId.value = profileID
-    selection.value = { type: 'all' }
-    unreadOnly.value = false
-    await loadItems()
+    await selectSidebar({ type: 'all' })
   }
 
   async function selectSidebar(nextSelection: SidebarSelection) {
@@ -74,7 +71,7 @@ export function useFeedState() {
 
   async function selectItem(id: string) {
     selectedId.value = id
-    await loadActions(items.value.find((item) => item.id === id) ?? null)
+    await loadActions(selectedItem.value)
   }
 
   async function toggleUnread() {
@@ -111,7 +108,7 @@ export function useFeedState() {
 
   onMounted(async () => {
     try {
-      profiles.value = ((await Profiles()) ?? []) as BindingProfile[] as Profile[]
+      profiles.value = (await Profiles()) ?? []
       const firstProfile = profiles.value[0]
       if (firstProfile) await selectProfile(firstProfile.id)
     } catch (error) {
