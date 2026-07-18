@@ -1,15 +1,16 @@
 <script setup lang="ts">
 defineProps<{ profileName: string }>()
 
-// macOS renders its native traffic lights over the top-left of the frameless
-// titlebar (MacTitleBarHiddenInset); pad past them so content doesn't overlap.
+// macOS renders its native traffic lights over the top-left of the titlebar
+// (MacTitleBarHiddenInset). Pad past them, and match the 42px
+// UnifiedCompact toolbar height (measured on macOS Tahoe) macOS vertically centers the buttons in.
 const isMac = navigator.userAgent.includes('Mac')
 </script>
 
 <template>
   <header
-    class="flex h-10 shrink-0 items-center gap-3 border-b border-border bg-raised px-3.5"
-    :class="{ 'pl-[84px]': isMac }"
+    class="flex shrink-0 items-center gap-3 border-b border-border bg-raised px-3.5"
+    :class="isMac ? 'h-[42px] pl-[84px]' : 'h-10'"
     style="--wails-draggable: drag"
   >
     <span class="font-mono text-[12.5px] font-semibold">hive</span>

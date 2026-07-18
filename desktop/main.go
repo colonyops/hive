@@ -59,8 +59,20 @@ func main() {
 		BackgroundColour: application.NewRGB(24, 26, 31),
 		URL:              "/",
 		Mac: application.MacWindow{
-			TitleBar:                application.MacTitleBarHiddenInset,
-			InvisibleTitleBarHeight: 40,
+			// HiddenInset with an explicit compact toolbar style: the default
+			// (Automatic) lets AppKit pick the toolbar height, which drifts
+			// across macOS versions. UnifiedCompact pins it — 42pt as measured
+			// on macOS Tahoe — so the traffic lights center on the 42px HTML
+			// titlebar.
+			TitleBar: application.MacTitleBar{
+				AppearsTransparent:   true,
+				HideTitle:            true,
+				FullSizeContent:      true,
+				UseToolbar:           true,
+				HideToolbarSeparator: true,
+				ToolbarStyle:         application.MacToolbarStyleUnifiedCompact,
+			},
+			InvisibleTitleBarHeight: 42,
 		},
 	})
 
