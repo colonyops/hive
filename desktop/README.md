@@ -111,11 +111,11 @@ Desktop-only Go code lives under `internal/desktop/**`; the `desktop/`
 package is thin Wails wiring. `internal/desktop/auth` implements GitHub
 authentication behind the auth service: an OAuth device flow plus a
 personal-access-token fallback, with tokens stored in the OS keychain
-(`HIVE_GITHUB_TOKEN` is a read-only headless override). The device flow
-requires a registered GitHub OAuth app client ID, supplied via
-`HIVE_GITHUB_CLIENT_ID` until the Hive app registration exists; the PAT path
-works without it. `internal/github` is the shared GitHub REST client
-(deliberately not under `internal/desktop`).
+(`HIVE_GITHUB_TOKEN` is a read-only headless override). The device flow uses
+the registered Hive Desktop OAuth app's public client ID by default;
+`HIVE_GITHUB_CLIENT_ID` overrides it, e.g. to test another registration.
+`internal/github` is the shared GitHub REST client (deliberately not under
+`internal/desktop`).
 
 `HIVE_DESKTOP_MOCK` selects deterministic offline backends: `feed` starts
 authenticated, `onboarding` starts signed out with a fake device flow that

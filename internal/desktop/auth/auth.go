@@ -23,11 +23,12 @@ const (
 )
 
 // EnvGitHubClientID overrides the OAuth app client ID used by the device
-// flow. The default is a placeholder until the Hive OAuth app is registered;
-// the PAT path works regardless.
+// flow, e.g. to test against a different OAuth app registration.
 const EnvGitHubClientID = "HIVE_GITHUB_CLIENT_ID"
 
-const placeholderClientID = "Ov23li-hive-desktop-placeholder"
+// defaultClientID is the registered Hive Desktop OAuth app. Client IDs are
+// public; the device flow uses no client secret.
+const defaultClientID = "Ov23likA3JPBPkYbMGu4"
 
 // deviceFlowScopes: repo covers PR/issue search on private repos;
 // notifications covers the inbox feed.
@@ -111,7 +112,7 @@ type liveAuth struct {
 func NewLiveBackend(client *github.Client, tokens github.TokenStore, onChange func()) Backend {
 	clientID := os.Getenv(EnvGitHubClientID)
 	if clientID == "" {
-		clientID = placeholderClientID
+		clientID = defaultClientID
 	}
 	return &liveAuth{client: client, tokens: tokens, clientID: clientID, onChange: onChange}
 }
