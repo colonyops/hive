@@ -1,0 +1,60 @@
+@import "tailwindcss";
+
+@theme static {
+  --color-app: #0a0a0b;
+  --color-raised: #0e0e10;
+  --color-sidebar: #121215;
+  --color-pane: #0c0c0e;
+  --color-chip: #17171a;
+  --color-hover: #1c1c20;
+  --color-border: #1c1c20;
+  --color-card: #26262b;
+  --color-strong: #2a2a30;
+  --color-text: #fafafa;
+  --color-text-2: #a1a1aa;
+  --color-text-3: #71717a;
+  --color-text-4: #52525b;
+  --color-accent: #f59e0b;
+  --color-accent-hover: #fbbf24;
+  --color-kind-pr: #34d399;
+  --color-kind-issue: #60a5fa;
+  --color-tasks: #a78bfa;
+  --color-docs: #60a5fa;
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+@keyframes hivePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hive-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.hive-scroll::-webkit-scrollbar-thumb {
+  background: #2a2a30;
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+}
+
+.hive-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--color-app);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
