@@ -40,10 +40,10 @@ describe('FeedListItem', () => {
 
   it('shows the unread dot only for unread items', () => {
     const unread = mountItem({ unread: true })
-    expect(unread.findAll('span').some((span) => span.classes().includes('bg-accent') && span.classes().includes('size-[7px]'))).toBe(true)
+    expect(unread.find('[data-testid="unread-dot"]').exists()).toBe(true)
 
     const read = mountItem({ unread: false })
-    expect(read.findAll('span').some((span) => span.classes().includes('bg-accent') && span.classes().includes('size-[7px]'))).toBe(false)
+    expect(read.find('[data-testid="unread-dot"]').exists()).toBe(false)
   })
 
   it('applies selected styling', () => {

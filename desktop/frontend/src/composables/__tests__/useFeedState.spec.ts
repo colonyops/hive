@@ -175,6 +175,56 @@ describe('useFeedState', () => {
     wrapper.unmount()
   })
 
+  it('clears items, selection, and actions when loading items fails', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    expect(state.items.value).not.toHaveLength(0)
+    expect(state.selectedId.value).toBe('pr-1')
+    expect(state.actions.value).not.toHaveLength(0)
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.Items.mockRejectedValue(new Error('items failed'))
+
+    await state.selectSidebar({ type: 'all' })
+
+    expect(state.items.value).toEqual([])
+    expect(state.selectedId.value).toBeNull()
+    expect(state.actions.value).toEqual([])
+    expect(warn).toHaveBeenCalled()
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('refreshes items for the currently selected feed', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectSidebar({ type: 'feed', feedId: 'desktop' })
+    mocks.Items.mockClear()
+
+    await state.refresh()
+
+    expect(mocks.Items).toHaveBeenCalledWith('personal', 'desktop')
+
+    wrapper.unmount()
+  })
+
+  it('enters the sidebar Unread view and auto-selects the first unread item', async () => {
+    mocks.Items.mockResolvedValue([
+      { ...feedItem('pr-1', 'PR', 'First PR'), unread: false },
+      feedItem('issue-1', 'Issue', 'First issue'),
+    ])
+    const { state, wrapper } = await mountLoadedState()
+    expect(state.selectedId.value).toBe('pr-1')
+
+    await state.selectSidebar({ type: 'unread' })
+
+    expect(state.unreadOnly.value).toBe(true)
+    expect(state.title.value).toBe('Unread')
+    expect(state.selectedId.value).toBe('issue-1')
+
+    wrapper.unmount()
+  })
+
   it('loads actions for the selected item kind', async () => {
     const { state, wrapper } = await mountLoadedState()
     mocks.ActionsFor.mockClear()

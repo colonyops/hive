@@ -38,10 +38,9 @@ const actions: Action[] = [
 ]
 
 describe('DetailPane', () => {
-  it('renders primary and non-primary action controls', () => {
+  it('renders one action card per action', () => {
     const wrapper = mount(DetailPane, { props: { item, actions } })
 
-    expect(wrapper.find('[data-testid="primary-action"]').text()).toContain('Run')
     expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(2)
   })
 

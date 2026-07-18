@@ -16,7 +16,7 @@ const emit = defineEmits<{ run: [] }>()
       <span class="mt-0.5 block text-[11.5px] text-text-3 font-mono">{{ action.sub }}</span>
     </span>
     <span v-if="action.primary" class="flex shrink-0 items-center gap-1.5 rounded-md bg-accent px-2.5 py-[5px] text-xs font-semibold text-accent-contrast" data-testid="primary-action">Run <IconCornerDownLeft class="size-3" /></span>
-    <IconPlay v-else class="size-3.5 shrink-0 text-text-4" />
+    <IconPlay v-else data-testid="secondary-affordance" class="size-3.5 shrink-0 text-text-4" />
   </button>
 </template>
 

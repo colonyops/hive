@@ -1,5 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
-import { effectScope, ref } from 'vue'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { effectScope, ref, type EffectScope } from 'vue'
 import {
   filterAndScore,
   scoreCommand,
@@ -18,7 +18,14 @@ function command(overrides: Partial<Command> & Pick<Command, 'id' | 'title'>): C
 }
 
 describe('useCommands', () => {
+  let scope: EffectScope
+
+  beforeEach(() => {
+    scope = effectScope()
+  })
+
   afterEach(() => {
+    scope.stop()
     const palette = useCommandPalette()
     palette.open.value = false
     palette.query.value = ''
@@ -61,7 +68,6 @@ describe('useCommands', () => {
   })
 
   it('registers commands and removes them when the effect scope is disposed', () => {
-    const scope = effectScope()
     const palette = useCommandPalette()
 
     scope.run(() => useCommands([command({ id: 'alpha', title: 'Alpha command' })]))
@@ -74,7 +80,6 @@ describe('useCommands', () => {
   })
 
   it('updates results from a reactive command source', () => {
-    const scope = effectScope()
     const enabled = ref(false)
     const palette = useCommandPalette()
 
@@ -90,12 +95,9 @@ describe('useCommands', () => {
     enabled.value = true
 
     expect(palette.results.value.map((cmd) => cmd.id)).toEqual(['always', 'dynamic'])
-
-    scope.stop()
   })
 
   it('runs a palette command, closes the palette, and clears the query', async () => {
-    const scope = effectScope()
     const handler = vi.fn()
     const palette = useCommandPalette()
 
@@ -108,7 +110,5 @@ describe('useCommands', () => {
     expect(handler).toHaveBeenCalledTimes(1)
     expect(palette.open.value).toBe(false)
     expect(palette.query.value).toBe('')
-
-    scope.stop()
   })
 })

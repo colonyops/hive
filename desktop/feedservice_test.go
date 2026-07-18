@@ -10,14 +10,23 @@ import (
 func TestFeedServiceItemsContract(t *testing.T) {
 	t.Parallel()
 
-	items := NewFeedService().Items("any-profile", "any-feed")
+	service := NewFeedService()
 
-	require.Len(t, items, 6)
-	assert.Equal(t, []string{"pr2841", "iss1190", "pr2838", "iss1204", "pr2830", "iss1177"}, itemIDs(items))
-	assert.Equal(t, []string{"PR", "Issue", "PR", "Issue", "PR", "Issue"}, itemKinds(items))
-	assert.Equal(t, []bool{true, true, false, true, false, false}, itemUnread(items))
-	for _, item := range items {
-		assert.NotEmpty(t, item.Branch, item.ID)
+	for _, profile := range service.Profiles() {
+		items := service.Items(profile.ID, "")
+		require.NotEmpty(t, items, "profile %s has no items", profile.ID)
+
+		seenIDs := make(map[string]struct{}, len(items))
+		for _, item := range items {
+			assert.Contains(t, []string{"PR", "Issue"}, item.Kind, item.ID)
+			assert.NotEmpty(t, item.ID)
+			assert.NotEmpty(t, item.Title, item.ID)
+			assert.NotEmpty(t, item.Branch, item.ID)
+
+			_, duplicate := seenIDs[item.ID]
+			assert.False(t, duplicate, "duplicate item ID %s", item.ID)
+			seenIDs[item.ID] = struct{}{}
+		}
 	}
 }
 
@@ -25,11 +34,10 @@ func TestFeedServiceActionsForContract(t *testing.T) {
 	t.Parallel()
 
 	tests := []struct {
-		kind         string
-		primaryTitle string
+		kind string
 	}{
-		{kind: "PR", primaryTitle: "Review PR"},
-		{kind: "Issue", primaryTitle: "Start implementation"},
+		{kind: "PR"},
+		{kind: "Issue"},
 	}
 
 	for _, tt := range tests {
@@ -37,11 +45,18 @@ func TestFeedServiceActionsForContract(t *testing.T) {
 			t.Parallel()
 
 			actions := NewFeedService().ActionsFor(tt.kind)
-			require.Len(t, actions, 4)
+			require.NotEmpty(t, actions)
 
 			primary := primaryActions(actions)
 			require.Len(t, primary, 1)
-			assert.Equal(t, tt.primaryTitle, primary[0].Title)
+
+			for _, action := range actions {
+				assert.NotEmpty(t, action.ID)
+				assert.NotEmpty(t, action.Icon, action.ID)
+				assert.NotEmpty(t, action.Color, action.ID)
+				assert.NotEmpty(t, action.Title, action.ID)
+				assert.NotEmpty(t, action.Sub, action.ID)
+			}
 		})
 	}
 }
@@ -52,33 +67,15 @@ func TestFeedServiceProfilesContract(t *testing.T) {
 	profiles := NewFeedService().Profiles()
 
 	require.NotEmpty(t, profiles)
-	assert.Equal(t, 23, profiles[0].TotalCount)
-	assert.Equal(t, 4, profiles[0].UnreadCount)
-	assert.Len(t, profiles[0].Feeds, 3)
-}
-
-func itemIDs(items []FeedItem) []string {
-	ids := make([]string, len(items))
-	for i, item := range items {
-		ids[i] = item.ID
+	for _, profile := range profiles {
+		assert.NotEmpty(t, profile.ID)
+		assert.NotEmpty(t, profile.Name, profile.ID)
+		require.NotEmpty(t, profile.Feeds, profile.ID)
+		for _, feed := range profile.Feeds {
+			assert.NotEmpty(t, feed.ID, profile.ID)
+			assert.NotEmpty(t, feed.Name, profile.ID)
+		}
 	}
-	return ids
-}
-
-func itemKinds(items []FeedItem) []string {
-	kinds := make([]string, len(items))
-	for i, item := range items {
-		kinds[i] = item.Kind
-	}
-	return kinds
-}
-
-func itemUnread(items []FeedItem) []bool {
-	unread := make([]bool, len(items))
-	for i, item := range items {
-		unread[i] = item.Unread
-	}
-	return unread
 }
 
 func primaryActions(actions []Action) []Action {

@@ -27,7 +27,7 @@ const emit = defineEmits<{ select: [] }>()
       <div class="flex shrink-0 flex-col items-end gap-[7px]">
         <div class="flex items-center gap-2">
           <span class="font-mono text-[11px] text-text-4">{{ item.age }}</span>
-          <span v-if="item.unread" class="size-[7px] shrink-0 rounded-full bg-accent" />
+          <span v-if="item.unread" data-testid="unread-dot" class="size-[7px] shrink-0 rounded-full bg-accent" />
         </div>
         <div class="flex max-w-[150px] flex-wrap items-center justify-end gap-[5px]">
           <span v-for="label in item.labels ?? []" :key="label" class="rounded border border-card bg-chip px-1.5 py-px font-mono text-[10px] text-text-2">{{ label }}</span>

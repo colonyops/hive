@@ -24,10 +24,11 @@ describe('ActionCard', () => {
   it('renders the primary and non-primary action affordances', () => {
     const primary = mountAction({ primary: true })
     expect(primary.find('[data-testid="primary-action"]').text()).toContain('Run')
+    expect(primary.find('[data-testid="secondary-affordance"]').exists()).toBe(false)
 
     const secondary = mountAction({ primary: false })
     expect(secondary.find('[data-testid="primary-action"]').exists()).toBe(false)
-    expect(secondary.find('svg').exists()).toBe(true)
+    expect(secondary.find('[data-testid="secondary-affordance"]').exists()).toBe(true)
   })
 
   it('emits run when clicked', async () => {
