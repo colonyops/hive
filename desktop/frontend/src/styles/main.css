@@ -30,9 +30,20 @@
   --color-feeds: var(--hv-feeds);
   --color-selection: var(--hv-selection);
   --color-backdrop: var(--hv-backdrop);
+  --color-scrim-strong: var(--hv-scrim-strong);
   --color-code-key: var(--hv-code-key);
   --color-code-string: var(--hv-code-string);
   --color-code-comment: var(--hv-code-comment);
+  --color-severity-info: var(--hv-severity-info);
+  --color-severity-info-tint: var(--hv-severity-info-tint);
+  --color-severity-success: var(--hv-severity-success);
+  --color-severity-success-tint: var(--hv-severity-success-tint);
+  --color-severity-success-border: var(--hv-severity-success-border);
+  --color-severity-error: var(--hv-severity-error);
+  --color-severity-error-tint: var(--hv-severity-error-tint);
+  --color-severity-error-border: var(--hv-severity-error-border);
+  --color-severity-auto-tint: var(--hv-severity-auto-tint);
+  --color-severity-auto-border: var(--hv-severity-auto-border);
 }
 
 @theme {
@@ -71,9 +82,24 @@
   --hv-feeds: #34d399;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.5);
+  --hv-scrim-strong: rgba(10, 11, 14, 0.72);
   --hv-code-key: #7dcfff;
   --hv-code-string: #9ece6a;
   --hv-code-comment: #565f89;
+  /* Toast/overlay severity accents (design spec "shared design tokens" §0 —
+     dark-theme reference hexes). Kept theme-invariant, same as the
+     kind-pr/kind-issue item-type colors above: severity meaning (info,
+     success, error, automatic) shouldn't shift with the app's chrome theme. */
+  --hv-severity-info: #7aa2f7;
+  --hv-severity-info-tint: rgba(122, 162, 247, 0.15);
+  --hv-severity-success: #4ade80;
+  --hv-severity-success-tint: rgba(74, 222, 128, 0.15);
+  --hv-severity-success-border: #2c4a38;
+  --hv-severity-error: #f7768e;
+  --hv-severity-error-tint: rgba(247, 118, 142, 0.15);
+  --hv-severity-error-border: #4a2b32;
+  --hv-severity-auto-tint: rgba(245, 158, 11, 0.15);
+  --hv-severity-auto-border: #4a3f22;
 }
 
 [data-theme="light"] {
@@ -101,6 +127,7 @@
   --hv-accent-tint: #f5e6c8;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(24, 24, 27, 0.25);
+  --hv-scrim-strong: rgba(27, 27, 25, 0.45);
   --hv-code-key: #0f6bb8;
   --hv-code-string: #4d7c0f;
   --hv-code-comment: #a8a59d;
@@ -131,6 +158,7 @@
   --hv-accent-tint: #3a2f18;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
   --hv-code-key: #7dcfff;
   --hv-code-string: #9ece6a;
   --hv-code-comment: #4a5480;
@@ -161,6 +189,7 @@
   --hv-accent-tint: #3a2f18;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.55);
+  --hv-scrim-strong: rgba(0, 0, 0, 0.7);
   --hv-code-key: #83a598;
   --hv-code-string: #b8bb26;
   --hv-code-comment: #928374;
