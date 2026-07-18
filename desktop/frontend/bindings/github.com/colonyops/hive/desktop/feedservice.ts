@@ -30,7 +30,8 @@ export function Items(profileID: string, feedID: string): $CancellablePromise<$m
 }
 
 /**
- * Profiles returns the profiles shown in the desktop rail.
+ * Profiles returns the profiles shown in the desktop rail. A single profile
+ * until profile creation exists.
  */
 export function Profiles(): $CancellablePromise<$models.Profile[] | null> {
     return $Call.ByID(1352748783);
