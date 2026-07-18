@@ -3,16 +3,21 @@ name: Go Build/Test
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   Go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
 
+      # The pinned wails alpha defaults to the GTK4/WebKitGTK 6.0 stack on
+      # Linux (GTK3 is opt-in via -tags gtk3, which nothing here passes).
       - name: Install Linux desktop build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: Set up Go
         uses: actions/setup-go@v6

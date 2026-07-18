@@ -15,6 +15,13 @@ jobs:
           go-version-file: 'go.mod'
           cache: true
 
+      # mise install compiles the pinned wails3 CLI, which needs the
+      # GTK4/WebKitGTK 6.0 dev stack on Linux.
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+
       - name: Set up mise
         uses: jdx/mise-action@v4
 
