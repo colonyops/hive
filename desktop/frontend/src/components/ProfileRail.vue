@@ -11,6 +11,8 @@ const emit = defineEmits<{ select: [profileId: string] }>()
       v-for="profile in profiles"
       :key="profile.id"
       :title="profile.name"
+      :data-id="profile.id"
+      data-testid="profile-tile"
       class="relative flex size-[38px] cursor-pointer items-center justify-center rounded-[10px] border border-card bg-chip font-mono text-sm font-semibold text-text-2 transition-colors hover:bg-[#1f1f24] hover:text-text"
       :class="{ 'text-text': profile.id === activeProfileId }"
       @click="emit('select', profile.id)"

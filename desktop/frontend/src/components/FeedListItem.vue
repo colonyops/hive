@@ -6,12 +6,12 @@ const emit = defineEmits<{ select: [] }>()
 </script>
 
 <template>
-  <button class="feed-item" :class="{ selected }" @click="emit('select')">
+  <button class="feed-item" :class="{ selected }" :data-id="item.id" data-testid="feed-item" @click="emit('select')">
     <div class="relative flex items-start gap-2.5">
       <span class="source-icon mt-px">⌘</span>
       <div class="min-w-0 flex-1">
         <div class="mb-1 flex items-center gap-2">
-          <span class="kind-badge" :class="item.kind === 'PR' ? 'text-kind-pr border-kind-pr' : 'text-kind-issue border-kind-issue'">{{ item.kind }}</span>
+          <span class="kind-badge" data-testid="kind-badge" :class="item.kind === 'PR' ? 'text-kind-pr border-kind-pr' : 'text-kind-issue border-kind-issue'">{{ item.kind }}</span>
           <span class="font-mono text-[11.5px] text-text-3">{{ item.repo }} #{{ item.num }}</span>
           <span class="flex-1" />
           <span v-if="item.unread" class="size-[7px] shrink-0 rounded-full bg-accent" />

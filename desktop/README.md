@@ -11,11 +11,15 @@ On macOS, the shell uses `application.MacOptions.ActivationPolicy` set to
 application alive while its window is hidden or closed.
 
 The hidden, frameless 1360×864 Hive window is attached with
-`SystemTray.AttachWindow(window)` and has `HideOnFocusLost: true`. In the
-pinned Wails alpha, `SystemTray.SetTemplateIcon` accepts exactly one `[]byte`
-PNG; it has no paired `@2x` argument or filename-based asset lookup. Both
-committed template PNGs are embedded, and the shell supplies the 36×36 `@2x`
-PNG as the single raster to preserve the best available detail.
+`SystemTray.AttachWindow(window)` and has `HideOnFocusLost: true`. During
+`wails3 dev`, Wails sets `FRONTEND_DEVSERVER_URL`; when that is present, the
+shell starts the same frameless tray-attached window visible and disables
+focus-loss hiding so it behaves like a persistent development window.
+
+In the pinned Wails alpha, `SystemTray.SetTemplateIcon` accepts exactly one
+`[]byte` PNG; it has no paired `@2x` argument or filename-based asset lookup.
+Both committed template PNGs are embedded, and the shell supplies the 36×36
+`@2x` PNG as the single raster to preserve the best available detail.
 
 The alpha's macOS tray implementation gives an attached window left-click
 routing and a tray menu right-click routing when both are configured. Thus a
@@ -135,3 +139,24 @@ to point at `icons.icns`. The Linux AppImage consumes the 512px
 uses the generated multi-resolution `build/windows/icon.ico`. The generated
 `tray-templateTemplate.png` and `tray-templateTemplate@2x.png` retain the
 macOS `Template` suffix for automatic tinting.
+
+## Agent-driven UI verification
+
+Use the headless server build for the UI verification loop:
+
+```sh
+mise run desktop:serve
+```
+
+Drive and inspect the app at `http://localhost:8080` with Playwright or browser
+tooling, read the screenshots in `desktop/e2e/screenshots`, edit, and repeat.
+Run `mise run desktop:e2e` as the regression gate. Before the first local run,
+install the browsers with:
+
+```sh
+cd desktop/e2e
+npx playwright install chromium webkit
+```
+
+Native shell behavior, including the tray and hide-on-blur behavior, remains a
+manual verification concern.

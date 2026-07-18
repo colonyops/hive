@@ -22,7 +22,7 @@ const visibleItems = computed(() => props.unreadOnly ? props.items.filter((item)
       <span class="font-mono text-[11px] text-text-3">{{ countLabel }}</span>
       <span class="flex-1" />
       <div class="flex gap-1.5">
-        <button class="unread-chip" :class="{ active: unreadOnly }" @click="emit('toggle-unread')">Unread</button>
+        <button class="unread-chip" data-testid="unread-chip" :class="{ active: unreadOnly }" @click="emit('toggle-unread')">Unread</button>
         <button class="refresh-chip" aria-label="Refresh" @click="emit('refresh')">⟳</button>
       </div>
     </header>

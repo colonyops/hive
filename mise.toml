@@ -118,6 +118,15 @@ run = "wails3 generate bindings -clean=true -ts -i"
 description = "Build and run the desktop app as a headless HTTP server (server build)"
 run = ["go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop", "./desktop/bin/hive-desktop-server"]
 
+[tasks."desktop:test"]
+description = "Run desktop frontend + Go tests"
+run = ["cd desktop/frontend && npm test", "go test ./desktop/..."]
+
+[tasks."desktop:e2e"]
+description = "Run desktop e2e tests (Playwright vs server build)"
+dir = "desktop/e2e"
+run = "npx playwright test"
+
 [tasks."docs:serve"]
 description = "Serve documentation site locally"
 run = "zensical serve"

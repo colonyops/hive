@@ -59,3 +59,43 @@ jobs:
       - name: Build frontend
         working-directory: desktop/frontend
         run: npm run build
+
+      - name: Test frontend
+        working-directory: desktop/frontend
+        run: npm test
+
+  desktop-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            desktop/e2e/package-lock.json
+            desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci
+
+      - name: Install e2e dependencies
+        working-directory: desktop/e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: desktop/e2e
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run desktop e2e tests
+        working-directory: desktop/e2e
+        run: npx playwright test

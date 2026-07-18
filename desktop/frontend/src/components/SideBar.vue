@@ -14,7 +14,7 @@ function selected(selection: SidebarSelection): boolean {
 <template>
   <aside class="hive-scroll flex w-[250px] shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar">
     <div class="border-b border-border px-4 pb-3 pt-4">
-      <div class="text-[15px] font-semibold tracking-[-.01em]">{{ profile.name }}</div>
+      <div class="text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
       <div class="mt-1 flex items-center gap-1.5">
         <span class="flex size-[15px] items-center justify-center rounded border border-strong bg-chip font-mono text-[8px] font-bold text-zinc-200">⌘</span>
         <span class="text-xs text-text-3">{{ profile.sourceSummary }}</span>
@@ -45,14 +45,14 @@ function selected(selection: SidebarSelection): boolean {
 
     <section class="px-2.5 pb-1.5 pt-2">
       <div class="section-label"><span class="text-tasks">▤</span>TASKS <span class="ml-auto text-sm text-[#3a3a40]">+</span></div>
-      <div class="static-entry"><span class="w-[18px] text-center text-tasks">◆</span><span class="flex-1">MVP v0.1 epic</span><span class="font-mono text-[11px] text-text-3">14</span></div>
-      <div class="static-entry"><span class="w-[18px] text-center text-tasks">◆</span><span class="flex-1">Auth epic</span><span class="font-mono text-[11px] text-text-3">6</span></div>
+      <div class="static-entry" data-testid="sidebar-inert"><span class="w-[18px] text-center text-tasks">◆</span><span class="flex-1">MVP v0.1 epic</span><span class="font-mono text-[11px] text-text-3">14</span></div>
+      <div class="static-entry" data-testid="sidebar-inert"><span class="w-[18px] text-center text-tasks">◆</span><span class="flex-1">Auth epic</span><span class="font-mono text-[11px] text-text-3">6</span></div>
     </section>
 
     <section class="px-2.5 pb-1.5 pt-2">
       <div class="section-label"><span class="text-docs">≡</span>DOCS <span class="ml-auto text-sm text-[#3a3a40]">+</span></div>
-      <div class="static-entry"><span class="w-[18px] text-center text-docs">≡</span><span class="flex-1 font-mono text-xs">rollout-plan.md</span></div>
-      <div class="static-entry"><span class="w-[18px] text-center text-docs">≡</span><span class="flex-1 font-mono text-xs">batch-spawn.md</span></div>
+      <div class="static-entry" data-testid="sidebar-inert"><span class="w-[18px] text-center text-docs">≡</span><span class="flex-1 font-mono text-xs">rollout-plan.md</span></div>
+      <div class="static-entry" data-testid="sidebar-inert"><span class="w-[18px] text-center text-docs">≡</span><span class="flex-1 font-mono text-xs">batch-spawn.md</span></div>
     </section>
   </aside>
 </template>

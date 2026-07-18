@@ -14,7 +14,7 @@ const emit = defineEmits<{ hide: [] }>()
     <div class="mx-1 h-4 w-px bg-border" />
     <span class="font-mono text-[12.5px] font-semibold">hive</span>
     <span class="text-[13px] text-text-3">/</span>
-    <span class="text-[13px] text-zinc-300">{{ profileName }}</span>
+    <span class="text-[13px] text-zinc-300" data-testid="breadcrumb-profile-name">{{ profileName }}</span>
     <div class="flex-1" />
     <div class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2">
       <span class="size-[7px] rounded-full bg-accent [animation:hivePulse_2.4s_ease-in-out_infinite]" />
