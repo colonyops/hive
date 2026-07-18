@@ -325,6 +325,42 @@ func updateFeedInConfig(data []byte, profileID, feedID string, def FeedDef) ([]b
 	return encodeConfigNode(doc)
 }
 
+// deleteFeedFromConfig removes the feed from the profile's feeds sequence,
+// preserving comments and formatting elsewhere in the document.
+func deleteFeedFromConfig(data []byte, profileID, feedID string) ([]byte, error) {
+	doc, profileNode, err := findProfileNode(data, profileID)
+	if err != nil {
+		return nil, err
+	}
+	feeds := mappingValue(profileNode, "feeds")
+	if feeds == nil || feeds.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("profile %q has no feeds", profileID)
+	}
+	if !removeSequenceEntryByID(feeds, feedID) {
+		return nil, fmt.Errorf("feed %q not found in profile %q", feedID, profileID)
+	}
+	return encodeConfigNode(doc)
+}
+
+// deleteProfileFromConfig removes the profile — and its feeds — from the
+// top-level profiles sequence, preserving comments and formatting elsewhere
+// in the document. Sources are untouched: they are shared, decoupled
+// definitions other profiles may still reference.
+func deleteProfileFromConfig(data []byte, profileID string) ([]byte, error) {
+	doc, root, err := parseConfigNode(data)
+	if err != nil {
+		return nil, err
+	}
+	profiles := mappingValue(root, "profiles")
+	if profiles == nil || profiles.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("profile %q not found: config has no profiles", profileID)
+	}
+	if !removeSequenceEntryByID(profiles, profileID) {
+		return nil, fmt.Errorf("profile %q not found", profileID)
+	}
+	return encodeConfigNode(doc)
+}
+
 // findProfileNode parses the document and locates the profile's mapping node.
 func findProfileNode(data []byte, profileID string) (doc, profile *yaml.Node, err error) {
 	doc, root, err := parseConfigNode(data)
@@ -377,6 +413,21 @@ func sequenceEntryByID(seq *yaml.Node, id string) *yaml.Node {
 		}
 	}
 	return nil
+}
+
+// removeSequenceEntryByID removes the sequence's mapping entry whose "id"
+// scalar equals id, reporting whether an entry was found and removed.
+func removeSequenceEntryByID(seq *yaml.Node, id string) bool {
+	for i, entry := range seq.Content {
+		if entry.Kind != yaml.MappingNode {
+			continue
+		}
+		if idNode := mappingValue(entry, "id"); idNode != nil && idNode.Value == id {
+			seq.Content = append(seq.Content[:i], seq.Content[i+1:]...)
+			return true
+		}
+	}
+	return false
 }
 
 func encodeConfigNode(doc *yaml.Node) ([]byte, error) {

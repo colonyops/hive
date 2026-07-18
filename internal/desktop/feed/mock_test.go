@@ -176,6 +176,48 @@ func TestMockProviderSourceAndFeedFlow(t *testing.T) {
 	require.ErrorContains(t, provider.UpdateFeed(t.Context(), profile.ID, "ghost", FeedDef{Name: "X", Sources: []string{"team-reviews"}}), "unknown feed")
 }
 
+// TestMockProviderDeleteFlow walks the delete half of the editor flow the
+// e2e mutable server must support: delete a feed, then delete the profile,
+// leaving sources untouched throughout.
+func TestMockProviderDeleteFlow(t *testing.T) {
+	t.Parallel()
+
+	provider := NewEmptyMockProvider()
+	profile, err := provider.CreateProfile(t.Context(), "My Triage")
+	require.NoError(t, err)
+	require.NotEmpty(t, profile.Feeds)
+
+	sourcesBefore, err := provider.Sources(t.Context())
+	require.NoError(t, err)
+
+	firstFeed := profile.Feeds[0].ID
+	require.NoError(t, provider.DeleteFeed(t.Context(), profile.ID, firstFeed))
+
+	profiles, err := provider.Profiles(t.Context())
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	for _, summary := range profiles[0].Feeds {
+		assert.NotEqual(t, firstFeed, summary.ID, "deleted feed still in profile summary")
+	}
+	_, err = provider.FeedDefFor(t.Context(), profile.ID, firstFeed)
+	require.ErrorContains(t, err, "unknown feed")
+
+	require.ErrorContains(t, provider.DeleteFeed(t.Context(), profile.ID, "ghost"), "unknown feed")
+	require.ErrorContains(t, provider.DeleteFeed(t.Context(), "ghost", firstFeed), "unknown profile")
+
+	require.NoError(t, provider.DeleteProfile(t.Context(), profile.ID))
+	profiles, err = provider.Profiles(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, profiles)
+
+	// Sources are shared/decoupled: deleting the profile leaves them alone.
+	sourcesAfter, err := provider.Sources(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, sourcesBefore, sourcesAfter)
+
+	require.ErrorContains(t, provider.DeleteProfile(t.Context(), "ghost"), "unknown profile")
+}
+
 // TestMockProviderFeedDefsForFixture pins that the fixture profile's feed
 // summaries all have definitions behind them, so the edit flow works on the
 // canned data too.

@@ -165,6 +165,20 @@ func (p *LiveProvider) UpdateFeed(_ context.Context, profileID, feedID string, d
 	return p.store.UpdateFeed(profileID, feedID, def)
 }
 
+// DeleteFeed removes the feed from the profile. The source cache is
+// unaffected, matching UpdateFeed: sources are shared and other feeds may
+// still reference them.
+func (p *LiveProvider) DeleteFeed(_ context.Context, profileID, feedID string) error {
+	return p.store.DeleteFeed(profileID, feedID)
+}
+
+// DeleteProfile removes the profile and its feeds. Sources are left
+// untouched — they are shared, decoupled definitions other profiles may
+// still reference.
+func (p *LiveProvider) DeleteProfile(_ context.Context, profileID string) error {
+	return p.store.DeleteProfile(profileID)
+}
+
 func (p *LiveProvider) Items(ctx context.Context, profileID, feedID string) ([]Item, error) {
 	def, err := p.profileDef(profileID)
 	if err != nil {

@@ -77,6 +77,19 @@ func (s *FeedService) UpdateFeed(profileID, feedID string, def feed.FeedDef) err
 	return s.provider.UpdateFeed(context.Background(), profileID, feedID, def)
 }
 
+// DeleteFeed removes the feed from the profile; the profile and its other
+// feeds are untouched.
+func (s *FeedService) DeleteFeed(profileID, feedID string) error {
+	return s.provider.DeleteFeed(context.Background(), profileID, feedID)
+}
+
+// DeleteProfile removes the profile and its feeds. Sources are left
+// untouched: they are shared, decoupled definitions other profiles may
+// still reference.
+func (s *FeedService) DeleteProfile(profileID string) error {
+	return s.provider.DeleteProfile(context.Background(), profileID)
+}
+
 // Config describes the profiles config file: path, content, validity.
 func (s *FeedService) Config() (feed.ConfigInfo, error) {
 	return s.provider.Config(context.Background())

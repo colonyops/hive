@@ -61,6 +61,23 @@ export function CreateSource(def: feed$0.SourceDef): $CancellablePromise<feed$0.
 }
 
 /**
+ * DeleteFeed removes the feed from the profile; the profile and its other
+ * feeds are untouched.
+ */
+export function DeleteFeed(profileID: string, feedID: string): $CancellablePromise<void> {
+    return $Call.ByID(3635964346, profileID, feedID);
+}
+
+/**
+ * DeleteProfile removes the profile and its feeds. Sources are left
+ * untouched: they are shared, decoupled definitions other profiles may
+ * still reference.
+ */
+export function DeleteProfile(profileID: string): $CancellablePromise<void> {
+    return $Call.ByID(388918543, profileID);
+}
+
+/**
  * FeedDefFor returns one feed's definition, for edit prefill.
  */
 export function FeedDefFor(profileID: string, feedID: string): $CancellablePromise<feed$0.FeedDef> {

@@ -281,6 +281,48 @@ func (s *Store) UpdateFeed(profileID, feedID string, def FeedDef) error {
 	return s.commitConfigLocked(updated)
 }
 
+// DeleteFeed removes the feed from the profile; the profile and its other
+// feeds are untouched.
+func (s *Store) DeleteFeed(profileID, feedID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.loadConfigLocked(true); err != nil {
+		return fmt.Errorf("feed: fix %s before deleting feeds: %w", filepath.Base(s.configPath), err)
+	}
+
+	data, err := s.readConfigBytesLocked()
+	if err != nil {
+		return err
+	}
+	updated, err := deleteFeedFromConfig(data, profileID, feedID)
+	if err != nil {
+		return fmt.Errorf("feed: %w", err)
+	}
+	return s.commitConfigLocked(updated)
+}
+
+// DeleteProfile removes the profile and its feeds from the config. Sources
+// are left untouched: they are shared, decoupled definitions other profiles
+// may still reference. Deleting the last profile is allowed — it leaves an
+// empty profiles list, the same state a fresh install starts from.
+func (s *Store) DeleteProfile(profileID string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := s.loadConfigLocked(true); err != nil {
+		return fmt.Errorf("feed: fix %s before deleting profiles: %w", filepath.Base(s.configPath), err)
+	}
+
+	data, err := s.readConfigBytesLocked()
+	if err != nil {
+		return err
+	}
+	updated, err := deleteProfileFromConfig(data, profileID)
+	if err != nil {
+		return fmt.Errorf("feed: %w", err)
+	}
+	return s.commitConfigLocked(updated)
+}
+
 // readConfigBytesLocked reads the raw config file; a missing file reads as
 // empty, matching the append helpers' empty-document path.
 func (s *Store) readConfigBytesLocked() ([]byte, error) {

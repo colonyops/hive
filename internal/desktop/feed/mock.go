@@ -288,6 +288,43 @@ func (p *MockProvider) UpdateFeed(_ context.Context, profileID, feedID string, d
 	return nil
 }
 
+// DeleteFeed removes the feed definition and its summary from the profile.
+func (p *MockProvider) DeleteFeed(_ context.Context, profileID, feedID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	at := p.profileIndexLocked(profileID)
+	if at < 0 {
+		return fmt.Errorf("feed: unknown profile %q", profileID)
+	}
+	defs := p.feedDefs[profileID]
+	if _, ok := defs[feedID]; !ok {
+		return fmt.Errorf("feed: unknown feed %q in profile %q", feedID, profileID)
+	}
+	delete(defs, feedID)
+	for i, summary := range p.profiles[at].Feeds {
+		if summary.ID == feedID {
+			p.profiles[at].Feeds = append(p.profiles[at].Feeds[:i], p.profiles[at].Feeds[i+1:]...)
+			break
+		}
+	}
+	return nil
+}
+
+// DeleteProfile removes the profile and its feed definitions. Sources are
+// left untouched: they are shared, decoupled definitions other profiles may
+// still reference.
+func (p *MockProvider) DeleteProfile(_ context.Context, profileID string) error {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	at := p.profileIndexLocked(profileID)
+	if at < 0 {
+		return fmt.Errorf("feed: unknown profile %q", profileID)
+	}
+	delete(p.feedDefs, profileID)
+	p.profiles = append(p.profiles[:at], p.profiles[at+1:]...)
+	return nil
+}
+
 func (p *MockProvider) profileIndexLocked(profileID string) int {
 	for i, profile := range p.profiles {
 		if profile.ID == profileID {

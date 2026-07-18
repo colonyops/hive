@@ -302,6 +302,113 @@ profiles:
 	require.ErrorContains(t, err, "not found")
 }
 
+func TestDeleteFeedFromConfig(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`# header comment
+sources:
+  - id: inbox
+    kind: notifications
+profiles:
+  # the day job
+  - id: work
+    name: Work
+    feeds:
+      - id: a
+        name: A
+        sources: [inbox]
+      # keep this one, it matters
+      - id: b
+        name: B
+        sources: [inbox]
+      - id: c
+        name: C
+        sources: [inbox]
+`)
+	// Delete a feed from the middle of the list; comments elsewhere survive.
+	updated, err := deleteFeedFromConfig(data, "work", "b")
+	require.NoError(t, err)
+	assert.Contains(t, string(updated), "# header comment")
+	assert.Contains(t, string(updated), "# the day job")
+
+	file, err := parseConfig(updated)
+	require.NoError(t, err)
+	require.Len(t, file.Profiles[0].Feeds, 2)
+	assert.Equal(t, "a", file.Profiles[0].Feeds[0].ID)
+	assert.Equal(t, "c", file.Profiles[0].Feeds[1].ID)
+
+	// Deleting the only remaining feed leaves an empty feeds sequence.
+	onlyOne := []byte(`sources:
+  - id: inbox
+    kind: notifications
+profiles:
+  - id: work
+    name: Work
+    feeds:
+      - id: solo
+        name: Solo
+        sources: [inbox]
+`)
+	updated, err = deleteFeedFromConfig(onlyOne, "work", "solo")
+	require.NoError(t, err)
+	file, err = parseConfig(updated)
+	require.NoError(t, err)
+	assert.Empty(t, file.Profiles[0].Feeds)
+
+	_, err = deleteFeedFromConfig(data, "work", "ghost")
+	require.ErrorContains(t, err, "not found")
+	_, err = deleteFeedFromConfig(data, "ghost", "a")
+	require.ErrorContains(t, err, "not found")
+}
+
+func TestDeleteProfileFromConfig(t *testing.T) {
+	t.Parallel()
+
+	data := []byte(`# my dotfiles-managed feeds
+sources:
+  - id: inbox
+    kind: notifications
+profiles:
+  # the day job
+  - id: work
+    name: Work
+    feeds:
+      - id: a
+        name: A
+        sources: [inbox]
+  - id: side
+    name: Side Projects
+    feeds:
+      - id: b
+        name: B
+        sources: [inbox]
+`)
+	updated, err := deleteProfileFromConfig(data, "work")
+	require.NoError(t, err)
+	assert.Contains(t, string(updated), "# my dotfiles-managed feeds")
+	assert.NotContains(t, string(updated), "# the day job", "comment attached to the removed profile is gone with it")
+
+	file, err := parseConfig(updated)
+	require.NoError(t, err)
+	require.Len(t, file.Profiles, 1)
+	assert.Equal(t, "side", file.Profiles[0].ID)
+	// Sources are untouched by a profile deletion.
+	require.Len(t, file.Sources, 1)
+	assert.Equal(t, "inbox", file.Sources[0].ID)
+
+	// Deleting the last remaining profile leaves an empty (but valid) profiles
+	// list; sources stay behind since they are decoupled and shared.
+	updated, err = deleteProfileFromConfig(updated, "side")
+	require.NoError(t, err)
+	file, err = parseConfig(updated)
+	require.NoError(t, err)
+	assert.Empty(t, file.Profiles)
+	require.Len(t, file.Sources, 1)
+
+	_, err = deleteProfileFromConfig(data, "ghost")
+	require.ErrorContains(t, err, "not found")
+}
+
 func TestAppendSourceToConfigCreatesKey(t *testing.T) {
 	t.Parallel()
 

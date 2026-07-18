@@ -289,6 +289,117 @@ func TestStoreUpdateFeedRejectsInvalidBeforeWrite(t *testing.T) {
 	assert.Equal(t, string(before), string(after), "rejected updates leave the file untouched")
 }
 
+func TestStoreDeleteFeed(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	path := filepath.Join(dir, "profiles.yaml")
+	require.NoError(t, os.WriteFile(path, []byte(`# keep me
+sources:
+  - id: inbox
+    kind: notifications
+profiles:
+  - id: work
+    name: Work
+    feeds:
+      - id: a
+        name: A
+        sources: [inbox]
+      - id: b
+        name: B
+        sources: [inbox]
+`), 0o600))
+	store := newStoreAt(dir)
+
+	require.NoError(t, store.DeleteFeed("work", "a"))
+
+	data, err := os.ReadFile(path)
+	require.NoError(t, err)
+	assert.Contains(t, string(data), "# keep me")
+
+	fresh := newStoreAt(dir)
+	profiles, err := fresh.Profiles()
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	require.Len(t, profiles[0].Feeds, 1)
+	assert.Equal(t, "b", profiles[0].Feeds[0].ID)
+
+	require.ErrorContains(t, store.DeleteFeed("work", "ghost"), "not found")
+	require.ErrorContains(t, store.DeleteFeed("ghost", "b"), "not found")
+}
+
+func TestStoreDeleteFeedOnlyFeedInProfile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	store := newStoreAt(dir)
+	profile, err := store.CreateProfile("Work")
+	require.NoError(t, err)
+
+	for _, feedDef := range profile.Feeds {
+		require.NoError(t, store.DeleteFeed(profile.ID, feedDef.ID))
+	}
+
+	fresh := newStoreAt(dir)
+	profiles, err := fresh.Profiles()
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	assert.Empty(t, profiles[0].Feeds)
+}
+
+func TestStoreDeleteProfile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	store := newStoreAt(dir)
+	work, err := store.CreateProfile("Work")
+	require.NoError(t, err)
+	side, err := store.CreateProfile("Side Projects")
+	require.NoError(t, err)
+
+	sourcesBefore, err := store.Sources()
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteProfile(work.ID))
+
+	fresh := newStoreAt(dir)
+	profiles, err := fresh.Profiles()
+	require.NoError(t, err)
+	require.Len(t, profiles, 1)
+	assert.Equal(t, side.ID, profiles[0].ID)
+
+	// Sources are shared/decoupled: deleting a profile leaves them alone.
+	sourcesAfter, err := fresh.Sources()
+	require.NoError(t, err)
+	assert.Equal(t, sourcesBefore, sourcesAfter)
+
+	require.ErrorContains(t, store.DeleteProfile("ghost"), "not found")
+}
+
+func TestStoreDeleteLastProfileLeavesEmptyValidConfig(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	store := newStoreAt(dir)
+	profile, err := store.CreateProfile("Only One")
+	require.NoError(t, err)
+
+	require.NoError(t, store.DeleteProfile(profile.ID))
+
+	fresh := newStoreAt(dir)
+	profiles, err := fresh.Profiles()
+	require.NoError(t, err)
+	assert.Empty(t, profiles)
+
+	// Sources persist even with zero profiles left to reference them.
+	sources, err := fresh.Sources()
+	require.NoError(t, err)
+	assert.Len(t, sources, 3)
+
+	info := fresh.ConfigInfo()
+	assert.True(t, info.Valid)
+}
+
 func TestStoreFeedDefForUnknown(t *testing.T) {
 	t.Parallel()
 

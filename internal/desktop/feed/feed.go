@@ -89,6 +89,13 @@ type Provider interface {
 	CreateFeed(ctx context.Context, profileID string, def FeedDef) (Source, error)
 	// UpdateFeed replaces the feed's definition; the feed keeps its ID.
 	UpdateFeed(ctx context.Context, profileID, feedID string, def FeedDef) error
+	// DeleteFeed removes the feed from the profile; the profile and its
+	// other feeds are untouched.
+	DeleteFeed(ctx context.Context, profileID, feedID string) error
+	// DeleteProfile removes the profile and its feeds. Sources are left
+	// untouched: they are shared, decoupled definitions other profiles may
+	// still reference. Deleting the last profile is allowed.
+	DeleteProfile(ctx context.Context, profileID string) error
 }
 
 // ActionsFor returns the actions available for a PR or issue. Shared by
