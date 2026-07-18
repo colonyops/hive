@@ -100,7 +100,7 @@ func validateFilters(f FilterDef) error {
 
 // applyFilters returns the items passing the feed's filter block. It runs
 // after the feed's source items are merged and deduplicated, so a merged
-// search+notification item carries both its author and its reason.
+// search+notification item carries its author, labels, and reason.
 func applyFilters(def FeedDef, items []liveItem) []liveItem {
 	f := def.Filters
 	if f.IsZero() {

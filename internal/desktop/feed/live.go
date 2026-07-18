@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+	"golang.org/x/sync/singleflight"
 
 	"github.com/colonyops/hive/internal/github"
 )
@@ -43,8 +44,14 @@ type LiveProvider struct {
 
 	mu    sync.Mutex
 	cache map[string]*cachedSource
+	// flight coalesces concurrent fetches of the same source (by canonical
+	// key) into one API request.
+	flight singleflight.Group
 }
 
+// cachedSource is one source's cached fetch. Entries are immutable once
+// published into the cache: readers use their fields after releasing p.mu,
+// so an update must publish a new entry, never mutate one in place.
 type cachedSource struct {
 	items     []liveItem
 	fetchedAt time.Time
@@ -397,9 +404,9 @@ func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedD
 // mergeNewest resolves an item present in several sources (search result vs
 // notification thread) to its newest copy, so age and read state derive from
 // the latest activity — the same newest-wins contract MarkRead records.
-// Notifications carry no author and search results no reason; backfill both
-// from the other copy so a merged item has author and reason regardless of
-// which side is newer.
+// Notifications carry no author or labels, and search results no reason;
+// backfill each empty field from the other copy so a merged item has author,
+// labels, and reason regardless of which side is newer.
 func mergeNewest(a, b liveItem) liveItem {
 	newer, older := a, b
 	if older.updatedAt.After(newer.updatedAt) {
@@ -410,6 +417,9 @@ func mergeNewest(a, b liveItem) liveItem {
 	}
 	if newer.item.Reason == "" {
 		newer.item.Reason = older.item.Reason
+	}
+	if len(newer.item.Labels) == 0 {
+		newer.item.Labels = older.item.Labels
 	}
 	return newer
 }
@@ -504,10 +514,26 @@ func (p *LiveProvider) sourceItems(ctx context.Context, src SourceDef) ([]liveIt
 	return items, nil
 }
 
-// fetchSource performs the source's API request and updates the cache.
+// fetchSource performs the source's API request and updates the cache,
+// coalescing concurrent fetches of the same source into one request — a poll
+// tick racing a user navigation costs one API call, and both callers see the
+// same result. A TTL-bypassing refresh that joins an in-flight fetch adopts
+// its result: the data is at most one request old, fresh enough for a manual
+// refresh.
+func (p *LiveProvider) fetchSource(ctx context.Context, src SourceDef) ([]liveItem, error) {
+	result, err, _ := p.flight.Do(sourceKey(src), func() (any, error) {
+		return p.fetchSourceDirect(ctx, src)
+	})
+	if err != nil {
+		return nil, err
+	}
+	return result.([]liveItem), nil
+}
+
+// fetchSourceDirect is the uncoalesced fetch behind fetchSource.
 // Notifications requests are conditional: a 304 keeps the cached items and
 // refreshes their fetch time at no rate-limit cost.
-func (p *LiveProvider) fetchSource(ctx context.Context, src SourceDef) ([]liveItem, error) {
+func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]liveItem, error) {
 	token, err := p.tokens.Token()
 	if err != nil {
 		return nil, err
@@ -534,18 +560,19 @@ func (p *LiveProvider) fetchSource(ctx context.Context, src SourceDef) ([]liveIt
 		}
 		pollInterval := time.Duration(result.PollInterval) * time.Second
 		if result.NotModified && prev != nil {
-			p.mu.Lock()
-			prev.fetchedAt = p.now()
+			// Published entries are immutable (readers use them outside the
+			// lock): publish a refreshed copy instead of mutating prev. This
+			// also re-adopts the entry if Invalidate raced the request.
+			next := *prev
+			next.fetchedAt = p.now()
 			if pollInterval > 0 {
-				prev.pollInterval = pollInterval
+				next.pollInterval = pollInterval
 			}
 			if result.LastModified != "" {
-				prev.lastModified = result.LastModified
+				next.lastModified = result.LastModified
 			}
-			p.cache[key] = prev // re-adopt if Invalidate raced the request
-			items := prev.items
-			p.mu.Unlock()
-			return items, nil
+			p.setCache(key, &next)
+			return next.items, nil
 		}
 		items := p.notificationItems(result.Items)
 		p.setCache(key, &cachedSource{
@@ -626,9 +653,11 @@ func (p *LiveProvider) notificationItems(notifications []github.Notification) []
 			Age:    shortAge(p.now().Sub(n.UpdatedAt)),
 			Unread: n.Unread, // native inbox state seeds unread
 			Reason: n.Reason,
-			Labels: []string{strings.ReplaceAll(n.Reason, "_", " ")},
+			// No Labels: the notifications API does not deliver them. The
+			// reason renders as its own chip from Reason, and mergeNewest
+			// backfills real labels from a search copy of the same item.
 			Branch: suggestedBranch(kind, num, n.Subject.Title),
-			Body:   fmt.Sprintf("GitHub notification (%s) for %s in %s.", strings.ReplaceAll(n.Reason, "_", " "), strings.ToLower(kind), repo),
+			Body:   fmt.Sprintf("GitHub notification for %s in %s.", strings.ToLower(kind), repo),
 			Prompt: suggestedPrompt(kind, repo, num, n.Subject.Title),
 			URL:    htmlURLForSubject(repo, kind, num),
 		}
