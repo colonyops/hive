@@ -3,6 +3,30 @@
 This directory is a Wails v3 Vue + TypeScript shell for Hive. It is deliberately
 minimal while the desktop UI is developed in later phases.
 
+## Tray-resident shell
+
+On macOS, the shell uses `application.MacOptions.ActivationPolicy` set to
+`application.ActivationPolicyAccessory`, so Hive has no Dock icon. It also sets
+`ApplicationShouldTerminateAfterLastWindowClosed: false`, keeping the
+application alive while its window is hidden or closed.
+
+The hidden, frameless 1360×864 Hive window is attached with
+`SystemTray.AttachWindow(window)` and has `HideOnFocusLost: true`. In the
+pinned Wails alpha, `SystemTray.SetTemplateIcon` accepts exactly one `[]byte`
+PNG; it has no paired `@2x` argument or filename-based asset lookup. Both
+committed template PNGs are embedded, and the shell supplies the 36×36 `@2x`
+PNG as the single raster to preserve the best available detail.
+
+The alpha's macOS tray implementation gives an attached window left-click
+routing and a tray menu right-click routing when both are configured. Thus a
+left click toggles the Hive window, while a right click opens the menu with
+**Show Hive** and **Quit**. **Show Hive** uses `SystemTray.ShowWindow()` to
+position, show, and focus the window; **Quit** calls `app.Quit()`.
+
+Manual Phase 2 verification remains required: check template-icon tinting in
+light and dark menu bars, absence of a Dock icon, left-click toggle,
+blur-to-hide, window-close persistence, and the Show Hive/Quit tray menu.
+
 ## Pinned versions
 
 - Wails CLI and Go module: `github.com/wailsapp/wails/v3 v3.0.0-alpha2.116`
