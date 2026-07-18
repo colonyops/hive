@@ -6,9 +6,16 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import OnboardingScreen from './components/OnboardingScreen.vue'
+import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
+
+const {
+  status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
+  startDeviceFlow, useTokenInstead, backToStart, submitToken,
+} = useAuth()
 
 const {
   profiles, activeProfile, activeProfileId, selection, items, selectedId, selectedItem,
@@ -111,8 +118,22 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 <template>
   <main class="h-screen w-screen overflow-hidden bg-app text-text">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <TitleBar :profile-name="activeProfile?.name ?? 'Loading'" />
-      <div class="flex min-h-0 flex-1">
+      <TitleBar :profile-name="authenticated ? activeProfile?.name ?? 'Loading' : undefined" />
+      <!-- Hold an empty frame until auth status resolves so an authenticated
+           user never sees onboarding flash by. -->
+      <div v-if="authStatus === null" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">Loading…</div>
+      <OnboardingScreen
+        v-else-if="!authenticated"
+        :card="authCard"
+        :device-flow="deviceFlow"
+        :error="authError"
+        :busy="authBusy"
+        @start-device-flow="startDeviceFlow"
+        @use-token-instead="useTokenInstead"
+        @back-to-start="backToStart"
+        @submit-token="submitToken"
+      />
+      <div v-else class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" />
         <SideBar
           v-if="activeProfile"

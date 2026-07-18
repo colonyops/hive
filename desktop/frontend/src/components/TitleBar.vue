@@ -1,5 +1,6 @@
 <script setup lang="ts">
-defineProps<{ profileName: string }>()
+// profileName is empty during onboarding: the bar shows just the wordmark.
+defineProps<{ profileName?: string }>()
 
 // macOS draws its native traffic lights over the top-left of this bar
 // (hidden-inset chrome configured in desktop/main.go). Pad past them and keep
@@ -15,10 +16,12 @@ const isMac = navigator.userAgent.includes('Mac')
     style="--wails-draggable: drag"
   >
     <span class="font-mono text-[12.5px] font-semibold">hive</span>
-    <span class="text-[13px] text-text-3">/</span>
-    <span class="text-[13px] text-text-2" data-testid="breadcrumb-profile-name">{{ profileName }}</span>
+    <template v-if="profileName">
+      <span class="text-[13px] text-text-3">/</span>
+      <span class="text-[13px] text-text-2" data-testid="breadcrumb-profile-name">{{ profileName }}</span>
+    </template>
     <div class="flex-1" />
-    <div class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2">
+    <div v-if="profileName" class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2">
       <span class="size-[7px] rounded-full bg-accent [animation:hivePulse_2.4s_ease-in-out_infinite]" />
       <span>polling github · <span class="text-accent">3 new</span></span>
     </div>
