@@ -20,7 +20,7 @@ const visibleItems = computed(() => props.unreadOnly ? props.items.filter((item)
   <section class="feed-list flex min-w-0 flex-[1.25] flex-col border-r border-border">
     <header class="flex h-[46px] shrink-0 items-center gap-2.5 border-b border-border bg-pane px-4">
       <span class="source-icon"><IconGitBranch class="size-3" /></span>
-      <span class="text-[13px] font-semibold">{{ title }}</span>
+      <span class="text-[13px] font-semibold" data-testid="feed-title">{{ title }}</span>
       <span class="font-mono text-[11px] text-text-3">{{ countLabel }}</span>
       <span class="flex-1" />
       <div class="flex gap-1.5">

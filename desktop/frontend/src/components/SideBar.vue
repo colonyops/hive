@@ -1,10 +1,7 @@
 <script setup lang="ts">
 import IconCircle from '~icons/lucide/circle'
-import IconDiamond from '~icons/lucide/diamond'
-import IconFileText from '~icons/lucide/file-text'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
-import IconListTodo from '~icons/lucide/list-todo'
 import IconPlus from '~icons/lucide/plus'
 import IconRss from '~icons/lucide/rss'
 import type { Profile, SidebarSelection } from '../types/feed'
@@ -50,24 +47,11 @@ function selected(selection: SidebarSelection): boolean {
         <span class="nav-icon"><IconGitBranch class="size-3" /></span><span class="flex-1 text-left">{{ feed.name }}</span><span class="font-mono text-[11px]" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{ feed.newCount || feed.count }}</span>
       </button>
     </section>
-
-    <section class="px-2.5 pb-1.5 pt-2">
-      <div class="section-label"><IconListTodo class="size-3 text-tasks" />TASKS <IconPlus class="ml-auto size-3.5 text-strong" /></div>
-      <div class="static-entry" data-testid="sidebar-inert"><span class="flex w-[18px] justify-center text-tasks"><IconDiamond class="size-3" /></span><span class="flex-1">MVP v0.1 epic</span><span class="font-mono text-[11px] text-text-3">14</span></div>
-      <div class="static-entry" data-testid="sidebar-inert"><span class="flex w-[18px] justify-center text-tasks"><IconDiamond class="size-3" /></span><span class="flex-1">Auth epic</span><span class="font-mono text-[11px] text-text-3">6</span></div>
-    </section>
-
-    <section class="px-2.5 pb-1.5 pt-2">
-      <div class="section-label"><IconFileText class="size-3 text-docs" />DOCS <IconPlus class="ml-auto size-3.5 text-strong" /></div>
-      <div class="static-entry" data-testid="sidebar-inert"><span class="flex w-[18px] justify-center text-docs"><IconFileText class="size-3" /></span><span class="flex-1 font-mono text-xs">rollout-plan.md</span></div>
-      <div class="static-entry" data-testid="sidebar-inert"><span class="flex w-[18px] justify-center text-docs"><IconFileText class="size-3" /></span><span class="flex-1 font-mono text-xs">batch-spawn.md</span></div>
-    </section>
   </aside>
 </template>
 
 <style scoped>
-.sidebar-entry, .static-entry { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; }
-.sidebar-entry { cursor: pointer; }
+.sidebar-entry { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; cursor: pointer; }
 .sidebar-entry:hover { background: var(--color-chip); color: var(--color-text); }
 .sidebar-entry-selected { background: var(--color-hover); color: var(--color-accent); font-weight: 500; }
 .sidebar-entry-selected .nav-icon { border-color: var(--color-accent-tint); color: var(--color-accent); }

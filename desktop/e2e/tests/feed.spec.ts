@@ -58,23 +58,17 @@ test('filters the feed to its three unread items', async ({ page }) => {
   ])
 })
 
-test('switches profiles and resets the selected item', async ({ page }) => {
-  await page.locator('[data-testid="feed-item"][data-id="iss1190"]').click()
-  await page.getByTestId('profile-tile').filter({ hasText: 'D' }).click()
-  await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Desktop')
-  await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Desktop')
-  await expect(page.getByTestId('detail-pane')).toContainText('hive/core #2841')
+test('shows the single profile in the rail and sidebar', async ({ page }) => {
+  await expect(page.getByTestId('profile-tile')).toHaveCount(1)
+  await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage')
+  await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
 })
 
-test('shows an inert toast for actions and leaves TASKS and DOCS unchanged', async ({ page }) => {
+test('shows an inert toast for actions without changing the selection', async ({ page }) => {
   const detail = page.getByTestId('detail-pane')
   await expect(detail).toContainText('hive/core #2841')
   await page.getByTestId('action-card').first().click()
   await expect(page.getByTestId('toast')).toHaveText('Not wired up yet')
-  await expect(detail).toContainText('hive/core #2841')
-
-  await page.getByTestId('sidebar-inert').filter({ hasText: 'MVP v0.1 epic' }).click()
-  await page.getByTestId('sidebar-inert').filter({ hasText: 'rollout-plan.md' }).click()
   await expect(detail).toContainText('hive/core #2841')
 })
 
@@ -83,12 +77,12 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   const palette = page.getByTestId('command-palette')
   await expect(palette).toBeVisible()
   const input = page.getByTestId('command-palette-input')
-  await input.fill('desktop')
+  await input.fill('notifications')
   await expect(page.getByTestId('command-palette-command')).toHaveCount(1)
-  await expect(page.getByTestId('command-palette-command')).toHaveText('Switch to profile: Desktop')
+  await expect(page.getByTestId('command-palette-command')).toHaveText('Select feed: Notifications inbox')
   await input.press('Enter')
   await expect(palette).toBeHidden()
-  await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Desktop')
+  await expect(page.getByTestId('feed-title')).toHaveText('Notifications inbox')
 
   await page.keyboard.press('Meta+k')
   await expect(palette).toBeVisible()

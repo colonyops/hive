@@ -52,32 +52,15 @@ func NewFeedService() *FeedService {
 	return &FeedService{}
 }
 
-// Profiles returns the profiles shown in the desktop rail.
+// Profiles returns the profiles shown in the desktop rail. A single profile
+// until profile creation exists.
 func (s *FeedService) Profiles() []Profile {
 	return []Profile{
 		{
 			ID:            "hive-core",
 			Letter:        "H",
 			Name:          "Frontend Triage",
-			SourceSummary: "GitHub · 6 sources",
-			TotalCount:    23,
-			UnreadCount:   4,
-			Feeds:         mockFeeds(),
-		},
-		{
-			ID:            "desktop",
-			Letter:        "D",
-			Name:          "Desktop",
-			SourceSummary: "GitHub · 6 sources",
-			TotalCount:    23,
-			UnreadCount:   4,
-			Feeds:         mockFeeds(),
-		},
-		{
-			ID:            "platform",
-			Letter:        "P",
-			Name:          "Platform",
-			SourceSummary: "GitHub · 6 sources",
+			SourceSummary: "GitHub · 3 sources",
 			TotalCount:    23,
 			UnreadCount:   4,
 			Feeds:         mockFeeds(),

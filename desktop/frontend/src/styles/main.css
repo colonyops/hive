@@ -28,8 +28,6 @@
   --color-kind-issue: var(--hv-kind-issue);
   --color-kind-issue-tint: var(--hv-kind-issue-tint);
   --color-feeds: var(--hv-feeds);
-  --color-tasks: var(--hv-tasks);
-  --color-docs: var(--hv-docs);
   --color-selection: var(--hv-selection);
   --color-backdrop: var(--hv-backdrop);
 }
@@ -68,8 +66,6 @@
   --hv-kind-issue: #facc15;
   --hv-kind-issue-tint: rgba(250, 204, 21, 0.13);
   --hv-feeds: #34d399;
-  --hv-tasks: #a78bfa;
-  --hv-docs: #60a5fa;
   --hv-selection: rgba(245, 158, 11, 0.1);
   --hv-backdrop: rgba(0, 0, 0, 0.5);
 }
