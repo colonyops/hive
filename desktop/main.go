@@ -4,6 +4,9 @@ import (
 	"embed"
 	"log"
 
+	"github.com/colonyops/hive/internal/desktop"
+	"github.com/colonyops/hive/internal/desktop/auth"
+	"github.com/colonyops/hive/internal/github"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -20,12 +23,35 @@ var appIcon []byte
 var trayIcon []byte
 
 // Package-variable initialization instead of init(): this repo enables
-// gochecknoinits. The event exists solely so typed-event TS bindings generate.
+// gochecknoinits.
 var _ = registerEvents()
 
 func registerEvents() struct{} {
+	// feed:updated carries the profile ID whose data changed; auth:updated
+	// carries the new auth state string. Both are wake-up signals: the
+	// frontend re-reads the relevant service on receipt.
 	application.RegisterEvent[string]("feed:updated")
+	application.RegisterEvent[string]("auth:updated")
 	return struct{}{}
+}
+
+func buildAuthBackend(onChange func()) auth.Backend {
+	switch desktop.MockMode() {
+	case "feed":
+		return auth.NewMockBackend(true, onChange)
+	case "onboarding":
+		return auth.NewMockBackend(false, onChange)
+	default:
+		return auth.NewLiveBackend(github.NewClient(), github.NewKeychainStore(), onChange)
+	}
+}
+
+// emitAuthUpdated pushes the auth:updated wake-up to the frontend. Safe to
+// call from any goroutine once the app is running.
+func emitAuthUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("auth:updated", "changed")
+	}
 }
 
 func main() {
@@ -35,6 +61,7 @@ func main() {
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(NewFeedService()),
+			application.NewService(auth.NewService(buildAuthBackend(emitAuthUpdated))),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),
