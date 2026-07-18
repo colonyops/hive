@@ -215,7 +215,7 @@ func (p *LiveProvider) materializeProfile(ctx context.Context, def ProfileDef) P
 		SourceSummary: fmt.Sprintf("GitHub · %d sources", len(def.Feeds)),
 	}
 
-	seen := make(map[string]bool)
+	newest := make(map[string]liveItem)
 	for _, feedDef := range def.Feeds {
 		source := Source{ID: feedDef.ID, Name: feedDef.Name}
 		items, err := p.feedItems(ctx, def.ID, feedDef)
@@ -224,20 +224,25 @@ func (p *LiveProvider) materializeProfile(ctx context.Context, def ProfileDef) P
 		} else {
 			source.Count = len(items)
 			for _, li := range items {
-				final := p.finalize(li)
-				if final.Unread {
+				if p.finalize(li).Unread {
 					source.NewCount++
 				}
-				if !seen[final.ID] {
-					seen[final.ID] = true
-					profile.TotalCount++
-					if final.Unread {
-						profile.UnreadCount++
-					}
+				if prev, ok := newest[li.item.ID]; ok {
+					newest[li.item.ID] = mergeNewest(prev, li)
+				} else {
+					newest[li.item.ID] = li
 				}
 			}
 		}
 		profile.Feeds = append(profile.Feeds, source)
+	}
+	// Profile totals dedupe on the newest copy, matching gather and the
+	// MarkRead newest-wins contract, so the rail and list counts agree.
+	for _, li := range newest {
+		profile.TotalCount++
+		if p.finalize(li).Unread {
+			profile.UnreadCount++
+		}
 	}
 	return profile
 }
@@ -248,7 +253,7 @@ func (p *LiveProvider) materializeProfile(ctx context.Context, def ProfileDef) P
 func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedDef) ([]liveItem, error) {
 	var (
 		merged  []liveItem
-		seen    = make(map[string]bool)
+		index   = make(map[string]int)
 		lastErr error
 		fetched int
 	)
@@ -261,10 +266,11 @@ func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedD
 		}
 		fetched++
 		for _, li := range items {
-			if seen[li.item.ID] {
+			if at, ok := index[li.item.ID]; ok {
+				merged[at] = mergeNewest(merged[at], li)
 				continue
 			}
-			seen[li.item.ID] = true
+			index[li.item.ID] = len(merged)
 			merged = append(merged, li)
 		}
 	}
@@ -276,6 +282,21 @@ func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedD
 		return merged[i].updatedAt.After(merged[j].updatedAt)
 	})
 	return merged, nil
+}
+
+// mergeNewest resolves an item present in several feeds (search result vs
+// notification thread) to its newest copy, so age and read state derive from
+// the latest activity — the same newest-wins contract MarkRead records.
+// Notifications carry no author; backfill it from the older copy.
+func mergeNewest(a, b liveItem) liveItem {
+	newer, older := a, b
+	if older.updatedAt.After(newer.updatedAt) {
+		newer, older = older, newer
+	}
+	if newer.item.Author == "" {
+		newer.item.Author = older.item.Author
+	}
+	return newer
 }
 
 // finalize applies app-local read state at materialization time, so cached
@@ -305,8 +326,10 @@ func (p *LiveProvider) feedItems(ctx context.Context, profileID string, def Feed
 	items, err := p.fetchFeed(ctx, def)
 	if err != nil {
 		// Serve stale data over an error when we have it: triage beats
-		// freshness during a blip. The error still logs at the call sites.
-		if ok {
+		// freshness during a blip. Auth failures pass through even so —
+		// stale data would mask the reconnect prompt.
+		if ok && !errors.Is(err, github.ErrUnauthorized) && !errors.Is(err, ErrNotAuthenticated) {
+			p.logger.Debug().Err(err).Str("feed", def.ID).Msg("feed fetch failed; serving stale cache")
 			return cached.items, nil
 		}
 		return nil, err

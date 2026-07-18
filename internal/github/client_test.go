@@ -54,6 +54,36 @@ func TestRateLimitedMapsToSentinel(t *testing.T) {
 	require.ErrorIs(t, err, ErrRateLimited)
 }
 
+func TestSecondaryRateLimitMapsToSentinel(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Retry-After", "60")
+		w.Header().Set("X-RateLimit-Remaining", "1")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"You have exceeded a secondary rate limit. Please wait a few minutes before you try again."}`))
+	}))
+	defer server.Close()
+
+	_, err := NewClient(WithAPIBase(server.URL)).User(t.Context())
+	require.ErrorIs(t, err, ErrRateLimited)
+}
+
+func TestForbiddenWithoutRateLimitIsGeneric(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("X-RateLimit-Remaining", "42")
+		w.WriteHeader(http.StatusForbidden)
+		_, _ = w.Write([]byte(`{"message":"Resource protected by organization SAML enforcement"}`))
+	}))
+	defer server.Close()
+
+	_, err := NewClient(WithAPIBase(server.URL)).User(t.Context())
+	require.NotErrorIs(t, err, ErrRateLimited)
+	require.ErrorContains(t, err, "HTTP 403")
+}
+
 func TestUnreachableMapsToSentinel(t *testing.T) {
 	t.Parallel()
 

@@ -13,6 +13,7 @@ import (
 	"net/http"
 	"net/url"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -157,13 +158,27 @@ func statusError(resp *http.Response) error {
 		return nil
 	case resp.StatusCode == http.StatusUnauthorized:
 		return ErrUnauthorized
-	case resp.StatusCode == http.StatusTooManyRequests,
-		resp.StatusCode == http.StatusForbidden && resp.Header.Get("X-RateLimit-Remaining") == "0":
+	case resp.StatusCode == http.StatusTooManyRequests:
 		return ErrRateLimited
+	case resp.StatusCode == http.StatusForbidden:
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		if forbiddenIsRateLimit(resp, body) {
+			return ErrRateLimited
+		}
+		return fmt.Errorf("github: %s %s: %s", resp.Request.Method, resp.Request.URL.Path, summarize(resp.StatusCode, body))
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return fmt.Errorf("github: %s %s: %s", resp.Request.Method, resp.Request.URL.Path, summarize(resp.StatusCode, body))
 	}
+}
+
+// forbiddenIsRateLimit distinguishes rate-limit 403s from permission 403s.
+// Primary limits set X-RateLimit-Remaining: 0; secondary (abuse) limits keep
+// a nonzero remaining but send Retry-After and a "rate limit" message.
+func forbiddenIsRateLimit(resp *http.Response, body []byte) bool {
+	return resp.Header.Get("X-RateLimit-Remaining") == "0" ||
+		resp.Header.Get("Retry-After") != "" ||
+		strings.Contains(strings.ToLower(string(body)), "rate limit")
 }
 
 func summarize(status int, body []byte) string {

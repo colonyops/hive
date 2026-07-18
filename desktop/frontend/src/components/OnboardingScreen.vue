@@ -57,10 +57,12 @@ async function copyCode() {
 }
 
 function submit() {
+  if (props.busy) return
   if (tokenInput.value.trim()) emit('submitToken', tokenInput.value.trim())
 }
 
 function submitWorkspace() {
+  if (props.busy) return
   if (workspaceInput.value.trim()) emit('createWorkspace', workspaceInput.value.trim())
 }
 </script>

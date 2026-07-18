@@ -147,4 +147,45 @@ describe('useAuth', () => {
     wrapper.unmount()
     expect(unsubscribe).toHaveBeenCalled()
   })
+
+  it('returns to the start card when the backend pushes a device-flow failure', async () => {
+    let handler: (() => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: () => void) => {
+      if (event === 'auth:updated') handler = cb
+      return () => {}
+    })
+    mocks.StartDeviceFlow.mockResolvedValue({ userCode: 'AAAA-BBBB', verificationUri: 'https://github.com/login/device' })
+    const { auth } = withAuth()
+    await flushPromises()
+
+    await auth.startDeviceFlow()
+    expect(auth.card.value).toBe('device')
+
+    mocks.Status.mockResolvedValue({ state: 'unauthenticated', message: 'github: device flow: authorization denied', login: '', name: '', avatarUrl: '' })
+    handler?.()
+    await flushPromises()
+
+    expect(auth.card.value).toBe('idle')
+    expect(auth.deviceFlow.value).toBeNull()
+    expect(auth.error.value).toContain('authorization denied')
+  })
+
+  it('shows the stored-token failure message on the idle card', async () => {
+    mocks.Status.mockResolvedValue({ state: 'unauthenticated', message: 'Stored GitHub token is no longer valid.', login: '', name: '', avatarUrl: '' })
+    const { auth } = withAuth()
+    await flushPromises()
+
+    expect(auth.error.value).toBe('Stored GitHub token is no longer valid.')
+  })
+
+  it('ignores a second submit while busy', async () => {
+    mocks.SetToken.mockReturnValue(new Promise(() => {}))
+    const { auth } = withAuth()
+    await flushPromises()
+
+    void auth.submitToken('pat-1')
+    void auth.submitToken('pat-1')
+
+    expect(mocks.SetToken).toHaveBeenCalledTimes(1)
+  })
 })

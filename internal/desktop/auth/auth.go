@@ -161,6 +161,8 @@ func (a *liveAuth) StartDeviceFlow(ctx context.Context) (DeviceFlowInfo, error) 
 		a.flowCancel()
 	}
 	a.flowCancel = cancel
+	// A fresh attempt supersedes any earlier failure message.
+	a.cached = nil
 	a.mu.Unlock()
 
 	go a.pollFlow(pollCtx, auth)
@@ -174,12 +176,24 @@ func (a *liveAuth) pollFlow(ctx context.Context, auth github.DeviceAuth) {
 		if errors.Is(err, context.Canceled) {
 			return
 		}
-		a.setCached(Status{State: StateUnauthenticated, Message: err.Error()})
+		a.setCached(Status{State: StateUnauthenticated, Message: flowFailureMessage(err)})
 		a.notify()
 		return
 	}
 
-	a.adoptToken(ctx, token)
+	// Not the poll context: its device-code deadline may be about to fire,
+	// and validating a just-granted token must not race it.
+	a.adoptToken(context.Background(), token)
+}
+
+// flowFailureMessage maps device-flow failures onto user-facing text. The
+// local poll deadline (ExpiresIn) usually fires before GitHub ever reports
+// expired_token, so DeadlineExceeded means the code expired unused.
+func flowFailureMessage(err error) string {
+	if errors.Is(err, context.DeadlineExceeded) {
+		return "The sign-in code expired before authorization. Start again to get a fresh code."
+	}
+	return err.Error()
 }
 
 func (a *liveAuth) SetToken(ctx context.Context, token string) (Status, error) {
@@ -238,19 +252,25 @@ func (a *liveAuth) SignOut() error {
 	if err := a.tokens.DeleteToken(); err != nil {
 		return err
 	}
-	a.setCached(Status{State: StateUnauthenticated})
+	status := Status{State: StateUnauthenticated}
+	// The env override outranks the keychain, so deleting the keychain entry
+	// cannot revoke access; say so instead of silently bouncing back to
+	// authenticated on the next Status read.
+	if os.Getenv(github.EnvToken) != "" {
+		status.Message = "Signed out, but the " + github.EnvToken + " environment override is still set and keeps this session authenticated."
+	}
+	a.setCached(status)
 	a.notify()
 	return nil
 }
 
+// setCached pins the status Status() returns. Failure statuses are cached
+// too: auth:updated carries no payload, so the Message must survive until
+// the frontend's follow-up Status() read.
 func (a *liveAuth) setCached(status Status) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
-	if status.State == StateAuthenticated {
-		a.cached = &status
-	} else {
-		a.cached = nil
-	}
+	a.cached = &status
 }
 
 func (a *liveAuth) notify() {
@@ -279,6 +299,10 @@ type mockAuth struct {
 	mu     sync.Mutex
 	status Status
 	timer  *time.Timer
+	// flowSeq invalidates a pending grant whose timer already fired but is
+	// blocked on mu when CancelDeviceFlow runs: timer.Stop() returns false
+	// then, so the callback must re-check it is still the current flow.
+	flowSeq int
 }
 
 const mockGrantDelay = 1500 * time.Millisecond
@@ -307,8 +331,14 @@ func (a *mockAuth) StartDeviceFlow(context.Context) (DeviceFlowInfo, error) {
 	if a.timer != nil {
 		a.timer.Stop()
 	}
+	a.flowSeq++
+	seq := a.flowSeq
 	a.timer = time.AfterFunc(mockGrantDelay, func() {
 		a.mu.Lock()
+		if a.flowSeq != seq {
+			a.mu.Unlock()
+			return
+		}
 		a.status = mockAuthenticatedStatus()
 		a.mu.Unlock()
 		if a.onChange != nil {
@@ -321,6 +351,7 @@ func (a *mockAuth) StartDeviceFlow(context.Context) (DeviceFlowInfo, error) {
 func (a *mockAuth) CancelDeviceFlow() {
 	a.mu.Lock()
 	defer a.mu.Unlock()
+	a.flowSeq++
 	if a.timer != nil {
 		a.timer.Stop()
 		a.timer = nil
@@ -332,6 +363,7 @@ func (a *mockAuth) SetToken(_ context.Context, token string) (Status, error) {
 		return Status{}, fmt.Errorf("token is empty")
 	}
 	a.mu.Lock()
+	a.flowSeq++ // a pending device grant must not re-fire over an explicit token
 	a.status = mockAuthenticatedStatus()
 	a.mu.Unlock()
 	if a.onChange != nil {

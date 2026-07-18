@@ -65,6 +65,10 @@ type Provider interface {
 	// CreateProfile persists a new profile ("workspace") seeded with the
 	// default feeds — onboarding step 2.
 	CreateProfile(ctx context.Context, name string) (Profile, error)
+	// Refresh refetches the profile's feeds bypassing any cache, so a manual
+	// "Refresh now" is a real fetch. It reports whether anything changed and
+	// fails only when every feed fails.
+	Refresh(ctx context.Context, profileID string) (bool, error)
 }
 
 // ActionsFor returns the actions available for a PR or issue. Shared by

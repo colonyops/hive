@@ -8,15 +8,19 @@ const mocks = vi.hoisted(() => ({
   CreateProfile: vi.fn(),
   Hide: vi.fn(),
   Items: vi.fn(),
+  MarkRead: vi.fn(),
   On: vi.fn(),
   Profiles: vi.fn(),
+  Refresh: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/feedservice', () => ({
   ActionsFor: mocks.ActionsFor,
   CreateProfile: mocks.CreateProfile,
   Items: mocks.Items,
+  MarkRead: mocks.MarkRead,
   Profiles: mocks.Profiles,
+  Refresh: mocks.Refresh,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -99,10 +103,15 @@ describe('useFeedState', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     mocks.Profiles.mockResolvedValue(profiles)
-    mocks.Items.mockImplementation((profileID: string, feedID: string) => Promise.resolve(itemSets[`${profileID}:${feedID}`] ?? []))
+    // Clone so markItemRead's in-place `item.unread = false` on one test never
+    // leaks into the shared fixture arrays seen by later tests.
+    mocks.Items.mockImplementation((profileID: string, feedID: string) =>
+      Promise.resolve((itemSets[`${profileID}:${feedID}`] ?? []).map((item) => ({ ...item }))))
     mocks.ActionsFor.mockImplementation((kind: string) => Promise.resolve([{ id: `action-${kind}`, title: kind }]))
     mocks.Hide.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
+    mocks.MarkRead.mockResolvedValue(undefined)
+    mocks.Refresh.mockResolvedValue(false)
   })
 
   it('loads profiles on mount and switches profiles by resetting selection and reloading items', async () => {
@@ -217,6 +226,8 @@ describe('useFeedState', () => {
   })
 
   it('enters the sidebar Unread view and auto-selects the first unread item', async () => {
+    // Entering the Unread view re-anchors a read (filtered-out) selection to
+    // the first unread item, same as toggling the unread chip.
     mocks.Items.mockResolvedValue([
       { ...feedItem('pr-1', 'PR', 'First PR'), unread: false },
       feedItem('issue-1', 'Issue', 'First issue'),
@@ -364,6 +375,117 @@ describe('useFeedState', () => {
     await state.hideWindow()
 
     expect(mocks.Hide).toHaveBeenCalledTimes(1)
+
+    wrapper.unmount()
+  })
+
+  it('keeps the selected item when a reload still contains it', async () => {
+    let handler: ((event: { data: unknown }) => void) | undefined
+    mocks.On.mockImplementation((event: string, cb: (event: { data: unknown }) => void) => {
+      if (event === 'feed:updated') handler = cb
+      return () => {}
+    })
+    const { state, wrapper } = await mountLoadedState()
+    expect(state.selectedId.value).toBe('pr-1')
+
+    await state.selectItem('issue-1')
+    mocks.Items.mockClear()
+
+    handler?.({ data: 'personal' })
+    await flushPromises()
+
+    expect(state.selectedId.value).toBe('issue-1')
+    expect(mocks.Items).toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('clears the unread filter when navigating the sidebar', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectUnreadView()
+    expect(state.unreadOnly.value).toBe(true)
+
+    mocks.Items.mockClear()
+    await state.selectSidebar({ type: 'all' })
+
+    expect(state.unreadOnly.value).toBe(false)
+    expect(mocks.Items).toHaveBeenCalled()
+    expect(state.title.value).toBe('All items')
+
+    wrapper.unmount()
+  })
+
+  it('marks an unread item read on selection', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectItem('issue-1')
+
+    expect(mocks.MarkRead).toHaveBeenCalledWith('personal', 'issue-1')
+    expect(state.items.value.find((item) => item.id === 'issue-1')?.unread).toBe(false)
+
+    mocks.MarkRead.mockClear()
+    await state.selectItem('issue-1')
+
+    expect(mocks.MarkRead).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
+  it('keeps onboarding gated off when profiles fail to load', async () => {
+    mocks.Profiles.mockRejectedValueOnce(new Error('boom'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, wrapper } = await mountLoadedState()
+
+    expect(state.profilesLoaded.value).toBe(false)
+    expect(state.profilesError.value).toBe('Could not load your workspaces.')
+
+    mocks.Profiles.mockResolvedValue(profiles)
+    await state.loadProfiles()
+
+    expect(state.profilesError.value).toBeNull()
+    expect(state.profilesLoaded.value).toBe(true)
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('manual refresh bypasses the cache via Refresh', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Items.mockClear()
+
+    await state.refresh()
+
+    expect(mocks.Refresh).toHaveBeenCalledWith('personal')
+    expect(mocks.Items).toHaveBeenCalledWith('personal', '')
+
+    mocks.Items.mockClear()
+    mocks.Refresh.mockRejectedValueOnce(new Error('github: rate limited'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    await state.refresh()
+
+    expect(state.loadError.value).toContain('rate limit')
+    expect(mocks.Items).not.toHaveBeenCalled()
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('ignores re-entrant createProfile calls', async () => {
+    mocks.Profiles.mockResolvedValue([])
+    let resolveCreate!: (profile: Profile) => void
+    mocks.CreateProfile.mockReturnValue(new Promise<Profile>((resolve) => { resolveCreate = resolve }))
+    const { state, wrapper } = await mountLoadedState()
+
+    const first = state.createProfile('My Triage')
+    const second = state.createProfile('My Triage')
+
+    resolveCreate({ ...profiles[0], id: 'created-1', name: 'My Triage' })
+    await first
+    await second
+
+    expect(mocks.CreateProfile).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
   })

@@ -37,6 +37,11 @@ func (c *Client) StartDeviceFlow(ctx context.Context, clientID string, scopes []
 	if auth.Interval <= 0 {
 		auth.Interval = 5
 	}
+	if auth.ExpiresIn <= 0 {
+		// GitHub always sends expires_in (900); guard so a missing value
+		// never yields an already-expired poll context.
+		auth.ExpiresIn = 900
+	}
 	return auth, nil
 }
 

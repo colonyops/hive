@@ -13,7 +13,15 @@ export function useAuth() {
   const deviceFlow = ref<DeviceFlowInfo | null>(null)
   const card = ref<OnboardingCard>('idle')
   // Errors from the active card's action; cleared on card switches.
-  const error = ref<string | null>(null)
+  const actionError = ref<string | null>(null)
+  // Backend-pushed failures ride Status.Message (auth:updated carries no
+  // payload); show them on the idle card unless a local action error is fresher.
+  const error = computed(() => {
+    if (actionError.value) return actionError.value
+    const current = status.value
+    if (card.value === 'idle' && current && current.state !== 'authenticated' && current.message) return current.message
+    return null
+  })
   const busy = ref(false)
   let unsubscribe: (() => void) | undefined
 
@@ -21,7 +29,15 @@ export function useAuth() {
 
   async function reload() {
     try {
-      status.value = await Status()
+      const next = await Status()
+      status.value = next
+      // A failure push while the device card waits means the flow died
+      // (denied, expired, validation failed): fall back to the start card so
+      // a dead user code is not left on screen.
+      if (card.value === 'device' && next.state !== 'authenticated' && next.message) {
+        card.value = 'idle'
+        deviceFlow.value = null
+      }
     } catch (err) {
       console.warn('Unable to load auth status', err)
       status.value = { state: 'unauthenticated', login: '', name: '', avatarUrl: '', message: '' }
@@ -29,13 +45,14 @@ export function useAuth() {
   }
 
   async function startDeviceFlow() {
-    error.value = null
+    if (busy.value) return
+    actionError.value = null
     busy.value = true
     try {
       deviceFlow.value = await StartDeviceFlow()
       card.value = 'device'
     } catch (err) {
-      error.value = messageOf(err, 'Could not reach GitHub to start sign-in.')
+      actionError.value = messageOf(err, 'Could not reach GitHub to start sign-in.')
     } finally {
       busy.value = false
     }
@@ -52,7 +69,7 @@ export function useAuth() {
   }
 
   function useTokenInstead() {
-    error.value = null
+    actionError.value = null
     card.value = 'token'
     void cancelPendingFlow()
   }
@@ -68,17 +85,18 @@ export function useAuth() {
   }
 
   function backToStart() {
-    error.value = null
+    actionError.value = null
     card.value = 'idle'
   }
 
   async function submitToken(token: string) {
-    error.value = null
+    if (busy.value) return
+    actionError.value = null
     busy.value = true
     try {
       status.value = await SetToken(token)
     } catch (err) {
-      error.value = messageOf(err, 'GitHub rejected the token.')
+      actionError.value = messageOf(err, 'GitHub rejected the token.')
     } finally {
       busy.value = false
     }

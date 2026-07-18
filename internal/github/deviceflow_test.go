@@ -49,6 +49,7 @@ func TestStartDeviceFlowDefaultsInterval(t *testing.T) {
 	auth, err := NewClient(WithAuthBase(server.URL)).StartDeviceFlow(t.Context(), "c", nil)
 	require.NoError(t, err)
 	assert.Equal(t, 5, auth.Interval)
+	assert.Equal(t, 900, auth.ExpiresIn)
 }
 
 func TestPollDeviceFlowPendingThenGranted(t *testing.T) {

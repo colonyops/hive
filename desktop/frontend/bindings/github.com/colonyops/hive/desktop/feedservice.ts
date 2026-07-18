@@ -50,3 +50,11 @@ export function MarkRead(profileID: string, itemID: string): $CancellablePromise
 export function Profiles(): $CancellablePromise<feed$0.Profile[] | null> {
     return $Call.ByID(1352748783);
 }
+
+/**
+ * Refresh refetches the profile's feeds, bypassing the cache TTL, and
+ * reports whether anything changed. Backs the manual "Refresh now" action.
+ */
+export function Refresh(profileID: string): $CancellablePromise<boolean> {
+    return $Call.ByID(2193367500, profileID);
+}

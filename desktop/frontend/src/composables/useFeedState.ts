@@ -1,6 +1,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
-import { ActionsFor, CreateProfile, Items, Profiles } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
+import { ActionsFor, CreateProfile, Items, MarkRead, Profiles, Refresh } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
 import type { Action, FeedItem, Profile, SidebarSelection } from '../types/feed'
 
 export function useFeedState() {
@@ -8,6 +8,8 @@ export function useFeedState() {
   // False until the first Profiles() resolves: the app must distinguish
   // "no workspaces yet" (onboarding step 2) from "not loaded yet".
   const profilesLoaded = ref(false)
+  // Set when loadProfiles fails; distinct from "loaded, empty" (see above).
+  const profilesError = ref<string | null>(null)
   const activeProfileId = ref('')
   // Scope (all | one feed) and the unread filter are independent axes; the
   // sidebar "Unread" view is all-scope with the filter on.
@@ -62,6 +64,9 @@ export function useFeedState() {
       if (seq !== loadSeq) return
       loadError.value = null
       items.value = loaded
+      // Keep the selection when the reloaded list still has it: a background
+      // refresh must not yank the item the user is reading.
+      if (selectedId.value && loaded.some((item) => item.id === selectedId.value)) return
       const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
       selectedId.value = first?.id ?? null
       await loadActions(first)
@@ -79,6 +84,7 @@ export function useFeedState() {
     try {
       profiles.value = (await Profiles()) ?? []
       profilesLoaded.value = true
+      profilesError.value = null
       const active = profiles.value.find((profile) => profile.id === activeProfileId.value) ?? profiles.value[0]
       if (active) {
         await selectProfile(active.id)
@@ -90,11 +96,14 @@ export function useFeedState() {
       }
     } catch (error) {
       console.warn('Unable to load feed profiles', error)
-      profilesLoaded.value = true
+      // profilesLoaded stays false here: claiming "loaded, empty" would route
+      // an existing user into first-run onboarding instead of an error state.
+      profilesError.value = 'Could not load your workspaces.'
     }
   }
 
   async function createProfile(name: string) {
+    if (creatingProfile.value) return // re-entry guard: Enter-key can double-submit
     creatingProfile.value = true
     createProfileError.value = null
     try {
@@ -116,24 +125,22 @@ export function useFeedState() {
   }
 
   async function selectSidebar(nextSelection: SidebarSelection) {
-    selection.value = nextSelection
-    await loadItems(nextSelection.type === 'feed' ? nextSelection.feedId : '')
+    // Explicit sidebar navigation always leaves the Unread view; the header
+    // chip (toggleUnread) is the way to filter within a scope.
+    unreadOnly.value = false
+    await applySelection(nextSelection)
   }
 
   // The sidebar "Unread" view: all-scope with the unread filter on.
   async function selectUnreadView() {
     unreadOnly.value = true
-    await selectSidebar({ type: 'all' })
+    await applySelection({ type: 'all' })
+    await reanchorToUnread()
   }
 
-  async function selectItem(id: string) {
-    selectedId.value = id
-    await loadActions(selectedItem.value)
-  }
-
-  async function toggleUnread() {
-    unreadOnly.value = !unreadOnly.value
-    if (!unreadOnly.value) return
+  // With the unread filter on, a read (filtered-out) selection re-anchors to
+  // the first unread item so the detail pane matches the visible list.
+  async function reanchorToUnread() {
     if (selectedItem.value && !selectedItem.value.unread) {
       const firstUnread = items.value.find((item) => item.unread) ?? null
       selectedId.value = firstUnread?.id ?? null
@@ -141,8 +148,62 @@ export function useFeedState() {
     }
   }
 
+  async function applySelection(nextSelection: SidebarSelection) {
+    selection.value = nextSelection
+    await loadItems(nextSelection.type === 'feed' ? nextSelection.feedId : '')
+  }
+
+  function currentFeedId(): string {
+    return selection.value.type === 'feed' ? selection.value.feedId : ''
+  }
+
+  async function reloadProfilesQuietly() {
+    try {
+      profiles.value = (await Profiles()) ?? []
+    } catch (error) {
+      console.warn('Unable to refresh profiles', error)
+    }
+  }
+
+  async function selectItem(id: string) {
+    selectedId.value = id
+    const item = selectedItem.value
+    await loadActions(item)
+    if (item) await markItemRead(item)
+  }
+
+  // Selecting an item is the read action: app-local only, GitHub untouched.
+  async function markItemRead(item: FeedItem) {
+    if (!item.unread || !activeProfileId.value) return
+    try {
+      await MarkRead(activeProfileId.value, item.id)
+    } catch (error) {
+      console.warn('Unable to mark item read', error)
+      return
+    }
+    item.unread = false
+    await reloadProfilesQuietly()
+  }
+
+  async function toggleUnread() {
+    unreadOnly.value = !unreadOnly.value
+    if (unreadOnly.value) await reanchorToUnread()
+  }
+
   async function refresh() {
-    await loadItems(selection.value.type === 'feed' ? selection.value.feedId : '')
+    if (activeProfileId.value) {
+      try {
+        await Refresh(activeProfileId.value)
+      } catch (error) {
+        // Refresh fails only when every feed fails; show the failure state
+        // rather than silently re-serving the cache.
+        console.warn('Unable to refresh from GitHub', error)
+        loadError.value = loadErrorMessage(error)
+        return
+      }
+      await reloadProfilesQuietly()
+    }
+    await loadItems(currentFeedId())
   }
 
   function notWired() {
@@ -160,14 +221,12 @@ export function useFeedState() {
   // A push refresh must not disturb what the user is looking at: it swaps
   // the profiles list in place (counts) and re-fetches items only for the
   // active profile; the staleness token handles any race with a manual
-  // navigation happening at the same moment.
+  // navigation happening at the same moment. The poller already refetched
+  // into the backend cache before emitting this event, so this must not call
+  // refresh() — that would trigger a second bypass fetch.
   async function onFeedUpdated(profileID: string) {
-    try {
-      profiles.value = (await Profiles()) ?? []
-    } catch (error) {
-      console.warn('Unable to refresh profiles after feed update', error)
-    }
-    if (profileID === activeProfileId.value) await refresh()
+    await reloadProfilesQuietly()
+    if (profileID === activeProfileId.value) await loadItems(currentFeedId())
   }
 
   let unsubscribeFeed: (() => void) | undefined
@@ -187,6 +246,7 @@ export function useFeedState() {
   return {
     profiles,
     profilesLoaded,
+    profilesError,
     activeProfile,
     activeProfileId,
     selection,

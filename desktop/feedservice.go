@@ -41,3 +41,9 @@ func (s *FeedService) MarkRead(profileID, itemID string) error {
 func (s *FeedService) CreateProfile(name string) (feed.Profile, error) {
 	return s.provider.CreateProfile(context.Background(), name)
 }
+
+// Refresh refetches the profile's feeds, bypassing the cache TTL, and
+// reports whether anything changed. Backs the manual "Refresh now" action.
+func (s *FeedService) Refresh(profileID string) (bool, error) {
+	return s.provider.Refresh(context.Background(), profileID)
+}

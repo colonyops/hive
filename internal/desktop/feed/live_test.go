@@ -109,12 +109,16 @@ func TestLiveProviderItemsMergesAndDedupes(t *testing.T) {
 	}
 	assert.Equal(t, []string{"colonyops/hive#42", "colonyops/hive#3", "colonyops/hive#9", "colonyops/docs#7"}, ids)
 
+	// PR#42 exists in both the search feed (10:00) and the notifications
+	// inbox (11:00): the newer notification copy wins, with the author
+	// backfilled from the search copy.
 	pr := items[0]
 	assert.Equal(t, "PR", pr.Kind)
 	assert.Equal(t, "colonyops/hive", pr.Repo)
 	assert.Equal(t, 42, pr.Num)
 	assert.Equal(t, "hayden", pr.Author)
-	assert.Equal(t, "2h", pr.Age)
+	assert.Equal(t, "1h", pr.Age)
+	assert.Equal(t, []string{"review requested"}, pr.Labels)
 	assert.True(t, pr.Unread)
 	assert.Equal(t, "review/42-fix-spawn-env", pr.Branch)
 	assert.Equal(t, "https://github.com/colonyops/hive/pull/42", pr.URL)
@@ -203,6 +207,73 @@ func TestLiveProviderCachesWithinTTL(t *testing.T) {
 	_, err = provider.Items(t.Context(), def.ID, "my-open-prs")
 	require.NoError(t, err)
 	assert.Equal(t, int32(2), searchCalls.Load(), "invalidate forces a refetch")
+}
+
+// flakyAPIServer serves one search item and an empty inbox, and fails every
+// request with the configured status code once set.
+func flakyAPIServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
+	t.Helper()
+
+	var failStatus atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("/search/issues", func(w http.ResponseWriter, _ *http.Request) {
+		if status := failStatus.Load(); status != 0 {
+			w.WriteHeader(int(status))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"total_count":1,"items":[
+			{"number":42,"title":"Fix spawn env","state":"open",
+			 "html_url":"https://github.com/colonyops/hive/pull/42",
+			 "repository_url":"https://api.github.com/repos/colonyops/hive",
+			 "user":{"login":"hayden"},"labels":[],
+			 "pull_request":{"html_url":"https://github.com/colonyops/hive/pull/42"},
+			 "updated_at":"2026-07-18T10:00:00Z","created_at":"2026-07-17T00:00:00Z","body":""}
+		]}`))
+	})
+	mux.HandleFunc("/notifications", func(w http.ResponseWriter, _ *http.Request) {
+		if status := failStatus.Load(); status != 0 {
+			w.WriteHeader(int(status))
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server, &failStatus
+}
+
+func TestLiveProviderStaleCacheOnTransientError(t *testing.T) {
+	t.Parallel()
+
+	server, failStatus := flakyAPIServer(t)
+	client := github.NewClient(github.WithAPIBase(server.URL))
+	store := NewStore(t.TempDir())
+	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
+	current, err := time.Parse(time.RFC3339, testNow)
+	require.NoError(t, err)
+	provider.now = func() time.Time { return current }
+	def := createTestProfile(t, store)
+
+	items, err := provider.Items(t.Context(), def.ID, "")
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+
+	// Transient server failure past the TTL: stale cache keeps the feed up.
+	failStatus.Store(http.StatusInternalServerError)
+	current = current.Add(liveCacheTTL + time.Second)
+	items, err = provider.Items(t.Context(), def.ID, "")
+	require.NoError(t, err)
+	assert.Len(t, items, 1, "stale cache serves through a transient error")
+
+	// Auth failure past the TTL: pass through so the reconnect state shows
+	// instead of an indefinitely stale feed.
+	failStatus.Store(http.StatusUnauthorized)
+	current = current.Add(liveCacheTTL + time.Second)
+	_, err = provider.Items(t.Context(), def.ID, "")
+	require.ErrorIs(t, err, github.ErrUnauthorized)
 }
 
 func TestLiveProviderRequiresToken(t *testing.T) {

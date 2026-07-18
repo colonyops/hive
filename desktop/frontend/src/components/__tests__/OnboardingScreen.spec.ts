@@ -70,4 +70,25 @@ describe('OnboardingScreen', () => {
     const wrapper = mountScreen({ error: 'Could not reach GitHub to start sign-in.' })
     expect(wrapper.get('[data-testid="onboarding-error"]').text()).toContain('Could not reach GitHub')
   })
+
+  it('ignores Enter on the workspace card while busy', async () => {
+    const wrapper = mountScreen({ card: 'workspace', busy: true })
+    await wrapper.get('[data-testid="onboarding-workspace-input"]').setValue('Frontend Triage')
+    await wrapper.get('[data-testid="onboarding-workspace-input"]').trigger('keydown.enter')
+    expect(wrapper.emitted('createWorkspace')).toBeUndefined()
+  })
+
+  it('ignores Enter on the token card while busy', async () => {
+    const wrapper = mountScreen({ card: 'token', busy: true })
+    await wrapper.get('[data-testid="onboarding-token-input"]').setValue('ghp_abc')
+    await wrapper.get('[data-testid="onboarding-token-input"]').trigger('keydown.enter')
+    expect(wrapper.emitted('submitToken')).toBeUndefined()
+  })
+
+  it('emits on Enter when not busy and text is present', async () => {
+    const wrapper = mountScreen({ card: 'token', busy: false })
+    await wrapper.get('[data-testid="onboarding-token-input"]').setValue('ghp_abc')
+    await wrapper.get('[data-testid="onboarding-token-input"]').trigger('keydown.enter')
+    expect(wrapper.emitted('submitToken')).toEqual([['ghp_abc']])
+  })
 })

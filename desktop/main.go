@@ -94,13 +94,23 @@ func main() {
 		poller.Start()
 	}
 
+	// Every auth transition drops the feed cache before the frontend is
+	// notified: a different account must never be served items fetched with
+	// the previous token.
+	onAuthChange := func() {
+		if live, ok := provider.(*feed.LiveProvider); ok {
+			live.Invalidate()
+		}
+		emitAuthUpdated()
+	}
+
 	options := application.Options{
 		Name:        "Hive",
 		Description: "Hive desktop application",
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(NewFeedService(provider)),
-			application.NewService(auth.NewService(buildAuthBackend(emitAuthUpdated))),
+			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

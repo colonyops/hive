@@ -18,7 +18,7 @@ const {
 } = useAuth()
 
 const {
-  profiles, profilesLoaded, activeProfile, activeProfileId, selection, items, loadError,
+  profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
   selectedId, selectedItem, actions, unreadOnly, title, countLabel, toast,
   creatingProfile, createProfileError, loadProfiles, createProfile,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
@@ -26,9 +26,10 @@ const {
 } = useFeedState()
 
 // Booting while signed out leaves profiles unloaded (or the live backend
-// erroring); re-load the moment auth lands, including post-onboarding.
-watch(authenticated, (isAuthed) => {
-  if (isAuthed) void loadProfiles()
+// erroring); re-load the moment auth lands — and when the login changes, so
+// a different account never sees the previous account's data.
+watch(() => (authenticated.value ? authStatus.value?.login ?? '' : null), (key) => {
+  if (key !== null) void loadProfiles()
 })
 
 // Step 2 of onboarding: authenticated but no workspace exists yet.
@@ -172,7 +173,13 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           />
           <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
         </section>
-        <div v-else class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Loading feed…</div>
+        <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
+          <template v-if="profilesError">
+            <span data-testid="profiles-error">{{ profilesError }}</span>
+            <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
+          </template>
+          <span v-else>Loading feed…</span>
+        </div>
       </div>
     </div>
     <Transition name="toast">

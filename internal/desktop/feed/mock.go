@@ -119,6 +119,11 @@ func (p *MockProvider) MarkRead(context.Context, string, string) error {
 	return nil
 }
 
+// Refresh is a no-op: the fixtures never change.
+func (p *MockProvider) Refresh(context.Context, string) (bool, error) {
+	return false, nil
+}
+
 // CreateProfile appends a fixture-backed profile with the given name.
 // Deterministic ID: e2e asserts against a stable snapshot.
 func (p *MockProvider) CreateProfile(_ context.Context, name string) (Profile, error) {

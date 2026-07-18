@@ -59,6 +59,26 @@ func newLiveAuthForTest(t *testing.T, tokens github.TokenStore, validTokens map[
 	return NewLiveBackend(client, tokens, onChange)
 }
 
+// deniedDeviceFlowServer fakes a device flow whose token endpoint always
+// denies authorization, so pollFlow's failure path runs.
+func deniedDeviceFlowServer(t *testing.T) *httptest.Server {
+	t.Helper()
+
+	mux := http.NewServeMux()
+	mux.HandleFunc("/login/device/code", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"device_code":"dev1","user_code":"AAAA-BBBB","verification_uri":"https://github.com/login/device","expires_in":900,"interval":1}`))
+	})
+	mux.HandleFunc("/login/oauth/access_token", func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"error":"access_denied"}`))
+	})
+
+	server := httptest.NewServer(mux)
+	t.Cleanup(server.Close)
+	return server
+}
+
 func TestLiveStatusNoToken(t *testing.T) {
 	t.Parallel()
 
@@ -148,6 +168,53 @@ func TestLiveAuthDeviceFlowGrantStoresToken(t *testing.T) {
 	assert.Equal(t, StateAuthenticated, auth.Status(t.Context()).State)
 }
 
+func TestLiveAuthDeviceFlowDeniedSurfacesMessage(t *testing.T) {
+	t.Parallel()
+
+	server := deniedDeviceFlowServer(t)
+	client := github.NewClient(github.WithAPIBase(server.URL), github.WithAuthBase(server.URL))
+	changed := make(chan struct{}, 1)
+	auth := NewLiveBackend(client, github.NewMemoryTokenStore(""), func() {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+
+	_, err := auth.StartDeviceFlow(t.Context())
+	require.NoError(t, err)
+
+	select {
+	case <-changed:
+	case <-time.After(5 * time.Second):
+		t.Fatal("device flow denial did not notify")
+	}
+
+	status := auth.Status(t.Context())
+	assert.Equal(t, StateUnauthenticated, status.State)
+	assert.Contains(t, status.Message, "authorization denied")
+
+	// Starting a fresh attempt must clear the stale failure message right
+	// away, before the new attempt's own outcome (still ~1s out) arrives.
+	_, err = auth.StartDeviceFlow(t.Context())
+	require.NoError(t, err)
+	assert.Empty(t, auth.Status(t.Context()).Message)
+}
+
+func TestLiveAuthSignOutWithEnvOverrideExplains(t *testing.T) {
+	t.Setenv(github.EnvToken, "env-token")
+
+	store := github.NewMemoryTokenStore("tok1")
+	auth := newLiveAuthForTest(t, store, map[string]string{"tok1": "hayden"}, nil)
+	require.Equal(t, StateAuthenticated, auth.Status(t.Context()).State)
+
+	require.NoError(t, auth.SignOut())
+
+	status := auth.Status(t.Context())
+	assert.Equal(t, StateUnauthenticated, status.State)
+	assert.Contains(t, status.Message, github.EnvToken)
+}
+
 func TestLiveAuthSignOutClearsToken(t *testing.T) {
 	t.Parallel()
 
@@ -187,6 +254,31 @@ func TestMockAuthDeviceFlowAutoGrants(t *testing.T) {
 	}
 	assert.Equal(t, StateAuthenticated, auth.Status(t.Context()).State)
 	assert.Equal(t, "hayden", auth.Status(t.Context()).Login)
+}
+
+func TestMockAuthCancelPreventsLateGrant(t *testing.T) {
+	t.Parallel()
+
+	changed := make(chan struct{}, 1)
+	auth := NewMockBackend(false, func() {
+		select {
+		case changed <- struct{}{}:
+		default:
+		}
+	})
+
+	_, err := auth.StartDeviceFlow(t.Context())
+	require.NoError(t, err)
+	auth.CancelDeviceFlow()
+
+	time.Sleep(2 * time.Second) // past mockGrantDelay (1.5s)
+
+	assert.Equal(t, StateUnauthenticated, auth.Status(t.Context()).State)
+	select {
+	case <-changed:
+		t.Fatal("onChange fired after cancel")
+	default:
+	}
 }
 
 func TestMockAuthSetTokenAndSignOut(t *testing.T) {
