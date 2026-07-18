@@ -147,7 +147,7 @@ function onKeydown(e: KeyboardEvent): void {
                 <span class="palette-chip" aria-hidden="true">
                   <component :is="entry.cmd.icon ?? IconZap" />
                 </span>
-                <span class="palette-title">{{ entry.parts.pre }}<span class="palette-title-match">{{ entry.parts.match }}</span>{{ entry.parts.post }}</span>
+                <span class="palette-title" data-testid="command-palette-command-title">{{ entry.parts.pre }}<span class="palette-title-match">{{ entry.parts.match }}</span>{{ entry.parts.post }}</span>
                 <span v-if="entry.cmd.hint" class="palette-hint">{{ entry.cmd.hint }}</span>
                 <span v-if="entry.index === selectedIndex" class="palette-enter-badge" aria-hidden="true">↵</span>
               </button>
