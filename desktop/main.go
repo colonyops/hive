@@ -3,6 +3,7 @@ package main
 import (
 	"embed"
 	"log"
+	"os"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
@@ -16,6 +17,8 @@ var trayIcon []byte
 //go:embed build/icons/tray-templateTemplate@2x.png
 var trayIcon2x []byte
 
+const frontendDevServerURLEnv = "FRONTEND_DEVSERVER_URL"
+
 var _ = registerEvents()
 
 func registerEvents() struct{} {
@@ -28,6 +31,10 @@ func templateTrayIcon() []byte {
 		return trayIcon2x
 	}
 	return trayIcon
+}
+
+func isWailsDevMode() bool {
+	return os.Getenv(frontendDevServerURLEnv) != ""
 }
 
 func main() {
@@ -46,14 +53,15 @@ func main() {
 		},
 	}
 	app := application.New(options)
+	devMode := isWailsDevMode()
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Hive",
 		Width:            1360,
 		Height:           864,
 		Frameless:        true,
-		Hidden:           true,
-		HideOnFocusLost:  true,
+		Hidden:           !devMode,
+		HideOnFocusLost:  !devMode,
 		BackgroundColour: application.NewRGB(6, 7, 15),
 		URL:              "/",
 	})
