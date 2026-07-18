@@ -6,6 +6,7 @@ import (
 
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/auth"
+	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/github"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -35,6 +36,12 @@ func registerEvents() struct{} {
 	return struct{}{}
 }
 
+// buildFeedProvider returns the mock fixtures in every mode until the live
+// GitHub-backed provider lands; the seam is what this phase establishes.
+func buildFeedProvider() feed.Provider {
+	return feed.NewMockProvider()
+}
+
 func buildAuthBackend(onChange func()) auth.Backend {
 	switch desktop.MockMode() {
 	case "feed":
@@ -60,7 +67,7 @@ func main() {
 		Description: "Hive desktop application",
 		Icon:        appIcon,
 		Services: []application.Service{
-			application.NewService(NewFeedService()),
+			application.NewService(NewFeedService(buildFeedProvider())),
 			application.NewService(auth.NewService(buildAuthBackend(emitAuthUpdated))),
 		},
 		Assets: application.AssetOptions{

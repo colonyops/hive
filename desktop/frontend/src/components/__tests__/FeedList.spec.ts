@@ -17,6 +17,7 @@ function item(id: string, title: string, unread: boolean): FeedItem {
     branch: 'feat/desktop-ui-shell',
     body: 'Body',
     prompt: 'Prompt',
+    url: 'https://github.com/colonyops/hive/pull/42',
   }
 }
 

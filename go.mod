@@ -20,6 +20,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.10.1
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.116
+	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.38.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
@@ -66,7 +67,6 @@ require (
 	github.com/xo/terminfo v0.0.0-20220910002029-abceb7e1c41e // indirect
 	github.com/yuin/goldmark v1.7.16 // indirect
 	github.com/yuin/goldmark-emoji v1.0.6 // indirect
-	github.com/zalando/go-keyring v0.2.8 // indirect
 	golang.org/x/net v0.53.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/text v0.37.0 // indirect

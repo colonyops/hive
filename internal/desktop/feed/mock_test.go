@@ -1,4 +1,4 @@
-package main
+package feed
 
 import (
 	"testing"
@@ -7,13 +7,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestFeedServiceItemsContract(t *testing.T) {
+// The mock provider owns the fixture snapshot the e2e specs assert on; these
+// tests pin structure, not literals.
+
+func TestMockProviderItemsContract(t *testing.T) {
 	t.Parallel()
 
-	service := NewFeedService()
+	provider := NewMockProvider()
+	profiles, err := provider.Profiles(t.Context())
+	require.NoError(t, err)
 
-	for _, profile := range service.Profiles() {
-		items := service.Items(profile.ID, "")
+	for _, profile := range profiles {
+		items, err := provider.Items(t.Context(), profile.ID, "")
+		require.NoError(t, err)
 		require.NotEmpty(t, items, "profile %s has no items", profile.ID)
 
 		seenIDs := make(map[string]struct{}, len(items))
@@ -22,6 +28,7 @@ func TestFeedServiceItemsContract(t *testing.T) {
 			assert.NotEmpty(t, item.ID)
 			assert.NotEmpty(t, item.Title, item.ID)
 			assert.NotEmpty(t, item.Branch, item.ID)
+			assert.NotEmpty(t, item.URL, item.ID)
 
 			_, duplicate := seenIDs[item.ID]
 			assert.False(t, duplicate, "duplicate item ID %s", item.ID)
@@ -30,60 +37,46 @@ func TestFeedServiceItemsContract(t *testing.T) {
 	}
 }
 
-func TestFeedServiceActionsForContract(t *testing.T) {
+func TestActionsForContract(t *testing.T) {
 	t.Parallel()
 
-	tests := []struct {
-		kind string
-	}{
-		{kind: "PR"},
-		{kind: "Issue"},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.kind, func(t *testing.T) {
+	for _, kind := range []string{"PR", "Issue"} {
+		t.Run(kind, func(t *testing.T) {
 			t.Parallel()
 
-			actions := NewFeedService().ActionsFor(tt.kind)
+			actions := ActionsFor(kind)
 			require.NotEmpty(t, actions)
 
-			primary := primaryActions(actions)
-			require.Len(t, primary, 1)
-
+			primary := 0
 			for _, action := range actions {
+				if action.Primary {
+					primary++
+				}
 				assert.NotEmpty(t, action.ID)
 				assert.NotEmpty(t, action.Icon, action.ID)
 				assert.NotEmpty(t, action.Color, action.ID)
 				assert.NotEmpty(t, action.Title, action.ID)
 				assert.NotEmpty(t, action.Sub, action.ID)
 			}
+			assert.Equal(t, 1, primary, "exactly one primary action per kind")
 		})
 	}
 }
 
-func TestFeedServiceProfilesContract(t *testing.T) {
+func TestMockProviderProfilesContract(t *testing.T) {
 	t.Parallel()
 
-	profiles := NewFeedService().Profiles()
+	profiles, err := NewMockProvider().Profiles(t.Context())
+	require.NoError(t, err)
 
 	require.NotEmpty(t, profiles)
 	for _, profile := range profiles {
 		assert.NotEmpty(t, profile.ID)
 		assert.NotEmpty(t, profile.Name, profile.ID)
 		require.NotEmpty(t, profile.Feeds, profile.ID)
-		for _, feed := range profile.Feeds {
-			assert.NotEmpty(t, feed.ID, profile.ID)
-			assert.NotEmpty(t, feed.Name, profile.ID)
+		for _, source := range profile.Feeds {
+			assert.NotEmpty(t, source.ID, profile.ID)
+			assert.NotEmpty(t, source.Name, profile.ID)
 		}
 	}
-}
-
-func primaryActions(actions []Action) []Action {
-	primary := make([]Action, 0, 1)
-	for _, action := range actions {
-		if action.Primary {
-			primary = append(primary, action)
-		}
-	}
-	return primary
 }

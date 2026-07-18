@@ -60,6 +60,7 @@ function feedItem(id: string, kind: string, title: string): FeedItem {
     branch: 'feat/desktop-ui-shell',
     body: 'Body',
     prompt: 'Prompt',
+    url: 'https://github.com/colonyops/hive/pull/42',
   }
 }
 
