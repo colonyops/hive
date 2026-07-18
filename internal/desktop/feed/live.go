@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -21,15 +22,18 @@ var ErrNotAuthenticated = errors.New("feed: not authenticated")
 
 const (
 	// liveCacheTTL keeps feed switches snappy between poller refreshes
-	// without hammering the API.
+	// without hammering the search API.
 	liveCacheTTL = 30 * time.Second
-	// searchLimit bounds items per feed; the desktop feed is a triage
-	// surface, not an archive browser.
-	searchLimit = 30
+	// notificationsMinPoll is the floor for the notifications poll interval.
+	// GitHub's X-Poll-Interval header is a contract (typically 60s); it is
+	// honored even when absent.
+	notificationsMinPoll = 60 * time.Second
 )
 
 // LiveProvider serves feed data from the GitHub API, with app-local unread
-// state. Fetches are cached per (profile, feed) for liveCacheTTL.
+// state. Fetches are cached per source — keyed by what is requested, not by
+// which feed or profile asked — so any number of feeds sharing a source cost
+// one request per poll.
 type LiveProvider struct {
 	client *github.Client
 	tokens github.TokenStore
@@ -38,18 +42,28 @@ type LiveProvider struct {
 	now    func() time.Time
 
 	mu    sync.Mutex
-	cache map[string]*cachedFeed
+	cache map[string]*cachedSource
 }
 
-type cachedFeed struct {
+type cachedSource struct {
 	items     []liveItem
 	fetchedAt time.Time
+	// lastModified and pollInterval drive the notifications conditional-GET
+	// loop; both stay zero for search sources.
+	lastModified string
+	pollInterval time.Duration
 }
 
 // liveItem pairs the wire item with the timestamp unread state derives from.
 type liveItem struct {
 	item      Item
 	updatedAt time.Time
+}
+
+// sourceKey is the canonical cache key of a source: two source definitions
+// requesting the same data share one cache entry and one API request.
+func sourceKey(src SourceDef) string {
+	return src.Kind + "\x00" + src.Query + "\x00" + strconv.Itoa(src.effectiveLimit())
 }
 
 func NewLiveProvider(client *github.Client, tokens github.TokenStore, store *Store, logger zerolog.Logger) *LiveProvider {
@@ -59,7 +73,7 @@ func NewLiveProvider(client *github.Client, tokens github.TokenStore, store *Sto
 		store:  store,
 		logger: logger,
 		now:    time.Now,
-		cache:  make(map[string]*cachedFeed),
+		cache:  make(map[string]*cachedSource),
 	}
 }
 
@@ -68,22 +82,80 @@ func (p *LiveProvider) Profiles(ctx context.Context) ([]Profile, error) {
 	if err != nil {
 		return nil, err
 	}
+	srcByID, err := p.sourcesByID()
+	if err != nil {
+		return nil, err
+	}
 
 	profiles := make([]Profile, 0, len(defs))
 	for _, def := range defs {
-		profiles = append(profiles, p.materializeProfile(ctx, def))
+		profiles = append(profiles, p.materializeProfile(ctx, srcByID, def))
 	}
 	return profiles, nil
 }
 
 // CreateProfile persists a new profile with default feeds and returns it
-// materialized (fetching its feeds).
+// materialized (fetching its sources).
 func (p *LiveProvider) CreateProfile(ctx context.Context, name string) (Profile, error) {
 	def, err := p.store.CreateProfile(name)
 	if err != nil {
 		return Profile{}, err
 	}
-	return p.materializeProfile(ctx, def), nil
+	srcByID, err := p.sourcesByID()
+	if err != nil {
+		return Profile{}, err
+	}
+	return p.materializeProfile(ctx, srcByID, def), nil
+}
+
+// Sources returns the source definitions, for the source picker in the feed
+// editor.
+func (p *LiveProvider) Sources(context.Context) ([]SourceDef, error) {
+	return p.store.Sources()
+}
+
+// FeedDefFor returns one feed's definition, for edit prefill.
+func (p *LiveProvider) FeedDefFor(_ context.Context, profileID, feedID string) (FeedDef, error) {
+	return p.store.FeedDefFor(profileID, feedID)
+}
+
+// CreateSource persists a new top-level source. No fetch happens until a feed
+// references it.
+func (p *LiveProvider) CreateSource(_ context.Context, def SourceDef) (SourceDef, error) {
+	return p.store.CreateSource(def)
+}
+
+// CreateFeed persists a new feed in the profile and returns its materialized
+// summary. Fetch failures degrade to zero counts with a log line, matching
+// materializeProfile.
+func (p *LiveProvider) CreateFeed(ctx context.Context, profileID string, def FeedDef) (Source, error) {
+	created, err := p.store.CreateFeed(profileID, def)
+	if err != nil {
+		return Source{}, err
+	}
+	summary := Source{ID: created.ID, Name: created.Name}
+	srcByID, err := p.sourcesByID()
+	if err != nil {
+		return Source{}, err
+	}
+	items, err := p.feedItems(ctx, srcByID, created)
+	if err != nil {
+		p.logger.Debug().Err(err).Str("feed", created.ID).Msg("feed fetch failed; counting as empty")
+		return summary, nil
+	}
+	summary.Count = len(items)
+	for _, li := range items {
+		if p.finalize(li).Unread {
+			summary.NewCount++
+		}
+	}
+	return summary, nil
+}
+
+// UpdateFeed replaces the feed's definition; the feed keeps its ID. The
+// source cache is unaffected — filters apply at read time.
+func (p *LiveProvider) UpdateFeed(_ context.Context, profileID, feedID string, def FeedDef) error {
+	return p.store.UpdateFeed(profileID, feedID, def)
 }
 
 func (p *LiveProvider) Items(ctx context.Context, profileID, feedID string) ([]Item, error) {
@@ -118,16 +190,13 @@ func (p *LiveProvider) ActionsFor(kind string) []Action {
 }
 
 // MarkRead records the item as read as of its currently-known update time.
-// The same item can sit in several feed caches with different timestamps
+// The same item can sit in several source caches with different timestamps
 // (search result vs notification thread); the newest wins so the item does
 // not bounce back to unread.
-func (p *LiveProvider) MarkRead(_ context.Context, profileID, itemID string) error {
+func (p *LiveProvider) MarkRead(_ context.Context, _, itemID string) error {
 	var updatedAt time.Time
 	p.mu.Lock()
-	for key, cached := range p.cache {
-		if !strings.HasPrefix(key, profileID+"\x00") {
-			continue
-		}
+	for _, cached := range p.cache {
 		for _, li := range cached.items {
 			if li.item.ID == itemID && li.updatedAt.After(updatedAt) {
 				updatedAt = li.updatedAt
@@ -146,52 +215,85 @@ func (p *LiveProvider) Config(context.Context) (ConfigInfo, error) {
 	return p.store.ConfigInfo(), nil
 }
 
-// Invalidate drops the fetch cache so the next call refetches.
+// Invalidate drops the fetch cache so the next call refetches. Config
+// reloads and auth changes call it: a notifications refetch is nearly free
+// (conditional), and a search refetch is one request per source.
 func (p *LiveProvider) Invalidate() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	p.cache = make(map[string]*cachedFeed)
+	p.cache = make(map[string]*cachedSource)
 }
 
-// Refresh refetches every feed of the profile, bypassing the TTL, and
-// reports whether anything changed versus the cached state. The poller uses
-// it to decide when to push feed:updated. It returns an error only when
-// every feed fails.
+// Refresh refetches the distinct sources referenced by the profile's feeds,
+// bypassing the search TTL. Notifications sources still honor X-Poll-Interval
+// — the conditional request is cheap, but the header is a contract. It
+// reports whether any referenced source's data changed and fails only when
+// every source fails.
 func (p *LiveProvider) Refresh(ctx context.Context, profileID string) (bool, error) {
 	def, err := p.profileDef(profileID)
 	if err != nil {
 		return false, err
 	}
+	srcByID, err := p.sourcesByID()
+	if err != nil {
+		return false, err
+	}
 
 	var (
-		changed bool
-		lastErr error
-		fetched int
+		changed   bool
+		lastErr   error
+		refreshed int
 	)
-	for _, feedDef := range def.Feeds {
-		items, err := p.fetchFeed(ctx, feedDef)
+	for _, src := range distinctSources(def.Feeds, srcByID) {
+		sourceChanged, err := p.refreshSource(ctx, src)
 		if err != nil {
 			lastErr = err
-			p.logger.Debug().Err(err).Str("profile", def.Name).Str("feed", feedDef.ID).Msg("poll fetch failed")
+			p.logger.Debug().Err(err).Str("profile", def.Name).Str("source", src.ID).Msg("refresh fetch failed")
 			continue
 		}
-		fetched++
-
-		key := def.ID + "\x00" + feedDef.ID
-		p.mu.Lock()
-		if prev, ok := p.cache[key]; !ok || !sameItems(prev.items, items) {
+		refreshed++
+		if sourceChanged {
 			changed = true
 		}
-		p.cache[key] = &cachedFeed{items: items, fetchedAt: p.now()}
-		p.mu.Unlock()
 	}
-	if fetched == 0 && lastErr != nil {
+	if refreshed == 0 && lastErr != nil {
 		return false, lastErr
 	}
 	return changed, nil
 }
 
-// sameItems reports whether two fetches carry the same feed state: same
+// refreshSource force-fetches one source, bypassing the search TTL, and
+// reports whether its cached items changed. Notifications sources within
+// their X-Poll-Interval window are skipped unchanged.
+func (p *LiveProvider) refreshSource(ctx context.Context, src SourceDef) (bool, error) {
+	key := sourceKey(src)
+	p.mu.Lock()
+	prev, hadPrev := p.cache[key]
+	p.mu.Unlock()
+
+	if hadPrev && src.Kind == "notifications" {
+		if p.now().Sub(prev.fetchedAt) < notificationsTTL(prev) {
+			return false, nil
+		}
+	}
+
+	items, err := p.fetchSource(ctx, src)
+	if err != nil {
+		return false, err
+	}
+	return !hadPrev || !sameItems(prev.items, items), nil
+}
+
+// notificationsTTL is the effective minimum interval between notification
+// fetches for a cache entry.
+func notificationsTTL(cached *cachedSource) time.Duration {
+	if cached.pollInterval > notificationsMinPoll {
+		return cached.pollInterval
+	}
+	return notificationsMinPoll
+}
+
+// sameItems reports whether two fetches carry the same source state: same
 // items, same order, same update times and native unread flags.
 func sameItems(a, b []liveItem) bool {
 	if len(a) != len(b) {
@@ -210,20 +312,20 @@ func sameItems(a, b []liveItem) bool {
 // ── Materialization ──────────────────────────────────────────────────────────
 
 // materializeProfile builds the wire profile, including per-feed and total
-// counts. Feed fetch failures degrade to zero counts with a log line: the
-// rail should render even when GitHub is unreachable.
-func (p *LiveProvider) materializeProfile(ctx context.Context, def ProfileDef) Profile {
+// counts. Fetch failures degrade to zero counts with a log line: the rail
+// should render even when GitHub is unreachable.
+func (p *LiveProvider) materializeProfile(ctx context.Context, srcByID map[string]SourceDef, def ProfileDef) Profile {
 	profile := Profile{
 		ID:            def.ID,
 		Letter:        ProfileLetter(def.Name),
 		Name:          def.Name,
-		SourceSummary: fmt.Sprintf("GitHub · %d sources", len(def.Feeds)),
+		SourceSummary: fmt.Sprintf("GitHub · %d sources", len(distinctSources(def.Feeds, srcByID))),
 	}
 
 	newest := make(map[string]liveItem)
 	for _, feedDef := range def.Feeds {
 		source := Source{ID: feedDef.ID, Name: feedDef.Name}
-		items, err := p.feedItems(ctx, def.ID, feedDef)
+		items, err := p.feedItems(ctx, srcByID, feedDef)
 		if err != nil {
 			p.logger.Debug().Err(err).Str("profile", def.Name).Str("feed", feedDef.ID).Msg("feed fetch failed; counting as empty")
 		} else {
@@ -252,10 +354,15 @@ func (p *LiveProvider) materializeProfile(ctx context.Context, def ProfileDef) P
 	return profile
 }
 
-// gather fetches the given feeds, deduplicates by item ID (a PR can be in a
-// search feed and the notifications inbox), and orders newest-updated first.
-// It fails only when every feed fails; partial failures degrade with a log.
+// gather materializes the given feeds, deduplicates by item ID (a PR can be
+// in two feeds), and orders newest-updated first. It fails only when every
+// feed fails; partial failures degrade with a log.
 func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedDef) ([]liveItem, error) {
+	srcByID, err := p.sourcesByID()
+	if err != nil {
+		return nil, err
+	}
+
 	var (
 		merged  []liveItem
 		index   = make(map[string]int)
@@ -263,7 +370,7 @@ func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedD
 		fetched int
 	)
 	for _, feedDef := range feeds {
-		items, err := p.feedItems(ctx, def.ID, feedDef)
+		items, err := p.feedItems(ctx, srcByID, feedDef)
 		if err != nil {
 			lastErr = err
 			p.logger.Debug().Err(err).Str("profile", def.Name).Str("feed", feedDef.ID).Msg("feed fetch failed")
@@ -283,16 +390,16 @@ func (p *LiveProvider) gather(ctx context.Context, def ProfileDef, feeds []FeedD
 		return nil, lastErr
 	}
 
-	sort.SliceStable(merged, func(i, j int) bool {
-		return merged[i].updatedAt.After(merged[j].updatedAt)
-	})
+	sortNewestFirst(merged)
 	return merged, nil
 }
 
-// mergeNewest resolves an item present in several feeds (search result vs
+// mergeNewest resolves an item present in several sources (search result vs
 // notification thread) to its newest copy, so age and read state derive from
 // the latest activity — the same newest-wins contract MarkRead records.
-// Notifications carry no author; backfill it from the older copy.
+// Notifications carry no author and search results no reason; backfill both
+// from the other copy so a merged item has author and reason regardless of
+// which side is newer.
 func mergeNewest(a, b liveItem) liveItem {
 	newer, older := a, b
 	if older.updatedAt.After(newer.updatedAt) {
@@ -300,6 +407,9 @@ func mergeNewest(a, b liveItem) liveItem {
 	}
 	if newer.item.Author == "" {
 		newer.item.Author = older.item.Author
+	}
+	if newer.item.Reason == "" {
+		newer.item.Reason = older.item.Reason
 	}
 	return newer
 }
@@ -318,35 +428,86 @@ func (p *LiveProvider) finalize(li liveItem) Item {
 
 // ── Fetching ─────────────────────────────────────────────────────────────────
 
-func (p *LiveProvider) feedItems(ctx context.Context, profileID string, def FeedDef) ([]liveItem, error) {
-	key := profileID + "\x00" + def.ID
+// feedItems materializes one feed: union the cached/fetched items of its
+// sources, dedupe and merge by item ID, apply the feed's filters, and order
+// newest first. It fails only when every source fails.
+func (p *LiveProvider) feedItems(ctx context.Context, srcByID map[string]SourceDef, def FeedDef) ([]liveItem, error) {
+	var (
+		merged  []liveItem
+		index   = make(map[string]int)
+		lastErr error
+		fetched int
+	)
+	for _, sourceID := range def.Sources {
+		src, ok := srcByID[sourceID]
+		if !ok {
+			// Possible only in the window between a config reload and this
+			// read racing on split store snapshots; the next poll heals it.
+			lastErr = fmt.Errorf("feed: unknown source %q", sourceID)
+			p.logger.Debug().Str("feed", def.ID).Str("source", sourceID).Msg("source not found; skipping")
+			continue
+		}
+		items, err := p.sourceItems(ctx, src)
+		if err != nil {
+			lastErr = err
+			p.logger.Debug().Err(err).Str("feed", def.ID).Str("source", src.ID).Msg("source fetch failed")
+			continue
+		}
+		fetched++
+		for _, li := range items {
+			if at, ok := index[li.item.ID]; ok {
+				merged[at] = mergeNewest(merged[at], li)
+				continue
+			}
+			index[li.item.ID] = len(merged)
+			merged = append(merged, li)
+		}
+	}
+	if fetched == 0 && lastErr != nil {
+		return nil, lastErr
+	}
+
+	sortNewestFirst(merged)
+	return applyFilters(def, merged), nil
+}
+
+// sourceItems returns the source's items, from cache within the TTL — 30s
+// for search, the X-Poll-Interval contract for notifications — and fetching
+// otherwise.
+func (p *LiveProvider) sourceItems(ctx context.Context, src SourceDef) ([]liveItem, error) {
+	key := sourceKey(src)
 
 	p.mu.Lock()
 	cached, ok := p.cache[key]
 	p.mu.Unlock()
-	if ok && p.now().Sub(cached.fetchedAt) < liveCacheTTL {
-		return cached.items, nil
+	if ok {
+		ttl := liveCacheTTL
+		if src.Kind == "notifications" {
+			ttl = notificationsTTL(cached)
+		}
+		if p.now().Sub(cached.fetchedAt) < ttl {
+			return cached.items, nil
+		}
 	}
 
-	items, err := p.fetchFeed(ctx, def)
+	items, err := p.fetchSource(ctx, src)
 	if err != nil {
 		// Serve stale data over an error when we have it: triage beats
 		// freshness during a blip. Auth failures pass through even so —
 		// stale data would mask the reconnect prompt.
 		if ok && !errors.Is(err, github.ErrUnauthorized) && !errors.Is(err, ErrNotAuthenticated) {
-			p.logger.Debug().Err(err).Str("feed", def.ID).Msg("feed fetch failed; serving stale cache")
+			p.logger.Debug().Err(err).Str("source", src.ID).Msg("source fetch failed; serving stale cache")
 			return cached.items, nil
 		}
 		return nil, err
 	}
-
-	p.mu.Lock()
-	p.cache[key] = &cachedFeed{items: items, fetchedAt: p.now()}
-	p.mu.Unlock()
 	return items, nil
 }
 
-func (p *LiveProvider) fetchFeed(ctx context.Context, def FeedDef) ([]liveItem, error) {
+// fetchSource performs the source's API request and updates the cache.
+// Notifications requests are conditional: a 304 keeps the cached items and
+// refreshes their fetch time at no rate-limit cost.
+func (p *LiveProvider) fetchSource(ctx context.Context, src SourceDef) ([]liveItem, error) {
 	token, err := p.tokens.Token()
 	if err != nil {
 		return nil, err
@@ -355,39 +516,62 @@ func (p *LiveProvider) fetchFeed(ctx context.Context, def FeedDef) ([]liveItem, 
 		return nil, ErrNotAuthenticated
 	}
 	client := p.client.WithTokenCopy(token)
+	key := sourceKey(src)
 
-	switch def.Kind {
+	switch src.Kind {
 	case "notifications":
-		notifications, err := client.Notifications(ctx, searchLimit)
+		p.mu.Lock()
+		prev := p.cache[key]
+		ifModifiedSince := ""
+		if prev != nil {
+			ifModifiedSince = prev.lastModified
+		}
+		p.mu.Unlock()
+
+		result, err := client.Notifications(ctx, src.effectiveLimit(), ifModifiedSince)
 		if err != nil {
 			return nil, err
 		}
-		return filterByRepo(def, p.notificationItems(notifications)), nil
+		pollInterval := time.Duration(result.PollInterval) * time.Second
+		if result.NotModified && prev != nil {
+			p.mu.Lock()
+			prev.fetchedAt = p.now()
+			if pollInterval > 0 {
+				prev.pollInterval = pollInterval
+			}
+			if result.LastModified != "" {
+				prev.lastModified = result.LastModified
+			}
+			p.cache[key] = prev // re-adopt if Invalidate raced the request
+			items := prev.items
+			p.mu.Unlock()
+			return items, nil
+		}
+		items := p.notificationItems(result.Items)
+		p.setCache(key, &cachedSource{
+			items:        items,
+			fetchedAt:    p.now(),
+			lastModified: result.LastModified,
+			pollInterval: pollInterval,
+		})
+		return items, nil
 	case "search":
-		result, err := client.SearchIssues(ctx, def.Query, searchLimit)
+		result, err := client.SearchIssues(ctx, src.Query, src.effectiveLimit())
 		if err != nil {
 			return nil, err
 		}
-		return filterByRepo(def, p.searchItems(result.Items)), nil
+		items := p.searchItems(result.Items)
+		p.setCache(key, &cachedSource{items: items, fetchedAt: p.now()})
+		return items, nil
 	default:
-		return nil, fmt.Errorf("feed: unknown feed kind %q", def.Kind)
+		return nil, fmt.Errorf("feed: unknown source kind %q", src.Kind)
 	}
 }
 
-// filterByRepo applies the feed's include/exclude repo globs. Filtering
-// happens after the fetch, so it changes what is shown, not what is
-// requested — a filtered feed still costs exactly one API call.
-func filterByRepo(def FeedDef, items []liveItem) []liveItem {
-	if len(def.Repos) == 0 && len(def.ExcludeRepos) == 0 {
-		return items
-	}
-	out := make([]liveItem, 0, len(items))
-	for _, li := range items {
-		if def.matchesRepo(li.item.Repo) {
-			out = append(out, li)
-		}
-	}
-	return out
+func (p *LiveProvider) setCache(key string, cached *cachedSource) {
+	p.mu.Lock()
+	p.cache[key] = cached
+	p.mu.Unlock()
 }
 
 func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {
@@ -441,6 +625,7 @@ func (p *LiveProvider) notificationItems(notifications []github.Notification) []
 			Title:  n.Subject.Title,
 			Age:    shortAge(p.now().Sub(n.UpdatedAt)),
 			Unread: n.Unread, // native inbox state seeds unread
+			Reason: n.Reason,
 			Labels: []string{strings.ReplaceAll(n.Reason, "_", " ")},
 			Branch: suggestedBranch(kind, num, n.Subject.Title),
 			Body:   fmt.Sprintf("GitHub notification (%s) for %s in %s.", strings.ReplaceAll(n.Reason, "_", " "), strings.ToLower(kind), repo),
@@ -465,6 +650,47 @@ func (p *LiveProvider) profileDef(profileID string) (ProfileDef, error) {
 		}
 	}
 	return ProfileDef{}, fmt.Errorf("feed: unknown profile %q", profileID)
+}
+
+func (p *LiveProvider) sourcesByID() (map[string]SourceDef, error) {
+	sources, err := p.store.Sources()
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[string]SourceDef, len(sources))
+	for _, src := range sources {
+		byID[src.ID] = src
+	}
+	return byID, nil
+}
+
+// distinctSources resolves the sources referenced by the feeds, deduplicated
+// by canonical key, in first-reference order. Unresolvable references are
+// skipped; validation prevents them in a consistent config snapshot.
+func distinctSources(feeds []FeedDef, srcByID map[string]SourceDef) []SourceDef {
+	var out []SourceDef
+	seen := make(map[string]bool)
+	for _, feedDef := range feeds {
+		for _, sourceID := range feedDef.Sources {
+			src, ok := srcByID[sourceID]
+			if !ok {
+				continue
+			}
+			key := sourceKey(src)
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			out = append(out, src)
+		}
+	}
+	return out
+}
+
+func sortNewestFirst(items []liveItem) {
+	sort.SliceStable(items, func(i, j int) bool {
+		return items[i].updatedAt.After(items[j].updatedAt)
+	})
 }
 
 func findFeed(feeds []FeedDef, id string) (FeedDef, bool) {

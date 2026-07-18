@@ -5,24 +5,44 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/bmatcuk/doublestar/v4"
 	"gopkg.in/yaml.v3"
 )
 
-// FeedDef is a feed definition inside a profile. The vocabulary (kind +
-// query) deliberately mirrors the saved-view schema proposed for TUI sources
-// (issue #370) so the two can converge on one definition later.
-type FeedDef struct {
+// SourceDef is a top-level data source: one GitHub API acquisition, shared by
+// any number of feeds. Sources are the only part of the config that costs API
+// requests; feeds are free client-side views over them.
+type SourceDef struct {
 	ID    string `json:"id"              yaml:"id"`
-	Name  string `json:"name"            yaml:"name"`
 	Kind  string `json:"kind"            yaml:"kind"` // "search" | "notifications"
 	Query string `json:"query,omitempty" yaml:"query,omitempty"`
-	// Repos/ExcludeRepos are doublestar globs matched against "owner/repo"
-	// (e.g. "colonyops/*"). They filter fetched results client-side, so
-	// they never add API requests — one request per feed per poll holds
-	// regardless of how the filters are written.
-	Repos        []string `json:"repos,omitempty"         yaml:"repos,omitempty"`
-	ExcludeRepos []string `json:"exclude_repos,omitempty" yaml:"exclude_repos,omitempty"`
+	// Limit bounds items per fetch. Search: default 50, max 100 (API page
+	// cap). Notifications: default 50, max 50 (API page cap).
+	Limit int `json:"limit,omitempty" yaml:"limit,omitempty"`
+}
+
+const (
+	defaultSourceLimit    = 50
+	maxSearchLimit        = 100
+	maxNotificationsLimit = 50
+)
+
+// effectiveLimit resolves the configured limit against per-kind defaults and
+// API caps; validation rejects out-of-range values, so this only fills the
+// default.
+func (s SourceDef) effectiveLimit() int {
+	if s.Limit > 0 {
+		return s.Limit
+	}
+	return defaultSourceLimit
+}
+
+// FeedDef is a feed inside a profile: a client-side filtered view over one or
+// more top-level sources. Feeds never cost API requests of their own.
+type FeedDef struct {
+	ID      string    `json:"id"      yaml:"id"`
+	Name    string    `json:"name"    yaml:"name"`
+	Sources []string  `json:"sources" yaml:"sources"`
+	Filters FilterDef `json:"filters" yaml:"filters,omitempty"`
 }
 
 // ProfileDef is a profile ("workspace") definition.
@@ -34,14 +54,17 @@ type ProfileDef struct {
 
 // configFile is the on-disk shape of the profiles config.
 type configFile struct {
+	Sources  []SourceDef  `yaml:"sources"`
 	Profiles []ProfileDef `yaml:"profiles"`
 }
 
-// maxFeeds caps the total feed count across all profiles. Every feed costs
-// one GitHub API request per poll cycle (once a minute), and authenticated
-// search allows 30 requests/min — a config past that ceiling would sit in
-// permanent rate-limit backoff, so reject it outright with an explanation.
-const maxFeeds = 30
+// maxSearchSources caps sources of kind "search". Each distinct search source
+// is one request per poll cycle (about once a minute) against GitHub's search
+// bucket of 30 requests/min; 25 leaves headroom for manual refreshes.
+// Notifications sources are uncapped: they poll the core bucket (5000/hr) with
+// conditional requests whose 304 responses are free, and identical sources
+// deduplicate to one request anyway.
+const maxSearchSources = 25
 
 // ConfigInfo describes the profiles config file for the frontend: where it
 // lives, what it contains, and whether it currently parses.
@@ -56,29 +79,61 @@ type ConfigInfo struct {
 	Error string `json:"error"`
 }
 
-// parseConfig strictly decodes and validates profiles YAML. Unknown fields
-// are errors: a typo like "filter:" for "repos:" must fail loudly, not
+// legacyFeedFieldMarkers identify KnownFields errors caused by the pre-source
+// schema, where kind/query/repos/exclude_repos lived on feeds. None of these
+// fields exist on FeedDef anymore, so the substrings only fire on old configs.
+var legacyFeedFieldMarkers = []string{
+	"field kind not found",
+	"field query not found",
+	"field repos not found",
+	"field exclude_repos not found",
+}
+
+// parseConfig strictly decodes and validates the profiles YAML. Unknown fields
+// are errors: a typo like "filter:" for "filters:" must fail loudly, not
 // silently configure nothing.
-func parseConfig(data []byte) ([]ProfileDef, error) {
+func parseConfig(data []byte) (configFile, error) {
 	var file configFile
 	dec := yaml.NewDecoder(bytes.NewReader(data))
 	dec.KnownFields(true)
 	if err := dec.Decode(&file); err != nil {
-		if err.Error() == "EOF" { // empty file: valid, no profiles
-			return nil, nil
+		if err.Error() == "EOF" { // empty file: valid, no sources or profiles
+			return configFile{}, nil
 		}
-		return nil, fmt.Errorf("parse profiles config: %w", err)
+		for _, marker := range legacyFeedFieldMarkers {
+			if strings.Contains(err.Error(), marker) {
+				return configFile{}, fmt.Errorf("parse profiles config: %w (hint: feeds now reference top-level sources: entries — kind/query moved to sources, and repos/exclude_repos moved under the feed's filters: block)", err)
+			}
+		}
+		return configFile{}, fmt.Errorf("parse profiles config: %w", err)
 	}
-	if err := validateProfiles(file.Profiles); err != nil {
-		return nil, err
+	if err := validateConfig(file); err != nil {
+		return configFile{}, err
 	}
-	return file.Profiles, nil
+	return file, nil
 }
 
-func validateProfiles(defs []ProfileDef) error {
+func validateConfig(file configFile) error {
+	sourceIDs := make(map[string]bool, len(file.Sources))
+	searchSources := 0
+	for _, def := range file.Sources {
+		if err := validateSource(def); err != nil {
+			return err
+		}
+		if sourceIDs[def.ID] {
+			return fmt.Errorf("source id %q is defined twice", def.ID)
+		}
+		sourceIDs[def.ID] = true
+		if def.Kind == "search" {
+			searchSources++
+		}
+	}
+	if searchSources > maxSearchSources {
+		return fmt.Errorf("%d search sources defined; the limit is %d — each search source is one request per poll against GitHub's search rate limit (30 requests/min), and %d leaves headroom for manual refreshes (notifications sources are not capped)", searchSources, maxSearchSources, maxSearchSources)
+	}
+
 	profileIDs := make(map[string]bool)
-	feeds := 0
-	for _, def := range defs {
+	for _, def := range file.Profiles {
 		if def.ID == "" {
 			return fmt.Errorf("profile %q: id is required", def.Name)
 		}
@@ -92,8 +147,7 @@ func validateProfiles(defs []ProfileDef) error {
 
 		feedIDs := make(map[string]bool)
 		for _, feedDef := range def.Feeds {
-			feeds++
-			if err := validateFeed(def.ID, feedDef); err != nil {
+			if err := validateFeed(def.ID, feedDef, sourceIDs); err != nil {
 				return err
 			}
 			if feedIDs[feedDef.ID] {
@@ -102,113 +156,227 @@ func validateProfiles(defs []ProfileDef) error {
 			feedIDs[feedDef.ID] = true
 		}
 	}
-	if feeds > maxFeeds {
-		return fmt.Errorf("%d feeds defined; the limit is %d — each feed is one GitHub API request per poll, and more than %d would exceed the search rate limit (30 requests/min)", feeds, maxFeeds, maxFeeds)
+	return nil
+}
+
+func validateSource(def SourceDef) error {
+	if def.ID == "" {
+		return fmt.Errorf("source: id is required")
+	}
+	switch def.Kind {
+	case "search":
+		if strings.TrimSpace(def.Query) == "" {
+			return fmt.Errorf("source %q: kind \"search\" requires a query", def.ID)
+		}
+		if def.Limit > maxSearchLimit {
+			return fmt.Errorf("source %q: limit %d exceeds the search API page cap of %d", def.ID, def.Limit, maxSearchLimit)
+		}
+	case "notifications":
+		if def.Query != "" {
+			return fmt.Errorf("source %q: kind \"notifications\" takes no query", def.ID)
+		}
+		if def.Limit > maxNotificationsLimit {
+			return fmt.Errorf("source %q: limit %d exceeds the notifications API page cap of %d", def.ID, def.Limit, maxNotificationsLimit)
+		}
+	default:
+		return fmt.Errorf("source %q: unknown kind %q (want \"search\" or \"notifications\")", def.ID, def.Kind)
+	}
+	if def.Limit < 0 {
+		return fmt.Errorf("source %q: limit must not be negative", def.ID)
 	}
 	return nil
 }
 
-func validateFeed(profileID string, def FeedDef) error {
+func validateFeed(profileID string, def FeedDef, sourceIDs map[string]bool) error {
 	if def.ID == "" {
 		return fmt.Errorf("profile %q: feed %q: id is required", profileID, def.Name)
 	}
 	if def.Name == "" {
 		return fmt.Errorf("profile %q: feed %q: name is required", profileID, def.ID)
 	}
-	switch def.Kind {
-	case "search":
-		if strings.TrimSpace(def.Query) == "" {
-			return fmt.Errorf("profile %q: feed %q: kind \"search\" requires a query", profileID, def.ID)
-		}
-	case "notifications":
-		if def.Query != "" {
-			return fmt.Errorf("profile %q: feed %q: kind \"notifications\" takes no query", profileID, def.ID)
-		}
-	default:
-		return fmt.Errorf("profile %q: feed %q: unknown kind %q (want \"search\" or \"notifications\")", profileID, def.ID, def.Kind)
+	if len(def.Sources) == 0 {
+		return fmt.Errorf("profile %q: feed %q: at least one source is required", profileID, def.ID)
 	}
-	for _, pattern := range append(append([]string{}, def.Repos...), def.ExcludeRepos...) {
-		if !doublestar.ValidatePattern(pattern) {
-			return fmt.Errorf("profile %q: feed %q: invalid repo glob %q", profileID, def.ID, pattern)
+	for _, sourceID := range def.Sources {
+		if !sourceIDs[sourceID] {
+			return fmt.Errorf("profile %q: feed %q: unknown source %q (not defined under top-level sources:)", profileID, def.ID, sourceID)
+		}
+	}
+	if err := validateFilters(def.Filters); err != nil {
+		return fmt.Errorf("profile %q: feed %q: %w", profileID, def.ID, err)
+	}
+	return nil
+}
+
+const configHeader = `# Hive Desktop feeds — sources, workspaces, and feeds, as code.
+# Edited by hand or by the app; changes apply live, no restart needed.
+# Sources are the GitHub API cost (deduplicated, polled about once a
+# minute); feeds are free client-side filtered views over them.
+`
+
+// appendProfileToConfig returns the config document with the profile appended
+// to the top-level profiles sequence, preserving comments and formatting.
+func appendProfileToConfig(data []byte, def ProfileDef) ([]byte, error) {
+	return appendTopLevelEntry(data, "profiles", def)
+}
+
+// appendSourceToConfig returns the config document with the source appended
+// to the top-level sources sequence, preserving comments and formatting.
+func appendSourceToConfig(data []byte, def SourceDef) ([]byte, error) {
+	return appendTopLevelEntry(data, "sources", def)
+}
+
+// appendTopLevelEntry appends value to the top-level sequence under key,
+// creating the key when missing. It edits the YAML node tree instead of
+// re-marshalling the whole document so comments and formatting in a
+// hand-managed file survive an app-side edit.
+func appendTopLevelEntry(data []byte, key string, value any) ([]byte, error) {
+	var valueNode yaml.Node
+	if err := valueNode.Encode(value); err != nil {
+		return nil, fmt.Errorf("encode %s entry: %w", key, err)
+	}
+
+	if len(bytes.TrimSpace(data)) == 0 {
+		doc := &yaml.Node{Kind: yaml.DocumentNode, Content: []*yaml.Node{{
+			Kind: yaml.MappingNode,
+			Content: []*yaml.Node{
+				{Kind: yaml.ScalarNode, Value: key},
+				{Kind: yaml.SequenceNode, Content: []*yaml.Node{&valueNode}},
+			},
+		}}}
+		out, err := encodeConfigNode(doc)
+		if err != nil {
+			return nil, err
+		}
+		return append([]byte(configHeader), out...), nil
+	}
+
+	doc, root, err := parseConfigNode(data)
+	if err != nil {
+		return nil, err
+	}
+	if seq := mappingValue(root, key); seq != nil {
+		if seq.Kind == yaml.SequenceNode {
+			seq.Content = append(seq.Content, &valueNode)
+		} else { // key present with a null value
+			*seq = yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{&valueNode}}
+		}
+		return encodeConfigNode(doc)
+	}
+
+	root.Content = append(root.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: key},
+		&yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{&valueNode}},
+	)
+	return encodeConfigNode(doc)
+}
+
+// appendFeedToConfig appends the feed to the profile's feeds sequence,
+// preserving comments and formatting elsewhere in the document.
+func appendFeedToConfig(data []byte, profileID string, def FeedDef) ([]byte, error) {
+	doc, profileNode, err := findProfileNode(data, profileID)
+	if err != nil {
+		return nil, err
+	}
+
+	var feedNode yaml.Node
+	if err := feedNode.Encode(def); err != nil {
+		return nil, fmt.Errorf("encode feed: %w", err)
+	}
+
+	if seq := mappingValue(profileNode, "feeds"); seq != nil {
+		if seq.Kind == yaml.SequenceNode {
+			seq.Content = append(seq.Content, &feedNode)
+		} else { // "feeds:" with a null value
+			*seq = yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{&feedNode}}
+		}
+		return encodeConfigNode(doc)
+	}
+
+	profileNode.Content = append(profileNode.Content,
+		&yaml.Node{Kind: yaml.ScalarNode, Value: "feeds"},
+		&yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{&feedNode}},
+	)
+	return encodeConfigNode(doc)
+}
+
+// updateFeedInConfig replaces the feed's mapping node in place. Comments
+// elsewhere in the document survive; comments attached to the replaced feed
+// node itself are lost — the node is re-encoded wholesale.
+func updateFeedInConfig(data []byte, profileID, feedID string, def FeedDef) ([]byte, error) {
+	doc, profileNode, err := findProfileNode(data, profileID)
+	if err != nil {
+		return nil, err
+	}
+	feeds := mappingValue(profileNode, "feeds")
+	if feeds == nil || feeds.Kind != yaml.SequenceNode {
+		return nil, fmt.Errorf("profile %q has no feeds", profileID)
+	}
+	feedNode := sequenceEntryByID(feeds, feedID)
+	if feedNode == nil {
+		return nil, fmt.Errorf("feed %q not found in profile %q", feedID, profileID)
+	}
+
+	var replacement yaml.Node
+	if err := replacement.Encode(def); err != nil {
+		return nil, fmt.Errorf("encode feed: %w", err)
+	}
+	*feedNode = replacement
+	return encodeConfigNode(doc)
+}
+
+// findProfileNode parses the document and locates the profile's mapping node.
+func findProfileNode(data []byte, profileID string) (doc, profile *yaml.Node, err error) {
+	doc, root, err := parseConfigNode(data)
+	if err != nil {
+		return nil, nil, err
+	}
+	profiles := mappingValue(root, "profiles")
+	if profiles == nil || profiles.Kind != yaml.SequenceNode {
+		return nil, nil, fmt.Errorf("profile %q not found: config has no profiles", profileID)
+	}
+	profileNode := sequenceEntryByID(profiles, profileID)
+	if profileNode == nil {
+		return nil, nil, fmt.Errorf("profile %q not found", profileID)
+	}
+	return doc, profileNode, nil
+}
+
+// parseConfigNode parses the raw document into its node tree and returns the
+// document node plus the root mapping.
+func parseConfigNode(data []byte) (doc, root *yaml.Node, err error) {
+	doc = &yaml.Node{}
+	if err := yaml.Unmarshal(data, doc); err != nil {
+		return nil, nil, fmt.Errorf("parse profiles config: %w", err)
+	}
+	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
+		return nil, nil, fmt.Errorf("profiles config is not a mapping")
+	}
+	return doc, doc.Content[0], nil
+}
+
+// mappingValue returns the value node for key in a mapping node, or nil.
+func mappingValue(mapping *yaml.Node, key string) *yaml.Node {
+	for i := 0; i+1 < len(mapping.Content); i += 2 {
+		if mapping.Content[i].Value == key {
+			return mapping.Content[i+1]
 		}
 	}
 	return nil
 }
 
-// matchesRepo reports whether an item's repo ("owner/name") passes the
-// feed's include/exclude globs. Excludes win; an empty include list means
-// include everything.
-func (d FeedDef) matchesRepo(repo string) bool {
-	if matchAnyGlob(d.ExcludeRepos, repo) {
-		return false
-	}
-	if len(d.Repos) == 0 {
-		return true
-	}
-	return matchAnyGlob(d.Repos, repo)
-}
-
-func matchAnyGlob(patterns []string, repo string) bool {
-	for _, pattern := range patterns {
-		// Match errors only on malformed patterns, which validation
-		// rejected at load; a malformed pattern here just doesn't match.
-		if ok, err := doublestar.Match(pattern, repo); err == nil && ok {
-			return true
-		}
-	}
-	return false
-}
-
-const configHeader = `# Hive Desktop profiles — workspaces and their feeds, as code.
-# Edited by hand or by the app; changes apply live, no restart needed.
-# Each feed is one GitHub API request per poll (about once a minute).
-`
-
-// appendProfileToConfig returns the config document with the profile
-// appended. It edits the YAML node tree instead of re-marshalling the whole
-// document so comments and formatting in a hand-managed file survive an
-// app-side profile creation.
-func appendProfileToConfig(data []byte, def ProfileDef) ([]byte, error) {
-	if len(bytes.TrimSpace(data)) == 0 {
-		out, err := yaml.Marshal(configFile{Profiles: []ProfileDef{def}})
-		if err != nil {
-			return nil, fmt.Errorf("encode profiles config: %w", err)
-		}
-		return append([]byte(configHeader), out...), nil
-	}
-
-	var doc yaml.Node
-	if err := yaml.Unmarshal(data, &doc); err != nil {
-		return nil, fmt.Errorf("parse profiles config: %w", err)
-	}
-	if len(doc.Content) == 0 || doc.Content[0].Kind != yaml.MappingNode {
-		return nil, fmt.Errorf("profiles config is not a mapping")
-	}
-
-	var profileNode yaml.Node
-	if err := profileNode.Encode(def); err != nil {
-		return nil, fmt.Errorf("encode profile: %w", err)
-	}
-
-	root := doc.Content[0]
-	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value != "profiles" {
+// sequenceEntryByID returns the sequence's mapping entry whose "id" scalar
+// equals id, or nil.
+func sequenceEntryByID(seq *yaml.Node, id string) *yaml.Node {
+	for _, entry := range seq.Content {
+		if entry.Kind != yaml.MappingNode {
 			continue
 		}
-		seq := root.Content[i+1]
-		if seq.Kind == yaml.SequenceNode {
-			seq.Content = append(seq.Content, &profileNode)
-		} else { // "profiles:" with a null value
-			*seq = yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{&profileNode}}
+		if idNode := mappingValue(entry, "id"); idNode != nil && idNode.Value == id {
+			return entry
 		}
-		return encodeConfigNode(&doc)
 	}
-
-	root.Content = append(root.Content,
-		&yaml.Node{Kind: yaml.ScalarNode, Value: "profiles"},
-		&yaml.Node{Kind: yaml.SequenceNode, Content: []*yaml.Node{&profileNode}},
-	)
-	return encodeConfigNode(&doc)
+	return nil
 }
 
 func encodeConfigNode(doc *yaml.Node) ([]byte, error) {
@@ -227,19 +395,33 @@ func encodeConfigNode(doc *yaml.Node) ([]byte, error) {
 // ExampleConfig is what the UI and copy-prompt show before the file exists:
 // a concrete, commented starting point rather than an empty pane.
 func ExampleConfig() string {
-	return configHeader + `profiles:
+	return configHeader + `sources:
+  - id: my-prs
+    kind: search
+    query: "is:open is:pr author:@me archived:false"
+  - id: assigned
+    kind: search
+    query: "is:open assignee:@me archived:false"
+  - id: inbox
+    kind: notifications
+profiles:
   - id: triage
     name: Triage
     feeds:
       - id: my-open-prs
         name: My open PRs
-        kind: search
-        query: "is:open is:pr author:@me archived:false"
+        sources: [my-prs]
       - id: notifications-inbox
         name: Notifications inbox
-        kind: notifications
-        # Optional owner/repo globs, matched client-side (no extra API cost):
-        # repos: ["colonyops/*"]
-        # exclude_repos: ["colonyops/noisy-repo"]
+        sources: [inbox]
+        # Optional client-side filters (no API cost). Groups AND together,
+        # values within a group OR, excludes win over includes:
+        filters:
+          exclude_authors: ["dependabot[bot]"]
+          # repos: ["colonyops/*"]
+          # reasons: [mention, review_requested]
+      - id: assigned-across-org
+        name: Assigned across org
+        sources: [assigned]
 `
 }

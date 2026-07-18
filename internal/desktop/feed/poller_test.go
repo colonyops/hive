@@ -5,7 +5,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -17,10 +20,12 @@ import (
 )
 
 // mutableAPIServer serves a single search item whose title can be swapped,
-// and an empty notifications inbox.
+// and an empty notifications inbox. It counts search requests so source
+// deduplication across profiles is observable.
 type mutableAPIServer struct {
-	mu    sync.Mutex
-	title string
+	mu          sync.Mutex
+	title       string
+	searchCalls atomic.Int32
 }
 
 func (m *mutableAPIServer) setTitle(title string) {
@@ -32,6 +37,7 @@ func (m *mutableAPIServer) setTitle(title string) {
 func (m *mutableAPIServer) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/search/issues", func(w http.ResponseWriter, _ *http.Request) {
+		m.searchCalls.Add(1)
 		m.mu.Lock()
 		title := m.title
 		m.mu.Unlock()
@@ -111,6 +117,55 @@ func TestPollOnceNotifiesChangedProfiles(t *testing.T) {
 	api.setTitle("v2-renamed")
 	poller.PollOnce(t.Context())
 	assert.Equal(t, []string{def.ID, def.ID}, notified)
+}
+
+// TestPollOnceDedupesSourcesAcrossProfiles is the point of the source split:
+// two profiles reading the same source cost one request per poll, and both
+// wake when it changes.
+func TestPollOnceDedupesSourcesAcrossProfiles(t *testing.T) {
+	t.Parallel()
+
+	api := &mutableAPIServer{title: "v1"}
+	server := httptest.NewServer(api.handler())
+	t.Cleanup(server.Close)
+
+	client := github.NewClient(github.WithAPIBase(server.URL))
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "profiles.yaml"), []byte(`sources:
+  - id: shared
+    kind: search
+    query: "is:open involves:@me"
+profiles:
+  - id: one
+    name: One
+    feeds:
+      - {id: f1, name: F1, sources: [shared]}
+  - id: two
+    name: Two
+    feeds:
+      - {id: f2, name: F2, sources: [shared]}
+      - id: f3
+        name: F3
+        sources: [shared]
+        filters:
+          types: [issue]
+`), 0o600))
+	store := newStoreAt(dir)
+	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
+
+	var notified []string
+	poller := NewPoller(provider, time.Hour, func(profileID string) {
+		notified = append(notified, profileID)
+	}, zerolog.Nop())
+
+	poller.PollOnce(t.Context())
+	assert.Equal(t, int32(1), api.searchCalls.Load(), "three feeds in two profiles, one source, one request")
+	assert.Equal(t, []string{"one", "two"}, notified, "both profiles reference the changed source")
+
+	api.setTitle("v2-renamed")
+	poller.PollOnce(t.Context())
+	assert.Equal(t, int32(2), api.searchCalls.Load())
+	assert.Equal(t, []string{"one", "two", "one", "two"}, notified)
 }
 
 func TestPollerStartStop(t *testing.T) {

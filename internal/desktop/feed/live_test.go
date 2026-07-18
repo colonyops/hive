@@ -5,6 +5,8 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -16,18 +18,51 @@ import (
 	"github.com/colonyops/hive/internal/github"
 )
 
-const testNow = "2026-07-18T12:00:00Z"
+const (
+	testNow          = "2026-07-18T12:00:00Z"
+	testLastModified = "Sat, 18 Jul 2026 11:00:00 GMT"
+)
 
-// liveAPIServer fakes the search and notifications endpoints. The search
-// response includes one PR shared with the notifications inbox so dedupe is
-// observable.
-func liveAPIServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
+// testClock is a settable clock for provider TTL tests.
+type testClock struct {
+	mu  sync.Mutex
+	now time.Time
+}
+
+func newTestClock(t *testing.T) *testClock {
 	t.Helper()
+	now, err := time.Parse(time.RFC3339, testNow)
+	require.NoError(t, err)
+	return &testClock{now: now}
+}
 
-	var searchCalls atomic.Int32
+func (c *testClock) Now() time.Time {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.now
+}
+
+func (c *testClock) Advance(d time.Duration) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.now = c.now.Add(d)
+}
+
+// fakeAPI fakes the search and notifications endpoints. The search response
+// includes one PR shared with the notifications inbox so dedupe is
+// observable. Notifications support the conditional-GET loop: a request
+// carrying the current Last-Modified answers 304.
+type fakeAPI struct {
+	searchCalls  atomic.Int32
+	notifCalls   atomic.Int32
+	notifFull    atomic.Int32 // non-304 notification responses
+	pollInterval atomic.Int32 // X-Poll-Interval value; 0 omits the header
+}
+
+func (f *fakeAPI) handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/search/issues", func(w http.ResponseWriter, r *http.Request) {
-		searchCalls.Add(1)
+		f.searchCalls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		switch r.URL.Query().Get("q") {
 		case "is:open is:pr author:@me archived:false":
@@ -55,8 +90,18 @@ func liveAPIServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 			]}`))
 		}
 	})
-	mux.HandleFunc("/notifications", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/notifications", func(w http.ResponseWriter, r *http.Request) {
+		f.notifCalls.Add(1)
+		if interval := f.pollInterval.Load(); interval > 0 {
+			w.Header().Set("X-Poll-Interval", strconv.Itoa(int(interval)))
+		}
+		if r.Header.Get("If-Modified-Since") == testLastModified {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+		f.notifFull.Add(1)
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Last-Modified", testLastModified)
 		_, _ = w.Write([]byte(`[
 			{"id":"n1","unread":true,"reason":"review_requested","updated_at":"2026-07-18T11:00:00Z",
 			 "subject":{"title":"Fix spawn env","url":"https://api.github.com/repos/colonyops/hive/pulls/42","type":"PullRequest"},
@@ -69,22 +114,21 @@ func liveAPIServer(t *testing.T) (*httptest.Server, *atomic.Int32) {
 			 "repository":{"full_name":"colonyops/hive"}}
 		]`))
 	})
-
-	server := httptest.NewServer(mux)
-	t.Cleanup(server.Close)
-	return server, &searchCalls
+	return mux
 }
 
-func newLiveProviderForTest(t *testing.T) (*LiveProvider, *Store, *atomic.Int32) {
+func newLiveProviderForTest(t *testing.T) (*LiveProvider, *Store, *fakeAPI, *testClock) {
 	t.Helper()
-	server, searchCalls := liveAPIServer(t)
+	api := &fakeAPI{}
+	server := httptest.NewServer(api.handler())
+	t.Cleanup(server.Close)
+
 	client := github.NewClient(github.WithAPIBase(server.URL))
 	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
-	now, err := time.Parse(time.RFC3339, testNow)
-	require.NoError(t, err)
-	provider.now = func() time.Time { return now }
-	return provider, store, searchCalls
+	clock := newTestClock(t)
+	provider.now = clock.Now
+	return provider, store, api, clock
 }
 
 func createTestProfile(t *testing.T, store *Store) ProfileDef {
@@ -97,7 +141,7 @@ func createTestProfile(t *testing.T, store *Store) ProfileDef {
 func TestLiveProviderItemsMergesAndDedupes(t *testing.T) {
 	t.Parallel()
 
-	provider, store, _ := newLiveProviderForTest(t)
+	provider, store, _, _ := newLiveProviderForTest(t)
 	def := createTestProfile(t, store)
 
 	items, err := provider.Items(t.Context(), def.ID, "")
@@ -111,14 +155,15 @@ func TestLiveProviderItemsMergesAndDedupes(t *testing.T) {
 	}
 	assert.Equal(t, []string{"colonyops/hive#42", "colonyops/hive#3", "colonyops/hive#9", "colonyops/docs#7"}, ids)
 
-	// PR#42 exists in both the search feed (10:00) and the notifications
+	// PR#42 exists in both the my-prs source (10:00) and the notifications
 	// inbox (11:00): the newer notification copy wins, with the author
-	// backfilled from the search copy.
+	// backfilled from the search copy and the reason carried on the item.
 	pr := items[0]
 	assert.Equal(t, "PR", pr.Kind)
 	assert.Equal(t, "colonyops/hive", pr.Repo)
 	assert.Equal(t, 42, pr.Num)
 	assert.Equal(t, "hayden", pr.Author)
+	assert.Equal(t, "review_requested", pr.Reason)
 	assert.Equal(t, "1h", pr.Age)
 	assert.Equal(t, []string{"review requested"}, pr.Labels)
 	assert.True(t, pr.Unread)
@@ -128,13 +173,15 @@ func TestLiveProviderItemsMergesAndDedupes(t *testing.T) {
 
 	// Read notification arrives read; search items start unread.
 	assert.False(t, items[1].Unread, "read notification stays read")
+	assert.Equal(t, "mention", items[1].Reason)
 	assert.True(t, items[2].Unread)
+	assert.Empty(t, items[2].Reason, "search-only item has no reason")
 }
 
 func TestLiveProviderSingleFeedAndUnknownFeed(t *testing.T) {
 	t.Parallel()
 
-	provider, store, _ := newLiveProviderForTest(t)
+	provider, store, _, _ := newLiveProviderForTest(t)
 	def := createTestProfile(t, store)
 
 	items, err := provider.Items(t.Context(), def.ID, "my-open-prs")
@@ -152,7 +199,7 @@ func TestLiveProviderSingleFeedAndUnknownFeed(t *testing.T) {
 func TestLiveProviderMarkReadClearsUnread(t *testing.T) {
 	t.Parallel()
 
-	provider, store, _ := newLiveProviderForTest(t)
+	provider, store, _, _ := newLiveProviderForTest(t)
 	def := createTestProfile(t, store)
 
 	items, err := provider.Items(t.Context(), def.ID, "")
@@ -169,7 +216,7 @@ func TestLiveProviderMarkReadClearsUnread(t *testing.T) {
 func TestLiveProviderProfilesCounts(t *testing.T) {
 	t.Parallel()
 
-	provider, store, _ := newLiveProviderForTest(t)
+	provider, store, _, _ := newLiveProviderForTest(t)
 	def := createTestProfile(t, store)
 
 	profiles, err := provider.Profiles(t.Context())
@@ -196,19 +243,121 @@ func TestLiveProviderProfilesCounts(t *testing.T) {
 func TestLiveProviderCachesWithinTTL(t *testing.T) {
 	t.Parallel()
 
-	provider, store, searchCalls := newLiveProviderForTest(t)
+	provider, store, api, _ := newLiveProviderForTest(t)
 	def := createTestProfile(t, store)
 
 	_, err := provider.Items(t.Context(), def.ID, "my-open-prs")
 	require.NoError(t, err)
 	_, err = provider.Items(t.Context(), def.ID, "my-open-prs")
 	require.NoError(t, err)
-	assert.Equal(t, int32(1), searchCalls.Load(), "second read within TTL hits the cache")
+	assert.Equal(t, int32(1), api.searchCalls.Load(), "second read within TTL hits the cache")
 
 	provider.Invalidate()
 	_, err = provider.Items(t.Context(), def.ID, "my-open-prs")
 	require.NoError(t, err)
-	assert.Equal(t, int32(2), searchCalls.Load(), "invalidate forces a refetch")
+	assert.Equal(t, int32(2), api.searchCalls.Load(), "invalidate forces a refetch")
+}
+
+func TestLiveProviderSharedSourceSingleFetch(t *testing.T) {
+	t.Parallel()
+
+	api := &fakeAPI{}
+	server := httptest.NewServer(api.handler())
+	t.Cleanup(server.Close)
+	client := github.NewClient(github.WithAPIBase(server.URL))
+	dir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "profiles.yaml"), []byte(`sources:
+  - id: my-work
+    kind: search
+    query: "is:open is:pr author:@me archived:false"
+  - id: my-work-twin # identical acquisition: same canonical key, one request
+    kind: search
+    query: "is:open is:pr author:@me archived:false"
+profiles:
+  - id: work
+    name: Work
+    feeds:
+      - id: all
+        name: All
+        sources: [my-work]
+      - id: hive-only
+        name: Hive only
+        sources: [my-work-twin]
+        filters:
+          repos: ["colonyops/hive"]
+`), 0o600))
+	store := newStoreAt(dir)
+	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
+	provider.now = newTestClock(t).Now
+
+	// Materializing the whole profile touches both feeds — and both source
+	// defs — but they share one canonical source key: one request.
+	items, err := provider.Items(t.Context(), "work", "")
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	assert.Equal(t, int32(1), api.searchCalls.Load(), "two feeds over one source cost one request")
+
+	filtered, err := provider.Items(t.Context(), "work", "hive-only")
+	require.NoError(t, err)
+	require.Len(t, filtered, 1)
+	assert.Equal(t, "colonyops/hive#42", filtered[0].ID)
+	assert.Equal(t, int32(1), api.searchCalls.Load(), "filtered view reads the same cache")
+}
+
+func TestLiveProviderNotificationsConditionalFlow(t *testing.T) {
+	t.Parallel()
+
+	provider, store, api, clock := newLiveProviderForTest(t)
+	def := createTestProfile(t, store)
+
+	items, err := provider.Items(t.Context(), def.ID, "notifications-inbox")
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	assert.Equal(t, int32(1), api.notifCalls.Load())
+	assert.Equal(t, int32(1), api.notifFull.Load())
+
+	// Within the 60s poll floor: served from cache, no request at all.
+	clock.Advance(30 * time.Second)
+	_, err = provider.Items(t.Context(), def.ID, "notifications-inbox")
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), api.notifCalls.Load(), "poll floor gates the fetch")
+
+	// Past the floor: a conditional request goes out and answers 304; the
+	// cached items survive.
+	clock.Advance(31 * time.Second)
+	items, err = provider.Items(t.Context(), def.ID, "notifications-inbox")
+	require.NoError(t, err)
+	require.Len(t, items, 2)
+	assert.Equal(t, int32(2), api.notifCalls.Load(), "conditional refetch past the floor")
+	assert.Equal(t, int32(1), api.notifFull.Load(), "304 keeps the cached items")
+}
+
+func TestRefreshHonorsNotificationsPollInterval(t *testing.T) {
+	t.Parallel()
+
+	provider, store, api, clock := newLiveProviderForTest(t)
+	api.pollInterval.Store(300)
+	def := createTestProfile(t, store)
+
+	changed, err := provider.Refresh(t.Context(), def.ID)
+	require.NoError(t, err)
+	assert.True(t, changed, "first refresh populates the cache")
+	require.Equal(t, int32(1), api.notifCalls.Load())
+	searchCalls := api.searchCalls.Load()
+
+	// A manual refresh bypasses the search TTL but not X-Poll-Interval.
+	clock.Advance(2 * time.Minute)
+	_, err = provider.Refresh(t.Context(), def.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int32(1), api.notifCalls.Load(), "notifications wait out X-Poll-Interval")
+	assert.Equal(t, searchCalls+2, api.searchCalls.Load(), "search sources refetch on manual refresh")
+
+	// Past the server-mandated interval the conditional request goes out.
+	clock.Advance(4 * time.Minute)
+	_, err = provider.Refresh(t.Context(), def.ID)
+	require.NoError(t, err)
+	assert.Equal(t, int32(2), api.notifCalls.Load())
+	assert.Equal(t, int32(1), api.notifFull.Load(), "unchanged inbox answers 304")
 }
 
 // flakyAPIServer serves one search item and an empty inbox, and fails every
@@ -254,18 +403,17 @@ func TestLiveProviderStaleCacheOnTransientError(t *testing.T) {
 	client := github.NewClient(github.WithAPIBase(server.URL))
 	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
-	current, err := time.Parse(time.RFC3339, testNow)
-	require.NoError(t, err)
-	provider.now = func() time.Time { return current }
+	clock := newTestClock(t)
+	provider.now = clock.Now
 	def := createTestProfile(t, store)
 
 	items, err := provider.Items(t.Context(), def.ID, "")
 	require.NoError(t, err)
 	require.Len(t, items, 1)
 
-	// Transient server failure past the TTL: stale cache keeps the feed up.
+	// Transient server failure past every TTL: stale cache keeps the feed up.
 	failStatus.Store(http.StatusInternalServerError)
-	current = current.Add(liveCacheTTL + time.Second)
+	clock.Advance(notificationsMinPoll + time.Second)
 	items, err = provider.Items(t.Context(), def.ID, "")
 	require.NoError(t, err)
 	assert.Len(t, items, 1, "stale cache serves through a transient error")
@@ -273,7 +421,7 @@ func TestLiveProviderStaleCacheOnTransientError(t *testing.T) {
 	// Auth failure past the TTL: pass through so the reconnect state shows
 	// instead of an indefinitely stale feed.
 	failStatus.Store(http.StatusUnauthorized)
-	current = current.Add(liveCacheTTL + time.Second)
+	clock.Advance(notificationsMinPoll + time.Second)
 	_, err = provider.Items(t.Context(), def.ID, "")
 	require.ErrorIs(t, err, github.ErrUnauthorized)
 }
@@ -281,7 +429,9 @@ func TestLiveProviderStaleCacheOnTransientError(t *testing.T) {
 func TestLiveProviderRequiresToken(t *testing.T) {
 	t.Parallel()
 
-	server, _ := liveAPIServer(t)
+	api := &fakeAPI{}
+	server := httptest.NewServer(api.handler())
+	t.Cleanup(server.Close)
 	client := github.NewClient(github.WithAPIBase(server.URL))
 	store := newStoreAt(t.TempDir())
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore(""), store, zerolog.Nop())
@@ -305,21 +455,50 @@ func TestSlugifyAndShortAge(t *testing.T) {
 	assert.Equal(t, "2w", shortAge(15*24*time.Hour))
 }
 
+func TestLiveProviderCreateFeedMaterializes(t *testing.T) {
+	t.Parallel()
+
+	provider, store, _, _ := newLiveProviderForTest(t)
+	def := createTestProfile(t, store)
+
+	summary, err := provider.CreateFeed(t.Context(), def.ID, FeedDef{
+		Name:    "Hive PRs",
+		Sources: []string{"my-prs"},
+		Filters: FilterDef{Repos: []string{"colonyops/hive"}},
+	})
+	require.NoError(t, err)
+	assert.Equal(t, "hive-prs", summary.ID)
+	assert.Equal(t, "Hive PRs", summary.Name)
+	assert.Equal(t, 1, summary.Count, "filters apply to the materialized summary")
+	assert.Equal(t, 1, summary.NewCount)
+
+	items, err := provider.Items(t.Context(), def.ID, "hive-prs")
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, "colonyops/hive#42", items[0].ID)
+}
+
 func TestLiveProviderRepoFilters(t *testing.T) {
 	t.Parallel()
 
-	server, _ := liveAPIServer(t)
+	api := &fakeAPI{}
+	server := httptest.NewServer(api.handler())
+	t.Cleanup(server.Close)
 	client := github.NewClient(github.WithAPIBase(server.URL))
 	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "profiles.yaml"), []byte(`profiles:
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "profiles.yaml"), []byte(`sources:
+  - id: my-prs
+    kind: search
+    query: "is:open is:pr author:@me archived:false"
+profiles:
   - id: work
     name: Work
     feeds:
       - id: prs
         name: My PRs
-        kind: search
-        query: "is:open is:pr author:@me archived:false"
-        exclude_repos: ["colonyops/docs"]
+        sources: [my-prs]
+        filters:
+          exclude_repos: ["colonyops/docs"]
 `), 0o600))
 	store := newStoreAt(dir)
 	provider := NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())

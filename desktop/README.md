@@ -102,49 +102,84 @@ re-reads counts and, when it is the active profile, items, and
 profiles-config reload.
 
 The feed service delegates to a `feed.Provider`: mock fixtures in
-`HIVE_DESKTOP_MOCK` modes, or the GitHub-backed `LiveProvider` (search-query
-feeds plus the notifications inbox, deduplicated by `repo#num`, 30s fetch
-cache, app-local read state under the hive data dir's `desktop/`
-subdirectory). In live mode a poller refreshes every profile each 60s and
-emits `feed:updated` on change; the titlebar's polling indicator reflects
-the active profile's unread count.
+`HIVE_DESKTOP_MOCK` modes, or the GitHub-backed `LiveProvider`. Live data is
+acquired per **source** (a search query or the notifications inbox) and
+cached by what is requested — kind + query + limit — so any number of feeds
+and profiles reading the same source share one request. Feeds are client-side
+filtered views over sources, deduplicated by `repo#num`, with app-local read
+state under the hive data dir's `desktop/` subdirectory. In live mode a
+poller refreshes the distinct source set across all profiles each 60s and
+emits `feed:updated` per profile whose sources changed; the titlebar's
+polling indicator reflects the active profile's unread count.
 
-## Profiles and feeds as code
+## Sources, profiles, and feeds as code
 
-Profiles ("workspaces") and their feeds are defined in a user-editable YAML
-file at `$XDG_CONFIG_HOME/hive/desktop/profiles.yaml` (`~/.config` fallback;
-`HIVE_DESKTOP_CONFIG` overrides the path) — deliberately in the config dir,
-not the data dir, so it can live in a dotfiles repo. App-local state
-(read-state) stays in the data dir.
+Sources, profiles ("workspaces"), and their feeds are defined in a
+user-editable YAML file at `$XDG_CONFIG_HOME/hive/desktop/profiles.yaml`
+(`~/.config` fallback; `HIVE_DESKTOP_CONFIG` overrides the path) —
+deliberately in the config dir, not the data dir, so it can live in a
+dotfiles repo. App-local state (read-state) stays in the data dir.
+
+Sources acquire data from the GitHub API; feeds are client-side filtered
+views over one or more sources. Only sources cost API requests — feeds are
+unlimited and free.
 
 ```yaml
+sources:
+  - id: my-work               # unique across sources
+    kind: search              # "search" | "notifications"
+    query: "is:open involves:@me archived:false"   # search only
+    limit: 50                 # optional; search: default 50 max 100,
+                              # notifications: default 50 max 50 (API cap)
+  - id: inbox
+    kind: notifications
 profiles:
-  - id: triage            # stable slug; renaming makes it a new profile
+  - id: triage                # stable slug; renaming makes it a new profile
     name: Triage
     feeds:
       - id: my-open-prs
         name: My open PRs
-        kind: search      # "search" | "notifications"
-        query: "is:open is:pr author:@me archived:false"
+        sources: [my-work]    # at least one; ids must exist under sources
+        filters:              # optional; groups AND, values OR, excludes win
+          types: [pr]                     # pr | issue
+          repos: ["colonyops/*"]          # owner/repo doublestar globs
+          exclude_repos: ["colonyops/x"]
+          authors: ["hay-kot"]            # case-insensitive; [ ] literal
+          exclude_authors: ["*[bot]"]
+          labels: ["bug", "area/*"]       # any item label matches any glob
+          exclude_labels: ["wontfix"]
+          reasons: [mention, review_requested]  # notification reasons
       - id: notifications-inbox
         name: Notifications inbox
-        kind: notifications
-        repos: ["colonyops/*"]        # optional owner/repo globs (doublestar)
-        exclude_repos: ["colonyops/x"]
+        sources: [inbox]
 ```
 
-Parsing is strict (unknown keys are errors) and validated: unique ids,
-kind-specific query rules, glob syntax, and a 30-feed cap — each feed is one
-GitHub API request per poll cycle, and more would exceed the authenticated
-search rate limit (30 requests/min). `repos`/`exclude_repos` filter fetched
-items client-side, so filters never add API requests.
+Parsing is strict (unknown keys are errors; configs in the old
+feed-level-kind/query schema fail with a hint) and validated: unique ids,
+kind-specific query and limit rules, glob syntax, and the types/reasons
+vocabularies. A `reasons` filter matches the notification reason, so items
+known only from a search source never match it — reasons belong on feeds
+that read a notifications source.
+
+Rate-limit model: at most **25 search sources** — each distinct search
+source is one request per poll (about once a minute) against GitHub's
+search bucket of 30 requests/min, and 25 leaves headroom for manual
+refreshes. Identical sources (same kind, query, and limit) deduplicate to
+one request no matter how many feeds or profiles read them. Notifications
+sources are uncapped: they poll the core bucket (5000/hr) with conditional
+`If-Modified-Since` requests — an unchanged inbox answers 304 at no
+rate-limit cost — and honor the server's `X-Poll-Interval` (min 60s) even
+on manual refresh. There is no cap on feeds.
 
 A `ConfigWatcher` (fsnotify on the config's parent directory, debounced)
 hot-reloads the file on external edits: the store re-parses (keeping the
-last-good profiles when the new content is broken), the provider cache is
-invalidated, and `config:updated` wakes the frontend. Creating a profile in
-the app appends to the YAML via node-tree surgery so hand-written comments
-survive. The "Feeds as code" sheet (sidebar FEEDS `+`, or ⌘K → "Edit feeds
+last-good sources and profiles when the new content is broken), the provider
+cache is invalidated, and `config:updated` wakes the frontend. App-side
+writes — creating a profile, source, or feed, and editing a feed — go
+through YAML node-tree surgery so hand-written comments survive (comments
+attached to a replaced feed node itself are lost), and the resulting
+document is validated before it is written: a config that fails validation
+never reaches disk. The "Feeds as code" sheet (sidebar FEEDS `+`, or ⌘K → "Edit feeds
 as code…") shows the file, its validity, and a **Copy prompt** button that
 puts a schema-complete prompt on the clipboard for a coding agent to edit
 the config on the user's behalf.

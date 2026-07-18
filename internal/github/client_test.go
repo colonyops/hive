@@ -154,7 +154,11 @@ func TestNotifications(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		assert.Equal(t, "/notifications", r.URL.Path)
 		assert.Equal(t, "true", r.URL.Query().Get("all"))
+		assert.Equal(t, "50", r.URL.Query().Get("per_page"))
+		assert.Empty(t, r.Header.Get("If-Modified-Since"), "first poll is unconditional")
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("Last-Modified", "Sat, 18 Jul 2026 08:00:00 GMT")
+		w.Header().Set("X-Poll-Interval", "60")
 		_, _ = w.Write([]byte(`[
 			{
 				"id": "3141",
@@ -168,15 +172,45 @@ func TestNotifications(t *testing.T) {
 	}))
 	defer server.Close()
 
-	notifications, err := NewClient(WithAPIBase(server.URL)).Notifications(t.Context(), 50)
+	result, err := NewClient(WithAPIBase(server.URL)).Notifications(t.Context(), 50, "")
 	require.NoError(t, err)
-	require.Len(t, notifications, 1)
+	require.Len(t, result.Items, 1)
+	assert.False(t, result.NotModified)
+	assert.Equal(t, "Sat, 18 Jul 2026 08:00:00 GMT", result.LastModified)
+	assert.Equal(t, 60, result.PollInterval)
 
-	n := notifications[0]
+	n := result.Items[0]
 	assert.True(t, n.Unread)
 	assert.Equal(t, "PullRequest", n.Subject.Type)
 	assert.Equal(t, 42, n.Subject.Number())
 	assert.Equal(t, "colonyops/hive", n.Repository.FullName)
+}
+
+func TestNotificationsConditionalNotModified(t *testing.T) {
+	t.Parallel()
+
+	const lastModified = "Sat, 18 Jul 2026 08:00:00 GMT"
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, lastModified, r.Header.Get("If-Modified-Since"))
+		w.Header().Set("X-Poll-Interval", "120")
+		w.WriteHeader(http.StatusNotModified)
+	}))
+	defer server.Close()
+
+	result, err := NewClient(WithAPIBase(server.URL)).Notifications(t.Context(), 50, lastModified)
+	require.NoError(t, err)
+	assert.True(t, result.NotModified)
+	assert.Empty(t, result.Items)
+	assert.Equal(t, 120, result.PollInterval)
+}
+
+func TestParsePollInterval(t *testing.T) {
+	t.Parallel()
+
+	assert.Equal(t, 60, parsePollInterval("60"))
+	assert.Equal(t, 0, parsePollInterval(""))
+	assert.Equal(t, 0, parsePollInterval("soon"))
+	assert.Equal(t, 0, parsePollInterval("-5"))
 }
 
 func TestRepoFromAPIURL(t *testing.T) {
