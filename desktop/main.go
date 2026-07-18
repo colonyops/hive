@@ -78,9 +78,12 @@ func main() {
 
 	// Closing the window keeps the app running in the dock and tray; it can be
 	// reopened from either. Quitting is done via Cmd+Q or the tray menu.
-	window.OnWindowEvent(events.Common.WindowClosing, func(e *application.WindowEvent) {
-		e.Cancel()
+	// This must be a hook, not OnWindowEvent: hooks run synchronously before
+	// listeners, so Cancel() reliably aborts Wails' own window-destroy listener,
+	// which otherwise races this callback in a separate goroutine.
+	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		window.Hide()
+		e.Cancel()
 	})
 
 	app.Event.OnApplicationEvent(events.Mac.ApplicationShouldHandleReopen, func(*application.ApplicationEvent) {
