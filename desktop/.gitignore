@@ -5,11 +5,3 @@ frontend/dist/*
 !frontend/dist/.gitkeep
 frontend/node_modules
 build/linux/appimage/build
-build/windows/nsis/MicrosoftEdgeWebview2Setup.exe
-# Mobile generated (per-machine; overlays hold absolute paths)
-build/ios/xcode/overlay.json
-build/ios/xcode/gen/
-build/android/overlay.json
-build/android/gen/
-# Keep the Gradle wrapper binary tracked even when a global ignore excludes JARs.
-!build/android/gradle/wrapper/gradle-wrapper.jar

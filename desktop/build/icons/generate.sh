@@ -33,7 +33,7 @@ render() {
       -define png:color-type=6 "PNG32:$output"
 }
 
-mkdir -p "$build_dir/darwin" "$build_dir/windows" "$build_dir/linux"
+mkdir -p "$build_dir/darwin" "$build_dir/linux"
 
 # macOS requires these exact iconset names, including the @2x representations.
 iconset="$tmpdir/hive.iconset"
@@ -49,15 +49,6 @@ render "$mark" 512 "$iconset/icon_256x256@2x.png"
 render "$mark" 512 "$iconset/icon_512x512.png"
 render "$mark" 1024 "$iconset/icon_512x512@2x.png"
 iconutil -c icns "$iconset" -o "$build_dir/darwin/icons.icns"
-
-# Windows accepts a multi-resolution ICO assembled from these PNG representations.
-for size in 16 24 32 48 64 128 256; do
-  render "$mark" "$size" "$tmpdir/icon-$size.png"
-done
-magick "$tmpdir/icon-16.png" "$tmpdir/icon-24.png" "$tmpdir/icon-32.png" \
-  "$tmpdir/icon-48.png" "$tmpdir/icon-64.png" "$tmpdir/icon-128.png" \
-  "$tmpdir/icon-256.png" -strip -define png:exclude-chunks=date,time \
-  "$build_dir/windows/icon.ico"
 
 # appicon.png is used by Linux AppImage; the package icon below is its 128px peer.
 render "$mark" 512 "$build_dir/appicon.png"
