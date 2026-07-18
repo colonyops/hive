@@ -92,13 +92,14 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await expect(page.getByTestId('feed-editor-source-team-prs')).toBeChecked()
 
   await page.getByTestId('feed-editor-name').fill('Team PRs')
-  await page.getByTestId('feed-editor-filters-toggle').click()
   await page.getByTestId('feed-editor-repos').fill('acme/*')
   await expect(page.getByTestId('feed-editor-yaml')).toContainText('name: Team PRs')
   await page.getByTestId('feed-editor-save').click()
 
   await expect(editor).toBeHidden()
-  await expect(page.getByTestId('toast')).toHaveText('Feed created')
+  // .last(): toasts stack and outlive a single 4s auto-dismiss window, so an
+  // earlier toast from this same test run can still be visible here.
+  await expect(page.getByTestId('toast').last()).toHaveText('Feed created')
   const teamRow = page.locator('[data-testid="sidebar-feed"][data-id="team-prs"]')
   await expect(teamRow).toContainText('Team PRs')
 
@@ -116,6 +117,34 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await page.getByTestId('feed-editor-save').click()
 
   await expect(editor).toBeHidden()
-  await expect(page.getByTestId('toast')).toHaveText('Feed updated')
+  await expect(page.getByTestId('toast').last()).toHaveText('Feed updated')
   await expect(teamRow).toContainText('Team PRs (all)')
+
+  // ── Delete feed: two-step confirm inside the editor ───────────────────────
+  await teamRow.hover()
+  await page.getByTestId('sidebar-feed-edit-team-prs').click()
+  await expect(editor).toBeVisible()
+  await page.getByTestId('feed-editor-delete').click()
+  await expect(page.getByTestId('feed-editor-delete-confirm')).toBeVisible()
+  await page.getByTestId('feed-editor-delete-confirm').click()
+
+  await expect(editor).toBeHidden()
+  await expect(page.getByTestId('toast').last()).toHaveText('Feed deleted')
+  await expect(page.locator('[data-testid="sidebar-feed"][data-id="team-prs"]')).toHaveCount(0)
+
+  // ── Delete profile: hover reveals the header trash icon, modal confirms ───
+  await expect(page.getByTestId('profile-tile')).toHaveCount(2)
+  await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Backend Triage')
+  await page.getByTestId('sidebar-profile-header').hover()
+  await page.getByTestId('sidebar-delete-profile').click()
+
+  const deleteProfileModal = page.getByTestId('delete-profile-modal')
+  await expect(deleteProfileModal).toBeVisible()
+  await expect(deleteProfileModal).toContainText('Backend Triage')
+  await page.getByTestId('delete-profile-confirm').click()
+
+  await expect(deleteProfileModal).toBeHidden()
+  await expect(page.getByTestId('toast').last()).toHaveText('Profile deleted')
+  await expect(page.getByTestId('profile-tile')).toHaveCount(1)
+  await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
 })

@@ -12,6 +12,8 @@ const mocks = vi.hoisted(() => ({
   CreateFeed: vi.fn(),
   CreateProfile: vi.fn(),
   CreateSource: vi.fn(),
+  DeleteFeed: vi.fn(),
+  DeleteProfile: vi.fn(),
   FeedDefFor: vi.fn(),
   Items: vi.fn(),
   MarkRead: vi.fn(),
@@ -37,6 +39,8 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/feedservice', () => ({
   CreateFeed: mocks.CreateFeed,
   CreateProfile: mocks.CreateProfile,
   CreateSource: mocks.CreateSource,
+  DeleteFeed: mocks.DeleteFeed,
+  DeleteProfile: mocks.DeleteProfile,
   FeedDefFor: mocks.FeedDefFor,
   Items: mocks.Items,
   MarkRead: mocks.MarkRead,
@@ -90,6 +94,8 @@ describe('App feed editor wiring', () => {
       { id: 'inbox', kind: 'notifications' },
     ])
     mocks.FeedDefFor.mockResolvedValue({ id: 'desktop', name: 'Desktop UI', sources: ['my-prs'], filters: {} })
+    mocks.DeleteFeed.mockResolvedValue(undefined)
+    mocks.DeleteProfile.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
   })
 
@@ -155,6 +161,48 @@ describe('App feed editor wiring', () => {
       filters: {},
     })
     expect(document.querySelector('[data-testid="feed-editor"]')).toBeNull() // closed on success
+
+    wrapper.unmount()
+  })
+
+  it('deletes a feed from the sidebar editor and closes the drawer', async () => {
+    const wrapper = await mountApp()
+
+    await wrapper.find('[data-testid="sidebar-feed-edit-desktop"]').trigger('click')
+    await flushPromises()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="feed-editor-delete"]')?.click()
+    await flushPromises()
+    document.querySelector<HTMLButtonElement>('[data-testid="feed-editor-delete-confirm"]')?.click()
+    await flushPromises()
+
+    expect(mocks.DeleteFeed).toHaveBeenCalledWith('personal', 'desktop')
+    expect(document.querySelector('[data-testid="feed-editor"]')).toBeNull()
+    // ToastStack isn't teleported, unlike the drawer/modals above — assert
+    // through the wrapper, not document.querySelector.
+    expect(wrapper.find('[data-testid="toast-title"]').text()).toBe('Feed deleted')
+
+    wrapper.unmount()
+  })
+
+  it('deletes the active profile through the sidebar trash icon and confirm modal, then falls back to onboarding when none remain', async () => {
+    const wrapper = await mountApp()
+
+    await wrapper.find('[data-testid="sidebar-delete-profile"]').trigger('click')
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="delete-profile-modal"]')).not.toBeNull()
+
+    mocks.Profiles.mockResolvedValue([])
+    document.querySelector<HTMLButtonElement>('[data-testid="delete-profile-confirm"]')?.click()
+    await flushPromises()
+
+    expect(mocks.DeleteProfile).toHaveBeenCalledWith('personal')
+    expect(document.querySelector('[data-testid="delete-profile-modal"]')).toBeNull()
+    // No profiles left: the same "create your first workspace" step a fresh
+    // install starts from, not a bespoke empty state. OnboardingScreen isn't
+    // teleported, so assert through the wrapper.
+    expect(wrapper.find('[data-testid="onboarding"]').exists()).toBe(true)
 
     wrapper.unmount()
   })

@@ -5,10 +5,11 @@ import IconList from '~icons/lucide/list'
 import IconPencil from '~icons/lucide/pencil'
 import IconPlus from '~icons/lucide/plus'
 import IconRss from '~icons/lucide/rss'
+import IconTrash2 from '~icons/lucide/trash-2'
 import type { Profile, SidebarSelection } from '../types/feed'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
-const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'edit-feeds': []; 'edit-feed': [feedId: string] }>()
+const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'edit-feeds': []; 'edit-feed': [feedId: string]; 'delete-profile': [] }>()
 
 // "All items" and "Unread" are both all-scope; the unread filter picks
 // which entry lights up. A feed entry highlights regardless of the filter.
@@ -27,8 +28,16 @@ function feedSelected(feedId: string): boolean {
 
 <template>
   <aside class="hive-scroll flex w-[250px] shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar">
-    <div class="border-b border-border px-4 pb-3 pt-4">
-      <div class="text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
+    <div class="profile-header border-b border-border px-4 pb-3 pt-4" data-testid="sidebar-profile-header">
+      <div class="flex items-center gap-2">
+        <div class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
+        <button
+          class="profile-delete shrink-0 cursor-pointer text-text-3 hover:text-severity-error"
+          aria-label="Delete profile"
+          data-testid="sidebar-delete-profile"
+          @click="emit('delete-profile')"
+        ><IconTrash2 class="size-3.5" /></button>
+      </div>
       <div class="mt-1 flex items-center gap-1.5">
         <span class="flex size-[15px] items-center justify-center rounded border border-strong bg-chip text-text-2"><IconGitBranch class="size-2.5" /></span>
         <span class="text-xs text-text-3">{{ profile.sourceSummary }}</span>
@@ -83,6 +92,9 @@ function feedSelected(feedId: string): boolean {
 /* The pencil holds its space (opacity, not display) so hovering never shifts the count badge. */
 .feed-edit { display: inline-flex; opacity: 0; }
 .sidebar-entry:hover .feed-edit, .feed-edit:focus-visible { opacity: 1; }
+/* Same pattern as .feed-edit: holds its space, only reveals on header hover. */
+.profile-delete { display: inline-flex; opacity: 0; }
+.profile-header:hover .profile-delete, .profile-delete:focus-visible { opacity: 1; }
 .sidebar-entry-selected .nav-icon { border-color: var(--color-accent-tint); color: var(--color-accent); }
 .nav-icon { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 18px; height: 18px; border: 1px solid var(--color-strong); border-radius: 5px; background: var(--color-app); color: var(--color-text-2); }
 .section-label { display: flex; align-items: center; gap: 7px; padding: 0 6px 8px; color: var(--color-text-4); font-family: var(--font-mono); font-size: 10.5px; letter-spacing: .12em; }

@@ -55,4 +55,12 @@ describe('SideBar', () => {
 
     expect(wrapper.emitted('edit-feeds')).toHaveLength(1)
   })
+
+  it('emits delete-profile from the header trash icon', async () => {
+    const wrapper = mountSideBar()
+
+    await wrapper.find('[data-testid="sidebar-delete-profile"]').trigger('click')
+
+    expect(wrapper.emitted('delete-profile')).toHaveLength(1)
+  })
 })

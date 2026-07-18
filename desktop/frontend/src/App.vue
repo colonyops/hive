@@ -13,14 +13,18 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import ConfigErrorOverlay from './components/ConfigErrorOverlay.vue'
 import ConfigSheet from './components/ConfigSheet.vue'
 import FeedEditorSheet from './components/FeedEditorSheet.vue'
+import DeleteProfileModal from './components/DeleteProfileModal.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
+import ToastStack from './components/ToastStack.vue'
 import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
+import { parseConfigErrors } from './lib/configErrors'
 import type { FeedDef, SourceDef } from './types/feed'
 
 const {
@@ -30,14 +34,20 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
-  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toast,
-  creatingProfile, createProfileError, loadProfiles, createProfile,
-  config, loadConfig, copyConfigPrompt, copyConfigPath,
+  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toasts, dismissToast, clearToasts,
+  creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
+  config, configErrorOverlayOpen, dismissConfigError, loadConfig, copyConfigPrompt, copyConfigPath, copyConfigErrors,
   sources, creatingSource, createSourceError, savingFeed, saveFeedError,
-  loadSources, createSource, loadFeedDef, createFeed, updateFeed,
+  loadSources, createSource, loadFeedDef, createFeed, updateFeed, deleteFeed,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
+
+// The overlay only ever gets the shape the backend actually provides today
+// (see internal/desktop/feed/config.go ConfigInfo.Error — a single string);
+// parseConfigErrors is the seam where richer per-problem data would plug in
+// without touching the template.
+const configErrors = computed(() => parseConfigErrors(config.value?.error ?? ''))
 
 // ── Config sheet & profile creation overlays ─────────────────────────────────
 
@@ -88,8 +98,28 @@ async function submitFeedSave(def: FeedDef) {
   if (saved) feedEditorOpen.value = false
 }
 
+async function submitFeedDelete(feedId: string) {
+  if (!activeProfileId.value) return
+  const deleted = await deleteFeed(activeProfileId.value, feedId)
+  if (deleted) feedEditorOpen.value = false
+}
+
 function submitNewSource(def: SourceDef) {
   void createSource(def)
+}
+
+// ── Delete profile confirm modal ─────────────────────────────────────────────
+
+const deleteProfileOpen = ref(false)
+
+function openDeleteProfile() {
+  deleteProfileOpen.value = true
+}
+
+async function confirmDeleteProfile() {
+  if (!activeProfileId.value) return
+  await deleteProfile(activeProfileId.value)
+  deleteProfileOpen.value = false
 }
 
 // Booting while signed out leaves profiles unloaded (or the live backend
@@ -253,7 +283,10 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 </script>
 
 <template>
-  <main class="h-screen w-screen overflow-hidden bg-app text-text">
+  <main
+    class="h-screen w-screen overflow-hidden bg-app text-text"
+    :class="{ 'pointer-events-none blur-[3px] opacity-40 transition-[filter,opacity] duration-200': configErrorOverlayOpen }"
+  >
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
@@ -285,6 +318,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           @select-unread="selectUnreadView"
           @edit-feeds="openConfigSheet"
           @edit-feed="openFeedEditor"
+          @delete-profile="openDeleteProfile"
         />
         <section v-if="activeProfile" class="flex min-w-0 flex-1">
           <FeedList
@@ -309,9 +343,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         </div>
       </div>
     </div>
-    <Transition name="toast">
-      <div v-if="toast" class="fixed bottom-5 right-5 rounded-lg border border-strong bg-chip px-4 py-2.5 font-mono text-xs text-text shadow-2xl" data-testid="toast">{{ toast }}</div>
-    </Transition>
+    <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
     <ConfigSheet
       v-if="configSheetOpen"
@@ -332,6 +364,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       :source-error="createSourceError"
       @close="feedEditorOpen = false"
       @save="submitFeedSave"
+      @delete="submitFeedDelete"
       @create-source="submitNewSource"
       @copy-prompt="copyConfigPrompt"
       @copy-path="copyConfigPath"
@@ -343,10 +376,21 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       @close="newProfileOpen = false"
       @create="submitNewProfile"
     />
+    <DeleteProfileModal
+      v-if="deleteProfileOpen && activeProfile"
+      :profile-name="activeProfile.name"
+      :busy="deletingProfile"
+      @close="deleteProfileOpen = false"
+      @confirm="confirmDeleteProfile"
+    />
   </main>
+  <ConfigErrorOverlay
+    v-if="configErrorOverlayOpen"
+    :path="config?.path ?? ''"
+    :errors="configErrors"
+    @retry="loadConfig"
+    @dismiss="dismissConfigError"
+    @copy-path="copyConfigPath"
+    @copy-errors="copyConfigErrors"
+  />
 </template>
-
-<style scoped>
-.toast-enter-active, .toast-leave-active { transition: opacity .16s ease, transform .16s ease; }
-.toast-enter-from, .toast-leave-to { opacity: 0; transform: translateY(5px); }
-</style>
