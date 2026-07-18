@@ -70,4 +70,52 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await expect(modal).toBeHidden()
   await expect(page.getByTestId('profile-tile')).toHaveCount(2)
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Backend Triage')
+
+  // ── Feed editor: inline-create a source, create a feed, then edit it ──────
+  // Also a mutation, so it stays on this per-browser server.
+  await page.keyboard.press('Meta+k')
+  await page.getByTestId('command-palette-input').fill('new feed')
+  await page.getByTestId('command-palette-command').filter({ hasText: 'New feed…' }).click()
+
+  const editor = page.getByTestId('feed-editor')
+  await expect(editor).toBeVisible()
+  await expect(page.getByTestId('feed-editor-title')).toHaveText('New feed')
+
+  // The workspace seeded the default sources for picking.
+  await expect(page.getByTestId('feed-editor-source-my-prs')).toBeVisible()
+
+  // Inline-create a search source; it lands in the list auto-checked.
+  await page.getByTestId('feed-editor-new-source-toggle').click()
+  await page.getByTestId('feed-editor-source-id').fill('team-prs')
+  await page.getByTestId('feed-editor-source-query').fill('org:acme is:pr is:open')
+  await page.getByTestId('feed-editor-source-add').click()
+  await expect(page.getByTestId('feed-editor-source-team-prs')).toBeChecked()
+
+  await page.getByTestId('feed-editor-name').fill('Team PRs')
+  await page.getByTestId('feed-editor-filters-toggle').click()
+  await page.getByTestId('feed-editor-repos').fill('acme/*')
+  await expect(page.getByTestId('feed-editor-yaml')).toContainText('name: Team PRs')
+  await page.getByTestId('feed-editor-save').click()
+
+  await expect(editor).toBeHidden()
+  await expect(page.getByTestId('toast')).toHaveText('Feed created')
+  const teamRow = page.locator('[data-testid="sidebar-feed"][data-id="team-prs"]')
+  await expect(teamRow).toContainText('Team PRs')
+
+  // Reopen through the row's hover pencil: the definition round-trips.
+  await teamRow.hover()
+  await page.getByTestId('sidebar-feed-edit-team-prs').click()
+  await expect(page.getByTestId('feed-editor-title')).toHaveText('Edit feed')
+  await expect(page.getByTestId('feed-editor-name')).toHaveValue('Team PRs')
+  // Filters auto-expand when populated; the saved glob is intact.
+  await expect(page.getByTestId('feed-editor-repos')).toHaveValue('acme/*')
+  await expect(page.getByTestId('feed-editor-yaml')).toContainText('id: team-prs')
+
+  await page.getByTestId('feed-editor-name').fill('Team PRs (all)')
+  await page.getByTestId('feed-editor-exclude-repos').fill('acme/sandbox')
+  await page.getByTestId('feed-editor-save').click()
+
+  await expect(editor).toBeHidden()
+  await expect(page.getByTestId('toast')).toHaveText('Feed updated')
+  await expect(teamRow).toContainText('Team PRs (all)')
 })

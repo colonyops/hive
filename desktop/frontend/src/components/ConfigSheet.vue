@@ -4,35 +4,13 @@ import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconClipboardCopy from '~icons/lucide/clipboard-copy'
 import IconFileCode from '~icons/lucide/file-code'
 import IconX from '~icons/lucide/x'
+import { tokenizeYaml } from '../lib/yamlHighlight'
 import type { ConfigInfo } from '../types/feed'
 
 const props = defineProps<{ config: ConfigInfo | null }>()
 const emit = defineEmits<{ close: []; 'copy-prompt': []; 'copy-path': [] }>()
 
-// Display-only YAML tokenizer: enough to make keys, strings, and comments
-// scan like the settings mock, nothing more. The file is never edited here.
-interface Token { text: string; kind: 'key' | 'string' | 'comment' | 'plain' }
-
-function tokenizeLine(line: string): Token[] {
-  const commentAt = line.indexOf('#')
-  const beforeComment = commentAt >= 0 ? line.slice(0, commentAt) : line
-  const comment = commentAt >= 0 ? line.slice(commentAt) : ''
-
-  const tokens: Token[] = []
-  const keyMatch = /^(\s*-?\s*)([\w-]+)(:)(.*)$/.exec(beforeComment)
-  if (keyMatch) {
-    const [, indent, key, colon, rest] = keyMatch
-    if (indent) tokens.push({ text: indent, kind: 'plain' })
-    tokens.push({ text: key + colon, kind: 'key' })
-    if (rest) tokens.push({ text: rest, kind: /["'[]/.test(rest.trimStart()[0] ?? '') ? 'string' : 'plain' })
-  } else if (beforeComment) {
-    tokens.push({ text: beforeComment, kind: 'plain' })
-  }
-  if (comment) tokens.push({ text: comment, kind: 'comment' })
-  return tokens
-}
-
-const lines = computed(() => (props.config?.yaml ?? '').replace(/\n$/, '').split('\n').map(tokenizeLine))
+const lines = computed(() => tokenizeYaml(props.config?.yaml ?? ''))
 
 function onKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') emit('close')

@@ -14,12 +14,14 @@ import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ConfigSheet from './components/ConfigSheet.vue'
+import FeedEditorSheet from './components/FeedEditorSheet.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
+import type { FeedDef, SourceDef } from './types/feed'
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -31,6 +33,8 @@ const {
   selectedId, selectedItem, actions, unreadOnly, title, countLabel, toast,
   creatingProfile, createProfileError, loadProfiles, createProfile,
   config, loadConfig, copyConfigPrompt, copyConfigPath,
+  sources, creatingSource, createSourceError, savingFeed, saveFeedError,
+  loadSources, createSource, loadFeedDef, createFeed, updateFeed,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
@@ -53,6 +57,39 @@ function openNewProfile() {
 async function submitNewProfile(name: string) {
   await createProfile(name)
   if (!createProfileError.value) newProfileOpen.value = false
+}
+
+// ── Feed editor sheet ────────────────────────────────────────────────────────
+
+const feedEditorOpen = ref(false)
+// Non-null while editing an existing feed; null in create mode.
+const editingFeedId = ref<string | null>(null)
+// The edit-mode prefill, loaded async after the sheet opens.
+const editingFeedDef = ref<FeedDef | null>(null)
+
+function openFeedEditor(feedId?: string) {
+  editingFeedId.value = feedId ?? null
+  editingFeedDef.value = null
+  createSourceError.value = null // stale failures must not greet the reopen
+  saveFeedError.value = null
+  feedEditorOpen.value = true
+  void loadSources()
+  void loadConfig() // the sheet shows the config path row
+  if (feedId && activeProfileId.value) {
+    void loadFeedDef(activeProfileId.value, feedId).then((def) => { editingFeedDef.value = def })
+  }
+}
+
+async function submitFeedSave(def: FeedDef) {
+  if (!activeProfileId.value) return
+  const saved = editingFeedId.value
+    ? await updateFeed(activeProfileId.value, editingFeedId.value, def)
+    : await createFeed(activeProfileId.value, def)
+  if (saved) feedEditorOpen.value = false
+}
+
+function submitNewSource(def: SourceDef) {
+  void createSource(def)
 }
 
 // Booting while signed out leaves profiles unloaded (or the live backend
@@ -105,7 +142,22 @@ useCommands(computed(() => {
       hint: profileName,
       run: () => selectSidebar({ type: 'feed', feedId: f.id }),
     })
+    cmds.push({
+      id: `feed:edit:${f.id}`,
+      title: `Edit feed: ${f.name}`,
+      group: 'Feeds',
+      keywords: ['editor', 'filters'],
+      run: () => openFeedEditor(f.id),
+    })
   }
+
+  cmds.push({
+    id: 'feed:new',
+    title: 'New feed…',
+    group: 'Feeds',
+    keywords: ['create', 'editor', 'source'],
+    run: () => openFeedEditor(),
+  })
 
   cmds.push({
     id: 'feed:toggle-unread',
@@ -232,6 +284,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           @select="selectSidebar"
           @select-unread="selectUnreadView"
           @edit-feeds="openConfigSheet"
+          @edit-feed="openFeedEditor"
         />
         <section v-if="activeProfile" class="flex min-w-0 flex-1">
           <FeedList
@@ -264,6 +317,22 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       v-if="configSheetOpen"
       :config="config"
       @close="configSheetOpen = false"
+      @copy-prompt="copyConfigPrompt"
+      @copy-path="copyConfigPath"
+    />
+    <FeedEditorSheet
+      v-if="feedEditorOpen"
+      :feed-id="editingFeedId"
+      :initial-def="editingFeedDef"
+      :sources="sources"
+      :config="config"
+      :busy="savingFeed"
+      :error="saveFeedError"
+      :source-busy="creatingSource"
+      :source-error="createSourceError"
+      @close="feedEditorOpen = false"
+      @save="submitFeedSave"
+      @create-source="submitNewSource"
       @copy-prompt="copyConfigPrompt"
       @copy-path="copyConfigPath"
     />

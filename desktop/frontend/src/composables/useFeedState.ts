@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
-import { ActionsFor, Config, ConfigPrompt, CreateProfile, Items, MarkRead, Profiles, Refresh } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
-import type { Action, ConfigInfo, FeedItem, Profile, SidebarSelection } from '../types/feed'
+import { ActionsFor, Config, ConfigPrompt, CreateFeed, CreateProfile, CreateSource, FeedDefFor, Items, MarkRead, Profiles, Refresh, Sources, UpdateFeed } from '../../bindings/github.com/colonyops/hive/desktop/feedservice'
+import type { Action, ConfigInfo, FeedDef, FeedItem, Profile, SidebarSelection, SourceDef } from '../types/feed'
 
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
@@ -23,6 +23,15 @@ export function useFeedState() {
   const toast = ref<string | null>(null)
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
+  // Top-level source definitions for the feed editor's picker; loaded when
+  // the editor opens.
+  const sources = ref<SourceDef[]>([])
+  const creatingSource = ref(false)
+  const createSourceError = ref<string | null>(null)
+  // One busy/error pair covers create and update: the editor sheet only ever
+  // runs one save at a time.
+  const savingFeed = ref(false)
+  const saveFeedError = ref<string | null>(null)
   // The profiles config file (path, content, validity) for the
   // feeds-as-code sheet; null until first loaded.
   const config = ref<ConfigInfo | null>(null)
@@ -119,6 +128,72 @@ export function useFeedState() {
     } finally {
       creatingProfile.value = false
     }
+  }
+
+  async function loadSources() {
+    try {
+      sources.value = (await Sources()) ?? []
+    } catch (error) {
+      // Keep whatever list we had; the editor's ≥1-source rule still guards
+      // saves, and a retry happens on the next open.
+      console.warn('Unable to load sources', error)
+    }
+  }
+
+  async function createSource(def: SourceDef): Promise<SourceDef | null> {
+    if (creatingSource.value) return null
+    creatingSource.value = true
+    createSourceError.value = null
+    try {
+      const created = await CreateSource(def)
+      sources.value = [...sources.value, created]
+      return created
+    } catch (error) {
+      console.warn('Unable to create source', error)
+      createSourceError.value = error instanceof Error && error.message ? error.message : 'Could not create the source.'
+      return null
+    } finally {
+      creatingSource.value = false
+    }
+  }
+
+  async function loadFeedDef(profileID: string, feedID: string): Promise<FeedDef | null> {
+    try {
+      return await FeedDefFor(profileID, feedID)
+    } catch (error) {
+      console.warn('Unable to load feed definition', error)
+      saveFeedError.value = error instanceof Error && error.message ? error.message : 'Could not load the feed.'
+      return null
+    }
+  }
+
+  async function createFeed(profileID: string, def: FeedDef): Promise<boolean> {
+    return saveFeed(async () => { await CreateFeed(profileID, def) }, 'Feed created')
+  }
+
+  async function updateFeed(profileID: string, feedID: string, def: FeedDef): Promise<boolean> {
+    return saveFeed(async () => { await UpdateFeed(profileID, feedID, def) }, 'Feed updated')
+  }
+
+  // The config:updated event that follows a successful write also refreshes
+  // state, but it rides fsnotify; reload optimistically so the sidebar shows
+  // the new feed the moment the sheet closes.
+  async function saveFeed(write: () => Promise<void>, toastMessage: string): Promise<boolean> {
+    if (savingFeed.value) return false // re-entry guard: Enter-key can double-submit
+    savingFeed.value = true
+    saveFeedError.value = null
+    try {
+      await write()
+    } catch (error) {
+      console.warn('Unable to save feed', error)
+      saveFeedError.value = error instanceof Error && error.message ? error.message : 'Could not save the feed.'
+      return false
+    } finally {
+      savingFeed.value = false
+    }
+    showToast(toastMessage)
+    await reloadProfilesQuietly()
+    return true
   }
 
   async function selectProfile(profileID: string) {
@@ -338,6 +413,16 @@ export function useFeedState() {
     toast,
     creatingProfile,
     createProfileError,
+    sources,
+    creatingSource,
+    createSourceError,
+    savingFeed,
+    saveFeedError,
+    loadSources,
+    createSource,
+    loadFeedDef,
+    createFeed,
+    updateFeed,
     config,
     loadConfig,
     copyConfigPrompt,

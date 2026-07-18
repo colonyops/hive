@@ -184,6 +184,13 @@ as code…") shows the file, its validity, and a **Copy prompt** button that
 puts a schema-complete prompt on the clipboard for a coding agent to edit
 the config on the user's behalf.
 
+A feed editor sheet complements the raw file: ⌘K → "New feed…" creates a
+feed, and each sidebar feed row's hover pencil (or ⌘K → "Edit feed: …")
+opens it prefilled. The editor picks from the shared sources (with inline
+source creation), edits the filter groups, live-previews the YAML entry it
+will write, and saves through the same comment-preserving config writes —
+with the config path and **Copy prompt** one click away.
+
 Desktop-only Go code lives under `internal/desktop/**`; the `desktop/`
 package is thin Wails wiring. `internal/desktop/auth` implements GitHub
 authentication behind the auth service: an OAuth device flow plus a

@@ -7,24 +7,34 @@ const mocks = vi.hoisted(() => ({
   ActionsFor: vi.fn(),
   Config: vi.fn(),
   ConfigPrompt: vi.fn(),
+  CreateFeed: vi.fn(),
   CreateProfile: vi.fn(),
+  CreateSource: vi.fn(),
+  FeedDefFor: vi.fn(),
   Hide: vi.fn(),
   Items: vi.fn(),
   MarkRead: vi.fn(),
   On: vi.fn(),
   Profiles: vi.fn(),
   Refresh: vi.fn(),
+  Sources: vi.fn(),
+  UpdateFeed: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/feedservice', () => ({
   ActionsFor: mocks.ActionsFor,
   Config: mocks.Config,
   ConfigPrompt: mocks.ConfigPrompt,
+  CreateFeed: mocks.CreateFeed,
   CreateProfile: mocks.CreateProfile,
+  CreateSource: mocks.CreateSource,
+  FeedDefFor: mocks.FeedDefFor,
   Items: mocks.Items,
   MarkRead: mocks.MarkRead,
   Profiles: mocks.Profiles,
   Refresh: mocks.Refresh,
+  Sources: mocks.Sources,
+  UpdateFeed: mocks.UpdateFeed,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -118,6 +128,14 @@ describe('useFeedState', () => {
     mocks.On.mockReturnValue(() => {})
     mocks.MarkRead.mockResolvedValue(undefined)
     mocks.Refresh.mockResolvedValue(false)
+    mocks.Sources.mockResolvedValue([
+      { id: 'my-prs', kind: 'search', query: 'is:open is:pr author:@me' },
+      { id: 'inbox', kind: 'notifications' },
+    ])
+    mocks.CreateSource.mockImplementation((def: object) => Promise.resolve({ ...def }))
+    mocks.CreateFeed.mockResolvedValue({ id: 'team-prs', name: 'Team PRs', count: 0, newCount: 0 })
+    mocks.UpdateFeed.mockResolvedValue(undefined)
+    mocks.FeedDefFor.mockResolvedValue({ id: 'desktop', name: 'Desktop UI', sources: ['my-prs'], filters: {} })
   })
 
   it('loads profiles on mount and switches profiles by resetting selection and reloading items', async () => {
@@ -559,6 +577,110 @@ describe('useFeedState', () => {
     expect(mocks.Profiles).not.toHaveBeenCalled()
     expect(state.items.value).not.toHaveLength(0)
 
+    wrapper.unmount()
+  })
+
+  it('loads sources for the feed editor', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.loadSources()
+
+    expect(state.sources.value.map((source) => source.id)).toEqual(['my-prs', 'inbox'])
+
+    wrapper.unmount()
+  })
+
+  it('keeps the previous sources when loading fails', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    await state.loadSources()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    mocks.Sources.mockRejectedValueOnce(new Error('boom'))
+
+    await state.loadSources()
+
+    expect(state.sources.value.map((source) => source.id)).toEqual(['my-prs', 'inbox'])
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('creates a source and appends the backend-assigned definition', async () => {
+    mocks.CreateSource.mockResolvedValue({ id: 'team-prs-2', kind: 'search', query: 'org:acme' })
+    const { state, wrapper } = await mountLoadedState()
+    await state.loadSources()
+
+    const created = await state.createSource({ id: 'team-prs', kind: 'search', query: 'org:acme' })
+
+    expect(mocks.CreateSource).toHaveBeenCalledWith({ id: 'team-prs', kind: 'search', query: 'org:acme' })
+    expect(created?.id).toBe('team-prs-2')
+    expect(state.sources.value.map((source) => source.id)).toEqual(['my-prs', 'inbox', 'team-prs-2'])
+    expect(state.createSourceError.value).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('surfaces source creation failures', async () => {
+    mocks.CreateSource.mockRejectedValue(new Error('source "x": kind "search" requires a query'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const { state, wrapper } = await mountLoadedState()
+
+    const created = await state.createSource({ id: 'x', kind: 'search' })
+
+    expect(created).toBeNull()
+    expect(state.createSourceError.value).toContain('requires a query')
+    expect(state.creatingSource.value).toBe(false)
+
+    warn.mockRestore()
+    wrapper.unmount()
+  })
+
+  it('loads a feed definition for edit prefill', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    const def = await state.loadFeedDef('personal', 'desktop')
+
+    expect(mocks.FeedDefFor).toHaveBeenCalledWith('personal', 'desktop')
+    expect(def?.name).toBe('Desktop UI')
+
+    wrapper.unmount()
+  })
+
+  it('creates a feed, toasts, and optimistically reloads profiles', async () => {
+    const { state, wrapper } = await mountLoadedState()
+    mocks.Profiles.mockClear()
+
+    const def = { id: '', name: 'Team PRs', sources: ['my-prs'], filters: {} }
+    const saved = await state.createFeed('personal', def)
+
+    expect(saved).toBe(true)
+    expect(mocks.CreateFeed).toHaveBeenCalledWith('personal', def)
+    expect(state.toast.value).toBe('Feed created')
+    expect(mocks.Profiles).toHaveBeenCalled()
+    expect(state.saveFeedError.value).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('updates a feed and reports failures without a toast', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    const def = { id: 'desktop', name: 'Desktop UI', sources: ['my-prs'], filters: { types: ['pr'] } }
+    const saved = await state.updateFeed('personal', 'desktop', def)
+
+    expect(saved).toBe(true)
+    expect(mocks.UpdateFeed).toHaveBeenCalledWith('personal', 'desktop', def)
+    expect(state.toast.value).toBe('Feed updated')
+
+    mocks.UpdateFeed.mockRejectedValueOnce(new Error('feed: unknown source "gone"'))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+
+    const failed = await state.updateFeed('personal', 'desktop', def)
+
+    expect(failed).toBe(false)
+    expect(state.saveFeedError.value).toContain('unknown source')
+    expect(state.savingFeed.value).toBe(false)
+
+    warn.mockRestore()
     wrapper.unmount()
   })
 

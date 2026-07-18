@@ -78,9 +78,10 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(palette).toBeVisible()
   const input = page.getByTestId('command-palette-input')
   await input.fill('notifications')
-  await expect(page.getByTestId('command-palette-command')).toHaveCount(1)
-  await expect(page.getByTestId('command-palette-command-title')).toHaveText('Select feed: Notifications inbox')
-  await input.press('Enter')
+  // The feed matches twice now: its Select entry and its feed-editor Edit entry.
+  const commands = page.getByTestId('command-palette-command')
+  await expect(commands).toHaveCount(2)
+  await commands.filter({ hasText: 'Select feed: Notifications inbox' }).click()
   await expect(palette).toBeHidden()
   await expect(page.getByTestId('feed-title')).toHaveText('Notifications inbox')
 
