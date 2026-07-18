@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
+import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconClipboardCopy from '~icons/lucide/clipboard-copy'
+import IconMenu from '~icons/lucide/menu'
 import IconPlus from '~icons/lucide/plus'
 import IconRss from '~icons/lucide/rss'
 import IconX from '~icons/lucide/x'
@@ -27,6 +29,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   close: []
   save: [def: FeedDef]
+  delete: [feedId: string]
   'create-source': [def: SourceDef]
   'copy-prompt': []
   'copy-path': []
@@ -49,8 +52,15 @@ const excludeLabelsText = ref('')
 const types = ref<string[]>([])
 const reasons = ref<string[]>([])
 
-const filtersOpen = ref(false)
 const reasonsOpen = ref(false)
+
+function sourceSelected(id: string): boolean {
+  return checkedSources.value.includes(id)
+}
+
+function typeChecked(value: string): boolean {
+  return types.value.includes(value)
+}
 
 // The six glob groups render identically; keep the descriptors in one place.
 // `model` holds the Ref itself (arrays don't unwrap), bound via .value.
@@ -94,8 +104,6 @@ const filters = computed<FilterDef>(() => {
   return out
 })
 
-const hasFilters = computed(() => Object.keys(filters.value).length > 0)
-
 watch(() => props.initialDef, (def) => {
   if (!def) return
   name.value = def.name
@@ -109,7 +117,6 @@ watch(() => props.initialDef, (def) => {
   excludeLabelsText.value = (f.exclude_labels ?? []).join('\n')
   types.value = [...(f.types ?? [])]
   reasons.value = [...(f.reasons ?? [])]
-  if (hasFilters.value) filtersOpen.value = true
   if (reasons.value.length > 0) reasonsOpen.value = true
 }, { immediate: true })
 
@@ -131,6 +138,17 @@ const canSave = computed(() =>
 function submit() {
   if (props.busy || !canSave.value) return
   emit('save', buildDef())
+}
+
+// ── Delete (edit mode only) — two-step inline confirm, no modal. The parent
+// owns the actual delete call; this component only reports intent. ─────────
+
+const deleteConfirming = ref(false)
+
+function confirmDelete() {
+  if (!props.feedId) return
+  emit('delete', props.feedId)
+  deleteConfirming.value = false
 }
 
 // ── YAML preview ─────────────────────────────────────────────────────────────
@@ -214,13 +232,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         aria-modal="true"
         data-testid="feed-editor"
       >
-        <header class="flex shrink-0 items-center gap-3 border-b border-row bg-pane px-6 py-5">
-          <span class="flex size-7 items-center justify-center rounded-[7px] bg-accent-tint text-accent"><IconRss class="size-4" /></span>
-          <div class="flex-1 text-lg font-semibold tracking-[-.01em]" data-testid="feed-editor-title">{{ isEdit ? 'Edit feed' : 'New feed' }}</div>
+        <header class="flex shrink-0 items-center gap-3 border-b border-row bg-pane px-[22px] py-[18px]">
+          <span class="flex size-[30px] shrink-0 items-center justify-center rounded-lg bg-accent-tint text-accent"><IconRss class="size-4" /></span>
+          <div class="flex-1 text-[16px] font-semibold tracking-[-.01em]" data-testid="feed-editor-title">{{ isEdit ? 'Edit feed' : 'New feed' }}</div>
           <button class="cursor-pointer text-text-3 hover:text-text" aria-label="Close" data-testid="feed-editor-close" @click="emit('close')"><IconX class="size-4.5" /></button>
         </header>
 
-        <div class="hive-scroll flex min-h-0 flex-1 flex-col gap-4.5 overflow-y-auto px-6 py-5">
+        <div class="hive-scroll flex min-h-0 flex-1 flex-col gap-6 overflow-y-auto px-[22px] py-[22px]">
           <!-- Name -->
           <div>
             <div class="mb-1.5 text-[12.5px] text-text-2">Name</div>
@@ -229,148 +247,172 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               v-model="name"
               type="text"
               placeholder="Team PRs"
-              class="w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+              class="w-full rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
               data-testid="feed-editor-name"
               @keydown.enter="submit"
             >
             <p v-if="!isEdit" class="mt-1.5 text-xs leading-relaxed text-text-4">The feed's id is derived from the name on save.</p>
           </div>
 
+          <div class="h-px shrink-0 bg-row" />
+
           <!-- Sources -->
           <div>
-            <div class="mb-1.5 text-[12.5px] text-text-2">Sources</div>
-            <p class="mb-2 text-xs leading-relaxed text-text-4">
-              Sources are the GitHub API cost, shared across feeds. This feed shows their merged items; pick at least one.
+            <div class="mb-[3px] flex items-baseline justify-between gap-2">
+              <div class="text-[14.5px] font-semibold tracking-[-.01em] text-text">Sources</div>
+              <div class="font-mono text-[11.5px] text-text-4">{{ checkedSources.length }} selected</div>
+            </div>
+            <p class="mb-3.5 text-[12.5px] leading-relaxed text-text-4">
+              Sources are the GitHub API cost, shared across feeds. This feed merges their items — pick at least one.
             </p>
-            <div class="flex flex-col gap-1 rounded-lg border border-card bg-app p-1.5" data-testid="feed-editor-sources">
+            <div class="flex flex-col gap-2" data-testid="feed-editor-sources">
               <div v-if="sources.length === 0" class="px-2 py-1.5 font-mono text-[11.5px] text-text-4" data-testid="feed-editor-no-sources">
                 No sources yet — create one below.
               </div>
               <label
                 v-for="source in sources"
                 :key="source.id"
-                class="flex cursor-pointer items-start gap-2.5 rounded-md px-2 py-1.5 hover:bg-hover"
+                class="flex cursor-pointer gap-3 rounded-[10px] border px-[13px] py-3 transition-colors"
+                :class="sourceSelected(source.id) ? 'border-strong bg-raised' : 'border-row bg-app hover:border-card'"
               >
-                <input
-                  v-model="checkedSources"
-                  type="checkbox"
-                  :value="source.id"
-                  class="mt-0.5 accent-accent"
-                  :data-testid="`feed-editor-source-${source.id}`"
+                <span
+                  class="relative mt-px flex size-[18px] shrink-0 items-center justify-center rounded-[5px] border-[1.5px]"
+                  :class="sourceSelected(source.id) ? 'border-accent bg-accent' : 'border-strong bg-transparent'"
                 >
+                  <input
+                    v-model="checkedSources"
+                    type="checkbox"
+                    :value="source.id"
+                    class="absolute inset-0 size-full cursor-pointer opacity-0"
+                    :data-testid="`feed-editor-source-${source.id}`"
+                  >
+                  <IconCheck v-if="sourceSelected(source.id)" class="size-3 text-accent-contrast" :stroke-width="3" />
+                </span>
                 <span class="min-w-0 flex-1">
                   <span class="flex items-center gap-2">
-                    <span class="font-mono text-[12.5px] text-text">{{ source.id }}</span>
-                    <span class="rounded border border-strong bg-chip px-1.5 font-mono text-[10px] text-text-3">{{ source.kind }}</span>
+                    <span class="font-mono text-[13.5px] font-semibold text-text">{{ source.id }}</span>
+                    <span class="rounded bg-chip px-1.5 py-px font-mono text-[10.5px] text-text-3">{{ source.kind }}</span>
                   </span>
-                  <span v-if="source.query" class="mt-0.5 block truncate font-mono text-[11px] text-text-4">{{ source.query }}</span>
+                  <span v-if="source.query" class="mt-[5px] block truncate font-mono text-xs leading-relaxed text-text-4">{{ source.query }}</span>
                 </span>
               </label>
             </div>
 
             <!-- Inline source creation -->
-            <button
-              class="mt-2 flex cursor-pointer items-center gap-1.5 text-[12.5px] text-text-3 hover:text-text"
-              data-testid="feed-editor-new-source-toggle"
-              @click="newSourceOpen = !newSourceOpen"
-            >
-              <component :is="newSourceOpen ? IconChevronDown : IconChevronRight" class="size-3.5" />
-              <IconPlus class="size-3" />New source…
-            </button>
-            <div v-if="newSourceOpen" class="mt-2 flex flex-col gap-2.5 rounded-lg border border-card bg-raised p-3" data-testid="feed-editor-new-source">
-              <div class="flex gap-2">
-                <div class="flex-1">
-                  <div class="mb-1.5 text-[12.5px] text-text-2">Id</div>
+            <div class="mt-3 overflow-hidden rounded-[10px] border border-row">
+              <button
+                class="flex w-full cursor-pointer items-center gap-2 bg-raised px-[13px] py-[11px] text-left"
+                :class="{ 'border-b border-row': newSourceOpen }"
+                data-testid="feed-editor-new-source-toggle"
+                @click="newSourceOpen = !newSourceOpen"
+              >
+                <IconPlus class="size-3.5 text-accent" />
+                <span class="text-[12.5px] font-semibold text-text">New source</span>
+                <span class="flex-1" />
+                <component :is="newSourceOpen ? IconChevronDown : IconChevronRight" class="size-3 text-text-3" />
+              </button>
+              <div v-if="newSourceOpen" class="flex flex-col gap-3.5 bg-app p-[13px]" data-testid="feed-editor-new-source">
+                <div class="grid grid-cols-[1fr_150px] gap-2.5">
+                  <div>
+                    <div class="mb-1.5 text-[11.5px] text-text-2">Id</div>
+                    <input
+                      v-model="sourceId"
+                      type="text"
+                      placeholder="team-prs"
+                      class="w-full rounded-lg border border-card bg-app px-[11px] py-[9px] font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+                      data-testid="feed-editor-source-id"
+                    >
+                  </div>
+                  <div>
+                    <div class="mb-1.5 text-[11.5px] text-text-2">Kind</div>
+                    <select
+                      v-model="sourceKind"
+                      class="w-full cursor-pointer rounded-lg border border-card bg-app px-[11px] py-[9px] text-[13.5px] text-text outline-none focus:border-accent"
+                      data-testid="feed-editor-source-kind"
+                    >
+                      <option value="search">search</option>
+                      <option value="notifications">notifications</option>
+                    </select>
+                  </div>
+                </div>
+                <div v-if="sourceKind === 'search'">
+                  <div class="mb-1.5 text-[11.5px] text-text-2">Query</div>
                   <input
-                    v-model="sourceId"
+                    v-model="sourceQuery"
                     type="text"
-                    placeholder="team-prs"
-                    class="w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-                    data-testid="feed-editor-source-id"
+                    placeholder="is:open involves:@me archived:false"
+                    class="w-full rounded-lg border border-card bg-app px-[11px] py-[9px] font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+                    data-testid="feed-editor-source-query"
                   >
                 </div>
-                <div class="w-[170px]">
-                  <div class="mb-1.5 text-[12.5px] text-text-2">Kind</div>
-                  <select
-                    v-model="sourceKind"
-                    class="w-full cursor-pointer rounded-lg border border-strong bg-app px-3 py-2.5 text-[13.5px] text-text outline-none focus:border-accent"
-                    data-testid="feed-editor-source-kind"
-                  >
-                    <option value="search">search</option>
-                    <option value="notifications">notifications</option>
-                  </select>
+                <div class="flex items-end gap-2.5">
+                  <div class="w-[120px]">
+                    <div class="mb-1.5 text-[11.5px] text-text-2">Limit</div>
+                    <input
+                      v-model="sourceLimit"
+                      type="number"
+                      placeholder="50"
+                      min="1"
+                      class="w-full rounded-lg border border-card bg-app px-[11px] py-[9px] font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+                      data-testid="feed-editor-source-limit"
+                    >
+                  </div>
+                  <button
+                    class="cursor-pointer rounded-lg border border-card bg-sidebar px-4 py-[9px] text-[13.5px] text-text hover:border-strong disabled:cursor-default disabled:opacity-50"
+                    :disabled="sourceBusy || !canAddSource"
+                    data-testid="feed-editor-source-add"
+                    @click="addSource"
+                  >Add source</button>
                 </div>
+                <p v-if="sourceError" class="text-xs leading-relaxed text-kind-issue" data-testid="feed-editor-source-error">{{ sourceError }}</p>
               </div>
-              <div v-if="sourceKind === 'search'">
-                <div class="mb-1.5 text-[12.5px] text-text-2">Query</div>
-                <input
-                  v-model="sourceQuery"
-                  type="text"
-                  placeholder="is:open involves:@me archived:false"
-                  class="w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-                  data-testid="feed-editor-source-query"
-                >
-              </div>
-              <div class="flex items-end gap-2.5">
-                <div class="w-[120px]">
-                  <div class="mb-1.5 text-[12.5px] text-text-2">Limit</div>
-                  <input
-                    v-model="sourceLimit"
-                    type="number"
-                    placeholder="50"
-                    min="1"
-                    class="w-full rounded-lg border border-strong bg-app px-3.5 py-2.5 font-mono text-[13.5px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-                    data-testid="feed-editor-source-limit"
-                  >
-                </div>
-                <button
-                  class="cursor-pointer rounded-lg border border-card px-4 py-2.5 text-[13.5px] text-text-2 hover:text-text disabled:cursor-default disabled:opacity-50"
-                  :disabled="sourceBusy || !canAddSource"
-                  data-testid="feed-editor-source-add"
-                  @click="addSource"
-                >Add source</button>
-              </div>
-              <p v-if="sourceError" class="text-xs text-kind-issue" data-testid="feed-editor-source-error">{{ sourceError }}</p>
             </div>
           </div>
 
+          <div class="h-px shrink-0 bg-row" />
+
           <!-- Filters -->
           <div>
-            <button
-              class="flex cursor-pointer items-center gap-1.5 text-[12.5px] text-text-2 hover:text-text"
-              data-testid="feed-editor-filters-toggle"
-              @click="filtersOpen = !filtersOpen"
-            >
-              <component :is="filtersOpen ? IconChevronDown : IconChevronRight" class="size-3.5" />
-              Filters<span v-if="!filtersOpen && hasFilters" class="font-mono text-[11px] text-accent">·&nbsp;active</span>
-            </button>
-            <p class="mt-1 text-xs leading-relaxed text-text-4">
-              Client-side, no API cost. Groups AND together, values within a group OR, excludes win. Patterns are doublestar globs, one per line.
+            <div class="mb-[3px] text-[14.5px] font-semibold tracking-[-.01em] text-text">Filters</div>
+            <p class="mb-3.5 text-[12.5px] leading-relaxed text-text-4">
+              Client-side, no API cost. Groups AND together; values within a group OR; excludes win. One doublestar glob per line.
             </p>
-            <div v-if="filtersOpen" class="mt-2.5 flex flex-col gap-3" data-testid="feed-editor-filters">
-              <div class="grid grid-cols-2 gap-2.5">
+            <div class="flex flex-col gap-3.5" data-testid="feed-editor-filters">
+              <div class="grid grid-cols-2 gap-x-3.5 gap-y-3">
                 <div v-for="group in globGroups" :key="group.key">
-                  <div class="mb-1.5 text-[12.5px] text-text-2">{{ group.label }}</div>
+                  <div class="mb-1.5 text-[11.5px] text-text-2">{{ group.label }}</div>
                   <textarea
                     v-model="group.model.value"
                     rows="2"
                     :placeholder="group.placeholder"
-                    class="w-full resize-y rounded-lg border border-strong bg-app px-3.5 py-2.5 font-mono text-[12.5px] leading-relaxed text-text outline-none placeholder:text-text-4 focus:border-accent"
+                    class="w-full resize-y rounded-lg border border-strong bg-app px-3 py-2.5 font-mono text-[12.5px] leading-relaxed text-text outline-none placeholder:text-text-4 focus:border-accent"
                     :data-testid="group.testid"
                   />
                 </div>
               </div>
 
-              <div>
-                <div class="mb-1.5 text-[12.5px] text-text-2">Types</div>
-                <div class="flex gap-4">
-                  <label class="flex cursor-pointer items-center gap-2 text-[13px] text-text-2">
-                    <input v-model="types" type="checkbox" value="pr" class="accent-accent" data-testid="feed-editor-type-pr">Pull requests
-                  </label>
-                  <label class="flex cursor-pointer items-center gap-2 text-[13px] text-text-2">
-                    <input v-model="types" type="checkbox" value="issue" class="accent-accent" data-testid="feed-editor-type-issue">Issues
-                  </label>
-                </div>
+              <div class="mt-1 flex items-center gap-6 border-t border-row pt-4">
+                <div class="text-[12.5px] text-text-2">Types</div>
+                <label class="flex cursor-pointer items-center gap-2 text-[13px]" :class="typeChecked('pr') ? 'text-text' : 'text-text-2'">
+                  <span
+                    class="relative flex size-4 shrink-0 items-center justify-center rounded-[5px] border-[1.5px]"
+                    :class="typeChecked('pr') ? 'border-accent bg-accent' : 'border-strong bg-transparent'"
+                  >
+                    <input v-model="types" type="checkbox" value="pr" class="absolute inset-0 size-full cursor-pointer opacity-0" data-testid="feed-editor-type-pr">
+                    <IconCheck v-if="typeChecked('pr')" class="size-2.5 text-accent-contrast" :stroke-width="3.2" />
+                  </span>
+                  Pull requests
+                </label>
+                <label class="flex cursor-pointer items-center gap-2 text-[13px]" :class="typeChecked('issue') ? 'text-text' : 'text-text-2'">
+                  <span
+                    class="relative flex size-4 shrink-0 items-center justify-center rounded-[5px] border-[1.5px]"
+                    :class="typeChecked('issue') ? 'border-accent bg-accent' : 'border-strong bg-transparent'"
+                  >
+                    <input v-model="types" type="checkbox" value="issue" class="absolute inset-0 size-full cursor-pointer opacity-0" data-testid="feed-editor-type-issue">
+                    <IconCheck v-if="typeChecked('issue')" class="size-2.5 text-accent-contrast" :stroke-width="3.2" />
+                  </span>
+                  Issues
+                </label>
               </div>
 
               <div>
@@ -398,10 +440,12 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             </div>
           </div>
 
+          <div class="h-px shrink-0 bg-row" />
+
           <!-- YAML preview -->
-          <div class="min-h-0">
-            <div class="mb-1.5 text-[12.5px] text-text-2">YAML preview</div>
-            <pre class="hive-scroll max-h-full overflow-auto rounded-lg border border-row bg-app px-3.5 py-3 font-mono text-xs leading-[1.65]" data-testid="feed-editor-yaml"><code><template v-for="(line, i) in previewLines" :key="i"><span v-for="(token, j) in line" :key="j" :class="{
+          <div>
+            <div class="mb-2 font-mono text-[11px] uppercase tracking-[.12em] text-text-4">Yaml preview</div>
+            <pre class="hive-scroll max-h-[320px] overflow-y-auto rounded-[9px] border border-row bg-app px-3.5 py-3 font-mono text-xs leading-[1.65]" data-testid="feed-editor-yaml"><code><template v-for="(line, i) in previewLines" :key="i"><span v-for="(token, j) in line" :key="j" :class="{
               'text-code-key': token.kind === 'key',
               'text-code-string': token.kind === 'string',
               'text-code-comment': token.kind === 'comment',
@@ -412,11 +456,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             </p>
           </div>
 
+          <div class="h-px shrink-0 bg-row" />
+
           <!-- Config file: same as-code affordances as the config sheet -->
           <div>
             <div class="mb-1.5 text-[12.5px] text-text-2">Config file</div>
             <div class="flex gap-2">
-              <div class="flex min-w-0 flex-1 items-center rounded-lg border border-card bg-app px-3 py-2 font-mono text-[12.5px] text-text-2">
+              <div class="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-card bg-app px-3 py-2 font-mono text-[12.5px] text-text-2">
+                <IconMenu class="size-3 shrink-0 text-text-3" />
                 <span class="truncate" data-testid="feed-editor-path">{{ config?.path ?? '…' }}</span>
               </div>
               <button
@@ -441,7 +488,28 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           </div>
         </div>
 
-        <footer class="flex shrink-0 gap-2.5 border-t border-row bg-raised px-6 py-3.5">
+        <footer class="flex shrink-0 items-center gap-2.5 border-t border-row bg-raised px-[22px] py-4">
+          <div v-if="isEdit" class="flex items-center gap-2.5">
+            <button
+              v-if="!deleteConfirming"
+              class="cursor-pointer whitespace-nowrap text-[13.5px] text-kind-issue hover:brightness-110"
+              data-testid="feed-editor-delete"
+              @click="deleteConfirming = true"
+            >Delete feed</button>
+            <template v-else>
+              <span class="whitespace-nowrap text-[13px] text-text-3">Confirm delete?</span>
+              <button
+                class="cursor-pointer whitespace-nowrap text-[13.5px] font-semibold text-kind-issue hover:brightness-110"
+                data-testid="feed-editor-delete-confirm"
+                @click="confirmDelete"
+              >Delete</button>
+              <button
+                class="cursor-pointer whitespace-nowrap text-[13.5px] text-text-3 hover:text-text"
+                data-testid="feed-editor-delete-cancel"
+                @click="deleteConfirming = false"
+              >Cancel</button>
+            </template>
+          </div>
           <button
             class="flex-1 cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-accent-contrast hover:brightness-110 disabled:cursor-default disabled:opacity-50"
             :disabled="busy || !canSave"
@@ -449,7 +517,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             @click="submit"
           >{{ isEdit ? 'Save changes' : 'Create feed' }}</button>
           <button
-            class="cursor-pointer rounded-lg border border-card px-4 py-2.5 text-[13.5px] text-text-2 hover:text-text"
+            class="cursor-pointer whitespace-nowrap rounded-lg border border-card px-4 py-2.5 text-[13.5px] text-text-2 hover:text-text"
             data-testid="feed-editor-cancel"
             @click="emit('close')"
           >Cancel</button>

@@ -31,7 +31,7 @@ const visibleItems = computed(() => props.unreadOnly ? props.items.filter((item)
         <button class="refresh-chip" aria-label="Refresh" @click="emit('refresh')"><IconRefreshCw class="size-3" /></button>
       </div>
     </header>
-    <div class="hive-scroll flex-1 overflow-y-auto">
+    <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
       <!-- Load failure: the "GitHub unreachable" design state. -->
       <div v-if="loadError" class="state-frame" data-testid="feed-error">
         <div class="state-icon text-accent"><IconTriangleAlert class="size-5" /></div>

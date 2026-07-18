@@ -73,7 +73,22 @@ describe('FeedEditorSheet', () => {
     wrapper.unmount()
   })
 
-  it('prefills from the initial definition in edit mode and expands filters', async () => {
+  it('renders source rows as selectable cards with a distinct selected state', async () => {
+    const wrapper = mountEditor()
+
+    const checkbox = el<HTMLInputElement>('feed-editor-source-my-prs')!
+    const card = checkbox.closest('label')!
+    expect(card.className).toContain('bg-app')
+    expect(card.className).not.toContain('bg-raised')
+
+    await check(checkbox)
+    expect(card.className).toContain('bg-raised')
+    expect(card.className).not.toContain('bg-app')
+
+    wrapper.unmount()
+  })
+
+  it('prefills from the initial definition in edit mode and auto-expands populated reasons', async () => {
     const def: FeedDef = {
       id: 'team-prs',
       name: 'Team PRs',
@@ -87,7 +102,7 @@ describe('FeedEditorSheet', () => {
     expect(el<HTMLInputElement>('feed-editor-name')?.value).toBe('Team PRs')
     expect(el<HTMLInputElement>('feed-editor-source-my-prs')?.checked).toBe(true)
     expect(el<HTMLInputElement>('feed-editor-source-inbox')?.checked).toBe(false)
-    // Filters and reasons auto-expand when populated; one glob per line.
+    // Filters are always visible now; reasons still auto-expand when populated.
     expect(el<HTMLTextAreaElement>('feed-editor-repos')?.value).toBe('acme/*\nacme/{a,b}/**')
     expect(el<HTMLTextAreaElement>('feed-editor-exclude-authors')?.value).toBe('*[bot]')
     expect(el<HTMLInputElement>('feed-editor-type-pr')?.checked).toBe(true)
@@ -114,8 +129,6 @@ describe('FeedEditorSheet', () => {
     await check(el<HTMLInputElement>('feed-editor-source-my-prs')!)
     await check(el<HTMLInputElement>('feed-editor-source-inbox')!)
 
-    el<HTMLButtonElement>('feed-editor-filters-toggle')!.click()
-    await nextTick()
     // Brace globs contain commas; a line is one pattern, never comma-split.
     await setValue(el<HTMLTextAreaElement>('feed-editor-repos')!, 'acme/{api,web}/**\n acme/cli \n\n')
     await check(el<HTMLInputElement>('feed-editor-type-pr')!)
@@ -150,8 +163,6 @@ describe('FeedEditorSheet', () => {
   it('shows the search-items-excluded hint only while a reason is checked', async () => {
     const wrapper = mountEditor()
 
-    el<HTMLButtonElement>('feed-editor-filters-toggle')!.click()
-    await nextTick()
     el<HTMLButtonElement>('feed-editor-reasons-toggle')!.click()
     await nextTick()
     expect(el('feed-editor-reasons-hint')).toBeNull()
@@ -170,8 +181,6 @@ describe('FeedEditorSheet', () => {
 
     await setValue(el<HTMLInputElement>('feed-editor-name')!, 'Team PRs')
     await check(el<HTMLInputElement>('feed-editor-source-my-prs')!)
-    el<HTMLButtonElement>('feed-editor-filters-toggle')!.click()
-    await nextTick()
     await setValue(el<HTMLTextAreaElement>('feed-editor-repos')!, 'acme/{api,web}/**')
 
     const yaml = el('feed-editor-yaml')!.textContent ?? ''
@@ -257,6 +266,58 @@ describe('FeedEditorSheet', () => {
 
     expect(wrapper.emitted('copy-prompt')).toHaveLength(1)
     expect(wrapper.emitted('copy-path')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('hides the delete button entirely in create mode', () => {
+    const wrapper = mountEditor()
+
+    expect(el('feed-editor-delete')).toBeNull()
+    expect(el('feed-editor-delete-confirm')).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('requires a two-step inline confirm before emitting delete', async () => {
+    const def: FeedDef = { id: 'team-prs', name: 'Team PRs', sources: ['my-prs'], filters: {} }
+    const wrapper = mountEditor({ feedId: 'team-prs', initialDef: def })
+    await nextTick()
+
+    expect(el('feed-editor-delete-confirm')).toBeNull()
+
+    el<HTMLButtonElement>('feed-editor-delete')!.click()
+    await nextTick()
+
+    // The initial button swaps for the inline confirm row — no modal.
+    expect(el('feed-editor-delete')).toBeNull()
+    expect(el('feed-editor-delete-confirm')).not.toBeNull()
+    expect(wrapper.emitted('delete')).toBeUndefined()
+
+    el<HTMLButtonElement>('feed-editor-delete-confirm')!.click()
+    await nextTick()
+
+    expect(wrapper.emitted('delete')).toEqual([['team-prs']])
+    // Confirm collapses back to the plain delete button afterward.
+    expect(el('feed-editor-delete')).not.toBeNull()
+    expect(el('feed-editor-delete-confirm')).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('cancels the delete confirm without emitting', async () => {
+    const def: FeedDef = { id: 'team-prs', name: 'Team PRs', sources: ['my-prs'], filters: {} }
+    const wrapper = mountEditor({ feedId: 'team-prs', initialDef: def })
+    await nextTick()
+
+    el<HTMLButtonElement>('feed-editor-delete')!.click()
+    await nextTick()
+    el<HTMLButtonElement>('feed-editor-delete-cancel')!.click()
+    await nextTick()
+
+    expect(el('feed-editor-delete')).not.toBeNull()
+    expect(el('feed-editor-delete-confirm')).toBeNull()
+    expect(wrapper.emitted('delete')).toBeUndefined()
 
     wrapper.unmount()
   })
