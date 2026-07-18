@@ -3,11 +3,21 @@ name: Go Build/Test
 on:
   workflow_call:
 
+permissions:
+  contents: read
+
 jobs:
   Go:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+
+      # The pinned wails alpha defaults to the GTK4/WebKitGTK 6.0 stack on
+      # Linux (GTK3 is opt-in via -tags gtk3, which nothing here passes).
+      - name: Install Linux desktop build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -34,3 +44,63 @@ jobs:
 
       - name: Test
         run: go test ./... -race
+
+  desktop-frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci
+
+      - name: Build frontend
+        working-directory: desktop/frontend
+        run: npm run build
+
+      - name: Test frontend
+        working-directory: desktop/frontend
+        run: npm test
+
+  desktop-e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: 'go.mod'
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            desktop/e2e/package-lock.json
+            desktop/frontend/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: desktop/frontend
+        run: npm ci
+
+      - name: Install e2e dependencies
+        working-directory: desktop/e2e
+        run: npm ci
+
+      - name: Install Playwright browsers
+        working-directory: desktop/e2e
+        run: npx playwright install --with-deps chromium webkit
+
+      - name: Run desktop e2e tests
+        working-directory: desktop/e2e
+        run: npx playwright test

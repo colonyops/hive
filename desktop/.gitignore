@@ -1,0 +1,8 @@
+.task
+bin
+!frontend/dist/
+frontend/dist/*
+!frontend/dist/.gitkeep
+frontend/node_modules
+build/linux/appimage/build
+build/linux/hive-desktop.desktop

@@ -1,6 +1,7 @@
 [tools]
 # Go Tools
 "go" = "1.26"
+"go:github.com/wailsapp/wails/v3/cmd/wails3" = "v3.0.0-alpha2.116"
 "go:golang.org/x/tools/cmd/deadcode" = "latest"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
@@ -92,6 +93,45 @@ run = "go run . doctor"
 description = "Run doctor with intentionally invalid config"
 env = { HIVE_CONFIG = "./dev/config.invalid.yaml" }
 run = "go run . doctor || true"
+
+[tasks."desktop:dev"]
+description = "Run the desktop app in dev mode (wails3 dev)"
+dir = "desktop"
+run = "wails3 dev -config ./build/config.yml"
+
+[tasks."desktop:build"]
+description = "Build the desktop app"
+dir = "desktop"
+run = "wails3 build"
+
+[tasks."desktop:icons"]
+description = "Regenerate desktop icon assets from SVG masters"
+dir = "desktop"
+run = "./build/icons/generate.sh"
+
+[tasks."desktop:generate"]
+description = "Regenerate desktop TS bindings"
+dir = "desktop"
+run = "wails3 generate bindings -clean=true -ts -i"
+
+[tasks."desktop:serve"]
+description = "Build and run the desktop app as a headless HTTP server (server build)"
+# The server binary embeds frontend/dist, so the frontend must be built first —
+# a fresh clone's dist contains only .gitkeep. Port override: WAILS_SERVER_PORT.
+run = [
+  "cd desktop/frontend && npm run build",
+  "go build -tags server -o ./desktop/bin/hive-desktop-server ./desktop",
+  "./desktop/bin/hive-desktop-server",
+]
+
+[tasks."desktop:test"]
+description = "Run desktop frontend + Go tests"
+run = ["cd desktop/frontend && npm test", "go test ./desktop/..."]
+
+[tasks."desktop:e2e"]
+description = "Run desktop e2e tests (Playwright vs server build)"
+dir = "desktop/e2e"
+run = "npx playwright test"
 
 [tasks."docs:serve"]
 description = "Serve documentation site locally"

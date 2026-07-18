@@ -1,0 +1,187 @@
+@import "tailwindcss";
+
+@theme inline {
+  --color-app: var(--hv-app);
+  --color-raised: var(--hv-raised);
+  --color-sidebar: var(--hv-sidebar);
+  --color-pane: var(--hv-pane);
+  --color-list: var(--hv-list);
+  --color-chip: var(--hv-chip);
+  --color-hover: var(--hv-hover);
+  --color-action-card: var(--hv-action-card);
+  --color-action-hover: var(--hv-action-hover);
+  --color-action-hover-border: var(--hv-action-hover-border);
+  --color-border: var(--hv-border);
+  --color-card: var(--hv-card);
+  --color-strong: var(--hv-strong);
+  --color-row: var(--hv-row);
+  --color-row-hover: var(--hv-row-hover);
+  --color-text: var(--hv-text);
+  --color-text-2: var(--hv-text-2);
+  --color-text-3: var(--hv-text-3);
+  --color-text-4: var(--hv-text-4);
+  --color-accent: var(--hv-accent);
+  --color-accent-contrast: var(--hv-accent-contrast);
+  --color-accent-tint: var(--hv-accent-tint);
+  --color-kind-pr: var(--hv-kind-pr);
+  --color-kind-pr-tint: var(--hv-kind-pr-tint);
+  --color-kind-issue: var(--hv-kind-issue);
+  --color-kind-issue-tint: var(--hv-kind-issue-tint);
+  --color-feeds: var(--hv-feeds);
+  --color-selection: var(--hv-selection);
+  --color-backdrop: var(--hv-backdrop);
+}
+
+@theme {
+  --font-sans: "IBM Plex Sans", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+}
+
+:root,
+[data-theme="dark"] {
+  --hv-app: #181a1f;
+  --hv-raised: #22242c;
+  --hv-sidebar: #282a33;
+  --hv-pane: #1e2027;
+  --hv-list: #181a1f;
+  --hv-chip: #2f313b;
+  --hv-hover: #3a3d47;
+  --hv-action-card: #282a33;
+  --hv-action-hover: #2f313b;
+  --hv-action-hover-border: #3a3a40;
+  --hv-border: #3a3d47;
+  --hv-card: #40434e;
+  --hv-strong: #484b57;
+  --hv-row: #2c2e37;
+  --hv-row-hover: #24262e;
+  --hv-text: #fafafa;
+  --hv-text-2: #a1a1aa;
+  --hv-text-3: #71717a;
+  --hv-text-4: #52525b;
+  --hv-accent: #f59e0b;
+  --hv-accent-contrast: #181a1f;
+  --hv-accent-tint: #3a2f18;
+  --hv-kind-pr: #4ade80;
+  --hv-kind-pr-tint: rgba(74, 222, 128, 0.13);
+  --hv-kind-issue: #facc15;
+  --hv-kind-issue-tint: rgba(250, 204, 21, 0.13);
+  --hv-feeds: #34d399;
+  --hv-selection: rgba(245, 158, 11, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="light"] {
+  --hv-app: #ffffff;
+  --hv-raised: #f1f0ec;
+  --hv-sidebar: #f6f5f2;
+  --hv-pane: #faf9f7;
+  --hv-list: #ffffff;
+  --hv-chip: #eeece8;
+  --hv-hover: #e2e0d9;
+  --hv-action-card: #f6f5f2;
+  --hv-action-hover: #eeece8;
+  --hv-action-hover-border: #d3d1c9;
+  --hv-border: #e2e0d9;
+  --hv-card: #d3d1c9;
+  --hv-strong: #c6c4bb;
+  --hv-row: #e9e7e2;
+  --hv-row-hover: #efeee9;
+  --hv-text: #1b1b19;
+  --hv-text-2: #57544d;
+  --hv-text-3: #7a776f;
+  --hv-text-4: #a8a59d;
+  --hv-accent: #f59e0b;
+  --hv-accent-contrast: #ffffff;
+  --hv-accent-tint: #f5e6c8;
+  --hv-selection: rgba(245, 158, 11, 0.1);
+  --hv-backdrop: rgba(24, 24, 27, 0.25);
+}
+
+[data-theme="midnight"] {
+  --hv-app: #0b0d17;
+  --hv-raised: #141829;
+  --hv-sidebar: #171c30;
+  --hv-pane: #0f1320;
+  --hv-list: #0b0d17;
+  --hv-chip: #1e2440;
+  --hv-hover: #2a3252;
+  --hv-action-card: #171c30;
+  --hv-action-hover: #1e2440;
+  --hv-action-hover-border: #2a3252;
+  --hv-border: #2a3252;
+  --hv-card: #2a3252;
+  --hv-strong: #3a4568;
+  --hv-row: #1e2440;
+  --hv-row-hover: #1b2138;
+  --hv-text: #eaf0ff;
+  --hv-text-2: #8791b8;
+  --hv-text-3: #6b76a0;
+  --hv-text-4: #4a5480;
+  --hv-accent: #f59e0b;
+  --hv-accent-contrast: #0b0d17;
+  --hv-accent-tint: #3a2f18;
+  --hv-selection: rgba(245, 158, 11, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+}
+
+[data-theme="gruvbox"] {
+  --hv-app: #1d2021;
+  --hv-raised: #32302f;
+  --hv-sidebar: #3c3836;
+  --hv-pane: #282828;
+  --hv-list: #1d2021;
+  --hv-chip: #3c3836;
+  --hv-hover: #504945;
+  --hv-action-card: #3c3836;
+  --hv-action-hover: #3c3836;
+  --hv-action-hover-border: #504945;
+  --hv-border: #504945;
+  --hv-card: #665c54;
+  --hv-strong: #7c6f64;
+  --hv-row: #504945;
+  --hv-row-hover: #3a3735;
+  --hv-text: #fbf1c7;
+  --hv-text-2: #bdae93;
+  --hv-text-3: #a89984;
+  --hv-text-4: #928374;
+  --hv-accent: #f59e0b;
+  --hv-accent-contrast: #1d2021;
+  --hv-accent-tint: #3a2f18;
+  --hv-selection: rgba(245, 158, 11, 0.1);
+  --hv-backdrop: rgba(0, 0, 0, 0.55);
+}
+
+@keyframes hivePulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.hive-scroll::-webkit-scrollbar {
+  width: 9px;
+}
+
+.hive-scroll::-webkit-scrollbar-thumb {
+  background: var(--color-strong);
+  border: 2px solid transparent;
+  border-radius: 6px;
+  background-clip: content-box;
+}
+
+.hive-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+body {
+  margin: 0;
+  background: var(--color-app);
+  color: var(--color-text);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
