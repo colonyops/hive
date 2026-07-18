@@ -23,7 +23,7 @@ test('opens the feeds-as-code sheet from the command palette', async ({ page }) 
   await page.keyboard.press('Meta+k')
   const input = page.getByTestId('command-palette-input')
   await input.fill('as code')
-  await expect(page.getByTestId('command-palette-command')).toHaveText('Edit feeds as code…')
+  await expect(page.getByTestId('command-palette-command-title')).toHaveText('Edit feeds as code…')
   await input.press('Enter')
 
   await expect(page.getByTestId('config-sheet')).toBeVisible()
