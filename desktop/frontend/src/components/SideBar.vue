@@ -6,13 +6,21 @@ import IconPlus from '~icons/lucide/plus'
 import IconRss from '~icons/lucide/rss'
 import type { Profile, SidebarSelection } from '../types/feed'
 
-const props = defineProps<{ profile: Profile; selection: SidebarSelection }>()
-const emit = defineEmits<{ select: [sel: SidebarSelection] }>()
+const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
+const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': [] }>()
 
-function selected(selection: SidebarSelection): boolean {
-  if (props.selection.type !== selection.type) return false
-  if (selection.type === 'feed') return props.selection.type === 'feed' && props.selection.feedId === selection.feedId
-  return true
+// "All items" and "Unread" are both all-scope; the unread filter picks
+// which entry lights up. A feed entry highlights regardless of the filter.
+function allSelected(): boolean {
+  return props.selection.type === 'all' && !props.unreadOnly
+}
+
+function unreadSelected(): boolean {
+  return props.selection.type === 'all' && props.unreadOnly
+}
+
+function feedSelected(feedId: string): boolean {
+  return props.selection.type === 'feed' && props.selection.feedId === feedId
 }
 </script>
 
@@ -27,10 +35,10 @@ function selected(selection: SidebarSelection): boolean {
     </div>
 
     <div class="px-2.5 pb-0.5 pt-3">
-      <button class="sidebar-entry" :class="{ 'sidebar-entry-selected': selected({ type: 'all' }) }" @click="emit('select', { type: 'all' })">
+      <button class="sidebar-entry" :class="{ 'sidebar-entry-selected': allSelected() }" @click="emit('select', { type: 'all' })">
         <span class="nav-icon border-accent-tint text-accent"><IconList class="size-3" /></span><span class="flex-1 text-left">All items</span><span class="font-mono text-[11px]">{{ profile.totalCount }}</span>
       </button>
-      <button class="sidebar-entry" :class="{ 'sidebar-entry-selected': selected({ type: 'unread' }) }" @click="emit('select', { type: 'unread' })">
+      <button class="sidebar-entry" data-testid="sidebar-unread" :class="{ 'sidebar-entry-selected': unreadSelected() }" @click="emit('select-unread')">
         <span class="nav-icon"><IconCircle class="size-3" /></span><span class="flex-1 text-left">Unread</span><span class="size-[7px] rounded-full bg-accent" /><span class="ml-[7px] font-mono text-[11px] text-text-3">{{ profile.unreadCount }}</span>
       </button>
     </div>
@@ -41,7 +49,7 @@ function selected(selection: SidebarSelection): boolean {
         v-for="feed in profile.feeds ?? []"
         :key="feed.id"
         class="sidebar-entry"
-        :class="{ 'sidebar-entry-selected': selected({ type: 'feed', feedId: feed.id }) }"
+        :class="{ 'sidebar-entry-selected': feedSelected(feed.id) }"
         @click="emit('select', { type: 'feed', feedId: feed.id })"
       >
         <span class="nav-icon"><IconGitBranch class="size-3" /></span><span class="flex-1 text-left">{{ feed.name }}</span><span class="font-mono text-[11px]" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{ feed.newCount || feed.count }}</span>

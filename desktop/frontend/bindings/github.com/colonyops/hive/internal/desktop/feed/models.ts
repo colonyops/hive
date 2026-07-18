@@ -14,9 +14,9 @@ export interface Action {
 }
 
 /**
- * FeedItem is an item from a profile feed.
+ * Item is an item from a profile feed.
  */
-export interface FeedItem {
+export interface Item {
     "id": string;
 
     /**
@@ -33,20 +33,12 @@ export interface FeedItem {
     "branch": string;
     "body": string;
     "prompt": string;
+    "url": string;
 }
 
 /**
- * FeedSource is a selectable source within a profile.
- */
-export interface FeedSource {
-    "id": string;
-    "name": string;
-    "count": number;
-    "newCount": number;
-}
-
-/**
- * Profile is a desktop feed profile and its available sources.
+ * Profile is a desktop feed profile (a "workspace" in the designs) and its
+ * feeds.
  */
 export interface Profile {
     "id": string;
@@ -55,5 +47,15 @@ export interface Profile {
     "sourceSummary": string;
     "totalCount": number;
     "unreadCount": number;
-    "feeds": FeedSource[] | null;
+    "feeds": Source[] | null;
+}
+
+/**
+ * Source is a selectable feed within a profile.
+ */
+export interface Source {
+    "id": string;
+    "name": string;
+    "count": number;
+    "newCount": number;
 }

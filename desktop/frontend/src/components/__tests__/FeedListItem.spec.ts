@@ -16,6 +16,7 @@ const baseItem: FeedItem = {
   branch: 'feat/desktop-ui-shell',
   body: 'Body',
   prompt: 'Prompt',
+  url: 'https://github.com/colonyops/hive/pull/42',
 }
 
 function mountItem(overrides: Partial<FeedItem> = {}, selected = false) {

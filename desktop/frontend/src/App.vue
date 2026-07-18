@@ -1,20 +1,39 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
 import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import OnboardingScreen from './components/OnboardingScreen.vue'
+import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
 
 const {
-  profiles, activeProfile, activeProfileId, selection, items, selectedId, selectedItem,
-  actions, unreadOnly, title, countLabel, toast, selectProfile, selectSidebar, selectItem,
+  status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
+  startDeviceFlow, useTokenInstead, backToStart, submitToken,
+} = useAuth()
+
+const {
+  profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
+  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toast,
+  creatingProfile, createProfileError, loadProfiles, createProfile,
+  selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
+
+// Booting while signed out leaves profiles unloaded (or the live backend
+// erroring); re-load the moment auth lands — and when the login changes, so
+// a different account never sees the previous account's data.
+watch(() => (authenticated.value ? authStatus.value?.login ?? '' : null), (key) => {
+  if (key !== null) void loadProfiles()
+})
+
+// Step 2 of onboarding: authenticated but no workspace exists yet.
+const needsWorkspace = computed(() => authenticated.value && profilesLoaded.value && profiles.value.length === 0)
 
 // ── Command palette ──────────────────────────────────────────────────────────
 
@@ -111,14 +130,34 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 <template>
   <main class="h-screen w-screen overflow-hidden bg-app text-text">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
-      <TitleBar :profile-name="activeProfile?.name ?? 'Loading'" />
-      <div class="flex min-h-0 flex-1">
+      <TitleBar
+        :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
+        :unread-count="activeProfile?.unreadCount ?? 0"
+      />
+      <!-- Hold an empty frame until auth status resolves so an authenticated
+           user never sees onboarding flash by. -->
+      <div v-if="authStatus === null" class="flex min-h-0 flex-1 items-center justify-center font-mono text-xs text-text-4">Loading…</div>
+      <OnboardingScreen
+        v-else-if="!authenticated || needsWorkspace"
+        :card="needsWorkspace ? 'workspace' : authCard"
+        :device-flow="deviceFlow"
+        :error="needsWorkspace ? createProfileError : authError"
+        :busy="needsWorkspace ? creatingProfile : authBusy"
+        @start-device-flow="startDeviceFlow"
+        @use-token-instead="useTokenInstead"
+        @back-to-start="backToStart"
+        @submit-token="submitToken"
+        @create-workspace="createProfile"
+      />
+      <div v-else class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" />
         <SideBar
           v-if="activeProfile"
           :profile="activeProfile"
           :selection="selection"
+          :unread-only="unreadOnly"
           @select="selectSidebar"
+          @select-unread="selectUnreadView"
         />
         <section v-if="activeProfile" class="flex min-w-0 flex-1">
           <FeedList
@@ -127,13 +166,20 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             :selected-id="selectedId"
             :unread-only="unreadOnly"
             :count-label="countLabel"
+            :load-error="loadError"
             @select="selectItem"
             @toggle-unread="toggleUnread"
             @refresh="refresh"
           />
           <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
         </section>
-        <div v-else class="flex flex-1 items-center justify-center font-mono text-xs text-text-4">Loading feed…</div>
+        <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
+          <template v-if="profilesError">
+            <span data-testid="profiles-error">{{ profilesError }}</span>
+            <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
+          </template>
+          <span v-else>Loading feed…</span>
+        </div>
       </div>
     </div>
     <Transition name="toast">

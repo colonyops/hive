@@ -20,6 +20,7 @@ require (
 	github.com/stretchr/testify v1.11.1
 	github.com/urfave/cli/v3 v3.10.1
 	github.com/wailsapp/wails/v3 v3.0.0-alpha2.116
+	github.com/zalando/go-keyring v0.2.8
 	golang.org/x/mod v0.38.0
 	golang.org/x/sys v0.47.0
 	golang.org/x/term v0.45.0
@@ -45,6 +46,7 @@ require (
 	github.com/clipperhouse/displaywidth v0.11.0 // indirect
 	github.com/clipperhouse/uax29/v2 v2.7.0 // indirect
 	github.com/coder/websocket v1.8.14 // indirect
+	github.com/danieljoos/wincred v1.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/dlclark/regexp2 v1.11.5 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect

@@ -17,12 +17,13 @@ function item(id: string, title: string, unread: boolean): FeedItem {
     branch: 'feat/desktop-ui-shell',
     body: 'Body',
     prompt: 'Prompt',
+    url: 'https://github.com/colonyops/hive/pull/42',
   }
 }
 
 const items = [item('unread-1', 'Unread item', true), item('read-1', 'Read item', false)]
 
-function mountList(unreadOnly = false) {
+function mountList(unreadOnly = false, loadError: string | null = null) {
   return mount(FeedList, {
     props: {
       title: 'All items',
@@ -30,6 +31,7 @@ function mountList(unreadOnly = false) {
       selectedId: null,
       unreadOnly,
       countLabel: '2 · 1 unread',
+      loadError,
     },
   })
 }
@@ -49,6 +51,49 @@ describe('FeedList', () => {
     await itemButton!.trigger('click')
 
     expect(wrapper.emitted('select')).toEqual([['read-1']])
+  })
+
+  it('shows the unreachable state with a retry that emits refresh', async () => {
+    const wrapper = mountList(false, "Can't reach GitHub right now.")
+
+    const error = wrapper.get('[data-testid="feed-error"]')
+    expect(error.text()).toContain('GitHub unreachable')
+    expect(error.text()).toContain("Can't reach GitHub right now.")
+    expect(wrapper.text()).not.toContain('Unread item')
+
+    await error.get('button').trigger('click')
+    expect(wrapper.emitted('refresh')).toHaveLength(1)
+  })
+
+  it('shows the all-caught-up state when the unread filter drains the list', () => {
+    const wrapper = mount(FeedList, {
+      props: {
+        title: 'Unread',
+        items: [item('read-1', 'Read item', false)],
+        selectedId: null,
+        unreadOnly: true,
+        countLabel: '1 · 0 unread',
+        loadError: null,
+      },
+    })
+
+    const empty = wrapper.get('[data-testid="feed-empty"]')
+    expect(empty.text()).toContain("You're all caught up")
+  })
+
+  it('shows the plain empty state without the unread filter', () => {
+    const wrapper = mount(FeedList, {
+      props: {
+        title: 'All items',
+        items: [],
+        selectedId: null,
+        unreadOnly: false,
+        countLabel: '0 · 0 unread',
+        loadError: null,
+      },
+    })
+
+    expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No items yet')
   })
 
   it('emits toggle-unread and refresh from header controls', async () => {

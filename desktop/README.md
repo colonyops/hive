@@ -91,12 +91,35 @@ wails3 generate bindings -clean=true -ts -i
 ```
 
 The frontend Vite plugin requires generated typed-event bindings. The shell
-registers the future-facing `feed:updated` event solely to generate those
-bindings, using package-variable initialization rather than an `init()`
-function because this repository enables `gochecknoinits` (main.go carries a
-comment saying the same). `FeedService` serves mock `Profiles`, `Items`, and
-`ActionsFor` data over the generated TS bindings; the data stays placeholder
-until the real data layer lands in a later phase.
+registers the `feed:updated` and `auth:updated` events using package-variable
+initialization rather than an `init()` function because this repository
+enables `gochecknoinits` (main.go carries a comment saying the same). Both
+events are wake-up signals: `auth:updated` makes the frontend re-read auth
+Status (device-flow grants land in a Go goroutine), and `feed:updated`
+carries the profile ID whose data changed so the frontend re-reads counts
+and, when it is the active profile, items.
+
+The feed service delegates to a `feed.Provider`: mock fixtures in
+`HIVE_DESKTOP_MOCK` modes, or the GitHub-backed `LiveProvider` (search-query
+feeds plus the notifications inbox, deduplicated by `repo#num`, 30s fetch
+cache, app-local read state under the hive data dir's `desktop/`
+subdirectory). In live mode a poller refreshes every profile each 60s and
+emits `feed:updated` on change; the titlebar's polling indicator reflects
+the active profile's unread count.
+
+Desktop-only Go code lives under `internal/desktop/**`; the `desktop/`
+package is thin Wails wiring. `internal/desktop/auth` implements GitHub
+authentication behind the auth service: an OAuth device flow plus a
+personal-access-token fallback, with tokens stored in the OS keychain
+(`HIVE_GITHUB_TOKEN` is a read-only headless override). The device flow uses
+the registered Hive Desktop OAuth app's public client ID by default;
+`HIVE_GITHUB_CLIENT_ID` overrides it, e.g. to test another registration.
+`internal/github` is the shared GitHub REST client (deliberately not under
+`internal/desktop`).
+
+`HIVE_DESKTOP_MOCK` selects deterministic offline backends: `feed` starts
+authenticated, `onboarding` starts signed out with a fake device flow that
+grants after ~1.5s. Unset, the live backends run.
 
 `build/config.yml` keeps `dev_mode.root_path: .`; when `wails3 dev` is started
 from `desktop/`, Wails watches `desktop/` rather than the whole repository.
@@ -159,10 +182,14 @@ mise run desktop:serve
 
 Drive and inspect the app at `http://localhost:8080` with Playwright or browser
 tooling, read the screenshots in `desktop/e2e/screenshots`, edit, and repeat.
+Set `HIVE_DESKTOP_MOCK=onboarding` to drive the first-run screen offline.
 Run `mise run desktop:e2e` as the regression gate. Its harness
 (`desktop/e2e/scripts/serve.sh` and `playwright.config.ts`) deliberately runs
-its own fresh build on port 8931, so the gate never reuses a stale interactive
-server. Before the first local run, install the browsers with:
+its own fresh build on port 8931 (in `feed` mock mode), so the gate never
+reuses a stale interactive server, plus two `onboarding`-mode instances on
+8932/8933 — one per browser project, because the mock auth backend stays
+authenticated once its fake device flow grants. Before the first local run,
+install the browsers with:
 
 ```sh
 cd desktop/e2e
