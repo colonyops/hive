@@ -142,6 +142,39 @@ describe('useFeedState', () => {
     wrapper.unmount()
   })
 
+  it('exits the sidebar Unread view when the filter is toggled off', async () => {
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectSidebar({ type: 'unread' })
+    expect(state.unreadOnly.value).toBe(true)
+    expect(state.title.value).toBe('Unread')
+
+    await state.toggleUnread()
+
+    expect(state.unreadOnly.value).toBe(false)
+    expect(state.selection.value).toEqual({ type: 'all' })
+    expect(state.title.value).toBe('All items')
+
+    wrapper.unmount()
+  })
+
+  it('moves selection to the first unread item when the filter hides the selected one', async () => {
+    mocks.Items.mockResolvedValue([
+      { ...feedItem('pr-1', 'PR', 'First PR'), unread: false },
+      feedItem('issue-1', 'Issue', 'First issue'),
+    ])
+    const { state, wrapper } = await mountLoadedState()
+
+    await state.selectItem('pr-1')
+    await state.toggleUnread()
+
+    expect(state.unreadOnly.value).toBe(true)
+    expect(state.selectedId.value).toBe('issue-1')
+    expect(mocks.ActionsFor).toHaveBeenCalledWith('Issue')
+
+    wrapper.unmount()
+  })
+
   it('loads actions for the selected item kind', async () => {
     const { state, wrapper } = await mountLoadedState()
     mocks.ActionsFor.mockClear()

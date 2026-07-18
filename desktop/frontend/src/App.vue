@@ -83,7 +83,7 @@ useCommands(computed(() => {
 // ── Global ⌘K / Ctrl+K listener ──────────────────────────────────────────────
 
 function onGlobalKeydown(e: KeyboardEvent): void {
-  if (e.key !== 'k' || (!e.metaKey && !e.ctrlKey)) return
+  if (e.key.toLowerCase() !== 'k' || (!e.metaKey && !e.ctrlKey)) return
 
   // If palette is already open, always close it (even from inside the input)
   if (paletteOpen.value) {

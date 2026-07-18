@@ -36,6 +36,9 @@ const visibleItems = computed(() => props.unreadOnly ? props.items.filter((item)
         :selected="item.id === selectedId"
         @select="emit('select', item.id)"
       />
+      <div v-if="visibleItems.length === 0" class="flex h-full items-center justify-center font-mono text-xs text-text-4" data-testid="feed-empty">
+        {{ unreadOnly ? 'No unread items' : 'No items' }}
+      </div>
     </div>
   </section>
 </template>

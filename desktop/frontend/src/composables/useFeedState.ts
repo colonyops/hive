@@ -48,8 +48,9 @@ export function useFeedState() {
     if (!activeProfileId.value) return
     try {
       items.value = ((await Items(activeProfileId.value, feedID)) ?? []) as BindingFeedItem[] as FeedItem[]
-      selectedId.value = items.value[0]?.id ?? null
-      await loadActions(items.value[0] ?? null)
+      const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
+      selectedId.value = first?.id ?? null
+      await loadActions(first)
     } catch (error) {
       console.warn('Unable to load feed items', error)
       items.value = []
@@ -76,8 +77,20 @@ export function useFeedState() {
     await loadActions(items.value.find((item) => item.id === id) ?? null)
   }
 
-  function toggleUnread() {
+  async function toggleUnread() {
     unreadOnly.value = !unreadOnly.value
+    if (!unreadOnly.value) {
+      // Turning the filter off while the sidebar "Unread" view is active exits
+      // to "All items"; otherwise the title and highlight would still claim
+      // Unread while every item renders.
+      if (selection.value.type === 'unread') selection.value = { type: 'all' }
+      return
+    }
+    if (selectedItem.value && !selectedItem.value.unread) {
+      const firstUnread = items.value.find((item) => item.unread) ?? null
+      selectedId.value = firstUnread?.id ?? null
+      await loadActions(firstUnread)
+    }
   }
 
   async function refresh() {
