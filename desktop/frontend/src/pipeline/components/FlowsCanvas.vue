@@ -9,13 +9,22 @@
 // (cardShadow) on the selected card; opening the editor is a distinct,
 // explicit double-click gesture.
 //
-// Wire *creation* is intentionally out of scope here (a separate task):
-// existing wires render, but drawing/removing one by pointer is left to
-// hand-editing the flow's YAML for now — see NodePalette.vue's module docs
-// for the same posture.
+// Wire creation (8c "WIRING"): a pointerdown on an *output* port
+// (@pointerdown.stop.prevent — stopping the card's own onNodePointerDown
+// from also firing is the port-drag-vs-card-drag disambiguation) starts a
+// drag tracked in `wireDraft`; a live dashed SVG path follows the pointer
+// (world coords via clientToWorld, mirroring onNodePointerDown's zoom-scaled
+// delta math below) and any input port the pointer is currently over that
+// lib/ports.ts's canConnect() accepts gets the "drop to connect" highlight.
+// pointerup over a valid target emits add-wire; anywhere else cancels.
+// Wire deletion is hover-driven: each rendered wire gets an invisible wide
+// hit-path plus a small ✕ control at its midpoint, both revealed via the
+// scoped .wire-group:hover rules below, emitting remove-wire on click.
+// FlowsView.vue binds both emits straight to usePipelineEditor's
+// addWire/removeWire.
 import { computed, ref, watch } from 'vue'
 import { byType } from '../registry'
-import { hasInputPort, outputPortCount } from '../lib/ports'
+import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
 import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStatus'
 import { gridPosition, type EditorFlow, type NodePosition, type NodeRunRecord, type WireLayout } from '../lib/wireFlow'
 import type { FlowNode, Wire } from '../types'
@@ -40,6 +49,8 @@ const emit = defineEmits<{
   move: [id: string, x: number, y: number]
   'update-node': [node: FlowNode]
   'delete-node': [id: string]
+  'add-wire': [wire: Wire]
+  'remove-wire': [wire: Wire]
 }>()
 
 const CARD_WIDTH = 176
@@ -126,11 +137,21 @@ function portPoint(nodeId: string, portIndex: number, output: boolean): { x: num
   }
 }
 
-function wirePath(wire: Wire): string {
-  const from = portPoint(wire.from, wire.out ?? 0, true)
-  const to = portPoint(wire.to, 0, false)
+/** Cubic-bezier `d` between two world-space points — shared by wirePath (a real wire), draftPath (the live in-progress drag), and nothing else needs the bend math duplicated. */
+function bezierPath(from: { x: number; y: number }, to: { x: number; y: number }): string {
   const bend = Math.max(60, Math.abs(to.x - from.x) / 2)
   return `M ${from.x} ${from.y} C ${from.x + bend} ${from.y}, ${to.x - bend} ${to.y}, ${to.x} ${to.y}`
+}
+
+function wirePath(wire: Wire): string {
+  return bezierPath(portPoint(wire.from, wire.out ?? 0, true), portPoint(wire.to, 0, false))
+}
+
+/** Midpoint of a wire's two port points — where its hover delete (✕) control sits. */
+function wireMidpoint(wire: Wire): { x: number; y: number } {
+  const from = portPoint(wire.from, wire.out ?? 0, true)
+  const to = portPoint(wire.to, 0, false)
+  return { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 }
 }
 
 // ── Live status (8c: idle / running / done / error) ─────────────────────
@@ -201,6 +222,81 @@ function onNodeDblClick(node: FlowNode) {
 function onSurfaceClick() {
   selectedNodeId.value = null
 }
+
+// ── Wire creation by drag (8c "WIRING") ─────────────────────────────────
+// A pointerdown on an output port (not the card) starts a drag: wireDraft
+// tracks the source node/port and the pointer's current world position, so
+// the template can render a live dashed path (draftPath) from the source
+// port to the cursor. On every move, nodeAt() hit-tests the drag's current
+// world position against each node's card bbox (a full-card target is a
+// larger, easier-to-hit drop zone than the 9×13 port itself) and
+// canConnect() (lib/ports.ts) gates whether that node is actually a legal
+// target — the same gate used again on drop, so the "drop to connect"
+// highlight (hoverTargetId) and the eventual add-wire emit can never
+// disagree.
+
+interface WireDraft {
+  fromNodeId: string
+  fromPort: number
+  toX: number
+  toY: number
+}
+
+const wireDraft = ref<WireDraft | null>(null)
+const hoverTargetId = ref<string | null>(null)
+
+/** Converts a pointer event's client coords into world (canvas-content) coords — the inverse of the outer content div's `translate(pan) scale(zoom)` transform, mirroring onNodePointerDown's zoom-scaled delta math above but as an absolute position rather than a delta. */
+function clientToWorld(clientX: number, clientY: number): { x: number; y: number } {
+  const rect = viewportRef.value?.getBoundingClientRect()
+  const left = rect?.left ?? 0
+  const top = rect?.top ?? 0
+  return { x: (clientX - left - pan.value.x) / zoom.value, y: (clientY - top - pan.value.y) / zoom.value }
+}
+
+/** The node whose 176×52 card bbox contains a world-space point, if any. */
+function nodeAt(worldX: number, worldY: number): FlowNode | null {
+  for (const node of props.flow.nodes) {
+    const pos = positions.value.get(node.id)
+    if (!pos) continue
+    if (worldX >= pos.x && worldX <= pos.x + CARD_WIDTH && worldY >= pos.y && worldY <= pos.y + CARD_HEIGHT) return node
+  }
+  return null
+}
+
+function onOutputPortPointerDown(e: PointerEvent, node: FlowNode, portIndex: number) {
+  if (e.button !== 0) return
+  const start = portPoint(node.id, portIndex, true)
+  wireDraft.value = { fromNodeId: node.id, fromPort: portIndex, toX: start.x, toY: start.y }
+  hoverTargetId.value = null
+
+  function targetAt(clientX: number, clientY: number): FlowNode | null {
+    const world = clientToWorld(clientX, clientY)
+    const target = nodeAt(world.x, world.y)
+    return target && canConnect(node, portIndex, target, props.flow.wires, (type) => byType[type]) ? target : null
+  }
+
+  function onMove(ev: PointerEvent) {
+    const world = clientToWorld(ev.clientX, ev.clientY)
+    wireDraft.value = { fromNodeId: node.id, fromPort: portIndex, toX: world.x, toY: world.y }
+    hoverTargetId.value = targetAt(ev.clientX, ev.clientY)?.id ?? null
+  }
+  function onUp(ev: PointerEvent) {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    const target = targetAt(ev.clientX, ev.clientY)
+    if (target) emit('add-wire', { from: node.id, out: portIndex, to: target.id })
+    wireDraft.value = null
+    hoverTargetId.value = null
+  }
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
+
+const draftPath = computed<string>(() => {
+  const draft = wireDraft.value
+  if (!draft) return ''
+  return bezierPath(portPoint(draft.fromNodeId, draft.fromPort, true), { x: draft.toX, y: draft.toY })
+})
 
 // ── Zoom / fit — a basic scale transform; panning only happens as a side
 // effect of Fit/focus centering content, there's no click-drag-to-pan in
@@ -308,21 +404,48 @@ function onDrawerDelete(id: string) {
     @click.self="onSurfaceClick"
   >
     <div v-if="flow.nodes.length === 0" class="flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="canvas-empty">
-      Add a node from the palette to get started. Wires render here once nodes are wired in the flow's YAML.
+      Add a node from the palette to get started. Drag from an output port to an input port to wire nodes together.
     </div>
 
     <div class="absolute left-0 top-0 origin-top-left" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }">
       <svg class="pointer-events-none absolute left-0 top-0 h-0 w-0 overflow-visible">
+        <g v-for="(wire, i) in flow.wires" :key="i" class="wire-group">
+          <path
+            :d="wirePath(wire)"
+            fill="none"
+            class="wire-visible"
+            stroke-width="2.5"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            data-testid="flow-wire"
+          />
+          <path
+            :d="wirePath(wire)"
+            fill="none"
+            stroke="transparent"
+            stroke-width="16"
+            class="wire-hitbox"
+          />
+          <g
+            :transform="`translate(${wireMidpoint(wire).x}, ${wireMidpoint(wire).y})`"
+            class="wire-delete"
+            :data-testid="`wire-delete-${i}`"
+            @click.stop="emit('remove-wire', wire)"
+          >
+            <circle r="8" class="wire-delete-bg" />
+            <path d="M-3,-3 L3,3 M3,-3 L-3,3" class="wire-delete-x" />
+          </g>
+        </g>
+
         <path
-          v-for="(wire, i) in flow.wires"
-          :key="i"
-          :d="wirePath(wire)"
+          v-if="wireDraft"
+          :d="draftPath"
           fill="none"
-          stroke="var(--color-strong)"
+          stroke="var(--color-accent)"
           stroke-width="2.5"
           stroke-linecap="round"
-          stroke-linejoin="round"
-          data-testid="flow-wire"
+          stroke-dasharray="6 6"
+          data-testid="wire-draft"
         />
       </svg>
 
@@ -347,15 +470,24 @@ function onDrawerDelete(id: string) {
             </div>
           </div>
 
-          <span v-if="hasInput(node)" class="port absolute -left-[5px]" :style="portStyle(0, 1)" data-testid="port-in" />
+          <span
+            v-if="hasInput(node)"
+            class="port absolute -left-[5px]"
+            :class="{ 'port-target-valid': wireDraft && hoverTargetId === node.id }"
+            :style="portStyle(0, 1)"
+            data-testid="port-in"
+          />
           <span
             v-for="p in outputPorts(node)"
             :key="p"
-            class="port absolute -right-[5px]"
+            class="port absolute -right-[5px] cursor-crosshair"
             :style="portStyle(p, outputPorts(node).length)"
             :data-testid="`port-out-${node.id}-${p}`"
+            @pointerdown.stop.prevent="onOutputPortPointerDown($event, node, p)"
           />
         </div>
+
+        <div v-if="wireDraft && hoverTargetId === node.id" class="drop-hint" data-testid="wire-drop-hint">drop to connect</div>
 
         <div class="mt-1.5 flex items-center gap-1.5 pl-[3px]">
           <span class="size-2 shrink-0 rounded-full" :class="{ 'hive-pulse': statusDotPulses(node) }" :style="{ background: statusDotColor(node) }" />
@@ -382,7 +514,68 @@ function onDrawerDelete(id: string) {
   border: 1px solid var(--color-canvas);
 }
 
+/* 8c "drop to connect": the currently-hovered legal wire-drag target. */
+.port-target-valid {
+  background: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.32);
+}
+
+.drop-hint {
+  position: absolute;
+  left: -2px;
+  top: -24px;
+  white-space: nowrap;
+  pointer-events: none;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 10px;
+  color: var(--color-accent);
+  background: var(--color-pane);
+  border: 1px solid var(--color-accent);
+  border-radius: 5px;
+  padding: 2px 7px;
+}
+
 .hive-pulse {
   animation: hivePulse 1.6s ease-in-out infinite;
+}
+
+/* Hover-to-delete a wire (8c): the thin visible path never itself catches
+   pointer events (fill:none + a 2.5px stroke is too small to hit reliably);
+   the invisible wire-hitbox path underneath does, and :hover on it — via
+   plain CSS ancestor propagation — reveals wire-delete and recolors
+   wire-visible on the shared wire-group. */
+.wire-visible {
+  stroke: var(--color-strong);
+  transition: stroke 120ms ease;
+}
+
+.wire-hitbox {
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.wire-delete {
+  pointer-events: auto;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+
+.wire-delete-bg {
+  fill: var(--color-severity-error);
+}
+
+.wire-delete-x {
+  stroke: white;
+  stroke-width: 1.5px;
+  stroke-linecap: round;
+}
+
+.wire-group:hover .wire-visible {
+  stroke: var(--color-severity-error);
+}
+
+.wire-group:hover .wire-delete {
+  opacity: 1;
 }
 </style>

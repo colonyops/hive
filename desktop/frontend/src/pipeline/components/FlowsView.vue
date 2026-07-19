@@ -49,7 +49,7 @@ const props = defineProps<{ flowId?: string }>()
 
 const {
   flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error,
-  refreshFlows, refreshNodeRuns, selectFlow, newFlow, addNode, updateNode, deleteNode, moveNode, deploy,
+  refreshFlows, refreshNodeRuns, selectFlow, newFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
 } = usePipelineEditor(client)
 
 watch([() => props.flowId, flows], ([id, list]) => {
@@ -343,6 +343,8 @@ const showDebug = ref(false)
           @move="moveNode"
           @update-node="updateNode"
           @delete-node="deleteNode"
+          @add-wire="addWire"
+          @remove-wire="removeWire"
         />
         <div v-else class="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="flows-view-empty">
           Select a flow, or create a new one, to start editing.

@@ -61,6 +61,30 @@ async function dblClickNode(wrapper: ReturnType<typeof mountCanvas>, testid: str
   await card.trigger('dblclick')
 }
 
+// Mirrors FlowsCanvas.vue's own port-position math (CARD_WIDTH/CARD_HEIGHT/
+// PORT_HEIGHT, portTop for a single port) so tests can name a drop point in
+// terms of a node's layout position rather than a hand-computed magic
+// number. zoom is 1 and pan is {0,0} by default (no fit()/drag has run), and
+// happy-dom reports getBoundingClientRect() as all-zero (see the fit() test
+// below), so a world coordinate here is also the clientX/clientY to dispatch.
+function portWorldPos(pos: { x: number; y: number }, output: boolean): { x: number; y: number } {
+  const cardWidth = 176
+  const cardHeight = 52
+  const portHeight = 13
+  const top = (cardHeight - portHeight) / 2
+  return { x: output ? pos.x + cardWidth : pos.x, y: pos.y + top + portHeight / 2 }
+}
+
+/** Drags a wire from an output port's testid to a world/client point, then releases there. */
+async function dragWire(wrapper: ReturnType<typeof mountCanvas>, fromTestId: string, to: { x: number; y: number }) {
+  const port = wrapper.get(`[data-testid="${fromTestId}"]`)
+  await port.trigger('pointerdown', { button: 0 })
+  window.dispatchEvent(new PointerEvent('pointermove', { clientX: to.x, clientY: to.y }))
+  await nextTick()
+  window.dispatchEvent(new PointerEvent('pointerup', { clientX: to.x, clientY: to.y }))
+  await nextTick()
+}
+
 describe('FlowsCanvas', () => {
   it('renders one card per node with its title, type, and idle status by default', () => {
     const wrapper = mountCanvas()
@@ -291,6 +315,88 @@ describe('FlowsCanvas', () => {
     // A single 176×52 node's bbox is tiny next to the (fallback) 1200×800
     // viewport, so fitToBBox clamps zoom to its 1.5 max.
     expect(wrapper.vm.zoom).toBe(1.5)
+
+    wrapper.unmount()
+  })
+
+  it('dragging from an output port to a valid input port emits add-wire with the right {from, out, to}', async () => {
+    // wires: [] — the default flow() already wires source->filter, which
+    // would make this drop a (rejected) duplicate.
+    const wrapper = mountCanvas({ flow: flow({ wires: [] }) })
+    const filterInput = portWorldPos({ x: 400, y: 20 }, false)
+
+    await dragWire(wrapper, 'port-out-source-0', filterInput)
+
+    expect(wrapper.emitted('add-wire')).toEqual([[{ from: 'source', out: 0, to: 'filter' }]])
+
+    wrapper.unmount()
+  })
+
+  it('shows a live draft wire and highlights the hovered valid target while dragging, clearing both on drop', async () => {
+    const wrapper = mountCanvas({ flow: flow({ wires: [] }) })
+    const filterInput = portWorldPos({ x: 400, y: 20 }, false)
+
+    await wrapper.get('[data-testid="port-out-source-0"]').trigger('pointerdown', { button: 0 })
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: filterInput.x, clientY: filterInput.y }))
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="wire-draft"]').exists()).toBe(true)
+    const filterInputPort = wrapper.get('[data-testid="flow-node-filter"] [data-testid="port-in"]')
+    expect(filterInputPort.classes()).toContain('port-target-valid')
+
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: filterInput.x, clientY: filterInput.y }))
+    await nextTick()
+
+    expect(wrapper.find('[data-testid="wire-draft"]').exists()).toBe(false)
+    expect(wrapper.emitted('add-wire')).toEqual([[{ from: 'source', out: 0, to: 'filter' }]])
+
+    wrapper.unmount()
+  })
+
+  it('dropping on a node with no input port (a source) does not emit add-wire', async () => {
+    const wrapper = mountCanvas({ flow: flow({ wires: [] }) })
+    // A point inside source's 176x52 card bbox (source has no port-in at all).
+    const overSource = { x: 10 + 40, y: 20 + 26 }
+
+    await dragWire(wrapper, 'port-out-filter-0', overSource)
+
+    expect(wrapper.emitted('add-wire')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('dropping back on the same node does not emit add-wire (no self-connection)', async () => {
+    const wrapper = mountCanvas({ flow: flow({ wires: [] }) })
+    // A point inside filter's own card bbox — the same node the drag started from.
+    const overFilter = { x: 400 + 40, y: 20 + 26 }
+
+    await dragWire(wrapper, 'port-out-filter-0', overFilter)
+
+    expect(wrapper.emitted('add-wire')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('a port-drag does not select, move, or open the drawer for the card it started on (disambiguation)', async () => {
+    const wrapper = mountCanvas({ flow: flow({ wires: [] }) })
+
+    await dragWire(wrapper, 'port-out-filter-0', { x: 2000, y: 2000 }) // nowhere near any node — cancels
+
+    expect(wrapper.emitted('add-wire')).toBeUndefined()
+    expect(wrapper.emitted('move')).toBeUndefined()
+    const card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).not.toContain('var(--color-accent)')
+    expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('the wire-delete affordance emits remove-wire with the correct wire', async () => {
+    const wrapper = mountCanvas() // default wires: source->filter, filter->feed
+
+    await wrapper.get('[data-testid="wire-delete-0"]').trigger('click')
+
+    expect(wrapper.emitted('remove-wire')).toEqual([[{ from: 'source', to: 'filter' }]])
 
     wrapper.unmount()
   })
