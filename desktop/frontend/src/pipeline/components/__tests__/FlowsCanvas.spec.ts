@@ -400,4 +400,74 @@ describe('FlowsCanvas', () => {
 
     wrapper.unmount()
   })
+
+  it('Backspace deletes the selected node and clears the selection', async () => {
+    const wrapper = mountCanvas()
+    await clickNode(wrapper, 'flow-node-filter')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    await nextTick()
+
+    expect(wrapper.emitted('delete-node')).toEqual([['filter']])
+    const card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).not.toContain('var(--color-accent)')
+
+    wrapper.unmount()
+  })
+
+  it('Delete deletes the selected node and clears the selection', async () => {
+    const wrapper = mountCanvas()
+    await clickNode(wrapper, 'flow-node-filter')
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await nextTick()
+
+    expect(wrapper.emitted('delete-node')).toEqual([['filter']])
+    const card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).not.toContain('var(--color-accent)')
+
+    wrapper.unmount()
+  })
+
+  it('does not emit delete-node on Backspace/Delete when nothing is selected', async () => {
+    const wrapper = mountCanvas()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Delete' }))
+    await nextTick()
+
+    expect(wrapper.emitted('delete-node')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('does not emit delete-node on Backspace when a text input has focus', async () => {
+    const wrapper = mountCanvas()
+    await clickNode(wrapper, 'flow-node-filter')
+
+    const input = document.createElement('input')
+    document.body.appendChild(input)
+    input.focus()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    await nextTick()
+
+    expect(wrapper.emitted('delete-node')).toBeUndefined()
+
+    input.remove()
+    wrapper.unmount()
+  })
+
+  it('does not emit delete-node on Backspace while the NodeEditorDrawer is open', async () => {
+    const wrapper = mountCanvas()
+    await dblClickNode(wrapper, 'flow-node-filter') // selects + opens the drawer
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Backspace' }))
+    await nextTick()
+
+    expect(wrapper.emitted('delete-node')).toBeUndefined()
+    expect(wrapper.find('[data-testid="node-editor-title"]').exists()).toBe(true) // drawer still open
+
+    wrapper.unmount()
+  })
 })

@@ -22,7 +22,12 @@
 // scoped .wire-group:hover rules below, emitting remove-wire on click.
 // FlowsView.vue binds both emits straight to usePipelineEditor's
 // addWire/removeWire.
-import { computed, ref, watch } from 'vue'
+//
+// Keyboard deletion: Backspace/Delete on a selected node emits delete-node
+// (same path as the drawer's delete affordance — see onKeyDown near the
+// bottom), guarded off while the drawer is open or a text input/textarea/
+// contentEditable has focus.
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { byType } from '../registry'
 import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
 import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStatus'
@@ -398,6 +403,39 @@ function onDrawerDelete(id: string) {
   drawerOpen.value = false
   selectedNodeId.value = null
 }
+
+// ── Keyboard deletion: Backspace/Delete removes the selected node ─────────
+// Reuses the same delete-node emit path as the drawer's delete affordance
+// (onDrawerDelete above) — the delete only mutates the draft flow until
+// Deploy, so there's no separate undo to wire up here. Suppressed while the
+// drawer is open (its own delete-confirm flow owns Backspace/Delete then)
+// and while focus is in a text input/textarea/contentEditable (e.g. the
+// palette search or a drawer field), so typing "delete" as text never
+// deletes the node.
+
+function isEditableTarget(el: Element | null): boolean {
+  if (!el) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable
+}
+
+function onKeyDown(e: KeyboardEvent) {
+  if (e.key !== 'Backspace' && e.key !== 'Delete') return
+  if (!selectedNodeId.value) return
+  if (drawerOpen.value) return
+  if (isEditableTarget(document.activeElement)) return
+  const id = selectedNodeId.value
+  emit('delete-node', id)
+  selectedNodeId.value = null
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onKeyDown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKeyDown)
+})
 </script>
 
 <template>
