@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { flushPromises, mount } from '@vue/test-utils'
 import { defineComponent, h, nextTick } from 'vue'
 import NodeEditorDrawer from '../NodeEditorDrawer.vue'
 import { defineNodeType } from '../../nodeType'
@@ -187,20 +187,81 @@ describe('NodeEditorDrawer', () => {
     wrapper.unmount()
   })
 
-  it('requires a two-step inline confirm before emitting delete', async () => {
+  it('shows a delete confirm popover without emitting delete on the first click', async () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node)
+
+    expect(el('node-editor-delete-popover')).toBeNull()
+
+    el<HTMLButtonElement>('node-editor-delete')!.click()
+    await nextTick()
+
+    // The trigger stays put (anchor for the popover) rather than being
+    // replaced — this is what keeps the rest of the footer from shifting.
+    expect(el('node-editor-delete')).not.toBeNull()
+    expect(el('node-editor-delete-popover')).not.toBeNull()
+    expect(wrapper.emitted('delete')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('emits delete with the node id when the popover Confirm is clicked', async () => {
     const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
     const wrapper = mountDrawer(node)
 
     el<HTMLButtonElement>('node-editor-delete')!.click()
     await nextTick()
 
-    expect(el('node-editor-delete')).toBeNull()
-    expect(wrapper.emitted('delete')).toBeUndefined()
-
     el<HTMLButtonElement>('node-editor-delete-confirm')!.click()
     await nextTick()
 
     expect(wrapper.emitted('delete')).toEqual([['n1']])
+    expect(el('node-editor-delete-popover')).toBeNull()
+
+    wrapper.unmount()
+  })
+
+  it('returns to the initial state when the popover Cancel is clicked, without emitting delete', async () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node)
+
+    el<HTMLButtonElement>('node-editor-delete')!.click()
+    await nextTick()
+
+    el<HTMLButtonElement>('node-editor-delete-cancel')!.click()
+    await nextTick()
+
+    expect(el('node-editor-delete-popover')).toBeNull()
+    expect(wrapper.emitted('delete')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('cancels the pending confirm (not the whole drawer) on Escape', async () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node)
+
+    el<HTMLButtonElement>('node-editor-delete')!.click()
+    await nextTick()
+
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
+    await nextTick()
+
+    expect(el('node-editor-delete-popover')).toBeNull()
+    expect(wrapper.emitted('delete')).toBeUndefined()
+    expect(wrapper.emitted('close')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('moves focus to the popover Cancel button when the confirm appears', async () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node)
+
+    el<HTMLButtonElement>('node-editor-delete')!.click()
+    await flushPromises()
+
+    expect(document.activeElement).toBe(el('node-editor-delete-cancel'))
 
     wrapper.unmount()
   })

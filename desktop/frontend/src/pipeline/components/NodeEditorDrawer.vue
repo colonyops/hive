@@ -5,9 +5,11 @@
 // Enabled toggle that's the inverse of FlowNode.disabled), a body that owns
 // the Name field and mounts `def.editor` over a structuredClone draft
 // (unchanged contract: {config, errors} in, `update:config` out), and a
-// footer of Delete | Cancel | Done — the two-step inline delete confirm is
-// unchanged. Parent-owns-persistence — this never mutates the `node` prop;
-// save() emits a whole new FlowNode.
+// footer of Delete | Cancel | Done. The delete confirm is still two-step,
+// but renders as a small popover anchored over the Delete button (not an
+// inline swap) so the footer's Close/Save buttons never shift — see the
+// "Delete" section below. Parent-owns-persistence — this never mutates the
+// `node` prop; save() emits a whole new FlowNode.
 //
 // This is meant to become the app-wide editing-surface shape — a reusable
 // right sheet, not a one-off for flow nodes — so keep the geometry generic
@@ -86,14 +88,34 @@ function submit() {
   emit('save', buildNode())
 }
 
-// ── Delete — two-step inline confirm, no modal (per FeedEditorSheet). ───────
+// ── Delete — two-step confirm via a small popover anchored over the Delete
+// button, rather than an inline swap in the footer's flex row. An inline
+// swap ("Delete" -> "Confirm delete? Delete Cancel") grows the footer's
+// left-hand content and pushes Close/Save sideways as the flex-1 spacer
+// shrinks; the popover keeps the footer's flex children constant so nothing
+// else in the footer ever moves. ────────────────────────────────────────────
 
 const deleteConfirming = ref(false)
+const deleteTriggerRef = ref<HTMLButtonElement | null>(null)
+const deleteCancelRef = ref<HTMLButtonElement | null>(null)
+
+function requestDelete() {
+  deleteConfirming.value = true
+}
+
+function cancelDelete() {
+  deleteConfirming.value = false
+  nextTick(() => deleteTriggerRef.value?.focus())
+}
 
 function confirmDelete() {
   emit('delete', props.node.id)
   deleteConfirming.value = false
 }
+
+watch(deleteConfirming, (confirming) => {
+  if (confirming) nextTick(() => deleteCancelRef.value?.focus())
+})
 
 // ── Docs ─────────────────────────────────────────────────────────────────────
 
@@ -106,7 +128,15 @@ const helpSummary = computed(() => summarize(props.def.help))
 const nameRef = ref<HTMLInputElement | null>(null)
 
 function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
+  if (e.key !== 'Escape') return
+  // The delete popover takes precedence: Esc cancels the pending confirm
+  // first, and only closes the whole drawer on a second Esc once the
+  // popover is dismissed.
+  if (deleteConfirming.value) {
+    cancelDelete()
+    return
+  }
+  emit('close')
 }
 
 onMounted(async () => {
@@ -207,25 +237,41 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       </div>
 
       <footer class="flex shrink-0 items-center gap-2.5 border-t border-row bg-raised px-[18px] py-[13px]">
-        <button
-          v-if="!deleteConfirming"
-          class="cursor-pointer whitespace-nowrap text-[12px] text-kind-issue hover:brightness-110"
-          data-testid="node-editor-delete"
-          @click="deleteConfirming = true"
-        >Delete</button>
-        <template v-else>
-          <span class="whitespace-nowrap text-[12px] text-text-3">Confirm delete?</span>
+        <div class="relative">
           <button
-            class="cursor-pointer whitespace-nowrap text-[12px] font-semibold text-kind-issue hover:brightness-110"
-            data-testid="node-editor-delete-confirm"
-            @click="confirmDelete"
+            ref="deleteTriggerRef"
+            type="button"
+            class="cursor-pointer whitespace-nowrap text-[12px] text-kind-issue hover:brightness-110"
+            data-testid="node-editor-delete"
+            :aria-expanded="deleteConfirming"
+            @click="requestDelete"
           >Delete</button>
-          <button
-            class="cursor-pointer whitespace-nowrap text-[12px] text-text-3 hover:text-text"
-            data-testid="node-editor-delete-cancel"
-            @click="deleteConfirming = false"
-          >Cancel</button>
-        </template>
+
+          <div
+            v-if="deleteConfirming"
+            class="absolute bottom-full left-0 z-10 mb-2 flex w-max flex-col gap-2.5 rounded-lg border border-strong bg-pane p-3 shadow-[0_12px_30px_-8px_rgba(0,0,0,.5)]"
+            role="group"
+            aria-label="Confirm delete node"
+            data-testid="node-editor-delete-popover"
+          >
+            <div class="whitespace-nowrap text-[12px] text-text-2">Delete this node?</div>
+            <div class="flex items-center gap-2">
+              <button
+                ref="deleteCancelRef"
+                type="button"
+                class="cursor-pointer whitespace-nowrap rounded-md border border-card px-2.5 py-1.5 text-[12px] text-text-2 hover:text-text"
+                data-testid="node-editor-delete-cancel"
+                @click="cancelDelete"
+              >Cancel</button>
+              <button
+                type="button"
+                class="cursor-pointer whitespace-nowrap rounded-md bg-severity-error px-2.5 py-1.5 text-[12px] font-semibold text-accent-contrast hover:brightness-110"
+                data-testid="node-editor-delete-confirm"
+                @click="confirmDelete"
+              >Delete node</button>
+            </div>
+          </div>
+        </div>
         <div class="flex-1" />
         <button
           class="cursor-pointer whitespace-nowrap rounded-lg border border-card px-[15px] py-2 text-[13px] text-text-2 hover:text-text"
