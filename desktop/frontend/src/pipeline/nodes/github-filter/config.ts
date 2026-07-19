@@ -4,6 +4,8 @@
 // glob-matching helpers; runtime.ts wires them into the port-routing
 // ProcessorRuntime.
 
+import IconFilter from '~icons/lucide/filter'
+
 export const type = 'github-filter'
 export const role = 'processor' as const
 // isolate:false — trusted, declarative, no author JS — the engine hosts
@@ -22,6 +24,36 @@ export interface Config {
   exclude_labels?: string[]
   types?: string[]
   reasons?: string[]
+}
+
+// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+
+export const label = 'GitHub filter'
+export const category = 'Process' as const
+export const glyph = IconFilter
+
+export const defaults: Config = {}
+
+/**
+ * UX-only — an empty filter matches every message (the fail port never
+ * fires), which is almost always an authoring mistake rather than intent,
+ * so the drawer flags it. Go's SaveFlow validator does not reject this
+ * (D1 lists "empty github-filter" as a hard error there, in fact — this
+ * mirrors that rule for live feedback before Deploy).
+ */
+export function validate(config: Config): string[] {
+  const groups: Array<string[] | undefined> = [
+    config.repos,
+    config.exclude_repos,
+    config.authors,
+    config.exclude_authors,
+    config.labels,
+    config.exclude_labels,
+    config.types,
+    config.reasons,
+  ]
+  const hasAny = groups.some((group) => group && group.length > 0)
+  return hasAny ? [] : ['at least one filter group must be set']
 }
 
 /**

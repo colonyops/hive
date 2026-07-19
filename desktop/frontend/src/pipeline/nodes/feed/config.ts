@@ -5,6 +5,7 @@
 // mapping. Phase 6 additionally uses `type`/`role` for the palette registry
 // and a (future) editor.vue for the `feed` field.
 
+import IconRss from '~icons/lucide/rss'
 import type { Sink } from '../../types'
 
 export const type = 'feed'
@@ -20,4 +21,23 @@ export const unread = true
 
 export function sink(config: Config): Sink {
   return { kind: 'feed', targetId: config.feed }
+}
+
+// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+
+export const label = 'Feed'
+export const category = 'Destinations' as const
+export const glyph = IconRss
+/** Terminal node — 0 outputs. */
+export const outputs = 0
+
+export const defaults: Config = {
+  feed: '',
+}
+
+/** UX-only — Go's SaveFlow validator is authoritative (the ref must resolve to a profiles/*.yml feed). */
+export function validate(config: Config): string[] {
+  const errors: string[] = []
+  if (!config.feed || !config.feed.trim()) errors.push('feed is required')
+  return errors
 }

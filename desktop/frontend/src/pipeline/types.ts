@@ -23,6 +23,8 @@ import type { Discard, NodeRunView as NodeRun, Output } from '../../bindings/git
 export interface FlowNode {
   id: string
   type: string
+  /** Author-facing display name (D1's optional Node.name) — Phase 6's drawer edits this; nodes without one fall back to their type's label. */
+  name?: string
   disabled?: boolean
   config: Record<string, any>
 }

@@ -4,6 +4,7 @@
 // ProcessorRuntime) and the future Phase 6 drawer's live syntax check both
 // import from here rather than duplicating the `new Function(...)` call.
 
+import IconSquareFunction from '~icons/lucide/square-function'
 import type { Msg } from '../../types'
 import type { NodeResult } from '../../engine/transport'
 
@@ -64,4 +65,33 @@ export function checkSyntax(src: string): string[] {
   } catch (error) {
     return [error instanceof Error ? error.message : String(error)]
   }
+}
+
+// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+
+export const label = 'Function'
+export const category = 'Process' as const
+export const glyph = IconSquareFunction
+
+export const defaults: Config = {
+  on_message: 'return msg',
+}
+
+/** UX-only — Go's SaveFlow validator is authoritative; this mirrors it for live drawer feedback. */
+export function validate(config: Config): string[] {
+  const errors: string[] = []
+  if (!config.on_message || !config.on_message.trim()) {
+    errors.push('on_message is required')
+  } else {
+    errors.push(...checkSyntax(config.on_message))
+  }
+  if (config.on_start) errors.push(...checkSyntax(config.on_start).map((e) => `on_start: ${e}`))
+  if (config.on_stop) errors.push(...checkSyntax(config.on_stop).map((e) => `on_stop: ${e}`))
+  if (config.outputs !== undefined && (config.outputs < 1 || config.outputs > 16)) {
+    errors.push('outputs must be between 1 and 16')
+  }
+  if (config.timeout !== undefined && (config.timeout < 100 || config.timeout > 60000)) {
+    errors.push('timeout must be between 100ms and 60s')
+  }
+  return errors
 }

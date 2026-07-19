@@ -3,6 +3,7 @@
 // nodes/feed/config.ts for the parallel terminal (sink/unread are the
 // engine's single source of truth for commit-tagging a terminal node).
 
+import IconZap from '~icons/lucide/zap'
 import type { Sink } from '../../types'
 
 export const type = 'action'
@@ -18,4 +19,23 @@ export const unread = false
 
 export function sink(config: Config): Sink {
   return { kind: 'action', targetId: config.action }
+}
+
+// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+
+export const label = 'Action'
+export const category = 'Destinations' as const
+export const glyph = IconZap
+/** Terminal node — 0 outputs. */
+export const outputs = 0
+
+export const defaults: Config = {
+  action: '',
+}
+
+/** UX-only — Go's SaveFlow validator is authoritative (the ref must resolve to a .hive/actions.yml entry). */
+export function validate(config: Config): string[] {
+  const errors: string[] = []
+  if (!config.action || !config.action.trim()) errors.push('action is required')
+  return errors
 }

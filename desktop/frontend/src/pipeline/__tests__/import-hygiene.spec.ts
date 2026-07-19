@@ -53,3 +53,38 @@ describe('pipeline node runtime import hygiene', () => {
     }
   })
 })
+
+// D2's other import-hygiene rule, the app-bundle side: index.ts (and its
+// editor.vue) must never import runtime.ts, or worker code ships in the main
+// chunk. Checked the same way — reading source text, not importing — so a
+// module that imports runtime.ts only for its side effects (no named binding
+// used) still gets caught.
+function appModuleFiles(): string[] {
+  return readdirSync(nodesDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .flatMap((entry) => [join(nodesDir, entry.name, 'index.ts'), join(nodesDir, entry.name, 'editor.vue')])
+    .filter((path) => {
+      try {
+        readFileSync(path)
+        return true
+      } catch {
+        return false
+      }
+    })
+}
+
+describe('pipeline node app-module import hygiene', () => {
+  const files = appModuleFiles()
+
+  it('finds at least one index.ts/editor.vue to check (guards against a silently-empty glob)', () => {
+    expect(files.length).toBeGreaterThan(0)
+  })
+
+  it('no index.ts/editor.vue imports runtime.ts', () => {
+    for (const file of files) {
+      const src = readFileSync(file, 'utf-8')
+      expect(src, file).not.toMatch(/from\s+['"]\.\/runtime['"]/)
+      expect(src, file).not.toMatch(/require\(\s*['"]\.\/runtime['"]\s*\)/)
+    }
+  })
+})
