@@ -5,7 +5,7 @@ import "fmt"
 // FeedConfig is a feed node: 1 input, 0 outputs (terminal). Its results are
 // relayed to Go and persisted against the referenced profiles feed id.
 type FeedConfig struct {
-	Feed string `yaml:"feed"`
+	Feed string `json:"feed" yaml:"feed"`
 }
 
 func (c *FeedConfig) Inputs() int  { return 1 }
@@ -27,7 +27,7 @@ func (c *FeedConfig) Validate(refs Refs) error {
 // ActionConfig is an action node: 1 input, 0 outputs (terminal). It enqueues
 // an output_command against the referenced .hive/actions.yml action id.
 type ActionConfig struct {
-	Action string `yaml:"action"`
+	Action string `json:"action" yaml:"action"`
 }
 
 func (c *ActionConfig) Inputs() int  { return 1 }

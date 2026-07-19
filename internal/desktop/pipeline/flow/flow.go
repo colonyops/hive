@@ -13,23 +13,27 @@
 // loaders can be wired in later without this package depending on them.
 package flow
 
-// Flow is one parsed and validated flows/*.yaml document.
+// Flow is one parsed and validated flows/*.yaml document. Besides being the
+// decode target for LoadFlow, it is the wire shape GetFlow/SaveFlow expose
+// to the desktop frontend's graph editor over Wails — hence the json tags
+// alongside the (unused-by-Flow-itself, since flowFile is the YAML decode
+// target) documentation of the on-disk names.
 type Flow struct {
 	// ID is the filename stem (no extension), never a value read from the
 	// file itself.
-	ID      string
-	Name    string
-	Enabled bool
-	Nodes   []Node
-	Wires   []Wire
+	ID      string `json:"id"`
+	Name    string `json:"name"`
+	Enabled bool   `json:"enabled"`
+	Nodes   []Node `json:"nodes"`
+	Wires   []Wire `json:"wires"`
 }
 
 // Wire is a directed edge from one node's output port to another node's
 // (sole) input. Out defaults to 0 when omitted in YAML.
 type Wire struct {
-	From string `yaml:"from"`
-	Out  int    `yaml:"out,omitempty"`
-	To   string `yaml:"to"`
+	From string `json:"from"          yaml:"from"`
+	Out  int    `json:"out,omitempty" yaml:"out,omitempty"`
+	To   string `json:"to"            yaml:"to"`
 }
 
 // flowFile is the top-level on-disk shape of a flows/*.yaml document.

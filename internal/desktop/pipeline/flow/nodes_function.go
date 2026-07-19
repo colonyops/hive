@@ -25,11 +25,11 @@ const (
 // graph runtime (part B/Phase 6) — this package only parses and validates
 // the config.
 type FunctionConfig struct {
-	OnMessage string   `yaml:"on_message"`
-	OnStart   string   `yaml:"on_start,omitempty"`
-	OnStop    string   `yaml:"on_stop,omitempty"`
-	OutputsN  int      `yaml:"outputs,omitempty"`
-	Timeout   Duration `yaml:"timeout,omitempty"`
+	OnMessage string   `json:"on_message"         yaml:"on_message"`
+	OnStart   string   `json:"on_start,omitempty" yaml:"on_start,omitempty"`
+	OnStop    string   `json:"on_stop,omitempty"  yaml:"on_stop,omitempty"`
+	OutputsN  int      `json:"outputs,omitempty"  yaml:"outputs,omitempty"`
+	Timeout   Duration `json:"timeout,omitempty"  yaml:"timeout,omitempty"`
 }
 
 func (c *FunctionConfig) Inputs() int { return 1 }

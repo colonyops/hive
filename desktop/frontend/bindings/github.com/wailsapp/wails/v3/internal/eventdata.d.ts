@@ -11,6 +11,7 @@ declare module "@wailsio/runtime" {
             "auth:updated": string;
             "config:updated": string;
             "feed:updated": string;
+            "flows:updated": string;
             "log:appended": number;
         }
     }

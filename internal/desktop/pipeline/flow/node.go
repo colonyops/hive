@@ -8,13 +8,17 @@ import (
 )
 
 // Node is one node in a flow's graph: the common envelope fields (id, type,
-// name, disabled) plus a per-type Config decoded via the registry.
+// name, disabled) plus a per-type Config decoded via the registry. The json
+// tags document the wire shape produced by MarshalJSON/UnmarshalJSON (see
+// node_json.go) — Node's own (Un)MarshalJSON/(Un)MarshalYAML methods bypass
+// normal struct-tag reflection, so these tags are documentation, not decode
+// wiring.
 type Node struct {
-	ID       string
-	Type     string
-	Name     string
-	Disabled bool
-	Config   NodeConfig
+	ID       string     `json:"id"`
+	Type     string     `json:"type"`
+	Name     string     `json:"name,omitempty"`
+	Disabled bool       `json:"disabled,omitempty"`
+	Config   NodeConfig `json:"-"`
 }
 
 // NodeConfig is the per-type union every registered node type implements.
@@ -124,6 +128,54 @@ func stripReservedKeys(value *yaml.Node) *yaml.Node {
 		out.Content = append(out.Content, key, value.Content[i+1])
 	}
 	return out
+}
+
+// MarshalYAML implements yaml.Marshaler, inverting UnmarshalYAML's two-pass
+// decode: the envelope fields (id, type, name, disabled) and the per-type
+// config's own fields are flattened into one mapping, matching the on-disk
+// shape UnmarshalYAML reads back (see the worked example in loader_test.go).
+// Returning a *yaml.Node here (rather than a plain value) is a documented
+// yaml.v3 pattern for building the node by hand: the encoder uses it
+// directly instead of re-marshaling it through reflection.
+func (n Node) MarshalYAML() (any, error) {
+	out := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
+	if err := appendYAMLField(out, "id", n.ID); err != nil {
+		return nil, err
+	}
+	if err := appendYAMLField(out, "type", n.Type); err != nil {
+		return nil, err
+	}
+	if n.Name != "" {
+		if err := appendYAMLField(out, "name", n.Name); err != nil {
+			return nil, err
+		}
+	}
+	if n.Disabled {
+		if err := appendYAMLField(out, "disabled", n.Disabled); err != nil {
+			return nil, err
+		}
+	}
+	if n.Config != nil {
+		var cfgNode yaml.Node
+		if err := cfgNode.Encode(n.Config); err != nil {
+			return nil, fmt.Errorf("node %q: encode config: %w", n.ID, err)
+		}
+		if cfgNode.Kind != yaml.MappingNode {
+			return nil, fmt.Errorf("node %q: config type %T did not encode to a mapping", n.ID, n.Config)
+		}
+		out.Content = append(out.Content, cfgNode.Content...)
+	}
+	return out, nil
+}
+
+// appendYAMLField encodes value and appends it to mapping under key.
+func appendYAMLField(mapping *yaml.Node, key string, value any) error {
+	var v yaml.Node
+	if err := v.Encode(value); err != nil {
+		return fmt.Errorf("encode %s: %w", key, err)
+	}
+	mapping.Content = append(mapping.Content, &yaml.Node{Kind: yaml.ScalarNode, Value: key}, &v)
+	return nil
 }
 
 func nodeKindName(kind yaml.Kind) string {

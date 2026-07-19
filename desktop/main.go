@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
+	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/colonyops/hive/internal/github"
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -37,12 +38,18 @@ func registerEvents() struct{} {
 	// carries the new auth state string; config:updated carries "ok" or the
 	// config error text after a profiles-config reload; log:appended carries
 	// the pipeline event log's new tail offset after a producer tick appends
-	// at least one row. All are wake-up signals: the frontend re-reads the
-	// relevant service on receipt.
+	// at least one row; flows:updated fires after a flows/*.yaml directory
+	// reload (an external edit, or the app's own SaveFlow/SaveLayout — see
+	// buildFlowsStore). All are wake-up signals: the frontend re-reads the
+	// relevant service on receipt. flows:updated is a wake-up only: the
+	// frontend graph runtime performs the actual drain-then-swap of a
+	// running flow on receipt (Phase 6) — this phase just keeps
+	// FlowsService's view of flows/*.yaml current.
 	application.RegisterEvent[string]("feed:updated")
 	application.RegisterEvent[string]("auth:updated")
 	application.RegisterEvent[string]("config:updated")
 	application.RegisterEvent[int64]("log:appended")
+	application.RegisterEvent[string]("flows:updated")
 	return struct{}{}
 }
 
@@ -143,6 +150,41 @@ func emitAuthUpdated() {
 	}
 }
 
+// buildFlowsStore constructs the flow.FlowStore over desktop.FlowsDir(),
+// backed by a Refs adapter over provider — this works uniformly across mock
+// and live feed providers, so unlike buildFeedProvider there is no
+// mock-mode branch here: an empty/tmp flows dir is deterministic on its
+// own, and the store never touches GitHub or auth state. It also starts a
+// FlowsWatcher that reloads the store and wakes the frontend on any
+// flows/*.yaml change, including the app's own SaveFlow/SaveLayout writes
+// (the same self-triggering tradeoff feed.ConfigWatcher makes). A watcher
+// that fails to start degrades to no hot-reload, matching feed's posture:
+// the app still works, edits just need a restart to pick up.
+func buildFlowsStore(provider feed.Provider, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
+	dir := desktop.FlowsDir()
+	store := flow.NewFlowStore(dir, newFlowRefsAdapter(provider))
+
+	watcher, err := flow.NewFlowsWatcher(dir, func() {
+		if err := store.Reload(); err != nil {
+			logger.Warn().Err(err).Msg("flows reload failed")
+		}
+		emitFlowsUpdated()
+	}, logger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("flows hot-reload unavailable")
+		return store, nil
+	}
+	return store, watcher
+}
+
+// emitFlowsUpdated pushes the flows:updated wake-up to the frontend. Safe to
+// call from any goroutine once the app is running.
+func emitFlowsUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("flows:updated", "changed")
+	}
+}
+
 func main() {
 	// The poller, watcher, and pipeline producer live for the whole
 	// process; they die with it, so there are no Stop/Close calls here (and
@@ -164,6 +206,12 @@ func main() {
 		producer.Start()
 	}
 
+	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	flowsStore, flowsWatcher := buildFlowsStore(provider, flowsLogger)
+	if flowsWatcher != nil {
+		flowsWatcher.Start()
+	}
+
 	// Every auth transition drops the feed cache before the frontend is
 	// notified: a different account must never be served items fetched with
 	// the previous token.
@@ -182,6 +230,7 @@ func main() {
 			application.NewService(NewFeedService(provider)),
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 			application.NewService(NewPipelineService(pipelineDB)),
+			application.NewService(NewFlowsService(flowsStore)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

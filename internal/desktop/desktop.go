@@ -19,6 +19,10 @@ const EnvMockMode = "HIVE_DESKTOP_MOCK"
 // HIVE_CONFIG overrides the CLI config file.
 const EnvConfigPath = "HIVE_DESKTOP_CONFIG"
 
+// EnvFlowsDir overrides the flows/*.yaml directory location, mirroring how
+// EnvConfigPath overrides the profiles config file.
+const EnvFlowsDir = "HIVE_DESKTOP_FLOWS"
+
 // MockMode returns the requested mock mode, or "" for live backends.
 func MockMode() string {
 	return os.Getenv(EnvMockMode)
@@ -54,4 +58,17 @@ func ConfigPath() string {
 		configHome = filepath.Join(home, ".config")
 	}
 	return filepath.Join(configHome, "hive", "desktop", "profiles.yaml")
+}
+
+// FlowsDir is where the desktop pipeline's flow definitions
+// (flows/<id>.yaml, plus each flow's sibling flows/<id>.ui.yaml layout)
+// live: a "flows" directory next to the profiles config, so both are
+// user-editable, dotfiles-managed YAML under the same root. It follows the
+// same override convention as ConfigPath: EnvFlowsDir wins outright over
+// the derived location.
+func FlowsDir() string {
+	if dir := os.Getenv(EnvFlowsDir); dir != "" {
+		return dir
+	}
+	return filepath.Join(filepath.Dir(ConfigPath()), "flows")
 }

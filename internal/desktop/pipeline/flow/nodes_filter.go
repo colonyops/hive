@@ -12,14 +12,14 @@ import (
 // groups AND together, values within a group OR, and exclude groups win
 // over includes.
 type GithubFilterConfig struct {
-	Repos          []string `yaml:"repos,omitempty"`
-	ExcludeRepos   []string `yaml:"exclude_repos,omitempty"`
-	Authors        []string `yaml:"authors,omitempty"`
-	ExcludeAuthors []string `yaml:"exclude_authors,omitempty"`
-	Labels         []string `yaml:"labels,omitempty"`
-	ExcludeLabels  []string `yaml:"exclude_labels,omitempty"`
-	Types          []string `yaml:"types,omitempty"`
-	Reasons        []string `yaml:"reasons,omitempty"`
+	Repos          []string `json:"repos,omitempty"           yaml:"repos,omitempty"`
+	ExcludeRepos   []string `json:"exclude_repos,omitempty"   yaml:"exclude_repos,omitempty"`
+	Authors        []string `json:"authors,omitempty"         yaml:"authors,omitempty"`
+	ExcludeAuthors []string `json:"exclude_authors,omitempty" yaml:"exclude_authors,omitempty"`
+	Labels         []string `json:"labels,omitempty"          yaml:"labels,omitempty"`
+	ExcludeLabels  []string `json:"exclude_labels,omitempty"  yaml:"exclude_labels,omitempty"`
+	Types          []string `json:"types,omitempty"           yaml:"types,omitempty"`
+	Reasons        []string `json:"reasons,omitempty"         yaml:"reasons,omitempty"`
 }
 
 func (c *GithubFilterConfig) Inputs() int  { return 1 }

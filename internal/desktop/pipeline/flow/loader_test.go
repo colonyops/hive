@@ -136,6 +136,21 @@ nodes:
 	_ = warnings
 }
 
+func TestLoadFlows_SkipsUIYAMLSiblings(t *testing.T) {
+	dir := t.TempDir()
+	writeFlow(t, dir, "triage.yaml", minimalValidFlowYAML())
+	// A sibling layout file, in the same directory, must never be treated
+	// as a flow definition — its content isn't the flow schema at all.
+	writeFlow(t, dir, "triage.ui.yaml", "nodes:\n  src: { x: 10, y: 20 }\n")
+	writeFlow(t, dir, "triage.ui.yml", "nodes: {}\n")
+
+	flows, perFileErrors, _ := LoadFlows(dir, minimalRefs())
+
+	require.Len(t, flows, 1)
+	assert.Equal(t, "triage", flows[0].ID)
+	assert.Empty(t, perFileErrors)
+}
+
 func TestLoadFlows_MissingDir(t *testing.T) {
 	flows, perFileErrors, _ := LoadFlows(filepath.Join(t.TempDir(), "does-not-exist"), minimalRefs())
 	assert.Empty(t, flows)

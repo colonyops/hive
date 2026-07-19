@@ -26,7 +26,9 @@ func LoadFlow(path string, refs Refs) (Flow, []string, error) {
 	return parseFlow(id, data, refs)
 }
 
-// LoadFlows loads every *.yaml/*.yml file directly inside dir. Each file is
+// LoadFlows loads every *.yaml/*.yml file directly inside dir, except a
+// flow's sibling <id>.ui.yaml layout file (see SaveUI/LoadUI) — layouts
+// live in the same directory but are never flow definitions. Each file is
 // isolated: a broken flow is recorded in perFileErrors (keyed by filename)
 // and skipped, while the remaining files still load. warnings is keyed by
 // flow id and only holds entries for flows that produced soft warnings.
@@ -45,10 +47,14 @@ func LoadFlows(dir string, refs Refs) (flows []Flow, perFileErrors map[string]er
 		if entry.IsDir() {
 			continue
 		}
-		if ext := filepath.Ext(entry.Name()); ext != ".yaml" && ext != ".yml" {
+		name := entry.Name()
+		if strings.HasSuffix(name, ".ui.yaml") || strings.HasSuffix(name, ".ui.yml") {
 			continue
 		}
-		names = append(names, entry.Name())
+		if ext := filepath.Ext(name); ext != ".yaml" && ext != ".yml" {
+			continue
+		}
+		names = append(names, name)
 	}
 	sort.Strings(names)
 

@@ -17,7 +17,7 @@ const rpcSourceKind = "rpc"
 // the items produced by the referenced profiles source, which must be one
 // of the github-* kinds.
 type GithubSourceConfig struct {
-	Source string `yaml:"source"`
+	Source string `json:"source" yaml:"source"`
 }
 
 func (c *GithubSourceConfig) Inputs() int  { return 0 }
@@ -44,7 +44,7 @@ func (c *GithubSourceConfig) Validate(refs Refs) error {
 // items produced by the referenced profiles source, which must be of kind
 // "rpc".
 type RPCSourceConfig struct {
-	Source string `yaml:"source"`
+	Source string `json:"source" yaml:"source"`
 }
 
 func (c *RPCSourceConfig) Inputs() int  { return 0 }

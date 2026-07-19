@@ -24,6 +24,31 @@ func (d Duration) String() string {
 	return time.Duration(d).String()
 }
 
+// MarshalText formats the duration as a Go duration string ("5s") — the
+// same format UnmarshalYAML and UnmarshalText require on read. Implementing
+// encoding.TextMarshaler (rather than yaml.Marshaler directly) covers both
+// wire formats with one method: yaml.v3 falls back to TextMarshaler when a
+// type isn't a yaml.Marshaler, and encoding/json does the same for
+// encoding.TextMarshaler/TextUnmarshaler — so SaveFlow's YAML output and the
+// Wails JSON bridge both get "5s", never a bare nanosecond count.
+func (d Duration) MarshalText() ([]byte, error) {
+	return []byte(time.Duration(d).String()), nil
+}
+
+// UnmarshalText parses a Go duration string, for JSON decode (the frontend
+// graph editor's wire format via Wails). YAML decode goes through
+// UnmarshalYAML instead, which additionally rejects bare integers — a
+// distinction that matters for hand-authored YAML but not for a value the
+// frontend already round-tripped through this same Duration type.
+func (d *Duration) UnmarshalText(text []byte) error {
+	parsed, err := time.ParseDuration(string(text))
+	if err != nil {
+		return fmt.Errorf("duration: %w", err)
+	}
+	*d = Duration(parsed)
+	return nil
+}
+
 // UnmarshalYAML rejects bare integer/float scalars and otherwise parses the
 // scalar as a Go duration string.
 func (d *Duration) UnmarshalYAML(value *yaml.Node) error {

@@ -39,3 +39,20 @@ func TestDuration_RejectsUnparseableString(t *testing.T) {
 	_, err := decodeDuration(t, `"not-a-duration"`)
 	require.Error(t, err)
 }
+
+func TestDuration_MarshalYAML_ProducesDurationString(t *testing.T) {
+	out, err := yaml.Marshal(Duration(5 * time.Second))
+	require.NoError(t, err)
+	assert.Equal(t, "5s\n", string(out))
+}
+
+func TestDuration_MarshalText_UnmarshalText_RoundTrip(t *testing.T) {
+	d := Duration(250 * time.Millisecond)
+	text, err := d.MarshalText()
+	require.NoError(t, err)
+	assert.Equal(t, "250ms", string(text))
+
+	var decoded Duration
+	require.NoError(t, decoded.UnmarshalText(text))
+	assert.Equal(t, d, decoded)
+}
