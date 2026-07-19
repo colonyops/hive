@@ -11,11 +11,13 @@ import type { ToastInstance, ToastOptions } from '../types/toast'
 // profiles.yaml + feed/source CRUD are gone — editing a source or feed is
 // editing its node in the flow canvas.
 //
-// NOTE: feed_item rows are written by the flow graph runtime, which today runs
-// only while the flows canvas is open (FlowsView). Until an always-on
-// per-profile runtime lands, a profile's feeds may show zero items until its
-// canvas has run once. The structure here is complete; only the live
-// population is pending.
+// feed_item rows are written by the flow graph runtime — an always-on,
+// app-level instance owned by pipeline/composables/useFlowsSession.ts, not
+// this module. That runtime currently runs only the ACTIVE profile's flow
+// (running every enabled profile's flow concurrently is a follow-up — see
+// useFlowsSession.ts's module docs); refresh() here just re-reads whatever
+// feed_item currently holds for the active profile after App.vue's
+// "log:appended" handler has pumped a commit.
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
   const profilesLoaded = ref(false)
@@ -338,24 +340,22 @@ export function useFeedState() {
   }
 
   // ── Wails events ──────────────────────────────────────────────────────────────
+  // Note: no "log:appended" listener here — App.vue owns that subscription
+  // now (see pipeline/composables/useFlowsSession.ts), since the runtime's
+  // commit into feed_item must complete BEFORE this module's refresh() reads
+  // it back. Subscribing here too would race that commit and could read
+  // stale feed_item rows.
 
   let unsubscribeFlows: (() => void) | undefined
-  let unsubscribeLog: (() => void) | undefined
 
   onMounted(() => {
     // A flows/*.yaml change (create/delete/edit) reshapes the profiles list.
     unsubscribeFlows = Events.On('flows:updated', () => { void reloadProfilesQuietly() })
-    // The producer appended new source rows; once the runtime commits them the
-    // feed_items change, so re-read the active view.
-    unsubscribeLog = Events.On('log:appended', () => {
-      if (activeProfileId.value) void refresh()
-    })
     void loadProfiles()
   })
 
   onUnmounted(() => {
     unsubscribeFlows?.()
-    unsubscribeLog?.()
     clearToasts()
   })
 

@@ -2,30 +2,27 @@
 // The flows editor view (8a shell): a 214px node palette, the canvas toolbar
 // (flow-selector · node/wire counts · zoom/Fit · Deploy), the canvas itself,
 // and a bottom status strip (dirty state + aggregate node status counts).
-// This is the one place in src/pipeline that imports the real Wails
-// bindings and the "flows:updated" event — usePipelineEditor's own core
-// takes an injected client and never touches @wailsio/runtime or bindings/
-// directly (see its module docs); this component is the adapter
-// FlowsService/PipelineService's generated bindings are wired through,
-// mirroring driver.ts's documented injection posture (a real PipelineClient
-// adapter would be wired up the same way).
 //
-// Individual refs/actions are destructured out of usePipelineEditor()
-// (rather than kept as one `editor` object) so the template can use them
+// hc-8ft4yhm6: this component no longer owns the PipelineEditorClient
+// adapter, the usePipelineEditor instance, or the runtime — it reads all of
+// that from the shared useFlowsSession() singleton instead (App.vue is the
+// session's first caller and binds it to the active profile's flow; see
+// useFlowsSession.ts's module docs). That's what lets feed_item keep being
+// committed while this view is unmounted (canvas closed).
+//
+// Individual refs/actions are destructured out of useFlowsSession()
+// (rather than kept as one `session` object) so the template can use them
 // directly without a `.value` on every access — the same convention
 // useFeedState() + App.vue already use.
-import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconMaximize2 from '~icons/lucide/maximize-2'
 import IconMinus from '~icons/lucide/minus'
 import IconPlus from '~icons/lucide/plus'
 import IconWorkflow from '~icons/lucide/workflow'
-import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { Commit, FeedItems, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
-import { usePipelineEditor, type PipelineEditorClient } from '../composables/usePipelineEditor'
-import { usePipelineRuntime } from '../composables/usePipelineRuntime'
-import type { PipelineClient } from '../driver'
+import { FeedItems } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { useFlowsSession } from '../composables/useFlowsSession'
 import { classify } from '../lib/runStatus'
 import { buildFlowPrompt } from '../lib/flowPrompt'
 import NodePalette from './NodePalette.vue'
@@ -33,30 +30,22 @@ import FlowsCanvas from './FlowsCanvas.vue'
 import FlowDebugPanel from './FlowDebugPanel.vue'
 import FeedItemsPreview, { type FeedItemsClient } from './FeedItemsPreview.vue'
 
-const client: PipelineEditorClient = {
-  async listFlows() { return await ListFlows() },
-  async getFlow(id) { return await GetFlow(id) },
-  async saveFlow(flow) { await SaveFlow(flow) },
-  async getLayout(id) { return await GetLayout(id) },
-  async saveLayout(id, layout) { await SaveLayout(id, layout) },
-  async nodeRuns(flowId, limit) { return await NodeRuns(flowId, limit) },
-}
-
-// flowId is the profile's flow (a profile IS a flow): when the flows canvas
-// is opened for a profile, select that flow once the list has loaded. If the
-// profile hasn't been migrated to a flow yet, the picker stays open.
-const props = defineProps<{ flowId?: string }>()
-
 const {
   flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error,
   refreshFlows, refreshNodeRuns, selectFlow, newFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
-} = usePipelineEditor(client)
+  running: runtimeRunning, lastRun: runtimeLastRun, runtimeError, runRuntime, stopRuntime,
+} = useFlowsSession()
 
-watch([() => props.flowId, flows], ([id, list]) => {
-  if (!id || activeFlow.value?.id === id) return
-  if (list.some((f) => f.id === id)) void selectFlow(id)
-}, { immediate: true })
+// Which flow is active is now driven externally (App.vue calls
+// session.bindActiveFlow() whenever the active profile changes) — this view
+// just renders whatever the session currently has selected.
 
+// An external flows/*.yaml edit (another window, git) still needs a nudge
+// while the canvas is open, so the same "flows:updated" refresh this view
+// has always done stays here — this is NOT redundant with useFeedState's
+// own "flows:updated" listener, which refreshes the sidebar's `profiles`
+// list, an entirely different piece of state from the session's `flows`
+// (canvas selector) and `nodeRuns` (canvas/debug-panel status).
 let unsubscribe: (() => void) | undefined
 onMounted(() => {
   unsubscribe = Events.On('flows:updated', () => {
@@ -112,51 +101,6 @@ function onPaletteAdd(type: string) {
 
 const canvasRef = ref<InstanceType<typeof FlowsCanvas> | null>(null)
 const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100))
-
-// ── Runtime hookup (Phase 6c) ─────────────────────────────────────────────
-// Adapts PipelineService.ReadFrom/Commit into driver.ts's injected
-// PipelineClient shape — the same adapter posture as `client` above.
-// wrapped in async functions (not passed directly) so the return type is a
-// plain Promise, not Wails's CancellablePromise.
-const pipelineClient: PipelineClient = {
-  async readFrom(offset, limit) { return await ReadFrom(offset, limit) },
-  async commit(batch) { await Commit(batch) },
-}
-
-// One usePipelineRuntime instance per selected flow — rebuilt whenever the
-// active flow's id changes (a different flow is a different commit
-// consumer and cursor), but NOT on every node/wire edit: addNode/
-// updateNode/etc. mutate the same activeFlow object in place (see
-// usePipelineEditor.ts), so the driver's captured Flow reference already
-// sees those edits on its next pump() without needing a new instance.
-const runtime = shallowRef<ReturnType<typeof usePipelineRuntime> | null>(null)
-
-watch(() => activeFlow.value?.id, () => {
-  runtime.value?.stop()
-  runtime.value = activeFlow.value ? usePipelineRuntime(pipelineClient, activeFlow.value) : null
-}, { immediate: true })
-
-// Flattened, template-friendly reads of the current runtime's nested refs —
-// a template accessing `runtime.running.value` through a shallowRef would
-// not auto-unwrap (Vue only auto-unwraps a ref's own top-level binding),
-// so these computeds do it explicitly instead.
-const runtimeRunning = computed(() => runtime.value?.running.value ?? false)
-const runtimeLastRun = computed(() => runtime.value?.lastRun.value ?? null)
-const runtimeError = computed(() => runtime.value?.error.value ?? null)
-
-let unsubscribeLog: (() => void) | undefined
-onMounted(() => {
-  // Drives the mounted runtime's pump() loop on every backend log append —
-  // see driver.ts's module docs and usePipelineRuntime's own docs for why
-  // this subscription lives here rather than inside the composable.
-  unsubscribeLog = Events.On('log:appended', () => {
-    void runtime.value?.pump()
-  })
-})
-onUnmounted(() => {
-  unsubscribeLog?.()
-  runtime.value?.stop()
-})
 
 // ── Feed preview (Phase 6c) — a read-only look at one `feed` node's
 // persisted items, not the sidebar switchover (Phase 7). Defaults to the
@@ -310,13 +254,13 @@ const showDebug = ref(false)
               class="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40"
               :disabled="!activeFlow || runtimeRunning"
               data-testid="deploy-menu-run"
-              @click="runDeployMenuAction(() => runtime?.run())"
+              @click="runDeployMenuAction(() => runRuntime())"
             >Run</button>
             <button
               class="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40"
               :disabled="!activeFlow || !runtimeRunning"
               data-testid="deploy-menu-stop"
-              @click="runDeployMenuAction(() => runtime?.stop())"
+              @click="runDeployMenuAction(() => stopRuntime())"
             >Stop</button>
             <button
               class="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-hover hover:text-text"

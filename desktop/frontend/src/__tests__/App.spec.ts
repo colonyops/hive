@@ -2,6 +2,7 @@ import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import App from '../App.vue'
 import { useCommandPalette } from '../composables/useCommands'
+import { resetFlowsSessionForTests } from '../pipeline/composables/useFlowsSession'
 
 const mocks = vi.hoisted(() => ({
   // flowsservice
@@ -83,6 +84,11 @@ async function mountApp() {
 
 describe('App', () => {
   beforeEach(() => {
+    // useFlowsSession is a module singleton (App.vue + FlowsView.vue share
+    // one instance) — without this, a later test would silently reuse a
+    // prior test's instance, including its already-torn-down onMounted/
+    // watch hooks from that test's wrapper.unmount().
+    resetFlowsSessionForTests()
     vi.clearAllMocks()
     mocks.Status.mockResolvedValue({ state: 'authenticated', login: 'hay', name: 'Hay', avatarUrl: '', message: '' })
     mocks.ListFlows.mockResolvedValue([{ id: 'personal', name: 'Personal', enabled: true, valid: true }])
@@ -153,6 +159,39 @@ describe('App', () => {
     expect(mocks.DeleteFlow).toHaveBeenCalledWith('personal')
     expect(document.querySelector('[data-testid="delete-profile-modal"]')).toBeNull()
     expect(wrapper.find('[data-testid="onboarding"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('binds the active profile\'s flow to the shared session/runtime even with the flows canvas closed (hc-8ft4yhm6)', async () => {
+    const wrapper = await mountApp()
+
+    // GetLayout/NodeRuns are only ever called from usePipelineEditor's
+    // selectFlow — never from useFeedState — so seeing them here proves
+    // the always-on session bound and loaded the active profile's flow
+    // even though the flows canvas was never opened.
+    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
+    expect(mocks.GetLayout).toHaveBeenCalledWith('personal')
+    expect(mocks.NodeRuns).toHaveBeenCalledWith('personal', 100)
+
+    wrapper.unmount()
+  })
+
+  it('on "log:appended", pumps the runtime (commit) BEFORE refreshing the feed — the commit must land before the re-read', async () => {
+    const wrapper = await mountApp()
+
+    const callOrder: string[] = []
+    mocks.ReadFrom.mockResolvedValueOnce([{ ID: 'm1', Key: 'm1', Topic: 'source:test', Ts: 0, Payload: {}, Meta: null }])
+    mocks.Commit.mockImplementationOnce(async () => { callOrder.push('commit') })
+    mocks.FeedItemCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return [] })
+
+    const logHandler = mocks.On.mock.calls.find(([event]) => event === 'log:appended')?.[1] as (() => void) | undefined
+    expect(logHandler).toBeDefined()
+
+    logHandler?.()
+    await flushPromises()
+
+    expect(callOrder).toEqual(['commit', 'refresh'])
 
     wrapper.unmount()
   })

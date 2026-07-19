@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Events } from '@wailsio/runtime'
 import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -23,6 +24,7 @@ import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
+import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -37,25 +39,48 @@ const {
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
 
-// ── Flows editor mode ────────────────────────────────────────────────────────
+// ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
 // the sidebar+main region while the spaces rail and titlebar stay mounted (so
 // the user is never stranded — see the template). Reached from the sidebar's
 // "Flows" pill / "Edit flow" footer and the ⌘K command; exited via the
 // titlebar breadcrumb.
-const mode = ref<'feed' | 'flows'>('feed')
+//
+// The session (useFlowsSession) is a module singleton shared with
+// FlowsView.vue: it owns the pipeline editor AND the always-on runtime that
+// commits feed_item for the active profile's flow, so the sidebar populates
+// even while the canvas below is never opened. App.vue is the FIRST caller
+// (this line runs during App's own setup), so the session's internal
+// onMounted/watch hooks bind to App's lifetime — it keeps running for as
+// long as the app does, independent of FlowsView mounting/unmounting.
+const session = useFlowsSession()
 
-function openFlows() {
-  mode.value = 'flows'
-}
+// Bind the session's tracked flow to whichever profile is active, and
+// switching profiles from the flows canvas returns to the feed view of the
+// new profile — the just-opened flow belonged to the previous profile.
+watch(activeProfileId, (id) => {
+  session.bindActiveFlow(id || undefined)
+  session.exitFlows()
+})
 
-function exitFlows() {
-  mode.value = 'feed'
-}
-
-// Switching profiles from the flows canvas returns to the feed view of the new
-// profile — the just-opened flow belonged to the previous profile.
-watch(activeProfileId, () => { mode.value = 'feed' })
+// ── Always-on runtime pump (hc-8ft4yhm6) ─────────────────────────────────────
+// Drives the shared session's runtime on every backend log append —
+// mirrors FlowsView's old per-canvas subscription (see usePipelineRuntime's
+// module docs for why the mounting component owns Events.On rather than the
+// composable), except this one lives here so it keeps pumping with the
+// canvas closed. The commit must complete BEFORE useFeedState.refresh()
+// re-reads feed_item, or the sidebar would race the write and show stale
+// counts/items — hence the `await` ahead of the (fire-and-forget) refresh.
+let unsubscribeLog: (() => void) | undefined
+onMounted(() => {
+  unsubscribeLog = Events.On('log:appended', () => {
+    void (async () => {
+      await session.pump()
+      void refresh()
+    })()
+  })
+})
+onUnmounted(() => { unsubscribeLog?.() })
 
 // ── Profile create / delete overlays ─────────────────────────────────────────
 
@@ -163,11 +188,11 @@ useCommands(computed(() => {
   // View — enter/exit the flows canvas for the active profile.
   cmds.push({
     id: 'flow:edit',
-    title: mode.value === 'feed' ? 'Edit flow…' : 'Back to feed',
+    title: session.flowsOpen.value ? 'Back to feed' : 'Edit flow…',
     group: 'View',
     keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
     icon: IconWorkflow,
-    run: () => { mode.value === 'feed' ? openFlows() : exitFlows() },
+    run: () => { session.flowsOpen.value ? session.exitFlows() : session.openFlows() },
   })
 
   // Themes
@@ -228,8 +253,8 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
         :unread-count="activeProfile?.unreadCount ?? 0"
-        :flows-active="mode === 'flows'"
-        @exit-flows="exitFlows"
+        :flows-active="session.flowsOpen.value"
+        @exit-flows="session.exitFlows"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
@@ -252,7 +277,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
            rail and the breadcrumb are always there to navigate back. -->
       <div v-else class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
-        <FlowsView v-if="mode === 'flows'" :flow-id="activeProfileId" />
+        <FlowsView v-if="session.flowsOpen.value" />
         <template v-else>
           <SideBar
             v-if="activeProfile"
@@ -262,7 +287,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @select="selectSidebar"
             @select-unread="selectUnreadView"
             @delete-profile="openDeleteProfile"
-            @open-flows="openFlows"
+            @open-flows="session.openFlows()"
           />
           <section v-if="activeProfile" class="flex min-w-0 flex-1">
             <FeedList
