@@ -37,92 +37,39 @@ var trayIcon []byte
 var _ = registerEvents()
 
 func registerEvents() struct{} {
-	// feed:updated carries the profile ID whose data changed; auth:updated
-	// carries the new auth state string; config:updated carries "ok" or the
-	// config error text after a profiles-config reload; log:appended carries
-	// the pipeline event log's new tail offset after a producer tick appends
-	// at least one row; flows:updated fires after a flows/*.yaml directory
-	// reload (an external edit, or the app's own SaveFlow/SaveLayout — see
+	// auth:updated carries the new auth state string; log:appended carries the
+	// pipeline event log's new tail offset after a producer tick appends at
+	// least one row; flows:updated fires after a flows/*.yaml directory reload
+	// (an external edit, or the app's own SaveFlow/SaveLayout — see
 	// buildFlowsStore). All are wake-up signals: the frontend re-reads the
-	// relevant service on receipt. flows:updated is a wake-up only: the
-	// frontend graph runtime performs the actual drain-then-swap of a
-	// running flow on receipt (Phase 6) — this phase just keeps
-	// FlowsService's view of flows/*.yaml current.
-	application.RegisterEvent[string]("feed:updated")
+	// relevant service on receipt.
 	application.RegisterEvent[string]("auth:updated")
-	application.RegisterEvent[string]("config:updated")
 	application.RegisterEvent[int64]("log:appended")
 	application.RegisterEvent[string]("flows:updated")
 	return struct{}{}
 }
 
-// buildFeedProvider returns the provider plus, in live mode, a poller that
-// pushes feed:updated when a background refresh finds changes and a watcher
-// that hot-reloads the profiles config on external edits. Mock modes serve
-// static fixtures and need neither.
-func buildFeedProvider() (feed.Provider, *feed.Poller, *feed.ConfigWatcher) {
-	switch desktop.MockMode() {
-	case "feed":
-		return feed.NewMockProvider(), nil, nil
-	case "onboarding":
-		// Empty start so e2e walks the whole first run: auth, then
-		// workspace creation, then the fixture feed.
-		return feed.NewEmptyMockProvider(), nil, nil
-	default:
-		logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-		store := feed.NewStore(desktop.ConfigPath(), desktop.StateDir())
-		provider := feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), store, logger)
-		poller := feed.NewPoller(provider, feed.DefaultPollInterval, emitFeedUpdated, logger)
-		watcher, err := feed.NewConfigWatcher(desktop.ConfigPath(), func() {
-			reloadConfig(store, provider)
-		}, logger)
-		if err != nil {
-			// The app works without hot reload; edits then need a restart.
-			logger.Warn().Err(err).Msg("profiles config hot-reload unavailable")
-		}
-		return provider, poller, watcher
-	}
-}
-
-// reloadConfig re-reads the profiles config after an on-disk change, drops
-// the fetch cache (feed definitions may have changed), and wakes the
-// frontend with the outcome. A broken config keeps the last-good profiles;
-// the error text rides the event so the UI can say what is wrong.
-func reloadConfig(store *feed.Store, provider *feed.LiveProvider) {
-	status := "ok"
-	if err := store.Reload(); err != nil {
-		status = err.Error()
-	}
-	provider.Invalidate()
-	if app := application.Get(); app != nil {
-		app.Event.Emit("config:updated", status)
-	}
-}
-
-// emitFeedUpdated pushes the changed profile's ID to the frontend. Safe to
-// call from the poller goroutine once the app is running.
-func emitFeedUpdated(profileID string) {
-	if app := application.Get(); app != nil {
-		app.Event.Emit("feed:updated", profileID)
-	}
-}
-
-// buildPipelineProducer starts the pipeline event-log producer over every
-// enabled github-source node across all flows (via flows), or returns nil
-// when there is nothing to poll. Mock modes ("feed", "onboarding") skip it:
-// they serve static fixtures with no ticking network fetch, and starting a
-// producer there would make e2e non-deterministic for no benefit — this phase
-// ships no mock Source. Live mode requires provider to be a *feed.LiveProvider,
-// which it always is outside mock modes (see buildFeedProvider).
-func buildPipelineProducer(db *pipelinedb.DB, provider feed.Provider, flows pipeline.FlowLister, logger zerolog.Logger) *pipeline.Producer {
+// buildSourceFetcher builds the GitHub fetch layer the pipeline producer polls
+// through, or nil in a mock mode (where the producer is skipped anyway — see
+// buildPipelineProducer). Now that a profile is a flow, there is no profiles
+// config to load or hot-reload here: source config lives in the flow's
+// github-source nodes, and the producer enumerates them from the flow store.
+func buildSourceFetcher() *feed.LiveProvider {
 	if desktop.MockMode() != "" {
 		return nil
 	}
-	live, ok := provider.(*feed.LiveProvider)
-	if !ok {
+	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	return feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), logger)
+}
+
+// buildPipelineProducer starts the pipeline event-log producer over every
+// enabled github-source node across all flows (via flows), or returns nil when
+// there is nothing to poll (mock mode, so fetcher is nil).
+func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows pipeline.FlowLister, logger zerolog.Logger) *pipeline.Producer {
+	if fetcher == nil {
 		return nil
 	}
-	return pipeline.NewProducer(db, pipeline.NewFlowSourceLister(live, flows), feed.DefaultPollInterval, emitLogAppended, logger)
+	return pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), feed.DefaultPollInterval, emitLogAppended, logger)
 }
 
 // emitLogAppended pushes the pipeline event log's new tail offset to the
@@ -278,13 +225,7 @@ func main() {
 	// The poller, watcher, and pipeline producer live for the whole
 	// process; they die with it, so there are no Stop/Close calls here (and
 	// log.Fatal below would skip a defer anyway).
-	provider, poller, watcher := buildFeedProvider()
-	if poller != nil {
-		poller.Start()
-	}
-	if watcher != nil {
-		watcher.Start()
-	}
+	fetcher := buildSourceFetcher()
 
 	pipelineLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	pipelineDB, err := pipelinedb.Open(desktop.StateDir(), pipelinedb.DefaultOpenOptions())
@@ -309,16 +250,16 @@ func main() {
 		flowsWatcher.Start()
 	}
 
-	if producer := buildPipelineProducer(pipelineDB, provider, flowsStore, pipelineLogger); producer != nil {
+	if producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, pipelineLogger); producer != nil {
 		producer.Start()
 	}
 
-	// Every auth transition drops the feed cache before the frontend is
+	// Every auth transition drops the fetch cache before the frontend is
 	// notified: a different account must never be served items fetched with
 	// the previous token.
 	onAuthChange := func() {
-		if live, ok := provider.(*feed.LiveProvider); ok {
-			live.Invalidate()
+		if fetcher != nil {
+			fetcher.Invalidate()
 		}
 		emitAuthUpdated()
 	}
@@ -328,7 +269,6 @@ func main() {
 		Description: "Hive desktop application",
 		Icon:        appIcon,
 		Services: []application.Service{
-			application.NewService(NewFeedService(provider)),
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 			application.NewService(NewPipelineService(pipelineDB)),
 			application.NewService(NewFlowsService(flowsStore)),

@@ -22,6 +22,21 @@ import * as flow$0 from "../internal/desktop/pipeline/flow/models.js";
 import * as $models from "./models.js";
 
 /**
+ * CreateFlow seeds a new flow (a new "profile") named name and returns its
+ * listing summary, so the frontend can select it immediately.
+ */
+export function CreateFlow(name: string): $CancellablePromise<$models.FlowSummary> {
+    return $Call.ByID(307325216, name);
+}
+
+/**
+ * DeleteFlow removes a flow (a "profile") and its layout.
+ */
+export function DeleteFlow(id: string): $CancellablePromise<void> {
+    return $Call.ByID(2980382819, id);
+}
+
+/**
  * GetFlow returns one flow's full definition for the editor.
  */
 export function GetFlow(id: string): $CancellablePromise<flow$0.Flow> {

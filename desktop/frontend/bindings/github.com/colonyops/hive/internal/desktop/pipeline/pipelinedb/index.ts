@@ -4,6 +4,7 @@
 export type {
     CommitBatch,
     Discard,
+    FeedCount,
     FeedItemView,
     Msg,
     NodeRunRecord,

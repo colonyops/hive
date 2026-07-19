@@ -15,10 +15,22 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as feed$0 from "../internal/desktop/feed/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as pipeline$0 from "../internal/desktop/pipeline/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as pipelinedb$0 from "../internal/desktop/pipeline/pipelinedb/models.js";
+
+/**
+ * ActionsFor returns the configured actions for an item kind ("PR"/"Issue"),
+ * for the detail-pane action picker. The catalog is static today (see
+ * feed.ActionsFor); this is the seam where actions.yml-driven actions plug in.
+ */
+export function ActionsFor(kind: string): $CancellablePromise<feed$0.Action[] | null> {
+    return $Call.ByID(1014871757, kind);
+}
 
 /**
  * Commit applies the frontend graph runtime's batch atomically: it upserts
@@ -29,6 +41,14 @@ import * as pipelinedb$0 from "../internal/desktop/pipeline/pipelinedb/models.js
  */
 export function Commit(batch: pipeline$0.CommitBatch): $CancellablePromise<void> {
     return $Call.ByID(2833242122, batch);
+}
+
+/**
+ * FeedItemCounts returns per-feed total/unread counts for every feed in a
+ * flow, for the sidebar's rail badges.
+ */
+export function FeedItemCounts(flowID: string): $CancellablePromise<pipeline$0.FeedCount[] | null> {
+    return $Call.ByID(460495308, flowID);
 }
 
 /**

@@ -15,9 +15,6 @@ import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
-import ConfigErrorOverlay from './components/ConfigErrorOverlay.vue'
-import ConfigSheet from './components/ConfigSheet.vue'
-import FeedEditorSheet from './components/FeedEditorSheet.vue'
 import DeleteProfileModal from './components/DeleteProfileModal.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
@@ -26,8 +23,6 @@ import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
-import { parseConfigErrors } from './lib/configErrors'
-import type { FeedDef, SourceDef } from './types/feed'
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -38,18 +33,9 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
   selectedId, selectedItem, actions, unreadOnly, title, countLabel, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
-  config, configErrorOverlayOpen, dismissConfigError, loadConfig, copyConfigPrompt, copyConfigPath, copyConfigErrors,
-  sources, creatingSource, createSourceError, savingFeed, saveFeedError,
-  loadSources, createSource, loadFeedDef, createFeed, updateFeed, deleteFeed,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, notWired, hideWindow,
 } = useFeedState()
-
-// The overlay only ever gets the shape the backend actually provides today
-// (see internal/desktop/feed/config.go ConfigInfo.Error — a single string);
-// parseConfigErrors is the seam where richer per-problem data would plug in
-// without touching the template.
-const configErrors = computed(() => parseConfigErrors(config.value?.error ?? ''))
 
 // ── Flows editor mode ────────────────────────────────────────────────────────
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
@@ -71,15 +57,9 @@ function exitFlows() {
 // profile — the just-opened flow belonged to the previous profile.
 watch(activeProfileId, () => { mode.value = 'feed' })
 
-// ── Config sheet & profile creation overlays ─────────────────────────────────
+// ── Profile create / delete overlays ─────────────────────────────────────────
 
-const configSheetOpen = ref(false)
 const newProfileOpen = ref(false)
-
-function openConfigSheet() {
-  configSheetOpen.value = true
-  void loadConfig()
-}
 
 function openNewProfile() {
   createProfileError.value = null // a stale failure must not greet the reopen
@@ -90,47 +70,6 @@ async function submitNewProfile(name: string) {
   await createProfile(name)
   if (!createProfileError.value) newProfileOpen.value = false
 }
-
-// ── Feed editor sheet ────────────────────────────────────────────────────────
-
-const feedEditorOpen = ref(false)
-// Non-null while editing an existing feed; null in create mode.
-const editingFeedId = ref<string | null>(null)
-// The edit-mode prefill, loaded async after the sheet opens.
-const editingFeedDef = ref<FeedDef | null>(null)
-
-function openFeedEditor(feedId?: string) {
-  editingFeedId.value = feedId ?? null
-  editingFeedDef.value = null
-  createSourceError.value = null // stale failures must not greet the reopen
-  saveFeedError.value = null
-  feedEditorOpen.value = true
-  void loadSources()
-  void loadConfig() // the sheet shows the config path row
-  if (feedId && activeProfileId.value) {
-    void loadFeedDef(activeProfileId.value, feedId).then((def) => { editingFeedDef.value = def })
-  }
-}
-
-async function submitFeedSave(def: FeedDef) {
-  if (!activeProfileId.value) return
-  const saved = editingFeedId.value
-    ? await updateFeed(activeProfileId.value, editingFeedId.value, def)
-    : await createFeed(activeProfileId.value, def)
-  if (saved) feedEditorOpen.value = false
-}
-
-async function submitFeedDelete(feedId: string) {
-  if (!activeProfileId.value) return
-  const deleted = await deleteFeed(activeProfileId.value, feedId)
-  if (deleted) feedEditorOpen.value = false
-}
-
-function submitNewSource(def: SourceDef) {
-  void createSource(def)
-}
-
-// ── Delete profile confirm modal ─────────────────────────────────────────────
 
 const deleteProfileOpen = ref(false)
 
@@ -194,22 +133,7 @@ useCommands(computed(() => {
       hint: profileName,
       run: () => selectSidebar({ type: 'feed', feedId: f.id }),
     })
-    cmds.push({
-      id: `feed:edit:${f.id}`,
-      title: `Edit feed: ${f.name}`,
-      group: 'Feeds',
-      keywords: ['editor', 'filters'],
-      run: () => openFeedEditor(f.id),
-    })
   }
-
-  cmds.push({
-    id: 'feed:new',
-    title: 'New feed…',
-    group: 'Feeds',
-    keywords: ['create', 'editor', 'source'],
-    run: () => openFeedEditor(),
-  })
 
   cmds.push({
     id: 'feed:toggle-unread',
@@ -236,30 +160,14 @@ useCommands(computed(() => {
     run: openNewProfile,
   })
 
+  // View — enter/exit the flows canvas for the active profile.
   cmds.push({
-    id: 'feed:edit-config',
-    title: 'Edit feeds as code…',
-    group: 'Feeds',
-    keywords: ['config', 'yaml', 'profiles'],
-    run: openConfigSheet,
-  })
-
-  cmds.push({
-    id: 'feed:copy-config-prompt',
-    title: 'Copy feeds config prompt',
-    group: 'Feeds',
-    keywords: ['config', 'yaml', 'agent', 'prompt'],
-    run: copyConfigPrompt,
-  })
-
-  // View
-  cmds.push({
-    id: 'view:toggle-flows',
-    title: mode.value === 'feed' ? 'Open flows editor…' : 'Back to feed',
+    id: 'flow:edit',
+    title: mode.value === 'feed' ? 'Edit flow…' : 'Back to feed',
     group: 'View',
     keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
     icon: IconWorkflow,
-    run: () => { mode.value = mode.value === 'feed' ? 'flows' : 'feed' },
+    run: () => { mode.value === 'feed' ? openFlows() : exitFlows() },
   })
 
   // Themes
@@ -315,10 +223,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 </script>
 
 <template>
-  <main
-    class="h-screen w-screen overflow-hidden bg-app text-text"
-    :class="{ 'pointer-events-none blur-[3px] opacity-40 transition-[filter,opacity] duration-200': configErrorOverlayOpen }"
-  >
+  <main class="h-screen w-screen overflow-hidden bg-app text-text">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
@@ -356,8 +261,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             :unread-only="unreadOnly"
             @select="selectSidebar"
             @select-unread="selectUnreadView"
-            @edit-feeds="openConfigSheet"
-            @edit-feed="openFeedEditor"
             @delete-profile="openDeleteProfile"
             @open-flows="openFlows"
           />
@@ -387,30 +290,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
     </div>
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
-    <ConfigSheet
-      v-if="configSheetOpen"
-      :config="config"
-      @close="configSheetOpen = false"
-      @copy-prompt="copyConfigPrompt"
-      @copy-path="copyConfigPath"
-    />
-    <FeedEditorSheet
-      v-if="feedEditorOpen"
-      :feed-id="editingFeedId"
-      :initial-def="editingFeedDef"
-      :sources="sources"
-      :config="config"
-      :busy="savingFeed"
-      :error="saveFeedError"
-      :source-busy="creatingSource"
-      :source-error="createSourceError"
-      @close="feedEditorOpen = false"
-      @save="submitFeedSave"
-      @delete="submitFeedDelete"
-      @create-source="submitNewSource"
-      @copy-prompt="copyConfigPrompt"
-      @copy-path="copyConfigPath"
-    />
     <NewProfileModal
       v-if="newProfileOpen"
       :busy="creatingProfile"
@@ -426,13 +305,4 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       @confirm="confirmDeleteProfile"
     />
   </main>
-  <ConfigErrorOverlay
-    v-if="configErrorOverlayOpen"
-    :path="config?.path ?? ''"
-    :errors="configErrors"
-    @retry="loadConfig"
-    @dismiss="dismissConfigError"
-    @copy-path="copyConfigPath"
-    @copy-errors="copyConfigErrors"
-  />
 </template>

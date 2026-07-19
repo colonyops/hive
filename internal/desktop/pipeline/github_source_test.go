@@ -5,8 +5,6 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
-	"os"
-	"path/filepath"
 	"sync/atomic"
 	"testing"
 
@@ -57,31 +55,16 @@ func (a *singleSearchAPI) handler() http.Handler {
 	return mux
 }
 
-// newLiveProviderFixture writes a minimal profiles config with one search
-// source and constructs a real feed.LiveProvider against a fake GitHub API,
-// mirroring feed's own poller_test.go fixture pattern.
+// newLiveProviderFixture constructs a real feed.LiveProvider against a fake
+// GitHub API. Source config now lives in the flow's github-source nodes, not
+// a profiles config, so the provider needs no store.
 func newLiveProviderFixture(t *testing.T, api *singleSearchAPI) *feed.LiveProvider {
 	t.Helper()
 	server := httptest.NewServer(api.handler())
 	t.Cleanup(server.Close)
 
-	dir := t.TempDir()
-	require.NoError(t, os.WriteFile(filepath.Join(dir, "profiles.yaml"), []byte(`sources:
-  - id: my-prs
-    kind: search
-    query: "is:open is:pr author:@me archived:false"
-profiles:
-  - id: triage
-    name: Triage
-    feeds:
-      - id: my-open-prs
-        name: My open PRs
-        sources: [my-prs]
-`), 0o600))
-
 	client := github.NewClient(github.WithAPIBase(server.URL))
-	store := feed.NewStore(filepath.Join(dir, "profiles.yaml"), t.TempDir())
-	return feed.NewLiveProvider(client, github.NewMemoryTokenStore("tok"), store, zerolog.Nop())
+	return feed.NewLiveProvider(client, github.NewMemoryTokenStore("tok"), zerolog.Nop())
 }
 
 func TestGithubSource_Produce_EmitsWireItems(t *testing.T) {
@@ -138,7 +121,7 @@ func TestGithubSource_Produce_PropagatesFetchError(t *testing.T) {
 
 	// No token: LiveProvider.SourceItems fails with ErrNotAuthenticated
 	// before ever hitting the network.
-	live := feed.NewLiveProvider(github.NewClient(), github.NewMemoryTokenStore(""), feed.NewStore(filepath.Join(t.TempDir(), "profiles.yaml"), t.TempDir()), zerolog.Nop())
+	live := feed.NewLiveProvider(github.NewClient(), github.NewMemoryTokenStore(""), zerolog.Nop())
 	src := &githubSource{live: live, def: feed.SourceDef{ID: "triage/in-prs", Kind: "search", Query: "is:open"}, topic: "source:triage/in-prs"}
 
 	called := false

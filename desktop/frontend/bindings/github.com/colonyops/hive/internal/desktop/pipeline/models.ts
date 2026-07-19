@@ -23,6 +23,18 @@ export type CommitBatch = pipelinedb$0.CommitBatch;
  * package (desktop/pipelineservice.go, the frontend graph runtime via Wails
  * bindings) speak in terms of this package's names.
  *
+ * FeedCount is a feed's total/unread item counts for the sidebar rail.
+ */
+export type FeedCount = pipelinedb$0.FeedCount;
+
+/**
+ * Sink, Output, Discard, NodeRun, and CommitBatch are pipelinedb's commit
+ * protocol structs, re-exported verbatim under package pipeline — the same
+ * alias pattern as Msg above: pipelinedb owns the transactional
+ * implementation (see pipelinedb/commit.go), while callers outside this
+ * package (desktop/pipelineservice.go, the frontend graph runtime via Wails
+ * bindings) speak in terms of this package's names.
+ *
  * FeedItem mirrors pipelinedb.FeedItemView, which is named "View" only
  * to avoid colliding with sqlc's generated raw feed_item row model
  * (also named FeedItem, in pipelinedb/models.go).

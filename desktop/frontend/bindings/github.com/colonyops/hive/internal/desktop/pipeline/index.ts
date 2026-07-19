@@ -3,6 +3,7 @@
 
 export type {
     CommitBatch,
+    FeedCount,
     FeedItem,
     NodeRunRecord
 } from "./models.js";

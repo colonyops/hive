@@ -3,15 +3,13 @@ import IconChevronRight from '~icons/lucide/chevron-right'
 import IconCircle from '~icons/lucide/circle'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
-import IconPencil from '~icons/lucide/pencil'
-import IconPlus from '~icons/lucide/plus'
 import IconRss from '~icons/lucide/rss'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
 import type { Profile, SidebarSelection } from '../types/feed'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
-const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'edit-feeds': []; 'edit-feed': [feedId: string]; 'delete-profile': []; 'open-flows': [] }>()
+const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'delete-profile': []; 'open-flows': [] }>()
 
 // "All items" and "Unread" are both all-scope; the unread filter picks
 // which entry lights up. A feed entry highlights regardless of the filter.
@@ -64,31 +62,20 @@ function feedSelected(feedId: string): boolean {
     <section class="px-2.5 pb-1.5 pt-2">
       <div class="section-label">
         <IconRss class="size-3 text-feeds" />FEEDS
-        <button class="ml-auto cursor-pointer text-strong hover:text-text-2" aria-label="Edit feeds" data-testid="sidebar-edit-feeds" @click="emit('edit-feeds')"><IconPlus class="size-3.5" /></button>
       </div>
-      <!-- A div, not a button: the hover pencil is itself a button and
-           interactive elements must not nest. -->
-      <div
+      <button
         v-for="feed in profile.feeds ?? []"
         :key="feed.id"
+        type="button"
         class="sidebar-entry"
-        role="button"
-        tabindex="0"
         :class="{ 'sidebar-entry-selected': feedSelected(feed.id) }"
         data-testid="sidebar-feed"
         :data-id="feed.id"
         @click="emit('select', { type: 'feed', feedId: feed.id })"
-        @keydown.enter="emit('select', { type: 'feed', feedId: feed.id })"
       >
         <span class="nav-icon"><IconGitBranch class="size-3" /></span><span class="min-w-0 flex-1 truncate text-left">{{ feed.name }}</span>
-        <button
-          class="feed-edit cursor-pointer text-text-3 hover:text-text"
-          :aria-label="`Edit feed ${feed.name}`"
-          :data-testid="`sidebar-feed-edit-${feed.id}`"
-          @click.stop="emit('edit-feed', feed.id)"
-        ><IconPencil class="size-3" /></button>
         <span class="font-mono text-[11px]" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{ feed.newCount || feed.count }}</span>
-      </div>
+      </button>
     </section>
 
     <button

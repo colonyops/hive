@@ -39,6 +39,16 @@ export interface Discard {
 }
 
 /**
+ * FeedCount is a feed's total and unread item counts, keyed by the
+ * flow-qualified feed id.
+ */
+export interface FeedCount {
+    "feedId": string;
+    "total": number;
+    "unread": number;
+}
+
+/**
  * FeedItemView is the JSON/Wails-friendly shape of a persisted feed_item
  * row. It is named "View" (rather than FeedItem) only to avoid colliding
  * with the sqlc-generated raw row model of the same name in models.go —

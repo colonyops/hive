@@ -5,6 +5,7 @@ import type { FeedItem } from '../../types/feed'
 
 const baseItem: FeedItem = {
   id: 'item-1',
+  feedId: 'triage/desktop',
   kind: 'PR',
   repo: 'colonyops/hive',
   num: 42,
