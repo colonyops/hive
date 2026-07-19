@@ -24,4 +24,17 @@ describe('TitleBar', () => {
     await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
     expect(wrapper.emitted('exit-flows')).toHaveLength(1)
   })
+
+  it('renders the error chip only when errorCount > 0 and emits open-error-node on click', async () => {
+    const none = mount(TitleBar, { props: { profileName: 'Triage', errorCount: 0 } })
+    expect(none.find('[data-testid="titlebar-error-chip"]').exists()).toBe(false)
+
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', errorCount: 2 } })
+    const chip = wrapper.find('[data-testid="titlebar-error-chip"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('2 errors')
+
+    await chip.trigger('click')
+    expect(wrapper.emitted('open-error-node')).toHaveLength(1)
+  })
 })

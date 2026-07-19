@@ -8,6 +8,7 @@ import IconMinus from '~icons/lucide/minus'
 import IconPalette from '~icons/lucide/palette'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconRss from '~icons/lucide/rss'
+import IconShare2 from '~icons/lucide/share-2'
 import IconWorkflow from '~icons/lucide/workflow'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
@@ -62,6 +63,32 @@ watch(activeProfileId, (id) => {
   session.bindActiveFlow(id || undefined)
   session.exitFlows()
 })
+
+// ── Reveal in flow (8d) ───────────────────────────────────────────────────────
+// A sidebar feed row's id is flow-qualified ("<activeProfileId>/<nodeId>" —
+// see useFeedState's loadFeeds), so the node id is everything after the
+// profile id's own "/" separator. openFlows() both opens the canvas and sets
+// flowFocusNodeId, which FlowsCanvas's existing focus watch turns into a
+// select + center-pan (see FlowsView.vue's :focus-node-id binding).
+function revealInFlow(feedId: string): void {
+  const nodeId = feedId.slice(activeProfileId.value.length + 1)
+  session.openFlows(nodeId)
+}
+
+// ── Titlebar error chip (8d) ──────────────────────────────────────────────────
+// Sourced from the always-on session (not FlowsView), so the chip renders and
+// deep-links correctly even with the canvas closed.
+const errorNodeIds = computed(() =>
+  (session.activeFlow.value?.nodes ?? [])
+    .filter((node) => session.latestRunByNode.value.get(node.id)?.ok === false)
+    .map((node) => node.id),
+)
+const errorCount = computed(() => errorNodeIds.value.length)
+const firstErrorNodeId = computed(() => errorNodeIds.value[0])
+
+function openErrorNode(): void {
+  if (firstErrorNodeId.value) session.openFlows(firstErrorNodeId.value)
+}
 
 // ── Always-on runtime pump (hc-8ft4yhm6) ─────────────────────────────────────
 // Drives the shared session's runtime on every backend log append —
@@ -195,6 +222,19 @@ useCommands(computed(() => {
     run: () => { session.flowsOpen.value ? session.exitFlows() : session.openFlows() },
   })
 
+  // Jump to any node in the active flow by name (8d) — opens the canvas
+  // focused/centered on that node, same as "Reveal in flow" from the sidebar.
+  for (const node of session.activeFlow.value?.nodes ?? []) {
+    cmds.push({
+      id: `flow:node:${node.id}`,
+      title: `Jump to node: ${node.name || node.type}`,
+      group: 'Flow',
+      keywords: ['flows', 'node', 'canvas', 'reveal'],
+      icon: IconShare2,
+      run: () => session.openFlows(node.id),
+    })
+  }
+
   // Themes
   for (const t of themes) {
     cmds.push({
@@ -254,7 +294,9 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
         :unread-count="activeProfile?.unreadCount ?? 0"
         :flows-active="session.flowsOpen.value"
+        :error-count="errorCount"
         @exit-flows="session.exitFlows"
+        @open-error-node="openErrorNode"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
@@ -288,6 +330,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @select-unread="selectUnreadView"
             @delete-profile="openDeleteProfile"
             @open-flows="session.openFlows()"
+            @reveal-in-flow="revealInFlow"
           />
           <section v-if="activeProfile" class="flex min-w-0 flex-1">
             <FeedList

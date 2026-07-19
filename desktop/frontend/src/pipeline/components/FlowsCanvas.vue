@@ -71,6 +71,15 @@ const positions = computed<Map<string, NodePosition>>(() => {
 
 const nodesById = computed(() => new Map(props.flow.nodes.map((n) => [n.id, n])))
 
+// Declared up here (rather than down in the "Selection" section below,
+// where selectedNode/selectedDef/drawerOpen live) because the focusNodeId
+// watch further down runs with `immediate: true` — on a truthy initial
+// prop (e.g. a "reveal in flow" deep link) it calls centerOnNode()
+// synchronously during setup(), which needs selectedNodeId to already be
+// initialized. A `const` declared later would still be in its temporal
+// dead zone at that point and throw.
+const selectedNodeId = ref<string | null>(null)
+
 function defFor(node: FlowNode) {
   return byType[node.type]
 }
@@ -372,8 +381,9 @@ defineExpose({ zoom, zoomIn, zoomOut, fit })
 
 // ── Selection: single click selects (accent ring), double click opens the
 // NodeEditorDrawer ────────────────────────────────────────────────────────
+// selectedNodeId itself is declared up near nodesById — see the comment
+// there for why.
 
-const selectedNodeId = ref<string | null>(null)
 const selectedNode = computed(() => props.flow.nodes.find((n) => n.id === selectedNodeId.value) ?? null)
 const selectedDef = computed(() => (selectedNode.value ? byType[selectedNode.value.type] : null))
 const drawerOpen = ref(false)

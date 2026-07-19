@@ -1,11 +1,16 @@
 <script setup lang="ts">
+import IconTriangleAlert from '~icons/lucide/triangle-alert'
+
 // profileName is empty during onboarding: the bar shows just the wordmark.
 // unreadCount drives the "N new" tally next to the polling indicator.
 // flowsActive adds a "/ Flows" breadcrumb crumb and turns the profile crumb
 // into a button that exits back to the feed view (the fix for being "stuck"
 // in the flows canvas).
-defineProps<{ profileName?: string; unreadCount?: number; flowsActive?: boolean }>()
-const emit = defineEmits<{ 'exit-flows': [] }>()
+// errorCount (8d) is the count of the active flow's nodes whose last run
+// failed — sourced app-wide from useFlowsSession, so the chip renders and
+// deep-links even with the flows canvas closed.
+defineProps<{ profileName?: string; unreadCount?: number; flowsActive?: boolean; errorCount?: number }>()
+const emit = defineEmits<{ 'exit-flows': []; 'open-error-node': [] }>()
 
 // macOS draws its native traffic lights over the top-left of this bar
 // (hidden-inset chrome configured in desktop/main.go). Pad past them and keep
@@ -38,6 +43,13 @@ const isMac = navigator.userAgent.includes('Mac')
       </template>
     </template>
     <div class="flex-1" />
+    <button
+      v-if="errorCount && errorCount > 0"
+      class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-severity-error-border bg-severity-error-tint px-2 py-1 text-[11.5px] font-semibold text-severity-error hover:opacity-85"
+      style="--wails-draggable: no-drag"
+      data-testid="titlebar-error-chip"
+      @click="emit('open-error-node')"
+    ><IconTriangleAlert class="size-3" />{{ errorCount }} error<template v-if="errorCount !== 1">s</template></button>
     <div v-if="profileName && !flowsActive" class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2" data-testid="polling-indicator">
       <span class="size-[7px] rounded-full bg-accent [animation:hivePulse_2.4s_ease-in-out_infinite]" />
       <span>polling github<template v-if="unreadCount"> · <span class="text-accent">{{ unreadCount }} new</span></template></span>

@@ -4,12 +4,19 @@ import IconCircle from '~icons/lucide/circle'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
 import IconRss from '~icons/lucide/rss'
+import IconShare2 from '~icons/lucide/share-2'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
 import type { Profile, SidebarSelection } from '../types/feed'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
-const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'delete-profile': []; 'open-flows': [] }>()
+const emit = defineEmits<{
+  select: [sel: SidebarSelection]
+  'select-unread': []
+  'delete-profile': []
+  'open-flows': []
+  'reveal-in-flow': [feedId: string]
+}>()
 
 // "All items" and "Unread" are both all-scope; the unread filter picks
 // which entry lights up. A feed entry highlights regardless of the filter.
@@ -74,6 +81,12 @@ function feedSelected(feedId: string): boolean {
         @click="emit('select', { type: 'feed', feedId: feed.id })"
       >
         <span class="nav-icon"><IconGitBranch class="size-3" /></span><span class="min-w-0 flex-1 truncate text-left">{{ feed.name }}</span>
+        <span
+          class="feed-reveal flex size-5 shrink-0 cursor-pointer items-center justify-center rounded-md text-accent hover:bg-accent/20"
+          title="Reveal in flow"
+          data-testid="sidebar-reveal-in-flow"
+          @click.stop="emit('reveal-in-flow', feed.id)"
+        ><IconShare2 class="size-3" /></span>
         <span class="font-mono text-[11px]" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{ feed.newCount || feed.count }}</span>
       </button>
     </section>
@@ -97,9 +110,9 @@ function feedSelected(feedId: string): boolean {
 .sidebar-entry { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; cursor: pointer; }
 .sidebar-entry:hover { background: var(--color-chip); color: var(--color-text); }
 .sidebar-entry-selected { background: var(--color-hover); color: var(--color-accent); font-weight: 500; }
-/* The pencil holds its space (opacity, not display) so hovering never shifts the count badge. */
-.feed-edit { display: inline-flex; opacity: 0; }
-.sidebar-entry:hover .feed-edit, .feed-edit:focus-visible { opacity: 1; }
+/* Reveal-in-flow holds its space (opacity, not display) so hovering never shifts the count badge — same pattern the old feed-edit pencil used. */
+.feed-reveal { display: inline-flex; opacity: 0; }
+.sidebar-entry:hover .feed-reveal, .feed-reveal:focus-visible { opacity: 1; }
 /* Same pattern as .feed-edit: holds its space, only reveals on header hover. */
 .profile-delete { display: inline-flex; opacity: 0; }
 .profile-header:hover .profile-delete, .profile-delete:focus-visible { opacity: 1; }

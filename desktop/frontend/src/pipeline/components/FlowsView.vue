@@ -31,7 +31,7 @@ import FlowDebugPanel from './FlowDebugPanel.vue'
 import FeedItemsPreview, { type FeedItemsClient } from './FeedItemsPreview.vue'
 
 const {
-  flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error,
+  flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error, flowFocusNodeId,
   refreshFlows, refreshNodeRuns, selectFlow, newFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
   running: runtimeRunning, lastRun: runtimeLastRun, runtimeError, runRuntime, stopRuntime,
 } = useFlowsSession()
@@ -284,6 +284,7 @@ const showDebug = ref(false)
           :flow="activeFlow"
           :layout="layout"
           :latest-run-by-node="latestRunByNode"
+          :focus-node-id="flowFocusNodeId"
           @move="moveNode"
           @update-node="updateNode"
           @delete-node="deleteNode"

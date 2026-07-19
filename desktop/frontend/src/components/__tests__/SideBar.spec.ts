@@ -50,4 +50,13 @@ describe('SideBar', () => {
 
     expect(wrapper.emitted('delete-profile')).toHaveLength(1)
   })
+
+  it('emits reveal-in-flow with the feed id from the per-feed icon, without also selecting the row', async () => {
+    const wrapper = mountSideBar()
+
+    await wrapper.find('[data-testid="sidebar-feed"][data-id="backend"] [data-testid="sidebar-reveal-in-flow"]').trigger('click')
+
+    expect(wrapper.emitted('reveal-in-flow')).toEqual([['backend']])
+    expect(wrapper.emitted('select')).toBeUndefined()
+  })
 })
