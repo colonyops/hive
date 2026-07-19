@@ -16,6 +16,7 @@ import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import SettingsView from './components/SettingsView.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
 import DeleteProfileModal from './components/DeleteProfileModal.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
@@ -117,6 +118,27 @@ async function discardPendingNavigation(): Promise<void> {
   if (session.dirty.value) return // reload from disk failed — stay open
   pendingNavigation.value = null
   applyPendingNavigation(pending)
+}
+
+// ── Settings view (hc-pppw2iww) ──────────────────────────────────────────────
+// A plain app-level view-state ref — NOT folded into useFlowsSession, since
+// settings is an app-chrome concern independent of any profile/flow. Mirrors
+// how session.flowsOpen swaps the main region (see the template): SideBar's
+// "open-settings" sets this true and renders SettingsView full-screen in
+// place of the sidebar+feed; its own header "Back to feed" button (or Esc)
+// sets it back to false. Opening settings also exits the flows canvas so the
+// two full-screen views never stack — safe to do unconditionally (unlike
+// requestExitFlows) because SideBar (the only place the settings button
+// lives today) is itself only rendered once flows is already closed.
+const settingsOpen = ref(false)
+
+function openSettings(): void {
+  settingsOpen.value = true
+  session.exitFlows()
+}
+
+function closeSettings(): void {
+  settingsOpen.value = false
 }
 
 // ── Reveal in flow (8d) ───────────────────────────────────────────────────────
@@ -374,7 +396,8 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
            rail and the breadcrumb are always there to navigate back. -->
       <div v-else class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="requestSelectProfile" @add="openNewProfile" />
-        <FlowsView v-if="session.flowsOpen.value" />
+        <SettingsView v-if="settingsOpen" @close="closeSettings" />
+        <FlowsView v-else-if="session.flowsOpen.value" />
         <template v-else>
           <SideBar
             v-if="activeProfile"
@@ -386,6 +409,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @select-unread="selectUnreadView"
             @delete-profile="openDeleteProfile"
             @open-flows="session.openFlows()"
+            @open-settings="openSettings"
             @reveal-in-flow="revealInFlow"
           />
           <section v-if="activeProfile" class="flex min-w-0 flex-1">

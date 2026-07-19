@@ -127,7 +127,7 @@ describe('App', () => {
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
-    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
 
     // Flows canvas is up; the spaces rail stays; the breadcrumb offers a way back.
@@ -140,6 +140,28 @@ describe('App', () => {
 
     // Back to the feed view.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('opens the settings view from the sidebar gear, hiding the sidebar/feed, and returns to the feed via its close button', async () => {
+    const wrapper = await mountApp()
+
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true) // rail stays mounted
+
+    await wrapper.find('[data-testid="settings-close"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
     wrapper.unmount()
@@ -252,7 +274,7 @@ describe('App', () => {
 
   it('exiting the canvas via the breadcrumb while dirty prompts a confirm instead of leaving immediately; Cancel stays in the canvas', async () => {
     const wrapper = await mountApp()
-    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
 
@@ -279,7 +301,7 @@ describe('App', () => {
 
   it('exiting the canvas via the breadcrumb while dirty: Deploy saves the draft then returns to the feed view', async () => {
     const wrapper = await mountApp()
-    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
 
     const session = useFlowsSession()
@@ -302,7 +324,7 @@ describe('App', () => {
 
   it('exiting the canvas via the breadcrumb while dirty: Discard drops the draft (reloads from disk) then returns to the feed view', async () => {
     const wrapper = await mountApp()
-    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
 
     const session = useFlowsSession()

@@ -23,10 +23,15 @@ function mountSideBar(overrides: Partial<{ flowsDirty: boolean }> = {}) {
 }
 
 describe('SideBar', () => {
-  it('opens the flows canvas from the header Flows pill', async () => {
+  it('has no header Flows pill; a Settings gear button opens the settings page instead', async () => {
     const wrapper = mountSideBar()
-    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
-    expect(wrapper.emitted('open-flows')).toHaveLength(1)
+
+    expect(wrapper.find('[data-testid="sidebar-open-flows"]').exists()).toBe(false)
+    expect(wrapper.find('.flow-pill').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').text()).not.toContain('Flows')
+
+    await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
+    expect(wrapper.emitted('open-settings')).toHaveLength(1)
   })
 
   it('opens the flows canvas from the Edit flow footer', async () => {

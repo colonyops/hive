@@ -4,6 +4,7 @@ import IconCircle from '~icons/lucide/circle'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
 import IconRss from '~icons/lucide/rss'
+import IconSettings from '~icons/lucide/settings'
 import IconShare2 from '~icons/lucide/share-2'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
@@ -15,6 +16,7 @@ const emit = defineEmits<{
   'select-unread': []
   'delete-profile': []
   'open-flows': []
+  'open-settings': []
   'reveal-in-flow': [feedId: string]
 }>()
 
@@ -39,11 +41,12 @@ function feedSelected(feedId: string): boolean {
       <div class="flex items-center gap-2">
         <div class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
         <button
-          class="flow-pill flex shrink-0 items-center gap-1.5 rounded-md border border-accent/35 bg-accent-tint px-2 py-1 text-[11.5px] font-semibold text-accent hover:bg-accent/20"
-          title="Edit this profile's flow"
-          data-testid="sidebar-open-flows"
-          @click="emit('open-flows')"
-        ><IconWorkflow class="size-3" />Flows</button>
+          class="settings-button flex size-6 shrink-0 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
+          title="Settings"
+          aria-label="Settings"
+          data-testid="sidebar-open-settings"
+          @click="emit('open-settings')"
+        ><IconSettings class="size-3.5" /></button>
         <button
           class="profile-delete shrink-0 cursor-pointer text-text-3 hover:text-severity-error"
           aria-label="Delete profile"
