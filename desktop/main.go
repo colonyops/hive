@@ -10,6 +10,8 @@ import (
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
+	"github.com/colonyops/hive/internal/desktop/pipeline"
+	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/colonyops/hive/internal/github"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
@@ -33,11 +35,14 @@ var _ = registerEvents()
 func registerEvents() struct{} {
 	// feed:updated carries the profile ID whose data changed; auth:updated
 	// carries the new auth state string; config:updated carries "ok" or the
-	// config error text after a profiles-config reload. All are wake-up
-	// signals: the frontend re-reads the relevant service on receipt.
+	// config error text after a profiles-config reload; log:appended carries
+	// the pipeline event log's new tail offset after a producer tick appends
+	// at least one row. All are wake-up signals: the frontend re-reads the
+	// relevant service on receipt.
 	application.RegisterEvent[string]("feed:updated")
 	application.RegisterEvent[string]("auth:updated")
 	application.RegisterEvent[string]("config:updated")
+	application.RegisterEvent[int64]("log:appended")
 	return struct{}{}
 }
 
@@ -92,6 +97,33 @@ func emitFeedUpdated(profileID string) {
 	}
 }
 
+// buildPipelineProducer starts the pipeline event-log producer over
+// provider's configured sources, or returns nil when there is nothing to
+// poll. Mock modes ("feed", "onboarding") skip it: they serve static
+// fixtures with no ticking network fetch, and starting a producer there
+// would make e2e non-deterministic for no benefit — this phase ships no
+// mock Source. Live mode requires provider to be a *feed.LiveProvider,
+// which it always is outside mock modes (see buildFeedProvider).
+func buildPipelineProducer(db *pipelinedb.DB, provider feed.Provider, logger zerolog.Logger) *pipeline.Producer {
+	if desktop.MockMode() != "" {
+		return nil
+	}
+	live, ok := provider.(*feed.LiveProvider)
+	if !ok {
+		return nil
+	}
+	return pipeline.NewProducer(db, pipeline.NewGithubSourceLister(live), feed.DefaultPollInterval, emitLogAppended, logger)
+}
+
+// emitLogAppended pushes the pipeline event log's new tail offset to the
+// frontend after a producer tick appends at least one row. Safe to call
+// from the producer goroutine once the app is running.
+func emitLogAppended(nextOffset int64) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("log:appended", nextOffset)
+	}
+}
+
 func buildAuthBackend(onChange func()) auth.Backend {
 	switch desktop.MockMode() {
 	case "feed":
@@ -112,15 +144,24 @@ func emitAuthUpdated() {
 }
 
 func main() {
-	// The poller and watcher live for the whole process; they die with it,
-	// so there are no Stop/Close calls here (and log.Fatal below would skip
-	// a defer anyway).
+	// The poller, watcher, and pipeline producer live for the whole
+	// process; they die with it, so there are no Stop/Close calls here (and
+	// log.Fatal below would skip a defer anyway).
 	provider, poller, watcher := buildFeedProvider()
 	if poller != nil {
 		poller.Start()
 	}
 	if watcher != nil {
 		watcher.Start()
+	}
+
+	pipelineLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	pipelineDB, err := pipelinedb.Open(desktop.StateDir(), pipelinedb.DefaultOpenOptions())
+	if err != nil {
+		log.Fatal(err)
+	}
+	if producer := buildPipelineProducer(pipelineDB, provider, pipelineLogger); producer != nil {
+		producer.Start()
 	}
 
 	// Every auth transition drops the feed cache before the frontend is
@@ -140,6 +181,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(NewFeedService(provider)),
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
+			application.NewService(NewPipelineService(pipelineDB)),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

@@ -13,6 +13,7 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
+	"os"
 	"path/filepath"
 	"time"
 
@@ -95,6 +96,14 @@ func Open(dir string, opts OpenOptions) (*DB, error) {
 	}
 	if opts.BusyTimeout == 0 {
 		opts.BusyTimeout = DefaultOpenOptions().BusyTimeout
+	}
+
+	// SQLite will not create a missing parent directory itself, and on a
+	// fresh install dir (desktop.StateDir()) does not exist yet — only the
+	// feed store's first save lazily creates it. Ensure it exists here so
+	// Open is self-contained and robust for any caller, not just main.go.
+	if err := os.MkdirAll(dir, 0o700); err != nil {
+		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
 	dbPath := filepath.Join(dir, "desktop-pipeline.db")

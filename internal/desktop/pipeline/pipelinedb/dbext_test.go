@@ -2,6 +2,7 @@ package pipelinedb
 
 import (
 	"context"
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -58,4 +59,27 @@ func TestOpen_Idempotent(t *testing.T) {
 	appliedSecond, err := migrate.AppliedVersions(ctx, second.Conn())
 	require.NoError(t, err)
 	assert.Equal(t, appliedFirst, appliedSecond, "applied migration set should be unchanged")
+}
+
+// TestOpen_CreatesMissingParentDir is a regression test for the fresh-install
+// startup crash: desktop.StateDir() does not exist until the feed store's
+// first save (see feed/store.go's writeFileAtomic), but main.go calls
+// pipelinedb.Open before anything else has a chance to create it. SQLite
+// does not create a missing parent directory on its own, so Open must.
+func TestOpen_CreatesMissingParentDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "does", "not", "exist")
+
+	database, err := Open(dir, DefaultOpenOptions())
+	require.NoError(t, err, "Open should create the target directory when it does not exist")
+	t.Cleanup(func() { _ = database.Close() })
+
+	ctx := context.Background()
+	offset, err := database.Append(ctx, "source:test", "key-1", []byte(`{"v":1}`))
+	require.NoError(t, err)
+
+	msgs, next, err := database.ReadFrom(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "key-1", msgs[0].Key)
+	assert.Equal(t, offset, next)
 }

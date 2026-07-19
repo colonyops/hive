@@ -210,6 +210,25 @@ func (p *LiveProvider) ActionsFor(kind string) []Action {
 	return ActionsFor(kind)
 }
 
+// SourceItems returns one source's current items — served from cache within
+// the fetch TTL, otherwise fetched via the same conditional,
+// singleflight-coalesced path as feedItems (see sourceItems/fetchSource) —
+// converted to the wire Item shape with app-local read state applied. It is
+// the seam the desktop pipeline's producer (internal/desktop/pipeline) uses
+// to turn a configured source into event_log rows without a second
+// implementation of GitHub fetching.
+func (p *LiveProvider) SourceItems(ctx context.Context, src SourceDef) ([]Item, error) {
+	items, err := p.sourceItems(ctx, src)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Item, 0, len(items))
+	for _, li := range items {
+		out = append(out, p.finalize(li))
+	}
+	return out, nil
+}
+
 // MarkRead records the item as read as of its currently-known update time.
 // The same item can sit in several source caches with different timestamps
 // (search result vs notification thread); the newest wins so the item does
