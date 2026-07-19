@@ -18,10 +18,10 @@ func TestSaveFlow_NewFile_LoadSaveLoadRoundTrip(t *testing.T) {
 		Name:    "Frontend Triage",
 		Enabled: true,
 		Nodes: []Node{
-			{ID: "in-prs", Type: "github-source", Config: &GithubSourceConfig{Source: "team-prs"}},
+			{ID: "in-prs", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open is:pr"}},
 			{ID: "drop-bots", Type: "github-filter", Config: &GithubFilterConfig{ExcludeAuthors: []string{"*[bot]"}, Repos: []string{"colonyops/*"}}},
 			{ID: "tag", Type: "function", Name: "Tag reviewed", Config: &FunctionConfig{OnMessage: "return msg;", OutputsN: 2, Timeout: Duration(5e9)}},
-			{ID: "team-feed", Type: "feed", Config: &FeedConfig{Feed: "team-review"}},
+			{ID: "team-feed", Type: "feed", Config: &FeedConfig{}},
 			{ID: "spawn-review", Type: "action", Disabled: true, Config: &ActionConfig{Action: "review-pr"}},
 		},
 		Wires: []Wire{
@@ -73,8 +73,8 @@ func TestSaveFlow_EditPreservesHeaderAndUnrelatedKeys(t *testing.T) {
 version: 1
 name: Frontend Triage
 nodes:
-  - { id: src, type: github-source, source: my-source }
-  - { id: sink, type: feed, feed: my-feed }
+  - { id: src, type: github-source, kind: search, query: "is:open" }
+  - { id: sink, type: feed }
 wires:
   - { from: src, to: sink }
 `
@@ -114,8 +114,8 @@ func TestSaveFlow_EmptyFileTreatedAsNew(t *testing.T) {
 		ID:      "triage",
 		Enabled: true,
 		Nodes: []Node{
-			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Source: "my-source"}},
-			{ID: "sink", Type: "feed", Config: &FeedConfig{Feed: "my-feed"}},
+			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
+			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
 		},
 		Wires: []Wire{{From: "src", To: "sink"}},
 	}
@@ -134,8 +134,8 @@ func TestSaveFlow_DisabledFlowRoundTrips(t *testing.T) {
 		ID:      "triage",
 		Enabled: false,
 		Nodes: []Node{
-			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Source: "my-source"}},
-			{ID: "sink", Type: "feed", Config: &FeedConfig{Feed: "my-feed"}},
+			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
+			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
 		},
 		Wires: []Wire{{From: "src", To: "sink"}},
 	}

@@ -8,11 +8,10 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 )
 
-func TestFlowRefsAdapter_ResolveAction_ResolvesLoadedActionID(t *testing.T) {
+func TestActionsRefs_ResolveAction_ResolvesLoadedActionID(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte(`version: 1
@@ -24,7 +23,8 @@ actions:
 `), 0o644))
 
 	store := actions.NewActionStore(path)
-	adapter := newFlowRefsAdapter(feed.NewMockProvider(), store)
+	require.NoError(t, store.Reload())
+	adapter := newActionsRefs(store)
 
 	assert.True(t, adapter.ResolveAction("spawn-review"))
 	assert.False(t, adapter.ResolveAction("does-not-exist"))

@@ -15,8 +15,14 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/colonyops/hive/internal/desktop/feed"
+	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
 	"github.com/colonyops/hive/internal/github"
 )
+
+// fakeFlows is an in-memory FlowLister for the source-lister tests.
+type fakeFlows []flow.Flow
+
+func (f fakeFlows) List() []flow.Flow { return f }
 
 // singleSearchAPI serves one search item and counts requests, so tests can
 // prove githubSource routes through LiveProvider's cache/singleflight
@@ -84,7 +90,7 @@ func TestGithubSource_Produce_EmitsWireItems(t *testing.T) {
 	api := &singleSearchAPI{}
 	live := newLiveProviderFixture(t, api)
 
-	src := &githubSource{live: live, def: feed.SourceDef{ID: "my-prs", Kind: "search", Query: "is:open is:pr author:@me"}}
+	src := &githubSource{live: live, def: feed.SourceDef{ID: "triage/in-prs", Kind: "search", Query: "is:open is:pr author:@me"}, topic: "source:triage/in-prs"}
 
 	var emitted []Msg
 	err := src.Produce(context.Background(), func(msg Msg) error {
@@ -95,9 +101,9 @@ func TestGithubSource_Produce_EmitsWireItems(t *testing.T) {
 	require.Len(t, emitted, 1)
 
 	msg := emitted[0]
-	assert.Equal(t, "source:my-prs", msg.Topic)
+	assert.Equal(t, "source:triage/in-prs", msg.Topic)
 	assert.Equal(t, "o/r#7", msg.Key)
-	assert.Equal(t, "my-prs", msg.Meta["source"])
+	assert.Equal(t, "triage/in-prs", msg.Meta["source"])
 	assert.Equal(t, "PR", msg.Meta["kind"])
 	assert.Equal(t, "o/r", msg.Meta["repo"])
 
@@ -117,7 +123,7 @@ func TestGithubSource_Produce_ReusesCoalescedFetch(t *testing.T) {
 
 	api := &singleSearchAPI{}
 	live := newLiveProviderFixture(t, api)
-	src := &githubSource{live: live, def: feed.SourceDef{ID: "my-prs", Kind: "search", Query: "is:open is:pr author:@me"}}
+	src := &githubSource{live: live, def: feed.SourceDef{ID: "triage/in-prs", Kind: "search", Query: "is:open is:pr author:@me"}, topic: "source:triage/in-prs"}
 
 	for range 3 {
 		err := src.Produce(context.Background(), func(Msg) error { return nil })
@@ -133,7 +139,7 @@ func TestGithubSource_Produce_PropagatesFetchError(t *testing.T) {
 	// No token: LiveProvider.SourceItems fails with ErrNotAuthenticated
 	// before ever hitting the network.
 	live := feed.NewLiveProvider(github.NewClient(), github.NewMemoryTokenStore(""), feed.NewStore(filepath.Join(t.TempDir(), "profiles.yaml"), t.TempDir()), zerolog.Nop())
-	src := &githubSource{live: live, def: feed.SourceDef{ID: "my-prs", Kind: "search", Query: "is:open"}}
+	src := &githubSource{live: live, def: feed.SourceDef{ID: "triage/in-prs", Kind: "search", Query: "is:open"}, topic: "source:triage/in-prs"}
 
 	called := false
 	err := src.Produce(context.Background(), func(Msg) error {
@@ -144,19 +150,40 @@ func TestGithubSource_Produce_PropagatesFetchError(t *testing.T) {
 	assert.False(t, called, "no items should be emitted when the fetch fails")
 }
 
-func TestNewGithubSourceLister_ResolvesConfiguredSources(t *testing.T) {
+func TestNewFlowSourceLister_ResolvesEnabledSourceNodesAcrossFlows(t *testing.T) {
 	t.Parallel()
 
 	api := &singleSearchAPI{}
 	live := newLiveProviderFixture(t, api)
 
-	lister := NewGithubSourceLister(live)
+	flows := fakeFlows{
+		{
+			ID:      "triage",
+			Enabled: true,
+			Nodes: []flow.Node{
+				{ID: "in-prs", Type: "github-source", Config: &flow.GithubSourceConfig{Kind: "search", Query: "is:open"}},
+				{ID: "off", Type: "github-source", Disabled: true, Config: &flow.GithubSourceConfig{Kind: "notifications"}},
+				{ID: "sink", Type: "feed", Config: &flow.FeedConfig{}},
+			},
+		},
+		// A disabled flow contributes no sources.
+		{
+			ID:      "paused",
+			Enabled: false,
+			Nodes:   []flow.Node{{ID: "in", Type: "github-source", Config: &flow.GithubSourceConfig{Kind: "notifications"}}},
+		},
+	}
+
+	lister := NewFlowSourceLister(live, flows)
 	sources, err := lister(context.Background())
 	require.NoError(t, err)
-	require.Contains(t, sources, "my-prs")
 
-	_, ok := sources["my-prs"].(*githubSource)
-	assert.True(t, ok, "the lister should build githubSource instances")
+	// Only the one enabled node in the one enabled flow, keyed flow-qualified.
+	require.Len(t, sources, 1)
+	require.Contains(t, sources, "triage/in-prs")
+	gs, ok := sources["triage/in-prs"].(*githubSource)
+	require.True(t, ok, "the lister should build githubSource instances")
+	assert.Equal(t, "source:triage/in-prs", gs.topic)
 }
 
 // TestProducer_WithGithubSource_AppendsAcrossTicks is an end-to-end slice of
@@ -169,8 +196,16 @@ func TestProducer_WithGithubSource_AppendsAcrossTicks(t *testing.T) {
 	live := newLiveProviderFixture(t, api)
 	db := openTestPipelineDB(t)
 
+	flows := fakeFlows{{
+		ID:      "triage",
+		Enabled: true,
+		Nodes: []flow.Node{
+			{ID: "in-prs", Type: "github-source", Config: &flow.GithubSourceConfig{Kind: "search", Query: "is:open is:pr author:@me"}},
+		},
+	}}
+
 	var appendedOffsets []int64
-	producer := NewProducer(db, NewGithubSourceLister(live), 0, func(offset int64) {
+	producer := NewProducer(db, NewFlowSourceLister(live, flows), 0, func(offset int64) {
 		appendedOffsets = append(appendedOffsets, offset)
 	}, zerolog.Nop())
 
@@ -180,7 +215,7 @@ func TestProducer_WithGithubSource_AppendsAcrossTicks(t *testing.T) {
 	msgs, _, err := db.ReadFrom(context.Background(), 0, 10)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
-	assert.Equal(t, "source:my-prs", msgs[0].Topic)
+	assert.Equal(t, "source:triage/in-prs", msgs[0].Topic)
 	assert.Equal(t, "o/r#7", msgs[0].Key)
 
 	// A second tick with unchanged upstream data must not re-append (dedup)

@@ -44,11 +44,11 @@ wires:
 func TestValidate_OutOfRangeWirePort(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: s }
-  - { id: sink, type: feed, feed: f }
+  - { id: src, type: github-source, kind: search, query: "is:open" }
+  - { id: sink, type: feed }
 wires:
   - { from: src, out: 1, to: sink }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}, Feeds: map[string]bool{"f": true}})
+`), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "out of range")
 }
@@ -56,11 +56,11 @@ wires:
 func TestValidate_WireIntoSource_IsError(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src1, type: github-source, source: s }
-  - { id: src2, type: github-source, source: s }
+  - { id: src1, type: github-source, kind: search, query: "is:open" }
+  - { id: src2, type: github-source, kind: search, query: "is:open" }
 wires:
   - { from: src1, to: src2 }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}})
+`), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is a source")
 }
@@ -68,11 +68,11 @@ wires:
 func TestValidate_WireOutOfTerminal_IsError(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: sink1, type: feed, feed: f }
-  - { id: sink2, type: feed, feed: f }
+  - { id: sink1, type: feed }
+  - { id: sink2, type: feed }
 wires:
   - { from: sink1, to: sink2 }
-`), MapRefs{Feeds: map[string]bool{"f": true}})
+`), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "is a terminal")
 }
@@ -80,9 +80,9 @@ wires:
 func TestValidate_DuplicateNodeID(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: dup, type: github-source, source: s }
-  - { id: dup, type: github-source, source: s }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}})
+  - { id: dup, type: github-source, kind: search, query: "is:open" }
+  - { id: dup, type: github-source, kind: search, query: "is:open" }
+`), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate node id")
 }
@@ -90,12 +90,12 @@ nodes:
 func TestValidate_DuplicateWire(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: s }
-  - { id: sink, type: feed, feed: f }
+  - { id: src, type: github-source, kind: search, query: "is:open" }
+  - { id: sink, type: feed }
 wires:
   - { from: src, out: 0, to: sink }
   - { from: src, out: 0, to: sink }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}, Feeds: map[string]bool{"f": true}})
+`), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "duplicate wire")
 }
@@ -121,8 +121,8 @@ nodes:
 func TestValidate_BadSlug(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: "Not_A_Slug!", type: github-source, source: s }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}})
+  - { id: "Not_A_Slug!", type: github-source, kind: search, query: "is:open" }
+`), nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "slug")
 }
@@ -136,22 +136,59 @@ nodes:
 	assert.Contains(t, err.Error(), "bare number")
 }
 
-func TestValidate_UnresolvableFeedRef(t *testing.T) {
+// --- github-source embedded config validation ---
+
+func TestValidate_GithubSource_KindRequired(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: sink, type: feed, feed: no-such-feed }
-`), MapRefs{})
+  - { id: src, type: github-source }
+`), nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unresolved reference")
+	assert.Contains(t, err.Error(), "kind is required")
 }
 
-func TestValidate_UnresolvableSourceRef(t *testing.T) {
+func TestValidate_GithubSource_SearchNeedsQuery(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: no-such-source }
-`), MapRefs{})
+  - { id: src, type: github-source, kind: search }
+`), nil)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "unresolved reference")
+	assert.Contains(t, err.Error(), "requires a query")
+}
+
+func TestValidate_GithubSource_NotificationsRejectsQuery(t *testing.T) {
+	_, _, err := parseFlow("f", []byte(`version: 1
+nodes:
+  - { id: src, type: github-source, kind: notifications, query: "is:open" }
+`), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "takes no query")
+}
+
+func TestValidate_GithubSource_UnknownKind(t *testing.T) {
+	_, _, err := parseFlow("f", []byte(`version: 1
+nodes:
+  - { id: src, type: github-source, kind: webhook }
+`), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown kind")
+}
+
+func TestValidate_GithubSource_NotificationsOK(t *testing.T) {
+	_, _, err := parseFlow("f", []byte(`version: 1
+nodes:
+  - { id: src, type: github-source, kind: notifications }
+`), nil)
+	require.NoError(t, err)
+}
+
+func TestValidate_UnknownNodeType_IsError(t *testing.T) {
+	_, _, err := parseFlow("f", []byte(`version: 1
+nodes:
+  - { id: src, type: rpc-source }
+`), nil)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown type")
 }
 
 func TestValidate_UnresolvableActionRef(t *testing.T) {
@@ -163,31 +200,15 @@ nodes:
 	assert.Contains(t, err.Error(), "unresolved reference")
 }
 
-func TestValidate_NilRefs_ResolvesToUnresolvedNotPanic(t *testing.T) {
+func TestValidate_NilRefs_ActionResolvesToUnresolvedNotPanic(t *testing.T) {
 	require.NotPanics(t, func() {
 		_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: s }
+  - { id: act, type: action, action: a }
 `), nil)
 		require.Error(t, err)
 		assert.Contains(t, err.Error(), "unresolved reference")
 	})
-}
-
-func TestValidate_KindMismatchedSourceRef(t *testing.T) {
-	_, _, err := parseFlow("f", []byte(`version: 1
-nodes:
-  - { id: src, type: github-source, source: s }
-`), MapRefs{Sources: map[string]string{"s": "rpc"}})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), "github-*")
-
-	_, _, err = parseFlow("f", []byte(`version: 1
-nodes:
-  - { id: src, type: rpc-source, source: s }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}})
-	require.Error(t, err)
-	assert.Contains(t, err.Error(), `want kind "rpc"`)
 }
 
 // --- soft warnings ---
@@ -195,11 +216,11 @@ nodes:
 func TestValidate_DisabledNode_IsWarningNotError(t *testing.T) {
 	f, warnings, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: s, disabled: true }
-  - { id: sink, type: feed, feed: fd }
+  - { id: src, type: github-source, kind: search, query: "is:open", disabled: true }
+  - { id: sink, type: feed }
 wires:
   - { from: src, to: sink }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}, Feeds: map[string]bool{"fd": true}})
+`), nil)
 	require.NoError(t, err)
 	assert.NotEmpty(t, f.Nodes)
 	require.NotEmpty(t, warnings)
@@ -215,10 +236,10 @@ wires:
 func TestValidate_UntargetedTerminal_IsWarningNotError(t *testing.T) {
 	_, warnings, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: s }
-  - { id: sink, type: feed, feed: fd }
+  - { id: src, type: github-source, kind: search, query: "is:open" }
+  - { id: sink, type: feed }
 wires: []
-`), MapRefs{Sources: map[string]string{"s": "github-search"}, Feeds: map[string]bool{"fd": true}})
+`), nil)
 	require.NoError(t, err)
 	found := false
 	for _, w := range warnings {
@@ -232,8 +253,8 @@ wires: []
 func TestValidate_NoTerminal_IsWarningNotError(t *testing.T) {
 	_, warnings, err := parseFlow("f", []byte(`version: 1
 nodes:
-  - { id: src, type: github-source, source: s }
-`), MapRefs{Sources: map[string]string{"s": "github-search"}})
+  - { id: src, type: github-source, kind: search, query: "is:open" }
+`), nil)
 	require.NoError(t, err)
 	found := false
 	for _, w := range warnings {

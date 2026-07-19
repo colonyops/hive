@@ -2,6 +2,7 @@ package main
 
 import (
 	"embed"
+	"fmt"
 	"log"
 	"os"
 
@@ -10,6 +11,7 @@ import (
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
+	"github.com/colonyops/hive/internal/desktop/migrate"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
@@ -105,14 +107,14 @@ func emitFeedUpdated(profileID string) {
 	}
 }
 
-// buildPipelineProducer starts the pipeline event-log producer over
-// provider's configured sources, or returns nil when there is nothing to
-// poll. Mock modes ("feed", "onboarding") skip it: they serve static
-// fixtures with no ticking network fetch, and starting a producer there
-// would make e2e non-deterministic for no benefit — this phase ships no
-// mock Source. Live mode requires provider to be a *feed.LiveProvider,
+// buildPipelineProducer starts the pipeline event-log producer over every
+// enabled github-source node across all flows (via flows), or returns nil
+// when there is nothing to poll. Mock modes ("feed", "onboarding") skip it:
+// they serve static fixtures with no ticking network fetch, and starting a
+// producer there would make e2e non-deterministic for no benefit — this phase
+// ships no mock Source. Live mode requires provider to be a *feed.LiveProvider,
 // which it always is outside mock modes (see buildFeedProvider).
-func buildPipelineProducer(db *pipelinedb.DB, provider feed.Provider, logger zerolog.Logger) *pipeline.Producer {
+func buildPipelineProducer(db *pipelinedb.DB, provider feed.Provider, flows pipeline.FlowLister, logger zerolog.Logger) *pipeline.Producer {
 	if desktop.MockMode() != "" {
 		return nil
 	}
@@ -120,7 +122,7 @@ func buildPipelineProducer(db *pipelinedb.DB, provider feed.Provider, logger zer
 	if !ok {
 		return nil
 	}
-	return pipeline.NewProducer(db, pipeline.NewGithubSourceLister(live), feed.DefaultPollInterval, emitLogAppended, logger)
+	return pipeline.NewProducer(db, pipeline.NewFlowSourceLister(live, flows), feed.DefaultPollInterval, emitLogAppended, logger)
 }
 
 // emitLogAppended pushes the pipeline event log's new tail offset to the
@@ -161,9 +163,9 @@ func emitAuthUpdated() {
 // (the same self-triggering tradeoff feed.ConfigWatcher makes). A watcher
 // that fails to start degrades to no hot-reload, matching feed's posture:
 // the app still works, edits just need a restart to pick up.
-func buildFlowsStore(provider feed.Provider, actionStore *actions.ActionStore, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
+func buildFlowsStore(actionStore *actions.ActionStore, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
 	dir := desktop.FlowsDir()
-	store := flow.NewFlowStore(dir, newFlowRefsAdapter(provider, actionStore))
+	store := flow.NewFlowStore(dir, newActionsRefs(actionStore))
 
 	watcher, err := flow.NewFlowsWatcher(dir, func() {
 		if err := store.Reload(); err != nil {
@@ -240,7 +242,39 @@ func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, logg
 	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 }
 
+// runMigrationIfRequested handles the one-time `--migrate-profiles[=dry|write]`
+// flag: it converts the legacy profiles.yaml into per-profile flows/*.yaml and
+// exits, never starting the app. Inert (returns false) when the flag is absent,
+// so a normal launch is unaffected. `--force` overwrites existing flow files.
+func runMigrationIfRequested() bool {
+	var requested, write, force bool
+	for _, arg := range os.Args[1:] {
+		switch arg {
+		case "--migrate-profiles", "--migrate-profiles=dry":
+			requested = true
+		case "--migrate-profiles=write":
+			requested, write = true, true
+		case "--force":
+			force = true
+		}
+	}
+	if !requested {
+		return false
+	}
+	report, err := migrate.Convert(desktop.ConfigPath(), desktop.FlowsDir(), migrate.Options{Write: write, Force: force})
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "migrate-profiles:", err)
+		os.Exit(1)
+	}
+	fmt.Print(report.Format())
+	return true
+}
+
 func main() {
+	if runMigrationIfRequested() {
+		return
+	}
+
 	// The poller, watcher, and pipeline producer live for the whole
 	// process; they die with it, so there are no Stop/Close calls here (and
 	// log.Fatal below would skip a defer anyway).
@@ -257,9 +291,6 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if producer := buildPipelineProducer(pipelineDB, provider, pipelineLogger); producer != nil {
-		producer.Start()
-	}
 
 	actionsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	actionStore, actionsWatcher := buildActionStore(actionsLogger)
@@ -270,10 +301,16 @@ func main() {
 		outputWorker.Start()
 	}
 
+	// The flows store must exist before the producer: the producer enumerates
+	// its github-source nodes to decide what to poll.
 	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	flowsStore, flowsWatcher := buildFlowsStore(provider, actionStore, flowsLogger)
+	flowsStore, flowsWatcher := buildFlowsStore(actionStore, flowsLogger)
 	if flowsWatcher != nil {
 		flowsWatcher.Start()
+	}
+
+	if producer := buildPipelineProducer(pipelineDB, provider, flowsStore, pipelineLogger); producer != nil {
+		producer.Start()
 	}
 
 	// Every auth transition drops the feed cache before the frontend is

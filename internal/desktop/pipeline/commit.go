@@ -28,6 +28,9 @@ type (
 	// to avoid colliding with sqlc's generated raw feed_item row model
 	// (also named FeedItem, in pipelinedb/models.go).
 	FeedItem = pipelinedb.FeedItemView
+
+	// FeedCount is a feed's total/unread item counts for the sidebar rail.
+	FeedCount = pipelinedb.FeedCount
 )
 
 // Sink.Kind values.

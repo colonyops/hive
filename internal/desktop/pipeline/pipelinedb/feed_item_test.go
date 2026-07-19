@@ -54,6 +54,34 @@ func TestFeedItems_EmptyFeed(t *testing.T) {
 	assert.Empty(t, items)
 }
 
+func TestFeedItemCounts_PerFeedTotalsAndUnread_ScopedToFlow(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+
+	up := func(feedID, itemID string, unread int64) {
+		require.NoError(t, database.queries.UpsertFeedItem(ctx, UpsertFeedItemParams{
+			FeedID: feedID, ItemID: itemID, Payload: []byte(`{}`), UpdatedAt: 1, Unread: unread,
+		}))
+	}
+	up("triage/prs", "1", 1)
+	up("triage/prs", "2", 0)
+	up("triage/prs", "3", 1)
+	up("triage/inbox", "1", 1)
+	// A different flow's feeds must not leak into triage's counts.
+	up("other/feed", "1", 1)
+
+	counts, err := database.FeedItemCounts(ctx, "triage")
+	require.NoError(t, err)
+
+	byFeed := make(map[string]FeedCount, len(counts))
+	for _, c := range counts {
+		byFeed[c.FeedID] = c
+	}
+	require.Len(t, byFeed, 2)
+	assert.Equal(t, FeedCount{FeedID: "triage/prs", Total: 3, Unread: 2}, byFeed["triage/prs"])
+	assert.Equal(t, FeedCount{FeedID: "triage/inbox", Total: 1, Unread: 1}, byFeed["triage/inbox"])
+}
+
 func TestMarkFeedItemRead_ClearsUnread(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()

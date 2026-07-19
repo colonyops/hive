@@ -7,11 +7,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// exampleFlowRefs resolves every reference ExampleFlow() uses.
+// exampleFlowRefs resolves every reference ExampleFlow() uses — now only the
+// action node's actions.yml id.
 func exampleFlowRefs() MapRefs {
 	return MapRefs{
-		Sources: map[string]string{"team-prs": "github-search"},
-		Feeds:   map[string]bool{"team-review": true},
 		Actions: map[string]bool{"review-pr": true},
 	}
 }

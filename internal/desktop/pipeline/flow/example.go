@@ -2,32 +2,30 @@ package flow
 
 // ExampleFlow is a concrete, worked-example flows/*.yaml document exercising
 // every registered node type: github-source -> github-filter ->
-// function(outputs: 2) -> {feed, action}. It mirrors feed.ExampleConfig()'s
-// role — a helpful starting point rather than an empty file, for docs
-// (docs/source-pipeline.md) and any future "start from an example"
+// function(outputs: 2) -> {feed, action}. It mirrors the role a starter
+// template plays — a helpful worked example rather than an empty file, for
+// docs (docs/source-pipeline.md) and any future "start from an example"
 // flows-editor affordance.
 //
-// Unlike feed.ExampleConfig() — which feed.Store.ConfigInfo falls back to
-// automatically when profiles.yaml doesn't exist yet — nothing here writes
-// this to disk, and FlowStore never seeds an empty flows directory with it.
-// The source/feed/action ids below ("team-prs"/"team-review"/"review-pr")
-// are placeholders that won't resolve against a real install's
-// profiles.yaml/actions.yml, so silently writing this out (or wiring it as
-// the flows editor's "New flow" template) would hand a user a
-// permanently-broken flow rather than a helpful one. A caller that wants
-// this content (docs, or a future template picker) uses the string
-// directly.
+// Nothing here writes this to disk, and FlowStore never seeds an empty flows
+// directory with it: the action id below ("review-pr") is a placeholder that
+// won't resolve against a real install's actions.yml, so silently writing
+// this out (or wiring it as the flows editor's "New flow" template) would
+// hand a user a partially-broken flow rather than a helpful one. A caller
+// that wants this content (docs, or a future template picker) uses the string
+// directly. FlowStore.Create seeds a real, resolvable starter flow instead.
 func ExampleFlow() string {
 	return flowFileHeader + `
 version: 1
 name: Frontend Triage
 nodes:
-  # A github-source node names one github-* source from profiles/*.yml — it
-  # does not fetch GitHub itself, it only reads whatever the backend
-  # producer already appended to the event log under topic "source:team-prs".
+  # A github-source node embeds its own GitHub fetch config — a "search"
+  # source runs the query, a "notifications" source drains the inbox. The
+  # backend producer polls this node and appends its items to the event log.
   - id: in-prs
     type: github-source
-    source: team-prs
+    kind: search
+    query: "is:open is:pr archived:false"
 
   # A github-filter node is a client-side gate: groups AND together, values
   # within a group OR, excludes win over includes. Port 0 = pass, port 1 =
@@ -48,11 +46,10 @@ nodes:
       msg.Payload.tag = "review";
       return [msg, null];
 
-  # Terminal: upserts into the "team-review" feed (profiles/*.yml) as an
-  # unread feed_item.
+  # Terminal: the node IS the feed — its items persist as unread feed_item
+  # rows keyed by this node's id and show in the sidebar under FEEDS.
   - id: team-feed
     type: feed
-    feed: team-review
 
   # Terminal: enqueues an output_command against the "review-pr" action
   # (actions.yml — the desktop config dir, not a repo .hive/ directory).

@@ -5,64 +5,65 @@ import (
 	"strings"
 )
 
-// githubSourceKindPrefix is how profiles source kinds name the github
-// family (e.g. "github-search", "github-notifications"); a github-source
-// node may reference any source whose kind carries this prefix.
-const githubSourceKindPrefix = "github-"
+// Source fetch limits — kept local to the flow package (the package doc
+// forbids a flow -> feed import). They mirror the GitHub API page caps the
+// producer's fetch path enforces: search pages at 100, notifications at 50.
+const (
+	defaultSourceLimit    = 50
+	maxSearchLimit        = 100
+	maxNotificationsLimit = 50
+)
 
-// rpcSourceKind is the profiles source kind an rpc-source node may reference.
-const rpcSourceKind = "rpc"
-
-// GithubSourceConfig is a github-source node: 0 inputs, 1 output. It emits
-// the items produced by the referenced profiles source, which must be one
-// of the github-* kinds.
+// GithubSourceConfig is a github-source node: 0 inputs, 1 output. It embeds
+// the GitHub fetch config directly (there is no separate profiles sources:
+// list any more — a source IS this node), matching the desktop feed fetch
+// model: a "search" source runs a query, a "notifications" source drains the
+// authenticated user's inbox. The backend producer polls one such node per
+// tick and appends its items to the event log under a flow-qualified topic.
 type GithubSourceConfig struct {
-	Source string `json:"source" yaml:"source"`
+	Kind  string `json:"kind"            yaml:"kind"`
+	Query string `json:"query,omitempty" yaml:"query,omitempty"`
+	Limit int    `json:"limit,omitempty" yaml:"limit,omitempty"`
 }
 
 func (c *GithubSourceConfig) Inputs() int  { return 0 }
 func (c *GithubSourceConfig) Outputs() int { return 1 }
 
-func (c *GithubSourceConfig) Validate(refs Refs) error {
-	if c.Source == "" {
-		return fmt.Errorf("github-source: source is required")
+// Validate is Refs-free: a source node's config is self-contained. The rules
+// mirror the desktop feed source validation (search needs a query and caps at
+// 100; notifications forbids a query and caps at 50).
+func (c *GithubSourceConfig) Validate(Refs) error {
+	switch c.Kind {
+	case "search":
+		if strings.TrimSpace(c.Query) == "" {
+			return fmt.Errorf("github-source: kind \"search\" requires a query")
+		}
+		if c.Limit > maxSearchLimit {
+			return fmt.Errorf("github-source: limit %d exceeds the search API page cap of %d", c.Limit, maxSearchLimit)
+		}
+	case "notifications":
+		if strings.TrimSpace(c.Query) != "" {
+			return fmt.Errorf("github-source: kind \"notifications\" takes no query")
+		}
+		if c.Limit > maxNotificationsLimit {
+			return fmt.Errorf("github-source: limit %d exceeds the notifications API page cap of %d", c.Limit, maxNotificationsLimit)
+		}
+	case "":
+		return fmt.Errorf("github-source: kind is required (want \"search\" or \"notifications\")")
+	default:
+		return fmt.Errorf("github-source: unknown kind %q (want \"search\" or \"notifications\")", c.Kind)
 	}
-	if !validSlug(c.Source) {
-		return fmt.Errorf("github-source: source %q is not a valid id", c.Source)
-	}
-	kind, ok := refsResolveSource(refs, c.Source)
-	if !ok {
-		return fmt.Errorf("github-source: source %q: unresolved reference", c.Source)
-	}
-	if !strings.HasPrefix(kind, githubSourceKindPrefix) {
-		return fmt.Errorf("github-source: source %q has kind %q, want a github-* source", c.Source, kind)
+	if c.Limit < 0 {
+		return fmt.Errorf("github-source: limit must not be negative")
 	}
 	return nil
 }
 
-// RPCSourceConfig is an rpc-source node: 0 inputs, 1 output. It emits the
-// items produced by the referenced profiles source, which must be of kind
-// "rpc".
-type RPCSourceConfig struct {
-	Source string `json:"source" yaml:"source"`
-}
-
-func (c *RPCSourceConfig) Inputs() int  { return 0 }
-func (c *RPCSourceConfig) Outputs() int { return 1 }
-
-func (c *RPCSourceConfig) Validate(refs Refs) error {
-	if c.Source == "" {
-		return fmt.Errorf("rpc-source: source is required")
+// EffectiveLimit resolves the configured limit against the per-kind default,
+// so the producer never has to repeat the fallback.
+func (c *GithubSourceConfig) EffectiveLimit() int {
+	if c.Limit > 0 {
+		return c.Limit
 	}
-	if !validSlug(c.Source) {
-		return fmt.Errorf("rpc-source: source %q is not a valid id", c.Source)
-	}
-	kind, ok := refsResolveSource(refs, c.Source)
-	if !ok {
-		return fmt.Errorf("rpc-source: source %q: unresolved reference", c.Source)
-	}
-	if kind != rpcSourceKind {
-		return fmt.Errorf("rpc-source: source %q has kind %q, want kind %q", c.Source, kind, rpcSourceKind)
-	}
-	return nil
+	return defaultSourceLimit
 }

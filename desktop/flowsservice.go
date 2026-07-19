@@ -48,6 +48,21 @@ func (s *FlowsService) ListFlows() ([]FlowSummary, error) {
 	return out, nil
 }
 
+// CreateFlow seeds a new flow (a new "profile") named name and returns its
+// listing summary, so the frontend can select it immediately.
+func (s *FlowsService) CreateFlow(name string) (FlowSummary, error) {
+	f, err := s.store.Create(name)
+	if err != nil {
+		return FlowSummary{}, err
+	}
+	return FlowSummary{ID: f.ID, Name: f.Name, Enabled: f.Enabled, Valid: true}, nil
+}
+
+// DeleteFlow removes a flow (a "profile") and its layout.
+func (s *FlowsService) DeleteFlow(id string) error {
+	return s.store.Delete(id)
+}
+
 // GetFlow returns one flow's full definition for the editor.
 func (s *FlowsService) GetFlow(id string) (flow.Flow, error) {
 	f, ok := s.store.Get(id)

@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -62,8 +63,8 @@ func TestFlowStore_Save_PersistsAndReloads(t *testing.T) {
 		ID:      "triage",
 		Enabled: true,
 		Nodes: []Node{
-			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Source: "my-source"}},
-			{ID: "sink", Type: "feed", Config: &FeedConfig{Feed: "my-feed"}},
+			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
+			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
 		},
 		Wires: []Wire{{From: "src", To: "sink"}},
 	}
@@ -86,17 +87,17 @@ func TestFlowStore_Save_InvalidFlowRejected_LeavesLastGood(t *testing.T) {
 		ID:      "triage",
 		Enabled: true,
 		Nodes: []Node{
-			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Source: "my-source"}},
-			{ID: "sink", Type: "feed", Config: &FeedConfig{Feed: "my-feed"}},
+			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
+			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
 		},
 		Wires: []Wire{{From: "src", To: "sink"}},
 	}
 	require.NoError(t, store.Save(good))
 
-	// An invalid edit: sink now references an unknown feed.
+	// An invalid edit: the source now has an unknown kind.
 	bad := good
 	bad.Nodes = append([]Node{}, good.Nodes...)
-	bad.Nodes[1] = Node{ID: "sink", Type: "feed", Config: &FeedConfig{Feed: "unknown-feed"}}
+	bad.Nodes[0] = Node{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "webhook"}}
 
 	err := store.Save(bad)
 	require.Error(t, err)
@@ -129,6 +130,53 @@ func TestFlowStore_Reload_PicksUpExternalChange(t *testing.T) {
 	list := store.List()
 	require.Len(t, list, 1)
 	assert.Equal(t, "triage", list[0].ID)
+}
+
+func TestFlowStore_Create_SeedsStarterFlowWithUniqueID(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFlowStore(dir, minimalRefs())
+
+	f, err := store.Create("Frontend Triage")
+	require.NoError(t, err)
+	assert.Equal(t, "frontend-triage", f.ID)
+	assert.Equal(t, "Frontend Triage", f.Name)
+	assert.True(t, f.Enabled)
+	assert.NotEmpty(t, f.Nodes)
+	assert.NotEmpty(t, f.Wires)
+
+	// It loads back clean (starter flow references no actions).
+	loaded, warnings, err := LoadFlow(filepath.Join(dir, "frontend-triage.yaml"), MapRefs{})
+	require.NoError(t, err)
+	assert.Empty(t, warnings)
+	assert.Equal(t, "Frontend Triage", loaded.Name)
+
+	// A second create of the same name gets a unique id, not a clobber.
+	f2, err := store.Create("Frontend Triage")
+	require.NoError(t, err)
+	assert.Equal(t, "frontend-triage-2", f2.ID)
+
+	// A layout was seeded too.
+	layout := store.GetLayout("frontend-triage")
+	assert.NotEmpty(t, layout.Nodes)
+}
+
+func TestFlowStore_Delete_RemovesFlowAndLayout(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFlowStore(dir, minimalRefs())
+	f, err := store.Create("Triage")
+	require.NoError(t, err)
+
+	require.NoError(t, store.Delete(f.ID))
+
+	_, ok := store.Get(f.ID)
+	assert.False(t, ok)
+	_, err = os.Stat(filepath.Join(dir, f.ID+".yaml"))
+	assert.True(t, os.IsNotExist(err))
+	_, err = os.Stat(filepath.Join(dir, f.ID+".ui.yaml"))
+	assert.True(t, os.IsNotExist(err))
+
+	// Deleting a non-existent flow is not an error (end state is the same).
+	require.NoError(t, store.Delete("never-existed"))
 }
 
 func TestFlowStore_LayoutRoundTrip(t *testing.T) {

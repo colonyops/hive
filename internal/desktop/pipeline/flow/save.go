@@ -55,6 +55,14 @@ func SaveFlow(path string, f Flow) error {
 	return writeFileAtomic(path, data)
 }
 
+// MarshalFlow renders f as a clean flows/*.yaml document (header + fields) —
+// the same output SaveFlow writes for a new file. Exposed for callers that
+// want to preview a flow without touching disk (e.g. a migration dry-run or a
+// copy-to-clipboard prompt).
+func MarshalFlow(f Flow) ([]byte, error) {
+	return newFlowDocument(f)
+}
+
 // newFlowDocument marshals f as a clean document with a header comment, for
 // a flow file that doesn't exist yet (or was empty).
 func newFlowDocument(f Flow) ([]byte, error) {

@@ -9,11 +9,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// workedExampleRefs resolves every reference used by workedExampleYAML.
+// workedExampleRefs resolves every reference used by workedExampleYAML — now
+// only the action node's actions.yml id.
 func workedExampleRefs() MapRefs {
 	return MapRefs{
-		Sources: map[string]string{"team-prs": "github-search"},
-		Feeds:   map[string]bool{"team-review": true},
 		Actions: map[string]bool{"review-pr": true},
 	}
 }
@@ -23,7 +22,7 @@ func workedExampleRefs() MapRefs {
 const workedExampleYAML = `version: 1
 name: Frontend Triage
 nodes:
-  - { id: in-prs, type: github-source, source: team-prs }
+  - { id: in-prs, type: github-source, kind: search, query: "is:open is:pr" }
   - { id: drop-bots, type: github-filter, exclude_authors: ["*[bot]"], repos: ["colonyops/*"] }
   - id: tag
     type: function
@@ -31,7 +30,7 @@ nodes:
     on_message: |
       if (msg.payload.state === "closed") return null;
       msg.payload.tag = "review"; return [msg, null];
-  - { id: team-feed, type: feed, feed: team-review }
+  - { id: team-feed, type: feed }
   - { id: spawn-review, type: action, action: review-pr }
 wires:
   - { from: in-prs, to: drop-bots }
@@ -91,18 +90,17 @@ func TestLoadFlow_IDIsFilenameStem(t *testing.T) {
 func minimalValidFlowYAML() string {
 	return `version: 1
 nodes:
-  - { id: src, type: github-source, source: my-source }
-  - { id: sink, type: feed, feed: my-feed }
+  - { id: src, type: github-source, kind: search, query: "is:open" }
+  - { id: sink, type: feed }
 wires:
   - { from: src, to: sink }
 `
 }
 
+// minimalRefs — the minimal flow references no actions, so an empty resolver
+// suffices.
 func minimalRefs() MapRefs {
-	return MapRefs{
-		Sources: map[string]string{"my-source": "github-search"},
-		Feeds:   map[string]bool{"my-feed": true},
-	}
+	return MapRefs{}
 }
 
 func TestLoadFlow_MissingFile(t *testing.T) {

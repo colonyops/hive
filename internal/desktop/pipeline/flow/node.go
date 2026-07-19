@@ -42,7 +42,6 @@ type nodeFactory func() NodeConfig
 // carried by the config type itself).
 var registry = map[string]nodeFactory{
 	"github-source": func() NodeConfig { return &GithubSourceConfig{} },
-	"rpc-source":    func() NodeConfig { return &RPCSourceConfig{} },
 	"github-filter": func() NodeConfig { return &GithubFilterConfig{} },
 	"function":      func() NodeConfig { return &FunctionConfig{} },
 	"feed":          func() NodeConfig { return &FeedConfig{} },

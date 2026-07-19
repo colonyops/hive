@@ -5,6 +5,14 @@ import (
 	"strings"
 )
 
+// Validate re-runs the checks LoadFlow applies (node ids, per-node config,
+// wires, cycles) against an in-memory Flow, returning soft warnings and a
+// hard error. Exposed for callers that build a Flow in memory — e.g. the
+// profiles->flows migration — and want to validate before persisting.
+func Validate(f Flow, refs Refs) ([]string, error) {
+	return validateFlow(&f, refs)
+}
+
 // validateFlow checks node ids, per-node config (including cross-file refs),
 // and wires, returning soft warnings alongside a nil error on success. The
 // first hard-error condition encountered fails the whole flow; warnings are

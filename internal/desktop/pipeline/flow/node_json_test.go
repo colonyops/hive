@@ -35,7 +35,7 @@ func TestNode_JSONRoundTrip(t *testing.T) {
 }
 
 func TestNode_JSON_DisabledAndNameOmitEmpty(t *testing.T) {
-	n := Node{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Source: "my-source"}}
+	n := Node{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}}
 	data, err := json.Marshal(n)
 	require.NoError(t, err)
 	assert.NotContains(t, string(data), `"name"`)
@@ -51,7 +51,7 @@ func TestNode_UnmarshalJSON_UnknownType_IsHardError(t *testing.T) {
 
 func TestNode_UnmarshalJSON_UnknownPerTypeField_IsHardError(t *testing.T) {
 	var n Node
-	err := json.Unmarshal([]byte(`{"id":"src","type":"github-source","source":"my-source","extra_field":"nope"}`), &n)
+	err := json.Unmarshal([]byte(`{"id":"src","type":"github-source","kind":"search","query":"is:open","extra_field":"nope"}`), &n)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "extra_field")
 }
@@ -64,8 +64,8 @@ func TestFlow_JSONRoundTrip(t *testing.T) {
 		Name:    "Frontend Triage",
 		Enabled: true,
 		Nodes: []Node{
-			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Source: "my-source"}},
-			{ID: "sink", Type: "feed", Config: &FeedConfig{Feed: "my-feed"}},
+			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
+			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
 		},
 		Wires: []Wire{{From: "src", To: "sink"}},
 	}

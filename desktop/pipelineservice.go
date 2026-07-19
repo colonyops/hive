@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 
+	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
@@ -43,6 +44,19 @@ func (s *PipelineService) FeedItems(feedID string) ([]pipeline.FeedItem, error) 
 // MarkFeedItemRead clears the unread flag on one feed item.
 func (s *PipelineService) MarkFeedItemRead(feedID, itemID string) error {
 	return s.db.MarkFeedItemRead(context.Background(), feedID, itemID)
+}
+
+// FeedItemCounts returns per-feed total/unread counts for every feed in a
+// flow, for the sidebar's rail badges.
+func (s *PipelineService) FeedItemCounts(flowID string) ([]pipeline.FeedCount, error) {
+	return s.db.FeedItemCounts(context.Background(), flowID)
+}
+
+// ActionsFor returns the configured actions for an item kind ("PR"/"Issue"),
+// for the detail-pane action picker. The catalog is static today (see
+// feed.ActionsFor); this is the seam where actions.yml-driven actions plug in.
+func (s *PipelineService) ActionsFor(kind string) []feed.Action {
+	return feed.ActionsFor(kind)
 }
 
 // NodeRuns returns up to limit of a flow's most recent node_run rows,

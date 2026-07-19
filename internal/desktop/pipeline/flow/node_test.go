@@ -20,7 +20,8 @@ func TestNode_DecodesReservedFieldsAndConfig(t *testing.T) {
 type: github-source
 name: My Source
 disabled: true
-source: my-source
+kind: search
+query: "is:open is:pr"
 `)
 	require.NoError(t, err)
 	assert.Equal(t, "src", n.ID)
@@ -30,7 +31,8 @@ source: my-source
 
 	cfg, ok := n.Config.(*GithubSourceConfig)
 	require.True(t, ok)
-	assert.Equal(t, "my-source", cfg.Source)
+	assert.Equal(t, "search", cfg.Kind)
+	assert.Equal(t, "is:open is:pr", cfg.Query)
 }
 
 func TestNode_UnknownType_IsHardError(t *testing.T) {
@@ -44,7 +46,8 @@ type: not-a-real-type
 func TestNode_UnknownPerTypeField_IsHardError(t *testing.T) {
 	_, err := decodeNode(t, `id: src
 type: github-source
-source: my-source
+kind: search
+query: "is:open"
 extra_field: nope
 `)
 	require.Error(t, err)

@@ -117,6 +117,92 @@ func (s *FlowStore) Save(f Flow) error {
 	return s.reloadLocked()
 }
 
+// Create seeds a new flow (a new "profile") named name: it slugifies name to
+// a flow id unique among existing flows, writes a starter graph plus its
+// layout, reloads, and returns the loaded flow. A profile is a flow, so this
+// is how the app's "New profile" affordance is backed.
+func (s *FlowStore) Create(name string) (Flow, error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureLoadedLocked()
+
+	id := s.uniqueIDLocked(slugify(name))
+	f, layout := starterFlow(id, name)
+	if _, err := validateFlow(&f, s.refs); err != nil {
+		return Flow{}, fmt.Errorf("flow %q: %w", id, err)
+	}
+
+	if err := SaveFlow(filepath.Join(s.dir, id+".yaml"), f); err != nil {
+		return Flow{}, err
+	}
+	if err := SaveUI(s.uiPath(id), layout); err != nil {
+		return Flow{}, err
+	}
+	if err := s.reloadLocked(); err != nil {
+		return Flow{}, err
+	}
+	return s.flows[id], nil
+}
+
+// Delete removes a flow (a "profile") and its sibling layout file, then
+// reloads. A missing flow file is not an error — the end state (gone) is the
+// same either way.
+func (s *FlowStore) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if err := os.Remove(filepath.Join(s.dir, id+".yaml")); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("flow: delete %q: %w", id, err)
+	}
+	_ = os.Remove(s.uiPath(id)) // layout is cosmetic; its absence is fine
+	return s.reloadLocked()
+}
+
+// uniqueIDLocked returns base, or base-2/base-3/... if a flow with that id
+// already exists. Caller holds s.mu.
+func (s *FlowStore) uniqueIDLocked(base string) string {
+	taken := func(id string) bool {
+		if _, ok := s.flows[id]; ok {
+			return true
+		}
+		_, ok := s.errs[id+".yaml"]
+		return ok
+	}
+	id := base
+	for i := 2; taken(id); i++ {
+		id = fmt.Sprintf("%s-%d", base, i)
+	}
+	return id
+}
+
+// starterFlow is the graph a freshly created profile begins with: a few
+// github-source nodes each wired to its own feed terminal, laid out in two
+// columns (sources left, feeds right).
+func starterFlow(id, name string) (Flow, Layout) {
+	seeds := []struct {
+		feedID, feedName, kind, query string
+	}{
+		{"my-open-prs", "My open PRs", "search", "is:open is:pr author:@me archived:false"},
+		{"assigned", "Assigned", "search", "is:open assignee:@me archived:false"},
+		{"notifications", "Notifications", "notifications", ""},
+	}
+
+	var nodes []Node
+	var wires []Wire
+	layout := Layout{Nodes: map[string]NodePosition{}}
+	for i, seed := range seeds {
+		srcID := seed.feedID + "-src"
+		nodes = append(nodes,
+			Node{ID: srcID, Type: "github-source", Config: &GithubSourceConfig{Kind: seed.kind, Query: seed.query}},
+			Node{ID: seed.feedID, Type: "feed", Name: seed.feedName, Config: &FeedConfig{}},
+		)
+		wires = append(wires, Wire{From: srcID, To: seed.feedID})
+		layout.Nodes[srcID] = NodePosition{X: 48, Y: 48 + i*96}
+		layout.Nodes[seed.feedID] = NodePosition{X: 360, Y: 48 + i*96}
+	}
+	return Flow{ID: id, Name: name, Enabled: true, Nodes: nodes, Wires: wires}, layout
+}
+
 // GetLayout returns id's node layout — see LoadUI for missing/broken-file
 // semantics (an empty Layout, never an error).
 func (s *FlowStore) GetLayout(id string) Layout {

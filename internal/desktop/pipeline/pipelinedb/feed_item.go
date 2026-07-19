@@ -39,6 +39,29 @@ func (db *DB) FeedItems(ctx context.Context, feedID string) ([]FeedItemView, err
 	return items, nil
 }
 
+// FeedCount is a feed's total and unread item counts, keyed by the
+// flow-qualified feed id.
+type FeedCount struct {
+	FeedID string `json:"feedId"`
+	Total  int    `json:"total"`
+	Unread int    `json:"unread"`
+}
+
+// FeedItemCounts returns per-feed total and unread counts for every feed
+// belonging to flowID (feed ids "<flowID>/<nodeId>"), for the sidebar's rail
+// badges.
+func (db *DB) FeedItemCounts(ctx context.Context, flowID string) ([]FeedCount, error) {
+	rows, err := db.queries.CountFeedItemsByFlow(ctx, flowID+"/%")
+	if err != nil {
+		return nil, fmt.Errorf("counting feed items for flow %q: %w", flowID, err)
+	}
+	out := make([]FeedCount, 0, len(rows))
+	for _, r := range rows {
+		out = append(out, FeedCount{FeedID: r.FeedID, Total: int(r.Total), Unread: int(r.Unread)})
+	}
+	return out, nil
+}
+
 // MarkFeedItemRead clears the unread flag on one feed item.
 func (db *DB) MarkFeedItemRead(ctx context.Context, feedID, itemID string) error {
 	if err := db.queries.MarkFeedItemRead(ctx, MarkFeedItemReadParams{

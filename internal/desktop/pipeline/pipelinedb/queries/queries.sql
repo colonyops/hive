@@ -66,6 +66,18 @@ ORDER BY updated_at DESC;
 UPDATE feed_item SET unread = 0
 WHERE feed_id = ? AND item_id = ?;
 
+-- name: CountFeedItemsByFlow :many
+-- Per-feed total and unread counts for every feed belonging to a flow, for
+-- the sidebar rail badges: one query instead of an N-feed fan-out of
+-- ListFeedItemsByFeed. The caller passes a LIKE prefix like "myflow/%".
+SELECT
+    feed_id,
+    CAST(COUNT(*) AS INTEGER) AS total,
+    CAST(SUM(unread) AS INTEGER) AS unread
+FROM feed_item
+WHERE feed_id LIKE sqlc.arg(flow_prefix)
+GROUP BY feed_id;
+
 -- name: EnqueueOutputCommand :exec
 -- Deduped on (action_id, key): a replayed commit batch enqueues the same
 -- action invocation at most once (see idx_output_command_action_key).

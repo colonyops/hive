@@ -83,6 +83,48 @@ func (q *Queries) CountEventLog(ctx context.Context) (int64, error) {
 	return count, err
 }
 
+const countFeedItemsByFlow = `-- name: CountFeedItemsByFlow :many
+SELECT
+    feed_id,
+    CAST(COUNT(*) AS INTEGER) AS total,
+    CAST(SUM(unread) AS INTEGER) AS unread
+FROM feed_item
+WHERE feed_id LIKE ?1
+GROUP BY feed_id
+`
+
+type CountFeedItemsByFlowRow struct {
+	FeedID string `json:"feed_id"`
+	Total  int64  `json:"total"`
+	Unread int64  `json:"unread"`
+}
+
+// Per-feed total and unread counts for every feed belonging to a flow, for
+// the sidebar rail badges: one query instead of an N-feed fan-out of
+// ListFeedItemsByFeed. The caller passes a LIKE prefix like "myflow/%".
+func (q *Queries) CountFeedItemsByFlow(ctx context.Context, flowPrefix string) ([]CountFeedItemsByFlowRow, error) {
+	rows, err := q.db.QueryContext(ctx, countFeedItemsByFlow, flowPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []CountFeedItemsByFlowRow{}
+	for rows.Next() {
+		var i CountFeedItemsByFlowRow
+		if err := rows.Scan(&i.FeedID, &i.Total, &i.Unread); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const deleteEventLogOlderThan = `-- name: DeleteEventLogOlderThan :exec
 DELETE FROM event_log WHERE created_at < ?
 `

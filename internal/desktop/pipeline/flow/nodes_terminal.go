@@ -2,27 +2,15 @@ package flow
 
 import "fmt"
 
-// FeedConfig is a feed node: 1 input, 0 outputs (terminal). Its results are
-// relayed to Go and persisted against the referenced profiles feed id.
-type FeedConfig struct {
-	Feed string `json:"feed" yaml:"feed"`
-}
+// FeedConfig is a feed node: 1 input, 0 outputs (terminal). The node *is* the
+// feed — its identity is the node id (flow-qualified as "<flowId>/<nodeId>"
+// when persisting feed_item rows), so there is no config to carry.
+type FeedConfig struct{}
 
 func (c *FeedConfig) Inputs() int  { return 1 }
 func (c *FeedConfig) Outputs() int { return 0 }
 
-func (c *FeedConfig) Validate(refs Refs) error {
-	if c.Feed == "" {
-		return fmt.Errorf("feed: feed is required")
-	}
-	if !validSlug(c.Feed) {
-		return fmt.Errorf("feed: feed %q is not a valid id", c.Feed)
-	}
-	if !refsResolveFeed(refs, c.Feed) {
-		return fmt.Errorf("feed: feed %q: unresolved reference", c.Feed)
-	}
-	return nil
-}
+func (c *FeedConfig) Validate(Refs) error { return nil }
 
 // ActionConfig is an action node: 1 input, 0 outputs (terminal). It enqueues
 // an output_command against the referenced .hive/actions.yml action id.
