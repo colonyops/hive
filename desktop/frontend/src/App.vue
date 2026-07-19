@@ -19,6 +19,7 @@ import CommandPalette from './components/CommandPalette.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
 import DeleteProfileModal from './components/DeleteProfileModal.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
+import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuth } from './composables/useAuth'
@@ -63,6 +64,60 @@ watch(activeProfileId, (id) => {
   session.bindActiveFlow(id || undefined)
   session.exitFlows()
 })
+
+// ── Un-deployed changes guard (hc-sx4k3c7k) ──────────────────────────────
+// Exiting the canvas and switching the active profile both silently
+// abandon un-deployed flow edits (session.dirty) today. Both call sites
+// route through the request*() wrappers below instead of touching
+// flowsOpen/activeProfileId directly, so when dirty the actual navigation
+// is deferred behind a confirm modal (Deploy/Discard/Cancel) rather than
+// firing immediately — nothing has changed yet when the modal opens, so
+// Cancel needs no "undo": the rail selection and the real active profile
+// were never touched in the first place.
+type PendingNavigation = { kind: 'exit-flows' } | { kind: 'switch-profile'; profileId: string }
+const pendingNavigation = ref<PendingNavigation | null>(null)
+const unsavedChangesBusy = ref(false)
+
+function requestExitFlows(): void {
+  if (session.dirty.value) pendingNavigation.value = { kind: 'exit-flows' }
+  else session.exitFlows()
+}
+
+function requestSelectProfile(id: string): void {
+  if (session.dirty.value && id !== activeProfileId.value) pendingNavigation.value = { kind: 'switch-profile', profileId: id }
+  else void selectProfile(id)
+}
+
+function applyPendingNavigation(pending: PendingNavigation): void {
+  if (pending.kind === 'exit-flows') session.exitFlows()
+  else void selectProfile(pending.profileId)
+}
+
+function cancelPendingNavigation(): void {
+  pendingNavigation.value = null
+}
+
+async function deployPendingNavigation(): Promise<void> {
+  const pending = pendingNavigation.value
+  if (!pending) return
+  unsavedChangesBusy.value = true
+  await session.deploy()
+  unsavedChangesBusy.value = false
+  if (session.dirty.value) return // deploy failed — session.error carries the message; stay open so the user can retry or cancel
+  pendingNavigation.value = null
+  applyPendingNavigation(pending)
+}
+
+async function discardPendingNavigation(): Promise<void> {
+  const pending = pendingNavigation.value
+  if (!pending) return
+  unsavedChangesBusy.value = true
+  await session.discardDraft()
+  unsavedChangesBusy.value = false
+  if (session.dirty.value) return // reload from disk failed — stay open
+  pendingNavigation.value = null
+  applyPendingNavigation(pending)
+}
 
 // ── Reveal in flow (8d) ───────────────────────────────────────────────────────
 // A sidebar feed row's id is flow-qualified ("<activeProfileId>/<nodeId>" —
@@ -160,7 +215,7 @@ useCommands(computed(() => {
       title: `Switch to profile: ${p.name}`,
       group: 'Profiles',
       icon: IconLayoutGrid,
-      run: () => selectProfile(p.id),
+      run: () => requestSelectProfile(p.id),
     })
   }
 
@@ -219,7 +274,7 @@ useCommands(computed(() => {
     group: 'View',
     keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
     icon: IconWorkflow,
-    run: () => { session.flowsOpen.value ? session.exitFlows() : session.openFlows() },
+    run: () => { session.flowsOpen.value ? requestExitFlows() : session.openFlows() },
   })
 
   // Jump to any node in the active flow by name (8d) — opens the canvas
@@ -295,7 +350,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         :unread-count="activeProfile?.unreadCount ?? 0"
         :flows-active="session.flowsOpen.value"
         :error-count="errorCount"
-        @exit-flows="session.exitFlows"
+        @exit-flows="requestExitFlows"
         @open-error-node="openErrorNode"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
@@ -318,7 +373,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
            what keeps the user from being stranded in the flows canvas — the
            rail and the breadcrumb are always there to navigate back. -->
       <div v-else class="flex min-h-0 flex-1">
-        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
+        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="requestSelectProfile" @add="openNewProfile" />
         <FlowsView v-if="session.flowsOpen.value" />
         <template v-else>
           <SideBar
@@ -326,6 +381,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             :profile="activeProfile"
             :selection="selection"
             :unread-only="unreadOnly"
+            :flows-dirty="session.dirty.value"
             @select="selectSidebar"
             @select-unread="selectUnreadView"
             @delete-profile="openDeleteProfile"
@@ -371,6 +427,14 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       :busy="deletingProfile"
       @close="deleteProfileOpen = false"
       @confirm="confirmDeleteProfile"
+    />
+    <UnsavedFlowChangesModal
+      v-if="pendingNavigation"
+      :busy="unsavedChangesBusy"
+      :error="session.error.value"
+      @close="cancelPendingNavigation"
+      @deploy="deployPendingNavigation"
+      @discard="discardPendingNavigation"
     />
   </main>
 </template>

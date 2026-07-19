@@ -236,6 +236,201 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  // ── Un-deployed changes guard (hc-sx4k3c7k) ──────────────────────────────
+
+  it('shows the un-deployed changes badge in the sidebar once the flow is dirty', async () => {
+    const wrapper = await mountApp()
+    expect(wrapper.find('[data-testid="undeployed-badge"]').exists()).toBe(false)
+
+    useFlowsSession().addNode('feed')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="undeployed-badge"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('exiting the canvas via the breadcrumb while dirty prompts a confirm instead of leaving immediately; Cancel stays in the canvas', async () => {
+    const wrapper = await mountApp()
+    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
+
+    const session = useFlowsSession()
+    session.addNode('feed')
+    expect(session.dirty.value).toBe(true)
+
+    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await flushPromises()
+
+    // Still in the canvas — the exit was deferred behind the confirm modal.
+    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).not.toBeNull()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-cancel"]')?.click()
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true) // cancel aborted the exit
+    expect(session.dirty.value).toBe(true) // draft untouched
+
+    wrapper.unmount()
+  })
+
+  it('exiting the canvas via the breadcrumb while dirty: Deploy saves the draft then returns to the feed view', async () => {
+    const wrapper = await mountApp()
+    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await flushPromises()
+
+    const session = useFlowsSession()
+    session.addNode('feed')
+
+    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await flushPromises()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-deploy"]')?.click()
+    await flushPromises()
+
+    expect(mocks.SaveFlow).toHaveBeenCalled()
+    expect(mocks.SaveLayout).toHaveBeenCalled()
+    expect(session.dirty.value).toBe(false)
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('exiting the canvas via the breadcrumb while dirty: Discard drops the draft (reloads from disk) then returns to the feed view', async () => {
+    const wrapper = await mountApp()
+    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    await flushPromises()
+
+    const session = useFlowsSession()
+    session.addNode('feed')
+    const getFlowCallsBefore = mocks.GetFlow.mock.calls.length
+
+    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await flushPromises()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-discard"]')?.click()
+    await flushPromises()
+
+    expect(mocks.SaveFlow).not.toHaveBeenCalled()
+    expect(mocks.GetFlow.mock.calls.length).toBeGreaterThan(getFlowCallsBefore) // discard reloaded from disk
+    expect(session.dirty.value).toBe(false)
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('switching profiles from the rail while dirty prompts a confirm instead of switching immediately; Cancel stays on the current profile', async () => {
+    mocks.ListFlows.mockResolvedValue([
+      { id: 'personal', name: 'Personal', enabled: true, valid: true },
+      { id: 'work', name: 'Work', enabled: true, valid: true },
+    ])
+    mocks.GetFlow.mockImplementation(async (id: string) =>
+      id === 'work' ? { id: 'work', name: 'Work', enabled: true, nodes: [], wires: [] } : flow,
+    )
+
+    const wrapper = await mountApp()
+    const session = useFlowsSession()
+    session.addNode('feed') // dirties the active ("personal") flow's draft
+    expect(session.dirty.value).toBe(true)
+
+    await wrapper.find('[data-testid="profile-tile"][data-id="work"]').trigger('click')
+    await flushPromises()
+
+    // Still on the personal profile — the switch was deferred behind the confirm modal.
+    expect(wrapper.find('[data-testid="sidebar-profile-name"]').text()).toBe('Personal')
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).not.toBeNull()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-cancel"]')?.click()
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="sidebar-profile-name"]').text()).toBe('Personal') // cancel aborted the switch
+    expect(session.dirty.value).toBe(true) // draft untouched
+    expect(mocks.GetLayout).not.toHaveBeenCalledWith('work')
+
+    wrapper.unmount()
+  })
+
+  it('switching profiles from the rail while dirty: Deploy saves the draft then switches profiles', async () => {
+    mocks.ListFlows.mockResolvedValue([
+      { id: 'personal', name: 'Personal', enabled: true, valid: true },
+      { id: 'work', name: 'Work', enabled: true, valid: true },
+    ])
+    mocks.GetFlow.mockImplementation(async (id: string) =>
+      id === 'work' ? { id: 'work', name: 'Work', enabled: true, nodes: [], wires: [] } : flow,
+    )
+
+    const wrapper = await mountApp()
+    const session = useFlowsSession()
+    session.addNode('feed')
+
+    await wrapper.find('[data-testid="profile-tile"][data-id="work"]').trigger('click')
+    await flushPromises()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-deploy"]')?.click()
+    await flushPromises()
+
+    expect(mocks.SaveFlow).toHaveBeenCalled()
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="sidebar-profile-name"]').text()).toBe('Work')
+    expect(mocks.GetLayout).toHaveBeenCalledWith('work')
+
+    wrapper.unmount()
+  })
+
+  it('switching profiles from the rail while dirty: Discard drops the draft then switches profiles', async () => {
+    mocks.ListFlows.mockResolvedValue([
+      { id: 'personal', name: 'Personal', enabled: true, valid: true },
+      { id: 'work', name: 'Work', enabled: true, valid: true },
+    ])
+    mocks.GetFlow.mockImplementation(async (id: string) =>
+      id === 'work' ? { id: 'work', name: 'Work', enabled: true, nodes: [], wires: [] } : flow,
+    )
+
+    const wrapper = await mountApp()
+    const session = useFlowsSession()
+    session.addNode('feed')
+
+    await wrapper.find('[data-testid="profile-tile"][data-id="work"]').trigger('click')
+    await flushPromises()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-discard"]')?.click()
+    await flushPromises()
+
+    expect(mocks.SaveFlow).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="sidebar-profile-name"]').text()).toBe('Work')
+    expect(mocks.GetLayout).toHaveBeenCalledWith('work')
+
+    wrapper.unmount()
+  })
+
+  it('switching profiles from the rail is instant (no confirm) when the flow is not dirty', async () => {
+    mocks.ListFlows.mockResolvedValue([
+      { id: 'personal', name: 'Personal', enabled: true, valid: true },
+      { id: 'work', name: 'Work', enabled: true, valid: true },
+    ])
+    mocks.GetFlow.mockImplementation(async (id: string) =>
+      id === 'work' ? { id: 'work', name: 'Work', enabled: true, nodes: [], wires: [] } : flow,
+    )
+
+    const wrapper = await mountApp()
+    expect(useFlowsSession().dirty.value).toBe(false)
+
+    await wrapper.find('[data-testid="profile-tile"][data-id="work"]').trigger('click')
+    await flushPromises()
+
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).toBeNull()
+    expect(wrapper.find('[data-testid="sidebar-profile-name"]').text()).toBe('Work')
+
+    wrapper.unmount()
+  })
+
   it('on "log:appended", pumps the runtime (commit) BEFORE refreshing the feed — the commit must land before the re-read', async () => {
     const wrapper = await mountApp()
 

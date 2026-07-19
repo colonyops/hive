@@ -203,6 +203,42 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
+  it('discardDraft() reloads the active flow fresh from disk, clearing dirty (hc-sx4k3c7k)', async () => {
+    const editorClient = fakeEditorClient()
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
+    await flushPromises()
+
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+    expect(state.activeFlow.value?.id).toBe('flow-1')
+
+    state.addNode('feed') // a local edit — dirties the draft
+    expect(state.dirty.value).toBe(true)
+
+    const getFlowCallsBefore = (editorClient.getFlow as ReturnType<typeof vi.fn>).mock.calls.length
+    await state.discardDraft()
+
+    expect(state.dirty.value).toBe(false)
+    // Reloaded from disk via the same getFlow/getLayout path selectFlow uses.
+    expect((editorClient.getFlow as ReturnType<typeof vi.fn>).mock.calls.length).toBe(getFlowCallsBefore + 1)
+    expect(editorClient.getFlow).toHaveBeenLastCalledWith('flow-1')
+
+    wrapper.unmount()
+  })
+
+  it('discardDraft() is a no-op when no flow is bound', async () => {
+    const editorClient = fakeEditorClient()
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
+    await flushPromises()
+
+    expect(state.activeFlow.value).toBeNull()
+    await state.discardDraft()
+
+    expect(editorClient.getFlow).not.toHaveBeenCalled()
+
+    wrapper.unmount()
+  })
+
   it('rebuilds the runtime when the active flow changes to a different flow', async () => {
     const editorClient = fakeEditorClient({
       listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2')]),

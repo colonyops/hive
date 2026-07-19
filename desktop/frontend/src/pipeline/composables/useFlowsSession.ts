@@ -75,6 +75,14 @@ export interface FlowsSession extends ReturnType<typeof usePipelineEditor> {
   openFlows(focusNodeId?: string): void
   /** Returns to the feed view. */
   exitFlows(): void
+  /**
+   * Discards the active flow's local draft by reloading it fresh from disk
+   * (GetFlow/GetLayout via editor.selectFlow) — the mechanical meaning of
+   * "discard" for the unsaved-changes navigation guard (hc-sx4k3c7k):
+   * clears `dirty` back to false without writing anything. A no-op when no
+   * flow is currently bound.
+   */
+  discardDraft(): Promise<void>
   /** Delegates to the active flow's runtime pump() — a no-op if no flow is bound or the runtime isn't running. Called by App.vue on every "log:appended" event. */
   pump(): Promise<void>
   /**
@@ -149,6 +157,11 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     flowsOpen.value = false
   }
 
+  async function discardDraft(): Promise<void> {
+    if (!activeFlow.value) return
+    await editor.selectFlow(activeFlow.value.id)
+  }
+
   // ── Runtime (hc-8ft4yhm6) ─────────────────────────────────────────────
   // One usePipelineRuntime instance per active flow — rebuilt whenever the
   // active flow's id changes (a different flow is a different commit
@@ -200,6 +213,7 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     bindActiveFlow,
     openFlows,
     exitFlows,
+    discardDraft,
     pump,
     runRuntime,
     stopRuntime,

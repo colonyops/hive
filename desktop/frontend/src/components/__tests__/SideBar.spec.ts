@@ -16,9 +16,9 @@ const profile: Profile = {
   ],
 }
 
-function mountSideBar() {
+function mountSideBar(overrides: Partial<{ flowsDirty: boolean }> = {}) {
   return mount(SideBar, {
-    props: { profile, selection: { type: 'all' }, unreadOnly: false },
+    props: { profile, selection: { type: 'all' }, unreadOnly: false, ...overrides },
   })
 }
 
@@ -58,5 +58,18 @@ describe('SideBar', () => {
 
     expect(wrapper.emitted('reveal-in-flow')).toEqual([['backend']])
     expect(wrapper.emitted('select')).toBeUndefined()
+  })
+
+  it('shows the un-deployed changes badge only when flowsDirty is true', () => {
+    const clean = mountSideBar({ flowsDirty: false })
+    expect(clean.find('[data-testid="undeployed-badge"]').exists()).toBe(false)
+
+    const dirty = mountSideBar({ flowsDirty: true })
+    expect(dirty.find('[data-testid="undeployed-badge"]').exists()).toBe(true)
+  })
+
+  it('omits the un-deployed changes badge by default (flowsDirty unset)', () => {
+    const wrapper = mountSideBar()
+    expect(wrapper.find('[data-testid="undeployed-badge"]').exists()).toBe(false)
   })
 })

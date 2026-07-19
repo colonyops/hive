@@ -9,7 +9,7 @@ import IconTrash2 from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
 import type { Profile, SidebarSelection } from '../types/feed'
 
-const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
+const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean; flowsDirty?: boolean }>()
 const emit = defineEmits<{
   select: [sel: SidebarSelection]
   'select-unread': []
@@ -101,6 +101,11 @@ function feedSelected(feedId: string): boolean {
         <span class="block text-[12.5px] font-semibold text-text">Edit flow</span>
         <span class="block truncate font-mono text-[11px] text-text-3">sources · processing · outputs</span>
       </span>
+      <span
+        v-if="flowsDirty"
+        class="flex shrink-0 items-center gap-1.5 rounded-md border border-accent/35 bg-accent-tint px-1.5 py-0.5 text-[10.5px] font-semibold text-accent"
+        data-testid="undeployed-badge"
+      ><span class="size-1.5 shrink-0 rounded-full bg-accent" />Un-deployed</span>
       <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
     </button>
   </aside>
