@@ -1,0 +1,162 @@
+package pipelinedb
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"time"
+)
+
+// Sink kinds: where a committed Output is written.
+const (
+	SinkKindFeed   = "feed"
+	SinkKindAction = "action"
+)
+
+// Sink identifies where an Output is committed to: a feed_item row (Kind ==
+// SinkKindFeed, TargetID is the feed_id) or an enqueued output_command
+// (Kind == SinkKindAction, TargetID is the action_id).
+type Sink struct {
+	Kind     string `json:"kind"`
+	TargetID string `json:"targetId"`
+}
+
+// Output is one committed side effect of a flow run: either a feed item to
+// upsert or an action invocation to enqueue.
+type Output struct {
+	Sink    Sink            `json:"sink"`
+	Key     string          `json:"key"` // feed_item.item_id, and the output dedup key
+	Payload json.RawMessage `json:"payload"`
+	Unread  bool            `json:"unread"` // feed items only
+}
+
+// Discard records a message a node dropped instead of forwarding, for
+// metrics/observability. CommitBatch does not persist Discards as rows —
+// they exist for callers that want to log or count them; the per-node
+// aggregate is expected to already be reflected in the corresponding
+// NodeRun.DropCount.
+type Discard struct {
+	MsgID  string `json:"msgId"`
+	NodeID string `json:"nodeId"`
+}
+
+// NodeRunView is one node's per-tick execution summary, recorded for the
+// flows debug/status UI. It is named "View" (rather than NodeRun) only to
+// avoid colliding with the sqlc-generated raw row model of the same name in
+// models.go — package pipeline's NodeRun alias re-exports this type under
+// the name callers actually use (see pipeline/commit.go).
+type NodeRunView struct {
+	FlowID    string `json:"flowId"`
+	NodeID    string `json:"nodeId"`
+	OK        bool   `json:"ok"`
+	InCount   int    `json:"inCount"`
+	OutCount  int    `json:"outCount"`
+	DropCount int    `json:"dropCount"`
+	Err       string `json:"err"`
+	DurMs     int64  `json:"durMs"`
+}
+
+// CommitBatch is the frontend graph runtime's atomic write: it advances a
+// consumer's committed offset and persists the outputs/node-run metrics
+// produced while processing up to that offset, all in one transaction (see
+// DB.CommitBatch).
+type CommitBatch struct {
+	Consumer   string        `json:"consumer"`   // event_log consumer key (flow id / consumer id)
+	UpToOffset int64         `json:"upToOffset"` // advance consumer_offset to here
+	Outputs    []Output      `json:"outputs"`
+	Discards   []Discard     `json:"discards"`
+	NodeRuns   []NodeRunView `json:"nodeRuns"`
+}
+
+// CommitBatch applies b atomically: feed outputs are upserted into
+// feed_item, action outputs are enqueued into output_command (deduped by
+// (action_id, key)), node runs are recorded, and the consumer's offset is
+// advanced to b.UpToOffset — all in one transaction.
+//
+// Idempotency by offset: if b.UpToOffset is at or below the consumer's
+// currently committed offset, this batch was already applied in a previous
+// commit and the call is a no-op (returns nil without touching feed_item,
+// output_command, or node_run). This makes replay of a batch fully
+// idempotent without per-row dedup bookkeeping for feed_item/node_run —
+// only output_command needs its own dedup key, since two different batches
+// could legitimately enqueue the same action.
+func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
+	return db.WithTx(ctx, func(q *Queries) error {
+		current, err := q.GetConsumerOffset(ctx, b.Consumer)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("reading committed offset for consumer %q: %w", b.Consumer, err)
+		}
+
+		if b.UpToOffset <= current.Offset {
+			// Already applied by a previous commit of this batch (or a
+			// stale/out-of-order commit) — no-op.
+			return nil
+		}
+
+		now := time.Now().UnixNano()
+
+		for _, out := range b.Outputs {
+			switch out.Sink.Kind {
+			case SinkKindFeed:
+				if err := q.UpsertFeedItem(ctx, UpsertFeedItemParams{
+					FeedID:    out.Sink.TargetID,
+					ItemID:    out.Key,
+					Payload:   []byte(out.Payload),
+					UpdatedAt: now,
+					Unread:    boolToInt64(out.Unread),
+				}); err != nil {
+					return fmt.Errorf("upserting feed_item %s/%s: %w", out.Sink.TargetID, out.Key, err)
+				}
+			case SinkKindAction:
+				if err := q.EnqueueOutputCommand(ctx, EnqueueOutputCommandParams{
+					ActionID:  out.Sink.TargetID,
+					Key:       out.Key,
+					Payload:   []byte(out.Payload),
+					CreatedAt: now,
+				}); err != nil {
+					return fmt.Errorf("enqueuing output_command %s/%s: %w", out.Sink.TargetID, out.Key, err)
+				}
+			default:
+				return fmt.Errorf("commit batch: unknown sink kind %q", out.Sink.Kind)
+			}
+		}
+
+		for _, nr := range b.NodeRuns {
+			var errCol sql.NullString
+			if nr.Err != "" {
+				errCol = sql.NullString{String: nr.Err, Valid: true}
+			}
+			if err := q.InsertNodeRun(ctx, InsertNodeRunParams{
+				FlowID:    nr.FlowID,
+				NodeID:    nr.NodeID,
+				Ok:        boolToInt64(nr.OK),
+				InCount:   int64(nr.InCount),
+				OutCount:  int64(nr.OutCount),
+				DropCount: int64(nr.DropCount),
+				Err:       errCol,
+				EndedAt:   now,
+				DurMs:     nr.DurMs,
+			}); err != nil {
+				return fmt.Errorf("inserting node_run for %s/%s: %w", nr.FlowID, nr.NodeID, err)
+			}
+		}
+
+		if err := q.CommitConsumerOffset(ctx, CommitConsumerOffsetParams{
+			Consumer: b.Consumer,
+			Offset:   b.UpToOffset,
+		}); err != nil {
+			return fmt.Errorf("advancing consumer offset for %q: %w", b.Consumer, err)
+		}
+
+		return nil
+	})
+}
+
+func boolToInt64(b bool) int64 {
+	if b {
+		return 1
+	}
+	return 0
+}

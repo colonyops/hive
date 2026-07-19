@@ -7,6 +7,7 @@ package pipelinedb
 
 import (
 	"context"
+	"database/sql"
 )
 
 const appendEvent = `-- name: AppendEvent :one
@@ -105,6 +106,31 @@ func (q *Queries) DeleteOldestEventLog(ctx context.Context, limit int64) error {
 	return err
 }
 
+const enqueueOutputCommand = `-- name: EnqueueOutputCommand :exec
+INSERT INTO output_command (action_id, key, payload, status, created_at)
+VALUES (?, ?, ?, 'pending', ?)
+ON CONFLICT(action_id, key) DO NOTHING
+`
+
+type EnqueueOutputCommandParams struct {
+	ActionID  string `json:"action_id"`
+	Key       string `json:"key"`
+	Payload   []byte `json:"payload"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// Deduped on (action_id, key): a replayed commit batch enqueues the same
+// action invocation at most once (see idx_output_command_action_key).
+func (q *Queries) EnqueueOutputCommand(ctx context.Context, arg EnqueueOutputCommandParams) error {
+	_, err := q.db.ExecContext(ctx, enqueueOutputCommand,
+		arg.ActionID,
+		arg.Key,
+		arg.Payload,
+		arg.CreatedAt,
+	)
+	return err
+}
+
 const getConsumerOffset = `-- name: GetConsumerOffset :one
 SELECT consumer, "offset" FROM consumer_offset
 WHERE consumer = ?
@@ -115,6 +141,88 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 	var i ConsumerOffset
 	err := row.Scan(&i.Consumer, &i.Offset)
 	return i, err
+}
+
+const insertNodeRun = `-- name: InsertNodeRun :exec
+INSERT INTO node_run (flow_id, node_id, ok, in_count, out_count, drop_count, err, ended_at, dur_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+`
+
+type InsertNodeRunParams struct {
+	FlowID    string         `json:"flow_id"`
+	NodeID    string         `json:"node_id"`
+	Ok        int64          `json:"ok"`
+	InCount   int64          `json:"in_count"`
+	OutCount  int64          `json:"out_count"`
+	DropCount int64          `json:"drop_count"`
+	Err       sql.NullString `json:"err"`
+	EndedAt   int64          `json:"ended_at"`
+	DurMs     int64          `json:"dur_ms"`
+}
+
+func (q *Queries) InsertNodeRun(ctx context.Context, arg InsertNodeRunParams) error {
+	_, err := q.db.ExecContext(ctx, insertNodeRun,
+		arg.FlowID,
+		arg.NodeID,
+		arg.Ok,
+		arg.InCount,
+		arg.OutCount,
+		arg.DropCount,
+		arg.Err,
+		arg.EndedAt,
+		arg.DurMs,
+	)
+	return err
+}
+
+const listFeedItemsByFeed = `-- name: ListFeedItemsByFeed :many
+SELECT feed_id, item_id, payload, updated_at, unread FROM feed_item
+WHERE feed_id = ?
+ORDER BY updated_at DESC
+`
+
+func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]FeedItem, error) {
+	rows, err := q.db.QueryContext(ctx, listFeedItemsByFeed, feedID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []FeedItem{}
+	for rows.Next() {
+		var i FeedItem
+		if err := rows.Scan(
+			&i.FeedID,
+			&i.ItemID,
+			&i.Payload,
+			&i.UpdatedAt,
+			&i.Unread,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const markFeedItemRead = `-- name: MarkFeedItemRead :exec
+UPDATE feed_item SET unread = 0
+WHERE feed_id = ? AND item_id = ?
+`
+
+type MarkFeedItemReadParams struct {
+	FeedID string `json:"feed_id"`
+	ItemID string `json:"item_id"`
+}
+
+func (q *Queries) MarkFeedItemRead(ctx context.Context, arg MarkFeedItemReadParams) error {
+	_, err := q.db.ExecContext(ctx, markFeedItemRead, arg.FeedID, arg.ItemID)
+	return err
 }
 
 const readEventsFrom = `-- name: ReadEventsFrom :many
@@ -156,4 +264,34 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const upsertFeedItem = `-- name: UpsertFeedItem :exec
+INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(feed_id, item_id) DO UPDATE SET
+    payload    = excluded.payload,
+    updated_at = excluded.updated_at,
+    unread     = excluded.unread
+`
+
+type UpsertFeedItemParams struct {
+	FeedID    string `json:"feed_id"`
+	ItemID    string `json:"item_id"`
+	Payload   []byte `json:"payload"`
+	UpdatedAt int64  `json:"updated_at"`
+	Unread    int64  `json:"unread"`
+}
+
+// Idempotent by (feed_id, item_id): committing the same key twice updates
+// the row in place rather than duplicating it.
+func (q *Queries) UpsertFeedItem(ctx context.Context, arg UpsertFeedItemParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFeedItem,
+		arg.FeedID,
+		arg.ItemID,
+		arg.Payload,
+		arg.UpdatedAt,
+		arg.Unread,
+	)
+	return err
 }

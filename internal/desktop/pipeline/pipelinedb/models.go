@@ -47,4 +47,5 @@ type OutputCommand struct {
 	Payload   []byte `json:"payload"`
 	Status    string `json:"status"`
 	CreatedAt int64  `json:"created_at"`
+	Key       string `json:"key"`
 }

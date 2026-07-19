@@ -46,3 +46,33 @@ DELETE FROM event_log
 WHERE "offset" IN (
     SELECT "offset" FROM event_log ORDER BY "offset" ASC LIMIT ?
 );
+
+-- name: UpsertFeedItem :exec
+-- Idempotent by (feed_id, item_id): committing the same key twice updates
+-- the row in place rather than duplicating it.
+INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
+VALUES (?, ?, ?, ?, ?)
+ON CONFLICT(feed_id, item_id) DO UPDATE SET
+    payload    = excluded.payload,
+    updated_at = excluded.updated_at,
+    unread     = excluded.unread;
+
+-- name: ListFeedItemsByFeed :many
+SELECT * FROM feed_item
+WHERE feed_id = ?
+ORDER BY updated_at DESC;
+
+-- name: MarkFeedItemRead :exec
+UPDATE feed_item SET unread = 0
+WHERE feed_id = ? AND item_id = ?;
+
+-- name: EnqueueOutputCommand :exec
+-- Deduped on (action_id, key): a replayed commit batch enqueues the same
+-- action invocation at most once (see idx_output_command_action_key).
+INSERT INTO output_command (action_id, key, payload, status, created_at)
+VALUES (?, ?, ?, 'pending', ?)
+ON CONFLICT(action_id, key) DO NOTHING;
+
+-- name: InsertNodeRun :exec
+INSERT INTO node_run (flow_id, node_id, ok, in_count, out_count, drop_count, err, ended_at, dur_ms)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);

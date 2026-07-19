@@ -3,19 +3,14 @@ package main
 import (
 	"context"
 
+	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
 // PipelineService is the Wails service exposing the desktop pipeline's
-// event log to the frontend. All data comes from the injected
-// *pipelinedb.DB; this type is wire glue only, matching FeedService's
-// thin-glue style.
-//
-// Phase 2 ships only this minimal offset read/commit pair — enough for a
-// consumer to tail the log and checkpoint its position. Phase 3 extends
-// Commit into the full protocol (outputs/discards/feed_item/node_run) once
-// the frontend graph runtime consumes the log; this service's surface will
-// grow then, not change shape now.
+// event log and commit protocol to the frontend. All data comes from the
+// injected *pipelinedb.DB; this type is wire glue only, matching
+// FeedService's thin-glue style.
 type PipelineService struct {
 	db *pipelinedb.DB
 }
@@ -31,8 +26,21 @@ func (s *PipelineService) ReadFrom(offset int64, limit int) ([]pipelinedb.Msg, e
 	return msgs, err
 }
 
-// Commit records offset as consumer's last-read position. Monotonic: a
-// commit at or below the currently stored offset is a no-op.
-func (s *PipelineService) Commit(consumer string, offset int64) error {
-	return s.db.Commit(context.Background(), consumer, offset)
+// Commit applies the frontend graph runtime's batch atomically: it upserts
+// feed outputs, enqueues action outputs, records node-run metrics, and
+// advances the consumer's offset to batch.UpToOffset. Idempotent by offset:
+// replaying a batch already applied (UpToOffset <= the consumer's current
+// offset) is a no-op.
+func (s *PipelineService) Commit(batch pipeline.CommitBatch) error {
+	return s.db.CommitBatch(context.Background(), batch)
+}
+
+// FeedItems returns the persisted items for a feed, newest first.
+func (s *PipelineService) FeedItems(feedID string) ([]pipeline.FeedItem, error) {
+	return s.db.FeedItems(context.Background(), feedID)
+}
+
+// MarkFeedItemRead clears the unread flag on one feed item.
+func (s *PipelineService) MarkFeedItemRead(feedID, itemID string) error {
+	return s.db.MarkFeedItemRead(context.Background(), feedID, itemID)
 }
