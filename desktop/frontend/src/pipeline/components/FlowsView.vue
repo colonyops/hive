@@ -34,10 +34,20 @@ const client: PipelineEditorClient = {
   async nodeRuns(flowId, limit) { return await NodeRuns(flowId, limit) },
 }
 
+// flowId is the profile's flow (a profile IS a flow): when the flows canvas
+// is opened for a profile, select that flow once the list has loaded. If the
+// profile hasn't been migrated to a flow yet, the picker stays open.
+const props = defineProps<{ flowId?: string }>()
+
 const {
   flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error,
   refreshFlows, refreshNodeRuns, selectFlow, newFlow, addNode, updateNode, deleteNode, moveNode, deploy,
 } = usePipelineEditor(client)
+
+watch([() => props.flowId, flows], ([id, list]) => {
+  if (!id || activeFlow.value?.id === id) return
+  if (list.some((f) => f.id === id)) void selectFlow(id)
+}, { immediate: true })
 
 let unsubscribe: (() => void) | undefined
 onMounted(() => {
@@ -127,8 +137,10 @@ watch(feedNodes, (nodes) => {
 }, { immediate: true })
 
 const previewFeedId = computed(() => {
+  const flowId = activeFlow.value?.id
   const node = feedNodes.value.find((n) => n.id === selectedFeedNodeId.value)
-  return typeof node?.config.feed === 'string' && node.config.feed ? node.config.feed : null
+  // A feed node's durable feed_item key is its flow-qualified node id.
+  return flowId && node ? `${flowId}/${node.id}` : null
 })
 
 // ── Copy prompt (Phase 6c) — the flows equivalent of the feed sidebar's

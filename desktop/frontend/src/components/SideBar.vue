@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IconChevronRight from '~icons/lucide/chevron-right'
 import IconCircle from '~icons/lucide/circle'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
@@ -6,10 +7,11 @@ import IconPencil from '~icons/lucide/pencil'
 import IconPlus from '~icons/lucide/plus'
 import IconRss from '~icons/lucide/rss'
 import IconTrash2 from '~icons/lucide/trash-2'
+import IconWorkflow from '~icons/lucide/workflow'
 import type { Profile, SidebarSelection } from '../types/feed'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean }>()
-const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'edit-feeds': []; 'edit-feed': [feedId: string]; 'delete-profile': [] }>()
+const emit = defineEmits<{ select: [sel: SidebarSelection]; 'select-unread': []; 'edit-feeds': []; 'edit-feed': [feedId: string]; 'delete-profile': []; 'open-flows': [] }>()
 
 // "All items" and "Unread" are both all-scope; the unread filter picks
 // which entry lights up. A feed entry highlights regardless of the filter.
@@ -31,6 +33,12 @@ function feedSelected(feedId: string): boolean {
     <div class="profile-header border-b border-border px-4 pb-3 pt-4" data-testid="sidebar-profile-header">
       <div class="flex items-center gap-2">
         <div class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
+        <button
+          class="flow-pill flex shrink-0 items-center gap-1.5 rounded-md border border-accent/35 bg-accent-tint px-2 py-1 text-[11.5px] font-semibold text-accent hover:bg-accent/20"
+          title="Edit this profile's flow"
+          data-testid="sidebar-open-flows"
+          @click="emit('open-flows')"
+        ><IconWorkflow class="size-3" />Flows</button>
         <button
           class="profile-delete shrink-0 cursor-pointer text-text-3 hover:text-severity-error"
           aria-label="Delete profile"
@@ -82,6 +90,19 @@ function feedSelected(feedId: string): boolean {
         <span class="font-mono text-[11px]" :class="feed.newCount ? 'text-accent' : 'text-text-3'">{{ feed.newCount || feed.count }}</span>
       </div>
     </section>
+
+    <button
+      class="mt-auto flex items-center gap-2.5 border-t border-border p-2.5 text-left hover:bg-chip"
+      data-testid="sidebar-edit-flow"
+      @click="emit('open-flows')"
+    >
+      <span class="flex size-[22px] shrink-0 items-center justify-center rounded-md border border-dashed border-card bg-app text-accent"><IconWorkflow class="size-3" /></span>
+      <span class="min-w-0 flex-1">
+        <span class="block text-[12.5px] font-semibold text-text">Edit flow</span>
+        <span class="block truncate font-mono text-[11px] text-text-3">sources · processing · outputs</span>
+      </span>
+      <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
+    </button>
   </aside>
 </template>
 

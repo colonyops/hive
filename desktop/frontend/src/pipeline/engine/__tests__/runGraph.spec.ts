@@ -91,8 +91,9 @@ describe('runGraph', () => {
       ],
     }
     const result = await runGraph(flow, [msg('1', { x: 'original' })], transport)
-    const mutatedOut = result.outputs.find((o) => o.sink.targetId === 'mutated')
-    const readerOut = result.outputs.find((o) => o.sink.targetId === 'reader')
+    // A feed node's sink target is its flow-qualified node id (<flowId>/<nodeId>).
+    const mutatedOut = result.outputs.find((o) => o.sink.targetId === 'f/mutated-feed')
+    const readerOut = result.outputs.find((o) => o.sink.targetId === 'f/reader-feed')
     expect(mutatedOut?.payload.x).toBe('mutated')
     expect(readerOut?.payload.x).toBe('original')
   })
@@ -102,9 +103,9 @@ describe('runGraph', () => {
     const flow: Flow = {
       id: 'triage',
       nodes: [
-        { id: 'in-prs', type: 'github-source', config: { source: 'team-prs' } },
+        { id: 'in-prs', type: 'github-source', config: { kind: 'search', query: 'is:open' } },
         { id: 'drop-bots', type: 'github-filter', config: { repos: ['acme/*'] } },
-        { id: 'team-feed', type: 'feed', config: { feed: 'team-review' } },
+        { id: 'team-feed', type: 'feed', config: {} },
         { id: 'spawn-review', type: 'action', config: { action: 'review-pr' } },
       ],
       wires: [
@@ -114,8 +115,9 @@ describe('runGraph', () => {
         // port 1 (fail) intentionally left unwired — today's plain drop behavior.
       ],
     }
-    const passing = msg('1', { repo: 'acme/app' }, 'source:team-prs')
-    const failing = msg('2', { repo: 'other/repo' }, 'source:team-prs')
+    // The source node ingests only its own flow-qualified topic (source:<flowId>/<nodeId>).
+    const passing = msg('1', { repo: 'acme/app' }, 'source:triage/in-prs')
+    const failing = msg('2', { repo: 'other/repo' }, 'source:triage/in-prs')
     const result = await runGraph(flow, [passing, failing], transport)
 
     expect(result.consumer).toBe('triage')
@@ -123,7 +125,7 @@ describe('runGraph', () => {
     expect(result.outputs).toHaveLength(2)
     expect(result.outputs).toEqual(
       expect.arrayContaining([
-        { sink: { kind: 'feed', targetId: 'team-review' }, key: '1', payload: { repo: 'acme/app' }, unread: true },
+        { sink: { kind: 'feed', targetId: 'triage/team-feed' }, key: '1', payload: { repo: 'acme/app' }, unread: true },
         { sink: { kind: 'action', targetId: 'review-pr' }, key: '1', payload: { repo: 'acme/app' }, unread: false },
       ]),
     )

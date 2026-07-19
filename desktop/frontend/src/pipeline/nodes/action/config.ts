@@ -17,7 +17,7 @@ export interface Config {
 /** Action outputs are enqueued commands, not feed items — unread has no meaning here. */
 export const unread = false
 
-export function sink(config: Config): Sink {
+export function sink(_flowId: string, _nodeId: string, config: Config): Sink {
   return { kind: 'action', targetId: config.action }
 }
 

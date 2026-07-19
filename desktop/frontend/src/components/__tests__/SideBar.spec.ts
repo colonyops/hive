@@ -23,6 +23,18 @@ function mountSideBar() {
 }
 
 describe('SideBar', () => {
+  it('opens the flows canvas from the header Flows pill', async () => {
+    const wrapper = mountSideBar()
+    await wrapper.find('[data-testid="sidebar-open-flows"]').trigger('click')
+    expect(wrapper.emitted('open-flows')).toHaveLength(1)
+  })
+
+  it('opens the flows canvas from the Edit flow footer', async () => {
+    const wrapper = mountSideBar()
+    await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
+    expect(wrapper.emitted('open-flows')).toHaveLength(1)
+  })
+
   it('emits edit-feed with the feed id from the row pencil, without selecting the row', async () => {
     const wrapper = mountSideBar()
 

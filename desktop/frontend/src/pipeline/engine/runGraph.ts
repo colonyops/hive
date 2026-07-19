@@ -43,7 +43,7 @@ export const UNROUTED_NODE_ID = '$unrouted'
 const PASSTHROUGH_TYPES = new Set<string>([githubSourceNode.type])
 
 interface TerminalDef {
-  sink(config: any): Sink
+  sink(flowId: string, nodeId: string, config: any): Sink
   unread: boolean
 }
 
@@ -78,15 +78,15 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
   const discards: Discard[] = []
   const nodeRuns = new Map<string, NodeRunAcc>()
 
-  // Seed entry nodes (in-degree 0) from the input batch. A node whose
-  // config declares `source` only accepts messages on that source's log
-  // topic ("source:<id>", per github_source.go); a node with no `source`
-  // field accepts every message — the permissive default that lets a test
+  // Seed entry nodes (in-degree 0) from the input batch. A github-source
+  // entry node only accepts messages on its own flow-qualified log topic
+  // ("source:<flowId>/<nodeId>", per github_source.go); a non-source entry
+  // node accepts every message — the permissive default that lets a test
   // flow's first node (e.g. a bare github-filter under test) receive the
   // batch directly without a separate source node.
   const entryNodeIds = flow.nodes.filter((n) => (entryDegrees.get(n.id) ?? 0) === 0).map((n) => n.id)
   for (const msg of batch) {
-    const matchingEntries = entryNodeIds.filter((id) => acceptsEntry(nodesById.get(id)!, msg))
+    const matchingEntries = entryNodeIds.filter((id) => acceptsEntry(flow.id, nodesById.get(id)!, msg))
     if (matchingEntries.length === 0) continue
     routed.add(msg.ID)
     matchingEntries.forEach((id) => {
@@ -121,7 +121,7 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
 
       const terminal = TERMINALS[node.type]
       if (terminal) {
-        outputs.push({ sink: terminal.sink(node.config), key: msg.Key, payload: msg.Payload, unread: terminal.unread })
+        outputs.push({ sink: terminal.sink(flow.id, nodeId, node.config), key: msg.Key, payload: msg.Payload, unread: terminal.unread })
         run.outCount++
         continue
       }
@@ -176,10 +176,12 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
   }
 }
 
-function acceptsEntry(node: FlowNode, msg: Msg): boolean {
-  const source = node.config?.source
-  if (typeof source !== 'string' || source === '') return true
-  return msg.Topic === `source:${source}`
+// A github-source entry node only ingests its own flow-qualified topic; any
+// other entry node (a test's bare processor with no upstream source) accepts
+// the whole batch.
+function acceptsEntry(flowId: string, node: FlowNode, msg: Msg): boolean {
+  if (node.type !== githubSourceNode.type) return true
+  return msg.Topic === `source:${flowId}/${node.id}`
 }
 
 /**

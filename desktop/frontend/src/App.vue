@@ -51,14 +51,25 @@ const {
 // without touching the template.
 const configErrors = computed(() => parseConfigErrors(config.value?.error ?? ''))
 
-// ── Flows editor mode (Phase 6b) ─────────────────────────────────────────────
-// Flows are app-wide (not scoped to a profile — see internal/desktop
-// desktop.FlowsDir()), so this mode swaps the whole main area rather than
-// living inside the profile/sidebar layout below; reached via the command
-// palette (⌘K → "Open flows editor") since this app already surfaces
-// several actions that way (edit-config, copy-config-prompt) rather than
-// spending title-bar space on them.
+// ── Flows editor mode ────────────────────────────────────────────────────────
+// A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
+// the sidebar+main region while the spaces rail and titlebar stay mounted (so
+// the user is never stranded — see the template). Reached from the sidebar's
+// "Flows" pill / "Edit flow" footer and the ⌘K command; exited via the
+// titlebar breadcrumb.
 const mode = ref<'feed' | 'flows'>('feed')
+
+function openFlows() {
+  mode.value = 'flows'
+}
+
+function exitFlows() {
+  mode.value = 'feed'
+}
+
+// Switching profiles from the flows canvas returns to the feed view of the new
+// profile — the just-opened flow belonged to the previous profile.
+watch(activeProfileId, () => { mode.value = 'feed' })
 
 // ── Config sheet & profile creation overlays ─────────────────────────────────
 
@@ -312,6 +323,8 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
         :unread-count="activeProfile?.unreadCount ?? 0"
+        :flows-active="mode === 'flows'"
+        @exit-flows="exitFlows"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
@@ -328,41 +341,48 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         @submit-token="submitToken"
         @create-workspace="createProfile"
       />
-      <FlowsView v-else-if="mode === 'flows'" />
+      <!-- The spaces rail (ProfileRail) and TitleBar stay mounted across the
+           feed<->flows switch; only the sidebar+main region swaps. This is
+           what keeps the user from being stranded in the flows canvas — the
+           rail and the breadcrumb are always there to navigate back. -->
       <div v-else class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
-        <SideBar
-          v-if="activeProfile"
-          :profile="activeProfile"
-          :selection="selection"
-          :unread-only="unreadOnly"
-          @select="selectSidebar"
-          @select-unread="selectUnreadView"
-          @edit-feeds="openConfigSheet"
-          @edit-feed="openFeedEditor"
-          @delete-profile="openDeleteProfile"
-        />
-        <section v-if="activeProfile" class="flex min-w-0 flex-1">
-          <FeedList
-            :title="title"
-            :items="items"
-            :selected-id="selectedId"
+        <FlowsView v-if="mode === 'flows'" :flow-id="activeProfileId" />
+        <template v-else>
+          <SideBar
+            v-if="activeProfile"
+            :profile="activeProfile"
+            :selection="selection"
             :unread-only="unreadOnly"
-            :count-label="countLabel"
-            :load-error="loadError"
-            @select="selectItem"
-            @toggle-unread="toggleUnread"
-            @refresh="refresh"
+            @select="selectSidebar"
+            @select-unread="selectUnreadView"
+            @edit-feeds="openConfigSheet"
+            @edit-feed="openFeedEditor"
+            @delete-profile="openDeleteProfile"
+            @open-flows="openFlows"
           />
-          <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
-        </section>
-        <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
-          <template v-if="profilesError">
-            <span data-testid="profiles-error">{{ profilesError }}</span>
-            <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
-          </template>
-          <span v-else>Loading feed…</span>
-        </div>
+          <section v-if="activeProfile" class="flex min-w-0 flex-1">
+            <FeedList
+              :title="title"
+              :items="items"
+              :selected-id="selectedId"
+              :unread-only="unreadOnly"
+              :count-label="countLabel"
+              :load-error="loadError"
+              @select="selectItem"
+              @toggle-unread="toggleUnread"
+              @refresh="refresh"
+            />
+            <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
+          </section>
+          <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
+            <template v-if="profilesError">
+              <span data-testid="profiles-error">{{ profilesError }}</span>
+              <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
+            </template>
+            <span v-else>Loading feed…</span>
+          </div>
+        </template>
       </div>
     </div>
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
