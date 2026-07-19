@@ -11,6 +11,7 @@ import (
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
+	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/colonyops/hive/internal/github"
@@ -151,18 +152,18 @@ func emitAuthUpdated() {
 }
 
 // buildFlowsStore constructs the flow.FlowStore over desktop.FlowsDir(),
-// backed by a Refs adapter over provider — this works uniformly across mock
-// and live feed providers, so unlike buildFeedProvider there is no
-// mock-mode branch here: an empty/tmp flows dir is deterministic on its
-// own, and the store never touches GitHub or auth state. It also starts a
-// FlowsWatcher that reloads the store and wakes the frontend on any
+// backed by a Refs adapter over provider and actionStore — this works
+// uniformly across mock and live feed providers, so unlike buildFeedProvider
+// there is no mock-mode branch here: an empty/tmp flows dir is deterministic
+// on its own, and the store never touches GitHub or auth state. It also
+// starts a FlowsWatcher that reloads the store and wakes the frontend on any
 // flows/*.yaml change, including the app's own SaveFlow/SaveLayout writes
 // (the same self-triggering tradeoff feed.ConfigWatcher makes). A watcher
 // that fails to start degrades to no hot-reload, matching feed's posture:
 // the app still works, edits just need a restart to pick up.
-func buildFlowsStore(provider feed.Provider, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
+func buildFlowsStore(provider feed.Provider, actionStore *actions.ActionStore, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
 	dir := desktop.FlowsDir()
-	store := flow.NewFlowStore(dir, newFlowRefsAdapter(provider))
+	store := flow.NewFlowStore(dir, newFlowRefsAdapter(provider, actionStore))
 
 	watcher, err := flow.NewFlowsWatcher(dir, func() {
 		if err := store.Reload(); err != nil {
@@ -183,6 +184,60 @@ func emitFlowsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("flows:updated", "changed")
 	}
+}
+
+// buildActionStore constructs the actions.ActionStore over
+// desktop.ActionsPath(), loading it eagerly (rather than waiting for the
+// first lazy List/Get) so a broken actions.yml is logged at startup instead
+// of only surfacing silently as "no actions found" the first time something
+// asks. It also starts a file watcher (reusing feed.ConfigWatcher, which
+// already does exactly this for a single config file) so hand edits to
+// actions.yml apply live, matching flows'/profiles' hot-reload posture. A
+// watcher that fails to start degrades to no hot-reload: the app still
+// works, edits just need a restart to pick up.
+func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *feed.ConfigWatcher) {
+	path := desktop.ActionsPath()
+	store := actions.NewActionStore(path)
+	if err := store.Reload(); err != nil {
+		logger.Warn().Err(err).Msg("actions.yml load failed; using last-good (likely empty) action set")
+	}
+
+	watcher, err := feed.NewConfigWatcher(path, func() {
+		if err := store.Reload(); err != nil {
+			logger.Warn().Err(err).Msg("actions.yml reload failed")
+		}
+	}, logger)
+	if err != nil {
+		logger.Warn().Err(err).Msg("actions.yml hot-reload unavailable")
+		return store, nil
+	}
+	return store, watcher
+}
+
+// buildOutputWorker constructs the output worker over db and actionStore, or
+// returns nil in mock mode. Mock modes ("feed", "onboarding") skip it,
+// mirroring buildPipelineProducer: they serve static fixtures with no live
+// producer feeding the event log, so there is nothing for a frontend graph
+// run to commit and no output_command would ever be enqueued in practice —
+// but skipping the worker outright keeps e2e fully deterministic rather than
+// relying on that being true (e.g. against a shell action actually running
+// a command).
+//
+// launch-session and publish-event get logging stubs (see
+// LaunchSessionExecutor/PublishEventExecutor's package docs for why: the
+// desktop app doesn't wire the hive session service or a real event bus
+// yet). shell gets a real executor — running an author-trusted local
+// command has no such missing dependency.
+func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, logger zerolog.Logger) *pipeline.Worker {
+	if desktop.MockMode() != "" {
+		return nil
+	}
+	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
+		"launch-session": pipeline.NewLaunchSessionExecutor(nil),
+		"shell":          pipeline.NewShellExecutor(logger),
+		"publish-event":  pipeline.NewPublishEventExecutor(nil),
+	})
+	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 }
 
 func main() {
@@ -206,8 +261,17 @@ func main() {
 		producer.Start()
 	}
 
+	actionsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	actionStore, actionsWatcher := buildActionStore(actionsLogger)
+	if actionsWatcher != nil {
+		actionsWatcher.Start()
+	}
+	if outputWorker := buildOutputWorker(pipelineDB, actionStore, pipelineLogger); outputWorker != nil {
+		outputWorker.Start()
+	}
+
 	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	flowsStore, flowsWatcher := buildFlowsStore(provider, flowsLogger)
+	flowsStore, flowsWatcher := buildFlowsStore(provider, actionStore, flowsLogger)
 	if flowsWatcher != nil {
 		flowsWatcher.Start()
 	}

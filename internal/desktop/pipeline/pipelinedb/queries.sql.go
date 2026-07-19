@@ -210,6 +210,46 @@ func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]Fee
 	return items, nil
 }
 
+const listPendingOutputCommands = `-- name: ListPendingOutputCommands :many
+SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
+WHERE status = 'pending'
+ORDER BY created_at ASC
+LIMIT ?
+`
+
+// Oldest first: the output worker drains the queue in enqueue order.
+func (q *Queries) ListPendingOutputCommands(ctx context.Context, limit int64) ([]OutputCommand, error) {
+	rows, err := q.db.QueryContext(ctx, listPendingOutputCommands, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []OutputCommand{}
+	for rows.Next() {
+		var i OutputCommand
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActionID,
+			&i.Payload,
+			&i.Status,
+			&i.CreatedAt,
+			&i.Key,
+			&i.Attempts,
+			&i.LastError,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markFeedItemRead = `-- name: MarkFeedItemRead :exec
 UPDATE feed_item SET unread = 0
 WHERE feed_id = ? AND item_id = ?
@@ -222,6 +262,31 @@ type MarkFeedItemReadParams struct {
 
 func (q *Queries) MarkFeedItemRead(ctx context.Context, arg MarkFeedItemReadParams) error {
 	_, err := q.db.ExecContext(ctx, markFeedItemRead, arg.FeedID, arg.ItemID)
+	return err
+}
+
+const markOutputCommandDone = `-- name: MarkOutputCommandDone :exec
+UPDATE output_command SET status = 'done'
+WHERE id = ?
+`
+
+func (q *Queries) MarkOutputCommandDone(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, markOutputCommandDone, id)
+	return err
+}
+
+const markOutputCommandFailed = `-- name: MarkOutputCommandFailed :exec
+UPDATE output_command SET status = 'failed', attempts = attempts + 1, last_error = ?
+WHERE id = ?
+`
+
+type MarkOutputCommandFailedParams struct {
+	LastError sql.NullString `json:"last_error"`
+	ID        int64          `json:"id"`
+}
+
+func (q *Queries) MarkOutputCommandFailed(ctx context.Context, arg MarkOutputCommandFailedParams) error {
+	_, err := q.db.ExecContext(ctx, markOutputCommandFailed, arg.LastError, arg.ID)
 	return err
 }
 
@@ -264,6 +329,21 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 		return nil, err
 	}
 	return items, nil
+}
+
+const retryOutputCommand = `-- name: RetryOutputCommand :exec
+UPDATE output_command SET attempts = attempts + 1, last_error = ?
+WHERE id = ?
+`
+
+type RetryOutputCommandParams struct {
+	LastError sql.NullString `json:"last_error"`
+	ID        int64          `json:"id"`
+}
+
+func (q *Queries) RetryOutputCommand(ctx context.Context, arg RetryOutputCommandParams) error {
+	_, err := q.db.ExecContext(ctx, retryOutputCommand, arg.LastError, arg.ID)
+	return err
 }
 
 const upsertFeedItem = `-- name: UpsertFeedItem :exec

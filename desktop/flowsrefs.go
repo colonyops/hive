@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/colonyops/hive/internal/desktop/feed"
+	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 )
 
 // flowSourceKinds maps a profiles source's Kind ("search"/"notifications")
@@ -16,22 +17,18 @@ var flowSourceKinds = map[string]string{
 }
 
 // flowRefsAdapter resolves a flow's cross-file references (profiles
-// sources, profiles feeds) against the desktop feed provider, satisfying
-// flow.Refs. It is built on feed.Provider — not the concrete *feed.Store —
-// so it works uniformly across live and mock feed backends alike; the
-// store's on-disk config is exactly what Provider.Sources/Profiles already
-// expose.
-//
-// Actions are not wired yet: Phase 5 supplies the real .hive/actions.yml
-// action set. Until then ResolveAction always reports unresolved, so any
-// flow with an action node fails validation visibly rather than silently
-// passing.
+// sources, profiles feeds, actions.yml actions) against the desktop feed
+// provider and the actions store, satisfying flow.Refs. It is built on
+// feed.Provider — not the concrete *feed.Store — so it works uniformly
+// across live and mock feed backends alike; the store's on-disk config is
+// exactly what Provider.Sources/Profiles already expose.
 type flowRefsAdapter struct {
 	provider feed.Provider
+	actions  *actions.ActionStore
 }
 
-func newFlowRefsAdapter(provider feed.Provider) *flowRefsAdapter {
-	return &flowRefsAdapter{provider: provider}
+func newFlowRefsAdapter(provider feed.Provider, actionStore *actions.ActionStore) *flowRefsAdapter {
+	return &flowRefsAdapter{provider: provider, actions: actionStore}
 }
 
 func (a *flowRefsAdapter) ResolveSource(id string) (string, bool) {
@@ -66,6 +63,7 @@ func (a *flowRefsAdapter) ResolveFeed(id string) bool {
 	return false
 }
 
-func (a *flowRefsAdapter) ResolveAction(string) bool {
-	return false
+func (a *flowRefsAdapter) ResolveAction(id string) bool {
+	_, ok := a.actions.Get(id)
+	return ok
 }

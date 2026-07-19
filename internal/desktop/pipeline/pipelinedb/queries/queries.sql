@@ -73,6 +73,25 @@ INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'pending', ?)
 ON CONFLICT(action_id, key) DO NOTHING;
 
+-- name: ListPendingOutputCommands :many
+-- Oldest first: the output worker drains the queue in enqueue order.
+SELECT * FROM output_command
+WHERE status = 'pending'
+ORDER BY created_at ASC
+LIMIT ?;
+
+-- name: MarkOutputCommandDone :exec
+UPDATE output_command SET status = 'done'
+WHERE id = ?;
+
+-- name: RetryOutputCommand :exec
+UPDATE output_command SET attempts = attempts + 1, last_error = ?
+WHERE id = ?;
+
+-- name: MarkOutputCommandFailed :exec
+UPDATE output_command SET status = 'failed', attempts = attempts + 1, last_error = ?
+WHERE id = ?;
+
 -- name: InsertNodeRun :exec
 INSERT INTO node_run (flow_id, node_id, ok, in_count, out_count, drop_count, err, ended_at, dur_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
