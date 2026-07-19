@@ -27,8 +27,19 @@
 // (same path as the drawer's delete affordance — see onKeyDown near the
 // bottom), guarded off while the drawer is open or a text input/textarea/
 // contentEditable has focus.
+//
+// Node creation by drag-from-palette: the canvas is a native HTML5 drop
+// target (dragover/drop, not the pointer-event machinery above — the drag
+// originates in NodePalette.vue, a different component, so the platform's
+// own drag-and-drop is the only channel that reaches across). onDrop reads
+// the node type NodePalette.vue stashed under NODE_TYPE_MIME, converts the
+// drop's client point to world coords via clientToWorld (same helper wire
+// creation uses), and emits add-node-at for FlowsView to hand to
+// usePipelineEditor's addNode(type, pos). isDragOver just drives a highlight
+// while a compatible drag is over the canvas.
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { byType } from '../registry'
+import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
 import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStatus'
 import { gridPosition, type EditorFlow, type NodePosition, type NodeRunRecord, type WireLayout } from '../lib/wireFlow'
@@ -56,6 +67,7 @@ const emit = defineEmits<{
   'delete-node': [id: string]
   'add-wire': [wire: Wire]
   'remove-wire': [wire: Wire]
+  'add-node-at': [type: string, x: number, y: number]
 }>()
 
 const CARD_WIDTH = 176
@@ -312,6 +324,34 @@ const draftPath = computed<string>(() => {
   return bezierPath(portPoint(draft.fromNodeId, draft.fromPort, true), { x: draft.toX, y: draft.toY })
 })
 
+// ── Node creation by drag-from-palette ─────────────────────────────────
+// isDragOver just drives the drop-target highlight; the actual node type
+// only needs to be read once, on drop (some browsers withhold
+// dataTransfer.getData() during dragover for security reasons, so reading
+// it early would silently return an empty string).
+
+const isDragOver = ref(false)
+
+function onDragEnter() {
+  isDragOver.value = true
+}
+
+function onDragOver(e: DragEvent) {
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy'
+}
+
+function onDragLeave() {
+  isDragOver.value = false
+}
+
+function onDrop(e: DragEvent) {
+  isDragOver.value = false
+  const type = e.dataTransfer?.getData(NODE_TYPE_MIME)
+  if (!type) return
+  const world = clientToWorld(e.clientX, e.clientY)
+  emit('add-node-at', type, Math.round(world.x), Math.round(world.y))
+}
+
 // ── Zoom / fit — a basic scale transform; panning only happens as a side
 // effect of Fit/focus centering content, there's no click-drag-to-pan in
 // v1. The buttons themselves live in FlowsView's canvas toolbar (8a) —
@@ -443,6 +483,7 @@ onBeforeUnmount(() => {
     ref="viewportRef"
     class="relative h-full w-full overflow-hidden"
     data-testid="flows-canvas"
+    :class="{ 'canvas-drop-target': isDragOver }"
     :style="{
       backgroundColor: 'var(--color-canvas)',
       backgroundImage: 'radial-gradient(var(--color-canvas-dot) 1.1px, transparent 1.1px)',
@@ -450,6 +491,10 @@ onBeforeUnmount(() => {
       backgroundPosition: '-1px -1px',
     }"
     @click.self="onSurfaceClick"
+    @dragenter.prevent="onDragEnter"
+    @dragover.prevent="onDragOver"
+    @dragleave="onDragLeave"
+    @drop.prevent="onDrop"
   >
     <div v-if="flow.nodes.length === 0" class="flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="canvas-empty">
       Add a node from the palette to get started. Drag from an output port to an input port to wire nodes together.
@@ -566,6 +611,12 @@ onBeforeUnmount(() => {
 .port-target-valid {
   background: var(--color-accent);
   box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.32);
+}
+
+/* Drop-from-palette affordance: a dashed accent outline while a compatible drag hovers the canvas. */
+.canvas-drop-target {
+  outline: 2px dashed var(--color-accent);
+  outline-offset: -2px;
 }
 
 .drop-hint {

@@ -1,17 +1,17 @@
 <script setup lang="ts">
 // Searchable, category-grouped node palette (Phase 6b) — the app registry's
 // `palette` (registry.ts) grouped by NodeCategory, filtered by label/type.
-// Clicking an entry adds it to the active flow; an entry is also draggable
-// (dragstart fires the same `add` — there is no canvas drop-target in v1,
-// see FlowsCanvas.vue's module docs on wire creation for the same
-// "basic first, full drag-and-drop later" posture).
+// An entry is added to the active flow by dragging it onto the canvas
+// (see FlowsCanvas.vue's dragover/drop handling): dragstart here just seeds
+// the node type into dataTransfer under NODE_TYPE_MIME. There is no
+// click-to-add — a single click landing a node with no control over
+// position was bad UX, so real drag-and-drop is the only way to add a node.
 import { computed, ref } from 'vue'
 import IconSearch from '~icons/lucide/search'
 import { palette } from '../registry'
+import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { summarize } from '../lib/markdown'
 import type { NodeCategory, NodeTypeDefinition } from '../nodeType'
-
-const emit = defineEmits<{ add: [type: string] }>()
 
 const query = ref('')
 
@@ -34,8 +34,9 @@ function matches(def: NodeTypeDefinition, q: string): boolean {
 const hasResults = computed(() => CATEGORIES.some((c) => filtered.value[c].length > 0))
 
 function onDragStart(e: DragEvent, type: string) {
-  e.dataTransfer?.setData('text/plain', type)
-  emit('add', type)
+  if (!e.dataTransfer) return
+  e.dataTransfer.setData(NODE_TYPE_MIME, type)
+  e.dataTransfer.effectAllowed = 'copy'
 }
 </script>
 
@@ -71,7 +72,6 @@ function onDragStart(e: DragEvent, type: string) {
             :title="summarize(def.help)"
             data-testid="palette-entry"
             :data-type="def.type"
-            @click="emit('add', def.type)"
             @dragstart="onDragStart($event, def.type)"
           >
             <span

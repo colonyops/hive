@@ -124,6 +124,19 @@ describe('usePipelineEditor', () => {
     wrapper.unmount()
   })
 
+  it('addNode with an explicit position places the node there instead of the deterministic grid slot', async () => {
+    const client = fakeClient()
+    const { state, wrapper } = await mountLoadedEditor(client)
+    await state.selectFlow('flow-1')
+
+    const node = state.addNode('feed', { x: 321, y: 654 })
+
+    expect(state.layout.value.nodes?.[node.id]).toEqual({ x: 321, y: 654 })
+    expect(state.dirty.value).toBe(true)
+
+    wrapper.unmount()
+  })
+
   it('updateNode replaces the node by id and marks dirty', async () => {
     const { state, wrapper } = await mountLoadedEditor()
     await state.selectFlow('flow-1')

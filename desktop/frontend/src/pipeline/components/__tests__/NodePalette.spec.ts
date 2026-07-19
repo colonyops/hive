@@ -1,7 +1,8 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import NodePalette from '../NodePalette.vue'
 import { byType } from '../../registry'
+import { NODE_TYPE_MIME } from '../../lib/dragTypes'
 
 describe('NodePalette', () => {
   it('lists every registered node type grouped by category', () => {
@@ -46,24 +47,37 @@ describe('NodePalette', () => {
     wrapper.unmount()
   })
 
-  it('clicking an entry emits add with its type', async () => {
+  it('clicking an entry does not add it — dragging onto the canvas is the only way to add a node', async () => {
     const wrapper = mount(NodePalette)
 
     const entry = wrapper.get('[data-type="feed"]')
     await entry.trigger('click')
 
-    expect(wrapper.emitted('add')).toEqual([['feed']])
+    expect(wrapper.emitted('add')).toBeUndefined()
 
     wrapper.unmount()
   })
 
-  it('starting a drag on an entry also emits add with its type', async () => {
+  it('each entry is draggable', () => {
     const wrapper = mount(NodePalette)
 
-    const entry = wrapper.get('[data-type="function"]')
-    await entry.trigger('dragstart', { dataTransfer: new DataTransfer() })
+    const entry = wrapper.get('[data-type="feed"]')
+    expect(entry.attributes('draggable')).toBe('true')
 
-    expect(wrapper.emitted('add')).toEqual([['function']])
+    wrapper.unmount()
+  })
+
+  it('starting a drag on an entry sets its node type into dataTransfer with a copy effect', async () => {
+    const wrapper = mount(NodePalette)
+    const setData = vi.fn()
+    const dataTransfer = { setData, effectAllowed: '' }
+
+    const entry = wrapper.get('[data-type="function"]')
+    await entry.trigger('dragstart', { dataTransfer })
+
+    expect(setData).toHaveBeenCalledWith(NODE_TYPE_MIME, 'function')
+    expect(dataTransfer.effectAllowed).toBe('copy')
+    expect(wrapper.emitted('add')).toBeUndefined()
 
     wrapper.unmount()
   })

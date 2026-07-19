@@ -91,8 +91,9 @@ function submitNewFlow() {
   flowMenuOpen.value = false
 }
 
-function onPaletteAdd(type: string) {
-  if (activeFlow.value) addNode(type)
+/** FlowsCanvas.vue's add-node-at — a palette entry dropped on the canvas at a world-space point. */
+function onAddNodeAt(type: string, x: number, y: number) {
+  if (activeFlow.value) addNode(type, { x, y })
 }
 
 // ── Canvas zoom/Fit — the buttons live in this toolbar, the zoom/pan state
@@ -164,7 +165,7 @@ const showDebug = ref(false)
 <template>
   <div class="flex h-full min-h-0 flex-1" data-testid="flows-view">
     <aside class="w-[214px] shrink-0 border-r border-row bg-pane" data-testid="flows-palette-rail">
-      <NodePalette @add="onPaletteAdd" />
+      <NodePalette />
     </aside>
 
     <section class="flex min-w-0 flex-1 flex-col">
@@ -290,6 +291,7 @@ const showDebug = ref(false)
           @delete-node="deleteNode"
           @add-wire="addWire"
           @remove-wire="removeWire"
+          @add-node-at="onAddNodeAt"
         />
         <div v-else class="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="flows-view-empty">
           Select a flow, or create a new one, to start editing.

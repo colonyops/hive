@@ -145,12 +145,17 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     return activeFlow.value
   }
 
-  /** Instantiates type from the registry, appends it to the draft flow, and places it at a default canvas position. */
-  function addNode(type: string): FlowNode {
+  /**
+   * Instantiates type from the registry, appends it to the draft flow, and
+   * places it on the canvas at `position` — or, when omitted (e.g. a
+   * caller with no drop point to give it), the next deterministic grid
+   * slot, same as before.
+   */
+  function addNode(type: string, position?: NodePosition): FlowNode {
     const flow = requireFlow()
     const node = instantiate(type)
     flow.nodes = [...flow.nodes, node]
-    setNodePosition(node.id, gridPosition(flow.nodes.length - 1))
+    setNodePosition(node.id, position ?? gridPosition(flow.nodes.length - 1))
     dirty.value = true
     return node
   }

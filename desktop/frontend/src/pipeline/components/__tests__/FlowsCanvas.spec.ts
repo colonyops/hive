@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import FlowsCanvas from '../FlowsCanvas.vue'
+import { NODE_TYPE_MIME } from '../../lib/dragTypes'
 import type { EditorFlow, NodeRunRecord, WireLayout } from '../../lib/wireFlow'
 
 function flow(overrides: Partial<EditorFlow> = {}): EditorFlow {
@@ -467,6 +468,62 @@ describe('FlowsCanvas', () => {
 
     expect(wrapper.emitted('delete-node')).toBeUndefined()
     expect(wrapper.find('[data-testid="node-editor-title"]').exists()).toBe(true) // drawer still open
+
+    wrapper.unmount()
+  })
+
+  it('dropping a palette node type emits add-node-at with world coords for the drop point', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+
+    await canvas.trigger('drop', {
+      clientX: 250,
+      clientY: 90,
+      dataTransfer: { getData: (fmt: string) => (fmt === NODE_TYPE_MIME ? 'feed' : '') },
+    })
+
+    // zoom is 1 and pan is {0,0} by default (no fit()/drag has run), and
+    // happy-dom reports getBoundingClientRect() as all-zero, so the world
+    // coords for this drop equal the client coords — mirrors dragWire's
+    // portWorldPos convention above.
+    expect(wrapper.emitted('add-node-at')).toEqual([['feed', 250, 90]])
+
+    wrapper.unmount()
+  })
+
+  it('ignores a drop with no recognized node type in dataTransfer', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+
+    await canvas.trigger('drop', { clientX: 250, clientY: 90, dataTransfer: { getData: () => '' } })
+
+    expect(wrapper.emitted('add-node-at')).toBeUndefined()
+
+    wrapper.unmount()
+  })
+
+  it('toggles a drop-target highlight while a drag is over the canvas, clearing it on drop', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+
+    await canvas.trigger('dragenter', { dataTransfer: { types: [NODE_TYPE_MIME] } })
+    expect(canvas.classes()).toContain('canvas-drop-target')
+
+    await canvas.trigger('drop', { clientX: 0, clientY: 0, dataTransfer: { getData: () => 'feed' } })
+    expect(canvas.classes()).not.toContain('canvas-drop-target')
+
+    wrapper.unmount()
+  })
+
+  it('toggles the drop-target highlight off on dragleave', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+
+    await canvas.trigger('dragenter', { dataTransfer: { types: [NODE_TYPE_MIME] } })
+    expect(canvas.classes()).toContain('canvas-drop-target')
+
+    await canvas.trigger('dragleave')
+    expect(canvas.classes()).not.toContain('canvas-drop-target')
 
     wrapper.unmount()
   })
