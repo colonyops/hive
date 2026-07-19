@@ -77,9 +77,20 @@ export interface FlowsSession extends ReturnType<typeof usePipelineEditor> {
   exitFlows(): void
   /** Delegates to the active flow's runtime pump() — a no-op if no flow is bound or the runtime isn't running. Called by App.vue on every "log:appended" event. */
   pump(): Promise<void>
-  /** Manually starts the active flow's runtime (idempotent). Exposed for FlowsView's Run/Stop controls — the runtime already auto-starts when a flow becomes active. */
+  /**
+   * Manually starts the active flow's runtime (idempotent) — the runtime
+   * already auto-starts when a flow becomes active, so this only matters
+   * after an explicit stopRuntime(). Not currently wired into FlowsView's
+   * UI (its deploy-menu "Refresh now" calls pump() directly instead, which
+   * works whether or not the runtime is running); kept on the session API
+   * for callers that do need to resume a stopped runtime.
+   */
   runRuntime(): Promise<void>
-  /** Manually stops the active flow's runtime. Exposed for FlowsView's Run/Stop controls. */
+  /**
+   * Manually stops the active flow's runtime, pausing feed_item commits
+   * for this profile app-wide until runRuntime() is called again. Not
+   * currently wired into FlowsView's UI — see runRuntime()'s docs above.
+   */
   stopRuntime(): void
 }
 

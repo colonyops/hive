@@ -103,3 +103,99 @@ describe('FlowsView flow selector', () => {
     wrapper.unmount()
   })
 })
+
+describe('FlowsView deploy menu', () => {
+  beforeEach(() => {
+    // useFlowsSession is a module singleton — without a reset, a later
+    // test's mount would silently reuse a prior test's already-torn-down
+    // instance (see useFlowsSession.ts's module docs).
+    resetFlowsSessionForTests()
+    vi.clearAllMocks()
+    mocks.ListFlows.mockResolvedValue(flowSummaries)
+    mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
+    mocks.GetLayout.mockResolvedValue({ nodes: {} })
+    mocks.NodeRuns.mockResolvedValue([])
+    mocks.ReadFrom.mockResolvedValue([])
+    mocks.Commit.mockResolvedValue(undefined)
+    mocks.On.mockReturnValue(() => {})
+  })
+
+  async function mountWithActiveFlow() {
+    const wrapper = await mountFlowsView()
+    useFlowsSession().bindActiveFlow('flow-1')
+    await flushPromises()
+    return wrapper
+  }
+
+  // hc-cahcdf75: the always-on per-profile runtime (hc-8ft4yhm6) means the
+  // deployed flow is already running app-wide, so the old Run/Stop pair is
+  // gone — replaced by a single "Refresh now" one-shot pump, and "Debug"
+  // is now an explicit, state-aware "Show/Hide debug panel" label.
+  it('no longer offers separate Run/Stop actions', async () => {
+    const wrapper = await mountWithActiveFlow()
+
+    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="deploy-menu-run"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="deploy-menu-stop"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="deploy-menu-refresh"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="deploy-menu-refresh"]').text()).toBe('Refresh now')
+
+    wrapper.unmount()
+  })
+
+  it('"Refresh now" triggers an immediate manual pump via the session and closes the menu', async () => {
+    const wrapper = await mountWithActiveFlow()
+    mocks.ReadFrom.mockClear()
+
+    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="deploy-menu-refresh"]').trigger('click')
+    await flushPromises()
+
+    expect(mocks.ReadFrom).toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="deploy-menu"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('"Refresh now" is disabled when no flow is active', async () => {
+    const wrapper = await mountFlowsView()
+
+    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="deploy-menu-refresh"]').attributes('disabled')).toBeDefined()
+
+    wrapper.unmount()
+  })
+
+  it('"Copy prompt" still copies the flow prompt', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    const wrapper = await mountWithActiveFlow()
+
+    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="deploy-menu-copy-prompt"]').trigger('click')
+    await flushPromises()
+
+    expect(writeText).toHaveBeenCalled()
+    expect(wrapper.get('[data-testid="copy-prompt-status"]').text()).toBe('Prompt copied')
+
+    wrapper.unmount()
+  })
+
+  it('debug toggle is labeled "Show debug panel" / "Hide debug panel" and toggles FlowDebugPanel', async () => {
+    const wrapper = await mountWithActiveFlow()
+
+    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
+    expect(wrapper.get('[data-testid="deploy-menu-debug-toggle"]').text()).toBe('Show debug panel')
+    expect(wrapper.find('[data-testid="flow-debug-aside"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="deploy-menu-debug-toggle"]').trigger('click')
+    expect(wrapper.find('[data-testid="flow-debug-aside"]').exists()).toBe(true)
+    // Toggling also closes the menu — reopen it to check the label flipped.
+    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
+    expect(wrapper.get('[data-testid="deploy-menu-debug-toggle"]').text()).toBe('Hide debug panel')
+
+    wrapper.unmount()
+  })
+})

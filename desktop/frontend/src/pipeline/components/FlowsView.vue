@@ -33,7 +33,7 @@ import FeedItemsPreview, { type FeedItemsClient } from './FeedItemsPreview.vue'
 const {
   flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error, flowFocusNodeId,
   refreshFlows, refreshNodeRuns, selectFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
-  running: runtimeRunning, lastRun: runtimeLastRun, runtimeError, runRuntime, stopRuntime,
+  running: runtimeRunning, lastRun: runtimeLastRun, runtimeError, pump,
 } = useFlowsSession()
 
 // Which flow is active is now driven externally (App.vue calls
@@ -141,8 +141,18 @@ onUnmounted(() => {
   if (copyStatusTimer !== undefined) clearTimeout(copyStatusTimer)
 })
 
-// ── Deploy split-button menu — demotes Run/Stop/Copy prompt/Debug behind
-// the "▾" so the main Deploy action reads as one clear amber affordance. ───
+// ── Deploy split-button menu — demotes Refresh now/Copy prompt/Show debug
+// panel behind the "▾" so the main Deploy action reads as one clear amber
+// affordance. Deploy already starts (and the always-on per-profile runtime
+// — see useFlowsSession.ts's hc-8ft4yhm6 docs — keeps) the flow running
+// continuously app-wide, so there's no manual Run/Stop here anymore: "Run"
+// was disabled the instant a flow became active (the runtime auto-starts),
+// and "Stop" would silently pause app-wide feed_item ingestion for this
+// profile with no indicator outside this menu/the debug panel. What's left
+// that's still genuinely useful from the canvas is a one-shot manual pump
+// (session.pump(), the same call App.vue's "log:appended" listener makes)
+// so a change can be previewed in the debug panel immediately instead of
+// waiting for the next log event. ───────────────────────────────────────
 const deployMenuOpen = ref(false)
 
 function runDeployMenuAction(action: () => void) {
@@ -233,16 +243,10 @@ const showDebug = ref(false)
           >
             <button
               class="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40"
-              :disabled="!activeFlow || runtimeRunning"
-              data-testid="deploy-menu-run"
-              @click="runDeployMenuAction(() => runRuntime())"
-            >Run</button>
-            <button
-              class="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-hover hover:text-text disabled:cursor-default disabled:opacity-40"
-              :disabled="!activeFlow || !runtimeRunning"
-              data-testid="deploy-menu-stop"
-              @click="runDeployMenuAction(() => stopRuntime())"
-            >Stop</button>
+              :disabled="!activeFlow"
+              data-testid="deploy-menu-refresh"
+              @click="runDeployMenuAction(() => pump())"
+            >Refresh now</button>
             <button
               class="flex w-full cursor-pointer items-center px-3 py-1.5 text-left text-[12.5px] text-text-2 hover:bg-hover hover:text-text"
               data-testid="deploy-menu-copy-prompt"
@@ -253,7 +257,7 @@ const showDebug = ref(false)
               :class="showDebug ? 'bg-selection' : ''"
               data-testid="deploy-menu-debug-toggle"
               @click="runDeployMenuAction(() => { showDebug = !showDebug })"
-            >Debug</button>
+            >{{ showDebug ? 'Hide debug panel' : 'Show debug panel' }}</button>
           </div>
         </div>
       </div>
