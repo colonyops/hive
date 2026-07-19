@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import ActionCard from './ActionCard.vue'
+import PanelResizeHandle from './PanelResizeHandle.vue'
+import { useResizablePanel } from '../composables/useResizablePanel'
 import IconCircleDot from '~icons/lucide/circle-dot'
 import IconExternalLink from '~icons/lucide/external-link'
 import IconGitBranch from '~icons/lucide/git-branch'
@@ -10,10 +12,21 @@ import type { Action, FeedItem } from '../types/feed'
 
 defineProps<{ item: FeedItem | null; actions: Action[] }>()
 const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; edit: [] }>()
+
+// DetailPane is docked on the right, so its handle sits on its left border —
+// dragging left (toward the FeedList) grows the pane.
+const { width, startResize, step } = useResizablePanel({
+  storageKey: 'hive.panel.detailpane',
+  defaultWidth: 466,
+  min: 360,
+  max: 760,
+  edge: 'left',
+})
 </script>
 
 <template>
-  <aside class="hive-scroll flex min-w-0 flex-1 flex-col overflow-y-auto bg-pane" data-testid="detail-pane">
+  <aside class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto bg-pane" :style="{ width: width + 'px' }" data-testid="detail-pane">
+    <PanelResizeHandle edge="left" name="detailpane" :start="startResize" :step="step" />
     <template v-if="item">
       <div class="border-b border-border px-5 pb-4 pt-[18px]">
         <div class="mb-[11px] flex items-center gap-[9px]">

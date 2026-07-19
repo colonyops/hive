@@ -61,4 +61,23 @@ describe('DetailPane', () => {
 
     expect(wrapper.text()).toContain('Select an item to inspect')
   })
+
+  it('renders a resize handle that widens the panel on drag and persists the width', async () => {
+    const wrapper = mount(DetailPane, { props: { item, actions } })
+    const aside = wrapper.get('aside').element as HTMLElement
+    expect(aside.style.width).toBe('466px') // default
+
+    const handle = wrapper.get('[data-testid="resize-handle-detailpane"]')
+    expect(handle.attributes('role')).toBe('separator')
+
+    await handle.trigger('pointerdown', { clientX: 500, pointerId: 1 })
+    // edge is 'left': dragging left (toward the FeedList) grows the pane.
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 450, pointerId: 1 }))
+    await wrapper.vm.$nextTick()
+
+    expect(aside.style.width).toBe('516px')
+
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 450, pointerId: 1 }))
+    expect(localStorage.getItem('hive.panel.detailpane')).toBe('516')
+  })
 })

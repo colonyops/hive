@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import FeedListItem from './FeedListItem.vue'
-import PanelResizeHandle from './PanelResizeHandle.vue'
-import { useResizablePanel } from '../composables/useResizablePanel'
 import IconCheck from '~icons/lucide/check'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
@@ -19,20 +17,10 @@ const props = defineProps<{
 }>()
 const emit = defineEmits<{ select: [id: string]; 'toggle-unread': []; refresh: [] }>()
 const visibleItems = computed(() => props.unreadOnly ? props.items.filter((item) => item.unread) : props.items)
-
-// Column width is user-resizable (DetailPane fills whatever's left — see
-// App.vue's flex-1 on it) rather than the old flex-[1.25] share.
-const { width, startResize, step } = useResizablePanel({
-  storageKey: 'hive.panel.feedlist',
-  defaultWidth: 380,
-  min: 280,
-  max: 620,
-  edge: 'right',
-})
 </script>
 
 <template>
-  <section class="feed-list relative flex shrink-0 flex-col border-r border-border" :style="{ width: width + 'px' }">
+  <section class="feed-list flex min-w-0 flex-[1.25] flex-col border-r border-border">
     <header class="flex h-[46px] shrink-0 items-center gap-2.5 border-b border-border bg-pane px-4">
       <span class="source-icon"><IconGitBranch class="size-3" /></span>
       <span class="text-[13px] font-semibold" data-testid="feed-title">{{ title }}</span>
@@ -76,8 +64,6 @@ const { width, startResize, step } = useResizablePanel({
         </div>
       </template>
     </div>
-
-    <PanelResizeHandle edge="right" name="feedlist" :start="startResize" :step="step" />
   </section>
 </template>
 
