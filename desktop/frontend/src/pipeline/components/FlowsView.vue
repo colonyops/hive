@@ -23,12 +23,14 @@ import IconPlus from '~icons/lucide/plus'
 import IconWorkflow from '~icons/lucide/workflow'
 import { FeedItems } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import { useFlowsSession } from '../composables/useFlowsSession'
+import { useResizablePanel } from '../../composables/useResizablePanel'
 import { classify } from '../lib/runStatus'
 import { buildFlowPrompt } from '../lib/flowPrompt'
 import NodePalette from './NodePalette.vue'
 import FlowsCanvas from './FlowsCanvas.vue'
 import FlowDebugPanel from './FlowDebugPanel.vue'
 import FeedItemsPreview, { type FeedItemsClient } from './FeedItemsPreview.vue'
+import PanelResizeHandle from '../../components/PanelResizeHandle.vue'
 
 const {
   flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error, flowFocusNodeId,
@@ -39,6 +41,11 @@ const {
 // Which flow is active is now driven externally (App.vue calls
 // session.bindActiveFlow() whenever the active profile changes) — this view
 // just renders whatever the session currently has selected.
+
+const { width: paletteWidth, startResize: startPaletteResize, step: stepPalette } =
+  useResizablePanel({ storageKey: 'hive.panel.palette', defaultWidth: 214, min: 170, max: 380, edge: 'right' })
+const { width: debugWidth, startResize: startDebugResize, step: stepDebug } =
+  useResizablePanel({ storageKey: 'hive.panel.debug', defaultWidth: 300, min: 230, max: 560, edge: 'left' })
 
 // An external flows/*.yaml edit (another window, git) still needs a nudge
 // while the canvas is open, so the same "flows:updated" refresh this view
@@ -165,8 +172,9 @@ const showDebug = ref(false)
 
 <template>
   <div class="flex h-full min-h-0 flex-1" data-testid="flows-view">
-    <aside class="w-[214px] shrink-0 border-r border-row bg-pane" data-testid="flows-palette-rail">
+    <aside class="relative shrink-0 border-r border-row bg-pane" :style="{ width: paletteWidth + 'px' }" data-testid="flows-palette-rail">
       <NodePalette />
+      <PanelResizeHandle edge="right" name="palette" :start="startPaletteResize" :step="stepPalette" />
     </aside>
 
     <section class="flex min-w-0 flex-1 flex-col">
@@ -283,9 +291,11 @@ const showDebug = ref(false)
 
         <aside
           v-if="showDebug && activeFlow"
-          class="flex w-[300px] shrink-0 flex-col border-l border-row bg-sidebar"
+          class="relative flex shrink-0 flex-col border-l border-row bg-sidebar"
+          :style="{ width: debugWidth + 'px' }"
           data-testid="flow-debug-aside"
         >
+          <PanelResizeHandle edge="left" name="debug" :start="startDebugResize" :step="stepDebug" />
           <div class="min-h-0 flex-1 overflow-hidden" style="height: 60%">
             <FlowDebugPanel
               :flow="activeFlow"

@@ -8,6 +8,8 @@ import IconSettings from '~icons/lucide/settings'
 import IconShare2 from '~icons/lucide/share-2'
 import IconTrash2 from '~icons/lucide/trash-2'
 import IconWorkflow from '~icons/lucide/workflow'
+import PanelResizeHandle from './PanelResizeHandle.vue'
+import { useResizablePanel } from '../composables/useResizablePanel'
 import type { Profile, SidebarSelection } from '../types/feed'
 
 const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean; flowsDirty?: boolean }>()
@@ -19,6 +21,14 @@ const emit = defineEmits<{
   'open-settings': []
   'reveal-in-flow': [feedId: string]
 }>()
+
+const { width, startResize, step } = useResizablePanel({
+  storageKey: 'hive.panel.sidebar',
+  defaultWidth: 250,
+  min: 190,
+  max: 480,
+  edge: 'right',
+})
 
 // "All items" and "Unread" are both all-scope; the unread filter picks
 // which entry lights up. A feed entry highlights regardless of the filter.
@@ -36,7 +46,7 @@ function feedSelected(feedId: string): boolean {
 </script>
 
 <template>
-  <aside class="hive-scroll flex w-[250px] shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar">
+  <aside class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar" :style="{ width: width + 'px' }">
     <div class="profile-header border-b border-border px-4 pb-3 pt-4" data-testid="sidebar-profile-header">
       <div class="flex items-center gap-2">
         <div class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
@@ -111,6 +121,8 @@ function feedSelected(feedId: string): boolean {
       ><span class="size-1.5 shrink-0 rounded-full bg-accent" />Un-deployed</span>
       <IconChevronRight class="size-3.5 shrink-0 text-text-4" />
     </button>
+
+    <PanelResizeHandle edge="right" name="sidebar" :start="startResize" :step="step" />
   </aside>
 </template>
 

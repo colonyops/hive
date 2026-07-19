@@ -20,6 +20,8 @@ import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import { hasInputPort, outputPortCount } from '../lib/ports'
 import { renderMarkdown, summarize } from '../lib/markdown'
+import { useResizablePanel } from '../../composables/useResizablePanel'
+import PanelResizeHandle from '../../components/PanelResizeHandle.vue'
 import type { NodeTypeDefinition } from '../nodeType'
 import type { FlowNode } from '../types'
 
@@ -33,6 +35,14 @@ const emit = defineEmits<{
   delete: [id: string]
   close: []
 }>()
+
+const { width, startResize, step } = useResizablePanel({
+  storageKey: 'hive.panel.node-editor',
+  defaultWidth: 440,
+  min: 360,
+  max: 760,
+  edge: 'left',
+})
 
 // ── Draft state — a deep clone of the incoming node; nothing here ever
 // writes back into props.node. ──────────────────────────────────────────────
@@ -151,12 +161,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <Teleport to="body">
     <div class="fixed inset-0 z-40 bg-backdrop" data-testid="node-editor-backdrop" @click="emit('close')" />
     <aside
-      class="fixed inset-y-0 right-0 z-40 flex w-[440px] max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
+      class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
+      :style="{ width: width + 'px' }"
       role="dialog"
       :aria-label="`Edit ${def.label}`"
       aria-modal="true"
       data-testid="node-editor"
     >
+      <PanelResizeHandle edge="left" name="node-editor" :start="startResize" :step="step" />
       <header class="flex shrink-0 items-center gap-[11px] border-b border-row bg-pane px-[18px] py-[15px]">
         <span
           class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]"

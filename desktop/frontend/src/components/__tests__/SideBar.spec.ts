@@ -77,4 +77,22 @@ describe('SideBar', () => {
     const wrapper = mountSideBar()
     expect(wrapper.find('[data-testid="undeployed-badge"]').exists()).toBe(false)
   })
+
+  it('renders a resize handle that widens the panel on drag and persists the width', async () => {
+    const wrapper = mountSideBar()
+    const aside = wrapper.get('aside').element as HTMLElement
+    expect(aside.style.width).toBe('250px') // default
+
+    const handle = wrapper.get('[data-testid="resize-handle-sidebar"]')
+    expect(handle.attributes('role')).toBe('separator')
+
+    await handle.trigger('pointerdown', { clientX: 250, pointerId: 1 })
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 300, pointerId: 1 }))
+    await wrapper.vm.$nextTick()
+
+    expect(aside.style.width).toBe('300px')
+
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 300, pointerId: 1 }))
+    expect(localStorage.getItem('hive.panel.sidebar')).toBe('300')
+  })
 })

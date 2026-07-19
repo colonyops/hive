@@ -13,7 +13,7 @@ const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': [];
 </script>
 
 <template>
-  <aside class="hive-scroll flex w-[466px] shrink-0 flex-col overflow-y-auto bg-pane" data-testid="detail-pane">
+  <aside class="hive-scroll flex min-w-0 flex-1 flex-col overflow-y-auto bg-pane" data-testid="detail-pane">
     <template v-if="item">
       <div class="border-b border-border px-5 pb-4 pt-[18px]">
         <div class="mb-[11px] flex items-center gap-[9px]">
