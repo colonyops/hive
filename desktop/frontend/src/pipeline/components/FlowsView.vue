@@ -32,7 +32,7 @@ import FeedItemsPreview, { type FeedItemsClient } from './FeedItemsPreview.vue'
 
 const {
   flows, activeFlow, layout, dirty, nodeRuns, latestRunByNode, saving, error, flowFocusNodeId,
-  refreshFlows, refreshNodeRuns, selectFlow, newFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
+  refreshFlows, refreshNodeRuns, selectFlow, addNode, updateNode, deleteNode, addWire, removeWire, moveNode, deploy,
   running: runtimeRunning, lastRun: runtimeLastRun, runtimeError, runRuntime, stopRuntime,
 } = useFlowsSession()
 
@@ -76,18 +76,9 @@ const statusCounts = computed(() => {
 // ── Flow selector (toolbar dropdown — replaces the old flow-list sidebar) ──
 
 const flowMenuOpen = ref(false)
-const newFlowName = ref('')
 
 function pickFlow(id: string) {
   void selectFlow(id)
-  flowMenuOpen.value = false
-}
-
-function submitNewFlow() {
-  const name = newFlowName.value.trim()
-  if (!name) return
-  newFlow(name)
-  newFlowName.value = ''
   flowMenuOpen.value = false
 }
 
@@ -201,17 +192,6 @@ const showDebug = ref(false)
                 <span class="min-w-0 flex-1 truncate text-[12.5px] text-text">{{ f.name || f.id }}</span>
               </button>
             </div>
-            <div class="flex items-center gap-1.5 border-t border-row p-1.5">
-              <input
-                v-model="newFlowName"
-                type="text"
-                placeholder="New flow name…"
-                class="w-full min-w-0 rounded-md border border-strong bg-app px-2 py-1.5 text-[12px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-                data-testid="flow-selector-new-name"
-                @keydown.enter="submitNewFlow"
-              >
-              <button class="shrink-0 cursor-pointer rounded-md bg-accent px-2 py-1.5 text-[11.5px] font-semibold text-accent-contrast" data-testid="flow-selector-new-submit" @click="submitNewFlow">Add</button>
-            </div>
           </div>
         </div>
 
@@ -294,7 +274,7 @@ const showDebug = ref(false)
           @add-node-at="onAddNodeAt"
         />
         <div v-else class="flex flex-1 items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="flows-view-empty">
-          Select a flow, or create a new one, to start editing.
+          Select a flow to start editing.
         </div>
 
         <aside

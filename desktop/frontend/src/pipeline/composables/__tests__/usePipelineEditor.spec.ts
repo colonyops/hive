@@ -227,30 +227,6 @@ describe('usePipelineEditor', () => {
     wrapper.unmount()
   })
 
-  it('newFlow starts an empty local draft, marks dirty, and adds an optimistic row to the flows list', async () => {
-    const { state, wrapper } = await mountLoadedEditor()
-
-    state.newFlow('My New Flow!')
-
-    expect(state.activeFlow.value).toEqual({ id: 'my-new-flow', name: 'My New Flow!', enabled: true, nodes: [], wires: [] })
-    expect(state.layout.value).toEqual({ nodes: {} })
-    expect(state.dirty.value).toBe(true)
-    expect(state.flows.value.some((f) => f.id === 'my-new-flow')).toBe(true)
-
-    wrapper.unmount()
-  })
-
-  it('newFlow de-duplicates the slug against existing flow ids', async () => {
-    const client = fakeClient({ listFlows: vi.fn().mockResolvedValue([summary('inbox'), summary('inbox-2')]) })
-    const { state, wrapper } = await mountLoadedEditor(client)
-
-    state.newFlow('Inbox')
-
-    expect(state.activeFlow.value!.id).toBe('inbox-3')
-
-    wrapper.unmount()
-  })
-
   it('derives the latest node_run per node from a newest-first list, ignoring later (older) duplicates', async () => {
     const runs: NodeRunRecord[] = [
       { flowId: 'flow-1', nodeId: 'a', ok: true, inCount: 2, outCount: 2, dropCount: 0, err: '', durMs: 5, endedAt: 300 },

@@ -121,25 +121,6 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     }
   }
 
-  /**
-   * Starts a brand-new flow as a local, unsaved draft — nothing is written
-   * until deploy(). The id is a slug derived from name, de-duplicated
-   * against the known flows list; Go's FlowStore.Save creates the file the
-   * first time a flow with that id is saved, so no backend call is needed
-   * up front. An optimistic row is added to `flows` so the picker shows the
-   * new flow immediately; deploy()'s refreshFlows() replaces it with the
-   * real saved summary.
-   */
-  function newFlow(name: string): void {
-    const id = uniqueId(slugify(name), new Set(flows.value.map((f) => f.id)))
-    activeFlow.value = { id, name, enabled: true, nodes: [], wires: [] }
-    layout.value = normalizeLayout()
-    nodeRuns.value = []
-    error.value = null
-    dirty.value = true
-    flows.value = [...flows.value, { id, name, enabled: true, valid: true }]
-  }
-
   function requireFlow(): EditorFlow {
     if (!activeFlow.value) throw new Error('pipeline: no active flow selected')
     return activeFlow.value
@@ -240,7 +221,6 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     refreshFlows,
     refreshNodeRuns,
     selectFlow,
-    newFlow,
     addNode,
     updateNode,
     deleteNode,
@@ -255,18 +235,6 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
 
 function sameWire(a: Wire, b: Wire): boolean {
   return a.from === b.from && (a.out ?? 0) === (b.out ?? 0) && a.to === b.to
-}
-
-function slugify(name: string): string {
-  const base = name.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')
-  return base.slice(0, 64) || 'flow'
-}
-
-function uniqueId(base: string, taken: Set<string>): string {
-  if (!taken.has(base)) return base
-  let n = 2
-  while (taken.has(`${base}-${n}`)) n++
-  return `${base}-${n}`
 }
 
 function message(err: unknown, fallback: string): string {
