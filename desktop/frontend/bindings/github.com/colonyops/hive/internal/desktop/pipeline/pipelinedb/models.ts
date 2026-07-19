@@ -77,6 +77,26 @@ export interface Msg {
 }
 
 /**
+ * NodeRunRecord is the JSON/Wails-friendly shape of a persisted node_run
+ * row, read back for the flows canvas's live status and RECENT list. It
+ * carries the same fields as NodeRunView (commit.go's write-side shape)
+ * plus EndedAt, which only exists once a run has actually been persisted —
+ * CommitBatch stamps it server-side, so the write-side NodeRunView has no
+ * use for it.
+ */
+export interface NodeRunRecord {
+    "flowId": string;
+    "nodeId": string;
+    "ok": boolean;
+    "inCount": number;
+    "outCount": number;
+    "dropCount": number;
+    "err": string;
+    "durMs": number;
+    "endedAt": number;
+}
+
+/**
  * NodeRunView is one node's per-tick execution summary, recorded for the
  * flows debug/status UI. It is named "View" (rather than NodeRun) only to
  * avoid colliding with the sqlc-generated raw row model of the same name in

@@ -210,6 +210,53 @@ func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]Fee
 	return items, nil
 }
 
+const listNodeRunsByFlow = `-- name: ListNodeRunsByFlow :many
+SELECT flow_id, node_id, ok, in_count, out_count, drop_count, err, ended_at, dur_ms FROM node_run
+WHERE flow_id = ?
+ORDER BY ended_at DESC
+LIMIT ?
+`
+
+type ListNodeRunsByFlowParams struct {
+	FlowID string `json:"flow_id"`
+	Limit  int64  `json:"limit"`
+}
+
+// Recent runs, newest first: the canvas derives latest-per-node status and a
+// RECENT list from this page rather than querying per-node.
+func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlowParams) ([]NodeRun, error) {
+	rows, err := q.db.QueryContext(ctx, listNodeRunsByFlow, arg.FlowID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []NodeRun{}
+	for rows.Next() {
+		var i NodeRun
+		if err := rows.Scan(
+			&i.FlowID,
+			&i.NodeID,
+			&i.Ok,
+			&i.InCount,
+			&i.OutCount,
+			&i.DropCount,
+			&i.Err,
+			&i.EndedAt,
+			&i.DurMs,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listPendingOutputCommands = `-- name: ListPendingOutputCommands :many
 SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
 WHERE status = 'pending'

@@ -7,12 +7,14 @@ import IconMinus from '~icons/lucide/minus'
 import IconPalette from '~icons/lucide/palette'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconRss from '~icons/lucide/rss'
+import IconWorkflow from '~icons/lucide/workflow'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
 import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
+import FlowsView from './pipeline/components/FlowsView.vue'
 import ConfigErrorOverlay from './components/ConfigErrorOverlay.vue'
 import ConfigSheet from './components/ConfigSheet.vue'
 import FeedEditorSheet from './components/FeedEditorSheet.vue'
@@ -48,6 +50,15 @@ const {
 // parseConfigErrors is the seam where richer per-problem data would plug in
 // without touching the template.
 const configErrors = computed(() => parseConfigErrors(config.value?.error ?? ''))
+
+// ── Flows editor mode (Phase 6b) ─────────────────────────────────────────────
+// Flows are app-wide (not scoped to a profile — see internal/desktop
+// desktop.FlowsDir()), so this mode swaps the whole main area rather than
+// living inside the profile/sidebar layout below; reached via the command
+// palette (⌘K → "Open flows editor") since this app already surfaces
+// several actions that way (edit-config, copy-config-prompt) rather than
+// spending title-bar space on them.
+const mode = ref<'feed' | 'flows'>('feed')
 
 // ── Config sheet & profile creation overlays ─────────────────────────────────
 
@@ -230,6 +241,16 @@ useCommands(computed(() => {
     run: copyConfigPrompt,
   })
 
+  // View
+  cmds.push({
+    id: 'view:toggle-flows',
+    title: mode.value === 'feed' ? 'Open flows editor…' : 'Back to feed',
+    group: 'View',
+    keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
+    icon: IconWorkflow,
+    run: () => { mode.value = mode.value === 'feed' ? 'flows' : 'feed' },
+  })
+
   // Themes
   for (const t of themes) {
     cmds.push({
@@ -307,6 +328,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         @submit-token="submitToken"
         @create-workspace="createProfile"
       />
+      <FlowsView v-else-if="mode === 'flows'" />
       <div v-else class="flex min-h-0 flex-1">
         <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
         <SideBar

@@ -6,6 +6,7 @@ export type {
     Discard,
     FeedItemView,
     Msg,
+    NodeRunRecord,
     NodeRunView,
     Output,
     Sink

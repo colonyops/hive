@@ -95,3 +95,11 @@ WHERE id = ?;
 -- name: InsertNodeRun :exec
 INSERT INTO node_run (flow_id, node_id, ok, in_count, out_count, drop_count, err, ended_at, dur_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?);
+
+-- name: ListNodeRunsByFlow :many
+-- Recent runs, newest first: the canvas derives latest-per-node status and a
+-- RECENT list from this page rather than querying per-node.
+SELECT * FROM node_run
+WHERE flow_id = ?
+ORDER BY ended_at DESC
+LIMIT ?;

@@ -28,3 +28,17 @@ export type CommitBatch = pipelinedb$0.CommitBatch;
  * (also named FeedItem, in pipelinedb/models.go).
  */
 export type FeedItem = pipelinedb$0.FeedItemView;
+
+/**
+ * Sink, Output, Discard, NodeRun, and CommitBatch are pipelinedb's commit
+ * protocol structs, re-exported verbatim under package pipeline — the same
+ * alias pattern as Msg above: pipelinedb owns the transactional
+ * implementation (see pipelinedb/commit.go), while callers outside this
+ * package (desktop/pipelineservice.go, the frontend graph runtime via Wails
+ * bindings) speak in terms of this package's names.
+ *
+ * NodeRunRecord mirrors pipelinedb.NodeRunRecord, the read-side shape
+ * returned by NodeRuns (see pipelinedb/node_run.go) — NodeRun's write
+ * shape plus EndedAt.
+ */
+export type NodeRunRecord = pipelinedb$0.NodeRunRecord;

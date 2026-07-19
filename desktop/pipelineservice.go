@@ -44,3 +44,10 @@ func (s *PipelineService) FeedItems(feedID string) ([]pipeline.FeedItem, error) 
 func (s *PipelineService) MarkFeedItemRead(feedID, itemID string) error {
 	return s.db.MarkFeedItemRead(context.Background(), feedID, itemID)
 }
+
+// NodeRuns returns up to limit of a flow's most recent node_run rows,
+// newest first, for the flows canvas's live per-node status and RECENT
+// activity list.
+func (s *PipelineService) NodeRuns(flowID string, limit int) ([]pipeline.NodeRunRecord, error) {
+	return s.db.NodeRuns(context.Background(), flowID, limit)
+}

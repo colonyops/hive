@@ -19,6 +19,11 @@ type (
 	// named NodeRun, in pipelinedb/models.go).
 	NodeRun = pipelinedb.NodeRunView
 
+	// NodeRunRecord mirrors pipelinedb.NodeRunRecord, the read-side shape
+	// returned by NodeRuns (see pipelinedb/node_run.go) — NodeRun's write
+	// shape plus EndedAt.
+	NodeRunRecord = pipelinedb.NodeRunRecord
+
 	// FeedItem mirrors pipelinedb.FeedItemView, which is named "View" only
 	// to avoid colliding with sqlc's generated raw feed_item row model
 	// (also named FeedItem, in pipelinedb/models.go).

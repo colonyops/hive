@@ -46,6 +46,15 @@ export function MarkFeedItemRead(feedID: string, itemID: string): $CancellablePr
 }
 
 /**
+ * NodeRuns returns up to limit of a flow's most recent node_run rows,
+ * newest first, for the flows canvas's live per-node status and RECENT
+ * activity list.
+ */
+export function NodeRuns(flowID: string, limit: number): $CancellablePromise<pipeline$0.NodeRunRecord[] | null> {
+    return $Call.ByID(2130853077, flowID, limit);
+}
+
+/**
  * ReadFrom returns up to limit event_log rows appended after offset, in
  * ascending order.
  */
