@@ -7,6 +7,13 @@ cd ../../
   npm run build
 )
 mkdir -p desktop/bin
+
+# The feed-mode server's flows/*.yaml directory: a checked-in fixture (one
+# flow, whose feed node id matches desktop/mockseed.go's seeded feed_item
+# rows) rather than desktop.FlowsDir()'s default — keeps the mock sidebar's
+# profile/feed list deterministic instead of depending on whatever XDG
+# config happens to exist on the machine running the gate.
+FEED_FLOWS_DIR="$(pwd)/desktop/e2e/fixtures/flows"
 # CGO_ENABLED=0: the server-mode binary is pure Go (matches the Wails server
 # Dockerfile). With cgo on, Linux builds pull in Wails' gtk4/webkitgtk bindings,
 # which fail on CI runners without the GTK dev packages.
@@ -70,4 +77,4 @@ for i in "${!ports[@]}"; do
   fi
 done
 
-exec env HIVE_DESKTOP_MOCK=feed WAILS_SERVER_PORT="${WAILS_SERVER_PORT:-8931}" desktop/bin/hive-desktop-server
+exec env HIVE_DESKTOP_MOCK=feed HIVE_DESKTOP_FLOWS="${FEED_FLOWS_DIR}" WAILS_SERVER_PORT="${WAILS_SERVER_PORT:-8931}" desktop/bin/hive-desktop-server

@@ -55,9 +55,15 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await workspaceInput.fill('Frontend Triage')
   await page.getByTestId('onboarding-workspace-submit').click()
 
-  await expect(page.getByTestId('feed-item')).toHaveCount(6, { timeout: 15_000 })
-  await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage')
+  // "New profile" seeds a real starter flow (flow.FlowStore.starterFlow —
+  // three github-source -> feed pairs), but nothing has polled GitHub yet in
+  // mock mode (buildPipelineProducer is skipped, and only the fixture flow
+  // desktop/mockseed.go targets gets seeded feed_item rows) — so a freshly
+  // created workspace starts with feeds but zero items.
+  await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage', { timeout: 15_000 })
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
+  await expect(page.getByTestId('sidebar-feed')).toHaveCount(3)
+  await expect(page.getByTestId('feed-item')).toHaveCount(0)
 
   // A second profile through the rail modal — this server is ours to
   // mutate, unlike the shared feed-mode instance.
@@ -70,67 +76,48 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await expect(modal).toBeHidden()
   await expect(page.getByTestId('profile-tile')).toHaveCount(2)
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Backend Triage')
+  await expect(page.getByTestId('sidebar-feed')).toHaveCount(3)
 
-  // ── Feed editor: inline-create a source, create a feed, then edit it ──────
-  // Also a mutation, so it stays on this per-browser server.
-  await page.keyboard.press('Meta+k')
-  await page.getByTestId('command-palette-input').fill('new feed')
-  await page.getByTestId('command-palette-command').filter({ hasText: 'New feed…' }).click()
+  // ── Flows canvas: rename a starter-flow feed node, then Deploy ───────────
+  // Editing a feed is done through its node in the flows canvas now (there
+  // is no separate feed editor sheet). Also a mutation, so it stays on this
+  // per-browser server.
+  await page.getByTestId('sidebar-open-flows').click()
+  const flowsView = page.getByTestId('flows-view')
+  await expect(flowsView).toBeVisible()
+  await expect(page.getByTestId('canvas-node-wire-count')).toHaveText('6 nodes · 3 wires')
 
-  const editor = page.getByTestId('feed-editor')
+  await page.locator('[data-testid="flow-node-my-open-prs"]').dblclick()
+  const editor = page.getByTestId('node-editor')
   await expect(editor).toBeVisible()
-  await expect(page.getByTestId('feed-editor-title')).toHaveText('New feed')
+  await expect(page.getByTestId('node-editor-title')).toHaveText('Edit node · Feed')
+  await expect(page.getByTestId('node-editor-name')).toHaveValue('My open PRs')
 
-  // The workspace seeded the default sources for picking.
-  await expect(page.getByTestId('feed-editor-source-my-prs')).toBeVisible()
-
-  // Inline-create a search source; it lands in the list auto-checked.
-  await page.getByTestId('feed-editor-new-source-toggle').click()
-  await page.getByTestId('feed-editor-source-id').fill('team-prs')
-  await page.getByTestId('feed-editor-source-query').fill('org:acme is:pr is:open')
-  await page.getByTestId('feed-editor-source-add').click()
-  await expect(page.getByTestId('feed-editor-source-team-prs')).toBeChecked()
-
-  await page.getByTestId('feed-editor-name').fill('Team PRs')
-  await page.getByTestId('feed-editor-repos').fill('acme/*')
-  await expect(page.getByTestId('feed-editor-yaml')).toContainText('name: Team PRs')
-  await page.getByTestId('feed-editor-save').click()
-
+  await page.getByTestId('node-editor-name').fill('Team PRs')
+  await page.getByTestId('node-editor-save').click()
   await expect(editor).toBeHidden()
-  // .last(): toasts stack and outlive a single 4s auto-dismiss window, so an
-  // earlier toast from this same test run can still be visible here.
-  await expect(page.getByTestId('toast').last()).toHaveText('Feed created')
-  const teamRow = page.locator('[data-testid="sidebar-feed"][data-id="team-prs"]')
+  await expect(page.getByTestId('flow-dirty-indicator')).toBeVisible()
+
+  await page.getByTestId('deploy-button').click()
+  await expect(page.getByTestId('flow-saved-indicator')).toHaveText('flows/backend-triage.yaml')
+  await expect(page.getByTestId('flow-dirty-indicator')).toHaveCount(0)
+
+  // Back to the feed view: the sidebar reflects the rename immediately
+  // (Deploy's refreshFlows() re-reads the just-saved flow).
+  await page.getByTestId('breadcrumb-profile-name').click()
+  await expect(flowsView).toBeHidden()
+  await expect(page.getByTestId('sidebar-feed')).toHaveCount(3)
+  const teamRow = page.locator('[data-testid="sidebar-feed"][data-id="backend-triage/my-open-prs"]')
   await expect(teamRow).toContainText('Team PRs')
 
-  // Reopen through the row's hover pencil: the definition round-trips.
+  // "Reveal in flow" (replaces the old edit pencil) jumps back into the
+  // canvas, focused on the renamed node.
   await teamRow.hover()
-  await page.getByTestId('sidebar-feed-edit-team-prs').click()
-  await expect(page.getByTestId('feed-editor-title')).toHaveText('Edit feed')
-  await expect(page.getByTestId('feed-editor-name')).toHaveValue('Team PRs')
-  // Filters auto-expand when populated; the saved glob is intact.
-  await expect(page.getByTestId('feed-editor-repos')).toHaveValue('acme/*')
-  await expect(page.getByTestId('feed-editor-yaml')).toContainText('id: team-prs')
-
-  await page.getByTestId('feed-editor-name').fill('Team PRs (all)')
-  await page.getByTestId('feed-editor-exclude-repos').fill('acme/sandbox')
-  await page.getByTestId('feed-editor-save').click()
-
-  await expect(editor).toBeHidden()
-  await expect(page.getByTestId('toast').last()).toHaveText('Feed updated')
-  await expect(teamRow).toContainText('Team PRs (all)')
-
-  // ── Delete feed: two-step confirm inside the editor ───────────────────────
-  await teamRow.hover()
-  await page.getByTestId('sidebar-feed-edit-team-prs').click()
-  await expect(editor).toBeVisible()
-  await page.getByTestId('feed-editor-delete').click()
-  await expect(page.getByTestId('feed-editor-delete-confirm')).toBeVisible()
-  await page.getByTestId('feed-editor-delete-confirm').click()
-
-  await expect(editor).toBeHidden()
-  await expect(page.getByTestId('toast').last()).toHaveText('Feed deleted')
-  await expect(page.locator('[data-testid="sidebar-feed"][data-id="team-prs"]')).toHaveCount(0)
+  await teamRow.getByTestId('sidebar-reveal-in-flow').click()
+  await expect(flowsView).toBeVisible()
+  await expect(page.locator('[data-testid="flow-node-my-open-prs"]')).toBeVisible()
+  await page.getByTestId('breadcrumb-profile-name').click()
+  await expect(flowsView).toBeHidden()
 
   // ── Delete profile: hover reveals the header trash icon, modal confirms ───
   await expect(page.getByTestId('profile-tile')).toHaveCount(2)

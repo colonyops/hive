@@ -233,6 +233,16 @@ func main() {
 		log.Fatal(err)
 	}
 
+	// Mock "feed" mode has no live producer (buildSourceFetcher/
+	// buildPipelineProducer both no-op in mock mode), so the sidebar would
+	// otherwise be empty offline: seed a fixed set of feed_item rows for the
+	// fixture flow desktop/e2e/fixtures/flows/frontend-triage.yaml serves
+	// (see desktop/mockseed.go and desktop/e2e/scripts/serve.sh's
+	// HIVE_DESKTOP_FLOWS).
+	if desktop.MockMode() == "feed" {
+		seedMockFeedItemsOrWarn(pipelineDB, pipelineLogger)
+	}
+
 	actionsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	actionStore, actionsWatcher := buildActionStore(actionsLogger)
 	if actionsWatcher != nil {

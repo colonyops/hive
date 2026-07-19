@@ -78,9 +78,11 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(palette).toBeVisible()
   const input = page.getByTestId('command-palette-input')
   await input.fill('notifications')
-  // The feed matches twice now: its Select entry and its feed-editor Edit entry.
+  // The fixture flow has one feed node ("Notifications inbox"); a feed is
+  // edited via its node in the flows canvas now, so there's no separate
+  // feed-editor "Edit" entry to also match.
   const commands = page.getByTestId('command-palette-command')
-  await expect(commands).toHaveCount(2)
+  await expect(commands).toHaveCount(1)
   await commands.filter({ hasText: 'Select feed: Notifications inbox' }).click()
   await expect(palette).toBeHidden()
   await expect(page.getByTestId('feed-title')).toHaveText('Notifications inbox')

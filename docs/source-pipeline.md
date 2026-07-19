@@ -1,32 +1,39 @@
 # The desktop source pipeline
 
-!!! warning "Experimental — partially implemented"
-    The pipeline described here runs **alongside** the desktop app's original
-    feed system today; it does not yet drive the sidebar. See
-    [Current state and the deferred cutover](#current-state-and-the-deferred-cutover)
-    for exactly what is and isn't wired up.
+!!! note "Current architecture — a handful of pieces still incomplete"
+    The pipeline described here **is** the desktop app's feed system: a
+    profile is a flow, and the sidebar reads persisted `feed_item` rows this
+    pipeline commits. See
+    [Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)
+    for what's still not wired up.
 
 The source pipeline is a Node-RED-style graph editor and runtime built into
-Hive Desktop: GitHub (and future RPC) sources feed an append-only event log,
-a stateless frontend graph runtime processes it in small batches, and the
-result is committed back to Go as persisted feed items and side-effecting
-actions. It is reachable today via the command palette (`⌘K` → **"Open flows
-editor…"**), independent of the sidebar's existing feed experience.
+Hive Desktop: GitHub sources feed an append-only event log, a stateless
+frontend graph runtime processes it in small batches, and the result is
+committed back to Go as persisted feed items and side-effecting actions. A
+profile IS a flow — the rail's profile tiles, the sidebar's feeds, and the
+items in the feed list are all backed by a `flows/*.yaml` file and the
+`feed_item` rows its `feed` nodes commit. The graph editor itself (the
+Node-RED-style canvas) is reachable via the command palette (`⌘K` →
+**"Edit flow…"**), the sidebar's "Flows" pill, or a feed row's "Reveal in
+flow" icon — a per-profile sub-view, not a separate app mode.
 
 This document is the durable architecture reference for that system. It
 covers the wire contract, the storage layer, the config schemas, the
-frontend node-type contract, and what still needs to happen before the
-pipeline can replace the legacy feed path.
+frontend node-type contract, and — now that the cutover to this being the
+sidebar's actual data source has landed — what still needs to happen beyond
+that (a handful of gaps, not a parallel system left to retire).
 
 ## Overview and the tripartite model
 
 The pipeline is split into three tiers that never share a database or a
 process boundary:
 
-1. **Go, write side (source producer)** — polls GitHub (today; RPC sources
-   are schema-ready but not yet implemented) and appends whatever it finds to
-   an append-only log, deduplicating by key so an unchanged item isn't
-   re-appended every tick.
+1. **Go, write side (source producer)** — polls GitHub and appends whatever
+   it finds to an append-only log, deduplicating by key so an unchanged item
+   isn't re-appended every tick. (An `rpc-source` node type once existed as a
+   schema-only placeholder; it has since been removed entirely — see
+   [Current architecture and remaining gaps](#current-architecture-and-remaining-gaps).)
 2. **TypeScript, stateless (frontend graph runtime)** — reads a page of log
    rows, runs them through one flow's graph (sources → filters/functions →
    feeds/actions) in a Web Worker (or an in-process fallback), and produces a
@@ -40,7 +47,7 @@ process boundary:
    GitHub API
        │
        │  feed.LiveProvider.SourceItems (cached, conditional, singleflight —
-       │  the same fetch path the legacy feed system uses)
+       │  internal/desktop/feed's surviving GitHub fetch core)
        ▼
  ┌───────────────────────┐
  │ pipeline.Producer      │  poll tick, dedupe unchanged payloads per key
@@ -74,9 +81,9 @@ process boundary:
              │                                       │              │
              ▼                                       ▼              │
    FeedItems(feedID)                        pipeline.Worker.Tick()  │
-   (flows editor's read-only                 drains output_command, │
-   preview panel; the legacy                 auto_apply gate,       │
-   sidebar does not read this yet)           dispatches Executors    │
+   (flows editor's read-only preview          drains output_command, │
+   panel AND the sidebar — both read          auto_apply gate,       │
+   the same persisted rows)                   dispatches Executors    │
                                                                      │
    consumer_offset  ◀──────────────── ConsumerOffset/Commit ────────┘
 ```
@@ -271,7 +278,7 @@ input batch. Because that invariant holds, committing `UpToOffset` past a
 message is always correct: nothing that message could still be "in flight"
 for is left unaccounted.
 
-## The three config files and schemas
+## The config files and schemas
 
 ### `flows/*.yaml`
 
@@ -304,12 +311,15 @@ per-type field are hard errors.
 
 | `type` | In / Out | Config fields | Notes |
 | --- | --- | --- | --- |
-| `github-source` | 0 / 1 | `source` (a `github-*` id in `profiles/*.yml`) | Backend-run — see [source producer](#source-producer-and-output-worker). |
-| `rpc-source` | 0 / 1 | `source` (a `rpc` id in `profiles/*.yml`) | Schema exists; no producer or frontend node type implements it yet. |
+| `github-source` | 0 / 1 | `kind` (`search`\|`notifications`), `query?` (required for `search`), `limit?` | Backend-run — see [source producer](#source-producer-and-output-worker). Embeds its own GitHub fetch config directly; no cross-file reference. |
 | `github-filter` | 1 / 2 | `repos`/`exclude_repos`/`authors`/`exclude_authors`/`labels`/`exclude_labels` (doublestar globs), `types` (`pr`\|`issue`), `reasons` (GitHub notification reasons) | Port 0 = pass, port 1 = fail. At least one filter group must be set (a hard error if all are empty). |
 | `function` | 1 / 1..16 (`outputs`) | `on_message` (required), `on_start?`, `on_stop?`, `outputs?` (1–16, default 1), `timeout?` (100ms–60s, default 5s) | Author-trusted JS, no sandbox. |
-| `feed` | 1 / 0 (terminal) | `feed` (a feed id in `profiles/*.yml`) | Commits `Sink{feed, <feed id>}`; new items land unread. |
+| `feed` | 1 / 0 (terminal) | *(none)* | Commits `Sink{feed, "<flowId>/<nodeId>"}`; new items land unread. The node's own (flow-qualified) id IS the feed's identity — there's no field to set. |
 | `action` | 1 / 0 (terminal) | `action` (an id in `actions.yml`) | Commits `Sink{action, <action id>}`. |
+
+`rpc-source` no longer exists: it has been removed from `flow`'s node
+registry (`flow/node.go`) along with its schema type, not merely left
+unimplemented.
 
 Wires are directed edges: `{from, out?, to}`, `out` defaulting to `0`.
 Validation (`flow/validate.go`'s `validateFlow`) runs, in order:
@@ -327,12 +337,15 @@ Validation (`flow/validate.go`'s `validateFlow`) runs, in order:
   `disabled: true` node; a terminal node with no inbound wire; the flow
   having no terminal node at all.
 
-Cross-file references (does a `source`/`feed`/`action` id exist, and what
-kind is it) are resolved through an injected `flow.Refs` interface — the
-package never imports the profiles or actions loaders itself, so those can
-be wired in independently (`desktop/flowsrefs.go`'s `flowRefsAdapter` is the
-real implementation; `flow.MapRefs` is the map-backed test double used
-throughout `flow`'s own test suite).
+The only remaining cross-file reference is the `action` node's `action` id,
+resolved through an injected `flow.Refs` interface (`ResolveAction(id)
+bool`) — the package never imports the actions loader itself, so it can be
+wired in independently (`desktop/flowsrefs.go`'s `actionsRefs` is the real
+implementation; `flow.MapRefs` is the map-backed test double used throughout
+`flow`'s own test suite). `source`/`feed` used to resolve against
+`profiles/*.yml` too, before the cutover — both are self-contained now (a
+`github-source` node embeds its own fetch config, a `feed` node's identity
+is just its own node id), so `Refs` shrank down to the one method.
 
 Each flow file has a machine-written sibling layout file, `<id>.ui.yaml`
 (`flow/layout.go`): node canvas positions only, keyed by node id. It is
@@ -368,27 +381,37 @@ wires:
   - { from: tag, out: 0, to: spawn-review }
 ```
 
-### `profiles/*.yml` (current state)
+### Legacy `profiles.yaml` and the `migrate` converter
 
-Implemented by `internal/desktop/feed` (`desktop.ConfigPath()`, default
-`$XDG_CONFIG_HOME/hive/desktop/profiles.yaml`). This is the **pre-existing**
-schema the legacy feed system reads — `sources:` (GitHub search/notifications
-queries) and `profiles:` → `feeds:` (client-side filtered views over one or
-more sources), with each feed's own `filters:` block
-(`internal/desktop/feed/filters.go`'s `FilterDef`).
+`profiles.yaml` (`sources:` + `profiles:` → `feeds:`, each feed's own
+`filters:` block) is **not a live schema any more** — nothing in the running
+app reads it, and the old `internal/desktop/feed` code that used to parse it
+(`FilterDef`, `Store`, `ConfigInfo`, the poller, …) is deleted. It survives
+purely as the *input* format `internal/desktop/migrate` converts, one time,
+into `flows/*.yaml`.
 
-The flow schema's `github-source`/`rpc-source`/`feed` nodes are an
-**additive** consumer of this same file — a `github-source` node's `source:`
-field and a `feed` node's `feed:` field both resolve against
-`profiles/*.yml` via `flow.Refs` (`desktop/flowsrefs.go`). Nothing about
-`profiles/*.yml` changes to support flows; the legacy feed filters
-(`FilterDef`, the sidebar's own filtering) keep working exactly as they do
-today, independent of whether any flow references the same sources/feeds. A
-future cutover (see [below](#current-state-and-the-deferred-cutover)) would
-retire `FilterDef`-based filtering in favor of `github-filter` flow nodes,
-but that hasn't happened — both mechanisms are live simultaneously right
-now, and a source or feed id can be referenced by a flow node with no
-awareness on the profiles side that it's being read that way.
+`internal/desktop/migrate` (run via the desktop binary's
+`--migrate-profiles[=dry|write]` flag, wired up in `desktop/main.go`'s
+`runMigrationIfRequested`) keeps its own **private** copy of the old config
+shape (`legacyConfig`/`legacySource`/`legacyFilter`/`legacyFeed`/
+`legacyProfile` in `migrate/convert.go`), decoded laxly so a field the app no
+longer knows about is ignored rather than fatal — that isolation is what let
+the legacy feed package's config schema be deleted outright without
+`migrate` needing any of it.
+
+Per legacy profile, `buildFlow` produces one flow: each legacy `feed`
+becomes a `feed` node (plus a `github-filter` node when the feed had a
+non-empty `filters:` block), and each `source` a feed referenced becomes —
+once, deduplicated — a `github-source` node carrying that source's
+`kind`/`query`/`limit` as its own embedded `GithubSourceConfig`, all laid out
+in three columns (sources · filters · feeds). The produced flow is rendered,
+validated against a real `flow.MapRefs{}`, and — in write mode — saved via
+`flow.SaveFlow`/`flow.SaveUI` next to a one-time `.bak` backup of the
+original `profiles.yaml`; `--force` is required to overwrite a
+`flows/<id>.yaml` that already exists, so a re-run never clobbers hand
+edits. See
+[Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)
+below for how this fits into the cutover as a whole.
 
 ### `actions.yml`
 
@@ -434,10 +457,11 @@ action out from under a running flow.
 ## The node-type contract (frontend, D2)
 
 Every node type lives under
-`desktop/frontend/src/pipeline/nodes/<type>/`, one directory per type
-(`action`, `feed`, `function`, `github-filter`, `github-source` today —
-`rpc-source` has no frontend directory yet, only a backend `flow` schema
-entry):
+`desktop/frontend/src/pipeline/nodes/<type>/`, one directory per type:
+`action`, `feed`, `function`, `github-filter`, `github-source`. (An earlier
+revision of this document also listed a schema-only `rpc-source` type; it
+has since been removed entirely — see
+[Current architecture and remaining gaps](#current-architecture-and-remaining-gaps).)
 
 | File | Role |
 | --- | --- |
@@ -457,10 +481,10 @@ Two separate registries, both built via Vite's `import.meta.glob`
 
 `role` is the discriminant that decides *where* a node type runs:
 
-- `'source'` — backend-run (`github-source`/`rpc-source`). No `runtime.ts`
-  at all; the frontend only relays whatever the backend producer already
-  appended, filtering entry-node messages by `config.source`'s log topic
-  (`"source:<id>"`).
+- `'source'` — backend-run (`github-source` is the only type today). No
+  `runtime.ts` at all; the frontend only relays whatever the backend
+  producer already appended, filtering entry-node messages by the node's
+  own flow-qualified log topic (`"source:<flowId>/<nodeId>"`).
 - `'processor'` — a Web Worker (`github-filter`, `function`).
 - `'output'` — an engine-collected commit intent, never actually "run" — a
   terminal node's own `sink()`/`unread` in its `config.ts` tells `runGraph`
@@ -498,15 +522,15 @@ every processor node through an injected `WorkerTransport`
    `topoSort`; a cycle here is defended against, but Go's `SaveFlow`
    validation should already have rejected it).
 2. Seed every in-degree-0 ("entry") node from the input batch — a
-   `github-source`/`rpc-source` node only accepts messages on its own
-   `"source:<id>"` topic; a bare entry node with no `source` field accepts
-   everything (useful for tests exercising one node in isolation). Anything
-   matching zero entry nodes becomes an immediate discard
-   (`UNROUTED_NODE_ID`).
+   `github-source` node only accepts messages on its own flow-qualified
+   `"source:<flowId>/<nodeId>"` topic; a bare entry node with no matching
+   source type accepts everything (useful for tests exercising one node in
+   isolation). Anything matching zero entry nodes becomes an immediate
+   discard (`UNROUTED_NODE_ID`).
 3. Walk nodes in topological order, per pending message: `disabled` nodes
-   discard; `github-source`/`rpc-source` pass straight through to their
-   wires; terminal (`feed`/`action`) nodes become an `Output`; everything
-   else runs through the transport.
+   discard; a `github-source` node passes straight through to its wires;
+   terminal (`feed`/`action`) nodes become an `Output`; everything else runs
+   through the transport.
 4. **Deep-clone fan-out**: forwarding one message to more than one wire
    `structuredClone`s it per destination, so one downstream branch mutating
    `msg.Payload` can never affect a sibling branch (or this node's own
@@ -564,17 +588,24 @@ Deploy-triggered wait for an in-flight run to finish.
 
 **`pipeline.Producer`** (`internal/desktop/pipeline/producer.go`) is the
 poll loop: each tick, it resolves the current `SourceLister` (re-read every
-tick, so a source added/removed in `profiles/*.yml` takes effect without a
-restart), calls `Produce` on each `Source`, and appends every emitted `Msg`.
-The only implementation today, `githubSource`
-(`internal/desktop/pipeline/github_source.go`), doesn't fetch GitHub
-itself — it delegates to `feed.LiveProvider.SourceItems`, the exact same
-cached/conditional/singleflight fetch path (`internal/desktop/feed/live.go`)
-the legacy feed system already uses, so the pipeline gains a producer
-without a second GitHub-fetching implementation to keep in sync. A source
-fetch failure is logged and skipped; it never blocks other sources in the
-same tick. `NewGithubSourceLister` builds one `githubSource` per configured
-`feed.SourceDef`.
+tick, so a `github-source` node added to, edited in, or removed from any
+flow takes effect without a restart), calls `Produce` on each `Source`, and
+appends every emitted `Msg`. `NewFlowSourceLister`
+(`internal/desktop/pipeline/github_source.go`) builds one `githubSource` per
+enabled `github-source` node across every loaded flow
+(`pipeline.FlowLister`, satisfied by `*flow.FlowStore`), keyed and
+topic-tagged by that node's flow-qualified id (`"<flowId>/<nodeId>"`, topic
+`"source:<flowId>/<nodeId>"`) — there is no more `profiles.yaml` sources
+list to enumerate. `githubSource` itself doesn't fetch GitHub — it delegates
+to `feed.LiveProvider.SourceItems` (`internal/desktop/feed/live.go`), the
+cached/conditional/singleflight fetch path that's now all that's left of the
+once-larger `internal/desktop/feed` package, built from a `feed.SourceDef`
+constructed on the fly from the node's own embedded `GithubSourceConfig`
+rather than loaded from a config file. Two `github-source` nodes with
+identical fetch config still share one GitHub request (`LiveProvider` keys
+its cache on kind+query+limit, not id) while producing distinct topics so
+each flow's graph only ingests its own rows. A source fetch failure is
+logged and skipped; it never blocks other sources in the same tick.
 
 **`pipeline.Worker`** (`output_worker.go`) is the output side: on each tick
 it drains up to `DefaultOutputWorkerBatch` (50) pending `output_command`
@@ -612,90 +643,161 @@ immediately, no retries.
   desktop:e2e`, or `desktop:serve` for interactive use) in
   `HIVE_DESKTOP_MOCK=feed`/`onboarding` mode against `127.0.0.1:8931`
   (`8080` is commonly occupied by an unrelated local process, hence the
-  non-default port). `desktop/e2e/tests/flows-editor.spec.ts` is additive
-  DOM/text coverage of the flows editor surface (opening it from the
-  command palette, the empty state, the node palette). Deeper coverage —
-  a stateless-commit/replay spec, and screenshot snapshots for the flows
-  canvas — is deferred future work; see the next section.
+  non-default port). The `feed`-mode server additionally points
+  `HIVE_DESKTOP_FLOWS` at a checked-in fixture directory
+  (`desktop/e2e/fixtures/flows/`, one flow) and seeds a matching, fixed set
+  of `feed_item` rows at startup (`desktop/mockseed.go`, gated on
+  `desktop.MockMode() == "feed"`) — this replaced
+  `internal/desktop/feed/mock.go`'s static in-memory item list once the
+  sidebar switched onto real `feed_item` reads (see
+  [Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)).
+  `desktop/e2e/tests/flows-editor.spec.ts` exercises the flows editor
+  surface against that same fixture flow (opening it from the command
+  palette, the populated canvas, the node palette); `feed.spec.ts`,
+  `theme.spec.ts`, and `onboarding.spec.ts` cover the sidebar/detail pane,
+  theming, and first-run onboarding plus profile/flow-node CRUD
+  respectively. Deeper coverage — a stateless-commit/replay spec, and
+  screenshot snapshots for the flows canvas — is still deferred future
+  work; see the next section.
 
-## Current state and the deferred cutover
+## Current architecture and remaining gaps
 
-As of this phase, the source pipeline is **additive**: it runs fully
-alongside the legacy feed system, not in place of it.
+The cutover earlier revisions of this document described as "deferred" has
+landed: the source pipeline is no longer a parallel system running alongside
+the legacy feed — it **is** the feed. A profile is a flow, the sidebar reads
+`feed_item`, and the old `profiles.yaml`-based feed/source/filter machinery
+is gone.
 
-- The flows editor is reachable via `⌘K` → **"Open flows editor…"**
-  (`App.vue`'s `mode` ref swaps the whole main area between `'feed'` and
-  `'flows'`), but the **sidebar still reads exclusively from the legacy feed
-  path** — `internal/desktop/feed.Store`/`useFeedState.ts` — not from
-  `feed_item`. A `feed` flow node's committed items are visible today only
-  through the flows editor's own read-only preview panel
-  (`FeedItemsPreview.vue`, backed by `PipelineService.FeedItems`).
-- The legacy feed system's own orchestration — `internal/desktop/feed`'s
-  `FilterDef` (`filters.go`) and `LiveProvider.fetchSourceDirect`
-  (`live.go`) — is untouched and fully in charge of what the sidebar shows.
-  The pipeline's `githubSource` producer *reuses*
-  `LiveProvider.SourceItems` (the cached layer above `fetchSourceDirect`)
-  rather than re-fetching GitHub itself, but that's read-sharing, not a
-  dependency in the other direction — deleting `FilterDef`/
-  `fetchSourceDirect` today would break the legacy feed path outright.
-- No flow runs unless a user has hand-authored one and clicked **Deploy** —
-  there is no "default flow" that starts automatically, and nothing writes
-  `flow.ExampleFlow()`'s content to disk at startup (see below).
-- `rpc-source` exists as a `flow` schema node type with backend validation,
-  but has no source producer implementation and no frontend node-type
-  directory (`nodes/rpc-source/` doesn't exist) — it can be referenced in a
-  hand-written `flows/*.yaml`, but nothing runs it yet.
+- **A profile IS a flow.** The rail's profile tiles are flow files
+  (`FlowsService.ListFlows`/`GetFlow`), and "New profile"
+  (`NewProfileModal` → `useFeedState.createProfile` →
+  `FlowsService.CreateFlow`) calls `flow.FlowStore.Create`, which seeds a
+  real, resolvable **starter flow** (`FlowStore.starterFlow`,
+  `internal/desktop/pipeline/flow/store.go`) — three `github-source` →
+  `feed` pairs (My open PRs / Assigned / Notifications), each source
+  embedding its own fetch config directly rather than pointing at a
+  `profiles.yaml` that no longer exists. This directly addresses what
+  earlier revisions of this document listed as deferred work ("a default
+  flow that runs automatically") — it landed in this per-profile shape
+  rather than as `flow.ExampleFlow()`'s worked example — see
+  [Starter-flow example](#starter-flow-example) for how the two differ.
+- **The flows editor is a per-profile sub-view, not a separate app mode.**
+  `App.vue` no longer has a `mode` ref toggling `'feed'`/`'flows'`; it
+  renders either `SideBar`+`FeedList` or `FlowsView` based on
+  `useFlowsSession().flowsOpen` (a shared session's `shallowRef<boolean>` —
+  see below), reached from the sidebar's "Flows" pill/footer row, a
+  jump-to-node command, or a feed row's "Reveal in flow" icon
+  (`SideBar.vue`'s `data-testid="sidebar-reveal-in-flow"` — there is no
+  pencil/edit affordance any more; a feed is edited by opening its node in
+  the canvas), and exited via the titlebar breadcrumb (`TitleBar.vue`'s
+  `data-testid="breadcrumb-profile-name"` becomes a button back to the feed
+  while flows are active).
+- **The sidebar reads `feed_item`.** `useFeedState.ts`'s `loadFeeds`/
+  `loadItems` call `PipelineService.FeedItemCounts`/`FeedItems` — the same
+  read path the flows editor's preview panel always used — instead of
+  `internal/desktop/feed.Store`, which no longer exists.
+- **An always-on, per-profile runtime keeps `feed_item` current with the
+  canvas closed.**
+  `desktop/frontend/src/pipeline/composables/useFlowsSession.ts` is a
+  module singleton, first constructed by `App.vue`, that owns both the
+  editor state (`usePipelineEditor`) and a `usePipelineRuntime` instance for
+  whichever flow is bound to the active profile
+  (`session.bindActiveFlow(activeProfileId)`, watched in `App.vue`).
+  `App.vue` subscribes to the backend's `"log:appended"` event once, at the
+  app level, and on every tick calls `session.pump()` and *then*
+  `useFeedState`'s `refresh()` — commit-then-refresh ordering is the whole
+  point, so the sidebar never reads a stale `feed_item` row.
+  `FlowsView.vue` reads the same session, so opening the canvas never
+  starts a second, competing runtime. This runs only the **active**
+  profile's flow today; running every enabled profile's flow concurrently
+  is a follow-up (search the frontend for `hc-8ft4yhm6`).
+- **`github-source` embeds its GitHub fetch config directly.**
+  `GithubSourceConfig` (`internal/desktop/pipeline/flow/nodes_source.go`) is
+  `{kind, query?, limit?}` — a `github-source` node no longer names a
+  `profiles.yaml` source id, because that file is no longer a live schema
+  (see [Legacy `profiles.yaml` and the `migrate` converter](#legacy-profilesyaml-and-the-migrate-converter)
+  above). A `feed` node is likewise config-free: `FeedConfig` is an empty
+  struct, and the feed's identity is just its own (flow-qualified) node id.
+- **`rpc-source` is gone**, not merely unimplemented: it has been removed
+  from `flow`'s node registry (`flow/node.go`) along with its schema type.
+  There is no RPC source today, backend or frontend.
+- **The legacy feed system's `FilterDef`/`fetchSourceDirect` orchestration,
+  its `Store` (readstate), its poller, and its mock provider are all
+  deleted.** `internal/desktop/feed` now holds only what the pipeline still
+  needs: the `Item`/`Action` wire types and `LiveProvider.SourceItems` — the
+  cached, conditional, singleflight GitHub fetch core the pipeline's
+  `githubSource` producer calls through. Nothing about client-side
+  filtering survived the cutover; a `github-filter` flow node is the only
+  filtering mechanism now.
+
+**What's still incomplete**, independent of the cutover above:
+
 - `WebWorkerTransport` is fully implemented and unit-tested but not wired
-  into the running app — `InProcessTransport` (main-thread) is what actually
-  executes every processor node today.
+  into the running app — `InProcessTransport` (main-thread) is what
+  actually executes every processor node today.
 - `launch-session` and `publish-event` actions execute against **logging
   stubs** (`LoggingSessionLauncher`, `LoggingEventPublisher`) — only `shell`
   actually does anything outside a log line.
-
-**The deferred cutover** — tracked as separate follow-up work, deliberately
-out of scope here because it is a large, Docker-e2e-heavy switchover that
-would break the running app if done incompletely and can't be fully
-validated outside that environment — is:
-
-1. A default flow that runs automatically (so the pipeline actually
-   replaces, not just parallels, today's polling), likely seeded from
-   something like `flow.ExampleFlow()`'s shape but with real resolvable
-   `source`/`feed` ids rather than placeholders.
-2. Switching the sidebar (`useFeedState.ts` and its feed components) to
-   read `feed_item` via `PipelineService.FeedItems` instead of
-   `internal/desktop/feed.Store`.
-3. Only once (1) and (2) are live and verified: deleting
-   `internal/desktop/feed`'s `FilterDef`-based orchestration and
-   `fetchSourceDirect`'s direct callers, since at that point the flows
-   pipeline is the only thing driving the sidebar.
-4. Rewriting/adding e2e screenshot snapshots and a stateless-commit/replay
-   spec, all of which need the Docker-based `mise run desktop:e2e` gate to
-   verify against real rendered output.
+- "Drain in-flight, then swap" Deploy semantics are still realized more by
+  construction than by an explicit drain step — see
+  [Deploy and drain semantics](#deploy-and-drain-semantics) above; this
+  didn't change with the cutover.
+- There is still no manual confirmation UI for a non-`auto_apply` action
+  sitting `pending` in `output_command`.
+- e2e screenshot snapshots and a stateless-commit/replay spec are still
+  deferred future work requiring the Docker-based `mise run desktop:e2e`
+  gate to verify against real rendered output. What changed this phase is
+  that the existing suites (`feed.spec.ts`, `theme.spec.ts`,
+  `flows-editor.spec.ts`, `onboarding.spec.ts`) now exercise the real
+  `feed_item`/flow-backed sidebar via a deterministic mock seed
+  (`desktop/mockseed.go` + `desktop/e2e/fixtures/flows/`) instead of the
+  deleted `internal/desktop/feed/mock.go`'s static fixture — see
+  [Testing strategy](#testing-strategy) above.
 
 ## Starter-flow example
 
-`flow.ExampleFlow()` (`internal/desktop/pipeline/flow/example.go`) mirrors
-`feed.ExampleConfig()`'s role: a concrete, commented, worked
-`flows/*.yaml` document — the same github-source → github-filter →
-function(outputs: 2) → {feed, action} pipeline described above — for docs
-and any future "start from an example" affordance. Unlike
-`feed.ExampleConfig()` (which `feed.Store.ConfigInfo` falls back to when
-`profiles.yaml` doesn't exist yet), **nothing serves this automatically**:
-its `source`/`feed`/`action` ids (`team-prs`/`team-review`/`review-pr`) are
-placeholders that won't resolve against a real install's `profiles.yaml`/
-`actions.yml`, so writing it to disk (or wiring it as the flows editor's
-"New flow" template) would hand a user a permanently-broken flow rather than
-a helpful one — see `internal/desktop/pipeline/flow/example_test.go` for the
-test asserting it parses and validates clean against a `flow.MapRefs` that
-resolves those same placeholder ids. The flows editor's actual "New flow"
-action (`usePipelineEditor.ts`'s `newFlow`) starts genuinely blank
-(`{nodes: [], wires: []}`) rather than from this template: seeding a
-multi-node draft would mean instantiating five node types, wiring them, and
-placing a layout position for each (well beyond a small, self-contained
-change to `newFlow`), and — since a brand-new flow can't know which real
-`source`/`feed`/`action` ids exist in a given install — it would start the
-user off with unresolved-reference validation errors on every terminal node
-rather than a genuinely blank canvas.
+There are now two different "starter flow" concepts worth telling apart:
+
+- **`flow.ExampleFlow()`** (`internal/desktop/pipeline/flow/example.go`) is
+  a concrete, commented, worked `flows/*.yaml` document — the same
+  github-source → github-filter → function(outputs: 2) → {feed, action}
+  pipeline described above — kept purely for docs (this file) and tests.
+  **Nothing serves this automatically**: its `action` id (`review-pr`) is a
+  placeholder that won't resolve against a real install's `actions.yml`, so
+  writing it to disk would hand a user a permanently-broken flow rather than
+  a helpful one — see `internal/desktop/pipeline/flow/example_test.go` for
+  the test asserting it parses and validates clean against a `flow.MapRefs`
+  that resolves that same placeholder id. (Before the cutover its
+  `source`/`feed` fields were placeholders too, resolved against
+  `profiles.yaml`; now that `github-source`/`feed` are self-contained, only
+  the `action` reference is left unresolved.)
+- **`flow.FlowStore.starterFlow`** (private to
+  `internal/desktop/pipeline/flow/store.go`) is what a user actually gets:
+  `FlowStore.Create` — the backend of "New profile" — seeds it
+  automatically, and every field is real and immediately usable (three
+  `github-source` nodes with real, pollable `kind`/`query` configs, each
+  wired straight to its own `feed` node: My open PRs / Assigned /
+  Notifications). This is the "default flow that runs automatically" that
+  earlier revisions of this document listed as deferred work — it landed in
+  this shape (seeded per new profile, not a single global default) rather than as
+  `flow.ExampleFlow()`'s worked example, since the worked example's whole
+  point is demonstrating every node type (including
+  `function`/`github-filter`/`action`), not being a safe, immediately
+  runnable starting point.
+
+A third, unrelated affordance: the flows editor's own "New flow name…"
+field (in the canvas toolbar's flow-selector dropdown) calls
+`usePipelineEditor.ts`'s `newFlow`, which starts a genuinely blank, unsaved
+draft (`{nodes: [], wires: []}`) rather than either template above —
+nothing is written until the user adds nodes by hand and clicks Deploy.
+This is a lower-level "add another flow" escape hatch alongside the
+starter-seeded "New profile" path (a deployed blank-started flow is still
+just a flow file, so it still shows up as its own profile tile) — seeding
+it from `flow.ExampleFlow()` would run into the same problem
+`ExampleFlow()` always has: a brand-new flow can't know which real `action`
+id (if any) exists in a given install, so a multi-node template risks
+starting the user off with unresolved-reference errors rather than a
+genuinely blank canvas.
 
 ## Key files
 
@@ -707,9 +809,13 @@ rather than a genuinely blank canvas.
 | Output worker + executors | `internal/desktop/pipeline/output_worker.go`, `launch_session_executor.go`, `shell_executor.go`, `publish_event_executor.go` |
 | `flows/*.yaml` schema | `internal/desktop/pipeline/flow/` |
 | `actions.yml` schema | `internal/desktop/pipeline/actions/` |
+| `profiles.yaml` → `flows/*.yaml` migration | `internal/desktop/migrate/` |
 | Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
+| Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue` |
+| Always-on per-profile runtime | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |
 | Frontend node-type contract | `desktop/frontend/src/pipeline/nodeType.ts`, `registry.ts`, `nodes/*/` |
 | Frontend engine | `desktop/frontend/src/pipeline/engine/` (`graph.ts`, `runGraph.ts`, `transport.ts`, `webWorkerTransport.ts`) |
 | Frontend driver + composables | `desktop/frontend/src/pipeline/driver.ts`, `composables/usePipelineEditor.ts`, `composables/usePipelineRuntime.ts` |
 | Flows editor UI | `desktop/frontend/src/pipeline/components/FlowsView.vue` and siblings |
-| e2e | `desktop/e2e/tests/flows-editor.spec.ts`, `desktop/e2e/playwright.config.ts` |
+| e2e mock fixtures | `desktop/mockseed.go`, `desktop/e2e/fixtures/flows/` |
+| e2e | `desktop/e2e/tests/`, `desktop/e2e/scripts/serve.sh`, `desktop/e2e/playwright.config.ts` |
