@@ -72,6 +72,9 @@ export function checkSyntax(src: string): string[] {
 export const label = 'Function'
 export const category = 'Process' as const
 export const glyph = IconSquareFunction
+// Purple — matches the mockup's Function node cap (8c anatomy diagram).
+export const accentToken = 'var(--color-node-purple)'
+export const tint = 'var(--color-node-purple-tint)'
 
 export const defaults: Config = {
   on_message: 'return msg',

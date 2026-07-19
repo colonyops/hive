@@ -27,6 +27,10 @@ export function sink(flowId: string, nodeId: string): Sink {
 export const label = 'Feed'
 export const category = 'Destinations' as const
 export const glyph = IconRss
+// Green — the mockup doesn't show a Feed node explicitly; reuses the
+// existing --color-feeds hue (already this app's "feed" meaning color).
+export const accentToken = 'var(--color-node-green)'
+export const tint = 'var(--color-node-green-tint)'
 /** Terminal node — 0 outputs. */
 export const outputs = 0
 

@@ -31,6 +31,9 @@ export interface Config {
 export const label = 'GitHub filter'
 export const category = 'Process' as const
 export const glyph = IconFilter
+// Teal — matches the mockup's Filter node cap (8c status states).
+export const accentToken = 'var(--color-node-teal)'
+export const tint = 'var(--color-node-teal-tint)'
 
 export const defaults: Config = {}
 

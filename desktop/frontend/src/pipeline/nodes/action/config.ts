@@ -26,6 +26,11 @@ export function sink(_flowId: string, _nodeId: string, config: Config): Sink {
 export const label = 'Action'
 export const category = 'Destinations' as const
 export const glyph = IconZap
+// Orange — the mockup doesn't show an Action node explicitly; a warm hue
+// distinct from the amber chrome accent (Deploy button, focus rings) so an
+// action node's cap never reads as "the same color as the UI chrome".
+export const accentToken = 'var(--color-node-orange)'
+export const tint = 'var(--color-node-orange-tint)'
 /** Terminal node — 0 outputs. */
 export const outputs = 0
 

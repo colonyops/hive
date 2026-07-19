@@ -47,7 +47,7 @@ function onDragStart(e: DragEvent, type: string) {
         <input
           v-model="query"
           type="text"
-          placeholder="Search nodes…"
+          placeholder="filter nodes…"
           class="w-full min-w-0 bg-transparent text-[12.5px] text-text outline-none placeholder:text-text-4"
           data-testid="palette-search"
         >
@@ -66,7 +66,7 @@ function onDragStart(e: DragEvent, type: string) {
             v-for="def in filtered[category]"
             :key="def.type"
             type="button"
-            class="flex w-full cursor-grab items-start gap-2.5 rounded-lg px-2 py-2 text-left hover:bg-hover active:cursor-grabbing"
+            class="flex w-full cursor-grab items-center gap-2.5 rounded-lg border border-transparent px-2 py-1.5 text-left hover:border-strong hover:bg-hover active:cursor-grabbing"
             draggable="true"
             :title="summarize(def.help)"
             data-testid="palette-entry"
@@ -74,13 +74,17 @@ function onDragStart(e: DragEvent, type: string) {
             @click="emit('add', def.type)"
             @dragstart="onDragStart($event, def.type)"
           >
-            <span class="flex size-6 shrink-0 items-center justify-center rounded-md bg-chip text-text-2">
+            <span
+              class="flex size-[22px] shrink-0 items-center justify-center rounded-md"
+              :style="{ background: def.tint ?? 'var(--color-accent-tint)', color: def.accentToken ?? 'var(--color-accent)' }"
+            >
               <component :is="def.glyph" class="size-3.5" />
             </span>
             <span class="min-w-0 flex-1">
               <span class="block truncate text-[12.5px] font-medium text-text" data-testid="palette-entry-label">{{ def.label }}</span>
               <span class="block truncate text-[10.5px] text-text-4" data-testid="palette-entry-summary">{{ summarize(def.help) }}</span>
             </span>
+            <span class="shrink-0 font-mono text-[12px] leading-none text-text-4" aria-hidden="true">⠿</span>
           </button>
         </div>
       </template>

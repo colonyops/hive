@@ -4,7 +4,7 @@
 // processor types, where this matters).
 import editor from './editor.vue'
 import help from './help.md?raw'
-import { category, defaults, glyph, label, role, type, validate } from './config'
+import { accentToken, category, defaults, glyph, label, role, tint, type, validate } from './config'
 import { defineNodeType } from '../../nodeType'
 
 export default defineNodeType({
@@ -13,6 +13,8 @@ export default defineNodeType({
   category,
   role,
   glyph,
+  accentToken,
+  tint,
   defaults,
   outputs: 1,
   validate,

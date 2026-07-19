@@ -23,6 +23,19 @@ export interface NodeTypeDefinition<C = Record<string, any>> {
   role: NodeRole
   /** Icon component (unplugin-icons `~icons/lucide/*`). */
   glyph: any
+  /**
+   * Per-type accent color for the canvas card's role cap + glyph icon (a CSS
+   * color value, e.g. `var(--color-node-blue)` — see styles/main.css's
+   * node-* tokens). Falls back to the generic `var(--color-accent)` when
+   * unset.
+   */
+  accentToken?: string
+  /**
+   * Per-type tinted background for the glyph tile (a CSS color value, e.g.
+   * `var(--color-node-blue-tint)`). Falls back to the generic
+   * `var(--color-accent-tint)` when unset.
+   */
+  tint?: string
   defaults: C
   /** Fixed port count, or a function of config (e.g. the function node's `outputs?`). */
   outputs?: number | ((c: C) => number)

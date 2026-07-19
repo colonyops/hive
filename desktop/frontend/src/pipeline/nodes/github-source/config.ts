@@ -31,6 +31,9 @@ export interface Config {
 export const label = 'GitHub source'
 export const category = 'Sources' as const
 export const glyph = IconGithub
+// Blue — matches the mockup's GitHub source node cap (8c wiring/anatomy).
+export const accentToken = 'var(--color-node-blue)'
+export const tint = 'var(--color-node-blue-tint)'
 
 export const defaults: Config = {
   kind: 'search',

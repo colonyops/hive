@@ -3,7 +3,7 @@
 // itself; see engine/runGraph.ts's TERMINALS map).
 import editor from './editor.vue'
 import help from './help.md?raw'
-import { category, defaults, glyph, label, outputs, role, type, validate } from './config'
+import { accentToken, category, defaults, glyph, label, outputs, role, tint, type, validate } from './config'
 import { defineNodeType } from '../../nodeType'
 
 export default defineNodeType({
@@ -12,6 +12,8 @@ export default defineNodeType({
   category,
   role,
   glyph,
+  accentToken,
+  tint,
   defaults,
   outputs,
   validate,
