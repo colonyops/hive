@@ -3,13 +3,16 @@
 // back to a deterministic grid slot when unpositioned — see
 // lib/wireFlow.ts's gridPosition), SVG wires between ports, drag-to-
 // reposition, zoom/fit (exposed for FlowsView's toolbar — see defineExpose
-// below), live per-node status from nodeRuns, and a click-to-select ->
-// NodeInspector -> "Edit" -> NodeEditorDrawer flow for add/edit/delete.
+// below), live per-node status from nodeRuns, and a single-click-selects /
+// double-click-opens-the-NodeEditorDrawer flow for add/edit/delete. There is
+// no floating inspector — selection is just the accent highlight ring
+// (cardShadow) on the selected card; opening the editor is a distinct,
+// explicit double-click gesture.
 //
 // Wire *creation* is intentionally out of scope here (a separate task):
 // existing wires render, but drawing/removing one by pointer is left to
-// hand-editing the flow's YAML for now — see NodeInspector.vue and
-// NodePalette.vue's module docs for the same posture.
+// hand-editing the flow's YAML for now — see NodePalette.vue's module docs
+// for the same posture.
 import { computed, ref, watch } from 'vue'
 import { byType } from '../registry'
 import { hasInputPort, outputPortCount } from '../lib/ports'
@@ -17,14 +20,11 @@ import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStat
 import { gridPosition, type EditorFlow, type NodePosition, type NodeRunRecord, type WireLayout } from '../lib/wireFlow'
 import type { FlowNode, Wire } from '../types'
 import NodeEditorDrawer from './NodeEditorDrawer.vue'
-import NodeInspector from './NodeInspector.vue'
 
 const props = defineProps<{
   flow: EditorFlow
   layout: WireLayout
   latestRunByNode: Map<string, NodeRunRecord>
-  /** Full run history (newest-first) for the NodeInspector's RECENT list — latestRunByNode only carries one row per node. */
-  nodeRuns?: NodeRunRecord[]
   /**
    * Node ids currently mid-execution — the 'running' status (8c: blue
    * pulsing) has no real per-node signal yet (node_run rows are only
@@ -159,16 +159,12 @@ function statusDotPulses(node: FlowNode): boolean {
   return statusPulses(statusFor(node))
 }
 
-/** The selected node's most recent run history, newest-first, for the NodeInspector's RECENT list. */
-function recentRunsFor(nodeId: string): NodeRunRecord[] {
-  return (props.nodeRuns ?? []).filter((r) => r.nodeId === nodeId).slice(0, 5)
-}
-
-// ── Drag to reposition / click to select (opens the NodeInspector) ──────
+// ── Drag to reposition / click to select / double-click to open the editor ──
 // A pointerdown starts tracking; if the pointer moves past a small
-// threshold before pointerup, it's a drag (moveNode fires continuously);
-// otherwise it's a click (selects the node) — the same disambiguation
-// FeedList-style clickable rows don't need, but a draggable canvas does.
+// threshold before pointerup, it's a drag (moveNode fires continuously) and
+// never selects or opens anything. Otherwise it's a click: a single click
+// selects the node (accent highlight ring via cardShadow); a second click
+// within the double-click window opens the NodeEditorDrawer instead.
 
 const DRAG_THRESHOLD = 4
 
@@ -195,6 +191,11 @@ function onNodePointerDown(e: PointerEvent, node: FlowNode) {
   }
   window.addEventListener('pointermove', onMove)
   window.addEventListener('pointerup', onUp)
+}
+
+function onNodeDblClick(node: FlowNode) {
+  selectedNodeId.value = node.id
+  drawerOpen.value = true
 }
 
 function onSurfaceClick() {
@@ -273,25 +274,13 @@ watch(() => props.focusNodeId, (id) => {
 
 defineExpose({ zoom, zoomIn, zoomOut, fit })
 
-// ── Selection: NodeInspector (click) -> "Edit" -> NodeEditorDrawer ──────
+// ── Selection: single click selects (accent ring), double click opens the
+// NodeEditorDrawer ────────────────────────────────────────────────────────
 
 const selectedNodeId = ref<string | null>(null)
 const selectedNode = computed(() => props.flow.nodes.find((n) => n.id === selectedNodeId.value) ?? null)
 const selectedDef = computed(() => (selectedNode.value ? byType[selectedNode.value.type] : null))
 const drawerOpen = ref(false)
-
-const INSPECTOR_WIDTH = 250
-const INSPECTOR_GAP = 24
-
-const inspectorStyle = computed(() => {
-  if (!selectedNode.value) return {}
-  const pos = positions.value.get(selectedNode.value.id) ?? { x: 0, y: 0 }
-  return {
-    left: `${pos.x + CARD_WIDTH + INSPECTOR_GAP}px`,
-    top: `${Math.max(0, pos.y - 20)}px`,
-    width: `${INSPECTOR_WIDTH}px`,
-  }
-})
 
 function onDrawerSave(node: FlowNode) {
   emit('update-node', node)
@@ -344,6 +333,7 @@ function onDrawerDelete(id: string) {
         :style="cardWrapperStyle(node)"
         :data-testid="`flow-node-${node.id}`"
         @pointerdown="onNodePointerDown($event, node)"
+        @dblclick="onNodeDblClick(node)"
       >
         <div class="relative flex h-[52px] overflow-hidden rounded-[2px] bg-action-card active:cursor-grabbing" :style="{ boxShadow: cardShadow(node) }">
           <div class="w-1.5 shrink-0" :style="{ background: capColor(node) }" />
@@ -372,17 +362,6 @@ function onDrawerDelete(id: string) {
           <span class="truncate font-mono text-[10.5px]" :style="{ color: statusTextColor(node) }" data-testid="flow-node-status">{{ statusText(node) }}</span>
         </div>
       </div>
-
-      <NodeInspector
-        v-if="selectedNode && selectedDef && !drawerOpen"
-        :node="selectedNode"
-        :def="selectedDef"
-        :run="latestRunByNode.get(selectedNode.id)"
-        :running="runningNodeIds?.has(selectedNode.id) ?? false"
-        :recent-runs="recentRunsFor(selectedNode.id)"
-        :style="inspectorStyle"
-        @edit="drawerOpen = true"
-      />
     </div>
 
     <NodeEditorDrawer

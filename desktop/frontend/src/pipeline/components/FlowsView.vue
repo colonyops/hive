@@ -16,6 +16,11 @@
 // useFeedState() + App.vue already use.
 import { computed, onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
+import IconChevronDown from '~icons/lucide/chevron-down'
+import IconMaximize2 from '~icons/lucide/maximize-2'
+import IconMinus from '~icons/lucide/minus'
+import IconPlus from '~icons/lucide/plus'
+import IconWorkflow from '~icons/lucide/workflow'
 import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { Commit, FeedItems, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import { usePipelineEditor, type PipelineEditorClient } from '../composables/usePipelineEditor'
@@ -223,13 +228,13 @@ const showDebug = ref(false)
         <div class="relative">
           <button
             type="button"
-            class="flex cursor-pointer items-center gap-1.5 rounded-lg border border-strong bg-chip px-2.5 py-1.5 text-[12.5px] text-text hover:border-card"
+            class="flex h-[30px] cursor-pointer items-center gap-1.5 rounded-lg border border-strong bg-chip px-2.5 text-[12.5px] text-text hover:border-card"
             data-testid="flow-selector-toggle"
             @click="flowMenuOpen = !flowMenuOpen"
           >
-            <span class="text-accent">◈</span>
+            <IconWorkflow class="size-3.5 shrink-0 text-accent" />
             <span class="max-w-[180px] truncate">{{ activeFlow?.name || 'Select a flow' }}</span>
-            <span class="text-text-3">▾</span>
+            <IconChevronDown class="size-3.5 shrink-0 text-text-3" />
           </button>
 
           <div
@@ -269,18 +274,18 @@ const showDebug = ref(false)
 
         <div class="flex-1" />
 
-        <div class="flex items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-[12px] text-text-2">
-          <button class="cursor-pointer px-2.5 py-1.5 hover:bg-hover hover:text-text" data-testid="canvas-zoom-out" @click="canvasRef?.zoomOut()">−</button>
-          <span class="px-1 text-text" data-testid="canvas-zoom-level">{{ zoomPercent }}%</span>
-          <button class="cursor-pointer px-2.5 py-1.5 hover:bg-hover hover:text-text" data-testid="canvas-zoom-in" @click="canvasRef?.zoomIn()">+</button>
+        <div class="flex h-[30px] items-center overflow-hidden rounded-lg border border-strong bg-chip font-mono text-[12px] text-text-2">
+          <button class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text" data-testid="canvas-zoom-out" @click="canvasRef?.zoomOut()"><IconMinus class="size-3.5" /></button>
+          <span class="flex h-full items-center px-1 text-text" data-testid="canvas-zoom-level">{{ zoomPercent }}%</span>
+          <button class="flex h-full cursor-pointer items-center px-2.5 hover:bg-hover hover:text-text" data-testid="canvas-zoom-in" @click="canvasRef?.zoomIn()"><IconPlus class="size-3.5" /></button>
         </div>
-        <button class="cursor-pointer whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 py-1.5 text-[12px] text-text-2 hover:border-card hover:text-text" data-testid="canvas-fit" @click="canvasRef?.fit()">⤢ Fit</button>
+        <button class="flex h-[30px] cursor-pointer items-center gap-1.5 whitespace-nowrap rounded-lg border border-strong bg-chip px-2.5 text-[12px] text-text-2 hover:border-card hover:text-text" data-testid="canvas-fit" @click="canvasRef?.fit()"><IconMaximize2 class="size-3.5" />Fit</button>
 
         <div class="mx-0.5 h-5 w-px bg-row" />
 
-        <div class="relative flex items-center">
+        <div class="relative flex h-[30px] items-center">
           <button
-            class="cursor-pointer rounded-l-lg bg-accent py-1.5 pl-2.5 pr-2 text-[12.5px] font-semibold text-accent-contrast disabled:cursor-default disabled:opacity-40"
+            class="flex h-full cursor-pointer items-center rounded-l-lg bg-accent pl-2.5 pr-2 text-[12.5px] font-semibold text-accent-contrast disabled:cursor-default disabled:opacity-40"
             :disabled="!dirty || saving || !activeFlow"
             data-testid="deploy-button"
             @click="deploy"
@@ -291,10 +296,10 @@ const showDebug = ref(false)
             </span>
           </button>
           <button
-            class="cursor-pointer rounded-r-lg bg-accent py-1.5 pl-1 pr-2.5 text-[12.5px] font-semibold text-accent-contrast opacity-70 hover:opacity-100"
+            class="flex h-full cursor-pointer items-center rounded-r-lg bg-accent pl-1 pr-2.5 text-accent-contrast opacity-70 hover:opacity-100"
             data-testid="deploy-menu-toggle"
             @click="deployMenuOpen = !deployMenuOpen"
-          >▾</button>
+          ><IconChevronDown class="size-3.5" /></button>
 
           <div
             v-if="deployMenuOpen"
@@ -335,7 +340,6 @@ const showDebug = ref(false)
           :flow="activeFlow"
           :layout="layout"
           :latest-run-by-node="latestRunByNode"
-          :node-runs="nodeRuns"
           @move="moveNode"
           @update-node="updateNode"
           @delete-node="deleteNode"

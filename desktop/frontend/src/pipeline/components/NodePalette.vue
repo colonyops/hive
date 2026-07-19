@@ -41,8 +41,8 @@ function onDragStart(e: DragEvent, type: string) {
 
 <template>
   <div class="flex h-full flex-col" data-testid="node-palette">
-    <div class="shrink-0 border-b border-row p-2.5">
-      <div class="flex items-center gap-2 rounded-lg border border-strong bg-app px-2.5 py-2">
+    <div class="flex h-11 shrink-0 items-center border-b border-row px-2.5" data-testid="palette-search-header">
+      <div class="flex h-8 w-full items-center gap-2 rounded-lg border border-strong bg-app px-2.5">
         <IconSearch class="size-3.5 shrink-0 text-text-4" />
         <input
           v-model="query"

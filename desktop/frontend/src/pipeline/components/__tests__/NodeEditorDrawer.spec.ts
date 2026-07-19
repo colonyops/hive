@@ -51,22 +51,66 @@ function el<T extends HTMLElement>(testid: string): T | null {
 }
 
 describe('NodeEditorDrawer', () => {
-  it('renders the node type label and mounts the editor over a cloned draft of the node config', () => {
+  it('renders as a right-anchored, full-height side sheet (not a centered dialog)', () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node)
+
+    const sheet = el('node-editor')!
+    expect(sheet.className).toContain('fixed')
+    expect(sheet.className).toContain('right-0')
+    expect(sheet.className).toContain('inset-y-0')
+    // The scrim is a separate full-screen element, not a centering flex
+    // wrapper around the sheet — the sheet is a sibling, anchored to the
+    // right edge on its own.
+    const backdrop = el('node-editor-backdrop')!
+    expect(backdrop.contains(sheet)).toBe(false)
+    expect(backdrop.className).not.toContain('items-center')
+    expect(backdrop.className).not.toContain('justify-center')
+
+    wrapper.unmount()
+  })
+
+  it('renders "Edit node · <label>" plus a role/port subtitle, and mounts the editor over a cloned draft of the node config', () => {
     const node: FlowNode = { id: 'n1', type: 'stub', config: { label: 'hello' } }
     const wrapper = mountDrawer(node)
 
-    expect(el('node-editor-title')?.textContent).toBe('Stub node')
+    expect(el('node-editor-title')?.textContent).toBe('Edit node · Stub node')
+    // stubDef defaults role: 'processor', no outputs override -> 1 in / 1 out.
+    expect(el('node-editor-subtitle')?.textContent).toBe('processor · 1 in → 1 out')
     expect(el('stub-editor-value')?.textContent).toBe('hello')
 
     wrapper.unmount()
   })
 
-  it('prefills name/disabled from the node prop', () => {
+  it('renders a source role subtitle as "emits N output(s)" (no input side)', () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node, { role: 'source', outputs: 2 })
+
+    expect(el('node-editor-subtitle')?.textContent).toBe('source · emits 2 outputs')
+
+    wrapper.unmount()
+  })
+
+  it('prefills name from the node prop, and Enabled from the inverse of disabled', () => {
     const node: FlowNode = { id: 'n1', type: 'stub', name: 'My node', disabled: true, config: { label: '' } }
     const wrapper = mountDrawer(node)
 
     expect(el<HTMLInputElement>('node-editor-name')?.value).toBe('My node')
-    expect(el<HTMLInputElement>('node-editor-disabled')?.checked).toBe(true)
+    expect(el('node-editor-enabled')?.getAttribute('aria-checked')).toBe('false')
+
+    wrapper.unmount()
+  })
+
+  it('toggles disabled via the Enabled control', async () => {
+    const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
+    const wrapper = mountDrawer(node)
+
+    expect(el('node-editor-enabled')?.getAttribute('aria-checked')).toBe('true')
+
+    el<HTMLButtonElement>('node-editor-enabled')!.click()
+    await nextTick()
+
+    expect(el('node-editor-enabled')?.getAttribute('aria-checked')).toBe('false')
 
     wrapper.unmount()
   })
@@ -107,9 +151,8 @@ describe('NodeEditorDrawer', () => {
     nameInput.dispatchEvent(new Event('input', { bubbles: true }))
     await nextTick()
 
-    const disabledBox = el<HTMLInputElement>('node-editor-disabled')!
-    disabledBox.checked = true
-    disabledBox.dispatchEvent(new Event('change', { bubbles: true }))
+    // Enabled starts true (disabled: undefined) — one click flips it to disabled: true.
+    el<HTMLButtonElement>('node-editor-enabled')!.click()
     await nextTick()
 
     el<HTMLButtonElement>('stub-editor-edit')!.click()
@@ -162,11 +205,11 @@ describe('NodeEditorDrawer', () => {
     wrapper.unmount()
   })
 
-  it('emits close on backdrop click, the close button, and Escape', async () => {
+  it('emits close on backdrop click, Cancel, and Escape', async () => {
     const node: FlowNode = { id: 'n1', type: 'stub', config: { label: '' } }
     const wrapper = mountDrawer(node)
 
-    el<HTMLButtonElement>('node-editor-close')!.click()
+    el<HTMLButtonElement>('node-editor-backdrop')!.click()
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))
     el<HTMLButtonElement>('node-editor-cancel')!.click()
 

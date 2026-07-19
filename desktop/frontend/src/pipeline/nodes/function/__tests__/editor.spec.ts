@@ -79,6 +79,25 @@ describe('function editor', () => {
 
     expect(wrapper.emitted('update:config')).toBeUndefined()
   })
+
+  it('lists the tabs in On start / On message / On stop order, defaulting to On message', () => {
+    const wrapper = mount(Editor, { props: { config: defaults } })
+    const tabs = wrapper.findAll('[role="tab"]')
+    expect(tabs.map((t) => t.text())).toEqual(['On start', 'On message', 'On stop'])
+    expect(wrapper.get('[data-testid="function-editor-tab-on_message"]').attributes('aria-selected')).toBe('true')
+  })
+
+  it('shows a green "no syntax errors" chip for valid source on the active tab, and a red error count for invalid source', async () => {
+    const valid = mount(Editor, { props: { config: { on_message: 'return msg' } } })
+    expect(valid.get('[data-testid="function-editor-syntax-status"]').text()).toBe('✓ no syntax errors')
+
+    const invalid = mount(Editor, { props: { config: { on_message: 'return msg(' } } })
+    expect(invalid.get('[data-testid="function-editor-syntax-status"]').text()).toContain('syntax error')
+
+    // Switching tabs re-targets the chip at the newly active tab's own source.
+    await invalid.get('[data-testid="function-editor-tab-on_start"]').trigger('click')
+    expect(invalid.get('[data-testid="function-editor-syntax-status"]').text()).toBe('✓ no syntax errors')
+  })
 })
 
 describe('function validate', () => {

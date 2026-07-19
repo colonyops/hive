@@ -169,4 +169,24 @@ describe('CodeField', () => {
     const wrapper = mount(CodeField, { props: { modelValue: '', error: 'Unexpected token', testid: 'cf' } })
     expect(wrapper.find('[data-testid="cf-error"]').text()).toBe('Unexpected token')
   })
+
+  it('renders one line-number gutter row per line, minimum one for empty content', () => {
+    const empty = mount(CodeField, { props: { modelValue: '', testid: 'cf' } })
+    expect(empty.get('[data-testid="cf-gutter"]').findAll('div')).toHaveLength(1)
+
+    const wrapper = mount(CodeField, { props: { modelValue: 'a\nb\nc', testid: 'cf' } })
+    const lines = wrapper.get('[data-testid="cf-gutter"]').findAll('div')
+    expect(lines.map((l) => l.text())).toEqual(['1', '2', '3'])
+  })
+
+  it('renders the tokenized overlay as text — no unescaped markup from the source can reach the DOM', () => {
+    const src = 'const x = "<img src=x onerror=alert(1)>"; // <script>bad</script>'
+    const wrapper = mount(CodeField, { props: { modelValue: src, testid: 'cf' } })
+
+    const pre = wrapper.get('[data-testid="cf-pre"]')
+    expect(pre.text()).toBe(src)
+    expect(pre.find('img').exists()).toBe(false)
+    expect(pre.find('script').exists()).toBe(false)
+    expect(pre.html()).toContain('&lt;script&gt;')
+  })
 })

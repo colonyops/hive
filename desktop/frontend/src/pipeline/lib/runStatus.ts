@@ -1,9 +1,8 @@
 // Shared node run-status classification (8c: idle / running / done / error) —
-// FlowsCanvas (per-card status line + border glow), FlowsView (the bottom
-// status strip's aggregate "N ok/running/idle/error" counts), and
-// NodeInspector (status row + RECENT list rows) all classify a node's status
-// through this one module so the aggregate counts can never disagree with
-// what an individual card shows.
+// FlowsCanvas (per-card status line + border glow) and FlowsView (the
+// bottom status strip's aggregate "N ok/running/idle/error" counts) both
+// classify a node's status through this one module so the aggregate counts
+// can never disagree with what an individual card shows.
 //
 // "running" has no real per-node signal yet — node_run rows are only ever
 // written for a *completed* pump (see internal/desktop/pipeline), so there is

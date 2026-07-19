@@ -1,19 +1,23 @@
 <script setup lang="ts">
 // The function node's editor: a CodeField per lifecycle hook (switched via
 // TabStrip so on_start/on_stop don't have to stay always-visible), plus
-// outputs/timeout. checkSyntax comes straight from config.ts — the same
-// implementation the worker runtime compiles with (D2's single-source
-// principle), so this live check can never drift from what actually runs.
+// outputs/timeout as compact footer chips alongside a live syntax-status
+// chip for whichever tab is active. checkSyntax comes straight from
+// config.ts — the same implementation the worker runtime compiles with
+// (D2's single-source principle), so this live check can never drift from
+// what actually runs.
 import { computed, ref } from 'vue'
-import { CodeField, NumberField, TabStrip, TextField } from '../../fields'
+import { CodeField, TabStrip } from '../../fields'
 import { DEFAULT_OUTPUTS, checkSyntax, type Config } from './config'
 
 const props = defineProps<{ config: Config; errors?: string[] }>()
 const emit = defineEmits<{ 'update:config': [config: Config] }>()
 
+// On start / On message / On stop (8b) — On message stays the default tab
+// even though it's no longer first in the list.
 const tabs = [
-  { value: 'on_message', label: 'On message' },
   { value: 'on_start', label: 'On start' },
+  { value: 'on_message', label: 'On message' },
   { value: 'on_stop', label: 'On stop' },
 ]
 const activeTab = ref('on_message')
@@ -26,7 +30,19 @@ const onMessageErrors = computed(() => checkSyntax(props.config.on_message ?? ''
 const onStartErrors = computed(() => (props.config.on_start ? checkSyntax(props.config.on_start) : []))
 const onStopErrors = computed(() => (props.config.on_stop ? checkSyntax(props.config.on_stop) : []))
 
+/** The active tab's own errors — what the footer's "no syntax errors" chip reflects. */
+const activeErrors = computed(() => {
+  if (activeTab.value === 'on_start') return onStartErrors.value
+  if (activeTab.value === 'on_stop') return onStopErrors.value
+  return onMessageErrors.value
+})
+
 const outputsValue = computed(() => props.config.outputs ?? DEFAULT_OUTPUTS)
+
+function onOutputsInput(e: Event) {
+  const n = Number((e.target as HTMLInputElement).value)
+  set('outputs', Number.isFinite(n) ? n : 0)
+}
 
 // timeout is stored in Config as milliseconds (D1); the field displays/edits
 // it as a short duration string ("5s", "500ms") to match the YAML author
@@ -86,23 +102,35 @@ function onTimeoutInput(text: string) {
       </div>
     </div>
 
-    <div class="grid grid-cols-2 gap-3">
-      <NumberField
-        label="Outputs"
-        :model-value="outputsValue"
-        :min="1"
-        :max="16"
-        testid="function-editor-outputs"
-        @update:model-value="(v) => set('outputs', v)"
-      />
-      <TextField
-        label="Timeout"
-        :model-value="timeoutText"
-        placeholder="5s"
-        hint="Go duration string, e.g. 5s, 500ms (100ms..60s)."
-        testid="function-editor-timeout"
-        @update:model-value="onTimeoutInput"
-      />
+    <div class="flex flex-wrap items-center gap-2 font-mono text-[11px] text-text-3" data-testid="function-editor-footer-chips">
+      <label class="inline-flex items-center gap-1.5 rounded-md border border-row bg-app px-2 py-1">
+        Outputs
+        <input
+          type="number"
+          min="1"
+          max="16"
+          :value="outputsValue"
+          class="w-7 bg-transparent text-text-2 outline-none"
+          data-testid="function-editor-outputs"
+          @input="onOutputsInput"
+        >
+      </label>
+      <label class="inline-flex items-center gap-1.5 rounded-md border border-row bg-app px-2 py-1">
+        Timeout
+        <input
+          type="text"
+          :value="timeoutText"
+          placeholder="5s"
+          class="w-10 bg-transparent text-text-2 outline-none"
+          data-testid="function-editor-timeout"
+          @input="(e) => onTimeoutInput((e.target as HTMLInputElement).value)"
+        >
+      </label>
+      <span
+        class="ml-1 inline-flex items-center gap-1"
+        :class="activeErrors.length === 0 ? 'text-severity-success' : 'text-severity-error'"
+        data-testid="function-editor-syntax-status"
+      >{{ activeErrors.length === 0 ? '✓ no syntax errors' : `✕ ${activeErrors.length} syntax error${activeErrors.length === 1 ? '' : 's'}` }}</span>
     </div>
   </div>
 </template>

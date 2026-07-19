@@ -30,7 +30,6 @@ function mountCanvas(props: {
   flow?: EditorFlow
   layout?: WireLayout
   latestRunByNode?: Map<string, NodeRunRecord>
-  nodeRuns?: NodeRunRecord[]
   runningNodeIds?: Set<string>
   focusNodeId?: string | null
 } = {}) {
@@ -39,10 +38,10 @@ function mountCanvas(props: {
       flow: props.flow ?? flow(),
       layout: props.layout ?? layout(),
       latestRunByNode: props.latestRunByNode ?? new Map(),
-      nodeRuns: props.nodeRuns ?? [],
       runningNodeIds: props.runningNodeIds,
       focusNodeId: props.focusNodeId,
     },
+    global: { stubs: { teleport: true } },
   })
 }
 
@@ -55,6 +54,11 @@ async function clickNode(wrapper: ReturnType<typeof mountCanvas>, testid: string
   await card.trigger('pointerdown', { button: 0, clientX: 100, clientY: 100 })
   window.dispatchEvent(new PointerEvent('pointerup', { clientX: 100, clientY: 100 }))
   await nextTick()
+}
+
+async function dblClickNode(wrapper: ReturnType<typeof mountCanvas>, testid: string) {
+  const card = wrapper.get(`[data-testid="${testid}"]`)
+  await card.trigger('dblclick')
 }
 
 describe('FlowsCanvas', () => {
@@ -151,60 +155,44 @@ describe('FlowsCanvas', () => {
     wrapper.unmount()
   })
 
-  it('clicking a node (no drag) opens the NodeInspector for that node, not the drawer', async () => {
+  it('a single click (no drag) selects the node — no drawer, just the accent highlight ring', async () => {
     const wrapper = mountCanvas()
 
     await clickNode(wrapper, 'flow-node-filter')
 
-    expect(wrapper.get('[data-testid="node-inspector-title"]').text()).toContain('GitHub filter')
-    expect(document.querySelector('[data-testid="node-editor"]')).toBeNull()
+    // Selection shows as an accent ring via cardShadow's box-shadow.
+    const card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).toContain('var(--color-accent)')
+    expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
 
-  it('clicking empty canvas space deselects the node and closes the inspector', async () => {
+  it('clicking empty canvas space deselects the node', async () => {
     const wrapper = mountCanvas()
     await clickNode(wrapper, 'flow-node-filter')
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(true)
+    let card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).toContain('var(--color-accent)')
 
     await wrapper.get('[data-testid="flows-canvas"]').trigger('click')
 
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(false)
+    card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).not.toContain('var(--color-accent)')
 
     wrapper.unmount()
   })
 
-  it('the inspector\'s RECENT list reads from nodeRuns (not just the latest run)', async () => {
-    const runs = [
-      run({ nodeId: 'filter', ok: true, inCount: 5, outCount: 3, endedAt: Date.now() * 1e6 }),
-      run({ nodeId: 'filter', ok: false, err: 'timeout', endedAt: Date.now() * 1e6 }),
-      run({ nodeId: 'source', ok: true }), // a different node — must not appear
-    ]
-    const wrapper = mountCanvas({ nodeRuns: runs })
-
-    await clickNode(wrapper, 'flow-node-filter')
-
-    const rows = wrapper.findAll('[data-testid="node-inspector-recent-row"]')
-    expect(rows).toHaveLength(2)
-    expect(rows[0]!.text()).toContain('5 → 3')
-    expect(rows[1]!.text()).toContain('timeout')
-
-    wrapper.unmount()
-  })
-
-  it('the inspector\'s Edit button opens the NodeEditorDrawer for the selected node and hides the inspector', async () => {
+  it('a double click opens the NodeEditorDrawer for that node and selects it', async () => {
     const wrapper = mountCanvas()
-    await clickNode(wrapper, 'flow-node-filter')
 
-    await wrapper.get('[data-testid="node-inspector-edit"]').trigger('click')
+    await dblClickNode(wrapper, 'flow-node-filter')
 
-    expect(document.querySelector('[data-testid="node-editor-title"]')?.textContent).toBe('GitHub filter')
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="node-editor-title"]').text()).toBe('Edit node · GitHub filter')
 
     wrapper.unmount()
   })
 
-  it('dragging a node past the threshold emits move and does not open the inspector', async () => {
+  it('dragging a node past the threshold emits move and does not select or open the drawer', async () => {
     const wrapper = mountCanvas()
     const card = wrapper.get('[data-testid="flow-node-source"]') // layout position {x:10, y:20}
 
@@ -214,39 +202,47 @@ describe('FlowsCanvas', () => {
     await nextTick()
 
     expect(wrapper.emitted('move')).toEqual([['source', 40, 20]])
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
+    const sourceCard = wrapper.get('[data-testid="flow-node-source"] > div')
+    expect(sourceCard.attributes('style')).not.toContain('var(--color-accent)')
 
     wrapper.unmount()
   })
 
-  it('a drawer save re-emits update-node, closes the drawer, and keeps the node selected', async () => {
+  it('a drawer save re-emits update-node and closes the drawer', async () => {
     const wrapper = mountCanvas()
-    await clickNode(wrapper, 'flow-node-feed')
-    await wrapper.get('[data-testid="node-inspector-edit"]').trigger('click')
+    await dblClickNode(wrapper, 'flow-node-feed')
 
-    document.querySelector<HTMLButtonElement>('[data-testid="node-editor-save"]')!.click()
-    await nextTick()
+    await wrapper.get('[data-testid="node-editor-save"]').trigger('click')
 
     expect(wrapper.emitted('update-node')).toEqual([[{ id: 'feed', type: 'feed', disabled: false, config: { feed: 'inbox' } }]])
-    expect(document.querySelector('[data-testid="node-editor"]')).toBeNull()
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
 
     wrapper.unmount()
   })
 
-  it('a drawer delete re-emits delete-node and closes both the drawer and the inspector', async () => {
+  it('a drawer delete re-emits delete-node and closes the drawer', async () => {
     const wrapper = mountCanvas()
-    await clickNode(wrapper, 'flow-node-feed')
-    await wrapper.get('[data-testid="node-inspector-edit"]').trigger('click')
+    await dblClickNode(wrapper, 'flow-node-feed')
 
-    document.querySelector<HTMLButtonElement>('[data-testid="node-editor-delete"]')!.click()
-    await nextTick()
-    document.querySelector<HTMLButtonElement>('[data-testid="node-editor-delete-confirm"]')!.click()
-    await nextTick()
+    await wrapper.get('[data-testid="node-editor-delete"]').trigger('click')
+    await wrapper.get('[data-testid="node-editor-delete-confirm"]').trigger('click')
 
     expect(wrapper.emitted('delete-node')).toEqual([['feed']])
-    expect(document.querySelector('[data-testid="node-editor"]')).toBeNull()
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('a drawer close (Cancel) closes the drawer without emitting save or delete', async () => {
+    const wrapper = mountCanvas()
+    await dblClickNode(wrapper, 'flow-node-feed')
+
+    await wrapper.get('[data-testid="node-editor-cancel"]').trigger('click')
+
+    expect(wrapper.find('[data-testid="node-editor"]').exists()).toBe(false)
+    expect(wrapper.emitted('update-node')).toBeUndefined()
+    expect(wrapper.emitted('delete-node')).toBeUndefined()
 
     wrapper.unmount()
   })
@@ -285,11 +281,13 @@ describe('FlowsCanvas', () => {
 
   it('focusNodeId selects the node and center-pans on it (reusing fit()\'s bbox/scale/pan mechanism)', async () => {
     const wrapper = mountCanvas()
-    expect(wrapper.find('[data-testid="node-inspector-panel"]').exists()).toBe(false)
+    let card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).not.toContain('var(--color-accent)')
 
     await wrapper.setProps({ focusNodeId: 'filter' })
 
-    expect(wrapper.get('[data-testid="node-inspector-title"]').text()).toContain('GitHub filter')
+    card = wrapper.get('[data-testid="flow-node-filter"] > div')
+    expect(card.attributes('style')).toContain('var(--color-accent)')
     // A single 176×52 node's bbox is tiny next to the (fallback) 1200×800
     // viewport, so fitToBBox clamps zoom to its 1.5 max.
     expect(wrapper.vm.zoom).toBe(1.5)
