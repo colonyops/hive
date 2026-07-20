@@ -110,10 +110,10 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   const teamRow = page.locator('[data-testid="sidebar-feed"][data-id="backend-triage/my-open-prs"]')
   await expect(teamRow).toContainText('Team PRs')
 
-  // "Reveal in flow" (replaces the old edit pencil) jumps back into the
-  // canvas, focused on the renamed node.
-  await teamRow.hover()
-  await teamRow.getByTestId('sidebar-reveal-in-flow').click()
+  // The "Edit flow" footer jumps back into the canvas, where the renamed node
+  // lives. (There is no per-feed reveal-in-flow icon anymore — a feed is edited
+  // by opening its node in the canvas.)
+  await page.getByTestId('sidebar-edit-flow').click()
   await expect(flowsView).toBeVisible()
   await expect(page.locator('[data-testid="flow-node-my-open-prs"]')).toBeVisible()
   await page.getByTestId('breadcrumb-profile-name').click()
