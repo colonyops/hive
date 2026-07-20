@@ -1,7 +1,6 @@
-// App-wide flow editor/runtime session. The editor owns a mutable local draft;
-// the runtime owns a separate deployed snapshot selected exclusively by the
-// active profile in App.vue. Canvas edits therefore cannot affect a running
-// graph until their exact saved snapshot is deployed.
+// App-wide flow editor/runtime session. The editor owns one mutable local
+// draft, while the deployed-runtime manager owns an independent snapshot for
+// every enabled flow. Canvas/profile selection therefore never gates work.
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { Commit, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
@@ -11,6 +10,7 @@ import { usePipelineRuntime, type RuntimeSummary } from './usePipelineRuntime'
 import type { PipelineClient } from '../driver'
 
 type PipelineEditor = ReturnType<typeof usePipelineEditor>
+type PipelineRuntime = ReturnType<typeof usePipelineRuntime>
 
 export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDraft'> {
   flowsOpen: Ref<boolean>
@@ -18,19 +18,22 @@ export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDr
   running: ComputedRef<boolean>
   lastRun: ComputedRef<RuntimeSummary | null>
   runtimeError: ComputedRef<string | null>
-  /** The active profile's deployed runtime id, or null while it is loading. */
+  /** The selected profile's runtime id, or null when it has no enabled runtime. */
   runtimeFlowId: ComputedRef<string | null>
-  /** Profile selection is the only operation which can select a runtime. */
+  /** Binds profile selection to the editor only; it never controls runtimes. */
   bindActiveFlow(id: string | undefined): void
   openFlows(focusNodeId?: string): void
   exitFlows(): void
   discardDraft(): Promise<void>
-  /** Saves the editor draft and swaps its saved snapshot if it is the active profile. */
+  /** Saves the editor draft, then updates that flow's runtime if it is enabled. */
   deploy(): Promise<void>
-  /** Reloads the active profile's deployed graph after flows:updated. */
+  /** Reconciles every enabled deployed runtime after flows:updated. */
   reloadDeployed(): Promise<void>
+  /** Drains every enabled runtime. */
   pump(): Promise<void>
+  /** Starts every managed runtime (normally they are started by reconciliation). */
   runRuntime(): Promise<void>
+  /** Stops every managed runtime; used when the app/session shuts down. */
   stopRuntime(): void
 }
 
@@ -63,7 +66,7 @@ function errorMessage(err: unknown, fallback: string): string {
 
 function deployedSnapshot(wire: WireFlow): EditorFlow {
   // Wails values are JSON-shaped. Never share nodes/config with the editor's
-  // mutable draft, including when both were made from the same GetFlow result.
+  // mutable draft, including when both came from the same GetFlow result.
   return flowFromWire(JSON.parse(JSON.stringify(wire)) as WireFlow)
 }
 
@@ -73,19 +76,93 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
 
   const flowsOpen = shallowRef(false)
   const flowFocusNodeId = shallowRef<string | null>(null)
-  const desiredFlowId = shallowRef<string | undefined>(undefined)
-  const runtime = shallowRef<ReturnType<typeof usePipelineRuntime> | null>(null)
-  const deployedFlowId = shallowRef<string | null>(null)
-  const runtimeLoadError = shallowRef<string | null>(null)
+  const selectedProfileId = shallowRef<string | undefined>(undefined)
+  const runtimes = shallowRef<Map<string, PipelineRuntime>>(new Map())
+  const runtimeLoadErrors = shallowRef<Map<string, string>>(new Map())
 
-  // All graph reads, swaps, and runtime drains use one tail. A swap is thus
-  // behind every earlier pump, and a pump queued during a reload sees an old
-  // whole snapshot or a new whole snapshot, never a mutable editor graph.
+  // Lifecycle changes and log drains share one tail. A reload can therefore
+  // never replace a graph halfway through one of its commits.
   let operationTail: Promise<void> = Promise.resolve()
   function serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = operationTail.then(operation, operation)
     operationTail = result.then(() => undefined, () => undefined)
     return result
+  }
+
+  function setRuntime(id: string, runtime: PipelineRuntime): void {
+    const next = new Map(runtimes.value)
+    next.set(id, runtime)
+    runtimes.value = next
+  }
+
+  function removeRuntime(id: string): void {
+    const existing = runtimes.value.get(id)
+    if (!existing) return
+    existing.stop()
+    const next = new Map(runtimes.value)
+    next.delete(id)
+    runtimes.value = next
+  }
+
+  function setRuntimeLoadError(id: string, message: string | null): void {
+    const next = new Map(runtimeLoadErrors.value)
+    if (message) next.set(id, message)
+    else next.delete(id)
+    runtimeLoadErrors.value = next
+  }
+
+  function isEnabledFlow(id: string): boolean {
+    return flows.value.some((flow) => flow.id === id && flow.valid && flow.enabled)
+  }
+
+  /** Replaces one runtime only after a complete valid candidate exists. */
+  async function loadRuntime(id: string): Promise<void> {
+    let wire: WireFlow
+    try {
+      wire = await deps.editorClient.getFlow(id)
+    } catch (err) {
+      if (isEnabledFlow(id)) setRuntimeLoadError(id, errorMessage(err, 'Could not reload the deployed flow.'))
+      return // An external reload failure keeps the last known-good runtime.
+    }
+
+    if (!isEnabledFlow(id) || wire.id !== id) {
+      if (isEnabledFlow(id) && wire.id !== id) {
+        setRuntimeLoadError(id, 'Deployed flow identity did not match its listing.')
+      }
+      return
+    }
+
+    let snapshot: EditorFlow
+    try {
+      snapshot = deployedSnapshot(wire)
+    } catch (err) {
+      setRuntimeLoadError(id, errorMessage(err, 'Could not load the deployed flow.'))
+      return
+    }
+
+    // The serialized caller has drained all earlier work. Do not stop a
+    // usable runtime until the replacement snapshot has been validated.
+    removeRuntime(id)
+    const runtime = usePipelineRuntime(deps.runtimeClient, snapshot)
+    setRuntime(id, runtime)
+    setRuntimeLoadError(id, null)
+    await runtime.run()
+  }
+
+  /** Starts missing enabled runtimes and stops disabled/deleted ones. */
+  async function reconcileRuntimes(reload: boolean): Promise<void> {
+    const enabledIDs = new Set(flows.value.filter((flow) => flow.valid && flow.enabled).map((flow) => flow.id))
+
+    for (const id of runtimes.value.keys()) {
+      if (!enabledIDs.has(id)) {
+        removeRuntime(id)
+        setRuntimeLoadError(id, null)
+      }
+    }
+
+    for (const id of enabledIDs) {
+      if (reload || !runtimes.value.has(id)) await loadRuntime(id)
+    }
   }
 
   function openFlows(focusNodeId?: string): void {
@@ -97,95 +174,36 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     flowsOpen.value = false
   }
 
-  /** Replaces a runtime only after a complete valid candidate exists. */
-  async function swapRuntime(id: string, wire: WireFlow): Promise<void> {
-    // Profile changes are synchronous while reads are in flight. Do not let an
-    // older request install a runtime for the newly selected profile.
-    if (desiredFlowId.value !== id || wire.id !== id) return
-
-    let snapshot: EditorFlow
+  let pendingEditorProfile: string | undefined
+  async function selectBoundEditor(id: string): Promise<void> {
+    if (pendingEditorProfile !== id || selectedProfileId.value !== id || !flows.value.some((flow) => flow.id === id)) return
     try {
-      snapshot = deployedSnapshot(wire)
-    } catch (err) {
-      runtimeLoadError.value = errorMessage(err, 'Could not load the deployed flow.')
-      return
-    }
-
-    // serialize() guarantees earlier pumps have drained. Delaying stop until
-    // here preserves the last known-good runtime when fetching/parsing fails.
-    runtime.value?.stop()
-    runtime.value = usePipelineRuntime(deps.runtimeClient, snapshot)
-    deployedFlowId.value = id
-    runtimeLoadError.value = null
-    await runtime.value.run()
-  }
-
-  async function loadAndSwap(id: string, refreshDraft: boolean): Promise<void> {
-    let wire: WireFlow
-    try {
-      wire = await deps.editorClient.getFlow(id)
-    } catch (err) {
-      if (desiredFlowId.value === id) {
-        runtimeLoadError.value = errorMessage(err, 'Could not reload the deployed flow.')
-      }
-      return // Keep the last-good runtime on an external reload failure.
-    }
-
-    if (desiredFlowId.value !== id || wire.id !== id) {
-      if (desiredFlowId.value === id && wire.id !== id) {
-        runtimeLoadError.value = 'Deployed flow identity did not match the active profile.'
-      }
-      return
-    }
-
-    // A profile runtime reload may update its clean draft, but never clobbers
-    // unsaved work or an editor draft the user selected for another flow.
-    const shouldRefreshDraft = refreshDraft && !editor.dirty.value
-    let wireLayout
-    if (shouldRefreshDraft) {
-      try {
-        wireLayout = await deps.editorClient.getLayout(id)
-      } catch (err) {
-        // Layout is editor-only; a valid runtime must still remain available.
-        console.warn('Unable to reload flow layout', id, err)
-      }
-    }
-
-    if (desiredFlowId.value !== id) return
-    await swapRuntime(id, wire)
-
-    if (wireLayout && desiredFlowId.value === id && !editor.dirty.value) {
-      replaceDraft(wire, wireLayout)
+      // Profile navigation has already guarded dirty drafts in App.vue. This
+      // selection does not touch runtime ownership, which remains per-flow.
+      await selectFlow(id)
+    } finally {
+      if (pendingEditorProfile === id) pendingEditorProfile = undefined
     }
   }
-
-  let activationPending: string | undefined
-  watch([desiredFlowId, flows], ([id, list]) => {
-    if (!id || !list.some((flow) => flow.id === id) || activationPending === id) return
-    if (deployedFlowId.value === id) return
-    activationPending = id
-    void serialize(async () => {
-      try {
-        if (desiredFlowId.value === id) await loadAndSwap(id, true)
-      } finally {
-        activationPending = undefined
-      }
-    })
-  }, { immediate: true })
 
   function bindActiveFlow(id: string | undefined): void {
-    if (desiredFlowId.value === id) return
-    desiredFlowId.value = id
-
-    // Queue this before the watch queues the candidate load. The old profile
-    // therefore drains any already-requested work, then cannot keep consuming
-    // under a different selected profile if the new candidate fails to load.
-    void serialize(async () => {
-      if (desiredFlowId.value !== id || deployedFlowId.value === id) return
-      runtime.value?.stop()
-      deployedFlowId.value = null
-    })
+    if (selectedProfileId.value === id) return
+    selectedProfileId.value = id
+    pendingEditorProfile = id
+    if (id) void serialize(async () => { await selectBoundEditor(id) })
   }
+
+  // The editor's initial ListFlows is asynchronous. Once it arrives, start
+  // all enabled runtimes, and complete a profile/editor binding that happened
+  // while the list was still loading. Later list refreshes only add/remove
+  // runtimes; they deliberately do not overwrite an independently selected
+  // editor draft.
+  watch(flows, () => {
+    void serialize(async () => {
+      await reconcileRuntimes(false)
+      if (pendingEditorProfile) await selectBoundEditor(pendingEditorProfile)
+    })
+  }, { immediate: true })
 
   async function discardDraft(): Promise<void> {
     const id = activeFlow.value?.id
@@ -204,41 +222,55 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
   async function deploy(): Promise<void> {
     await serialize(async () => {
       const wire = await saveDraft()
-      // saveDraft returns precisely the graph it wrote. A later local edit
-      // stays dirty and private, but must not prevent this saved graph running.
-      if (!wire || wire.id !== desiredFlowId.value) return
-      await swapRuntime(wire.id, wire)
+      if (!wire) return
+      if (wire.enabled) await loadRuntime(wire.id)
+      else removeRuntime(wire.id)
     })
+  }
+
+  async function refreshCleanEditorDraft(): Promise<void> {
+    const id = activeFlow.value?.id
+    if (!id || editor.dirty.value) return
+    try {
+      const [wire, wireLayout] = await Promise.all([deps.editorClient.getFlow(id), deps.editorClient.getLayout(id)])
+      if (activeFlow.value?.id === id && !editor.dirty.value) replaceDraft(wire, wireLayout)
+    } catch (err) {
+      editor.error.value = errorMessage(err, 'Could not reload the flow.')
+    }
   }
 
   async function reloadDeployed(): Promise<void> {
     await serialize(async () => {
       await editor.refreshFlows()
-      const id = desiredFlowId.value
-      if (id) await loadAndSwap(id, true)
+      await reconcileRuntimes(true)
+      await refreshCleanEditorDraft()
     })
   }
 
   async function pump(): Promise<void> {
-    await serialize(async () => { await runtime.value?.pump() })
+    await serialize(async () => {
+      await Promise.all([...runtimes.value.values()].map(async (runtime) => { await runtime.pump() }))
+    })
   }
 
   async function runRuntime(): Promise<void> {
-    await serialize(async () => { await runtime.value?.run() })
+    await serialize(async () => {
+      await Promise.all([...runtimes.value.values()].map(async (runtime) => { await runtime.run() }))
+    })
   }
 
   function stopRuntime(): void {
-    runtime.value?.stop()
+    for (const runtime of runtimes.value.values()) runtime.stop()
   }
 
-  const running = computed(() => runtime.value?.running.value ?? false)
-  const lastRun = computed(() => runtime.value?.lastRun.value ?? null)
-  const runtimeError = computed(() => runtimeLoadError.value ?? runtime.value?.error.value ?? null)
-  // During a profile switch an old runtime may finish an already requested
-  // drain. Never expose it as belonging to the newly active profile.
-  const runtimeFlowId = computed(() =>
-    deployedFlowId.value === desiredFlowId.value ? deployedFlowId.value : null,
-  )
+  const selectedRuntime = computed(() => selectedProfileId.value ? runtimes.value.get(selectedProfileId.value) : undefined)
+  const running = computed(() => selectedRuntime.value?.running.value ?? false)
+  const lastRun = computed(() => selectedRuntime.value?.lastRun.value ?? null)
+  const runtimeError = computed(() => {
+    const id = selectedProfileId.value
+    return (id ? runtimeLoadErrors.value.get(id) : null) ?? selectedRuntime.value?.error.value ?? null
+  })
+  const runtimeFlowId = computed(() => selectedRuntime.value ? selectedProfileId.value ?? null : null)
 
   return {
     ...editorState,

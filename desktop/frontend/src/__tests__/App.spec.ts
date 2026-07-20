@@ -185,13 +185,13 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('binds the active profile\'s flow to the shared session/runtime even with the flows canvas closed (hc-8ft4yhm6)', async () => {
+  it('binds the active profile draft even with the flows canvas closed (hc-8ft4yhm6)', async () => {
     const wrapper = await mountApp()
 
     // GetLayout/NodeRuns are only ever called from usePipelineEditor's
     // selectFlow — never from useFeedState — so seeing them here proves
-    // the always-on session bound and loaded the active profile's flow
-    // even though the flows canvas was never opened.
+    // the app-wide session selected and loaded the active profile draft even
+    // though the flows canvas was never opened.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
     expect(mocks.GetLayout).toHaveBeenCalledWith('personal')
     expect(mocks.NodeRuns).toHaveBeenCalledWith('personal', 100)
@@ -199,7 +199,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('reloads the active deployed runtime when flows:updated arrives with the canvas closed', async () => {
+  it('reconciles deployed runtimes when flows:updated arrives with the canvas closed', async () => {
     const wrapper = await mountApp()
     const getFlowCalls = mocks.GetFlow.mock.calls.length
     const handler = mocks.On.mock.calls.find(([event]) => event === 'flows:updated')?.[1] as (() => void) | undefined

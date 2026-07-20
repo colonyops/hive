@@ -127,8 +127,8 @@ describe('FlowsView deploy menu', () => {
     return wrapper
   }
 
-  // hc-cahcdf75: the always-on per-profile runtime (hc-8ft4yhm6) means the
-  // deployed flow is already running app-wide, so the old Run/Stop pair is
+  // The always-on per-enabled-flow runtime manager means deployed flows are
+  // already running app-wide, so the old Run/Stop pair is
   // gone — replaced by a single "Refresh now" one-shot pump, and "Debug"
   // is now an explicit, state-aware "Show/Hide debug panel" label.
   it('no longer offers separate Run/Stop actions', async () => {

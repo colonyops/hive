@@ -50,16 +50,15 @@ const {
 // titlebar breadcrumb.
 //
 // The session (useFlowsSession) is a module singleton shared with
-// FlowsView.vue: it owns the pipeline editor AND the always-on runtime that
-// commits feed_item for the active profile's flow, so the sidebar populates
-// even while the canvas below is never opened. App.vue is the FIRST caller
-// (this line runs during App's own setup), so the session's internal
-// onMounted/watch hooks bind to App's lifetime — it keeps running for as
-// long as the app does, independent of FlowsView mounting/unmounting.
+// FlowsView.vue: it owns the pipeline editor and a runtime for every enabled
+// flow, so feeds keep updating while the canvas is closed or another profile
+// is selected. App.vue is the first caller, which makes the manager app-lived
+// rather than dependent on FlowsView mounting/unmounting.
 const session = useFlowsSession()
 
-// Bind the session's tracked flow to whichever profile is active, and
-// switching profiles from the flows canvas returns to the feed view of the
+// Bind profile navigation to the editor's selected draft. Runtime ownership
+// remains independent: every enabled flow runs whether selected or not.
+// Switching profiles from the flows canvas returns to the feed view of the
 // new profile — the just-opened flow belonged to the previous profile.
 watch(activeProfileId, (id) => {
   session.bindActiveFlow(id || undefined)
@@ -168,13 +167,10 @@ function openErrorNode(): void {
 }
 
 // ── Always-on runtime pump (hc-8ft4yhm6) ─────────────────────────────────────
-// Drives the shared session's runtime on every backend log append —
-// mirrors FlowsView's old per-canvas subscription (see usePipelineRuntime's
-// module docs for why the mounting component owns Events.On rather than the
-// composable), except this one lives here so it keeps pumping with the
-// canvas closed. The commit must complete BEFORE useFeedState.refresh()
-// re-reads feed_item, or the sidebar would race the write and show stale
-// counts/items — hence the `await` ahead of the (fire-and-forget) refresh.
+// Drives every enabled runtime on each backend log append. The subscription
+// lives here so processing continues with the canvas closed and regardless of
+// profile selection. Commits complete BEFORE useFeedState.refresh() re-reads
+// feed_item, so all profile sidebars observe the newly committed work.
 let unsubscribeLog: (() => void) | undefined
 let unsubscribeFlowsRuntime: (() => void) | undefined
 onMounted(() => {
@@ -192,6 +188,7 @@ onMounted(() => {
 onUnmounted(() => {
   unsubscribeLog?.()
   unsubscribeFlowsRuntime?.()
+  session.stopRuntime()
 })
 
 // ── Profile create / delete overlays ─────────────────────────────────────────

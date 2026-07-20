@@ -11,13 +11,11 @@ import type { ToastInstance, ToastOptions } from '../types/toast'
 // profiles.yaml + feed/source CRUD are gone — editing a source or feed is
 // editing its node in the flow canvas.
 //
-// feed_item rows are written by the flow graph runtime — an always-on,
+// feed_item rows are written by the flow graph runtime manager — an
 // app-level instance owned by pipeline/composables/useFlowsSession.ts, not
-// this module. That runtime currently runs only the ACTIVE profile's flow
-// (running every enabled profile's flow concurrently is a follow-up — see
-// useFlowsSession.ts's module docs); refresh() here just re-reads whatever
-// feed_item currently holds for the active profile after App.vue's
-// "log:appended" handler has pumped a commit.
+// this module. It runs every enabled flow independently; refresh() here just
+// re-reads the selected profile after App.vue's "log:appended" handler has
+// pumped all committed work.
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
   const profilesLoaded = ref(false)

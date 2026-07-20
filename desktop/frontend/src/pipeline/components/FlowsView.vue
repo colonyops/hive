@@ -6,9 +6,9 @@
 // hc-8ft4yhm6: this component no longer owns the PipelineEditorClient
 // adapter, the usePipelineEditor instance, or the runtime — it reads all of
 // that from the shared useFlowsSession() singleton instead (App.vue is the
-// session's first caller and binds it to the active profile's flow; see
-// useFlowsSession.ts's module docs). That's what lets feed_item keep being
-// committed while this view is unmounted (canvas closed).
+// session's first caller; see useFlowsSession.ts's module docs). Its runtime
+// manager keeps every enabled flow committing feed_item while this view is
+// unmounted (canvas closed).
 //
 // Individual refs/actions are destructured out of useFlowsSession()
 // (rather than kept as one `session` object) so the template can use them
@@ -38,9 +38,9 @@ const {
   running: runtimeRunning, lastRun: runtimeLastRun, runtimeError, pump,
 } = useFlowsSession()
 
-// Which flow is active is now driven externally (App.vue calls
-// session.bindActiveFlow() whenever the active profile changes) — this view
-// just renders whatever the session currently has selected.
+// App.vue binds profile navigation to the editor selection, while the picker
+// below may independently choose another draft. This view only renders editor
+// state; deployed runtimes are managed separately for every enabled flow.
 
 const { size: paletteWidth, startResize: startPaletteResize, step: stepPalette } =
   useResizablePanel({ storageKey: 'hive.panel.palette', defaultSize: 214, min: 170, max: 380, edge: 'right' })
@@ -150,12 +150,10 @@ onUnmounted(() => {
 
 // ── Deploy split-button menu — demotes Refresh now/Copy prompt/Show debug
 // panel behind the "▾" so the main Deploy action reads as one clear amber
-// affordance. Deploy already starts (and the always-on per-profile runtime
-// — see useFlowsSession.ts's hc-8ft4yhm6 docs — keeps) the flow running
-// continuously app-wide, so there's no manual Run/Stop here anymore: "Run"
-// was disabled the instant a flow became active (the runtime auto-starts),
-// and "Stop" would silently pause app-wide feed_item ingestion for this
-// profile with no indicator outside this menu/the debug panel. What's left
+// affordance. Deploy updates the enabled flow's app-wide runtime, and the
+// runtime manager keeps every enabled flow running continuously. There is no
+// manual Run/Stop: stopping a selected graph would violate background
+// ingestion for that flow. What's left
 // that's still genuinely useful from the canvas is a one-shot manual pump
 // (session.pump(), the same call App.vue's "log:appended" listener makes)
 // so a change can be previewed in the debug panel immediately instead of

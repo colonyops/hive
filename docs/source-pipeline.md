@@ -696,21 +696,20 @@ is gone.
   `loadItems` call `PipelineService.FeedItemCounts`/`FeedItems` — the same
   read path the flows editor's preview panel always used — instead of
   `internal/desktop/feed.Store`, which no longer exists.
-- **An always-on, per-profile runtime keeps `feed_item` current with the
-  canvas closed.**
+- **An always-on runtime manager keeps every enabled flow's `feed_item`
+  current with the canvas closed.**
   `desktop/frontend/src/pipeline/composables/useFlowsSession.ts` is a
-  module singleton, first constructed by `App.vue`, that owns both the
-  editor state (`usePipelineEditor`) and a `usePipelineRuntime` instance for
-  whichever flow is bound to the active profile
-  (`session.bindActiveFlow(activeProfileId)`, watched in `App.vue`).
-  `App.vue` subscribes to the backend's `"log:appended"` event once, at the
-  app level, and on every tick calls `session.pump()` and *then*
-  `useFeedState`'s `refresh()` — commit-then-refresh ordering is the whole
-  point, so the sidebar never reads a stale `feed_item` row.
-  `FlowsView.vue` reads the same session, so opening the canvas never
-  starts a second, competing runtime. This runs only the **active**
-  profile's flow today; running every enabled profile's flow concurrently
-  is a follow-up (search the frontend for `hc-8ft4yhm6`).
+  module singleton, first constructed by `App.vue`, that owns editor state
+  (`usePipelineEditor`) plus one `usePipelineRuntime` per enabled, valid
+  flow. Each runtime consumes its own durable flow-id offset. Profile and
+  canvas selection choose only the editor draft; they never start, stop, or
+  redirect deployed processing. `flows:updated` refreshes the listing,
+  starts new enabled flows, stops disabled/deleted flows, and atomically
+  replaces every surviving deployed snapshot after earlier drains finish.
+  `App.vue` subscribes once to `"log:appended"`, calls `session.pump()` for
+  all runtimes, then calls `useFeedState`'s `refresh()`, preserving
+  commit-then-refresh ordering for every profile sidebar. `FlowsView.vue`
+  reads the same session and never creates a competing runtime.
 - **`github-source` embeds its GitHub fetch config directly.**
   `GithubSourceConfig` (`internal/desktop/pipeline/flow/nodes_source.go`) is
   `{kind, query?, limit?}` — a `github-source` node no longer names a
@@ -812,7 +811,7 @@ genuinely blank canvas.
 | `profiles.yaml` → `flows/*.yaml` migration | `internal/desktop/migrate/` |
 | Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
 | Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue` |
-| Always-on per-profile runtime | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |
+| Always-on per-enabled-flow runtime manager | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |
 | Frontend node-type contract | `desktop/frontend/src/pipeline/nodeType.ts`, `registry.ts`, `nodes/*/` |
 | Frontend engine | `desktop/frontend/src/pipeline/engine/` (`graph.ts`, `runGraph.ts`, `transport.ts`, `webWorkerTransport.ts`) |
 | Frontend driver + composables | `desktop/frontend/src/pipeline/driver.ts`, `composables/usePipelineEditor.ts`, `composables/usePipelineRuntime.ts` |

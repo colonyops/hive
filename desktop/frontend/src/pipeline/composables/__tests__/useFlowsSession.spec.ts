@@ -172,21 +172,42 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
-  it('pump() is a clean no-op before any flow has been bound', async () => {
-    const readFrom = vi.fn().mockResolvedValue([])
-    const commit = vi.fn()
-    const { state, wrapper } = mountSession({ editorClient: fakeEditorClient(), runtimeClient: { readFrom, commit } })
+  it('starts every enabled flow before a profile is bound and pump() drains each runtime', async () => {
+    const editorClient = fakeEditorClient({
+      listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2'), summary('disabled', { enabled: false })]),
+      getFlow: vi.fn().mockImplementation((id: string) => Promise.resolve(wireFlow(id))),
+    })
+    let acceptWork = false
+    let delivered = false
+    const readFrom = vi.fn().mockImplementation(async (consumer: string) => {
+      if (acceptWork && consumer === 'flow-2' && !delivered) {
+        delivered = true
+        return [msg('1')]
+      }
+      return []
+    })
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit } })
     await flushPromises()
 
+    // No profile/canvas selection has happened, but both enabled flows have
+    // their own durable consumer and started their initial backlog drain.
+    expect(editorClient.getFlow).toHaveBeenCalledWith('flow-1')
+    expect(editorClient.getFlow).toHaveBeenCalledWith('flow-2')
+    expect(editorClient.getFlow).not.toHaveBeenCalledWith('disabled')
+    expect(readFrom.mock.calls.map(([consumer]) => consumer)).toEqual(expect.arrayContaining(['flow-1', 'flow-2']))
+
+    readFrom.mockClear()
+    commit.mockClear()
+    acceptWork = true
     await state.pump()
 
-    expect(readFrom).not.toHaveBeenCalled()
-    expect(commit).not.toHaveBeenCalled()
-
+    expect(readFrom.mock.calls.map(([consumer]) => consumer)).toEqual(expect.arrayContaining(['flow-1', 'flow-2']))
+    expect(commit).toHaveBeenCalledWith(expect.objectContaining({ consumer: 'flow-2' }))
     wrapper.unmount()
   })
 
-  it('runRuntime/stopRuntime manually control the active flow\'s runtime (FlowsView\'s deploy-menu Run/Stop)', async () => {
+  it('runRuntime/stopRuntime control every managed runtime (session shutdown support)', async () => {
     const editorClient = fakeEditorClient()
     const readFrom = vi.fn().mockResolvedValue([])
     const commit = vi.fn().mockResolvedValue(undefined)
@@ -228,15 +249,18 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
-  it('discardDraft() is a no-op when no flow is bound', async () => {
+  it('discardDraft() is a no-op when no editor flow is selected', async () => {
     const editorClient = fakeEditorClient()
     const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
     await flushPromises()
 
     expect(state.activeFlow.value).toBeNull()
+    const getFlowCalls = (editorClient.getFlow as ReturnType<typeof vi.fn>).mock.calls.length
     await state.discardDraft()
 
-    expect(editorClient.getFlow).not.toHaveBeenCalled()
+    // Runtime startup loads enabled deployments, but discard itself does not
+    // issue a second editor read without an editor selection.
+    expect(editorClient.getFlow).toHaveBeenCalledTimes(getFlowCalls)
 
     wrapper.unmount()
   })
@@ -292,39 +316,28 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
-  it('drains a queued pump before swapping to another profile runtime', async () => {
-    const order: string[] = []
-    const getFlow = vi.fn().mockImplementation(async (id: string) => {
-      if (id === 'flow-2') order.push('swap')
-      return wireFlow(id)
-    })
+  it('reconciles disabled and deleted flows by stopping their runtimes', async () => {
+    const listFlows = vi.fn()
+      .mockResolvedValueOnce([summary('flow-1'), summary('flow-2')])
+      .mockResolvedValueOnce([summary('flow-1', { enabled: false }), summary('flow-2')])
+      .mockResolvedValueOnce([summary('flow-2')]) // flow-1 was then deleted externally
     const editorClient = fakeEditorClient({
-      listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2')]),
-      getFlow,
+      listFlows,
+      getFlow: vi.fn().mockImplementation((id: string) => Promise.resolve(wireFlow(id))),
     })
-    let resolveRead!: (batch: Msg[]) => void
     const readFrom = vi.fn().mockResolvedValue([])
-    const commit = vi.fn().mockImplementation(async () => { order.push('commit') })
-    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit } })
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit: vi.fn() } })
     await flushPromises()
 
-    state.bindActiveFlow('flow-1')
-    await flushPromises()
-    readFrom.mockImplementationOnce(() => new Promise<Msg[]>((resolve) => { resolveRead = resolve }))
+    await state.reloadDeployed() // flow-1 becomes disabled
+    readFrom.mockClear()
+    await state.pump()
+    expect(readFrom.mock.calls.map(([consumer]) => consumer)).toEqual(['flow-2'])
 
-    const drain = state.pump()
-    await vi.waitFor(() => expect(readFrom).toHaveBeenCalledTimes(2))
-    state.bindActiveFlow('flow-2')
-    await flushPromises()
-    expect(order).not.toContain('swap')
-
-    resolveRead([msg('1')])
-    await drain
-    await flushPromises()
-
-    expect(order).toEqual(expect.arrayContaining(['commit', 'swap']))
-    expect(order.indexOf('commit')).toBeLessThan(order.indexOf('swap'))
-    expect(state.runtimeFlowId.value).toBe('flow-2')
+    await state.reloadDeployed() // flow-1 is now absent from the listing
+    readFrom.mockClear()
+    await state.pump()
+    expect(readFrom.mock.calls.map(([consumer]) => consumer)).toEqual(['flow-2'])
     wrapper.unmount()
   })
 
@@ -345,27 +358,22 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
-  it('rebuilds the runtime when the active flow changes to a different flow', async () => {
+  it('reloadDeployed rebuilds every enabled runtime, not just the selected profile', async () => {
+    const getFlow = vi.fn().mockImplementation((id: string) => Promise.resolve(wireFlow(id)))
     const editorClient = fakeEditorClient({
       listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2')]),
-      getFlow: vi.fn().mockImplementation((id: string) => Promise.resolve(wireFlow(id))),
+      getFlow,
     })
-    const readFrom = vi.fn().mockResolvedValue([])
-    const commit = vi.fn().mockResolvedValue(undefined)
-    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit } })
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
     await flushPromises()
+    expect(getFlow).toHaveBeenCalledTimes(2)
 
     state.bindActiveFlow('flow-1')
     await flushPromises()
-    expect(readFrom).toHaveBeenCalledTimes(1) // initial pump for flow-1
+    const beforeReload = getFlow.mock.calls.length
+    await state.reloadDeployed()
 
-    state.bindActiveFlow('flow-2')
-    await flushPromises()
-
-    expect(state.activeFlow.value?.id).toBe('flow-2')
-    expect(state.running.value).toBe(true) // the new runtime auto-ran too
-    expect(readFrom).toHaveBeenCalledTimes(2) // initial pump for flow-2
-
+    expect(getFlow.mock.calls.slice(beforeReload).map(([id]) => id)).toEqual(expect.arrayContaining(['flow-1', 'flow-2']))
     wrapper.unmount()
   })
 })
