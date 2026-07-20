@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SideBar from '../SideBar.vue'
-import type { Profile } from '../../types/feed'
+import type { FeedTree, Profile, SidebarNode } from '../../types/feed'
 
 const profile: Profile = {
   id: 'personal',
@@ -101,5 +101,100 @@ describe('SideBar', () => {
 
     window.dispatchEvent(new PointerEvent('pointerup', { clientX: 300, pointerId: 1 }))
     expect(localStorage.getItem('hive.panel.sidebar')).toBe('300')
+  })
+})
+
+// ── folders + reordering ──────────────────────────────────────────────────────
+
+const desktopFeed = { id: 'desktop', name: 'Desktop UI', count: 2, newCount: 1 }
+const backendFeed = { id: 'backend', name: 'Backend', count: 1, newCount: 0 }
+
+const grouped: Profile = {
+  ...profile,
+  tree: [
+    { kind: 'feed', feed: desktopFeed },
+    { kind: 'folder', folder: { id: 'work', name: 'Work', collapsed: false, feeds: [backendFeed] } },
+  ],
+}
+
+function mountGrouped() {
+  return mount(SideBar, { props: { profile: grouped, selection: { type: 'all' } } })
+}
+
+// The tree carried by the most recent 'reorder' emit.
+function lastReorder(wrapper: ReturnType<typeof mountGrouped>): FeedTree {
+  const events = wrapper.emitted('reorder')
+  return events![events!.length - 1][0] as FeedTree
+}
+
+function folderNamed(tree: FeedTree, id: string) {
+  const node = tree.find((n): n is Extract<SidebarNode, { kind: 'folder' }> => n.kind === 'folder' && n.folder.id === id)
+  return node?.folder
+}
+
+describe('SideBar folders', () => {
+  it('renders folders with their nested feeds', () => {
+    const wrapper = mountGrouped()
+    expect(wrapper.find('[data-testid="sidebar-folder"][data-id="work"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="folder-name"]').text()).toBe('Work')
+    // The nested feed renders inside the folder.
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(true)
+  })
+
+  it('hides a collapsed folder\'s feeds', () => {
+    const collapsed: Profile = {
+      ...profile,
+      tree: [{ kind: 'folder', folder: { id: 'work', name: 'Work', collapsed: true, feeds: [backendFeed] } }],
+    }
+    const wrapper = mount(SideBar, { props: { profile: collapsed, selection: { type: 'all' } } })
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(false)
+  })
+
+  it('toggles a folder collapsed when its header is clicked', async () => {
+    const wrapper = mountGrouped()
+    await wrapper.find('[data-testid="sidebar-folder"][data-id="work"] .folder-header').trigger('click')
+    expect(folderNamed(lastReorder(wrapper), 'work')?.collapsed).toBe(true)
+  })
+
+  it('appends a new empty folder when the new-folder button is clicked', async () => {
+    const wrapper = mountGrouped()
+    await wrapper.find('[data-testid="sidebar-new-folder"]').trigger('click')
+    const folders = lastReorder(wrapper).filter((n) => n.kind === 'folder')
+    expect(folders).toHaveLength(2)
+  })
+
+  it('renames a folder, emitting the new name', async () => {
+    const wrapper = mountGrouped()
+    await wrapper.find('[data-testid="folder-rename"]').trigger('click')
+    const input = wrapper.find('[data-testid="folder-rename-input"]')
+    expect(input.exists()).toBe(true)
+    await input.setValue('Projects')
+    await input.trigger('keydown.enter')
+    expect(folderNamed(lastReorder(wrapper), 'work')?.name).toBe('Projects')
+  })
+
+  it('deleting a folder ungroups its feeds back to the top level', async () => {
+    const wrapper = mountGrouped()
+    await wrapper.find('[data-testid="folder-delete"]').trigger('click')
+    const tree = lastReorder(wrapper)
+    expect(tree.some((n) => n.kind === 'folder')).toBe(false)
+    expect(tree.some((n) => n.kind === 'feed' && n.feed.id === 'backend')).toBe(true)
+  })
+
+  it('emits a reorder when a feed is dragged to the trailing drop zone', async () => {
+    const wrapper = mountGrouped()
+    // Drag the top-level "desktop" feed to the end.
+    await wrapper.find('[data-testid="sidebar-item"]').trigger('dragstart')
+    await wrapper.find('[data-testid="sidebar-drop-end"]').trigger('dragover')
+    await wrapper.find('[data-testid="sidebar-drop-end"]').trigger('drop')
+
+    const tree = lastReorder(wrapper)
+    expect(tree[tree.length - 1]).toMatchObject({ kind: 'feed', feed: { id: 'desktop' } })
+  })
+
+  it('falls back to a flat list of feeds when the profile has no tree', () => {
+    const wrapper = mountSideBar()
+    expect(wrapper.findAll('[data-testid="sidebar-item"]')).toHaveLength(2)
+    expect(wrapper.find('[data-testid="sidebar-folder"]').exists()).toBe(false)
   })
 })

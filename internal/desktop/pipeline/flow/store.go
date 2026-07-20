@@ -153,7 +153,8 @@ func (s *FlowStore) Delete(id string) error {
 	if err := os.Remove(filepath.Join(s.dir, id+".yaml")); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("flow: delete %q: %w", id, err)
 	}
-	_ = os.Remove(s.uiPath(id)) // layout is cosmetic; its absence is fine
+	_ = os.Remove(s.uiPath(id))      // layout is cosmetic; its absence is fine
+	_ = os.Remove(s.sidebarPath(id)) // sidebar layout is cosmetic too
 	return s.reloadLocked()
 }
 
@@ -213,6 +214,18 @@ func (s *FlowStore) SaveLayout(id string, layout Layout) error {
 	return SaveUI(s.uiPath(id), layout)
 }
 
+// GetSidebar returns id's sidebar layout (feed folders + ordering) — see
+// LoadSidebar for missing/broken-file semantics (an empty layout, never an
+// error).
+func (s *FlowStore) GetSidebar(id string) SidebarLayout {
+	return LoadSidebar(s.sidebarPath(id))
+}
+
+// SaveSidebar persists id's sidebar layout.
+func (s *FlowStore) SaveSidebar(id string, layout SidebarLayout) error {
+	return SaveSidebar(s.sidebarPath(id), layout)
+}
+
 // Reload re-reads every flow file in the directory. It only returns an
 // error when the directory itself can't be created/read (rare — the flows
 // dir is created on demand); a broken individual flow file is never a
@@ -253,4 +266,8 @@ func (s *FlowStore) ensureLoadedLocked() {
 
 func (s *FlowStore) uiPath(id string) string {
 	return filepath.Join(s.dir, id+".ui.yaml")
+}
+
+func (s *FlowStore) sidebarPath(id string) string {
+	return filepath.Join(s.dir, id+".sidebar.yaml")
 }

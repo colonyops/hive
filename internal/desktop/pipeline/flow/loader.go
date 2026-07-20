@@ -51,6 +51,9 @@ func LoadFlows(dir string, refs Refs) (flows []Flow, perFileErrors map[string]er
 		if strings.HasSuffix(name, ".ui.yaml") || strings.HasSuffix(name, ".ui.yml") {
 			continue
 		}
+		if strings.HasSuffix(name, ".sidebar.yaml") || strings.HasSuffix(name, ".sidebar.yml") {
+			continue
+		}
 		if ext := filepath.Ext(name); ext != ".yaml" && ext != ".yml" {
 			continue
 		}

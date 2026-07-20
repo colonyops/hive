@@ -370,6 +370,18 @@ broken layout file is not an error (the editor just lays nodes out fresh).
 `LoadFlows` explicitly skips `*.ui.yaml`/`*.ui.yml` files when scanning the
 flows directory for flow definitions.
 
+A second machine-written sibling, `<id>.sidebar.yaml` (`flow/sidebar.go`),
+records how the profile's feed nodes are grouped into **folders** and ordered
+in the sidebar's FEEDS section (`SaveSidebar`/`GetSidebar` on `FlowsService`,
+driven by drag-and-drop in `SideBar.vue`). Like the layout file it is
+node-id-keyed, purely cosmetic, and skipped by `LoadFlows`; a missing or broken
+file falls back to listing feeds in flow-node order. It is a *separate* file
+from `.ui.yaml` so the canvas editor's whole-layout writes can never clobber
+the sidebar grouping. The frontend resolves it against the flow's live feed
+nodes in `lib/feedTree.ts` — appending feeds the file doesn't mention (so a
+newly added feed is never hidden) and dropping references to feeds that no
+longer exist.
+
 **Worked example** (a similar package-local fixture — with
 `msg.payload` written lowercase, since it's a pure YAML round-trip test that
 never actually executes the JS — lives in `flow/loader_test.go`'s
@@ -746,7 +758,8 @@ own profile tile).
 | `flows/*.yaml` schema | `internal/desktop/pipeline/flow/` |
 | `actions.yml` schema | `internal/desktop/pipeline/actions/` |
 | Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
-| Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue` |
+| Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue`, `SidebarFeedRow.vue` |
+| Sidebar feed folders + ordering | `internal/desktop/pipeline/flow/sidebar.go` (`<id>.sidebar.yaml`), `desktop/frontend/src/lib/feedTree.ts` |
 | Always-on per-enabled-flow runtime manager | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |
 | Frontend node-type contract | `desktop/frontend/src/pipeline/nodeType.ts`, `registry.ts`, `nodes/*/` |
 | Frontend engine | `desktop/frontend/src/pipeline/engine/` (`graph.ts`, `runGraph.ts`, `transport.ts`, `webWorkerTransport.ts`) |

@@ -53,6 +53,16 @@ export function GetLayout(id: string): $CancellablePromise<flow$0.Layout> {
 }
 
 /**
+ * GetSidebar returns a flow's sidebar layout: how its feed nodes are grouped
+ * into folders and ordered in the sidebar's FEEDS section. A missing or broken
+ * file is not an error — it returns an empty layout so the sidebar falls back
+ * to flow-node order.
+ */
+export function GetSidebar(id: string): $CancellablePromise<flow$0.SidebarLayout> {
+    return $Call.ByID(378136572, id);
+}
+
+/**
  * ListFlows returns one summary per flow file — valid and invalid alike —
  * for the flows picker.
  */
@@ -74,4 +84,11 @@ export function SaveFlow(f: flow$0.Flow): $CancellablePromise<void> {
  */
 export function SaveLayout(id: string, layout: flow$0.Layout): $CancellablePromise<void> {
     return $Call.ByID(4232063923, id, layout);
+}
+
+/**
+ * SaveSidebar persists a flow's sidebar layout (feed folders + ordering).
+ */
+export function SaveSidebar(id: string, layout: flow$0.SidebarLayout): $CancellablePromise<void> {
+    return $Call.ByID(3551590419, id, layout);
 }

@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
   DeleteFlow: vi.fn(),
+  GetSidebar: vi.fn(),
+  SaveSidebar: vi.fn(),
   FeedItems: vi.fn(),
   FeedItemCounts: vi.fn(),
   MarkFeedItemRead: vi.fn(),
@@ -22,6 +24,8 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () =
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
   DeleteFlow: mocks.DeleteFlow,
+  GetSidebar: mocks.GetSidebar,
+  SaveSidebar: mocks.SaveSidebar,
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
@@ -61,6 +65,8 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.ListFlows.mockResolvedValue([flowSummary])
   mocks.GetFlow.mockResolvedValue(flow)
+  mocks.GetSidebar.mockResolvedValue({ items: [] })
+  mocks.SaveSidebar.mockResolvedValue(undefined)
   mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'triage/my-prs', total: 3, unread: 2 }])
   mocks.FeedItems.mockResolvedValue([])
   mocks.ActionViews.mockResolvedValue([])
@@ -82,6 +88,46 @@ describe('useFeedState', () => {
     expect(state.activeProfile.value?.totalCount).toBe(3)
     expect(state.activeProfile.value?.unreadCount).toBe(2)
     expect(state.activeProfile.value?.sourceSummary).toBe('GitHub · 1 source')
+  })
+
+  it('builds a flat sidebar tree from feeds when there is no saved layout', async () => {
+    const get = mountState()
+    await flushPromises()
+    expect(get().activeProfile.value?.tree).toEqual([
+      { kind: 'feed', feed: { id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 } },
+    ])
+  })
+
+  it('reconciles the saved sidebar layout (folders, node-id keyed) into the tree', async () => {
+    mocks.GetSidebar.mockResolvedValue({
+      items: [{ folder: { id: 'work', name: 'Work', collapsed: true, feeds: ['my-prs'] } }],
+    })
+    const get = mountState()
+    await flushPromises()
+
+    expect(get().activeProfile.value?.tree).toEqual([
+      {
+        kind: 'folder',
+        folder: { id: 'work', name: 'Work', collapsed: true, feeds: [{ id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 }] },
+      },
+    ])
+  })
+
+  it('persists a reordered tree via SaveSidebar, keyed by feed node id', async () => {
+    mocks.SaveSidebar.mockResolvedValue(undefined)
+    const get = mountState()
+    await flushPromises()
+
+    const feed = { id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 }
+    await get().reorderFeeds('triage', [
+      { kind: 'folder', folder: { id: 'work', name: 'Work', collapsed: false, feeds: [feed] } },
+    ])
+
+    expect(mocks.SaveSidebar).toHaveBeenCalledWith('triage', {
+      items: [{ folder: { id: 'work', name: 'Work', collapsed: false, feeds: ['my-prs'] } }],
+    })
+    // The in-memory tree updates optimistically.
+    expect(get().activeProfile.value?.tree?.[0]).toMatchObject({ kind: 'folder', folder: { id: 'work' } })
   })
 
   it('loads a feed\'s items from feed_item, decoding the payload', async () => {

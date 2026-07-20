@@ -1,9 +1,10 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Browser, Events, Window } from '@wailsio/runtime'
-import { CreateFlow, DeleteFlow, GetFlow, ListFlows } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
+import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
-import type { FeedItem, FeedSummary, Profile, SidebarSelection } from '../types/feed'
+import type { FeedItem, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
 import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
@@ -121,7 +122,7 @@ export function useFeedState() {
   // feed nodes, with per-feed counts from feed_item.
   async function loadFeeds(flowId: string) {
     try {
-      const [flow, counts] = await Promise.all([GetFlow(flowId), FeedItemCounts(flowId)])
+      const [flow, counts, sidebar] = await Promise.all([GetFlow(flowId), FeedItemCounts(flowId), GetSidebar(flowId)])
       const countByFeed = new Map((counts ?? []).map((c) => [c.feedId, c]))
       const nodes = (flow.nodes ?? []) as Array<{ id: string; type: string; name?: string }>
       const feeds: FeedSummary[] = nodes
@@ -135,12 +136,29 @@ export function useFeedState() {
       const profile = profiles.value.find((p) => p.id === flowId)
       if (profile) {
         profile.feeds = feeds
+        // Rebuild the sidebar tree from current feeds + saved layout on every
+        // load so counts stay fresh and added/removed feeds reconcile in.
+        profile.tree = buildFeedTree(feeds, sidebar, flowId)
         profile.sourceSummary = `GitHub · ${sourceCount} source${sourceCount === 1 ? '' : 's'}`
         profile.totalCount = feeds.reduce((sum, f) => sum + f.count, 0)
         profile.unreadCount = feeds.reduce((sum, f) => sum + f.newCount, 0)
       }
     } catch (error) {
       console.warn('Unable to load flow feeds', error)
+    }
+  }
+
+  // reorderFeeds persists a new sidebar grouping/order for a profile: it
+  // updates the in-memory tree optimistically, then writes the layout. The
+  // saved <id>.sidebar.yaml is keyed by feed node id (see lib/feedTree).
+  async function reorderFeeds(flowId: string, tree: FeedTree) {
+    const profile = profiles.value.find((p) => p.id === flowId)
+    if (profile) profile.tree = tree
+    try {
+      await SaveSidebar(flowId, treeToLayout(tree, flowId))
+    } catch (error) {
+      console.warn('Unable to save sidebar layout', error)
+      showToast('Could not save the sidebar layout', { severity: 'error' })
     }
   }
 
@@ -421,6 +439,7 @@ export function useFeedState() {
     loadProfiles,
     createProfile,
     deleteProfile,
+    reorderFeeds,
     selectProfile,
     selectSidebar,
     selectUnreadView,

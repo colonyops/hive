@@ -32,6 +32,25 @@ export interface FeedSummary {
   newCount: number
 }
 
+// FeedFolder is a named, collapsible group of feeds in the sidebar. It carries
+// resolved FeedSummary objects (not ids) so the sidebar can render counts
+// directly. Persisted (per-flow, by node id) as a flow.SidebarFolder.
+export interface FeedFolder {
+  id: string
+  name: string
+  collapsed: boolean
+  feeds: FeedSummary[]
+}
+
+// SidebarNode is one entry in the sidebar's ordered FEEDS section: a bare feed
+// or a folder. FeedTree is the resolved, ordered tree the SideBar renders — the
+// reconciliation of a profile's live feeds with its saved flow.SidebarLayout
+// (see lib/feedTree.ts).
+export type SidebarNode =
+  | { kind: 'feed'; feed: FeedSummary }
+  | { kind: 'folder'; folder: FeedFolder }
+export type FeedTree = SidebarNode[]
+
 // Profile is a workspace in the UI — backed by a flow.
 export interface Profile {
   id: string
@@ -41,6 +60,10 @@ export interface Profile {
   totalCount: number
   unreadCount: number
   feeds: FeedSummary[]
+  // tree is the resolved sidebar grouping/order for `feeds`. Absent until the
+  // profile's feeds have loaded; the SideBar falls back to a flat list of
+  // `feeds` when it is missing.
+  tree?: FeedTree
 }
 
 // Scope only: the unread filter is an independent axis (unreadOnly in

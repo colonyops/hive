@@ -42,7 +42,7 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
   selectedId, selectedItem, actions, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
-  selectProfile, selectSidebar, selectUnreadView, selectItem,
+  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, invokeAction, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
@@ -545,6 +545,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @open-flows="openFlows()"
             @open-settings="requestOpenSettings('profile')"
             @reveal-in-flow="revealInFlow"
+            @reorder="(t) => activeProfile && reorderFeeds(activeProfile.id, t)"
           />
           <section v-if="activeProfile" class="flex min-w-0 flex-1">
             <FeedList
