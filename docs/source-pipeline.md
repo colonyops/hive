@@ -381,38 +381,6 @@ wires:
   - { from: tag, out: 0, to: spawn-review }
 ```
 
-### Legacy `profiles.yaml` and the `migrate` converter
-
-`profiles.yaml` (`sources:` + `profiles:` → `feeds:`, each feed's own
-`filters:` block) is **not a live schema any more** — nothing in the running
-app reads it, and the old `internal/desktop/feed` code that used to parse it
-(`FilterDef`, `Store`, `ConfigInfo`, the poller, …) is deleted. It survives
-purely as the *input* format `internal/desktop/migrate` converts, one time,
-into `flows/*.yaml`.
-
-`internal/desktop/migrate` (run via the desktop binary's
-`--migrate-profiles[=dry|write]` flag, wired up in `desktop/main.go`'s
-`runMigrationIfRequested`) keeps its own **private** copy of the old config
-shape (`legacyConfig`/`legacySource`/`legacyFilter`/`legacyFeed`/
-`legacyProfile` in `migrate/convert.go`), decoded laxly so a field the app no
-longer knows about is ignored rather than fatal — that isolation is what let
-the legacy feed package's config schema be deleted outright without
-`migrate` needing any of it.
-
-Per legacy profile, `buildFlow` produces one flow: each legacy `feed`
-becomes a `feed` node (plus a `github-filter` node when the feed had a
-non-empty `filters:` block), and each `source` a feed referenced becomes —
-once, deduplicated — a `github-source` node carrying that source's
-`kind`/`query`/`limit` as its own embedded `GithubSourceConfig`, all laid out
-in three columns (sources · filters · feeds). The produced flow is rendered,
-validated against a real `flow.MapRefs{}`, and — in write mode — saved via
-`flow.SaveFlow`/`flow.SaveUI` next to a one-time `.bak` backup of the
-original `profiles.yaml`; `--force` is required to overwrite a
-`flows/<id>.yaml` that already exists, so a re-run never clobbers hand
-edits. See
-[Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)
-below for how this fits into the cutover as a whole.
-
 ### `actions.yml`
 
 Implemented by `internal/desktop/pipeline/actions`, at
@@ -714,11 +682,10 @@ is gone.
   reads the same session and never creates a competing runtime.
 - **`github-source` embeds its GitHub fetch config directly.**
   `GithubSourceConfig` (`internal/desktop/pipeline/flow/nodes_source.go`) is
-  `{kind, query?, limit?}` — a `github-source` node no longer names a
-  `profiles.yaml` source id, because that file is no longer a live schema
-  (see [Legacy `profiles.yaml` and the `migrate` converter](#legacy-profilesyaml-and-the-migrate-converter)
-  above). A `feed` node is likewise config-free: `FeedConfig` is an empty
-  struct, and the feed's identity is just its own (flow-qualified) node id.
+  `{kind, query?, limit?}` — a `github-source` node is self-contained
+  rather than naming an external source id. A `feed` node is likewise
+  config-free: `FeedConfig` is an empty struct, and the feed's identity is
+  just its own (flow-qualified) node id.
 - **`rpc-source` is gone**, not merely unimplemented: it has been removed
   from `flow`'s node registry (`flow/node.go`) along with its schema type.
   There is no RPC source today, backend or frontend.
@@ -808,7 +775,6 @@ genuinely blank canvas.
 | Output worker + executors | `internal/desktop/pipeline/output_worker.go`, `launch_session_executor.go`, `shell_executor.go`, `publish_event_executor.go` |
 | `flows/*.yaml` schema | `internal/desktop/pipeline/flow/` |
 | `actions.yml` schema | `internal/desktop/pipeline/actions/` |
-| `profiles.yaml` → `flows/*.yaml` migration | `internal/desktop/migrate/` |
 | Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
 | Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue` |
 | Always-on per-enabled-flow runtime manager | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |

@@ -20,7 +20,6 @@ import (
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
-	"github.com/colonyops/hive/internal/desktop/migrate"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
@@ -281,39 +280,7 @@ func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, laun
 	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 }
 
-// runMigrationIfRequested handles the one-time `--migrate-profiles[=dry|write]`
-// flag: it converts the legacy profiles.yaml into per-profile flows/*.yaml and
-// exits, never starting the app. Inert (returns false) when the flag is absent,
-// so a normal launch is unaffected. `--force` overwrites existing flow files.
-func runMigrationIfRequested() bool {
-	var requested, write, force bool
-	for _, arg := range os.Args[1:] {
-		switch arg {
-		case "--migrate-profiles", "--migrate-profiles=dry":
-			requested = true
-		case "--migrate-profiles=write":
-			requested, write = true, true
-		case "--force":
-			force = true
-		}
-	}
-	if !requested {
-		return false
-	}
-	report, err := migrate.Convert(desktop.ConfigPath(), desktop.FlowsDir(), migrate.Options{Write: write, Force: force})
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "migrate-profiles:", err)
-		os.Exit(1)
-	}
-	fmt.Print(report.Format())
-	return true
-}
-
 func main() {
-	if runMigrationIfRequested() {
-		return
-	}
-
 	// The poller, watcher, and pipeline producer live for the whole
 	// process; they die with it, so there are no Stop/Close calls here (and
 	// log.Fatal below would skip a defer anyway).
