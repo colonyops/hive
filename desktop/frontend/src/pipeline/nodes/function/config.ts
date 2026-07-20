@@ -1,7 +1,7 @@
 // function is the author-trusted JS processor node (1 in / N out). This
 // file is the single source of truth for its Config shape and the
 // compile()/checkSyntax() helpers — runtime.ts (the worker-side
-// ProcessorRuntime) and the future Phase 6 drawer's live syntax check both
+// ProcessorRuntime), config validation, and the drawer's live syntax check
 // import from here rather than duplicating the `new Function(...)` call.
 
 import type { Msg } from '../../types'
@@ -19,7 +19,7 @@ export interface Config {
   on_message: string
   /** optional — runs once per instance before the first message. */
   on_start?: string
-  /** optional — runs once per instance on teardown (Phase 4 Deploy drain). */
+  /** optional stop hook compiled by the runtime for transports that invoke lifecycle stop. */
   on_stop?: string
   /** 1..16, default 1 (D1). */
   outputs?: number
@@ -53,8 +53,8 @@ export function compile(src: string): CompiledFn {
 }
 
 /**
- * Surfaces syntax errors from `src` without running it — shared by the
- * (future) Phase 6 drawer's live syntax check. Returns an empty array when
+ * Surfaces syntax errors from `src` without running it — shared by config
+ * validation and the drawer's live syntax check. Returns an empty array when
  * `src` compiles cleanly.
  */
 export function checkSyntax(src: string): string[] {
@@ -66,7 +66,7 @@ export function checkSyntax(src: string): string[] {
   }
 }
 
-// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+// ── App-registry metadata ───────────────────────────────────────────────────
 
 export const label = 'Function'
 export const category = 'Process' as const

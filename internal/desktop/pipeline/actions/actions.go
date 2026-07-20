@@ -36,7 +36,7 @@ type View struct {
 // fields plus a per-type Config decoded via the registry.
 type Action struct {
 	// ID is the action's id, referenced by a flow's `action:` node field and
-	// (in a later phase) the detail-pane action picker.
+	// by the detail-pane action picker.
 	ID string
 	// Label is the human-readable name shown wherever the action is offered
 	// (a flow node, a detail-pane button).
@@ -44,10 +44,10 @@ type Action struct {
 	// Type is the action kind discriminator: "launch-session", "shell", or
 	// "publish-event".
 	Type string
-	// AppliesTo restricts which msg.meta.kind values this action is offered
-	// for (a later phase's detail-pane action picker); empty means "any
-	// kind". It plays no role in flow `action` nodes, which target one
-	// specific action id explicitly regardless of kind.
+	// AppliesTo restricts which feed item kinds this action is offered for in
+	// the detail pane; empty means "any kind". It plays no role in flow
+	// `action` nodes, which target one specific action id explicitly
+	// regardless of kind.
 	AppliesTo []string
 	// AutoApply, when true, lets the output worker execute this action's
 	// queued output_command rows automatically. When false (the default),

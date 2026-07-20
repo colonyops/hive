@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Debug/health panel (Phase 6c): a read-only view over the same node_run
-// data FlowsCanvas already polls via usePipelineEditor (nodeRuns/
+// Debug/health panel: a read-only view over the same node_run data
+// FlowsCanvas already polls via usePipelineEditor (nodeRuns/
 // latestRunByNode — see composables/usePipelineEditor.ts), plus the
 // mounting component's usePipelineRuntime summary of its last pump(). Pure
 // display — this never mutates its props, so it takes plain values rather

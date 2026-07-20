@@ -17,15 +17,14 @@ import (
 // fires with the offset of the last row appended, so main.go can wake the
 // frontend (the Wails "log:appended" event).
 //
-// Dedup vs. Compact: a source's Produce re-emits every current item on
+// Source deduplication: a source's Produce re-emits every current item on
 // every tick, even when nothing changed upstream (githubSource's fetch
 // layer may itself be cache-hit, but the cached items are still emitted).
-// Rather than appending an unchanged item every tick and relying solely on
-// pipelinedb.Compact to collapse it later, Producer delegates to
-// pipelinedb.AppendIfChanged. It stores the last payload by (topic, key) in
-// the database and atomically appends a changed event with its new head, so
-// deduplication survives restarts and a failed append never suppresses a
-// retry. Compact remains the source of truth for bounding on-disk growth.
+// Producer delegates to pipelinedb.AppendIfChanged, which stores the last
+// payload by (topic, key) in the database and atomically appends a changed
+// event with its new head, so deduplication survives restarts and a failed
+// append never suppresses a retry. Successful ticks also append a source
+// snapshot event for downstream feed reconciliation.
 type Producer struct {
 	db         Appender
 	sources    SourceLister

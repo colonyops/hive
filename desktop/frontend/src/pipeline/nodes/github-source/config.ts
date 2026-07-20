@@ -26,7 +26,7 @@ export interface Config {
   limit?: number
 }
 
-// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+// ── App-registry metadata ───────────────────────────────────────────────────
 
 export const label = 'GitHub source'
 export const category = 'Sources' as const

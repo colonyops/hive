@@ -110,8 +110,8 @@ export function renderMarkdown(src: string): string {
 
 /**
  * The first paragraph of a help.md doc, skipping leading headings — used as
- * a short summary both by the drawer's collapsed Docs section and (Phase 6
- * canvas) the palette's hover card, per D2.
+ * a short summary by the drawer's collapsed Docs section and the palette's
+ * hover card.
  */
 export function summarize(markdown: string): string {
   const lines = markdown.replace(/\r\n/g, '\n').split('\n')

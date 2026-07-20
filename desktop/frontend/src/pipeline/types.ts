@@ -17,13 +17,13 @@ export type { NodeRunView as NodeRun } from '../../bindings/github.com/colonyops
 
 import type { Discard, FeedSnapshot, NodeRunView as NodeRun, Output } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 
-// Flow model (TS). There is no flows/*.yaml loader yet (Phase 4) — the
-// engine operates on in-memory Flow objects built by callers (tests, and
-// eventually a Phase 4 loader).
+// Flow model (TS). The engine operates on in-memory Flow objects supplied
+// by the editor/session layer, which adapts the generated Wails flow model
+// from Go's flows/*.yaml loader.
 export interface FlowNode {
   id: string
   type: string
-  /** Author-facing display name (D1's optional Node.name) — Phase 6's drawer edits this; nodes without one fall back to their type's label. */
+  /** Author-facing display name edited in the drawer; nodes without one fall back to their type's label. */
   name?: string
   disabled?: boolean
   config: Record<string, any>

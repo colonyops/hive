@@ -1,5 +1,5 @@
-// App registry (D2/Phase 6): palette metadata + editor + defaults, discovered
-// from nodes/*/index.ts. Worker runtimes live in processors.ts so the app
+// App registry: palette metadata + editor + defaults, discovered from
+// nodes/*/index.ts. Worker runtimes live in processors.ts so the app
 // bundle never imports runtime.ts modules.
 
 import type { NodeCategory, NodeTypeDefinition } from './nodeType'

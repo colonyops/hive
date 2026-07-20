@@ -1,4 +1,4 @@
-// Shared node run-status classification (8c: idle / running / done / error) —
+// Shared node run-status classification (idle / running / done / error) —
 // FlowsCanvas (per-card status line + border glow) and FlowsView (the
 // bottom status strip's aggregate "N ok/running/idle/error" counts) both
 // classify a node's status through this one module so the aggregate counts
@@ -7,10 +7,10 @@
 // "running" has no real per-node signal yet — node_run rows are only ever
 // written for a *completed* pump (see internal/desktop/pipeline), so there is
 // no backend concept of "this node is mid-execution" today. Callers pass an
-// explicit `running: boolean` (see FlowsCanvas's `runningNodeIds` prop) —
-// true per-node liveness is deferred to the always-on runtime work
-// (hc-8ft4yhm6); until that lands, nothing sets it and every node classifies
-// as idle/ok/error same as before.
+// explicit `running: boolean` (see FlowsCanvas's `runningNodeIds` prop).
+// The current runtime records completed node_run rows but does not expose a
+// per-node in-flight signal, so callers normally classify nodes as
+// idle/ok/error from the latest completed run.
 import type { NodeRunRecord } from './wireFlow'
 
 export type RunStatus = 'idle' | 'running' | 'ok' | 'error'
@@ -21,7 +21,7 @@ export function classify(run: NodeRunRecord | undefined, running: boolean): RunS
   return run.ok ? 'ok' : 'error'
 }
 
-/** The status line's label text — mirrors 8c's four states exactly ("idle", "running…", "24 → 19 · 2m ago", "error: <msg>"). */
+/** The status line's label text for idle, running, ok, and error states. */
 export function statusLabel(status: RunStatus, run: NodeRunRecord | undefined): string {
   switch (status) {
     case 'running':
@@ -51,7 +51,7 @@ export function statusColor(status: RunStatus): string {
   }
 }
 
-/** Whether the status dot pulses (8c: running and error both animate; idle/ok are static). */
+/** Whether the status dot pulses: running and error animate; idle/ok are static. */
 export function statusPulses(status: RunStatus): boolean {
   return status === 'running' || status === 'error'
 }

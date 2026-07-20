@@ -22,7 +22,7 @@ export function sink(flowId: string, nodeId: string): Sink {
   return { kind: 'feed', targetId: `${flowId}/${nodeId}` }
 }
 
-// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+// ── App-registry metadata ───────────────────────────────────────────────────
 
 export const label = 'Feed'
 export const category = 'Destinations' as const

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// Searchable, category-grouped node palette (Phase 6b) — the app registry's
-// `palette` (registry.ts) grouped by NodeCategory, filtered by label/type.
+// Searchable, category-grouped node palette — the app registry's `palette`
+// (registry.ts) grouped by NodeCategory, filtered by label/type.
 // An entry is added to the active flow by dragging it onto the canvas
 // (see FlowsCanvas.vue's dragover/drop handling): dragstart here just seeds
 // the node type into dataTransfer under NODE_TYPE_MIME. There is no

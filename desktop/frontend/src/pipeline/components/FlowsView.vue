@@ -1,14 +1,12 @@
 <script setup lang="ts">
-// The flows editor view (8a shell): a 214px node palette, the canvas toolbar
+// The flows editor view: a 214px node palette, the canvas toolbar
 // (flow-selector · node/wire counts · zoom/Fit · Deploy), the canvas itself,
 // and a bottom status strip (dirty state + aggregate node status counts).
 //
-// hc-8ft4yhm6: this component no longer owns the PipelineEditorClient
-// adapter, the usePipelineEditor instance, or the runtime — it reads all of
-// that from the shared useFlowsSession() singleton instead (App.vue is the
-// session's first caller; see useFlowsSession.ts's module docs). Its runtime
-// manager keeps every enabled flow committing feed_item while this view is
-// unmounted (canvas closed).
+// This component reads editor state and deployed runtimes from the shared
+// useFlowsSession() singleton (App.vue is the session's first caller; see
+// useFlowsSession.ts's module docs). That runtime manager keeps every
+// enabled flow committing feed_item while this view is closed.
 //
 // Individual refs/actions are destructured out of useFlowsSession()
 // (rather than kept as one `session` object) so the template can use them
@@ -70,8 +68,8 @@ const wireCount = computed(() => activeFlow.value?.wires.length ?? 0)
 // node in the active flow through the same lib/runStatus.ts helper
 // FlowsCanvas uses per-card, so the strip's counts can never disagree with
 // what the graph shows. Nothing sets a node "running" yet (see
-// lib/runStatus.ts's module docs), so that bucket stays 0 until the
-// always-on runtime work (hc-8ft4yhm6) gives it a real per-node signal. ────
+// lib/runStatus.ts's module docs), so that bucket stays 0 until there is a
+// real per-node in-flight signal. ─────────────────────────────────────────
 const statusCounts = computed(() => {
   const counts = { idle: 0, running: 0, ok: 0, error: 0 }
   for (const node of activeFlow.value?.nodes ?? []) {
@@ -101,9 +99,9 @@ function onAddNodeAt(type: string, x: number, y: number) {
 const canvasRef = ref<InstanceType<typeof FlowsCanvas> | null>(null)
 const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100))
 
-// ── Feed preview (Phase 6c) — a read-only look at one `feed` node's
-// persisted items, not the sidebar switchover (Phase 7). Defaults to the
-// flow's first feed node and offers a picker when there's more than one. ──
+// ── Feed preview — a read-only look at one `feed` node's persisted items.
+// Defaults to the flow's first feed node and offers a picker when there's
+// more than one. ─────────────────────────────────────────────────────────
 const feedItemsClient: FeedItemsClient = {
   async feedItems(feedId) { return await FeedItems(feedId) },
 }
@@ -124,7 +122,7 @@ const previewFeedId = computed(() => {
   return flowId && node ? `${flowId}/${node.id}` : null
 })
 
-// ── Copy prompt (Phase 6c) — the flows equivalent of the feed sidebar's
+// ── Copy prompt — the flows equivalent of the feed sidebar's
 // "Copy feeds config prompt" (see App.vue's copyConfigPrompt command). This
 // view has no reachable toast queue (ToastStack is driven by useFeedState,
 // mounted as App.vue's sibling — see FlowsView's own module docs above on

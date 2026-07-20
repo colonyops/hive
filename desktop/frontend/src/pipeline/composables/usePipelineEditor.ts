@@ -1,5 +1,5 @@
-// Editor state over FlowsService/PipelineService (Phase 6b): the flows
-// picker's summaries, the selected flow's draft graph + layout, dirty
+// Editor state over FlowsService/PipelineService: the flows picker's
+// summaries, the selected flow's draft graph + layout, dirty
 // tracking for Deploy, and polled node_run status for the canvas. Mirrors
 // driver.ts's injection posture — the composable core never imports
 // bindings/ or @wailsio/runtime directly; the mounting component

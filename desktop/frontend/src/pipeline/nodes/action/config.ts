@@ -21,7 +21,7 @@ export function sink(_flowId: string, _nodeId: string, config: Config): Sink {
   return { kind: 'action', targetId: config.action }
 }
 
-// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+// ── App-registry metadata ───────────────────────────────────────────────────
 
 export const label = 'Action'
 export const category = 'Destinations' as const

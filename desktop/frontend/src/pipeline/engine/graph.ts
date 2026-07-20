@@ -4,7 +4,7 @@
 
 import type { Flow, Wire } from '../types'
 
-/** Number of inbound wires per node id (0 = entry node candidate). Wires with either endpoint unknown are ignored — Phase 4 owns ref validation. */
+/** Number of inbound wires per node id (0 = entry node candidate). Wires with either endpoint unknown are ignored here; Go SaveFlow validation owns ref errors. */
 export function inDegrees(flow: Flow): Map<string, number> {
   const known = new Set(flow.nodes.map((n) => n.id))
   const deg = new Map<string, number>()
@@ -36,7 +36,7 @@ export function outWiresByPort(flow: Flow): Map<string, Map<number, Wire[]>> {
 
 /**
  * Kahn's algorithm. Flow validation (cycle diagnostics, dangling refs,
- * port-bounds) is Phase 4's job — runGraph assumes an acyclic flow, but
+ * port-bounds) is Go SaveFlow validation's job — runGraph assumes an acyclic flow, but
  * still guards against hanging forever on a bad one: if a cycle sneaks in,
  * some nodes never reach in-degree 0 and get left out of `order`, so we
  * throw instead of looping.

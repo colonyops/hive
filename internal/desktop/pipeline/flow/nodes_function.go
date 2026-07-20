@@ -21,9 +21,8 @@ const (
 )
 
 // FunctionConfig is a function node: 1 input, N outputs (default 1). It
-// carries the node's JavaScript lifecycle hooks, evaluated by the frontend
-// graph runtime (part B/Phase 6) — this package only parses and validates
-// the config.
+// carries JavaScript lifecycle hooks evaluated by the frontend graph runtime;
+// this package only parses and validates the config.
 type FunctionConfig struct {
 	OnMessage string   `json:"on_message"         yaml:"on_message"`
 	OnStart   string   `json:"on_start,omitempty" yaml:"on_start,omitempty"`

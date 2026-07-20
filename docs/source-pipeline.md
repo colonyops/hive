@@ -1,11 +1,11 @@
 # The desktop source pipeline
 
-!!! note "Current architecture — a handful of pieces still incomplete"
+!!! note "Current architecture and remaining gaps"
     The pipeline described here **is** the desktop app's feed system: a
     profile is a flow, and the sidebar reads persisted `feed_item` rows this
     pipeline commits. See
     [Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)
-    for what's still not wired up.
+    for the current runtime shape and remaining gaps.
 
 The source pipeline is a Node-RED-style graph editor and runtime built into
 Hive Desktop: GitHub sources feed an append-only event log, a stateless
@@ -53,12 +53,12 @@ process boundary:
  │ pipeline.Producer      │  poll tick, dedupe unchanged payloads per key
  │  (source producer)     │
  └───────────┬───────────┘
-             │ db.Append(topic="source:<id>", key, payload)
+             │ db.AppendIfChanged(...) + db.AppendSnapshot(...)
              ▼
  ┌────────────────────────────────────────────────────────────┐
  │ event_log  (desktop-pipeline.db — append-only, STRICT)      │
  └───────────┬──────────────────────────────────────────────┬─┘
-             │ PipelineService.ReadFrom(offset, limit)       │
+             │ PipelineService.ReadFrom(consumer, limit)     │
              ▼                                                │
  ┌────────────────────────────────────────────────────────┐   │
  │ Frontend graph runtime (stateless, per flow)             │   │
@@ -101,11 +101,12 @@ verbatim as `pipeline.Msg` (a type alias, `internal/desktop/pipeline/source.go`)
 
 ```go
 type Msg struct {
-	ID      string
-	Key     string
-	Topic   string
-	Ts      int64
-	Payload json.RawMessage
+	ID       string
+	Key      string
+	Topic    string
+	Ts       int64
+	Payload  json.RawMessage
+	Snapshot []SnapshotItem `json:"Snapshot,omitempty"`
 }
 ```
 
@@ -115,17 +116,19 @@ type Msg struct {
 | `Key`     | The item's stable identity (e.g. `"colonyops/hive#2841"`), used for source identity and `feed_item`/`output_command` dedup | `key` |
 | `Topic`   | `"source:<source-id>"` — which configured source produced this message   | `topic` |
 | `Ts`      | Unix nanoseconds when the row was appended                               | `created_at` |
-| `Payload` | The opaque item JSON (shape is set by the source, e.g. a PR/issue/notification) | `payload` |
+| `Payload` | The opaque item JSON (shape is set by the source, e.g. a PR/issue/notification); snapshot rows carry the encoded `SnapshotItem[]` here too | `payload` |
+| `Snapshot` | Present only for authoritative successful source snapshot rows; contains the full current key/payload set for that source | decoded from snapshot rows (`snapshot != 0`) |
 
 One casing/location fact worth calling out explicitly, since it trips
 people up:
 
-- **`Msg` has no `json` struct tags at all**, unlike every other wire type in
-  this codebase (`CommitBatch`, `Output`, `Sink`, …, all of which use
-  lowerCamel JSON tags). That means `Msg` serializes under its literal Go
-  field names, so a function node's `on_message` body reads `msg.Payload`,
-  `msg.Key`, `msg.ID`, `msg.Topic` — **capitalized**, not
-  `msg.payload`/`msg.key`. See `desktop/frontend/src/pipeline/nodes/function/help.md`.
+- **`Msg` serializes its core fields under literal Go field names**, unlike
+  every other wire type in this codebase (`CommitBatch`, `Output`, `Sink`, …,
+  all of which use lowerCamel JSON tags). `Snapshot` is explicitly tagged as
+  capitalized to match. A function node's `on_message` body therefore reads
+  `msg.Payload`, `msg.Key`, `msg.ID`, `msg.Topic`, `msg.Snapshot` —
+  **capitalized**, not `msg.payload`/`msg.key`. See
+  `desktop/frontend/src/pipeline/nodes/function/help.md`.
 
 ## The dedicated DB and table roles
 
@@ -137,21 +140,21 @@ directly: desktop pipeline write traffic (a poll tick appending dozens of
 rows, a commit batch running every pump) must never contend with the
 CLI/TUI's own SQLite writer.
 
-All five tables are declared `STRICT` (SQLite's opt-in type enforcement) in
-`pipelinedb/migrations/0001_pipeline.up.sql`, with two later migrations
-(`0002_output_command_key.up.sql`, `0003_output_command_retry.up.sql`) adding
-the action-dedup key and bounded-retry columns to `output_command`:
+The base tables are declared `STRICT` (SQLite's opt-in type enforcement) in
+`pipelinedb/migrations/0001_pipeline.up.sql`. Later migrations add the
+action-dedup key, bounded retries, confirmation state, durable source heads,
+and source snapshot reconciliation metadata:
 
 | Table | Role |
 | --- | --- |
-| `event_log` | Append-only log of every message a source has ever produced. `"offset"` (quoted — a SQLite keyword) is the autoincrement primary key and the thing everything else replays from. Indexed on `(topic, "offset")`. |
+| `event_log` | Append-only log of every message a source has ever produced. `"offset"` (quoted — a SQLite keyword) is the autoincrement primary key and the thing everything else replays from. Indexed on `(topic, "offset")`. Snapshot rows carry a successful source poll's full current item set. |
 | `consumer_offset` | One row per consumer (a flow id), tracking the last offset that consumer's commit has fully accounted for. |
-| `feed_item` | Go-owned, persisted output of a flow's `feed` nodes — primary key `(feed_id, item_id)`, so a re-commit of the same item is an upsert, not a duplicate row. |
-| `output_command` | The queue of side-effecting action invocations waiting for the output worker, deduped on `(action_id, key)` (unique index `idx_output_command_action_key`), with `status`/`attempts`/`last_error` for bounded retry. |
+| `source_head` | Durable `(topic, key) → payload` source head used by `AppendIfChanged` to skip unchanged source item events across producer restarts. |
+| `feed_item` | Go-owned, persisted output of a flow's `feed` nodes — primary key `(feed_id, item_id)`, so a re-commit of the same item is an upsert, not a duplicate row. Snapshot metadata (`source_topic`, `snapshot_id`) lets commits reconcile rows that disappear from a source. |
+| `output_command` | The queue of side-effecting action invocations waiting for the output worker, deduped on `(action_id, key)` (unique index `idx_output_command_action_key`), with `status`/`attempts`/`last_error` for confirmation and bounded retry. |
 | `node_run` | Per-node, per-tick execution metrics (`in_count`/`out_count`/`drop_count`/`ok`/`err`/`dur_ms`) for the flows editor's debug panel and RECENT list. |
 
-Both `event_log`/`consumer_offset` and `feed_item`/`output_command`/`node_run`
-share the same migration runner, `internal/data/migrate` — a small,
+These tables share the same migration runner, `internal/data/migrate` — a small,
 storage-agnostic package (`Load`/`Apply`/`Up` over an `fs.FS` of
 `NNNN_name.up.sql` files, tracked in a `schema_migrations` table) also used by
 hive's own `hive.db`. `pipelinedb.Open` calls `migrate.Up` directly with no
@@ -163,18 +166,26 @@ reconcile.
 `pipelinedb.DB` (`log.go`) exposes the whole event-log surface:
 
 - **`Append(ctx, topic, key, payload) (offset int64, err error)`** — inserts
-  one row, stamping `created_at` as `time.Now().UnixNano()`.
+  one ordinary event row, stamping `created_at` as `time.Now().UnixNano()`.
+- **`AppendIfChanged(ctx, topic, key, payload) (offset int64, appended bool, err error)`** —
+  atomically compares the payload against `source_head` for `(topic, key)`,
+  appends only changed non-empty keys, and updates the head in the same
+  transaction. Empty-key messages always append because they have no stable
+  source-item identity.
+- **`AppendSnapshot(ctx, topic, items) (offset int64, err error)`** — appends
+  one authoritative full-source snapshot row for a successful poll, including
+  an empty source.
 - **`ReadFrom(ctx, offset, limit) ([]Msg, nextOffset int64, err error)`** —
   rows with `"offset" > offset`, ascending, up to `limit`. If nothing
   matches, `nextOffset` is the input `offset` unchanged, so a caller can
   always resume with `ReadFrom(ctx, nextOffset, limit)`.
+- **`ReadForConsumer(ctx, consumer, limit) ([]Msg, error)`** — the Wails-facing
+  read path: it resolves the consumer's SQLite checkpoint and returns the
+  next page after it, so the frontend never owns a separate numeric cursor.
 - **`ConsumerOffset(ctx, consumer) (int64, error)`** — reads a consumer's
   checkpoint. Checkpoints are advanced only through `CommitBatch`, whose
   monotonic SQL upsert means an out-of-order or replayed batch never regresses
   a consumer's checkpoint.
-`Producer` (below) additionally keeps its own **in-memory**, non-persisted
-`seen` map (topic+key → last payload) so an unchanged item isn't
-re-`Append`ed on every poll tick — a soft optimization a restart forgets.
 
 ## The commit and offset protocol
 
@@ -189,10 +200,19 @@ type Sink struct {
 }
 
 type Output struct {
-	Sink    Sink
-	Key     string          // feed_item.item_id, and the output_command dedup key
-	Payload json.RawMessage
-	Unread  bool            // feed items only
+	Sink           Sink
+	Key            string          // feed_item.item_id, and the output_command dedup key
+	Payload        json.RawMessage
+	Unread         bool            // feed items only
+	SourceTopic    string          // feed snapshot reconciliation scope
+	SnapshotID     string          // source snapshot offset, as a string
+	PreserveUnread bool            // snapshot refreshes keep an existing read state
+}
+
+type FeedSnapshot struct {
+	FeedID      string
+	SourceTopic string
+	SnapshotID  string
 }
 
 type Discard struct {
@@ -201,11 +221,12 @@ type Discard struct {
 }
 
 type CommitBatch struct {
-	Consumer   string        // event_log consumer key — the flow id
-	UpToOffset int64         // advance consumer_offset to here
-	Outputs    []Output
-	Discards   []Discard
-	NodeRuns   []NodeRunView
+	Consumer      string         // event_log consumer key — the flow id
+	UpToOffset    string         // decimal event-log offset; preserves int64 across Wails
+	Outputs       []Output
+	FeedSnapshots []FeedSnapshot
+	Discards      []Discard
+	NodeRuns      []NodeRunView
 }
 ```
 
@@ -227,9 +248,10 @@ single SQLite transaction:
    applied by a previous commit (or is a stale/out-of-order retry) — nothing
    is written, not even `node_run`.
 3. Otherwise: upsert every feed `Output` into `feed_item`, enqueue every
-   action `Output` into `output_command`, insert every `NodeRunView` into
-   `node_run`, and advance `consumer_offset` to `UpToOffset` — all in the
-   same transaction as an `INSERT … ON CONFLICT … WHERE excluded."offset" >
+   action `Output` into `output_command`, reconcile any `FeedSnapshot` scopes
+   by deleting rows not produced by the snapshot, insert every `NodeRunView`
+   into `node_run`, and advance `consumer_offset` to `UpToOffset` — all in
+   the same transaction as an `INSERT … ON CONFLICT … WHERE excluded."offset" >
    consumer_offset."offset"` upsert, so the offset itself can never regress
    even if two commits race.
 
@@ -441,23 +463,20 @@ Two separate registries, both built via Vite's `import.meta.glob`
 every processor node through an injected `WorkerTransport`
 (`engine/transport.ts`):
 
+- `WebWorkerTransport` (`engine/webWorkerTransport.ts`) is the production
+  default: `PipelineDriver` constructs it through `workerFactory.ts` when no
+  test transport is injected. One **shared** worker hosts every
+  `isolate: false` runtime (`github-filter` today); a **dedicated** worker is
+  spawned per `isolate: true` node *instance* (`function`), so a timeout's
+  `terminate()` kills only that one instance, never a sibling or the shared
+  worker. It owns the message-protocol glue (request/response correlation,
+  timeout-driven worker replacement, and state merged back across the
+  `postMessage` structured-clone boundary).
 - `InProcessTransport` runs a `ProcessorRuntime` directly on the calling
   thread, wrapped in a `Promise`, and enforces `timeoutMs` itself by racing
-  the promise against a deadline. This is both the unit-test double and
-  **the actual production default today** — `driver.ts`'s
-  `PipelineDriverOptions.transport` falls back to it, and
-  `FlowsView.vue`/`usePipelineRuntime.ts` never construct anything else, so
-  despite `WebWorkerTransport` existing and being fully unit-tested, no code
-  path in this repo currently instantiates one.
-- `WebWorkerTransport` (`engine/webWorkerTransport.ts`) is the intended
-  production transport: one **shared** worker hosts every `isolate: false`
-  runtime (`github-filter` today); a **dedicated** worker is spawned per
-  `isolate: true` node *instance* (`function`), so a timeout's `terminate()`
-  kills only that one instance, never a sibling or the shared worker. It
-  owns only the message-protocol glue (request/response correlation, state
-  merged back across the `postMessage` structured-clone boundary) — wiring
-  it to a real bundled worker script is left to whoever does this
-  production hookup; nothing here has done it yet.
+  the promise against a deadline. It remains an explicit unit-test/fallback
+  implementation; callers must inject it instead of relying on it as the
+  production default.
 - On a timeout (`NodeTimeoutError`, distinguished from an ordinary thrown
   error) `runGraph` calls `transport.reset(instanceId)` — "terminate,
   respawn" — so the next run starts clean; an ordinary node error needs no
@@ -517,19 +536,13 @@ layout-only edit — reloading `FlowStore` and emitting the Wails
 `"flows:updated"` event so the frontend picker/list stays current
 (`FlowsView.vue`'s `Events.On('flows:updated', …)`).
 
-"Drain in-flight, then swap" (the design's stated Deploy semantics, and
-`flow/save.go`'s own header comment) is realized more by construction than
-by an explicit drain step today: `usePipelineEditor.ts`'s `addNode`/
-`updateNode`/`deleteNode`/`deploy` all mutate the **same in-memory `Flow`
-object** the active `PipelineDriver` already holds a reference to
-(`FlowsView.vue` only builds a fresh `usePipelineRuntime` — and fresh
-`PipelineDriver` — when the *selected flow's id* changes, not on every
-edit or on Deploy of the same flow). So an edit is visible to the very next
-`pump()` without any explicit reload, and `usePipelineRuntime.ts`'s
-`pumping` guard prevents two overlapping `pump()` calls from racing each
-other over the same cursor — that overlap-guard is the practical
-"drain before the next run starts" behavior today, rather than a
-Deploy-triggered wait for an in-flight run to finish.
+"Drain in-flight, then swap" is enforced by `useFlowsSession.ts`'s serialized
+operation tail. Editor changes mutate only the selected draft; deployed
+runtimes own independent cloned snapshots for every enabled flow. A Deploy
+saves the draft through `FlowsService.SaveFlow`, then reloads that flow's
+runtime snapshot (or stops it if disabled) through the same serialized queue
+used by log drains and `flows:updated` reconciliation, so a replacement graph
+is not installed halfway through an older commit.
 
 ## Source producer and output worker
 
@@ -603,15 +616,14 @@ immediately, no retries.
   palette, the populated canvas, the node palette); `feed.spec.ts`,
   `theme.spec.ts`, and `onboarding.spec.ts` cover the sidebar/detail pane,
   theming, and first-run onboarding plus profile/flow-node CRUD
-  respectively. Deeper coverage — a stateless-commit/replay spec, and
-  screenshot snapshots for the flows canvas — is still deferred future
-  work; see the next section.
+  respectively. Additional coverage still needed includes a
+  stateless-commit/replay spec and screenshot snapshots for the flows
+  canvas; see the next section.
 
 ## Current architecture and remaining gaps
 
-The cutover earlier revisions of this document described as "deferred" has
-landed: the source pipeline is no longer a parallel system running alongside
-the legacy feed — it **is** the feed. A profile is a flow, the sidebar reads
+The source pipeline is no longer a parallel system running alongside the
+legacy feed — it **is** the feed. A profile is a flow, the sidebar reads
 `feed_item`, and the old `profiles.yaml`-based feed/source/filter machinery
 is gone.
 
@@ -623,9 +635,7 @@ is gone.
   `internal/desktop/pipeline/flow/store.go`) — three `github-source` →
   `feed` pairs (My open PRs / Assigned / Notifications), each source
   embedding its own fetch config directly rather than pointing at a
-  `profiles.yaml` that no longer exists. This directly addresses what
-  earlier revisions of this document listed as deferred work ("a default
-  flow that runs automatically") — see [Starter flow](#starter-flow).
+  `profiles.yaml` that no longer exists. See [Starter flow](#starter-flow).
 - **The flows editor is a per-profile sub-view, not a separate app mode.**
   `App.vue` no longer has a `mode` ref toggling `'feed'`/`'flows'`; it
   renders either `SideBar`+`FeedList` or `FlowsView` based on
@@ -675,21 +685,13 @@ is gone.
 
 **What's still incomplete**, independent of the cutover above:
 
-- `WebWorkerTransport` is fully implemented and unit-tested but not wired
-  into the running app — `InProcessTransport` (main-thread) is what
-  actually executes every processor node today.
-- "Drain in-flight, then swap" Deploy semantics are still realized more by
-  construction than by an explicit drain step — see
-  [Deploy and drain semantics](#deploy-and-drain-semantics) above; this
-  didn't change with the cutover.
-- Non-`auto_apply` output commands move to `awaiting_confirmation`; the
-  matching configured detail-pane action explicitly confirms and executes
-  the command.
-- e2e screenshot snapshots and a stateless-commit/replay spec are still
-  deferred future work requiring the Docker-based `mise run desktop:e2e`
-  gate to verify against real rendered output. What changed this phase is
-  that the existing suites (`feed.spec.ts`, `theme.spec.ts`,
-  `flows-editor.spec.ts`, `onboarding.spec.ts`) now exercise the real
+- The runtime records completed `node_run` rows but does not expose a real
+  per-node in-flight signal, so the canvas and debug strip cannot show which
+  individual node is currently executing.
+- e2e screenshot snapshots and a stateless-commit/replay spec still need to
+  be added and verified with the Docker-based `mise run desktop:e2e` gate.
+  The existing suites (`feed.spec.ts`, `theme.spec.ts`,
+  `flows-editor.spec.ts`, `onboarding.spec.ts`) exercise the real
   `feed_item`/flow-backed sidebar via a deterministic mock seed
   (`desktop/mockseed.go` + `desktop/e2e/fixtures/flows/`) instead of the
   deleted `internal/desktop/feed/mock.go`'s static fixture — see
@@ -703,10 +705,9 @@ create a profile: `FlowStore.Create` — the backend of "New profile" — seeds
 it automatically, and every field is real and immediately usable (three
 `github-source` nodes with real, pollable `kind`/`query` configs, each wired
 straight to its own `feed` node: My open PRs / Assigned / Notifications).
-This is the "default flow that runs automatically" that earlier revisions
-of this document listed as deferred work; it landed as a safe per-profile
-starter instead of a global template that tries to demonstrate every node
-type.
+This is the default flow that runs automatically for a new profile. It is a
+safe per-profile starter instead of a global template that tries to
+demonstrate every node type.
 
 A separate affordance: the flows editor's own "New flow name…" field (in
 the canvas toolbar's flow-selector dropdown) calls `usePipelineEditor.ts`'s

@@ -207,9 +207,9 @@ func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 	assert.Equal(t, 3, wakeCount)
 }
 
-// TestProducer_EmptyKeyNeverDeduped mirrors pipelinedb.Compact's exemption
-// of empty-key rows: Producer must not collapse repeated empty-key emits
-// into a single append.
+// TestProducer_EmptyKeyNeverDeduped verifies that messages without a stable
+// item identity are not stored in source_head, so repeated empty-key emits
+// still append distinct events.
 func TestProducer_EmptyKeyNeverDeduped(t *testing.T) {
 	t.Parallel()
 

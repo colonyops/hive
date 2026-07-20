@@ -1,5 +1,5 @@
-// Cross-registry parity guard (D2, deferred from Phase 3): the app registry
-// (byType, over nodes/*/index.ts) and the worker registry (processorRegistry,
+// Cross-registry parity guard: the app registry (byType, over
+// nodes/*/index.ts) and the worker registry (processorRegistry,
 // over nodes/*/runtime.ts) are discovered independently via two separate
 // import.meta.glob calls — nothing structurally forces them to agree.  This
 // asserts they do: every `role: 'processor'` app entry has a matching

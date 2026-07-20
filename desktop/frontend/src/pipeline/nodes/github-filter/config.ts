@@ -24,7 +24,7 @@ export interface Config {
   reasons?: string[]
 }
 
-// ── Phase 6: app-registry metadata (D2) ─────────────────────────────────────
+// ── App-registry metadata ───────────────────────────────────────────────────
 
 export const label = 'GitHub filter'
 export const category = 'Process' as const

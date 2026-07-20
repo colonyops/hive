@@ -30,9 +30,9 @@ const flowFileHeader = `# Hive Desktop flow — nodes and wires, as code.
 // unrelated top-level keys, but — since there's no way to tell, from a
 // Flow value alone, which individual node or wire actually changed —
 // comments attached to specific node/wire entries do not survive an edit.
-// Full per-entry comment retention is future work if it turns out to
-// matter in practice; round-trip structural fidelity (LoadFlow -> SaveFlow
-// -> LoadFlow yields an equal Flow) does not depend on it.
+// If per-entry comments become important, SaveFlow will need a richer edit
+// model; round-trip structural fidelity (LoadFlow -> SaveFlow -> LoadFlow
+// yields an equal Flow) does not depend on it.
 func SaveFlow(path string, f Flow) error {
 	if id := flowIDFromFilename(filepath.Base(path)); id != f.ID {
 		return fmt.Errorf("flow: path %q does not match flow id %q", path, f.ID)

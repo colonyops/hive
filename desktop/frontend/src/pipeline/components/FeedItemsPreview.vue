@@ -1,8 +1,7 @@
 <script setup lang="ts">
-// Read-only preview of one feed's persisted items (Phase 6c) — proves a
-// flow's `feed` node actually persisted something, without being the
-// sidebar switchover (that's Phase 7's job, over useFeedState.ts/the
-// existing feed_item read path this component deliberately does not touch).
+// Read-only preview of one feed node's persisted items. It uses the same
+// feed_item read path as the sidebar, scoped to the selected feed node so
+// flow authors can inspect what that terminal node most recently committed.
 //
 // Mirrors driver.ts/usePipelineEditor.ts's injection posture: takes an
 // injected client rather than importing PipelineService/bindings directly,

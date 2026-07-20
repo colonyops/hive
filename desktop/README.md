@@ -1,7 +1,6 @@
 # Hive desktop shell
 
-This directory is a Wails v3 Vue + TypeScript shell for Hive. It is deliberately
-minimal while the desktop UI is developed in later phases.
+This directory is the Wails v3 Vue + TypeScript shell for Hive.
 
 ## Native shell
 
@@ -30,10 +29,10 @@ alpha, `SystemTray.SetTemplateIcon` accepts exactly one `[]byte` PNG, so the
 shell embeds only the retina `tray-templateTemplate@2x.png`; the 1x PNG is
 still generated and committed as an asset but not embedded.
 
-Manual Phase 2 verification remains required: check the Dock icon, native
-traffic lights centered on the 42px titlebar, close-hides-window, reopening
-from the Dock and from the tray menu, template-icon tinting in light and dark
-menu bars, and Quit from the tray menu.
+Manual native-shell verification remains required: check the Dock icon,
+native traffic lights centered on the 42px titlebar, close-hides-window,
+reopening from the Dock and from the tray menu, template-icon tinting in
+light and dark menu bars, and Quit from the tray menu.
 
 ## Pinned versions
 
