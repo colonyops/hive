@@ -23,7 +23,7 @@ test('renders the mock feed with pr2841 selected by default', async ({ page }) =
   expect(await feedItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-id')))).toEqual(
     expectedItems.map(([id]) => id),
   )
-  expect(await feedItems.locator('[data-testid="kind-badge"]').evaluateAll((badges) => badges.map((badge) => badge.getAttribute('data-kind')))).toEqual(
+  expect(await feedItems.locator('[data-testid="type-pill"]').evaluateAll((badges) => badges.map((badge) => badge.getAttribute('data-kind')))).toEqual(
     expectedItems.map(([, kind]) => kind),
   )
   await expect(page.getByTestId('detail-pane')).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
@@ -50,7 +50,7 @@ test('updates the detail pane and actions for PRs and issues', async ({ page }) 
 })
 
 test('filters the feed to its remaining unread items', async ({ page }) => {
-  await page.getByTestId('unread-chip').click()
+  await page.getByTestId('filter-unread').click()
   const unreadItems = page.getByTestId('feed-item')
   await expect(unreadItems).toHaveCount(2)
   expect(await unreadItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-id')))).toEqual([
@@ -82,7 +82,7 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(notificationsFeed).toBeVisible()
   await notificationsFeed.click()
   await expect(palette).toBeHidden()
-  await expect(page.getByTestId('feed-title')).toHaveText('Notifications inbox')
+  await expect(page.getByTestId('sidebar-feed').filter({ hasText: 'Notifications inbox' })).toHaveClass(/sidebar-entry-selected/)
 
   await page.keyboard.press('Meta+k')
   await expect(palette).toBeVisible()

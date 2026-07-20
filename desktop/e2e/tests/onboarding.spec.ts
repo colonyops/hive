@@ -119,11 +119,12 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   await page.getByTestId('breadcrumb-profile-name').click()
   await expect(flowsView).toBeHidden()
 
-  // ── Delete profile: hover reveals the header trash icon, modal confirms ───
+  // ── Delete profile from its routed settings danger zone ─────────────────
   await expect(page.getByTestId('profile-tile')).toHaveCount(2)
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Backend Triage')
-  await page.getByTestId('sidebar-profile-header').hover()
-  await page.getByTestId('sidebar-delete-profile').click()
+  await page.getByTestId('sidebar-open-settings').click()
+  await page.getByTestId('profile-settings-danger').click()
+  await page.getByTestId('profile-settings-delete').click()
 
   const deleteProfileModal = page.getByTestId('delete-profile-modal')
   await expect(deleteProfileModal).toBeVisible()
