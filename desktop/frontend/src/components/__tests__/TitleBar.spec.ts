@@ -9,12 +9,28 @@ describe('TitleBar', () => {
     expect(wrapper.find('[data-testid="breadcrumb-profile-name"]').exists()).toBe(false)
   })
 
-  it('shows the polling indicator in feed mode, not flows mode', () => {
-    const feed = mount(TitleBar, { props: { profileName: 'Triage', flowsActive: false } })
-    expect(feed.find('[data-testid="polling-indicator"]').exists()).toBe(true)
+  it('shows the Activity link once a profile is loaded and emits open-activity on click', async () => {
+    const onboarding = mount(TitleBar, { props: {} })
+    expect(onboarding.find('[data-testid="titlebar-activity"]').exists()).toBe(false)
 
-    const flows = mount(TitleBar, { props: { profileName: 'Triage', flowsActive: true } })
-    expect(flows.find('[data-testid="polling-indicator"]').exists()).toBe(false)
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage' } })
+    const link = wrapper.find('[data-testid="titlebar-activity"]')
+    expect(link.exists()).toBe(true)
+    expect(link.text()).toContain('Activity')
+
+    await link.trigger('click')
+    expect(wrapper.emitted('open-activity')).toHaveLength(1)
+  })
+
+  it('shows the unseen-activity dot only with unseen events and not while on the Activity page', () => {
+    const unseen = mount(TitleBar, { props: { profileName: 'Triage', unseenActivity: 3 } })
+    expect(unseen.find('[data-testid="titlebar-activity-unseen"]').exists()).toBe(true)
+
+    const none = mount(TitleBar, { props: { profileName: 'Triage', unseenActivity: 0 } })
+    expect(none.find('[data-testid="titlebar-activity-unseen"]').exists()).toBe(false)
+
+    const active = mount(TitleBar, { props: { profileName: 'Triage', unseenActivity: 3, activityActive: true } })
+    expect(active.find('[data-testid="titlebar-activity-unseen"]').exists()).toBe(false)
   })
 
   it('adds a Flows breadcrumb and exits via the profile crumb in flows mode', async () => {

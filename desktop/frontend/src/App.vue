@@ -21,6 +21,7 @@ import CommandPalette from './components/CommandPalette.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
 import FlowsView from './pipeline/components/FlowsView.vue'
+import ActivityView from './components/ActivityView.vue'
 import DeleteProfileModal from './components/DeleteProfileModal.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
 import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
@@ -28,6 +29,7 @@ import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
 import DevBar from './components/DevBar.vue'
 import { useAuth } from './composables/useAuth'
+import { useActivity } from './composables/useActivity'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
@@ -78,6 +80,7 @@ const session = useFlowsSession()
 const router = useRouter()
 const route = useRoute()
 const flowsActive = computed(() => route.name === 'flows')
+const activityActive = computed(() => route.name === 'activity')
 const applicationSettingsActive = computed(() => route.name === 'application-settings')
 const profileSettingsActive = computed(() => route.name === 'profile-settings')
 const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
@@ -242,6 +245,15 @@ function requestOpenActionsSettings(): void {
 function requestOpenSettings(page: 'application' | 'profile'): void {
   if (page === 'application') void router.push({ name: 'application-settings' })
   else if (activeProfileId.value) void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value } })
+}
+
+// ── Activity (6d) ─────────────────────────────────────────────────────────────
+// App-global audit log. The titlebar's Activity link replaces the old "polling
+// github" indicator; unseenActivity drives its dot.
+const { unseenCount: unseenActivity } = useActivity()
+
+function openActivity(): void {
+  void router.push({ name: 'activity' })
 }
 
 function closeSettings(): void {
@@ -486,13 +498,16 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
         :flows-active="flowsActive"
+        :activity-active="activityActive"
         :error-count="errorCount"
+        :unseen-activity="unseenActivity"
         :can-go-back="canGoBack"
         :can-go-forward="canGoForward"
         @back="router.back()"
         @forward="router.forward()"
         @exit-flows="requestExitFlows"
         @open-error-node="openErrorNode"
+        @open-activity="openActivity"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
@@ -539,6 +554,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           @select-section="selectProfileSettingsSection"
         />
         <FlowsView v-else-if="flowsActive" />
+        <ActivityView v-else-if="activityActive" @close="closeSettings" />
         <template v-else>
           <SideBar
             v-if="activeProfile"

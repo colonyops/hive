@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import IconActivity from '~icons/lucide/activity'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
@@ -10,10 +11,15 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 // errorCount (8d) is the count of the active flow's nodes whose last run
 // failed — sourced app-wide from useFlowsSession, so the chip renders and
 // deep-links even with the flows canvas closed.
+// activityActive highlights the Activity link when the audit-log page is open;
+// unseenActivity (6d) is the number of activity events recorded since the user
+// last opened that page, shown as a pulsing dot.
 defineProps<{
   profileName?: string
   flowsActive?: boolean
+  activityActive?: boolean
   errorCount?: number
+  unseenActivity?: number
   canGoBack?: boolean
   canGoForward?: boolean
 }>()
@@ -22,6 +28,7 @@ const emit = defineEmits<{
   forward: []
   'exit-flows': []
   'open-error-node': []
+  'open-activity': []
 }>()
 
 // macOS draws its native traffic lights over the top-left of this bar
@@ -80,9 +87,27 @@ const isMac = navigator.userAgent.includes('Mac')
       data-testid="titlebar-error-chip"
       @click="emit('open-error-node')"
     ><IconTriangleAlert class="size-3" />{{ errorCount }} error<template v-if="errorCount !== 1">s</template></button>
-    <div v-if="profileName && !flowsActive" class="flex items-center gap-[7px] font-mono text-[11.5px] text-text-2" data-testid="polling-indicator">
-      <span class="size-[7px] rounded-full bg-accent [animation:hivePulse_2.4s_ease-in-out_infinite]" />
-      <span>polling github</span>
-    </div>
+    <!-- Replaces the old decorative "polling github" indicator: a link to the
+         Activity audit log. A pulsing dot flags activity recorded since the
+         page was last opened. -->
+    <button
+      v-if="profileName"
+      class="relative flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11.5px] font-medium"
+      :class="activityActive
+        ? 'border-accent bg-accent text-accent-contrast'
+        : 'border-border text-text-2 hover:border-strong hover:text-text'"
+      style="--wails-draggable: no-drag"
+      data-testid="titlebar-activity"
+      aria-label="Open activity"
+      @click="emit('open-activity')"
+    >
+      <IconActivity class="size-3.5" />
+      Activity
+      <span
+        v-if="unseenActivity && unseenActivity > 0 && !activityActive"
+        class="size-[7px] rounded-full bg-accent [animation:hivePulse_2.4s_ease-in-out_infinite]"
+        data-testid="titlebar-activity-unseen"
+      />
+    </button>
   </header>
 </template>

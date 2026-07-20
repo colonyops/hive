@@ -10,6 +10,48 @@ import (
 	"database/sql"
 )
 
+const appendActivityEvent = `-- name: AppendActivityEvent :one
+INSERT INTO activity_event (created_at, category, severity, title, body, source, metadata)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+RETURNING id, created_at, category, severity, title, body, source, metadata
+`
+
+type AppendActivityEventParams struct {
+	CreatedAt int64  `json:"created_at"`
+	Category  string `json:"category"`
+	Severity  string `json:"severity"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Source    string `json:"source"`
+	Metadata  []byte `json:"metadata"`
+}
+
+// Append one audit-log row and return it (with its assigned id) so the caller
+// can echo the stored event straight back to subscribers.
+func (q *Queries) AppendActivityEvent(ctx context.Context, arg AppendActivityEventParams) (ActivityEvent, error) {
+	row := q.db.QueryRowContext(ctx, appendActivityEvent,
+		arg.CreatedAt,
+		arg.Category,
+		arg.Severity,
+		arg.Title,
+		arg.Body,
+		arg.Source,
+		arg.Metadata,
+	)
+	var i ActivityEvent
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.Category,
+		&i.Severity,
+		&i.Title,
+		&i.Body,
+		&i.Source,
+		&i.Metadata,
+	)
+	return i, err
+}
+
 const appendEvent = `-- name: AppendEvent :one
 INSERT INTO event_log (topic, key, payload, created_at, snapshot)
 VALUES (?, ?, ?, ?, ?)
@@ -276,6 +318,52 @@ func (q *Queries) InsertNodeRun(ctx context.Context, arg InsertNodeRunParams) er
 		arg.DurMs,
 	)
 	return err
+}
+
+const listActivityEvents = `-- name: ListActivityEvents :many
+SELECT id, created_at, category, severity, title, body, source, metadata FROM activity_event
+WHERE id < ?
+ORDER BY id DESC
+LIMIT ?
+`
+
+type ListActivityEventsParams struct {
+	ID    int64 `json:"id"`
+	Limit int64 `json:"limit"`
+}
+
+// Newest first, paged by a descending id cursor: pass a sentinel above the
+// largest id for the first page, then the smallest id returned to continue.
+func (q *Queries) ListActivityEvents(ctx context.Context, arg ListActivityEventsParams) ([]ActivityEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listActivityEvents, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ActivityEvent{}
+	for rows.Next() {
+		var i ActivityEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.Category,
+			&i.Severity,
+			&i.Title,
+			&i.Body,
+			&i.Source,
+			&i.Metadata,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listConsumerOffsets = `-- name: ListConsumerOffsets :many
@@ -545,6 +633,22 @@ func (q *Queries) MarkOutputCommandFailed(ctx context.Context, arg MarkOutputCom
 		arg.Stderr,
 		arg.ID,
 	)
+	return err
+}
+
+const pruneActivityEvents = `-- name: PruneActivityEvents :exec
+DELETE FROM activity_event
+WHERE id IN (
+    SELECT id FROM activity_event
+    ORDER BY id DESC
+    LIMIT -1 OFFSET ?
+)
+`
+
+// Retain only the newest rows globally; bounded diagnostic history like
+// node_run. The id primary key both orders and breaks ties exactly.
+func (q *Queries) PruneActivityEvents(ctx context.Context, offset int64) error {
+	_, err := q.db.ExecContext(ctx, pruneActivityEvents, offset)
 	return err
 }
 

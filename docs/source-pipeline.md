@@ -153,6 +153,7 @@ and source snapshot reconciliation metadata:
 | `feed_item` | Go-owned, persisted output of a flow's `feed` nodes — primary key `(feed_id, item_id)`, so a re-commit of the same item is an upsert, not a duplicate row. Snapshot metadata (`source_topic`, `snapshot_id`) lets commits reconcile rows that disappear from a source. |
 | `output_command` | The queue of side-effecting action invocations waiting for the output worker, deduped on `(action_id, key)` (unique index `idx_output_command_action_key`), with `status`/`attempts`/`last_error` for confirmation and bounded retry. Terminal-history pruning uses the partial `idx_output_command_terminal_id` index. |
 | `node_run` | Per-node, per-tick execution metrics (`in_count`/`out_count`/`drop_count`/`ok`/`err`/`dur_ms`) for the flows editor's debug panel and RECENT list. `idx_node_run_flow_ended_at` serves the per-flow view and `idx_node_run_ended_at` serves retention pruning. |
+| `activity_event` | The user-facing audit log behind the Activity view (`0009_activity_event.up.sql`): `id` autoincrement primary key, `created_at` (unix **milliseconds**, JS-number-safe unlike the nanoseconds elsewhere), `category`/`severity` plain-TEXT enums, `title`/`body`/`source`, and optional JSON `metadata`. Unlike `event_log` (the data plane the runtime consumes), these rows exist for a human to debug or track what the app did. See the Activity log section below. |
 
 These tables share the same migration runner, `internal/data/migrate` — a small,
 storage-agnostic package (`Load`/`Apply`/`Up` over an `fs.FS` of
@@ -201,6 +202,8 @@ IDs from `flow.FlowStore` on every pass. It calls `DB.Prune` transactionally:
 - The newest 2,000 terminal (`done` or permanently `failed`) `output_command`
   records are retained. Nonterminal and retryable commands are never candidates
   for deletion.
+- The newest 5,000 `activity_event` rows are retained globally (bounded
+  diagnostic history, like `node_run`).
 
 The loop is stopped and joined as the desktop backend shuts down.
 
@@ -744,6 +747,50 @@ escape hatch alongside the starter-seeded "New profile" path (a deployed
 blank-started flow is still just a flow file, so it still shows up as its
 own profile tile).
 
+## Activity log (audit feed)
+
+The Activity view (a full-page audit log reached from the titlebar's Activity
+link, which replaced the old decorative "polling github" indicator) surfaces
+what the app did so a human can debug, inform, or track it. It is built on the
+`activity_event` table but is otherwise independent of the source/commit data
+plane.
+
+The write surface is a small, reusable recorder rather than ad-hoc formatting
+at each call site:
+
+- `internal/desktop/activity` owns the domain: `Category`/`Severity` go-enums,
+  an `Event` struct, ergonomic constructors (`Refresh`, `RefreshFailed`,
+  `SessionCreated`, `AutoAction`, `ActionRun`, `ActionFailed`, `ConfigReloaded`)
+  — the "mixin" surface a subsystem uses to name what happened — and a `Store`
+  implementing the `Recorder` interface (`Record` is fire-and-forget: a failed
+  audit write logs and is swallowed, never derailing the emit site).
+- A single `*activity.Store` is built in `main.go` over the shared
+  `pipelinedb.DB` and injected into every emitter via `SetRecorder`:
+  `Producer` (refresh completed / failed — only refreshes that changed
+  something are recorded, to avoid per-poll noise), `Worker` (auto-action on the
+  automatic path, manual action on `Confirm`, and a terminal `ActionFailed` on
+  permanent failure), `HiveSessionLauncher` (session created), and the
+  `actions.yml` reload watcher callback (config reloaded with action/auto-rule
+  counts). Session launches are recorded by the launcher, so the worker skips
+  the generic action event for `ActionTypeLaunchSession` to avoid double-logging.
+- The frontend records its own events (things only the UI knows about — a failed
+  layout save, a deleted profile) through `ActivityService.Record`, proving the
+  same recorder path is available to both sides.
+
+Every append emits an `activity:appended` Wails event carrying the new id; the
+frontend's `useActivity` singleton re-reads the latest page and advances the
+titlebar's unseen indicator. `ActivityService.List(before, limit)` pages the
+log newest-first by a descending id cursor. The view filters (All / Sessions /
+Auto actions / Refreshes / Errors) and free-text search run client-side over the
+loaded page; the "Errors" pill filters on `severity == error`, so a failed
+refresh (category `refresh`, severity `error`) reads as an error.
+
+**Not yet wired** (deferred, representative-set scope): "session finished /
+opened PR" (no backend hook exists yet), exact "N new, M updated" refresh counts
+(the producer knows changed-row counts, not the commit-time new/updated split),
+and the mockup's inline row actions (Undo / View log / Retry) — the `metadata`
+JSON column is reserved so these can attach later without a schema change.
+
 ## Key files
 
 | Concern | Path |
@@ -752,9 +799,11 @@ own profile tile).
 | Migrations | `internal/desktop/pipeline/pipelinedb/migrations/`, `internal/data/migrate` |
 | Source producer | `internal/desktop/pipeline/producer.go`, `source.go`, `github_source.go` |
 | Output worker + executors | `internal/desktop/pipeline/output_worker.go`, `launch_session_executor.go`, `shell_executor.go`, `publish_event_executor.go` |
+| Activity log (recorder, enums, store) | `internal/desktop/activity/`, `internal/desktop/pipeline/pipelinedb/activity_event.go` |
 | `flows/*.yaml` schema | `internal/desktop/pipeline/flow/` |
 | `actions.yml` schema | `internal/desktop/pipeline/actions/` |
-| Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
+| Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/activityservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
+| Activity view (frontend) | `desktop/frontend/src/components/ActivityView.vue`, `composables/useActivity.ts`, `lib/activityPresentation.ts`, `components/TitleBar.vue` |
 | Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue`, `SidebarFeedRow.vue` |
 | Sidebar feed folders + ordering | `internal/desktop/pipeline/flow/sidebar.go` (`<id>.sidebar.yaml`), `desktop/frontend/src/lib/feedTree.ts` |
 | Always-on per-enabled-flow runtime manager | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |

@@ -14,6 +14,9 @@ type RetentionPolicy struct {
 	// TerminalOutputCommandLimit is the number of newest done/failed
 	// output_command rows to retain. Non-terminal commands are never pruned.
 	TerminalOutputCommandLimit int64
+	// ActivityEventLimit is the total number of newest activity_event rows to
+	// retain for the Activity view's audit history.
+	ActivityEventLimit int64
 }
 
 // DefaultRetentionPolicy keeps enough recent history for the desktop's debug
@@ -22,6 +25,7 @@ func DefaultRetentionPolicy() RetentionPolicy {
 	return RetentionPolicy{
 		NodeRunLimit:               10_000,
 		TerminalOutputCommandLimit: 2_000,
+		ActivityEventLimit:         5_000,
 	}
 }
 
@@ -48,6 +52,9 @@ func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy Reten
 	}
 	if policy.TerminalOutputCommandLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("terminal output command retention limit must not be negative")
+	}
+	if policy.ActivityEventLimit < 0 {
+		return RetentionResult{}, fmt.Errorf("activity event retention limit must not be negative")
 	}
 
 	enabled := uniqueConsumers(enabledConsumers)
@@ -89,6 +96,9 @@ func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy Reten
 		}
 		if err := q.PruneTerminalOutputCommands(ctx, policy.TerminalOutputCommandLimit); err != nil {
 			return fmt.Errorf("pruning terminal output commands: %w", err)
+		}
+		if err := q.PruneActivityEvents(ctx, policy.ActivityEventLimit); err != nil {
+			return fmt.Errorf("pruning activity events: %w", err)
 		}
 		return nil
 	})

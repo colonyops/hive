@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/rs/zerolog"
 )
@@ -31,10 +32,16 @@ type Producer struct {
 	interval   time.Duration
 	onAppended func(nextOffset int64)
 	logger     zerolog.Logger
+	recorder   activity.Recorder
 
 	stopOnce sync.Once
 	stop     chan struct{}
 }
+
+// SetRecorder attaches an activity recorder so refreshes and their failures
+// surface in the Activity view. Optional: a nil recorder (the default) means
+// the producer records nothing. Set once at wiring time, before Start.
+func (pr *Producer) SetRecorder(r activity.Recorder) { pr.recorder = r }
 
 // NewProducer builds a Producer. interval <= 0 is rejected by the caller's
 // choice of default (main.go passes feed.DefaultPollInterval); Producer
@@ -91,6 +98,8 @@ func (pr *Producer) Tick(ctx context.Context) {
 	for id, src := range sources {
 		topic := "source:" + id
 		items := make([]pipelinedb.SnapshotItem, 0)
+		started := time.Now()
+		changed := 0
 		err := src.Produce(ctx, func(msg Msg) error {
 			if msg.Topic != topic {
 				return fmt.Errorf("source %q emitted topic %q, expected %q", id, msg.Topic, topic)
@@ -102,26 +111,44 @@ func (pr *Producer) Tick(ctx context.Context) {
 			}
 			if ok {
 				appended++
+				changed++
 				lastOffset = offset
 			}
 			return nil
 		})
 		if err != nil {
 			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: source fetch failed")
+			pr.record(ctx, activity.RefreshFailed(id, err.Error()))
 			continue
 		}
 
 		offset, err := pr.db.AppendSnapshot(ctx, topic, items)
 		if err != nil {
 			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: appending source snapshot failed")
+			pr.record(ctx, activity.RefreshFailed(id, err.Error()))
 			continue
 		}
 		appended++
 		lastOffset = offset
+
+		// Only surface refreshes that actually changed something: an unchanged
+		// poll every interval would flood the Activity view with noise.
+		if changed > 0 {
+			pr.record(ctx, activity.Refresh(id, changed, time.Since(started)))
+		}
 	}
 
 	if appended > 0 && pr.onAppended != nil {
 		pr.onAppended(lastOffset)
+	}
+}
+
+// record forwards an activity event when a recorder is attached. Recording is
+// best-effort: the recorder itself logs and swallows failures, and a nil
+// recorder (no wiring) is a no-op.
+func (pr *Producer) record(ctx context.Context, e activity.Event) {
+	if pr.recorder != nil {
+		pr.recorder.Record(ctx, e)
 	}
 }
 
