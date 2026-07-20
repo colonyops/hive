@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"sync"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/rs/zerolog"
@@ -270,27 +271,33 @@ func TestProducer_ResolvingSourcesErrorSkipsTick(t *testing.T) {
 }
 
 func TestProducer_StartStop(t *testing.T) {
-	t.Parallel()
+	// The poll loop is real-time timed (a ticker), so a wall-clock version of
+	// this — sleep 50ms and hope the 10ms ticker fired — flakes under CI
+	// scheduling load (wakeCount can still be 0). synctest runs the loop on a
+	// fake clock, so advancing time is deterministic: the ticker fires exactly
+	// as scheduled and the lifecycle assertion never races the scheduler.
+	synctest.Test(t, func(t *testing.T) {
+		db := openTestPipelineDB(t)
+		src := &fakeSource{batches: [][]Msg{
+			{{Topic: "source:s1", Key: "a", Payload: []byte(`{"v":1}`)}},
+		}}
+		var wakeCount int
+		var mu sync.Mutex
+		producer := NewProducer(db, listerOf(map[string]Source{"s1": src}), 10*time.Millisecond, func(int64) {
+			mu.Lock()
+			wakeCount++
+			mu.Unlock()
+		}, zerolog.Nop())
 
-	db := openTestPipelineDB(t)
-	src := &fakeSource{batches: [][]Msg{
-		{{Topic: "source:s1", Key: "a", Payload: []byte(`{"v":1}`)}},
-	}}
-	var wakeCount int
-	var mu sync.Mutex
-	producer := NewProducer(db, listerOf(map[string]Source{"s1": src}), 10*time.Millisecond, func(int64) {
+		producer.Start()
+		time.Sleep(50 * time.Millisecond) // fake time: the ticker fires deterministically
+		synctest.Wait()                   // let the in-flight tick's append settle
+		producer.Stop()
+		producer.Stop() // idempotent
+
 		mu.Lock()
-		wakeCount++
+		got := wakeCount
 		mu.Unlock()
-	}, zerolog.Nop())
-
-	producer.Start()
-	time.Sleep(50 * time.Millisecond)
-	producer.Stop()
-	producer.Stop() // idempotent
-
-	mu.Lock()
-	got := wakeCount
-	mu.Unlock()
-	assert.GreaterOrEqual(t, got, 1, "at least one tick should have run and appended")
+		assert.GreaterOrEqual(t, got, 1, "at least one tick should have run and appended")
+	})
 }
