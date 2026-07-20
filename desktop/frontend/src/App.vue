@@ -71,7 +71,7 @@ const flowsActive = computed(() => route.name === 'flows')
 const applicationSettingsActive = computed(() => route.name === 'application-settings')
 const profileSettingsActive = computed(() => route.name === 'profile-settings')
 const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
-  route.params.section === 'integrations' ? 'integrations' : 'appearance',
+  route.params.section === 'integrations' ? 'integrations' : route.params.section === 'actions' ? 'actions' : 'appearance',
 )
 const profileSettingsSection = computed<ProfileSettingsSection>(() =>
   route.params.section === 'danger' ? 'danger' : 'general',
@@ -223,6 +223,10 @@ function requestExitFlows(): void {
 
 function requestSelectProfile(id: string): void {
   openFeed(id)
+}
+
+function requestOpenActionsSettings(): void {
+  void router.push({ name: 'application-settings', params: { section: 'actions' } })
 }
 
 function requestOpenSettings(page: 'application' | 'profile'): void {
@@ -546,7 +550,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :actions="actions" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="notWired" />
+            <DetailPane :item="selectedItem" :actions="actions" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">

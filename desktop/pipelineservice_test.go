@@ -44,11 +44,13 @@ actions:
   - id: review-pr
     label: Review PR
     type: launch-session
+    show_in_detail: true
     applies_to: [pr]
     prompt_template: "Review {{ .Payload.title }}"
   - id: triage-any
     label: Triage
     type: shell
+    show_in_detail: true
     command_template: "true"
 `), 0o644))
 	store := actions.NewActionStore(path)
@@ -69,8 +71,8 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 	service := NewPipelineService(db, store, worker)
 
 	assert.Equal(t, []actions.View{
-		{ID: "review-pr", Label: "Review PR", Type: "launch-session", AutoApply: false},
-		{ID: "triage-any", Label: "Triage", Type: "shell", AutoApply: false},
+		{ID: "review-pr", Label: "Review PR", Type: "launch-session", ShowInDetail: true},
+		{ID: "triage-any", Label: "Triage", Type: "shell", ShowInDetail: true},
 	}, service.ActionViews("PR"))
 
 	require.NoError(t, service.InvokeAction("review-pr", feed.Item{ID: "pr-1", Kind: "PR", Title: "Fix it"}))

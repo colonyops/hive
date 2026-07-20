@@ -216,7 +216,7 @@ describe('useFeedState', () => {
     mocks.FeedItems.mockResolvedValue([
       { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR', labels: [] } },
     ])
-    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'launch-session', autoApply: false }])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'launch-session' }])
     const get = mountState()
     await flushPromises()
     await get().selectSidebar({ type: 'all' })

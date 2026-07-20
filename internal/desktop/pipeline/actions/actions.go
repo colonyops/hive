@@ -26,10 +26,10 @@ import (
 // and identify an action, but execution always resolves its current
 // definition from ActionStore.
 type View struct {
-	ID        string `json:"id"`
-	Label     string `json:"label"`
-	Type      string `json:"type"`
-	AutoApply bool   `json:"autoApply"`
+	ID           string `json:"id"`
+	Label        string `json:"label"`
+	Type         string `json:"type"`
+	ShowInDetail bool   `json:"showInDetail"`
 }
 
 // Action is one parsed and validated actions.yml entry: the common envelope
@@ -54,6 +54,9 @@ type Action struct {
 	// the worker moves a queued command to awaiting_confirmation until a
 	// manual confirmation UI (the detail pane) triggers it.
 	AutoApply bool
+	// ShowInDetail controls whether this action is offered in the detail pane.
+	// Flow action nodes remain eligible regardless of this presentation flag.
+	ShowInDetail bool
 	// Config is the per-type configuration: *LaunchSessionConfig,
 	// *ShellConfig, or *PublishEventConfig.
 	Config ActionConfig
@@ -61,7 +64,7 @@ type Action struct {
 
 // View returns the safe presentation contract for this action.
 func (a Action) View() View {
-	return View{ID: a.ID, Label: a.Label, Type: a.Type, AutoApply: a.AutoApply}
+	return View{ID: a.ID, Label: a.Label, Type: a.Type, ShowInDetail: a.ShowInDetail}
 }
 
 // ActionConfig is the per-type union every registered action type
@@ -89,11 +92,12 @@ var registry = map[string]actionFactory{
 // first (laxly — unknown keys ignored) purely to read the `type:`
 // discriminator and the envelope fields.
 type actionHeader struct {
-	ID        string   `yaml:"id"`
-	Label     string   `yaml:"label"`
-	Type      string   `yaml:"type"`
-	AppliesTo []string `yaml:"applies_to"`
-	AutoApply bool     `yaml:"auto_apply"`
+	ID           string   `yaml:"id"`
+	Label        string   `yaml:"label"`
+	Type         string   `yaml:"type"`
+	AppliesTo    []string `yaml:"applies_to"`
+	AutoApply    bool     `yaml:"auto_apply"`
+	ShowInDetail bool     `yaml:"show_in_detail"`
 }
 
 // reservedActionKeys are the envelope keys every action mapping may carry.
@@ -101,11 +105,12 @@ type actionHeader struct {
 // action's own envelope fields never trip "unknown field" on the per-type
 // config struct.
 var reservedActionKeys = map[string]bool{
-	"id":         true,
-	"label":      true,
-	"type":       true,
-	"applies_to": true,
-	"auto_apply": true,
+	"id":             true,
+	"label":          true,
+	"type":           true,
+	"applies_to":     true,
+	"auto_apply":     true,
+	"show_in_detail": true,
 }
 
 // UnmarshalYAML implements the two-pass strict decode: (1) decode a lax
@@ -149,6 +154,7 @@ func (a *Action) UnmarshalYAML(value *yaml.Node) error {
 	a.Type = header.Type
 	a.AppliesTo = header.AppliesTo
 	a.AutoApply = header.AutoApply
+	a.ShowInDetail = header.ShowInDetail
 	a.Config = cfg
 	return nil
 }

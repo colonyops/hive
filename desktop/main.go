@@ -145,9 +145,8 @@ func emitFlowsUpdated() {
 	}
 }
 
-// emitActionsUpdated wakes the detail pane after a successful or failed
-// actions.yml reload. ActionStore retains its last-good set on failure, so
-// refreshing always shows the currently effective action views.
+// emitActionsUpdated wakes frontend consumers after a successful catalog
+// change or a watcher reload. Service mutations call it only after success.
 func emitActionsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("actions:updated", "changed")
@@ -164,6 +163,9 @@ func emitActionsUpdated() {
 // to pick up.
 func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *actions.ActionsWatcher) {
 	path := desktop.ActionsPath()
+	if _, err := actions.SeedDefaultsIfMissing(path); err != nil {
+		logger.Warn().Err(err).Msg("actions seed failed")
+	}
 	store := actions.NewActionStore(path)
 	if err := store.Reload(); err != nil {
 		logger.Warn().Err(err).Msg("actions.yml load failed; using last-good (likely empty) action set")
@@ -310,6 +312,7 @@ func main() {
 	// both resolve enabled flow IDs live from it.
 	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	flowsStore, flowsWatcher := buildFlowsStore(actionStore, flowsLogger)
+	actionStore.SetUsageChecker(actionUsageChecker{flows: flowsStore, db: pipelineDB})
 	if flowsWatcher != nil {
 		flowsWatcher.Start()
 	}
@@ -351,6 +354,7 @@ func main() {
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker)),
 			application.NewService(NewFlowsService(flowsStore)),
+			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),

@@ -22,8 +22,8 @@ const item: FeedItem = {
 }
 
 const actions: ActionView[] = [
-  { id: 'summarize', label: 'Summarize thread', type: 'launch-session', autoApply: false },
-  { id: 'draft', label: 'Draft reply', type: 'shell', autoApply: false },
+  { id: 'summarize', label: 'Summarize thread', type: 'launch-session', showInDetail: true },
+  { id: 'draft', label: 'Draft reply', type: 'shell', showInDetail: true },
 ]
 
 describe('DetailPane', () => {

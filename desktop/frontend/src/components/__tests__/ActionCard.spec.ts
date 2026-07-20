@@ -7,7 +7,7 @@ const baseAction: ActionView = {
   id: 'summarize',
   label: 'Summarize thread',
   type: 'launch-session',
-  autoApply: false,
+  showInDetail: true,
 }
 
 function mountAction(overrides: Partial<ActionView> = {}) {

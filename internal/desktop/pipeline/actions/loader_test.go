@@ -22,6 +22,7 @@ actions:
   - id: spawn-review
     label: Spawn review agent
     type: launch-session
+    show_in_detail: true
     applies_to: [pr]
     auto_apply: true
     prompt_template: "Review {{ .Payload.title }}"
@@ -30,6 +31,7 @@ actions:
   - id: run-lint
     label: Run lint
     type: shell
+    show_in_detail: true
     command_template: "lint {{ .Payload.path | shq }}"
     cwd: /tmp
     timeout: "30s"
@@ -38,6 +40,7 @@ actions:
   - id: notify
     label: Notify
     type: publish-event
+    show_in_detail: true
     topic: pipeline.notify
 `
 
