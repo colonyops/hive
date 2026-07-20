@@ -236,18 +236,43 @@ mise run desktop:serve
 Drive and inspect the app at `http://localhost:8080` with Playwright or browser
 tooling, read the screenshots in `desktop/e2e/screenshots`, edit, and repeat.
 Set `HIVE_DESKTOP_MOCK=onboarding` to drive the first-run screen offline.
-Run `mise run desktop:e2e` as the regression gate. Its harness
-(`desktop/e2e/scripts/serve.sh` and `playwright.config.ts`) deliberately runs
-its own fresh build on port 8931 (in `feed` mock mode), so the gate never
-reuses a stale interactive server, plus two `onboarding`-mode instances on
-8932/8933 — one per browser project, because the mock auth backend stays
-authenticated once its fake device flow grants. Before the first local run,
-install the browsers with:
-
-```sh
-cd desktop/e2e
-npx playwright install chromium webkit
-```
+Run `mise run desktop:e2e` as the Docker-only regression gate. Its harness
+builds the server and starts private feed, onboarding, pipeline, and action
+smoke instances inside the pinned Playwright image; no local browser install
+or host Playwright invocation is supported.
 
 Native shell behavior — the tray, the Dock, and close-hides-window — remains
 a manual verification concern.
+
+## Actions catalog and delivery
+
+Desktop actions are global configuration, stored in `actions.yml` beside the
+flow directory (`$XDG_CONFIG_HOME/hive/desktop/actions.yml`; override with
+`HIVE_DESKTOP_ACTIONS`). The settings screen creates, edits, and deletes the
+catalog entries. External YAML edits reload live; a parse failure keeps the
+last-good catalog until the file is fixed. `show_in_detail` controls manual
+feed-item visibility only, while a flow `action` node may target any catalog
+id regardless of its detail kind scope.
+
+A flow action node is automation control: it emits a durable, deduplicated
+`output_command`, not an editor-side script. `launch-session` can launch
+headlessly when its repository template is configured, or interactively ask
+for repository/name/agent when it is not. Prefer local HTTPS or SSH remotes
+for repository templates. `shell` captures bounded stdout/stderr diagnostics.
+`publish-message` accepts only a constant topic and durably publishes with
+sender `hive-desktop` and an empty session identity. Completed outcomes are
+typed (session or message); failed outcomes retain their persisted diagnostics.
+
+## Docker E2E gate
+
+`mise run desktop:e2e` is Docker-only. It builds the digest-pinned
+Go/Playwright image in `desktop/e2e/Dockerfile` and runs Playwright there; it
+never attaches to a host browser or server. `run-docker.sh` supplies a fresh
+256-bit harness marker, which both the image command and server launcher
+require, so direct host Playwright cannot start the servers. Each server has a
+private data/config root. Fixture-driven servers receive private flow/action
+copies and a run id; onboarding deliberately receives no injected fixture env,
+and action-seed deliberately starts without an action fixture to verify exact
+first-run seeding. Action smoke also gets a local bare Git remote. This keeps
+parallel browser projects from mutating checked-in fixtures or sharing
+SQLite/action state. Docker must be available; there is no host fallback.

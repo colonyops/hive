@@ -97,7 +97,7 @@ func emitLogAppended(nextOffset int64) {
 
 func buildAuthBackend(onChange func()) auth.Backend {
 	switch desktop.MockMode() {
-	case "feed", "pipeline":
+	case "feed", "pipeline", "action-smoke":
 		return auth.NewMockBackend(true, onChange)
 	case "onboarding":
 		return auth.NewMockBackend(false, onChange)
@@ -298,7 +298,7 @@ func main() {
 	// fixture flow desktop/e2e/fixtures/flows/frontend-triage.yaml serves
 	// (see desktop/mockseed.go and desktop/e2e/scripts/serve.sh's
 	// HIVE_DESKTOP_FLOWS).
-	if desktop.MockMode() == "feed" {
+	if desktop.MockMode() == "feed" || desktop.MockMode() == "action-smoke" {
 		seedMockFeedItemsOrWarn(pipelineDB, pipelineLogger)
 	}
 
@@ -358,7 +358,7 @@ func main() {
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
-			Middleware: sourceToCommitSmokeMiddleware(pipelineDB),
+			Middleware: desktopSmokeMiddleware(pipelineDB, actionRuntime.db),
 		},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyRegular,

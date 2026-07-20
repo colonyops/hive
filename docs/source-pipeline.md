@@ -81,9 +81,9 @@ process boundary:
              │                                       │              │
              ▼                                       ▼              │
    FeedItems(feedID)                        pipeline.Worker.Tick()  │
-   (flows editor's read-only preview          drains output_command, │
-   panel AND the sidebar — both read          auto_apply gate,       │
-   the same persisted rows)                   dispatches Executors    │
+   (flows editor's read-only preview          drains queued output   │
+   panel AND the sidebar — both read          commands and dispatches │
+   the same persisted rows)                   their typed executors   │
                                                                      │
    consumer_offset  ◀────────── ConsumerOffset / CommitBatch ────────┘
 ```
@@ -199,8 +199,8 @@ IDs from `flow.FlowStore` on every pass. It calls `DB.Prune` transactionally:
   the then-current log.
 - The newest 10,000 `node_run` records are retained globally.
 - The newest 2,000 terminal (`done` or permanently `failed`) `output_command`
-  records are retained. `pending`, `awaiting_confirmation`, `running`, and
-  retryable commands are never candidates for deletion.
+  records are retained. Nonterminal and retryable commands are never candidates
+  for deletion.
 
 The loop is stopped and joined as the desktop backend shuts down.
 
@@ -434,25 +434,27 @@ version: 1
 actions:
   - id: review-pr
     label: Spawn review agent
-    type: launch-session       # | shell | publish-event
-    applies_to: [pr]           # optional; restricts the detail-pane picker by item kind
-    auto_apply: false          # default false — see below
+    type: launch-session       # | shell | publish-message
+    applies_to: [pr]           # optional detail-pane kind scope
+    show_in_detail: true       # presentation only; flow nodes still target it
     prompt_template: "Review {{ .Payload.title }}"
-    agent: claude              # optional
+    repo_template: "git@github.com:colonyops/hive.git"
 ```
 
 | `type` | Config fields | Executor |
 | --- | --- | --- |
-| `launch-session` | `prompt_template` (required, Go template), `agent?`, `repo_template?` | `LaunchSessionExecutor` creates a background Hive session through `SessionService`; its name is derived from the action id and source key. |
-| `shell` | `command_template` (required), `cwd?`, `timeout?`, `env?` | `ShellExecutor` — runs `sh -c <rendered command>` for real; author-trusted, no sandboxing beyond cwd/env/timeout. |
-| `publish-event` | `topic` (required) | `PublishEventExecutor` queues the raw payload on Hive's in-process event bus. Bus backpressure fails the command so the output worker can retry it. |
+| `launch-session` | `prompt_template` (required, Go template), `agent?`, `repo_template?` | `LaunchSessionExecutor` creates a Hive session. A repository template is headless-capable; without one the detail pane asks for repository, name, and agent input. |
+| `shell` | `command_template` (required), `cwd?`, `timeout?`, `env?` | `ShellExecutor` runs `sh -c <rendered command>` for trusted action authors. Stdout and stderr diagnostics are retained with a 64 KiB bound. |
+| `publish-message` | literal `topic` and `message_template` (both required) | `PublishMessageExecutor` durably publishes the rendered payload with sender `hive-desktop` and no session id. Topics cannot be templates or wildcards. |
 
 `id`/`label` are required envelope fields; `id` follows the same slug rule
-as flow node ids. `AutoApply` gates whether `pipeline.Worker` (the output
-worker) executes a queued `output_command` automatically. The detail pane
-lists the same configured actions through `PipelineService.ActionViews`;
-clicking one explicitly confirms and executes its deduplicated
-`(action_id, item_id)` command.
+as flow node ids. The global catalog lives in `actions.yml` and supports
+create, edit, delete, and external-file reload. Invalid external YAML leaves
+the prior last-good catalog active until a fixed file reloads. `show_in_detail`
+controls only manual detail-pane visibility; it does not limit an `action`
+flow node. Detail actions and flow outputs both use durable `(action_id, key)`
+deduplication. Their typed result is either a launched session or a published
+message; failed runs persist bounded diagnostics for later readback.
 
 `actions.ActionStore` (`actions/store.go`) has the same last-good-on-failure
 posture as `flow.FlowStore`: a broken `actions.yml` on reload keeps serving
@@ -604,19 +606,15 @@ its cache on kind+query+limit, not id) while producing distinct topics so
 each flow's graph only ingests its own rows. A source fetch failure is
 logged and skipped; it never blocks other sources in the same tick.
 
-**`pipeline.Worker`** (`output_worker.go`) is the output side: on each tick
-it promotes confirmation-gated commands whose actions now have
-`AutoApply: true`, then drains up to `DefaultOutputWorkerBatch` (50)
-runnable `output_command` rows by ID. `AutoApply: false` (the `actions.yml`
-default) moves a command to `awaiting_confirmation`, keeping manual work out
-of the runnable queue so it cannot block automatic work. Flipping an action
-to `auto_apply: true` promotes its waiting commands on the next tick; a
-matching detail-pane action explicitly confirms and executes a manual
-command. A failed execution is retried (with
-`last_error` recorded) until
-`MaxOutputCommandAttempts` (5), then marked permanently `failed`; an unknown
-`action_id` (e.g. `actions.yml` was edited to remove it) is marked failed
-immediately, no retries.
+**`pipeline.Worker`** (`output_worker.go`) is the output side: it drains up to
+`DefaultOutputWorkerBatch` (50) runnable `output_command` rows by ID. A
+matching detail-pane action explicitly creates and executes one durable
+command. A failed background execution is retried (with `last_error`
+recorded) until `MaxOutputCommandAttempts` (5), then marked permanently
+`failed`; an unknown `action_id` (for example after a catalog edit) fails
+immediately. Explicit detail actions are one-shot: attempted failures retain
+bounded stdout/stderr diagnostics and are terminal rather than replayed
+without the user's interactive input.
 
 ## Testing strategy
 
@@ -635,27 +633,23 @@ immediately, no retries.
   each node type's `config.ts`/`editor.vue`, the composables
   (`usePipelineEditor`/`usePipelineRuntime`), and `driver.ts`. Run with
   `cd desktop/frontend && npm test`.
-- **Playwright e2e** (`desktop/e2e`) — drives a real server build (`mise run
-  desktop:e2e`, or `desktop:serve` for interactive use) in
-  `HIVE_DESKTOP_MOCK=feed`/`onboarding` mode against `127.0.0.1:8931`
-  (`8080` is commonly occupied by an unrelated local process, hence the
-  non-default port). The `feed`-mode server additionally points
-  `HIVE_DESKTOP_FLOWS` at a checked-in fixture directory
-  (`desktop/e2e/fixtures/flows/`, one flow), `HIVE_DESKTOP_ACTIONS` at its
-  configured action fixture (`desktop/e2e/fixtures/actions.yml`), and seeds
-  a matching, fixed set of `feed_item` rows at startup (`desktop/mockseed.go`,
-  gated on `desktop.MockMode() == "feed"`) — this replaced
-  `internal/desktop/feed/mock.go`'s static in-memory item list once the
-  sidebar switched onto real `feed_item` reads (see
-  [Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)).
-  `desktop/e2e/tests/flows-editor.spec.ts` exercises the flows editor
-  surface against that same fixture flow (opening it from the command
-  palette, the populated canvas, the node palette); `feed.spec.ts`,
-  `theme.spec.ts`, and `onboarding.spec.ts` cover the sidebar/detail pane,
-  theming, and first-run onboarding plus profile/flow-node CRUD
-  respectively. Additional coverage still needed includes a
-  stateless-commit/replay spec and screenshot snapshots for the flows
-  canvas; see the next section.
+- **Playwright e2e** (`desktop/e2e`) — `mise run desktop:e2e` is Docker-only:
+  the digest-pinned Playwright image builds a real server and runs feed,
+  onboarding, pipeline, and action-smoke projects on private ports. A fresh
+  256-bit Docker harness marker is required before either Playwright or the
+  server launcher runs. Every server has a fresh data/config root.
+  Fixture-driven servers receive private flows/actions copies and a run id;
+  onboarding deliberately has no injected fixture env, and action-seed
+  deliberately has no action fixture so it can prove first-run seeding. Action
+  smoke also gets a local bare remote. Checked-in fixtures are never writable,
+  and no project can share SQLite/action state. The action-smoke endpoint is
+  read-only, requires action-smoke mode plus the Docker marker/run id, and only
+  exposes its filtered command records; browser tests invoke Wails methods and
+  UI before using it for durable readback.
+  `feed.spec.ts`, `theme.spec.ts`, `onboarding.spec.ts`,
+  `flows-editor.spec.ts`, `source-to-commit.spec.ts`, and `actions.spec.ts`
+  cover the real persisted sidebar, graph commit, catalog UI, and action
+  feedback without pixel assertions.
 
 ## Current architecture and remaining gaps
 
@@ -724,14 +718,10 @@ is gone.
 - The runtime records completed `node_run` rows but does not expose a real
   per-node in-flight signal, so the canvas and debug strip cannot show which
   individual node is currently executing.
-- e2e screenshot snapshots and a stateless-commit/replay spec still need to
-  be added and verified with the Docker-based `mise run desktop:e2e` gate.
-  The existing suites (`feed.spec.ts`, `theme.spec.ts`,
-  `flows-editor.spec.ts`, `onboarding.spec.ts`) exercise the real
-  `feed_item`/flow-backed sidebar via a deterministic mock seed
-  (`desktop/mockseed.go` + `desktop/e2e/fixtures/flows/`) instead of the
-  deleted `internal/desktop/feed/mock.go`'s static fixture — see
-  [Testing strategy](#testing-strategy) above.
+- Docker e2e exercises the real `feed_item`/flow-backed sidebar, frontend
+  graph commit, and action catalog through private deterministic fixtures;
+  screenshot assertions remain intentionally out of scope because behavior
+  and persisted field values are the contract.
 
 ## Starter flow
 

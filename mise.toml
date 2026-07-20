@@ -134,9 +134,8 @@ description = "Run desktop frontend + Go tests"
 run = ["cd desktop/frontend && npm test", "go test ./desktop/... ./internal/desktop/..."]
 
 [tasks."desktop:e2e"]
-description = "Run desktop e2e tests (Playwright vs server build)"
-dir = "desktop/e2e"
-run = "npx playwright test"
+description = "Run desktop e2e tests in the pinned Docker/Playwright environment"
+run = "./desktop/e2e/scripts/run-docker.sh"
 
 [tasks."docs:serve"]
 description = "Serve documentation site locally"

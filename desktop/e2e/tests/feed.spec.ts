@@ -68,7 +68,7 @@ test('confirms a configured action without changing the selection', async ({ pag
   const detail = page.getByTestId('detail-pane')
   await expect(detail).toContainText('hive/core #2841')
   await page.getByTestId('action-card').first().click()
-  await expect(page.getByTestId('toast')).toHaveText('Review PR started')
+  await expect(page.getByTestId('toast')).toHaveText('Review PR completed')
   await expect(detail).toContainText('hive/core #2841')
 })
 
