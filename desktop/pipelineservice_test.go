@@ -27,6 +27,15 @@ func (e *recordingActionExecutor) Execute(_ context.Context, _ actions.Action, d
 	return nil
 }
 
+type recordingSessionLauncher struct {
+	calls []pipeline.LaunchSessionRequest
+}
+
+func (l *recordingSessionLauncher) LaunchSession(_ context.Context, req pipeline.LaunchSessionRequest) error {
+	l.calls = append(l.calls, req)
+	return nil
+}
+
 func configuredActionStore(t *testing.T) *actions.ActionStore {
 	t.Helper()
 	path := filepath.Join(t.TempDir(), "actions.yml")
@@ -69,4 +78,27 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 	assert.Equal(t, "pr-1", executor.data.Key)
 	assert.Equal(t, "Fix it", executor.data.Payload["title"])
 	assert.Error(t, service.InvokeAction("review-pr", feed.Item{ID: "issue-1", Kind: "Issue"}))
+}
+
+func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing.T) {
+	store := configuredActionStore(t)
+	db, err := pipelinedb.Open(t.TempDir(), pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+
+	launcher := &recordingSessionLauncher{}
+	worker := pipeline.NewWorker(db, store, pipeline.NewDispatcher(map[string]pipeline.Executor{
+		"launch-session": pipeline.NewLaunchSessionExecutor(launcher),
+	}), 0, zerolog.Nop())
+	service := NewPipelineService(db, store, worker)
+
+	require.NoError(t, service.InvokeAction("review-pr", feed.Item{ID: "pr-1", Kind: "PR", Title: "Fix it"}))
+	require.Equal(t, []pipeline.LaunchSessionRequest{{
+		Name: "review-pr-pr-1", Prompt: "Review Fix it",
+	}}, launcher.calls)
+
+	var status string
+	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
+		`SELECT status FROM output_command WHERE action_id = ? AND key = ?`, "review-pr", "pr-1").Scan(&status))
+	assert.Equal(t, "done", status)
 }

@@ -440,9 +440,9 @@ actions:
 
 | `type` | Config fields | Executor |
 | --- | --- | --- |
-| `launch-session` | `prompt_template` (required, Go template), `agent?`, `repo_template?`, `post?` | `LaunchSessionExecutor` — **currently a logging stub** (`LoggingSessionLauncher`); real session-spawn wiring is deferred, since the desktop app deliberately excludes `internal/hive`'s session/core machinery today. |
+| `launch-session` | `prompt_template` (required, Go template), `agent?`, `repo_template?` | `LaunchSessionExecutor` creates a background Hive session through `SessionService`; its name is derived from the action id and source key. |
 | `shell` | `command_template` (required), `cwd?`, `timeout?`, `env?` | `ShellExecutor` — runs `sh -c <rendered command>` for real; author-trusted, no sandboxing beyond cwd/env/timeout. |
-| `publish-event` | `topic` (required) | `PublishEventExecutor` — **currently a logging stub** (`LoggingEventPublisher`); no real event bus is wired in yet (see the package doc on `publish_event_executor.go` for why `internal/core/eventbus`/`internal/core/messaging` are both poor fits). |
+| `publish-event` | `topic` (required) | `PublishEventExecutor` queues the raw payload on Hive's in-process event bus. Bus backpressure fails the command so the output worker can retry it. |
 
 `id`/`label` are required envelope fields; `id` follows the same slug rule
 as flow node ids. `AutoApply` gates whether `pipeline.Worker` (the output
@@ -736,9 +736,6 @@ is gone.
 - `WebWorkerTransport` is fully implemented and unit-tested but not wired
   into the running app — `InProcessTransport` (main-thread) is what
   actually executes every processor node today.
-- `launch-session` and `publish-event` actions execute against **logging
-  stubs** (`LoggingSessionLauncher`, `LoggingEventPublisher`) — only `shell`
-  actually does anything outside a log line.
 - "Drain in-flight, then swap" Deploy semantics are still realized more by
   construction than by an explicit drain step — see
   [Deploy and drain semantics](#deploy-and-drain-semantics) above; this

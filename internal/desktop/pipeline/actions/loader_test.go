@@ -27,7 +27,6 @@ actions:
     prompt_template: "Review {{ .Payload.title }}"
     agent: claude
     repo_template: "{{ .Payload.repo }}"
-    post: "comment"
   - id: run-lint
     label: Run lint
     type: shell
@@ -58,9 +57,8 @@ func TestLoadActions_MultiActionFile(t *testing.T) {
 	spawn := byID["spawn-review"]
 	assert.Equal(t, "launch-session", spawn.Type)
 	assert.True(t, spawn.AutoApply)
-	lsCfg, ok := spawn.Config.(*LaunchSessionConfig)
+	_, ok := spawn.Config.(*LaunchSessionConfig)
 	require.True(t, ok)
-	assert.Equal(t, "comment", lsCfg.Post)
 
 	lint := byID["run-lint"]
 	assert.Equal(t, "shell", lint.Type)
@@ -154,6 +152,21 @@ actions:
 	_, err := LoadActions(path)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "label")
+}
+
+func TestLoadActions_UnsupportedLaunchSessionPost_IsError(t *testing.T) {
+	dir := t.TempDir()
+	path := writeActionsFile(t, dir, "actions.yml", `version: 1
+actions:
+  - id: x
+    label: X
+    type: launch-session
+    prompt_template: "Review {{ .Payload.title }}"
+    post: "comment"
+`)
+	_, err := LoadActions(path)
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "post")
 }
 
 func TestLoadActions_MissingRequiredPerTypeField_IsError(t *testing.T) {

@@ -1,13 +1,22 @@
 package main
 
 import (
+	"context"
 	"embed"
 	"fmt"
+	"io"
 	"log"
 	"os"
+	"path/filepath"
 
 	"github.com/rs/zerolog"
 
+	"github.com/colonyops/hive/internal/commands"
+	"github.com/colonyops/hive/internal/core/config"
+	"github.com/colonyops/hive/internal/core/eventbus"
+	"github.com/colonyops/hive/internal/core/git"
+	coredb "github.com/colonyops/hive/internal/data/db"
+	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
@@ -17,6 +26,10 @@ import (
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/colonyops/hive/internal/github"
+	"github.com/colonyops/hive/internal/hive"
+	"github.com/colonyops/hive/internal/hive/scripts"
+	"github.com/colonyops/hive/pkg/executil"
+	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
 )
@@ -173,22 +186,97 @@ func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *feed.Config
 	return store, watcher
 }
 
+// hiveActionRuntime owns the Hive dependencies needed by desktop actions.
+// The desktop pipeline keeps its own database, while sessions and internal
+// events intentionally use Hive's shared state and event bus.
+type hiveActionRuntime struct {
+	db     *coredb.DB
+	cancel context.CancelFunc
+
+	launcher  pipeline.SessionLauncher
+	publisher pipeline.EventPublisher
+}
+
+func (r *hiveActionRuntime) Close() {
+	r.cancel()
+	if err := r.db.Close(); err != nil {
+		log.Printf("close hive action database: %v", err)
+	}
+}
+
+func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
+	dataDir := filepath.Dir(desktop.StateDir())
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		return nil, fmt.Errorf("create hive data directory: %w", err)
+	}
+
+	configPath := os.Getenv("HIVE_CONFIG")
+	if configPath == "" {
+		configPath = commands.DefaultConfigPath()
+	}
+	cfg, err := config.Load(configPath, dataDir)
+	if err != nil {
+		return nil, fmt.Errorf("load hive config for actions: %w", err)
+	}
+	if err := scripts.EnsureExtracted(dataDir, "desktop"); err != nil {
+		logger.Warn().Err(err).Msg("extract hive action scripts failed")
+	}
+
+	database, err := coredb.Open(dataDir, coredb.OpenOptions{
+		MaxOpenConns: cfg.Database.MaxOpenConns,
+		MaxIdleConns: cfg.Database.MaxIdleConns,
+		BusyTimeout:  cfg.Database.BusyTimeout,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("open hive action database: %w", err)
+	}
+	if err := stores.MigrateFromJSON(context.Background(), database, dataDir); err != nil {
+		_ = database.Close()
+		return nil, fmt.Errorf("migrate hive action data: %w", err)
+	}
+
+	bus := eventbus.New(64)
+	busCtx, cancel := context.WithCancel(context.Background())
+	go bus.Start(busCtx)
+
+	profile := cfg.Agents.DefaultProfile()
+	renderer := tmpl.New(tmpl.Config{
+		ScriptPaths:  scripts.ScriptPaths(dataDir),
+		AgentCommand: profile.CommandOrDefault(cfg.Agents.Default),
+		AgentWindow:  cfg.Agents.Default,
+		AgentFlags:   profile.ShellFlags(),
+	})
+	exec := &executil.RealExecutor{}
+	sessions := hive.NewSessionService(
+		stores.NewSessionStore(database),
+		git.NewExecutor(cfg.GitPath, exec),
+		cfg,
+		bus,
+		exec,
+		renderer,
+		logger.With().Str("component", "hive-actions").Logger(),
+		io.Discard,
+		io.Discard,
+	)
+
+	return &hiveActionRuntime{
+		db:        database,
+		cancel:    cancel,
+		launcher:  pipeline.NewHiveSessionLauncher(sessions),
+		publisher: pipeline.NewEventBusPublisher(bus),
+	}, nil
+}
+
 // buildOutputWorker constructs the output worker over db and actionStore.
 // Mock modes do not start its background loop because no fixture flow emits
 // output commands, but they retain this worker for explicit detail-pane
 // confirmation RPCs. That keeps the configured action path real in e2e while
 // avoiding a background shell action from compromising fixture determinism.
-//
-// launch-session and publish-event get logging stubs (see
-// LaunchSessionExecutor/PublishEventExecutor's package docs for why: the
-// desktop app doesn't wire the hive session service or a real event bus
-// yet). shell gets a real executor — running an author-trusted local
-// command has no such missing dependency.
-func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, logger zerolog.Logger) *pipeline.Worker {
+func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.EventPublisher, logger zerolog.Logger) *pipeline.Worker {
 	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
-		"launch-session": pipeline.NewLaunchSessionExecutor(nil),
+		"launch-session": pipeline.NewLaunchSessionExecutor(launcher),
 		"shell":          pipeline.NewShellExecutor(logger),
-		"publish-event":  pipeline.NewPublishEventExecutor(nil),
+		"publish-event":  pipeline.NewPublishEventExecutor(publisher),
 	})
 	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 }
@@ -236,6 +324,10 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
+	actionRuntime, err := buildHiveActionRuntime(pipelineLogger)
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	// Mock "feed" mode has no live producer (buildSourceFetcher/
 	// buildPipelineProducer both no-op in mock mode), so the sidebar would
@@ -252,7 +344,7 @@ func main() {
 	if actionsWatcher != nil {
 		actionsWatcher.Start()
 	}
-	outputWorker := buildOutputWorker(pipelineDB, actionStore, pipelineLogger)
+	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, pipelineLogger)
 	if desktop.MockMode() == "" {
 		outputWorker.Start()
 	}
@@ -349,6 +441,8 @@ func main() {
 	app.SystemTray.New().SetTemplateIcon(trayIcon).SetMenu(trayMenu)
 
 	if err := app.Run(); err != nil {
+		actionRuntime.Close()
 		log.Fatal(err)
 	}
+	actionRuntime.Close()
 }

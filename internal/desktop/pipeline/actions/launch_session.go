@@ -19,13 +19,6 @@ type LaunchSessionConfig struct {
 	// RepoTemplate optionally renders which repo the session is created
 	// against; empty means the launcher's own default.
 	RepoTemplate string `yaml:"repo_template,omitempty"`
-	// Post is reserved for the design mock's "post-create mode" (board 5c) —
-	// what happens right after the session spawns. Its semantics depend on
-	// real session-spawn wiring, deferred past this phase; it is captured
-	// here for schema completeness and passed through to the executor
-	// unrendered, but the logging stub does nothing with it beyond logging
-	// it.
-	Post string `yaml:"post,omitempty"`
 }
 
 func (c *LaunchSessionConfig) Validate() error {

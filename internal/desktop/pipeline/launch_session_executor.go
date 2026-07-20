@@ -5,8 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/rs/zerolog"
-
+	"github.com/colonyops/hive/internal/core/session"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/pkg/tmpl"
 )
@@ -14,43 +13,15 @@ import (
 // LaunchSessionRequest is a rendered launch-session action, ready to hand to
 // a SessionLauncher.
 type LaunchSessionRequest struct {
+	Name   string
 	Prompt string
 	Agent  string
 	Repo   string
-	Post   string
 }
 
-// SessionLauncher spawns a real hive session for a launch-session action.
-//
-// The desktop app does not wire the hive session service yet (see
-// internal/desktop/desktop.go's package doc: session/core logic is
-// deliberately excluded from the desktop build), so there is no real
-// implementation of this interface in this phase. LoggingSessionLauncher is
-// the default: it logs the rendered request and returns success without
-// spawning anything. Real session-spawn wiring — the flagship
-// "launch-session" scenario the design calls out (an incoming PR auto-spawns
-// a review agent) — is deferred to a later phase, which will provide a real
-// SessionLauncher (almost certainly backed by internal/hive.SessionService)
-// and inject it here; LaunchSessionExecutor does not need to change.
+// SessionLauncher spawns a hive session for a launch-session action.
 type SessionLauncher interface {
 	LaunchSession(ctx context.Context, req LaunchSessionRequest) error
-}
-
-// LoggingSessionLauncher is the default SessionLauncher: a stub that logs
-// what it would have spawned. See SessionLauncher's doc for why this is the
-// default rather than a real implementation.
-type LoggingSessionLauncher struct {
-	Logger zerolog.Logger
-}
-
-func (l LoggingSessionLauncher) LaunchSession(_ context.Context, req LaunchSessionRequest) error {
-	l.Logger.Info().
-		Str("agent", req.Agent).
-		Str("repo", req.Repo).
-		Str("post", req.Post).
-		Str("prompt", req.Prompt).
-		Msg("launch-session action (stub): would spawn a hive session")
-	return nil
 }
 
 // LaunchSessionExecutor renders a launch-session action's templates over
@@ -59,12 +30,10 @@ type LaunchSessionExecutor struct {
 	launcher SessionLauncher
 }
 
-// NewLaunchSessionExecutor builds a LaunchSessionExecutor over launcher. A
-// nil launcher defaults to LoggingSessionLauncher.
+// NewLaunchSessionExecutor builds a LaunchSessionExecutor over launcher.
+// A nil launcher leaves the executor unavailable rather than acknowledging an
+// action without creating its session.
 func NewLaunchSessionExecutor(launcher SessionLauncher) *LaunchSessionExecutor {
-	if launcher == nil {
-		launcher = LoggingSessionLauncher{Logger: zerolog.Nop()}
-	}
 	return &LaunchSessionExecutor{launcher: launcher}
 }
 
@@ -72,6 +41,9 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	cfg, ok := action.Config.(*actions.LaunchSessionConfig)
 	if !ok {
 		return fmt.Errorf("launch-session executor: action %q has config type %T", action.ID, action.Config)
+	}
+	if e.launcher == nil {
+		return fmt.Errorf("launch-session executor: no session launcher configured")
 	}
 
 	renderer := tmpl.New(tmpl.Config{})
@@ -88,12 +60,18 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 		if err != nil {
 			return fmt.Errorf("launch-session: repo_template: %w", err)
 		}
+		repo = strings.TrimSpace(repo)
+	}
+
+	name := session.Slugify(action.ID + "-" + data.Key)
+	if err := session.ValidateName(name); err != nil {
+		return fmt.Errorf("launch-session: derived session name: %w", err)
 	}
 
 	return e.launcher.LaunchSession(ctx, LaunchSessionRequest{
+		Name:   name,
 		Prompt: prompt,
 		Agent:  cfg.Agent,
 		Repo:   repo,
-		Post:   cfg.Post,
 	})
 }
