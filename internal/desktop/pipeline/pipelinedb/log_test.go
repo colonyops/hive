@@ -68,7 +68,75 @@ func TestAppend_ReadFrom_Monotonic(t *testing.T) {
 	assert.Equal(t, offsets[1], next)
 }
 
-func TestCompact_KeepsLatestPerKey(t *testing.T) {
+func TestAppendIfChanged_DedupesByTopicAndKey(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+
+	first, appended, err := database.AppendIfChanged(ctx, "source:one", "shared", []byte(`{"v":1}`))
+	require.NoError(t, err)
+	assert.True(t, appended)
+
+	unchanged, appended, err := database.AppendIfChanged(ctx, "source:one", "shared", []byte(`{"v":1}`))
+	require.NoError(t, err)
+	assert.False(t, appended)
+	assert.Zero(t, unchanged)
+
+	otherTopic, appended, err := database.AppendIfChanged(ctx, "source:two", "shared", []byte(`{"v":1}`))
+	require.NoError(t, err)
+	assert.True(t, appended, "the same key in another topic is a distinct source item")
+
+	changed, appended, err := database.AppendIfChanged(ctx, "source:one", "shared", []byte(`{"v":2}`))
+	require.NoError(t, err)
+	assert.True(t, appended)
+	assert.Greater(t, changed, otherTopic)
+
+	assert.Greater(t, otherTopic, first)
+	msgs, _, err := database.ReadFrom(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, msgs, 3)
+	assert.Equal(t, []string{"source:one", "source:two", "source:one"}, []string{msgs[0].Topic, msgs[1].Topic, msgs[2].Topic})
+	assert.Equal(t, []byte(`{"v":2}`), []byte(msgs[2].Payload))
+}
+
+func TestAppendIfChanged_RollsBackHeadOnAppendFailure(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+
+	_, appended, err := database.AppendIfChanged(ctx, "source:test", "item", []byte(`{"v":1}`))
+	require.NoError(t, err)
+	require.True(t, appended)
+
+	_, err = database.Conn().ExecContext(ctx, `
+		CREATE TRIGGER fail_source_head_update
+		BEFORE UPDATE ON source_head
+		BEGIN
+			SELECT RAISE(ABORT, 'source head write failed');
+		END;
+	`)
+	require.NoError(t, err)
+
+	_, appended, err = database.AppendIfChanged(ctx, "source:test", "item", []byte(`{"v":2}`))
+	require.Error(t, err)
+	assert.False(t, appended)
+
+	msgs, _, err := database.ReadFrom(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1, "the event append rolls back when the source head update fails")
+
+	_, err = database.Conn().ExecContext(ctx, `DROP TRIGGER fail_source_head_update`)
+	require.NoError(t, err)
+
+	_, appended, err = database.AppendIfChanged(ctx, "source:test", "item", []byte(`{"v":2}`))
+	require.NoError(t, err)
+	assert.True(t, appended, "a failed append must not advance the source head")
+
+	msgs, _, err = database.ReadFrom(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, msgs, 2)
+	assert.Equal(t, []byte(`{"v":2}`), []byte(msgs[1].Payload))
+}
+
+func TestCompact_KeepsLatestPerTopicAndKey(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
 
@@ -82,6 +150,11 @@ func TestCompact_KeepsLatestPerKey(t *testing.T) {
 
 	// A distinct key is untouched by key-compaction.
 	other, err := database.Append(ctx, "source:test", "other", []byte(`{"v":"other"}`))
+	require.NoError(t, err)
+
+	// A matching key in a different topic has a distinct identity and must
+	// survive compaction alongside the source:test row above.
+	otherTopic, err := database.Append(ctx, "source:other", "dup", []byte(`{"v":"other-topic"}`))
 	require.NoError(t, err)
 
 	// Empty-key rows have no identity to compact against and must survive
@@ -106,9 +179,10 @@ func TestCompact_KeepsLatestPerKey(t *testing.T) {
 
 	assert.Contains(t, gotOffsets, newest, "latest row for a compacted key should survive")
 	assert.Contains(t, gotOffsets, other)
+	assert.Contains(t, gotOffsets, otherTopic, "compaction identity includes topic")
 	assert.Contains(t, gotOffsets, emptyA, "empty-key rows are exempt from compaction")
 	assert.Contains(t, gotOffsets, emptyB, "empty-key rows are exempt from compaction")
-	assert.Len(t, msgs, 4, "only one row per non-empty key, plus both empty-key rows")
+	assert.Len(t, msgs, 5, "only one row per non-empty topic/key, plus both empty-key rows")
 }
 
 func TestCompact_AgeRetention(t *testing.T) {

@@ -60,13 +60,13 @@ const compactEventLogByKey = `-- name: CompactEventLogByKey :exec
 DELETE FROM event_log
 WHERE key != ''
   AND "offset" NOT IN (
-    SELECT MAX("offset") FROM event_log WHERE key != '' GROUP BY key
+    SELECT MAX("offset") FROM event_log WHERE key != '' GROUP BY topic, key
   )
 `
 
-// Log-compaction pass: for every non-empty key, keep only the row at its
-// highest offset (the current value). Rows with an empty key (system events
-// with no stable identity) are exempt from key-compaction.
+// Log-compaction pass: for every non-empty (topic, key), keep only the row
+// at its highest offset (the current value). Rows with an empty key (system
+// events with no stable identity) are exempt from key-compaction.
 func (q *Queries) CompactEventLogByKey(ctx context.Context) error {
 	_, err := q.db.ExecContext(ctx, compactEventLogByKey)
 	return err
@@ -183,6 +183,23 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 	var i ConsumerOffset
 	err := row.Scan(&i.Consumer, &i.Offset)
 	return i, err
+}
+
+const getSourceHeadPayload = `-- name: GetSourceHeadPayload :one
+SELECT payload FROM source_head
+WHERE topic = ? AND key = ?
+`
+
+type GetSourceHeadPayloadParams struct {
+	Topic string `json:"topic"`
+	Key   string `json:"key"`
+}
+
+func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPayloadParams) ([]byte, error) {
+	row := q.db.QueryRowContext(ctx, getSourceHeadPayload, arg.Topic, arg.Key)
+	var payload []byte
+	err := row.Scan(&payload)
+	return payload, err
 }
 
 const insertNodeRun = `-- name: InsertNodeRun :exec
@@ -531,5 +548,22 @@ func (q *Queries) UpsertFeedItem(ctx context.Context, arg UpsertFeedItemParams) 
 		arg.UpdatedAt,
 		arg.Unread,
 	)
+	return err
+}
+
+const upsertSourceHead = `-- name: UpsertSourceHead :exec
+INSERT INTO source_head (topic, key, payload)
+VALUES (?, ?, ?)
+ON CONFLICT(topic, key) DO UPDATE SET payload = excluded.payload
+`
+
+type UpsertSourceHeadParams struct {
+	Topic   string `json:"topic"`
+	Key     string `json:"key"`
+	Payload []byte `json:"payload"`
+}
+
+func (q *Queries) UpsertSourceHead(ctx context.Context, arg UpsertSourceHeadParams) error {
+	_, err := q.db.ExecContext(ctx, upsertSourceHead, arg.Topic, arg.Key, arg.Payload)
 	return err
 }

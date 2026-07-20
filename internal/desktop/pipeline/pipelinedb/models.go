@@ -51,3 +51,9 @@ type OutputCommand struct {
 	Attempts  int64          `json:"attempts"`
 	LastError sql.NullString `json:"last_error"`
 }
+
+type SourceHead struct {
+	Topic   string `json:"topic"`
+	Key     string `json:"key"`
+	Payload []byte `json:"payload"`
+}

@@ -23,7 +23,7 @@ func TestOpen_FreshDB_AppliesMigrations(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
 
-	for _, table := range []string{"event_log", "consumer_offset", "feed_item", "output_command", "node_run"} {
+	for _, table := range []string{"event_log", "consumer_offset", "source_head", "feed_item", "output_command", "node_run"} {
 		_, err := database.Conn().ExecContext(ctx, "SELECT 1 FROM "+table+" LIMIT 0")
 		require.NoError(t, err, "%s table should exist", table)
 	}

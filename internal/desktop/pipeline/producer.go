@@ -1,7 +1,6 @@
 package pipeline
 
 import (
-	"bytes"
 	"context"
 	"sync"
 	"time"
@@ -20,21 +19,17 @@ import (
 // every tick, even when nothing changed upstream (githubSource's fetch
 // layer may itself be cache-hit, but the cached items are still emitted).
 // Rather than appending an unchanged item every tick and relying solely on
-// pipelinedb.Compact to collapse it later, Producer keeps an in-memory
-// last-emitted-payload map keyed by topic+key and skips the Append when the
-// payload is byte-identical to the last one appended for that key. This is
-// a soft, non-persisted optimization (a restart forgets it, so at most one
-// extra row per key is appended after a restart) — Compact remains the
-// source of truth for bounding on-disk growth.
+// pipelinedb.Compact to collapse it later, Producer delegates to
+// pipelinedb.AppendIfChanged. It stores the last payload by (topic, key) in
+// the database and atomically appends a changed event with its new head, so
+// deduplication survives restarts and a failed append never suppresses a
+// retry. Compact remains the source of truth for bounding on-disk growth.
 type Producer struct {
 	db         Appender
 	sources    SourceLister
 	interval   time.Duration
 	onAppended func(nextOffset int64)
 	logger     zerolog.Logger
-
-	seenMu sync.Mutex
-	seen   map[string][]byte // topic+"\x00"+key -> last appended payload
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -51,7 +46,6 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 		interval:   interval,
 		onAppended: onAppended,
 		logger:     logger,
-		seen:       make(map[string][]byte),
 		stop:       make(chan struct{}),
 	}
 }
@@ -117,32 +111,9 @@ func (pr *Producer) Tick(ctx context.Context) {
 	}
 }
 
-// appendIfChanged appends msg unless its payload is byte-identical to the
-// last payload appended for its topic+key (see the dedup-vs-Compact note on
-// Producer). It reports the new offset and whether an append happened.
-// Empty-key messages are never deduped: pipelinedb.Compact's key-compaction
-// exempts them (they have no identity to compact against), so Producer
-// mirrors that and always appends them.
+// appendIfChanged delegates source-state deduplication to the database. Its
+// transactional source head is durable across producer restarts and excludes
+// empty keys, which have no source-item identity.
 func (pr *Producer) appendIfChanged(ctx context.Context, msg Msg) (int64, bool, error) {
-	if msg.Key != "" {
-		seenKey := msg.Topic + "\x00" + msg.Key
-
-		pr.seenMu.Lock()
-		prev, hadPrev := pr.seen[seenKey]
-		unchanged := hadPrev && bytes.Equal(prev, msg.Payload)
-		if !unchanged {
-			pr.seen[seenKey] = append([]byte(nil), msg.Payload...)
-		}
-		pr.seenMu.Unlock()
-
-		if unchanged {
-			return 0, false, nil
-		}
-	}
-
-	offset, err := pr.db.Append(ctx, msg.Topic, msg.Key, msg.Payload)
-	if err != nil {
-		return 0, false, err
-	}
-	return offset, true, nil
+	return pr.db.AppendIfChanged(ctx, msg.Topic, msg.Key, msg.Payload)
 }

@@ -48,20 +48,20 @@ func listerOf(sources map[string]Source) SourceLister {
 	}
 }
 
-// fakeAppender records Append calls without touching disk, for tests that
-// only care about whether/how many times Append was invoked.
+// fakeAppender records AppendIfChanged calls without touching disk, for tests
+// that only care whether Producer invokes its database dependency.
 type fakeAppender struct {
 	mu      sync.Mutex
 	nextOff int64
 	calls   []pipelinedb.Msg
 }
 
-func (a *fakeAppender) Append(_ context.Context, topic, key string, payload []byte) (int64, error) {
+func (a *fakeAppender) AppendIfChanged(_ context.Context, topic, key string, payload []byte) (int64, bool, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.nextOff++
 	a.calls = append(a.calls, pipelinedb.Msg{Topic: topic, Key: key, Payload: payload})
-	return a.nextOff, nil
+	return a.nextOff, true, nil
 }
 
 func (a *fakeAppender) callCount() int {
@@ -162,13 +162,13 @@ func TestProducer_Tick_SourceErrorDoesNotBlockOthers(t *testing.T) {
 	assert.Equal(t, "x", msgs[0].Key)
 }
 
-// TestProducer_DedupesUnchangedPayload verifies the dedup-vs-Compact choice:
-// an unchanged payload for the same topic+key is not re-appended on the next
+// TestProducer_DedupesUnchangedPayload verifies durable deduplication: an
+// unchanged payload for the same topic/key is not re-appended on the next
 // tick, but a changed payload is.
 func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 	t.Parallel()
 
-	appender := &fakeAppender{}
+	db := openTestPipelineDB(t)
 	src := &fakeSource{batches: [][]Msg{
 		{{Topic: "source:s1", Key: "a", Payload: []byte(`{"v":1}`)}}, // tick 1: new
 		{{Topic: "source:s1", Key: "a", Payload: []byte(`{"v":1}`)}}, // tick 2: unchanged
@@ -176,20 +176,19 @@ func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 	}}
 
 	var wakeCount int
-	producer := NewProducer(appender, listerOf(map[string]Source{"s1": src}), time.Hour, func(int64) {
+	producer := NewProducer(db, listerOf(map[string]Source{"s1": src}), time.Hour, func(int64) {
 		wakeCount++
 	}, zerolog.Nop())
 
 	producer.Tick(t.Context())
-	assert.Equal(t, 1, appender.callCount(), "tick 1 appends the new item")
-	assert.Equal(t, 1, wakeCount)
-
 	producer.Tick(t.Context())
-	assert.Equal(t, 1, appender.callCount(), "tick 2 is an unchanged payload: no append, no wake-up")
-	assert.Equal(t, 1, wakeCount)
-
 	producer.Tick(t.Context())
-	assert.Equal(t, 2, appender.callCount(), "tick 3's changed payload is appended")
+
+	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
+	require.NoError(t, err)
+	require.Len(t, msgs, 2, "only new and changed payloads are appended")
+	assert.Equal(t, []byte(`{"v":1}`), []byte(msgs[0].Payload))
+	assert.Equal(t, []byte(`{"v":2}`), []byte(msgs[1].Payload))
 	assert.Equal(t, 2, wakeCount)
 }
 
@@ -199,17 +198,45 @@ func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 func TestProducer_EmptyKeyNeverDeduped(t *testing.T) {
 	t.Parallel()
 
-	appender := &fakeAppender{}
+	db := openTestPipelineDB(t)
 	src := &fakeSource{batches: [][]Msg{
 		{{Topic: "source:s1", Key: "", Payload: []byte(`{"v":1}`)}},
 		{{Topic: "source:s1", Key: "", Payload: []byte(`{"v":1}`)}},
 	}}
 
-	producer := NewProducer(appender, listerOf(map[string]Source{"s1": src}), time.Hour, nil, zerolog.Nop())
+	producer := NewProducer(db, listerOf(map[string]Source{"s1": src}), time.Hour, nil, zerolog.Nop())
 
 	producer.Tick(t.Context())
 	producer.Tick(t.Context())
-	assert.Equal(t, 2, appender.callCount(), "empty-key messages are always appended")
+	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 2, "empty-key messages are always appended")
+}
+
+func TestProducer_DeduplicationSurvivesRestart(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	firstDB, err := pipelinedb.Open(dir, pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+
+	first := NewProducer(firstDB, listerOf(map[string]Source{
+		"s1": &fakeSource{batches: [][]Msg{{{Topic: "source:s1", Key: "a", Payload: []byte(`{"v":1}`)}}}},
+	}), time.Hour, nil, zerolog.Nop())
+	first.Tick(t.Context())
+	require.NoError(t, firstDB.Close())
+
+	secondDB, err := pipelinedb.Open(dir, pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = secondDB.Close() })
+	second := NewProducer(secondDB, listerOf(map[string]Source{
+		"s1": &fakeSource{batches: [][]Msg{{{Topic: "source:s1", Key: "a", Payload: []byte(`{"v":1}`)}}}},
+	}), time.Hour, nil, zerolog.Nop())
+	second.Tick(t.Context())
+
+	msgs, _, err := secondDB.ReadFrom(t.Context(), 0, 10)
+	require.NoError(t, err)
+	assert.Len(t, msgs, 1, "a restarted producer must retain source heads")
 }
 
 func TestProducer_ResolvingSourcesErrorSkipsTick(t *testing.T) {

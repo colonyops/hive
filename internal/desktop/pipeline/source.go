@@ -22,9 +22,9 @@ type Msg = pipelinedb.Msg
 // once fetching or an emit call fails. Implementations should set:
 //   - Topic: "source:" + the source's stable ID, so consumers can filter by
 //     source.
-//   - Key: the item's stable identity, so pipelinedb.Compact's per-key
-//     compaction collapses repeated appends of the same item to its latest
-//     value.
+//   - Key: the item's stable identity, so pipelinedb.Compact's per-(topic,
+//     key) compaction collapses repeated appends of the same item to its
+//     latest value.
 //   - Payload: the item, JSON-encoded.
 type Source interface {
 	Produce(ctx context.Context, emit func(Msg) error) error
@@ -37,10 +37,9 @@ type Source interface {
 // feed.Poller re-reads profiles/sources on every tick.
 type SourceLister func(ctx context.Context) (map[string]Source, error)
 
-// Appender is the subset of *pipelinedb.DB a Producer needs. Tests can
-// substitute a fake to observe append calls directly; most tests still use
-// a real pipelinedb.DB via t.TempDir(), which is cheap and exercises the
-// real monotonic-offset contract.
+// Appender is the subset of *pipelinedb.DB a Producer needs. It atomically
+// appends changed source values with their durable source heads. Tests can
+// substitute a fake; most tests use a real pipelinedb.DB via t.TempDir().
 type Appender interface {
-	Append(ctx context.Context, topic, key string, payload []byte) (int64, error)
+	AppendIfChanged(ctx context.Context, topic, key string, payload []byte) (offset int64, appended bool, err error)
 }
