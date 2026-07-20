@@ -47,6 +47,10 @@ const {
   toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
+// The feed-item kinds currently in the system — what the actions editor
+// autocompletes and validates "applies to" against.
+const knownFeedTypes = computed(() => [...new Set(items.value.map((item) => item.kind).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
+
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
 // the sidebar+main region while the spaces rail and titlebar stay mounted (so
@@ -517,6 +521,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           :github-connected="authenticated"
           :github-login="authStatus?.login"
           :active-category="applicationSettingsSection"
+          :known-feed-types="knownFeedTypes"
           @close="closeSettings"
           @select-category="selectApplicationSettingsSection"
         />

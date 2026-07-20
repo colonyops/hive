@@ -3,41 +3,36 @@ import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
 import AppCheckbox from './AppCheckbox.vue'
+import AppSelect from './AppSelect.vue'
+import AppliesToField from './AppliesToField.vue'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import type { EditableAction } from '../composables/useActionsSettings'
 
-const props = defineProps<{ action: EditableAction; isNew: boolean; busy?: boolean; error?: string | null; returnFocusTo?: HTMLElement | null }>()
+const props = withDefaults(defineProps<{ action: EditableAction; isNew: boolean; busy?: boolean; error?: string | null; returnFocusTo?: HTMLElement | null; knownTypes?: string[] }>(), { knownTypes: () => [] })
 const emit = defineEmits<{ save: []; cancel: [] }>()
 const editorRef = ref<HTMLElement | null>(null)
 const idRef = ref<HTMLInputElement | null>(null)
 const labelRef = ref<HTMLInputElement | null>(null)
-const appliesToInput = ref<HTMLInputElement | null>(null)
+const appliesField = ref<{ flush: () => void } | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 const validationError = ref<string | null>(null)
 const { size, startResize, step } = useResizablePanel({ storageKey: 'hive.panel.action-editor', defaultSize: 480, min: 360, max: 760, edge: 'left' })
 
-function setType(): void {
-  if (props.action.type === 'launch-session') { props.action.launch = { promptTemplate: '', repoTemplate: '' }; props.action.shell = undefined; props.action.message = undefined }
-  else if (props.action.type === 'shell') { props.action.launch = undefined; props.action.shell = { commandTemplate: '' }; props.action.message = undefined }
+const typeOptions = [
+  { value: 'launch-session', label: 'Launch session' },
+  { value: 'shell', label: 'Shell' },
+  { value: 'publish-message', label: 'Publish message' },
+]
+function setType(value: string): void {
+  props.action.type = value
+  if (value === 'launch-session') { props.action.launch = { promptTemplate: '', repoTemplate: '' }; props.action.shell = undefined; props.action.message = undefined }
+  else if (value === 'shell') { props.action.launch = undefined; props.action.shell = { commandTemplate: '' }; props.action.message = undefined }
   else { props.action.launch = undefined; props.action.shell = undefined; props.action.message = { topic: '', messageTemplate: '' } }
-}
-const typeDraft = ref('')
-function addType(): void {
-  const value = typeDraft.value.trim().replace(/,+$/, '').trim()
-  typeDraft.value = ''
-  if (!value) return
-  const current = props.action.appliesTo ?? []
-  if (!current.includes(value)) props.action.appliesTo = [...current, value]
-}
-function removeType(tag: string): void { props.action.appliesTo = (props.action.appliesTo ?? []).filter((item) => item !== tag) }
-function onTypeKeydown(event: KeyboardEvent): void {
-  if (event.key === 'Enter' || event.key === ',') { event.preventDefault(); addType() }
-  else if (event.key === 'Backspace' && !typeDraft.value && props.action.appliesTo?.length) { props.action.appliesTo = props.action.appliesTo.slice(0, -1) }
 }
 function envText(): string { return Object.entries(props.action.shell?.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value ?? ''}`).join('\n') }
 function setEnv(event: Event): void { if (!props.action.shell) return; const env: Record<string, string> = {}; for (const line of (event.target as HTMLTextAreaElement).value.split('\n')) { const [key, ...value] = line.split('='); if (key.trim()) env[key.trim()] = value.join('=') }; props.action.shell.env = env }
-function save(): void { addType(); if (!props.action.id.trim() || !props.action.label.trim()) { validationError.value = 'ID and label are required.'; return }; validationError.value = null; emit('save') }
+function save(): void { appliesField.value?.flush(); if (!props.action.id.trim() || !props.action.label.trim()) { validationError.value = 'ID and label are required.'; return }; validationError.value = null; emit('save') }
 function cancel(): void { if (!props.busy) emit('cancel') }
 function onKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') cancel() }
 function focusableElements(): HTMLElement[] {
@@ -76,14 +71,9 @@ onUnmounted(() => {
       <div class="hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]"><div class="grid gap-3">
         <label class="text-xs text-text-2">ID<input ref="idRef" v-model="action.id" :disabled="!isNew" data-testid="action-id" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent disabled:opacity-60" /></label>
         <label class="text-xs text-text-2">Label<input ref="labelRef" v-model="action.label" data-testid="action-label" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label>
-        <label class="text-xs text-text-2">Type<select v-model="action.type" data-testid="action-type" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" @change="setType"><option value="launch-session">Launch session</option><option value="shell">Shell</option><option value="publish-message">Publish message</option></select></label>
+        <div class="text-xs text-text-2">Type<AppSelect :model-value="action.type" :options="typeOptions" testid="action-type" aria-label="Type" class="mt-1" @update:model-value="setType" /></div>
         <AppCheckbox v-model="action.showInDetail" label="Show manual button in detail pane" testid="action-show-in-detail" />
-        <div class="text-xs text-text-2">Applies to <span class="text-text-4">(feed-item types)</span>
-          <div class="mt-1 flex flex-wrap items-center gap-1.5 rounded border border-border bg-app px-2 py-1.5 focus-within:border-accent" data-testid="action-applies-to-tokens" @click="() => appliesToInput?.focus()">
-            <span v-for="tag in action.appliesTo ?? []" :key="tag" class="inline-flex items-center gap-1 rounded-md border border-strong bg-chip py-0.5 pl-2 pr-1 font-mono text-[12px] text-text"><span>{{ tag }}</span><button type="button" class="flex size-4 items-center justify-center rounded text-text-3 hover:text-severity-error" :aria-label="`Remove ${tag}`" @click.stop="removeType(tag)"><IconX class="size-2.5" /></button></span>
-            <input ref="appliesToInput" v-model="typeDraft" data-testid="action-applies-to" placeholder="Add type…" class="min-w-[80px] flex-1 bg-transparent font-mono text-[12.5px] text-text outline-none" @keydown="onTypeKeydown" @blur="addType" />
-          </div>
-        </div>
+        <AppliesToField ref="appliesField" :model-value="action.appliesTo" :known-types="knownTypes" @update:model-value="action.appliesTo = $event" />
         <template v-if="action.launch"><label class="text-xs text-text-2">Prompt template<textarea v-model="action.launch.promptTemplate" data-testid="action-launch-prompt" class="mt-1 min-h-[90px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Repository template<input v-model="action.launch.repoTemplate" data-testid="action-launch-repo" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Agent (optional)<input v-model="action.launch.agent" data-testid="action-launch-agent" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label></template>
         <template v-if="action.shell"><label class="text-xs text-text-2">Command template<textarea v-model="action.shell.commandTemplate" data-testid="action-shell-command" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Working directory<input v-model="action.shell.cwd" data-testid="action-shell-cwd" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Timeout<input v-model="action.shell.timeout" data-testid="action-shell-timeout" placeholder="e.g. 30s" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Environment (KEY=value per line)<textarea :value="envText()" data-testid="action-shell-env" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" @input="setEnv" /></label></template>
         <template v-if="action.message"><label class="text-xs text-text-2">Message template<textarea v-model="action.message.messageTemplate" data-testid="action-message-template" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Topic<input v-model="action.message.topic" data-testid="action-message-topic" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label></template>

@@ -9,7 +9,17 @@ import { useConfirmation } from '../composables/useConfirmation'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import { useActionsSettings, type EditableAction } from '../composables/useActionsSettings'
 
+const props = withDefaults(defineProps<{ knownTypes?: string[] }>(), { knownTypes: () => [] })
 const { actions, loading, error, create, update, remove } = useActionsSettings()
+// What the editor autocompletes and validates against: live feed-item kinds
+// (passed down from the app) unioned with types already configured on actions,
+// deduped case-insensitively with the first-seen casing kept as canonical.
+const editorTypes = computed(() => {
+  const canonical = new Map<string, string>()
+  for (const type of props.knownTypes) if (type && !canonical.has(type.toLowerCase())) canonical.set(type.toLowerCase(), type)
+  for (const action of actions.value) for (const type of action.appliesTo ?? []) if (type && !canonical.has(type.toLowerCase())) canonical.set(type.toLowerCase(), type)
+  return [...canonical.values()].sort((a, b) => a.localeCompare(b))
+})
 const editing = ref<EditableAction | null>(null)
 const editorTrigger = ref<HTMLElement | null>(null)
 const saving = ref(false)
@@ -70,7 +80,7 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
       <div v-else class="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-text-4" data-testid="actions-source">Synced from .hive/actions.yml · {{ actions.length }} {{ actions.length === 1 ? 'action' : 'actions' }}</div>
     </div>
 
-    <ActionEditor v-if="editing" :action="editing" :is-new="isNew" :busy="saving" :error="error" :return-focus-to="editorTrigger" @save="save" @cancel="editing = null" />
+    <ActionEditor v-if="editing" :action="editing" :is-new="isNew" :busy="saving" :error="error" :known-types="editorTypes" :return-focus-to="editorTrigger" @save="save" @cancel="editing = null" />
     <ConfirmationDialog v-if="confirmation.open.value && confirmation.options.value" :title="confirmation.options.value.title" :description="confirmation.options.value.description" :confirm-label="confirmation.options.value.confirmLabel" :busy="confirmation.busy.value" :error="confirmation.error.value" @confirm="confirmation.confirm" @cancel="confirmation.cancel" />
   </div>
 </template>

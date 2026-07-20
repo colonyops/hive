@@ -16,11 +16,12 @@ import SettingsSegmented from './settings/SettingsSegmented.vue'
 import { setTheme, themeLabels, themes, useTheme, type Theme } from '../composables/useTheme'
 import type { ApplicationSettingsSection } from '../router'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   githubConnected: boolean
   githubLogin?: string
   activeCategory: ApplicationSettingsSection
-}>()
+  knownFeedTypes?: string[]
+}>(), { knownFeedTypes: () => [] })
 const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationSettingsSection] }>()
 const categories = [
   { id: 'appearance' as const, label: 'Appearance', icon: IconPalette },
@@ -92,7 +93,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           />
         </div>
 
-        <ActionSettingsView v-else-if="props.activeCategory === 'actions'" />
+        <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
 
         <div v-else class="mx-auto max-w-[640px]" data-testid="settings-integrations">
           <div class="mb-5">
