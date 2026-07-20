@@ -52,6 +52,7 @@ export function useFeedState() {
   const defaultToastDuration = 4000
   // Monotonic token: out-of-order loadItems responses must not clobber newer.
   let loadSeq = 0
+  let feedsSeq = 0
   let actionLoadSeq = 0
 
   function actionKey(itemID: string, actionID: string): string { return `${itemID}\u0000${actionID}` }
@@ -186,10 +187,17 @@ export function useFeedState() {
   }
 
   // loadFeeds populates the active profile's sidebar feeds from its flow's
-  // feed nodes, with per-feed counts from feed_item.
+  // feed nodes, with per-feed counts from feed_item. A deploy (rename, add or
+  // remove a feed node) fires flows:updated, which can start this reload while
+  // an earlier one is still in flight; the reads below resolve out of order, so
+  // a stale reload must not overwrite a fresher one. Guard with a sequence, the
+  // same way loadItems does — otherwise the later-resolving read wins even when
+  // it read the pre-deploy flow, leaving the sidebar on the old feed label.
   async function loadFeeds(flowId: string) {
+    const seq = ++feedsSeq
     try {
       const [flow, counts, sidebar] = await Promise.all([GetFlow(flowId), FeedItemCounts(flowId), GetSidebar(flowId)])
+      if (seq !== feedsSeq) return
       const countByFeed = new Map((counts ?? []).map((c) => [c.feedId, c]))
       const nodes = (flow.nodes ?? []) as Array<{ id: string; type: string; name?: string }>
       const feeds: FeedSummary[] = nodes

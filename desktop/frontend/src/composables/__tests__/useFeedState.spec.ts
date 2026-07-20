@@ -107,6 +107,43 @@ describe('useFeedState', () => {
     ])
   })
 
+  // Regression: a deploy that renames a feed node fires flows:updated, which
+  // reloads the sidebar feeds. If an earlier (stale) reload is still in flight
+  // reading the pre-rename flow, its GetFlow can resolve *after* the fresh one
+  // and overwrite the sidebar with the old label — the flake behind the webkit
+  // onboarding e2e test. loadFeeds must drop a superseded read, the same way
+  // loadItems already guards with a sequence number.
+  it('drops a stale feed reload so a rename is not clobbered by a late in-flight read', async () => {
+    const handlers: Record<string, () => void> = {}
+    mocks.On.mockImplementation((event: string, cb: () => void) => {
+      handlers[event] = cb
+      return () => {}
+    })
+
+    const get = mountState()
+    await flushPromises()
+    expect(get().activeProfile.value?.feeds[0]?.name).toBe('My PRs')
+
+    // Two overlapping flows:updated reloads. Each loadFeeds blocks on a GetFlow
+    // we resolve by hand, so we can force the stale read to land last.
+    const renamed = { ...flow, nodes: [flow.nodes[0], { ...flow.nodes[1], name: 'Team PRs' }] }
+    const resolvers: Array<(f: unknown) => void> = []
+    mocks.GetFlow.mockImplementation(() => new Promise((resolve) => { resolvers.push(resolve) }))
+
+    handlers['flows:updated']?.() // R1 (stale): parked on its GetFlow await
+    await flushPromises()
+    handlers['flows:updated']?.() // R2 (fresh): parked on its GetFlow await
+    await flushPromises()
+    expect(resolvers).toHaveLength(2)
+
+    resolvers[1](renamed) // fresh reload finishes first with the new name
+    await flushPromises()
+    resolvers[0](flow) // stale reload finishes last with the OLD name
+    await flushPromises()
+
+    expect(get().activeProfile.value?.feeds[0]?.name).toBe('Team PRs')
+  })
+
   it('reconciles the saved sidebar layout (folders, node-id keyed) into the tree', async () => {
     mocks.GetSidebar.mockResolvedValue({
       items: [{ folder: { id: 'work', name: 'Work', feeds: ['my-prs'] } }],
