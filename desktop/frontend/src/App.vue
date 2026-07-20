@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Events } from '@wailsio/runtime'
+import { Events, Window } from '@wailsio/runtime'
+import { useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
 import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
@@ -62,8 +63,8 @@ const knownFeedTypes = computed(() => [...new Set(items.value.map((item) => item
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
 // the sidebar+main region while the spaces rail and titlebar stay mounted (so
 // the user is never stranded — see the template). Reached from the sidebar's
-// "Flows" pill / "Edit flow" footer and the ⌘K command; exited via the
-// titlebar breadcrumb.
+// "Flows" pill / "Edit flow" footer and the ⌘K command; exited by selecting a
+// profile in the spaces rail or the ⌘K "Back to feed" command.
 //
 // The session (useFlowsSession) is a module singleton shared with
 // FlowsView.vue: it owns the pipeline editor and a runtime for every enabled
@@ -350,6 +351,33 @@ watch(() => (authenticated.value ? authStatus.value?.login ?? '' : null), (key) 
 // Step 2 of onboarding: authenticated but no workspace exists yet.
 const needsWorkspace = computed(() => authenticated.value && profilesLoaded.value && profiles.value.length === 0)
 
+// ── Layout chrome ─────────────────────────────────────────────────────────────
+// The feed sidebar collapses to reclaim horizontal space (handy in split
+// screens); the choice is persisted. Its toggle only appears in the feed view —
+// the one place a sidebar renders — so it never dangles over settings or flows.
+const sidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
+const feedViewActive = computed(() =>
+  authenticated.value && !needsWorkspace.value &&
+  !applicationSettingsActive.value && !profileSettingsActive.value &&
+  !flowsActive.value && !activityActive.value &&
+  !!activeProfile.value,
+)
+
+function toggleSidebar(): void {
+  sidebarCollapsed.value = !sidebarCollapsed.value
+}
+
+// We draw our own hidden-inset title bar, so the native double-click-to-zoom
+// gesture has to be re-implemented. Guarded for the non-Wails test/browser
+// context, matching hideWindow's posture.
+async function toggleMaximise(): Promise<void> {
+  try {
+    if (typeof Window?.ToggleMaximise === 'function') await Window.ToggleMaximise()
+  } catch (error) {
+    console.debug('Window maximise is unavailable outside Wails', error)
+  }
+}
+
 // ── Command palette ──────────────────────────────────────────────────────────
 
 const { open: paletteOpen, toggle: togglePalette } = useCommandPalette()
@@ -497,17 +525,20 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
-        :flows-active="flowsActive"
         :activity-active="activityActive"
         :error-count="errorCount"
         :unseen-activity="unseenActivity"
         :can-go-back="canGoBack"
         :can-go-forward="canGoForward"
+        :sidebar-collapsed="sidebarCollapsed"
+        :can-toggle-sidebar="feedViewActive"
         @back="router.back()"
         @forward="router.forward()"
-        @exit-flows="requestExitFlows"
         @open-error-node="openErrorNode"
         @open-activity="openActivity"
+        @toggle-sidebar="toggleSidebar"
+        @open-palette="togglePalette"
+        @toggle-maximise="toggleMaximise"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
@@ -527,7 +558,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       <!-- The spaces rail (ProfileRail) and TitleBar stay mounted across the
            feed<->flows switch; only the sidebar+main region swaps. This is
            what keeps the user from being stranded in the flows canvas — the
-           rail and the breadcrumb are always there to navigate back. -->
+           spaces rail is always there to navigate back. -->
       <div v-else class="flex min-h-0 flex-1">
         <ProfileRail
           :profiles="profiles"
@@ -557,7 +588,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         <ActivityView v-else-if="activityActive" @close="closeSettings" />
         <template v-else>
           <SideBar
-            v-if="activeProfile"
+            v-if="activeProfile && !sidebarCollapsed"
             :profile="activeProfile"
             :selection="selection"
             :flows-dirty="session.dirty.value"

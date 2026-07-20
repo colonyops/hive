@@ -117,6 +117,9 @@ describe('App', () => {
     // watch hooks from that test's wrapper.unmount().
     resetFlowsSessionForTests()
     vi.clearAllMocks()
+    // Panel collapse / width state persists via useStorage; clear it so one
+    // test's collapsed sidebar can't leak into the next.
+    localStorage.clear()
     mocks.Status.mockResolvedValue({ state: 'authenticated', login: 'hay', name: 'Hay', avatarUrl: '', message: '' })
     mocks.ListFlows.mockResolvedValue([{ id: 'personal', name: 'Personal', enabled: true, valid: true }])
     mocks.GetFlow.mockResolvedValue(flow)
@@ -151,7 +154,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('opens the flows canvas from the sidebar and exits via the breadcrumb, keeping the rail mounted', async () => {
+  it('opens the flows canvas from the sidebar and exits via the profile rail, keeping the rail mounted', async () => {
     const wrapper = await mountApp()
 
     // Feed view first: sidebar present, no flows canvas.
@@ -161,16 +164,30 @@ describe('App', () => {
     await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
 
-    // Flows canvas is up; the spaces rail stays; the breadcrumb offers a way back.
+    // Flows canvas is up; the spaces rail stays mounted as the way back.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true)
-    expect(wrapper.find('[data-testid="breadcrumb-flows"]').exists()).toBe(true)
 
-    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await wrapper.find('[data-testid="profile-tile"][data-id="personal"]').trigger('click')
     await flushPromises()
 
     // Back to the feed view.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('collapses and restores the feed sidebar from the title-bar toggle', async () => {
+    const wrapper = await mountApp()
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="titlebar-toggle-sidebar"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
+
+    await wrapper.find('[data-testid="titlebar-toggle-sidebar"]').trigger('click')
+    await flushPromises()
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
     wrapper.unmount()
@@ -422,7 +439,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('exiting the canvas via the breadcrumb while dirty prompts a confirm instead of leaving immediately; Cancel stays in the canvas', async () => {
+  it('exiting the canvas via the profile rail while dirty prompts a confirm instead of leaving immediately; Cancel stays in the canvas', async () => {
     const wrapper = await mountApp()
     await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
@@ -432,7 +449,7 @@ describe('App', () => {
     session.addNode('feed')
     expect(session.dirty.value).toBe(true)
 
-    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await wrapper.find('[data-testid="profile-tile"][data-id="personal"]').trigger('click')
     await flushPromises()
 
     // Still in the canvas — the exit was deferred behind the confirm modal.
@@ -449,7 +466,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('exiting the canvas via the breadcrumb while dirty: Deploy saves the draft then returns to the feed view', async () => {
+  it('exiting the canvas via the profile rail while dirty: Deploy saves the draft then returns to the feed view', async () => {
     const wrapper = await mountApp()
     await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
@@ -457,7 +474,7 @@ describe('App', () => {
     const session = useFlowsSession()
     session.addNode('feed')
 
-    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await wrapper.find('[data-testid="profile-tile"][data-id="personal"]').trigger('click')
     await flushPromises()
 
     document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-deploy"]')?.click()
@@ -472,7 +489,7 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('exiting the canvas via the breadcrumb while dirty: Discard drops the draft (reloads from disk) then returns to the feed view', async () => {
+  it('exiting the canvas via the profile rail while dirty: Discard drops the draft (reloads from disk) then returns to the feed view', async () => {
     const wrapper = await mountApp()
     await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
     await flushPromises()
@@ -481,7 +498,7 @@ describe('App', () => {
     session.addNode('feed')
     const getFlowCallsBefore = mocks.GetFlow.mock.calls.length
 
-    await wrapper.find('[data-testid="breadcrumb-profile-name"]').trigger('click')
+    await wrapper.find('[data-testid="profile-tile"][data-id="personal"]').trigger('click')
     await flushPromises()
 
     document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-discard"]')?.click()
