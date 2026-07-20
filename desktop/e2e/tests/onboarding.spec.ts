@@ -56,7 +56,8 @@ test.describe.serial('first-run onboarding, then workspace and flow management',
     await expect(onboarding).toContainText('Triage GitHub and')
     await expect(onboarding).toContainText('Create your first workspace')
     await expect(onboarding).toContainText('Tokens are stored in your OS keychain.')
-    await expect(page.getByTestId('breadcrumb-profile-name')).toBeHidden()
+    // No profile chrome in the title bar while onboarding (gated on profileName).
+    await expect(page.getByTestId('titlebar-activity')).toBeHidden()
 
     // Token fallback card round-trip (no state change on the server).
     await page.getByTestId('onboarding-use-token').click()
@@ -90,8 +91,7 @@ test.describe.serial('first-run onboarding, then workspace and flow management',
     await workspaceInput.fill('Frontend Triage')
     await page.getByTestId('onboarding-workspace-submit').click()
 
-    await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage', { timeout: 15_000 })
-    await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
+    await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage', { timeout: 15_000 })
     await expect(page.getByTestId('sidebar-feed')).toHaveCount(3)
     await expect(page.getByTestId('feed-item')).toHaveCount(0)
   })
@@ -133,9 +133,10 @@ test.describe.serial('first-run onboarding, then workspace and flow management',
     await expect(page.getByTestId('flow-saved-indicator')).toHaveText('flows/backend-triage.yaml')
     await expect(page.getByTestId('flow-dirty-indicator')).toHaveCount(0)
 
-    // Back to the feed view: the sidebar reflects the rename (Deploy's
-    // flows:updated re-reads the just-saved flow).
-    await page.getByTestId('breadcrumb-profile-name').click()
+    // Back to the feed view via the spaces rail (the title-bar breadcrumb is
+    // gone): the sidebar reflects the rename (Deploy's flows:updated re-reads
+    // the just-saved flow).
+    await page.locator('[data-testid="profile-tile"][data-id="backend-triage"]').click()
     await expect(flowsView).toBeHidden()
     await expect(page.getByTestId('sidebar-feed')).toHaveCount(3)
     const teamRow = page.locator('[data-testid="sidebar-feed"][data-id="backend-triage/my-open-prs"]')
@@ -147,7 +148,7 @@ test.describe.serial('first-run onboarding, then workspace and flow management',
     await page.getByTestId('sidebar-edit-flow').click()
     await expect(flowsView).toBeVisible()
     await expect(page.locator('[data-testid="flow-node-my-open-prs"]')).toBeVisible()
-    await page.getByTestId('breadcrumb-profile-name').click()
+    await page.locator('[data-testid="profile-tile"][data-id="backend-triage"]').click()
     await expect(flowsView).toBeHidden()
   })
 

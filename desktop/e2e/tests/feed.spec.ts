@@ -60,7 +60,6 @@ test('filters the feed to its remaining unread items', async ({ page }) => {
 
 test('shows the single profile in the rail and sidebar', async ({ page }) => {
   await expect(page.getByTestId('profile-tile')).toHaveCount(1)
-  await expect(page.getByTestId('breadcrumb-profile-name')).toHaveText('Frontend Triage')
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
 })
 
