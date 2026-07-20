@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
   SaveLayout: vi.fn(),
+  GetSidebar: vi.fn(),
+  SaveSidebar: vi.fn(),
   // pipelineservice
   FeedItems: vi.fn(),
   FeedItemCounts: vi.fn(),
@@ -43,6 +45,8 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => (
   GetLayout: mocks.GetLayout,
   SaveFlow: mocks.SaveFlow,
   SaveLayout: mocks.SaveLayout,
+  GetSidebar: mocks.GetSidebar,
+  SaveSidebar: mocks.SaveSidebar,
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
@@ -105,6 +109,8 @@ describe('App', () => {
     mocks.ListFlows.mockResolvedValue([{ id: 'personal', name: 'Personal', enabled: true, valid: true }])
     mocks.GetFlow.mockResolvedValue(flow)
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
+    mocks.GetSidebar.mockResolvedValue({ items: [] })
+    mocks.SaveSidebar.mockResolvedValue(undefined)
     mocks.FeedItems.mockResolvedValue([])
     mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
     mocks.ActionViews.mockResolvedValue([])
@@ -305,24 +311,6 @@ describe('App', () => {
     expect(handler).toBeDefined()
     handler?.()
     await vi.waitFor(() => expect(mocks.GetFlow.mock.calls.length).toBeGreaterThan(getFlowCalls))
-
-    wrapper.unmount()
-  })
-
-  it('reveals a feed in the flow: maps the flow-qualified feed id to its node id and opens the canvas focused on it', async () => {
-    const wrapper = await mountApp()
-
-    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
-
-    // "personal/desktop" (feedId) -> "desktop" (nodeId) — see useFeedState's loadFeeds.
-    await wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"] [data-testid="sidebar-reveal-in-flow"]').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
-
-    const session = useFlowsSession()
-    expect(session.flowsOpen.value).toBe(true)
-    expect(session.flowFocusNodeId.value).toBe('desktop')
 
     wrapper.unmount()
   })

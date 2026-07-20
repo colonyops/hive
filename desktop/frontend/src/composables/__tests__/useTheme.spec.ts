@@ -1,53 +1,49 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { initializeTheme, setTheme } from '../useTheme'
+import { nextTick } from 'vue'
 
-function memoryStorage(): Storage {
-  const values = new Map<string, string>()
-  return {
-    get length() { return values.size },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => [...values.keys()][index] ?? null,
-    removeItem: (key) => values.delete(key),
-    setItem: (key, value) => values.set(key, value),
-  }
-}
-
+// currentTheme is a module singleton that loads the persisted theme (via VueUse
+// useStorage) at import time, so each test sets localStorage first, then resets
+// modules and imports fresh to exercise the startup-restore path.
 beforeEach(() => {
-  vi.stubGlobal('localStorage', memoryStorage())
+  localStorage.clear()
+  vi.resetModules()
 })
 
 afterEach(() => {
   delete document.documentElement.dataset.theme
-  vi.unstubAllGlobals()
 })
 
 describe('useTheme', () => {
-  it('initializes from localStorage and applies the saved theme', () => {
+  it('restores the persisted theme at startup', async () => {
     localStorage.setItem('hive.theme', 'midnight')
+    const { initializeTheme } = await import('../useTheme')
 
     initializeTheme()
 
     expect(document.documentElement.dataset.theme).toBe('midnight')
   })
 
-  it('falls back to dark for unknown stored themes', () => {
+  it('falls back to dark for unknown stored themes', async () => {
     localStorage.setItem('hive.theme', 'solarized')
+    const { initializeTheme } = await import('../useTheme')
 
     initializeTheme()
 
     expect(document.documentElement.dataset.theme).toBe('dark')
+    await nextTick()
     expect(localStorage.getItem('hive.theme')).toBe('dark')
   })
 
-  it('defaults to dark and persists a selected theme', () => {
-    initializeTheme()
+  it('defaults to dark and persists a selected theme', async () => {
+    const { initializeTheme, setTheme } = await import('../useTheme')
 
+    initializeTheme()
     expect(document.documentElement.dataset.theme).toBe('dark')
 
     setTheme('gruvbox')
 
     expect(document.documentElement.dataset.theme).toBe('gruvbox')
+    await nextTick()
     expect(localStorage.getItem('hive.theme')).toBe('gruvbox')
   })
 })

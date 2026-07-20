@@ -6,5 +6,8 @@ export type {
     Layout,
     Node,
     NodePosition,
+    SidebarFolder,
+    SidebarItem,
+    SidebarLayout,
     Wire
 } from "./models.js";

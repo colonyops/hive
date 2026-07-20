@@ -42,7 +42,7 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
   selectedId, selectedItem, actions, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
-  selectProfile, selectSidebar, selectUnreadView, selectItem,
+  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, invokeAction, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
@@ -241,17 +241,6 @@ function selectApplicationSettingsSection(section: ApplicationSettingsSection): 
 function selectProfileSettingsSection(section: ProfileSettingsSection): void {
   if (!activeProfileId.value) return
   void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value, section } })
-}
-
-// ── Reveal in flow (8d) ───────────────────────────────────────────────────────
-// A sidebar feed row's id is flow-qualified ("<activeProfileId>/<nodeId>" —
-// see useFeedState's loadFeeds), so the node id is everything after the
-// profile id's own "/" separator. openFlows() both opens the canvas and sets
-// flowFocusNodeId, which FlowsCanvas's existing focus watch turns into a
-// select + center-pan (see FlowsView.vue's :focus-node-id binding).
-function revealInFlow(feedId: string): void {
-  const nodeId = feedId.slice(activeProfileId.value.length + 1)
-  openFlows(nodeId)
 }
 
 // ── Titlebar error chip (8d) ──────────────────────────────────────────────────
@@ -544,7 +533,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @select="navigateSidebar"
             @open-flows="openFlows()"
             @open-settings="requestOpenSettings('profile')"
-            @reveal-in-flow="revealInFlow"
+            @reorder="(t) => activeProfile && reorderFeeds(activeProfile.id, t)"
           />
           <section v-if="activeProfile" class="flex min-w-0 flex-1">
             <FeedList

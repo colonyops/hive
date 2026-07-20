@@ -51,6 +51,45 @@ export interface NodePosition {
 }
 
 /**
+ * SidebarFolder is one named group of feeds in a profile's sidebar. Feeds
+ * lists the member feed node ids in display order. Note there is no collapsed
+ * field: whether a folder is expanded is transient view state the frontend
+ * keeps in localStorage, not configuration — this file records structure and
+ * order only.
+ */
+export interface SidebarFolder {
+    "id": string;
+    "name": string;
+    "feeds": string[] | null;
+}
+
+/**
+ * SidebarItem is one entry in the sidebar's ordered top level: either a bare
+ * feed (Feed set to a feed node id) or a folder (Folder set). Exactly one is
+ * meant to be non-empty; a malformed item with neither is ignored by the
+ * frontend when it reconciles the layout against the flow's actual feed nodes.
+ */
+export interface SidebarItem {
+    "feed"?: string;
+    "folder"?: SidebarFolder | null;
+}
+
+/**
+ * SidebarLayout is the machine-written, non-authoritative sibling of a flow —
+ * the on-disk shape of a <id>.sidebar.yaml file. It records how a profile's
+ * feed nodes are grouped into folders and ordered in the sidebar's FEEDS
+ * section. Like Layout (.ui.yaml) it is purely cosmetic and keyed by node id:
+ * a missing or broken file just means the sidebar falls back to listing feeds
+ * in flow-node order, feed nodes absent from the layout are appended (so a
+ * newly added feed is never hidden), and entries for feeds that no longer
+ * exist are dropped. It is never consulted by LoadFlow/validation and never
+ * blocks a flow from loading.
+ */
+export interface SidebarLayout {
+    "items": SidebarItem[] | null;
+}
+
+/**
  * Wire is a directed edge from one node's output port to another node's
  * (sole) input. Out defaults to 0 when omitted in YAML.
  */

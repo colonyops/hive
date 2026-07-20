@@ -1,25 +1,9 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import { useResizablePanel } from '../useResizablePanel'
 
-function memoryStorage(): Storage {
-  const values = new Map<string, string>()
-  return {
-    get length() { return values.size },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => [...values.keys()][index] ?? null,
-    removeItem: (key) => values.delete(key),
-    setItem: (key, value) => values.set(key, value),
-  }
-}
-
-beforeEach(() => {
-  vi.stubGlobal('localStorage', memoryStorage())
-})
-
-afterEach(() => {
-  vi.unstubAllGlobals()
-})
+// Size persists to localStorage (via VueUse useStorage); isolate each test.
+beforeEach(() => localStorage.clear())
 
 function pointerEvent(type: string, clientX: number): PointerEvent {
   return new PointerEvent(type, { pointerId: 1, clientX, bubbles: true, cancelable: true })
@@ -60,32 +44,31 @@ describe('useResizablePanel', () => {
     expect(size.value).toBe(250)
   })
 
-  it('a right-edge drag grows the panel as the pointer moves right, and persists only on pointerup', () => {
+  it('a right-edge drag grows the panel as the pointer moves right, and persists', async () => {
     const { size, startResize } = useResizablePanel({ storageKey: 'hive.panel.e', defaultSize: 250, min: 190, max: 480, edge: 'right' })
 
     beginDrag(startResize, 100)
     window.dispatchEvent(pointerEvent('pointermove', 150))
+    window.dispatchEvent(pointerEvent('pointerup', 150))
 
     expect(size.value).toBe(300)
-    expect(localStorage.getItem('hive.panel.e')).toBeNull() // not yet persisted mid-drag
-
-    window.dispatchEvent(pointerEvent('pointerup', 150))
+    await nextTick()
     expect(localStorage.getItem('hive.panel.e')).toBe('300')
   })
 
-  it('a left-edge drag grows the panel as the pointer moves left', () => {
+  it('a left-edge drag grows the panel as the pointer moves left', async () => {
     const { size, startResize } = useResizablePanel({ storageKey: 'hive.panel.f', defaultSize: 440, min: 360, max: 760, edge: 'left' })
 
     beginDrag(startResize, 500)
     window.dispatchEvent(pointerEvent('pointermove', 450)) // moved left by 50
+    window.dispatchEvent(pointerEvent('pointerup', 450))
 
     expect(size.value).toBe(490)
-
-    window.dispatchEvent(pointerEvent('pointerup', 450))
+    await nextTick()
     expect(localStorage.getItem('hive.panel.f')).toBe('490')
   })
 
-  it('clamps the dragged width to [min, max]', () => {
+  it('clamps the dragged width to [min, max]', async () => {
     const { size, startResize } = useResizablePanel({ storageKey: 'hive.panel.g', defaultSize: 250, min: 190, max: 480, edge: 'right' })
 
     beginDrag(startResize, 0)
@@ -96,25 +79,28 @@ describe('useResizablePanel', () => {
     expect(size.value).toBe(190)
 
     window.dispatchEvent(pointerEvent('pointerup', -10000))
+    await nextTick()
     expect(localStorage.getItem('hive.panel.g')).toBe('190')
   })
 
-  it('step() nudges and clamps the width and persists immediately', () => {
+  it('step() nudges and clamps the width and persists', async () => {
     const { size, step } = useResizablePanel({ storageKey: 'hive.panel.h', defaultSize: 250, min: 190, max: 480, edge: 'right' })
 
     step(12)
     expect(size.value).toBe(262)
+    await nextTick()
     expect(localStorage.getItem('hive.panel.h')).toBe('262')
 
     step(-1000)
     expect(size.value).toBe(190)
+    await nextTick()
     expect(localStorage.getItem('hive.panel.h')).toBe('190')
 
     step(1000)
     expect(size.value).toBe(480)
   })
 
-  it('a bottom-edge drag grows the panel as the pointer moves down (vertical axis)', () => {
+  it('a bottom-edge drag grows the panel as the pointer moves down (vertical axis)', async () => {
     const { size, startResize } = useResizablePanel({ storageKey: 'hive.panel.v', defaultSize: 240, min: 96, max: 640, edge: 'bottom' })
 
     const handle = document.createElement('div')
@@ -122,10 +108,10 @@ describe('useResizablePanel', () => {
     handle.addEventListener('pointerdown', (e) => startResize(e as PointerEvent))
     handle.dispatchEvent(new PointerEvent('pointerdown', { pointerId: 1, clientY: 100, bubbles: true, cancelable: true }))
     window.dispatchEvent(new PointerEvent('pointermove', { pointerId: 1, clientY: 160 })) // moved down by 60
+    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientY: 160 }))
 
     expect(size.value).toBe(300)
-
-    window.dispatchEvent(new PointerEvent('pointerup', { pointerId: 1, clientY: 160 }))
+    await nextTick()
     expect(localStorage.getItem('hive.panel.v')).toBe('300')
   })
 

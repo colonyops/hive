@@ -13,6 +13,7 @@
   "dependencies": {
     "@fontsource/ibm-plex-mono": "5.2.7",
     "@fontsource/ibm-plex-sans": "5.2.8",
+    "@vueuse/core": "^14.3.0",
     "@wailsio/runtime": "3.0.0-alpha.97",
     "markdown-it": "^14.3.0",
     "markdown-it-task-lists": "^2.1.1",

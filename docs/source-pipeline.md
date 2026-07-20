@@ -370,6 +370,26 @@ broken layout file is not an error (the editor just lays nodes out fresh).
 `LoadFlows` explicitly skips `*.ui.yaml`/`*.ui.yml` files when scanning the
 flows directory for flow definitions.
 
+A second machine-written sibling, `<id>.sidebar.yaml` (`flow/sidebar.go`),
+records how the profile's feed nodes are grouped into **folders** and ordered
+in the sidebar's FEEDS section (`SaveSidebar`/`GetSidebar` on `FlowsService`,
+driven by drag-and-drop in `SideBar.vue`). It stores **structure and order
+only** — folder names and their member/top-level feed ids — not view state:
+whether a folder is currently expanded is transient UI, kept in `localStorage`
+via VueUse `useStorage` (keyed by flow id → folder ids), never in the file. So
+`SidebarFolder` has no `collapsed` field, and collapsing a folder never writes
+to disk. Like the layout file it is node-id-keyed, purely cosmetic, and skipped
+by `LoadFlows`; a missing or broken file falls back to listing feeds in
+flow-node order. It is a *separate* file from `.ui.yaml` so the canvas editor's
+whole-layout writes can never clobber the sidebar grouping, and — unlike
+`.ui.yaml` — the `FlowsWatcher` deliberately **ignores** `.sidebar.yaml`
+(`isFlowFile`): a sidebar-layout write is frontend-owned UI state, so reloading
+the store and emitting `flows:updated` for it would pointlessly blank and
+refetch the sidebar (a visible flash on every reorder). The frontend resolves
+the file against the flow's live feed nodes in `lib/feedTree.ts` — appending
+feeds the file doesn't mention (so a newly added feed is never hidden) and
+dropping references to feeds that no longer exist.
+
 **Worked example** (a similar package-local fixture — with
 `msg.payload` written lowercase, since it's a pure YAML round-trip test that
 never actually executes the JS — lives in `flow/loader_test.go`'s
@@ -657,11 +677,10 @@ is gone.
   `App.vue` no longer has a `mode` ref toggling `'feed'`/`'flows'`; it
   renders either `SideBar`+`FeedList` or `FlowsView` based on
   `useFlowsSession().flowsOpen` (a shared session's `shallowRef<boolean>` —
-  see below), reached from the sidebar's "Flows" pill/footer row, a
-  jump-to-node command, or a feed row's "Reveal in flow" icon
-  (`SideBar.vue`'s `data-testid="sidebar-reveal-in-flow"` — there is no
-  pencil/edit affordance any more; a feed is edited by opening its node in
-  the canvas), and exited via the titlebar breadcrumb (`TitleBar.vue`'s
+  see below), reached from the sidebar's "Flows" pill/footer row or the
+  ⌘K jump-to-node command (there is no per-feed "reveal in flow" / edit
+  affordance in the sidebar; a feed is edited by opening its node in the
+  canvas), and exited via the titlebar breadcrumb (`TitleBar.vue`'s
   `data-testid="breadcrumb-profile-name"` becomes a button back to the feed
   while flows are active).
 - **The sidebar reads `feed_item`.** `useFeedState.ts`'s `loadFeeds`/
@@ -746,7 +765,8 @@ own profile tile).
 | `flows/*.yaml` schema | `internal/desktop/pipeline/flow/` |
 | `actions.yml` schema | `internal/desktop/pipeline/actions/` |
 | Wails services | `desktop/pipelineservice.go`, `desktop/flowsservice.go`, `desktop/flowsrefs.go`, `desktop/main.go` |
-| Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue` |
+| Sidebar (profile = flow, `feed_item` reads) | `desktop/frontend/src/composables/useFeedState.ts`, `desktop/frontend/src/components/SideBar.vue`, `SidebarFeedRow.vue` |
+| Sidebar feed folders + ordering | `internal/desktop/pipeline/flow/sidebar.go` (`<id>.sidebar.yaml`), `desktop/frontend/src/lib/feedTree.ts` |
 | Always-on per-enabled-flow runtime manager | `desktop/frontend/src/pipeline/composables/useFlowsSession.ts`, `usePipelineRuntime.ts` |
 | Frontend node-type contract | `desktop/frontend/src/pipeline/nodeType.ts`, `registry.ts`, `nodes/*/` |
 | Frontend engine | `desktop/frontend/src/pipeline/engine/` (`graph.ts`, `runGraph.ts`, `transport.ts`, `webWorkerTransport.ts`) |

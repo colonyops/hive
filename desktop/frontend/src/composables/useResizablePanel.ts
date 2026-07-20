@@ -1,4 +1,5 @@
-import { ref, type Ref } from 'vue'
+import { useStorage } from '@vueuse/core'
+import type { Ref } from 'vue'
 
 /** Which edge of the panel the drag handle sits on. This picks both the drag
  * axis and the sign of the delta:
@@ -36,24 +37,18 @@ function clamp(value: number, min: number, max: number): number {
 export function useResizablePanel(options: UseResizablePanelOptions): UseResizablePanelReturn {
   const { storageKey, defaultSize, min, max, edge } = options
 
-  function readStored(): number {
-    const raw = localStorage.getItem(storageKey)
-    if (raw === null) return defaultSize
-    const parsed = Number(raw)
-    if (!Number.isFinite(parsed) || parsed < min || parsed > max) return defaultSize
-    return parsed
-  }
-
-  const size = ref(readStored())
+  // size is the persisted, reactive px size — VueUse's useStorage mirrors it to
+  // localStorage, so a drag or keyboard nudge is saved without any explicit
+  // read/write plumbing.
+  const size = useStorage(storageKey, defaultSize)
+  // Guard a stale/garbage stored value (e.g. from an older min/max) so the
+  // panel never opens out of range.
+  if (!Number.isFinite(size.value) || size.value < min || size.value > max) size.value = defaultSize
 
   const vertical = edge === 'top' || edge === 'bottom'
   // See ResizeEdge above: the 'left'/'top' edges invert the delta so dragging
   // toward the panel's interior shrinks it.
   const sign = edge === 'left' || edge === 'top' ? -1 : 1
-
-  function persist(): void {
-    localStorage.setItem(storageKey, String(size.value))
-  }
 
   function startResize(event: PointerEvent): void {
     const target = event.target as Element | null
@@ -72,7 +67,6 @@ export function useResizablePanel(options: UseResizablePanelOptions): UseResizab
       window.removeEventListener('pointermove', onMove)
       window.removeEventListener('pointerup', onUp)
       target?.releasePointerCapture?.(pointerId)
-      persist()
     }
 
     window.addEventListener('pointermove', onMove)
@@ -81,7 +75,6 @@ export function useResizablePanel(options: UseResizablePanelOptions): UseResizab
 
   function step(deltaPx: number): void {
     size.value = clamp(size.value + deltaPx, min, max)
-    persist()
   }
 
   return { size, startResize, step }

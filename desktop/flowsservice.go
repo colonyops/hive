@@ -90,3 +90,16 @@ func (s *FlowsService) GetLayout(id string) flow.Layout {
 func (s *FlowsService) SaveLayout(id string, layout flow.Layout) error {
 	return s.store.SaveLayout(id, layout)
 }
+
+// GetSidebar returns a flow's sidebar layout: how its feed nodes are grouped
+// into folders and ordered in the sidebar's FEEDS section. A missing or broken
+// file is not an error — it returns an empty layout so the sidebar falls back
+// to flow-node order.
+func (s *FlowsService) GetSidebar(id string) flow.SidebarLayout {
+	return s.store.GetSidebar(id)
+}
+
+// SaveSidebar persists a flow's sidebar layout (feed folders + ordering).
+func (s *FlowsService) SaveSidebar(id string, layout flow.SidebarLayout) error {
+	return s.store.SaveSidebar(id, layout)
+}
