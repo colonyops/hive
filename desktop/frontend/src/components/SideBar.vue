@@ -22,7 +22,6 @@ const emit = defineEmits<{
   select: [sel: SidebarSelection]
   'open-flows': []
   'open-settings': []
-  'reveal-in-flow': [feedId: string]
   reorder: [tree: FeedTree]
 }>()
 
@@ -265,7 +264,6 @@ function deleteFolder(folder: FeedFolder): void {
             :feed="node.feed"
             :selected="feedSelected(node.feed.id)"
             @select="emit('select', { type: 'feed', feedId: node.feed.id })"
-            @reveal="emit('reveal-in-flow', node.feed.id)"
           />
         </div>
 
@@ -286,8 +284,10 @@ function deleteFolder(folder: FeedFolder): void {
             @dragend="onDragEnd"
             @click="onHeaderClick(node.folder)"
           >
-            <span class="folder-chevron text-text-4"><component :is="node.folder.collapsed ? IconChevronRight : IconChevronDown" class="size-3" /></span>
-            <span class="nav-icon"><IconFolder class="size-3" /></span>
+            <span class="nav-icon">
+              <IconFolder class="folder-glyph size-3" />
+              <component :is="node.folder.collapsed ? IconChevronRight : IconChevronDown" class="folder-chevron size-3" />
+            </span>
             <input
               v-if="renamingId === node.folder.id"
               v-model="draftName"
@@ -332,7 +332,6 @@ function deleteFolder(folder: FeedFolder): void {
                 :feed="feed"
                 :selected="feedSelected(feed.id)"
                 @select="emit('select', { type: 'feed', feedId: feed.id })"
-                @reveal="emit('reveal-in-flow', feed.id)"
               />
             </div>
             <div v-if="node.folder.feeds.length === 0" class="folder-empty">Drop feeds here</div>
@@ -385,18 +384,24 @@ function deleteFolder(folder: FeedFolder): void {
 /* An item wrapper carries the drag handle + insertion indicator; the row/header
    inside it stays visually unchanged. */
 .sb-item { border-radius: 7px; }
-.sb-item.indented { padding-left: 16px; }
+.sb-item.indented { padding-left: 12px; }
 .drop-before { box-shadow: inset 0 2px 0 0 var(--color-accent); }
 .drop-after { box-shadow: inset 0 -2px 0 0 var(--color-accent); }
 
-.folder-header { display: flex; align-items: center; gap: 7px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; cursor: pointer; }
+.folder-header { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 8px; border-radius: 7px; color: var(--color-text-2); font-size: 13px; cursor: pointer; }
 .folder-header:hover { background: var(--color-chip); color: var(--color-text); }
-.folder-chevron { display: inline-flex; flex: none; }
+/* The leading icon slot shows the folder glyph by default and swaps to a
+   collapse/expand chevron on hover — no permanent chevron column, so the
+   folder header aligns with the feed rows above it. */
+.folder-glyph { display: inline-flex; }
+.folder-chevron { display: none; }
+.folder-header:hover .folder-glyph { display: none; }
+.folder-header:hover .folder-chevron { display: inline-flex; }
 .folder-action { opacity: 0; }
 .folder-header:hover .folder-action, .folder-action:focus-visible { opacity: 1; }
 .folder-rename { background: var(--color-app); border: 1px solid var(--color-accent); border-radius: 5px; padding: 1px 5px; font-size: 13px; color: var(--color-text); outline: none; }
 .folder-body { margin-top: 1px; }
-.folder-empty { padding: 6px 8px 6px 24px; font-size: 11.5px; color: var(--color-text-4); font-style: italic; }
+.folder-empty { padding: 6px 8px 6px 20px; font-size: 11.5px; color: var(--color-text-4); font-style: italic; }
 .sb-folder.drop-into { background: var(--color-accent-tint); border-radius: 7px; }
 .sb-folder.drop-before { box-shadow: inset 0 2px 0 0 var(--color-accent); }
 .sb-folder.drop-after { box-shadow: inset 0 -2px 0 0 var(--color-accent); }

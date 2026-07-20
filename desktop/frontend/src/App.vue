@@ -243,17 +243,6 @@ function selectProfileSettingsSection(section: ProfileSettingsSection): void {
   void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value, section } })
 }
 
-// ── Reveal in flow (8d) ───────────────────────────────────────────────────────
-// A sidebar feed row's id is flow-qualified ("<activeProfileId>/<nodeId>" —
-// see useFeedState's loadFeeds), so the node id is everything after the
-// profile id's own "/" separator. openFlows() both opens the canvas and sets
-// flowFocusNodeId, which FlowsCanvas's existing focus watch turns into a
-// select + center-pan (see FlowsView.vue's :focus-node-id binding).
-function revealInFlow(feedId: string): void {
-  const nodeId = feedId.slice(activeProfileId.value.length + 1)
-  openFlows(nodeId)
-}
-
 // ── Titlebar error chip (8d) ──────────────────────────────────────────────────
 // Sourced from the always-on session (not FlowsView), so the chip renders and
 // deep-links correctly even with the canvas closed.
@@ -544,7 +533,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             @select="navigateSidebar"
             @open-flows="openFlows()"
             @open-settings="requestOpenSettings('profile')"
-            @reveal-in-flow="revealInFlow"
             @reorder="(t) => activeProfile && reorderFeeds(activeProfile.id, t)"
           />
           <section v-if="activeProfile" class="flex min-w-0 flex-1">

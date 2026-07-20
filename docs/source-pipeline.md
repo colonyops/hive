@@ -669,11 +669,10 @@ is gone.
   `App.vue` no longer has a `mode` ref toggling `'feed'`/`'flows'`; it
   renders either `SideBar`+`FeedList` or `FlowsView` based on
   `useFlowsSession().flowsOpen` (a shared session's `shallowRef<boolean>` —
-  see below), reached from the sidebar's "Flows" pill/footer row, a
-  jump-to-node command, or a feed row's "Reveal in flow" icon
-  (`SideBar.vue`'s `data-testid="sidebar-reveal-in-flow"` — there is no
-  pencil/edit affordance any more; a feed is edited by opening its node in
-  the canvas), and exited via the titlebar breadcrumb (`TitleBar.vue`'s
+  see below), reached from the sidebar's "Flows" pill/footer row or the
+  ⌘K jump-to-node command (there is no per-feed "reveal in flow" / edit
+  affordance in the sidebar; a feed is edited by opening its node in the
+  canvas), and exited via the titlebar breadcrumb (`TitleBar.vue`'s
   `data-testid="breadcrumb-profile-name"` becomes a button back to the feed
   while flows are active).
 - **The sidebar reads `feed_item`.** `useFeedState.ts`'s `loadFeeds`/

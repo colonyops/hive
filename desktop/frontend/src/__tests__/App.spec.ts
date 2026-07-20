@@ -315,24 +315,6 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('reveals a feed in the flow: maps the flow-qualified feed id to its node id and opens the canvas focused on it', async () => {
-    const wrapper = await mountApp()
-
-    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
-
-    // "personal/desktop" (feedId) -> "desktop" (nodeId) — see useFeedState's loadFeeds.
-    await wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"] [data-testid="sidebar-reveal-in-flow"]').trigger('click')
-    await flushPromises()
-
-    expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
-
-    const session = useFlowsSession()
-    expect(session.flowsOpen.value).toBe(true)
-    expect(session.flowFocusNodeId.value).toBe('desktop')
-
-    wrapper.unmount()
-  })
-
   it('the titlebar error chip deep-links to the first failing node, even with the canvas closed', async () => {
     mocks.NodeRuns.mockResolvedValue([
       { flowId: 'personal', nodeId: 'src', ok: false, inCount: 0, outCount: 0, dropCount: 0, err: 'boom', durMs: 1, endedAt: 0 },
