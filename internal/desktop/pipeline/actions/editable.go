@@ -41,7 +41,8 @@ type EditableShellConfig struct {
 }
 
 type EditableMessageConfig struct {
-	Topic string `json:"topic"`
+	MessageTemplate string `json:"messageTemplate"`
+	Topic           string `json:"topic"`
 }
 
 func editableFromAction(a Action) EditableAction {
@@ -55,8 +56,8 @@ func editableFromAction(a Action) EditableAction {
 			timeout = time.Duration(c.Timeout).String()
 		}
 		out.Shell = &EditableShellConfig{CommandTemplate: c.CommandTemplate, Cwd: c.Cwd, Timeout: timeout, Env: cloneEnv(c.Env)}
-	case *PublishEventConfig:
-		out.Message = &EditableMessageConfig{Topic: c.Topic}
+	case *PublishMessageConfig:
+		out.Message = &EditableMessageConfig{MessageTemplate: c.MessageTemplate, Topic: c.Topic}
 	}
 	return out
 }
@@ -95,11 +96,11 @@ func actionFromEditable(e EditableAction) (Action, error) {
 			timeout = Duration(d)
 		}
 		a.Config = &ShellConfig{CommandTemplate: e.Shell.CommandTemplate, Cwd: e.Shell.Cwd, Timeout: timeout, Env: cloneEnv(e.Shell.Env)}
-	case "publish-event":
+	case "publish-message":
 		if e.Message == nil {
-			return Action{}, fmt.Errorf("action %q: message config is required for publish-event", e.ID)
+			return Action{}, fmt.Errorf("action %q: message config is required for publish-message", e.ID)
 		}
-		a.Config = &PublishEventConfig{Topic: e.Message.Topic}
+		a.Config = &PublishMessageConfig{MessageTemplate: e.Message.MessageTemplate, Topic: e.Message.Topic}
 	default:
 		return Action{}, fmt.Errorf("action %q: unknown type %q", e.ID, e.Type)
 	}

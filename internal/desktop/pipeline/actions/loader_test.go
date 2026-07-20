@@ -24,7 +24,6 @@ actions:
     type: launch-session
     show_in_detail: true
     applies_to: [pr]
-    auto_apply: true
     prompt_template: "Review {{ .Payload.title }}"
     agent: claude
     repo_template: "{{ .Payload.repo }}"
@@ -39,8 +38,9 @@ actions:
       FOO: bar
   - id: notify
     label: Notify
-    type: publish-event
+    type: publish-message
     show_in_detail: true
+    message_template: "{{ .Payload.title }}"
     topic: pipeline.notify
 `
 
@@ -59,7 +59,6 @@ func TestLoadActions_MultiActionFile(t *testing.T) {
 
 	spawn := byID["spawn-review"]
 	assert.Equal(t, "launch-session", spawn.Type)
-	assert.True(t, spawn.AutoApply)
 	_, ok := spawn.Config.(*LaunchSessionConfig)
 	require.True(t, ok)
 
@@ -71,8 +70,8 @@ func TestLoadActions_MultiActionFile(t *testing.T) {
 	assert.Equal(t, "bar", shCfg.Env["FOO"])
 
 	notify := byID["notify"]
-	assert.Equal(t, "publish-event", notify.Type)
-	peCfg, ok := notify.Config.(*PublishEventConfig)
+	assert.Equal(t, "publish-message", notify.Type)
+	peCfg, ok := notify.Config.(*PublishMessageConfig)
 	require.True(t, ok)
 	assert.Equal(t, "pipeline.notify", peCfg.Topic)
 }

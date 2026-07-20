@@ -87,7 +87,7 @@ func TestActionUsageCheckerBlocksLoadedFlowsAndNonterminalQueueOnly(t *testing.T
 	db, err := pipelinedb.Open(t.TempDir(), pipelinedb.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
-	for _, status := range []string{"pending", "running", "awaiting_confirmation", "done", "failed"} {
+	for _, status := range []string{"pending", "running", "done", "failed"} {
 		_, err := db.Conn().ExecContext(context.Background(), `INSERT INTO output_command (action_id, key, payload, status, created_at) VALUES (?, ?, ?, ?, 1)`, "used", status, []byte("{}"), status)
 		require.NoError(t, err)
 	}
@@ -96,18 +96,18 @@ func TestActionUsageCheckerBlocksLoadedFlowsAndNonterminalQueueOnly(t *testing.T
 	usage, err := checker.Usage("used")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"flow-a"}, usage.FlowIDs)
-	assert.EqualValues(t, 3, usage.ActiveCommands)
+	assert.EqualValues(t, 2, usage.ActiveCommands)
 
 	store.SetUsageChecker(checker)
 	err = store.Delete("used")
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "flow-a")
-	assert.Contains(t, err.Error(), "3 nonterminal output command")
+	assert.Contains(t, err.Error(), "2 nonterminal output command")
 
 	// Terminal history alone is explicitly allowed once the deployed flow is
 	// removed and all queue work has completed.
 	require.NoError(t, flows.Delete("flow-a"))
-	_, err = db.Conn().ExecContext(context.Background(), `UPDATE output_command SET status = 'done' WHERE status IN ('pending', 'running', 'awaiting_confirmation')`)
+	_, err = db.Conn().ExecContext(context.Background(), `UPDATE output_command SET status = 'done' WHERE status IN ('pending', 'running')`)
 	require.NoError(t, err)
 	require.NoError(t, store.Delete("used"))
 }

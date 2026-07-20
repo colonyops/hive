@@ -63,9 +63,9 @@ describe('ActionSettingsView', () => {
     }))
   })
 
-  it('keeps publish-event terminology honest and surfaces deletion errors', async () => {
+  it('keeps publish-message terminology honest and surfaces deletion errors', async () => {
     mocks.DeleteAction.mockRejectedValue(new Error('flow-a blocks deletion'))
-    const wrapper = mountSettings([{ id: 'event', label: 'Event', type: 'publish-event', showInDetail: false, appliesTo: [], message: { topic: 'updates' } }])
+    const wrapper = mountSettings([{ id: 'event', label: 'Event', type: 'publish-message', showInDetail: false, appliesTo: [], message: { topic: 'updates', messageTemplate: 'hello' } }])
     await flushPromises()
     await wrapper.get('[data-testid="action-row-event"] button:last-child').trigger('click')
     await wrapper.get('[data-testid="action-delete-confirm"] button').trigger('click')
@@ -73,7 +73,7 @@ describe('ActionSettingsView', () => {
     expect(wrapper.get('[data-testid="actions-error"]').text()).toContain('flow-a blocks deletion')
 
     await wrapper.get('[data-testid="action-row-event"] button').trigger('click')
-    expect(wrapper.get('[data-testid="action-type"]').text()).toContain('Publish event')
-    expect(wrapper.find('[data-testid="action-event-topic"]').exists()).toBe(true)
+    expect(wrapper.get('[data-testid="action-type"]').text()).toContain('Publish message')
+    expect(wrapper.find('[data-testid="action-message-topic"]').exists()).toBe(true)
   })
 })

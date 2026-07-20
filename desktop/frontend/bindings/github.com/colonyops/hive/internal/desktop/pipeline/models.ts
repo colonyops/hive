@@ -6,6 +6,23 @@
 import * as pipelinedb$0 from "./pipelinedb/models.js";
 
 /**
+ * ActionInvocationInput contains only user-supplied action inputs. It never
+ * carries executable configuration or message attribution.
+ */
+export interface ActionInvocationInput {
+    "session"?: SessionInvocationInput | null;
+}
+
+export interface ActionRunView {
+    "commandId": number;
+    "status": string;
+    "result"?: ExecutionOutcome | null;
+    "error"?: string;
+    "stdout"?: string;
+    "stderr"?: string;
+}
+
+/**
  * Sink, Output, Discard, NodeRun, and CommitBatch are pipelinedb's commit
  * protocol structs, re-exported verbatim under package pipeline — the same
  * alias pattern as Msg above: pipelinedb owns the transactional
@@ -14,6 +31,15 @@ import * as pipelinedb$0 from "./pipelinedb/models.js";
  * bindings) speak in terms of this package's names.
  */
 export type CommitBatch = pipelinedb$0.CommitBatch;
+
+/**
+ * ExecutionOutcome is a tagged-by-presence union. Exactly one branch is set
+ * for successful side-effecting executors.
+ */
+export interface ExecutionOutcome {
+    "session"?: SessionExecutionOutcome | null;
+    "message"?: MessageExecutionOutcome | null;
+}
 
 /**
  * Sink, Output, Discard, NodeRun, and CommitBatch are pipelinedb's commit
@@ -41,6 +67,11 @@ export type FeedCount = pipelinedb$0.FeedCount;
  */
 export type FeedItem = pipelinedb$0.FeedItemView;
 
+export interface MessageExecutionOutcome {
+    "topic": string;
+    "sender": string;
+}
+
 /**
  * Sink, Output, Discard, NodeRun, and CommitBatch are pipelinedb's commit
  * protocol structs, re-exported verbatim under package pipeline — the same
@@ -54,3 +85,33 @@ export type FeedItem = pipelinedb$0.FeedItemView;
  * shape plus EndedAt.
  */
 export type NodeRunRecord = pipelinedb$0.NodeRunRecord;
+
+export interface SessionExecutionOutcome {
+    "id": string;
+    "name": string;
+}
+
+export interface SessionInvocationInput {
+    "name": string;
+    "repository": string;
+    "agent"?: string;
+}
+
+/**
+ * SessionLaunchOptions is the narrow DTO used by the session launch dialog.
+ */
+export interface SessionLaunchOptions {
+    "repositories": SessionLaunchRepository[] | null;
+    "defaultRepository": string;
+    "agents": string[] | null;
+    "defaultAgent": string;
+}
+
+/**
+ * SessionLaunchRepository is the safe presentation of a repository available
+ * to an interactive action. Local checkout paths stay backend-only.
+ */
+export interface SessionLaunchRepository {
+    "name": string;
+    "repository": string;
+}

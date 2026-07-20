@@ -21,7 +21,7 @@ type LaunchSessionRequest struct {
 
 // SessionLauncher spawns a hive session for a launch-session action.
 type SessionLauncher interface {
-	LaunchSession(ctx context.Context, req LaunchSessionRequest) error
+	LaunchSession(ctx context.Context, req LaunchSessionRequest) (SessionExecutionOutcome, error)
 }
 
 // LaunchSessionExecutor renders a launch-session action's templates over
@@ -37,41 +37,60 @@ func NewLaunchSessionExecutor(launcher SessionLauncher) *LaunchSessionExecutor {
 	return &LaunchSessionExecutor{launcher: launcher}
 }
 
-func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Action, data OutputData) error {
+func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Action, data OutputData, input ActionInvocationInput) (ExecutionResult, error) {
 	cfg, ok := action.Config.(*actions.LaunchSessionConfig)
 	if !ok {
-		return fmt.Errorf("launch-session executor: action %q has config type %T", action.ID, action.Config)
+		return ExecutionResult{}, fmt.Errorf("launch-session executor: action %q has config type %T", action.ID, action.Config)
 	}
 	if e.launcher == nil {
-		return fmt.Errorf("launch-session executor: no session launcher configured")
+		return ExecutionResult{}, fmt.Errorf("launch-session executor: no session launcher configured")
 	}
 
 	renderer := tmpl.New(tmpl.Config{})
 
 	prompt, err := renderer.Render(cfg.PromptTemplate, data)
 	if err != nil {
-		return fmt.Errorf("launch-session: prompt_template: %w", err)
+		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template: %w", err)
 	}
 	prompt = strings.TrimSpace(prompt)
+	if prompt == "" {
+		return ExecutionResult{}, fmt.Errorf("launch-session: prompt_template rendered blank")
+	}
 
 	var repo string
 	if cfg.RepoTemplate != "" {
 		repo, err = renderer.Render(cfg.RepoTemplate, data)
 		if err != nil {
-			return fmt.Errorf("launch-session: repo_template: %w", err)
+			return ExecutionResult{}, fmt.Errorf("launch-session: repo_template: %w", err)
 		}
 		repo = strings.TrimSpace(repo)
 	}
 
 	name := session.Slugify(action.ID + "-" + data.Key)
 	if err := session.ValidateName(name); err != nil {
-		return fmt.Errorf("launch-session: derived session name: %w", err)
+		return ExecutionResult{}, fmt.Errorf("launch-session: derived session name: %w", err)
 	}
 
-	return e.launcher.LaunchSession(ctx, LaunchSessionRequest{
-		Name:   name,
-		Prompt: prompt,
-		Agent:  cfg.Agent,
-		Repo:   repo,
-	})
+	if cfg.RepoTemplate == "" {
+		if input.Session == nil {
+			return ExecutionResult{}, fmt.Errorf("launch-session: repository, name, and agent input are required")
+		}
+		repo, name = strings.TrimSpace(input.Session.Repository), strings.TrimSpace(input.Session.Name)
+		if repo == "" || name == "" {
+			return ExecutionResult{}, fmt.Errorf("launch-session: repository and session name are required")
+		}
+		if err := session.ValidateName(name); err != nil {
+			return ExecutionResult{}, fmt.Errorf("launch-session: session name: %w", err)
+		}
+		if input.Session.Agent != "" {
+			cfg = &actions.LaunchSessionConfig{Agent: input.Session.Agent}
+		}
+	} else if repo == "" {
+		return ExecutionResult{}, fmt.Errorf("launch-session: repo_template rendered blank")
+	}
+	outcome, err := e.launcher.LaunchSession(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: cfg.Agent, Repo: repo})
+	if err != nil {
+		return ExecutionResult{Attempted: true}, err
+	}
+	return ExecutionResult{Attempted: true, Outcome: &ExecutionOutcome{Session: &outcome}}, nil
 }

@@ -45,14 +45,17 @@ type NodeRun struct {
 }
 
 type OutputCommand struct {
-	ID        int64          `json:"id"`
-	ActionID  string         `json:"action_id"`
-	Payload   []byte         `json:"payload"`
-	Status    string         `json:"status"`
-	CreatedAt int64          `json:"created_at"`
-	Key       string         `json:"key"`
-	Attempts  int64          `json:"attempts"`
-	LastError sql.NullString `json:"last_error"`
+	ID         int64          `json:"id"`
+	ActionID   string         `json:"action_id"`
+	Payload    []byte         `json:"payload"`
+	Status     string         `json:"status"`
+	CreatedAt  int64          `json:"created_at"`
+	Key        string         `json:"key"`
+	Attempts   int64          `json:"attempts"`
+	LastError  sql.NullString `json:"last_error"`
+	ResultJson sql.NullString `json:"result_json"`
+	Stdout     sql.NullString `json:"stdout"`
+	Stderr     sql.NullString `json:"stderr"`
 }
 
 type SourceHead struct {

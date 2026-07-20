@@ -7,7 +7,7 @@ const baseAction: ActionView = {
   id: 'summarize',
   label: 'Summarize thread',
   type: 'launch-session',
-  showInDetail: true,
+  showInDetail: true, requiresSessionInput: false,
 }
 
 function mountAction(overrides: Partial<ActionView> = {}) {
@@ -33,5 +33,18 @@ describe('ActionCard', () => {
     await wrapper.find('button.action-card').trigger('click')
 
     expect(wrapper.emitted('run')).toHaveLength(1)
+  })
+
+  it('displays persisted failed command diagnostics', () => {
+    const wrapper = mount(ActionCard, {
+      props: {
+        action: baseAction,
+        run: { commandId: 42, status: 'failed', error: 'command exited 1', stdout: 'partial output', stderr: 'bad input' },
+      },
+    })
+
+    expect(wrapper.get('[data-testid="action-failure"]').text()).toContain('command exited 1')
+    expect(wrapper.get('[data-testid="action-stdout"]').text()).toContain('partial output')
+    expect(wrapper.get('[data-testid="action-stderr"]').text()).toContain('bad input')
   })
 })

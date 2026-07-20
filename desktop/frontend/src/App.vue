@@ -16,6 +16,7 @@ import ProfileRail from './components/ProfileRail.vue'
 import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
+import CreateSessionDialog from './components/CreateSessionDialog.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
@@ -40,10 +41,10 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
-  selectedId, selectedItem, actions, unreadOnly, title, toasts, dismissToast, clearToasts,
+  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem,
-  toggleUnread, refresh, invokeAction, notWired, openUrl, openSelectedInBrowser, hideWindow,
+  toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
@@ -550,7 +551,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :actions="actions" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
+            <DetailPane :item="selectedItem" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">
@@ -562,6 +563,15 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         </template>
       </div>
     </div>
+    <CreateSessionDialog
+      v-if="sessionLaunchAction && sessionLaunchOptions"
+      :action-label="sessionLaunchAction.label"
+      :options="sessionLaunchOptions"
+      :busy="sessionLaunchBusy"
+      :error="sessionLaunchError"
+      @close="cancelSessionLaunch"
+      @submit="submitSessionLaunch"
+    />
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
     <NewProfileModal

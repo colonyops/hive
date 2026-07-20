@@ -21,3 +21,8 @@ func (a *actionsRefs) ResolveAction(id string) bool {
 	_, ok := a.actions.Get(id)
 	return ok
 }
+
+func (a *actionsRefs) ActionHeadlessCapable(id string) bool {
+	action, ok := a.actions.Get(id)
+	return ok && action.HeadlessCapable()
+}

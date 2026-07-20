@@ -1,7 +1,8 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
 import type { FeedItem, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
@@ -29,6 +30,13 @@ export function useFeedState() {
   const loadError = ref<string | null>(null)
   const selectedId = ref<string | null>(null)
   const actions = ref<ActionView[]>([])
+  const pendingAction = ref<string | null>(null)
+  const actionError = ref<string | null>(null)
+  const actionRuns = ref<Record<string, ActionRunView>>({})
+  const sessionLaunchAction = ref<ActionView | null>(null)
+  const sessionLaunchOptions = ref<SessionLaunchOptionsView | null>(null)
+  const sessionLaunchBusy = ref(false)
+  const sessionLaunchError = ref<string | null>(null)
   const toasts = ref<ToastInstance[]>([])
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
@@ -343,17 +351,79 @@ export function useFeedState() {
     await loadItems(currentFeedId())
   }
 
-  async function invokeAction(actionID: string) {
+  async function runAction(actionID: string, input: Record<string, unknown> = {}) {
     const item = selectedItem.value
-    if (!item) return
+    if (!item) return false
+    if (pendingAction.value) return false
+    pendingAction.value = actionID
+    actionError.value = null
     try {
-      await InvokeAction(actionID, item)
+      const run = await InvokeAction(actionID, item, input)
+      actionRuns.value = { ...actionRuns.value, [actionID]: run }
+      if (run.status !== 'done') {
+        actionError.value = run.error || 'The action did not complete.'
+        showToast(actionError.value, { severity: 'error' })
+        return false
+      }
       const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
-      showToast(`${label} started`, { severity: 'success' })
+      if (run.result?.session) {
+        showToast(`Created session ${run.result.session.name} (${run.result.session.id})`, { severity: 'success' })
+      } else if (run.result?.message) {
+        showToast(`Published message to ${run.result.message.topic} as ${run.result.message.sender}`, { severity: 'success' })
+      } else {
+        showToast(`${label} completed`, { severity: 'success' })
+      }
+      return true
     } catch (error) {
       console.warn('Unable to invoke action', error)
-      showToast(error instanceof Error && error.message ? error.message : 'Could not run the action.', { severity: 'error' })
+      actionError.value = error instanceof Error && error.message ? error.message : 'Could not run the action.'
+      showToast(actionError.value, { severity: 'error' })
+      return false
+    } finally {
+      pendingAction.value = null
     }
+  }
+
+  // Interactive launch-session actions never invoke until the user has chosen
+  // a repository and valid session name. Configured repo_template actions
+  // remain headless and use the same direct execution path as other actions.
+  async function invokeAction(actionID: string) {
+    const action = actions.value.find((candidate) => candidate.id === actionID)
+    if (!action?.requiresSessionInput) {
+      await runAction(actionID)
+      return
+    }
+    if (pendingAction.value || sessionLaunchBusy.value) return
+    sessionLaunchError.value = null
+    pendingAction.value = actionID
+    try {
+      sessionLaunchOptions.value = await SessionLaunchOptions()
+      sessionLaunchAction.value = action
+    } catch (error) {
+      const message = error instanceof Error && error.message ? error.message : 'Could not load session options.'
+      actionError.value = message
+      showToast(message, { severity: 'error' })
+    } finally {
+      pendingAction.value = null
+    }
+  }
+
+  function cancelSessionLaunch() {
+    if (sessionLaunchBusy.value) return
+    sessionLaunchAction.value = null
+    sessionLaunchOptions.value = null
+    sessionLaunchError.value = null
+  }
+
+  async function submitSessionLaunch(input: { name: string; repository: string; agent?: string }) {
+    const action = sessionLaunchAction.value
+    if (!action || sessionLaunchBusy.value) return
+    sessionLaunchBusy.value = true
+    sessionLaunchError.value = null
+    const succeeded = await runAction(action.id, { session: input })
+    sessionLaunchBusy.value = false
+    if (succeeded) cancelSessionLaunch()
+    else sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
   }
 
   function notWired() {
@@ -427,6 +497,13 @@ export function useFeedState() {
     selectedId,
     selectedItem,
     actions,
+    pendingAction,
+    actionError,
+    actionRuns,
+    sessionLaunchAction,
+    sessionLaunchOptions,
+    sessionLaunchBusy,
+    sessionLaunchError,
     unreadOnly,
     title,
     toasts,
@@ -447,6 +524,8 @@ export function useFeedState() {
     toggleUnread,
     refresh,
     invokeAction,
+    cancelSessionLaunch,
+    submitSessionLaunch,
     notWired,
     openUrl,
     openSelectedInBrowser,

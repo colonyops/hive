@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   MarkFeedItemRead: vi.fn(),
   ActionViews: vi.fn(),
   InvokeAction: vi.fn(),
+  SessionLaunchOptions: vi.fn(),
   On: vi.fn(),
   Hide: vi.fn(),
   OpenURL: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', (
   MarkFeedItemRead: mocks.MarkFeedItemRead,
   ActionViews: mocks.ActionViews,
   InvokeAction: mocks.InvokeAction,
+  SessionLaunchOptions: mocks.SessionLaunchOptions,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -70,7 +72,8 @@ beforeEach(() => {
   mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'triage/my-prs', total: 3, unread: 2 }])
   mocks.FeedItems.mockResolvedValue([])
   mocks.ActionViews.mockResolvedValue([])
-  mocks.InvokeAction.mockResolvedValue(undefined)
+  mocks.InvokeAction.mockResolvedValue({ commandId: 1, status: 'done' })
+  mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [{ name: 'hive', repository: 'https://github.com/colonyops/hive.git' }], defaultRepository: 'https://github.com/colonyops/hive.git', agents: ['claude'], defaultAgent: 'claude' })
   mocks.On.mockReturnValue(() => {})
 })
 
@@ -224,8 +227,63 @@ describe('useFeedState', () => {
 
     await get().invokeAction('review')
 
-    expect(mocks.InvokeAction).toHaveBeenCalledWith('review', expect.objectContaining({ id: 'o/r#1', kind: 'PR' }))
-    expect(get().toasts.value.some((toast) => toast.message === 'Review started')).toBe(true)
+    expect(mocks.InvokeAction).toHaveBeenCalledWith('review', expect.objectContaining({ id: 'o/r#1', kind: 'PR' }), {})
+    expect(get().toasts.value.some((toast) => toast.message === 'Review completed')).toBe(true)
+  })
+
+  it('names published message topic and sender in success feedback', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'notify', label: 'Notify', type: 'publish-message' }])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 18, status: 'done', result: { message: { topic: 'agent.session.inbox', sender: 'hive-desktop' } } })
+    const get = mountState()
+    await flushPromises()
+    await get().selectSidebar({ type: 'all' })
+    await flushPromises()
+
+    await get().invokeAction('notify')
+
+    expect(get().toasts.value.some((toast) => toast.message === 'Published message to agent.session.inbox as hive-desktop')).toBe(true)
+  })
+
+  it('treats a non-done action run as a failure and keeps diagnostics',async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 17, status: 'failed', error: 'command exited 1', stdout: 'partial', stderr: 'bad input' })
+    const get = mountState()
+    await flushPromises()
+    await get().selectSidebar({ type: 'all' })
+    await flushPromises()
+
+    await get().invokeAction('review')
+
+    expect(get().actionRuns.value.review).toMatchObject({ commandId: 17, status: 'failed', stderr: 'bad input' })
+    expect(get().toasts.value.some((toast) => toast.severity === 'error' && toast.message === 'command exited 1')).toBe(true)
+  })
+
+  it('opens interactive launch actions before invoking and submits dialog input', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'launch-session', requiresSessionInput: true }])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 1, status: 'done', result: { session: { id: 'session-1', name: 'review-pr-1' } } })
+    const get = mountState()
+    await flushPromises()
+    await get().selectSidebar({ type: 'all' })
+    await flushPromises()
+
+    await get().invokeAction('review')
+    expect(mocks.SessionLaunchOptions).toHaveBeenCalledOnce()
+    expect(mocks.InvokeAction).not.toHaveBeenCalled()
+    expect(get().sessionLaunchAction.value?.id).toBe('review')
+
+    await get().submitSessionLaunch({ name: 'review-pr-1', repository: 'https://github.com/colonyops/hive.git', agent: 'claude' })
+    expect(mocks.InvokeAction).toHaveBeenCalledWith('review', expect.anything(), { session: { name: 'review-pr-1', repository: 'https://github.com/colonyops/hive.git', agent: 'claude' } })
+    expect(get().toasts.value.some((toast) => toast.message === 'Created session review-pr-1 (session-1)')).toBe(true)
+    expect(get().sessionLaunchAction.value).toBeNull()
   })
 
   it('marks an item read via the pipeline service', async () => {

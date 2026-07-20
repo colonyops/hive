@@ -191,8 +191,8 @@ type hiveActionRuntime struct {
 	db     *coredb.DB
 	cancel context.CancelFunc
 
-	launcher  pipeline.SessionLauncher
-	publisher pipeline.EventPublisher
+	launcher  *pipeline.HiveSessionLauncher
+	publisher pipeline.MessagePublisher
 }
 
 func (r *hiveActionRuntime) Close() {
@@ -261,7 +261,7 @@ func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
 		db:        database,
 		cancel:    cancel,
 		launcher:  pipeline.NewHiveSessionLauncher(sessions),
-		publisher: pipeline.NewEventBusPublisher(bus),
+		publisher: pipeline.NewHiveMessagePublisher(hive.NewMessageService(stores.NewMessageStore(database, cfg.Messaging.MaxMessages), cfg, bus)),
 	}, nil
 }
 
@@ -270,11 +270,11 @@ func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
 // output commands, but they retain this worker for explicit detail-pane
 // confirmation RPCs. That keeps the configured action path real in e2e while
 // avoiding a background shell action from compromising fixture determinism.
-func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.EventPublisher, logger zerolog.Logger) *pipeline.Worker {
+func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.MessagePublisher, logger zerolog.Logger) *pipeline.Worker {
 	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
-		"launch-session": pipeline.NewLaunchSessionExecutor(launcher),
-		"shell":          pipeline.NewShellExecutor(logger),
-		"publish-event":  pipeline.NewPublishEventExecutor(publisher),
+		"launch-session":  pipeline.NewLaunchSessionExecutor(launcher),
+		"shell":           pipeline.NewShellExecutor(logger),
+		"publish-message": pipeline.NewPublishMessageExecutor(publisher),
 	})
 	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 }
@@ -352,7 +352,7 @@ func main() {
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
-			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker)),
+			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
 			application.NewService(NewFlowsService(flowsStore)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 		},

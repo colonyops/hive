@@ -142,7 +142,7 @@ and `flows:updated` wake-up.
 
 `actions.yml` lives at `$XDG_CONFIG_HOME/hive/desktop/actions.yml`
 (`HIVE_DESKTOP_ACTIONS` overrides the file) and defines detail-pane/output
-worker actions such as `launch-session`, `shell`, and `publish-event`:
+worker actions such as `launch-session`, `shell`, and `publish-message`:
 
 ```yaml
 version: 1

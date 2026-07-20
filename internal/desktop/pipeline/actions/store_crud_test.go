@@ -46,7 +46,8 @@ actions:
   # trailing action comment
   - id: last
     label: Last
-    type: publish-event
+    type: publish-message
+    message_template: "{{ .Payload.title }}"
     topic: events
 `
 	require.NoError(t, os.WriteFile(path, []byte(original), 0o600))
@@ -104,7 +105,7 @@ func TestActionStoreExternalEditsKeepLastGoodAndRepairRecovers(t *testing.T) {
 	assert.Equal(t, []string{"good"}, []string{catalog.Actions[0].ID})
 	assert.NotEmpty(t, catalog.Error)
 
-	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: repaired\n    label: Repaired\n    type: publish-event\n    topic: repaired\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: repaired\n    label: Repaired\n    type: publish-message\n    message_template: message\n    topic: repaired\n"), 0o600))
 	require.NoError(t, s.Reload())
 	catalog = s.ListEditable()
 	assert.Equal(t, "repaired", catalog.Actions[0].ID)
@@ -264,7 +265,7 @@ func TestAtomicWriteFailureCleansTemporaryFileAndDoesNotInstallTarget(t *testing
 
 func TestActionStoreReloadsInstalledFileAfterDirectorySyncFailure(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "actions.yml")
-	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: run\n    label: Old\n    type: shell\n    auto_apply: true\n    command_template: true\n"), 0o600))
+	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: run\n    label: Old\n    type: shell\n    command_template: true\n"), 0o600))
 	s := NewActionStore(path)
 	require.Equal(t, "Old", s.ListEditable().Actions[0].Label)
 
@@ -286,5 +287,4 @@ func TestActionStoreReloadsInstalledFileAfterDirectorySyncFailure(t *testing.T) 
 	loaded, err := LoadActions(path)
 	require.NoError(t, err)
 	require.Len(t, loaded, 1)
-	assert.True(t, loaded[0].AutoApply, "hidden legacy setting survives editor updates")
 }

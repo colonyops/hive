@@ -31,5 +31,8 @@ func (c *ActionConfig) Validate(refs Refs) error {
 	if !refsResolveAction(refs, c.Action) {
 		return fmt.Errorf("action: action %q: unresolved reference", c.Action)
 	}
+	if !refsActionHeadlessCapable(refs, c.Action) {
+		return fmt.Errorf("action: action %q requires interactive session input and cannot run in a flow", c.Action)
+	}
 	return nil
 }

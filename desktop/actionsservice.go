@@ -77,12 +77,11 @@ func (c actionUsageChecker) Usage(id string) (actions.ActionUsage, error) {
 			}
 		}
 	}
-	// These are precisely the statuses that can still execute or need a user
-	// decision in the output worker. Done/failed history is terminal and must
-	// never keep an action from being deleted.
+	// Pending work can run and running work may have been dispatched. Done and
+	// failed history is terminal and must never keep an action from deletion.
 	err := c.db.Conn().QueryRowContext(context.Background(), `
 		SELECT COUNT(*) FROM output_command
-		WHERE action_id = ? AND status IN ('pending', 'running', 'awaiting_confirmation')`, id).Scan(&usage.ActiveCommands)
+		WHERE action_id = ? AND status IN ('pending', 'running')`, id).Scan(&usage.ActiveCommands)
 	if err != nil {
 		return usage, fmt.Errorf("counting nonterminal output commands: %w", err)
 	}

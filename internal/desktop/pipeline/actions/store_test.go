@@ -35,12 +35,12 @@ func TestActionStore_ViewsForFiltersAndHidesExecutionConfig(t *testing.T) {
 
 	store := NewActionStore(path)
 	assert.Equal(t, []View{
-		{ID: "notify", Label: "Notify", Type: "publish-event", ShowInDetail: true},
+		{ID: "notify", Label: "Notify", Type: "publish-message", ShowInDetail: true},
 		{ID: "run-lint", Label: "Run lint", Type: "shell", ShowInDetail: true},
 		{ID: "spawn-review", Label: "Spawn review agent", Type: "launch-session", ShowInDetail: true},
 	}, store.ViewsFor("PR"))
 	assert.Equal(t, []View{
-		{ID: "notify", Label: "Notify", Type: "publish-event", ShowInDetail: true},
+		{ID: "notify", Label: "Notify", Type: "publish-message", ShowInDetail: true},
 		{ID: "run-lint", Label: "Run lint", Type: "shell", ShowInDetail: true},
 	}, store.ViewsFor("issue"))
 }

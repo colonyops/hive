@@ -187,7 +187,7 @@ func (s *ActionStore) Delete(id string) error {
 				reasons = append(reasons, "flows: "+strings.Join(usage.FlowIDs, ", "))
 			}
 			if usage.ActiveCommands > 0 {
-				reasons = append(reasons, fmt.Sprintf("%d nonterminal output command(s) (pending, running, or awaiting confirmation)", usage.ActiveCommands))
+				reasons = append(reasons, fmt.Sprintf("%d nonterminal output command(s) (pending or running)", usage.ActiveCommands))
 			}
 			return fmt.Errorf("action %q is in use (%s)", id, strings.Join(reasons, "; "))
 		}
@@ -222,9 +222,6 @@ func (s *ActionStore) mutateLocked(mode, id string, a Action) (EditableAction, e
 		if i < 0 {
 			return EditableAction{}, fmt.Errorf("action %q not found", id)
 		}
-		// auto_apply is a legacy runtime setting until Phase 2. The Phase 1
-		// editor contract does not expose it, so retain the persisted value.
-		a.AutoApply = actionAutoApply(list.Content[i])
 		list.Content[i] = actionNode(a)
 	}
 	if err := s.writeDocumentLocked(doc); err != nil {
@@ -284,16 +281,6 @@ func findActionNode(list *yaml.Node, id string) int {
 	return -1
 }
 
-func actionAutoApply(node *yaml.Node) bool {
-	for i := 0; i+1 < len(node.Content); i += 2 {
-		if node.Content[i].Value == "auto_apply" {
-			var value bool
-			return node.Content[i+1].Decode(&value) == nil && value
-		}
-	}
-	return false
-}
-
 func (s *ActionStore) writeDocumentLocked(doc *yaml.Node) error {
 	data, err := yaml.Marshal(doc)
 	if err != nil {
@@ -342,9 +329,6 @@ func actionNode(a Action) *yaml.Node {
 		}
 		n.Content = append(n.Content, scalar("applies_to"), seq)
 	}
-	if a.AutoApply {
-		n.Content = append(n.Content, scalar("auto_apply"), &yaml.Node{Kind: yaml.ScalarNode, Tag: "!!bool", Value: "true"})
-	}
 	switch c := a.Config.(type) {
 	case *LaunchSessionConfig:
 		if c.RepoTemplate != "" {
@@ -374,7 +358,8 @@ func actionNode(a Action) *yaml.Node {
 			}
 			n.Content = append(n.Content, scalar("env"), m)
 		}
-	case *PublishEventConfig:
+	case *PublishMessageConfig:
+		add("message_template", c.MessageTemplate)
 		add("topic", c.Topic)
 	}
 	return n

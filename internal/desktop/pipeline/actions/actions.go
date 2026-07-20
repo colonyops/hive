@@ -17,6 +17,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 
 	"gopkg.in/yaml.v3"
 )
@@ -26,10 +27,11 @@ import (
 // and identify an action, but execution always resolves its current
 // definition from ActionStore.
 type View struct {
-	ID           string `json:"id"`
-	Label        string `json:"label"`
-	Type         string `json:"type"`
-	ShowInDetail bool   `json:"showInDetail"`
+	ID                   string `json:"id"`
+	Label                string `json:"label"`
+	Type                 string `json:"type"`
+	ShowInDetail         bool   `json:"showInDetail"`
+	RequiresSessionInput bool   `json:"requiresSessionInput"`
 }
 
 // Action is one parsed and validated actions.yml entry: the common envelope
@@ -42,29 +44,24 @@ type Action struct {
 	// (a flow node, a detail-pane button).
 	Label string
 	// Type is the action kind discriminator: "launch-session", "shell", or
-	// "publish-event".
+	// "publish-message".
 	Type string
 	// AppliesTo restricts which feed item kinds this action is offered for in
 	// the detail pane; empty means "any kind". It plays no role in flow
 	// `action` nodes, which target one specific action id explicitly
 	// regardless of kind.
 	AppliesTo []string
-	// AutoApply, when true, lets the output worker execute this action's
-	// queued output_command rows automatically. When false (the default),
-	// the worker moves a queued command to awaiting_confirmation until a
-	// manual confirmation UI (the detail pane) triggers it.
-	AutoApply bool
 	// ShowInDetail controls whether this action is offered in the detail pane.
 	// Flow action nodes remain eligible regardless of this presentation flag.
 	ShowInDetail bool
 	// Config is the per-type configuration: *LaunchSessionConfig,
-	// *ShellConfig, or *PublishEventConfig.
+	// *ShellConfig, or *PublishMessageConfig.
 	Config ActionConfig
 }
 
 // View returns the safe presentation contract for this action.
 func (a Action) View() View {
-	return View{ID: a.ID, Label: a.Label, Type: a.Type, ShowInDetail: a.ShowInDetail}
+	return View{ID: a.ID, Label: a.Label, Type: a.Type, ShowInDetail: a.ShowInDetail, RequiresSessionInput: a.RequiresSessionInput()}
 }
 
 // ActionConfig is the per-type union every registered action type
@@ -83,9 +80,9 @@ type actionFactory func() ActionConfig
 // registry maps an action's `type:` discriminator to the factory for its
 // per-type config.
 var registry = map[string]actionFactory{
-	"launch-session": func() ActionConfig { return &LaunchSessionConfig{} },
-	"shell":          func() ActionConfig { return &ShellConfig{} },
-	"publish-event":  func() ActionConfig { return &PublishEventConfig{} },
+	"launch-session":  func() ActionConfig { return &LaunchSessionConfig{} },
+	"shell":           func() ActionConfig { return &ShellConfig{} },
+	"publish-message": func() ActionConfig { return &PublishMessageConfig{} },
 }
 
 // actionHeader is the small set of fields common to every action, decoded
@@ -96,7 +93,6 @@ type actionHeader struct {
 	Label        string   `yaml:"label"`
 	Type         string   `yaml:"type"`
 	AppliesTo    []string `yaml:"applies_to"`
-	AutoApply    bool     `yaml:"auto_apply"`
 	ShowInDetail bool     `yaml:"show_in_detail"`
 }
 
@@ -109,7 +105,6 @@ var reservedActionKeys = map[string]bool{
 	"label":          true,
 	"type":           true,
 	"applies_to":     true,
-	"auto_apply":     true,
 	"show_in_detail": true,
 }
 
@@ -153,14 +148,13 @@ func (a *Action) UnmarshalYAML(value *yaml.Node) error {
 	a.Label = header.Label
 	a.Type = header.Type
 	a.AppliesTo = header.AppliesTo
-	a.AutoApply = header.AutoApply
 	a.ShowInDetail = header.ShowInDetail
 	a.Config = cfg
 	return nil
 }
 
 // stripReservedKeys returns a shallow copy of an action's mapping node with
-// the envelope keys (id/label/type/applies_to/auto_apply) removed, leaving
+// the envelope keys (id/label/type/applies_to) removed, leaving
 // only per-type fields for the strict config decode.
 func stripReservedKeys(value *yaml.Node) *yaml.Node {
 	out := &yaml.Node{Kind: yaml.MappingNode, Tag: "!!map"}
@@ -189,4 +183,15 @@ func nodeKindName(kind yaml.Kind) string {
 	default:
 		return "unknown"
 	}
+}
+
+// HeadlessCapable reports whether a flow worker can execute this action without interactive input.
+func (a Action) HeadlessCapable() bool {
+	c, ok := a.Config.(*LaunchSessionConfig)
+	return !ok || strings.TrimSpace(c.RepoTemplate) != ""
+}
+
+func (a Action) RequiresSessionInput() bool {
+	c, ok := a.Config.(*LaunchSessionConfig)
+	return ok && strings.TrimSpace(c.RepoTemplate) == ""
 }

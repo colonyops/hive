@@ -19,7 +19,7 @@ function setType(): void {
   } else {
     props.action.launch = undefined
     props.action.shell = undefined
-    props.action.message = { topic: '' }
+    props.action.message = { topic: '', messageTemplate: '' }
   }
 }
 
@@ -49,7 +49,7 @@ function setEnv(event: Event): void {
     <div class="grid gap-3">
       <label class="text-xs text-text-2">ID<input v-model="action.id" :disabled="!isNew" data-testid="action-id" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text disabled:opacity-60" /></label>
       <label class="text-xs text-text-2">Label<input v-model="action.label" data-testid="action-label" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" /></label>
-      <label class="text-xs text-text-2">Type<select v-model="action.type" data-testid="action-type" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" @change="setType"><option value="launch-session">Launch session</option><option value="shell">Shell</option><option value="publish-event">Publish event</option></select></label>
+      <label class="text-xs text-text-2">Type<select v-model="action.type" data-testid="action-type" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" @change="setType"><option value="launch-session">Launch session</option><option value="shell">Shell</option><option value="publish-message">Publish message</option></select></label>
       <label class="flex gap-2 text-xs text-text-2"><input v-model="action.showInDetail" type="checkbox" data-testid="action-show-in-detail" /> Show manual button in detail pane</label>
       <label class="text-xs text-text-2">Applies to (comma-separated)<input v-model="appliesTo" data-testid="action-applies-to" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" /></label>
       <template v-if="action.launch">
@@ -63,7 +63,7 @@ function setEnv(event: Event): void {
         <label class="text-xs text-text-2">Timeout<input v-model="action.shell.timeout" data-testid="action-shell-timeout" placeholder="e.g. 30s" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" /></label>
         <label class="text-xs text-text-2">Environment (KEY=value per line)<textarea :value="envText()" data-testid="action-shell-env" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text" @input="setEnv" /></label>
       </template>
-      <label v-if="action.message" class="text-xs text-text-2">Event topic<input v-model="action.message.topic" data-testid="action-event-topic" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" /></label>
+      <template v-if="action.message"><label class="text-xs text-text-2">Message template<textarea v-model="action.message.messageTemplate" data-testid="action-message-template" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text" /></label><label class="text-xs text-text-2">Topic<input v-model="action.message.topic" data-testid="action-message-topic" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text" /></label></template>
     </div>
     <div class="mt-4 flex justify-end gap-2"><button class="px-3 py-1.5 text-xs text-text-2" @click="emit('cancel')">Cancel</button><button class="rounded bg-accent px-3 py-1.5 text-xs font-medium text-accent-contrast" data-testid="action-save" @click="emit('save')">Save</button></div>
   </div>

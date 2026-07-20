@@ -82,7 +82,7 @@ func FlowsDir() string {
 const EnvActionsPath = "HIVE_DESKTOP_ACTIONS"
 
 // ActionsPath is the actions.yml file location: launch-session/shell/
-// publish-event action definitions consumed by the desktop pipeline's
+// publish-message action definitions consumed by the desktop pipeline's
 // output worker and detail-pane action picker (see
 // internal/desktop/pipeline/actions). The design doc calls this
 // ".hive/actions.yml" (repo-scoped), but the desktop app's config is global

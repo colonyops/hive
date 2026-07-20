@@ -21,3 +21,13 @@ func refsResolveAction(refs Refs, id string) bool {
 	}
 	return refs.ResolveAction(id)
 }
+
+// HeadlessActionRefs is optionally implemented by action resolvers. Older
+// resolvers still validate existence; desktop's resolver additionally blocks
+// interactive launch actions from background flow nodes.
+type HeadlessActionRefs interface{ ActionHeadlessCapable(string) bool }
+
+func refsActionHeadlessCapable(refs Refs, id string) bool {
+	h, ok := refs.(HeadlessActionRefs)
+	return !ok || h.ActionHeadlessCapable(id)
+}

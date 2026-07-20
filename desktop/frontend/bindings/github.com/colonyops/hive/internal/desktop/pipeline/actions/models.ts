@@ -34,6 +34,7 @@ export interface EditableLaunchConfig {
 }
 
 export interface EditableMessageConfig {
+    "messageTemplate": string;
     "topic": string;
 }
 
@@ -55,4 +56,5 @@ export interface View {
     "label": string;
     "type": string;
     "showInDetail": boolean;
+    "requiresSessionInput": boolean;
 }
