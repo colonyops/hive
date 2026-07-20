@@ -97,7 +97,7 @@ func emitLogAppended(nextOffset int64) {
 
 func buildAuthBackend(onChange func()) auth.Backend {
 	switch desktop.MockMode() {
-	case "feed":
+	case "feed", "pipeline":
 		return auth.NewMockBackend(true, onChange)
 	case "onboarding":
 		return auth.NewMockBackend(false, onChange)
@@ -353,7 +353,8 @@ func main() {
 			application.NewService(NewFlowsService(flowsStore)),
 		},
 		Assets: application.AssetOptions{
-			Handler: application.AssetFileServerFS(assets),
+			Handler:    application.AssetFileServerFS(assets),
+			Middleware: sourceToCommitSmokeMiddleware(pipelineDB),
 		},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyRegular,

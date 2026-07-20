@@ -11,6 +11,7 @@ const here = dirname(fileURLToPath(import.meta.url))
 const feedPorts = {
   chromium: 8931,
   webkit: 8934,
+  pipelineSmoke: 8935,
 } as const
 
 export default defineConfig({
@@ -32,7 +33,20 @@ export default defineConfig({
     reuseExistingServer: false,
   },
   projects: [
-    { name: 'chromium', use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${feedPorts.chromium}` } },
-    { name: 'webkit', use: { browserName: 'webkit', baseURL: `http://127.0.0.1:${feedPorts.webkit}` } },
+    {
+      name: 'chromium',
+      testIgnore: '**/source-to-commit.spec.ts',
+      use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${feedPorts.chromium}` },
+    },
+    {
+      name: 'webkit',
+      testIgnore: '**/source-to-commit.spec.ts',
+      use: { browserName: 'webkit', baseURL: `http://127.0.0.1:${feedPorts.webkit}` },
+    },
+    {
+      name: 'pipeline-smoke',
+      testMatch: '**/source-to-commit.spec.ts',
+      use: { browserName: 'chromium', baseURL: `http://127.0.0.1:${feedPorts.pipelineSmoke}` },
+    },
   ],
 })

@@ -14,6 +14,7 @@ mkdir -p desktop/bin
 # profile/feed list deterministic instead of depending on whatever XDG
 # config happens to exist on the machine running the gate.
 FEED_FLOWS_DIR="$(pwd)/desktop/e2e/fixtures/flows"
+PIPELINE_SMOKE_FLOWS_DIR="$(pwd)/desktop/e2e/fixtures/flows/source-to-commit"
 FEED_ACTIONS_PATH="$(pwd)/desktop/e2e/fixtures/actions.yml"
 # CGO_ENABLED=0: the server-mode binary is pure Go (matches the Wails server
 # Dockerfile). With cgo on, Linux builds pull in Wails' gtk4/webkitgtk bindings,
@@ -86,12 +87,16 @@ start_server() {
 
   mkdir -p "${data_dir}" "${config_home}"
   echo "starting ${mode} mock server ${name} on port ${port}" >&2
-  if [[ "${mode}" == "feed" ]]; then
+  if [[ "${mode}" == "feed" || "${mode}" == "pipeline" ]]; then
+    local flows_dir="${FEED_FLOWS_DIR}"
+    if [[ "${mode}" == "pipeline" ]]; then
+      flows_dir="${PIPELINE_SMOKE_FLOWS_DIR}"
+    fi
     env \
       HIVE_DATA_DIR="${data_dir}" \
       XDG_CONFIG_HOME="${config_home}" \
       HIVE_DESKTOP_MOCK="${mode}" \
-      HIVE_DESKTOP_FLOWS="${FEED_FLOWS_DIR}" \
+      HIVE_DESKTOP_FLOWS="${flows_dir}" \
       HIVE_DESKTOP_ACTIONS="${FEED_ACTIONS_PATH}" \
       WAILS_SERVER_PORT="${port}" \
       desktop/bin/hive-desktop-server &
@@ -134,7 +139,7 @@ wait_ready() {
   exit 1
 }
 
-for port in 8931 8932 8933 8934; do
+for port in 8931 8932 8933 8934 8935; do
   check_port_free "${port}"
 done
 
@@ -144,6 +149,7 @@ done
 start_server onboarding 8932 onboarding-chromium
 start_server onboarding 8933 onboarding-webkit
 start_server feed 8934 feed-webkit
+start_server pipeline 8935 pipeline-smoke
 
 for i in "${!pids[@]}"; do
   wait_ready "${pids[$i]}" "${pid_names[$i]}" "${pid_ports[$i]}"

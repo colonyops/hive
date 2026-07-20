@@ -12,7 +12,9 @@ import (
 
 // EnvMockMode selects deterministic offline backends instead of live
 // GitHub: "feed" starts authenticated with fixture data (the e2e default),
-// "onboarding" starts signed out with a self-granting fake device flow.
+// "pipeline" starts authenticated with the isolated source-to-commit smoke
+// fixture, and "onboarding" starts signed out with a self-granting fake
+// device flow.
 const EnvMockMode = "HIVE_DESKTOP_MOCK"
 
 // EnvConfigPath overrides the legacy profiles config path. New desktop
