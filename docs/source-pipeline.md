@@ -339,17 +339,16 @@ broken layout file is not an error (the editor just lays nodes out fresh).
 `LoadFlows` explicitly skips `*.ui.yaml`/`*.ui.yml` files when scanning the
 flows directory for flow definitions.
 
-**Worked example** (also `flow.ExampleFlow()`, see
-[Starter-flow example](#starter-flow-example) below; a similar fixture — but
-with `msg.payload` written lowercase, since it's a pure YAML round-trip test
-that never actually executes the JS — lives in `flow/loader_test.go`'s
+**Worked example** (a similar package-local fixture — with
+`msg.payload` written lowercase, since it's a pure YAML round-trip test that
+never actually executes the JS — lives in `flow/loader_test.go`'s
 `workedExampleYAML`):
 
 ```yaml
 version: 1
 name: Frontend Triage
 nodes:
-  - { id: in-prs, type: github-source, source: team-prs }
+  - { id: in-prs, type: github-source, kind: search, query: "is:open is:pr archived:false" }
   - { id: drop-bots, type: github-filter, exclude_authors: ["*[bot]"], repos: ["colonyops/*"] }
   - id: tag
     type: function
@@ -357,7 +356,7 @@ nodes:
     on_message: |
       if (msg.Payload.state === "closed") return null;
       msg.Payload.tag = "review"; return [msg, null];
-  - { id: team-feed, type: feed, feed: team-review }
+  - { id: team-feed, type: feed }
   - { id: spawn-review, type: action, action: review-pr }
 wires:
   - { from: in-prs, to: drop-bots }
@@ -633,9 +632,7 @@ is gone.
   embedding its own fetch config directly rather than pointing at a
   `profiles.yaml` that no longer exists. This directly addresses what
   earlier revisions of this document listed as deferred work ("a default
-  flow that runs automatically") — it landed in this per-profile shape
-  rather than as `flow.ExampleFlow()`'s worked example — see
-  [Starter-flow example](#starter-flow-example) for how the two differ.
+  flow that runs automatically") — see [Starter flow](#starter-flow).
 - **The flows editor is a per-profile sub-view, not a separate app mode.**
   `App.vue` no longer has a `mode` ref toggling `'feed'`/`'flows'`; it
   renders either `SideBar`+`FeedList` or `FlowsView` based on
@@ -705,50 +702,27 @@ is gone.
   deleted `internal/desktop/feed/mock.go`'s static fixture — see
   [Testing strategy](#testing-strategy) above.
 
-## Starter-flow example
+## Starter flow
 
-There are now two different "starter flow" concepts worth telling apart:
+**`flow.FlowStore.starterFlow`** (private to
+`internal/desktop/pipeline/flow/store.go`) is what a user gets when they
+create a profile: `FlowStore.Create` — the backend of "New profile" — seeds
+it automatically, and every field is real and immediately usable (three
+`github-source` nodes with real, pollable `kind`/`query` configs, each wired
+straight to its own `feed` node: My open PRs / Assigned / Notifications).
+This is the "default flow that runs automatically" that earlier revisions
+of this document listed as deferred work; it landed as a safe per-profile
+starter instead of a global template that tries to demonstrate every node
+type.
 
-- **`flow.ExampleFlow()`** (`internal/desktop/pipeline/flow/example.go`) is
-  a concrete, commented, worked `flows/*.yaml` document — the same
-  github-source → github-filter → function(outputs: 2) → {feed, action}
-  pipeline described above — kept purely for docs (this file) and tests.
-  **Nothing serves this automatically**: its `action` id (`review-pr`) is a
-  placeholder that won't resolve against a real install's `actions.yml`, so
-  writing it to disk would hand a user a permanently-broken flow rather than
-  a helpful one — see `internal/desktop/pipeline/flow/example_test.go` for
-  the test asserting it parses and validates clean against a `flow.MapRefs`
-  that resolves that same placeholder id. (Before the cutover its
-  `source`/`feed` fields were placeholders too, resolved against
-  `profiles.yaml`; now that `github-source`/`feed` are self-contained, only
-  the `action` reference is left unresolved.)
-- **`flow.FlowStore.starterFlow`** (private to
-  `internal/desktop/pipeline/flow/store.go`) is what a user actually gets:
-  `FlowStore.Create` — the backend of "New profile" — seeds it
-  automatically, and every field is real and immediately usable (three
-  `github-source` nodes with real, pollable `kind`/`query` configs, each
-  wired straight to its own `feed` node: My open PRs / Assigned /
-  Notifications). This is the "default flow that runs automatically" that
-  earlier revisions of this document listed as deferred work — it landed in
-  this shape (seeded per new profile, not a single global default) rather than as
-  `flow.ExampleFlow()`'s worked example, since the worked example's whole
-  point is demonstrating every node type (including
-  `function`/`github-filter`/`action`), not being a safe, immediately
-  runnable starting point.
-
-A third, unrelated affordance: the flows editor's own "New flow name…"
-field (in the canvas toolbar's flow-selector dropdown) calls
-`usePipelineEditor.ts`'s `newFlow`, which starts a genuinely blank, unsaved
-draft (`{nodes: [], wires: []}`) rather than either template above —
-nothing is written until the user adds nodes by hand and clicks Deploy.
-This is a lower-level "add another flow" escape hatch alongside the
-starter-seeded "New profile" path (a deployed blank-started flow is still
-just a flow file, so it still shows up as its own profile tile) — seeding
-it from `flow.ExampleFlow()` would run into the same problem
-`ExampleFlow()` always has: a brand-new flow can't know which real `action`
-id (if any) exists in a given install, so a multi-node template risks
-starting the user off with unresolved-reference errors rather than a
-genuinely blank canvas.
+A separate affordance: the flows editor's own "New flow name…" field (in
+the canvas toolbar's flow-selector dropdown) calls `usePipelineEditor.ts`'s
+`newFlow`, which starts a genuinely blank, unsaved draft (`{nodes: [],
+wires: []}`) rather than a template. Nothing is written until the user adds
+nodes by hand and clicks Deploy. This is a lower-level "add another flow"
+escape hatch alongside the starter-seeded "New profile" path (a deployed
+blank-started flow is still just a flow file, so it still shows up as its
+own profile tile).
 
 ## Key files
 

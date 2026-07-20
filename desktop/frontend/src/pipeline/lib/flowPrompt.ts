@@ -22,7 +22,7 @@ const CATEGORY_ORDER: NodeCategory[] = ['Sources', 'Process', 'Destinations']
 const WORKED_EXAMPLE = `version: 1
 name: Frontend Triage
 nodes:
-  - { id: in-prs, type: github-source, source: team-prs }
+  - { id: in-prs, type: github-source, kind: search, query: "is:open is:pr archived:false" }
   - { id: drop-bots, type: github-filter, exclude_authors: ["*[bot]"], repos: ["colonyops/*"] }
   - id: tag
     type: function
@@ -30,7 +30,7 @@ nodes:
     on_message: |
       if (msg.Payload.state === "closed") return null;
       msg.Payload.tag = "review"; return [msg, null];
-  - { id: team-feed, type: feed, feed: team-review }
+  - { id: team-feed, type: feed }
   - { id: spawn-review, type: action, action: review-pr }
 wires:
   - { from: in-prs, to: drop-bots }
