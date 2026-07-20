@@ -176,6 +176,7 @@ function openErrorNode(): void {
 // re-reads feed_item, or the sidebar would race the write and show stale
 // counts/items — hence the `await` ahead of the (fire-and-forget) refresh.
 let unsubscribeLog: (() => void) | undefined
+let unsubscribeFlowsRuntime: (() => void) | undefined
 onMounted(() => {
   unsubscribeLog = Events.On('log:appended', () => {
     void (async () => {
@@ -183,8 +184,15 @@ onMounted(() => {
       void refresh()
     })()
   })
+  // The app owns this subscription, rather than FlowsView, because deployed
+  // graphs must reload even while the canvas is closed. The session keeps an
+  // unsaved editor draft private while replacing only its runtime snapshot.
+  unsubscribeFlowsRuntime = Events.On('flows:updated', () => { void session.reloadDeployed() })
 })
-onUnmounted(() => { unsubscribeLog?.() })
+onUnmounted(() => {
+  unsubscribeLog?.()
+  unsubscribeFlowsRuntime?.()
+})
 
 // ── Profile create / delete overlays ─────────────────────────────────────────
 

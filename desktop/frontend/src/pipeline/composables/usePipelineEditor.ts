@@ -62,6 +62,10 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
   const loadingFlow = ref(false)
   const saving = ref(false)
   const error = ref<string | null>(null)
+  // Incremented for every local draft mutation. Deploy snapshots this value so
+  // an edit made while its save is in flight is never incorrectly marked
+  // deployed when the older snapshot finishes.
+  let draftRevision = 0
 
   /**
    * Latest node_run per node id. nodeRuns is newest-first (the backend
@@ -103,15 +107,22 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     }
   }
 
+  function replaceDraft(wireFlow: WireFlow, wireLayout: WireLayout): void {
+    // Vue may proxy a draft's arrays. Wire values are JSON-shaped, so copying
+    // through JSON safely removes proxies as well as editor/runtime aliases.
+    activeFlow.value = flowFromWire(copyJSON(wireFlow))
+    layout.value = normalizeLayout(copyJSON(wireLayout))
+    dirty.value = false
+    draftRevision++
+    void refreshNodeRuns()
+  }
+
   async function selectFlow(id: string): Promise<void> {
     loadingFlow.value = true
     error.value = null
     try {
       const [wireFlow, wireLayout] = await Promise.all([client.getFlow(id), client.getLayout(id)])
-      activeFlow.value = flowFromWire(wireFlow)
-      layout.value = normalizeLayout(wireLayout)
-      dirty.value = false
-      await refreshNodeRuns()
+      replaceDraft(wireFlow, wireLayout)
     } catch (err) {
       console.warn('Unable to load flow', id, err)
       error.value = message(err, 'Could not load the flow.')
@@ -145,6 +156,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     const flow = requireFlow()
     flow.nodes = flow.nodes.map((n) => (n.id === node.id ? node : n))
     dirty.value = true
+    draftRevision++
   }
 
   function deleteNode(id: string): void {
@@ -155,6 +167,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     delete nodes[id]
     layout.value = { ...layout.value, nodes }
     dirty.value = true
+    draftRevision++
   }
 
   function addWire(wire: Wire): void {
@@ -162,12 +175,14 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     if (flow.wires.some((w) => sameWire(w, wire))) return
     flow.wires = [...flow.wires, wire]
     dirty.value = true
+    draftRevision++
   }
 
   function removeWire(wire: Wire): void {
     const flow = requireFlow()
     flow.wires = flow.wires.filter((w) => !sameWire(w, wire))
     dirty.value = true
+    draftRevision++
   }
 
   function moveNode(id: string, x: number, y: number): void {
@@ -177,20 +192,29 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
 
   function setNodePosition(id: string, pos: NodePosition): void {
     layout.value = { ...layout.value, nodes: { ...(layout.value.nodes ?? {}), [id]: pos } }
+    draftRevision++
   }
 
-  async function deploy(): Promise<void> {
+  /** Saves and returns the exact graph snapshot that reached disk, or null on failure. */
+  async function deploy(): Promise<WireFlow | null> {
     const flow = requireFlow()
+    // Save independent JSON-shaped copies. The editor remains mutable while
+    // Wails is in flight, but only this exact snapshot becomes deployed.
+    const flowSnapshot = copyJSON(flowToWire(flow))
+    const layoutSnapshot = copyJSON(layout.value)
+    const revision = draftRevision
     saving.value = true
     error.value = null
     try {
-      await client.saveFlow(flowToWire(flow))
-      await client.saveLayout(flow.id, layout.value)
-      dirty.value = false
+      await client.saveFlow(flowSnapshot)
+      await client.saveLayout(flow.id, layoutSnapshot)
+      if (draftRevision === revision) dirty.value = false
       await refreshFlows()
+      return flowSnapshot
     } catch (err) {
       console.warn('Unable to deploy flow', flow.id, err)
       error.value = message(err, 'Could not deploy the flow.')
+      return null
     } finally {
       saving.value = false
     }
@@ -221,6 +245,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     refreshFlows,
     refreshNodeRuns,
     selectFlow,
+    replaceDraft,
     addNode,
     updateNode,
     deleteNode,
@@ -235,6 +260,10 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
 
 function sameWire(a: Wire, b: Wire): boolean {
   return a.from === b.from && (a.out ?? 0) === (b.out ?? 0) && a.to === b.to
+}
+
+function copyJSON<T>(value: T): T {
+  return JSON.parse(JSON.stringify(value)) as T
 }
 
 function message(err: unknown, fallback: string): string {

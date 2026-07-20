@@ -1,105 +1,42 @@
-// The app-level flows session (hc-8ft4yhm6, "always-on per-profile flow
-// runtime"): a MODULE SINGLETON that owns the pipeline editor
-// (usePipelineEditor) and the runtime that pumps commits into feed_item
-// (usePipelineRuntime) for the active profile's flow, so that feed_item gets
-// written continuously — not only while the flows canvas (FlowsView.vue) is
-// mounted. App.vue and FlowsView.vue both call useFlowsSession() and get
-// back the SAME instance: App.vue drives it from the profile switcher and
-// the app-wide "log:appended" subscription (so the sidebar populates with
-// the canvas closed); FlowsView.vue reads the same editor/runtime state to
-// render the canvas, toolbar, and debug panel.
-//
-// Scope note: this runs only the ACTIVE profile's flow (one shared runtime
-// instance, rebuilt whenever the active flow changes — see the watch
-// below). Hayden's stated ultimate goal is to run every ENABLED profile's
-// flow concurrently (flow.Enabled already exists on the schema) — that's a
-// follow-up, not implemented here. Search for "hc-8ft4yhm6" if extending
-// this to multiple concurrent runtimes.
-//
-// Like usePipelineRuntime.ts and usePipelineEditor.ts, this composable's
-// core takes injected clients and never imports bindings/ or
-// @wailsio/runtime directly — a default adapter over the real Wails
-// bindings is built lazily (buildDefaultDeps) only when no deps are
-// supplied, so this file stays importable/unit-testable with a fake client
-// (see __tests__/useFlowsSession.spec.ts).
-//
-// Per usePipelineRuntime's own module docs, the "log:appended" Wails event
-// subscription is deliberately NOT owned here — App.vue owns it and calls
-// the pump() this composable exposes on every tick, then refreshes
-// useFeedState AFTER that pump resolves (commit-then-refresh ordering is
-// the whole point of hc-8ft4yhm6; see App.vue).
-//
-// ── Singleton + test isolation ──────────────────────────────────────────
-// The instance is created on the FIRST call to useFlowsSession() and reused
-// on every later call, regardless of caller or deps — this is what makes
-// App.vue and FlowsView.vue share one editor + one runtime. Because
-// usePipelineEditor() registers onMounted/onUnmounted (its node_run poll
-// timer) and the runtime watch below registers a `watch()`, that first call
-// MUST happen synchronously inside a component's setup() (App.vue's
-// top-level <script setup> in production) so those hooks bind to an active
-// component instance/effect scope.
-//
-// Tests that mount fresh App/host components per test must call
-// resetFlowsSessionForTests() (e.g. in beforeEach) so each mount creates
-// its own instance — otherwise a later test would silently reuse an
-// instance whose onMounted/watch already tore down with a previous test's
-// unmount.
+// App-wide flow editor/runtime session. The editor owns a mutable local draft;
+// the runtime owns a separate deployed snapshot selected exclusively by the
+// active profile in App.vue. Canvas edits therefore cannot affect a running
+// graph until their exact saved snapshot is deployed.
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { Commit, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { flowFromWire, type EditorFlow, type WireFlow } from '../lib/wireFlow'
 import { usePipelineEditor, type PipelineEditorClient } from './usePipelineEditor'
 import { usePipelineRuntime, type RuntimeSummary } from './usePipelineRuntime'
 import type { PipelineClient } from '../driver'
 
-export interface FlowsSessionDeps {
-  /** Defaults to a real adapter over FlowsService/PipelineService's Wails bindings. */
-  editorClient?: PipelineEditorClient
-  /** Defaults to a real adapter over PipelineService.ReadFrom/Commit's Wails bindings. */
-  runtimeClient?: PipelineClient
+type PipelineEditor = ReturnType<typeof usePipelineEditor>
+
+export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDraft'> {
+  flowsOpen: Ref<boolean>
+  flowFocusNodeId: Ref<string | null>
+  running: ComputedRef<boolean>
+  lastRun: ComputedRef<RuntimeSummary | null>
+  runtimeError: ComputedRef<string | null>
+  /** The active profile's deployed runtime id, or null while it is loading. */
+  runtimeFlowId: ComputedRef<string | null>
+  /** Profile selection is the only operation which can select a runtime. */
+  bindActiveFlow(id: string | undefined): void
+  openFlows(focusNodeId?: string): void
+  exitFlows(): void
+  discardDraft(): Promise<void>
+  /** Saves the editor draft and swaps its saved snapshot if it is the active profile. */
+  deploy(): Promise<void>
+  /** Reloads the active profile's deployed graph after flows:updated. */
+  reloadDeployed(): Promise<void>
+  pump(): Promise<void>
+  runRuntime(): Promise<void>
+  stopRuntime(): void
 }
 
-export interface FlowsSession extends ReturnType<typeof usePipelineEditor> {
-  /** Whether the flows canvas (FlowsView) is the active main-region view. */
-  flowsOpen: Ref<boolean>
-  /** Node to focus/scroll-to once the canvas opens — set by openFlows(id). Consumed by the 8d nav task; unused today. */
-  flowFocusNodeId: Ref<string | null>
-  /** True while the shared runtime for the active flow is running. */
-  running: ComputedRef<boolean>
-  /** The active runtime's most recent pump() outcome, or null before the first pump. */
-  lastRun: ComputedRef<RuntimeSummary | null>
-  /** The active runtime's last pump failure message, or null. Distinct from `error` (the editor's own load/save error). */
-  runtimeError: ComputedRef<string | null>
-  /** Sets the flow the session should track (mirrors FlowsView's old `watch([flowId, flows])`) — selects it once it's in the loaded `flows` list. Called by App.vue whenever the active profile changes. */
-  bindActiveFlow(id: string | undefined): void
-  /** Opens the flows canvas, optionally focusing a node once it's up. */
-  openFlows(focusNodeId?: string): void
-  /** Returns to the feed view. */
-  exitFlows(): void
-  /**
-   * Discards the active flow's local draft by reloading it fresh from disk
-   * (GetFlow/GetLayout via editor.selectFlow) — the mechanical meaning of
-   * "discard" for the unsaved-changes navigation guard (hc-sx4k3c7k):
-   * clears `dirty` back to false without writing anything. A no-op when no
-   * flow is currently bound.
-   */
-  discardDraft(): Promise<void>
-  /** Delegates to the active flow's runtime pump() — a no-op if no flow is bound or the runtime isn't running. Called by App.vue on every "log:appended" event. */
-  pump(): Promise<void>
-  /**
-   * Manually starts the active flow's runtime (idempotent) — the runtime
-   * already auto-starts when a flow becomes active, so this only matters
-   * after an explicit stopRuntime(). Not currently wired into FlowsView's
-   * UI (its deploy-menu "Refresh now" calls pump() directly instead, which
-   * works whether or not the runtime is running); kept on the session API
-   * for callers that do need to resume a stopped runtime.
-   */
-  runRuntime(): Promise<void>
-  /**
-   * Manually stops the active flow's runtime, pausing feed_item commits
-   * for this profile app-wide until runRuntime() is called again. Not
-   * currently wired into FlowsView's UI — see runRuntime()'s docs above.
-   */
-  stopRuntime(): void
+export interface FlowsSessionDeps {
+  editorClient?: PipelineEditorClient
+  runtimeClient?: PipelineClient
 }
 
 function defaultEditorClient(): PipelineEditorClient {
@@ -113,40 +50,43 @@ function defaultEditorClient(): PipelineEditorClient {
   }
 }
 
-// Adapts PipelineService.ReadFrom/Commit into driver.ts's injected
-// PipelineClient shape, wrapped in async functions (not passed directly) so
-// the return type is a plain Promise, not Wails's CancellablePromise —
-// same posture as FlowsView.vue's old `pipelineClient` adapter.
 function defaultRuntimeClient(): PipelineClient {
   return {
-    async readFrom(offset, limit) { return await ReadFrom(offset, limit) },
+    async readFrom(consumer, limit) { return await ReadFrom(consumer, limit) },
     async commit(batch) { await Commit(batch) },
   }
 }
 
+function errorMessage(err: unknown, fallback: string): string {
+  return err instanceof Error && err.message ? err.message : fallback
+}
+
+function deployedSnapshot(wire: WireFlow): EditorFlow {
+  // Wails values are JSON-shaped. Never share nodes/config with the editor's
+  // mutable draft, including when both were made from the same GetFlow result.
+  return flowFromWire(JSON.parse(JSON.stringify(wire)) as WireFlow)
+}
+
 function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
   const editor = usePipelineEditor(deps.editorClient)
-  const { flows, activeFlow } = editor
+  const { flows, activeFlow, selectFlow, replaceDraft, deploy: saveDraft, ...editorState } = editor
 
   const flowsOpen = shallowRef(false)
   const flowFocusNodeId = shallowRef<string | null>(null)
-
-  // The flow the session has been told to track (App.vue calls
-  // bindActiveFlow() whenever the active profile changes). Kept separate
-  // from activeFlow.value?.id because the desired id may arrive before
-  // `flows` has finished its first load — the watch below re-checks
-  // whenever either changes, exactly like FlowsView's old
-  // `watch([() => props.flowId, flows], ...)`.
   const desiredFlowId = shallowRef<string | undefined>(undefined)
+  const runtime = shallowRef<ReturnType<typeof usePipelineRuntime> | null>(null)
+  const deployedFlowId = shallowRef<string | null>(null)
+  const runtimeLoadError = shallowRef<string | null>(null)
 
-  function bindActiveFlow(id: string | undefined): void {
-    desiredFlowId.value = id
+  // All graph reads, swaps, and runtime drains use one tail. A swap is thus
+  // behind every earlier pump, and a pump queued during a reload sees an old
+  // whole snapshot or a new whole snapshot, never a mutable editor graph.
+  let operationTail: Promise<void> = Promise.resolve()
+  function serialize<T>(operation: () => Promise<T>): Promise<T> {
+    const result = operationTail.then(operation, operation)
+    operationTail = result.then(() => undefined, () => undefined)
+    return result
   }
-
-  watch([desiredFlowId, flows], ([id, list]) => {
-    if (!id || activeFlow.value?.id === id) return
-    if (list.some((f) => f.id === id)) void editor.selectFlow(id)
-  }, { immediate: true })
 
   function openFlows(focusNodeId?: string): void {
     flowsOpen.value = true
@@ -157,63 +97,166 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     flowsOpen.value = false
   }
 
-  async function discardDraft(): Promise<void> {
-    if (!activeFlow.value) return
-    await editor.selectFlow(activeFlow.value.id)
+  /** Replaces a runtime only after a complete valid candidate exists. */
+  async function swapRuntime(id: string, wire: WireFlow): Promise<void> {
+    // Profile changes are synchronous while reads are in flight. Do not let an
+    // older request install a runtime for the newly selected profile.
+    if (desiredFlowId.value !== id || wire.id !== id) return
+
+    let snapshot: EditorFlow
+    try {
+      snapshot = deployedSnapshot(wire)
+    } catch (err) {
+      runtimeLoadError.value = errorMessage(err, 'Could not load the deployed flow.')
+      return
+    }
+
+    // serialize() guarantees earlier pumps have drained. Delaying stop until
+    // here preserves the last known-good runtime when fetching/parsing fails.
+    runtime.value?.stop()
+    runtime.value = usePipelineRuntime(deps.runtimeClient, snapshot)
+    deployedFlowId.value = id
+    runtimeLoadError.value = null
+    await runtime.value.run()
   }
 
-  // ── Runtime (hc-8ft4yhm6) ─────────────────────────────────────────────
-  // One usePipelineRuntime instance per active flow — rebuilt whenever the
-  // active flow's id changes (a different flow is a different commit
-  // consumer and cursor), but NOT on every node/wire edit: addNode/
-  // updateNode/etc. mutate the same activeFlow object in place (see
-  // usePipelineEditor.ts), so the driver's captured Flow reference already
-  // sees those edits on its next pump() without needing a new instance.
-  // Unlike FlowsView's old per-canvas instance, this one is started
-  // (run()) the moment a flow becomes active, so it pumps immediately and
-  // keeps pumping via App.vue's "log:appended" subscription regardless of
-  // whether the canvas is ever opened.
-  const runtime = shallowRef<ReturnType<typeof usePipelineRuntime> | null>(null)
+  async function loadAndSwap(id: string, refreshDraft: boolean): Promise<void> {
+    let wire: WireFlow
+    try {
+      wire = await deps.editorClient.getFlow(id)
+    } catch (err) {
+      if (desiredFlowId.value === id) {
+        runtimeLoadError.value = errorMessage(err, 'Could not reload the deployed flow.')
+      }
+      return // Keep the last-good runtime on an external reload failure.
+    }
 
-  watch(() => activeFlow.value?.id, () => {
-    runtime.value?.stop()
-    runtime.value = activeFlow.value ? usePipelineRuntime(deps.runtimeClient, activeFlow.value) : null
-    if (runtime.value) void runtime.value.run()
+    if (desiredFlowId.value !== id || wire.id !== id) {
+      if (desiredFlowId.value === id && wire.id !== id) {
+        runtimeLoadError.value = 'Deployed flow identity did not match the active profile.'
+      }
+      return
+    }
+
+    // A profile runtime reload may update its clean draft, but never clobbers
+    // unsaved work or an editor draft the user selected for another flow.
+    const shouldRefreshDraft = refreshDraft && !editor.dirty.value
+    let wireLayout
+    if (shouldRefreshDraft) {
+      try {
+        wireLayout = await deps.editorClient.getLayout(id)
+      } catch (err) {
+        // Layout is editor-only; a valid runtime must still remain available.
+        console.warn('Unable to reload flow layout', id, err)
+      }
+    }
+
+    if (desiredFlowId.value !== id) return
+    await swapRuntime(id, wire)
+
+    if (wireLayout && desiredFlowId.value === id && !editor.dirty.value) {
+      replaceDraft(wire, wireLayout)
+    }
+  }
+
+  let activationPending: string | undefined
+  watch([desiredFlowId, flows], ([id, list]) => {
+    if (!id || !list.some((flow) => flow.id === id) || activationPending === id) return
+    if (deployedFlowId.value === id) return
+    activationPending = id
+    void serialize(async () => {
+      try {
+        if (desiredFlowId.value === id) await loadAndSwap(id, true)
+      } finally {
+        activationPending = undefined
+      }
+    })
   }, { immediate: true })
 
-  // Flattened, template-friendly reads of the current runtime's nested
-  // refs — a template (or another computed) accessing
-  // `runtime.value.running.value` through a shallowRef would not
-  // auto-unwrap (Vue only auto-unwraps a ref's own top-level binding), so
-  // these computeds do it explicitly instead. Mirrors FlowsView's old
-  // runtimeRunning/runtimeLastRun/runtimeError computeds.
-  const running = computed(() => runtime.value?.running.value ?? false)
-  const lastRun = computed(() => runtime.value?.lastRun.value ?? null)
-  const runtimeError = computed(() => runtime.value?.error.value ?? null)
+  function bindActiveFlow(id: string | undefined): void {
+    if (desiredFlowId.value === id) return
+    desiredFlowId.value = id
+
+    // Queue this before the watch queues the candidate load. The old profile
+    // therefore drains any already-requested work, then cannot keep consuming
+    // under a different selected profile if the new candidate fails to load.
+    void serialize(async () => {
+      if (desiredFlowId.value !== id || deployedFlowId.value === id) return
+      runtime.value?.stop()
+      deployedFlowId.value = null
+    })
+  }
+
+  async function discardDraft(): Promise<void> {
+    const id = activeFlow.value?.id
+    if (!id) return
+    await serialize(async () => {
+      if (activeFlow.value?.id !== id) return
+      try {
+        const [wire, wireLayout] = await Promise.all([deps.editorClient.getFlow(id), deps.editorClient.getLayout(id)])
+        if (activeFlow.value?.id === id) replaceDraft(wire, wireLayout)
+      } catch (err) {
+        editor.error.value = errorMessage(err, 'Could not load the flow.')
+      }
+    })
+  }
+
+  async function deploy(): Promise<void> {
+    await serialize(async () => {
+      const wire = await saveDraft()
+      // saveDraft returns precisely the graph it wrote. A later local edit
+      // stays dirty and private, but must not prevent this saved graph running.
+      if (!wire || wire.id !== desiredFlowId.value) return
+      await swapRuntime(wire.id, wire)
+    })
+  }
+
+  async function reloadDeployed(): Promise<void> {
+    await serialize(async () => {
+      await editor.refreshFlows()
+      const id = desiredFlowId.value
+      if (id) await loadAndSwap(id, true)
+    })
+  }
 
   async function pump(): Promise<void> {
-    await runtime.value?.pump()
+    await serialize(async () => { await runtime.value?.pump() })
   }
 
   async function runRuntime(): Promise<void> {
-    await runtime.value?.run()
+    await serialize(async () => { await runtime.value?.run() })
   }
 
   function stopRuntime(): void {
     runtime.value?.stop()
   }
 
+  const running = computed(() => runtime.value?.running.value ?? false)
+  const lastRun = computed(() => runtime.value?.lastRun.value ?? null)
+  const runtimeError = computed(() => runtimeLoadError.value ?? runtime.value?.error.value ?? null)
+  // During a profile switch an old runtime may finish an already requested
+  // drain. Never expose it as belonging to the newly active profile.
+  const runtimeFlowId = computed(() =>
+    deployedFlowId.value === desiredFlowId.value ? deployedFlowId.value : null,
+  )
+
   return {
-    ...editor,
+    ...editorState,
+    flows,
+    activeFlow,
+    selectFlow,
     flowsOpen,
     flowFocusNodeId,
     running,
     lastRun,
     runtimeError,
+    runtimeFlowId,
     bindActiveFlow,
     openFlows,
     exitFlows,
     discardDraft,
+    deploy,
+    reloadDeployed,
     pump,
     runRuntime,
     stopRuntime,
@@ -222,13 +265,6 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
 
 let sharedSession: FlowsSession | null = null
 
-/**
- * Returns the shared FlowsSession instance, creating it on the first call.
- * Every later call — from App.vue, FlowsView.vue, or anywhere else — gets
- * back the exact same instance; `deps` is only consulted the first time
- * (see the module docs above on why the first call must happen inside a
- * component's setup()).
- */
 export function useFlowsSession(deps: FlowsSessionDeps = {}): FlowsSession {
   if (!sharedSession) {
     sharedSession = createFlowsSession({
@@ -239,14 +275,7 @@ export function useFlowsSession(deps: FlowsSessionDeps = {}): FlowsSession {
   return sharedSession
 }
 
-/**
- * Test-only: clears the shared instance so the next useFlowsSession() call
- * builds a fresh one (optionally with newly-injected deps). Call this in
- * `beforeEach`/`afterEach` for any spec that mounts a component tree
- * calling useFlowsSession() (App.vue, FlowsView.vue) more than once —
- * without it, later tests would silently reuse a prior test's instance,
- * including its already-torn-down onMounted/watch hooks.
- */
 export function resetFlowsSessionForTests(): void {
+  sharedSession?.stopRuntime()
   sharedSession = null
 }

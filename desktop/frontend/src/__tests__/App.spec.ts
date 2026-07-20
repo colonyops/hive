@@ -199,6 +199,18 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('reloads the active deployed runtime when flows:updated arrives with the canvas closed', async () => {
+    const wrapper = await mountApp()
+    const getFlowCalls = mocks.GetFlow.mock.calls.length
+    const handler = mocks.On.mock.calls.find(([event]) => event === 'flows:updated')?.[1] as (() => void) | undefined
+
+    expect(handler).toBeDefined()
+    handler?.()
+    await vi.waitFor(() => expect(mocks.GetFlow.mock.calls.length).toBeGreaterThan(getFlowCalls))
+
+    wrapper.unmount()
+  })
+
   it('reveals a feed in the flow: maps the flow-qualified feed id to its node id and opens the canvas focused on it', async () => {
     const wrapper = await mountApp()
 

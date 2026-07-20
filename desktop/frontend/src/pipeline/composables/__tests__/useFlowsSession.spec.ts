@@ -241,6 +241,110 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
+  it('keeps undeployed draft edits out of the running snapshot', async () => {
+    const editorClient = fakeEditorClient()
+    const readFrom = vi.fn().mockResolvedValue([])
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit } })
+    await flushPromises()
+
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+    state.addNode('feed') // a second terminal in the private editor draft
+    expect(state.dirty.value).toBe(true)
+
+    readFrom.mockReset()
+    readFrom.mockResolvedValueOnce([msg('1')]).mockResolvedValueOnce([])
+    await state.pump()
+
+    // The deployed snapshot still has its single original feed node. If the
+    // runtime had retained the mutable draft this page would emit two outputs.
+    expect(commit).toHaveBeenLastCalledWith(expect.objectContaining({
+      consumer: 'flow-1',
+      outputs: [expect.any(Object)],
+    }))
+    wrapper.unmount()
+  })
+
+  it('only profile binding selects the runtime; choosing another editor draft cannot diverge it', async () => {
+    const editorClient = fakeEditorClient({
+      listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2')]),
+      getFlow: vi.fn().mockImplementation((id: string) => Promise.resolve(wireFlow(id))),
+    })
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
+    await flushPromises()
+
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+    expect(state.runtimeFlowId.value).toBe('flow-1')
+
+    await state.selectFlow('flow-2')
+    expect(state.activeFlow.value?.id).toBe('flow-2')
+    expect(state.runtimeFlowId.value).toBe('flow-1')
+
+    state.bindActiveFlow('flow-2')
+    // An old runtime is never reported as the new profile while its final
+    // drain/swap is pending.
+    expect(state.runtimeFlowId.value).not.toBe('flow-1')
+    await flushPromises()
+    expect(state.runtimeFlowId.value).toBe('flow-2')
+
+    wrapper.unmount()
+  })
+
+  it('drains a queued pump before swapping to another profile runtime', async () => {
+    const order: string[] = []
+    const getFlow = vi.fn().mockImplementation(async (id: string) => {
+      if (id === 'flow-2') order.push('swap')
+      return wireFlow(id)
+    })
+    const editorClient = fakeEditorClient({
+      listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2')]),
+      getFlow,
+    })
+    let resolveRead!: (batch: Msg[]) => void
+    const readFrom = vi.fn().mockResolvedValue([])
+    const commit = vi.fn().mockImplementation(async () => { order.push('commit') })
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit } })
+    await flushPromises()
+
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+    readFrom.mockImplementationOnce(() => new Promise<Msg[]>((resolve) => { resolveRead = resolve }))
+
+    const drain = state.pump()
+    await vi.waitFor(() => expect(readFrom).toHaveBeenCalledTimes(2))
+    state.bindActiveFlow('flow-2')
+    await flushPromises()
+    expect(order).not.toContain('swap')
+
+    resolveRead([msg('1')])
+    await drain
+    await flushPromises()
+
+    expect(order).toEqual(expect.arrayContaining(['commit', 'swap']))
+    expect(order.indexOf('commit')).toBeLessThan(order.indexOf('swap'))
+    expect(state.runtimeFlowId.value).toBe('flow-2')
+    wrapper.unmount()
+  })
+
+  it('keeps the last-good runtime when an external deployed reload fails', async () => {
+    const editorClient = fakeEditorClient()
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
+    await flushPromises()
+
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+    ;(editorClient.getFlow as ReturnType<typeof vi.fn>).mockRejectedValueOnce(new Error('disk unavailable'))
+
+    await state.reloadDeployed()
+
+    expect(state.runtimeFlowId.value).toBe('flow-1')
+    expect(state.running.value).toBe(true)
+    expect(state.runtimeError.value).toBe('disk unavailable')
+    wrapper.unmount()
+  })
+
   it('rebuilds the runtime when the active flow changes to a different flow', async () => {
     const editorClient = fakeEditorClient({
       listFlows: vi.fn().mockResolvedValue([summary('flow-1'), summary('flow-2')]),
