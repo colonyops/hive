@@ -22,6 +22,7 @@ import IconWorkflow from '~icons/lucide/workflow'
 import { FeedItems } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import { useFlowsSession } from '../composables/useFlowsSession'
 import { useResizablePanel } from '../../composables/useResizablePanel'
+import { useClipboard } from '../../composables/useClipboard'
 import { classify } from '../lib/runStatus'
 import { buildFlowPrompt } from '../lib/flowPrompt'
 import NodePalette from './NodePalette.vue'
@@ -128,23 +129,8 @@ const previewFeedId = computed(() => {
 // mounted as App.vue's sibling — see FlowsView's own module docs above on
 // staying out of that path), so success/failure surfaces as a small
 // self-clearing inline label instead of a toast. ──────────────────────────
-const copyStatus = ref<'idle' | 'success' | 'error'>('idle')
-let copyStatusTimer: ReturnType<typeof setTimeout> | undefined
-
-async function onCopyPrompt() {
-  try {
-    await navigator.clipboard.writeText(buildFlowPrompt())
-    copyStatus.value = 'success'
-  } catch (err) {
-    console.warn('Unable to copy flow prompt', err)
-    copyStatus.value = 'error'
-  }
-  if (copyStatusTimer !== undefined) clearTimeout(copyStatusTimer)
-  copyStatusTimer = setTimeout(() => { copyStatus.value = 'idle' }, 2500)
-}
-onUnmounted(() => {
-  if (copyStatusTimer !== undefined) clearTimeout(copyStatusTimer)
-})
+const { copy, status: copyStatus } = useClipboard({ resetDelay: 2500 })
+const onCopyPrompt = () => copy(buildFlowPrompt())
 
 // ── Deploy split-button menu — demotes Refresh now/Copy prompt/Show debug
 // panel behind the "▾" so the main Deploy action reads as one clear amber
