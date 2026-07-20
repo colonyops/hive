@@ -81,14 +81,14 @@ test('creates, edits, and deletes through the slideover and common confirmation 
   await page.getByTestId('action-shell-command').fill('/usr/bin/true')
   await page.getByTestId('action-show-in-detail').click()
   await page.getByTestId('action-save').click()
-  await expect(page.getByTestId('action-row-smoke-created')).toContainText('flow-only')
+  await expect(page.getByTestId('action-row-smoke-created')).toContainText('Flow-only')
 
   await page.getByTestId('action-row-smoke-created').getByText('Edit').click()
   await page.getByTestId('action-label').fill('Edited smoke action')
   await page.getByTestId('action-save').click()
   await expect(page.getByTestId('action-row-smoke-created')).toContainText('Edited smoke action')
 
-  await page.getByTestId('action-row-smoke-created').getByText('Delete').click()
+  await page.getByTestId('action-row-smoke-created').getByRole('button', { name: 'Delete' }).click()
   await expect(page.getByRole('alertdialog')).toContainText('Delete action')
   await page.getByRole('button', { name: 'Delete action' }).click()
   await expect(page.getByTestId('action-row-smoke-created')).toHaveCount(0)
