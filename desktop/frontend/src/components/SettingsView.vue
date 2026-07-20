@@ -230,7 +230,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               v-model="importFile"
               label="Import config file"
               accept=".yaml,.yml"
-              hint="Load a profiles.yaml exported from another machine."
+              hint="Load a flow or actions YAML file exported from another machine."
               testid="settings-import-file"
             />
             <SettingsSwitch

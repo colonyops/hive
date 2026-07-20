@@ -18,7 +18,7 @@ import (
 // flows/*.yaml, and keeping the two schema packages free of dependencies on
 // each other (actions never imports flow, flow never imports actions) keeps
 // each one loadable/testable in isolation — the same posture flow's own
-// package doc describes for its relationship to profiles/actions.
+// package doc describes for its relationship to actions.
 type Duration time.Duration
 
 // Duration returns the wrapped time.Duration.

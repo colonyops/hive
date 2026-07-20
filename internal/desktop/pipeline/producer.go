@@ -52,8 +52,7 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 	}
 }
 
-// Start runs the poll loop in a goroutine until Stop, mirroring
-// feed.Poller's Start/Stop lifecycle.
+// Start runs the poll loop in a goroutine until Stop.
 func (pr *Producer) Start() {
 	go func() {
 		ticker := time.NewTicker(pr.interval)
@@ -69,7 +68,7 @@ func (pr *Producer) Start() {
 	}()
 }
 
-// Stop halts the poll loop. Idempotent, like feed.Poller.Stop.
+// Stop halts the poll loop. Idempotent.
 func (pr *Producer) Stop() {
 	pr.stopOnce.Do(func() { close(pr.stop) })
 }

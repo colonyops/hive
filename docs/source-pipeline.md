@@ -327,8 +327,8 @@ resolved through an injected `flow.Refs` interface (`ResolveAction(id)
 bool`) — the package never imports the actions loader itself, so it can be
 wired in independently (`desktop/flowsrefs.go`'s `actionsRefs` is the real
 implementation; `flow.MapRefs` is the map-backed test double used throughout
-`flow`'s own test suite). `source`/`feed` used to resolve against
-`profiles/*.yml` too, before the cutover — both are self-contained now (a
+`flow`'s own test suite). `source`/`feed` used to resolve against legacy
+profiles files too, before the cutover — both are self-contained now (a
 `github-source` node embeds its own fetch config, a `feed` node's identity
 is just its own node id), so `Refs` shrank down to the one method.
 
@@ -369,10 +369,10 @@ wires:
 
 Implemented by `internal/desktop/pipeline/actions`, at
 `desktop.ActionsPath()` — **`$XDG_CONFIG_HOME/hive/desktop/actions.yml`**,
-next to `profiles.yaml`, *not* a repo-scoped `.hive/actions.yml`. The design
-doc calls this file `.hive/actions.yml`, but the desktop app's config is
-global rather than tied to any one repo, so `ActionsPath()`'s doc comment is
-explicit that it deliberately lives beside the desktop's other config
+in the desktop config root, *not* a repo-scoped `.hive/actions.yml`. The
+design doc calls this file `.hive/actions.yml`, but the desktop app's config
+is global rather than tied to any one repo, so `ActionsPath()`'s doc comment
+is explicit that it deliberately lives beside the desktop's flows config
 instead. (`EnvActionsPath` — `HIVE_DESKTOP_ACTIONS` — overrides the location
 outright.)
 
@@ -403,10 +403,11 @@ lists the same configured actions through `PipelineService.ActionViews`;
 clicking one explicitly confirms and executes its deduplicated
 `(action_id, item_id)` command.
 
-`actions.ActionStore` (`actions/store.go`) is the same last-good-on-failure
-posture as `flow.FlowStore`/`feed.Store`: a broken `actions.yml` on reload
-keeps serving whatever last parsed cleanly, rather than blanking every
-action out from under a running flow.
+`actions.ActionStore` (`actions/store.go`) has the same last-good-on-failure
+posture as `flow.FlowStore`: a broken `actions.yml` on reload keeps serving
+whatever last parsed cleanly, rather than blanking every action out from under
+a running flow. `actions.ActionsWatcher` (`actions/watcher.go`) watches the
+`actions.yml` parent directory so hand edits apply live.
 
 ## The node-type contract (frontend, D2)
 
@@ -647,7 +648,7 @@ is gone.
 - **The sidebar reads `feed_item`.** `useFeedState.ts`'s `loadFeeds`/
   `loadItems` call `PipelineService.FeedItemCounts`/`FeedItems` — the same
   read path the flows editor's preview panel always used — instead of
-  `internal/desktop/feed.Store`, which no longer exists.
+  the deleted legacy feed store.
 - **An always-on runtime manager keeps every enabled flow's `feed_item`
   current with the canvas closed.**
   `desktop/frontend/src/pipeline/composables/useFlowsSession.ts` is a

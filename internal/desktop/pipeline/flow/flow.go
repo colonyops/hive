@@ -8,9 +8,9 @@
 //
 // This package is deliberately self-contained: it does not know about Wails,
 // the desktop pipeline database, or internal/desktop/feed. Cross-file lookups
-// (does a referenced source/feed/action exist, and what kind is it) are
-// supplied by the caller through the Refs interface, so profiles/actions
-// loaders can be wired in later without this package depending on them.
+// (does a referenced action exist, and what kind is it) are supplied by the
+// caller through the Refs interface, so actions can stay owned by their own
+// package without this package depending on them.
 package flow
 
 // Flow is one parsed and validated flows/*.yaml document. Besides being the

@@ -99,8 +99,7 @@ func TestGithubSource_Produce_EmitsWireItems(t *testing.T) {
 // TestGithubSource_Produce_ReusesCoalescedFetch is the point of the seam:
 // githubSource must not implement its own fetching. It should route through
 // LiveProvider.SourceItems (cache + singleflight + conditional requests),
-// so repeated Produce calls within the cache TTL cost no extra API request
-// — the same guarantee feed.Poller / feed.LiveProvider.Refresh rely on.
+// so repeated Produce calls within the cache TTL cost no extra API request.
 func TestGithubSource_Produce_ReusesCoalescedFetch(t *testing.T) {
 	t.Parallel()
 

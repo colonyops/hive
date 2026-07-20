@@ -53,7 +53,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             @keydown.enter="submit"
           >
           <p class="text-xs leading-relaxed text-text-4">
-            Saved to <span class="font-mono text-text-3">profiles.yaml</span> with the default feeds — your open PRs,
+            Saved as a flow in <span class="font-mono text-text-3">flows/</span> with the default feeds — your open PRs,
             the notifications inbox, and cross-repo assignments.
           </p>
           <p v-if="error" class="text-xs text-kind-issue" data-testid="new-profile-error">{{ error }}</p>

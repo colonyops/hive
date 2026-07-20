@@ -53,11 +53,13 @@ func registerEvents() struct{} {
 	// pipeline event log's new tail offset after a producer tick appends at
 	// least one row; flows:updated fires after a flows/*.yaml directory reload
 	// (an external edit, or the app's own SaveFlow/SaveLayout — see
-	// buildFlowsStore). All are wake-up signals: the frontend re-reads the
-	// relevant service on receipt.
+	// buildFlowsStore); actions:updated fires after an actions.yml reload.
+	// All are wake-up signals: the frontend re-reads the relevant service on
+	// receipt.
 	application.RegisterEvent[string]("auth:updated")
 	application.RegisterEvent[int64]("log:appended")
 	application.RegisterEvent[string]("flows:updated")
+	application.RegisterEvent[string]("actions:updated")
 	return struct{}{}
 }
 
@@ -113,15 +115,11 @@ func emitAuthUpdated() {
 }
 
 // buildFlowsStore constructs the flow.FlowStore over desktop.FlowsDir(),
-// backed by a Refs adapter over provider and actionStore — this works
-// uniformly across mock and live feed providers, so unlike buildFeedProvider
-// there is no mock-mode branch here: an empty/tmp flows dir is deterministic
-// on its own, and the store never touches GitHub or auth state. It also
-// starts a FlowsWatcher that reloads the store and wakes the frontend on any
-// flows/*.yaml change, including the app's own SaveFlow/SaveLayout writes
-// (the same self-triggering tradeoff feed.ConfigWatcher makes). A watcher
-// that fails to start degrades to no hot-reload, matching feed's posture:
-// the app still works, edits just need a restart to pick up.
+// backed by a Refs adapter over actionStore. It also starts a FlowsWatcher
+// that reloads the store and wakes the frontend on any flows/*.yaml change,
+// including the app's own SaveFlow/SaveLayout writes. A watcher that fails to
+// start degrades to no hot-reload: the app still works, edits just need a
+// restart to pick up.
 func buildFlowsStore(actionStore *actions.ActionStore, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
 	dir := desktop.FlowsDir()
 	store := flow.NewFlowStore(dir, newActionsRefs(actionStore))
@@ -160,19 +158,18 @@ func emitActionsUpdated() {
 // desktop.ActionsPath(), loading it eagerly (rather than waiting for the
 // first lazy List/Get) so a broken actions.yml is logged at startup instead
 // of only surfacing silently as "no actions found" the first time something
-// asks. It also starts a file watcher (reusing feed.ConfigWatcher, which
-// already does exactly this for a single config file) so hand edits to
-// actions.yml apply live, matching flows'/profiles' hot-reload posture. A
-// watcher that fails to start degrades to no hot-reload: the app still
-// works, edits just need a restart to pick up.
-func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *feed.ConfigWatcher) {
+// asks. It also starts an ActionsWatcher so hand edits to actions.yml apply
+// live, matching flows hot-reload posture. A watcher that fails to start
+// degrades to no hot-reload: the app still works, edits just need a restart
+// to pick up.
+func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *actions.ActionsWatcher) {
 	path := desktop.ActionsPath()
 	store := actions.NewActionStore(path)
 	if err := store.Reload(); err != nil {
 		logger.Warn().Err(err).Msg("actions.yml load failed; using last-good (likely empty) action set")
 	}
 
-	watcher, err := feed.NewConfigWatcher(path, func() {
+	watcher, err := actions.NewActionsWatcher(path, func() {
 		if err := store.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("actions.yml reload failed")
 		}

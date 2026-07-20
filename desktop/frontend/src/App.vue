@@ -231,7 +231,7 @@ const needsWorkspace = computed(() => authenticated.value && profilesLoaded.valu
 
 const { open: paletteOpen, toggle: togglePalette } = useCommandPalette()
 
-// Seed commands — reactive getter so they update when profiles/feeds load
+// Seed commands — reactive getter so they update when profiles/flows load
 useCommands(computed(() => {
   const cmds: Command[] = []
 

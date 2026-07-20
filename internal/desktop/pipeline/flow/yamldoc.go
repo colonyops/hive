@@ -10,10 +10,9 @@ import (
 )
 
 // This file holds small, generic yaml.Node tree helpers used by SaveFlow to
-// edit an existing flow document in place — the same technique
-// internal/desktop/feed/config.go uses for the profiles config, duplicated
-// here (rather than imported) because package flow is deliberately
-// self-contained (see the package doc in flow.go).
+// edit an existing flow document in place. They stay in package flow because
+// flow document editing is deliberately self-contained (see the package doc
+// in flow.go).
 
 // parseDocNode parses data into its node tree and returns the document node
 // plus its root mapping.

@@ -17,11 +17,11 @@ const flowsWatchDebounce = 250 * time.Millisecond
 
 // FlowsWatcher invokes onChange when a *.yaml/*.yml file in the flows
 // directory changes on disk, so edits made outside the app — or the app's
-// own writes via SaveFlow/SaveLayout — apply live. It mirrors
-// feed.ConfigWatcher: it watches the directory rather than individual
-// files, since editors and atomic writers replace a file by rename (which
-// silently drops a watch registered on the file itself), and so the watch
-// works before the directory has any flow files in it yet.
+// own writes via SaveFlow/SaveLayout — apply live. It watches the directory
+// rather than individual files, since editors and atomic writers replace a
+// file by rename (which silently drops a watch registered on the file
+// itself), and so the watch works before the directory has any flow files in
+// it yet.
 type FlowsWatcher struct {
 	dir      string
 	onChange func()
@@ -101,8 +101,7 @@ func (w *FlowsWatcher) run() {
 // the watched directory) is a *.yaml/*.yml file. This matches both flow
 // definitions and their sibling .ui.yaml layouts: a layout-only edit
 // triggers the same (cheap, idempotent) Reload as a flow edit, rather than
-// needing to distinguish the two — the same tradeoff feed.ConfigWatcher
-// makes for its own writes re-triggering itself.
+// needing to distinguish the two.
 func isFlowFile(name string) bool {
 	ext := filepath.Ext(name)
 	return ext == ".yaml" || ext == ".yml"

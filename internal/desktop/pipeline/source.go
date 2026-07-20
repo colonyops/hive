@@ -33,9 +33,8 @@ type Source interface {
 
 // SourceLister resolves the current set of sources to poll, keyed by a
 // stable ID (used as the log topic and for logging). Producer calls it once
-// per tick — rather than fixing the set at construction — so sources added
-// to or removed from config take effect without a restart, mirroring how
-// feed.Poller re-reads profiles/sources on every tick.
+// per tick — rather than fixing the set at construction — so source nodes
+// added to or removed from flows take effect without a restart.
 type SourceLister func(ctx context.Context) (map[string]Source, error)
 
 // Appender is the subset of *pipelinedb.DB a Producer needs. It atomically

@@ -13,7 +13,7 @@ describe('DeleteProfileModal', () => {
     const wrapper = mountModal({ profileName: 'Backend Triage' })
 
     expect(document.body.textContent).toContain('Backend Triage')
-    expect(document.body.textContent).toContain('profiles.yaml')
+    expect(document.body.textContent).toContain('flow file')
 
     wrapper.unmount()
   })

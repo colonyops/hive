@@ -9,9 +9,9 @@ import (
 // ActionStore holds the actions loaded from an actions.yml file, reloading
 // on demand (Reload). On a broken reload (parse/validation failure) it
 // retains the last-good action set — the same last-good-on-failure posture
-// feed.Store and flow.FlowStore take — so a half-edited actions.yml degrades
-// (edits don't take effect) rather than blanking every action out from
-// under a running flow or the detail pane.
+// flow.FlowStore takes — so a half-edited actions.yml degrades (edits don't
+// take effect) rather than blanking every action out from under a running
+// flow or the detail pane.
 //
 // Thread-safe: every method takes the same mutex.
 type ActionStore struct {

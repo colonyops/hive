@@ -246,7 +246,7 @@ func (s *FlowStore) ensureLoadedLocked() {
 		return
 	}
 	// First-use lazy load: errors surface through Statuses (a broken flow
-	// file) or an empty List/Get (nothing loaded), matching feed.Store's
+	// file) or an empty List/Get (nothing loaded), matching the store's
 	// last-good-on-failure posture rather than panicking callers that
 	// haven't called Reload explicitly.
 	_ = s.reloadLocked()
