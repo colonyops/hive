@@ -42,8 +42,8 @@ type FlowStore struct {
 }
 
 // NewFlowStore returns a store over dir (typically desktop.FlowsDir()),
-// resolving cross-file references (sources, feeds, actions) through refs.
-// Nothing is read from disk until the first List/Get/Save/Statuses call.
+// resolving action-node references through refs. Nothing is read from disk
+// until the first List/Get/Save/Statuses call.
 func NewFlowStore(dir string, refs Refs) *FlowStore {
 	return &FlowStore{dir: dir, refs: refs}
 }

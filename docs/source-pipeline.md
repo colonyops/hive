@@ -304,8 +304,8 @@ Validation (`flow/validate.go`'s `validateFlow`) runs, in order:
 - **Hard errors** (any one fails the whole flow): missing/invalid/duplicate
   node ids (`^[a-z0-9][a-z0-9-]*$`, max 64 chars — `flow/slug.go`); a node's
   own `Validate(refs)` failing (a required field missing, an invalid glob,
-  an unresolved `source`/`feed`/`action` reference, an out-of-range
-  `outputs`/`timeout`); a wire naming an unknown node; a wire sourced from a
+  an unresolved action reference, an out-of-range `outputs`/`timeout`); a wire
+  naming an unknown node; a wire sourced from a
   terminal (0-output) node or targeting a source (0-input) node; a wire's
   `out` port out of range for its source node's declared output count; a
   duplicate wire; and a cycle (DFS-based, `flow/validate.go`'s `findCycle`,
@@ -318,11 +318,11 @@ The only remaining cross-file reference is the `action` node's `action` id,
 resolved through an injected `flow.Refs` interface (`ResolveAction(id)
 bool`) — the package never imports the actions loader itself, so it can be
 wired in independently (`desktop/flowsrefs.go`'s `actionsRefs` is the real
-implementation; `flow.MapRefs` is the map-backed test double used throughout
-`flow`'s own test suite). `source`/`feed` used to resolve against legacy
-profiles files too, before the cutover — both are self-contained now (a
-`github-source` node embeds its own fetch config, a `feed` node's identity
-is just its own node id), so `Refs` shrank down to the one method.
+runtime implementation; tests use local fakes). `source`/`feed` used to
+resolve against legacy profiles files too, before the cutover — both are
+self-contained now (a `github-source` node embeds its own fetch config, a
+`feed` node's identity is just its own node id), so `Refs` shrank down to the
+one method.
 
 Each flow file has a machine-written sibling layout file, `<id>.ui.yaml`
 (`flow/layout.go`): node canvas positions only, keyed by node id. It is

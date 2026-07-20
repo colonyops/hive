@@ -19,8 +19,16 @@ import (
 // for the mock "feed" e2e server.
 const fixtureFlowPath = "e2e/fixtures/flows/frontend-triage.yaml"
 
+type testFlowRefs struct {
+	actions map[string]bool
+}
+
+func (r testFlowRefs) ResolveAction(id string) bool {
+	return r.actions[id]
+}
+
 func TestFixtureFlow_LoadsAndMatchesSeedConstants(t *testing.T) {
-	f, warnings, err := flow.LoadFlow(fixtureFlowPath, flow.MapRefs{})
+	f, warnings, err := flow.LoadFlow(fixtureFlowPath, testFlowRefs{})
 	require.NoError(t, err)
 	assert.Empty(t, warnings)
 

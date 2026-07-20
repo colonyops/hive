@@ -195,7 +195,7 @@ func TestValidate_UnresolvableActionRef(t *testing.T) {
 	_, _, err := parseFlow("f", []byte(`version: 1
 nodes:
   - { id: act, type: action, action: no-such-action }
-`), MapRefs{})
+`), testRefs{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unresolved reference")
 }

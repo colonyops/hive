@@ -9,11 +9,19 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testRefs struct {
+	actions map[string]bool
+}
+
+func (r testRefs) ResolveAction(id string) bool {
+	return r.actions[id]
+}
+
 // workedExampleRefs resolves every reference used by workedExampleYAML — now
 // only the action node's actions.yml id.
-func workedExampleRefs() MapRefs {
-	return MapRefs{
-		Actions: map[string]bool{"review-pr": true},
+func workedExampleRefs() testRefs {
+	return testRefs{
+		actions: map[string]bool{"review-pr": true},
 	}
 }
 
@@ -99,8 +107,8 @@ wires:
 
 // minimalRefs — the minimal flow references no actions, so an empty resolver
 // suffices.
-func minimalRefs() MapRefs {
-	return MapRefs{}
+func minimalRefs() testRefs {
+	return testRefs{}
 }
 
 func TestLoadFlow_MissingFile(t *testing.T) {

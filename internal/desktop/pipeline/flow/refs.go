@@ -11,18 +11,6 @@ type Refs interface {
 	ResolveAction(id string) bool
 }
 
-// MapRefs is a simple map-backed Refs implementation for tests (and for any
-// caller happy to precompute the lookup into a map rather than implement the
-// interface directly).
-type MapRefs struct {
-	// Actions is the set of known action ids.
-	Actions map[string]bool
-}
-
-func (m MapRefs) ResolveAction(id string) bool {
-	return m.Actions[id]
-}
-
 // refsResolveAction guards the action node's Validate against a nil Refs (an
 // untyped nil interface panics if called directly) so a flow validated
 // without a resolver — or with one that doesn't know about a given id — fails

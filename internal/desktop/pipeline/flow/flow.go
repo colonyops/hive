@@ -7,10 +7,9 @@
 // "triage.yaml" -> id "triage") so the file and its id can never disagree.
 //
 // This package is deliberately self-contained: it does not know about Wails,
-// the desktop pipeline database, or internal/desktop/feed. Cross-file lookups
-// (does a referenced action exist, and what kind is it) are supplied by the
-// caller through the Refs interface, so actions can stay owned by their own
-// package without this package depending on them.
+// the desktop pipeline database, or internal/desktop/feed. Cross-file action
+// lookups are supplied by the caller through the Refs interface, so actions can
+// stay owned by their own package without this package depending on them.
 package flow
 
 // Flow is one parsed and validated flows/*.yaml document. Besides being the

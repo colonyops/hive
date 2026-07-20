@@ -145,7 +145,7 @@ func TestFlowStore_Create_SeedsStarterFlowWithUniqueID(t *testing.T) {
 	assert.NotEmpty(t, f.Wires)
 
 	// It loads back clean (starter flow references no actions).
-	loaded, warnings, err := LoadFlow(filepath.Join(dir, "frontend-triage.yaml"), MapRefs{})
+	loaded, warnings, err := LoadFlow(filepath.Join(dir, "frontend-triage.yaml"), minimalRefs())
 	require.NoError(t, err)
 	assert.Empty(t, warnings)
 	assert.Equal(t, "Frontend Triage", loaded.Name)
