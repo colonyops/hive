@@ -13,7 +13,8 @@ function item(id: string, title: string, unread: boolean): FeedItem {
     author: 'hayden',
     age: '5m',
     unread,
-    labels: null,
+    feedId: 'triage/desktop',
+    labels: [],
     branch: 'feat/desktop-ui-shell',
     body: 'Body',
     prompt: 'Prompt',
@@ -30,7 +31,6 @@ function mountList(unreadOnly = false, loadError: string | null = null) {
       items,
       selectedId: null,
       unreadOnly,
-      countLabel: '2 · 1 unread',
       loadError,
     },
   })
@@ -72,7 +72,6 @@ describe('FeedList', () => {
         items: [item('read-1', 'Read item', false)],
         selectedId: null,
         unreadOnly: true,
-        countLabel: '1 · 0 unread',
         loadError: null,
       },
     })
@@ -88,7 +87,6 @@ describe('FeedList', () => {
         items: [],
         selectedId: null,
         unreadOnly: false,
-        countLabel: '0 · 0 unread',
         loadError: null,
       },
     })
@@ -96,13 +94,31 @@ describe('FeedList', () => {
     expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No items yet')
   })
 
-  it('emits toggle-unread and refresh from header controls', async () => {
+  it('emits explicit unread filter values and refresh from header controls', async () => {
     const wrapper = mountList()
 
-    await wrapper.find('button.unread-chip').trigger('click')
-    await wrapper.find('button.refresh-chip').trigger('click')
+    await wrapper.find('[data-testid="filter-unread"]').trigger('click')
+    await wrapper.find('[data-testid="filter-all"]').trigger('click')
+    await wrapper.find('[data-testid="refresh-chip"]').trigger('click')
 
-    expect(wrapper.emitted('toggle-unread')).toHaveLength(1)
+    expect(wrapper.emitted('set-unread')).toEqual([[true], [false]])
     expect(wrapper.emitted('refresh')).toHaveLength(1)
+  })
+
+  it('filters the visible list by the search query', async () => {
+    const wrapper = mountList()
+
+    await wrapper.find('[data-testid="feed-search"]').setValue('Unread')
+
+    expect(wrapper.text()).toContain('Unread item')
+    expect(wrapper.text()).not.toContain('Read item')
+  })
+
+  it('shows a no-matches empty state when the search excludes everything', async () => {
+    const wrapper = mountList()
+
+    await wrapper.find('[data-testid="feed-search"]').setValue('zzz-nothing-here')
+
+    expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No matches')
   })
 })

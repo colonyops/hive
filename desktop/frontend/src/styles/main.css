@@ -44,6 +44,29 @@
   --color-severity-error-border: var(--hv-severity-error-border);
   --color-severity-auto-tint: var(--hv-severity-auto-tint);
   --color-severity-auto-border: var(--hv-severity-auto-border);
+  --color-severity-running: var(--hv-severity-running);
+  --color-severity-running-tint: var(--hv-severity-running-tint);
+
+  /* Flows canvas (8a/8c) — per-node-type accent hues + the graph surface's
+     own chrome. The node-* hues are theme-invariant (defined once below,
+     same as kind-pr/kind-issue/feeds above): a node's role color is part of
+     its identity on the canvas, not the app's chrome theme. The canvas-*
+     surface tokens ARE redefined per theme (below) since they need to sit at
+     the right contrast against each theme's differing background lightness. */
+  --color-node-blue: var(--hv-node-blue);
+  --color-node-blue-tint: var(--hv-node-blue-tint);
+  --color-node-purple: var(--hv-node-purple);
+  --color-node-purple-tint: var(--hv-node-purple-tint);
+  --color-node-teal: var(--hv-node-teal);
+  --color-node-teal-tint: var(--hv-node-teal-tint);
+  --color-node-green: var(--hv-node-green);
+  --color-node-green-tint: var(--hv-node-green-tint);
+  --color-node-orange: var(--hv-node-orange);
+  --color-node-orange-tint: var(--hv-node-orange-tint);
+  --color-node-port: var(--hv-node-port);
+  --color-canvas: var(--hv-canvas);
+  --color-canvas-dot: var(--hv-canvas-dot);
+  --color-canvas-toolbar: var(--hv-canvas-toolbar);
 }
 
 @theme {
@@ -100,6 +123,27 @@
   --hv-severity-error-border: #4a2b32;
   --hv-severity-auto-tint: rgba(245, 158, 11, 0.15);
   --hv-severity-auto-border: #4a3f22;
+  --hv-severity-running: #60a5fa;
+  --hv-severity-running-tint: rgba(96, 165, 250, 0.15);
+
+  /* Flows canvas (8a/8c) node-role hues — theme-invariant, see the
+     @theme inline comment above. */
+  --hv-node-blue: #60a5fa;
+  --hv-node-blue-tint: rgba(96, 165, 250, 0.13);
+  --hv-node-purple: #a78bfa;
+  --hv-node-purple-tint: rgba(167, 139, 250, 0.13);
+  --hv-node-teal: #2dd4bf;
+  --hv-node-teal-tint: rgba(45, 212, 191, 0.13);
+  --hv-node-green: #34d399;
+  --hv-node-green-tint: rgba(52, 211, 153, 0.13);
+  --hv-node-orange: #f2803c;
+  --hv-node-orange-tint: rgba(242, 128, 60, 0.13);
+
+  /* Flows canvas surface chrome — dark values match the mockup exactly. */
+  --hv-canvas: #14161a;
+  --hv-canvas-dot: #242730;
+  --hv-canvas-toolbar: #1a1c22;
+  --hv-node-port: #565f6e;
 }
 
 [data-theme="light"] {
@@ -131,6 +175,12 @@
   --hv-code-key: #0f6bb8;
   --hv-code-string: #4d7c0f;
   --hv-code-comment: #a8a59d;
+
+  /* Flows canvas surface chrome — a light recess relative to --hv-app. */
+  --hv-canvas: #f5f4f0;
+  --hv-canvas-dot: #e4e2dc;
+  --hv-canvas-toolbar: #f8f7f4;
+  --hv-node-port: #b7b4aa;
 }
 
 [data-theme="midnight"] {
@@ -162,6 +212,12 @@
   --hv-code-key: #7dcfff;
   --hv-code-string: #9ece6a;
   --hv-code-comment: #4a5480;
+
+  /* Flows canvas surface chrome — a dark recess relative to --hv-app. */
+  --hv-canvas: #08090f;
+  --hv-canvas-dot: #1c2238;
+  --hv-canvas-toolbar: #0d1020;
+  --hv-node-port: #46507a;
 }
 
 [data-theme="gruvbox"] {
@@ -193,6 +249,12 @@
   --hv-code-key: #83a598;
   --hv-code-string: #b8bb26;
   --hv-code-comment: #928374;
+
+  /* Flows canvas surface chrome — a dark recess relative to --hv-app. */
+  --hv-canvas: #181a1b;
+  --hv-canvas-dot: #32302f;
+  --hv-canvas-toolbar: #212425;
+  --hv-node-port: #7c6f64;
 }
 
 @keyframes hivePulse {
@@ -208,6 +270,13 @@
 
 .hive-scroll::-webkit-scrollbar {
   width: 9px;
+}
+
+/* These are vertical scroll regions; a resize handle straddling the panel edge
+   (positioned a few px outside) otherwise triggers a stray horizontal
+   scrollbar. Suppress it — horizontal content here never needs to scroll. */
+.hive-scroll::-webkit-scrollbar:horizontal {
+  display: none;
 }
 
 .hive-scroll::-webkit-scrollbar-thumb {

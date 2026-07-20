@@ -8,9 +8,10 @@ import type { Events } from "@wailsio/runtime";
 declare module "@wailsio/runtime" {
     namespace Events {
         interface CustomEvents {
+            "actions:updated": string;
             "auth:updated": string;
-            "config:updated": string;
-            "feed:updated": string;
+            "flows:updated": string;
+            "log:appended": number;
         }
     }
 }

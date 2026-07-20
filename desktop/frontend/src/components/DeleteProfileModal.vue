@@ -37,9 +37,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         </header>
         <div class="flex flex-col gap-3 px-5 py-4">
           <p class="text-[13px] leading-relaxed text-text-2">
-            Delete <span class="font-semibold text-text">{{ props.profileName }}</span>? Its feeds are removed from
-            <span class="font-mono text-text-3">profiles.yaml</span> — sources stay, since other profiles may still
-            reference them.
+            Delete <span class="font-semibold text-text">{{ props.profileName }}</span>? Its flow file and committed feed
+            rows are removed; other profiles keep their own source nodes.
           </p>
         </div>
         <footer class="flex gap-2.5 border-t border-row bg-raised px-5 py-3.5">

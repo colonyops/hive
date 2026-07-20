@@ -23,7 +23,7 @@ test('renders the mock feed with pr2841 selected by default', async ({ page }) =
   expect(await feedItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-id')))).toEqual(
     expectedItems.map(([id]) => id),
   )
-  expect(await feedItems.locator('[data-testid="kind-badge"]').evaluateAll((badges) => badges.map((badge) => badge.getAttribute('data-kind')))).toEqual(
+  expect(await feedItems.locator('[data-testid="type-pill"]').evaluateAll((badges) => badges.map((badge) => badge.getAttribute('data-kind')))).toEqual(
     expectedItems.map(([, kind]) => kind),
   )
   await expect(page.getByTestId('detail-pane')).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
@@ -36,25 +36,25 @@ test('updates the detail pane and actions for PRs and issues', async ({ page }) 
   await expect(page.getByTestId('detail-pane')).toContainText('OAuth device flow for in-app GitHub auth')
   await expect(page.getByTestId('detail-pane')).toContainText('hive/desktop #2838')
   await expect(page.getByTestId('detail-pane')).toContainText('feat/2838-oauth-device-flow')
-  await expect(page.getByTestId('action-card')).toHaveCount(4)
-  await expect(page.getByTestId('primary-action')).toHaveText('Run')
+  await expect(page.getByTestId('action-card')).toHaveCount(1)
+  await expect(page.getByTestId('run-action')).toHaveText('Run')
   await expect(page.getByTestId('action-card').first()).toContainText('Review PR')
 
   await page.locator('[data-testid="feed-item"][data-id="iss1190"]').click()
   await expect(page.getByTestId('detail-pane')).toContainText('Feed source: mirror GitHub notifications inbox')
   await expect(page.getByTestId('detail-pane')).toContainText('hive/desktop #1190')
   await expect(page.getByTestId('detail-pane')).toContainText('feat/1190-notifications-feed')
-  await expect(page.getByTestId('action-card')).toHaveCount(4)
-  await expect(page.getByTestId('primary-action')).toHaveText('Run')
+  await expect(page.getByTestId('action-card')).toHaveCount(1)
+  await expect(page.getByTestId('run-action')).toHaveText('Run')
   await expect(page.getByTestId('action-card').first()).toContainText('Start implementation')
 })
 
-test('filters the feed to its three unread items', async ({ page }) => {
-  await page.getByTestId('unread-chip').click()
+test('filters the feed to its remaining unread items', async ({ page }) => {
+  await page.getByTestId('filter-unread').click()
   const unreadItems = page.getByTestId('feed-item')
-  await expect(unreadItems).toHaveCount(3)
+  await expect(unreadItems).toHaveCount(2)
   expect(await unreadItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-id')))).toEqual([
-    'pr2841', 'iss1190', 'iss1204',
+    'pr2841', 'iss1204',
   ])
 })
 
@@ -64,11 +64,11 @@ test('shows the single profile in the rail and sidebar', async ({ page }) => {
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')
 })
 
-test('shows an inert toast for actions without changing the selection', async ({ page }) => {
+test('confirms a configured action without changing the selection', async ({ page }) => {
   const detail = page.getByTestId('detail-pane')
   await expect(detail).toContainText('hive/core #2841')
   await page.getByTestId('action-card').first().click()
-  await expect(page.getByTestId('toast')).toHaveText('Not wired up yet')
+  await expect(page.getByTestId('toast')).toHaveText('Review PR started')
   await expect(detail).toContainText('hive/core #2841')
 })
 
@@ -78,12 +78,11 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(palette).toBeVisible()
   const input = page.getByTestId('command-palette-input')
   await input.fill('notifications')
-  // The feed matches twice now: its Select entry and its feed-editor Edit entry.
-  const commands = page.getByTestId('command-palette-command')
-  await expect(commands).toHaveCount(2)
-  await commands.filter({ hasText: 'Select feed: Notifications inbox' }).click()
+  const notificationsFeed = page.getByTestId('command-palette-command').filter({ hasText: 'Select feed: Notifications inbox' })
+  await expect(notificationsFeed).toBeVisible()
+  await notificationsFeed.click()
   await expect(palette).toBeHidden()
-  await expect(page.getByTestId('feed-title')).toHaveText('Notifications inbox')
+  await expect(page.getByTestId('sidebar-feed').filter({ hasText: 'Notifications inbox' })).toHaveClass(/sidebar-entry-selected/)
 
   await page.keyboard.press('Meta+k')
   await expect(palette).toBeVisible()

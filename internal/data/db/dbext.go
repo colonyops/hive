@@ -126,5 +126,5 @@ func (db *DB) WithTx(ctx context.Context, fn func(*Queries) error) error {
 
 // initSchema runs all pending up migrations.
 func (db *DB) initSchema(ctx context.Context) error {
-	return migrateUp(ctx, db.conn)
+	return runMigrations(ctx, db.conn)
 }

@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { Events } from '@wailsio/runtime'
+import { useRoute, useRouter } from 'vue-router'
 import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -7,25 +9,29 @@ import IconMinus from '~icons/lucide/minus'
 import IconPalette from '~icons/lucide/palette'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconRss from '~icons/lucide/rss'
+import IconShare2 from '~icons/lucide/share-2'
+import IconWorkflow from '~icons/lucide/workflow'
 import TitleBar from './components/TitleBar.vue'
 import ProfileRail from './components/ProfileRail.vue'
 import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
 import CommandPalette from './components/CommandPalette.vue'
-import ConfigErrorOverlay from './components/ConfigErrorOverlay.vue'
-import ConfigSheet from './components/ConfigSheet.vue'
-import FeedEditorSheet from './components/FeedEditorSheet.vue'
+import ProfileSettingsView from './components/ProfileSettingsView.vue'
+import SettingsView from './components/SettingsView.vue'
+import FlowsView from './pipeline/components/FlowsView.vue'
 import DeleteProfileModal from './components/DeleteProfileModal.vue'
 import NewProfileModal from './components/NewProfileModal.vue'
+import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
 import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
-import { parseConfigErrors } from './lib/configErrors'
-import type { FeedDef, SourceDef } from './types/feed'
+import { useFlowsSession } from './pipeline/composables/useFlowsSession'
+import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
+import type { SidebarSelection } from './types/feed'
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -34,30 +40,263 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
-  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toasts, dismissToast, clearToasts,
+  selectedId, selectedItem, actions, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
-  config, configErrorOverlayOpen, dismissConfigError, loadConfig, copyConfigPrompt, copyConfigPath, copyConfigErrors,
-  sources, creatingSource, createSourceError, savingFeed, saveFeedError,
-  loadSources, createSource, loadFeedDef, createFeed, updateFeed, deleteFeed,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
-  toggleUnread, refresh, notWired, hideWindow,
+  toggleUnread, refresh, invokeAction, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
-// The overlay only ever gets the shape the backend actually provides today
-// (see internal/desktop/feed/config.go ConfigInfo.Error — a single string);
-// parseConfigErrors is the seam where richer per-problem data would plug in
-// without touching the template.
-const configErrors = computed(() => parseConfigErrors(config.value?.error ?? ''))
+// ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
+// A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
+// the sidebar+main region while the spaces rail and titlebar stay mounted (so
+// the user is never stranded — see the template). Reached from the sidebar's
+// "Flows" pill / "Edit flow" footer and the ⌘K command; exited via the
+// titlebar breadcrumb.
+//
+// The session (useFlowsSession) is a module singleton shared with
+// FlowsView.vue: it owns the pipeline editor and a runtime for every enabled
+// flow, so feeds keep updating while the canvas is closed or another profile
+// is selected. App.vue is the first caller, which makes the manager app-lived
+// rather than dependent on FlowsView mounting/unmounting.
+const session = useFlowsSession()
 
-// ── Config sheet & profile creation overlays ─────────────────────────────────
+// ── Route-driven navigation ────────────────────────────────────────────────
+// The Wails webview uses hash history: routes survive asset:// hosting and
+// native/browser back and forward controls traverse the same page stack. The
+// shell (title bar + profile rail) stays mounted while this route selects its
+// main page.
+const router = useRouter()
+const route = useRoute()
+const flowsActive = computed(() => route.name === 'flows')
+const applicationSettingsActive = computed(() => route.name === 'application-settings')
+const profileSettingsActive = computed(() => route.name === 'profile-settings')
+const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
+  route.params.section === 'integrations' ? 'integrations' : 'appearance',
+)
+const profileSettingsSection = computed<ProfileSettingsSection>(() =>
+  route.params.section === 'danger' ? 'danger' : 'general',
+)
+const canGoBack = computed(() => {
+  void route.fullPath
+  return router.options.history.state.back !== null
+})
+const canGoForward = computed(() => {
+  void route.fullPath
+  return router.options.history.state.forward !== null
+})
 
-const configSheetOpen = ref(false)
-const newProfileOpen = ref(false)
+// Keep the selected backend profile and flow draft aligned with route params.
+// Missing profile params occur only on the first /feed load; canonicalize that
+// entry once profiles arrive so future history entries are self-contained.
+watch(activeProfileId, (id) => {
+  session.bindActiveFlow(id || undefined)
+  const routeNeedsProfile = route.name === 'feed' || route.name === 'flows' || route.name === 'profile-settings'
+  if (id && routeNeedsProfile && !route.params.profileId) {
+    void router.replace({ name: route.name, params: { ...route.params, profileId: id }, query: route.query })
+  }
+})
 
-function openConfigSheet() {
-  configSheetOpen.value = true
-  void loadConfig()
+let feedRouteSync = 0
+watch([profilesLoaded, () => route.fullPath], async ([loaded]) => {
+  if (!loaded) return
+  const sync = ++feedRouteSync
+  const rawProfileId = route.params.profileId
+  if (typeof rawProfileId !== 'string') return
+  if (!profiles.value.some((profile) => profile.id === rawProfileId)) {
+    if (activeProfileId.value) void router.replace({ name: 'feed', params: { profileId: activeProfileId.value } })
+    return
+  }
+  if (rawProfileId !== activeProfileId.value) await selectProfile(rawProfileId)
+  if (sync !== feedRouteSync || route.name !== 'feed') return
+
+  const rawFeedId = route.query.feed
+  const feedId = typeof rawFeedId === 'string' && activeProfile.value?.feeds.some((feed) => feed.id === rawFeedId)
+    ? rawFeedId
+    : null
+  const wantsUnread = route.query.unread === '1'
+  if (feedId) await selectSidebar({ type: 'feed', feedId })
+  else if (wantsUnread) await selectUnreadView()
+  else await selectSidebar({ type: 'all' })
+
+  // Unread can also filter one specific feed. selectSidebar clears the flag,
+  // so apply it after loading that feed's items.
+  if (feedId && wantsUnread && !unreadOnly.value) await toggleUnread()
+}, { immediate: true })
+
+watch([() => route.name, () => route.query.node], ([name, rawNode]) => {
+  if (name === 'flows') session.openFlows(typeof rawNode === 'string' ? rawNode : undefined)
+  else session.exitFlows()
+}, { immediate: true })
+
+// A router guard protects dirty flow drafts for every navigation source,
+// including native mouse/browser Back — not only the app's own buttons.
+type PendingNavigation = { to: string }
+const pendingNavigation = ref<PendingNavigation | null>(null)
+const unsavedChangesBusy = ref(false)
+let allowGuardedNavigation = false
+const removeNavigationGuard = router.beforeEach((to, from) => {
+  const switchesProfile = typeof to.params.profileId === 'string' && to.params.profileId !== activeProfileId.value
+  const leavesDirtyFlow = from.name === 'flows' && (
+    to.name !== 'flows' || to.params.profileId !== from.params.profileId
+  )
+  if (!allowGuardedNavigation && (leavesDirtyFlow || switchesProfile) && session.dirty.value) {
+    pendingNavigation.value = { to: to.fullPath }
+    return false
+  }
+})
+onUnmounted(removeNavigationGuard)
+
+function cancelPendingNavigation(): void {
+  pendingNavigation.value = null
 }
+
+async function finishPendingNavigation(): Promise<void> {
+  const pending = pendingNavigation.value
+  if (!pending) return
+  pendingNavigation.value = null
+  allowGuardedNavigation = true
+  try {
+    await router.push(pending.to)
+  } finally {
+    allowGuardedNavigation = false
+  }
+}
+
+async function deployPendingNavigation(): Promise<void> {
+  if (!pendingNavigation.value) return
+  unsavedChangesBusy.value = true
+  await session.deploy()
+  unsavedChangesBusy.value = false
+  if (session.dirty.value) return
+  await finishPendingNavigation()
+}
+
+async function discardPendingNavigation(): Promise<void> {
+  if (!pendingNavigation.value) return
+  unsavedChangesBusy.value = true
+  await session.discardDraft()
+  unsavedChangesBusy.value = false
+  if (session.dirty.value) return
+  await finishPendingNavigation()
+}
+
+function openFeed(profileId = activeProfileId.value): void {
+  void router.push({ name: 'feed', params: profileId ? { profileId } : {} })
+}
+
+function navigateSidebar(nextSelection: SidebarSelection): void {
+  if (!activeProfileId.value) return
+  void router.push({
+    name: 'feed',
+    params: { profileId: activeProfileId.value },
+    query: nextSelection.type === 'feed' ? { feed: nextSelection.feedId } : {},
+  })
+}
+
+function navigateUnreadFilter(value: boolean): void {
+  if (!activeProfileId.value) return
+  const query: Record<string, string> = {}
+  if (selection.value.type === 'feed') query.feed = selection.value.feedId
+  if (value) query.unread = '1'
+  void router.push({ name: 'feed', params: { profileId: activeProfileId.value }, query })
+}
+
+function navigateUnreadToggle(): void {
+  navigateUnreadFilter(!unreadOnly.value)
+}
+
+function openFlows(focusNodeId?: string): void {
+  if (!activeProfileId.value) return
+  // Update immediately for command-palette and canvas focus feedback; the
+  // route watcher keeps this state aligned during back/forward traversal.
+  session.openFlows(focusNodeId)
+  void router.push({
+    name: 'flows',
+    params: { profileId: activeProfileId.value },
+    query: focusNodeId ? { node: focusNodeId } : {},
+  })
+}
+
+function requestExitFlows(): void {
+  openFeed()
+}
+
+function requestSelectProfile(id: string): void {
+  openFeed(id)
+}
+
+function requestOpenSettings(page: 'application' | 'profile'): void {
+  if (page === 'application') void router.push({ name: 'application-settings' })
+  else if (activeProfileId.value) void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value } })
+}
+
+function closeSettings(): void {
+  openFeed()
+}
+
+function selectApplicationSettingsSection(section: ApplicationSettingsSection): void {
+  void router.push({ name: 'application-settings', params: { section } })
+}
+
+function selectProfileSettingsSection(section: ProfileSettingsSection): void {
+  if (!activeProfileId.value) return
+  void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value, section } })
+}
+
+// ── Reveal in flow (8d) ───────────────────────────────────────────────────────
+// A sidebar feed row's id is flow-qualified ("<activeProfileId>/<nodeId>" —
+// see useFeedState's loadFeeds), so the node id is everything after the
+// profile id's own "/" separator. openFlows() both opens the canvas and sets
+// flowFocusNodeId, which FlowsCanvas's existing focus watch turns into a
+// select + center-pan (see FlowsView.vue's :focus-node-id binding).
+function revealInFlow(feedId: string): void {
+  const nodeId = feedId.slice(activeProfileId.value.length + 1)
+  openFlows(nodeId)
+}
+
+// ── Titlebar error chip (8d) ──────────────────────────────────────────────────
+// Sourced from the always-on session (not FlowsView), so the chip renders and
+// deep-links correctly even with the canvas closed.
+const errorNodeIds = computed(() =>
+  (session.activeFlow.value?.nodes ?? [])
+    .filter((node) => session.latestRunByNode.value.get(node.id)?.ok === false)
+    .map((node) => node.id),
+)
+const errorCount = computed(() => errorNodeIds.value.length)
+const firstErrorNodeId = computed(() => errorNodeIds.value[0])
+
+function openErrorNode(): void {
+  if (firstErrorNodeId.value) openFlows(firstErrorNodeId.value)
+}
+
+// ── Always-on runtime pump (hc-8ft4yhm6) ─────────────────────────────────────
+// Drives every enabled runtime on each backend log append. The subscription
+// lives here so processing continues with the canvas closed and regardless of
+// profile selection. Commits complete BEFORE useFeedState.refresh() re-reads
+// feed_item, so all profile sidebars observe the newly committed work.
+let unsubscribeLog: (() => void) | undefined
+let unsubscribeFlowsRuntime: (() => void) | undefined
+onMounted(() => {
+  unsubscribeLog = Events.On('log:appended', () => {
+    void (async () => {
+      await session.pump()
+      void refresh()
+    })()
+  })
+  // The app owns this subscription, rather than FlowsView, because deployed
+  // graphs must reload even while the canvas is closed. The session keeps an
+  // unsaved editor draft private while replacing only its runtime snapshot.
+  unsubscribeFlowsRuntime = Events.On('flows:updated', () => { void session.reloadDeployed() })
+})
+onUnmounted(() => {
+  unsubscribeLog?.()
+  unsubscribeFlowsRuntime?.()
+  session.disposeRuntime()
+})
+
+// ── Profile create / delete overlays ─────────────────────────────────────────
+
+const newProfileOpen = ref(false)
 
 function openNewProfile() {
   createProfileError.value = null // a stale failure must not greet the reopen
@@ -66,49 +305,11 @@ function openNewProfile() {
 
 async function submitNewProfile(name: string) {
   await createProfile(name)
-  if (!createProfileError.value) newProfileOpen.value = false
-}
-
-// ── Feed editor sheet ────────────────────────────────────────────────────────
-
-const feedEditorOpen = ref(false)
-// Non-null while editing an existing feed; null in create mode.
-const editingFeedId = ref<string | null>(null)
-// The edit-mode prefill, loaded async after the sheet opens.
-const editingFeedDef = ref<FeedDef | null>(null)
-
-function openFeedEditor(feedId?: string) {
-  editingFeedId.value = feedId ?? null
-  editingFeedDef.value = null
-  createSourceError.value = null // stale failures must not greet the reopen
-  saveFeedError.value = null
-  feedEditorOpen.value = true
-  void loadSources()
-  void loadConfig() // the sheet shows the config path row
-  if (feedId && activeProfileId.value) {
-    void loadFeedDef(activeProfileId.value, feedId).then((def) => { editingFeedDef.value = def })
+  if (!createProfileError.value) {
+    newProfileOpen.value = false
+    openFeed(activeProfileId.value)
   }
 }
-
-async function submitFeedSave(def: FeedDef) {
-  if (!activeProfileId.value) return
-  const saved = editingFeedId.value
-    ? await updateFeed(activeProfileId.value, editingFeedId.value, def)
-    : await createFeed(activeProfileId.value, def)
-  if (saved) feedEditorOpen.value = false
-}
-
-async function submitFeedDelete(feedId: string) {
-  if (!activeProfileId.value) return
-  const deleted = await deleteFeed(activeProfileId.value, feedId)
-  if (deleted) feedEditorOpen.value = false
-}
-
-function submitNewSource(def: SourceDef) {
-  void createSource(def)
-}
-
-// ── Delete profile confirm modal ─────────────────────────────────────────────
 
 const deleteProfileOpen = ref(false)
 
@@ -118,8 +319,10 @@ function openDeleteProfile() {
 
 async function confirmDeleteProfile() {
   if (!activeProfileId.value) return
-  await deleteProfile(activeProfileId.value)
+  const deleted = await deleteProfile(activeProfileId.value)
+  if (!deleted) return
   deleteProfileOpen.value = false
+  openFeed()
 }
 
 // Booting while signed out leaves profiles unloaded (or the live backend
@@ -136,7 +339,7 @@ const needsWorkspace = computed(() => authenticated.value && profilesLoaded.valu
 
 const { open: paletteOpen, toggle: togglePalette } = useCommandPalette()
 
-// Seed commands — reactive getter so they update when profiles/feeds load
+// Seed commands — reactive getter so they update when profiles/flows load
 useCommands(computed(() => {
   const cmds: Command[] = []
 
@@ -147,7 +350,7 @@ useCommands(computed(() => {
       title: `Switch to profile: ${p.name}`,
       group: 'Profiles',
       icon: IconLayoutGrid,
-      run: () => selectProfile(p.id),
+      run: () => requestSelectProfile(p.id),
     })
   }
 
@@ -160,7 +363,7 @@ useCommands(computed(() => {
     group: 'Feeds',
     icon: IconList,
     hint: profileName,
-    run: () => selectSidebar({ type: 'all' }),
+    run: () => navigateSidebar({ type: 'all' }),
   })
 
   for (const f of activeProfile.value?.feeds ?? []) {
@@ -170,31 +373,16 @@ useCommands(computed(() => {
       group: 'Feeds',
       icon: IconRss,
       hint: profileName,
-      run: () => selectSidebar({ type: 'feed', feedId: f.id }),
-    })
-    cmds.push({
-      id: `feed:edit:${f.id}`,
-      title: `Edit feed: ${f.name}`,
-      group: 'Feeds',
-      keywords: ['editor', 'filters'],
-      run: () => openFeedEditor(f.id),
+      run: () => navigateSidebar({ type: 'feed', feedId: f.id }),
     })
   }
-
-  cmds.push({
-    id: 'feed:new',
-    title: 'New feed…',
-    group: 'Feeds',
-    keywords: ['create', 'editor', 'source'],
-    run: () => openFeedEditor(),
-  })
 
   cmds.push({
     id: 'feed:toggle-unread',
     title: 'Toggle unread filter',
     group: 'Feeds',
     icon: IconEye,
-    run: toggleUnread,
+    run: navigateUnreadToggle,
   })
 
   cmds.push({
@@ -214,21 +402,28 @@ useCommands(computed(() => {
     run: openNewProfile,
   })
 
+  // View — enter/exit the flows canvas for the active profile.
   cmds.push({
-    id: 'feed:edit-config',
-    title: 'Edit feeds as code…',
-    group: 'Feeds',
-    keywords: ['config', 'yaml', 'profiles'],
-    run: openConfigSheet,
+    id: 'flow:edit',
+    title: flowsActive.value ? 'Back to feed' : 'Edit flow…',
+    group: 'View',
+    keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
+    icon: IconWorkflow,
+    run: () => { flowsActive.value ? requestExitFlows() : openFlows() },
   })
 
-  cmds.push({
-    id: 'feed:copy-config-prompt',
-    title: 'Copy feeds config prompt',
-    group: 'Feeds',
-    keywords: ['config', 'yaml', 'agent', 'prompt'],
-    run: copyConfigPrompt,
-  })
+  // Jump to any node in the active flow by name (8d) — opens the canvas
+  // focused/centered on that node, same as "Reveal in flow" from the sidebar.
+  for (const node of session.activeFlow.value?.nodes ?? []) {
+    cmds.push({
+      id: `flow:node:${node.id}`,
+      title: `Jump to node: ${node.name || node.type}`,
+      group: 'Flow',
+      keywords: ['flows', 'node', 'canvas', 'reveal'],
+      icon: IconShare2,
+      run: () => openFlows(node.id),
+    })
+  }
 
   // Themes
   for (const t of themes) {
@@ -283,14 +478,18 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 </script>
 
 <template>
-  <main
-    class="h-screen w-screen overflow-hidden bg-app text-text"
-    :class="{ 'pointer-events-none blur-[3px] opacity-40 transition-[filter,opacity] duration-200': configErrorOverlayOpen }"
-  >
+  <main class="h-screen w-screen overflow-hidden bg-app text-text">
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
-        :unread-count="activeProfile?.unreadCount ?? 0"
+        :flows-active="flowsActive"
+        :error-count="errorCount"
+        :can-go-back="canGoBack"
+        :can-go-forward="canGoForward"
+        @back="router.back()"
+        @forward="router.forward()"
+        @exit-flows="requestExitFlows"
+        @open-error-node="openErrorNode"
       />
       <!-- Hold an empty frame until auth status resolves so an authenticated
            user never sees onboarding flash by. -->
@@ -307,68 +506,71 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         @submit-token="submitToken"
         @create-workspace="createProfile"
       />
+      <!-- The spaces rail (ProfileRail) and TitleBar stay mounted across the
+           feed<->flows switch; only the sidebar+main region swaps. This is
+           what keeps the user from being stranded in the flows canvas — the
+           rail and the breadcrumb are always there to navigate back. -->
       <div v-else class="flex min-h-0 flex-1">
-        <ProfileRail :profiles="profiles" :active-profile-id="activeProfileId" @select="selectProfile" @add="openNewProfile" />
-        <SideBar
-          v-if="activeProfile"
-          :profile="activeProfile"
-          :selection="selection"
-          :unread-only="unreadOnly"
-          @select="selectSidebar"
-          @select-unread="selectUnreadView"
-          @edit-feeds="openConfigSheet"
-          @edit-feed="openFeedEditor"
-          @delete-profile="openDeleteProfile"
+        <ProfileRail
+          :profiles="profiles"
+          :active-profile-id="activeProfileId"
+          @select="requestSelectProfile"
+          @add="openNewProfile"
+          @open-settings="requestOpenSettings('application')"
         />
-        <section v-if="activeProfile" class="flex min-w-0 flex-1">
-          <FeedList
-            :title="title"
-            :items="items"
-            :selected-id="selectedId"
-            :unread-only="unreadOnly"
-            :count-label="countLabel"
-            :load-error="loadError"
-            @select="selectItem"
-            @toggle-unread="toggleUnread"
-            @refresh="refresh"
+        <SettingsView
+          v-if="applicationSettingsActive"
+          :github-connected="authenticated"
+          :github-login="authStatus?.login"
+          :active-category="applicationSettingsSection"
+          @close="closeSettings"
+          @select-category="selectApplicationSettingsSection"
+        />
+        <ProfileSettingsView
+          v-else-if="profileSettingsActive && activeProfile"
+          :profile="activeProfile"
+          :active-section="profileSettingsSection"
+          @close="closeSettings"
+          @delete="openDeleteProfile"
+          @select-section="selectProfileSettingsSection"
+        />
+        <FlowsView v-else-if="flowsActive" />
+        <template v-else>
+          <SideBar
+            v-if="activeProfile"
+            :profile="activeProfile"
+            :selection="selection"
+            :flows-dirty="session.dirty.value"
+            @select="navigateSidebar"
+            @open-flows="openFlows()"
+            @open-settings="requestOpenSettings('profile')"
+            @reveal-in-flow="revealInFlow"
           />
-          <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
-        </section>
-        <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
-          <template v-if="profilesError">
-            <span data-testid="profiles-error">{{ profilesError }}</span>
-            <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
-          </template>
-          <span v-else>Loading feed…</span>
-        </div>
+          <section v-if="activeProfile" class="flex min-w-0 flex-1">
+            <FeedList
+              :title="title"
+              :items="items"
+              :selected-id="selectedId"
+              :unread-only="unreadOnly"
+              :load-error="loadError"
+              @select="selectItem"
+              @set-unread="navigateUnreadFilter"
+              @refresh="refresh"
+            />
+            <DetailPane :item="selectedItem" :actions="actions" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="notWired" />
+          </section>
+          <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
+            <template v-if="profilesError">
+              <span data-testid="profiles-error">{{ profilesError }}</span>
+              <button class="cursor-pointer rounded border border-strong px-3 py-1.5 text-text-2 hover:text-text" @click="loadProfiles">Retry</button>
+            </template>
+            <span v-else>Loading feed…</span>
+          </div>
+        </template>
       </div>
     </div>
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
-    <ConfigSheet
-      v-if="configSheetOpen"
-      :config="config"
-      @close="configSheetOpen = false"
-      @copy-prompt="copyConfigPrompt"
-      @copy-path="copyConfigPath"
-    />
-    <FeedEditorSheet
-      v-if="feedEditorOpen"
-      :feed-id="editingFeedId"
-      :initial-def="editingFeedDef"
-      :sources="sources"
-      :config="config"
-      :busy="savingFeed"
-      :error="saveFeedError"
-      :source-busy="creatingSource"
-      :source-error="createSourceError"
-      @close="feedEditorOpen = false"
-      @save="submitFeedSave"
-      @delete="submitFeedDelete"
-      @create-source="submitNewSource"
-      @copy-prompt="copyConfigPrompt"
-      @copy-path="copyConfigPath"
-    />
     <NewProfileModal
       v-if="newProfileOpen"
       :busy="creatingProfile"
@@ -383,14 +585,13 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       @close="deleteProfileOpen = false"
       @confirm="confirmDeleteProfile"
     />
+    <UnsavedFlowChangesModal
+      v-if="pendingNavigation"
+      :busy="unsavedChangesBusy"
+      :error="session.error.value"
+      @close="cancelPendingNavigation"
+      @deploy="deployPendingNavigation"
+      @discard="discardPendingNavigation"
+    />
   </main>
-  <ConfigErrorOverlay
-    v-if="configErrorOverlayOpen"
-    :path="config?.path ?? ''"
-    :errors="configErrors"
-    @retry="loadConfig"
-    @dismiss="dismissConfigError"
-    @copy-path="copyConfigPath"
-    @copy-errors="copyConfigErrors"
-  />
 </template>

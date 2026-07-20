@@ -5,6 +5,7 @@ import type { FeedItem } from '../../types/feed'
 
 const baseItem: FeedItem = {
   id: 'item-1',
+  feedId: 'triage/desktop',
   kind: 'PR',
   repo: 'colonyops/hive',
   num: 42,
@@ -29,14 +30,14 @@ function mountItem(overrides: Partial<FeedItem> = {}, selected = false) {
 }
 
 describe('FeedListItem', () => {
-  it('maps pull requests and issues to their kind icon classes', () => {
+  it('maps pull requests and issues to their type pill classes', () => {
     const pr = mountItem({ kind: 'PR' })
-    expect(pr.find('[data-testid="kind-badge"]').classes()).toContain('kind-icon-pr')
-    expect(pr.find('[data-testid="kind-badge"]').attributes('data-kind')).toBe('PR')
+    expect(pr.find('[data-testid="type-pill"]').classes()).toContain('type-pill-pr')
+    expect(pr.find('[data-testid="type-pill"]').attributes('data-kind')).toBe('PR')
 
     const issue = mountItem({ kind: 'Issue' })
-    expect(issue.find('[data-testid="kind-badge"]').classes()).toContain('kind-icon-issue')
-    expect(issue.find('[data-testid="kind-badge"]').attributes('data-kind')).toBe('Issue')
+    expect(issue.find('[data-testid="type-pill"]').classes()).toContain('type-pill-issue')
+    expect(issue.find('[data-testid="type-pill"]').attributes('data-kind')).toBe('Issue')
   })
 
   it('shows the unread dot only for unread items', () => {
@@ -47,16 +48,14 @@ describe('FeedListItem', () => {
     expect(read.find('[data-testid="unread-dot"]').exists()).toBe(false)
   })
 
-  it('renders the notification reason as a chip before the labels, humanized', () => {
+  it('renders source, type, and body metadata without legacy reason or label chips', () => {
     const wrapper = mountItem({ reason: 'review_requested', labels: ['bug'] })
-    expect(wrapper.find('[data-testid="reason-chip"]').text()).toBe('review requested')
-    expect(wrapper.findAll('span.bg-chip').map((chip) => chip.text())).toEqual(['review requested', 'bug'])
-  })
 
-  it('omits the reason chip when the item has no reason', () => {
-    const wrapper = mountItem()
+    expect(wrapper.find('[data-testid="source-badge"]').attributes('data-source')).toBe('github')
+    expect(wrapper.find('[data-testid="type-pill"]').text()).toBe('Pull Request')
+    expect(wrapper.find('[data-testid="item-snippet"]').text()).toContain('hayden — Body')
     expect(wrapper.find('[data-testid="reason-chip"]').exists()).toBe(false)
-    expect(wrapper.findAll('span.bg-chip').map((chip) => chip.text())).toEqual(['frontend'])
+    expect(wrapper.findAll('span.bg-chip')).toHaveLength(0)
   })
 
   it('applies selected styling', () => {
