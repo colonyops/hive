@@ -131,6 +131,61 @@ func TestActionStoreMutatesMissingAndEmptyFilesAndDeleteLeavesEmptyCatalog(t *te
 	}
 }
 
+func TestActionStoreCRUDNormalizesEmptyAcceptedCatalogShapes(t *testing.T) {
+	for name, initial := range map[string]string{
+		"omitted-actions": "# catalog header\nversion: 1 # keep version comment\n",
+		"null-actions":    "# catalog header\nversion: 1\nactions: null\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "actions.yml")
+			require.NoError(t, os.WriteFile(path, []byte(initial), 0o600))
+			s := NewActionStore(path)
+
+			_, err := s.Create(editableShell("run"))
+			require.NoError(t, err)
+			updated := editableShell("run")
+			updated.Label = "Run now"
+			_, err = s.Update("run", updated)
+			require.NoError(t, err)
+			require.NoError(t, s.Delete("run"))
+
+			got := string(mustRead(t, path))
+			assert.Contains(t, got, "# catalog header")
+			assert.Contains(t, got, "version: 1")
+			assert.Contains(t, got, "actions: []")
+			assert.Empty(t, s.List())
+		})
+	}
+}
+
+func TestActionStoreUpdateBlocksHeadlessActionBecomingInteractiveForLoadedFlows(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "actions.yml")
+	s := NewActionStore(path)
+	headless := launchEditable("used")
+	headless.Launch.RepoTemplate = "https://github.com/owner/repo.git"
+	_, err := s.Create(headless)
+	require.NoError(t, err)
+
+	s.SetUsageChecker(usageStub{usage: ActionUsage{FlowIDs: []string{"flow-a", "flow-b"}, ActiveCommands: 2}})
+	_, err = s.Update("used", launchEditable("used"))
+	require.ErrorContains(t, err, "flow-a, flow-b")
+	require.ErrorContains(t, err, "cannot become interactive-only")
+	got, ok := s.Get("used")
+	require.True(t, ok)
+	assert.True(t, got.HeadlessCapable())
+
+	// A change that keeps the action headless remains safe even when flows
+	// reference it.
+	headless.Label = "Updated"
+	_, err = s.Update("used", headless)
+	require.NoError(t, err)
+
+	// Active command counts are deletion-specific and do not block Update.
+	s.SetUsageChecker(usageStub{usage: ActionUsage{ActiveCommands: 2}})
+	_, err = s.Update("used", launchEditable("used"))
+	require.NoError(t, err)
+}
+
 func TestActionStoreDeleteReportsUsageBlockers(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "actions.yml")
 	require.NoError(t, os.WriteFile(path, []byte("version: 1\nactions:\n  - id: used\n    label: Used\n    type: shell\n    command_template: true\n"), 0o600))

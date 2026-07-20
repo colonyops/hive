@@ -73,6 +73,38 @@ func TestActionsServiceListReturnsLastGoodActionsAndMalformedLatestError(t *test
 	assert.Contains(t, catalog.Error, "actions")
 }
 
+func TestActionsServiceUpdateKeepsFlowReferencedActionsHeadless(t *testing.T) {
+	store, _ := newServiceStore(t)
+	headless := actions.EditableAction{ID: "used", Label: "Used", Type: "launch-session", Launch: &actions.EditableLaunchConfig{
+		PromptTemplate: "Review", RepoTemplate: "https://github.com/owner/repo.git",
+	}}
+	_, err := store.Create(headless)
+	require.NoError(t, err)
+	flows := flow.NewFlowStore(t.TempDir(), newActionsRefs(store))
+	require.NoError(t, flows.Save(flow.Flow{ID: "flow-a", Name: "Flow A", Enabled: true, Nodes: []flow.Node{
+		{ID: "source", Type: "github-source", Config: &flow.GithubSourceConfig{Kind: "search", Query: "is:open"}},
+		{ID: "action", Type: "action", Config: &flow.ActionConfig{Action: "used"}},
+	}, Wires: []flow.Wire{{From: "source", To: "action"}}}))
+	db, err := pipelinedb.Open(t.TempDir(), pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	store.SetUsageChecker(actionUsageChecker{flows: flows, db: db})
+
+	wakes := 0
+	service := NewActionsService(store, func() { wakes++ })
+	interactive := headless
+	interactive.Launch = &actions.EditableLaunchConfig{PromptTemplate: "Review"}
+	_, err = service.UpdateAction("used", interactive)
+	require.ErrorContains(t, err, "flow-a")
+	assert.Equal(t, 0, wakes)
+
+	// Existing flows do not prevent an update that remains headless.
+	headless.Label = "Updated"
+	_, err = service.UpdateAction("used", headless)
+	require.NoError(t, err)
+	assert.Equal(t, 1, wakes)
+}
+
 func TestActionUsageCheckerBlocksLoadedFlowsAndNonterminalQueueOnly(t *testing.T) {
 	store, _ := newServiceStore(t)
 	_, err := store.Create(serviceAction("used"))

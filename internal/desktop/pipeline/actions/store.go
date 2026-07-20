@@ -166,6 +166,28 @@ func (s *ActionStore) Update(id string, e EditableAction) (EditableAction, error
 	if err != nil {
 		return EditableAction{}, err
 	}
+
+	// As with Delete, do not call Usage while holding s.mu: FlowStore Save/Create
+	// can resolve actions while holding the flow lock. This is intentionally a
+	// preflight, so a flow may start referencing the action before the locked
+	// disk mutation. Only a headless-to-interactive transition is unsafe for a
+	// loaded flow; active-command checks remain specific to Delete.
+	current, ok := s.Get(id)
+	if !ok {
+		return EditableAction{}, fmt.Errorf("action %q not found", id)
+	}
+	if current.HeadlessCapable() && !a.HeadlessCapable() {
+		if checker := s.usageChecker(); checker != nil {
+			usage, err := checker.Usage(id)
+			if err != nil {
+				return EditableAction{}, fmt.Errorf("check action %q usage: %w", id, err)
+			}
+			if len(usage.FlowIDs) > 0 {
+				return EditableAction{}, fmt.Errorf("action %q is referenced by flow(s): %s; it cannot become interactive-only", id, strings.Join(usage.FlowIDs, ", "))
+			}
+		}
+	}
+
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.mutateLocked("update", id, a)
@@ -251,17 +273,37 @@ func (s *ActionStore) latestDocumentLocked() (*yaml.Node, *yaml.Node, error) {
 		return nil, nil, fmt.Errorf("parse actions document: %w", err)
 	}
 	root := doc.Content[0]
-	var list *yaml.Node
+	if root.Kind != yaml.MappingNode {
+		return nil, nil, fmt.Errorf("actions: valid document has invalid root")
+	}
+	return &doc, normalizeActionsSequence(root), nil
+}
+
+// normalizeActionsSequence makes the optional/null actions field writable.
+// LoadActions accepts both shapes as an empty catalog, so CRUD must too. It
+// changes only that field, retaining all unrelated mapping keys and comments.
+func normalizeActionsSequence(root *yaml.Node) *yaml.Node {
 	for i := 0; i+1 < len(root.Content); i += 2 {
-		if root.Content[i].Value == "actions" {
-			list = root.Content[i+1]
-			break
+		if root.Content[i].Value != "actions" {
+			continue
 		}
+		if root.Content[i+1].Kind == yaml.SequenceNode {
+			return root.Content[i+1]
+		}
+		old := root.Content[i+1]
+		list := &yaml.Node{
+			Kind:        yaml.SequenceNode,
+			Tag:         "!!seq",
+			HeadComment: old.HeadComment,
+			LineComment: old.LineComment,
+			FootComment: old.FootComment,
+		}
+		root.Content[i+1] = list
+		return list
 	}
-	if list == nil || list.Kind != yaml.SequenceNode {
-		return nil, nil, fmt.Errorf("actions: valid document missing actions sequence")
-	}
-	return &doc, list, nil
+	list := &yaml.Node{Kind: yaml.SequenceNode, Tag: "!!seq"}
+	root.Content = append(root.Content, scalar("actions"), list)
+	return list
 }
 
 func newDocument() *yaml.Node {

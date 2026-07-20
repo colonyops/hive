@@ -76,11 +76,14 @@ func githubOwnerRepo(remote string) (owner, repo string, ok bool) {
 		return "", "", false
 	}
 
-	// SCP-style SSH is not accepted by net/url.
+	// SCP-style SSH is not accepted by net/url. Git also accepts the
+	// userless spelling github.com:owner/repo.git, so recognize both forms.
 	if at := strings.LastIndex(remote, "@"); at != -1 {
 		if rest := remote[at+1:]; strings.HasPrefix(strings.ToLower(rest), "github.com:") {
 			return githubPath(rest[len("github.com:"):])
 		}
+	} else if colon := strings.Index(remote, ":"); colon != -1 && strings.EqualFold(remote[:colon], "github.com") {
+		return githubPath(remote[colon+1:])
 	}
 
 	u, err := url.Parse(remote)
@@ -95,7 +98,10 @@ func githubPath(path string) (owner, repo string, ok bool) {
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", false
 	}
-	repo = strings.TrimSuffix(parts[1], ".git")
+	repo = parts[1]
+	if len(repo) >= len(".git") && strings.EqualFold(repo[len(repo)-len(".git"):], ".git") {
+		repo = repo[:len(repo)-len(".git")]
+	}
 	if repo == "" {
 		return "", "", false
 	}
