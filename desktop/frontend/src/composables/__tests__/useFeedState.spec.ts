@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   ActionsFor: vi.fn(),
   On: vi.fn(),
   Hide: vi.fn(),
+  OpenURL: vi.fn(),
 }))
 
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => ({
@@ -32,6 +33,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', (
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
   Window: { Hide: mocks.Hide },
+  Browser: { OpenURL: mocks.OpenURL },
 }))
 
 const flowSummary = { id: 'triage', name: 'Frontend Triage', enabled: true, valid: true }
@@ -119,6 +121,46 @@ describe('useFeedState', () => {
     await flushPromises()
 
     expect(mocks.DeleteFlow).toHaveBeenCalledWith('triage')
+  })
+
+  it('opens the selected item URL in the browser', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR', url: 'https://github.com/o/r/pull/1' } },
+    ])
+    mocks.OpenURL.mockResolvedValue(undefined)
+    const get = mountState()
+    await flushPromises()
+    await get().selectSidebar({ type: 'all' })
+    await flushPromises()
+
+    await get().openSelectedInBrowser()
+
+    expect(mocks.OpenURL).toHaveBeenCalledWith('https://github.com/o/r/pull/1')
+  })
+
+  it('toasts instead of opening when the selected item has no URL', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR' } },
+    ])
+    const get = mountState()
+    await flushPromises()
+    await get().selectSidebar({ type: 'all' })
+    await flushPromises()
+
+    await get().openSelectedInBrowser()
+
+    expect(mocks.OpenURL).not.toHaveBeenCalled()
+    expect(get().toasts.value.some((t) => t.severity === 'error')).toBe(true)
+  })
+
+  it('opens an arbitrary URL via openUrl', async () => {
+    mocks.OpenURL.mockResolvedValue(undefined)
+    const get = mountState()
+    await flushPromises()
+
+    await get().openUrl('https://example.com')
+
+    expect(mocks.OpenURL).toHaveBeenCalledWith('https://example.com')
   })
 
   it('marks an item read via the pipeline service', async () => {

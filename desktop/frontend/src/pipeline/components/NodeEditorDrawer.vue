@@ -36,9 +36,9 @@ const emit = defineEmits<{
   close: []
 }>()
 
-const { width, startResize, step } = useResizablePanel({
+const { size, startResize, step } = useResizablePanel({
   storageKey: 'hive.panel.node-editor',
-  defaultWidth: 440,
+  defaultSize: 440,
   min: 360,
   max: 760,
   edge: 'left',
@@ -162,7 +162,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     <div class="fixed inset-0 z-40 bg-backdrop" data-testid="node-editor-backdrop" @click="emit('close')" />
     <aside
       class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
-      :style="{ width: width + 'px' }"
+      :style="{ width: size + 'px' }"
       role="dialog"
       :aria-label="`Edit ${def.label}`"
       aria-modal="true"

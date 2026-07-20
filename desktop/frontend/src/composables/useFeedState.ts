@@ -1,5 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Events, Window } from '@wailsio/runtime'
+import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, ListFlows } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionsFor, FeedItemCounts, FeedItems, MarkFeedItemRead } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { Action, FeedItem, FeedSummary, Profile, SidebarSelection } from '../types/feed'
@@ -331,6 +331,30 @@ export function useFeedState() {
     showToast('Not wired up yet')
   }
 
+  // Opens a URL in the user's default browser via Wails — used for links
+  // rendered inside a feed item's markdown body.
+  async function openUrl(url: string) {
+    if (!url) return
+    try {
+      await Browser.OpenURL(url)
+    } catch (error) {
+      console.warn('Unable to open URL', error)
+      showToast('Could not open the link', { severity: 'error' })
+    }
+  }
+
+  // Opens the selected item's canonical GitHub URL (the detail pane's "open"
+  // button). The URL comes from the feed_item payload; a missing one means
+  // the source didn't carry it.
+  async function openSelectedInBrowser() {
+    const url = selectedItem.value?.url
+    if (!url) {
+      showToast('No link available for this item', { severity: 'error' })
+      return
+    }
+    await openUrl(url)
+  }
+
   async function hideWindow() {
     try {
       if (typeof Window !== 'undefined' && typeof Window.Hide === 'function') await Window.Hide()
@@ -391,6 +415,8 @@ export function useFeedState() {
     toggleUnread,
     refresh,
     notWired,
+    openUrl,
+    openSelectedInBrowser,
     hideWindow,
   }
 }

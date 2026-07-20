@@ -42,10 +42,10 @@ const {
 // session.bindActiveFlow() whenever the active profile changes) — this view
 // just renders whatever the session currently has selected.
 
-const { width: paletteWidth, startResize: startPaletteResize, step: stepPalette } =
-  useResizablePanel({ storageKey: 'hive.panel.palette', defaultWidth: 214, min: 170, max: 380, edge: 'right' })
-const { width: debugWidth, startResize: startDebugResize, step: stepDebug } =
-  useResizablePanel({ storageKey: 'hive.panel.debug', defaultWidth: 300, min: 230, max: 560, edge: 'left' })
+const { size: paletteWidth, startResize: startPaletteResize, step: stepPalette } =
+  useResizablePanel({ storageKey: 'hive.panel.palette', defaultSize: 214, min: 170, max: 380, edge: 'right' })
+const { size: debugWidth, startResize: startDebugResize, step: stepDebug } =
+  useResizablePanel({ storageKey: 'hive.panel.debug', defaultSize: 300, min: 230, max: 560, edge: 'left' })
 
 // An external flows/*.yaml edit (another window, git) still needs a nudge
 // while the canvas is open, so the same "flows:updated" refresh this view

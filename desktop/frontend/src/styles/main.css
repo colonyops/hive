@@ -272,6 +272,13 @@
   width: 9px;
 }
 
+/* These are vertical scroll regions; a resize handle straddling the panel edge
+   (positioned a few px outside) otherwise triggers a stray horizontal
+   scrollbar. Suppress it — horizontal content here never needs to scroll. */
+.hive-scroll::-webkit-scrollbar:horizontal {
+  display: none;
+}
+
 .hive-scroll::-webkit-scrollbar-thumb {
   background: var(--color-strong);
   border: 2px solid transparent;

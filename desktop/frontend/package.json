@@ -14,11 +14,14 @@
     "@fontsource/ibm-plex-mono": "5.2.7",
     "@fontsource/ibm-plex-sans": "5.2.8",
     "@wailsio/runtime": "3.0.0-alpha.97",
+    "markdown-it": "^14.3.0",
+    "markdown-it-task-lists": "^2.1.1",
     "vue": "^3.2.45"
   },
   "devDependencies": {
     "@iconify-json/lucide": "1.2.116",
     "@tailwindcss/vite": "4.3.2",
+    "@types/markdown-it": "^14.1.2",
     "@types/node": "22.20.1",
     "@vitejs/plugin-vue": "^6.0.0",
     "@vue/test-utils": "2.4.11",

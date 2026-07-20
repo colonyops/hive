@@ -62,6 +62,37 @@ describe('DetailPane', () => {
     expect(wrapper.text()).toContain('Select an item to inspect')
   })
 
+  it('renders the body as GitHub-flavored markdown', () => {
+    const markdownItem = { ...item, body: '## Steps\n\n- [ ] first\n- [x] second\n\nsee [docs](https://example.com)' }
+    const wrapper = mount(DetailPane, { props: { item: markdownItem, actions } })
+    const body = wrapper.get('[data-testid="detail-body"]')
+
+    expect(body.find('h2').exists()).toBe(true)
+    expect(body.find('input[type="checkbox"]').exists()).toBe(true)
+    expect(body.find('a').attributes('href')).toBe('https://example.com')
+  })
+
+  it('does not render an empty body container when the item has no body', () => {
+    const wrapper = mount(DetailPane, { props: { item: { ...item, body: '' }, actions } })
+
+    expect(wrapper.find('[data-testid="detail-body"]').exists()).toBe(false)
+  })
+
+  it('emits open-browser when the open button is clicked', async () => {
+    const wrapper = mount(DetailPane, { props: { item, actions } })
+    await wrapper.get('button.open-button').trigger('click')
+
+    expect(wrapper.emitted('open-browser')).toHaveLength(1)
+  })
+
+  it('emits open-url with the href when a body link is clicked', async () => {
+    const markdownItem = { ...item, body: 'see [docs](https://example.com/docs)' }
+    const wrapper = mount(DetailPane, { props: { item: markdownItem, actions } })
+    await wrapper.get('[data-testid="detail-body"] a').trigger('click')
+
+    expect(wrapper.emitted('open-url')).toEqual([['https://example.com/docs']])
+  })
+
   it('renders a resize handle that widens the panel on drag and persists the width', async () => {
     const wrapper = mount(DetailPane, { props: { item, actions } })
     const aside = wrapper.get('aside').element as HTMLElement

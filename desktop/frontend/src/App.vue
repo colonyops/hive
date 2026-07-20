@@ -39,7 +39,7 @@ const {
   selectedId, selectedItem, actions, unreadOnly, title, countLabel, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
-  toggleUnread, refresh, notWired, hideWindow,
+  toggleUnread, refresh, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
@@ -424,7 +424,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               @toggle-unread="toggleUnread"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="notWired" @edit="notWired" />
+            <DetailPane :item="selectedItem" :actions="actions" @run-action="notWired" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="notWired" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">

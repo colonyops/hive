@@ -22,9 +22,9 @@ const emit = defineEmits<{
   'reveal-in-flow': [feedId: string]
 }>()
 
-const { width, startResize, step } = useResizablePanel({
+const { size, startResize, step } = useResizablePanel({
   storageKey: 'hive.panel.sidebar',
-  defaultWidth: 250,
+  defaultSize: 250,
   min: 190,
   max: 480,
   edge: 'right',
@@ -46,7 +46,7 @@ function feedSelected(feedId: string): boolean {
 </script>
 
 <template>
-  <aside class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar" :style="{ width: width + 'px' }">
+  <aside class="hive-scroll relative flex shrink-0 flex-col overflow-y-auto border-r border-border bg-sidebar" :style="{ width: size + 'px' }">
     <div class="profile-header border-b border-border px-4 pb-3 pt-4" data-testid="sidebar-profile-header">
       <div class="flex items-center gap-2">
         <div class="min-w-0 flex-1 truncate text-[15px] font-semibold tracking-[-.01em]" data-testid="sidebar-profile-name">{{ profile.name }}</div>
