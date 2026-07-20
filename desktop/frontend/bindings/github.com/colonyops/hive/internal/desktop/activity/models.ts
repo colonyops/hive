@@ -22,6 +22,12 @@ export interface Event {
     "title": string;
     "body"?: string;
     "source"?: string;
+
+    /**
+     * Metadata is opaque to storage and reserved for later enrichment (links,
+     * ids, counts). No emit site populates it yet; it round-trips through the
+     * reserved metadata column so a future write path needs no schema change.
+     */
     "metadata"?: { [_ in string]?: string } | null;
 }
 
