@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -18,6 +19,15 @@ import (
 // stdout/stderr is attached to a log line or error message, so a runaway
 // command's output can't blow up the log.
 const maxShellOutputLogBytes = 4096
+
+// shellKillGrace bounds how long Run blocks after the command's context is
+// cancelled (timeout hit). CommandContext SIGKILLs `sh`, but a descendant it
+// spawned (e.g. `sleep`) can inherit the stdout/stderr pipe and keep it open,
+// which would otherwise make Wait block on the copy goroutine until that
+// grandchild exits on its own. WaitDelay force-closes the pipes shortly after
+// the kill so a timed-out command returns promptly instead of running its full
+// duration.
+const shellKillGrace = 2 * time.Second
 
 // ShellExecutor runs a shell action's command_template via `sh -c`. The
 // command is author-trusted config (actions.yml is a local file the
@@ -54,6 +64,7 @@ func (e *ShellExecutor) Execute(ctx context.Context, action actions.Action, data
 	}
 
 	cmd := exec.CommandContext(runCtx, "sh", "-c", command)
+	cmd.WaitDelay = shellKillGrace
 	if cfg.Cwd != "" {
 		cmd.Dir = cfg.Cwd
 	}
