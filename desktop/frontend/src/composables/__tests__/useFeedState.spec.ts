@@ -100,7 +100,7 @@ describe('useFeedState', () => {
 
   it('reconciles the saved sidebar layout (folders, node-id keyed) into the tree', async () => {
     mocks.GetSidebar.mockResolvedValue({
-      items: [{ folder: { id: 'work', name: 'Work', collapsed: true, feeds: ['my-prs'] } }],
+      items: [{ folder: { id: 'work', name: 'Work', feeds: ['my-prs'] } }],
     })
     const get = mountState()
     await flushPromises()
@@ -108,7 +108,7 @@ describe('useFeedState', () => {
     expect(get().activeProfile.value?.tree).toEqual([
       {
         kind: 'folder',
-        folder: { id: 'work', name: 'Work', collapsed: true, feeds: [{ id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 }] },
+        folder: { id: 'work', name: 'Work', feeds: [{ id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 }] },
       },
     ])
   })
@@ -120,11 +120,11 @@ describe('useFeedState', () => {
 
     const feed = { id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 }
     await get().reorderFeeds('triage', [
-      { kind: 'folder', folder: { id: 'work', name: 'Work', collapsed: false, feeds: [feed] } },
+      { kind: 'folder', folder: { id: 'work', name: 'Work', feeds: [feed] } },
     ])
 
     expect(mocks.SaveSidebar).toHaveBeenCalledWith('triage', {
-      items: [{ folder: { id: 'work', name: 'Work', collapsed: false, feeds: ['my-prs'] } }],
+      items: [{ folder: { id: 'work', name: 'Work', feeds: ['my-prs'] } }],
     })
     // The in-memory tree updates optimistically.
     expect(get().activeProfile.value?.tree?.[0]).toMatchObject({ kind: 'folder', folder: { id: 'work' } })

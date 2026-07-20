@@ -12,7 +12,7 @@ import (
 func sampleSidebar() SidebarLayout {
 	return SidebarLayout{Items: []SidebarItem{
 		{Feed: "my-open-prs"},
-		{Folder: &SidebarFolder{ID: "work", Name: "Work", Collapsed: true, Feeds: []string{"assigned", "notifications"}}},
+		{Folder: &SidebarFolder{ID: "work", Name: "Work", Feeds: []string{"assigned", "notifications"}}},
 		{Feed: "misc"},
 	}}
 }

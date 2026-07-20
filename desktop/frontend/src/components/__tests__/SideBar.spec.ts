@@ -1,7 +1,10 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import SideBar from '../SideBar.vue'
 import type { FeedTree, Profile, SidebarNode } from '../../types/feed'
+
+// Collapse state and panel width live in localStorage; isolate every test.
+beforeEach(() => localStorage.clear())
 
 const profile: Profile = {
   id: 'personal',
@@ -104,7 +107,7 @@ const grouped: Profile = {
   ...profile,
   tree: [
     { kind: 'feed', feed: desktopFeed },
-    { kind: 'folder', folder: { id: 'work', name: 'Work', collapsed: false, feeds: [backendFeed] } },
+    { kind: 'folder', folder: { id: 'work', name: 'Work', feeds: [backendFeed] } },
   ],
 }
 
@@ -132,19 +135,24 @@ describe('SideBar folders', () => {
     expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(true)
   })
 
-  it('hides a collapsed folder\'s feeds', () => {
-    const collapsed: Profile = {
-      ...profile,
-      tree: [{ kind: 'folder', folder: { id: 'work', name: 'Work', collapsed: true, feeds: [backendFeed] } }],
-    }
-    const wrapper = mount(SideBar, { props: { profile: collapsed, selection: { type: 'all' } } })
+  it('hides a folder\'s feeds when its collapsed state is set in localStorage', () => {
+    // Collapse is view state persisted in localStorage (keyed by flow then
+    // folder id), not part of the tree/layout.
+    localStorage.setItem('hive.sidebar.collapsed', JSON.stringify({ personal: ['work'] }))
+    const wrapper = mountGrouped()
     expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(false)
   })
 
-  it('toggles a folder collapsed when its header is clicked', async () => {
+  it('toggles collapse via localStorage on header click, without emitting a reorder', async () => {
     const wrapper = mountGrouped()
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(true)
+
     await wrapper.find('[data-testid="sidebar-folder"][data-id="work"] .folder-header').trigger('click')
-    expect(folderNamed(lastReorder(wrapper), 'work')?.collapsed).toBe(true)
+
+    // Feeds hidden, state persisted, and no layout write (collapse is not config).
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="backend"]').exists()).toBe(false)
+    expect(JSON.parse(localStorage.getItem('hive.sidebar.collapsed') ?? '{}')).toEqual({ personal: ['work'] })
+    expect(wrapper.emitted('reorder')).toBeUndefined()
   })
 
   it('appends a new empty folder when the new-folder button is clicked', async () => {

@@ -7,13 +7,15 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// SidebarFolder is one named, collapsible group of feeds in a profile's
-// sidebar. Feeds lists the member feed node ids in display order.
+// SidebarFolder is one named group of feeds in a profile's sidebar. Feeds
+// lists the member feed node ids in display order. Note there is no collapsed
+// field: whether a folder is expanded is transient view state the frontend
+// keeps in localStorage, not configuration — this file records structure and
+// order only.
 type SidebarFolder struct {
-	ID        string   `json:"id"        yaml:"id"`
-	Name      string   `json:"name"      yaml:"name"`
-	Collapsed bool     `json:"collapsed" yaml:"collapsed"`
-	Feeds     []string `json:"feeds"     yaml:"feeds"`
+	ID    string   `json:"id"    yaml:"id"`
+	Name  string   `json:"name"  yaml:"name"`
+	Feeds []string `json:"feeds" yaml:"feeds"`
 }
 
 // SidebarItem is one entry in the sidebar's ordered top level: either a bare

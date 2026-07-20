@@ -63,12 +63,7 @@ export function buildFeedTree(
       // after its feeds are removed — it stays as a drop target.
       tree.push({
         kind: 'folder',
-        folder: {
-          id: item.folder.id,
-          name: item.folder.name,
-          collapsed: item.folder.collapsed,
-          feeds: folderFeeds,
-        },
+        folder: { id: item.folder.id, name: item.folder.name, feeds: folderFeeds },
       })
     } else if (item?.feed) {
       const feed = take(item.feed)
@@ -93,7 +88,6 @@ export function treeToLayout(tree: FeedTree, flowId: string): WireSidebarLayout 
             folder: {
               id: node.folder.id,
               name: node.folder.name,
-              collapsed: node.folder.collapsed,
               feeds: node.folder.feeds.map((f) => feedNodeId(f.id, flowId)),
             },
           }

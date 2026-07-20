@@ -373,14 +373,22 @@ flows directory for flow definitions.
 A second machine-written sibling, `<id>.sidebar.yaml` (`flow/sidebar.go`),
 records how the profile's feed nodes are grouped into **folders** and ordered
 in the sidebar's FEEDS section (`SaveSidebar`/`GetSidebar` on `FlowsService`,
-driven by drag-and-drop in `SideBar.vue`). Like the layout file it is
-node-id-keyed, purely cosmetic, and skipped by `LoadFlows`; a missing or broken
-file falls back to listing feeds in flow-node order. It is a *separate* file
-from `.ui.yaml` so the canvas editor's whole-layout writes can never clobber
-the sidebar grouping. The frontend resolves it against the flow's live feed
-nodes in `lib/feedTree.ts` — appending feeds the file doesn't mention (so a
-newly added feed is never hidden) and dropping references to feeds that no
-longer exist.
+driven by drag-and-drop in `SideBar.vue`). It stores **structure and order
+only** — folder names and their member/top-level feed ids — not view state:
+whether a folder is currently expanded is transient UI, kept in `localStorage`
+via VueUse `useStorage` (keyed by flow id → folder ids), never in the file. So
+`SidebarFolder` has no `collapsed` field, and collapsing a folder never writes
+to disk. Like the layout file it is node-id-keyed, purely cosmetic, and skipped
+by `LoadFlows`; a missing or broken file falls back to listing feeds in
+flow-node order. It is a *separate* file from `.ui.yaml` so the canvas editor's
+whole-layout writes can never clobber the sidebar grouping, and — unlike
+`.ui.yaml` — the `FlowsWatcher` deliberately **ignores** `.sidebar.yaml`
+(`isFlowFile`): a sidebar-layout write is frontend-owned UI state, so reloading
+the store and emitting `flows:updated` for it would pointlessly blank and
+refetch the sidebar (a visible flash on every reorder). The frontend resolves
+the file against the flow's live feed nodes in `lib/feedTree.ts` — appending
+feeds the file doesn't mention (so a newly added feed is never hidden) and
+dropping references to feeds that no longer exist.
 
 **Worked example** (a similar package-local fixture — with
 `msg.payload` written lowercase, since it's a pure YAML round-trip test that

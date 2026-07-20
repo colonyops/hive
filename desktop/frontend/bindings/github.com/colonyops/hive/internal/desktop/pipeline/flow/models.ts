@@ -51,13 +51,15 @@ export interface NodePosition {
 }
 
 /**
- * SidebarFolder is one named, collapsible group of feeds in a profile's
- * sidebar. Feeds lists the member feed node ids in display order.
+ * SidebarFolder is one named group of feeds in a profile's sidebar. Feeds
+ * lists the member feed node ids in display order. Note there is no collapsed
+ * field: whether a folder is expanded is transient view state the frontend
+ * keeps in localStorage, not configuration — this file records structure and
+ * order only.
  */
 export interface SidebarFolder {
     "id": string;
     "name": string;
-    "collapsed": boolean;
     "feeds": string[] | null;
 }
 

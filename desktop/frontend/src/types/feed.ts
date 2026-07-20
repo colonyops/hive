@@ -32,13 +32,14 @@ export interface FeedSummary {
   newCount: number
 }
 
-// FeedFolder is a named, collapsible group of feeds in the sidebar. It carries
-// resolved FeedSummary objects (not ids) so the sidebar can render counts
-// directly. Persisted (per-flow, by node id) as a flow.SidebarFolder.
+// FeedFolder is a named group of feeds in the sidebar. It carries resolved
+// FeedSummary objects (not ids) so the sidebar can render counts directly.
+// Persisted (per-flow, by node id) as a flow.SidebarFolder. Note there is no
+// collapsed flag: expand/collapse is transient view state kept in localStorage
+// (see SideBar.vue), not part of the persisted layout.
 export interface FeedFolder {
   id: string
   name: string
-  collapsed: boolean
   feeds: FeedSummary[]
 }
 

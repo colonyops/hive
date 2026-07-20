@@ -39,7 +39,7 @@ describe('buildFeedTree', () => {
     const layout: SidebarLayout = {
       items: [
         { feed: 'c' },
-        { folder: { id: 'work', name: 'Work', collapsed: false, feeds: ['a', 'b'] } },
+        { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } },
       ],
     }
     expect(shape(buildFeedTree(feeds, layout, FLOW))).toEqual(['c', 'work[a,b]'])
@@ -54,7 +54,7 @@ describe('buildFeedTree', () => {
     const layout: SidebarLayout = {
       items: [
         { feed: 'gone' },
-        { folder: { id: 'work', name: 'Work', collapsed: false, feeds: ['a', 'ghost'] } },
+        { folder: { id: 'work', name: 'Work', feeds: ['a', 'ghost'] } },
       ],
     }
     expect(shape(buildFeedTree(feeds, layout, FLOW))).toEqual(['work[a]', 'b', 'c'])
@@ -62,7 +62,7 @@ describe('buildFeedTree', () => {
 
   it('keeps a folder that has become empty as a drop target', () => {
     const layout: SidebarLayout = {
-      items: [{ folder: { id: 'empty', name: 'Empty', collapsed: false, feeds: ['gone'] } }],
+      items: [{ folder: { id: 'empty', name: 'Empty', feeds: ['gone'] } }],
     }
     expect(shape(buildFeedTree(feeds, layout, FLOW))).toEqual(['empty[]', 'a', 'b', 'c'])
   })
@@ -70,7 +70,7 @@ describe('buildFeedTree', () => {
   it('dedupes a feed referenced twice, first placement wins', () => {
     const layout: SidebarLayout = {
       items: [
-        { folder: { id: 'work', name: 'Work', collapsed: false, feeds: ['a'] } },
+        { folder: { id: 'work', name: 'Work', feeds: ['a'] } },
         { feed: 'a' },
       ],
     }
@@ -81,7 +81,7 @@ describe('buildFeedTree', () => {
     const layout: SidebarLayout = {
       items: [
         { feed: 'c' },
-        { folder: { id: 'work', name: 'Work', collapsed: true, feeds: ['a', 'b'] } },
+        { folder: { id: 'work', name: 'Work', feeds: ['a', 'b'] } },
       ],
     }
     const tree = buildFeedTree(feeds, layout, FLOW)
@@ -94,7 +94,7 @@ describe('applyMove', () => {
   const withFolder: SidebarLayout = {
     items: [
       { feed: 'a' },
-      { folder: { id: 'work', name: 'Work', collapsed: false, feeds: ['b', 'c'] } },
+      { folder: { id: 'work', name: 'Work', feeds: ['b', 'c'] } },
       { feed: 'd' },
     ],
   }

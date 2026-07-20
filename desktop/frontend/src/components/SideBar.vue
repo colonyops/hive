@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import IconFolder from '~icons/lucide/folder'
@@ -140,7 +141,28 @@ function showInto(folderId: string): boolean {
 }
 const showEnd = computed(() => dropTarget.value?.kind === 'top-end')
 
-// ── folder operations ───────────────────────────────────────────────────────
+// ── folder collapse (view state) ────────────────────────────────────────────
+// Expand/collapse is transient view state, not configuration — it lives in
+// localStorage (keyed by flow id, then folder id), never in the persisted
+// sidebar layout. VueUse's useStorage handles serialization + defaults so a
+// toggle never touches the backend and never causes a flow reload.
+const collapsedByFlow = useStorage<Record<string, string[]>>('hive.sidebar.collapsed', {})
+
+function isCollapsed(folderId: string): boolean {
+  return (collapsedByFlow.value[props.profile.id] ?? []).includes(folderId)
+}
+
+function onHeaderClick(folder: FeedFolder): void {
+  if (renamingId.value === folder.id) return
+  const flowId = props.profile.id
+  const current = collapsedByFlow.value[flowId] ?? []
+  collapsedByFlow.value = {
+    ...collapsedByFlow.value,
+    [flowId]: isCollapsed(folder.id) ? current.filter((id) => id !== folder.id) : [...current, folder.id],
+  }
+}
+
+// ── folder structure (persisted) ────────────────────────────────────────────
 const renamingId = ref<string | null>(null)
 const draftName = ref('')
 
@@ -155,11 +177,6 @@ function replaceFolder(folder: FeedFolder, patch: Partial<FeedFolder>): void {
   )
 }
 
-function onHeaderClick(folder: FeedFolder): void {
-  if (renamingId.value === folder.id) return
-  replaceFolder(folder, { collapsed: !folder.collapsed })
-}
-
 function newFolderId(): string {
   const taken = new Set(tree.value.flatMap((n) => (n.kind === 'folder' ? [n.folder.id] : [])))
   let i = 1
@@ -169,7 +186,7 @@ function newFolderId(): string {
 
 function addFolder(): void {
   const id = newFolderId()
-  emit('reorder', [...tree.value, { kind: 'folder', folder: { id, name: 'New folder', collapsed: false, feeds: [] } }])
+  emit('reorder', [...tree.value, { kind: 'folder', folder: { id, name: 'New folder', feeds: [] } }])
   renamingId.value = id
   draftName.value = 'New folder'
 }
@@ -286,7 +303,7 @@ function deleteFolder(folder: FeedFolder): void {
           >
             <span class="nav-icon">
               <IconFolder class="folder-glyph size-3" />
-              <component :is="node.folder.collapsed ? IconChevronRight : IconChevronDown" class="folder-chevron size-3" />
+              <component :is="isCollapsed(node.folder.id) ? IconChevronRight : IconChevronDown" class="folder-chevron size-3" />
             </span>
             <input
               v-if="renamingId === node.folder.id"
@@ -315,7 +332,7 @@ function deleteFolder(folder: FeedFolder): void {
             <span class="font-mono text-[11px]" :class="folderNew(node.folder) ? 'text-accent' : 'text-text-3'">{{ folderNew(node.folder) || folderTotal(node.folder) }}</span>
           </div>
 
-          <div v-if="!node.folder.collapsed" class="folder-body">
+          <div v-if="!isCollapsed(node.folder.id)" class="folder-body">
             <div
               v-for="feed in node.folder.feeds"
               :key="feed.id"
