@@ -22,6 +22,13 @@ LIMIT ?;
 SELECT * FROM consumer_offset
 WHERE consumer = ?;
 
+-- name: ListConsumerOffsets :many
+SELECT * FROM consumer_offset;
+
+-- name: DeleteEventsThrough :exec
+DELETE FROM event_log
+WHERE "offset" <= ?;
+
 -- name: CommitConsumerOffset :exec
 -- Monotonic upsert: on conflict, only advance the stored offset when the
 -- incoming one is greater. If it isn't, the WHERE clause makes the DO UPDATE
@@ -151,3 +158,23 @@ SELECT * FROM node_run
 WHERE flow_id = ?
 ORDER BY ended_at DESC
 LIMIT ?;
+
+-- name: PruneNodeRuns :exec
+-- Retain the newest rows globally. rowid breaks same-nanosecond ties, so the
+-- limit is exact even when a fast batch stamps equal ended_at values.
+DELETE FROM node_run
+WHERE rowid IN (
+    SELECT rowid FROM node_run
+    ORDER BY ended_at DESC, rowid DESC
+    LIMIT -1 OFFSET ?
+);
+
+-- name: PruneTerminalOutputCommands :exec
+-- Never remove active commands: only terminal done/failed history is bounded.
+DELETE FROM output_command
+WHERE id IN (
+    SELECT id FROM output_command
+    WHERE status IN ('done', 'failed')
+    ORDER BY id DESC
+    LIMIT -1 OFFSET ?
+);

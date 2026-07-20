@@ -140,6 +140,16 @@ func (q *Queries) CountFeedItemsByFlow(ctx context.Context, flowPrefix string) (
 	return items, nil
 }
 
+const deleteEventsThrough = `-- name: DeleteEventsThrough :exec
+DELETE FROM event_log
+WHERE "offset" <= ?
+`
+
+func (q *Queries) DeleteEventsThrough(ctx context.Context, offset int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEventsThrough, offset)
+	return err
+}
+
 const deleteFeedItemsNotInSnapshot = `-- name: DeleteFeedItemsNotInSnapshot :exec
 DELETE FROM feed_item
 WHERE feed_id = ?
@@ -242,6 +252,33 @@ func (q *Queries) InsertNodeRun(ctx context.Context, arg InsertNodeRunParams) er
 		arg.DurMs,
 	)
 	return err
+}
+
+const listConsumerOffsets = `-- name: ListConsumerOffsets :many
+SELECT consumer, "offset" FROM consumer_offset
+`
+
+func (q *Queries) ListConsumerOffsets(ctx context.Context) ([]ConsumerOffset, error) {
+	rows, err := q.db.QueryContext(ctx, listConsumerOffsets)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ConsumerOffset{}
+	for rows.Next() {
+		var i ConsumerOffset
+		if err := rows.Scan(&i.Consumer, &i.Offset); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listFeedItemsByFeed = `-- name: ListFeedItemsByFeed :many
@@ -481,6 +518,38 @@ WHERE action_id = ? AND status = 'awaiting_confirmation'
 // confirmation-gated commands runnable again.
 func (q *Queries) PromoteOutputCommandsAwaitingConfirmation(ctx context.Context, actionID string) error {
 	_, err := q.db.ExecContext(ctx, promoteOutputCommandsAwaitingConfirmation, actionID)
+	return err
+}
+
+const pruneNodeRuns = `-- name: PruneNodeRuns :exec
+DELETE FROM node_run
+WHERE rowid IN (
+    SELECT rowid FROM node_run
+    ORDER BY ended_at DESC, rowid DESC
+    LIMIT -1 OFFSET ?
+)
+`
+
+// Retain the newest rows globally. rowid breaks same-nanosecond ties, so the
+// limit is exact even when a fast batch stamps equal ended_at values.
+func (q *Queries) PruneNodeRuns(ctx context.Context, offset int64) error {
+	_, err := q.db.ExecContext(ctx, pruneNodeRuns, offset)
+	return err
+}
+
+const pruneTerminalOutputCommands = `-- name: PruneTerminalOutputCommands :exec
+DELETE FROM output_command
+WHERE id IN (
+    SELECT id FROM output_command
+    WHERE status IN ('done', 'failed')
+    ORDER BY id DESC
+    LIMIT -1 OFFSET ?
+)
+`
+
+// Never remove active commands: only terminal done/failed history is bounded.
+func (q *Queries) PruneTerminalOutputCommands(ctx context.Context, offset int64) error {
+	_, err := q.db.ExecContext(ctx, pruneTerminalOutputCommands, offset)
 	return err
 }
 

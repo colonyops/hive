@@ -278,9 +278,6 @@ func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, laun
 }
 
 func main() {
-	// The poller, watcher, and pipeline producer live for the whole
-	// process; they die with it, so there are no Stop/Close calls here (and
-	// log.Fatal below would skip a defer anyway).
 	fetcher := buildSourceFetcher()
 
 	pipelineLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
@@ -308,20 +305,31 @@ func main() {
 	if actionsWatcher != nil {
 		actionsWatcher.Start()
 	}
-	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, pipelineLogger)
-	if desktop.MockMode() == "" {
-		outputWorker.Start()
-	}
 
-	// The flows store must exist before the producer: the producer enumerates
-	// its github-source nodes to decide what to poll.
+	// The flows store must exist before the producer and retention maintenance:
+	// both resolve enabled flow IDs live from it.
 	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	flowsStore, flowsWatcher := buildFlowsStore(actionStore, flowsLogger)
 	if flowsWatcher != nil {
 		flowsWatcher.Start()
 	}
 
-	if producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, pipelineLogger); producer != nil {
+	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, pipelineLogger)
+	if desktop.MockMode() == "" {
+		outputWorker.Start()
+	}
+
+	maintenance := pipeline.NewMaintenance(
+		pipelineDB,
+		flowsStore,
+		pipelinedb.DefaultRetentionPolicy(),
+		pipeline.DefaultRetentionInterval,
+		pipelineLogger,
+	)
+	maintenance.Start()
+
+	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, pipelineLogger)
+	if producer != nil {
 		producer.Start()
 	}
 
@@ -404,9 +412,13 @@ func main() {
 
 	app.SystemTray.New().SetTemplateIcon(trayIcon).SetMenu(trayMenu)
 
-	if err := app.Run(); err != nil {
+	shutdown := func() {
+		maintenance.Stop()
 		actionRuntime.Close()
+	}
+	if err := app.Run(); err != nil {
+		shutdown()
 		log.Fatal(err)
 	}
-	actionRuntime.Close()
+	shutdown()
 }

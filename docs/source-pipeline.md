@@ -151,8 +151,8 @@ and source snapshot reconciliation metadata:
 | `consumer_offset` | One row per consumer (a flow id), tracking the last offset that consumer's commit has fully accounted for. |
 | `source_head` | Durable `(topic, key) → payload` source head used by `AppendIfChanged` to skip unchanged source item events across producer restarts. |
 | `feed_item` | Go-owned, persisted output of a flow's `feed` nodes — primary key `(feed_id, item_id)`, so a re-commit of the same item is an upsert, not a duplicate row. Snapshot metadata (`source_topic`, `snapshot_id`) lets commits reconcile rows that disappear from a source. |
-| `output_command` | The queue of side-effecting action invocations waiting for the output worker, deduped on `(action_id, key)` (unique index `idx_output_command_action_key`), with `status`/`attempts`/`last_error` for confirmation and bounded retry. |
-| `node_run` | Per-node, per-tick execution metrics (`in_count`/`out_count`/`drop_count`/`ok`/`err`/`dur_ms`) for the flows editor's debug panel and RECENT list. |
+| `output_command` | The queue of side-effecting action invocations waiting for the output worker, deduped on `(action_id, key)` (unique index `idx_output_command_action_key`), with `status`/`attempts`/`last_error` for confirmation and bounded retry. Terminal-history pruning uses the partial `idx_output_command_terminal_id` index. |
+| `node_run` | Per-node, per-tick execution metrics (`in_count`/`out_count`/`drop_count`/`ok`/`err`/`dur_ms`) for the flows editor's debug panel and RECENT list. `idx_node_run_flow_ended_at` serves the per-flow view and `idx_node_run_ended_at` serves retention pruning. |
 
 These tables share the same migration runner, `internal/data/migrate` — a small,
 storage-agnostic package (`Load`/`Apply`/`Up` over an `fs.FS` of
@@ -186,6 +186,23 @@ reconcile.
   checkpoint. Checkpoints are advanced only through `CommitBatch`, whose
   monotonic SQL upsert means an out-of-order or replayed batch never regresses
   a consumer's checkpoint.
+
+### Retention
+
+`pipeline.Maintenance` runs every five minutes and resolves the enabled flow
+IDs from `flow.FlowStore` on every pass. It calls `DB.Prune` transactionally:
+
+- Event rows are removed only through the **minimum** durable offset of all
+  enabled flows. No enabled flows, or one enabled flow without a
+  `consumer_offset` yet, means no event-log rows are removed. Disabled flows
+  intentionally do not hold the boundary; when re-enabled, they start with
+  the then-current log.
+- The newest 10,000 `node_run` records are retained globally.
+- The newest 2,000 terminal (`done` or permanently `failed`) `output_command`
+  records are retained. `pending`, `awaiting_confirmation`, `running`, and
+  retryable commands are never candidates for deletion.
+
+The loop is stopped and joined as the desktop backend shuts down.
 
 ## The commit and offset protocol
 
