@@ -17,7 +17,8 @@ const mocks = vi.hoisted(() => ({
   FeedItems: vi.fn(),
   FeedItemCounts: vi.fn(),
   MarkFeedItemRead: vi.fn(),
-  ActionsFor: vi.fn(),
+  ActionViews: vi.fn(),
+  InvokeAction: vi.fn(),
   NodeRuns: vi.fn(),
   ReadFrom: vi.fn(),
   Commit: vi.fn(),
@@ -46,7 +47,8 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () =
   FeedItems: mocks.FeedItems,
   FeedItemCounts: mocks.FeedItemCounts,
   MarkFeedItemRead: mocks.MarkFeedItemRead,
-  ActionsFor: mocks.ActionsFor,
+  ActionViews: mocks.ActionViews,
+  InvokeAction: mocks.InvokeAction,
   NodeRuns: mocks.NodeRuns,
   ReadFrom: mocks.ReadFrom,
   Commit: mocks.Commit,
@@ -96,7 +98,8 @@ describe('App', () => {
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.FeedItems.mockResolvedValue([])
     mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
-    mocks.ActionsFor.mockResolvedValue([])
+    mocks.ActionViews.mockResolvedValue([])
+    mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.NodeRuns.mockResolvedValue([])
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})

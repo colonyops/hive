@@ -79,8 +79,8 @@ const EnvActionsPath = "HIVE_DESKTOP_ACTIONS"
 
 // ActionsPath is the actions.yml file location: launch-session/shell/
 // publish-event action definitions consumed by the desktop pipeline's
-// output worker (see internal/desktop/pipeline/actions) and, in a later
-// phase, the detail-pane action picker. The design doc calls this
+// output worker and detail-pane action picker (see
+// internal/desktop/pipeline/actions). The design doc calls this
 // ".hive/actions.yml" (repo-scoped), but the desktop app's config is global
 // rather than repo-scoped — there is no single repo it belongs to — so it
 // lives next to the desktop profiles/flows config instead. EnvActionsPath

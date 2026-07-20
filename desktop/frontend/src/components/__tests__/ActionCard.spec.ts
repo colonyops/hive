@@ -1,18 +1,16 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import ActionCard from '../ActionCard.vue'
-import type { Action } from '../../types/feed'
+import type { ActionView } from '../../types/action'
 
-const baseAction: Action = {
+const baseAction: ActionView = {
   id: 'summarize',
-  icon: 'sparkles',
-  color: '#f59e0b',
-  title: 'Summarize thread',
-  sub: 'Generate a concise summary',
-  primary: true,
+  label: 'Summarize thread',
+  type: 'launch-session',
+  autoApply: false,
 }
 
-function mountAction(overrides: Partial<Action> = {}) {
+function mountAction(overrides: Partial<ActionView> = {}) {
   return mount(ActionCard, {
     props: {
       action: { ...baseAction, ...overrides },
@@ -21,14 +19,12 @@ function mountAction(overrides: Partial<Action> = {}) {
 }
 
 describe('ActionCard', () => {
-  it('renders the primary and non-primary action affordances', () => {
-    const primary = mountAction({ primary: true })
-    expect(primary.find('[data-testid="primary-action"]').text()).toContain('Run')
-    expect(primary.find('[data-testid="secondary-affordance"]').exists()).toBe(false)
+  it('derives presentation from the configured action type', () => {
+    const wrapper = mountAction({ type: 'shell' })
 
-    const secondary = mountAction({ primary: false })
-    expect(secondary.find('[data-testid="primary-action"]').exists()).toBe(false)
-    expect(secondary.find('[data-testid="secondary-affordance"]').exists()).toBe(true)
+    expect(wrapper.text()).toContain('Summarize thread')
+    expect(wrapper.text()).toContain('Run shell command')
+    expect(wrapper.find('[data-testid="run-action"]').text()).toContain('Run')
   })
 
   it('emits run when clicked', async () => {

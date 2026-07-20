@@ -80,6 +80,7 @@ export interface FeedSnapshot {
  * by the frontend graph runtime.
  * 
  * It mirrors the design's { id, key, topic, ts, payload, meta } contract,
+ * with Snapshot populated only for an authoritative full-source snapshot,
  * mapped onto the event_log schema (see migrations/0001_pipeline.up.sql):
  *   - ID is derived from the row's "offset" (stable, unique per append; there
  *     is no separate id column).
@@ -87,7 +88,9 @@ export interface FeedSnapshot {
  *   - Meta is not persisted by this phase: event_log has no meta column.
  *     Later source phases may populate Meta on the in-memory Msg before it
  *     reaches the frontend, but Append here takes no meta and ReadFrom always
- *     returns a nil Meta. The schema is not extended speculatively.
+ *     returns a nil Meta. Snapshot event payloads are persisted explicitly.
+ *   - Snapshot is nil for ordinary item events and contains the full current
+ *     source item set for successful poll snapshots.
  */
 export interface Msg {
     "ID": string;

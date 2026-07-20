@@ -115,10 +115,11 @@ VALUES (?, ?, ?, 'pending', ?)
 ON CONFLICT(action_id, key) DO NOTHING;
 
 -- name: ListRunnableOutputCommands :many
--- Runnable commands are pending automatic execution. ID order matches
+-- Pending commands await automatic classification/execution; running ones
+-- were explicitly confirmed by the detail pane. ID order matches
 -- idx_output_command_status_id, avoiding a sort as the queue grows.
 SELECT * FROM output_command
-WHERE status = 'pending'
+WHERE status IN ('pending', 'running')
 ORDER BY id ASC
 LIMIT ?;
 
@@ -126,9 +127,20 @@ LIMIT ?;
 -- Continue a bounded worker scan after the previous row. The status/id
 -- predicate is covered by idx_output_command_status_id.
 SELECT * FROM output_command
-WHERE status = 'pending' AND id > ?
+WHERE status IN ('pending', 'running') AND id > ?
 ORDER BY id ASC
 LIMIT ?;
+
+-- name: ConfirmOutputCommand :one
+-- An explicit detail-pane action invocation creates a command when no flow
+-- action node did, or promotes that node's awaiting command to running.
+-- Completed/failed/running commands are deliberately not re-run: output
+-- actions remain deduped on (action_id, key).
+INSERT INTO output_command (action_id, key, payload, status, created_at)
+VALUES (?, ?, ?, 'running', ?)
+ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
+WHERE output_command.status IN ('pending', 'awaiting_confirmation')
+RETURNING *;
 
 -- name: MarkOutputCommandAwaitingConfirmation :exec
 UPDATE output_command SET status = 'awaiting_confirmation'

@@ -16,7 +16,7 @@ function update(action: string) {
       label="Action"
       :model-value="config.action"
       placeholder="review-pr"
-      hint="Id of an action declared in .hive/actions.yml — arriving messages enqueue it as an output_command."
+      hint="Id of an action declared in desktop actions.yml — arriving messages enqueue it as an output_command."
       monospace
       testid="action-node-editor-action"
       @update:model-value="update"

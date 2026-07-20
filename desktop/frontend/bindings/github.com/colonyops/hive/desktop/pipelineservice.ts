@@ -3,9 +3,7 @@
 
 /**
  * PipelineService is the Wails service exposing the desktop pipeline's
- * event log and commit protocol to the frontend. All data comes from the
- * injected *pipelinedb.DB; this type is wire glue only, matching
- * FeedService's thin-glue style.
+ * event log, configured actions, and commit protocol to the frontend.
  * @module
  */
 
@@ -21,15 +19,18 @@ import * as feed$0 from "../internal/desktop/feed/models.js";
 import * as pipeline$0 from "../internal/desktop/pipeline/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as actions$0 from "../internal/desktop/pipeline/actions/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as pipelinedb$0 from "../internal/desktop/pipeline/pipelinedb/models.js";
 
 /**
- * ActionsFor returns the configured actions for an item kind ("PR"/"Issue"),
- * for the detail-pane action picker. The catalog is static today (see
- * feed.ActionsFor); this is the seam where actions.yml-driven actions plug in.
+ * ActionViews returns the configured actions available for an item kind
+ * ("PR"/"Issue"). The actions store is the single source for both these
+ * detail-pane views and flow output actions.
  */
-export function ActionsFor(kind: string): $CancellablePromise<feed$0.Action[] | null> {
-    return $Call.ByID(1014871757, kind);
+export function ActionViews(kind: string): $CancellablePromise<actions$0.View[] | null> {
+    return $Call.ByID(2696790941, kind);
 }
 
 /**
@@ -56,6 +57,15 @@ export function FeedItemCounts(flowID: string): $CancellablePromise<pipeline$0.F
  */
 export function FeedItems(feedID: string): $CancellablePromise<pipeline$0.FeedItem[] | null> {
     return $Call.ByID(2832766353, feedID);
+}
+
+/**
+ * InvokeAction records the user's explicit confirmation for actionID against
+ * item and executes it. It accepts only actions that apply to the item's kind;
+ * executable configuration is always re-resolved from ActionStore.
+ */
+export function InvokeAction(actionID: string, item: feed$0.Item): $CancellablePromise<void> {
+    return $Call.ByID(204589393, actionID, item);
 }
 
 /**

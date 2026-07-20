@@ -432,7 +432,7 @@ actions:
   - id: review-pr
     label: Spawn review agent
     type: launch-session       # | shell | publish-event
-    applies_to: [pr]           # optional; restricts a future detail-pane picker to msg.meta.kind values
+    applies_to: [pr]           # optional; restricts the detail-pane picker by item kind
     auto_apply: false          # default false — see below
     prompt_template: "Review {{ .Payload.title }}"
     agent: claude              # optional
@@ -446,8 +446,10 @@ actions:
 
 `id`/`label` are required envelope fields; `id` follows the same slug rule
 as flow node ids. `AutoApply` gates whether `pipeline.Worker` (the output
-worker) executes a queued `output_command` automatically at all — see
-below.
+worker) executes a queued `output_command` automatically. The detail pane
+lists the same configured actions through `PipelineService.ActionViews`;
+clicking one explicitly confirms and executes its deduplicated
+`(action_id, item_id)` command.
 
 `actions.ActionStore` (`actions/store.go`) is the same last-good-on-failure
 posture as `flow.FlowStore`/`feed.Store`: a broken `actions.yml` on reload
@@ -613,9 +615,9 @@ it promotes confirmation-gated commands whose actions now have
 runnable `output_command` rows by ID. `AutoApply: false` (the `actions.yml`
 default) moves a command to `awaiting_confirmation`, keeping manual work out
 of the runnable queue so it cannot block automatic work. Flipping an action
-to `auto_apply: true` promotes its waiting commands on the next tick; with
-**no manual confirmation UI built yet**, a non-auto-apply command otherwise
-remains awaiting confirmation. A failed execution is retried (with
+to `auto_apply: true` promotes its waiting commands on the next tick; a
+matching detail-pane action explicitly confirms and executes a manual
+command. A failed execution is retried (with
 `last_error` recorded) until
 `MaxOutputCommandAttempts` (5), then marked permanently `failed`; an unknown
 `action_id` (e.g. `actions.yml` was edited to remove it) is marked failed
@@ -644,9 +646,10 @@ immediately, no retries.
   (`8080` is commonly occupied by an unrelated local process, hence the
   non-default port). The `feed`-mode server additionally points
   `HIVE_DESKTOP_FLOWS` at a checked-in fixture directory
-  (`desktop/e2e/fixtures/flows/`, one flow) and seeds a matching, fixed set
-  of `feed_item` rows at startup (`desktop/mockseed.go`, gated on
-  `desktop.MockMode() == "feed"`) — this replaced
+  (`desktop/e2e/fixtures/flows/`, one flow), `HIVE_DESKTOP_ACTIONS` at its
+  configured action fixture (`desktop/e2e/fixtures/actions.yml`), and seeds
+  a matching, fixed set of `feed_item` rows at startup (`desktop/mockseed.go`,
+  gated on `desktop.MockMode() == "feed"`) — this replaced
   `internal/desktop/feed/mock.go`'s static in-memory item list once the
   sidebar switched onto real `feed_item` reads (see
   [Current architecture and remaining gaps](#current-architecture-and-remaining-gaps)).
@@ -721,12 +724,12 @@ is gone.
   There is no RPC source today, backend or frontend.
 - **The legacy feed system's `FilterDef`/`fetchSourceDirect` orchestration,
   its `Store` (readstate), its poller, and its mock provider are all
-  deleted.** `internal/desktop/feed` now holds only what the pipeline still
-  needs: the `Item`/`Action` wire types and `LiveProvider.SourceItems` — the
-  cached, conditional, singleflight GitHub fetch core the pipeline's
-  `githubSource` producer calls through. Nothing about client-side
-  filtering survived the cutover; a `github-filter` flow node is the only
-  filtering mechanism now.
+  deleted.** `internal/desktop/feed` now holds only the `Item` wire type and
+  `LiveProvider.SourceItems` — the cached, conditional, singleflight GitHub
+  fetch core the pipeline's `githubSource` producer calls through. Configured
+  actions are exposed separately as `actions.View` from `ActionStore`.
+  Nothing about client-side filtering survived the cutover; a
+  `github-filter` flow node is the only filtering mechanism now.
 
 **What's still incomplete**, independent of the cutover above:
 
@@ -740,8 +743,9 @@ is gone.
   construction than by an explicit drain step — see
   [Deploy and drain semantics](#deploy-and-drain-semantics) above; this
   didn't change with the cutover.
-- There is still no manual confirmation UI for a non-`auto_apply` action
-  sitting `pending` in `output_command`.
+- Non-`auto_apply` output commands move to `awaiting_confirmation`; the
+  matching configured detail-pane action explicitly confirms and executes
+  the command.
 - e2e screenshot snapshots and a stateless-commit/replay spec are still
   deferred future work requiring the Docker-based `mise run desktop:e2e`
   gate to verify against real rendered output. What changed this phase is

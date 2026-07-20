@@ -1,5 +1,5 @@
 // action is a terminal node (1 in / 0 out): the arriving msg enqueues an
-// output_command against the referenced .hive/actions.yml action id. See
+// output_command against the referenced desktop actions.yml action id. See
 // nodes/feed/config.ts for the parallel terminal (sink/unread are the
 // engine's single source of truth for commit-tagging a terminal node).
 
@@ -10,7 +10,7 @@ export const type = 'action'
 export const role = 'output' as const
 
 export interface Config {
-  /** action id in .hive/actions.yml (Phase 5). */
+  /** action id in desktop actions.yml. */
   action: string
 }
 
@@ -38,7 +38,7 @@ export const defaults: Config = {
   action: '',
 }
 
-/** UX-only — Go's SaveFlow validator is authoritative (the ref must resolve to a .hive/actions.yml entry). */
+/** UX-only — Go's SaveFlow validator is authoritative (the ref must resolve to a desktop actions.yml entry). */
 export function validate(config: Config): string[] {
   const errors: string[] = []
   if (!config.action || !config.action.trim()) errors.push('action is required')

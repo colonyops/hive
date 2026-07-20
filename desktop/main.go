@@ -135,6 +135,15 @@ func emitFlowsUpdated() {
 	}
 }
 
+// emitActionsUpdated wakes the detail pane after a successful or failed
+// actions.yml reload. ActionStore retains its last-good set on failure, so
+// refreshing always shows the currently effective action views.
+func emitActionsUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("actions:updated", "changed")
+	}
+}
+
 // buildActionStore constructs the actions.ActionStore over
 // desktop.ActionsPath(), loading it eagerly (rather than waiting for the
 // first lazy List/Get) so a broken actions.yml is logged at startup instead
@@ -155,6 +164,7 @@ func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *feed.Config
 		if err := store.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("actions.yml reload failed")
 		}
+		emitActionsUpdated()
 	}, logger)
 	if err != nil {
 		logger.Warn().Err(err).Msg("actions.yml hot-reload unavailable")
@@ -163,14 +173,11 @@ func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *feed.Config
 	return store, watcher
 }
 
-// buildOutputWorker constructs the output worker over db and actionStore, or
-// returns nil in mock mode. Mock modes ("feed", "onboarding") skip it,
-// mirroring buildPipelineProducer: they serve static fixtures with no live
-// producer feeding the event log, so there is nothing for a frontend graph
-// run to commit and no output_command would ever be enqueued in practice —
-// but skipping the worker outright keeps e2e fully deterministic rather than
-// relying on that being true (e.g. against a shell action actually running
-// a command).
+// buildOutputWorker constructs the output worker over db and actionStore.
+// Mock modes do not start its background loop because no fixture flow emits
+// output commands, but they retain this worker for explicit detail-pane
+// confirmation RPCs. That keeps the configured action path real in e2e while
+// avoiding a background shell action from compromising fixture determinism.
 //
 // launch-session and publish-event get logging stubs (see
 // LaunchSessionExecutor/PublishEventExecutor's package docs for why: the
@@ -178,9 +185,6 @@ func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *feed.Config
 // yet). shell gets a real executor — running an author-trusted local
 // command has no such missing dependency.
 func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, logger zerolog.Logger) *pipeline.Worker {
-	if desktop.MockMode() != "" {
-		return nil
-	}
 	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
 		"launch-session": pipeline.NewLaunchSessionExecutor(nil),
 		"shell":          pipeline.NewShellExecutor(logger),
@@ -248,7 +252,8 @@ func main() {
 	if actionsWatcher != nil {
 		actionsWatcher.Start()
 	}
-	if outputWorker := buildOutputWorker(pipelineDB, actionStore, pipelineLogger); outputWorker != nil {
+	outputWorker := buildOutputWorker(pipelineDB, actionStore, pipelineLogger)
+	if desktop.MockMode() == "" {
 		outputWorker.Start()
 	}
 
@@ -280,7 +285,7 @@ func main() {
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
-			application.NewService(NewPipelineService(pipelineDB)),
+			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker)),
 			application.NewService(NewFlowsService(flowsStore)),
 		},
 		Assets: application.AssetOptions{

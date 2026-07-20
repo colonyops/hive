@@ -126,6 +126,47 @@ func TestWorker_NonAutoApplyAction_AwaitsConfirmation(t *testing.T) {
 	assert.Equal(t, int64(0), attempts, "no execution attempt was made")
 }
 
+func TestWorker_ConfirmExecutesManualActionAndConsumesAwaitingCommand(t *testing.T) {
+	t.Parallel()
+	db := openTestPipelineDB(t)
+	enqueueTestCommand(t, db, "review-action", "item-1", `{"title":"Fix bug"}`)
+
+	exec := &fakeExecutor{}
+	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)},
+		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.Tick(t.Context())
+
+	require.NoError(t, worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"changed"}`)))
+	assert.Equal(t, 1, exec.callCount())
+	assert.Equal(t, "Fix bug", exec.calls[0].Payload["title"], "confirmation preserves the queued command payload")
+
+	var status string
+	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
+		`SELECT status FROM output_command WHERE action_id = ? AND key = ?`,
+		"review-action", "item-1",
+	).Scan(&status))
+	assert.Equal(t, "done", status)
+	assert.Error(t, worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`)), "completed actions remain deduped")
+}
+
+func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
+	t.Parallel()
+	db := openTestPipelineDB(t)
+	exec := &fakeExecutor{}
+	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)},
+		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+
+	require.NoError(t, worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`)))
+	assert.Equal(t, 1, exec.callCount())
+
+	var status string
+	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
+		`SELECT status FROM output_command WHERE action_id = ? AND key = ?`,
+		"review-action", "item-1",
+	).Scan(&status))
+	assert.Equal(t, "done", status)
+}
+
 func TestWorker_ManualCommandsDoNotBlockAutomaticCommands(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)

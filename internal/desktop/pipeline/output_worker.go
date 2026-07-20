@@ -89,6 +89,7 @@ type ActionLister interface {
 // via t.TempDir(), matching Producer's own test posture (see Appender).
 type OutputCommandStore interface {
 	ListRunnableOutputCommandsAfter(ctx context.Context, afterID int64, limit int) ([]pipelinedb.OutputCommand, error)
+	ConfirmOutputCommand(ctx context.Context, actionID, key string, payload []byte) (pipelinedb.OutputCommand, bool, error)
 	MarkOutputCommandAwaitingConfirmation(ctx context.Context, id int64) error
 	PromoteOutputCommandsAwaitingConfirmation(ctx context.Context, actionID string) error
 	MarkOutputCommandDone(ctx context.Context, id int64) error
@@ -111,6 +112,7 @@ type Worker struct {
 	batch    int
 	logger   zerolog.Logger
 
+	runMu    sync.Mutex
 	stopOnce sync.Once
 	stop     chan struct{}
 }
@@ -152,12 +154,47 @@ func (w *Worker) Stop() {
 	w.stopOnce.Do(func() { close(w.stop) })
 }
 
+// Confirm records a user-approved action invocation and executes it. A flow
+// action node may already have produced the same command and left it awaiting
+// confirmation; Confirm promotes that durable command instead of creating a
+// second side effect. The action/key pair remains deduped after completion.
+func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []byte) error {
+	w.runMu.Lock()
+	defer w.runMu.Unlock()
+
+	row, confirmed, err := w.db.ConfirmOutputCommand(ctx, actionID, key, payload)
+	if err != nil {
+		return err
+	}
+	if !confirmed {
+		return fmt.Errorf("action %q has already run for %q", actionID, key)
+	}
+
+	action, ok := w.actions.Get(actionID)
+	if !ok {
+		err := fmt.Errorf("unknown action %q", actionID)
+		w.fail(ctx, row, err)
+		return err
+	}
+	if err := w.execute(ctx, row, action); err != nil {
+		w.fail(ctx, row, err)
+		return err
+	}
+	if err := w.db.MarkOutputCommandDone(ctx, row.ID); err != nil {
+		return fmt.Errorf("marking confirmed output command %d done: %w", row.ID, err)
+	}
+	return nil
+}
+
 // Tick promotes commands whose actions now auto-apply, then scans runnable
 // commands in ID order. Manual commands leave the runnable queue without
 // consuming the automatic execution batch. The scan itself is bounded so an
 // unbounded manual queue cannot hold the ticker loop forever. It is exported
 // so tests can drive a deterministic tick instead of waiting on the ticker.
 func (w *Worker) Tick(ctx context.Context) {
+	w.runMu.Lock()
+	defer w.runMu.Unlock()
+
 	for _, action := range w.actions.List() {
 		if !action.AutoApply {
 			continue
@@ -210,7 +247,7 @@ func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) bool
 		return true
 	}
 
-	if !action.AutoApply {
+	if row.Status == "pending" && !action.AutoApply {
 		if err := w.db.MarkOutputCommandAwaitingConfirmation(ctx, row.ID); err != nil {
 			w.logger.Error().Err(err).Int64("id", row.ID).
 				Msg("output worker: marking command awaiting confirmation failed")
@@ -218,14 +255,7 @@ func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) bool
 		return false
 	}
 
-	var payload map[string]any
-	if err := json.Unmarshal(row.Payload, &payload); err != nil {
-		w.fail(ctx, row, fmt.Errorf("decode payload: %w", err))
-		return true
-	}
-
-	data := OutputData{Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload)}
-	if err := w.dispatch.Execute(ctx, action, data); err != nil {
+	if err := w.execute(ctx, row, action); err != nil {
 		w.fail(ctx, row, err)
 		return true
 	}
@@ -234,6 +264,14 @@ func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) bool
 		w.logger.Error().Err(err).Int64("id", row.ID).Msg("output worker: marking command done failed")
 	}
 	return true
+}
+
+func (w *Worker) execute(ctx context.Context, row pipelinedb.OutputCommand, action actions.Action) error {
+	var payload map[string]any
+	if err := json.Unmarshal(row.Payload, &payload); err != nil {
+		return fmt.Errorf("decode payload: %w", err)
+	}
+	return w.dispatch.Execute(ctx, action, OutputData{Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload)})
 }
 
 // fail records a failed execution attempt: retried (status stays pending)

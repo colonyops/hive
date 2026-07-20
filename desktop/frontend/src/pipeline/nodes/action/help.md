@@ -4,7 +4,7 @@ An **action** node is a terminal (1 input, 0 outputs): every message that arrive
 
 ## Fields
 
-- `action` — the id of an action declared in `.hive/actions.yml` (`launch-session`, `shell`, or `publish-event`).
+- `action` — the id of an action declared in the desktop `actions.yml` (`launch-session`, `shell`, or `publish-event`).
 
 ## Behavior
 

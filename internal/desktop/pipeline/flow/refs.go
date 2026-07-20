@@ -1,7 +1,7 @@
 package flow
 
 // Refs resolves the one remaining cross-file reference a flow's nodes point
-// at: the action node's .hive/actions.yml action id. (Source and feed nodes
+// at: the action node's desktop actions.yml action id. (Source and feed nodes
 // are now self-contained — a source embeds its fetch config, a feed's
 // identity is its node id — so they no longer resolve anything.) It is
 // injected rather than imported so this package never depends on the actions

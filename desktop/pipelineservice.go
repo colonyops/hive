@@ -2,22 +2,25 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
+	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
 // PipelineService is the Wails service exposing the desktop pipeline's
-// event log and commit protocol to the frontend. All data comes from the
-// injected *pipelinedb.DB; this type is wire glue only, matching
-// FeedService's thin-glue style.
+// event log, configured actions, and commit protocol to the frontend.
 type PipelineService struct {
-	db *pipelinedb.DB
+	db      *pipelinedb.DB
+	actions *actions.ActionStore
+	worker  *pipeline.Worker
 }
 
-func NewPipelineService(db *pipelinedb.DB) *PipelineService {
-	return &PipelineService{db: db}
+func NewPipelineService(db *pipelinedb.DB, actionStore *actions.ActionStore, worker *pipeline.Worker) *PipelineService {
+	return &PipelineService{db: db, actions: actionStore, worker: worker}
 }
 
 // ReadFrom returns up to limit event_log rows after consumer's persisted
@@ -52,11 +55,35 @@ func (s *PipelineService) FeedItemCounts(flowID string) ([]pipeline.FeedCount, e
 	return s.db.FeedItemCounts(context.Background(), flowID)
 }
 
-// ActionsFor returns the configured actions for an item kind ("PR"/"Issue"),
-// for the detail-pane action picker. The catalog is static today (see
-// feed.ActionsFor); this is the seam where actions.yml-driven actions plug in.
-func (s *PipelineService) ActionsFor(kind string) []feed.Action {
-	return feed.ActionsFor(kind)
+// ActionViews returns the configured actions available for an item kind
+// ("PR"/"Issue"). The actions store is the single source for both these
+// detail-pane views and flow output actions.
+func (s *PipelineService) ActionViews(kind string) []actions.View {
+	return s.actions.ViewsFor(kind)
+}
+
+// InvokeAction records the user's explicit confirmation for actionID against
+// item and executes it. It accepts only actions that apply to the item's kind;
+// executable configuration is always re-resolved from ActionStore.
+func (s *PipelineService) InvokeAction(actionID string, item feed.Item) error {
+	action, ok := s.actions.Get(actionID)
+	if !ok {
+		return fmt.Errorf("unknown action %q", actionID)
+	}
+	if !actions.AppliesTo(action, item.Kind) {
+		return fmt.Errorf("action %q does not apply to %q", actionID, item.Kind)
+	}
+	if item.ID == "" {
+		return fmt.Errorf("action %q: item id is required", actionID)
+	}
+	if s.worker == nil {
+		return fmt.Errorf("action execution is unavailable")
+	}
+	payload, err := json.Marshal(item)
+	if err != nil {
+		return fmt.Errorf("encoding action item: %w", err)
+	}
+	return s.worker.Confirm(context.Background(), actionID, item.ID, payload)
 }
 
 // NodeRuns returns up to limit of a flow's most recent node_run rows,

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import DetailPane from '../DetailPane.vue'
-import type { Action, FeedItem } from '../../types/feed'
+import type { ActionView } from '../../types/action'
+import type { FeedItem } from '../../types/feed'
 
 const item: FeedItem = {
   id: 'item-1',
@@ -20,23 +21,9 @@ const item: FeedItem = {
   url: 'https://github.com/colonyops/hive/pull/42',
 }
 
-const actions: Action[] = [
-  {
-    id: 'summarize',
-    icon: 'sparkles',
-    color: '#f59e0b',
-    title: 'Summarize thread',
-    sub: 'Generate a concise summary',
-    primary: true,
-  },
-  {
-    id: 'draft',
-    icon: 'list',
-    color: '#38bdf8',
-    title: 'Draft reply',
-    sub: 'Write a response',
-    primary: false,
-  },
+const actions: ActionView[] = [
+  { id: 'summarize', label: 'Summarize thread', type: 'launch-session', autoApply: false },
+  { id: 'draft', label: 'Draft reply', type: 'shell', autoApply: false },
 ]
 
 describe('DetailPane', () => {

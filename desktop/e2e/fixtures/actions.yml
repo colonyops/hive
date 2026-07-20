@@ -1,0 +1,14 @@
+# Configured actions for HIVE_DESKTOP_MOCK=feed. Keep this catalog explicit:
+# the detail pane reads ActionStore rather than a mock-only hard-coded catalog.
+version: 1
+actions:
+  - id: review-pr
+    label: Review PR
+    type: launch-session
+    applies_to: [pr]
+    prompt_template: "Review {{ .Payload.title }}"
+  - id: start-implementation
+    label: Start implementation
+    type: launch-session
+    applies_to: [issue]
+    prompt_template: "Implement {{ .Payload.title }}"

@@ -74,6 +74,46 @@ func (q *Queries) CompactEventLogByKey(ctx context.Context) error {
 	return err
 }
 
+const confirmOutputCommand = `-- name: ConfirmOutputCommand :one
+INSERT INTO output_command (action_id, key, payload, status, created_at)
+VALUES (?, ?, ?, 'running', ?)
+ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
+WHERE output_command.status IN ('pending', 'awaiting_confirmation')
+RETURNING id, action_id, payload, status, created_at, "key", attempts, last_error
+`
+
+type ConfirmOutputCommandParams struct {
+	ActionID  string `json:"action_id"`
+	Key       string `json:"key"`
+	Payload   []byte `json:"payload"`
+	CreatedAt int64  `json:"created_at"`
+}
+
+// An explicit detail-pane action invocation creates a command when no flow
+// action node did, or promotes that node's awaiting command to running.
+// Completed/failed/running commands are deliberately not re-run: output
+// actions remain deduped on (action_id, key).
+func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCommandParams) (OutputCommand, error) {
+	row := q.db.QueryRowContext(ctx, confirmOutputCommand,
+		arg.ActionID,
+		arg.Key,
+		arg.Payload,
+		arg.CreatedAt,
+	)
+	var i OutputCommand
+	err := row.Scan(
+		&i.ID,
+		&i.ActionID,
+		&i.Payload,
+		&i.Status,
+		&i.CreatedAt,
+		&i.Key,
+		&i.Attempts,
+		&i.LastError,
+	)
+	return i, err
+}
+
 const countEventLog = `-- name: CountEventLog :one
 SELECT COUNT(*) FROM event_log
 `
@@ -346,12 +386,13 @@ func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlow
 
 const listRunnableOutputCommands = `-- name: ListRunnableOutputCommands :many
 SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
-WHERE status = 'pending'
+WHERE status IN ('pending', 'running')
 ORDER BY id ASC
 LIMIT ?
 `
 
-// Runnable commands are pending automatic execution. ID order matches
+// Pending commands await automatic classification/execution; running ones
+// were explicitly confirmed by the detail pane. ID order matches
 // idx_output_command_status_id, avoiding a sort as the queue grows.
 func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) ([]OutputCommand, error) {
 	rows, err := q.db.QueryContext(ctx, listRunnableOutputCommands, limit)
@@ -387,7 +428,7 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 
 const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
 SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
-WHERE status = 'pending' AND id > ?
+WHERE status IN ('pending', 'running') AND id > ?
 ORDER BY id ASC
 LIMIT ?
 `

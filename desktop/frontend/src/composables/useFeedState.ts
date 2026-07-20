@@ -1,8 +1,9 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, ListFlows } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { ActionsFor, FeedItemCounts, FeedItems, MarkFeedItemRead } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
-import type { Action, FeedItem, FeedSummary, Profile, SidebarSelection } from '../types/feed'
+import { ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import type { ActionView } from '../types/action'
+import type { FeedItem, FeedSummary, Profile, SidebarSelection } from '../types/feed'
 import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
@@ -26,7 +27,7 @@ export function useFeedState() {
   const items = ref<FeedItem[]>([])
   const loadError = ref<string | null>(null)
   const selectedId = ref<string | null>(null)
-  const actions = ref<Action[]>([])
+  const actions = ref<ActionView[]>([])
   const toasts = ref<ToastInstance[]>([])
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
@@ -252,7 +253,7 @@ export function useFeedState() {
       return
     }
     try {
-      actions.value = (await ActionsFor(item.kind)) ?? []
+      actions.value = (await ActionViews(item.kind)) ?? []
     } catch (error) {
       console.warn('Unable to load actions', error)
       actions.value = []
@@ -325,6 +326,19 @@ export function useFeedState() {
     await loadItems(currentFeedId())
   }
 
+  async function invokeAction(actionID: string) {
+    const item = selectedItem.value
+    if (!item) return
+    try {
+      await InvokeAction(actionID, item)
+      const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
+      showToast(`${label} started`, { severity: 'success' })
+    } catch (error) {
+      console.warn('Unable to invoke action', error)
+      showToast(error instanceof Error && error.message ? error.message : 'Could not run the action.', { severity: 'error' })
+    }
+  }
+
   function notWired() {
     showToast('Not wired up yet')
   }
@@ -369,15 +383,18 @@ export function useFeedState() {
   // stale feed_item rows.
 
   let unsubscribeFlows: (() => void) | undefined
+  let unsubscribeActions: (() => void) | undefined
 
   onMounted(() => {
     // A flows/*.yaml change (create/delete/edit) reshapes the profiles list.
     unsubscribeFlows = Events.On('flows:updated', () => { void reloadProfilesQuietly() })
+    unsubscribeActions = Events.On('actions:updated', () => { void loadActions(selectedItem.value) })
     void loadProfiles()
   })
 
   onUnmounted(() => {
     unsubscribeFlows?.()
+    unsubscribeActions?.()
     clearToasts()
   })
 
@@ -412,6 +429,7 @@ export function useFeedState() {
     selectItem,
     toggleUnread,
     refresh,
+    invokeAction,
     notWired,
     openUrl,
     openSelectedInBrowser,

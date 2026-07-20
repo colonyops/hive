@@ -1,7 +1,5 @@
 // The feed UI's view types. A profile is now a flow and its feeds are the
-// flow's feed nodes; items come from persisted feed_item rows. Action is the
-// one type still generated from the Go feed package (the detail-pane catalog).
-export type { Action } from '../../bindings/github.com/colonyops/hive/internal/desktop/feed/models'
+// flow's feed nodes; items come from persisted feed_item rows.
 
 // FeedItem is the rich item shape a feed_item row's opaque payload decodes to
 // (the JSON of Go's feed.Item). feedId is the flow-qualified feed key

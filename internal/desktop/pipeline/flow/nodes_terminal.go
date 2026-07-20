@@ -13,7 +13,7 @@ func (c *FeedConfig) Outputs() int { return 0 }
 func (c *FeedConfig) Validate(Refs) error { return nil }
 
 // ActionConfig is an action node: 1 input, 0 outputs (terminal). It enqueues
-// an output_command against the referenced .hive/actions.yml action id.
+// an output_command against the referenced desktop actions.yml action id.
 type ActionConfig struct {
 	Action string `json:"action" yaml:"action"`
 }

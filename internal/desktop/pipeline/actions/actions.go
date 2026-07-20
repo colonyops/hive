@@ -1,8 +1,7 @@
-// Package actions implements the desktop pipeline's .hive/actions.yml
-// schema: the output/action layer a flow's terminal `action` node targets
-// (see internal/desktop/pipeline/flow's ActionConfig), and — in a later
-// phase — the source for the desktop's detail-pane action buttons
-// (replacing the hardcoded feed.ActionsFor).
+// Package actions implements the desktop pipeline's actions.yml schema: the
+// output/action layer a flow's terminal `action` node targets (see
+// internal/desktop/pipeline/flow's ActionConfig) and the source for the
+// desktop detail pane's action buttons.
 //
 // It mirrors the flow package's registry + two-pass strict decode: a
 // discriminated union over `type`, probed via a lax header, dispatched to a
@@ -21,6 +20,17 @@ import (
 
 	"gopkg.in/yaml.v3"
 )
+
+// View is the complete action contract exposed to the desktop frontend. It
+// deliberately excludes executable configuration: the frontend can present
+// and identify an action, but execution always resolves its current
+// definition from ActionStore.
+type View struct {
+	ID        string `json:"id"`
+	Label     string `json:"label"`
+	Type      string `json:"type"`
+	AutoApply bool   `json:"autoApply"`
+}
 
 // Action is one parsed and validated actions.yml entry: the common envelope
 // fields plus a per-type Config decoded via the registry.
@@ -47,6 +57,11 @@ type Action struct {
 	// Config is the per-type configuration: *LaunchSessionConfig,
 	// *ShellConfig, or *PublishEventConfig.
 	Config ActionConfig
+}
+
+// View returns the safe presentation contract for this action.
+func (a Action) View() View {
+	return View{ID: a.ID, Label: a.Label, Type: a.Type, AutoApply: a.AutoApply}
 }
 
 // ActionConfig is the per-type union every registered action type

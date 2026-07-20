@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => ({
   FeedItems: vi.fn(),
   FeedItemCounts: vi.fn(),
   MarkFeedItemRead: vi.fn(),
-  ActionsFor: vi.fn(),
+  ActionViews: vi.fn(),
+  InvokeAction: vi.fn(),
   On: vi.fn(),
   Hide: vi.fn(),
   OpenURL: vi.fn(),
@@ -27,7 +28,8 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', (
   FeedItems: mocks.FeedItems,
   FeedItemCounts: mocks.FeedItemCounts,
   MarkFeedItemRead: mocks.MarkFeedItemRead,
-  ActionsFor: mocks.ActionsFor,
+  ActionViews: mocks.ActionViews,
+  InvokeAction: mocks.InvokeAction,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -61,7 +63,8 @@ beforeEach(() => {
   mocks.GetFlow.mockResolvedValue(flow)
   mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'triage/my-prs', total: 3, unread: 2 }])
   mocks.FeedItems.mockResolvedValue([])
-  mocks.ActionsFor.mockResolvedValue([])
+  mocks.ActionViews.mockResolvedValue([])
+  mocks.InvokeAction.mockResolvedValue(undefined)
   mocks.On.mockReturnValue(() => {})
 })
 
@@ -161,6 +164,22 @@ describe('useFeedState', () => {
     await get().openUrl('https://example.com')
 
     expect(mocks.OpenURL).toHaveBeenCalledWith('https://example.com')
+  })
+
+  it('invokes the selected configured action with the selected item', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'Fix it', kind: 'PR', labels: [] } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'launch-session', autoApply: false }])
+    const get = mountState()
+    await flushPromises()
+    await get().selectSidebar({ type: 'all' })
+    await flushPromises()
+
+    await get().invokeAction('review')
+
+    expect(mocks.InvokeAction).toHaveBeenCalledWith('review', expect.objectContaining({ id: 'o/r#1', kind: 'PR' }))
+    expect(get().toasts.value.some((toast) => toast.message === 'Review started')).toBe(true)
   })
 
   it('marks an item read via the pipeline service', async () => {

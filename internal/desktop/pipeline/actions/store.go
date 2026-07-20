@@ -2,6 +2,7 @@ package actions
 
 import (
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -41,6 +42,42 @@ func (s *ActionStore) List() []Action {
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
 	return out
+}
+
+// ViewsFor returns the frontend view for every action that applies to kind,
+// sorted by id. An action with no applies_to restriction applies to every
+// kind. Kind comparisons are case-insensitive because GitHub items use
+// "PR"/"Issue" while actions.yml examples conventionally use lowercase.
+func (s *ActionStore) ViewsFor(kind string) []View {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureLoadedLocked()
+
+	out := make([]View, 0, len(s.actions))
+	for _, action := range s.actions {
+		if actionAppliesTo(action, kind) {
+			out = append(out, action.View())
+		}
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i].ID < out[j].ID })
+	return out
+}
+
+// AppliesTo reports whether action is available for kind.
+func AppliesTo(action Action, kind string) bool {
+	return actionAppliesTo(action, kind)
+}
+
+func actionAppliesTo(action Action, kind string) bool {
+	if len(action.AppliesTo) == 0 {
+		return true
+	}
+	for _, allowed := range action.AppliesTo {
+		if strings.EqualFold(allowed, kind) {
+			return true
+		}
+	}
+	return false
 }
 
 // Get returns one loaded action by id.

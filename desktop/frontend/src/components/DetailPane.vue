@@ -10,9 +10,10 @@ import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconInfo from '~icons/lucide/info'
 import IconSettings from '~icons/lucide/settings'
-import type { Action, FeedItem } from '../types/feed'
+import type { FeedItem } from '../types/feed'
+import type { ActionView } from '../types/action'
 
-const props = defineProps<{ item: FeedItem | null; actions: Action[] }>()
+const props = defineProps<{ item: FeedItem | null; actions: ActionView[] }>()
 const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; 'open-url': [url: string]; edit: [] }>()
 
 // Issue/PR bodies are GitHub-flavored markdown from untrusted authors;
@@ -91,7 +92,7 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
           <ActionCard v-for="action in actions" :key="action.id" :action="action" @run="emit('run-action', action.id)" />
         </div>
         <div class="mt-3.5 flex items-center gap-2 font-mono text-[11px] text-text-3"><IconInfo class="size-3 shrink-0 text-accent" /> Runs headless (batch) on <span class="text-text-2">{{ item.branch }}</span></div>
-        <div class="mt-1.5 pl-[19px] font-mono text-[11px] text-text-4">Actions defined in .hive/actions.yml · attach via tmux</div>
+        <div class="mt-1.5 pl-[19px] font-mono text-[11px] text-text-4">Actions defined in desktop actions.yml</div>
       </div>
     </template>
     <div v-else class="m-auto font-mono text-xs text-text-4">Select an item to inspect</div>

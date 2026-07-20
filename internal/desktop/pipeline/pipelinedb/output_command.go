@@ -3,7 +3,9 @@ package pipelinedb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"time"
 )
 
 // ListRunnableOutputCommands returns up to limit output_command rows ready
@@ -29,6 +31,26 @@ func (db *DB) ListRunnableOutputCommandsAfter(ctx context.Context, afterID int64
 		return nil, fmt.Errorf("listing runnable output commands after %d: %w", afterID, err)
 	}
 	return rows, nil
+}
+
+// ConfirmOutputCommand creates a detail-pane action invocation or promotes
+// its matching confirmation-gated command to running. created is false when
+// that action/key has already completed, failed, or is running, preserving
+// output-command deduplication.
+func (db *DB) ConfirmOutputCommand(ctx context.Context, actionID, key string, payload []byte) (command OutputCommand, created bool, err error) {
+	command, err = db.queries.ConfirmOutputCommand(ctx, ConfirmOutputCommandParams{
+		ActionID:  actionID,
+		Key:       key,
+		Payload:   payload,
+		CreatedAt: time.Now().UnixNano(),
+	})
+	if errors.Is(err, sql.ErrNoRows) {
+		return OutputCommand{}, false, nil
+	}
+	if err != nil {
+		return OutputCommand{}, false, fmt.Errorf("confirming output command %q/%q: %w", actionID, key, err)
+	}
+	return command, true, nil
 }
 
 // MarkOutputCommandAwaitingConfirmation moves a manual action command out
