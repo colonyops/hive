@@ -190,7 +190,15 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     if (selectedProfileId.value === id) return
     selectedProfileId.value = id
     pendingEditorProfile = id
-    if (id) void serialize(async () => { await selectBoundEditor(id) })
+    if (!id) return
+    // When the target flow is not in the editor's list yet (e.g. a just-created
+    // profile whose flows:updated has not landed), the bind is deferred until
+    // watch(flows) sees it. Drop the previous profile's draft now: otherwise the
+    // canvas keeps showing — and lets the user edit — the wrong flow, and the
+    // deferred selectFlow/replaceDraft silently discards those edits (a renamed
+    // node reverting, Deploy greying out) the moment it finally runs.
+    if (!flows.value.some((flow) => flow.id === id)) editor.clearFlow()
+    void serialize(async () => { await selectBoundEditor(id) })
   }
 
   // The editor's initial ListFlows is asynchronous. Once it arrives, start

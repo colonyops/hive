@@ -132,6 +132,19 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     }
   }
 
+  // Drops the current draft — no flow selected. Used when a profile switch
+  // targets a flow the editor has not loaded yet, so the canvas shows its
+  // empty state (and cannot be edited against the previous profile's flow)
+  // until the real one binds. Bumps draftRevision so any in-flight deploy
+  // snapshot is not mistaken for the cleared draft.
+  function clearFlow(): void {
+    activeFlow.value = null
+    layout.value = normalizeLayout()
+    dirty.value = false
+    draftRevision++
+    nodeRuns.value = []
+  }
+
   function requireFlow(): EditorFlow {
     if (!activeFlow.value) throw new Error('pipeline: no active flow selected')
     return activeFlow.value
@@ -246,6 +259,7 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     refreshNodeRuns,
     selectFlow,
     replaceDraft,
+    clearFlow,
     addNode,
     updateNode,
     deleteNode,

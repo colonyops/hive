@@ -122,6 +122,41 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
+  // Regression: creating a profile switches selectedProfileId before its flow
+  // reaches the editor's list, so the bind defers. Leaving the previous
+  // profile's draft active meanwhile let the user rename a node against the
+  // wrong flow; the deferred selectFlow/replaceDraft then discarded that edit
+  // (dirty cleared → Deploy greyed out) — the webkit onboarding e2e flake at
+  // onboarding.spec.ts:101. The stale draft must be dropped on the deferred bind.
+  it('clears the previous draft when binding to a not-yet-loaded flow, then binds it once it arrives', async () => {
+    let flowsList = [summary('flow-1')]
+    const editorClient = fakeEditorClient({
+      listFlows: vi.fn().mockImplementation(() => Promise.resolve(flowsList)),
+      getFlow: vi.fn().mockImplementation((id: string) => Promise.resolve(wireFlow(id))),
+    })
+    const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
+    await flushPromises()
+
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+    expect(state.activeFlow.value?.id).toBe('flow-1')
+
+    // Switch to a profile whose flow is not in the list yet (deferred bind).
+    state.bindActiveFlow('flow-2')
+    await flushPromises()
+    // The stale flow-1 draft must be gone — not left editable under flow-2.
+    expect(state.activeFlow.value).toBeNull()
+
+    // flow-2 lands (its flows:updated); the deferred bind completes correctly.
+    flowsList = [summary('flow-1'), summary('flow-2')]
+    await state.reloadDeployed()
+    await flushPromises()
+    expect(state.activeFlow.value?.id).toBe('flow-2')
+    expect(state.dirty.value).toBe(false)
+
+    wrapper.unmount()
+  })
+
   it('openFlows/exitFlows toggle flowsOpen and set the focus node for the 8d nav task', async () => {
     const { state, wrapper } = mountSession({ editorClient: fakeEditorClient(), runtimeClient: fakeRuntimeClient() })
     await flushPromises()
