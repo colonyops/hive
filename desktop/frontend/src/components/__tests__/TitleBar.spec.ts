@@ -25,6 +25,16 @@ describe('TitleBar', () => {
     expect(wrapper.emitted('exit-flows')).toHaveLength(1)
   })
 
+  it('exposes enabled back and forward history controls', async () => {
+    const wrapper = mount(TitleBar, { props: { canGoBack: true, canGoForward: true } })
+
+    await wrapper.find('[data-testid="titlebar-back"]').trigger('click')
+    await wrapper.find('[data-testid="titlebar-forward"]').trigger('click')
+
+    expect(wrapper.emitted('back')).toHaveLength(1)
+    expect(wrapper.emitted('forward')).toHaveLength(1)
+  })
+
   it('renders the error chip only when errorCount > 0 and emits open-error-node on click', async () => {
     const none = mount(TitleBar, { props: { profileName: 'Triage', errorCount: 0 } })
     expect(none.find('[data-testid="titlebar-error-chip"]').exists()).toBe(false)

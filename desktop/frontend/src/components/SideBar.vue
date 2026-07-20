@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import IconChevronRight from '~icons/lucide/chevron-right'
-import IconCircle from '~icons/lucide/circle'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconList from '~icons/lucide/list'
 import IconRss from '~icons/lucide/rss'
@@ -11,10 +10,9 @@ import PanelResizeHandle from './PanelResizeHandle.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import type { Profile, SidebarSelection } from '../types/feed'
 
-const props = defineProps<{ profile: Profile; selection: SidebarSelection; unreadOnly: boolean; flowsDirty?: boolean }>()
+const props = defineProps<{ profile: Profile; selection: SidebarSelection; flowsDirty?: boolean }>()
 const emit = defineEmits<{
   select: [sel: SidebarSelection]
-  'select-unread': []
   'open-flows': []
   'open-settings': []
   'reveal-in-flow': [feedId: string]
@@ -28,14 +26,11 @@ const { size, startResize, step } = useResizablePanel({
   edge: 'right',
 })
 
-// "All items" and "Unread" are both all-scope; the unread filter picks
-// which entry lights up. A feed entry highlights regardless of the filter.
+// "All items" is the all-scope entry; the All / Unread filter now lives on the
+// list itself, so the sidebar no longer carries an Unread shortcut. A feed
+// entry highlights when it's the active selection.
 function allSelected(): boolean {
-  return props.selection.type === 'all' && !props.unreadOnly
-}
-
-function unreadSelected(): boolean {
-  return props.selection.type === 'all' && props.unreadOnly
+  return props.selection.type === 'all'
 }
 
 function feedSelected(feedId: string): boolean {
@@ -65,9 +60,6 @@ function feedSelected(feedId: string): boolean {
     <div class="px-2.5 pb-0.5 pt-3">
       <button class="sidebar-entry" :class="{ 'sidebar-entry-selected': allSelected() }" @click="emit('select', { type: 'all' })">
         <span class="nav-icon border-accent-tint text-accent"><IconList class="size-3" /></span><span class="flex-1 text-left">All items</span><span class="font-mono text-[11px]">{{ profile.totalCount }}</span>
-      </button>
-      <button class="sidebar-entry" data-testid="sidebar-unread" :class="{ 'sidebar-entry-selected': unreadSelected() }" @click="emit('select-unread')">
-        <span class="nav-icon"><IconCircle class="size-3" /></span><span class="flex-1 text-left">Unread</span><span class="size-[7px] rounded-full bg-accent" /><span class="ml-[7px] font-mono text-[11px] text-text-3">{{ profile.unreadCount }}</span>
       </button>
     </div>
 

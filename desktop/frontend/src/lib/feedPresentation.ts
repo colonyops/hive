@@ -19,7 +19,7 @@ export function feedSource(item?: { url?: string }): FeedSource {
 // Human label for an item's type, shown in the row's type pill and the detail
 // header. Falls back to the raw kind for anything unmapped.
 export function typeLabel(kind: string): string {
-  if (kind === 'PR') return 'Pull request'
+  if (kind === 'PR') return 'Pull Request'
   if (kind === 'Issue') return 'Issue'
   return kind || 'Item'
 }

@@ -2,11 +2,12 @@
 import { computed } from 'vue'
 import ActionCard from './ActionCard.vue'
 import PanelResizeHandle from './PanelResizeHandle.vue'
+import SourceMark from './SourceMark.vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
+import { feedSource } from '../lib/feedPresentation'
 import { renderGithubMarkdown } from '../lib/githubMarkdown'
 import IconCircleDot from '~icons/lucide/circle-dot'
 import IconExternalLink from '~icons/lucide/external-link'
-import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconInfo from '~icons/lucide/info'
 import IconSettings from '~icons/lucide/settings'
@@ -15,6 +16,10 @@ import type { ActionView } from '../types/action'
 
 const props = defineProps<{ item: FeedItem | null; actions: ActionView[] }>()
 const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; 'open-url': [url: string]; edit: [] }>()
+
+// The detail header leads with the item's source (brand badge) and its type,
+// mirroring the inbox row.
+const source = computed(() => feedSource(props.item ?? undefined))
 
 // Issue/PR bodies are GitHub-flavored markdown from untrusted authors;
 // renderGithubMarkdown parses the GFM and escapes raw HTML / unsafe links, so
@@ -63,15 +68,15 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
     <template v-if="item">
       <div class="relative border-b border-border px-5 pb-4 pt-[18px]">
         <div class="mb-[11px] flex items-center gap-[9px]">
+          <span class="source-badge" :data-source="source.key" data-testid="source-badge"><SourceMark :source="source" class="size-[15px]" /></span>
           <span class="kind-pill" :class="item.kind === 'PR' ? 'kind-pill-pr' : 'kind-pill-issue'">
             <IconGitPullRequest v-if="item.kind === 'PR'" class="size-[13px]" />
             <IconCircleDot v-else class="size-[13px]" />
-            {{ item.kind === 'PR' ? 'Pull request' : 'Issue' }}
+            {{ item.kind === 'PR' ? 'Pull Request' : 'Issue' }}
           </span>
-          <IconGitBranch class="size-3 shrink-0 text-text-3" />
-          <span class="font-mono text-xs text-text-3">{{ item.repo }} #{{ item.num }}</span>
+          <span class="min-w-0 truncate font-mono text-xs text-text-3">{{ source.label }} · {{ item.repo }} #{{ item.num }}</span>
           <span class="flex-1" />
-          <button class="open-button" @click="emit('open-browser')">open <IconExternalLink class="size-3" /></button>
+          <button class="open-button shrink-0" @click="emit('open-browser')">open <IconExternalLink class="size-3" /></button>
         </div>
         <h1 class="text-[17px] font-semibold leading-[1.3] tracking-[-.01em]">{{ item.title }}</h1>
         <p class="mt-[9px] text-xs text-text-3"><span class="text-text-2">{{ item.author }}</span> · {{ item.age }} ago</p>
@@ -100,6 +105,7 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
 </template>
 
 <style scoped>
+.source-badge { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; background: var(--color-chip); border: 1px solid var(--color-strong); color: var(--color-text); }
 .kind-pill { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 9px 0 7px; border-radius: 6px; font-size: 11px; font-weight: 600; }
 .kind-pill-pr { background: var(--color-kind-pr-tint); color: var(--color-kind-pr); }
 .kind-pill-issue { background: var(--color-kind-issue-tint); color: var(--color-kind-issue); }

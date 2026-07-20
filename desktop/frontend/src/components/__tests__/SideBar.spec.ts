@@ -18,7 +18,7 @@ const profile: Profile = {
 
 function mountSideBar(overrides: Partial<{ flowsDirty: boolean }> = {}) {
   return mount(SideBar, {
-    props: { profile, selection: { type: 'all' }, unreadOnly: false, ...overrides },
+    props: { profile, selection: { type: 'all' }, ...overrides },
   })
 }
 
@@ -34,6 +34,18 @@ describe('SideBar', () => {
 
     await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
     expect(wrapper.emitted('open-settings')).toHaveLength(1)
+  })
+
+  it('no longer carries an Unread shortcut (the All / Unread filter lives on the list)', () => {
+    const wrapper = mountSideBar()
+    expect(wrapper.find('[data-testid="sidebar-unread"]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('Unread')
+  })
+
+  it('highlights All items whenever the scope is all-items', () => {
+    const wrapper = mountSideBar()
+    const allEntry = wrapper.findAll('button.sidebar-entry').find((b) => b.text().includes('All items'))
+    expect(allEntry?.classes()).toContain('sidebar-entry-selected')
   })
 
   it('opens the flows canvas from the Edit flow footer', async () => {

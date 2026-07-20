@@ -33,6 +33,15 @@ describe('DetailPane', () => {
     expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(2)
   })
 
+  it('leads the header with the source badge and source-qualified context', () => {
+    const wrapper = mount(DetailPane, { props: { item, actions } })
+
+    const badge = wrapper.find('[data-testid="source-badge"]')
+    expect(badge.exists()).toBe(true)
+    expect(badge.attributes('data-source')).toBe('github')
+    expect(wrapper.text()).toContain('GitHub · colonyops/hive #42')
+  })
+
   it('emits run-action with the action id', async () => {
     const wrapper = mount(DetailPane, { props: { item, actions } })
     const draftButton = wrapper.findAll('button.action-card').find((button) => button.text().includes('Draft reply'))

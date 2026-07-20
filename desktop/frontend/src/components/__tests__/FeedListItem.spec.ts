@@ -52,7 +52,7 @@ describe('FeedListItem', () => {
     const wrapper = mountItem({ reason: 'review_requested', labels: ['bug'] })
 
     expect(wrapper.find('[data-testid="source-badge"]').attributes('data-source')).toBe('github')
-    expect(wrapper.find('[data-testid="type-pill"]').text()).toBe('Pull request')
+    expect(wrapper.find('[data-testid="type-pill"]').text()).toBe('Pull Request')
     expect(wrapper.find('[data-testid="item-snippet"]').text()).toContain('hayden — Body')
     expect(wrapper.find('[data-testid="reason-chip"]').exists()).toBe(false)
     expect(wrapper.findAll('span.bg-chip')).toHaveLength(0)

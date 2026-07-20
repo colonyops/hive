@@ -2,7 +2,7 @@
 // Application-wide settings, opened from the persistent profile rail.
 // Only settings backed by real behavior or explicitly marked future
 // integrations belong here.
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconPalette from '~icons/lucide/palette'
 import IconPlug from '~icons/lucide/plug'
@@ -12,12 +12,14 @@ import posthogIcon from '../assets/integrations/posthog.svg'
 import slackIcon from '../assets/integrations/slack.svg'
 import SettingsSegmented from './settings/SettingsSegmented.vue'
 import { setTheme, themeLabels, themes, useTheme, type Theme } from '../composables/useTheme'
+import type { ApplicationSettingsSection } from '../router'
 
-const props = defineProps<{ githubConnected: boolean; githubLogin?: string }>()
-const emit = defineEmits<{ close: [] }>()
-
-type CategoryId = 'appearance' | 'integrations'
-const activeCategory = ref<CategoryId>('appearance')
+const props = defineProps<{
+  githubConnected: boolean
+  githubLogin?: string
+  activeCategory: ApplicationSettingsSection
+}>()
+const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationSettingsSection] }>()
 const categories = [
   { id: 'appearance' as const, label: 'Appearance', icon: IconPalette },
   { id: 'integrations' as const, label: 'Integrations', icon: IconPlug },
@@ -55,17 +57,17 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           :key="category.id"
           type="button"
           class="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px]"
-          :class="activeCategory === category.id ? 'bg-hover font-medium text-accent' : 'text-text-2 hover:bg-chip hover:text-text'"
-          :aria-current="activeCategory === category.id ? 'true' : undefined"
+          :class="props.activeCategory === category.id ? 'bg-hover font-medium text-accent' : 'text-text-2 hover:bg-chip hover:text-text'"
+          :aria-current="props.activeCategory === category.id ? 'true' : undefined"
           :data-testid="`settings-category-${category.id}`"
-          @click="activeCategory = category.id"
+          @click="emit('select-category', category.id)"
         ><component :is="category.icon" class="size-3.5 shrink-0" />{{ category.label }}</button>
       </nav>
     </aside>
 
     <section class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-4">
-        <span class="text-[13px] font-semibold text-text">{{ activeCategory === 'appearance' ? 'Appearance' : 'Integrations' }}</span>
+        <span class="text-[13px] font-semibold text-text">{{ props.activeCategory === 'appearance' ? 'Appearance' : 'Integrations' }}</span>
         <div class="flex-1" />
         <button
           type="button"
@@ -76,7 +78,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       </header>
 
       <div class="hive-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6">
-        <div v-if="activeCategory === 'appearance'" class="mx-auto max-w-[560px]">
+        <div v-if="props.activeCategory === 'appearance'" class="mx-auto max-w-[560px]">
           <SettingsSegmented
             :model-value="theme"
             label="Theme"

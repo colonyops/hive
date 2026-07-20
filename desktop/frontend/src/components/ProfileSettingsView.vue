@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, onUnmounted } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
 import type { Profile } from '../types/feed'
+import type { ProfileSettingsSection } from '../router'
 
-const props = defineProps<{ profile: Profile }>()
-const emit = defineEmits<{ close: []; delete: [] }>()
-
-const activeSection = ref<'general' | 'danger'>('general')
+const props = defineProps<{ profile: Profile; activeSection: ProfileSettingsSection }>()
+const emit = defineEmits<{ close: []; delete: []; 'select-section': [section: ProfileSettingsSection] }>()
 
 function onKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') emit('close')
@@ -29,25 +28,25 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <button
           type="button"
           class="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px]"
-          :class="activeSection === 'general' ? 'bg-hover font-medium text-accent' : 'text-text-2 hover:bg-chip hover:text-text'"
-          :aria-current="activeSection === 'general' ? 'true' : undefined"
+          :class="props.activeSection === 'general' ? 'bg-hover font-medium text-accent' : 'text-text-2 hover:bg-chip hover:text-text'"
+          :aria-current="props.activeSection === 'general' ? 'true' : undefined"
           data-testid="profile-settings-general"
-          @click="activeSection = 'general'"
+          @click="emit('select-section', 'general')"
         ><IconSlidersHorizontal class="size-3.5 shrink-0" />General</button>
         <button
           type="button"
           class="flex w-full cursor-pointer items-center gap-2.5 rounded-md px-2.5 py-2 text-left text-[13px]"
-          :class="activeSection === 'danger' ? 'bg-hover font-medium text-severity-error' : 'text-text-2 hover:bg-chip hover:text-text'"
-          :aria-current="activeSection === 'danger' ? 'true' : undefined"
+          :class="props.activeSection === 'danger' ? 'bg-hover font-medium text-severity-error' : 'text-text-2 hover:bg-chip hover:text-text'"
+          :aria-current="props.activeSection === 'danger' ? 'true' : undefined"
           data-testid="profile-settings-danger"
-          @click="activeSection = 'danger'"
+          @click="emit('select-section', 'danger')"
         ><IconTrash2 class="size-3.5 shrink-0" />Danger zone</button>
       </nav>
     </aside>
 
     <section class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-4">
-        <span class="text-[13px] font-semibold text-text">{{ activeSection === 'general' ? 'General' : 'Danger zone' }}</span>
+        <span class="text-[13px] font-semibold text-text">{{ props.activeSection === 'general' ? 'General' : 'Danger zone' }}</span>
         <div class="flex-1" />
         <button
           type="button"
@@ -59,7 +58,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
       <div class="hive-scroll min-h-0 flex-1 overflow-y-auto px-6 py-6">
         <div class="mx-auto max-w-[560px]">
-          <div v-if="activeSection === 'general'" class="rounded-lg border border-border bg-raised p-4">
+          <div v-if="props.activeSection === 'general'" class="rounded-lg border border-border bg-raised p-4">
             <div class="text-[12.5px] text-text-3">Profile name</div>
             <div class="mt-1 text-[15px] font-semibold text-text" data-testid="profile-settings-name">{{ props.profile.name }}</div>
             <div class="mt-3 border-t border-border pt-3 text-xs text-text-3">{{ props.profile.sourceSummary }}</div>

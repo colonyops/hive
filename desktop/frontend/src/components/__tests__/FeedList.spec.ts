@@ -104,4 +104,21 @@ describe('FeedList', () => {
     expect(wrapper.emitted('set-unread')).toEqual([[true], [false]])
     expect(wrapper.emitted('refresh')).toHaveLength(1)
   })
+
+  it('filters the visible list by the search query', async () => {
+    const wrapper = mountList()
+
+    await wrapper.find('[data-testid="feed-search"]').setValue('Unread')
+
+    expect(wrapper.text()).toContain('Unread item')
+    expect(wrapper.text()).not.toContain('Read item')
+  })
+
+  it('shows a no-matches empty state when the search excludes everything', async () => {
+    const wrapper = mountList()
+
+    await wrapper.find('[data-testid="feed-search"]').setValue('zzz-nothing-here')
+
+    expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No matches')
+  })
 })

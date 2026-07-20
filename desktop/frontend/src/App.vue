@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Events } from '@wailsio/runtime'
+import { useRoute, useRouter } from 'vue-router'
 import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
@@ -29,6 +30,8 @@ import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
+import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
+import type { SidebarSelection } from './types/feed'
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -37,7 +40,7 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
-  selectedId, selectedItem, actions, unreadOnly, title, countLabel, toasts, dismissToast, clearToasts,
+  selectedId, selectedItem, actions, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
   selectProfile, selectSidebar, selectUnreadView, selectItem,
   toggleUnread, refresh, invokeAction, notWired, openUrl, openSelectedInBrowser, hideWindow,
@@ -57,93 +60,187 @@ const {
 // rather than dependent on FlowsView mounting/unmounting.
 const session = useFlowsSession()
 
-// Bind profile navigation to the editor's selected draft. Runtime ownership
-// remains independent: every enabled flow runs whether selected or not.
-// Switching profiles from the flows canvas returns to the feed view of the
-// new profile — the just-opened flow belonged to the previous profile.
-watch(activeProfileId, (id) => {
-  session.bindActiveFlow(id || undefined)
-  session.exitFlows()
+// ── Route-driven navigation ────────────────────────────────────────────────
+// The Wails webview uses hash history: routes survive asset:// hosting and
+// native/browser back and forward controls traverse the same page stack. The
+// shell (title bar + profile rail) stays mounted while this route selects its
+// main page.
+const router = useRouter()
+const route = useRoute()
+const flowsActive = computed(() => route.name === 'flows')
+const applicationSettingsActive = computed(() => route.name === 'application-settings')
+const profileSettingsActive = computed(() => route.name === 'profile-settings')
+const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
+  route.params.section === 'integrations' ? 'integrations' : 'appearance',
+)
+const profileSettingsSection = computed<ProfileSettingsSection>(() =>
+  route.params.section === 'danger' ? 'danger' : 'general',
+)
+const canGoBack = computed(() => {
+  void route.fullPath
+  return router.options.history.state.back !== null
+})
+const canGoForward = computed(() => {
+  void route.fullPath
+  return router.options.history.state.forward !== null
 })
 
-// ── Un-deployed changes guard (hc-sx4k3c7k) ──────────────────────────────
-// Exiting the canvas and switching the active profile both silently
-// abandon un-deployed flow edits (session.dirty) today. Both call sites
-// route through the request*() wrappers below instead of touching
-// flowsOpen/activeProfileId directly, so when dirty the actual navigation
-// is deferred behind a confirm modal (Deploy/Discard/Cancel) rather than
-// firing immediately — nothing has changed yet when the modal opens, so
-// Cancel needs no "undo": the rail selection and the real active profile
-// were never touched in the first place.
-type SettingsPage = 'application' | 'profile'
-type PendingNavigation =
-  | { kind: 'exit-flows' }
-  | { kind: 'switch-profile'; profileId: string }
-  | { kind: 'open-settings'; page: SettingsPage }
+// Keep the selected backend profile and flow draft aligned with route params.
+// Missing profile params occur only on the first /feed load; canonicalize that
+// entry once profiles arrive so future history entries are self-contained.
+watch(activeProfileId, (id) => {
+  session.bindActiveFlow(id || undefined)
+  const routeNeedsProfile = route.name === 'feed' || route.name === 'flows' || route.name === 'profile-settings'
+  if (id && routeNeedsProfile && !route.params.profileId) {
+    void router.replace({ name: route.name, params: { ...route.params, profileId: id }, query: route.query })
+  }
+})
+
+let feedRouteSync = 0
+watch([profilesLoaded, () => route.fullPath], async ([loaded]) => {
+  if (!loaded) return
+  const sync = ++feedRouteSync
+  const rawProfileId = route.params.profileId
+  if (typeof rawProfileId !== 'string') return
+  if (!profiles.value.some((profile) => profile.id === rawProfileId)) {
+    if (activeProfileId.value) void router.replace({ name: 'feed', params: { profileId: activeProfileId.value } })
+    return
+  }
+  if (rawProfileId !== activeProfileId.value) await selectProfile(rawProfileId)
+  if (sync !== feedRouteSync || route.name !== 'feed') return
+
+  const rawFeedId = route.query.feed
+  const feedId = typeof rawFeedId === 'string' && activeProfile.value?.feeds.some((feed) => feed.id === rawFeedId)
+    ? rawFeedId
+    : null
+  const wantsUnread = route.query.unread === '1'
+  if (feedId) await selectSidebar({ type: 'feed', feedId })
+  else if (wantsUnread) await selectUnreadView()
+  else await selectSidebar({ type: 'all' })
+
+  // Unread can also filter one specific feed. selectSidebar clears the flag,
+  // so apply it after loading that feed's items.
+  if (feedId && wantsUnread && !unreadOnly.value) await toggleUnread()
+}, { immediate: true })
+
+watch([() => route.name, () => route.query.node], ([name, rawNode]) => {
+  if (name === 'flows') session.openFlows(typeof rawNode === 'string' ? rawNode : undefined)
+  else session.exitFlows()
+}, { immediate: true })
+
+// A router guard protects dirty flow drafts for every navigation source,
+// including native mouse/browser Back — not only the app's own buttons.
+type PendingNavigation = { to: string }
 const pendingNavigation = ref<PendingNavigation | null>(null)
 const unsavedChangesBusy = ref(false)
-
-function requestExitFlows(): void {
-  if (session.dirty.value) pendingNavigation.value = { kind: 'exit-flows' }
-  else session.exitFlows()
-}
-
-function requestSelectProfile(id: string): void {
-  if (session.dirty.value && id !== activeProfileId.value) pendingNavigation.value = { kind: 'switch-profile', profileId: id }
-  else void selectProfile(id)
-}
-
-function applyPendingNavigation(pending: PendingNavigation): void {
-  if (pending.kind === 'exit-flows') session.exitFlows()
-  else if (pending.kind === 'switch-profile') void selectProfile(pending.profileId)
-  else {
-    settingsPage.value = pending.page
-    session.exitFlows()
+let allowGuardedNavigation = false
+const removeNavigationGuard = router.beforeEach((to, from) => {
+  const switchesProfile = typeof to.params.profileId === 'string' && to.params.profileId !== activeProfileId.value
+  const leavesDirtyFlow = from.name === 'flows' && (
+    to.name !== 'flows' || to.params.profileId !== from.params.profileId
+  )
+  if (!allowGuardedNavigation && (leavesDirtyFlow || switchesProfile) && session.dirty.value) {
+    pendingNavigation.value = { to: to.fullPath }
+    return false
   }
-}
+})
+onUnmounted(removeNavigationGuard)
 
 function cancelPendingNavigation(): void {
   pendingNavigation.value = null
 }
 
-async function deployPendingNavigation(): Promise<void> {
+async function finishPendingNavigation(): Promise<void> {
   const pending = pendingNavigation.value
   if (!pending) return
+  pendingNavigation.value = null
+  allowGuardedNavigation = true
+  try {
+    await router.push(pending.to)
+  } finally {
+    allowGuardedNavigation = false
+  }
+}
+
+async function deployPendingNavigation(): Promise<void> {
+  if (!pendingNavigation.value) return
   unsavedChangesBusy.value = true
   await session.deploy()
   unsavedChangesBusy.value = false
-  if (session.dirty.value) return // deploy failed — session.error carries the message; stay open so the user can retry or cancel
-  pendingNavigation.value = null
-  applyPendingNavigation(pending)
+  if (session.dirty.value) return
+  await finishPendingNavigation()
 }
 
 async function discardPendingNavigation(): Promise<void> {
-  const pending = pendingNavigation.value
-  if (!pending) return
+  if (!pendingNavigation.value) return
   unsavedChangesBusy.value = true
   await session.discardDraft()
   unsavedChangesBusy.value = false
-  if (session.dirty.value) return // reload from disk failed — stay open
-  pendingNavigation.value = null
-  applyPendingNavigation(pending)
+  if (session.dirty.value) return
+  await finishPendingNavigation()
 }
 
-// Profile settings are opened from the active profile header; application
-// settings are opened from the persistent rail. They share the main view slot
-// but remain separate so profile-only actions never appear as global options.
-const settingsPage = ref<SettingsPage | null>(null)
+function openFeed(profileId = activeProfileId.value): void {
+  void router.push({ name: 'feed', params: profileId ? { profileId } : {} })
+}
 
-function requestOpenSettings(page: SettingsPage): void {
-  if (session.flowsOpen.value && session.dirty.value) {
-    pendingNavigation.value = { kind: 'open-settings', page }
-    return
-  }
-  settingsPage.value = page
-  session.exitFlows()
+function navigateSidebar(nextSelection: SidebarSelection): void {
+  if (!activeProfileId.value) return
+  void router.push({
+    name: 'feed',
+    params: { profileId: activeProfileId.value },
+    query: nextSelection.type === 'feed' ? { feed: nextSelection.feedId } : {},
+  })
+}
+
+function navigateUnreadFilter(value: boolean): void {
+  if (!activeProfileId.value) return
+  const query: Record<string, string> = {}
+  if (selection.value.type === 'feed') query.feed = selection.value.feedId
+  if (value) query.unread = '1'
+  void router.push({ name: 'feed', params: { profileId: activeProfileId.value }, query })
+}
+
+function navigateUnreadToggle(): void {
+  navigateUnreadFilter(!unreadOnly.value)
+}
+
+function openFlows(focusNodeId?: string): void {
+  if (!activeProfileId.value) return
+  // Update immediately for command-palette and canvas focus feedback; the
+  // route watcher keeps this state aligned during back/forward traversal.
+  session.openFlows(focusNodeId)
+  void router.push({
+    name: 'flows',
+    params: { profileId: activeProfileId.value },
+    query: focusNodeId ? { node: focusNodeId } : {},
+  })
+}
+
+function requestExitFlows(): void {
+  openFeed()
+}
+
+function requestSelectProfile(id: string): void {
+  openFeed(id)
+}
+
+function requestOpenSettings(page: 'application' | 'profile'): void {
+  if (page === 'application') void router.push({ name: 'application-settings' })
+  else if (activeProfileId.value) void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value } })
 }
 
 function closeSettings(): void {
-  settingsPage.value = null
+  openFeed()
+}
+
+function selectApplicationSettingsSection(section: ApplicationSettingsSection): void {
+  void router.push({ name: 'application-settings', params: { section } })
+}
+
+function selectProfileSettingsSection(section: ProfileSettingsSection): void {
+  if (!activeProfileId.value) return
+  void router.push({ name: 'profile-settings', params: { profileId: activeProfileId.value, section } })
 }
 
 // ── Reveal in flow (8d) ───────────────────────────────────────────────────────
@@ -154,7 +251,7 @@ function closeSettings(): void {
 // select + center-pan (see FlowsView.vue's :focus-node-id binding).
 function revealInFlow(feedId: string): void {
   const nodeId = feedId.slice(activeProfileId.value.length + 1)
-  session.openFlows(nodeId)
+  openFlows(nodeId)
 }
 
 // ── Titlebar error chip (8d) ──────────────────────────────────────────────────
@@ -169,7 +266,7 @@ const errorCount = computed(() => errorNodeIds.value.length)
 const firstErrorNodeId = computed(() => errorNodeIds.value[0])
 
 function openErrorNode(): void {
-  if (firstErrorNodeId.value) session.openFlows(firstErrorNodeId.value)
+  if (firstErrorNodeId.value) openFlows(firstErrorNodeId.value)
 }
 
 // ── Always-on runtime pump (hc-8ft4yhm6) ─────────────────────────────────────
@@ -208,7 +305,10 @@ function openNewProfile() {
 
 async function submitNewProfile(name: string) {
   await createProfile(name)
-  if (!createProfileError.value) newProfileOpen.value = false
+  if (!createProfileError.value) {
+    newProfileOpen.value = false
+    openFeed(activeProfileId.value)
+  }
 }
 
 const deleteProfileOpen = ref(false)
@@ -222,7 +322,7 @@ async function confirmDeleteProfile() {
   const deleted = await deleteProfile(activeProfileId.value)
   if (!deleted) return
   deleteProfileOpen.value = false
-  settingsPage.value = null
+  openFeed()
 }
 
 // Booting while signed out leaves profiles unloaded (or the live backend
@@ -263,7 +363,7 @@ useCommands(computed(() => {
     group: 'Feeds',
     icon: IconList,
     hint: profileName,
-    run: () => selectSidebar({ type: 'all' }),
+    run: () => navigateSidebar({ type: 'all' }),
   })
 
   for (const f of activeProfile.value?.feeds ?? []) {
@@ -273,7 +373,7 @@ useCommands(computed(() => {
       group: 'Feeds',
       icon: IconRss,
       hint: profileName,
-      run: () => selectSidebar({ type: 'feed', feedId: f.id }),
+      run: () => navigateSidebar({ type: 'feed', feedId: f.id }),
     })
   }
 
@@ -282,7 +382,7 @@ useCommands(computed(() => {
     title: 'Toggle unread filter',
     group: 'Feeds',
     icon: IconEye,
-    run: toggleUnread,
+    run: navigateUnreadToggle,
   })
 
   cmds.push({
@@ -305,11 +405,11 @@ useCommands(computed(() => {
   // View — enter/exit the flows canvas for the active profile.
   cmds.push({
     id: 'flow:edit',
-    title: session.flowsOpen.value ? 'Back to feed' : 'Edit flow…',
+    title: flowsActive.value ? 'Back to feed' : 'Edit flow…',
     group: 'View',
     keywords: ['flows', 'pipeline', 'nodes', 'canvas', 'editor'],
     icon: IconWorkflow,
-    run: () => { session.flowsOpen.value ? requestExitFlows() : session.openFlows() },
+    run: () => { flowsActive.value ? requestExitFlows() : openFlows() },
   })
 
   // Jump to any node in the active flow by name (8d) — opens the canvas
@@ -321,7 +421,7 @@ useCommands(computed(() => {
       group: 'Flow',
       keywords: ['flows', 'node', 'canvas', 'reveal'],
       icon: IconShare2,
-      run: () => session.openFlows(node.id),
+      run: () => openFlows(node.id),
     })
   }
 
@@ -382,9 +482,12 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
     <div class="flex h-full min-h-0 flex-col overflow-hidden">
       <TitleBar
         :profile-name="authenticated && !needsWorkspace ? activeProfile?.name ?? 'Loading' : undefined"
-        :unread-count="activeProfile?.unreadCount ?? 0"
-        :flows-active="session.flowsOpen.value"
+        :flows-active="flowsActive"
         :error-count="errorCount"
+        :can-go-back="canGoBack"
+        :can-go-forward="canGoForward"
+        @back="router.back()"
+        @forward="router.forward()"
         @exit-flows="requestExitFlows"
         @open-error-node="openErrorNode"
       />
@@ -416,28 +519,30 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           @open-settings="requestOpenSettings('application')"
         />
         <SettingsView
-          v-if="settingsPage === 'application'"
+          v-if="applicationSettingsActive"
           :github-connected="authenticated"
           :github-login="authStatus?.login"
+          :active-category="applicationSettingsSection"
           @close="closeSettings"
+          @select-category="selectApplicationSettingsSection"
         />
         <ProfileSettingsView
-          v-else-if="settingsPage === 'profile' && activeProfile"
+          v-else-if="profileSettingsActive && activeProfile"
           :profile="activeProfile"
+          :active-section="profileSettingsSection"
           @close="closeSettings"
           @delete="openDeleteProfile"
+          @select-section="selectProfileSettingsSection"
         />
-        <FlowsView v-else-if="session.flowsOpen.value" />
+        <FlowsView v-else-if="flowsActive" />
         <template v-else>
           <SideBar
             v-if="activeProfile"
             :profile="activeProfile"
             :selection="selection"
-            :unread-only="unreadOnly"
             :flows-dirty="session.dirty.value"
-            @select="selectSidebar"
-            @select-unread="selectUnreadView"
-            @open-flows="session.openFlows()"
+            @select="navigateSidebar"
+            @open-flows="openFlows()"
             @open-settings="requestOpenSettings('profile')"
             @reveal-in-flow="revealInFlow"
           />
@@ -447,10 +552,9 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               :items="items"
               :selected-id="selectedId"
               :unread-only="unreadOnly"
-              :count-label="countLabel"
               :load-error="loadError"
               @select="selectItem"
-              @toggle-unread="toggleUnread"
+              @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
             <DetailPane :item="selectedItem" :actions="actions" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="notWired" />

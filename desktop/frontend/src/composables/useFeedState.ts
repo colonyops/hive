@@ -45,7 +45,6 @@ export function useFeedState() {
     if (sel.type === 'feed') return activeProfile.value?.feeds.find((f) => f.id === sel.feedId)?.name ?? 'Feed'
     return unreadOnly.value ? 'Unread' : 'All items'
   })
-  const countLabel = computed(() => (activeProfile.value ? `${activeProfile.value.totalCount} · ${activeProfile.value.unreadCount} unread` : ''))
 
   // ── Toasts ──────────────────────────────────────────────────────────────────
 
@@ -412,7 +411,6 @@ export function useFeedState() {
     actions,
     unreadOnly,
     title,
-    countLabel,
     toasts,
     showToast,
     dismissToast,

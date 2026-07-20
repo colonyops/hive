@@ -25,7 +25,7 @@ afterEach(() => {
 
 describe('SettingsView', () => {
   it('only exposes settings backed by application behavior', () => {
-    const wrapper = mount(SettingsView, { props: { githubConnected: true, githubLogin: 'hayden' } })
+    const wrapper = mount(SettingsView, { props: { githubConnected: true, githubLogin: 'hayden', activeCategory: 'appearance' } })
 
     expect(wrapper.find('[data-testid="settings-category-appearance"]').attributes('aria-current')).toBe('true')
     expect(wrapper.find('[data-testid="settings-theme-toggle-dark"]').exists()).toBe(true)
@@ -37,7 +37,7 @@ describe('SettingsView', () => {
   })
 
   it('reflects and changes the real application theme', async () => {
-    const wrapper = mount(SettingsView, { props: { githubConnected: true } })
+    const wrapper = mount(SettingsView, { props: { githubConnected: true, activeCategory: 'appearance' } })
 
     expect(wrapper.find('[data-testid="settings-theme-toggle-dark"]').attributes('aria-selected')).toBe('true')
 
@@ -50,9 +50,11 @@ describe('SettingsView', () => {
   })
 
   it('shows the connected GitHub source and outlined future connections', async () => {
-    const wrapper = mount(SettingsView, { props: { githubConnected: true, githubLogin: 'hayden' } })
+    const wrapper = mount(SettingsView, { props: { githubConnected: true, githubLogin: 'hayden', activeCategory: 'appearance' } })
 
     await wrapper.find('[data-testid="settings-category-integrations"]').trigger('click')
+    expect(wrapper.emitted('select-category')).toEqual([['integrations']])
+    await wrapper.setProps({ activeCategory: 'integrations' })
 
     expect(wrapper.find('[data-testid="integration-github-status"]').text()).toBe('Connected')
     expect(wrapper.find('[data-testid="integration-github"]').text()).toContain('Connected as hayden')
@@ -64,7 +66,7 @@ describe('SettingsView', () => {
   })
 
   it('closes from the header action and Escape', async () => {
-    const wrapper = mount(SettingsView, { props: { githubConnected: true } })
+    const wrapper = mount(SettingsView, { props: { githubConnected: true, activeCategory: 'appearance' } })
 
     await wrapper.find('[data-testid="settings-close"]').trigger('click')
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))

@@ -1,8 +1,10 @@
 import { describe, expect, it, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { createMemoryHistory } from 'vue-router'
 import App from '../App.vue'
 import { useCommandPalette } from '../composables/useCommands'
 import { resetFlowsSessionForTests, useFlowsSession } from '../pipeline/composables/useFlowsSession'
+import { createAppRouter } from '../router'
 
 const mocks = vi.hoisted(() => ({
   // flowsservice
@@ -78,10 +80,17 @@ const flow = {
   wires: [],
 }
 
-async function mountApp() {
-  const wrapper = mount(App)
+async function mountAppWithRouter() {
+  const router = createAppRouter(createMemoryHistory())
+  await router.push('/')
+  await router.isReady()
+  const wrapper = mount(App, { global: { plugins: [router] } })
   await flushPromises()
-  return wrapper
+  return { wrapper, router }
+}
+
+async function mountApp() {
+  return (await mountAppWithRouter()).wrapper
 }
 
 describe('App', () => {
@@ -167,7 +176,86 @@ describe('App', () => {
     expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="settings-close"]').trigger('click')
+    await flushPromises()
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('uses route history for settings pages and categories', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+    expect(wrapper.find('[data-testid="settings-theme-toggle-dark"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="settings-category-integrations"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.params.section).toBe('integrations')
+    expect(wrapper.find('[data-testid="settings-integrations"]').exists()).toBe(true)
+
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+    expect(router.currentRoute.value.params.section).toBe('')
+    expect(wrapper.find('[data-testid="settings-theme-toggle-dark"]').exists()).toBe(true)
+
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('records feed and unread navigation in back/forward history', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query.feed).toBe('personal/desktop')
+    expect(wrapper.find('[data-testid="sidebar-feed"][data-id="personal/desktop"]').classes()).toContain('sidebar-entry-selected')
+
+    await wrapper.find('[data-testid="filter-unread"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ feed: 'personal/desktop', unread: '1' })
+
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ feed: 'personal/desktop' })
+    expect(wrapper.find('[data-testid="filter-all"]').classes()).toContain('active')
+
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({})
+    const allItems = wrapper.findAll('button.sidebar-entry').find((button) => button.text().includes('All items'))
+    expect(allItems?.classes()).toContain('sidebar-entry-selected')
+
+    router.forward()
+    await flushPromises()
+    expect(router.currentRoute.value.query.feed).toBe('personal/desktop')
+
+    wrapper.unmount()
+  })
+
+  it('guards native back navigation when the flow has un-deployed changes', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+    await wrapper.find('[data-testid="sidebar-edit-flow"]').trigger('click')
+    await flushPromises()
+
+    const session = useFlowsSession()
+    session.addNode('feed')
+    router.back()
+    await flushPromises()
+
+    expect(router.currentRoute.value.name).toBe('flows')
+    expect(document.querySelector('[data-testid="unsaved-flow-changes-modal"]')).not.toBeNull()
+
+    document.querySelector<HTMLButtonElement>('[data-testid="unsaved-flow-discard"]')?.click()
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('feed')
+    expect(session.dirty.value).toBe(false)
 
     wrapper.unmount()
   })
@@ -177,7 +265,9 @@ describe('App', () => {
 
     expect(wrapper.find('[data-testid="sidebar-delete-profile"]').exists()).toBe(false)
     await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
+    await flushPromises()
     await wrapper.find('[data-testid="profile-settings-danger"]').trigger('click')
+    await flushPromises()
     await wrapper.find('[data-testid="profile-settings-delete"]').trigger('click')
     await flushPromises()
     expect(document.querySelector('[data-testid="delete-profile-modal"]')).not.toBeNull()
