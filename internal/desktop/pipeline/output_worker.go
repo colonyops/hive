@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/rs/zerolog"
@@ -17,6 +18,11 @@ const (
 	DefaultOutputWorkerBatch    = 50
 	MaxOutputCommandAttempts    = 5
 )
+
+// ActionTypeLaunchSession is the action type whose successful runs are recorded
+// as session events by the launcher, so the worker leaves them to it rather
+// than double-logging a generic action event.
+const ActionTypeLaunchSession = "launch-session"
 
 type OutputData struct {
 	Key     string
@@ -58,6 +64,8 @@ type Worker struct {
 	interval time.Duration
 	batch    int
 	logger   zerolog.Logger
+	recorder activity.Recorder
+
 	runMu    sync.Mutex
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -65,6 +73,19 @@ type Worker struct {
 
 func NewWorker(db OutputCommandStore, as ActionLister, d *Dispatcher, interval time.Duration, logger zerolog.Logger) *Worker {
 	return &Worker{db: db, actions: as, dispatch: d, interval: interval, batch: DefaultOutputWorkerBatch, logger: logger, stop: make(chan struct{})}
+}
+
+// SetRecorder attaches an activity recorder so automatic and manual action
+// runs (and their permanent failures) surface in the Activity view. Optional:
+// a nil recorder (the default) records nothing. Set once at wiring time.
+func (w *Worker) SetRecorder(r activity.Recorder) { w.recorder = r }
+
+// record forwards an activity event when a recorder is attached; nil is a
+// no-op, and the recorder itself logs and swallows write failures.
+func (w *Worker) record(ctx context.Context, e activity.Event) {
+	if w.recorder != nil {
+		w.recorder.Record(ctx, e)
+	}
 }
 
 func (w *Worker) Start() {
@@ -119,6 +140,10 @@ func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []by
 	if err = w.done(ctx, row.ID, result); err != nil {
 		return ActionRunView{}, err
 	}
+	// A launch-session run is recorded as a session event by the launcher.
+	if action.Type != ActionTypeLaunchSession {
+		w.record(ctx, activity.ActionRun(actionLabel(action), ""))
+	}
 	return w.view(ctx, row.ID), nil
 }
 
@@ -160,6 +185,20 @@ func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) {
 	if err := w.done(ctx, row.ID, result); err != nil {
 		w.logger.Error().Err(err).Msg("output worker: marking command done failed")
 	}
+	// This is the automatic path (process only executes when the action
+	// auto-applies). A launch-session run is recorded by the launcher instead.
+	if a.Type != ActionTypeLaunchSession {
+		w.record(ctx, activity.AutoAction(actionLabel(a), a.ID, row.Key))
+	}
+}
+
+// actionLabel is the human name for an action in activity copy, falling back
+// to the id when a config omits a label.
+func actionLabel(action actions.Action) string {
+	if action.Label != "" {
+		return action.Label
+	}
+	return action.ID
 }
 
 func (w *Worker) execute(ctx context.Context, row pipelinedb.OutputCommand, a actions.Action, input ActionInvocationInput) (ExecutionResult, error) {
@@ -175,6 +214,13 @@ func (w *Worker) fail(ctx context.Context, row pipelinedb.OutputCommand, result 
 		if err := w.db.MarkOutputCommandFailed(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
 			w.logger.Error().Err(err).Msg("output worker: mark failed")
 		}
+		// Only the terminal failure reaches the Activity view; retries stay in
+		// the logs so a flaky action doesn't spam the feed.
+		label := row.ActionID
+		if action, ok := w.actions.Get(row.ActionID); ok {
+			label = actionLabel(action)
+		}
+		w.record(ctx, activity.ActionFailed(label, execErr.Error()))
 		return
 	}
 	if err := w.db.RetryOutputCommand(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {

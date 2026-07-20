@@ -8,6 +8,17 @@ import (
 	"database/sql"
 )
 
+type ActivityEvent struct {
+	ID        int64  `json:"id"`
+	CreatedAt int64  `json:"created_at"`
+	Category  string `json:"category"`
+	Severity  string `json:"severity"`
+	Title     string `json:"title"`
+	Body      string `json:"body"`
+	Source    string `json:"source"`
+	Metadata  []byte `json:"metadata"`
+}
+
 type ConsumerOffset struct {
 	Consumer string `json:"consumer"`
 	Offset   int64  `json:"offset"`

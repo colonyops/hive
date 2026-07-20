@@ -6,6 +6,7 @@ import (
 
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/hive"
 )
 
@@ -18,11 +19,19 @@ type sessionLaunchOptionsSource interface {
 	ResolveSessionLaunchRepository(context.Context, string) (hive.SessionLaunchRepository, error)
 }
 
-type HiveSessionLauncher struct{ sessions SessionCreator }
+// HiveSessionLauncher adapts Hive's session service to SessionLauncher.
+type HiveSessionLauncher struct {
+	sessions SessionCreator
+	recorder activity.Recorder
+}
 
 func NewHiveSessionLauncher(sessions SessionCreator) *HiveSessionLauncher {
 	return &HiveSessionLauncher{sessions: sessions}
 }
+
+// SetRecorder attaches an activity recorder so created sessions surface in the
+// Activity view. Optional: nil (the default) records nothing.
+func (l *HiveSessionLauncher) SetRecorder(r activity.Recorder) { l.recorder = r }
 
 func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessionRequest) (SessionExecutionOutcome, error) {
 	if l.sessions == nil {
@@ -39,6 +48,13 @@ func (l *HiveSessionLauncher) LaunchSession(ctx context.Context, req LaunchSessi
 	s, err := l.sessions.CreateSession(ctx, hive.CreateOptions{Name: req.Name, Prompt: req.Prompt, Remote: remote, Source: source, AgentKey: req.Agent, Background: true, UseBatchSpawn: false})
 	if err != nil {
 		return SessionExecutionOutcome{}, fmt.Errorf("create hive session: %w", err)
+	}
+	if l.recorder != nil {
+		name := req.Name
+		if s != nil && s.Name != "" {
+			name = s.Name
+		}
+		l.recorder.Record(ctx, activity.SessionCreated(name, req.Agent, req.Repo))
 	}
 	return SessionExecutionOutcome{ID: s.ID, Name: s.Name}, nil
 }

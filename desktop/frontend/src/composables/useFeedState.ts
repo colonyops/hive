@@ -3,6 +3,7 @@ import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
+import { useActivity } from './useActivity'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
 import type { FeedItem, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
@@ -109,6 +110,11 @@ export function useFeedState() {
   })
 
   // ── Toasts ──────────────────────────────────────────────────────────────────
+
+  // Some UI-origin outcomes are worth keeping in the durable Activity log, not
+  // just the transient toast — these are events only the frontend knows about,
+  // demonstrating that the UI records activity the same way the backend does.
+  const { record: recordActivity } = useActivity()
 
   function showToast(message: string, options: ToastOptions = {}): number {
     const severity = options.severity ?? 'info'
@@ -220,6 +226,11 @@ export function useFeedState() {
     } catch (error) {
       console.warn('Unable to save sidebar layout', error)
       showToast('Could not save the sidebar layout', { severity: 'error' })
+      void recordActivity({
+        title: 'Sidebar layout save failed',
+        body: profile?.name ? `profile ${profile.name}` : '',
+        severity: 'error',
+      })
     }
   }
 
@@ -241,17 +252,21 @@ export function useFeedState() {
 
   async function deleteProfile(profileID: string): Promise<boolean> {
     if (deletingProfile.value) return false
+    // Capture the name before the row is gone, for the activity entry.
+    const deletedName = profiles.value.find((p) => p.id === profileID)?.name ?? profileID
     deletingProfile.value = true
     try {
       await DeleteFlow(profileID)
     } catch (error) {
       console.warn('Unable to delete flow', error)
       showToast(error instanceof Error && error.message ? error.message : 'Could not delete the profile.', { severity: 'error' })
+      void recordActivity({ title: `Couldn't delete profile ${deletedName}`, severity: 'error', category: 'config' })
       return false
     } finally {
       deletingProfile.value = false
     }
     showToast('Profile deleted', { severity: 'success' })
+    void recordActivity({ title: `Deleted profile ${deletedName}`, severity: 'success', category: 'config' })
     await reloadProfilesQuietly()
     if (activeProfileId.value === profileID) {
       const next = profiles.value[0]

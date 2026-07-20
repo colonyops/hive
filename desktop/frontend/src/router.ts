@@ -6,7 +6,7 @@ import {
   type RouterHistory,
 } from 'vue-router'
 
-export type AppRouteName = 'feed' | 'flows' | 'application-settings' | 'profile-settings'
+export type AppRouteName = 'feed' | 'flows' | 'activity' | 'application-settings' | 'profile-settings'
 export type ApplicationSettingsSection = 'appearance' | 'integrations' | 'actions'
 export type ProfileSettingsSection = 'general' | 'danger'
 
@@ -27,6 +27,13 @@ export function createAppRouter(history: RouterHistory = createWebHashHistory())
       {
         path: '/flows/:profileId',
         name: 'flows',
+        component: ShellPage,
+      },
+      {
+        // Activity is app-global (the audit log spans every profile), so it
+        // takes no profileId param.
+        path: '/activity',
+        name: 'activity',
         component: ShellPage,
       },
       {

@@ -18,6 +18,7 @@ import (
 	coredb "github.com/colonyops/hive/internal/data/db"
 	"github.com/colonyops/hive/internal/data/stores"
 	"github.com/colonyops/hive/internal/desktop"
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
@@ -60,6 +61,10 @@ func registerEvents() struct{} {
 	application.RegisterEvent[int64]("log:appended")
 	application.RegisterEvent[string]("flows:updated")
 	application.RegisterEvent[string]("actions:updated")
+	// activity:appended carries the new event's id after any subsystem (or the
+	// frontend, via ActivityService.Record) appends to the activity log. The
+	// Activity view re-reads its latest page and advances its unseen marker.
+	application.RegisterEvent[int64]("activity:appended")
 	return struct{}{}
 }
 
@@ -79,11 +84,13 @@ func buildSourceFetcher() *feed.LiveProvider {
 // buildPipelineProducer starts the pipeline event-log producer over every
 // enabled github-source node across all flows (via flows), or returns nil when
 // there is nothing to poll (mock mode, so fetcher is nil).
-func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows pipeline.FlowLister, logger zerolog.Logger) *pipeline.Producer {
+func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows pipeline.FlowLister, recorder activity.Recorder, logger zerolog.Logger) *pipeline.Producer {
 	if fetcher == nil {
 		return nil
 	}
-	return pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), feed.DefaultPollInterval, emitLogAppended, logger)
+	producer := pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), feed.DefaultPollInterval, emitLogAppended, logger)
+	producer.SetRecorder(recorder)
+	return producer
 }
 
 // emitLogAppended pushes the pipeline event log's new tail offset to the
@@ -103,6 +110,15 @@ func buildAuthBackend(onChange func()) auth.Backend {
 		return auth.NewMockBackend(false, onChange)
 	default:
 		return auth.NewLiveBackend(github.NewClient(), github.NewKeychainStore(), onChange)
+	}
+}
+
+// emitActivityAppended pushes the activity:appended wake-up (carrying the new
+// event's id) to the frontend after any subsystem records an activity event.
+// Safe to call from any goroutine once the app is running.
+func emitActivityAppended(id int64) {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("activity:appended", id)
 	}
 }
 
@@ -161,7 +177,7 @@ func emitActionsUpdated() {
 // live, matching flows hot-reload posture. A watcher that fails to start
 // degrades to no hot-reload: the app still works, edits just need a restart
 // to pick up.
-func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *actions.ActionsWatcher) {
+func buildActionStore(recorder activity.Recorder, logger zerolog.Logger) (*actions.ActionStore, *actions.ActionsWatcher) {
 	path := desktop.ActionsPath()
 	if _, err := actions.SeedDefaultsIfMissing(path); err != nil {
 		logger.Warn().Err(err).Msg("actions seed failed")
@@ -176,6 +192,18 @@ func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *actions.Act
 			logger.Warn().Err(err).Msg("actions.yml reload failed")
 		}
 		emitActionsUpdated()
+		// A hand edit (or the app's own write) reloaded actions.yml: record the
+		// now-effective action/auto-rule counts so the change is auditable.
+		if recorder != nil {
+			all := store.List()
+			autoRules := 0
+			for _, a := range all {
+				if a.AutoApply {
+					autoRules++
+				}
+			}
+			recorder.Record(context.Background(), activity.ConfigReloaded("actions.yml", len(all), autoRules))
+		}
 	}, logger)
 	if err != nil {
 		logger.Warn().Err(err).Msg("actions.yml hot-reload unavailable")
@@ -202,7 +230,7 @@ func (r *hiveActionRuntime) Close() {
 	}
 }
 
-func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
+func buildHiveActionRuntime(recorder activity.Recorder, logger zerolog.Logger) (*hiveActionRuntime, error) {
 	dataDir := filepath.Dir(desktop.StateDir())
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		return nil, fmt.Errorf("create hive data directory: %w", err)
@@ -257,10 +285,13 @@ func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
 		io.Discard,
 	)
 
+	launcher := pipeline.NewHiveSessionLauncher(sessions)
+	launcher.SetRecorder(recorder)
+
 	return &hiveActionRuntime{
 		db:        database,
 		cancel:    cancel,
-		launcher:  pipeline.NewHiveSessionLauncher(sessions),
+		launcher:  launcher,
 		publisher: pipeline.NewHiveMessagePublisher(hive.NewMessageService(stores.NewMessageStore(database, cfg.Messaging.MaxMessages), cfg, bus)),
 	}, nil
 }
@@ -270,13 +301,15 @@ func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
 // output commands, but they retain this worker for explicit detail-pane
 // confirmation RPCs. That keeps the configured action path real in e2e while
 // avoiding a background shell action from compromising fixture determinism.
-func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.MessagePublisher, logger zerolog.Logger) *pipeline.Worker {
+func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.MessagePublisher, recorder activity.Recorder, logger zerolog.Logger) *pipeline.Worker {
 	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
-		"launch-session":  pipeline.NewLaunchSessionExecutor(launcher),
-		"shell":           pipeline.NewShellExecutor(logger),
-		"publish-message": pipeline.NewPublishMessageExecutor(publisher),
+		pipeline.ActionTypeLaunchSession: pipeline.NewLaunchSessionExecutor(launcher),
+		"shell":                          pipeline.NewShellExecutor(logger),
+		"publish-message":                pipeline.NewPublishMessageExecutor(publisher),
 	})
-	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
+	worker := pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
+	worker.SetRecorder(recorder)
+	return worker
 }
 
 func main() {
@@ -287,7 +320,14 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	actionRuntime, err := buildHiveActionRuntime(pipelineLogger)
+
+	// The activity recorder is shared by every subsystem that reports to the
+	// Activity view (producer, worker, session launcher, config watcher) and by
+	// the ActivityService the frontend reads/writes. It emits activity:appended
+	// on each append so open views refresh.
+	activityStore := activity.NewStore(pipelineDB, activity.Options{Emit: emitActivityAppended})
+
+	actionRuntime, err := buildHiveActionRuntime(activityStore, pipelineLogger)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -303,7 +343,7 @@ func main() {
 	}
 
 	actionsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	actionStore, actionsWatcher := buildActionStore(actionsLogger)
+	actionStore, actionsWatcher := buildActionStore(activityStore, actionsLogger)
 	if actionsWatcher != nil {
 		actionsWatcher.Start()
 	}
@@ -317,7 +357,7 @@ func main() {
 		flowsWatcher.Start()
 	}
 
-	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, pipelineLogger)
+	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, activityStore, pipelineLogger)
 	if desktop.MockMode() == "" {
 		outputWorker.Start()
 	}
@@ -331,7 +371,7 @@ func main() {
 	)
 	maintenance.Start()
 
-	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, pipelineLogger)
+	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, activityStore, pipelineLogger)
 	if producer != nil {
 		producer.Start()
 	}
@@ -355,6 +395,7 @@ func main() {
 			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
 			application.NewService(NewFlowsService(flowsStore)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
+			application.NewService(NewActivityService(activityStore)),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
