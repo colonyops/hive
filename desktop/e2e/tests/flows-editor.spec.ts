@@ -59,7 +59,7 @@ test('opens the flows editor from the command palette and shows the fixture flow
 })
 
 test('double-clicking a node opens its editor drawer, read-only', async ({ page }) => {
-  await page.getByTestId('sidebar-open-flows').click()
+  await page.getByTestId('sidebar-edit-flow').click()
   await expect(page.getByTestId('flows-view')).toBeVisible()
 
   await page.locator('[data-testid="flow-node-notifications-inbox"]').dblclick()

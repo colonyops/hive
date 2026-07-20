@@ -82,7 +82,7 @@ test('first-run onboarding: token fallback card, then device flow to the feed', 
   // Editing a feed is done through its node in the flows canvas now (there
   // is no separate feed editor sheet). Also a mutation, so it stays on this
   // per-browser server.
-  await page.getByTestId('sidebar-open-flows').click()
+  await page.getByTestId('sidebar-edit-flow').click()
   const flowsView = page.getByTestId('flows-view')
   await expect(flowsView).toBeVisible()
   await expect(page.getByTestId('canvas-node-wire-count')).toHaveText('6 nodes · 3 wires')

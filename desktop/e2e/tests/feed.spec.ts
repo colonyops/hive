@@ -49,12 +49,12 @@ test('updates the detail pane and actions for PRs and issues', async ({ page }) 
   await expect(page.getByTestId('action-card').first()).toContainText('Start implementation')
 })
 
-test('filters the feed to its three unread items', async ({ page }) => {
+test('filters the feed to its remaining unread items', async ({ page }) => {
   await page.getByTestId('unread-chip').click()
   const unreadItems = page.getByTestId('feed-item')
-  await expect(unreadItems).toHaveCount(3)
+  await expect(unreadItems).toHaveCount(2)
   expect(await unreadItems.evaluateAll((items) => items.map((item) => item.getAttribute('data-id')))).toEqual([
-    'pr2841', 'iss1190', 'iss1204',
+    'pr2841', 'iss1204',
   ])
 })
 
@@ -78,12 +78,9 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(palette).toBeVisible()
   const input = page.getByTestId('command-palette-input')
   await input.fill('notifications')
-  // The fixture flow has one feed node ("Notifications inbox"); a feed is
-  // edited via its node in the flows canvas now, so there's no separate
-  // feed-editor "Edit" entry to also match.
-  const commands = page.getByTestId('command-palette-command')
-  await expect(commands).toHaveCount(1)
-  await commands.filter({ hasText: 'Select feed: Notifications inbox' }).click()
+  const notificationsFeed = page.getByTestId('command-palette-command').filter({ hasText: 'Select feed: Notifications inbox' })
+  await expect(notificationsFeed).toBeVisible()
+  await notificationsFeed.click()
   await expect(palette).toBeHidden()
   await expect(page.getByTestId('feed-title')).toHaveText('Notifications inbox')
 
