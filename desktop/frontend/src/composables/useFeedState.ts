@@ -1,7 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
@@ -30,10 +30,15 @@ export function useFeedState() {
   const loadError = ref<string | null>(null)
   const selectedId = ref<string | null>(null)
   const actions = ref<ActionView[]>([])
-  const pendingAction = ref<string | null>(null)
+  const pendingActionKeys = ref<Record<string, boolean>>({})
   const actionError = ref<string | null>(null)
-  const actionRuns = ref<Record<string, ActionRunView>>({})
+  const actionRunsByItem = ref<Record<string, Record<string, ActionRunView>>>({})
+  const actionRunGenerations = new Map<string, number>()
+  const actionRunIDs = loadActionRunIDs()
+  const pendingAction = computed(() => selectedId.value ? Object.keys(pendingActionKeys.value).find((key) => key.startsWith(`${selectedId.value}\u0000`))?.split('\u0000')[1] ?? null : null)
+  const actionRuns = computed(() => selectedId.value ? actionRunsByItem.value[selectedId.value] ?? {} : {})
   const sessionLaunchAction = ref<ActionView | null>(null)
+  const sessionLaunchItem = ref<FeedItem | null>(null)
   const sessionLaunchOptions = ref<SessionLaunchOptionsView | null>(null)
   const sessionLaunchBusy = ref(false)
   const sessionLaunchError = ref<string | null>(null)
@@ -46,6 +51,54 @@ export function useFeedState() {
   const defaultToastDuration = 4000
   // Monotonic token: out-of-order loadItems responses must not clobber newer.
   let loadSeq = 0
+  let actionLoadSeq = 0
+
+  function actionKey(itemID: string, actionID: string): string { return `${itemID}\u0000${actionID}` }
+  function loadActionRunIDs(): Record<string, Record<string, number>> {
+    try {
+      const stored: unknown = JSON.parse(localStorage.getItem('hive.action-run-ids') ?? '{}')
+      if (!stored || Array.isArray(stored) || typeof stored !== 'object') return {}
+      const result: Record<string, Record<string, number>> = {}
+      for (const [itemID, itemRuns] of Object.entries(stored)) {
+        if (!itemID || !itemRuns || Array.isArray(itemRuns) || typeof itemRuns !== 'object') continue
+        const validRuns: Record<string, number> = {}
+        for (const [actionID, commandID] of Object.entries(itemRuns)) {
+          if (!actionID || typeof commandID !== 'number' || !Number.isSafeInteger(commandID) || commandID <= 0) continue
+          validRuns[actionID] = commandID
+        }
+        if (Object.keys(validRuns).length) result[itemID] = validRuns
+      }
+      return result
+    } catch (error) {
+      console.warn('Unable to restore action run IDs', error)
+      return {}
+    }
+  }
+  function persistActionRunIDs(): void {
+    try { localStorage.setItem('hive.action-run-ids', JSON.stringify(actionRunIDs)) }
+    catch (error) { console.warn('Unable to persist action run IDs', error) }
+  }
+  function nextActionRunGeneration(itemID: string, actionID: string): void {
+    const key = actionKey(itemID, actionID)
+    actionRunGenerations.set(key, (actionRunGenerations.get(key) ?? 0) + 1)
+  }
+  function isCurrentActionRun(itemID: string, actionID: string, commandID: number, generation: number): boolean {
+    return actionRunIDs[itemID]?.[actionID] === commandID && (actionRunGenerations.get(actionKey(itemID, actionID)) ?? 0) === generation
+  }
+  function setActionRun(itemID: string, actionID: string, run: ActionRunView): void {
+    actionRunsByItem.value = { ...actionRunsByItem.value, [itemID]: { ...(actionRunsByItem.value[itemID] ?? {}), [actionID]: run } }
+    actionRunIDs[itemID] = { ...(actionRunIDs[itemID] ?? {}), [actionID]: run.commandId }
+    nextActionRunGeneration(itemID, actionID)
+    persistActionRunIDs()
+  }
+  function removeActionRunID(itemID: string, actionID: string): void {
+    if (!actionRunIDs[itemID]?.[actionID]) return
+    const itemRuns = { ...actionRunIDs[itemID] }; delete itemRuns[actionID]
+    if (Object.keys(itemRuns).length) actionRunIDs[itemID] = itemRuns
+    else delete actionRunIDs[itemID]
+    nextActionRunGeneration(itemID, actionID)
+    persistActionRunIDs()
+  }
 
   const activeProfile = computed(() => profiles.value.find((p) => p.id === activeProfileId.value) ?? null)
   const selectedItem = computed(() => items.value.find((item) => item.id === selectedId.value) ?? null)
@@ -273,13 +326,26 @@ export function useFeedState() {
   }
 
   async function loadActions(item: FeedItem | null) {
-    if (!item) {
-      actions.value = []
-      return
-    }
+    const token = ++actionLoadSeq
+    if (!item) { actions.value = []; return }
     try {
-      actions.value = (await ActionViews(item.kind)) ?? []
+      const available = (await ActionViews(item.kind)) ?? []
+      if (token !== actionLoadSeq || selectedId.value !== item.id) return
+      actions.value = available
+      await Promise.all(available.map(async (action) => {
+        const commandID = actionRunIDs[item.id]?.[action.id]
+        if (!commandID) return
+        const generation = actionRunGenerations.get(actionKey(item.id, action.id)) ?? 0
+        try {
+          const run = await ActionRun(commandID)
+          if (isCurrentActionRun(item.id, action.id, commandID, generation)) setActionRun(item.id, action.id, run)
+        } catch (error) {
+          console.warn('Unable to restore action run', error)
+          if (/not found|no rows|missing/i.test(error instanceof Error ? error.message : String(error)) && isCurrentActionRun(item.id, action.id, commandID, generation)) removeActionRunID(item.id, action.id)
+        }
+      }))
     } catch (error) {
+      if (token !== actionLoadSeq) return
       console.warn('Unable to load actions', error)
       actions.value = []
     }
@@ -351,28 +417,24 @@ export function useFeedState() {
     await loadItems(currentFeedId())
   }
 
-  async function runAction(actionID: string, input: Record<string, unknown> = {}) {
-    const item = selectedItem.value
+  async function runAction(actionID: string, input: Record<string, unknown> = {}, item = selectedItem.value) {
     if (!item) return false
-    if (pendingAction.value) return false
-    pendingAction.value = actionID
+    const key = actionKey(item.id, actionID)
+    if (pendingActionKeys.value[key]) return false
+    pendingActionKeys.value = { ...pendingActionKeys.value, [key]: true }
     actionError.value = null
     try {
       const run = await InvokeAction(actionID, item, input)
-      actionRuns.value = { ...actionRuns.value, [actionID]: run }
+      setActionRun(item.id, actionID, run)
       if (run.status !== 'done') {
         actionError.value = run.error || 'The action did not complete.'
         showToast(actionError.value, { severity: 'error' })
         return false
       }
       const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
-      if (run.result?.session) {
-        showToast(`Created session ${run.result.session.name} (${run.result.session.id})`, { severity: 'success' })
-      } else if (run.result?.message) {
-        showToast(`Published message to ${run.result.message.topic} as ${run.result.message.sender}`, { severity: 'success' })
-      } else {
-        showToast(`${label} completed`, { severity: 'success' })
-      }
+      if (run.result?.session) showToast(`Created session ${run.result.session.name} (${run.result.session.id})`, { severity: 'success' })
+      else if (run.result?.message) showToast(`Published message to ${run.result.message.topic} as ${run.result.message.sender}`, { severity: 'success' })
+      else showToast(`${label} completed`, { severity: 'success' })
       return true
     } catch (error) {
       console.warn('Unable to invoke action', error)
@@ -380,7 +442,7 @@ export function useFeedState() {
       showToast(actionError.value, { severity: 'error' })
       return false
     } finally {
-      pendingAction.value = null
+      const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
     }
   }
 
@@ -394,33 +456,39 @@ export function useFeedState() {
       return
     }
     if (pendingAction.value || sessionLaunchBusy.value) return
+    const item = selectedItem.value
+    if (!item) return
+    const key = actionKey(item.id, actionID)
     sessionLaunchError.value = null
-    pendingAction.value = actionID
+    pendingActionKeys.value = { ...pendingActionKeys.value, [key]: true }
     try {
       sessionLaunchOptions.value = await SessionLaunchOptions()
       sessionLaunchAction.value = action
+      sessionLaunchItem.value = item
     } catch (error) {
       const message = error instanceof Error && error.message ? error.message : 'Could not load session options.'
       actionError.value = message
       showToast(message, { severity: 'error' })
     } finally {
-      pendingAction.value = null
+      const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
     }
   }
 
   function cancelSessionLaunch() {
     if (sessionLaunchBusy.value) return
     sessionLaunchAction.value = null
+    sessionLaunchItem.value = null
     sessionLaunchOptions.value = null
     sessionLaunchError.value = null
   }
 
   async function submitSessionLaunch(input: { name: string; repository: string; agent?: string }) {
     const action = sessionLaunchAction.value
-    if (!action || sessionLaunchBusy.value) return
+    const item = sessionLaunchItem.value
+    if (!action || !item || sessionLaunchBusy.value) return
     sessionLaunchBusy.value = true
     sessionLaunchError.value = null
-    const succeeded = await runAction(action.id, { session: input })
+    const succeeded = await runAction(action.id, { session: input }, item)
     sessionLaunchBusy.value = false
     if (succeeded) cancelSessionLaunch()
     else sessionLaunchError.value = actionError.value ?? 'Could not create the session.'

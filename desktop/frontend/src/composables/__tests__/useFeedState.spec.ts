@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach, vi } from 'vitest'
+import { afterEach, describe, expect, it, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { useFeedState } from '../useFeedState'
 
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   FeedItemCounts: vi.fn(),
   MarkFeedItemRead: vi.fn(),
   ActionViews: vi.fn(),
+  ActionRun: vi.fn(),
   InvokeAction: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   On: vi.fn(),
@@ -34,6 +35,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', (
   FeedItemCounts: mocks.FeedItemCounts,
   MarkFeedItemRead: mocks.MarkFeedItemRead,
   ActionViews: mocks.ActionViews,
+  ActionRun: mocks.ActionRun,
   InvokeAction: mocks.InvokeAction,
   SessionLaunchOptions: mocks.SessionLaunchOptions,
 }))
@@ -63,6 +65,8 @@ function mountState() {
   return () => state
 }
 
+afterEach(() => vi.unstubAllGlobals())
+
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.ListFlows.mockResolvedValue([flowSummary])
@@ -72,6 +76,8 @@ beforeEach(() => {
   mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'triage/my-prs', total: 3, unread: 2 }])
   mocks.FeedItems.mockResolvedValue([])
   mocks.ActionViews.mockResolvedValue([])
+  mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' })
+  localStorage.clear()
   mocks.InvokeAction.mockResolvedValue({ commandId: 1, status: 'done' })
   mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [{ name: 'hive', repository: 'https://github.com/colonyops/hive.git' }], defaultRepository: 'https://github.com/colonyops/hive.git', agents: ['claude'], defaultAgent: 'claude' })
   mocks.On.mockReturnValue(() => {})
@@ -284,6 +290,157 @@ describe('useFeedState', () => {
     expect(mocks.InvokeAction).toHaveBeenCalledWith('review', expect.anything(), { session: { name: 'review-pr-1', repository: 'https://github.com/colonyops/hive.git', agent: 'claude' } })
     expect(get().toasts.value.some((toast) => toast.message === 'Created session review-pr-1 (session-1)')).toBe(true)
     expect(get().sessionLaunchAction.value).toBeNull()
+  })
+
+  it('scopes runs by item and rehydrates the persisted command when returning to an item', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'o/r#2', unread: false, payload: { id: 'o/r#2', title: 'Two', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 17, status: 'failed', error: 'bad', stderr: 'details' })
+    mocks.ActionRun.mockResolvedValue({ commandId: 17, status: 'failed', error: 'bad', stderr: 'details' })
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    await get().invokeAction('review')
+    expect(get().actionRuns.value.review?.commandId).toBe(17)
+    await get().selectItem('o/r#2'); await flushPromises()
+    expect(get().actionRuns.value.review).toBeUndefined()
+    await get().selectItem('o/r#1'); await flushPromises()
+    expect(mocks.ActionRun).toHaveBeenCalledWith(17)
+    expect(get().actionRuns.value.review?.stderr).toBe('details')
+  })
+
+  it.each([null, [], { 'o/r#1': { review: 0 } }, { 'o/r#1': { review: -1 } }, { 'o/r#1': { review: '17' } }, { 'o/r#1': [] }, { '': { review: 1 } }])('rejects malformed persisted action run IDs: %j', async (stored) => {
+    localStorage.setItem('hive.action-run-ids', JSON.stringify(stored))
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    expect(mocks.ActionRun).not.toHaveBeenCalled()
+  })
+
+  it('ignores malformed persisted action run entries while rehydrating valid entries', async () => {
+    localStorage.setItem('hive.action-run-ids', JSON.stringify({
+      'o/r#1': { review: 17, invalid: 0, stringy: '18', empty: 19 },
+      'o/r#2': [],
+      '': { review: 41 },
+    }))
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([
+      { id: 'review', label: 'Review', type: 'shell' },
+      { id: 'invalid', label: 'Invalid', type: 'shell' },
+      { id: 'stringy', label: 'Stringy', type: 'shell' },
+      { id: '', label: 'Empty', type: 'shell' },
+    ])
+    mocks.ActionRun.mockResolvedValue({ commandId: 17, status: 'failed', stderr: 'details' })
+    const get = mountState(); await flushPromises()
+    expect(get().actionRuns.value.review?.commandId).toBe(17)
+    expect(mocks.ActionRun).toHaveBeenCalledTimes(1)
+    expect(mocks.ActionRun).toHaveBeenCalledWith(17)
+  })
+
+  it('keeps successful action feedback when action run restoration fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal('localStorage', { getItem: () => { throw new Error('security denied') }, setItem: vi.fn(), clear: vi.fn(), key: vi.fn(), removeItem: vi.fn(), length: 0 })
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 17, status: 'done' })
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    await get().invokeAction('review')
+    expect(get().actionRuns.value.review?.commandId).toBe(17)
+    expect(get().toasts.value.some((toast) => toast.message === 'Review completed')).toBe(true)
+    expect(warn).toHaveBeenCalledWith('Unable to restore action run IDs', expect.any(Error))
+    warn.mockRestore()
+  })
+
+  it('keeps successful action feedback when action run persistence fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    vi.stubGlobal('localStorage', { getItem: () => null, setItem: () => { throw new Error('quota exceeded') }, clear: vi.fn(), key: vi.fn(), removeItem: vi.fn(), length: 0 })
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.InvokeAction.mockResolvedValue({ commandId: 17, status: 'done' })
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    await get().invokeAction('review')
+    expect(get().actionRuns.value.review?.commandId).toBe(17)
+    expect(get().toasts.value.some((toast) => toast.message === 'Review completed')).toBe(true)
+    expect(warn).toHaveBeenCalledWith('Unable to persist action run IDs', expect.any(Error))
+    warn.mockRestore()
+  })
+
+  it('drops a stale persisted command mapping without leaking it to another item', async () => {
+    localStorage.setItem('hive.action-run-ids', JSON.stringify({ 'o/r#1': { review: 41 } }))
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'o/r#2', unread: false, payload: { id: 'o/r#2', title: 'Two', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.ActionRun.mockRejectedValue(new Error('command not found'))
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    expect(mocks.ActionRun).toHaveBeenCalledWith(41)
+    expect(localStorage.getItem('hive.action-run-ids')).toBe('{}')
+    await get().selectItem('o/r#2'); await flushPromises()
+    expect(get().actionRuns.value.review).toBeUndefined()
+  })
+
+  it('does not let an old restored run overwrite a newer invocation for the same item and action', async () => {
+    let resolveOldRun!: (run: { commandId: number; status: string; stderr: string }) => void
+    localStorage.setItem('hive.action-run-ids', JSON.stringify({ 'o/r#1': { review: 41 } }))
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.ActionRun.mockImplementation(() => new Promise((resolve) => { resolveOldRun = resolve as typeof resolveOldRun }))
+    mocks.InvokeAction.mockResolvedValue({ commandId: 42, status: 'done' })
+    const get = mountState(); await flushPromises()
+    const loading = get().selectSidebar({ type: 'all' }); await flushPromises()
+    await get().invokeAction('review')
+    resolveOldRun({ commandId: 41, status: 'failed', stderr: 'stale' })
+    await loading; await flushPromises()
+    expect(get().actionRuns.value.review?.commandId).toBe(42)
+    expect(JSON.parse(localStorage.getItem('hive.action-run-ids') ?? '{}')).toEqual({ 'o/r#1': { review: 42 } })
+  })
+
+  it('does not let an old not-found response delete a newer invocation for the same item and action', async () => {
+    let rejectOldRun!: (error: Error) => void
+    localStorage.setItem('hive.action-run-ids', JSON.stringify({ 'o/r#1': { review: 41 } }))
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.ActionRun.mockImplementation(() => new Promise((_, reject) => { rejectOldRun = reject as typeof rejectOldRun }))
+    mocks.InvokeAction.mockResolvedValue({ commandId: 42, status: 'done' })
+    const get = mountState(); await flushPromises()
+    const loading = get().selectSidebar({ type: 'all' }); await flushPromises()
+    await get().invokeAction('review')
+    rejectOldRun(new Error('command not found'))
+    await loading; await flushPromises()
+    expect(get().actionRuns.value.review?.commandId).toBe(42)
+    expect(JSON.parse(localStorage.getItem('hive.action-run-ids') ?? '{}')).toEqual({ 'o/r#1': { review: 42 } })
+  })
+
+  it('does not let an out-of-order restored run appear on the newly selected item', async () => {
+    let resolveRun!: (run: { commandId: number; status: string; stderr: string }) => void
+    localStorage.setItem('hive.action-run-ids', JSON.stringify({ 'o/r#1': { review: 55 } }))
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'o/r#1', unread: false, payload: { id: 'o/r#1', title: 'One', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'o/r#2', unread: false, payload: { id: 'o/r#2', title: 'Two', kind: 'PR' } },
+    ])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review', type: 'shell' }])
+    mocks.ActionRun.mockImplementation(() => new Promise((resolve) => { resolveRun = resolve as typeof resolveRun }))
+    const get = mountState(); await flushPromises()
+    const loading = get().selectSidebar({ type: 'all' }); await flushPromises()
+    await get().selectItem('o/r#2'); await flushPromises()
+    resolveRun({ commandId: 55, status: 'failed', stderr: 'old item only' })
+    await loading; await flushPromises()
+    expect(get().selectedId.value).toBe('o/r#2')
+    expect(get().actionRuns.value.review).toBeUndefined()
   })
 
   it('marks an item read via the pipeline service', async () => {
