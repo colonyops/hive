@@ -8,8 +8,10 @@ import IconKeyboard from '~icons/lucide/keyboard'
 import IconPalette from '~icons/lucide/palette'
 import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
+import IconHardDrive from '~icons/lucide/hard-drive'
 import ActionSettingsView from './ActionSettingsView.vue'
 import KeybindingSettingsView from './KeybindingSettingsView.vue'
+import SystemSettingsView from './SystemSettingsView.vue'
 import githubIcon from '../assets/integrations/github.svg'
 import grafanaIcon from '../assets/integrations/grafana.svg'
 import posthogIcon from '../assets/integrations/posthog.svg'
@@ -30,13 +32,14 @@ const categories = [
   { id: 'keybindings' as const, label: 'Keyboard', icon: IconKeyboard },
   { id: 'integrations' as const, label: 'Integrations', icon: IconPlug },
   { id: 'actions' as const, label: 'Actions', icon: IconPlay },
+  { id: 'system' as const, label: 'System', icon: IconHardDrive },
 ]
-
 const sectionTitle = computed(() => ({
   appearance: 'Appearance',
   keybindings: 'Keyboard shortcuts',
   integrations: 'Integrations',
   actions: 'Actions',
+  system: 'System',
 }[props.activeCategory]))
 
 const { theme } = useTheme()
@@ -106,6 +109,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <KeybindingSettingsView v-else-if="props.activeCategory === 'keybindings'" />
 
         <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
+
+        <SystemSettingsView v-else-if="props.activeCategory === 'system'" />
 
         <div v-else class="mx-auto max-w-[640px]" data-testid="settings-integrations">
           <div class="mb-5">
