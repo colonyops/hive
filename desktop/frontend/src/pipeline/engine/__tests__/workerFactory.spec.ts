@@ -38,7 +38,7 @@ describe('pipeline worker factory', () => {
     }
     vi.stubGlobal('Worker', WorkerMock)
     const transport = createWebWorkerTransport()
-    const run = transport.run('function', 'flow:function', {}, { ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {}, Meta: null }, {}, 1000)
+    const run = transport.run('function', 'flow:function', {}, { ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {} }, {}, 1000)
 
     expect(workers).toHaveLength(1)
     workers[0].onmessage?.({ data: { id: 1, result: null, state: {} } })

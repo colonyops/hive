@@ -106,7 +106,6 @@ type Msg struct {
 	Topic   string
 	Ts      int64
 	Payload json.RawMessage
-	Meta    map[string]any
 }
 ```
 
@@ -117,23 +116,16 @@ type Msg struct {
 | `Topic`   | `"source:<source-id>"` — which configured source produced this message   | `topic` |
 | `Ts`      | Unix nanoseconds when the row was appended                               | `created_at` |
 | `Payload` | The opaque item JSON (shape is set by the source, e.g. a PR/issue/notification) | `payload` |
-| `Meta`    | `{source, kind, repo}` set by the source producer on append; **not persisted** — `ReadFrom` always returns a `nil` `Meta`, this phase never stored it | *(no column — see below)* |
 
-Two casing/location facts worth calling out explicitly, since they trip
+One casing/location fact worth calling out explicitly, since it trips
 people up:
 
 - **`Msg` has no `json` struct tags at all**, unlike every other wire type in
   this codebase (`CommitBatch`, `Output`, `Sink`, …, all of which use
   lowerCamel JSON tags). That means `Msg` serializes under its literal Go
   field names, so a function node's `on_message` body reads `msg.Payload`,
-  `msg.Key`, `msg.ID`, `msg.Topic`, `msg.Meta` — **capitalized**, not
+  `msg.Key`, `msg.ID`, `msg.Topic` — **capitalized**, not
   `msg.payload`/`msg.key`. See `desktop/frontend/src/pipeline/nodes/function/help.md`.
-- `Meta` is a genuine gap, not a bug: `event_log` (see below) has no `meta`
-  column, so anything a `Source` sets on `Msg.Meta` when it emits a message
-  (e.g. `github_source.go` sets `{source, kind, repo}`) is visible to that
-  one append call but is **not** persisted and **not** replayed — a message
-  read back via `ReadFrom` always has `Meta == nil`. If a node's logic needs
-  `kind`/`repo` durably, it must be encoded into `Payload` instead.
 
 ## The dedicated DB and table roles
 

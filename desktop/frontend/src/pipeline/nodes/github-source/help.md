@@ -10,4 +10,4 @@ A **GitHub source** node emits messages from an embedded GitHub search or notifi
 
 ## Behavior
 
-The source itself runs in the backend: Go polls every enabled flow's source nodes and appends each item to the event log under topic `source:<flowId>/<nodeId>`. This node has one output — every item becomes a `msg` whose payload mirrors the normalized PR/Issue/notification shape, and whose `Meta.kind` is one of `pr`, `issue`, or `notification`.
+The source itself runs in the backend: Go polls every enabled flow's source nodes and appends each item to the event log under topic `source:<flowId>/<nodeId>`. This node has one output — every item becomes a `msg` whose payload mirrors the normalized PR/Issue/notification shape.

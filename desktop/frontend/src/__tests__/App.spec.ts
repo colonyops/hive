@@ -472,7 +472,7 @@ describe('App', () => {
     const wrapper = await mountApp()
 
     const callOrder: string[] = []
-    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {}, Meta: null }])
+    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {} }])
     mocks.Commit.mockImplementationOnce(async () => { callOrder.push('commit') })
     mocks.FeedItemCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return [] })
 

@@ -5,7 +5,7 @@ import { processorRegistry } from '../../processors'
 import type { Flow, Msg } from '../../types'
 
 function msg(id: string, payload: any = {}, topic = 'source:test'): Msg {
-  return { ID: id, Key: id, Topic: topic, Ts: 0, Payload: payload, Meta: null, Snapshot: null }
+  return { ID: id, Key: id, Topic: topic, Ts: 0, Payload: payload, Snapshot: null }
 }
 
 describe('runGraph', () => {

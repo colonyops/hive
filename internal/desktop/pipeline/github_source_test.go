@@ -86,9 +86,6 @@ func TestGithubSource_Produce_EmitsWireItems(t *testing.T) {
 	msg := emitted[0]
 	assert.Equal(t, "source:triage/in-prs", msg.Topic)
 	assert.Equal(t, "o/r#7", msg.Key)
-	assert.Equal(t, "triage/in-prs", msg.Meta["source"])
-	assert.Equal(t, "PR", msg.Meta["kind"])
-	assert.Equal(t, "o/r", msg.Meta["repo"])
 
 	var item feed.Item
 	require.NoError(t, json.Unmarshal(msg.Payload, &item))

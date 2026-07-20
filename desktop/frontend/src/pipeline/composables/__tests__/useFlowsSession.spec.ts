@@ -20,7 +20,7 @@ function wireFlow(id = 'flow-1'): WireFlow {
 }
 
 function msg(id: string): Msg {
-  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: {}, Meta: null }
+  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: {} }
 }
 
 function fakeEditorClient(overrides: Partial<PipelineEditorClient> = {}): PipelineEditorClient {

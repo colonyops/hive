@@ -41,11 +41,6 @@ func (s *githubSource) Produce(ctx context.Context, emit func(Msg) error) error 
 			Key:     item.ID,
 			Topic:   s.topic,
 			Payload: payload,
-			Meta: map[string]any{
-				"source": s.def.ID,
-				"kind":   item.Kind,
-				"repo":   item.Repo,
-			},
 		}
 		if err := emit(msg); err != nil {
 			return err

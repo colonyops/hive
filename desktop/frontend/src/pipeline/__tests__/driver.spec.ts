@@ -4,7 +4,7 @@ import type { WorkerTransport } from '../engine/transport'
 import type { Flow, Msg } from '../types'
 
 function msg(id: string, payload: any = {}): Msg {
-  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: payload, Meta: null }
+  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: payload }
 }
 
 function simpleFlow(): Flow {

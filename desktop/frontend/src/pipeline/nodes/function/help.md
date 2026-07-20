@@ -21,7 +21,6 @@ msg.Payload   // opaque — shape set by the source (e.g. a PR/issue/notificatio
 msg.Key       // stable item identity (e.g. "colonyops/hive#2841")
 msg.Topic     // "source:<source-id>"
 msg.ID        // unique per log record
-msg.Meta      // { source, kind, repo? } — kind is "pr" | "issue" | "notification" | ...
 ```
 
 ## Example

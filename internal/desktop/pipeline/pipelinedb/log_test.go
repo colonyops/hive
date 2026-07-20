@@ -36,7 +36,6 @@ func TestAppend_ReadFrom_Monotonic(t *testing.T) {
 		assert.Equal(t, fmt.Sprintf(`{"n":%d}`, i), string(msg.Payload))
 		assert.Positive(t, msg.Ts)
 		assert.Equal(t, fmt.Sprintf("%d", offsets[i]), msg.ID)
-		assert.Nil(t, msg.Meta, "meta is not persisted in phase 1")
 	}
 
 	// Reading from the last offset returns nothing new and leaves nextOffset unchanged.

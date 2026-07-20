@@ -79,16 +79,12 @@ export interface FeedSnapshot {
  * Msg is the pipeline's generic log record, appended by sources and consumed
  * by the frontend graph runtime.
  * 
- * It mirrors the design's { id, key, topic, ts, payload, meta } contract,
+ * It mirrors the design's { id, key, topic, ts, payload } contract,
  * with Snapshot populated only for an authoritative full-source snapshot,
  * mapped onto the event_log schema (see migrations/0001_pipeline.up.sql):
  *   - ID is derived from the row's "offset" (stable, unique per append; there
  *     is no separate id column).
  *   - Ts is the row's created_at (unix nanoseconds).
- *   - Meta is not persisted by this phase: event_log has no meta column.
- *     Later source phases may populate Meta on the in-memory Msg before it
- *     reaches the frontend, but Append here takes no meta and ReadFrom always
- *     returns a nil Meta. Snapshot event payloads are persisted explicitly.
  *   - Snapshot is nil for ordinary item events and contains the full current
  *     source item set for successful poll snapshots.
  */
@@ -98,7 +94,6 @@ export interface Msg {
     "Topic": string;
     "Ts": number;
     "Payload": json$0.RawMessage;
-    "Meta": { [_ in string]?: any } | null;
     "Snapshot"?: SnapshotItem[] | null;
 }
 
