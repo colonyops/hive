@@ -1,0 +1,123 @@
+name: Build and Publish Desktop
+
+# Releases for the Wails desktop app are fully DECOUPLED from the CLI release
+# (.github/workflows/publish.yml). This workflow has its own version scheme and
+# its own tag namespace (`desktop-v*`), so bumping/publishing the desktop app
+# never touches the CLI's `v*` tags or its Homebrew/GoReleaser pipeline.
+#
+# macOS only, universal (arm64 + amd64), ad-hoc signed. Because the app is
+# ad-hoc signed (no Apple Developer ID / notarization), macOS quarantines it
+# after download — the release notes tell users how to strip the quarantine.
+
+permissions:
+  contents: write # create tags + releases and upload assets
+
+on:
+  workflow_dispatch:
+    inputs:
+      semverbump:
+        description: "Which version to bump by (ignored for the first release)"
+        required: true
+        default: "patch"
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+jobs:
+  release:
+    name: "Release Desktop (macOS)"
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0 # need the full tag history to compute the next version
+
+      - name: Compute next version
+        id: version
+        run: |
+          set -euo pipefail
+          latest=$(git tag --list 'desktop-v*' --sort=-v:refname | head -n1)
+          if [ -z "$latest" ]; then
+            # First desktop release: publish the version already committed in
+            # Info.plist rather than bumping past it.
+            version=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" desktop/build/darwin/Info.plist)
+          else
+            current="${latest#desktop-v}"
+            IFS='.' read -r major minor patch <<< "$current"
+            case "${{ inputs.semverbump }}" in
+              major) major=$((major + 1)); minor=0; patch=0 ;;
+              minor) minor=$((minor + 1)); patch=0 ;;
+              patch) patch=$((patch + 1)) ;;
+            esac
+            version="${major}.${minor}.${patch}"
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=desktop-v$version" >> "$GITHUB_OUTPUT"
+          echo "Next desktop version: $version (tag desktop-v$version)"
+
+      - name: Fail if tag already exists
+        run: |
+          if git rev-parse -q --verify "refs/tags/${{ steps.version.outputs.tag }}" >/dev/null; then
+            echo "Tag ${{ steps.version.outputs.tag }} already exists." >&2
+            exit 1
+          fi
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: "go.mod"
+          cache: true
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: desktop/frontend/package-lock.json
+
+      - name: Set up mise (provides the pinned wails3)
+        uses: jdx/mise-action@v4
+
+      - name: Stamp app version into Info.plist
+        run: |
+          /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" desktop/build/darwin/Info.plist
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.version }}" desktop/build/darwin/Info.plist
+
+      - name: Build & package universal .app (ad-hoc signed)
+        working-directory: desktop
+        run: wails3 task darwin:package:universal
+
+      - name: Zip the .app bundle
+        working-directory: desktop/bin
+        run: |
+          ditto -c -k --keepParent \
+            hive-desktop.app \
+            "Hive-desktop-${{ steps.version.outputs.version }}-macos-universal.zip"
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          notes=$(cat <<'EOF'
+          Universal macOS build (Apple Silicon + Intel) of the Hive desktop app.
+
+          This build is **ad-hoc signed** (not signed with an Apple Developer ID or
+          notarized), so macOS quarantines it after download. After copying
+          **Hive.app** to `/Applications`, remove the quarantine attribute once:
+
+          ```bash
+          xattr -dr com.apple.quarantine /Applications/Hive.app
+          ```
+
+          Otherwise macOS reports the app as damaged or from an unidentified developer.
+
+          Requires macOS 12.0 or later.
+          EOF
+          )
+          gh release create "${{ steps.version.outputs.tag }}" \
+            --target "$GITHUB_SHA" \
+            --title "Hive Desktop ${{ steps.version.outputs.version }}" \
+            --notes "$notes" \
+            "desktop/bin/Hive-desktop-${{ steps.version.outputs.version }}-macos-universal.zip"
