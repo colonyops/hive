@@ -35,6 +35,15 @@ tasks:
 
   dev:
     summary: Runs the application in development mode
+    # Resolve a free Vite port (honoring an explicit WAILS_VITE_PORT) so multiple
+    # dev instances can run at once, and inject the git branch for the dev bar.
+    vars:
+      VITE_PORT:
+        sh: ./build/scripts/dev-port.sh
+      DEV_BRANCH:
+        sh: git rev-parse --abbrev-ref HEAD 2>/dev/null || echo unknown
+    env:
+      VITE_HIVE_DEV_BRANCH: '{{.DEV_BRANCH}}'
     cmds:
       - wails3 dev -config ./build/config.yml -port {{.VITE_PORT}}
 

@@ -25,6 +25,7 @@ import NewProfileModal from './components/NewProfileModal.vue'
 import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
+import DevBar from './components/DevBar.vue'
 import { useAuth } from './composables/useAuth'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
@@ -32,6 +33,10 @@ import { setTheme, themeLabels, themes } from './composables/useTheme'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
 import type { SidebarSelection } from './types/feed'
+
+// Only true when Vite is serving in dev mode (under `wails3 dev`); statically
+// false in production/server builds, so DevBar is compiled out of them.
+const devMode = import.meta.env.DEV
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -557,6 +562,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           </div>
         </template>
       </div>
+      <DevBar v-if="devMode" />
     </div>
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
