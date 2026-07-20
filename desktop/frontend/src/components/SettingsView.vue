@@ -1,10 +1,7 @@
 <script setup lang="ts">
-// The settings page (hc-pppw2iww): replaces the old sidebar "Flows" pill,
-// which was redundant with the footer "Edit flow" entry and the per-feed
-// reveal-in-flow icon. Rendered full-screen in App.vue's main region — the
-// same slot FlowsView occupies when session.flowsOpen is true — gated by a
-// plain app-level `settingsOpen` ref (NOT folded into useFlowsSession:
-// settings isn't a flow/profile concern, it's an app-chrome one).
+// Application-wide settings, opened from the persistent profile rail.
+// Profile-specific settings live in ProfileSettingsView so destructive
+// profile actions and global preferences remain clearly separated.
 //
 // A left category rail + a scrollable form on the right, covering the full
 // control vocabulary the design spec calls for (text, select, file, image,
@@ -84,7 +81,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <div class="flex h-full min-h-0 flex-1" data-testid="settings-view">
     <aside class="hive-scroll w-[200px] shrink-0 overflow-y-auto border-r border-row bg-sidebar">
       <div class="border-b border-border px-4 pb-3 pt-4">
-        <div class="text-[15px] font-semibold tracking-[-.01em] text-text">Settings</div>
+        <div class="text-[15px] font-semibold tracking-[-.01em] text-text">Application settings</div>
       </div>
       <nav class="flex flex-col gap-0.5 px-2.5 py-3">
         <button

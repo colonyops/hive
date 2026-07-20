@@ -148,32 +148,37 @@ describe('App', () => {
     wrapper.unmount()
   })
 
-  it('opens the settings view from the sidebar gear, hiding the sidebar/feed, and returns to the feed via its close button', async () => {
+  it('opens profile settings from the sidebar gear and application settings from the rail', async () => {
     const wrapper = await mountApp()
-
-    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
     await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="profile-settings-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true) // rail stays mounted
 
-    await wrapper.find('[data-testid="settings-close"]').trigger('click')
+    await wrapper.find('[data-testid="profile-settings-close"]').trigger('click')
+    await wrapper.find('[data-testid="application-settings"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="settings-view"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="profile-settings-view"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true)
+
+    await wrapper.find('[data-testid="settings-close"]').trigger('click')
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
 
-  it('deletes the active profile (flow) via the trash icon + confirm modal, then falls back to onboarding', async () => {
+  it('deletes the active profile from profile settings, then falls back to onboarding', async () => {
     const wrapper = await mountApp()
 
-    await wrapper.find('[data-testid="sidebar-delete-profile"]').trigger('click')
+    expect(wrapper.find('[data-testid="sidebar-delete-profile"]').exists()).toBe(false)
+    await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
+    await wrapper.find('[data-testid="profile-settings-danger"]').trigger('click')
+    await wrapper.find('[data-testid="profile-settings-delete"]').trigger('click')
     await flushPromises()
     expect(document.querySelector('[data-testid="delete-profile-modal"]')).not.toBeNull()
 

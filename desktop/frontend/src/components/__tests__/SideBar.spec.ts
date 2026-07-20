@@ -23,12 +23,14 @@ function mountSideBar(overrides: Partial<{ flowsDirty: boolean }> = {}) {
 }
 
 describe('SideBar', () => {
-  it('has no header Flows pill; a Settings gear button opens the settings page instead', async () => {
+  it('has no header Flows pill or delete action; the gear opens profile settings', async () => {
     const wrapper = mountSideBar()
 
     expect(wrapper.find('[data-testid="sidebar-open-flows"]').exists()).toBe(false)
     expect(wrapper.find('.flow-pill').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').text()).not.toContain('Flows')
+    expect(wrapper.find('[data-testid="sidebar-delete-profile"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sidebar-open-settings"]').attributes('aria-label')).toBe('Profile settings')
 
     await wrapper.find('[data-testid="sidebar-open-settings"]').trigger('click')
     expect(wrapper.emitted('open-settings')).toHaveLength(1)
@@ -48,13 +50,6 @@ describe('SideBar', () => {
     expect(wrapper.emitted('select')).toEqual([[{ type: 'feed', feedId: 'backend' }]])
   })
 
-  it('emits delete-profile from the header trash icon', async () => {
-    const wrapper = mountSideBar()
-
-    await wrapper.find('[data-testid="sidebar-delete-profile"]').trigger('click')
-
-    expect(wrapper.emitted('delete-profile')).toHaveLength(1)
-  })
 
   it('emits reveal-in-flow with the feed id from the per-feed icon, without also selecting the row', async () => {
     const wrapper = mountSideBar()

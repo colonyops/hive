@@ -1,8 +1,7 @@
 <script setup lang="ts">
 // A segmented control — same visual as pipeline/fields/TabStrip.vue (a
 // bordered strip of equal-width buttons, the active one raised), kept as a
-// local copy since settings is an app-level concern independent of the
-// pipeline module (see App.vue's settingsOpen notes).
+// local copy because settings pages are independent of the pipeline module.
 import SettingsField from './SettingsField.vue'
 
 export interface SettingsSegmentedOption {

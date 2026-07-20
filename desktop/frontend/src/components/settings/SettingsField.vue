@@ -2,8 +2,8 @@
 // The label/slot/hint wrapper every settings control below builds on —
 // mirrors pipeline/fields/FieldRow.vue's "label above input, hint below"
 // layout (kept as a local copy rather than importing across the
-// settings/pipeline module boundary: settings is an app-level concern, not
-// a flow one — see App.vue's settingsOpen).
+// settings/pipeline module boundary: these controls belong to settings
+// pages rather than the flow editor.
 defineProps<{
   label?: string
   hint?: string
