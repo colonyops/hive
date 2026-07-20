@@ -193,16 +193,9 @@ func buildActionStore(recorder activity.Recorder, logger zerolog.Logger) (*actio
 		}
 		emitActionsUpdated()
 		// A hand edit (or the app's own write) reloaded actions.yml: record the
-		// now-effective action/auto-rule counts so the change is auditable.
+		// now-effective action count so the change is auditable.
 		if recorder != nil {
-			all := store.List()
-			autoRules := 0
-			for _, a := range all {
-				if a.AutoApply {
-					autoRules++
-				}
-			}
-			recorder.Record(context.Background(), activity.ConfigReloaded("actions.yml", len(all), autoRules))
+			recorder.Record(context.Background(), activity.ConfigReloaded("actions.yml", len(store.List())))
 		}
 	}, logger)
 	if err != nil {

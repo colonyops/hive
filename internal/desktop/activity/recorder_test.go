@@ -95,7 +95,7 @@ func TestConstructors(t *testing.T) {
 		{"auto-action", AutoAction("Triage", "triage.default", "#4820"), CategoryAutoAction, SeverityAuto},
 		{"action", ActionRun("Reproduce", "exit 0"), CategoryAction, SeveritySuccess},
 		{"action-failed", ActionFailed("Reproduce", "exit 1"), CategoryAction, SeverityError},
-		{"config", ConfigReloaded("actions.yml", 6, 2), CategoryConfig, SeverityInfo},
+		{"config", ConfigReloaded("actions.yml", 6), CategoryConfig, SeverityInfo},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

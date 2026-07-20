@@ -139,13 +139,13 @@ func ActionFailed(label, reason string) Event {
 }
 
 // ConfigReloaded records a config file reload, reporting the resulting action
-// and auto-rule counts.
-func ConfigReloaded(file string, actions, autoRules int) Event {
+// count.
+func ConfigReloaded(file string, actions int) Event {
 	return Event{
 		Category: CategoryConfig,
 		Severity: SeverityInfo,
 		Title:    fmt.Sprintf("Reloaded %s", file),
-		Body:     fmt.Sprintf("%d actions, %d auto-rules", actions, autoRules),
+		Body:     fmt.Sprintf("%d actions", actions),
 		Source:   file,
 	}
 }
