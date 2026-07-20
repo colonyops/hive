@@ -92,6 +92,35 @@ test('opens, filters, runs, and dismisses the command palette', async ({ page })
   await expect(palette).toBeVisible()
 })
 
+test('navigates between items with j/k and the arrow keys', async ({ page }) => {
+  const detail = page.getByTestId('detail-pane')
+  await expect(detail).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
+
+  await page.keyboard.press('ArrowDown')
+  await expect(detail).toContainText('Feed source: mirror GitHub notifications inbox')
+
+  await page.keyboard.press('j')
+  await expect(detail).toContainText('OAuth device flow for in-app GitHub auth')
+
+  await page.keyboard.press('k')
+  await expect(detail).toContainText('Feed source: mirror GitHub notifications inbox')
+
+  await page.keyboard.press('ArrowUp')
+  await expect(detail).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
+})
+
+test('does not navigate while typing in the feed search box', async ({ page }) => {
+  const detail = page.getByTestId('detail-pane')
+  await expect(detail).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
+
+  await page.getByTestId('feed-search').focus()
+  await page.keyboard.press('j')
+
+  // The 'j' lands in the search field and must not move the selection.
+  await expect(page.getByTestId('feed-search')).toHaveValue('j')
+  await expect(detail).toContainText('batch_spawn: fix detached tmux env & PATH propagation')
+})
+
 test('captures a full-window screenshot', async ({ page }, testInfo) => {
   const screenshots = join(here, '..', 'screenshots')
   await mkdir(screenshots, { recursive: true })

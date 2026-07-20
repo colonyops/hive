@@ -3,12 +3,9 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
 import { useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
-import IconEye from '~icons/lucide/eye'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconList from '~icons/lucide/list'
-import IconMinus from '~icons/lucide/minus'
 import IconPalette from '~icons/lucide/palette'
-import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconRss from '~icons/lucide/rss'
 import IconShare2 from '~icons/lucide/share-2'
 import IconWorkflow from '~icons/lucide/workflow'
@@ -33,6 +30,8 @@ import { useAuth } from './composables/useAuth'
 import { useActivity } from './composables/useActivity'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
+import { comboFromEvent, formatCombo, useKeybindings } from './composables/useKeybindings'
+import { commandCatalog } from './keybindings/catalog'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
@@ -48,10 +47,10 @@ const {
 } = useAuth()
 
 const {
-  profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
+  profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
-  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem,
+  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, selectNext, selectPrev,
   toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
@@ -85,7 +84,10 @@ const activityActive = computed(() => route.name === 'activity')
 const applicationSettingsActive = computed(() => route.name === 'application-settings')
 const profileSettingsActive = computed(() => route.name === 'profile-settings')
 const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
-  route.params.section === 'integrations' ? 'integrations' : route.params.section === 'actions' ? 'actions' : 'appearance',
+  route.params.section === 'integrations' ? 'integrations'
+    : route.params.section === 'actions' ? 'actions'
+      : route.params.section === 'keybindings' ? 'keybindings'
+        : 'appearance',
 )
 const profileSettingsSection = computed<ProfileSettingsSection>(() =>
   route.params.section === 'danger' ? 'danger' : 'general',
@@ -381,10 +383,50 @@ async function toggleMaximise(): Promise<void> {
 // ── Command palette ──────────────────────────────────────────────────────────
 
 const { open: paletteOpen, toggle: togglePalette } = useCommandPalette()
+const kb = useKeybindings()
+
+// One handler per bindable command id. Both the keydown dispatcher and the
+// command palette run through this map, so each command has a single
+// implementation and the palette can show its live shortcut.
+const runMap: Record<string, () => void | Promise<void>> = {
+  'feed.next': selectNext,
+  'feed.prev': selectPrev,
+  'feed.open-in-browser': openSelectedInBrowser,
+  'feed.toggle-unread': navigateUnreadToggle,
+  'feed.refresh': refresh,
+  'palette.toggle': togglePalette,
+  'window.hide': hideWindow,
+}
+const catalogById = new Map(commandCatalog.map((command) => [command.id, command]))
+
+// The feed only accepts bare navigation keys when it is actually the on-screen
+// view (matches the condition under which <FeedList> renders below).
+const feedNavActive = computed(() =>
+  route.name === 'feed' && authenticated.value && !needsWorkspace.value && !!activeProfile.value,
+)
+
+// While an overlay owns the screen, only the palette toggle stays live.
+const anyOverlayOpen = computed(() =>
+  paletteOpen.value || newProfileOpen.value || deleteProfileOpen.value || !!sessionLaunchAction.value || !!pendingNavigation.value,
+)
 
 // Seed commands — reactive getter so they update when profiles/flows load
 useCommands(computed(() => {
   const cmds: Command[] = []
+
+  // Bindable app commands (nav, refresh, …) with their live shortcut hint.
+  for (const command of commandCatalog) {
+    if (command.paletteHidden) continue
+    cmds.push({
+      id: command.id,
+      title: command.title,
+      group: command.group,
+      keywords: command.keywords,
+      icon: command.icon,
+      hint: formatCombo(kb.bindings.value[command.id]?.[0] ?? ''),
+      run: () => runMap[command.id]?.(),
+    })
+  }
 
   // Profiles
   for (const p of profiles.value) {
@@ -419,23 +461,6 @@ useCommands(computed(() => {
       run: () => navigateSidebar({ type: 'feed', feedId: f.id }),
     })
   }
-
-  cmds.push({
-    id: 'feed:toggle-unread',
-    title: 'Toggle unread filter',
-    group: 'Feeds',
-    icon: IconEye,
-    run: navigateUnreadToggle,
-  })
-
-  cmds.push({
-    id: 'feed:refresh',
-    title: 'Refresh feeds',
-    group: 'Feeds',
-    keywords: ['reload', 'sync'],
-    icon: IconRefreshCw,
-    run: refresh,
-  })
 
   cmds.push({
     id: 'profile:new',
@@ -480,40 +505,38 @@ useCommands(computed(() => {
     })
   }
 
-  // Window
-  cmds.push({
-    id: 'window:hide',
-    title: 'Hide window',
-    group: 'Window',
-    icon: IconMinus,
-    run: hideWindow,
-  })
-
   return cmds
 }))
 
-// ── Global ⌘K / Ctrl+K listener ──────────────────────────────────────────────
+// ── Global keybinding dispatcher ─────────────────────────────────────────────
+// Resolves a keydown against the configurable keymap and runs the matched
+// command. Bare (modifier-less) keys are ignored while typing; feed commands
+// only fire on the feed; overlays suppress everything but the palette toggle.
 
 function onGlobalKeydown(e: KeyboardEvent): void {
-  if (e.key.toLowerCase() !== 'k' || (!e.metaKey && !e.ctrlKey)) return
+  if (kb.recording.value) return // the settings editor is capturing this key
+  const combo = comboFromEvent(e)
+  if (!combo) return
+  const id = kb.resolve(combo)
+  if (!id) return
+  const command = catalogById.get(id)
+  if (!command) return
 
-  // If palette is already open, always close it (even from inside the input)
-  if (paletteOpen.value) {
-    e.preventDefault()
-    togglePalette()
-    return
-  }
-
-  // Ignore ⌘K while focus is in any editable element other than the palette input
+  const mods = combo.split('+')
+  const hasModifier = mods.includes('mod') || mods.includes('ctrl') || mods.includes('alt')
   const target = e.target as HTMLElement
   const isEditable =
     target instanceof HTMLInputElement ||
     target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
     target.isContentEditable
-  if (isEditable) return
+  if (isEditable && !hasModifier) return
+
+  if (anyOverlayOpen.value && id !== 'palette.toggle') return
+  if (command.context === 'feed' && !feedNavActive.value) return
 
   e.preventDefault()
-  togglePalette()
+  void runMap[id]?.()
 }
 
 onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
@@ -600,11 +623,14 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           <section v-if="activeProfile" class="flex min-w-0 flex-1">
             <FeedList
               :title="title"
-              :items="items"
+              :visible-items="visibleItems"
               :selected-id="selectedId"
               :unread-only="unreadOnly"
+              :unread-count="unreadCount"
+              :search="search"
               :load-error="loadError"
               @select="selectItem"
+              @update:search="(value) => (search = value)"
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
