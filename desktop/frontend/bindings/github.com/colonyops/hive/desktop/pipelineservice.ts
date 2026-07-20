@@ -24,6 +24,10 @@ import * as actions$0 from "../internal/desktop/pipeline/actions/models.js";
 // @ts-ignore: Unused imports
 import * as pipelinedb$0 from "../internal/desktop/pipeline/pipelinedb/models.js";
 
+export function ActionRun(commandID: number): $CancellablePromise<pipeline$0.ActionRunView> {
+    return $Call.ByID(2865983566, commandID);
+}
+
 /**
  * ActionViews returns the configured actions available for an item kind
  * ("PR"/"Issue"). The actions store is the single source for both these
@@ -64,8 +68,8 @@ export function FeedItems(feedID: string): $CancellablePromise<pipeline$0.FeedIt
  * item and executes it. It accepts only actions that apply to the item's kind;
  * executable configuration is always re-resolved from ActionStore.
  */
-export function InvokeAction(actionID: string, item: feed$0.Item): $CancellablePromise<void> {
-    return $Call.ByID(204589393, actionID, item);
+export function InvokeAction(actionID: string, item: feed$0.Item, input: pipeline$0.ActionInvocationInput): $CancellablePromise<pipeline$0.ActionRunView> {
+    return $Call.ByID(204589393, actionID, item, input);
 }
 
 /**
@@ -91,4 +95,13 @@ export function NodeRuns(flowID: string, limit: number): $CancellablePromise<pip
  */
 export function ReadFrom(consumer: string, limit: number): $CancellablePromise<pipelinedb$0.Msg[] | null> {
     return $Call.ByID(2706344123, consumer, limit);
+}
+
+/**
+ * SessionLaunchOptions supplies the configured repository and agent choices
+ * for interactive launch-session actions. It intentionally exposes no local
+ * checkout paths or executable action configuration.
+ */
+export function SessionLaunchOptions(): $CancellablePromise<pipeline$0.SessionLaunchOptions> {
+    return $Call.ByID(2125140544);
 }

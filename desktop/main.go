@@ -97,7 +97,7 @@ func emitLogAppended(nextOffset int64) {
 
 func buildAuthBackend(onChange func()) auth.Backend {
 	switch desktop.MockMode() {
-	case "feed", "pipeline":
+	case "feed", "pipeline", "action-smoke":
 		return auth.NewMockBackend(true, onChange)
 	case "onboarding":
 		return auth.NewMockBackend(false, onChange)
@@ -145,9 +145,8 @@ func emitFlowsUpdated() {
 	}
 }
 
-// emitActionsUpdated wakes the detail pane after a successful or failed
-// actions.yml reload. ActionStore retains its last-good set on failure, so
-// refreshing always shows the currently effective action views.
+// emitActionsUpdated wakes frontend consumers after a successful catalog
+// change or a watcher reload. Service mutations call it only after success.
 func emitActionsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("actions:updated", "changed")
@@ -164,6 +163,9 @@ func emitActionsUpdated() {
 // to pick up.
 func buildActionStore(logger zerolog.Logger) (*actions.ActionStore, *actions.ActionsWatcher) {
 	path := desktop.ActionsPath()
+	if _, err := actions.SeedDefaultsIfMissing(path); err != nil {
+		logger.Warn().Err(err).Msg("actions seed failed")
+	}
 	store := actions.NewActionStore(path)
 	if err := store.Reload(); err != nil {
 		logger.Warn().Err(err).Msg("actions.yml load failed; using last-good (likely empty) action set")
@@ -189,8 +191,8 @@ type hiveActionRuntime struct {
 	db     *coredb.DB
 	cancel context.CancelFunc
 
-	launcher  pipeline.SessionLauncher
-	publisher pipeline.EventPublisher
+	launcher  *pipeline.HiveSessionLauncher
+	publisher pipeline.MessagePublisher
 }
 
 func (r *hiveActionRuntime) Close() {
@@ -259,7 +261,7 @@ func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
 		db:        database,
 		cancel:    cancel,
 		launcher:  pipeline.NewHiveSessionLauncher(sessions),
-		publisher: pipeline.NewEventBusPublisher(bus),
+		publisher: pipeline.NewHiveMessagePublisher(hive.NewMessageService(stores.NewMessageStore(database, cfg.Messaging.MaxMessages), cfg, bus)),
 	}, nil
 }
 
@@ -268,11 +270,11 @@ func buildHiveActionRuntime(logger zerolog.Logger) (*hiveActionRuntime, error) {
 // output commands, but they retain this worker for explicit detail-pane
 // confirmation RPCs. That keeps the configured action path real in e2e while
 // avoiding a background shell action from compromising fixture determinism.
-func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.EventPublisher, logger zerolog.Logger) *pipeline.Worker {
+func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.MessagePublisher, logger zerolog.Logger) *pipeline.Worker {
 	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
-		"launch-session": pipeline.NewLaunchSessionExecutor(launcher),
-		"shell":          pipeline.NewShellExecutor(logger),
-		"publish-event":  pipeline.NewPublishEventExecutor(publisher),
+		"launch-session":  pipeline.NewLaunchSessionExecutor(launcher),
+		"shell":           pipeline.NewShellExecutor(logger),
+		"publish-message": pipeline.NewPublishMessageExecutor(publisher),
 	})
 	return pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 }
@@ -296,7 +298,7 @@ func main() {
 	// fixture flow desktop/e2e/fixtures/flows/frontend-triage.yaml serves
 	// (see desktop/mockseed.go and desktop/e2e/scripts/serve.sh's
 	// HIVE_DESKTOP_FLOWS).
-	if desktop.MockMode() == "feed" {
+	if desktop.MockMode() == "feed" || desktop.MockMode() == "action-smoke" {
 		seedMockFeedItemsOrWarn(pipelineDB, pipelineLogger)
 	}
 
@@ -310,6 +312,7 @@ func main() {
 	// both resolve enabled flow IDs live from it.
 	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	flowsStore, flowsWatcher := buildFlowsStore(actionStore, flowsLogger)
+	actionStore.SetUsageChecker(actionUsageChecker{flows: flowsStore, db: pipelineDB})
 	if flowsWatcher != nil {
 		flowsWatcher.Start()
 	}
@@ -349,12 +352,13 @@ func main() {
 		Icon:        appIcon,
 		Services: []application.Service{
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
-			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker)),
+			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
 			application.NewService(NewFlowsService(flowsStore)),
+			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
-			Middleware: sourceToCommitSmokeMiddleware(pipelineDB),
+			Middleware: desktopSmokeMiddleware(pipelineDB, actionRuntime.db),
 		},
 		Mac: application.MacOptions{
 			ActivationPolicy: application.ActivationPolicyRegular,

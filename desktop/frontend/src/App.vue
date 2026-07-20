@@ -16,6 +16,7 @@ import ProfileRail from './components/ProfileRail.vue'
 import SideBar from './components/SideBar.vue'
 import FeedList from './components/FeedList.vue'
 import DetailPane from './components/DetailPane.vue'
+import CreateSessionDialog from './components/CreateSessionDialog.vue'
 import CommandPalette from './components/CommandPalette.vue'
 import ProfileSettingsView from './components/ProfileSettingsView.vue'
 import SettingsView from './components/SettingsView.vue'
@@ -40,11 +41,15 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, loadError,
-  selectedId, selectedItem, actions, unreadOnly, title, toasts, dismissToast, clearToasts,
+  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem,
-  toggleUnread, refresh, invokeAction, notWired, openUrl, openSelectedInBrowser, hideWindow,
+  toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
+
+// The feed-item kinds currently in the system — what the actions editor
+// autocompletes and validates "applies to" against.
+const knownFeedTypes = computed(() => [...new Set(items.value.map((item) => item.kind).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
 
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
@@ -71,7 +76,7 @@ const flowsActive = computed(() => route.name === 'flows')
 const applicationSettingsActive = computed(() => route.name === 'application-settings')
 const profileSettingsActive = computed(() => route.name === 'profile-settings')
 const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
-  route.params.section === 'integrations' ? 'integrations' : 'appearance',
+  route.params.section === 'integrations' ? 'integrations' : route.params.section === 'actions' ? 'actions' : 'appearance',
 )
 const profileSettingsSection = computed<ProfileSettingsSection>(() =>
   route.params.section === 'danger' ? 'danger' : 'general',
@@ -223,6 +228,10 @@ function requestExitFlows(): void {
 
 function requestSelectProfile(id: string): void {
   openFeed(id)
+}
+
+function requestOpenActionsSettings(): void {
+  void router.push({ name: 'application-settings', params: { section: 'actions' } })
 }
 
 function requestOpenSettings(page: 'application' | 'profile'): void {
@@ -512,6 +521,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           :github-connected="authenticated"
           :github-login="authStatus?.login"
           :active-category="applicationSettingsSection"
+          :known-feed-types="knownFeedTypes"
           @close="closeSettings"
           @select-category="selectApplicationSettingsSection"
         />
@@ -546,7 +556,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :actions="actions" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="notWired" />
+            <DetailPane :item="selectedItem" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">
@@ -558,6 +568,15 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         </template>
       </div>
     </div>
+    <CreateSessionDialog
+      v-if="sessionLaunchAction && sessionLaunchOptions"
+      :action-label="sessionLaunchAction.label"
+      :options="sessionLaunchOptions"
+      :busy="sessionLaunchBusy"
+      :error="sessionLaunchError"
+      @close="cancelSessionLaunch"
+      @submit="submitSessionLaunch"
+    />
     <ToastStack :toasts="toasts" @dismiss="dismissToast" @clear-all="clearToasts" />
     <CommandPalette />
     <NewProfileModal

@@ -17,6 +17,11 @@ const mocks = vi.hoisted(() => ({
   SaveLayout: vi.fn(),
   GetSidebar: vi.fn(),
   SaveSidebar: vi.fn(),
+  // actionsservice
+  ListActions: vi.fn(),
+  CreateAction: vi.fn(),
+  UpdateAction: vi.fn(),
+  DeleteAction: vi.fn(),
   // pipelineservice
   FeedItems: vi.fn(),
   FeedItemCounts: vi.fn(),
@@ -47,6 +52,13 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => (
   SaveLayout: mocks.SaveLayout,
   GetSidebar: mocks.GetSidebar,
   SaveSidebar: mocks.SaveSidebar,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/actionsservice', () => ({
+  ListActions: mocks.ListActions,
+  CreateAction: mocks.CreateAction,
+  UpdateAction: mocks.UpdateAction,
+  DeleteAction: mocks.DeleteAction,
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
@@ -115,6 +127,7 @@ describe('App', () => {
     mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
     mocks.ActionViews.mockResolvedValue([])
     mocks.InvokeAction.mockResolvedValue(undefined)
+    mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
     mocks.NodeRuns.mockResolvedValue([])
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
@@ -212,6 +225,45 @@ describe('App', () => {
     expect(router.currentRoute.value.name).toBe('feed')
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
+    wrapper.unmount()
+  })
+
+  it('routes DetailPane Edit to actions settings', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/')
+    await router.isReady()
+    const wrapper = mount(App, {
+      global: {
+        plugins: [router],
+        stubs: { DetailPane: { template: '<button data-testid="detail-edit" @click="$emit(\'edit\')" />', emits: ['edit'] } },
+      },
+    })
+    await flushPromises()
+    await wrapper.get('[data-testid="detail-edit"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value).toMatchObject({ name: 'application-settings', params: { section: 'actions' } })
+    expect(wrapper.find('[data-testid="actions-settings"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('renders the actions settings deep-link and preserves it through back/forward history', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/settings/actions')
+    await router.isReady()
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+    expect(router.currentRoute.value.params.section).toBe('actions')
+    expect(wrapper.find('[data-testid="actions-settings"]').exists()).toBe(true)
+
+    await router.push('/settings/integrations')
+    await flushPromises()
+    router.back()
+    await flushPromises()
+    expect(router.currentRoute.value.params.section).toBe('actions')
+    expect(wrapper.find('[data-testid="actions-settings"]').exists()).toBe(true)
+    router.forward()
+    await flushPromises()
+    expect(router.currentRoute.value.params.section).toBe('integrations')
     wrapper.unmount()
   })
 

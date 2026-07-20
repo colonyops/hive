@@ -40,8 +40,8 @@ type RetentionResult struct {
 // current log rather than replaying data accumulated while it was disabled.
 //
 // Node runs and terminal output-command rows are bounded independently. The
-// latter intentionally excludes pending, awaiting_confirmation, running, and
-// retryable commands; losing any of those could drop a side effect.
+// latter intentionally excludes pending and running commands; losing either
+// could drop or duplicate a side effect.
 func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy RetentionPolicy) (RetentionResult, error) {
 	if policy.NodeRunLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("node run retention limit must not be negative")

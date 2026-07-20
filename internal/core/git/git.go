@@ -3,6 +3,7 @@ package git
 
 import (
 	"context"
+	"net/url"
 	"strings"
 )
 
@@ -44,6 +45,69 @@ type Git interface {
 
 // ExtractRepoName extracts the repository name from a git remote URL.
 // Handles both SSH (git@github.com:user/repo.git) and HTTPS (https://github.com/user/repo.git) formats.
+// RemoteIdentity returns a stable identity suitable for matching remotes.
+// GitHub's HTTPS and SSH spellings identify the same repository, so they map
+// to github.com/<owner>/<repo>. Other remotes deliberately retain their exact
+// (trimmed) spelling: a local path or a non-GitHub forge URL is an explicit
+// user choice and must not be conflated with another transport.
+func RemoteIdentity(remote string) string {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		return ""
+	}
+
+	owner, repo, ok := githubOwnerRepo(remote)
+	if !ok {
+		return remote
+	}
+	return "github.com/" + strings.ToLower(owner) + "/" + strings.ToLower(repo)
+}
+
+// EquivalentRemote reports whether two remotes refer to the same repository
+// under RemoteIdentity's intentionally narrow matching rules.
+func EquivalentRemote(left, right string) bool {
+	leftID, rightID := RemoteIdentity(left), RemoteIdentity(right)
+	return leftID != "" && leftID == rightID
+}
+
+func githubOwnerRepo(remote string) (owner, repo string, ok bool) {
+	remote = strings.TrimSpace(remote)
+	if remote == "" {
+		return "", "", false
+	}
+
+	// SCP-style SSH is not accepted by net/url. Git also accepts the
+	// userless spelling github.com:owner/repo.git, so recognize both forms.
+	if at := strings.LastIndex(remote, "@"); at != -1 {
+		if rest := remote[at+1:]; strings.HasPrefix(strings.ToLower(rest), "github.com:") {
+			return githubPath(rest[len("github.com:"):])
+		}
+	} else if colon := strings.Index(remote, ":"); colon != -1 && strings.EqualFold(remote[:colon], "github.com") {
+		return githubPath(remote[colon+1:])
+	}
+
+	u, err := url.Parse(remote)
+	if err != nil || !strings.EqualFold(u.Hostname(), "github.com") {
+		return "", "", false
+	}
+	return githubPath(strings.TrimPrefix(u.EscapedPath(), "/"))
+}
+
+func githubPath(path string) (owner, repo string, ok bool) {
+	parts := strings.Split(strings.Trim(strings.TrimSpace(path), "/"), "/")
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
+		return "", "", false
+	}
+	repo = parts[1]
+	if len(repo) >= len(".git") && strings.EqualFold(repo[len(repo)-len(".git"):], ".git") {
+		repo = repo[:len(repo)-len(".git")]
+	}
+	if repo == "" {
+		return "", "", false
+	}
+	return parts[0], repo, true
+}
+
 func ExtractRepoName(remote string) string {
 	remote = strings.TrimSuffix(remote, ".git")
 

@@ -62,8 +62,8 @@ const confirmOutputCommand = `-- name: ConfirmOutputCommand :one
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
 ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
-WHERE output_command.status IN ('pending', 'awaiting_confirmation')
-RETURNING id, action_id, payload, status, created_at, "key", attempts, last_error
+WHERE output_command.status = 'pending'
+RETURNING id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr
 `
 
 type ConfirmOutputCommandParams struct {
@@ -73,10 +73,8 @@ type ConfirmOutputCommandParams struct {
 	CreatedAt int64  `json:"created_at"`
 }
 
-// An explicit detail-pane action invocation creates a command when no flow
-// action node did, or promotes that node's awaiting command to running.
-// Completed/failed/running commands are deliberately not re-run: output
-// actions remain deduped on (action_id, key).
+// Explicit detail invocation creates work or claims a queued flow command.
+// Terminal/running commands remain deduplicated.
 func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCommandParams) (OutputCommand, error) {
 	row := q.db.QueryRowContext(ctx, confirmOutputCommand,
 		arg.ActionID,
@@ -94,6 +92,9 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 		&i.Key,
 		&i.Attempts,
 		&i.LastError,
+		&i.ResultJson,
+		&i.Stdout,
+		&i.Stderr,
 	)
 	return i, err
 }
@@ -202,6 +203,29 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 	row := q.db.QueryRowContext(ctx, getConsumerOffset, consumer)
 	var i ConsumerOffset
 	err := row.Scan(&i.Consumer, &i.Offset)
+	return i, err
+}
+
+const getOutputCommand = `-- name: GetOutputCommand :one
+SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command WHERE id = ?
+`
+
+func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand, error) {
+	row := q.db.QueryRowContext(ctx, getOutputCommand, id)
+	var i OutputCommand
+	err := row.Scan(
+		&i.ID,
+		&i.ActionID,
+		&i.Payload,
+		&i.Status,
+		&i.CreatedAt,
+		&i.Key,
+		&i.Attempts,
+		&i.LastError,
+		&i.ResultJson,
+		&i.Stdout,
+		&i.Stderr,
+	)
 	return i, err
 }
 
@@ -372,15 +396,14 @@ func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlow
 }
 
 const listRunnableOutputCommands = `-- name: ListRunnableOutputCommands :many
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
-WHERE status IN ('pending', 'running')
+SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command
+WHERE status = 'pending'
 ORDER BY id ASC
 LIMIT ?
 `
 
-// Pending commands await automatic classification/execution; running ones
-// were explicitly confirmed by the detail pane. ID order matches
-// idx_output_command_status_id, avoiding a sort as the queue grows.
+// Every enqueued flow action is runnable immediately; running is reserved for
+// an explicit detail invocation.
 func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) ([]OutputCommand, error) {
 	rows, err := q.db.QueryContext(ctx, listRunnableOutputCommands, limit)
 	if err != nil {
@@ -399,6 +422,9 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 			&i.Key,
 			&i.Attempts,
 			&i.LastError,
+			&i.ResultJson,
+			&i.Stdout,
+			&i.Stderr,
 		); err != nil {
 			return nil, err
 		}
@@ -414,8 +440,8 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 }
 
 const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
-WHERE status IN ('pending', 'running') AND id > ?
+SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command
+WHERE status = 'pending' AND id > ?
 ORDER BY id ASC
 LIMIT ?
 `
@@ -445,6 +471,9 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 			&i.Key,
 			&i.Attempts,
 			&i.LastError,
+			&i.ResultJson,
+			&i.Stdout,
+			&i.Stderr,
 		); err != nil {
 			return nil, err
 		}
@@ -474,50 +503,48 @@ func (q *Queries) MarkFeedItemRead(ctx context.Context, arg MarkFeedItemReadPara
 	return err
 }
 
-const markOutputCommandAwaitingConfirmation = `-- name: MarkOutputCommandAwaitingConfirmation :exec
-UPDATE output_command SET status = 'awaiting_confirmation'
-WHERE id = ? AND status = 'pending'
-`
-
-func (q *Queries) MarkOutputCommandAwaitingConfirmation(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, markOutputCommandAwaitingConfirmation, id)
-	return err
-}
-
 const markOutputCommandDone = `-- name: MarkOutputCommandDone :exec
-UPDATE output_command SET status = 'done'
+UPDATE output_command
+SET status = 'done', last_error = NULL, result_json = ?, stdout = ?, stderr = ?
 WHERE id = ?
 `
 
-func (q *Queries) MarkOutputCommandDone(ctx context.Context, id int64) error {
-	_, err := q.db.ExecContext(ctx, markOutputCommandDone, id)
+type MarkOutputCommandDoneParams struct {
+	ResultJson sql.NullString `json:"result_json"`
+	Stdout     sql.NullString `json:"stdout"`
+	Stderr     sql.NullString `json:"stderr"`
+	ID         int64          `json:"id"`
+}
+
+func (q *Queries) MarkOutputCommandDone(ctx context.Context, arg MarkOutputCommandDoneParams) error {
+	_, err := q.db.ExecContext(ctx, markOutputCommandDone,
+		arg.ResultJson,
+		arg.Stdout,
+		arg.Stderr,
+		arg.ID,
+	)
 	return err
 }
 
 const markOutputCommandFailed = `-- name: MarkOutputCommandFailed :exec
-UPDATE output_command SET status = 'failed', attempts = attempts + 1, last_error = ?
+UPDATE output_command SET status = 'failed', attempts = attempts + 1, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ?
 `
 
 type MarkOutputCommandFailedParams struct {
 	LastError sql.NullString `json:"last_error"`
+	Stdout    sql.NullString `json:"stdout"`
+	Stderr    sql.NullString `json:"stderr"`
 	ID        int64          `json:"id"`
 }
 
 func (q *Queries) MarkOutputCommandFailed(ctx context.Context, arg MarkOutputCommandFailedParams) error {
-	_, err := q.db.ExecContext(ctx, markOutputCommandFailed, arg.LastError, arg.ID)
-	return err
-}
-
-const promoteOutputCommandsAwaitingConfirmation = `-- name: PromoteOutputCommandsAwaitingConfirmation :exec
-UPDATE output_command SET status = 'pending'
-WHERE action_id = ? AND status = 'awaiting_confirmation'
-`
-
-// An action changed from manual to auto-apply, so make its previously
-// confirmation-gated commands runnable again.
-func (q *Queries) PromoteOutputCommandsAwaitingConfirmation(ctx context.Context, actionID string) error {
-	_, err := q.db.ExecContext(ctx, promoteOutputCommandsAwaitingConfirmation, actionID)
+	_, err := q.db.ExecContext(ctx, markOutputCommandFailed,
+		arg.LastError,
+		arg.Stdout,
+		arg.Stderr,
+		arg.ID,
+	)
 	return err
 }
 
@@ -596,17 +623,24 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 }
 
 const retryOutputCommand = `-- name: RetryOutputCommand :exec
-UPDATE output_command SET attempts = attempts + 1, last_error = ?
+UPDATE output_command SET attempts = attempts + 1, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ?
 `
 
 type RetryOutputCommandParams struct {
 	LastError sql.NullString `json:"last_error"`
+	Stdout    sql.NullString `json:"stdout"`
+	Stderr    sql.NullString `json:"stderr"`
 	ID        int64          `json:"id"`
 }
 
 func (q *Queries) RetryOutputCommand(ctx context.Context, arg RetryOutputCommandParams) error {
-	_, err := q.db.ExecContext(ctx, retryOutputCommand, arg.LastError, arg.ID)
+	_, err := q.db.ExecContext(ctx, retryOutputCommand,
+		arg.LastError,
+		arg.Stdout,
+		arg.Stderr,
+		arg.ID,
+	)
 	return err
 }
 

@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -20,7 +21,7 @@ func TestShellExecutor_SuccessfulCommand(t *testing.T) {
 		Config: &actions.ShellConfig{CommandTemplate: "true"},
 	}
 
-	err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}})
+	_, err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}}, ActionInvocationInput{})
 	require.NoError(t, err)
 }
 
@@ -32,7 +33,7 @@ func TestShellExecutor_FailingCommand_IsError(t *testing.T) {
 		Config: &actions.ShellConfig{CommandTemplate: "false"},
 	}
 
-	err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}})
+	_, err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}}, ActionInvocationInput{})
 	require.Error(t, err)
 }
 
@@ -49,7 +50,7 @@ func TestShellExecutor_RendersCommandTemplateWithShq(t *testing.T) {
 		},
 	}
 
-	err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{"title": "hello world"}})
+	_, err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{"title": "hello world"}}, ActionInvocationInput{})
 	require.NoError(t, err)
 
 	got, err := os.ReadFile(outFile)
@@ -70,9 +71,10 @@ func TestShellExecutor_RespectsCwd(t *testing.T) {
 		},
 	}
 
-	require.NoError(t, exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}}))
+	_, err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}}, ActionInvocationInput{})
+	require.NoError(t, err)
 
-	_, err := os.Stat(dir + "/marker.txt")
+	_, err = os.Stat(dir + "/marker.txt")
 	require.NoError(t, err)
 }
 
@@ -88,15 +90,43 @@ func TestShellExecutor_TimeoutKillsSlowCommand(t *testing.T) {
 	}
 
 	start := time.Now()
-	err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}})
+	_, err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}}, ActionInvocationInput{})
 	require.Error(t, err)
 	assert.Less(t, time.Since(start), 4*time.Second, "the timeout should have killed the command well before it finished")
 }
 
+func TestShellExecutor_BoundsAndDrainsNoisyStreams(t *testing.T) {
+	exec := NewShellExecutor(zerolog.Nop())
+	action := actions.Action{
+		ID:     "noisy",
+		Type:   "shell",
+		Config: &actions.ShellConfig{CommandTemplate: "yes stdout | head -c 70000; yes stderr | head -c 70000 >&2"},
+	}
+
+	result, err := exec.Execute(t.Context(), action, OutputData{Payload: map[string]any{}}, ActionInvocationInput{})
+	require.NoError(t, err)
+	assert.True(t, result.Attempted)
+	assert.Len(t, result.Log.Stdout, maxExecutionStreamBytes)
+	assert.Len(t, result.Log.Stderr, maxExecutionStreamBytes)
+	assert.True(t, strings.HasSuffix(result.Log.Stdout, truncatedStreamMarker))
+	assert.True(t, strings.HasSuffix(result.Log.Stderr, truncatedStreamMarker))
+}
+
+func TestBoundedExecutionWriterNeverBuffersMoreThanLimit(t *testing.T) {
+	writer := &boundedExecutionWriter{}
+	stream := []byte(strings.Repeat("x", maxExecutionStreamBytes*2))
+	n, err := writer.Write(stream)
+	require.NoError(t, err)
+	assert.Equal(t, len(stream), n, "all child output must be drained")
+	assert.LessOrEqual(t, writer.buf.Len(), maxExecutionStreamBytes)
+	assert.Len(t, writer.String(), maxExecutionStreamBytes)
+	assert.True(t, strings.HasSuffix(writer.String(), truncatedStreamMarker))
+}
+
 func TestShellExecutor_WrongConfigType_IsError(t *testing.T) {
 	exec := NewShellExecutor(zerolog.Nop())
-	action := actions.Action{ID: "x", Type: "shell", Config: &actions.PublishEventConfig{}}
+	action := actions.Action{ID: "x", Type: "shell", Config: &actions.PublishMessageConfig{}}
 
-	err := exec.Execute(t.Context(), action, OutputData{})
+	_, err := exec.Execute(t.Context(), action, OutputData{}, ActionInvocationInput{})
 	require.Error(t, err)
 }

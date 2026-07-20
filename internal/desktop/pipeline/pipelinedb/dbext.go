@@ -124,6 +124,12 @@ func Open(dir string, opts OpenOptions) (*DB, error) {
 		}
 		return nil, fmt.Errorf("failed to initialize schema: %w", err)
 	}
+	if err := db.RecoverInterruptedOutputCommands(ctx); err != nil {
+		if closeErr := conn.Close(); closeErr != nil {
+			return nil, fmt.Errorf("failed to recover interrupted commands: %w (close also failed: %w)", err, closeErr)
+		}
+		return nil, fmt.Errorf("failed to recover interrupted commands: %w", err)
+	}
 
 	return db, nil
 }

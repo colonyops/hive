@@ -91,6 +91,49 @@ func TestOpen_UpgradeToSourceSnapshots_ClearsLegacyFeedItems(t *testing.T) {
 	assert.Zero(t, count, "migration must remove rows whose provenance cannot be reconstructed")
 }
 
+func TestOpen_UpgradeMigratesAwaitingConfirmationToPending(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	conn := seedPipelineDBAtMigration(t, dir, 7)
+	_, err := conn.ExecContext(ctx, `
+		INSERT INTO output_command (action_id, payload, status, created_at, "key", attempts)
+		VALUES ('review', X'7B7D', 'awaiting_confirmation', 1, 'item-1', 0)`)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+
+	upgraded, err := Open(dir, DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = upgraded.Close() })
+	var status string
+	require.NoError(t, upgraded.Conn().QueryRowContext(ctx, `SELECT status FROM output_command WHERE action_id = 'review'`).Scan(&status))
+	assert.Equal(t, "pending", status)
+}
+
+func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+	first, err := Open(dir, DefaultOpenOptions())
+	require.NoError(t, err)
+	enqueueTestCommand(t, first, "review", "item-1")
+	_, created, err := first.ConfirmOutputCommand(ctx, "review", "item-1", []byte(`{}`))
+	require.NoError(t, err)
+	require.True(t, created)
+	require.NoError(t, first.Close())
+
+	reopened, err := Open(dir, DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = reopened.Close() })
+	row, err := reopened.OutputCommand(ctx, 1)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", row.Status)
+	assert.Equal(t, int64(1), row.Attempts)
+	assert.Contains(t, row.LastError.String, "interrupted")
+	rows, err := reopened.ListRunnableOutputCommands(ctx, 10)
+	require.NoError(t, err)
+	assert.Empty(t, rows)
+}
+
 func TestOpen_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 

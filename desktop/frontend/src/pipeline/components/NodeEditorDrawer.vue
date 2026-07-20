@@ -22,6 +22,7 @@ import { hasInputPort, outputPortCount } from '../lib/ports'
 import { renderMarkdown, summarize } from '../lib/markdown'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import PanelResizeHandle from '../../components/PanelResizeHandle.vue'
+import AppSwitch from '../../components/AppSwitch.vue'
 import type { NodeTypeDefinition } from '../nodeType'
 import type { FlowNode } from '../types'
 
@@ -68,6 +69,7 @@ function updateConfig(next: Record<string, any>) {
 }
 
 const errors = computed(() => props.def.validate?.(draftConfig.value) ?? [])
+const enabled = computed({ get: () => !disabled.value, set: (value: boolean) => { disabled.value = !value } })
 
 // ── Header role subtitle ("source · emits 1 output" / "processor · 1 in →
 // 1 out") — resolved against the live draft config so a function node's
@@ -180,26 +182,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <div class="truncate text-[14px] font-semibold tracking-[-.01em]" data-testid="node-editor-title">Edit node · {{ def.label }}</div>
           <div class="truncate font-mono text-[11px] text-text-3" data-testid="node-editor-subtitle">{{ subtitle }}</div>
         </div>
-        <button
-          type="button"
-          role="switch"
-          :aria-checked="!disabled"
-          class="flex shrink-0 cursor-pointer items-center gap-1.5 font-mono text-[11px]"
-          :class="!disabled ? 'text-severity-success' : 'text-text-3'"
-          data-testid="node-editor-enabled"
-          @click="disabled = !disabled"
-        >
-          <span
-            class="relative h-[15px] w-[26px] shrink-0 rounded-full transition-colors"
-            :style="{ background: !disabled ? 'var(--color-severity-success-tint)' : 'var(--color-chip)' }"
-          >
-            <span
-              class="absolute top-[2px] size-[11px] rounded-full transition-[left]"
-              :style="{ background: !disabled ? 'var(--color-severity-success)' : 'var(--color-text-3)', left: !disabled ? '13px' : '2px' }"
-            />
-          </span>
-          Enabled
-        </button>
+        <AppSwitch v-model="enabled" label="Enabled" class="shrink-0" testid="node-editor-enabled" />
       </header>
 
       <div class="hive-scroll flex min-h-0 flex-1 flex-col gap-[14px] overflow-y-auto px-[18px] py-[15px]">

@@ -22,8 +22,8 @@ const item: FeedItem = {
 }
 
 const actions: ActionView[] = [
-  { id: 'summarize', label: 'Summarize thread', type: 'launch-session', autoApply: false },
-  { id: 'draft', label: 'Draft reply', type: 'shell', autoApply: false },
+  { id: 'summarize', label: 'Summarize thread', type: 'launch-session', showInDetail: true, requiresSessionInput: false },
+  { id: 'draft', label: 'Draft reply', type: 'shell', showInDetail: true, requiresSessionInput: false },
 ]
 
 describe('DetailPane', () => {
@@ -50,6 +50,14 @@ describe('DetailPane', () => {
     await draftButton!.trigger('click')
 
     expect(wrapper.emitted('run-action')).toEqual([['draft']])
+  })
+
+  it('keeps long branch metadata as a deliberate label/value stack', () => {
+    const wrapper = mount(DetailPane, { props: { item: { ...item, branch: 'feat/a-very-long-branch-name-that-must-wrap-without-breaking-the-label' }, actions } })
+    const footer = wrapper.get('[data-testid="action-footer-meta"]')
+    expect(footer.text()).toContain('Runs headless (batch) on')
+    expect(footer.get('[data-testid="action-footer-branch"]').text()).toContain('a-very-long-branch')
+    expect(footer.classes()).toContain('action-footer-meta')
   })
 
   it('renders the empty state when no item is selected', () => {

@@ -3,6 +3,7 @@ package pipeline
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 
@@ -52,16 +53,17 @@ func (f fakeActionLister) List() []actions.Action {
 // fakeExecutor records every Execute call and returns a scripted error (or
 // nil) each time, so tests can assert exactly what the worker dispatched.
 type fakeExecutor struct {
-	mu    sync.Mutex
-	calls []OutputData
-	err   error
+	mu     sync.Mutex
+	calls  []OutputData
+	err    error
+	result ExecutionResult
 }
 
-func (f *fakeExecutor) Execute(_ context.Context, _ actions.Action, data OutputData) error {
+func (f *fakeExecutor) Execute(_ context.Context, _ actions.Action, data OutputData, _ ActionInvocationInput) (ExecutionResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.calls = append(f.calls, data)
-	return f.err
+	return f.result, f.err
 }
 
 func (f *fakeExecutor) callCount() int {
@@ -72,11 +74,10 @@ func (f *fakeExecutor) callCount() int {
 
 func launchSessionAction(id string, autoApply bool) actions.Action {
 	return actions.Action{
-		ID:        id,
-		Label:     "Test action",
-		Type:      "launch-session",
-		AutoApply: autoApply,
-		Config:    &actions.LaunchSessionConfig{PromptTemplate: "Review {{ .Payload.title }}"},
+		ID:     id,
+		Label:  "Test action",
+		Type:   "launch-session",
+		Config: &actions.LaunchSessionConfig{PromptTemplate: "Review {{ .Payload.title }}", RepoTemplate: "https://github.com/o/r.git"},
 	}
 }
 
@@ -100,33 +101,26 @@ func TestWorker_AutoApplyAction_ExecutesAndMarksDone(t *testing.T) {
 	assert.Empty(t, rows, "a successfully executed command is no longer runnable")
 }
 
-func TestWorker_NonAutoApplyAction_AwaitsConfirmation(t *testing.T) {
+func TestWorker_HeadlessActionExecutesAndConsumesQueue(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
-	enqueueTestCommand(t, db, "manual-action", "item-1", `{"title":"Fix bug"}`)
+	enqueueTestCommand(t, db, "headless-action", "item-1", `{"title":"Fix bug"}`)
 
 	exec := &fakeExecutor{}
-	worker := NewWorker(db, fakeActionLister{"manual-action": launchSessionAction("manual-action", false)},
+	worker := NewWorker(db, fakeActionLister{"headless-action": launchSessionAction("headless-action", false)},
 		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
-
 	worker.Tick(t.Context())
 
-	assert.Equal(t, 0, exec.callCount(), "non-auto-apply actions must not be executed by the worker")
+	assert.Equal(t, 1, exec.callCount())
 	rows, err := db.ListRunnableOutputCommands(t.Context(), 10)
 	require.NoError(t, err)
-	assert.Empty(t, rows, "manual commands must leave the runnable queue")
-
+	assert.Empty(t, rows)
 	var status string
-	var attempts int64
-	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
-		`SELECT status, attempts FROM output_command WHERE action_id = ? AND key = ?`,
-		"manual-action", "item-1",
-	).Scan(&status, &attempts))
-	assert.Equal(t, "awaiting_confirmation", status)
-	assert.Equal(t, int64(0), attempts, "no execution attempt was made")
+	require.NoError(t, db.Conn().QueryRowContext(t.Context(), `SELECT status FROM output_command WHERE action_id = ? AND key = ?`, "headless-action", "item-1").Scan(&status))
+	assert.Equal(t, "done", status)
 }
 
-func TestWorker_ConfirmExecutesManualActionAndConsumesAwaitingCommand(t *testing.T) {
+func TestWorker_ConfirmCannotReplayAlreadyCompletedDeployedFlowCommand(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
 	enqueueTestCommand(t, db, "review-action", "item-1", `{"title":"Fix bug"}`)
@@ -136,9 +130,10 @@ func TestWorker_ConfirmExecutesManualActionAndConsumesAwaitingCommand(t *testing
 		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
 	worker.Tick(t.Context())
 
-	require.NoError(t, worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"changed"}`)))
+	_, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"changed"}`), ActionInvocationInput{})
+	require.Error(t, err, "the worker already consumed the queued command")
 	assert.Equal(t, 1, exec.callCount())
-	assert.Equal(t, "Fix bug", exec.calls[0].Payload["title"], "confirmation preserves the queued command payload")
+	assert.Equal(t, "Fix bug", exec.calls[0].Payload["title"], "the worker preserves the queued command payload")
 
 	var status string
 	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
@@ -146,7 +141,8 @@ func TestWorker_ConfirmExecutesManualActionAndConsumesAwaitingCommand(t *testing
 		"review-action", "item-1",
 	).Scan(&status))
 	assert.Equal(t, "done", status)
-	assert.Error(t, worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`)), "completed actions remain deduped")
+	_, err = worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`), ActionInvocationInput{})
+	assert.Error(t, err, "completed actions remain deduped")
 }
 
 func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
@@ -156,7 +152,8 @@ func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)},
 		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
 
-	require.NoError(t, worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`)))
+	_, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), ActionInvocationInput{})
+	require.NoError(t, err)
 	assert.Equal(t, 1, exec.callCount())
 
 	var status string
@@ -167,93 +164,58 @@ func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 	assert.Equal(t, "done", status)
 }
 
-func TestWorker_ManualCommandsDoNotBlockAutomaticCommands(t *testing.T) {
+func TestWorker_RespectsBatchBoundAndResumesQueue(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
 	for i := range DefaultOutputWorkerBatch {
-		enqueueTestCommand(t, db, "manual-action", fmt.Sprintf("item-%d", i), `{}`)
+		enqueueTestCommand(t, db, "headless-action", fmt.Sprintf("item-%d", i), `{}`)
 	}
-	enqueueTestCommand(t, db, "automatic-action", "item-automatic", `{}`)
+	enqueueTestCommand(t, db, "headless-action", "item-after-bound", `{}`)
 
 	exec := &fakeExecutor{}
-	worker := NewWorker(db, fakeActionLister{
-		"manual-action":    launchSessionAction("manual-action", false),
-		"automatic-action": launchSessionAction("automatic-action", true),
-	}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
-
-	worker.Tick(t.Context())
-	assert.Equal(t, 1, exec.callCount(), "manual commands must not block automatic work for one tick")
-	assert.Equal(t, "item-automatic", exec.calls[0].Key)
-
-	var awaitingConfirmation int
-	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
-		`SELECT COUNT(*) FROM output_command WHERE status = 'awaiting_confirmation'`,
-	).Scan(&awaitingConfirmation))
-	assert.Equal(t, DefaultOutputWorkerBatch, awaitingConfirmation,
-		"all manual commands must leave the runnable queue in the same tick")
-
-	rows, err := db.ListRunnableOutputCommands(t.Context(), 10)
-	require.NoError(t, err)
-	assert.Empty(t, rows)
-}
-
-func TestWorker_AutoApplyFalseToTruePromotesAwaitingCommand(t *testing.T) {
-	t.Parallel()
-	db := openTestPipelineDB(t)
-	enqueueTestCommand(t, db, "review-action", "item-1", `{}`)
-
-	actionsByID := fakeActionLister{"review-action": launchSessionAction("review-action", false)}
-	exec := &fakeExecutor{}
-	worker := NewWorker(db, actionsByID,
+	worker := NewWorker(db, fakeActionLister{"headless-action": launchSessionAction("headless-action", true)},
 		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
-
 	worker.Tick(t.Context())
-	actionsByID["review-action"] = launchSessionAction("review-action", true)
-	worker.Tick(t.Context())
-
-	assert.Equal(t, 1, exec.callCount(), "enabling auto_apply must promote waiting commands")
+	assert.Equal(t, DefaultOutputWorkerBatch, exec.callCount(), "one tick is bounded")
 	rows, err := db.ListRunnableOutputCommands(t.Context(), 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 1)
+	assert.Equal(t, "item-after-bound", rows[0].Key)
+
+	worker.Tick(t.Context())
+	assert.Equal(t, DefaultOutputWorkerBatch+1, exec.callCount())
+	rows, err = db.ListRunnableOutputCommands(t.Context(), 10)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
 }
 
-func TestWorker_AutoApplyTrueToFalseMovesPendingCommandToAwaitingConfirmation(t *testing.T) {
+func TestWorker_ActionCatalogChangeStillExecutesHeadlessCommand(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
 	enqueueTestCommand(t, db, "review-action", "item-1", `{}`)
 
 	actionsByID := fakeActionLister{"review-action": launchSessionAction("review-action", true)}
 	exec := &fakeExecutor{}
-	worker := NewWorker(db, actionsByID,
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
-
+	worker := NewWorker(db, actionsByID, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
 	actionsByID["review-action"] = launchSessionAction("review-action", false)
 	worker.Tick(t.Context())
-
-	assert.Zero(t, exec.callCount(), "disabling auto_apply must prevent pending work from executing")
-	var status string
-	require.NoError(t, db.Conn().QueryRowContext(t.Context(),
-		`SELECT status FROM output_command WHERE action_id = ? AND key = ?`,
-		"review-action", "item-1",
-	).Scan(&status))
-	assert.Equal(t, "awaiting_confirmation", status)
+	assert.Equal(t, 1, exec.callCount())
 }
 
-func TestWorker_UnknownAction_MarkedFailedImmediately(t *testing.T) {
+func TestWorker_UnknownActionRecordsRetryableError(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
 	enqueueTestCommand(t, db, "does-not-exist", "item-1", `{}`)
 
 	exec := &fakeExecutor{}
-	worker := NewWorker(db, fakeActionLister{},
-		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
-
+	worker := NewWorker(db, fakeActionLister{}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
 	worker.Tick(t.Context())
-
 	assert.Equal(t, 0, exec.callCount())
 	rows, err := db.ListRunnableOutputCommands(t.Context(), 10)
 	require.NoError(t, err)
-	assert.Empty(t, rows)
+	require.Len(t, rows, 1)
+	assert.Equal(t, int64(1), rows[0].Attempts)
+	assert.Contains(t, rows[0].LastError.String, "unknown action")
 }
 
 func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
@@ -291,6 +253,55 @@ func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 	assert.Equal(t, MaxOutputCommandAttempts, exec.callCount(), "the executor was invoked once per attempt")
 }
 
+func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
+	db := openTestPipelineDB(t)
+	exec := &fakeExecutor{err: fmt.Errorf("boom"), result: ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: "partial output", Stderr: "failure output"}}}
+	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), ActionInvocationInput{})
+	require.NoError(t, err, "an attempted side-effect failure is returned as a persisted view")
+	assert.Equal(t, "failed", view.Status)
+	assert.Equal(t, "boom", view.Error)
+	assert.Equal(t, "partial output", view.Stdout)
+	assert.Equal(t, "failure output", view.Stderr)
+}
+
+func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.T) {
+	dir := t.TempDir()
+	db, err := pipelinedb.Open(dir, pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	enqueueTestCommand(t, db, "review-action", "item-1", `{"title":"Fix bug"}`)
+	_, created, err := db.ConfirmOutputCommand(t.Context(), "review-action", "item-1", []byte(`{}`))
+	require.NoError(t, err)
+	require.True(t, created)
+	require.NoError(t, db.Close())
+
+	reopened, err := pipelinedb.Open(dir, pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, reopened.Close()) })
+	exec := &fakeExecutor{}
+	worker := NewWorker(reopened, fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.Tick(t.Context())
+
+	assert.Zero(t, exec.callCount(), "recovery must never retry an interactive command without its input")
+	row, err := reopened.OutputCommand(t.Context(), 1)
+	require.NoError(t, err)
+	assert.Equal(t, "failed", row.Status)
+	assert.Contains(t, row.LastError.String, "interrupted")
+}
+
+func TestWorker_BoundsExecutorDiagnosticsBeforePersistence(t *testing.T) {
+	db := openTestPipelineDB(t)
+	noisy := strings.Repeat("x", maxExecutionStreamBytes+1)
+	exec := &fakeExecutor{result: ExecutionResult{Log: ExecutionLog{Stdout: noisy, Stderr: noisy}}}
+	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), ActionInvocationInput{})
+	require.NoError(t, err)
+	assert.Len(t, view.Stdout, maxExecutionStreamBytes)
+	assert.Len(t, view.Stderr, maxExecutionStreamBytes)
+	assert.True(t, strings.HasSuffix(view.Stdout, truncatedStreamMarker))
+	assert.True(t, strings.HasSuffix(view.Stderr, truncatedStreamMarker))
+}
+
 func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
@@ -312,7 +323,7 @@ func TestWorker_BadPayload_FailsWithoutCallingExecutor(t *testing.T) {
 func TestDispatcher_UnknownType_IsError(t *testing.T) {
 	t.Parallel()
 	d := NewDispatcher(map[string]Executor{})
-	err := d.Execute(t.Context(), actions.Action{ID: "x", Type: "no-such-type"}, OutputData{})
+	_, err := d.Execute(t.Context(), actions.Action{ID: "x", Type: "no-such-type"}, OutputData{}, ActionInvocationInput{})
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "no-such-type")
 }

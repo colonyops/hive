@@ -98,11 +98,10 @@ VALUES (?, ?, ?, 'pending', ?)
 ON CONFLICT(action_id, key) DO NOTHING;
 
 -- name: ListRunnableOutputCommands :many
--- Pending commands await automatic classification/execution; running ones
--- were explicitly confirmed by the detail pane. ID order matches
--- idx_output_command_status_id, avoiding a sort as the queue grows.
+-- Every enqueued flow action is runnable immediately; running is reserved for
+-- an explicit detail invocation.
 SELECT * FROM output_command
-WHERE status IN ('pending', 'running')
+WHERE status = 'pending'
 ORDER BY id ASC
 LIMIT ?;
 
@@ -110,41 +109,33 @@ LIMIT ?;
 -- Continue a bounded worker scan after the previous row. The status/id
 -- predicate is covered by idx_output_command_status_id.
 SELECT * FROM output_command
-WHERE status IN ('pending', 'running') AND id > ?
+WHERE status = 'pending' AND id > ?
 ORDER BY id ASC
 LIMIT ?;
 
 -- name: ConfirmOutputCommand :one
--- An explicit detail-pane action invocation creates a command when no flow
--- action node did, or promotes that node's awaiting command to running.
--- Completed/failed/running commands are deliberately not re-run: output
--- actions remain deduped on (action_id, key).
+-- Explicit detail invocation creates work or claims a queued flow command.
+-- Terminal/running commands remain deduplicated.
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
 ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
-WHERE output_command.status IN ('pending', 'awaiting_confirmation')
+WHERE output_command.status = 'pending'
 RETURNING *;
 
--- name: MarkOutputCommandAwaitingConfirmation :exec
-UPDATE output_command SET status = 'awaiting_confirmation'
-WHERE id = ? AND status = 'pending';
-
--- name: PromoteOutputCommandsAwaitingConfirmation :exec
--- An action changed from manual to auto-apply, so make its previously
--- confirmation-gated commands runnable again.
-UPDATE output_command SET status = 'pending'
-WHERE action_id = ? AND status = 'awaiting_confirmation';
+-- name: GetOutputCommand :one
+SELECT * FROM output_command WHERE id = ?;
 
 -- name: MarkOutputCommandDone :exec
-UPDATE output_command SET status = 'done'
+UPDATE output_command
+SET status = 'done', last_error = NULL, result_json = ?, stdout = ?, stderr = ?
 WHERE id = ?;
 
 -- name: RetryOutputCommand :exec
-UPDATE output_command SET attempts = attempts + 1, last_error = ?
+UPDATE output_command SET attempts = attempts + 1, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ?;
 
 -- name: MarkOutputCommandFailed :exec
-UPDATE output_command SET status = 'failed', attempts = attempts + 1, last_error = ?
+UPDATE output_command SET status = 'failed', attempts = attempts + 1, last_error = ?, stdout = ?, stderr = ?
 WHERE id = ?;
 
 -- name: InsertNodeRun :exec

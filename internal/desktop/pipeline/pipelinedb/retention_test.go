@@ -61,7 +61,7 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 		`, fmt.Sprintf("node-%d", i), i+1)
 		require.NoError(t, err)
 	}
-	for i, status := range []string{"done", "failed", "done", "pending", "awaiting_confirmation", "running"} {
+	for i, status := range []string{"done", "failed", "done", "pending", "running"} {
 		_, err := database.Conn().ExecContext(ctx, `
 			INSERT INTO output_command (action_id, key, payload, status, created_at)
 			VALUES (?, ?, X'7B7D', ?, ?)
@@ -86,7 +86,7 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 		statuses = append(statuses, status)
 	}
 	require.NoError(t, rows.Err())
-	assert.Equal(t, []string{"failed", "done", "pending", "awaiting_confirmation", "running"}, statuses)
+	assert.Equal(t, []string{"failed", "done", "pending", "running"}, statuses)
 }
 
 func TestOpen_FreshDB_HasRetentionIndexes(t *testing.T) {

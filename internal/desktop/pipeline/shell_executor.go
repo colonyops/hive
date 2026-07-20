@@ -9,16 +9,15 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/pkg/tmpl"
+	"github.com/rs/zerolog"
 )
 
-// maxShellOutputLogBytes caps how much of a shell action's combined
-// stdout/stderr is attached to a log line or error message, so a runaway
-// command's output can't blow up the log.
-const maxShellOutputLogBytes = 4096
+const (
+	maxExecutionStreamBytes = 64 * 1024
+	truncatedStreamMarker   = "\n... (truncated)"
+)
 
 // shellKillGrace bounds how long Run blocks after the command's context is
 // cancelled (timeout hit). CommandContext SIGKILLs `sh`, but a descendant it
@@ -38,31 +37,26 @@ type ShellExecutor struct {
 	logger zerolog.Logger
 }
 
-// NewShellExecutor builds a ShellExecutor that logs command output at logger.
-func NewShellExecutor(logger zerolog.Logger) *ShellExecutor {
-	return &ShellExecutor{logger: logger}
-}
-
-func (e *ShellExecutor) Execute(ctx context.Context, action actions.Action, data OutputData) error {
+func NewShellExecutor(logger zerolog.Logger) *ShellExecutor { return &ShellExecutor{logger: logger} }
+func (e *ShellExecutor) Execute(ctx context.Context, action actions.Action, data OutputData, _ ActionInvocationInput) (ExecutionResult, error) {
 	cfg, ok := action.Config.(*actions.ShellConfig)
 	if !ok {
-		return fmt.Errorf("shell executor: action %q has config type %T", action.ID, action.Config)
+		return ExecutionResult{}, fmt.Errorf("shell executor: action %q has config type %T", action.ID, action.Config)
 	}
-
-	renderer := tmpl.New(tmpl.Config{})
-	command, err := renderer.Render(cfg.CommandTemplate, data)
+	command, err := tmpl.New(tmpl.Config{}).Render(cfg.CommandTemplate, data)
 	if err != nil {
-		return fmt.Errorf("shell: command_template: %w", err)
+		return ExecutionResult{}, fmt.Errorf("shell: command_template: %w", err)
 	}
 	command = strings.TrimSpace(command)
-
+	if command == "" {
+		return ExecutionResult{}, fmt.Errorf("shell: command_template rendered blank")
+	}
 	runCtx := ctx
 	if d := cfg.Timeout.Duration(); d > 0 {
 		var cancel context.CancelFunc
 		runCtx, cancel = context.WithTimeout(ctx, d)
 		defer cancel()
 	}
-
 	cmd := exec.CommandContext(runCtx, "sh", "-c", command)
 	cmd.WaitDelay = shellKillGrace
 	if cfg.Cwd != "" {
@@ -75,29 +69,46 @@ func (e *ShellExecutor) Execute(ctx context.Context, action actions.Action, data
 		}
 		cmd.Env = env
 	}
-
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
-
-	runErr := cmd.Run()
-	output := truncateOutput(out.String())
-
-	if runErr != nil {
-		e.logger.Warn().Err(runErr).Str("action_id", action.ID).Str("output", output).
-			Msg("shell action: command failed")
-		return fmt.Errorf("shell: command failed: %w (output: %s)", runErr, output)
+	stdout, stderr := &boundedExecutionWriter{}, &boundedExecutionWriter{}
+	cmd.Stdout = stdout
+	cmd.Stderr = stderr
+	if err := cmd.Run(); err != nil {
+		result := ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: stdout.String(), Stderr: stderr.String()}}
+		e.logger.Warn().Err(err).Str("action_id", action.ID).Msg("shell action: command failed")
+		return result, fmt.Errorf("shell: command failed: %w", err)
 	}
-
-	e.logger.Info().Str("action_id", action.ID).Str("output", output).
-		Msg("shell action: command executed")
-	return nil
+	result := ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: stdout.String(), Stderr: stderr.String()}}
+	e.logger.Info().Str("action_id", action.ID).Msg("shell action: command executed")
+	return result, nil
 }
 
-func truncateOutput(s string) string {
-	s = strings.TrimSpace(s)
-	if len(s) <= maxShellOutputLogBytes {
-		return s
+// boundedExecutionWriter drains every write while retaining only a bounded
+// diagnostic prefix. It must return the full input length so a noisy child
+// cannot block on a full stdout/stderr pipe.
+type boundedExecutionWriter struct {
+	buf       bytes.Buffer
+	truncated bool
+}
+
+func (w *boundedExecutionWriter) Write(p []byte) (int, error) {
+	original := len(p)
+	if w.buf.Len() < maxExecutionStreamBytes {
+		remaining := maxExecutionStreamBytes - w.buf.Len()
+		if len(p) > remaining {
+			p = p[:remaining]
+			w.truncated = true
+		}
+		_, _ = w.buf.Write(p)
+	} else if len(p) > 0 {
+		w.truncated = true
 	}
-	return s[:maxShellOutputLogBytes] + "... (truncated)"
+	return original, nil
+}
+
+func (w *boundedExecutionWriter) String() string {
+	stream := w.buf.String()
+	if !w.truncated {
+		return stream
+	}
+	return stream[:maxExecutionStreamBytes-len(truncatedStreamMarker)] + truncatedStreamMarker
 }

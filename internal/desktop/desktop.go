@@ -17,6 +17,10 @@ import (
 // device flow.
 const EnvMockMode = "HIVE_DESKTOP_MOCK"
 
+// EnvE2EHarness carries the per-run, 256-bit token that Docker e2e creates.
+// It prevents test-only HTTP routes from being enabled by mock mode alone.
+const EnvE2EHarness = "HIVE_DESKTOP_E2E_HARNESS"
+
 // EnvConfigPath overrides the legacy profiles config path. New desktop
 // configuration derives its default directory from this path so existing
 // HIVE_DESKTOP_CONFIG setups keep flows/ and actions.yml in the same config
@@ -82,7 +86,7 @@ func FlowsDir() string {
 const EnvActionsPath = "HIVE_DESKTOP_ACTIONS"
 
 // ActionsPath is the actions.yml file location: launch-session/shell/
-// publish-event action definitions consumed by the desktop pipeline's
+// publish-message action definitions consumed by the desktop pipeline's
 // output worker and detail-pane action picker (see
 // internal/desktop/pipeline/actions). The design doc calls this
 // ".hive/actions.yml" (repo-scoped), but the desktop app's config is global

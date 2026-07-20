@@ -20,7 +20,6 @@ func TestAction_DecodesEnvelopeAndConfig(t *testing.T) {
 label: Spawn review agent
 type: launch-session
 applies_to: [pr, issue]
-auto_apply: true
 prompt_template: "Review {{ .Payload.title }}"
 agent: claude
 `)
@@ -29,7 +28,6 @@ agent: claude
 	assert.Equal(t, "Spawn review agent", a.Label)
 	assert.Equal(t, "launch-session", a.Type)
 	assert.Equal(t, []string{"pr", "issue"}, a.AppliesTo)
-	assert.True(t, a.AutoApply)
 
 	cfg, ok := a.Config.(*LaunchSessionConfig)
 	require.True(t, ok)
@@ -37,14 +35,13 @@ agent: claude
 	assert.Equal(t, "claude", cfg.Agent)
 }
 
-func TestAction_AutoApplyDefaultsFalse(t *testing.T) {
-	a, err := decodeAction(t, `id: shell-echo
+func TestAction_DecodesShellWithoutLegacyFields(t *testing.T) {
+	_, err := decodeAction(t, `id: shell-echo
 label: Echo
 type: shell
 command_template: "echo hi"
 `)
 	require.NoError(t, err)
-	assert.False(t, a.AutoApply)
 }
 
 func TestAction_UnknownType_IsHardError(t *testing.T) {
@@ -70,13 +67,13 @@ extra_field: nope
 func TestAction_ReservedKeysDoNotTripStrictPerTypeDecode(t *testing.T) {
 	a, err := decodeAction(t, `id: x
 label: X
-type: publish-event
+type: publish-message
 applies_to: [pr]
-auto_apply: false
+message_template: "{{ .Payload.title }}"
 topic: pipeline.pr-events
 `)
 	require.NoError(t, err)
-	cfg, ok := a.Config.(*PublishEventConfig)
+	cfg, ok := a.Config.(*PublishMessageConfig)
 	require.True(t, ok)
 	assert.Equal(t, "pipeline.pr-events", cfg.Topic)
 }
@@ -102,10 +99,11 @@ func TestShellConfig_Validate_RequiresCommandTemplate(t *testing.T) {
 	require.NoError(t, cfg.Validate())
 }
 
-func TestPublishEventConfig_Validate_RequiresTopic(t *testing.T) {
-	cfg := &PublishEventConfig{}
+func TestPublishMessageConfig_Validate_RequiresTopic(t *testing.T) {
+	cfg := &PublishMessageConfig{}
 	require.Error(t, cfg.Validate())
 
+	cfg.MessageTemplate = "message"
 	cfg.Topic = "some.topic"
 	require.NoError(t, cfg.Validate())
 }

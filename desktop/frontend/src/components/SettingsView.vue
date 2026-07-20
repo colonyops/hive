@@ -6,6 +6,8 @@ import { onMounted, onUnmounted } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconPalette from '~icons/lucide/palette'
 import IconPlug from '~icons/lucide/plug'
+import IconPlay from '~icons/lucide/play'
+import ActionSettingsView from './ActionSettingsView.vue'
 import githubIcon from '../assets/integrations/github.svg'
 import grafanaIcon from '../assets/integrations/grafana.svg'
 import posthogIcon from '../assets/integrations/posthog.svg'
@@ -14,15 +16,17 @@ import SettingsSegmented from './settings/SettingsSegmented.vue'
 import { setTheme, themeLabels, themes, useTheme, type Theme } from '../composables/useTheme'
 import type { ApplicationSettingsSection } from '../router'
 
-const props = defineProps<{
+const props = withDefaults(defineProps<{
   githubConnected: boolean
   githubLogin?: string
   activeCategory: ApplicationSettingsSection
-}>()
+  knownFeedTypes?: string[]
+}>(), { knownFeedTypes: () => [] })
 const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationSettingsSection] }>()
 const categories = [
   { id: 'appearance' as const, label: 'Appearance', icon: IconPalette },
   { id: 'integrations' as const, label: 'Integrations', icon: IconPlug },
+  { id: 'actions' as const, label: 'Actions', icon: IconPlay },
 ]
 
 const { theme } = useTheme()
@@ -67,7 +71,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
     <section class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-4">
-        <span class="text-[13px] font-semibold text-text">{{ props.activeCategory === 'appearance' ? 'Appearance' : 'Integrations' }}</span>
+        <span class="text-[13px] font-semibold text-text">{{ props.activeCategory === 'appearance' ? 'Appearance' : props.activeCategory === 'integrations' ? 'Integrations' : 'Actions' }}</span>
         <div class="flex-1" />
         <button
           type="button"
@@ -88,6 +92,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             @update:model-value="onThemeChange"
           />
         </div>
+
+        <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
 
         <div v-else class="mx-auto max-w-[640px]" data-testid="settings-integrations">
           <div class="mb-5">

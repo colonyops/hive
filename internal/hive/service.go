@@ -18,6 +18,7 @@ import (
 	"github.com/colonyops/hive/internal/core/messaging"
 	"github.com/colonyops/hive/internal/core/session"
 	coretmux "github.com/colonyops/hive/internal/core/tmux"
+	"github.com/colonyops/hive/internal/core/workspace"
 	"github.com/colonyops/hive/pkg/executil"
 	"github.com/colonyops/hive/pkg/randid"
 	"github.com/colonyops/hive/pkg/tmpl"
@@ -25,6 +26,24 @@ import (
 )
 
 // CreateOptions configures session creation.
+// SessionLaunchRepository is a repository available to an interactive
+// session launch. Source is an existing local checkout used for Hive's normal
+// file-copy behavior; desktop maps this to a narrower presentation DTO.
+type SessionLaunchRepository struct {
+	Name   string
+	Remote string
+	Source string
+}
+
+// SessionLaunchOptions supplies the configured repositories and agents for an
+// interactive session launcher.
+type SessionLaunchOptions struct {
+	Repositories      []SessionLaunchRepository
+	DefaultRepository string
+	Agents            []string
+	DefaultAgent      string
+}
+
 type CreateOptions struct {
 	Name          string // Session name (used in path)
 	SessionID     string // Session ID (auto-generated if empty)
@@ -682,6 +701,77 @@ func (s *SessionService) pruneExcessRecycled(ctx context.Context, sessions []ses
 // DetectRemote gets the git remote URL from the specified directory.
 func (s *SessionService) DetectRemote(ctx context.Context, dir string) (string, error) {
 	return s.git.RemoteURL(ctx, dir)
+}
+
+// SessionLaunchOptions lists repositories from configured workspaces followed
+// by existing on-disk Hive sessions. Equivalent GitHub remote spellings are
+// coalesced so a local configured checkout wins over a Hive clone without
+// rewriting either configured URL.
+func (s *SessionService) SessionLaunchOptions(ctx context.Context) (SessionLaunchOptions, error) {
+	workspaceRepos, err := workspace.ScanRepoDirs(ctx, s.config.Workspaces, s.git)
+	if err != nil {
+		return SessionLaunchOptions{}, fmt.Errorf("scan configured workspaces: %w", err)
+	}
+	sessions, err := s.sessions.List(ctx)
+	if err != nil {
+		return SessionLaunchOptions{}, fmt.Errorf("list sessions: %w", err)
+	}
+
+	options := SessionLaunchOptions{DefaultAgent: s.config.Agents.Default}
+	for key := range s.config.Agents.Profiles {
+		options.Agents = append(options.Agents, key)
+	}
+	sort.Strings(options.Agents)
+	if options.DefaultAgent != "" {
+		for i, key := range options.Agents {
+			if key == options.DefaultAgent {
+				options.Agents[0], options.Agents[i] = options.Agents[i], options.Agents[0]
+				break
+			}
+		}
+	}
+
+	seen := make(map[string]struct{})
+	add := func(repo SessionLaunchRepository) {
+		if strings.TrimSpace(repo.Remote) == "" || strings.TrimSpace(repo.Source) == "" {
+			return
+		}
+		identity := git.RemoteIdentity(repo.Remote)
+		if _, exists := seen[identity]; exists {
+			return
+		}
+		seen[identity] = struct{}{}
+		options.Repositories = append(options.Repositories, repo)
+	}
+	for _, repo := range workspaceRepos {
+		add(SessionLaunchRepository{Name: repo.Name, Remote: repo.Remote, Source: repo.Path})
+	}
+	for _, sess := range sessions {
+		if info, err := os.Stat(sess.Path); err != nil || !info.IsDir() {
+			continue
+		}
+		add(SessionLaunchRepository{Name: sess.Name, Remote: sess.Remote, Source: sess.Path})
+	}
+	if len(options.Repositories) > 0 {
+		options.DefaultRepository = options.Repositories[0].Remote
+	}
+	return options, nil
+}
+
+// ResolveSessionLaunchRepository selects a known local checkout when the
+// requested remote is equivalent. Non-GitHub and local paths match only by
+// their exact spelling, preserving explicit choices made by the caller.
+func (s *SessionService) ResolveSessionLaunchRepository(ctx context.Context, remote string) (SessionLaunchRepository, error) {
+	options, err := s.SessionLaunchOptions(ctx)
+	if err != nil {
+		return SessionLaunchRepository{}, err
+	}
+	for _, repo := range options.Repositories {
+		if git.EquivalentRemote(repo.Remote, remote) {
+			return repo, nil
+		}
+	}
+	return SessionLaunchRepository{Remote: remote}, nil
 }
 
 // DetectSession returns the session ID for the current working directory.

@@ -13,8 +13,9 @@ import IconInfo from '~icons/lucide/info'
 import IconSettings from '~icons/lucide/settings'
 import type { FeedItem } from '../types/feed'
 import type { ActionView } from '../types/action'
+import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 
-const props = defineProps<{ item: FeedItem | null; actions: ActionView[] }>()
+const props = defineProps<{ item: FeedItem | null; actions: ActionView[]; pendingAction?: string | null; actionRuns?: Record<string, ActionRunView> }>()
 const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; 'open-url': [url: string]; edit: [] }>()
 
 // The detail header leads with the item's source (brand badge) and its type,
@@ -94,9 +95,9 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
           <button class="edit-button" @click="emit('edit')"><IconSettings class="size-3" /> Edit</button>
         </div>
         <div class="flex flex-col gap-[9px]">
-          <ActionCard v-for="action in actions" :key="action.id" :action="action" @run="emit('run-action', action.id)" />
+          <ActionCard v-for="action in actions" :key="action.id" :action="action" :pending="pendingAction === action.id" :run="actionRuns?.[action.id]" @run="emit('run-action', action.id)" />
         </div>
-        <div class="mt-3.5 flex items-center gap-2 font-mono text-[11px] text-text-3"><IconInfo class="size-3 shrink-0 text-accent" /> Runs headless (batch) on <span class="text-text-2">{{ item.branch }}</span></div>
+        <div class="action-footer-meta mt-3.5 font-mono text-[11px] text-text-3" data-testid="action-footer-meta"><IconInfo class="mt-0.5 size-3 shrink-0 text-accent" /><div class="min-w-0"><span class="block">Runs headless (batch) on</span><span class="block break-words text-text-2" data-testid="action-footer-branch">{{ item.branch }}</span></div></div>
         <div class="mt-1.5 pl-[19px] font-mono text-[11px] text-text-4">Actions defined in desktop actions.yml</div>
       </div>
     </template>
@@ -112,6 +113,7 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
 .open-button, .edit-button { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; border: 1px solid var(--color-card); border-radius: 4px; padding: 2px 7px; color: var(--color-text-2); font-family: var(--font-mono); font-size: 11px; }
 .edit-button { border-radius: 5px; padding: 3px 8px; font-family: var(--font-sans); }
 .open-button:hover, .edit-button:hover { border-color: var(--color-strong); color: var(--color-text); }
+.action-footer-meta { display: grid; grid-template-columns: 12px minmax(0, 1fr); column-gap: 8px; align-items: start; }
 
 /* Rendered issue/PR body (GitHub-flavored markdown). Its height is set inline
    from the user-adjustable bodyHeight, so a long description scrolls internally

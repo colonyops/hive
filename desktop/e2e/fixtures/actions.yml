@@ -5,10 +5,12 @@ actions:
   - id: review-pr
     label: Review PR
     type: shell
+    show_in_detail: true
     applies_to: [pr]
     command_template: "/usr/bin/true"
   - id: start-implementation
     label: Start implementation
     type: shell
+    show_in_detail: true
     applies_to: [issue]
     command_template: "/usr/bin/true"

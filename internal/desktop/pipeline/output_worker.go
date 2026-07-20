@@ -7,103 +7,50 @@ import (
 	"sync"
 	"time"
 
-	"github.com/rs/zerolog"
-
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
+	"github.com/rs/zerolog"
 )
 
-// DefaultOutputWorkerInterval is how often the Worker drains pending
-// output_command rows. Unlike Producer's poll interval (bounded by GitHub
-// rate limits), this only touches the local pipeline DB and the configured
-// executors, so it ticks much faster.
-const DefaultOutputWorkerInterval = 5 * time.Second
+const (
+	DefaultOutputWorkerInterval = 5 * time.Second
+	DefaultOutputWorkerBatch    = 50
+	MaxOutputCommandAttempts    = 5
+)
 
-// DefaultOutputWorkerBatch bounds automatic command executions per tick, so
-// one very deep queue can't starve the ticker loop indefinitely.
-const DefaultOutputWorkerBatch = 50
-
-// outputWorkerScanMultiplier bounds how many runnable rows a tick inspects
-// while classifying manual work. It lets one batch of manual rows be moved out
-// of the way while still leaving room to execute a full automatic batch.
-const outputWorkerScanMultiplier = 2
-
-// MaxOutputCommandAttempts bounds how many failed executions the worker
-// retries before giving up and marking a command "failed" for good.
-const MaxOutputCommandAttempts = 5
-
-// OutputData is the template/execution context for one output_command
-// dispatch: the triggering msg's parsed JSON payload (for template field
-// access, e.g. "{{ .Payload.title }}") plus its dedup key. Raw carries the
-// exact bytes originally enqueued, for executors (publish-event) that want
-// to pass the payload through unchanged rather than re-marshal a
-// round-tripped map.
 type OutputData struct {
 	Key     string
 	Payload map[string]any
 	Raw     json.RawMessage
 }
-
-// Executor executes one action invocation with its rendered template data.
 type Executor interface {
-	Execute(ctx context.Context, action actions.Action, data OutputData) error
+	Execute(context.Context, actions.Action, OutputData, ActionInvocationInput) (ExecutionResult, error)
 }
+type Dispatcher struct{ executors map[string]Executor }
 
-// Dispatcher routes an action invocation to the Executor registered for its
-// Type. It is not itself an Executor to keep the "no executor for this
-// type" failure mode explicit at construction call sites (NewDispatcher),
-// rather than silently swallowed behind the Executor interface.
-type Dispatcher struct {
-	executors map[string]Executor
-}
-
-// NewDispatcher builds a Dispatcher over executors, keyed by action type
-// ("launch-session", "shell", "publish-event").
 func NewDispatcher(executors map[string]Executor) *Dispatcher {
 	return &Dispatcher{executors: executors}
 }
 
-// Execute dispatches to the executor registered for action.Type. A type
-// with no registered executor is a configuration gap (e.g. actions.yml was
-// edited to use a type this build doesn't wire up) — it surfaces as an
-// execution failure, retried/failed like any other, rather than a panic.
-func (d *Dispatcher) Execute(ctx context.Context, action actions.Action, data OutputData) error {
-	ex, ok := d.executors[action.Type]
+func (d *Dispatcher) Execute(ctx context.Context, a actions.Action, data OutputData, input ActionInvocationInput) (ExecutionResult, error) {
+	ex, ok := d.executors[a.Type]
 	if !ok {
-		return fmt.Errorf("dispatcher: no executor registered for action type %q", action.Type)
+		return ExecutionResult{}, fmt.Errorf("dispatcher: no executor registered for action type %q", a.Type)
 	}
-	return ex.Execute(ctx, action, data)
+	return ex.Execute(ctx, a, data, input)
 }
 
-// ActionLister resolves actions. *actions.ActionStore satisfies this; the
-// narrower interface lets tests inject a fake action set without touching
-// disk. List is used to promote confirmation-gated commands when an action
-// changes from manual to auto-apply.
 type ActionLister interface {
-	Get(id string) (actions.Action, bool)
-	List() []actions.Action
+	Get(string) (actions.Action, bool)
 }
-
-// OutputCommandStore is the subset of *pipelinedb.DB the Worker needs.
-// Tests can substitute a fake, though most still use a real pipelinedb.DB
-// via t.TempDir(), matching Producer's own test posture (see Appender).
 type OutputCommandStore interface {
-	ListRunnableOutputCommandsAfter(ctx context.Context, afterID int64, limit int) ([]pipelinedb.OutputCommand, error)
-	ConfirmOutputCommand(ctx context.Context, actionID, key string, payload []byte) (pipelinedb.OutputCommand, bool, error)
-	MarkOutputCommandAwaitingConfirmation(ctx context.Context, id int64) error
-	PromoteOutputCommandsAwaitingConfirmation(ctx context.Context, actionID string) error
-	MarkOutputCommandDone(ctx context.Context, id int64) error
-	MarkOutputCommandFailed(ctx context.Context, id int64, lastErr string) error
-	RetryOutputCommand(ctx context.Context, id int64, lastErr string) error
+	ListRunnableOutputCommandsAfter(context.Context, int64, int) ([]pipelinedb.OutputCommand, error)
+	ConfirmOutputCommand(context.Context, string, string, []byte) (pipelinedb.OutputCommand, bool, error)
+	OutputCommand(context.Context, int64) (pipelinedb.OutputCommand, error)
+	MarkOutputCommandDone(context.Context, int64, ...string) error
+	MarkOutputCommandFailed(context.Context, int64, string, ...string) error
+	RetryOutputCommand(context.Context, int64, string, ...string) error
 }
-
-// Worker is the output side of the desktop pipeline: it drains runnable
-// output_command rows enqueued by CommitBatch (see pipelinedb.CommitBatch)
-// and executes each one against its Action definition. Commands for manual
-// actions move to "awaiting_confirmation", so they cannot head-of-line block
-// automatic work. Every tick promotes those commands when their action's
-// auto_apply setting becomes true; changing it to false is safe because the
-// action is rechecked immediately before execution.
 type Worker struct {
 	db       OutputCommandStore
 	actions  ActionLister
@@ -111,29 +58,15 @@ type Worker struct {
 	interval time.Duration
 	batch    int
 	logger   zerolog.Logger
-
 	runMu    sync.Mutex
 	stopOnce sync.Once
 	stop     chan struct{}
 }
 
-// NewWorker builds a Worker. interval <= 0 is rejected by the caller's
-// choice of default (main.go passes DefaultOutputWorkerInterval); Worker
-// itself has no opinion on the default, mirroring Producer.
-func NewWorker(db OutputCommandStore, actionStore ActionLister, dispatch *Dispatcher, interval time.Duration, logger zerolog.Logger) *Worker {
-	return &Worker{
-		db:       db,
-		actions:  actionStore,
-		dispatch: dispatch,
-		interval: interval,
-		batch:    DefaultOutputWorkerBatch,
-		logger:   logger,
-		stop:     make(chan struct{}),
-	}
+func NewWorker(db OutputCommandStore, as ActionLister, d *Dispatcher, interval time.Duration, logger zerolog.Logger) *Worker {
+	return &Worker{db: db, actions: as, dispatch: d, interval: interval, batch: DefaultOutputWorkerBatch, logger: logger, stop: make(chan struct{})}
 }
 
-// Start runs the drain loop in a goroutine until Stop, mirroring
-// Producer's Start/Stop lifecycle.
 func (w *Worker) Start() {
 	go func() {
 		ticker := time.NewTicker(w.interval)
@@ -148,68 +81,53 @@ func (w *Worker) Start() {
 		}
 	}()
 }
-
-// Stop halts the drain loop. Idempotent, like Producer.Stop.
-func (w *Worker) Stop() {
-	w.stopOnce.Do(func() { close(w.stop) })
-}
-
-// Confirm records a user-approved action invocation and executes it. A flow
-// action node may already have produced the same command and left it awaiting
-// confirmation; Confirm promotes that durable command instead of creating a
-// second side effect. The action/key pair remains deduped after completion.
-func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []byte) error {
+func (w *Worker) Stop() { w.stopOnce.Do(func() { close(w.stop) }) }
+func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []byte, input ActionInvocationInput) (ActionRunView, error) {
 	w.runMu.Lock()
 	defer w.runMu.Unlock()
-
-	row, confirmed, err := w.db.ConfirmOutputCommand(ctx, actionID, key, payload)
+	row, created, err := w.db.ConfirmOutputCommand(ctx, actionID, key, payload)
 	if err != nil {
-		return err
+		return ActionRunView{}, err
 	}
-	if !confirmed {
-		return fmt.Errorf("action %q has already run for %q", actionID, key)
+	if !created {
+		return ActionRunView{}, fmt.Errorf("action %q has already run for %q", actionID, key)
 	}
-
 	action, ok := w.actions.Get(actionID)
 	if !ok {
-		err := fmt.Errorf("unknown action %q", actionID)
-		w.fail(ctx, row, err)
-		return err
+		err = fmt.Errorf("unknown action %q", actionID)
+		if markErr := w.db.MarkOutputCommandFailed(ctx, row.ID, err.Error()); markErr != nil {
+			return ActionRunView{}, markErr
+		}
+		return w.view(ctx, row.ID), err
 	}
-	if err := w.execute(ctx, row, action); err != nil {
-		w.fail(ctx, row, err)
-		return err
+	result, err := w.execute(ctx, row, action, input)
+	if err != nil {
+		// A detail-pane confirmation is an explicit, one-shot attempted side
+		// effect. Persist its diagnostics and make it terminal rather than
+		// retrying later without the interactive input that authorized it.
+		if markErr := w.db.MarkOutputCommandFailed(ctx, row.ID, err.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); markErr != nil {
+			return ActionRunView{}, markErr
+		}
+		view := w.view(ctx, row.ID)
+		if result.Attempted {
+			// The side effect was dispatched and failed. Return its durable
+			// diagnostics as a normal result so Wails can deliver them.
+			return view, nil
+		}
+		return view, err
 	}
-	if err := w.db.MarkOutputCommandDone(ctx, row.ID); err != nil {
-		return fmt.Errorf("marking confirmed output command %d done: %w", row.ID, err)
+	if err = w.done(ctx, row.ID, result); err != nil {
+		return ActionRunView{}, err
 	}
-	return nil
+	return w.view(ctx, row.ID), nil
 }
 
-// Tick promotes commands whose actions now auto-apply, then scans runnable
-// commands in ID order. Manual commands leave the runnable queue without
-// consuming the automatic execution batch. The scan itself is bounded so an
-// unbounded manual queue cannot hold the ticker loop forever. It is exported
-// so tests can drive a deterministic tick instead of waiting on the ticker.
 func (w *Worker) Tick(ctx context.Context) {
 	w.runMu.Lock()
 	defer w.runMu.Unlock()
-
-	for _, action := range w.actions.List() {
-		if !action.AutoApply {
-			continue
-		}
-		if err := w.db.PromoteOutputCommandsAwaitingConfirmation(ctx, action.ID); err != nil {
-			w.logger.Warn().Err(err).Str("action_id", action.ID).
-				Msg("output worker: promoting confirmation-gated commands failed")
-		}
-	}
-
-	maxScanned := w.batch * outputWorkerScanMultiplier
-	var afterID int64
-	for scanned, executed := 0, 0; scanned < maxScanned && executed < w.batch; {
-		limit := min(w.batch, maxScanned-scanned)
-		rows, err := w.db.ListRunnableOutputCommandsAfter(ctx, afterID, limit)
+	var after int64
+	for done := 0; done < w.batch; {
+		rows, err := w.db.ListRunnableOutputCommandsAfter(ctx, after, w.batch-done)
 		if err != nil {
 			w.logger.Warn().Err(err).Msg("output worker: listing runnable commands failed")
 			return
@@ -217,78 +135,91 @@ func (w *Worker) Tick(ctx context.Context) {
 		if len(rows) == 0 {
 			return
 		}
-
 		for _, row := range rows {
-			afterID = row.ID
-			scanned++
-			if w.process(ctx, row) {
-				executed++
-			}
-			if scanned == maxScanned || executed == w.batch {
+			after = row.ID
+			w.process(ctx, row)
+			done++
+			if done == w.batch {
 				return
 			}
 		}
 	}
 }
 
-// process resolves row's action, applies the auto_apply gate, renders and
-// dispatches its templates, and records the outcome. It reports whether the
-// row consumed an automatic execution slot; manual rows do not. A single
-// row's failure (unknown action, bad payload, executor error) never aborts
-// the rest of the batch.
-func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) bool {
-	action, ok := w.actions.Get(row.ActionID)
+func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) {
+	a, ok := w.actions.Get(row.ActionID)
 	if !ok {
-		w.logger.Warn().Int64("id", row.ID).Str("action_id", row.ActionID).
-			Msg("output worker: unknown action, marking command failed")
-		if err := w.db.MarkOutputCommandFailed(ctx, row.ID, fmt.Sprintf("unknown action %q", row.ActionID)); err != nil {
-			w.logger.Error().Err(err).Int64("id", row.ID).Msg("output worker: marking unknown-action command failed")
-		}
-		return true
+		w.fail(ctx, row, ExecutionResult{}, fmt.Errorf("unknown action %q", row.ActionID))
+		return
 	}
-
-	if row.Status == "pending" && !action.AutoApply {
-		if err := w.db.MarkOutputCommandAwaitingConfirmation(ctx, row.ID); err != nil {
-			w.logger.Error().Err(err).Int64("id", row.ID).
-				Msg("output worker: marking command awaiting confirmation failed")
-		}
-		return false
+	result, err := w.execute(ctx, row, a, ActionInvocationInput{})
+	if err != nil {
+		w.fail(ctx, row, result, err)
+		return
 	}
-
-	if err := w.execute(ctx, row, action); err != nil {
-		w.fail(ctx, row, err)
-		return true
+	if err := w.done(ctx, row.ID, result); err != nil {
+		w.logger.Error().Err(err).Msg("output worker: marking command done failed")
 	}
-
-	if err := w.db.MarkOutputCommandDone(ctx, row.ID); err != nil {
-		w.logger.Error().Err(err).Int64("id", row.ID).Msg("output worker: marking command done failed")
-	}
-	return true
 }
 
-func (w *Worker) execute(ctx context.Context, row pipelinedb.OutputCommand, action actions.Action) error {
+func (w *Worker) execute(ctx context.Context, row pipelinedb.OutputCommand, a actions.Action, input ActionInvocationInput) (ExecutionResult, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(row.Payload, &payload); err != nil {
-		return fmt.Errorf("decode payload: %w", err)
+		return ExecutionResult{}, fmt.Errorf("decode payload: %w", err)
 	}
-	return w.dispatch.Execute(ctx, action, OutputData{Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload)})
+	return w.dispatch.Execute(ctx, a, OutputData{Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload)}, input)
 }
 
-// fail records a failed execution attempt: retried (status stays pending)
-// while row.Attempts remains under MaxOutputCommandAttempts, or marked
-// permanently failed once the cap is reached. Either way the failure is
-// logged — an action execution failure is never silently dropped.
-func (w *Worker) fail(ctx context.Context, row pipelinedb.OutputCommand, execErr error) {
-	w.logger.Warn().Err(execErr).Int64("id", row.ID).Str("action_id", row.ActionID).
-		Int64("attempts", row.Attempts).Msg("output worker: action execution failed")
-
+func (w *Worker) fail(ctx context.Context, row pipelinedb.OutputCommand, result ExecutionResult, execErr error) {
 	if row.Attempts+1 >= MaxOutputCommandAttempts {
-		if err := w.db.MarkOutputCommandFailed(ctx, row.ID, execErr.Error()); err != nil {
-			w.logger.Error().Err(err).Int64("id", row.ID).Msg("output worker: marking command failed after max attempts")
+		if err := w.db.MarkOutputCommandFailed(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
+			w.logger.Error().Err(err).Msg("output worker: mark failed")
 		}
 		return
 	}
-	if err := w.db.RetryOutputCommand(ctx, row.ID, execErr.Error()); err != nil {
-		w.logger.Error().Err(err).Int64("id", row.ID).Msg("output worker: recording retry attempt failed")
+	if err := w.db.RetryOutputCommand(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
+		w.logger.Error().Err(err).Msg("output worker: retry")
 	}
+}
+
+func (w *Worker) view(ctx context.Context, id int64) ActionRunView {
+	row, err := w.db.OutputCommand(ctx, id)
+	if err != nil {
+		return ActionRunView{CommandID: id, Status: "unknown", Error: err.Error()}
+	}
+	return actionRunView(row)
+}
+
+// boundExecutionStream is the worker boundary for all executor implementations,
+// including fakes and third-party executors that do not capture output safely.
+func boundExecutionStream(stream string) string {
+	if len(stream) <= maxExecutionStreamBytes {
+		return stream
+	}
+	return stream[:maxExecutionStreamBytes-len(truncatedStreamMarker)] + truncatedStreamMarker
+}
+
+func actionRunView(row pipelinedb.OutputCommand) ActionRunView {
+	v := ActionRunView{CommandID: row.ID, Status: row.Status}
+	if row.LastError.Valid {
+		v.Error = row.LastError.String
+	}
+	if row.Stdout.Valid {
+		v.Stdout = row.Stdout.String
+	}
+	if row.Stderr.Valid {
+		v.Stderr = row.Stderr.String
+	}
+	if row.ResultJson.Valid {
+		_ = json.Unmarshal([]byte(row.ResultJson.String), &v.Result)
+	}
+	return v
+}
+
+func (w *Worker) done(ctx context.Context, id int64, result ExecutionResult) error {
+	raw, err := json.Marshal(result.Outcome)
+	if err != nil {
+		return err
+	}
+	return w.db.MarkOutputCommandDone(ctx, id, string(raw), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr))
 }

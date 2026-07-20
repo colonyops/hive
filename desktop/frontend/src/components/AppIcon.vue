@@ -3,9 +3,11 @@ import type { Component } from 'vue'
 import IconDiamond from '~icons/lucide/diamond'
 import IconList from '~icons/lucide/list'
 import IconPlay from '~icons/lucide/play'
+import IconRadio from '~icons/lucide/radio'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import IconSearch from '~icons/lucide/search'
 import IconSparkles from '~icons/lucide/sparkles'
+import IconTerminal from '~icons/lucide/terminal'
 import IconZap from '~icons/lucide/zap'
 
 defineProps<{ name: string }>()
@@ -17,9 +19,11 @@ const registry: Record<string, Component> = {
   diamond: IconDiamond,
   list: IconList,
   play: IconPlay,
+  radio: IconRadio,
   'rotate-ccw': IconRotateCcw,
   search: IconSearch,
   sparkles: IconSparkles,
+  terminal: IconTerminal,
 }
 </script>
 
