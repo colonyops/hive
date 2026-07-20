@@ -152,11 +152,11 @@ the action-dedup key and bounded-retry columns to `output_command`:
 
 Both `event_log`/`consumer_offset` and `feed_item`/`output_command`/`node_run`
 share the same migration runner, `internal/data/migrate` — a small,
-storage-agnostic package (`Load`/`Apply`/`Up`/`Down` over an `fs.FS` of
-`NNNN_name.{up,down}.sql` pairs, tracked in a `schema_migrations` table) also
-used by hive's own `hive.db`. `pipelinedb.Open` calls `migrate.Up` directly
-with no legacy-bootstrap step, since this database has no pre-migration
-history to reconcile.
+storage-agnostic package (`Load`/`Apply`/`Up` over an `fs.FS` of
+`NNNN_name.up.sql` files, tracked in a `schema_migrations` table) also used by
+hive's own `hive.db`. `pipelinedb.Open` calls `migrate.Up` directly with no
+legacy-bootstrap step, since this database has no pre-migration history to
+reconcile.
 
 ## The log API
 

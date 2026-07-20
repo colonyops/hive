@@ -1,7 +1,7 @@
 // Package migrate is a small SQLite migration runner shared across hive's
-// databases. It applies embedded, versioned up/down SQL migrations
-// (NNNN_name.{up,down}.sql) tracked in a schema_migrations table, one
-// transaction per migration.
+// databases. It applies embedded, versioned up SQL migrations
+// (NNNN_name.up.sql) tracked in a schema_migrations table, one transaction per
+// migration.
 //
 // It is deliberately storage-agnostic: callers pass an fs.FS rooted at their
 // migration files (e.g. fs.Sub(embedFS, "migrations")), so each database owns
@@ -23,29 +23,23 @@ import (
 	"time"
 )
 
-// Migration is a single versioned migration with its up and down SQL.
+// Migration is a single versioned migration with its up SQL.
 type Migration struct {
 	Version int
 	Name    string
 	UpSQL   string
-	DownSQL string
 }
 
-// Load parses NNNN_name.{up,down}.sql pairs from the root of fsys into a
-// version-sorted slice. It validates the naming format, rejects duplicates,
-// and requires every version to have a matching up/down pair with equal names.
+// Load parses NNNN_name.up.sql files from the root of fsys into a
+// version-sorted slice. It validates the naming format and rejects duplicate
+// versions.
 func Load(fsys fs.FS) ([]Migration, error) {
 	entries, err := fs.ReadDir(fsys, ".")
 	if err != nil {
 		return nil, fmt.Errorf("reading migrations directory: %w", err)
 	}
 
-	type half struct {
-		name string
-		sql  string
-	}
-	ups := make(map[int]half)
-	downs := make(map[int]half)
+	migrationsByVersion := make(map[int]Migration)
 
 	for _, entry := range entries {
 		if entry.IsDir() {
@@ -53,7 +47,7 @@ func Load(fsys fs.FS) ([]Migration, error) {
 		}
 		fname := entry.Name()
 
-		version, name, direction, err := parseFilename(fname)
+		version, name, err := parseFilename(fname)
 		if err != nil {
 			return nil, fmt.Errorf("invalid migration filename %q: %w", fname, err)
 		}
@@ -63,42 +57,19 @@ func Load(fsys fs.FS) ([]Migration, error) {
 			return nil, fmt.Errorf("reading %s: %w", fname, err)
 		}
 
-		target := ups
-		if direction == "down" {
-			target = downs
+		if _, exists := migrationsByVersion[version]; exists {
+			return nil, fmt.Errorf("duplicate migration for version %04d", version)
 		}
-
-		if _, exists := target[version]; exists {
-			return nil, fmt.Errorf("duplicate %s migration for version %04d", direction, version)
-		}
-		target[version] = half{name: name, sql: string(content)}
-	}
-
-	if len(ups) != len(downs) {
-		return nil, fmt.Errorf("migration count mismatch: %d up files, %d down files", len(ups), len(downs))
-	}
-
-	migrations := make([]Migration, 0, len(ups))
-	for version, up := range ups {
-		down, ok := downs[version]
-		if !ok {
-			return nil, fmt.Errorf("migration %04d has up file but no down file", version)
-		}
-		if up.name != down.name {
-			return nil, fmt.Errorf("migration %04d name mismatch: up=%q down=%q", version, up.name, down.name)
-		}
-		migrations = append(migrations, Migration{
+		migrationsByVersion[version] = Migration{
 			Version: version,
-			Name:    up.name,
-			UpSQL:   up.sql,
-			DownSQL: down.sql,
-		})
+			Name:    name,
+			UpSQL:   string(content),
+		}
 	}
 
-	for version := range downs {
-		if _, ok := ups[version]; !ok {
-			return nil, fmt.Errorf("migration %04d has down file but no up file", version)
-		}
+	migrations := make([]Migration, 0, len(migrationsByVersion))
+	for _, migration := range migrationsByVersion {
+		migrations = append(migrations, migration)
 	}
 
 	sort.Slice(migrations, func(i, j int) bool {
@@ -108,35 +79,27 @@ func Load(fsys fs.FS) ([]Migration, error) {
 	return migrations, nil
 }
 
-// parseFilename extracts version, name, and direction from "NNNN_name.up.sql"
-// or "NNNN_name.down.sql".
-func parseFilename(filename string) (int, string, string, error) {
-	var direction string
-	switch {
-	case strings.HasSuffix(filename, ".up.sql"):
-		direction = "up"
-		filename = strings.TrimSuffix(filename, ".up.sql")
-	case strings.HasSuffix(filename, ".down.sql"):
-		direction = "down"
-		filename = strings.TrimSuffix(filename, ".down.sql")
-	default:
-		return 0, "", "", fmt.Errorf("expected .up.sql or .down.sql suffix, got %q", filename)
+// parseFilename extracts version and name from "NNNN_name.up.sql".
+func parseFilename(filename string) (int, string, error) {
+	if !strings.HasSuffix(filename, ".up.sql") {
+		return 0, "", fmt.Errorf("expected .up.sql suffix, got %q", filename)
 	}
+	filename = strings.TrimSuffix(filename, ".up.sql")
 
 	parts := strings.SplitN(filename, "_", 2)
 	if len(parts) != 2 || parts[1] == "" {
-		return 0, "", "", fmt.Errorf("expected format NNNN_name.{up,down}.sql")
+		return 0, "", fmt.Errorf("expected format NNNN_name.up.sql")
 	}
 
 	version, err := strconv.Atoi(parts[0])
 	if err != nil {
-		return 0, "", "", fmt.Errorf("version %q is not a valid integer: %w", parts[0], err)
+		return 0, "", fmt.Errorf("version %q is not a valid integer: %w", parts[0], err)
 	}
 	if version <= 0 {
-		return 0, "", "", fmt.Errorf("version must be positive, got %d", version)
+		return 0, "", fmt.Errorf("version must be positive, got %d", version)
 	}
 
-	return version, parts[1], direction, nil
+	return version, parts[1], nil
 }
 
 // Up loads the migrations from fsys and applies all pending ones in version
@@ -170,47 +133,6 @@ func Apply(ctx context.Context, conn *sql.DB, migrations []Migration) error {
 		slog.Info("applying migration", "version", m.Version, "name", m.Name)
 		if err := applyMigration(ctx, conn, m.Version, m.Name, m.UpSQL); err != nil {
 			return fmt.Errorf("migration %04d (%s): %w", m.Version, m.Name, err)
-		}
-	}
-
-	return nil
-}
-
-// Down reverts the last n applied migrations from fsys in reverse version order.
-func Down(ctx context.Context, conn *sql.DB, fsys fs.FS, n int) error {
-	if n <= 0 {
-		return fmt.Errorf("n must be positive, got %d", n)
-	}
-
-	migrations, err := Load(fsys)
-	if err != nil {
-		return fmt.Errorf("loading migrations: %w", err)
-	}
-
-	if err := EnsureTable(ctx, conn); err != nil {
-		return err
-	}
-
-	applied, err := AppliedVersions(ctx, conn)
-	if err != nil {
-		return err
-	}
-
-	var toRevert []Migration
-	for i := len(migrations) - 1; i >= 0; i-- {
-		if applied[migrations[i].Version] {
-			toRevert = append(toRevert, migrations[i])
-		}
-	}
-
-	if n > len(toRevert) {
-		return fmt.Errorf("requested %d down migrations but only %d are applied", n, len(toRevert))
-	}
-
-	for _, m := range toRevert[:n] {
-		slog.Info("reverting migration", "version", m.Version, "name", m.Name)
-		if err := revertMigration(ctx, conn, m.Version, m.DownSQL); err != nil {
-			return fmt.Errorf("revert migration %04d (%s): %w", m.Version, m.Name, err)
 		}
 	}
 
@@ -269,25 +191,6 @@ func applyMigration(ctx context.Context, conn *sql.DB, version int, name, upSQL 
 	)
 	if err != nil {
 		return fmt.Errorf("recording migration: %w", err)
-	}
-
-	return tx.Commit()
-}
-
-// revertMigration executes downSQL and removes the version record in one transaction.
-func revertMigration(ctx context.Context, conn *sql.DB, version int, downSQL string) error {
-	tx, err := conn.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin transaction: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	if _, err := tx.ExecContext(ctx, downSQL); err != nil {
-		return fmt.Errorf("executing SQL: %w", err)
-	}
-
-	if _, err := tx.ExecContext(ctx, "DELETE FROM schema_migrations WHERE version = ?", version); err != nil {
-		return fmt.Errorf("removing migration record: %w", err)
 	}
 
 	return tx.Commit()

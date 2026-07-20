@@ -2,6 +2,9 @@ package pipelinedb
 
 import (
 	"context"
+	"database/sql"
+	"fmt"
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -17,6 +20,32 @@ func openTestDB(t *testing.T) *DB {
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = database.Close() })
 	return database
+}
+
+func seedPipelineDBAtMigration(t *testing.T, dir string, version int) *sql.DB {
+	t.Helper()
+	require.NoError(t, os.MkdirAll(dir, 0o700))
+
+	dbPath := filepath.Join(dir, "desktop-pipeline.db")
+	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)", dbPath))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	sub, err := migrationsSub()
+	require.NoError(t, err)
+	migrations, err := migrate.Load(sub)
+	require.NoError(t, err)
+
+	var selected []migrate.Migration
+	for _, migration := range migrations {
+		if migration.Version <= version {
+			selected = append(selected, migration)
+		}
+	}
+	require.NotEmpty(t, selected)
+	require.NoError(t, migrate.Apply(context.Background(), conn, selected))
+
+	return conn
 }
 
 func TestOpen_FreshDB_AppliesMigrations(t *testing.T) {
@@ -45,18 +74,13 @@ func TestOpen_UpgradeToSourceSnapshots_ClearsLegacyFeedItems(t *testing.T) {
 
 	// Start at schema version 5, when feed rows had no source/snapshot
 	// provenance, then seed a row as an existing installation would have.
-	database, err := Open(dir, DefaultOpenOptions())
-	require.NoError(t, err)
-
-	sub, err := migrationsSub()
-	require.NoError(t, err)
-	require.NoError(t, migrate.Down(ctx, database.Conn(), sub, 1))
-	_, err = database.Conn().ExecContext(ctx, `
+	conn := seedPipelineDBAtMigration(t, dir, 5)
+	_, err := conn.ExecContext(ctx, `
 		INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
 		VALUES ('feed', 'legacy-item', X'7B7D', 1, 1)
 	`)
 	require.NoError(t, err)
-	require.NoError(t, database.Close())
+	require.NoError(t, conn.Close())
 
 	upgraded, err := Open(dir, DefaultOpenOptions())
 	require.NoError(t, err)

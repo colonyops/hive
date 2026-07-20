@@ -131,34 +131,3 @@ func TestRunMigrations_LegacyBootstrap_EmptySchemaVersion(t *testing.T) {
 	require.NoError(t, err)
 	assert.Len(t, applied, len(migrations))
 }
-
-func TestMigrateDown_PreservesData(t *testing.T) {
-	database := openTestDB(t)
-	ctx := context.Background()
-	conn := database.Conn()
-
-	migrations := hiveMigrations(t)
-	sub, err := migrationsSub()
-	require.NoError(t, err)
-
-	// Insert a session row (clone_strategy defaults to 'full').
-	_, err = conn.ExecContext(ctx, `
-		INSERT INTO sessions (id, name, slug, path, remote, state, created_at, updated_at)
-		VALUES ('test-1', 'Test', 'test', '/tmp/test', 'https://example.com', 'active', 1, 1)
-	`)
-	require.NoError(t, err)
-
-	// Revert the last migration.
-	err = migrate.Down(ctx, conn, sub, 1)
-	require.NoError(t, err)
-
-	applied, err := migrate.AppliedVersions(ctx, conn)
-	require.NoError(t, err)
-	assert.Len(t, applied, len(migrations)-1, "one migration should be reverted")
-
-	// sessions table should still have the row.
-	var count int
-	err = conn.QueryRowContext(ctx, "SELECT COUNT(*) FROM sessions").Scan(&count)
-	require.NoError(t, err)
-	assert.Equal(t, 1, count, "session row should be preserved")
-}
