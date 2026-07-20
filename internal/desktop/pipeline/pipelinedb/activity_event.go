@@ -60,14 +60,6 @@ func (db *DB) ListActivityEvents(ctx context.Context, before int64, limit int) (
 	return out, nil
 }
 
-// PruneActivityEvents retains only the newest limit events.
-func (db *DB) PruneActivityEvents(ctx context.Context, limit int64) error {
-	if err := db.queries.PruneActivityEvents(ctx, limit); err != nil {
-		return fmt.Errorf("pruning activity events: %w", err)
-	}
-	return nil
-}
-
 // activityRecordFromRow adapts a generated row to the domain record. The two
 // are field-identical today, so a direct conversion suffices; if a future
 // column makes them diverge (e.g. a nullable column mapped to sql.NullString),
