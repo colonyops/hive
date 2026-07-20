@@ -73,11 +73,10 @@ func registerEvents() struct{} {
 // buildPipelineProducer). Now that a profile is a flow, there is no profiles
 // config to load or hot-reload here: source config lives in the flow's
 // github-source nodes, and the producer enumerates them from the flow store.
-func buildSourceFetcher() *feed.LiveProvider {
+func buildSourceFetcher(logger zerolog.Logger) *feed.LiveProvider {
 	if desktop.MockMode() != "" {
 		return nil
 	}
-	logger := zerolog.New(os.Stderr).With().Timestamp().Logger()
 	return feed.NewLiveProvider(github.NewClient(), github.NewKeychainStore(), logger)
 }
 
@@ -306,9 +305,22 @@ func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, laun
 }
 
 func main() {
-	fetcher := buildSourceFetcher()
+	// Seed HIVE_DATA_DIR / HIVE_DESKTOP_CONFIG from the bootstrap pointer file
+	// before any path is resolved, so a data/config directory override chosen
+	// in System settings applies to a dock-launched app. Must precede
+	// StateDir/ConfigPath use below. An explicit env var still wins.
+	bootstrapErr := desktop.ApplyBootstrap()
 
-	pipelineLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
+	logger, logCloser, logErr := desktop.NewLogger()
+	if logErr != nil {
+		logger.Warn().Err(logErr).Msg("desktop log file unavailable; logging to stderr only")
+	}
+	if bootstrapErr != nil {
+		logger.Warn().Err(bootstrapErr).Msg("desktop bootstrap overrides ignored")
+	}
+
+	fetcher := buildSourceFetcher(logger)
+
 	pipelineDB, err := pipelinedb.Open(desktop.StateDir(), pipelinedb.DefaultOpenOptions())
 	if err != nil {
 		log.Fatal(err)
@@ -320,7 +332,7 @@ func main() {
 	// on each append so open views refresh.
 	activityStore := activity.NewStore(pipelineDB, activity.Options{Emit: emitActivityAppended})
 
-	actionRuntime, err := buildHiveActionRuntime(activityStore, pipelineLogger)
+	actionRuntime, err := buildHiveActionRuntime(activityStore, logger)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -332,25 +344,23 @@ func main() {
 	// (see desktop/mockseed.go and desktop/e2e/scripts/serve.sh's
 	// HIVE_DESKTOP_FLOWS).
 	if desktop.MockMode() == "feed" || desktop.MockMode() == "action-smoke" {
-		seedMockFeedItemsOrWarn(pipelineDB, pipelineLogger)
+		seedMockFeedItemsOrWarn(pipelineDB, logger)
 	}
 
-	actionsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	actionStore, actionsWatcher := buildActionStore(activityStore, actionsLogger)
+	actionStore, actionsWatcher := buildActionStore(activityStore, logger)
 	if actionsWatcher != nil {
 		actionsWatcher.Start()
 	}
 
 	// The flows store must exist before the producer and retention maintenance:
 	// both resolve enabled flow IDs live from it.
-	flowsLogger := zerolog.New(os.Stderr).With().Timestamp().Logger()
-	flowsStore, flowsWatcher := buildFlowsStore(actionStore, flowsLogger)
+	flowsStore, flowsWatcher := buildFlowsStore(actionStore, logger)
 	actionStore.SetUsageChecker(actionUsageChecker{flows: flowsStore, db: pipelineDB})
 	if flowsWatcher != nil {
 		flowsWatcher.Start()
 	}
 
-	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, activityStore, pipelineLogger)
+	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, activityStore, logger)
 	if desktop.MockMode() == "" {
 		outputWorker.Start()
 	}
@@ -360,11 +370,11 @@ func main() {
 		flowsStore,
 		pipelinedb.DefaultRetentionPolicy(),
 		pipeline.DefaultRetentionInterval,
-		pipelineLogger,
+		logger,
 	)
 	maintenance.Start()
 
-	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, activityStore, pipelineLogger)
+	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, activityStore, logger)
 	if producer != nil {
 		producer.Start()
 	}
@@ -389,6 +399,7 @@ func main() {
 			application.NewService(NewFlowsService(flowsStore)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 			application.NewService(NewActivityService(activityStore)),
+			application.NewService(NewSystemService()),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
@@ -454,6 +465,7 @@ func main() {
 	shutdown := func() {
 		maintenance.Stop()
 		actionRuntime.Close()
+		logCloser()
 	}
 	if err := app.Run(); err != nil {
 		shutdown()

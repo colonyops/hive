@@ -117,6 +117,17 @@ so they can live in a dotfiles repo. App-local state (`feed_item`, read state,
 event-log offsets, queued output commands) stays in the data dir's `desktop/`
 subdirectory.
 
+The **System** settings screen (gear → System) surfaces these locations — the
+data directory, config directory, log file (`<data-dir>/desktop/desktop.log`),
+and pipeline database (`<data-dir>/desktop/desktop-pipeline.db`) — each with
+copy-path, open-in-default-app, and reveal-in-file-manager actions. It can also
+point the data and config directories at a different folder (e.g. an
+iCloud-synced directory): the choice is written to
+`$XDG_CONFIG_HOME/hive/desktop/bootstrap.yaml` and seeds `HIVE_DATA_DIR` /
+`HIVE_DESKTOP_CONFIG` at the next launch, so an explicit env var still wins.
+Overrides are point-only — existing data is not moved — and take effect after a
+restart.
+
 ```yaml
 name: Triage
 enabled: true

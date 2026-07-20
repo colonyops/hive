@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   ReadFrom: vi.fn(),
   Commit: vi.fn(),
   On: vi.fn(),
+  SetText: vi.fn(),
 }))
 
 vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => ({
@@ -39,6 +40,7 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
+  Clipboard: { SetText: mocks.SetText },
 }))
 
 const flowSummaries = [
@@ -152,15 +154,14 @@ describe('FlowsView deploy menu', () => {
   })
 
   it('"Copy prompt" still copies the flow prompt', async () => {
-    const writeText = vi.fn().mockResolvedValue(undefined)
-    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    mocks.SetText.mockResolvedValue(undefined)
     const wrapper = await mountWithActiveFlow()
 
     await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
     await wrapper.get('[data-testid="deploy-menu-copy-prompt"]').trigger('click')
     await flushPromises()
 
-    expect(writeText).toHaveBeenCalled()
+    expect(mocks.SetText).toHaveBeenCalled()
     expect(wrapper.get('[data-testid="copy-prompt-status"]').text()).toBe('Prompt copied')
 
     wrapper.unmount()

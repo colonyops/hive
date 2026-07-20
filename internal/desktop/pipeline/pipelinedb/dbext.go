@@ -53,6 +53,13 @@ type DB struct {
 	queries *Queries
 }
 
+// DatabasePath returns the desktop-pipeline.db file path within dir. It is the
+// single source of truth for the filename, shared by Open and by callers (the
+// System settings screen) that need to display or reveal the database.
+func DatabasePath(dir string) string {
+	return filepath.Join(dir, "desktop-pipeline.db")
+}
+
 // Open creates a new desktop-pipeline.db connection in dir, applying all
 // pending migrations. Unlike internal/data/db, there is no legacy bootstrap
 // step here: this is a new database with no pre-migration history, so Open
@@ -77,7 +84,7 @@ func Open(dir string, opts OpenOptions) (*DB, error) {
 		return nil, fmt.Errorf("failed to create database directory: %w", err)
 	}
 
-	dbPath := filepath.Join(dir, "desktop-pipeline.db")
+	dbPath := DatabasePath(dir)
 
 	// Open with pragmas for WAL mode, busy timeout, and foreign keys, plus
 	// _txlock=immediate so write transactions begin with BEGIN IMMEDIATE.

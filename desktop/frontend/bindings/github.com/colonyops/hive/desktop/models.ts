@@ -14,3 +14,32 @@ export interface FlowSummary {
     "error"?: string;
     "warnings"?: string[] | null;
 }
+
+/**
+ * PathInfo describes a single on-disk location surfaced in settings.
+ */
+export interface PathInfo {
+    "path": string;
+
+    /**
+     * Exists reports whether the path is present on disk right now (a log file
+     * or database may not exist until first written).
+     */
+    "exists": boolean;
+
+    /**
+     * Overridden reports whether a stored override backs this location. Only
+     * meaningful for the data and config directories; always false otherwise.
+     */
+    "overridden": boolean;
+}
+
+/**
+ * SystemInfo is the full set of locations shown on the System settings screen.
+ */
+export interface SystemInfo {
+    "dataDir": PathInfo;
+    "configDir": PathInfo;
+    "logFile": PathInfo;
+    "database": PathInfo;
+}

@@ -87,7 +87,8 @@ const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
   route.params.section === 'integrations' ? 'integrations'
     : route.params.section === 'actions' ? 'actions'
       : route.params.section === 'keybindings' ? 'keybindings'
-        : 'appearance',
+        : route.params.section === 'system' ? 'system'
+          : 'appearance',
 )
 const profileSettingsSection = computed<ProfileSettingsSection>(() =>
   route.params.section === 'danger' ? 'danger' : 'general',

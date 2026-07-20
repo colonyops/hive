@@ -6,6 +6,7 @@ import IconGithub from '~icons/lucide/github'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import type { DeviceFlowInfo } from '../types/auth'
 import type { OnboardingCard } from '../composables/useAuth'
+import { useClipboard } from '../composables/useClipboard'
 
 const props = defineProps<{
   // 'workspace' is step 2, shown once authenticated with no workspaces yet.
@@ -25,7 +26,7 @@ const emit = defineEmits<{
 
 const tokenInput = ref('')
 const workspaceInput = ref('')
-const copied = ref(false)
+const { copy, copied } = useClipboard({ resetDelay: 1600 })
 
 const activeStep = computed(() => props.card === 'workspace' ? 2 : 1)
 const steps = [
@@ -44,16 +45,10 @@ async function openVerification() {
   }
 }
 
-async function copyCode() {
+function copyCode() {
   const code = props.deviceFlow?.userCode
   if (!code) return
-  try {
-    await navigator.clipboard.writeText(code)
-    copied.value = true
-    setTimeout(() => { copied.value = false }, 1600)
-  } catch (err) {
-    console.warn('Unable to copy code', err)
-  }
+  void copy(code)
 }
 
 function submit() {

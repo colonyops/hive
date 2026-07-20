@@ -6,6 +6,7 @@ vi.mock('@wailsio/runtime', () => ({
   Browser: {
     OpenURL: vi.fn().mockResolvedValue(undefined),
   },
+  Clipboard: { SetText: vi.fn().mockResolvedValue(undefined) },
 }))
 
 function mountScreen(props: Partial<InstanceType<typeof OnboardingScreen>['$props']> = {}) {
