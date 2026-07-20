@@ -31,10 +31,6 @@ export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDr
   reloadDeployed(): Promise<void>
   /** Drains every enabled runtime. */
   pump(): Promise<void>
-  /** Starts every managed runtime (normally they are started by reconciliation). */
-  runRuntime(): Promise<void>
-  /** Pauses every managed runtime; runRuntime() can restart them. */
-  stopRuntime(): void
   /** Permanently disposes every managed runtime; used on session shutdown. */
   disposeRuntime(): void
 }
@@ -257,16 +253,6 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     })
   }
 
-  async function runRuntime(): Promise<void> {
-    await serialize(async () => {
-      await Promise.all([...runtimes.value.values()].map(async (runtime) => { await runtime.run() }))
-    })
-  }
-
-  function stopRuntime(): void {
-    for (const runtime of runtimes.value.values()) runtime.stop()
-  }
-
   function disposeRuntime(): void {
     for (const runtime of runtimes.value.values()) runtime.dispose()
     runtimes.value = new Map()
@@ -299,8 +285,6 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     deploy,
     reloadDeployed,
     pump,
-    runRuntime,
-    stopRuntime,
     disposeRuntime,
   }
 }

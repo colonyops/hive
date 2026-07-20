@@ -127,23 +127,6 @@ describe('FlowsView deploy menu', () => {
     return wrapper
   }
 
-  // The always-on per-enabled-flow runtime manager means deployed flows are
-  // already running app-wide, so the old Run/Stop pair is
-  // gone — replaced by a single "Refresh now" one-shot pump, and "Debug"
-  // is now an explicit, state-aware "Show/Hide debug panel" label.
-  it('no longer offers separate Run/Stop actions', async () => {
-    const wrapper = await mountWithActiveFlow()
-
-    await wrapper.get('[data-testid="deploy-menu-toggle"]').trigger('click')
-
-    expect(wrapper.find('[data-testid="deploy-menu-run"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="deploy-menu-stop"]').exists()).toBe(false)
-    expect(wrapper.find('[data-testid="deploy-menu-refresh"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="deploy-menu-refresh"]').text()).toBe('Refresh now')
-
-    wrapper.unmount()
-  })
-
   it('"Refresh now" triggers an immediate manual pump via the session and closes the menu', async () => {
     const wrapper = await mountWithActiveFlow()
     mocks.ReadFrom.mockClear()

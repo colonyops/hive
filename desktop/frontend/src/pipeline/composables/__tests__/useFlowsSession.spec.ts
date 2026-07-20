@@ -209,25 +209,6 @@ describe('useFlowsSession', () => {
     wrapper.unmount()
   })
 
-  it('runRuntime/stopRuntime control every managed runtime (session shutdown support)', async () => {
-    const editorClient = fakeEditorClient()
-    const readFrom = vi.fn().mockResolvedValue([])
-    const commit = vi.fn().mockResolvedValue(undefined)
-    const { state, wrapper } = mountSession({ editorClient, runtimeClient: { readFrom, commit } })
-    await flushPromises()
-    state.bindActiveFlow('flow-1')
-    await flushPromises()
-    expect(state.running.value).toBe(true)
-
-    state.stopRuntime()
-    expect(state.running.value).toBe(false)
-
-    await state.runRuntime()
-    expect(state.running.value).toBe(true)
-
-    wrapper.unmount()
-  })
-
   it('discardDraft() reloads the active flow fresh from disk, clearing dirty (hc-sx4k3c7k)', async () => {
     const editorClient = fakeEditorClient()
     const { state, wrapper } = mountSession({ editorClient, runtimeClient: fakeRuntimeClient() })
