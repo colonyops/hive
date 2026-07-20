@@ -415,7 +415,12 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           @add="openNewProfile"
           @open-settings="requestOpenSettings('application')"
         />
-        <SettingsView v-if="settingsPage === 'application'" @close="closeSettings" />
+        <SettingsView
+          v-if="settingsPage === 'application'"
+          :github-connected="authenticated"
+          :github-login="authStatus?.login"
+          @close="closeSettings"
+        />
         <ProfileSettingsView
           v-else-if="settingsPage === 'profile' && activeProfile"
           :profile="activeProfile"
