@@ -3,6 +3,8 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { useFlowsSession, resetFlowsSessionForTests, type FlowsSessionDeps } from '../useFlowsSession'
 import type { PipelineEditorClient } from '../usePipelineEditor'
 import type { PipelineClient } from '../../driver'
+import { usePipelineRuntime } from '../usePipelineRuntime'
+import type { WorkerTransport } from '../../engine/transport'
 import type { FlowSummary, WireFlow } from '../../lib/wireFlow'
 import type { Msg } from '../../types'
 
@@ -313,6 +315,30 @@ describe('useFlowsSession', () => {
     await flushPromises()
     expect(state.runtimeFlowId.value).toBe('flow-2')
 
+    wrapper.unmount()
+  })
+
+  it('disposes abandoned runtimes when replacing them and on session shutdown', async () => {
+    const transports: WorkerTransport[] = []
+    const runtimeFactory: typeof usePipelineRuntime = (client, flow) => {
+      const transport: WorkerTransport = { run: vi.fn(), reset: vi.fn(), dispose: vi.fn() }
+      transports.push(transport)
+      return usePipelineRuntime(client, flow, { transport })
+    }
+    const { state, wrapper } = mountSession({
+      editorClient: fakeEditorClient(),
+      runtimeClient: fakeRuntimeClient(),
+      runtimeFactory,
+    })
+    await flushPromises()
+    expect(transports).toHaveLength(1)
+
+    await state.reloadDeployed()
+    expect(transports).toHaveLength(2)
+    expect(transports[0].dispose).toHaveBeenCalledOnce()
+
+    state.disposeRuntime()
+    expect(transports[1].dispose).toHaveBeenCalledOnce()
     wrapper.unmount()
   })
 

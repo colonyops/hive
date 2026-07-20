@@ -33,13 +33,17 @@ export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDr
   pump(): Promise<void>
   /** Starts every managed runtime (normally they are started by reconciliation). */
   runRuntime(): Promise<void>
-  /** Stops every managed runtime; used when the app/session shuts down. */
+  /** Pauses every managed runtime; runRuntime() can restart them. */
   stopRuntime(): void
+  /** Permanently disposes every managed runtime; used on session shutdown. */
+  disposeRuntime(): void
 }
 
 export interface FlowsSessionDeps {
   editorClient?: PipelineEditorClient
   runtimeClient?: PipelineClient
+  /** Test seam for observing runtime lifecycle without constructing browser workers. */
+  runtimeFactory?: typeof usePipelineRuntime
 }
 
 function defaultEditorClient(): PipelineEditorClient {
@@ -98,7 +102,7 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
   function removeRuntime(id: string): void {
     const existing = runtimes.value.get(id)
     if (!existing) return
-    existing.stop()
+    existing.dispose()
     const next = new Map(runtimes.value)
     next.delete(id)
     runtimes.value = next
@@ -143,7 +147,7 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     // The serialized caller has drained all earlier work. Do not stop a
     // usable runtime until the replacement snapshot has been validated.
     removeRuntime(id)
-    const runtime = usePipelineRuntime(deps.runtimeClient, snapshot)
+    const runtime = deps.runtimeFactory(deps.runtimeClient, snapshot)
     setRuntime(id, runtime)
     setRuntimeLoadError(id, null)
     await runtime.run()
@@ -263,6 +267,11 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     for (const runtime of runtimes.value.values()) runtime.stop()
   }
 
+  function disposeRuntime(): void {
+    for (const runtime of runtimes.value.values()) runtime.dispose()
+    runtimes.value = new Map()
+  }
+
   const selectedRuntime = computed(() => selectedProfileId.value ? runtimes.value.get(selectedProfileId.value) : undefined)
   const running = computed(() => selectedRuntime.value?.running.value ?? false)
   const lastRun = computed(() => selectedRuntime.value?.lastRun.value ?? null)
@@ -292,6 +301,7 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
     pump,
     runRuntime,
     stopRuntime,
+    disposeRuntime,
   }
 }
 
@@ -302,12 +312,13 @@ export function useFlowsSession(deps: FlowsSessionDeps = {}): FlowsSession {
     sharedSession = createFlowsSession({
       editorClient: deps.editorClient ?? defaultEditorClient(),
       runtimeClient: deps.runtimeClient ?? defaultRuntimeClient(),
+      runtimeFactory: deps.runtimeFactory ?? usePipelineRuntime,
     })
   }
   return sharedSession
 }
 
 export function resetFlowsSessionForTests(): void {
-  sharedSession?.stopRuntime()
+  sharedSession?.disposeRuntime()
   sharedSession = null
 }

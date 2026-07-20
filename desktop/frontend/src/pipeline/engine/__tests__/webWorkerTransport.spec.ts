@@ -30,10 +30,10 @@ class FakeWorker implements WorkerLike {
   }
 }
 
-function fakeFactory(respond = true): { factory: WorkerFactory; workers: FakeWorker[] } {
+function fakeFactory(respond: boolean | ((index: number) => boolean) = true): { factory: WorkerFactory; workers: FakeWorker[] } {
   const workers: FakeWorker[] = []
   const factory: WorkerFactory = () => {
-    const worker = new FakeWorker(respond)
+    const worker = new FakeWorker(typeof respond === 'function' ? respond(workers.length) : respond)
     workers.push(worker)
     return worker
   }
@@ -88,11 +88,23 @@ describe('WebWorkerTransport', () => {
     expect(workers[0].terminate).toHaveBeenCalled()
   })
 
-  it('does not terminate the shared worker on a timeout (it may host unrelated in-flight instances)', async () => {
+  it('terminates and replaces the shared worker on timeout so poisoned state cannot persist', async () => {
     const { factory, workers } = fakeFactory(false)
     const transport = new WebWorkerTransport(factory, new Set(['function']))
     await expect(transport.run('github-filter', 'flow:stuck', {}, msg('1'), {}, 10)).rejects.toBeInstanceOf(NodeTimeoutError)
-    expect(workers[0].terminate).not.toHaveBeenCalled()
+    expect(workers[0].terminate).toHaveBeenCalled()
+    expect(workers).toHaveLength(2)
+  })
+
+  it('terminates and replaces an isolated worker before the next function request', async () => {
+    const { factory, workers } = fakeFactory((index) => index !== 0)
+    const transport = new WebWorkerTransport(factory, new Set(['function']))
+    await expect(transport.run('function', 'flow:stuck', {}, msg('1'), {}, 10)).rejects.toBeInstanceOf(NodeTimeoutError)
+    expect(workers[0].terminate).toHaveBeenCalledOnce()
+    expect(workers).toHaveLength(2)
+
+    const second = msg('2')
+    await expect(transport.run('function', 'flow:stuck', {}, second, {}, 1000)).resolves.toBe(second)
   })
 
   it('reset() terminates the dedicated worker so the next run spawns a fresh one', async () => {
@@ -103,6 +115,35 @@ describe('WebWorkerTransport', () => {
     expect(workers[0].terminate).toHaveBeenCalled()
     await transport.run('function', 'flow:a', {}, msg('2'), {}, 1000)
     expect(workers.length).toBe(2)
+  })
+
+  it('terminates the shared worker and every isolated worker on disposal', async () => {
+    const { factory, workers } = fakeFactory()
+    const transport = new WebWorkerTransport(factory, new Set(['function']))
+    await transport.run('github-filter', 'flow:filter', {}, msg('1'), {}, 1000)
+    await transport.run('function', 'flow:a', {}, msg('2'), {}, 1000)
+    await transport.run('function', 'flow:b', {}, msg('3'), {}, 1000)
+
+    transport.dispose()
+
+    expect(workers).toHaveLength(3)
+    for (const worker of workers) {
+      expect(worker.terminate).toHaveBeenCalledOnce()
+      expect(worker.onmessage).toBeNull()
+      expect(worker.onerror).toBeNull()
+    }
+    await expect(transport.run('function', 'flow:c', {}, msg('4'), {}, 1000)).rejects.toThrow('disposed')
+  })
+
+  it('rejects in-flight work when disposed', async () => {
+    const { factory, workers } = fakeFactory(false)
+    const transport = new WebWorkerTransport(factory, new Set(['function']))
+    const pending = transport.run('function', 'flow:a', {}, msg('1'), {}, 5000)
+
+    transport.dispose()
+
+    await expect(pending).rejects.toThrow('disposed')
+    expect(workers[0].terminate).toHaveBeenCalledOnce()
   })
 
   it('rejects still-pending requests when the worker reports an error', async () => {

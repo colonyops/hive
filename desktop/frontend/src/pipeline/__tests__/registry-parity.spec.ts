@@ -11,7 +11,7 @@
 
 import { describe, expect, it } from 'vitest'
 import { byType } from '../registry'
-import { processorRegistry } from '../registry'
+import { processorRegistry } from '../processors'
 
 describe('app/worker registry parity', () => {
   it('every processor-role app entry has a matching worker runtime', () => {

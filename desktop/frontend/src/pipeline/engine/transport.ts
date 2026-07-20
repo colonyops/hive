@@ -1,10 +1,6 @@
-// The transport seam: runGraph never touches a real Web Worker directly. It
-// drives every processor node through a WorkerTransport, so tests (and the
-// documented main-thread fallback from the Web Worker Wails spike,
-// .hive/research/2026-07-18-web-worker-wails-spike.md) can run entirely
-// in-process — happy-dom/vitest cannot construct real module workers with
-// terminate(), so InProcessTransport is both the test double and the
-// shipped fallback, not a mock-only shim.
+// The transport seam: runGraph never touches a real Web Worker directly.
+// Production supplies WebWorkerTransport; tests explicitly inject
+// InProcessTransport to run processor runtimes without browser workers.
 
 import type { Msg } from '../types'
 
@@ -69,11 +65,13 @@ export class NodeTimeoutError extends Error {
  * message" — it never hard-depends on a real Web Worker. `run` executes one
  * message through one node instance; `reset` is called by the engine after
  * a timeout to terminate/respawn whatever backs instanceId, so the next run
- * starts clean.
+ * starts clean. `dispose` is terminal: it releases all resources owned by
+ * this transport and rejects any work that is still in flight.
  */
 export interface WorkerTransport {
   run(runtimeType: string, instanceId: string, config: unknown, msg: Msg, state: object, timeoutMs: number): Promise<NodeResult>
   reset(instanceId: string): void
+  dispose(): void
 }
 
 /** Races a promise against a deadline, rejecting with NodeTimeoutError if the deadline wins. */
@@ -95,21 +93,9 @@ export function raceTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<
 
 /**
  * InProcessTransport runs a ProcessorRuntime directly in the calling
- * thread, wrapped in a Promise. This is both the unit-test double (tests
- * inject a registry with a "slow" runtime to exercise the timeout path) and
- * the documented main-thread fallback if Web Workers ever turn out to be
- * unavailable on a target webview (they are expected to be available on all
- * three Wails v3 targets — see the spike — so this is a fallback, not the
- * primary production path).
- *
- * Enforces timeoutMs itself (cooperatively: racing the returned promise
- * against a deadline) so it is correct standalone, not only when driven
- * through runGraph, which applies the same "record error + discard + reset
- * on timeout" handling uniformly across transports. A truly blocking
- * synchronous loop in a node's code cannot be preempted this way — only a
- * real Worker's terminate() can do that — but a node that returns a slow
- * Promise (the realistic "stuck" case for in-process/main-thread execution)
- * is caught correctly.
+ * thread. It is an explicit test/fallback implementation, not a production
+ * default. Its cooperative timeout can only interrupt asynchronous work;
+ * production uses a real worker so termination can preempt a blocking node.
  */
 export class InProcessTransport implements WorkerTransport {
   private started = new Set<string>()
@@ -136,5 +122,11 @@ export class InProcessTransport implements WorkerTransport {
   reset(instanceId: string): void {
     // "Respawn": the next run() for this instance re-invokes start().
     this.started.delete(instanceId)
+  }
+
+  dispose(): void {
+    // There are no external resources in-process, but release lifecycle
+    // bookkeeping so an abandoned driver does not retain node instance ids.
+    this.started.clear()
   }
 }

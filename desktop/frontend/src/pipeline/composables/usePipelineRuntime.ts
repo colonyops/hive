@@ -9,7 +9,7 @@ import type { WorkerTransport } from '../engine/transport'
 export interface PipelineRuntimeOptions {
   /** Forwarded to the underlying PipelineDriver (ReadFrom page size). Default 500. */
   limit?: number
-  /** Defaults to a fresh InProcessTransport. */
+  /** Defaults to a fresh production WebWorkerTransport. */
   transport?: WorkerTransport
 }
 
@@ -45,6 +45,7 @@ export function usePipelineRuntime(client: PipelineClient, flow: Flow, options: 
   let wakePending = false
   let generation = 0
   let drainPromise: Promise<void> | null = null
+  let disposed = false
 
   async function drain(token: number): Promise<void> {
     while (running.value && token === generation) {
@@ -92,7 +93,7 @@ export function usePipelineRuntime(client: PipelineClient, flow: Flow, options: 
    * their wakeup is latched so no appended work is lost in flight.
    */
   function pump(): Promise<void> {
-    if (!running.value) return Promise.resolve()
+    if (disposed || !running.value) return Promise.resolve()
     wakePending = true
     if (drainPromise) return drainPromise
 
@@ -107,7 +108,7 @@ export function usePipelineRuntime(client: PipelineClient, flow: Flow, options: 
 
   /** Starts the runtime and immediately drains any persisted backlog. */
   async function run(): Promise<void> {
-    if (running.value) return
+    if (disposed || running.value) return
     running.value = true
     await pump()
   }
@@ -119,6 +120,17 @@ export function usePipelineRuntime(client: PipelineClient, flow: Flow, options: 
     wakePending = false
   }
 
+  /**
+   * Permanently stops this runtime and releases its driver's transport.
+   * stop() remains a pause operation and can still be followed by run().
+   */
+  function dispose(): void {
+    if (disposed) return
+    disposed = true
+    stop()
+    driver.dispose()
+  }
+
   return {
     running,
     pumping,
@@ -127,6 +139,7 @@ export function usePipelineRuntime(client: PipelineClient, flow: Flow, options: 
     offset: computed(() => driver.offset),
     run,
     stop,
+    dispose,
     pump,
   }
 }

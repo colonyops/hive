@@ -1,9 +1,7 @@
 // Production WorkerTransport: one shared worker hosts every isolate:false
 // runtime (github-filter today); a dedicated worker is spawned per
-// isolate:true node INSTANCE (the function node), so a timeout's
-// terminate() kills only that one instance. See the class doc below for
-// why this file only owns the message-protocol glue, not a real worker
-// bundle.
+// isolate:true node INSTANCE (the function node), so a timeout can kill and
+// replace only that function instance's worker.
 
 import type { Msg } from '../types'
 import { NodeTimeoutError, type NodeResult, type WorkerTransport } from './transport'
@@ -12,17 +10,15 @@ import { NodeTimeoutError, type NodeResult, type WorkerTransport } from './trans
 export interface WorkerLike {
   postMessage(data: unknown): void
   terminate(): void
-  onmessage: ((ev: { data: any }) => void) | null
+  onmessage: ((ev: any) => void) | null
   onerror: ((ev: any) => void) | null
 }
 
 /**
  * Builds the actual worker for a hosting slot: 'shared' for every
- * isolate:false runtime type (one worker for all of them, keyed
- * 'shared'); 'isolated' for one instanceId's isolate:true node. Production
- * wiring (spawning a real `new Worker(new URL('./workerEntry.ts',
- * import.meta.url), {type: 'module'})` bundle hosting the worker registry)
- * is the caller's responsibility — there is no default factory here.
+ * isolate:false runtime type (one worker for all of them, keyed 'shared');
+ * 'isolated' for one instanceId's isolate:true node. workerFactory.ts
+ * provides the Vite module-worker implementation; tests inject fakes.
  */
 export type WorkerFactory = (kind: 'shared' | 'isolated', instanceId: string) => WorkerLike
 
@@ -47,20 +43,18 @@ interface RunResponse {
 interface PendingRequest {
   resolve(v: NodeResult): void
   reject(e: unknown): void
+  /** The worker servicing this request, used to scope worker-level errors. */
+  worker: WorkerLike
   /** The caller's original state object (NOT the cloned copy the worker received) — mutations reported back in the response are merged onto this. */
   state: Record<string, any>
 }
 
 /**
- * WebWorkerTransport owns only the message-protocol glue (request/response
- * correlation by id, timeout -> terminate -> respawn, merging a worker's
- * returned state back onto the caller's object across the postMessage
- * structured-clone boundary) — it does not bundle or load an actual worker
- * script itself. `createWorker` is required (no default): wiring it to a
- * real worker bundle is production glue with nothing to unit-test here (per
- * the Web Worker Wails spike, real execution is verified by manual QA, not
- * vitest/happy-dom, which cannot construct real module workers). Tests
- * inject a fake WorkerLike to exercise the protocol logic in this file.
+ * WebWorkerTransport owns request/response correlation, timeout-driven
+ * worker replacement, and merging returned state across the postMessage
+ * structured-clone boundary. workerFactory.ts supplies the production Vite
+ * module-worker factory; tests inject a fake WorkerLike to exercise this
+ * protocol without a browser worker implementation.
  *
  * State across the postMessage boundary: `state` is structured-cloned to
  * the worker on every call, so the worker mutates its OWN copy, not the
@@ -75,7 +69,12 @@ export class WebWorkerTransport implements WorkerTransport {
   private sharedWorker: WorkerLike | null = null
   private isolatedWorkers = new Map<string, WorkerLike>()
   private pending = new Map<number, PendingRequest>()
+  // runGraph calls reset() after any NodeTimeoutError. A timeout here has
+  // already installed a clean replacement, so consume that follow-up reset
+  // instead of terminating the new worker.
+  private replacedAfterTimeout = new Set<string>()
   private nextId = 1
+  private disposed = false
 
   constructor(
     private readonly createWorker: WorkerFactory,
@@ -83,6 +82,8 @@ export class WebWorkerTransport implements WorkerTransport {
   ) {}
 
   async run(runtimeType: string, instanceId: string, config: unknown, msg: Msg, state: object, timeoutMs: number): Promise<NodeResult> {
+    if (this.disposed) throw new Error('pipeline worker transport has been disposed')
+
     const isolated = this.isolateTypes.has(runtimeType)
     const worker = isolated ? this.getIsolatedWorker(instanceId) : this.getSharedWorker()
 
@@ -91,40 +92,61 @@ export class WebWorkerTransport implements WorkerTransport {
     const request: RunRequest = { kind: 'run', id, runtimeType, instanceId, config, msg, state: originalState }
 
     const responsePromise = new Promise<NodeResult>((resolve, reject) => {
-      this.pending.set(id, { resolve, reject, state: originalState })
+      this.pending.set(id, { resolve, reject, worker, state: originalState })
     })
 
     worker.postMessage(request)
 
     try {
-      return await this.raceTimeout(responsePromise, timeoutMs, id, isolated, instanceId)
+      return await this.raceTimeout(responsePromise, timeoutMs, id, worker, isolated, instanceId)
     } finally {
       this.pending.delete(id)
     }
   }
 
   reset(instanceId: string): void {
+    if (this.disposed || this.replacedAfterTimeout.delete(instanceId)) return
     const worker = this.isolatedWorkers.get(instanceId)
-    if (worker) {
-      worker.terminate()
-      this.isolatedWorkers.delete(instanceId)
-    }
-    // The shared worker hosts every isolate:false instance at once —
-    // terminating it over one instance's timeout would kill unrelated
-    // in-flight work, so a shared-hosted instance's reset is a no-op (no
-    // isolate:false runtime today — github-filter — does anything async
-    // enough to realistically time out).
+    if (!worker) return
+    worker.terminate()
+    this.isolatedWorkers.delete(instanceId)
   }
 
-  private raceTimeout(promise: Promise<NodeResult>, timeoutMs: number, id: number, isolated: boolean, instanceId: string): Promise<NodeResult> {
+  /**
+   * Permanently releases every worker this transport owns. Unlike reset(),
+   * this also terminates the shared worker and rejects all outstanding work.
+   */
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+
+    const workers = new Set<WorkerLike>(this.isolatedWorkers.values())
+    if (this.sharedWorker) workers.add(this.sharedWorker)
+    for (const worker of workers) {
+      worker.onmessage = null
+      worker.onerror = null
+      worker.terminate()
+    }
+    this.sharedWorker = null
+    this.isolatedWorkers.clear()
+    this.replacedAfterTimeout.clear()
+
+    for (const waiter of this.pending.values()) {
+      waiter.reject(new Error('pipeline worker transport has been disposed'))
+    }
+    this.pending.clear()
+  }
+
+  private raceTimeout(promise: Promise<NodeResult>, timeoutMs: number, id: number, worker: WorkerLike, isolated: boolean, instanceId: string): Promise<NodeResult> {
     return new Promise<NodeResult>((resolve, reject) => {
       const timer = setTimeout(() => {
-        if (isolated) {
-          this.isolatedWorkers.get(instanceId)?.terminate()
-          this.isolatedWorkers.delete(instanceId)
-        }
+        const waiter = this.pending.get(id)
+        if (!waiter) return
         this.pending.delete(id)
-        reject(new NodeTimeoutError(timeoutMs))
+        this.replaceWorker(worker, isolated, instanceId, id)
+        const error = new NodeTimeoutError(timeoutMs)
+        waiter.reject(error)
+        reject(error)
       }, timeoutMs)
       promise.then(
         (v) => {
@@ -157,6 +179,30 @@ export class WebWorkerTransport implements WorkerTransport {
     return worker
   }
 
+  /** Terminates a timed-out worker and immediately installs a clean replacement. */
+  private replaceWorker(worker: WorkerLike, isolated: boolean, instanceId: string, timedOutID: number): void {
+    worker.terminate()
+
+    if (isolated) {
+      if (this.isolatedWorkers.get(instanceId) === worker) {
+        const replacement = this.createWorker('isolated', instanceId)
+        this.wire(replacement)
+        this.isolatedWorkers.set(instanceId, replacement)
+      }
+    } else if (this.sharedWorker === worker) {
+      const replacement = this.createWorker('shared', 'shared')
+      this.wire(replacement)
+      this.sharedWorker = replacement
+    }
+
+    this.replacedAfterTimeout.add(instanceId)
+    for (const [id, pending] of this.pending) {
+      if (id === timedOutID || pending.worker !== worker) continue
+      this.pending.delete(id)
+      pending.reject(new Error('pipeline worker terminated after another request timed out'))
+    }
+  }
+
   private wire(worker: WorkerLike): void {
     worker.onmessage = (ev) => {
       const response = ev.data as RunResponse
@@ -176,6 +222,7 @@ export class WebWorkerTransport implements WorkerTransport {
       // leaving them hanging forever.
       const message = ev && typeof ev === 'object' && typeof (ev as any).message === 'string' ? (ev as any).message : String(ev)
       for (const [id, waiter] of this.pending) {
+        if (waiter.worker !== worker) continue
         waiter.reject(new Error(message))
         this.pending.delete(id)
       }

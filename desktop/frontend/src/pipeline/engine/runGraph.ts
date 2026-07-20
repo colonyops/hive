@@ -235,8 +235,8 @@ function normalizeResult(result: NodeResult, outputs: number): Array<{ port: num
 // Known processor types' output arity lives in their own config.ts
 // (single source of truth); everything else defaults to 1 output. This is
 // a small closed-form map rather than a Vite-glob registry because Phase 6
-// (the registry-driven palette) is out of scope here — see registry.ts for
-// the *worker* registry, which only needs runtime.ts, not arity.
+// (the registry-driven palette) is out of scope here — see processors.ts
+// for the worker runtime registry, which only needs runtime.ts, not arity.
 function outputCount(node: FlowNode): number {
   switch (node.type) {
     case functionNode.type:

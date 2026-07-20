@@ -4,7 +4,6 @@
 // ProcessorRuntime) and the future Phase 6 drawer's live syntax check both
 // import from here rather than duplicating the `new Function(...)` call.
 
-import IconSquareFunction from '~icons/lucide/square-function'
 import type { Msg } from '../../types'
 import type { NodeResult } from '../../engine/transport'
 
@@ -71,7 +70,6 @@ export function checkSyntax(src: string): string[] {
 
 export const label = 'Function'
 export const category = 'Process' as const
-export const glyph = IconSquareFunction
 // Purple — matches the mockup's Function node cap (8c anatomy diagram).
 export const accentToken = 'var(--color-node-purple)'
 export const tint = 'var(--color-node-purple-tint)'

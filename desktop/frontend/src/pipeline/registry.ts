@@ -1,34 +1,10 @@
-// The worker registry: runtime type -> ProcessorRuntime, discovered via a
-// Vite glob over every node type's runtime.ts. This is the *worker* half of
-// D2's two-registry split (the other half — an app/palette registry over
-// index.ts — is below). vitest supports import.meta.glob directly, so this
-// doubles as the registry both InProcessTransport (via tests/the fallback)
-// and a real worker bundle entry (production) would load.
+// App registry (D2/Phase 6): palette metadata + editor + defaults, discovered
+// from nodes/*/index.ts. Worker runtimes live in processors.ts so the app
+// bundle never imports runtime.ts modules.
 
-import type { ProcessorRuntime } from './engine/transport'
 import type { NodeCategory, NodeTypeDefinition } from './nodeType'
 import type { FlowNode } from './types'
 
-const modules = import.meta.glob<{ default: ProcessorRuntime }>('./nodes/*/runtime.ts', { eager: true })
-
-export const processorRegistry: Record<string, ProcessorRuntime> = {}
-
-for (const path in modules) {
-  const runtime = modules[path]?.default
-  if (!runtime || !runtime.type) {
-    throw new Error(`pipeline: ${path} does not default-export a ProcessorRuntime with a "type"`)
-  }
-  if (processorRegistry[runtime.type]) {
-    throw new Error(`pipeline: duplicate runtime type "${runtime.type}" (registered by ${path})`)
-  }
-  processorRegistry[runtime.type] = runtime
-}
-
-// ── App registry (D2/Phase 6): the *frontend* half of the two-registry
-// split, over nodes/*/index.ts (palette metadata + editor + defaults) rather
-// than nodes/*/runtime.ts (worker execution, above). Discovered the same
-// way, via import.meta.glob, so adding a node type means adding a directory
-// — no registry file to hand-edit.
 
 const nodeModules = import.meta.glob<{ default: NodeTypeDefinition }>('./nodes/*/index.ts', { eager: true })
 

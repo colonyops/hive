@@ -188,7 +188,7 @@ onMounted(() => {
 onUnmounted(() => {
   unsubscribeLog?.()
   unsubscribeFlowsRuntime?.()
-  session.stopRuntime()
+  session.disposeRuntime()
 })
 
 // ── Profile create / delete overlays ─────────────────────────────────────────

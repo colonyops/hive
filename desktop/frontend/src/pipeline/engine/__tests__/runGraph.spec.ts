@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { runGraph, UNROUTED_NODE_ID } from '../runGraph'
 import { InProcessTransport, NodeTimeoutError, type WorkerTransport } from '../transport'
-import { processorRegistry } from '../../registry'
+import { processorRegistry } from '../../processors'
 import type { Flow, Msg } from '../../types'
 
 function msg(id: string, payload: any = {}, topic = 'source:test'): Msg {
@@ -32,7 +32,7 @@ describe('runGraph', () => {
 
   it('a disabled node discards its msg without invoking the transport', async () => {
     const runSpy = vi.fn()
-    const transport: WorkerTransport = { run: runSpy, reset: vi.fn() }
+    const transport: WorkerTransport = { run: runSpy, reset: vi.fn(), dispose: vi.fn() }
     const flow: Flow = {
       id: 'f',
       nodes: [{ id: 'n', type: 'function', disabled: true, config: { on_message: 'return msg' } }],
@@ -179,6 +179,7 @@ describe('runGraph', () => {
         throw new Error('boom')
       },
       reset: resetSpy,
+      dispose: vi.fn(),
     }
     const flow: Flow = { id: 'f', nodes: [{ id: 'n', type: 'function', config: { on_message: 'return msg' } }], wires: [] }
     const result = await runGraph(flow, [msg('1')], failingTransport)
@@ -194,6 +195,7 @@ describe('runGraph', () => {
         throw new NodeTimeoutError(10)
       },
       reset: resetSpy,
+      dispose: vi.fn(),
     }
     const flow: Flow = { id: 'flow-timeout', nodes: [{ id: 'slow', type: 'function', config: { on_message: 'return msg' } }], wires: [] }
     const result = await runGraph(flow, [msg('1')], timeoutTransport)

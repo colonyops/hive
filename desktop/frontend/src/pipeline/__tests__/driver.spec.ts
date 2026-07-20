@@ -1,5 +1,6 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { PipelineDriver, type PipelineClient } from '../driver'
+import type { WorkerTransport } from '../engine/transport'
 import type { Flow, Msg } from '../types'
 
 function msg(id: string, payload: any = {}): Msg {
@@ -15,6 +16,8 @@ function simpleFlow(): Flow {
 }
 
 describe('PipelineDriver', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
   it('reads for the flow consumer, commits, and records the decimal committed offset', async () => {
     const batch = [msg('1'), msg('2'), msg('3')]
     const readFrom = vi.fn().mockResolvedValue(batch)
@@ -58,6 +61,44 @@ describe('PipelineDriver', () => {
 
     expect(readFrom).toHaveBeenLastCalledWith('flow-1', 500)
     expect(commit).toHaveBeenLastCalledWith(expect.objectContaining({ upToOffset: '4' }))
+  })
+
+  it('uses WebWorkerTransport for processor nodes when no test transport is injected', async () => {
+    const workers: Array<{ onmessage: ((event: { data: any }) => void) | null; onerror: ((event: any) => void) | null }> = []
+    class WorkerMock {
+      onmessage: ((event: { data: any }) => void) | null = null
+      onerror: ((event: any) => void) | null = null
+      postMessage(request: any): void {
+        queueMicrotask(() => this.onmessage?.({ data: { id: request.id, result: request.msg, state: request.state } }))
+      }
+      terminate(): void {}
+      constructor() { workers.push(this) }
+    }
+    vi.stubGlobal('Worker', WorkerMock)
+    const flow: Flow = {
+      id: 'flow-1',
+      nodes: [
+        { id: 'function', type: 'function', config: { on_message: 'return msg' } },
+        { id: 'feed', type: 'feed', config: { feed: 'inbox' } },
+      ],
+      wires: [{ from: 'function', to: 'feed' }],
+    }
+    const driver = new PipelineDriver({ readFrom: vi.fn().mockResolvedValue([msg('1')]), commit: vi.fn() }, flow)
+
+    const result = await driver.pump()
+
+    expect(workers).toHaveLength(1)
+    expect(result?.outputs).toHaveLength(1)
+  })
+
+  it('disposes its transport exactly once', () => {
+    const transport: WorkerTransport = { run: vi.fn(), reset: vi.fn(), dispose: vi.fn() }
+    const driver = new PipelineDriver({ readFrom: vi.fn(), commit: vi.fn() }, simpleFlow(), { transport })
+
+    driver.dispose()
+    driver.dispose()
+
+    expect(transport.dispose).toHaveBeenCalledOnce()
   })
 
   it('honors a custom page limit', async () => {

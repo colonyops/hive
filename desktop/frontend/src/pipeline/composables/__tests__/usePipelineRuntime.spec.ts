@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { usePipelineRuntime } from '../usePipelineRuntime'
 import type { PipelineClient } from '../../driver'
+import type { WorkerTransport } from '../../engine/transport'
 import type { Flow, Msg } from '../../types'
 
 function msg(id: string, payload: any = {}): Msg {
@@ -90,6 +91,22 @@ describe('usePipelineRuntime', () => {
 
     expect(readFrom).not.toHaveBeenCalled()
     expect(runtime.running.value).toBe(false)
+  })
+
+  it('keeps stop() restartable but dispose() permanently releases the driver transport', async () => {
+    const readFrom = vi.fn().mockResolvedValue([])
+    const transport: WorkerTransport = { run: vi.fn(), reset: vi.fn(), dispose: vi.fn() }
+    const runtime = usePipelineRuntime({ readFrom, commit: vi.fn() }, simpleFlow(), { transport })
+
+    await runtime.run()
+    runtime.stop()
+    await runtime.run()
+    expect(readFrom).toHaveBeenCalledTimes(2)
+
+    runtime.dispose()
+    await runtime.run()
+    expect(readFrom).toHaveBeenCalledTimes(2)
+    expect(transport.dispose).toHaveBeenCalledOnce()
   })
 
   it('surfaces a pump failure without throwing and leaves the committed offset unset', async () => {

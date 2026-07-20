@@ -1,7 +1,7 @@
 // Worker-side ProcessorRuntime for the `function` node. Never imports vue or
 // any DOM global (see __tests__/import-hygiene.spec.ts in ../../__tests__)
-// — this module runs inside a Web Worker in production (WebWorkerTransport)
-// and in-process in tests/fallback (InProcessTransport).
+// — this module runs inside a Web Worker in production and can be loaded by
+// the explicit InProcessTransport test implementation.
 
 import type { NodeContext, ProcessorRuntime } from '../../engine/transport'
 import type { Msg } from '../../types'

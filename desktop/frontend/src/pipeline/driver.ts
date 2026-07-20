@@ -3,9 +3,9 @@
 // replaying the log from a frontend-owned zero cursor.
 
 import type { CommitResult, Flow, Msg } from './types'
-import { InProcessTransport, type WorkerTransport } from './engine/transport'
+import type { WorkerTransport } from './engine/transport'
 import { runGraph, type RunGraphOptions } from './engine/runGraph'
-import { processorRegistry } from './registry'
+import { createWebWorkerTransport } from './engine/workerFactory'
 
 /** The subset of PipelineService the driver needs. */
 export interface PipelineClient {
@@ -17,7 +17,7 @@ export interface PipelineClient {
 export interface PipelineDriverOptions {
   /** ReadFrom page size per pump(). Default 500. */
   limit?: number
-  /** Defaults to a fresh InProcessTransport over the built-in worker registry. */
+  /** Defaults to a fresh production WebWorkerTransport. Tests inject InProcessTransport explicitly. */
   transport?: WorkerTransport
   /** Forwarded to every runGraph call. */
   runGraph?: RunGraphOptions
@@ -33,6 +33,7 @@ export class PipelineDriver {
   private readonly transport: WorkerTransport
   private readonly runGraphOptions: RunGraphOptions
   private readonly limit: number
+  private disposed = false
 
   constructor(
     private readonly client: PipelineClient,
@@ -40,7 +41,7 @@ export class PipelineDriver {
     opts: PipelineDriverOptions = {},
   ) {
     this.limit = opts.limit ?? 500
-    this.transport = opts.transport ?? new InProcessTransport(processorRegistry)
+    this.transport = opts.transport ?? createWebWorkerTransport()
     // A function node's state must survive across pages, not just within one
     // runGraph call.
     this.runGraphOptions = { states: new Map(), ...opts.runGraph }
@@ -51,12 +52,20 @@ export class PipelineDriver {
     return this.lastCommittedOffset
   }
 
+  /** Permanently releases this driver's transport and worker resources. */
+  dispose(): void {
+    if (this.disposed) return
+    this.disposed = true
+    this.transport.dispose()
+  }
+
   /**
    * Reads, runs, and commits one page. The backend derives the read position
    * from flow.id's persisted consumer checkpoint, so this is safe after a
    * frontend restart and never relies on a local cursor.
    */
   async pump(shouldContinue: () => boolean = () => true): Promise<CommitResult | null> {
+    if (this.disposed) throw new Error('pipeline driver has been disposed')
     const batch = (await this.client.readFrom(this.flow.id, this.limit)) ?? []
     if (!shouldContinue() || batch.length === 0) return null
 

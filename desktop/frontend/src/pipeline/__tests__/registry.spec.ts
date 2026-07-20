@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { processorRegistry } from '../registry'
+import { processorRegistry } from '../processors'
 import { InProcessTransport } from '../engine/transport'
 import type { Msg } from '../types'
 

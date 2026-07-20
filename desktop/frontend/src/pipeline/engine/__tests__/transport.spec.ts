@@ -47,6 +47,18 @@ describe('InProcessTransport', () => {
     expect(start).toHaveBeenCalledTimes(2)
   })
 
+  it('clears in-process lifecycle bookkeeping on disposal', async () => {
+    const start = vi.fn()
+    const runtime: ProcessorRuntime = { type: 'counter', start, onMsg: (m) => m }
+    const transport = new InProcessTransport({ counter: runtime })
+    await transport.run('counter', 'inst-1', {}, msg('1'), {}, 1000)
+
+    transport.dispose()
+    await transport.run('counter', 'inst-1', {}, msg('2'), {}, 1000)
+
+    expect(start).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects with NodeTimeoutError when a slow runtime exceeds timeoutMs', async () => {
     const slow: ProcessorRuntime = {
       type: 'slow',
