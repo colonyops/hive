@@ -1,26 +1,16 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import SettingsView from '../SettingsView.vue'
 import { setTheme } from '../../composables/useTheme'
 
 beforeEach(() => {
-  vi.stubGlobal('localStorage', (() => {
-    const values = new Map<string, string>()
-    return {
-      get length() { return values.size },
-      clear: () => values.clear(),
-      getItem: (key: string) => values.get(key) ?? null,
-      key: (index: number) => [...values.keys()][index] ?? null,
-      removeItem: (key: string) => values.delete(key),
-      setItem: (key: string, value: string) => values.set(key, value),
-    }
-  })())
+  localStorage.clear()
   setTheme('dark')
 })
 
 afterEach(() => {
   delete document.documentElement.dataset.theme
-  vi.unstubAllGlobals()
 })
 
 describe('SettingsView', () => {
@@ -46,6 +36,7 @@ describe('SettingsView', () => {
     expect(wrapper.find('[data-testid="settings-theme-toggle-gruvbox"]').attributes('aria-selected')).toBe('true')
     expect(wrapper.find('[data-testid="settings-theme-toggle-dark"]').attributes('aria-selected')).toBe('false')
     expect(document.documentElement.dataset.theme).toBe('gruvbox')
+    await nextTick()
     expect(localStorage.getItem('hive.theme')).toBe('gruvbox')
   })
 
