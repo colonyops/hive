@@ -6,9 +6,11 @@ export type {
     Discard,
     FeedCount,
     FeedItemView,
+    FeedSnapshot,
     Msg,
     NodeRunRecord,
     NodeRunView,
     Output,
-    Sink
+    Sink,
+    SnapshotItem
 } from "./models.js";

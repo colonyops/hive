@@ -27,10 +27,22 @@ type Sink struct {
 // Output is one committed side effect of a flow run: either a feed item to
 // upsert or an action invocation to enqueue.
 type Output struct {
-	Sink    Sink            `json:"sink"`
-	Key     string          `json:"key"` // feed_item.item_id, and the output dedup key
-	Payload json.RawMessage `json:"payload"`
-	Unread  bool            `json:"unread"` // feed items only
+	Sink           Sink            `json:"sink"`
+	Key            string          `json:"key"` // feed_item.item_id, and the output dedup key
+	Payload        json.RawMessage `json:"payload"`
+	Unread         bool            `json:"unread"` // feed items only
+	SourceTopic    string          `json:"sourceTopic,omitempty"`
+	SnapshotID     string          `json:"snapshotId,omitempty"`
+	PreserveUnread bool            `json:"preserveUnread,omitempty"`
+}
+
+// FeedSnapshot declares one source's complete current output scope for a
+// feed. CommitBatch removes rows from that (feed, source) scope which were
+// not produced by SnapshotID, atomically with the consumer offset advance.
+type FeedSnapshot struct {
+	FeedID      string `json:"feedId"`
+	SourceTopic string `json:"sourceTopic"`
+	SnapshotID  string `json:"snapshotId"`
 }
 
 // Discard records a message a node dropped instead of forwarding, for
@@ -64,17 +76,19 @@ type NodeRunView struct {
 // produced while processing up to that offset, all in one transaction (see
 // DB.CommitBatch).
 type CommitBatch struct {
-	Consumer   string        `json:"consumer"`   // event_log consumer key (flow id / consumer id)
-	UpToOffset string        `json:"upToOffset"` // decimal event-log offset; strings preserve int64 precision across Wails
-	Outputs    []Output      `json:"outputs"`
-	Discards   []Discard     `json:"discards"`
-	NodeRuns   []NodeRunView `json:"nodeRuns"`
+	Consumer      string         `json:"consumer"`   // event_log consumer key (flow id / consumer id)
+	UpToOffset    string         `json:"upToOffset"` // decimal event-log offset; strings preserve int64 precision across Wails
+	Outputs       []Output       `json:"outputs"`
+	FeedSnapshots []FeedSnapshot `json:"feedSnapshots"`
+	Discards      []Discard      `json:"discards"`
+	NodeRuns      []NodeRunView  `json:"nodeRuns"`
 }
 
 // CommitBatch applies b atomically: feed outputs are upserted into
-// feed_item, action outputs are enqueued into output_command (deduped by
-// (action_id, key)), node runs are recorded, and the consumer's offset is
-// advanced to b.UpToOffset — all in one transaction.
+// feed_item, declared source snapshots reconcile obsolete feed rows, action
+// outputs are enqueued into output_command (deduped by (action_id, key)),
+// node runs are recorded, and the consumer's offset is advanced to
+// b.UpToOffset — all in one transaction.
 //
 // Idempotency by offset: if b.UpToOffset is at or below the consumer's
 // currently committed offset, this batch was already applied in a previous
@@ -106,13 +120,22 @@ func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
 		for _, out := range b.Outputs {
 			switch out.Sink.Kind {
 			case SinkKindFeed:
-				if err := q.UpsertFeedItem(ctx, UpsertFeedItemParams{
-					FeedID:    out.Sink.TargetID,
-					ItemID:    out.Key,
-					Payload:   []byte(out.Payload),
-					UpdatedAt: now,
-					Unread:    boolToInt64(out.Unread),
-				}); err != nil {
+				params := UpsertFeedItemParams{
+					FeedID:      out.Sink.TargetID,
+					ItemID:      out.Key,
+					Payload:     []byte(out.Payload),
+					UpdatedAt:   now,
+					Unread:      boolToInt64(out.Unread),
+					SourceTopic: out.SourceTopic,
+					SnapshotID:  out.SnapshotID,
+				}
+				var err error
+				if out.PreserveUnread {
+					err = q.UpsertFeedItemSnapshot(ctx, UpsertFeedItemSnapshotParams(params))
+				} else {
+					err = q.UpsertFeedItem(ctx, params)
+				}
+				if err != nil {
 					return fmt.Errorf("upserting feed_item %s/%s: %w", out.Sink.TargetID, out.Key, err)
 				}
 			case SinkKindAction:
@@ -126,6 +149,12 @@ func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
 				}
 			default:
 				return fmt.Errorf("commit batch: unknown sink kind %q", out.Sink.Kind)
+			}
+		}
+
+		for _, snapshot := range b.FeedSnapshots {
+			if err := q.DeleteFeedItemsNotInSnapshot(ctx, DeleteFeedItemsNotInSnapshotParams(snapshot)); err != nil {
+				return fmt.Errorf("reconciling feed snapshot %s/%s: %w", snapshot.FeedID, snapshot.SourceTopic, err)
 			}
 		}
 

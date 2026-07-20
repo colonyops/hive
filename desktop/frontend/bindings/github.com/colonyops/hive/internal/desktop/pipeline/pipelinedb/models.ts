@@ -22,6 +22,7 @@ export interface CommitBatch {
      */
     "upToOffset": string;
     "outputs": Output[] | null;
+    "feedSnapshots": FeedSnapshot[] | null;
     "discards": Discard[] | null;
     "nodeRuns": NodeRunView[] | null;
 }
@@ -64,6 +65,17 @@ export interface FeedItemView {
 }
 
 /**
+ * FeedSnapshot declares one source's complete current output scope for a
+ * feed. CommitBatch removes rows from that (feed, source) scope which were
+ * not produced by SnapshotID, atomically with the consumer offset advance.
+ */
+export interface FeedSnapshot {
+    "feedId": string;
+    "sourceTopic": string;
+    "snapshotId": string;
+}
+
+/**
  * Msg is the pipeline's generic log record, appended by sources and consumed
  * by the frontend graph runtime.
  * 
@@ -84,6 +96,7 @@ export interface Msg {
     "Ts": number;
     "Payload": json$0.RawMessage;
     "Meta": { [_ in string]?: any } | null;
+    "Snapshot"?: SnapshotItem[] | null;
 }
 
 /**
@@ -141,6 +154,9 @@ export interface Output {
      * feed items only
      */
     "unread": boolean;
+    "sourceTopic"?: string;
+    "snapshotId"?: string;
+    "preserveUnread"?: boolean;
 }
 
 /**
@@ -151,4 +167,14 @@ export interface Output {
 export interface Sink {
     "kind": string;
     "targetId": string;
+}
+
+/**
+ * SnapshotItem is one current source item carried by a successful source
+ * snapshot. A snapshot event is distinct from ordinary changed-item events:
+ * it is emitted on every successful poll, including when the source is empty.
+ */
+export interface SnapshotItem {
+    "key": string;
+    "payload": json$0.RawMessage;
 }

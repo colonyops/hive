@@ -39,6 +39,34 @@ func TestOpen_FreshDB_AppliesMigrations(t *testing.T) {
 	assert.Len(t, applied, len(migrations))
 }
 
+func TestOpen_UpgradeToSourceSnapshots_ClearsLegacyFeedItems(t *testing.T) {
+	dir := t.TempDir()
+	ctx := context.Background()
+
+	// Start at schema version 5, when feed rows had no source/snapshot
+	// provenance, then seed a row as an existing installation would have.
+	database, err := Open(dir, DefaultOpenOptions())
+	require.NoError(t, err)
+
+	sub, err := migrationsSub()
+	require.NoError(t, err)
+	require.NoError(t, migrate.Down(ctx, database.Conn(), sub, 1))
+	_, err = database.Conn().ExecContext(ctx, `
+		INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
+		VALUES ('feed', 'legacy-item', X'7B7D', 1, 1)
+	`)
+	require.NoError(t, err)
+	require.NoError(t, database.Close())
+
+	upgraded, err := Open(dir, DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = upgraded.Close() })
+
+	var count int
+	require.NoError(t, upgraded.Conn().QueryRowContext(ctx, "SELECT COUNT(*) FROM feed_item").Scan(&count))
+	assert.Zero(t, count, "migration must remove rows whose provenance cannot be reconstructed")
+}
+
 func TestOpen_Idempotent(t *testing.T) {
 	dir := t.TempDir()
 

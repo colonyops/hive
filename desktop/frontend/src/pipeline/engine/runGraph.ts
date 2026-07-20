@@ -5,7 +5,7 @@
 // docs on WorkerTransport (./transport.ts) for why node execution never
 // touches a real Worker directly here.
 
-import type { CommitResult, Discard, Flow, FlowNode, Msg, Output, Sink, Wire } from '../types'
+import type { CommitResult, Discard, FeedSnapshot, Flow, FlowNode, Msg, Output, Sink, Wire } from '../types'
 import * as actionNode from '../nodes/action/config'
 import * as functionNode from '../nodes/function/config'
 import * as githubFilterNode from '../nodes/github-filter/config'
@@ -64,6 +64,13 @@ interface NodeRunAcc {
   durMs: number
 }
 
+interface SnapshotContext {
+  sourceTopic: string
+  snapshotId: string
+}
+
+type RuntimeMsg = Msg & { snapshotContext?: SnapshotContext }
+
 export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransport, opts: RunGraphOptions = {}): Promise<CommitResult> {
   const nodesById = new Map(flow.nodes.map((n) => [n.id, n]))
   const order = topoSort(flow)
@@ -72,31 +79,38 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
   const states = opts.states ?? new Map<string, Record<string, any>>()
   const defaultTimeoutMs = opts.defaultTimeoutMs ?? functionNode.DEFAULT_TIMEOUT_MS
 
-  const pending = new Map<string, Msg[]>()
-  const routed = new Set<string>()
+  const pending = new Map<string, RuntimeMsg[]>()
+  const snapshots = new Map<string, FeedSnapshot>()
   const outputs: Output[] = []
   const discards: Discard[] = []
   const nodeRuns = new Map<string, NodeRunAcc>()
 
-  // Seed entry nodes (in-degree 0) from the input batch. A github-source
-  // entry node only accepts messages on its own flow-qualified log topic
-  // ("source:<flowId>/<nodeId>", per github_source.go); a non-source entry
-  // node accepts every message — the permissive default that lets a test
-  // flow's first node (e.g. a bare github-filter under test) receive the
-  // batch directly without a separate source node.
+  // A source snapshot contains every current item, even items whose payload
+  // did not change. Route those items normally, but tag their resulting feed
+  // outputs so CommitBatch can atomically remove the source's obsolete rows.
   const entryNodeIds = flow.nodes.filter((n) => (entryDegrees.get(n.id) ?? 0) === 0).map((n) => n.id)
   for (const msg of batch) {
     const matchingEntries = entryNodeIds.filter((id) => acceptsEntry(flow.id, nodesById.get(id)!, msg))
-    if (matchingEntries.length === 0) continue
-    routed.add(msg.ID)
-    matchingEntries.forEach((id) => {
-      pushPending(pending, id, matchingEntries.length > 1 ? structuredClone(msg) : msg)
-    })
-  }
-  // Unrouted input messages still need to be accounted for so the offset
-  // can advance past them (they simply aren't this flow's concern).
-  for (const msg of batch) {
-    if (!routed.has(msg.ID)) discards.push({ msgId: msg.ID, nodeId: UNROUTED_NODE_ID })
+    if (matchingEntries.length === 0) {
+      discards.push({ msgId: msg.ID, nodeId: UNROUTED_NODE_ID })
+      continue
+    }
+
+    if (msg.Snapshot != null) {
+      const context = { sourceTopic: msg.Topic, snapshotId: msg.ID }
+      for (const node of flow.nodes) {
+        if (node.type !== feedNode.type) continue
+        const feedID = feedNode.sink(flow.id, node.id).targetId
+        snapshots.set(`${feedID}\u0000${context.sourceTopic}`, { feedId: feedID, sourceTopic: context.sourceTopic, snapshotId: context.snapshotId })
+      }
+      for (const item of msg.Snapshot) {
+        const itemMsg: RuntimeMsg = { ...msg, Key: item.key, Payload: item.payload, Snapshot: null, snapshotContext: context }
+        matchingEntries.forEach((id) => pushPending(pending, id, matchingEntries.length > 1 ? structuredClone(itemMsg) : itemMsg))
+      }
+      continue
+    }
+
+    matchingEntries.forEach((id) => pushPending(pending, id, matchingEntries.length > 1 ? structuredClone(msg) : msg))
   }
 
   for (const nodeId of order) {
@@ -121,7 +135,14 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
 
       const terminal = TERMINALS[node.type]
       if (terminal) {
-        outputs.push({ sink: terminal.sink(flow.id, nodeId, node.config), key: msg.Key, payload: msg.Payload, unread: terminal.unread })
+        const sink = terminal.sink(flow.id, nodeId, node.config)
+        const output: Output = { sink, key: msg.Key, payload: msg.Payload, unread: terminal.unread }
+        if (msg.snapshotContext && sink.kind === 'feed') {
+          output.sourceTopic = msg.snapshotContext.sourceTopic
+          output.snapshotId = msg.snapshotContext.snapshotId
+          output.preserveUnread = true
+        }
+        outputs.push(output)
         run.outCount++
         continue
       }
@@ -142,7 +163,7 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
           continue
         }
         for (const { port, msg: outMsg } of produced) {
-          forward(pending, outWires, nodeId, port, outMsg, run, discards)
+          forward(pending, outWires, nodeId, port, msg.snapshotContext ? { ...outMsg, snapshotContext: msg.snapshotContext } : outMsg, run, discards)
         }
       } catch (error) {
         run.durMs += nowMs() - startedAt
@@ -162,6 +183,7 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
     consumer: flow.id,
     upToOffset: computeUpToOffset(batch),
     outputs,
+    feedSnapshots: [...snapshots.values()],
     discards,
     nodeRuns: [...nodeRuns.entries()].map(([nodeId, a]) => ({
       flowId: flow.id,
@@ -227,11 +249,11 @@ function outputCount(node: FlowNode): number {
 }
 
 function forward(
-  pending: Map<string, Msg[]>,
+  pending: Map<string, RuntimeMsg[]>,
   outWires: Map<string, Map<number, Wire[]>>,
   nodeId: string,
   port: number,
-  msg: Msg,
+  msg: RuntimeMsg,
   run: NodeRunAcc,
   discards: Discard[],
 ): void {
@@ -251,7 +273,7 @@ function forward(
   })
 }
 
-function pushPending(pending: Map<string, Msg[]>, nodeId: string, msg: Msg): void {
+function pushPending(pending: Map<string, RuntimeMsg[]>, nodeId: string, msg: RuntimeMsg): void {
   const list = pending.get(nodeId)
   if (list) list.push(msg)
   else pending.set(nodeId, [msg])

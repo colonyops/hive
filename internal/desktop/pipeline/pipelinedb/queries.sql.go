@@ -11,8 +11,8 @@ import (
 )
 
 const appendEvent = `-- name: AppendEvent :one
-INSERT INTO event_log (topic, key, payload, created_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO event_log (topic, key, payload, created_at, snapshot)
+VALUES (?, ?, ?, ?, ?)
 RETURNING "offset"
 `
 
@@ -21,6 +21,7 @@ type AppendEventParams struct {
 	Key       string `json:"key"`
 	Payload   []byte `json:"payload"`
 	CreatedAt int64  `json:"created_at"`
+	Snapshot  int64  `json:"snapshot"`
 }
 
 func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error) {
@@ -29,6 +30,7 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64
 		arg.Key,
 		arg.Payload,
 		arg.CreatedAt,
+		arg.Snapshot,
 	)
 	var offset int64
 	err := row.Scan(&offset)
@@ -131,6 +133,24 @@ DELETE FROM event_log WHERE created_at < ?
 
 func (q *Queries) DeleteEventLogOlderThan(ctx context.Context, createdAt int64) error {
 	_, err := q.db.ExecContext(ctx, deleteEventLogOlderThan, createdAt)
+	return err
+}
+
+const deleteFeedItemsNotInSnapshot = `-- name: DeleteFeedItemsNotInSnapshot :exec
+DELETE FROM feed_item
+WHERE feed_id = ?
+  AND source_topic = ?
+  AND snapshot_id != ?
+`
+
+type DeleteFeedItemsNotInSnapshotParams struct {
+	FeedID      string `json:"feed_id"`
+	SourceTopic string `json:"source_topic"`
+	SnapshotID  string `json:"snapshot_id"`
+}
+
+func (q *Queries) DeleteFeedItemsNotInSnapshot(ctx context.Context, arg DeleteFeedItemsNotInSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedItemsNotInSnapshot, arg.FeedID, arg.SourceTopic, arg.SnapshotID)
 	return err
 }
 
@@ -240,15 +260,23 @@ WHERE feed_id = ?
 ORDER BY updated_at DESC
 `
 
-func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]FeedItem, error) {
+type ListFeedItemsByFeedRow struct {
+	FeedID    string `json:"feed_id"`
+	ItemID    string `json:"item_id"`
+	Payload   []byte `json:"payload"`
+	UpdatedAt int64  `json:"updated_at"`
+	Unread    int64  `json:"unread"`
+}
+
+func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]ListFeedItemsByFeedRow, error) {
 	rows, err := q.db.QueryContext(ctx, listFeedItemsByFeed, feedID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []FeedItem{}
+	items := []ListFeedItemsByFeedRow{}
 	for rows.Next() {
-		var i FeedItem
+		var i ListFeedItemsByFeedRow
 		if err := rows.Scan(
 			&i.FeedID,
 			&i.ItemID,
@@ -466,7 +494,7 @@ func (q *Queries) PromoteOutputCommandsAwaitingConfirmation(ctx context.Context,
 }
 
 const readEventsFrom = `-- name: ReadEventsFrom :many
-SELECT "offset", topic, "key", payload, created_at FROM event_log
+SELECT "offset", topic, "key", payload, created_at, snapshot FROM event_log
 WHERE "offset" > ?
 ORDER BY "offset" ASC
 LIMIT ?
@@ -492,6 +520,7 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 			&i.Key,
 			&i.Payload,
 			&i.CreatedAt,
+			&i.Snapshot,
 		); err != nil {
 			return nil, err
 		}
@@ -522,20 +551,24 @@ func (q *Queries) RetryOutputCommand(ctx context.Context, arg RetryOutputCommand
 }
 
 const upsertFeedItem = `-- name: UpsertFeedItem :exec
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload    = excluded.payload,
-    updated_at = excluded.updated_at,
-    unread     = excluded.unread
+    payload      = excluded.payload,
+    updated_at   = excluded.updated_at,
+    unread       = excluded.unread,
+    source_topic = excluded.source_topic,
+    snapshot_id  = excluded.snapshot_id
 `
 
 type UpsertFeedItemParams struct {
-	FeedID    string `json:"feed_id"`
-	ItemID    string `json:"item_id"`
-	Payload   []byte `json:"payload"`
-	UpdatedAt int64  `json:"updated_at"`
-	Unread    int64  `json:"unread"`
+	FeedID      string `json:"feed_id"`
+	ItemID      string `json:"item_id"`
+	Payload     []byte `json:"payload"`
+	UpdatedAt   int64  `json:"updated_at"`
+	Unread      int64  `json:"unread"`
+	SourceTopic string `json:"source_topic"`
+	SnapshotID  string `json:"snapshot_id"`
 }
 
 // Idempotent by (feed_id, item_id): committing the same key twice updates
@@ -547,6 +580,44 @@ func (q *Queries) UpsertFeedItem(ctx context.Context, arg UpsertFeedItemParams) 
 		arg.Payload,
 		arg.UpdatedAt,
 		arg.Unread,
+		arg.SourceTopic,
+		arg.SnapshotID,
+	)
+	return err
+}
+
+const upsertFeedItemSnapshot = `-- name: UpsertFeedItemSnapshot :exec
+INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(feed_id, item_id) DO UPDATE SET
+    payload      = excluded.payload,
+    updated_at   = excluded.updated_at,
+    unread       = feed_item.unread,
+    source_topic = excluded.source_topic,
+    snapshot_id  = excluded.snapshot_id
+`
+
+type UpsertFeedItemSnapshotParams struct {
+	FeedID      string `json:"feed_id"`
+	ItemID      string `json:"item_id"`
+	Payload     []byte `json:"payload"`
+	UpdatedAt   int64  `json:"updated_at"`
+	Unread      int64  `json:"unread"`
+	SourceTopic string `json:"source_topic"`
+	SnapshotID  string `json:"snapshot_id"`
+}
+
+// Snapshot outputs preserve a previously-read row's unread state while still
+// updating its payload and reconciliation marker.
+func (q *Queries) UpsertFeedItemSnapshot(ctx context.Context, arg UpsertFeedItemSnapshotParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFeedItemSnapshot,
+		arg.FeedID,
+		arg.ItemID,
+		arg.Payload,
+		arg.UpdatedAt,
+		arg.Unread,
+		arg.SourceTopic,
+		arg.SnapshotID,
 	)
 	return err
 }

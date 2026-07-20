@@ -5,7 +5,7 @@ import { processorRegistry } from '../../registry'
 import type { Flow, Msg } from '../../types'
 
 function msg(id: string, payload: any = {}, topic = 'source:test'): Msg {
-  return { ID: id, Key: id, Topic: topic, Ts: 0, Payload: payload, Meta: null }
+  return { ID: id, Key: id, Topic: topic, Ts: 0, Payload: payload, Meta: null, Snapshot: null }
 }
 
 describe('runGraph', () => {
@@ -133,6 +133,32 @@ describe('runGraph', () => {
 
     const filterRun = result.nodeRuns.find((nr) => nr.nodeId === 'drop-bots')
     expect(filterRun).toMatchObject({ flowId: 'triage', nodeId: 'drop-bots', ok: true, inCount: 2, outCount: 1, dropCount: 1 })
+  })
+
+  it('reconciles snapshot outputs after a filter change without re-unreading survivors', async () => {
+    const transport = new InProcessTransport(processorRegistry)
+    const snapshot = msg('10', {}, 'source:triage/in-prs')
+    snapshot.Snapshot = [{ key: 'keep', payload: { repo: 'acme/app' } }]
+
+    const flow: Flow = {
+      id: 'triage',
+      nodes: [
+        { id: 'in-prs', type: 'github-source', config: { kind: 'search', query: 'is:open' } },
+        { id: 'filter', type: 'github-filter', config: { repos: ['acme/*'] } },
+        { id: 'feed', type: 'feed', config: {} },
+      ],
+      wires: [{ from: 'in-prs', to: 'filter' }, { from: 'filter', out: 0, to: 'feed' }],
+    }
+    const before = await runGraph(flow, [snapshot], transport)
+    expect(before.outputs).toEqual([expect.objectContaining({ key: 'keep', sourceTopic: 'source:triage/in-prs', snapshotId: '10', preserveUnread: true })])
+    expect(before.feedSnapshots).toEqual([{ feedId: 'triage/feed', sourceTopic: 'source:triage/in-prs', snapshotId: '10' }])
+
+    // The same upstream item is still in the source snapshot, but changing
+    // the filter means it must no longer remain in the persisted feed.
+    flow.nodes[1].config = { repos: ['other/*'] }
+    const after = await runGraph(flow, [snapshot], transport)
+    expect(after.outputs).toEqual([])
+    expect(after.feedSnapshots).toEqual([{ feedId: 'triage/feed', sourceTopic: 'source:triage/in-prs', snapshotId: '10' }])
   })
 
   it('a msg matching no entry node topic is discarded as unrouted (still accounted for)', async () => {

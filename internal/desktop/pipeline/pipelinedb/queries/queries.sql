@@ -1,6 +1,6 @@
 -- name: AppendEvent :one
-INSERT INTO event_log (topic, key, payload, created_at)
-VALUES (?, ?, ?, ?)
+INSERT INTO event_log (topic, key, payload, created_at, snapshot)
+VALUES (?, ?, ?, ?, ?)
 RETURNING "offset";
 
 -- name: GetSourceHeadPayload :one
@@ -59,15 +59,35 @@ WHERE "offset" IN (
 -- name: UpsertFeedItem :exec
 -- Idempotent by (feed_id, item_id): committing the same key twice updates
 -- the row in place rather than duplicating it.
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload    = excluded.payload,
-    updated_at = excluded.updated_at,
-    unread     = excluded.unread;
+    payload      = excluded.payload,
+    updated_at   = excluded.updated_at,
+    unread       = excluded.unread,
+    source_topic = excluded.source_topic,
+    snapshot_id  = excluded.snapshot_id;
+
+-- name: UpsertFeedItemSnapshot :exec
+-- Snapshot outputs preserve a previously-read row's unread state while still
+-- updating its payload and reconciliation marker.
+INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
+VALUES (?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT(feed_id, item_id) DO UPDATE SET
+    payload      = excluded.payload,
+    updated_at   = excluded.updated_at,
+    unread       = feed_item.unread,
+    source_topic = excluded.source_topic,
+    snapshot_id  = excluded.snapshot_id;
+
+-- name: DeleteFeedItemsNotInSnapshot :exec
+DELETE FROM feed_item
+WHERE feed_id = ?
+  AND source_topic = ?
+  AND snapshot_id != ?;
 
 -- name: ListFeedItemsByFeed :many
-SELECT * FROM feed_item
+SELECT feed_id, item_id, payload, updated_at, unread FROM feed_item
 WHERE feed_id = ?
 ORDER BY updated_at DESC;
 

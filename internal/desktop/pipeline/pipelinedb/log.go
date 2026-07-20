@@ -15,6 +15,7 @@ import (
 // by the frontend graph runtime.
 //
 // It mirrors the design's { id, key, topic, ts, payload, meta } contract,
+// with Snapshot populated only for an authoritative full-source snapshot,
 // mapped onto the event_log schema (see migrations/0001_pipeline.up.sql):
 //   - ID is derived from the row's "offset" (stable, unique per append; there
 //     is no separate id column).
@@ -22,14 +23,25 @@ import (
 //   - Meta is not persisted by this phase: event_log has no meta column.
 //     Later source phases may populate Meta on the in-memory Msg before it
 //     reaches the frontend, but Append here takes no meta and ReadFrom always
-//     returns a nil Meta. The schema is not extended speculatively.
+//     returns a nil Meta. Snapshot event payloads are persisted explicitly.
+//   - Snapshot is nil for ordinary item events and contains the full current
+//     source item set for successful poll snapshots.
 type Msg struct {
-	ID      string
-	Key     string
-	Topic   string
-	Ts      int64
-	Payload json.RawMessage
-	Meta    map[string]any
+	ID       string
+	Key      string
+	Topic    string
+	Ts       int64
+	Payload  json.RawMessage
+	Meta     map[string]any
+	Snapshot []SnapshotItem `json:"Snapshot,omitempty"`
+}
+
+// SnapshotItem is one current source item carried by a successful source
+// snapshot. A snapshot event is distinct from ordinary changed-item events:
+// it is emitted on every successful poll, including when the source is empty.
+type SnapshotItem struct {
+	Key     string          `json:"key"`
+	Payload json.RawMessage `json:"payload"`
 }
 
 // Append inserts a new event_log row under topic, keyed by key, and returns
@@ -40,6 +52,7 @@ func (db *DB) Append(ctx context.Context, topic, key string, payload []byte) (in
 		Key:       key,
 		Payload:   payload,
 		CreatedAt: time.Now().UnixNano(),
+		Snapshot:  0,
 	})
 	if err != nil {
 		return 0, fmt.Errorf("appending event to topic %q: %w", topic, err)
@@ -79,6 +92,7 @@ func (db *DB) AppendIfChanged(ctx context.Context, topic, key string, payload []
 			Key:       key,
 			Payload:   payload,
 			CreatedAt: time.Now().UnixNano(),
+			Snapshot:  0,
 		})
 		if err != nil {
 			return fmt.Errorf("appending event to topic %q: %w", topic, err)
@@ -99,6 +113,27 @@ func (db *DB) AppendIfChanged(ctx context.Context, topic, key string, payload []
 	return offset, appended, nil
 }
 
+// AppendSnapshot appends a successful source poll's complete current item
+// set. Unlike item events, snapshots are deliberately not deduplicated: each
+// one is an authoritative reconciliation point, including an empty set.
+func (db *DB) AppendSnapshot(ctx context.Context, topic string, items []SnapshotItem) (int64, error) {
+	payload, err := json.Marshal(items)
+	if err != nil {
+		return 0, fmt.Errorf("encoding source snapshot for topic %q: %w", topic, err)
+	}
+	offset, err := db.queries.AppendEvent(ctx, AppendEventParams{
+		Topic:     topic,
+		Key:       "",
+		Payload:   payload,
+		CreatedAt: time.Now().UnixNano(),
+		Snapshot:  1,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("appending source snapshot for topic %q: %w", topic, err)
+	}
+	return offset, nil
+}
+
 // ReadFrom returns up to limit event_log rows with offset > offset, ordered
 // ascending, along with the offset of the last row returned (nextOffset).
 // If no rows are found, nextOffset is the offset argument unchanged, so
@@ -115,13 +150,19 @@ func (db *DB) ReadFrom(ctx context.Context, offset int64, limit int) ([]Msg, int
 	msgs := make([]Msg, 0, len(rows))
 	nextOffset := offset
 	for _, row := range rows {
-		msgs = append(msgs, Msg{
+		msg := Msg{
 			ID:      strconv.FormatInt(row.Offset, 10),
 			Key:     row.Key,
 			Topic:   row.Topic,
 			Ts:      row.CreatedAt,
 			Payload: json.RawMessage(row.Payload),
-		})
+		}
+		if row.Snapshot != 0 {
+			if err := json.Unmarshal(row.Payload, &msg.Snapshot); err != nil {
+				return nil, offset, fmt.Errorf("decoding source snapshot at offset %d: %w", row.Offset, err)
+			}
+		}
+		msgs = append(msgs, msg)
 		nextOffset = row.Offset
 	}
 

@@ -51,9 +51,10 @@ func listerOf(sources map[string]Source) SourceLister {
 // fakeAppender records AppendIfChanged calls without touching disk, for tests
 // that only care whether Producer invokes its database dependency.
 type fakeAppender struct {
-	mu      sync.Mutex
-	nextOff int64
-	calls   []pipelinedb.Msg
+	mu        sync.Mutex
+	nextOff   int64
+	calls     []pipelinedb.Msg
+	snapshots int
 }
 
 func (a *fakeAppender) AppendIfChanged(_ context.Context, topic, key string, payload []byte) (int64, bool, error) {
@@ -62,6 +63,14 @@ func (a *fakeAppender) AppendIfChanged(_ context.Context, topic, key string, pay
 	a.nextOff++
 	a.calls = append(a.calls, pipelinedb.Msg{Topic: topic, Key: key, Payload: payload})
 	return a.nextOff, true, nil
+}
+
+func (a *fakeAppender) AppendSnapshot(_ context.Context, _ string, _ []pipelinedb.SnapshotItem) (int64, error) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.nextOff++
+	a.snapshots++
+	return a.nextOff, nil
 }
 
 func (a *fakeAppender) callCount() int {
@@ -100,9 +109,10 @@ func TestProducer_Tick_AppendsMonotonicOffsets(t *testing.T) {
 
 	msgs, next, err := db.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	require.Len(t, msgs, 2)
+	require.Len(t, msgs, 3)
 	assert.Equal(t, "a", msgs[0].Key)
 	assert.Equal(t, "b", msgs[1].Key)
+	assert.Len(t, msgs[2].Snapshot, 2)
 	assert.Equal(t, "source:s1", msgs[0].Topic)
 	assert.Equal(t, next, appendedOffsets[0], "onAppended reports the last offset appended this tick")
 
@@ -119,7 +129,7 @@ func TestProducer_Tick_AppendsMonotonicOffsets(t *testing.T) {
 	}
 }
 
-func TestProducer_Tick_NoAppends_NoWakeup(t *testing.T) {
+func TestProducer_Tick_EmptySnapshot_WakesConsumer(t *testing.T) {
 	t.Parallel()
 
 	db := openTestPipelineDB(t)
@@ -131,11 +141,12 @@ func TestProducer_Tick_NoAppends_NoWakeup(t *testing.T) {
 	}, zerolog.Nop())
 
 	producer.Tick(t.Context())
-	assert.False(t, woke, "a tick that appends nothing must not wake the frontend")
+	assert.True(t, woke, "an empty successful snapshot must wake the frontend for reconciliation")
 
 	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	assert.Empty(t, msgs)
+	require.Len(t, msgs, 1)
+	assert.Empty(t, msgs[0].Snapshot)
 }
 
 func TestProducer_Tick_SourceErrorDoesNotBlockOthers(t *testing.T) {
@@ -158,8 +169,9 @@ func TestProducer_Tick_SourceErrorDoesNotBlockOthers(t *testing.T) {
 	require.Len(t, appendedOffsets, 1, "the healthy source's append still wakes the frontend")
 	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	require.Len(t, msgs, 1)
+	require.Len(t, msgs, 2)
 	assert.Equal(t, "x", msgs[0].Key)
+	assert.Len(t, msgs[1].Snapshot, 1)
 }
 
 // TestProducer_DedupesUnchangedPayload verifies durable deduplication: an
@@ -186,10 +198,13 @@ func TestProducer_DedupesUnchangedPayload(t *testing.T) {
 
 	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	require.Len(t, msgs, 2, "only new and changed payloads are appended")
+	require.Len(t, msgs, 5, "every successful source tick appends its authoritative snapshot")
 	assert.Equal(t, []byte(`{"v":1}`), []byte(msgs[0].Payload))
-	assert.Equal(t, []byte(`{"v":2}`), []byte(msgs[1].Payload))
-	assert.Equal(t, 2, wakeCount)
+	assert.Equal(t, []byte(`{"v":2}`), []byte(msgs[3].Payload))
+	assert.Len(t, msgs[1].Snapshot, 1)
+	assert.Len(t, msgs[2].Snapshot, 1)
+	assert.Len(t, msgs[4].Snapshot, 1)
+	assert.Equal(t, 3, wakeCount)
 }
 
 // TestProducer_EmptyKeyNeverDeduped mirrors pipelinedb.Compact's exemption
@@ -210,7 +225,7 @@ func TestProducer_EmptyKeyNeverDeduped(t *testing.T) {
 	producer.Tick(t.Context())
 	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	assert.Len(t, msgs, 2, "empty-key messages are always appended")
+	assert.Len(t, msgs, 4, "empty-key messages and source snapshots are always appended")
 }
 
 func TestProducer_DeduplicationSurvivesRestart(t *testing.T) {
@@ -236,7 +251,7 @@ func TestProducer_DeduplicationSurvivesRestart(t *testing.T) {
 
 	msgs, _, err := secondDB.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	assert.Len(t, msgs, 1, "a restarted producer must retain source heads")
+	assert.Len(t, msgs, 3, "a restarted producer retains source heads while still appending snapshots")
 }
 
 func TestProducer_ResolvingSourcesErrorSkipsTick(t *testing.T) {

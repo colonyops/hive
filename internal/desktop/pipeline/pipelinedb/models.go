@@ -19,14 +19,17 @@ type EventLog struct {
 	Key       string `json:"key"`
 	Payload   []byte `json:"payload"`
 	CreatedAt int64  `json:"created_at"`
+	Snapshot  int64  `json:"snapshot"`
 }
 
 type FeedItem struct {
-	FeedID    string `json:"feed_id"`
-	ItemID    string `json:"item_id"`
-	Payload   []byte `json:"payload"`
-	UpdatedAt int64  `json:"updated_at"`
-	Unread    int64  `json:"unread"`
+	FeedID      string `json:"feed_id"`
+	ItemID      string `json:"item_id"`
+	Payload     []byte `json:"payload"`
+	UpdatedAt   int64  `json:"updated_at"`
+	Unread      int64  `json:"unread"`
+	SourceTopic string `json:"source_topic"`
+	SnapshotID  string `json:"snapshot_id"`
 }
 
 type NodeRun struct {

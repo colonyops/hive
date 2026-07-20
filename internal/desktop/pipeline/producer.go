@@ -2,9 +2,11 @@ package pipeline
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"time"
 
+	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/rs/zerolog"
 )
 
@@ -89,7 +91,13 @@ func (pr *Producer) Tick(ctx context.Context) {
 		appended   int
 	)
 	for id, src := range sources {
+		topic := "source:" + id
+		items := make([]pipelinedb.SnapshotItem, 0)
 		err := src.Produce(ctx, func(msg Msg) error {
+			if msg.Topic != topic {
+				return fmt.Errorf("source %q emitted topic %q, expected %q", id, msg.Topic, topic)
+			}
+			items = append(items, pipelinedb.SnapshotItem{Key: msg.Key, Payload: msg.Payload})
 			offset, ok, err := pr.appendIfChanged(ctx, msg)
 			if err != nil {
 				return err
@@ -104,6 +112,14 @@ func (pr *Producer) Tick(ctx context.Context) {
 			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: source fetch failed")
 			continue
 		}
+
+		offset, err := pr.db.AppendSnapshot(ctx, topic, items)
+		if err != nil {
+			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: appending source snapshot failed")
+			continue
+		}
+		appended++
+		lastOffset = offset
 	}
 
 	if appended > 0 && pr.onAppended != nil {

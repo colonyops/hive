@@ -12,10 +12,10 @@
 // there as NodeRunView (see pipeline/commit.go's NodeRun alias comment);
 // re-exported here under the name callers actually use, same as the Go side.
 export type { CommitBatch, FeedItem } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
-export type { Msg, Output, Sink, Discard } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
+export type { Msg, Output, Sink, Discard, FeedSnapshot } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 export type { NodeRunView as NodeRun } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 
-import type { Discard, NodeRunView as NodeRun, Output } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
+import type { Discard, FeedSnapshot, NodeRunView as NodeRun, Output } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 
 // Flow model (TS). There is no flows/*.yaml loader yet (Phase 4) — the
 // engine operates on in-memory Flow objects built by callers (tests, and
@@ -44,7 +44,7 @@ export interface Flow {
 
 /**
  * CommitResult is runGraph's return shape. It mirrors CommitBatch field for
- * field (consumer/upToOffset/outputs/discards/nodeRuns) and is structurally
+ * field (consumer/upToOffset/outputs/feedSnapshots/discards/nodeRuns) and is structurally
  * assignable to it — a caller can pass a CommitResult straight into the
  * generated Commit() binding — but is declared separately so the engine has
  * its own name to document rather than reusing the wire type as a return
@@ -55,6 +55,7 @@ export interface CommitResult {
   /** Decimal event-log offset. Strings preserve SQLite int64 precision in JavaScript. */
   upToOffset: string
   outputs: Output[]
+  feedSnapshots: FeedSnapshot[]
   discards: Discard[]
   nodeRuns: NodeRun[]
 }

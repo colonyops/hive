@@ -197,15 +197,16 @@ func TestProducer_WithGithubSource_AppendsAcrossTicks(t *testing.T) {
 
 	msgs, _, err := db.ReadFrom(context.Background(), 0, 10)
 	require.NoError(t, err)
-	require.Len(t, msgs, 1)
+	require.Len(t, msgs, 2)
 	assert.Equal(t, "source:triage/in-prs", msgs[0].Topic)
 	assert.Equal(t, "o/r#7", msgs[0].Key)
+	assert.Len(t, msgs[1].Snapshot, 1)
 
 	// A second tick with unchanged upstream data must not re-append (dedup)
 	// even though githubSource re-emits the (cached) item every tick.
 	producer.Tick(context.Background())
 	msgs, _, err = db.ReadFrom(context.Background(), 0, 10)
 	require.NoError(t, err)
-	assert.Len(t, msgs, 1, "unchanged item across ticks is not re-appended")
+	assert.Len(t, msgs, 3, "unchanged items are deduplicated while every successful tick appends a snapshot")
 	assert.Equal(t, int32(1), api.calls.Load(), "still one API request: the second tick's fetch was cache-served")
 }
