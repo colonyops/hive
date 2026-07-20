@@ -41,8 +41,8 @@ type Action struct {
 	AppliesTo []string
 	// AutoApply, when true, lets the output worker execute this action's
 	// queued output_command rows automatically. When false (the default),
-	// a queued command is left pending — it is not executed until a later
-	// phase's manual confirmation UI (the detail pane) triggers it.
+	// the worker moves a queued command to awaiting_confirmation until a
+	// manual confirmation UI (the detail pane) triggers it.
 	AutoApply bool
 	// Config is the per-type configuration: *LaunchSessionConfig,
 	// *ShellConfig, or *PublishEventConfig.

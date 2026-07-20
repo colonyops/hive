@@ -608,16 +608,15 @@ each flow's graph only ingests its own rows. A source fetch failure is
 logged and skipped; it never blocks other sources in the same tick.
 
 **`pipeline.Worker`** (`output_worker.go`) is the output side: on each tick
-it drains up to `DefaultOutputWorkerBatch` (50) pending `output_command`
-rows, resolves each one's `actions.Action`, and — only if that action's
-`AutoApply` is `true` — renders its templates and dispatches to the
-registered `Executor` for its type via a `Dispatcher`. `AutoApply: false`
-(the `actions.yml` default) leaves a command sitting `pending`
-indefinitely; there is no separate "awaiting confirmation" status — the
-worker just re-checks `AutoApply` on every tick, so flipping it to `true`
-picks up already-queued commands on the very next tick, with **no manual
-confirmation UI built yet** to fire a non-auto-apply command by hand. A
-failed execution is retried (with `last_error` recorded) until
+it promotes confirmation-gated commands whose actions now have
+`AutoApply: true`, then drains up to `DefaultOutputWorkerBatch` (50)
+runnable `output_command` rows by ID. `AutoApply: false` (the `actions.yml`
+default) moves a command to `awaiting_confirmation`, keeping manual work out
+of the runnable queue so it cannot block automatic work. Flipping an action
+to `auto_apply: true` promotes its waiting commands on the next tick; with
+**no manual confirmation UI built yet**, a non-auto-apply command otherwise
+remains awaiting confirmation. A failed execution is retried (with
+`last_error` recorded) until
 `MaxOutputCommandAttempts` (5), then marked permanently `failed`; an unknown
 `action_id` (e.g. `actions.yml` was edited to remove it) is marked failed
 immediately, no retries.

@@ -85,12 +85,31 @@ INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'pending', ?)
 ON CONFLICT(action_id, key) DO NOTHING;
 
--- name: ListPendingOutputCommands :many
--- Oldest first: the output worker drains the queue in enqueue order.
+-- name: ListRunnableOutputCommands :many
+-- Runnable commands are pending automatic execution. ID order matches
+-- idx_output_command_status_id, avoiding a sort as the queue grows.
 SELECT * FROM output_command
 WHERE status = 'pending'
-ORDER BY created_at ASC
+ORDER BY id ASC
 LIMIT ?;
+
+-- name: ListRunnableOutputCommandsAfter :many
+-- Continue a bounded worker scan after the previous row. The status/id
+-- predicate is covered by idx_output_command_status_id.
+SELECT * FROM output_command
+WHERE status = 'pending' AND id > ?
+ORDER BY id ASC
+LIMIT ?;
+
+-- name: MarkOutputCommandAwaitingConfirmation :exec
+UPDATE output_command SET status = 'awaiting_confirmation'
+WHERE id = ? AND status = 'pending';
+
+-- name: PromoteOutputCommandsAwaitingConfirmation :exec
+-- An action changed from manual to auto-apply, so make its previously
+-- confirmation-gated commands runnable again.
+UPDATE output_command SET status = 'pending'
+WHERE action_id = ? AND status = 'awaiting_confirmation';
 
 -- name: MarkOutputCommandDone :exec
 UPDATE output_command SET status = 'done'

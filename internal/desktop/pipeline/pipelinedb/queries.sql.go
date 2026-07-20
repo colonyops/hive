@@ -299,16 +299,63 @@ func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlow
 	return items, nil
 }
 
-const listPendingOutputCommands = `-- name: ListPendingOutputCommands :many
+const listRunnableOutputCommands = `-- name: ListRunnableOutputCommands :many
 SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
 WHERE status = 'pending'
-ORDER BY created_at ASC
+ORDER BY id ASC
 LIMIT ?
 `
 
-// Oldest first: the output worker drains the queue in enqueue order.
-func (q *Queries) ListPendingOutputCommands(ctx context.Context, limit int64) ([]OutputCommand, error) {
-	rows, err := q.db.QueryContext(ctx, listPendingOutputCommands, limit)
+// Runnable commands are pending automatic execution. ID order matches
+// idx_output_command_status_id, avoiding a sort as the queue grows.
+func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) ([]OutputCommand, error) {
+	rows, err := q.db.QueryContext(ctx, listRunnableOutputCommands, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []OutputCommand{}
+	for rows.Next() {
+		var i OutputCommand
+		if err := rows.Scan(
+			&i.ID,
+			&i.ActionID,
+			&i.Payload,
+			&i.Status,
+			&i.CreatedAt,
+			&i.Key,
+			&i.Attempts,
+			&i.LastError,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
+SELECT id, action_id, payload, status, created_at, "key", attempts, last_error FROM output_command
+WHERE status = 'pending' AND id > ?
+ORDER BY id ASC
+LIMIT ?
+`
+
+type ListRunnableOutputCommandsAfterParams struct {
+	ID    int64 `json:"id"`
+	Limit int64 `json:"limit"`
+}
+
+// Continue a bounded worker scan after the previous row. The status/id
+// predicate is covered by idx_output_command_status_id.
+func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListRunnableOutputCommandsAfterParams) ([]OutputCommand, error) {
+	rows, err := q.db.QueryContext(ctx, listRunnableOutputCommandsAfter, arg.ID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
@@ -354,6 +401,16 @@ func (q *Queries) MarkFeedItemRead(ctx context.Context, arg MarkFeedItemReadPara
 	return err
 }
 
+const markOutputCommandAwaitingConfirmation = `-- name: MarkOutputCommandAwaitingConfirmation :exec
+UPDATE output_command SET status = 'awaiting_confirmation'
+WHERE id = ? AND status = 'pending'
+`
+
+func (q *Queries) MarkOutputCommandAwaitingConfirmation(ctx context.Context, id int64) error {
+	_, err := q.db.ExecContext(ctx, markOutputCommandAwaitingConfirmation, id)
+	return err
+}
+
 const markOutputCommandDone = `-- name: MarkOutputCommandDone :exec
 UPDATE output_command SET status = 'done'
 WHERE id = ?
@@ -376,6 +433,18 @@ type MarkOutputCommandFailedParams struct {
 
 func (q *Queries) MarkOutputCommandFailed(ctx context.Context, arg MarkOutputCommandFailedParams) error {
 	_, err := q.db.ExecContext(ctx, markOutputCommandFailed, arg.LastError, arg.ID)
+	return err
+}
+
+const promoteOutputCommandsAwaitingConfirmation = `-- name: PromoteOutputCommandsAwaitingConfirmation :exec
+UPDATE output_command SET status = 'pending'
+WHERE action_id = ? AND status = 'awaiting_confirmation'
+`
+
+// An action changed from manual to auto-apply, so make its previously
+// confirmation-gated commands runnable again.
+func (q *Queries) PromoteOutputCommandsAwaitingConfirmation(ctx context.Context, actionID string) error {
+	_, err := q.db.ExecContext(ctx, promoteOutputCommandsAwaitingConfirmation, actionID)
 	return err
 }
 
