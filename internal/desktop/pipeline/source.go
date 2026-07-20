@@ -24,9 +24,8 @@ type Msg = pipelinedb.Msg
 // key/payload set after it returns. Implementations should set:
 //   - Topic: "source:" + the source's stable ID, so consumers can filter by
 //     source.
-//   - Key: the item's stable identity, so pipelinedb.Compact's per-(topic,
-//     key) compaction collapses repeated appends of the same item to its
-//     latest value.
+//   - Key: the item's stable identity, used by AppendIfChanged to skip
+//     unchanged source values within the same topic.
 //   - Payload: the item, JSON-encoded.
 type Source interface {
 	Produce(ctx context.Context, emit func(Msg) error) error

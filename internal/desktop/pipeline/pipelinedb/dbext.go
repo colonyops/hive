@@ -15,7 +15,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"time"
 
 	"github.com/colonyops/hive/internal/data/migrate"
 
@@ -31,37 +30,11 @@ func migrationsSub() (fs.FS, error) {
 	return fs.Sub(migrationsFS, "migrations")
 }
 
-// CompactOptions bounds event_log growth beyond key-compaction. See Compact.
-type CompactOptions struct {
-	// MaxAge drops event_log rows older than now-MaxAge. Zero disables
-	// age-based retention.
-	MaxAge time.Duration
-	// MaxRows caps event_log at this many rows after key-compaction and age
-	// retention, dropping the oldest rows first. Zero disables count-based
-	// retention.
-	MaxRows int
-}
-
-// DefaultCompactOptions retains at most 30 days / 100k rows of event_log
-// history — enough to replay and diagnose a source outage, small enough to
-// keep desktop-pipeline.db bounded on disk.
-func DefaultCompactOptions() CompactOptions {
-	return CompactOptions{
-		MaxAge:  30 * 24 * time.Hour,
-		MaxRows: 100_000,
-	}
-}
-
 // OpenOptions configures database connection settings.
 type OpenOptions struct {
 	MaxOpenConns int // max open connections (default: 2)
 	MaxIdleConns int // max idle connections (default: 2)
 	BusyTimeout  int // busy timeout in milliseconds (default: 5000)
-
-	// Compact configures the retention Compact applies beyond key-compaction.
-	// The zero value disables age/count retention entirely; use
-	// DefaultCompactOptions for the recommended defaults.
-	Compact CompactOptions
 }
 
 // DefaultOpenOptions returns the recommended defaults for SQLite.
@@ -70,7 +43,6 @@ func DefaultOpenOptions() OpenOptions {
 		MaxOpenConns: 2,
 		MaxIdleConns: 2,
 		BusyTimeout:  5000,
-		Compact:      DefaultCompactOptions(),
 	}
 }
 
@@ -79,7 +51,6 @@ func DefaultOpenOptions() OpenOptions {
 type DB struct {
 	conn    *sql.DB
 	queries *Queries
-	compact CompactOptions
 }
 
 // Open creates a new desktop-pipeline.db connection in dir, applying all
@@ -123,7 +94,6 @@ func Open(dir string, opts OpenOptions) (*DB, error) {
 	db := &DB{
 		conn:    conn,
 		queries: New(conn),
-		compact: opts.Compact,
 	}
 
 	ctx := context.Background()

@@ -58,22 +58,6 @@ func (q *Queries) CommitConsumerOffset(ctx context.Context, arg CommitConsumerOf
 	return err
 }
 
-const compactEventLogByKey = `-- name: CompactEventLogByKey :exec
-DELETE FROM event_log
-WHERE key != ''
-  AND "offset" NOT IN (
-    SELECT MAX("offset") FROM event_log WHERE key != '' GROUP BY topic, key
-  )
-`
-
-// Log-compaction pass: for every non-empty (topic, key), keep only the row
-// at its highest offset (the current value). Rows with an empty key (system
-// events with no stable identity) are exempt from key-compaction.
-func (q *Queries) CompactEventLogByKey(ctx context.Context) error {
-	_, err := q.db.ExecContext(ctx, compactEventLogByKey)
-	return err
-}
-
 const confirmOutputCommand = `-- name: ConfirmOutputCommand :one
 INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
@@ -112,17 +96,6 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 		&i.LastError,
 	)
 	return i, err
-}
-
-const countEventLog = `-- name: CountEventLog :one
-SELECT COUNT(*) FROM event_log
-`
-
-func (q *Queries) CountEventLog(ctx context.Context) (int64, error) {
-	row := q.db.QueryRowContext(ctx, countEventLog)
-	var count int64
-	err := row.Scan(&count)
-	return count, err
 }
 
 const countFeedItemsByFlow = `-- name: CountFeedItemsByFlow :many
@@ -167,15 +140,6 @@ func (q *Queries) CountFeedItemsByFlow(ctx context.Context, flowPrefix string) (
 	return items, nil
 }
 
-const deleteEventLogOlderThan = `-- name: DeleteEventLogOlderThan :exec
-DELETE FROM event_log WHERE created_at < ?
-`
-
-func (q *Queries) DeleteEventLogOlderThan(ctx context.Context, createdAt int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEventLogOlderThan, createdAt)
-	return err
-}
-
 const deleteFeedItemsNotInSnapshot = `-- name: DeleteFeedItemsNotInSnapshot :exec
 DELETE FROM feed_item
 WHERE feed_id = ?
@@ -191,20 +155,6 @@ type DeleteFeedItemsNotInSnapshotParams struct {
 
 func (q *Queries) DeleteFeedItemsNotInSnapshot(ctx context.Context, arg DeleteFeedItemsNotInSnapshotParams) error {
 	_, err := q.db.ExecContext(ctx, deleteFeedItemsNotInSnapshot, arg.FeedID, arg.SourceTopic, arg.SnapshotID)
-	return err
-}
-
-const deleteOldestEventLog = `-- name: DeleteOldestEventLog :exec
-DELETE FROM event_log
-WHERE "offset" IN (
-    SELECT "offset" FROM event_log ORDER BY "offset" ASC LIMIT ?
-)
-`
-
-// Deletes the oldest ? rows by offset. Used for count-based retention once
-// age-based retention still leaves the table over its row cap.
-func (q *Queries) DeleteOldestEventLog(ctx context.Context, limit int64) error {
-	_, err := q.db.ExecContext(ctx, deleteOldestEventLog, limit)
 	return err
 }
 

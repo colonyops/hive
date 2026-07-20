@@ -32,30 +32,6 @@ VALUES (?, ?)
 ON CONFLICT(consumer) DO UPDATE SET "offset" = excluded."offset"
 WHERE excluded."offset" > consumer_offset."offset";
 
--- name: CompactEventLogByKey :exec
--- Log-compaction pass: for every non-empty (topic, key), keep only the row
--- at its highest offset (the current value). Rows with an empty key (system
--- events with no stable identity) are exempt from key-compaction.
-DELETE FROM event_log
-WHERE key != ''
-  AND "offset" NOT IN (
-    SELECT MAX("offset") FROM event_log WHERE key != '' GROUP BY topic, key
-  );
-
--- name: DeleteEventLogOlderThan :exec
-DELETE FROM event_log WHERE created_at < ?;
-
--- name: CountEventLog :one
-SELECT COUNT(*) FROM event_log;
-
--- name: DeleteOldestEventLog :exec
--- Deletes the oldest ? rows by offset. Used for count-based retention once
--- age-based retention still leaves the table over its row cap.
-DELETE FROM event_log
-WHERE "offset" IN (
-    SELECT "offset" FROM event_log ORDER BY "offset" ASC LIMIT ?
-);
-
 -- name: UpsertFeedItem :exec
 -- Idempotent by (feed_id, item_id): committing the same key twice updates
 -- the row in place rather than duplicating it.

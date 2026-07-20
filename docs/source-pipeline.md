@@ -113,7 +113,7 @@ type Msg struct {
 | Field     | Meaning                                                                 | Maps onto `event_log` as |
 | --------- | ------------------------------------------------------------------------ | ------------------------ |
 | `ID`      | Unique per log record — the engine's own commit cursor/dedup key         | `"offset"` (as a string) |
-| `Key`     | The item's stable identity (e.g. `"colonyops/hive#2841"`), used for compaction and for `feed_item`/`output_command` dedup | `key` |
+| `Key`     | The item's stable identity (e.g. `"colonyops/hive#2841"`), used for source identity and `feed_item`/`output_command` dedup | `key` |
 | `Topic`   | `"source:<source-id>"` — which configured source produced this message   | `topic` |
 | `Ts`      | Unix nanoseconds when the row was appended                               | `created_at` |
 | `Payload` | The opaque item JSON (shape is set by the source, e.g. a PR/issue/notification) | `payload` |
@@ -180,24 +180,9 @@ history to reconcile.
   consumer, offset) error`** — read/write a consumer's checkpoint directly.
   `Commit` is monotonic in SQL (see the commit-protocol section below), so an
   out-of-order or replayed call never regresses a consumer's checkpoint.
-- **`Compact(ctx) error`** — reclaims space in three independent, order-safe
-  passes, using `pipelinedb.DefaultCompactOptions()` (30 days / 100k rows)
-  unless a caller supplies its own `CompactOptions` at `Open`:
-    1. **Key-compaction** — for every non-empty `key`, keep only the
-       highest-offset row (log-compaction proper — the table's namesake
-       behavior). Empty-key messages are exempt (they have no identity to
-       compact against).
-    2. **Age retention** — drop rows older than `MaxAge` (skipped if zero).
-    3. **Count retention** — if still over `MaxRows`, drop the oldest rows
-       until the cap is met (skipped if zero).
-
-   Compaction is always safe to run: consumers resume from their own
-   committed offset, so it needs no coordination with in-flight readers.
-
 `Producer` (below) additionally keeps its own **in-memory**, non-persisted
 `seen` map (topic+key → last payload) so an unchanged item isn't
-re-`Append`ed on every poll tick even before compaction ever runs — a soft
-optimization a restart forgets, not a substitute for `Compact`.
+re-`Append`ed on every poll tick — a soft optimization a restart forgets.
 
 ## The commit and offset protocol
 

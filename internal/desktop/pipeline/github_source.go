@@ -24,8 +24,8 @@ type githubSource struct {
 // Produce emits one Msg per current item of the source, JSON-encoding
 // feed.Item as the payload. Topic is the flow-qualified
 // "source:<flowId>/<nodeId>" so a frontend graph only ingests its own source
-// nodes' rows; Key is the item's stable ID, so pipelinedb's per-(topic, key)
-// compaction collapses repeated appends of the same item to its latest value.
+// nodes' rows; Key is the item's stable ID, used to skip unchanged source
+// values within that topic.
 func (s *githubSource) Produce(ctx context.Context, emit func(Msg) error) error {
 	items, err := s.live.SourceItems(ctx, s.def)
 	if err != nil {
