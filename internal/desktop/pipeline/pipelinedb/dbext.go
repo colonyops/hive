@@ -79,8 +79,20 @@ func Open(dir string, opts OpenOptions) (*DB, error) {
 
 	dbPath := filepath.Join(dir, "desktop-pipeline.db")
 
-	// Open with pragmas for WAL mode, busy timeout, and foreign keys.
-	dsn := fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)", dbPath, opts.BusyTimeout)
+	// Open with pragmas for WAL mode, busy timeout, and foreign keys, plus
+	// _txlock=immediate so write transactions begin with BEGIN IMMEDIATE.
+	//
+	// Several goroutines write this DB concurrently through WithTx (the
+	// producer's AppendIfChanged, the frontend runtime's CommitBatch, the
+	// output worker, retention). Each reads before it writes. With the driver
+	// default (BEGIN, deferred) two such transactions can both hold a read
+	// lock and then both try to upgrade to the write lock — a deadlock SQLite
+	// resolves by returning SQLITE_BUSY *immediately*, ignoring busy_timeout,
+	// because waiting could never succeed. IMMEDIATE takes the write lock up
+	// front, so a second writer waits on busy_timeout and retries cleanly
+	// instead of failing. Read-only transactions still begin deferred, so WAL
+	// read concurrency is preserved.
+	dsn := fmt.Sprintf("file:%s?_txlock=immediate&_pragma=journal_mode(WAL)&_pragma=busy_timeout(%d)&_pragma=foreign_keys(ON)", dbPath, opts.BusyTimeout)
 	conn, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
