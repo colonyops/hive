@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"time"
 )
 
@@ -64,7 +65,7 @@ type NodeRunView struct {
 // DB.CommitBatch).
 type CommitBatch struct {
 	Consumer   string        `json:"consumer"`   // event_log consumer key (flow id / consumer id)
-	UpToOffset int64         `json:"upToOffset"` // advance consumer_offset to here
+	UpToOffset string        `json:"upToOffset"` // decimal event-log offset; strings preserve int64 precision across Wails
 	Outputs    []Output      `json:"outputs"`
 	Discards   []Discard     `json:"discards"`
 	NodeRuns   []NodeRunView `json:"nodeRuns"`
@@ -83,13 +84,18 @@ type CommitBatch struct {
 // only output_command needs its own dedup key, since two different batches
 // could legitimately enqueue the same action.
 func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
+	offset, err := strconv.ParseInt(b.UpToOffset, 10, 64)
+	if err != nil || offset < 0 {
+		return fmt.Errorf("parsing commit offset %q: expected a non-negative decimal int64", b.UpToOffset)
+	}
+
 	return db.WithTx(ctx, func(q *Queries) error {
 		current, err := q.GetConsumerOffset(ctx, b.Consumer)
 		if err != nil && !errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("reading committed offset for consumer %q: %w", b.Consumer, err)
 		}
 
-		if b.UpToOffset <= current.Offset {
+		if offset <= current.Offset {
 			// Already applied by a previous commit of this batch (or a
 			// stale/out-of-order commit) — no-op.
 			return nil
@@ -145,7 +151,7 @@ func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
 
 		if err := q.CommitConsumerOffset(ctx, CommitConsumerOffsetParams{
 			Consumer: b.Consumer,
-			Offset:   b.UpToOffset,
+			Offset:   offset,
 		}); err != nil {
 			return fmt.Errorf("advancing consumer offset for %q: %w", b.Consumer, err)
 		}

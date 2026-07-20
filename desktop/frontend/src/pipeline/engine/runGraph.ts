@@ -276,12 +276,12 @@ function nowMs(): number {
   return typeof performance !== 'undefined' ? performance.now() : Date.now()
 }
 
-function computeUpToOffset(batch: Msg[]): number {
-  if (batch.length === 0) return 0
-  let max = Number(batch[0].ID)
+function computeUpToOffset(batch: Msg[]): string {
+  if (batch.length === 0) return '0'
+  let max = BigInt(batch[0].ID)
   for (const msg of batch) {
-    const n = Number(msg.ID)
-    if (n > max) max = n
+    const offset = BigInt(msg.ID)
+    if (offset > max) max = offset
   }
-  return max
+  return max.toString()
 }

@@ -52,7 +52,8 @@ export interface Flow {
  */
 export interface CommitResult {
   consumer: string
-  upToOffset: number
+  /** Decimal event-log offset. Strings preserve SQLite int64 precision in JavaScript. */
+  upToOffset: string
   outputs: Output[]
   discards: Discard[]
   nodeRuns: NodeRun[]

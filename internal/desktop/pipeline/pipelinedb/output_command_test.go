@@ -12,7 +12,7 @@ func enqueueTestCommand(t *testing.T, db *DB, actionID, key string) {
 	t.Helper()
 	require.NoError(t, db.CommitBatch(context.Background(), CommitBatch{
 		Consumer:   "flow-" + actionID + "-" + key,
-		UpToOffset: 1,
+		UpToOffset: "1",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindAction, TargetID: actionID},

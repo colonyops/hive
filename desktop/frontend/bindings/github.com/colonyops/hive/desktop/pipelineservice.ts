@@ -75,9 +75,10 @@ export function NodeRuns(flowID: string, limit: number): $CancellablePromise<pip
 }
 
 /**
- * ReadFrom returns up to limit event_log rows appended after offset, in
- * ascending order.
+ * ReadFrom returns up to limit event_log rows after consumer's persisted
+ * offset, in ascending order. The frontend never supplies an offset: the
+ * SQLite checkpoint is the source of truth across runtime restarts.
  */
-export function ReadFrom(offset: number, limit: number): $CancellablePromise<pipelinedb$0.Msg[] | null> {
-    return $Call.ByID(2706344123, offset, limit);
+export function ReadFrom(consumer: string, limit: number): $CancellablePromise<pipelinedb$0.Msg[] | null> {
+    return $Call.ByID(2706344123, consumer, limit);
 }

@@ -162,7 +162,9 @@ describe('useFlowsSession', () => {
     readFrom.mockResolvedValueOnce([msg('1')])
     await state.pump()
 
-    expect(readFrom).toHaveBeenCalledTimes(2)
+    // The coalescing runtime drains the processed page and then performs its
+    // terminating empty read before resolving.
+    expect(readFrom).toHaveBeenCalledTimes(3)
     expect(commit).toHaveBeenCalledTimes(1)
     expect(state.lastRun.value).toMatchObject({ batchSize: 1, outputCount: 1 })
     expect(state.runtimeError.value).toBeNull()

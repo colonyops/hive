@@ -121,7 +121,7 @@ describe('runGraph', () => {
     const result = await runGraph(flow, [passing, failing], transport)
 
     expect(result.consumer).toBe('triage')
-    expect(result.upToOffset).toBe(2)
+    expect(result.upToOffset).toBe('2')
     expect(result.outputs).toHaveLength(2)
     expect(result.outputs).toEqual(
       expect.arrayContaining([
@@ -182,8 +182,8 @@ describe('runGraph', () => {
     const transport = new InProcessTransport(processorRegistry)
     const flow: Flow = { id: 'f', nodes: [], wires: [] }
     const empty = await runGraph(flow, [], transport)
-    expect(empty.upToOffset).toBe(0)
+    expect(empty.upToOffset).toBe('0')
     const some = await runGraph(flow, [msg('5'), msg('3'), msg('9')], transport)
-    expect(some.upToOffset).toBe(9)
+    expect(some.upToOffset).toBe('9')
   })
 })

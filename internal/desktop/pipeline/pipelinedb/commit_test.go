@@ -14,7 +14,7 @@ func TestCommitBatch_FeedOutput_UpsertsFeedItem(t *testing.T) {
 
 	batch := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 1,
+		UpToOffset: "1",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
@@ -39,7 +39,7 @@ func TestCommitBatch_FeedOutput_UpsertsFeedItem(t *testing.T) {
 	// updates the row in place rather than duplicating it.
 	batch2 := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 2,
+		UpToOffset: "2",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
@@ -76,7 +76,7 @@ func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
 
 	batch := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 1,
+		UpToOffset: "1",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
@@ -92,7 +92,7 @@ func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
 	// action fires at most once.
 	batch2 := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 2,
+		UpToOffset: "2",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
@@ -111,7 +111,7 @@ func TestCommitBatch_InsertsNodeRuns(t *testing.T) {
 
 	batch := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 1,
+		UpToOffset: "1",
 		NodeRuns: []NodeRunView{
 			{
 				FlowID:    "flow-1",
@@ -177,7 +177,7 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 
 	batch := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 5,
+		UpToOffset: "5",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
@@ -218,7 +218,7 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 	// no-op, even with different/new outputs.
 	staleBatch := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 3,
+		UpToOffset: "3",
 		Outputs: []Output{
 			{
 				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-b"},
@@ -244,7 +244,7 @@ func TestCommitBatch_UnknownSinkKind_Errors(t *testing.T) {
 
 	batch := CommitBatch{
 		Consumer:   "flow-1",
-		UpToOffset: 1,
+		UpToOffset: "1",
 		Outputs: []Output{
 			{Sink: Sink{Kind: "bogus", TargetID: "x"}, Key: "k", Payload: []byte(`{}`)},
 		},

@@ -16,58 +16,48 @@ function simpleFlow(): Flow {
 }
 
 describe('usePipelineRuntime', () => {
-  it('run() starts the runtime and performs an initial pump: reads, runs the graph, and commits', async () => {
-    const batch = [msg('1'), msg('2')]
-    const readFrom = vi.fn().mockResolvedValue(batch)
+  it('run() drains a backlog larger than one 500-row page before returning', async () => {
+    const backlog = Array.from({ length: 501 }, (_, index) => msg(String(index + 1)))
+    const readFrom = vi.fn()
+      .mockResolvedValueOnce(backlog.slice(0, 500))
+      .mockResolvedValueOnce(backlog.slice(500))
+      .mockResolvedValueOnce([])
     const commit = vi.fn().mockResolvedValue(undefined)
-    const client: PipelineClient = { readFrom, commit }
-    const runtime = usePipelineRuntime(client, simpleFlow())
+    const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
 
     await runtime.run()
 
-    expect(runtime.running.value).toBe(true)
-    expect(readFrom).toHaveBeenCalledWith(0, 500)
+    expect(readFrom).toHaveBeenCalledTimes(3)
+    expect(readFrom).toHaveBeenNthCalledWith(1, 'flow-1', 500)
+    expect(readFrom).toHaveBeenNthCalledWith(2, 'flow-1', 500)
+    expect(commit).toHaveBeenCalledTimes(2)
+    expect(commit).toHaveBeenLastCalledWith(expect.objectContaining({ upToOffset: '501' }))
+    expect(runtime.lastRun.value).toMatchObject({ batchSize: 1, outputCount: 1 })
+    expect(runtime.offset.value).toBe('501')
+  })
+
+  it('latches a wakeup received during an empty read and drains the newly available page', async () => {
+    let resolveInitialRead!: (value: Msg[]) => void
+    const readFrom = vi.fn()
+      .mockImplementationOnce(() => new Promise<Msg[]>((resolve) => { resolveInitialRead = resolve }))
+      .mockResolvedValueOnce([msg('1')])
+      .mockResolvedValueOnce([])
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
+
+    const initialDrain = runtime.run()
+    expect(runtime.pumping.value).toBe(true)
+    const wakeDrain = runtime.pump()
+
+    resolveInitialRead([])
+    await Promise.all([initialDrain, wakeDrain])
+
+    expect(readFrom).toHaveBeenCalledTimes(3)
     expect(commit).toHaveBeenCalledTimes(1)
-    expect(runtime.lastRun.value).toEqual({
-      batchSize: 2,
-      outputCount: 2,
-      discardCount: 0,
-      errorCount: 0,
-      completedAt: expect.any(Number),
-    })
-    expect(runtime.offset.value).toBe(2)
-    expect(runtime.error.value).toBeNull()
+    expect(runtime.offset.value).toBe('1')
   })
 
-  it('stop() halts the runtime — a subsequent pump() call is a no-op', async () => {
-    const readFrom = vi.fn().mockResolvedValue([msg('1')])
-    const commit = vi.fn().mockResolvedValue(undefined)
-    const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
-    await runtime.run()
-    runtime.stop()
-    readFrom.mockClear()
-    commit.mockClear()
-
-    await runtime.pump()
-
-    expect(readFrom).not.toHaveBeenCalled()
-    expect(commit).not.toHaveBeenCalled()
-    expect(runtime.running.value).toBe(false)
-  })
-
-  it('run() is idempotent while already running — calling it twice does not double-pump', async () => {
-    const readFrom = vi.fn().mockResolvedValue([])
-    const commit = vi.fn()
-    const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
-
-    await runtime.run()
-    readFrom.mockClear()
-    await runtime.run()
-
-    expect(readFrom).not.toHaveBeenCalled()
-  })
-
-  it('guards against overlapping pumps: a pump already in flight blocks a concurrent one', async () => {
+  it('stops an in-flight drain on a flow switch without starting another page', async () => {
     let resolveRead!: (value: Msg[]) => void
     const readFrom = vi.fn().mockImplementation(
       () => new Promise<Msg[]>((resolve) => { resolveRead = resolve }),
@@ -75,38 +65,34 @@ describe('usePipelineRuntime', () => {
     const commit = vi.fn().mockResolvedValue(undefined)
     const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
 
-    const runPromise = runtime.run() // starts the initial pump, blocked on readFrom
-    expect(runtime.pumping.value).toBe(true)
-
-    await runtime.pump() // a pump is already in flight — this must be a clean no-op
-    expect(readFrom).toHaveBeenCalledTimes(1)
-
+    const drain = runtime.run()
+    runtime.stop()
     resolveRead([msg('1')])
-    await runPromise
+    await drain
 
-    expect(runtime.pumping.value).toBe(false)
-    expect(commit).toHaveBeenCalledTimes(1)
-  })
-
-  it('an empty log is a clean no-op: no commit, batchSize 0, cursor unchanged', async () => {
-    const readFrom = vi.fn().mockResolvedValue([])
-    const commit = vi.fn()
-    const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
-
-    await runtime.run()
-
+    // Cancellation drops the returned page before graph execution/commit and
+    // prevents the old flow runtime from reading any subsequent page.
+    expect(readFrom).toHaveBeenCalledTimes(1)
     expect(commit).not.toHaveBeenCalled()
-    expect(runtime.lastRun.value).toEqual({
-      batchSize: 0,
-      outputCount: 0,
-      discardCount: 0,
-      errorCount: 0,
-      completedAt: expect.any(Number),
-    })
-    expect(runtime.offset.value).toBe(0)
+    expect(runtime.running.value).toBe(false)
+    expect(runtime.lastRun.value).toBeNull()
   })
 
-  it('surfaces a pump failure (e.g. Commit rejecting) without throwing, and leaves the cursor unchanged', async () => {
+  it('stop() halts the runtime — a subsequent pump() call is a no-op', async () => {
+    const readFrom = vi.fn().mockResolvedValue([])
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
+    await runtime.run()
+    runtime.stop()
+    readFrom.mockClear()
+
+    await runtime.pump()
+
+    expect(readFrom).not.toHaveBeenCalled()
+    expect(runtime.running.value).toBe(false)
+  })
+
+  it('surfaces a pump failure without throwing and leaves the committed offset unset', async () => {
     const readFrom = vi.fn().mockResolvedValue([msg('1')])
     const commit = vi.fn().mockRejectedValue(new Error('commit failed'))
     const runtime = usePipelineRuntime({ readFrom, commit }, simpleFlow())
@@ -114,7 +100,7 @@ describe('usePipelineRuntime', () => {
     await runtime.run()
 
     expect(runtime.error.value).toBe('commit failed')
-    expect(runtime.offset.value).toBe(0)
+    expect(runtime.offset.value).toBeNull()
     expect(runtime.pumping.value).toBe(false)
   })
 })

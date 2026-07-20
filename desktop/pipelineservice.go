@@ -20,11 +20,11 @@ func NewPipelineService(db *pipelinedb.DB) *PipelineService {
 	return &PipelineService{db: db}
 }
 
-// ReadFrom returns up to limit event_log rows appended after offset, in
-// ascending order.
-func (s *PipelineService) ReadFrom(offset int64, limit int) ([]pipelinedb.Msg, error) {
-	msgs, _, err := s.db.ReadFrom(context.Background(), offset, limit)
-	return msgs, err
+// ReadFrom returns up to limit event_log rows after consumer's persisted
+// offset, in ascending order. The frontend never supplies an offset: the
+// SQLite checkpoint is the source of truth across runtime restarts.
+func (s *PipelineService) ReadFrom(consumer string, limit int) ([]pipelinedb.Msg, error) {
+	return s.db.ReadForConsumer(context.Background(), consumer, limit)
 }
 
 // Commit applies the frontend graph runtime's batch atomically: it upserts

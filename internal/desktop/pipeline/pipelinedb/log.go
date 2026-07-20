@@ -75,6 +75,18 @@ func (db *DB) ReadFrom(ctx context.Context, offset int64, limit int) ([]Msg, int
 	return msgs, nextOffset, nil
 }
 
+// ReadForConsumer returns up to limit events after consumer's persisted
+// checkpoint. Consumers therefore resume from their last successful commit,
+// including after the frontend runtime restarts.
+func (db *DB) ReadForConsumer(ctx context.Context, consumer string, limit int) ([]Msg, error) {
+	offset, err := db.ConsumerOffset(ctx, consumer)
+	if err != nil {
+		return nil, err
+	}
+	msgs, _, err := db.ReadFrom(ctx, offset, limit)
+	return msgs, err
+}
+
 // ConsumerOffset returns the last offset committed by consumer, or 0 if the
 // consumer has never committed.
 func (db *DB) ConsumerOffset(ctx context.Context, consumer string) (int64, error) {

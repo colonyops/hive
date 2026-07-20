@@ -18,9 +18,9 @@ export interface CommitBatch {
     "consumer": string;
 
     /**
-     * advance consumer_offset to here
+     * decimal event-log offset; strings preserve int64 precision across Wails
      */
-    "upToOffset": number;
+    "upToOffset": string;
     "outputs": Output[] | null;
     "discards": Discard[] | null;
     "nodeRuns": NodeRunView[] | null;

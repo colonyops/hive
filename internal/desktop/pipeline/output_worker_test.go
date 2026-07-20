@@ -21,7 +21,7 @@ func enqueueTestCommand(t *testing.T, db *pipelinedb.DB, actionID, key, payload 
 	t.Helper()
 	require.NoError(t, db.CommitBatch(context.Background(), pipelinedb.CommitBatch{
 		Consumer:   "test-consumer-" + actionID + "-" + key,
-		UpToOffset: 1,
+		UpToOffset: "1",
 		Outputs: []pipelinedb.Output{
 			{
 				Sink:    pipelinedb.Sink{Kind: pipelinedb.SinkKindAction, TargetID: actionID},

@@ -165,6 +165,22 @@ func TestCompact_CountRetention(t *testing.T) {
 	}, gotIDs, "the three newest rows should survive")
 }
 
+func TestReadForConsumer_ResumesFromPersistedOffset(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+
+	for i := range 3 {
+		_, err := database.Append(ctx, "source:test", fmt.Sprintf("key-%d", i), []byte(`{}`))
+		require.NoError(t, err)
+	}
+	require.NoError(t, database.Commit(ctx, "flow-1", 2))
+
+	msgs, err := database.ReadForConsumer(ctx, "flow-1", 500)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "3", msgs[0].ID)
+}
+
 func TestCommit_Monotonic(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()

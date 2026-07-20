@@ -457,7 +457,7 @@ describe('App', () => {
     const wrapper = await mountApp()
 
     const callOrder: string[] = []
-    mocks.ReadFrom.mockResolvedValueOnce([{ ID: 'm1', Key: 'm1', Topic: 'source:test', Ts: 0, Payload: {}, Meta: null }])
+    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {}, Meta: null }])
     mocks.Commit.mockImplementationOnce(async () => { callOrder.push('commit') })
     mocks.FeedItemCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return [] })
 
@@ -465,9 +465,8 @@ describe('App', () => {
     expect(logHandler).toBeDefined()
 
     logHandler?.()
-    await flushPromises()
-
-    expect(callOrder).toEqual(['commit', 'refresh'])
+    // The drain yields between pages before its terminating empty read.
+    await vi.waitFor(() => expect(callOrder).toEqual(['commit', 'refresh']))
 
     wrapper.unmount()
   })
