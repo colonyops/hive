@@ -22,6 +22,14 @@ export default defineConfig({
   // Docker acceptance suite ordered so a slow WebKit watcher cannot race a
   // concurrent project while it is asserting its own isolated state.
   workers: 1,
+  // Real browsers + six concurrent Go servers on a shared CI runner make some
+  // timing jitter irreducible (a slow server response, a GC pause). Retry in
+  // CI so that jitter does not red a build; a genuine regression still fails
+  // every attempt. Local runs get 0 so flakes surface loudly. The onboarding
+  // suite opts out (retries: 0) — its device-flow grant is a one-way server
+  // state change a retry cannot replay. Set via env so `mise run desktop:e2e`
+  // (CI=1 in the image) and ad-hoc local runs differ automatically.
+  retries: process.env.CI ? 2 : 0,
   expect: { timeout: 10_000 },
   outputDir: 'test-results',
   use: {
