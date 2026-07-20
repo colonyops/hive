@@ -23,14 +23,13 @@ func TestStoreAppendRoundTrip(t *testing.T) {
 	store := newTestStore(t, Options{Emit: func(id int64) { emitted++; lastEmittedID = id }})
 	ctx := context.Background()
 
-	stored, err := store.Append(ctx, Refresh("github:hive/core", 12, 340*time.Millisecond).With("count", "12"))
+	stored, err := store.Append(ctx, Refresh("github:hive/core", 12, 340*time.Millisecond))
 	require.NoError(t, err)
 	require.NotZero(t, stored.ID)
 	require.NotZero(t, stored.CreatedAt)
 	require.Equal(t, CategoryRefresh, stored.Category)
 	require.Equal(t, SeverityInfo, stored.Severity)
 	require.Equal(t, "Refreshed github:hive/core", stored.Title)
-	require.Equal(t, "12", stored.Metadata["count"])
 	require.Equal(t, 1, emitted, "emit fires once per successful append")
 	require.Equal(t, stored.ID, lastEmittedID, "emit carries the new event id")
 

@@ -33,25 +33,17 @@ type Severity string
 // on append; constructors and callers leave them zero. CreatedAt is unix
 // milliseconds (see the activity_event migration for why milliseconds).
 type Event struct {
-	ID        int64             `json:"id"`
-	CreatedAt int64             `json:"createdAt"`
-	Category  Category          `json:"category"`
-	Severity  Severity          `json:"severity"`
-	Title     string            `json:"title"`
-	Body      string            `json:"body,omitempty"`
-	Source    string            `json:"source,omitempty"`
-	Metadata  map[string]string `json:"metadata,omitempty"`
-}
-
-// With attaches a metadata key/value, returning the enriched event so calls
-// chain onto a constructor: activity.Refresh(...).With("count", "12"). Metadata
-// is opaque to storage and reserved for later enrichment (links, ids, counts).
-func (e Event) With(key, value string) Event {
-	if e.Metadata == nil {
-		e.Metadata = map[string]string{}
-	}
-	e.Metadata[key] = value
-	return e
+	ID        int64    `json:"id"`
+	CreatedAt int64    `json:"createdAt"`
+	Category  Category `json:"category"`
+	Severity  Severity `json:"severity"`
+	Title     string   `json:"title"`
+	Body      string   `json:"body,omitempty"`
+	Source    string   `json:"source,omitempty"`
+	// Metadata is opaque to storage and reserved for later enrichment (links,
+	// ids, counts). No emit site populates it yet; it round-trips through the
+	// reserved metadata column so a future write path needs no schema change.
+	Metadata map[string]string `json:"metadata,omitempty"`
 }
 
 // Refresh records a source/feed refresh that completed, reporting how many
