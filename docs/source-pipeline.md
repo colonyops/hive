@@ -85,11 +85,11 @@ process boundary:
    panel AND the sidebar — both read          auto_apply gate,       │
    the same persisted rows)                   dispatches Executors    │
                                                                      │
-   consumer_offset  ◀──────────────── ConsumerOffset/Commit ────────┘
+   consumer_offset  ◀────────── ConsumerOffset / CommitBatch ────────┘
 ```
 
-Delivery (`ReadFrom`/`Commit`/`FeedItems`) is exposed to the frontend by
-`desktop/pipelineservice.go`; the append-only write side
+Delivery (`ReadFrom`/`FeedItems`) and batched commits are exposed to the
+frontend by `desktop/pipelineservice.go`; the append-only write side
 (`internal/desktop/pipeline`'s `Producer`/`Source`) never talks to the
 frontend directly.
 
@@ -176,10 +176,10 @@ history to reconcile.
   rows with `"offset" > offset`, ascending, up to `limit`. If nothing
   matches, `nextOffset` is the input `offset` unchanged, so a caller can
   always resume with `ReadFrom(ctx, nextOffset, limit)`.
-- **`ConsumerOffset(ctx, consumer) (int64, error)`** / **`Commit(ctx,
-  consumer, offset) error`** — read/write a consumer's checkpoint directly.
-  `Commit` is monotonic in SQL (see the commit-protocol section below), so an
-  out-of-order or replayed call never regresses a consumer's checkpoint.
+- **`ConsumerOffset(ctx, consumer) (int64, error)`** — reads a consumer's
+  checkpoint. Checkpoints are advanced only through `CommitBatch`, whose
+  monotonic SQL upsert means an out-of-order or replayed batch never regresses
+  a consumer's checkpoint.
 `Producer` (below) additionally keeps its own **in-memory**, non-persisted
 `seen` map (topic+key → last payload) so an unchanged item isn't
 re-`Append`ed on every poll tick — a soft optimization a restart forgets.

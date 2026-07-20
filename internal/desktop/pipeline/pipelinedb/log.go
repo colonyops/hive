@@ -193,17 +193,3 @@ func (db *DB) ConsumerOffset(ctx context.Context, consumer string) (int64, error
 	}
 	return row.Offset, nil
 }
-
-// Commit records offset as the last-read position for consumer. It is
-// monotonic: a commit at or below the currently stored offset is a no-op
-// (enforced in SQL, see CommitConsumerOffset), so out-of-order or replayed
-// commits never move a consumer's checkpoint backwards.
-func (db *DB) Commit(ctx context.Context, consumer string, offset int64) error {
-	if err := db.queries.CommitConsumerOffset(ctx, CommitConsumerOffsetParams{
-		Consumer: consumer,
-		Offset:   offset,
-	}); err != nil {
-		return fmt.Errorf("committing offset %d for consumer %q: %w", offset, consumer, err)
-	}
-	return nil
-}

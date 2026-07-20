@@ -129,42 +129,10 @@ func TestReadForConsumer_ResumesFromPersistedOffset(t *testing.T) {
 		_, err := database.Append(ctx, "source:test", fmt.Sprintf("key-%d", i), []byte(`{}`))
 		require.NoError(t, err)
 	}
-	require.NoError(t, database.Commit(ctx, "flow-1", 2))
+	require.NoError(t, database.CommitBatch(ctx, CommitBatch{Consumer: "flow-1", UpToOffset: "2"}))
 
 	msgs, err := database.ReadForConsumer(ctx, "flow-1", 500)
 	require.NoError(t, err)
 	require.Len(t, msgs, 1)
 	assert.Equal(t, "3", msgs[0].ID)
-}
-
-func TestCommit_Monotonic(t *testing.T) {
-	database := openTestDB(t)
-	ctx := context.Background()
-
-	// An unknown consumer has no committed offset.
-	offset, err := database.ConsumerOffset(ctx, "consumer-a")
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), offset)
-
-	require.NoError(t, database.Commit(ctx, "consumer-a", 5))
-	offset, err = database.ConsumerOffset(ctx, "consumer-a")
-	require.NoError(t, err)
-	assert.Equal(t, int64(5), offset)
-
-	// A lower offset must not regress the committed checkpoint.
-	require.NoError(t, database.Commit(ctx, "consumer-a", 3))
-	offset, err = database.ConsumerOffset(ctx, "consumer-a")
-	require.NoError(t, err)
-	assert.Equal(t, int64(5), offset, "commit at a lower offset must be a no-op")
-
-	// A higher offset advances it.
-	require.NoError(t, database.Commit(ctx, "consumer-a", 10))
-	offset, err = database.ConsumerOffset(ctx, "consumer-a")
-	require.NoError(t, err)
-	assert.Equal(t, int64(10), offset)
-
-	// Consumers are independent.
-	offset, err = database.ConsumerOffset(ctx, "consumer-b")
-	require.NoError(t, err)
-	assert.Equal(t, int64(0), offset)
 }
