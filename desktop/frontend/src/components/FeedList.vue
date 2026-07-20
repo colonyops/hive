@@ -1,40 +1,42 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { nextTick, ref, watch } from 'vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import { bodySnippet, feedSource, typeLabel } from '../lib/feedPresentation'
 import type { FeedItem } from '../types/feed'
 
+// Presentation-only: the store (useFeedState) owns the search text and the
+// filtered `visibleItems`, so keyboard navigation and this list render the
+// exact same set. This component just renders and relays intent.
 const props = defineProps<{
   title: string
-  items: FeedItem[]
+  visibleItems: FeedItem[]
   selectedId: string | null
   unreadOnly: boolean
+  unreadCount: number
+  search: string
   loadError: string | null
 }>()
-const emit = defineEmits<{ select: [id: string]; 'set-unread': [value: boolean]; refresh: [] }>()
+const emit = defineEmits<{
+  select: [id: string]
+  'set-unread': [value: boolean]
+  refresh: []
+  'update:search': [value: string]
+}>()
 
-// Search is a pure view filter over the already-loaded list (like unreadOnly),
-// so it lives here rather than in the store composable.
-const search = ref('')
-const unreadCount = computed(() => props.items.filter((item) => item.unread).length)
-
-function matchesSearch(item: FeedItem): boolean {
-  const query = search.value.trim().toLowerCase()
-  if (!query) return true
-  const haystack = [item.title, item.repo, item.author, typeLabel(item.kind), feedSource(item).label, bodySnippet(item.body)]
-    .join(' ')
-    .toLowerCase()
-  return haystack.includes(query)
-}
-
-const visibleItems = computed(() =>
-  props.items.filter((item) => (!props.unreadOnly || item.unread) && matchesSearch(item)),
-)
+// Keep the selected row in view when navigation moves the cursor by keyboard
+// (mirrors CommandPalette's scrollIntoView on selection change).
+const listContainer = ref<HTMLElement | null>(null)
+watch(() => props.selectedId, async (id) => {
+  if (!id) return
+  await nextTick()
+  const rows = listContainer.value?.querySelectorAll('[data-testid="feed-item"]')
+  const row = rows && Array.from(rows).find((el) => el.getAttribute('data-id') === id)
+  ;(row as HTMLElement | undefined)?.scrollIntoView?.({ block: 'nearest' })
+})
 </script>
 
 <template>
@@ -45,11 +47,12 @@ const visibleItems = computed(() =>
       <label class="search-box">
         <IconSearch class="size-[14px] shrink-0 text-text-3" />
         <input
-          v-model="search"
+          :value="search"
           type="text"
           class="search-input"
           placeholder="Search items, sources, people…"
           data-testid="feed-search"
+          @input="emit('update:search', ($event.target as HTMLInputElement).value)"
         >
       </label>
       <div class="segmented" role="group" aria-label="Filter">
@@ -60,7 +63,7 @@ const visibleItems = computed(() =>
       </div>
       <button class="refresh-chip" aria-label="Refresh" data-testid="refresh-chip" @click="emit('refresh')"><IconRefreshCw class="size-3" /></button>
     </header>
-    <div class="hive-scroll min-h-0 flex-1 overflow-y-auto">
+    <div ref="listContainer" class="hive-scroll min-h-0 flex-1 overflow-y-auto">
       <!-- Load failure: the "GitHub unreachable" design state. -->
       <div v-if="loadError" class="state-frame" data-testid="feed-error">
         <div class="state-icon text-accent"><IconTriangleAlert class="size-5" /></div>

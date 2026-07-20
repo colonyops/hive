@@ -3,6 +3,7 @@ import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
+import { bodySnippet, feedSource, typeLabel } from '../lib/feedPresentation'
 import { useActivity } from './useActivity'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
@@ -27,6 +28,10 @@ export function useFeedState() {
   const activeProfileId = ref('')
   const selection = ref<SidebarSelection>({ type: 'all' })
   const unreadOnly = ref(false)
+  // Search is a pure view filter over the loaded list (like unreadOnly). It
+  // lives here — not in FeedList — so keyboard navigation moves over exactly
+  // the rows the user sees. Cleared on feed/profile switch (see selectSidebar).
+  const search = ref('')
   const items = ref<FeedItem[]>([])
   const loadError = ref<string | null>(null)
   const selectedId = ref<string | null>(null)
@@ -109,6 +114,24 @@ export function useFeedState() {
     if (sel.type === 'feed') return activeProfile.value?.feeds.find((f) => f.id === sel.feedId)?.name ?? 'Feed'
     return unreadOnly.value ? 'Unread' : 'All items'
   })
+
+  // The Unread badge counts the whole loaded list, independent of search.
+  const unreadCount = computed(() => items.value.filter((item) => item.unread).length)
+
+  function matchesSearch(item: FeedItem): boolean {
+    const query = search.value.trim().toLowerCase()
+    if (!query) return true
+    const haystack = [item.title, item.repo, item.author, typeLabel(item.kind), feedSource(item).label, bodySnippet(item.body)]
+      .join(' ')
+      .toLowerCase()
+    return haystack.includes(query)
+  }
+
+  // The rows actually rendered: the loaded list narrowed by the unread filter
+  // and the search box. Keyboard navigation walks this same set.
+  const visibleItems = computed(() =>
+    items.value.filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
+  )
 
   // ── Toasts ──────────────────────────────────────────────────────────────────
 
@@ -393,6 +416,32 @@ export function useFeedState() {
     await loadFeeds(activeProfileId.value)
   }
 
+  // Move the selection to the next/previous visible item. Navigation walks the
+  // full `items` list (whose order and membership are stable) filtered by the
+  // same predicate as visibleItems — this keeps the cursor's anchor valid even
+  // when selectItem marks the current item read and it drops out of the unread
+  // view. Clamps at both ends (no wrap).
+  async function moveSelection(delta: 1 | -1) {
+    const all = items.value
+    const passes = (item: FeedItem) => (!unreadOnly.value || item.unread) && matchesSearch(item)
+    const currentIndex = all.findIndex((item) => item.id === selectedId.value)
+    if (currentIndex === -1) {
+      const visible = all.filter(passes)
+      const target = delta > 0 ? visible[0] : visible[visible.length - 1]
+      if (target) await selectItem(target.id)
+      return
+    }
+    for (let i = currentIndex + delta; i >= 0 && i < all.length; i += delta) {
+      if (passes(all[i])) {
+        await selectItem(all[i].id)
+        return
+      }
+    }
+  }
+
+  const selectNext = () => moveSelection(1)
+  const selectPrev = () => moveSelection(-1)
+
   // ── Navigation ──────────────────────────────────────────────────────────────
 
   async function selectProfile(profileID: string) {
@@ -404,6 +453,7 @@ export function useFeedState() {
 
   async function selectSidebar(nextSelection: SidebarSelection) {
     unreadOnly.value = false
+    search.value = '' // a switched feed starts unfiltered
     await applySelection(nextSelection)
   }
 
@@ -584,6 +634,9 @@ export function useFeedState() {
     activeProfileId,
     selection,
     items,
+    visibleItems,
+    unreadCount,
+    search,
     loadError,
     selectedId,
     selectedItem,
@@ -612,6 +665,8 @@ export function useFeedState() {
     selectSidebar,
     selectUnreadView,
     selectItem,
+    selectNext,
+    selectPrev,
     toggleUnread,
     refresh,
     invokeAction,

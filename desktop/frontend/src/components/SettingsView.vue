@@ -2,12 +2,14 @@
 // Application-wide settings, opened from the persistent profile rail.
 // Only settings backed by real behavior or explicitly marked future
 // integrations belong here.
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
+import IconKeyboard from '~icons/lucide/keyboard'
 import IconPalette from '~icons/lucide/palette'
 import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
 import ActionSettingsView from './ActionSettingsView.vue'
+import KeybindingSettingsView from './KeybindingSettingsView.vue'
 import githubIcon from '../assets/integrations/github.svg'
 import grafanaIcon from '../assets/integrations/grafana.svg'
 import posthogIcon from '../assets/integrations/posthog.svg'
@@ -25,9 +27,17 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{ close: []; 'select-category': [category: ApplicationSettingsSection] }>()
 const categories = [
   { id: 'appearance' as const, label: 'Appearance', icon: IconPalette },
+  { id: 'keybindings' as const, label: 'Keyboard', icon: IconKeyboard },
   { id: 'integrations' as const, label: 'Integrations', icon: IconPlug },
   { id: 'actions' as const, label: 'Actions', icon: IconPlay },
 ]
+
+const sectionTitle = computed(() => ({
+  appearance: 'Appearance',
+  keybindings: 'Keyboard shortcuts',
+  integrations: 'Integrations',
+  actions: 'Actions',
+}[props.activeCategory]))
 
 const { theme } = useTheme()
 const themeOptions = themes.map((value) => ({ value, label: themeLabels[value] }))
@@ -71,7 +81,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 
     <section class="flex min-w-0 flex-1 flex-col">
       <header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-4">
-        <span class="text-[13px] font-semibold text-text">{{ props.activeCategory === 'appearance' ? 'Appearance' : props.activeCategory === 'integrations' ? 'Integrations' : 'Actions' }}</span>
+        <span class="text-[13px] font-semibold text-text">{{ sectionTitle }}</span>
         <div class="flex-1" />
         <button
           type="button"
@@ -92,6 +102,8 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
             @update:model-value="onThemeChange"
           />
         </div>
+
+        <KeybindingSettingsView v-else-if="props.activeCategory === 'keybindings'" />
 
         <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
 

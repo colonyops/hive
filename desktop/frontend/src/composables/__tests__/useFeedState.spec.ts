@@ -495,4 +495,78 @@ describe('useFeedState', () => {
 
     expect(mocks.MarkFeedItemRead).toHaveBeenCalledWith('triage/my-prs', 'o/r#1')
   })
+
+  // ── Feed navigation ─────────────────────────────────────────────────────────
+
+  const threeItems = [
+    { feedId: 'triage/my-prs', itemId: 'a', unread: false, payload: { id: 'a', title: 'Alpha', kind: 'PR' } },
+    { feedId: 'triage/my-prs', itemId: 'b', unread: false, payload: { id: 'b', title: 'Bravo', kind: 'PR' } },
+    { feedId: 'triage/my-prs', itemId: 'c', unread: false, payload: { id: 'c', title: 'Charlie', kind: 'PR' } },
+  ]
+
+  it('filters visibleItems by the search text without touching the unread badge count', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'a', unread: true, payload: { id: 'a', title: 'Alpha', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'b', unread: false, payload: { id: 'b', title: 'Bravo', kind: 'PR' } },
+    ])
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+
+    get().search.value = 'bravo'
+    expect(get().visibleItems.value.map((i) => i.id)).toEqual(['b'])
+    expect(get().unreadCount.value).toBe(1) // badge counts the whole list, not the filtered view
+  })
+
+  it('moves the selection to the next and previous visible item, clamping at the ends', async () => {
+    mocks.FeedItems.mockResolvedValue(threeItems)
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    expect(get().selectedId.value).toBe('a')
+
+    await get().selectNext(); expect(get().selectedId.value).toBe('b')
+    await get().selectNext(); expect(get().selectedId.value).toBe('c')
+    await get().selectNext(); expect(get().selectedId.value).toBe('c') // clamp, no wrap
+
+    await get().selectPrev(); expect(get().selectedId.value).toBe('b')
+    await get().selectPrev(); expect(get().selectedId.value).toBe('a')
+    await get().selectPrev(); expect(get().selectedId.value).toBe('a') // clamp, no wrap
+  })
+
+  it('navigates only within the searched subset', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'a', unread: false, payload: { id: 'a', title: 'Onboarding', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'b', unread: false, payload: { id: 'b', title: 'Deploy', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'c', unread: false, payload: { id: 'c', title: 'Onload', kind: 'PR' } },
+    ])
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+
+    get().search.value = 'on' // matches Onboarding + Onload, not Deploy
+    await get().selectItem('a')
+    await get().selectNext()
+    expect(get().selectedId.value).toBe('c') // skips the filtered-out Deploy
+  })
+
+  it('is a no-op when the visible list is empty', async () => {
+    mocks.FeedItems.mockResolvedValue([])
+    const get = mountState(); await flushPromises(); await get().selectSidebar({ type: 'all' }); await flushPromises()
+    expect(get().selectedId.value).toBeNull()
+
+    await get().selectNext()
+    expect(get().selectedId.value).toBeNull()
+  })
+
+  it('keeps walking down the unread list as read items drop out of the view', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'a', unread: true, payload: { id: 'a', title: 'Alpha', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'b', unread: true, payload: { id: 'b', title: 'Bravo', kind: 'PR' } },
+      { feedId: 'triage/my-prs', itemId: 'c', unread: true, payload: { id: 'c', title: 'Charlie', kind: 'PR' } },
+    ])
+    mocks.MarkFeedItemRead.mockResolvedValue(undefined)
+    const get = mountState(); await flushPromises()
+    await get().selectUnreadView(); await flushPromises()
+    expect(get().selectedId.value).toBe('a') // initial select does not mark read
+
+    // Each selection marks the landed item read, dropping it from the unread
+    // view; navigation still advances forward instead of snapping back.
+    await get().selectNext(); await flushPromises(); expect(get().selectedId.value).toBe('b')
+    await get().selectNext(); await flushPromises(); expect(get().selectedId.value).toBe('c')
+  })
 })

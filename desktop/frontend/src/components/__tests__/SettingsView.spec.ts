@@ -56,6 +56,13 @@ describe('SettingsView', () => {
     }
   })
 
+  it('exposes a keybindings section that renders the editor', () => {
+    const wrapper = mount(SettingsView, { props: { githubConnected: true, activeCategory: 'keybindings' } })
+
+    expect(wrapper.find('[data-testid="settings-category-keybindings"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="settings-keybindings"]').exists()).toBe(true)
+  })
+
   it('closes from the header action and Escape', async () => {
     const wrapper = mount(SettingsView, { props: { githubConnected: true, activeCategory: 'appearance' } })
 
