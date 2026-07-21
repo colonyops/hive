@@ -11,9 +11,10 @@ describe('feed editor', () => {
     expect(wrapper.find('[data-testid="feed-editor-description"]').exists()).toBe(true)
   })
 
-  it('emits the chosen icon', async () => {
+  it('emits the chosen icon from the searchable picker', async () => {
     const wrapper = mount(Editor, { props: { config: {} } })
-    await wrapper.get('[data-testid="feed-editor-icon"]').setValue('sparkles')
+    await wrapper.get('[data-testid="feed-editor-icon"]').trigger('click')
+    await wrapper.get('[data-testid="feed-editor-icon-option-sparkles"]').trigger('click')
     const events = wrapper.emitted('update:config')
     expect(events?.at(-1)?.[0]).toEqual({ icon: 'sparkles' })
   })
