@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/desktop/activity"
+	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/rs/zerolog"
 )
@@ -33,6 +34,7 @@ type Producer struct {
 	onAppended func(nextOffset int64)
 	logger     zerolog.Logger
 	recorder   activity.Recorder
+	prefetcher SearchPrefetcher
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -42,6 +44,22 @@ type Producer struct {
 // surface in the Activity view. Optional: a nil recorder (the default) means
 // the producer records nothing. Set once at wiring time, before Start.
 func (pr *Producer) SetRecorder(r activity.Recorder) { pr.recorder = r }
+
+// SearchPrefetcher batch-fetches all search-kind source definitions before
+// the producer drains their individual topics.
+type SearchPrefetcher interface {
+	PrefetchSearch(ctx context.Context, defs []feed.SourceDef) error
+}
+
+// SetPrefetcher attaches the optional batch prefetcher. It is set once while
+// wiring the producer, before Start.
+func (pr *Producer) SetPrefetcher(p SearchPrefetcher) { pr.prefetcher = p }
+
+// searchDefSource is implemented by sources backed by a feed.SourceDef that
+// want inclusion in the search prefetch. Non-search sources return ok false.
+type searchDefSource interface {
+	searchDef() (feed.SourceDef, bool)
+}
 
 // NewProducer builds a Producer. interval <= 0 is rejected by the caller's
 // choice of default (main.go passes feed.DefaultPollInterval); Producer
@@ -89,6 +107,20 @@ func (pr *Producer) Tick(ctx context.Context) {
 	if err != nil {
 		pr.logger.Warn().Err(err).Msg("pipeline producer: resolving sources failed")
 		return
+	}
+
+	if pr.prefetcher != nil {
+		defs := make([]feed.SourceDef, 0, len(sources))
+		for _, src := range sources {
+			if searchSource, ok := src.(searchDefSource); ok {
+				if def, ok := searchSource.searchDef(); ok {
+					defs = append(defs, def)
+				}
+			}
+		}
+		if err := pr.prefetcher.PrefetchSearch(ctx, defs); err != nil {
+			pr.logger.Debug().Err(err).Msg("pipeline producer: search prefetch failed")
+		}
 	}
 
 	var (

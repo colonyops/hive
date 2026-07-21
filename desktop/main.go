@@ -89,6 +89,7 @@ func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows 
 	}
 	producer := pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), feed.DefaultPollInterval, emitLogAppended, logger)
 	producer.SetRecorder(recorder)
+	producer.SetPrefetcher(fetcher)
 	return producer
 }
 

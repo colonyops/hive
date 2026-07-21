@@ -3,10 +3,13 @@ package pipeline
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
@@ -26,13 +29,20 @@ func (f fakeFlows) List() []flow.Flow { return f }
 // prove githubSource routes through LiveProvider's cache/singleflight
 // instead of fetching on every call.
 type singleSearchAPI struct {
-	calls atomic.Int32
+	calls   atomic.Int32
+	aliases atomic.Int32
 }
 
 func (a *singleSearchAPI) handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/graphql", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, r *http.Request) {
 		a.calls.Add(1)
+		var request struct {
+			Query string `json:"query"`
+		}
+		_ = json.NewDecoder(r.Body).Decode(&request)
+		aliases := strings.Count(request.Query, ": search(")
+		a.aliases.Store(int32(aliases))
 		w.Header().Set("Content-Type", "application/json")
 		item := map[string]any{
 			"__typename": "PullRequest",
@@ -47,7 +57,11 @@ func (a *singleSearchAPI) handler() http.Handler {
 			"updatedAt":  "2026-07-18T10:00:00Z",
 			"createdAt":  "2026-07-17T00:00:00Z",
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"s0": map[string]any{"nodes": []any{item}}}})
+		data := make(map[string]any, aliases)
+		for i := range aliases {
+			data[fmt.Sprintf("s%d", i)] = map[string]any{"nodes": []any{item}}
+		}
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": data})
 	})
 	mux.HandleFunc("/notifications", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -164,6 +178,47 @@ func TestNewFlowSourceLister_ResolvesEnabledSourceNodesAcrossFlows(t *testing.T)
 	gs, ok := sources["triage/in-prs"].(*githubSource)
 	require.True(t, ok, "the lister should build githubSource instances")
 	assert.Equal(t, "source:triage/in-prs", gs.topic)
+}
+
+// TestProducer_PrefetchesSearchSourcesInOneBatch preserves per-source
+// snapshots while issuing one aliased GraphQL request for all search nodes.
+func TestProducer_PrefetchesSearchSourcesInOneBatch(t *testing.T) {
+	t.Parallel()
+
+	api := &singleSearchAPI{}
+	live := newLiveProviderFixture(t, api)
+	db := openTestPipelineDB(t)
+	flows := fakeFlows{
+		{
+			ID:      "triage",
+			Enabled: true,
+			Nodes: []flow.Node{
+				{ID: "issues", Type: "github-source", Config: &flow.GithubSourceConfig{Kind: "search", Query: "is:open is:issue"}},
+			},
+		},
+		{
+			ID:      "reviews",
+			Enabled: true,
+			Nodes: []flow.Node{
+				{ID: "prs", Type: "github-source", Config: &flow.GithubSourceConfig{Kind: "search", Query: "is:open is:pr"}},
+			},
+		},
+	}
+	producer := NewProducer(db, NewFlowSourceLister(live, flows), time.Hour, nil, zerolog.Nop())
+	producer.SetPrefetcher(live)
+
+	producer.Tick(t.Context())
+
+	assert.Equal(t, int32(1), api.calls.Load())
+	assert.Equal(t, int32(2), api.aliases.Load())
+	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
+	require.NoError(t, err)
+	topics := make(map[string]bool)
+	for _, msg := range msgs {
+		topics[msg.Topic] = true
+	}
+	assert.True(t, topics["source:triage/issues"])
+	assert.True(t, topics["source:reviews/prs"])
 }
 
 // TestProducer_WithGithubSource_AppendsAcrossTicks is an end-to-end slice of

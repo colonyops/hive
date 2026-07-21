@@ -19,9 +19,6 @@ import (
 var ErrNotAuthenticated = errors.New("feed: not authenticated")
 
 const (
-	// liveCacheTTL keeps repeated fetches of the same source snappy between
-	// producer ticks without hammering the search API.
-	liveCacheTTL = 30 * time.Second
 	// notificationsMinPoll is the floor for the notifications poll interval.
 	// GitHub's X-Poll-Interval header is a contract (typically 60s); it is
 	// honored even when absent.
@@ -41,9 +38,17 @@ type LiveProvider struct {
 	logger zerolog.Logger
 	now    func() time.Time
 
-	mu     sync.Mutex
-	cache  map[string]*cachedSource
-	flight singleflight.Group
+	mu             sync.Mutex
+	cache          map[string]*cachedSource
+	searchTTL      time.Duration
+	searchFailures map[string]searchFailure
+	flight         singleflight.Group
+}
+
+// searchFailure is one failed fetch attempt for a search cache key.
+type searchFailure struct {
+	at  time.Time
+	err error
 }
 
 // cachedSource is one source's cached fetch. Entries are immutable once
@@ -70,12 +75,25 @@ func sourceKey(src SourceDef) string {
 
 func NewLiveProvider(client *github.Client, tokens github.TokenStore, logger zerolog.Logger) *LiveProvider {
 	return &LiveProvider{
-		client: client,
-		tokens: tokens,
-		logger: logger,
-		now:    time.Now,
-		cache:  make(map[string]*cachedSource),
+		client:         client,
+		tokens:         tokens,
+		logger:         logger,
+		now:            time.Now,
+		cache:          make(map[string]*cachedSource),
+		searchTTL:      DefaultPollInterval,
+		searchFailures: make(map[string]searchFailure),
 	}
+}
+
+// SetSearchTTL sets the search cache TTL. Values <= 0 retain the default
+// poll interval. It is intended to be set while wiring the producer.
+func (p *LiveProvider) SetSearchTTL(ttl time.Duration) {
+	if ttl <= 0 {
+		ttl = DefaultPollInterval
+	}
+	p.mu.Lock()
+	p.searchTTL = ttl
+	p.mu.Unlock()
 }
 
 // SourceItems returns one source's current items — served from cache within
@@ -99,6 +117,7 @@ func (p *LiveProvider) Invalidate() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 	p.cache = make(map[string]*cachedSource)
+	p.searchFailures = make(map[string]searchFailure)
 }
 
 // notificationsTTL is the effective minimum interval between notification
@@ -110,17 +129,18 @@ func notificationsTTL(cached *cachedSource) time.Duration {
 	return notificationsMinPoll
 }
 
-// sourceItems returns the source's items, from cache within the TTL — 30s for
-// search, the X-Poll-Interval contract for notifications — and fetching
-// otherwise.
+// sourceItems returns the source's items from cache within its TTL, otherwise
+// fetching it through the conditional, singleflight-coalesced path.
 func (p *LiveProvider) sourceItems(ctx context.Context, src SourceDef) ([]liveItem, error) {
 	key := sourceKey(src)
 
 	p.mu.Lock()
 	cached, ok := p.cache[key]
+	searchTTL := p.searchTTL
+	failure, failed := p.searchFailures[key]
 	p.mu.Unlock()
 	if ok {
-		ttl := liveCacheTTL
+		ttl := searchTTL
 		if src.Kind == "notifications" {
 			ttl = notificationsTTL(cached)
 		}
@@ -129,18 +149,100 @@ func (p *LiveProvider) sourceItems(ctx context.Context, src SourceDef) ([]liveIt
 		}
 	}
 
+	if src.Kind == "search" && failed && p.now().Sub(failure.at) < searchTTL {
+		return p.serveFetchError(src, cached, ok, failure.err)
+	}
+
 	items, err := p.fetchSource(ctx, src)
 	if err != nil {
-		// Serve stale data over an error when we have it — a blip shouldn't
-		// empty the feed. Auth failures pass through even so: stale data would
-		// mask the reconnect prompt.
-		if ok && !errors.Is(err, github.ErrUnauthorized) && !errors.Is(err, ErrNotAuthenticated) {
-			p.logger.Debug().Err(err).Str("source", src.ID).Msg("source fetch failed; serving stale cache")
-			return cached.items, nil
-		}
-		return nil, err
+		return p.serveFetchError(src, cached, ok, err)
 	}
 	return items, nil
+}
+
+// serveFetchError preserves stale search and notifications data through
+// transient failures, while authentication failures must reach the caller so
+// it can prompt for a reconnect.
+func (p *LiveProvider) serveFetchError(src SourceDef, cached *cachedSource, ok bool, err error) ([]liveItem, error) {
+	if ok && !errors.Is(err, github.ErrUnauthorized) && !errors.Is(err, ErrNotAuthenticated) {
+		p.logger.Debug().Err(err).Str("source", src.ID).Msg("source fetch failed; serving stale cache")
+		return cached.items, nil
+	}
+	return nil, err
+}
+
+// PrefetchSearch batch-fetches search defs in one GraphQL request and stores
+// their results in the SourceItems cache. A failed batch is retained per key
+// so draining the individual sources does not retry it during this tick.
+func (p *LiveProvider) PrefetchSearch(ctx context.Context, defs []SourceDef) error {
+	representatives := make(map[string]SourceDef)
+	keys := make([]string, 0, len(defs))
+	for _, def := range defs {
+		if def.Kind != "search" {
+			continue
+		}
+		key := sourceKey(def)
+		if _, seen := representatives[key]; seen {
+			continue
+		}
+		representatives[key] = def
+		keys = append(keys, key)
+	}
+
+	p.mu.Lock()
+	ttl := p.searchTTL
+	due := make([]SourceDef, 0, len(keys))
+	dueKeys := make([]string, 0, len(keys))
+	now := p.now()
+	for _, key := range keys {
+		cached := p.cache[key]
+		if cached != nil && now.Sub(cached.fetchedAt) < ttl/2 {
+			continue
+		}
+		due = append(due, representatives[key])
+		dueKeys = append(dueKeys, key)
+	}
+	p.mu.Unlock()
+	if len(due) == 0 {
+		return nil
+	}
+
+	token, err := p.tokens.Token()
+	if err == nil && token == "" {
+		err = ErrNotAuthenticated
+	}
+	if err != nil {
+		p.recordSearchFailures(dueKeys, err)
+		return err
+	}
+
+	reqs := make([]github.SearchRequest, len(due))
+	for i, def := range due {
+		reqs[i] = github.SearchRequest{Query: def.Query, Limit: def.effectiveLimit()}
+	}
+	results, err := p.client.WithTokenCopy(token).SearchIssuesBatch(ctx, reqs)
+	if err != nil {
+		p.recordSearchFailures(dueKeys, err)
+		return err
+	}
+
+	fetchedAt := p.now()
+	p.mu.Lock()
+	for i, key := range dueKeys {
+		p.cache[key] = &cachedSource{items: p.searchItems(results[i]), fetchedAt: fetchedAt}
+		delete(p.searchFailures, key)
+	}
+	p.mu.Unlock()
+	return nil
+}
+
+func (p *LiveProvider) recordSearchFailures(keys []string, err error) {
+	failure := searchFailure{at: p.now(), err: err}
+	p.mu.Lock()
+	for _, key := range keys {
+		p.searchFailures[key] = failure
+	}
+	p.mu.Unlock()
 }
 
 // fetchSource performs the source's API request and updates the cache,
@@ -214,6 +316,7 @@ func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]
 		}
 		items := p.searchItems(results[0])
 		p.setCache(key, &cachedSource{items: items, fetchedAt: p.now()})
+		p.clearSearchFailure(key)
 		return items, nil
 	default:
 		return nil, fmt.Errorf("feed: unknown source kind %q", src.Kind)
@@ -223,6 +326,12 @@ func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]
 func (p *LiveProvider) setCache(key string, cached *cachedSource) {
 	p.mu.Lock()
 	p.cache[key] = cached
+	p.mu.Unlock()
+}
+
+func (p *LiveProvider) clearSearchFailure(key string) {
+	p.mu.Lock()
+	delete(p.searchFailures, key)
 	p.mu.Unlock()
 }
 
