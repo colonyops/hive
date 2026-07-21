@@ -5,7 +5,6 @@
 // activity.Recorder and by the frontend via ActivityService.Record; this view
 // only reads and presents them. Reached from the titlebar Activity link.
 import { computed, onMounted, ref, type Component } from 'vue'
-import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconInfo from '~icons/lucide/info'
 import IconPlay from '~icons/lucide/play'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
@@ -16,6 +15,7 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconZap from '~icons/lucide/zap'
 import { useActivity } from '../composables/useActivity'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
+import ViewHeader from './settings/ViewHeader.vue'
 import {
   ACTIVITY_FILTERS,
   eventStyleKey,
@@ -67,17 +67,12 @@ onMounted(() => {
 
 <template>
   <div class="flex h-full min-h-0 flex-1 flex-col" data-testid="activity-view">
-    <header class="flex h-11 shrink-0 items-center gap-2.5 border-b border-row bg-canvas-toolbar px-4">
-      <span class="text-[13px] font-semibold text-text">Activity</span>
-      <span class="font-mono text-[11px] text-text-4">audit log</span>
-      <div class="flex-1" />
-      <button
-        type="button"
-        class="flex cursor-pointer items-center gap-1.5 rounded-md px-2.5 py-1.5 text-[12.5px] text-text-2 hover:bg-chip hover:text-text"
-        data-testid="activity-close"
-        @click="emit('close')"
-      ><IconArrowLeft class="size-3.5" />Back to feed</button>
-    </header>
+    <ViewHeader close-testid="activity-close" @close="emit('close')">
+      <template #title>
+        <span class="text-[13px] font-semibold text-text">Activity</span>
+        <span class="font-mono text-[11px] text-text-4">audit log</span>
+      </template>
+    </ViewHeader>
 
     <!-- toolbar: filter pills + search -->
     <div class="flex shrink-0 items-center gap-2 border-b border-row bg-sidebar px-5 py-2.5">
