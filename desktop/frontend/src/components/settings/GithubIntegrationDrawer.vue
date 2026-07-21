@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import IconGithub from '~icons/lucide/github'
+import DrawerSheet from '../DrawerSheet.vue'
 import SettingsField from './SettingsField.vue'
 import * as SettingsService from '../../../bindings/github.com/colonyops/hive/desktop/settingsservice'
 
@@ -51,57 +52,42 @@ async function save() {
   }
 }
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') emit('close')
-}
-
-onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
-  void load()
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onMounted(() => void load())
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="fixed inset-0 z-40 bg-backdrop" data-testid="github-integration-backdrop" @click="emit('close')" />
-    <aside
-      class="fixed inset-y-0 right-0 z-40 flex w-[380px] max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
-      role="dialog"
-      aria-label="GitHub settings"
-      aria-modal="true"
-      data-testid="github-integration-drawer"
-    >
-      <header class="flex shrink-0 items-center gap-2.5 border-b border-row bg-pane px-[18px] py-[15px]">
+  <DrawerSheet ariaLabel="GitHub settings" testid="github-integration-drawer" backdrop-testid="github-integration-backdrop" :width="380" @close="emit('close')">
+    <template #header>
+      <div class="flex items-center gap-2.5">
         <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"><IconGithub class="size-3.5" /></span>
         <div>
           <div class="text-[14px] font-semibold tracking-[-.01em]">GitHub settings</div>
           <div class="font-mono text-[11px] text-text-3">Integration polling</div>
         </div>
-      </header>
-
-      <div class="hive-scroll min-h-0 flex-1 overflow-y-auto px-[18px] py-[15px]">
-        <SettingsField label="Poll interval" :hint="minimumHint" testid="github-poll-interval">
-          <div class="relative">
-            <input
-              v-model="pollIntervalSeconds"
-              type="number"
-              inputmode="numeric"
-              :min="minPollIntervalSeconds"
-              step="1"
-              class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] pr-16 text-[13px] text-text outline-none focus:border-accent"
-              :class="!valid ? 'border-severity-error' : ''"
-              data-testid="github-poll-interval-input"
-              :disabled="loading"
-            >
-            <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-text-3">seconds</span>
-          </div>
-        </SettingsField>
-        <p v-if="!valid" class="mt-2 text-xs text-severity-error" data-testid="github-poll-interval-error">Enter a whole number of at least {{ minPollIntervalSeconds }} seconds.</p>
-        <p v-if="error" class="mt-4 rounded-md border border-severity-error/40 bg-severity-error-tint px-3 py-2 text-xs text-severity-error" data-testid="github-settings-error">{{ error }}</p>
       </div>
+    </template>
 
-      <footer class="flex shrink-0 items-center justify-end gap-2.5 border-t border-row bg-raised px-[18px] py-[13px]">
+    <SettingsField label="Poll interval" :hint="minimumHint" testid="github-poll-interval">
+      <div class="relative">
+        <input
+          v-model="pollIntervalSeconds"
+          type="number"
+          inputmode="numeric"
+          :min="minPollIntervalSeconds"
+          step="1"
+          class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] pr-16 text-[13px] text-text outline-none focus:border-accent"
+          :class="!valid ? 'border-severity-error' : ''"
+          data-testid="github-poll-interval-input"
+          :disabled="loading"
+        >
+        <span class="pointer-events-none absolute inset-y-0 right-3 flex items-center text-xs text-text-3">seconds</span>
+      </div>
+    </SettingsField>
+    <p v-if="!valid" class="mt-2 text-xs text-severity-error" data-testid="github-poll-interval-error">Enter a whole number of at least {{ minPollIntervalSeconds }} seconds.</p>
+    <p v-if="error" class="mt-4 rounded-md border border-severity-error/40 bg-severity-error-tint px-3 py-2 text-xs text-severity-error" data-testid="github-settings-error">{{ error }}</p>
+
+    <template #footer>
+      <div class="flex items-center justify-end gap-2.5">
         <button
           type="button"
           class="cursor-pointer rounded-lg border border-card px-[15px] py-2 text-[13px] text-text-2 hover:text-text"
@@ -115,7 +101,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           :disabled="loading || saving || !valid"
           @click="save"
         >Save</button>
-      </footer>
-    </aside>
-  </Teleport>
+      </div>
+    </template>
+  </DrawerSheet>
 </template>

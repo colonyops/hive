@@ -1,28 +1,16 @@
 <script setup lang="ts">
-// The node editor shell every node type shares: a Teleport'd, right-
-// anchored full-height side sheet (Node-RED edit-panel style) — header
-// (role glyph tile + "Edit node · <label>" + role/port subtitle + an
-// Enabled toggle that's the inverse of FlowNode.disabled), a body that owns
-// the Name field and mounts `def.editor` over a structuredClone draft
-// (unchanged contract: {config, errors} in, `update:config` out), and a
-// footer of Delete | Cancel | Done. The delete confirm is still two-step,
-// but renders as a small popover anchored over the Delete button (not an
-// inline swap) so the footer's Close/Save buttons never shift — see the
-// "Delete" section below. Parent-owns-persistence — this never mutates the
-// `node` prop; save() emits a whole new FlowNode.
-//
-// This is meant to become the app-wide editing-surface shape — a reusable
-// right sheet, not a one-off for flow nodes — so keep the geometry generic
-// (fixed right edge, full height, scrim) rather than anything flow-specific.
+// Edits a node over a structuredClone draft: the Name field and `def.editor`
+// receive the draft, while save() emits a whole new FlowNode without mutating
+// `node`. The Delete confirmation remains a popover so the footer actions do
+// not shift while confirming.
 import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import { hasInputPort, outputPortCount } from '../lib/ports'
 import { renderMarkdown, summarize } from '../lib/markdown'
-import { useResizablePanel } from '../../composables/useResizablePanel'
-import PanelResizeHandle from '../../components/PanelResizeHandle.vue'
 import AppSwitch from '../../components/AppSwitch.vue'
+import DrawerSheet from '../../components/DrawerSheet.vue'
 import type { NodeTypeDefinition } from '../nodeType'
 import type { FlowNode } from '../types'
 
@@ -36,14 +24,6 @@ const emit = defineEmits<{
   delete: [id: string]
   close: []
 }>()
-
-const { size, startResize, step } = useResizablePanel({
-  storageKey: 'hive.panel.node-editor',
-  defaultSize: 440,
-  min: 360,
-  max: 760,
-  edge: 'left',
-})
 
 // ── Draft state — a deep clone of the incoming node; nothing here ever
 // writes back into props.node. ──────────────────────────────────────────────
@@ -160,18 +140,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>
-  <Teleport to="body">
-    <div class="fixed inset-0 z-40 bg-backdrop" data-testid="node-editor-backdrop" @click="emit('close')" />
-    <aside
-      class="fixed inset-y-0 right-0 z-40 flex max-w-full flex-col overflow-hidden border-l border-strong bg-pane text-text shadow-[-30px_0_60px_-20px_rgba(0,0,0,.5)]"
-      :style="{ width: size + 'px' }"
-      role="dialog"
-      :aria-label="`Edit ${def.label}`"
-      aria-modal="true"
-      data-testid="node-editor"
-    >
-      <PanelResizeHandle edge="left" name="node-editor" :start="startResize" :step="step" />
-      <header class="flex shrink-0 items-center gap-[11px] border-b border-row bg-pane px-[18px] py-[15px]">
+  <DrawerSheet
+    :ariaLabel="`Edit ${def.label}`"
+    testid="node-editor"
+    :resize="{ storageKey: 'hive.panel.node-editor', defaultSize: 440, min: 360, max: 760 }"
+    :close-on-escape="false"
+    body-class="flex flex-col gap-[14px]"
+    @close="emit('close')"
+  >
+    <template #header>
+      <div class="flex items-center gap-[11px]">
         <span
           class="flex size-[26px] shrink-0 items-center justify-center rounded-[7px]"
           :style="{ background: def.tint ?? 'var(--color-accent-tint)', color: def.accentToken ?? 'var(--color-accent)' }"
@@ -183,55 +161,55 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           <div class="truncate font-mono text-[11px] text-text-3" data-testid="node-editor-subtitle">{{ subtitle }}</div>
         </div>
         <AppSwitch v-model="enabled" label="Enabled" class="shrink-0" testid="node-editor-enabled" />
-      </header>
-
-      <div class="hive-scroll flex min-h-0 flex-1 flex-col gap-[14px] overflow-y-auto px-[18px] py-[15px]">
-        <div>
-          <div class="mb-1.5 text-[12px] text-text-2">Name</div>
-          <input
-            ref="nameRef"
-            v-model="name"
-            type="text"
-            :placeholder="def.label"
-            class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
-            data-testid="node-editor-name"
-            @keydown.enter="submit"
-          >
-        </div>
-
-        <component
-          :is="def.editor"
-          :config="draftConfig"
-          :errors="errors"
-          data-testid="node-editor-body"
-          @update:config="updateConfig"
-        />
-
-        <div v-if="errors.length > 0" class="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-selection px-3 py-2.5" data-testid="node-editor-errors">
-          <IconAlertTriangle class="mt-0.5 size-4 shrink-0 text-accent" />
-          <ul class="text-xs leading-relaxed text-text-2">
-            <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
-          </ul>
-        </div>
-
-        <template v-if="def.help">
-          <div class="h-px shrink-0 bg-row" />
-          <div>
-            <button
-              class="flex w-full cursor-pointer items-center gap-2 text-left"
-              data-testid="node-editor-docs-toggle"
-              @click="docsOpen = !docsOpen"
-            >
-              <component :is="docsOpen ? IconChevronDown : IconChevronRight" class="size-3.5 text-text-3" />
-              <span class="text-[12.5px] font-semibold text-text">Docs</span>
-              <span v-if="!docsOpen" class="truncate text-[11.5px] text-text-4" data-testid="node-editor-docs-summary">{{ helpSummary }}</span>
-            </button>
-            <div v-if="docsOpen" class="hive-doc mt-3 text-[13px] leading-relaxed text-text-2" data-testid="node-editor-docs" v-html="docsHtml" />
-          </div>
-        </template>
       </div>
+    </template>
 
-      <footer class="flex shrink-0 items-center gap-2.5 border-t border-row bg-raised px-[18px] py-[13px]">
+    <div>
+      <div class="mb-1.5 text-[12px] text-text-2">Name</div>
+      <input
+        ref="nameRef"
+        v-model="name"
+        type="text"
+        :placeholder="def.label"
+        class="w-full rounded-lg border border-strong bg-app px-[11px] py-[9px] text-[13px] text-text outline-none placeholder:text-text-4 focus:border-accent"
+        data-testid="node-editor-name"
+        @keydown.enter="submit"
+      >
+    </div>
+
+    <component
+      :is="def.editor"
+      :config="draftConfig"
+      :errors="errors"
+      data-testid="node-editor-body"
+      @update:config="updateConfig"
+    />
+
+    <div v-if="errors.length > 0" class="flex items-start gap-2.5 rounded-lg border border-accent/40 bg-selection px-3 py-2.5" data-testid="node-editor-errors">
+      <IconAlertTriangle class="mt-0.5 size-4 shrink-0 text-accent" />
+      <ul class="text-xs leading-relaxed text-text-2">
+        <li v-for="(err, i) in errors" :key="i">{{ err }}</li>
+      </ul>
+    </div>
+
+    <template v-if="def.help">
+      <div class="h-px shrink-0 bg-row" />
+      <div>
+        <button
+          class="flex w-full cursor-pointer items-center gap-2 text-left"
+          data-testid="node-editor-docs-toggle"
+          @click="docsOpen = !docsOpen"
+        >
+          <component :is="docsOpen ? IconChevronDown : IconChevronRight" class="size-3.5 text-text-3" />
+          <span class="text-[12.5px] font-semibold text-text">Docs</span>
+          <span v-if="!docsOpen" class="truncate text-[11.5px] text-text-4" data-testid="node-editor-docs-summary">{{ helpSummary }}</span>
+        </button>
+        <div v-if="docsOpen" class="hive-doc mt-3 text-[13px] leading-relaxed text-text-2" data-testid="node-editor-docs" v-html="docsHtml" />
+      </div>
+    </template>
+
+    <template #footer>
+      <div class="flex items-center gap-2.5">
         <div class="relative">
           <button
             ref="deleteTriggerRef"
@@ -278,9 +256,9 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           data-testid="node-editor-save"
           @click="submit"
         >Done</button>
-      </footer>
-    </aside>
-  </Teleport>
+      </div>
+    </template>
+  </DrawerSheet>
 </template>
 
 <style scoped>
