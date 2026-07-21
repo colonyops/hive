@@ -21,6 +21,12 @@ type githubSource struct {
 	topic string // "source:<flowId>/<nodeId>"
 }
 
+// searchDef exposes this source's definition for the producer's batched
+// prefetch. Notifications retain their independent conditional REST fetch.
+func (s *githubSource) searchDef() (feed.SourceDef, bool) {
+	return s.def, s.def.Kind == "search"
+}
+
 // Produce emits one Msg per current item of the source, JSON-encoding
 // feed.Item as the payload. Topic is the flow-qualified
 // "source:<flowId>/<nodeId>" so a frontend graph only ingests its own source

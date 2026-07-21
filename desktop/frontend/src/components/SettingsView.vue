@@ -2,13 +2,14 @@
 // Application-wide settings, opened from the persistent profile rail.
 // Only settings backed by real behavior or explicitly marked future
 // integrations belong here.
-import { computed, onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconKeyboard from '~icons/lucide/keyboard'
 import IconPalette from '~icons/lucide/palette'
 import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
 import IconHardDrive from '~icons/lucide/hard-drive'
+import IconSettings from '~icons/lucide/settings'
 import ActionSettingsView from './ActionSettingsView.vue'
 import KeybindingSettingsView from './KeybindingSettingsView.vue'
 import SystemSettingsView from './SystemSettingsView.vue'
@@ -17,6 +18,7 @@ import grafanaIcon from '../assets/integrations/grafana.svg'
 import posthogIcon from '../assets/integrations/posthog.svg'
 import slackIcon from '../assets/integrations/slack.svg'
 import SettingsSegmented from './settings/SettingsSegmented.vue'
+import GithubIntegrationDrawer from './settings/GithubIntegrationDrawer.vue'
 import { setTheme, themeLabels, themes, useTheme, type Theme } from '../composables/useTheme'
 import type { ApplicationSettingsSection } from '../router'
 
@@ -44,6 +46,7 @@ const sectionTitle = computed(() => ({
 
 const { theme } = useTheme()
 const themeOptions = themes.map((value) => ({ value, label: themeLabels[value] }))
+const githubSettingsOpen = ref(false)
 const futureIntegrations = [
   { id: 'grafana', name: 'Grafana', description: 'Metrics, dashboards, and alerts', icon: grafanaIcon },
   { id: 'posthog', name: 'PostHog', description: 'Product analytics and events', icon: posthogIcon },
@@ -129,11 +132,20 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
                 <div class="text-[13.5px] font-semibold text-text">GitHub</div>
                 <div class="mt-0.5 truncate text-xs text-text-3">{{ props.githubLogin ? `Connected as ${props.githubLogin}` : 'Issues, pull requests, and notifications' }}</div>
               </div>
-              <span
-                class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                :class="props.githubConnected ? 'bg-severity-success-tint text-severity-success' : 'bg-chip text-text-3'"
-                data-testid="integration-github-status"
-              >{{ props.githubConnected ? 'Connected' : 'Not connected' }}</span>
+              <div class="flex shrink-0 items-center gap-2">
+                <span
+                  class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  :class="props.githubConnected ? 'bg-severity-success-tint text-severity-success' : 'bg-chip text-text-3'"
+                  data-testid="integration-github-status"
+                >{{ props.githubConnected ? 'Connected' : 'Not connected' }}</span>
+                <button
+                  type="button"
+                  class="flex size-7 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
+                  aria-label="Configure GitHub integration"
+                  data-testid="integration-github-configure"
+                  @click="githubSettingsOpen = true"
+                ><IconSettings class="size-3.5" /></button>
+              </div>
             </article>
 
             <article
@@ -160,6 +172,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
               </div>
             </article>
           </div>
+          <GithubIntegrationDrawer v-if="githubSettingsOpen" @close="githubSettingsOpen = false" />
         </div>
       </div>
     </section>

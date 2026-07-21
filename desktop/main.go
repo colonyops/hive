@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"github.com/rs/zerolog"
 
@@ -83,12 +84,13 @@ func buildSourceFetcher(logger zerolog.Logger) *feed.LiveProvider {
 // buildPipelineProducer starts the pipeline event-log producer over every
 // enabled github-source node across all flows (via flows), or returns nil when
 // there is nothing to poll (mock mode, so fetcher is nil).
-func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows pipeline.FlowLister, recorder activity.Recorder, logger zerolog.Logger) *pipeline.Producer {
+func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows pipeline.FlowLister, recorder activity.Recorder, interval time.Duration, logger zerolog.Logger) *pipeline.Producer {
 	if fetcher == nil {
 		return nil
 	}
-	producer := pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), feed.DefaultPollInterval, emitLogAppended, logger)
+	producer := pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), interval, emitLogAppended, logger)
 	producer.SetRecorder(recorder)
+	producer.SetPrefetcher(fetcher)
 	return producer
 }
 
@@ -319,7 +321,23 @@ func main() {
 		logger.Warn().Err(bootstrapErr).Msg("desktop bootstrap overrides ignored")
 	}
 
+	interval := feed.DefaultPollInterval
+	settings, err := desktop.LoadSettings()
+	if err != nil {
+		logger.Warn().Err(err).Msg("desktop settings load failed; using defaults")
+	} else if resolved, err := settings.PollIntervalOrDefault(feed.DefaultPollInterval); err != nil {
+		logger.Warn().Err(err).Msg("desktop settings poll interval invalid; using defaults")
+	} else {
+		interval = resolved
+		if raw, parseErr := time.ParseDuration(settings.PollInterval); parseErr == nil && raw < desktop.MinPollInterval {
+			logger.Warn().Str("configured_interval", settings.PollInterval).Dur("interval", interval).Msg("desktop poll interval below minimum; clamped")
+		}
+	}
+
 	fetcher := buildSourceFetcher(logger)
+	if fetcher != nil {
+		fetcher.SetSearchTTL(interval)
+	}
 
 	pipelineDB, err := pipelinedb.Open(desktop.StateDir(), pipelinedb.DefaultOpenOptions())
 	if err != nil {
@@ -331,6 +349,9 @@ func main() {
 	// the ActivityService the frontend reads/writes. It emits activity:appended
 	// on each append so open views refresh.
 	activityStore := activity.NewStore(pipelineDB, activity.Options{Emit: emitActivityAppended})
+	if fetcher != nil {
+		fetcher.SetRecorder(activityStore)
+	}
 
 	actionRuntime, err := buildHiveActionRuntime(activityStore, logger)
 	if err != nil {
@@ -374,7 +395,7 @@ func main() {
 	)
 	maintenance.Start()
 
-	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, activityStore, logger)
+	producer := buildPipelineProducer(pipelineDB, fetcher, flowsStore, activityStore, interval, logger)
 	if producer != nil {
 		producer.Start()
 	}
@@ -400,6 +421,7 @@ func main() {
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 			application.NewService(NewActivityService(activityStore)),
 			application.NewService(NewSystemService()),
+			application.NewService(NewSettingsService(producer, fetcher, logger)),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),

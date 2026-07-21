@@ -1,8 +1,13 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { nextTick } from 'vue'
 import { mount } from '@vue/test-utils'
 import SettingsView from '../SettingsView.vue'
 import { setTheme } from '../../composables/useTheme'
+
+vi.mock('../../../bindings/github.com/colonyops/hive/desktop/settingsservice', () => ({
+  GithubSettings: vi.fn().mockResolvedValue({ pollIntervalSeconds: 60, minPollIntervalSeconds: 60 }),
+  SetGithubSettings: vi.fn(),
+}))
 
 beforeEach(() => {
   localStorage.clear()
@@ -54,6 +59,17 @@ describe('SettingsView', () => {
       expect(wrapper.find(`[data-testid="integration-${id}-add"]`).attributes('disabled')).toBeDefined()
       expect(wrapper.find(`[data-testid="integration-${id}"]`).text()).toContain('Coming soon')
     }
+  })
+
+  it('opens GitHub integration settings from the cog', async () => {
+    const wrapper = mount(SettingsView, {
+      props: { githubConnected: true, activeCategory: 'integrations' },
+      global: { stubs: { Teleport: true } },
+    })
+
+    expect(wrapper.find('[data-testid="integration-github-configure"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="integration-github-configure"]').trigger('click')
+    expect(wrapper.find('[data-testid="github-integration-drawer"]').exists()).toBe(true)
   })
 
   it('exposes a keybindings section that renders the editor', () => {

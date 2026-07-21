@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/desktop/activity"
+	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/rs/zerolog"
 )
@@ -29,10 +30,13 @@ import (
 type Producer struct {
 	db         Appender
 	sources    SourceLister
+	intervalMu sync.Mutex
 	interval   time.Duration
+	intervalCh chan time.Duration
 	onAppended func(nextOffset int64)
 	logger     zerolog.Logger
 	recorder   activity.Recorder
+	prefetcher SearchPrefetcher
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -43,6 +47,22 @@ type Producer struct {
 // the producer records nothing. Set once at wiring time, before Start.
 func (pr *Producer) SetRecorder(r activity.Recorder) { pr.recorder = r }
 
+// SearchPrefetcher batch-fetches all search-kind source definitions before
+// the producer drains their individual topics.
+type SearchPrefetcher interface {
+	PrefetchSearch(ctx context.Context, defs []feed.SourceDef) error
+}
+
+// SetPrefetcher attaches the optional batch prefetcher. It is set once while
+// wiring the producer, before Start.
+func (pr *Producer) SetPrefetcher(p SearchPrefetcher) { pr.prefetcher = p }
+
+// searchDefSource is implemented by sources backed by a feed.SourceDef that
+// want inclusion in the search prefetch. Non-search sources return ok false.
+type searchDefSource interface {
+	searchDef() (feed.SourceDef, bool)
+}
+
 // NewProducer builds a Producer. interval <= 0 is rejected by the caller's
 // choice of default (main.go passes feed.DefaultPollInterval); Producer
 // itself has no opinion on the default so this package does not need to
@@ -52,6 +72,7 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 		db:         db,
 		sources:    sources,
 		interval:   interval,
+		intervalCh: make(chan time.Duration, 1),
 		onAppended: onAppended,
 		logger:     logger,
 		stop:       make(chan struct{}),
@@ -60,18 +81,50 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 
 // Start runs the poll loop in a goroutine until Stop.
 func (pr *Producer) Start() {
+	pr.intervalMu.Lock()
+	interval := pr.interval
+	pr.intervalMu.Unlock()
 	go func() {
-		ticker := time.NewTicker(pr.interval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-pr.stop:
 				return
+			case interval := <-pr.intervalCh:
+				ticker.Reset(interval)
 			case <-ticker.C:
 				pr.Tick(context.Background())
 			}
 		}
 	}()
+}
+
+// SetInterval changes the poll cadence at runtime. The running ticker resets
+// to the new interval, with the next tick occurring one new interval from
+// now. Values <= 0 are ignored. It is safe before Start and concurrent with
+// the poll loop.
+func (pr *Producer) SetInterval(interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	pr.intervalMu.Lock()
+	pr.interval = interval
+	select {
+	case pr.intervalCh <- interval:
+	default:
+		// Keep only the latest pending update. The poll loop is the ticker's
+		// sole owner, so it performs Reset itself.
+		select {
+		case <-pr.intervalCh:
+		default:
+		}
+		select {
+		case pr.intervalCh <- interval:
+		default:
+		}
+	}
+	pr.intervalMu.Unlock()
 }
 
 // Stop halts the poll loop. Idempotent.
@@ -89,6 +142,20 @@ func (pr *Producer) Tick(ctx context.Context) {
 	if err != nil {
 		pr.logger.Warn().Err(err).Msg("pipeline producer: resolving sources failed")
 		return
+	}
+
+	if pr.prefetcher != nil {
+		defs := make([]feed.SourceDef, 0, len(sources))
+		for _, src := range sources {
+			if searchSource, ok := src.(searchDefSource); ok {
+				if def, ok := searchSource.searchDef(); ok {
+					defs = append(defs, def)
+				}
+			}
+		}
+		if err := pr.prefetcher.PrefetchSearch(ctx, defs); err != nil {
+			pr.logger.Debug().Err(err).Msg("pipeline producer: search prefetch failed")
+		}
 	}
 
 	var (
