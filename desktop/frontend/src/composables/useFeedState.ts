@@ -467,6 +467,22 @@ export function useFeedState() {
     if (item) await markItemRead(item)
   }
 
+  // Opens the existing ActionCard run detail for a persisted job. Jobs carry
+  // the feed-item key and action id, so no second run-detail UI is needed.
+  async function openActionRun(itemID: string, actionID: string, commandID: number): Promise<boolean> {
+    const item = items.value.find((candidate) => candidate.id === itemID)
+    if (!item) return false
+    await selectItem(itemID)
+    try {
+      const run = await ActionRun(commandID)
+      setActionRun(itemID, actionID, run)
+      return true
+    } catch (error) {
+      console.warn('Unable to open action run', error)
+      return false
+    }
+  }
+
   async function markItemRead(item: FeedItem) {
     if (!item.unread) return
     try {
@@ -728,6 +744,7 @@ export function useFeedState() {
     selectSidebar,
     selectUnreadView,
     selectItem,
+    openActionRun,
     selectNext,
     selectPrev,
     toggleUnread,
