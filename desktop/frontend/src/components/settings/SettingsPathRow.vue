@@ -11,6 +11,7 @@ import IconFolder from '~icons/lucide/folder'
 import IconFolderOpen from '~icons/lucide/folder-open'
 import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import { useClipboard } from '../../composables/useClipboard'
+import BaseBadge from '../BaseBadge.vue'
 
 const props = withDefaults(
   defineProps<{
@@ -36,15 +37,18 @@ const btnClass =
   <article class="rounded-lg border border-border bg-raised p-4" :data-testid="props.testid">
     <div class="flex items-center gap-2">
       <span class="text-[13.5px] font-semibold text-text">{{ props.label }}</span>
-      <span
+      <BaseBadge
         v-if="props.overridden"
-        class="rounded-full bg-chip px-2 py-0.5 text-[10.5px] font-semibold text-text-3"
+        variant="pill"
+        class="px-2 py-0.5 text-[10.5px] font-semibold"
         :data-testid="props.testid ? `${props.testid}-overridden` : undefined"
-      >Custom</span>
-      <span
+      >Custom</BaseBadge>
+      <BaseBadge
         v-if="!props.exists"
-        class="rounded-full bg-chip px-2 py-0.5 text-[10.5px] font-medium text-text-4"
-      >Not created yet</span>
+        tone="muted"
+        variant="pill"
+        class="px-2 py-0.5 text-[10.5px] font-medium"
+      >Not created yet</BaseBadge>
     </div>
 
     <div

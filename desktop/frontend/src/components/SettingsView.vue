@@ -9,6 +9,7 @@ import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
 import IconHardDrive from '~icons/lucide/hard-drive'
 import IconSettings from '~icons/lucide/settings'
+import BaseBadge from './BaseBadge.vue'
 import BaseCard from './BaseCard.vue'
 import BaseIconBadge from './BaseIconBadge.vue'
 import ActionSettingsView from './ActionSettingsView.vue'
@@ -120,11 +121,12 @@ function onThemeChange(value: string): void {
             </div>
             <template #actions>
               <div class="flex shrink-0 items-center gap-2">
-                <span
-                  class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                  :class="props.githubConnected ? 'bg-severity-success-tint text-severity-success' : 'bg-chip text-text-3'"
+                <BaseBadge
+                  :tone="props.githubConnected ? 'success' : 'neutral'"
+                  variant="pill"
+                  class="px-2.5 py-1 text-[11px] font-semibold"
                   data-testid="integration-github-status"
-                >{{ props.githubConnected ? 'Connected' : 'Not connected' }}</span>
+                >{{ props.githubConnected ? 'Connected' : 'Not connected' }}</BaseBadge>
                 <button
                   type="button"
                   class="flex size-7 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"

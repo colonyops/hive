@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
+import BaseBadge from './BaseBadge.vue'
 import BaseButton from './BaseButton.vue'
 import BaseCard from './BaseCard.vue'
 import BaseIconBadge from './BaseIconBadge.vue'
@@ -70,11 +71,11 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
         <div class="min-w-0 flex-1">
           <div class="truncate text-[15px] font-semibold tracking-[-.01em] text-text">{{ action.label }}</div>
           <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
-            <span class="rounded-[5px] border border-row bg-app px-[7px] py-0.5 font-mono text-[11px] text-text-3">{{ action.id }}</span>
-            <span class="rounded-[5px] bg-chip px-2 py-0.5 text-[11px] text-text-2">{{ actionTypeMeta(action.type).label }}</span>
-            <span class="inline-flex items-center gap-1.5 rounded-[5px] bg-chip px-2 py-0.5 text-[11px] text-text-3">
+            <BaseBadge class="border border-row !bg-app px-[7px] py-0.5 font-mono text-[11px]">{{ action.id }}</BaseBadge>
+            <BaseBadge class="px-2 py-0.5 text-[11px] !text-text-2">{{ actionTypeMeta(action.type).label }}</BaseBadge>
+            <BaseBadge class="px-2 py-0.5 text-[11px]">
               <span class="size-1.5 rounded-full" :class="action.showInDetail ? 'bg-severity-success' : 'bg-text-4'" />{{ action.showInDetail ? 'Shown in detail' : 'Flow-only' }}
-            </span>
+            </BaseBadge>
           </div>
         </div>
         <template #actions>
