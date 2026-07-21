@@ -143,7 +143,6 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   <DrawerSheet
     :ariaLabel="`Edit ${def.label}`"
     testid="node-editor"
-    :resize="{ storageKey: 'hive.panel.node-editor', defaultSize: 440, min: 360, max: 760 }"
     :close-on-escape="false"
     body-class="flex flex-col gap-[14px]"
     @close="emit('close')"

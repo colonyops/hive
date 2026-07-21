@@ -3,24 +3,25 @@ import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 
-interface DrawerResizeOptions {
-  storageKey: string
-  defaultSize: number
-  min: number
-  max: number
-}
-
 const props = withDefaults(defineProps<{
   ariaLabel: string
   testid?: string
   backdropTestid?: string
+  /** Fixed width in px — opts out of the default resizable behavior. */
   width?: number
-  resize?: DrawerResizeOptions
+  /** Resize persistence key; defaults to `hive.panel.<testid>`. */
+  storageKey?: string
+  defaultSize?: number
+  min?: number
+  max?: number
   closeOnEscape?: boolean
   closeOnBackdrop?: boolean
   trapFocus?: boolean
   bodyClass?: string
 }>(), {
+  defaultSize: 440,
+  min: 360,
+  max: 760,
   closeOnEscape: true,
   closeOnBackdrop: true,
   trapFocus: true,
@@ -28,8 +29,14 @@ const props = withDefaults(defineProps<{
 
 const emit = defineEmits<{ close: [] }>()
 const sheetRef = ref<HTMLElement | null>(null)
-const resizePanel = props.resize
-  ? useResizablePanel({ ...props.resize, edge: 'left' })
+const resizePanel = props.width === undefined
+  ? useResizablePanel({
+      storageKey: props.storageKey ?? `hive.panel.${props.testid ?? 'drawer'}`,
+      defaultSize: props.defaultSize,
+      min: props.min,
+      max: props.max,
+      edge: 'left',
+    })
   : null
 const panelWidth = computed(() => resizePanel?.size.value ?? props.width)
 
@@ -91,7 +98,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       :data-testid="testid"
       @keydown="trapFocus"
     >
-      <PanelResizeHandle v-if="resize" edge="left" :name="testid ?? 'drawer'" :start="startResize" :step="stepResize" />
+      <PanelResizeHandle v-if="resizePanel" edge="left" :name="testid ?? 'drawer'" :start="startResize" :step="stepResize" />
       <header v-if="$slots.header" class="shrink-0 border-b border-row bg-pane px-[18px] py-[15px]">
         <slot name="header" />
       </header>

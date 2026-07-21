@@ -56,7 +56,7 @@ onMounted(() => void load())
 </script>
 
 <template>
-  <DrawerSheet ariaLabel="GitHub settings" testid="github-integration-drawer" backdrop-testid="github-integration-backdrop" :resize="{ storageKey: 'hive.panel.github-settings', defaultSize: 380, min: 320, max: 560 }" @close="emit('close')">
+  <DrawerSheet ariaLabel="GitHub settings" testid="github-integration-drawer" backdrop-testid="github-integration-backdrop" :default-size="380" :min="320" :max="560" @close="emit('close')">
     <template #header>
       <div class="flex items-center gap-2.5">
         <span class="flex size-[26px] items-center justify-center rounded-[7px] bg-chip text-text-2"><IconGithub class="size-3.5" /></span>

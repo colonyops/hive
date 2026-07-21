@@ -48,7 +48,7 @@ onUnmounted(() => {
   <DrawerSheet
     :ariaLabel="isNew ? 'New action' : 'Edit action'"
     testid="action-editor"
-    :resize="{ storageKey: 'hive.panel.action-editor', defaultSize: 480, min: 360, max: 760 }"
+    :default-size="480"
     @close="cancel"
   >
     <template #header>

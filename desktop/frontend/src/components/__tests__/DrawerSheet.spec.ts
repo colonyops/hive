@@ -53,21 +53,27 @@ describe('DrawerSheet', () => {
     nonClosable.unmount()
   })
 
-  it('uses fixed width or a persisted resizable width as configured', () => {
+  it('is resizable by default and fixed only when width is given', () => {
+    const resizable = mountSheet()
+    expect(el('demo-drawer').style.width).toBe('440px')
+    expect(document.querySelector('[data-testid="resize-handle-demo-drawer"]')).not.toBeNull()
+    resizable.unmount()
+
+    const sized = mountSheet({ defaultSize: 500, storageKey: 'hive.panel.drawer-sheet-test' })
+    expect(el('demo-drawer').style.width).toBe('500px')
+    sized.unmount()
+
     const fixed = mountSheet({ width: 380 })
     expect(el('demo-drawer').style.width).toBe('380px')
     expect(document.querySelector('[data-testid="resize-handle-demo-drawer"]')).toBeNull()
     fixed.unmount()
-
-    const resizable = mountSheet({ resize: { storageKey: 'hive.panel.drawer-sheet-test', defaultSize: 440, min: 360, max: 760 } })
-    expect(el('demo-drawer').style.width).toBe('440px')
-    expect(document.querySelector('[data-testid="resize-handle-demo-drawer"]')).not.toBeNull()
-    resizable.unmount()
   })
 
   it('traps Tab navigation by default', () => {
     const wrapper = mount(DrawerSheet, {
-      props: { ariaLabel: 'Focus drawer', testid: 'focus-drawer' },
+      // Fixed width: the resize handle is focusable and would otherwise be
+      // the trap's first tab stop, which is beside the point here.
+      props: { ariaLabel: 'Focus drawer', testid: 'focus-drawer', width: 400 },
       slots: { default: '<button data-testid="first-focus">First</button><button data-testid="last-focus">Last</button>' },
     })
     const first = el<HTMLButtonElement>('first-focus')
