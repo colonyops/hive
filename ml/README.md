@@ -36,7 +36,8 @@ ml/
 │   ├── schema.py    # capture/annotation dataclasses, taxonomy, weak→model map
 │   ├── reader.py    # content-addressed reader + integrity validator
 │   ├── events.py    # controlled-lab manifest + scenario-event correlation
-│   └── cli.py       # `hive-corpus` CLI (validate / summary / correlate)
+│   ├── annotate.py  # append-only annotation store (silver/gold labels)
+│   └── cli.py       # `hive-corpus` CLI (validate / summary / correlate / annotate)
 └── tests/           # stdlib-only unit tests with synthetic fixtures
 ```
 
@@ -55,6 +56,11 @@ python3 -m hive_corpus summary
 
 # Correlate captures with the latest controlled-lab run
 python3 -m hive_corpus correlate
+
+# Annotations: append a human (gold) label, list, and resolve
+python3 -m hive_corpus annotate add <content_sha256> idle --confidence 0.95 --evidence "$ prompt, no spinner"
+python3 -m hive_corpus annotate list --source human
+python3 -m hive_corpus annotate resolve --with-corpus
 
 # Point at a specific corpus or lab run
 python3 -m hive_corpus summary --corpus /path/to/recordings/tmux
@@ -76,8 +82,9 @@ Optional extras (added as later stages land): `train` (numpy + scikit-learn),
 ## Status
 
 Implemented: corpus reader/validator, distribution summary, controlled-lab
-event correlation.
+event correlation, append-only annotation store with provenance resolution
+(`human` > `llm` > `weak`).
 
-Planned (see handoff "Immediate Next Work"): append-only annotations, LLM
-silver-labeling, human review queue/TUI, dataset export with session/pane/run
-splits + near-duplicate downsampling, baseline trainer, and Go inference parity.
+Planned (see handoff "Immediate Next Work"): LLM silver-labeling, human review
+queue/TUI, dataset export with session/pane/run splits + near-duplicate
+downsampling, baseline trainer, and Go inference parity.

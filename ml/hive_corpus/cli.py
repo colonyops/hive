@@ -16,8 +16,15 @@ import argparse
 import json
 import sys
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
+from .annotate import (
+    WRITABLE_SOURCES,
+    AnnotationStore,
+    default_annotations_path,
+    effective_label,
+)
 from .events import (
     correlate,
     find_latest_lab,
@@ -25,7 +32,7 @@ from .events import (
     load_manifest,
 )
 from .reader import default_corpus_dir, scan_corpus
-from .schema import weak_to_model
+from .schema import MODEL_STATES, Annotation, weak_to_model
 
 
 def _add_corpus_arg(p: argparse.ArgumentParser) -> None:
@@ -235,6 +242,110 @@ def cmd_correlate(args: argparse.Namespace) -> int:
     return 0
 
 
+def _add_store_arg(p: argparse.ArgumentParser) -> None:
+    p.add_argument(
+        "--store",
+        type=Path,
+        default=None,
+        help="annotation store JSONL (default: $XDG_DATA_HOME/hive/corpus-annotations/annotations.jsonl)",
+    )
+
+
+def _resolve_store(args: argparse.Namespace) -> AnnotationStore:
+    path = args.store if args.store is not None else default_annotations_path()
+    return AnnotationStore(path)
+
+
+def cmd_annotate_add(args: argparse.Namespace) -> int:
+    store = _resolve_store(args)
+    ann = Annotation(
+        content_sha256=args.sha,
+        state=args.state,
+        source="human",
+        created_at=datetime.now(timezone.utc),
+        confidence=args.confidence,
+        evidence=args.evidence or "",
+        alternatives=args.alternative or [],
+        needs_human=False,
+        note=args.note or "",
+    )
+    try:
+        store.append(ann)
+    except ValueError as exc:
+        print(f"invalid annotation: {exc}", file=sys.stderr)
+        return 2
+    print(f"added human annotation: {args.sha[:12]}\u2026 -> {args.state}")
+    return 0
+
+
+def cmd_annotate_list(args: argparse.Namespace) -> int:
+    store = _resolve_store(args)
+    anns = store.all()
+    if args.sha:
+        anns = [a for a in anns if a.content_sha256 == args.sha]
+    if args.source:
+        anns = [a for a in anns if a.source == args.source]
+    for ann in anns:
+        print(json.dumps(ann.to_dict()))
+    if not args.sha and not args.source:
+        print(f"{len(anns)} annotations", file=sys.stderr)
+    return 0
+
+
+def cmd_annotate_resolve(args: argparse.Namespace) -> int:
+    store = _resolve_store(args)
+    resolved = store.resolve()
+
+    by_source: Counter[str] = Counter(r.source for r in resolved.values())
+    by_state: Counter[str] = Counter(r.state for r in resolved.values())
+    superseded = sum(1 for r in resolved.values() if r.superseded)
+
+    report: dict = {
+        "store": str(store.path),
+        "annotated_captures": len(resolved),
+        "by_source": dict(by_source.most_common()),
+        "by_state": dict(by_state.most_common()),
+        "captures_with_superseded": superseded,
+    }
+
+    # Optionally join against the corpus to show effective-label coverage.
+    if args.corpus is not None or args.with_corpus:
+        corpus = _resolve_corpus(args)
+        result = scan_corpus(corpus, check_mode=False)
+        eff_source: Counter[str] = Counter()
+        eff_state: Counter[str] = Counter()
+        for cap in result.captures:
+            state, source = effective_label(cap, resolved)
+            eff_source[source] += 1
+            eff_state[state] += 1
+        report["corpus"] = str(corpus)
+        report["corpus_captures"] = len(result.captures)
+        report["effective_label_source"] = dict(eff_source.most_common())
+        report["effective_state"] = dict(eff_state.most_common())
+
+    if args.json:
+        print(json.dumps(report, indent=2))
+    else:
+        print(f"store:      {store.path}")
+        print(f"annotated:  {len(resolved)} captures")
+        print("by source:")
+        for k, n in by_source.most_common():
+            print(f"  {k}: {n}")
+        print("by state:")
+        for k, n in by_state.most_common():
+            print(f"  {k}: {n}")
+        print(f"captures with superseded labels: {superseded}")
+        if "effective_state" in report:
+            print(f"corpus:     {report['corpus']} ({report['corpus_captures']} captures)")
+            print("effective label source:")
+            for k, n in report["effective_label_source"].items():
+                print(f"  {k}: {n}")
+            print("effective state:")
+            for k, n in report["effective_state"].items():
+                print(f"  {k}: {n}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="hive-corpus", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -256,6 +367,32 @@ def build_parser() -> argparse.ArgumentParser:
     p_corr.add_argument("--json", action="store_true", help="emit JSON report")
     p_corr.add_argument("--jsonl", action="store_true", help="emit one JSON row per correlated capture")
     p_corr.set_defaults(func=cmd_correlate)
+
+    p_ann = sub.add_parser("annotate", help="manage the append-only annotation store")
+    ann_sub = p_ann.add_subparsers(dest="annotate_command", required=True)
+
+    p_add = ann_sub.add_parser("add", help="append a human (gold) annotation")
+    _add_store_arg(p_add)
+    p_add.add_argument("sha", help="content_sha256 of the capture to label")
+    p_add.add_argument("state", choices=MODEL_STATES, help="model state label")
+    p_add.add_argument("--confidence", type=float, default=None, help="0..1")
+    p_add.add_argument("--evidence", default=None, help="short quote justifying the label")
+    p_add.add_argument("--alternative", action="append", choices=MODEL_STATES, help="other plausible state (repeatable)")
+    p_add.add_argument("--note", default=None)
+    p_add.set_defaults(func=cmd_annotate_add)
+
+    p_list = ann_sub.add_parser("list", help="list annotations (JSONL)")
+    _add_store_arg(p_list)
+    p_list.add_argument("--sha", default=None, help="filter by content_sha256")
+    p_list.add_argument("--source", choices=WRITABLE_SOURCES, default=None, help="filter by source")
+    p_list.set_defaults(func=cmd_annotate_list)
+
+    p_res = ann_sub.add_parser("resolve", help="show resolved labels (human > llm > weak)")
+    _add_store_arg(p_res)
+    _add_corpus_arg(p_res)
+    p_res.add_argument("--with-corpus", action="store_true", help="join against corpus for effective-label coverage")
+    p_res.add_argument("--json", action="store_true", help="emit JSON report")
+    p_res.set_defaults(func=cmd_annotate_resolve)
 
     return parser
 
