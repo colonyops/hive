@@ -87,6 +87,19 @@ func (db *DB) SetJobStatus(
 	return jobRecordFromRow(row), nil
 }
 
+// FindRunningJobByCommandID returns the running job linked to commandID. The
+// boolean is false when no such job exists.
+func (db *DB) FindRunningJobByCommandID(ctx context.Context, commandID int64) (JobRecord, bool, error) {
+	row, err := db.queries.FindRunningJobByCommandID(ctx, sql.NullInt64{Int64: commandID, Valid: true})
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return JobRecord{}, false, nil
+		}
+		return JobRecord{}, false, fmt.Errorf("finding running job for command %d: %w", commandID, err)
+	}
+	return jobRecordFromRow(row), true, nil
+}
+
 // ListJobs returns up to limit jobs with id < before, newest first. Pass before
 // <= 0 to start from the most recent job.
 func (db *DB) ListJobs(ctx context.Context, before int64, limit int) ([]JobRecord, error) {

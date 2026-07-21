@@ -116,9 +116,13 @@ func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
 	first, err := Open(dir, DefaultOpenOptions())
 	require.NoError(t, err)
 	enqueueTestCommand(t, first, "review", "item-1")
-	_, created, err := first.ConfirmOutputCommand(ctx, "review", "item-1", []byte(`{}`))
+	command, created, err := first.ConfirmOutputCommand(ctx, "review", "item-1", []byte(`{}`))
 	require.NoError(t, err)
 	require.True(t, created)
+	job, err := first.InsertJob(ctx, JobRecord{CreatedAt: 1, UpdatedAt: 1, Status: "queued", Label: "Review"})
+	require.NoError(t, err)
+	_, err = first.SetJobRunning(ctx, job.ID, 2, "Running…", command.ID)
+	require.NoError(t, err)
 	require.NoError(t, first.Close())
 
 	reopened, err := Open(dir, DefaultOpenOptions())
@@ -132,6 +136,12 @@ func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
 	rows, err := reopened.ListRunnableOutputCommands(ctx, 10)
 	require.NoError(t, err)
 	assert.Empty(t, rows)
+	jobs, err := reopened.ListJobs(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, jobs, 1)
+	assert.Equal(t, "failed", jobs[0].Status)
+	assert.Equal(t, "Failed", jobs[0].Step)
+	assert.Contains(t, jobs[0].Error, "interrupted")
 }
 
 func TestOpen_Idempotent(t *testing.T) {

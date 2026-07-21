@@ -92,14 +92,32 @@ func wrap(msg string, err error) error {
 	return fmt.Errorf("%s: %w", msg, err)
 }
 
-// RecoverInterruptedOutputCommands makes a stale explicit invocation terminal.
-// A running command may already have performed its side effect before a crash,
-// so retrying it in the background would be unauthorized and unsafe.
+const interruptedOutputCommandError = "interrupted: application stopped while action was running"
+
+// RecoverInterruptedOutputCommands makes stale explicit invocations and their
+// linked jobs terminal. A running command may already have performed its side
+// effect before a crash, so retrying it in the background would be unauthorized
+// and unsafe.
 func (db *DB) RecoverInterruptedOutputCommands(ctx context.Context) error {
-	_, err := db.conn.ExecContext(ctx, `
+	tx, err := db.conn.BeginTx(ctx, nil)
+	if err != nil {
+		return wrap("starting interrupted output command recovery", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	if _, err = tx.ExecContext(ctx, `
+		UPDATE job
+		SET status = 'failed', step = 'Failed', error = ?, updated_at = ?
+		WHERE status = 'running'
+			AND command_id IN (SELECT id FROM output_command WHERE status = 'running')`,
+		interruptedOutputCommandError, time.Now().UnixMilli()); err != nil {
+		return wrap("recovering interrupted jobs", err)
+	}
+	if _, err = tx.ExecContext(ctx, `
 		UPDATE output_command
-		SET status = 'failed', attempts = attempts + 1,
-			last_error = 'interrupted: application stopped while action was running'
-		WHERE status = 'running'`)
-	return wrap("recovering interrupted output commands", err)
+		SET status = 'failed', attempts = attempts + 1, last_error = ?
+		WHERE status = 'running'`, interruptedOutputCommandError); err != nil {
+		return wrap("recovering interrupted output commands", err)
+	}
+	return wrap("committing interrupted output command recovery", tx.Commit())
 }

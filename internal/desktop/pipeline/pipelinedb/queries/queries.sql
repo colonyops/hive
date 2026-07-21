@@ -215,6 +215,14 @@ UPDATE job SET updated_at = ?, status = ?, step = ?, error = ?
 WHERE id = ?
 RETURNING *;
 
+-- name: FindRunningJobByCommandID :one
+-- Restore a running job's identity after a worker or app restart so retries do
+-- not create duplicate jobs and strand the original lifecycle as active.
+SELECT * FROM job
+WHERE command_id = ? AND status = 'running'
+ORDER BY id DESC
+LIMIT 1;
+
 -- name: ListJobs :many
 -- Newest first, paged by a descending id cursor (same shape as ListActivityEvents).
 SELECT * FROM job WHERE id < ? ORDER BY id DESC LIMIT ?;

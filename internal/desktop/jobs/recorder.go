@@ -21,6 +21,9 @@ type Recorder interface {
 	Begin(ctx context.Context, label, actionID, target string) int64
 	// Running marks a job running and links its output_command id.
 	Running(ctx context.Context, id int64, commandID int64)
+	// Resume returns the running job linked to commandID, or zero when none can
+	// be restored. It keeps automatic retries on one lifecycle across restarts.
+	Resume(ctx context.Context, commandID int64) int64
 	// Done marks a job completed.
 	Done(ctx context.Context, id int64)
 	// Fail marks a job failed with a reason.
@@ -89,6 +92,20 @@ func (s *Store) Running(ctx context.Context, id int64, commandID int64) {
 		return
 	}
 	s.emitUpdate(id)
+}
+
+// Resume returns the running job linked to commandID. Lookup failures are
+// logged and treated as no match so job tracking never derails command work.
+func (s *Store) Resume(ctx context.Context, commandID int64) int64 {
+	rec, found, err := s.db.FindRunningJobByCommandID(ctx, commandID)
+	if err != nil {
+		s.log.Warn("resuming job failed", "command_id", commandID, "error", err)
+		return 0
+	}
+	if !found {
+		return 0
+	}
+	return rec.ID
 }
 
 // Done advances a job to done. A zero job id is a safe no-op.

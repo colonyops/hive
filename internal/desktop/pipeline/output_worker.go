@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/colonyops/hive/internal/desktop/activity"
+	"github.com/colonyops/hive/internal/desktop/jobs"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 	"github.com/rs/zerolog"
@@ -58,13 +59,14 @@ type OutputCommandStore interface {
 	RetryOutputCommand(context.Context, int64, string, ...string) error
 }
 type Worker struct {
-	db       OutputCommandStore
-	actions  ActionLister
-	dispatch *Dispatcher
-	interval time.Duration
-	batch    int
-	logger   zerolog.Logger
-	recorder activity.Recorder
+	db          OutputCommandStore
+	actions     ActionLister
+	dispatch    *Dispatcher
+	interval    time.Duration
+	batch       int
+	logger      zerolog.Logger
+	recorder    activity.Recorder
+	jobRecorder jobs.Recorder
 
 	runMu    sync.Mutex
 	stopOnce sync.Once
@@ -72,7 +74,11 @@ type Worker struct {
 }
 
 func NewWorker(db OutputCommandStore, as ActionLister, d *Dispatcher, interval time.Duration, logger zerolog.Logger) *Worker {
-	return &Worker{db: db, actions: as, dispatch: d, interval: interval, batch: DefaultOutputWorkerBatch, logger: logger, stop: make(chan struct{})}
+	return &Worker{
+		db: db, actions: as, dispatch: d, interval: interval,
+		batch: DefaultOutputWorkerBatch, logger: logger,
+		stop: make(chan struct{}),
+	}
 }
 
 // SetRecorder attaches an activity recorder so automatic and manual action
@@ -80,12 +86,52 @@ func NewWorker(db OutputCommandStore, as ActionLister, d *Dispatcher, interval t
 // a nil recorder (the default) records nothing. Set once at wiring time.
 func (w *Worker) SetRecorder(r activity.Recorder) { w.recorder = r }
 
+// SetJobRecorder attaches a jobs recorder so manual and automatic action runs
+// surface as live jobs. A nil recorder, the default, records nothing.
+func (w *Worker) SetJobRecorder(r jobs.Recorder) { w.jobRecorder = r }
+
 // record forwards an activity event when a recorder is attached; nil is a
 // no-op, and the recorder itself logs and swallows write failures.
 func (w *Worker) record(ctx context.Context, e activity.Event) {
 	if w.recorder != nil {
 		w.recorder.Record(ctx, e)
 	}
+}
+
+func (w *Worker) jobBegin(ctx context.Context, label, actionID, target string) int64 {
+	if w.jobRecorder == nil {
+		return 0
+	}
+	return w.jobRecorder.Begin(ctx, label, actionID, target)
+}
+
+func (w *Worker) jobRunning(ctx context.Context, id, commandID int64) {
+	if w.jobRecorder != nil && id != 0 {
+		w.jobRecorder.Running(ctx, id, commandID)
+	}
+}
+
+func (w *Worker) jobResume(ctx context.Context, commandID int64) int64 {
+	if w.jobRecorder == nil {
+		return 0
+	}
+	return w.jobRecorder.Resume(ctx, commandID)
+}
+
+func (w *Worker) jobDone(ctx context.Context, id int64) {
+	if w.jobRecorder != nil && id != 0 {
+		w.jobRecorder.Done(ctx, id)
+	}
+}
+
+func (w *Worker) jobFail(ctx context.Context, id int64, reason string) {
+	if w.jobRecorder != nil && id != 0 {
+		w.jobRecorder.Fail(ctx, id, reason)
+	}
+}
+
+func (w *Worker) jobLogger(id int64, actionID string) zerolog.Logger {
+	return w.logger.With().Int64("job_id", id).Str("action_id", actionID).Logger()
 }
 
 func (w *Worker) Start() {
@@ -113,22 +159,40 @@ func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []by
 	if !created {
 		return ActionRunView{}, fmt.Errorf("action %q has already run for %q", actionID, key)
 	}
+
 	action, ok := w.actions.Get(actionID)
+	label := actionID
+	if ok {
+		label = actionLabel(action)
+	}
+	jobID := w.jobBegin(ctx, label, actionID, key)
+	logger := w.jobLogger(jobID, actionID)
+	logger.Debug().Msg("output worker: job queued")
+
 	if !ok {
 		err = fmt.Errorf("unknown action %q", actionID)
 		if markErr := w.db.MarkOutputCommandFailed(ctx, row.ID, err.Error()); markErr != nil {
+			logger.Error().Err(markErr).Msg("output worker: marking command failed")
 			return ActionRunView{}, markErr
 		}
+		w.jobFail(ctx, jobID, err.Error())
+		logger.Debug().Err(err).Msg("output worker: job failed")
 		return w.view(ctx, row.ID), err
 	}
-	result, err := w.execute(ctx, row, action, input)
+
+	w.jobRunning(ctx, jobID, row.ID)
+	logger.Debug().Int64("command_id", row.ID).Msg("output worker: job running")
+	result, err := w.execute(ctx, row, action, input, logger)
 	if err != nil {
 		// A detail-pane confirmation is an explicit, one-shot attempted side
 		// effect. Persist its diagnostics and make it terminal rather than
 		// retrying later without the interactive input that authorized it.
 		if markErr := w.db.MarkOutputCommandFailed(ctx, row.ID, err.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); markErr != nil {
+			logger.Error().Err(markErr).Msg("output worker: marking command failed")
 			return ActionRunView{}, markErr
 		}
+		w.jobFail(ctx, jobID, err.Error())
+		logger.Debug().Err(err).Msg("output worker: job failed")
 		view := w.view(ctx, row.ID)
 		if result.Attempted {
 			// The side effect was dispatched and failed. Return its durable
@@ -138,8 +202,11 @@ func (w *Worker) Confirm(ctx context.Context, actionID, key string, payload []by
 		return view, err
 	}
 	if err = w.done(ctx, row.ID, result); err != nil {
+		logger.Error().Err(err).Msg("output worker: marking command done failed")
 		return ActionRunView{}, err
 	}
+	w.jobDone(ctx, jobID)
+	logger.Debug().Msg("output worker: job done")
 	// A launch-session run is recorded as a session event by the launcher.
 	if action.Type != ActionTypeLaunchSession {
 		w.record(ctx, activity.ActionRun(actionLabel(action), ""))
@@ -173,18 +240,39 @@ func (w *Worker) Tick(ctx context.Context) {
 
 func (w *Worker) process(ctx context.Context, row pipelinedb.OutputCommand) {
 	a, ok := w.actions.Get(row.ActionID)
+	label := row.ActionID
+	if ok {
+		label = actionLabel(a)
+	}
+	jobID := w.jobResume(ctx, row.ID)
+	resumed := jobID != 0
+	if !resumed {
+		jobID = w.jobBegin(ctx, label, row.ActionID, row.Key)
+	}
+	logger := w.jobLogger(jobID, row.ActionID)
+	if !resumed {
+		logger.Debug().Msg("output worker: job queued")
+	}
+
+	if !resumed {
+		w.jobRunning(ctx, jobID, row.ID)
+		logger.Debug().Int64("command_id", row.ID).Msg("output worker: job running")
+	}
 	if !ok {
-		w.fail(ctx, row, ExecutionResult{}, fmt.Errorf("unknown action %q", row.ActionID))
+		w.fail(ctx, row, ExecutionResult{}, fmt.Errorf("unknown action %q", row.ActionID), jobID, logger)
 		return
 	}
-	result, err := w.execute(ctx, row, a, ActionInvocationInput{})
+	result, err := w.execute(ctx, row, a, ActionInvocationInput{}, logger)
 	if err != nil {
-		w.fail(ctx, row, result, err)
+		w.fail(ctx, row, result, err, jobID, logger)
 		return
 	}
 	if err := w.done(ctx, row.ID, result); err != nil {
-		w.logger.Error().Err(err).Msg("output worker: marking command done failed")
+		logger.Error().Err(err).Msg("output worker: marking command done failed")
+		return
 	}
+	w.jobDone(ctx, jobID)
+	logger.Debug().Msg("output worker: job done")
 	// This is the automatic path (process only executes when the action
 	// auto-applies). A launch-session run is recorded by the launcher instead.
 	if a.Type != ActionTypeLaunchSession {
@@ -201,19 +289,36 @@ func actionLabel(action actions.Action) string {
 	return action.ID
 }
 
-func (w *Worker) execute(ctx context.Context, row pipelinedb.OutputCommand, a actions.Action, input ActionInvocationInput) (ExecutionResult, error) {
+func (w *Worker) execute(
+	ctx context.Context,
+	row pipelinedb.OutputCommand,
+	a actions.Action,
+	input ActionInvocationInput,
+	logger zerolog.Logger,
+) (ExecutionResult, error) {
 	var payload map[string]any
 	if err := json.Unmarshal(row.Payload, &payload); err != nil {
+		logger.Warn().Err(err).Msg("output worker: decoding command payload failed")
 		return ExecutionResult{}, fmt.Errorf("decode payload: %w", err)
 	}
 	return w.dispatch.Execute(ctx, a, OutputData{Key: row.Key, Payload: payload, Raw: json.RawMessage(row.Payload)}, input)
 }
 
-func (w *Worker) fail(ctx context.Context, row pipelinedb.OutputCommand, result ExecutionResult, execErr error) {
+func (w *Worker) fail(
+	ctx context.Context,
+	row pipelinedb.OutputCommand,
+	result ExecutionResult,
+	execErr error,
+	jobID int64,
+	logger zerolog.Logger,
+) {
 	if row.Attempts+1 >= MaxOutputCommandAttempts {
 		if err := w.db.MarkOutputCommandFailed(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
-			w.logger.Error().Err(err).Msg("output worker: mark failed")
+			logger.Error().Err(err).Msg("output worker: mark failed")
+			return
 		}
+		w.jobFail(ctx, jobID, execErr.Error())
+		logger.Debug().Err(execErr).Msg("output worker: job failed")
 		// Only the terminal failure reaches the Activity view; retries stay in
 		// the logs so a flaky action doesn't spam the feed.
 		label := row.ActionID
@@ -224,8 +329,10 @@ func (w *Worker) fail(ctx context.Context, row pipelinedb.OutputCommand, result 
 		return
 	}
 	if err := w.db.RetryOutputCommand(ctx, row.ID, execErr.Error(), boundExecutionStream(result.Log.Stdout), boundExecutionStream(result.Log.Stderr)); err != nil {
-		w.logger.Error().Err(err).Msg("output worker: retry")
+		logger.Error().Err(err).Msg("output worker: retry")
+		return
 	}
+	logger.Debug().Err(execErr).Msg("output worker: command scheduled for retry")
 }
 
 func (w *Worker) view(ctx context.Context, id int64) ActionRunView {

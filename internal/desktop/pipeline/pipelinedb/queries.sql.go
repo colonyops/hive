@@ -236,6 +236,33 @@ func (q *Queries) EnqueueOutputCommand(ctx context.Context, arg EnqueueOutputCom
 	return err
 }
 
+const findRunningJobByCommandID = `-- name: FindRunningJobByCommandID :one
+SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job
+WHERE command_id = ? AND status = 'running'
+ORDER BY id DESC
+LIMIT 1
+`
+
+// Restore a running job's identity after a worker or app restart so retries do
+// not create duplicate jobs and strand the original lifecycle as active.
+func (q *Queries) FindRunningJobByCommandID(ctx context.Context, commandID sql.NullInt64) (Job, error) {
+	row := q.db.QueryRowContext(ctx, findRunningJobByCommandID, commandID)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.Label,
+		&i.Step,
+		&i.ActionID,
+		&i.Target,
+		&i.Error,
+		&i.CommandID,
+	)
+	return i, err
+}
+
 const getConsumerOffset = `-- name: GetConsumerOffset :one
 SELECT consumer, "offset" FROM consumer_offset
 WHERE consumer = ?
