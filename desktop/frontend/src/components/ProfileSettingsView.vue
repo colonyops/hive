@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, watch } from 'vue'
+import { ref, watch } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
 import type { Profile } from '../types/feed'
 import type { ProfileSettingsSection } from '../router'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 
 const props = withDefaults(defineProps<{ profile: Profile; activeSection: ProfileSettingsSection; renaming?: boolean; renameError?: string | null }>(), {
   renaming: false,
@@ -24,12 +25,7 @@ function submitRename(): void {
   emit('rename', trimmed)
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') emit('close')
-}
-
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(() => emit('close'))
 </script>
 
 <template>

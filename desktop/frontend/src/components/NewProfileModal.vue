@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconX from '~icons/lucide/x'
+import { useAutofocus } from '../composables/useAutofocus'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 
 const props = defineProps<{ busy: boolean; error: string | null }>()
 const emit = defineEmits<{ close: []; create: [name: string] }>()
@@ -15,16 +17,8 @@ function submit() {
   if (trimmed) emit('create', trimmed)
 }
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') emit('close')
-}
-
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
-  await nextTick()
-  inputRef.value?.focus()
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(() => emit('close'))
+useAutofocus(inputRef)
 </script>
 
 <template>

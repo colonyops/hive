@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
 import type { SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
+import { useAutofocus } from '../composables/useAutofocus'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 
 const props = defineProps<{ actionLabel: string; options: SessionLaunchOptions; busy: boolean; error: string | null }>()
 const emit = defineEmits<{ close: []; submit: [input: { name: string; repository: string; agent?: string }] }>()
@@ -38,16 +40,8 @@ function close() {
   if (!props.busy) emit('close')
 }
 
-function onKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') close()
-}
-
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
-  await nextTick()
-  nameInput.value?.focus()
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(close)
+useAutofocus(nameInput)
 </script>
 
 <template>

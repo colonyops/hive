@@ -6,25 +6,19 @@
 // draft before proceeding, Discard drops it (App.vue calls
 // session.discardDraft(), which reloads the flow fresh from disk), Cancel
 // aborts the navigation entirely and leaves the draft untouched.
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
+import { useAutofocus } from '../composables/useAutofocus'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 
 const props = defineProps<{ busy: boolean; error?: string | null }>()
 const emit = defineEmits<{ close: []; deploy: []; discard: [] }>()
 
 const deployRef = ref<HTMLButtonElement | null>(null)
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape' && !props.busy) emit('close')
-}
-
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
-  await nextTick()
-  deployRef.value?.focus()
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(() => emit('close'), { enabled: () => !props.busy })
+useAutofocus(deployRef)
 </script>
 
 <template>

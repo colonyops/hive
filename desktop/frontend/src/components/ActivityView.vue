@@ -4,7 +4,7 @@
 // reloads, and errors. Events are recorded by backend subsystems through the
 // activity.Recorder and by the frontend via ActivityService.Record; this view
 // only reads and presents them. Reached from the titlebar Activity link.
-import { computed, onMounted, onUnmounted, ref, type Component } from 'vue'
+import { computed, onMounted, ref, type Component } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconInfo from '~icons/lucide/info'
 import IconPlay from '~icons/lucide/play'
@@ -15,6 +15,7 @@ import IconSquareTerminal from '~icons/lucide/square-terminal'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconZap from '~icons/lucide/zap'
 import { useActivity } from '../composables/useActivity'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 import {
   ACTIVITY_FILTERS,
   eventStyleKey,
@@ -57,15 +58,11 @@ function styleFor(styleKey: ActivityStyleKey) {
   return STYLES[styleKey]
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') emit('close')
-}
+useEscapeToClose(() => emit('close'))
 
 onMounted(() => {
-  window.addEventListener('keydown', onKeydown)
   void load()
 })
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>

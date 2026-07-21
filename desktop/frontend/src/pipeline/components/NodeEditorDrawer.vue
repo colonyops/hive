@@ -3,7 +3,7 @@
 // receive the draft, while save() emits a whole new FlowNode without mutating
 // `node`. The Delete confirmation remains a popover so the footer actions do
 // not shift while confirming.
-import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, ref, toRaw, watch } from 'vue'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
@@ -11,6 +11,8 @@ import { hasInputPort, outputPortCount } from '../lib/ports'
 import { renderMarkdown, summarize } from '../lib/markdown'
 import AppSwitch from '../../components/AppSwitch.vue'
 import DrawerSheet from '../../components/DrawerSheet.vue'
+import { useAutofocus } from '../../composables/useAutofocus'
+import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { NodeTypeDefinition } from '../nodeType'
 import type { FlowNode } from '../types'
 
@@ -119,8 +121,7 @@ const helpSummary = computed(() => summarize(props.def.help))
 
 const nameRef = ref<HTMLInputElement | null>(null)
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
+function onEscape() {
   // The delete popover takes precedence: Esc cancels the pending confirm
   // first, and only closes the whole drawer on a second Esc once the
   // popover is dismissed.
@@ -131,12 +132,8 @@ function onKeydown(e: KeyboardEvent) {
   emit('close')
 }
 
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
-  await nextTick()
-  nameRef.value?.focus()
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(onEscape)
+useAutofocus(nameRef)
 </script>
 
 <template>

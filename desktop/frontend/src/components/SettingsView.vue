@@ -2,7 +2,7 @@
 // Application-wide settings, opened from the persistent profile rail.
 // Only settings backed by real behavior or explicitly marked future
 // integrations belong here.
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconKeyboard from '~icons/lucide/keyboard'
 import IconPalette from '~icons/lucide/palette'
@@ -20,6 +20,7 @@ import slackIcon from '../assets/integrations/slack.svg'
 import SettingsSegmented from './settings/SettingsSegmented.vue'
 import GithubIntegrationDrawer from './settings/GithubIntegrationDrawer.vue'
 import { setTheme, themeLabels, themes, useTheme, type Theme } from '../composables/useTheme'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 import type { ApplicationSettingsSection } from '../router'
 
 const props = withDefaults(defineProps<{
@@ -57,12 +58,7 @@ function onThemeChange(value: string): void {
   setTheme(value as Theme)
 }
 
-function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') emit('close')
-}
-
-onMounted(() => window.addEventListener('keydown', onKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(() => emit('close'))
 </script>
 
 <template>

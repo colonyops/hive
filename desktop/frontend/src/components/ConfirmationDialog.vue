@@ -1,7 +1,9 @@
 <script setup lang="ts">
-import { nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { ref } from 'vue'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconX from '~icons/lucide/x'
+import { useAutofocus } from '../composables/useAutofocus'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 
 const props = withDefaults(defineProps<{
   title: string
@@ -17,9 +19,9 @@ const emit = defineEmits<{ confirm: []; cancel: [] }>()
 const confirmRef = ref<HTMLButtonElement | null>(null)
 
 function cancel(): void { if (!props.busy) emit('cancel') }
-function onKeydown(event: KeyboardEvent): void { if (event.key === 'Escape') cancel() }
-onMounted(async () => { window.addEventListener('keydown', onKeydown); await nextTick(); confirmRef.value?.focus() })
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+
+useEscapeToClose(cancel)
+useAutofocus(confirmRef)
 </script>
 
 <template>
