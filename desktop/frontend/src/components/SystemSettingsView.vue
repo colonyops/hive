@@ -6,6 +6,7 @@ import { onMounted } from 'vue'
 import IconInfo from '~icons/lucide/info'
 import IconExternalLink from '~icons/lucide/external-link'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
+import SettingsSection from './settings/SettingsSection.vue'
 import { useSystemSettings } from '../composables/useSystemSettings'
 
 const {
@@ -53,12 +54,11 @@ onMounted(() => {
       data-testid="system-error"
     >{{ error }}</div>
 
-    <section class="mb-6">
-      <h2 class="text-[15px] font-semibold text-text">Storage locations</h2>
-      <p class="mb-3 mt-1 text-xs leading-relaxed text-text-3">
-        Point Hive at a different folder — for example an iCloud-synced directory to share configuration across
-        machines. Existing data is not moved, and a new location applies after restarting.
-      </p>
+    <SettingsSection
+      title="Storage locations"
+      description="Point Hive at a different folder — for example an iCloud-synced directory to share configuration across machines. Existing data is not moved, and a new location applies after restarting."
+      class="mb-6 [&>p]:mb-3"
+    >
       <div v-if="info" class="flex flex-col gap-3">
         <SettingsPathRow
           label="Data directory"
@@ -87,13 +87,13 @@ onMounted(() => {
           @reset="resetConfigDir"
         />
       </div>
-    </section>
+    </SettingsSection>
 
-    <section>
-      <h2 class="text-[15px] font-semibold text-text">Diagnostics</h2>
-      <p class="mb-3 mt-1 text-xs leading-relaxed text-text-3">
-        Open or locate the log file and database when troubleshooting.
-      </p>
+    <SettingsSection
+      title="Diagnostics"
+      description="Open or locate the log file and database when troubleshooting."
+      class="[&>p]:mb-3"
+    >
       <div v-if="info" class="flex flex-col gap-3">
         <SettingsPathRow
           label="Log file"
@@ -112,13 +112,14 @@ onMounted(() => {
           @reveal="revealPath(info.database.path)"
         />
       </div>
-    </section>
+    </SettingsSection>
 
-    <section class="mt-6" data-testid="system-about">
-      <h2 class="text-[15px] font-semibold text-text">About</h2>
-      <p class="mb-3 mt-1 text-xs leading-relaxed text-text-3">
-        The build of Hive you're running. Include this when reporting an issue.
-      </p>
+    <SettingsSection
+      title="About"
+      description="The build of Hive you're running. Include this when reporting an issue."
+      class="mt-6 [&>p]:mb-3"
+      data-testid="system-about"
+    >
       <div v-if="build" class="rounded-lg border border-border">
         <div class="flex items-center justify-between gap-3 px-3.5 py-2.5">
           <span class="text-[12.5px] text-text-3">Version</span>
@@ -154,6 +155,6 @@ onMounted(() => {
           </button>
         </div>
       </div>
-    </section>
+    </SettingsSection>
   </div>
 </template>

@@ -22,6 +22,7 @@ import slackIcon from '../assets/integrations/slack.svg'
 import GithubIntegrationDrawer from './settings/GithubIntegrationDrawer.vue'
 import SettingsLayout from './settings/SettingsLayout.vue'
 import SettingsNavItem from './settings/SettingsNavItem.vue'
+import SettingsSection from './settings/SettingsSection.vue'
 import SettingsSegmented from './settings/SettingsSegmented.vue'
 import { setTheme, themeLabels, themes, useTheme, type Theme } from '../composables/useTheme'
 import type { ApplicationSettingsSection } from '../router'
@@ -101,12 +102,11 @@ function onThemeChange(value: string): void {
       <SystemSettingsView v-else-if="props.activeCategory === 'system'" />
 
       <div v-else class="mx-auto max-w-[640px]" data-testid="settings-integrations">
-        <div class="mb-5">
-          <h2 class="text-[15px] font-semibold text-text">Data sources</h2>
-          <p class="mt-1 text-xs leading-relaxed text-text-3">
-            Connections bring external events into Hive. More providers will support guided setup here as they become available.
-          </p>
-        </div>
+        <SettingsSection
+          title="Data sources"
+          description="Connections bring external events into Hive. More providers will support guided setup here as they become available."
+          class="mb-5"
+        />
 
         <div class="flex flex-col gap-3">
           <BaseCard class="rounded-lg border border-border bg-raised" data-testid="integration-github">

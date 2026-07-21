@@ -9,6 +9,8 @@ import BaseIconBadge from './BaseIconBadge.vue'
 import AppIcon from './AppIcon.vue'
 import ActionEditor from './ActionEditor.vue'
 import ConfirmationDialog from './ConfirmationDialog.vue'
+import EmptyState from './settings/EmptyState.vue'
+import SettingsSection from './settings/SettingsSection.vue'
 import { useConfirmation } from '../composables/useConfirmation'
 import { actionTypeMeta } from '../lib/actionPresentation'
 import { useActionsSettings, type EditableAction } from '../composables/useActionsSettings'
@@ -40,10 +42,11 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
 <template>
   <div class="mx-auto max-w-[720px]" data-testid="actions-settings">
     <div class="mb-5 flex items-start gap-4">
-      <div class="flex-1">
-        <h2 class="text-[15px] font-semibold text-text">Actions</h2>
-        <p class="mt-1 text-xs leading-relaxed text-text-3">Detail visibility controls only manual feed-item buttons. Flow nodes can still target any action.</p>
-      </div>
+      <SettingsSection
+        title="Actions"
+        description="Detail visibility controls only manual feed-item buttons. Flow nodes can still target any action."
+        class="flex-1"
+      />
       <BaseButton
         size="sm"
         class="shrink-0"
@@ -86,7 +89,7 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
         </template>
       </BaseCard>
 
-      <p v-if="!actions.length" class="py-8 text-center text-xs text-text-4">No actions configured.</p>
+      <EmptyState v-if="!actions.length" message="No actions configured." />
       <div v-else class="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-text-4" data-testid="actions-source">Synced from .hive/actions.yml · {{ actions.length }} {{ actions.length === 1 ? 'action' : 'actions' }}</div>
     </div>
 
