@@ -1,6 +1,6 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { Browser, Events, Window } from '@wailsio/runtime'
-import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
+import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { bodySnippet, feedSource, typeLabel } from '../lib/feedPresentation'
@@ -51,6 +51,8 @@ export function useFeedState() {
   const toasts = ref<ToastInstance[]>([])
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
+  const renamingProfile = ref(false)
+  const renameProfileError = ref<string | null>(null)
   const deletingProfile = ref(false)
   let nextToastId = 1
   const toastTimers = new Map<number, ReturnType<typeof setTimeout>>()
@@ -278,6 +280,37 @@ export function useFeedState() {
       createProfileError.value = error instanceof Error && error.message ? error.message : 'Could not create the workspace.'
     } finally {
       creatingProfile.value = false
+    }
+  }
+
+  async function renameProfile(profileID: string, name: string): Promise<boolean> {
+    if (renamingProfile.value) return false
+    const trimmed = name.trim()
+    if (!trimmed) {
+      renameProfileError.value = 'Profile name cannot be empty.'
+      return false
+    }
+
+    const current = profiles.value.find((profile) => profile.id === profileID)
+    if (current?.name === trimmed) return true
+
+    renamingProfile.value = true
+    renameProfileError.value = null
+    try {
+      const renamed = await RenameFlow(profileID, trimmed)
+      const profile = profiles.value.find((candidate) => candidate.id === profileID)
+      if (profile) {
+        profile.name = renamed.name
+        profile.letter = letter(renamed.name)
+      }
+      showToast('Profile renamed', { severity: 'success' })
+      return true
+    } catch (error) {
+      console.warn('Unable to rename flow', error)
+      renameProfileError.value = error instanceof Error && error.message ? error.message : 'Could not rename the profile.'
+      return false
+    } finally {
+      renamingProfile.value = false
     }
   }
 
@@ -656,9 +689,12 @@ export function useFeedState() {
     clearToasts,
     creatingProfile,
     createProfileError,
+    renamingProfile,
+    renameProfileError,
     deletingProfile,
     loadProfiles,
     createProfile,
+    renameProfile,
     deleteProfile,
     reorderFeeds,
     selectProfile,

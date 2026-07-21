@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   ListFlows: vi.fn(),
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
+  RenameFlow: vi.fn(),
   DeleteFlow: vi.fn(),
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => (
   ListFlows: mocks.ListFlows,
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
+  RenameFlow: mocks.RenameFlow,
   DeleteFlow: mocks.DeleteFlow,
   GetLayout: mocks.GetLayout,
   SaveFlow: mocks.SaveFlow,
@@ -132,6 +134,7 @@ describe('App', () => {
     mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
     mocks.NodeRuns.mockResolvedValue([])
+    mocks.RenameFlow.mockResolvedValue({ id: 'personal', name: 'Team', enabled: true, valid: true })
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
   })
@@ -174,6 +177,21 @@ describe('App', () => {
     // Back to the feed view.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('renames the active profile from profile settings', async () => {
+    const wrapper = await mountApp()
+
+    await wrapper.get('[data-testid="sidebar-open-settings"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="profile-settings-name"]').setValue('Team')
+    await wrapper.get('[data-testid="profile-settings-view"] form').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.RenameFlow).toHaveBeenCalledWith('personal', 'Team')
+    expect((wrapper.get('[data-testid="profile-settings-name"]').element as HTMLInputElement).value).toBe('Team')
 
     wrapper.unmount()
   })

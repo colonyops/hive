@@ -71,6 +71,14 @@ export function ListFlows(): $CancellablePromise<$models.FlowSummary[] | null> {
 }
 
 /**
+ * RenameFlow changes a flow's profile-facing display name while preserving its
+ * stable id and graph definition.
+ */
+export function RenameFlow(id: string, name: string): $CancellablePromise<$models.FlowSummary> {
+    return $Call.ByID(1672705850, id, name);
+}
+
+/**
  * SaveFlow validates and persists a flow's definition. An invalid flow is
  * rejected and the last-good file on disk — and the store's served flow —
  * are left untouched.

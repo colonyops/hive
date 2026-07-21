@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   ListFlows: vi.fn(),
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
+  RenameFlow: vi.fn(),
   DeleteFlow: vi.fn(),
   GetSidebar: vi.fn(),
   SaveSidebar: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () =
   ListFlows: mocks.ListFlows,
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
+  RenameFlow: mocks.RenameFlow,
   DeleteFlow: mocks.DeleteFlow,
   GetSidebar: mocks.GetSidebar,
   SaveSidebar: mocks.SaveSidebar,
@@ -205,6 +207,30 @@ describe('useFeedState', () => {
 
     expect(mocks.CreateFlow).toHaveBeenCalledWith('New')
     expect(get().profiles.value.some((p) => p.id === 'new')).toBe(true)
+  })
+
+  it('renames a profile and updates its rail presentation', async () => {
+    mocks.RenameFlow.mockResolvedValue({ id: 'triage', name: 'Team Triage', enabled: true, valid: true })
+    const get = mountState()
+    await flushPromises()
+
+    const renamed = await get().renameProfile('triage', '  Team Triage  ')
+
+    expect(renamed).toBe(true)
+    expect(mocks.RenameFlow).toHaveBeenCalledWith('triage', 'Team Triage')
+    expect(get().activeProfile.value).toMatchObject({ name: 'Team Triage', letter: 'T' })
+  })
+
+  it('surfaces a profile rename failure without changing the current name', async () => {
+    mocks.RenameFlow.mockRejectedValue(new Error('disk is read-only'))
+    const get = mountState()
+    await flushPromises()
+
+    const renamed = await get().renameProfile('triage', 'Team Triage')
+
+    expect(renamed).toBe(false)
+    expect(get().renameProfileError.value).toBe('disk is read-only')
+    expect(get().activeProfile.value?.name).toBe('Frontend Triage')
   })
 
   it('deletes a profile by deleting its flow', async () => {

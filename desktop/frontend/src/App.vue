@@ -49,7 +49,7 @@ const {
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, title, toasts, dismissToast, clearToasts,
-  creatingProfile, createProfileError, deletingProfile, loadProfiles, createProfile, deleteProfile,
+  creatingProfile, createProfileError, renamingProfile, renameProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, selectNext, selectPrev,
   toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
@@ -330,6 +330,11 @@ async function submitNewProfile(name: string) {
   }
 }
 
+async function submitProfileRename(name: string) {
+  if (!activeProfileId.value) return
+  await renameProfile(activeProfileId.value, name)
+}
+
 const deleteProfileOpen = ref(false)
 
 function openDeleteProfile() {
@@ -604,7 +609,10 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           v-else-if="profileSettingsActive && activeProfile"
           :profile="activeProfile"
           :active-section="profileSettingsSection"
+          :renaming="renamingProfile"
+          :rename-error="renameProfileError"
           @close="closeSettings"
+          @rename="submitProfileRename"
           @delete="openDeleteProfile"
           @select-section="selectProfileSettingsSection"
         />
