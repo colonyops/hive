@@ -35,8 +35,11 @@ type updaterEngine interface {
 	Restart(ctx context.Context) error
 }
 
-// UpdateInfo is the frontend-facing view of the last check result.
+// UpdateInfo is the frontend-facing view of the last check result plus the
+// current auto-update toggle state, so a single Status() call seeds both the
+// title-bar chip and the settings switch.
 type UpdateInfo struct {
+	Enabled        bool   `json:"enabled"`
 	Available      bool   `json:"available"`
 	CurrentVersion string `json:"currentVersion"`
 	LatestVersion  string `json:"latestVersion"`
@@ -98,9 +101,11 @@ func (s *UpdaterService) Status() UpdateInfo {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.available != nil {
-		return *s.available
+		info := *s.available
+		info.Enabled = s.enabled
+		return info
 	}
-	return UpdateInfo{Available: false, CurrentVersion: s.currentVersion}
+	return UpdateInfo{Enabled: s.enabled, Available: false, CurrentVersion: s.currentVersion}
 }
 
 // SetEnabled persists the toggle to settings and starts/stops the ticker
@@ -162,23 +167,25 @@ func (s *UpdaterService) stop() {
 func (s *UpdaterService) check(ctx context.Context) (UpdateInfo, error) {
 	s.mu.Lock()
 	engine := s.engine
+	enabled := s.enabled
 	s.mu.Unlock()
 	if engine == nil {
-		info := UpdateInfo{Available: false, CurrentVersion: s.currentVersion}
+		info := UpdateInfo{Enabled: enabled, Available: false, CurrentVersion: s.currentVersion}
 		return info, nil
 	}
 
 	rel, err := engine.Check(ctx)
 	if err != nil {
 		s.logger.Debug().Err(err).Msg("update check failed")
-		return UpdateInfo{Available: false, CurrentVersion: s.currentVersion}, err
+		return UpdateInfo{Enabled: enabled, Available: false, CurrentVersion: s.currentVersion}, err
 	}
 
 	var info UpdateInfo
 	if rel == nil {
-		info = UpdateInfo{Available: false, CurrentVersion: s.currentVersion}
+		info = UpdateInfo{Enabled: enabled, Available: false, CurrentVersion: s.currentVersion}
 	} else {
 		info = UpdateInfo{
+			Enabled:        enabled,
 			Available:      true,
 			CurrentVersion: s.currentVersion,
 			LatestVersion:  rel.Version,
