@@ -4,6 +4,7 @@
 import * as ActionsService from "./actionsservice.js";
 import * as ActivityService from "./activityservice.js";
 import * as FlowsService from "./flowsservice.js";
+import * as JobService from "./jobservice.js";
 import * as PipelineService from "./pipelineservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as SystemService from "./systemservice.js";
@@ -11,6 +12,7 @@ export {
     ActionsService,
     ActivityService,
     FlowsService,
+    JobService,
     PipelineService,
     SettingsService,
     SystemService

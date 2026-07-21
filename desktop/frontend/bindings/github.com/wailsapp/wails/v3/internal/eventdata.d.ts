@@ -12,6 +12,7 @@ declare module "@wailsio/runtime" {
             "activity:appended": number;
             "auth:updated": string;
             "flows:updated": string;
+            "jobs:updated": string;
             "log:appended": number;
         }
     }
