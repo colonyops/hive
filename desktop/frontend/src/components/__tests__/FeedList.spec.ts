@@ -82,13 +82,24 @@ describe('FeedList', () => {
     expect(wrapper.emitted('update:search')).toEqual([['oauth']])
   })
 
-  it('offers newest, oldest, and unread-first sorting', async () => {
+  it('offers newest, oldest, and unread-first sorting in the View menu', async () => {
     const wrapper = mountList()
 
-    await wrapper.get('[data-testid="feed-sort"]').trigger('click')
-    await wrapper.get('[data-testid="feed-sort-option-oldest"]').trigger('click')
+    expect(wrapper.find('[data-testid="view-menu"]').exists()).toBe(false)
+    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
+
+    expect(wrapper.get('[data-testid="view-sort-newest"]').attributes('aria-checked')).toBe('true')
+    expect(wrapper.get('[data-testid="view-sort-unread"]').text()).toContain('Unread first')
+    await wrapper.get('[data-testid="view-sort-oldest"]').trigger('click')
 
     expect(wrapper.emitted('set-sort')).toEqual([['oldest']])
+    expect(wrapper.find('[data-testid="view-menu"]').exists()).toBe(false)
+  })
+
+  it('shows when a non-default View option is active', () => {
+    const wrapper = mountList({ sort: 'oldest' })
+
+    expect(wrapper.get('[data-testid="view-active-count"]').text()).toBe('1')
   })
 
   it('shows the unreachable state with a retry that emits refresh', async () => {
@@ -117,14 +128,16 @@ describe('FeedList', () => {
     expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No matches')
   })
 
-  it('emits explicit unread filter values and refresh from header controls', async () => {
+  it('keeps unread filters visible and emits refresh from the View menu', async () => {
     const wrapper = mountList()
 
     await wrapper.find('[data-testid="filter-unread"]').trigger('click')
     await wrapper.find('[data-testid="filter-all"]').trigger('click')
-    await wrapper.find('[data-testid="refresh-chip"]').trigger('click')
+    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="view-menu-refresh"]').trigger('click')
 
     expect(wrapper.emitted('set-unread')).toEqual([[true], [false]])
     expect(wrapper.emitted('refresh')).toHaveLength(1)
+    expect(wrapper.find('[data-testid="view-menu"]').exists()).toBe(false)
   })
 })
