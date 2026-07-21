@@ -34,6 +34,7 @@ import (
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
 //go:embed all:frontend/dist
@@ -68,6 +69,11 @@ func registerEvents() struct{} {
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
 	application.RegisterEvent[int64]("activity:appended")
+	// update:available carries the latest UpdateInfo when a self-update check
+	// finds a newer desktop release; update:none fires when the check confirms
+	// the app is current. The title bar reacts to update:available.
+	application.RegisterEvent[UpdateInfo]("update:available")
+	application.RegisterEvent[UpdateInfo]("update:none")
 	return struct{}{}
 }
 
@@ -422,6 +428,13 @@ func main() {
 		emitAuthUpdated()
 	}
 
+	// The updater service is created before the app (it goes in the Services
+	// slice) but its engine (app.Updater) only exists after application.New, so
+	// the live Updater is attached below. Auto-update defaults on; the persisted
+	// toggle seeds the initial state.
+	updaterVersion, _, _ := resolvedBuildInfo()
+	updaterService := NewUpdaterService(updaterVersion, settings.AutoUpdateOrDefault(), defaultUpdateCheckInterval, logger)
+
 	options := application.Options{
 		Name:        "Hive",
 		Description: "Hive desktop application",
@@ -435,6 +448,7 @@ func main() {
 			application.NewService(NewJobService(jobStore)),
 			application.NewService(NewSystemService()),
 			application.NewService(NewSettingsService(producer, fetcher, logger)),
+			application.NewService(updaterService),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
@@ -446,6 +460,25 @@ func main() {
 		},
 	}
 	app := application.New(options)
+
+	// Configure self-update only for real release builds: a dev build has no
+	// published release newer than itself, and every release would register as
+	// "newer" against the "dev" sentinel. isReleaseVersion rejects dev and
+	// pseudo-versions, so the engine stays nil there and the service degrades to
+	// Available:false with a no-op ticker.
+	if isReleaseVersion(updaterVersion) {
+		provider, provErr := newDesktopProvider(desktopRepoSlug, "")
+		if provErr != nil {
+			logger.Warn().Err(provErr).Msg("desktop auto-update unavailable; provider init failed")
+		} else if initErr := app.Updater.Init(updater.Config{
+			CurrentVersion: updaterVersion,
+			Providers:      []updater.Provider{provider},
+		}); initErr != nil {
+			logger.Warn().Err(initErr).Msg("desktop auto-update unavailable; updater init failed")
+		} else {
+			updaterService.attach(app.Updater)
+		}
+	}
 
 	window := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Title:            "Hive",
@@ -498,6 +531,7 @@ func main() {
 	app.SystemTray.New().SetTemplateIcon(trayIcon).SetMenu(trayMenu)
 
 	shutdown := func() {
+		updaterService.stop()
 		maintenance.Stop()
 		actionRuntime.Close()
 		logCloser()

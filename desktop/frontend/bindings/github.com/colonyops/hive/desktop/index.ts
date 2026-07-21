@@ -8,6 +8,7 @@ import * as JobService from "./jobservice.js";
 import * as PipelineService from "./pipelineservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as SystemService from "./systemservice.js";
+import * as UpdaterService from "./updaterservice.js";
 export {
     ActionsService,
     ActivityService,
@@ -15,7 +16,8 @@ export {
     JobService,
     PipelineService,
     SettingsService,
-    SystemService
+    SystemService,
+    UpdaterService
 };
 
 export type {
@@ -23,5 +25,6 @@ export type {
     FlowSummary,
     GithubSettings,
     PathInfo,
-    SystemInfo
+    SystemInfo,
+    UpdateInfo
 } from "./models.js";

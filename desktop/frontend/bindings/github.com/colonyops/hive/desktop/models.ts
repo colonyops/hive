@@ -77,3 +77,14 @@ export interface SystemInfo {
     "logFile": PathInfo;
     "database": PathInfo;
 }
+
+/**
+ * UpdateInfo is the frontend-facing view of the last check result.
+ */
+export interface UpdateInfo {
+    "available": boolean;
+    "currentVersion": string;
+    "latestVersion": string;
+    "notes": string;
+    "releaseUrl": string;
+}
