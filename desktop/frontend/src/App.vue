@@ -28,6 +28,7 @@ import ToastStack from './components/ToastStack.vue'
 import DevBar from './components/DevBar.vue'
 import { useAuth } from './composables/useAuth'
 import { useActivity } from './composables/useActivity'
+import { useJobs } from './composables/useJobs'
 import { useFeedState } from './composables/useFeedState'
 import { useCommands, useCommandPalette, type Command } from './composables/useCommands'
 import { comboFromEvent, formatCombo, useKeybindings } from './composables/useKeybindings'
@@ -51,7 +52,7 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, renamingProfile, renameProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, deleteProfile,
-  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, selectNext, selectPrev,
+  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, openActionRun, selectNext, selectPrev,
   toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
@@ -256,9 +257,19 @@ function requestOpenSettings(page: 'application' | 'profile'): void {
 // App-global audit log. The titlebar's Activity link replaces the old "polling
 // github" indicator; unseenActivity drives its dot.
 const { unseenCount: unseenActivity } = useActivity()
+const { activeJobs, hasActive: jobsActive } = useJobs()
 
 function openActivity(): void {
   void router.push({ name: 'activity' })
+}
+
+async function openJobRun(commandID: number): Promise<void> {
+  const job = activeJobs.value.find((candidate) => candidate.commandId === commandID)
+  if (!job || !activeProfileId.value) return
+  await router.push({ name: 'feed', params: { profileId: activeProfileId.value } })
+  if (route.name !== 'feed') return
+  await selectSidebar({ type: 'all' })
+  await openActionRun(job.target, job.actionId, commandID)
 }
 
 function closeSettings(): void {
@@ -586,6 +597,8 @@ onUnmounted(() => {
         :activity-active="activityActive"
         :error-count="errorCount"
         :unseen-activity="unseenActivity"
+        :jobs-active="jobsActive"
+        :active-jobs="activeJobs"
         :can-go-back="canGoBack"
         :can-go-forward="canGoForward"
         :sidebar-collapsed="sidebarCollapsed"
@@ -594,6 +607,7 @@ onUnmounted(() => {
         @forward="router.forward()"
         @open-error-node="openErrorNode"
         @open-activity="openActivity"
+        @open-job-run="openJobRun"
         @toggle-sidebar="toggleSidebar"
         @open-palette="togglePalette"
         @toggle-maximise="toggleMaximise"

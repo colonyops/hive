@@ -16,9 +16,9 @@ actions:
     applies_to: [pr]
     repo_template: "https://github.com/{{ .Payload.repo }}.git"
     prompt_template: |
-      Review pull request {{ .Payload.url }}: {{ .Payload.title }}
+      Review pull request {{ .Payload.title }}
 
-      {{ .Payload.body }}
+      {{ .Payload.url }}
   - id: start-implementation
     label: Start implementation
     type: launch-session
@@ -26,7 +26,9 @@ actions:
     applies_to: [issue]
     repo_template: "https://github.com/{{ .Payload.repo }}.git"
     prompt_template: |
-      Implement issue {{ .Payload.url }}: {{ .Payload.title }}
+      Work on {{ .Payload.title }}
+
+      {{ .Payload.url }}
 
       {{ .Payload.body }}
 `

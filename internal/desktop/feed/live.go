@@ -447,7 +447,7 @@ func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {
 			Labels:    labelNames(si.Labels),
 			Branch:    suggestedBranch(kind, si.Number, si.Title),
 			Body:      si.Body,
-			Prompt:    suggestedPrompt(kind, repo, si.Number, si.Title),
+			Prompt:    suggestedPrompt(kind, si.Title, si.URL, si.Body),
 			URL:       si.URL,
 		}
 		out = append(out, liveItem{item: item, updatedAt: si.UpdatedAt})
@@ -482,7 +482,7 @@ func (p *LiveProvider) notificationItems(notifications []github.Notification) []
 			Reason:    n.Reason,
 			Branch:    suggestedBranch(kind, num, n.Subject.Title),
 			Body:      fmt.Sprintf("GitHub notification for %s in %s.", strings.ToLower(kind), repo),
-			Prompt:    suggestedPrompt(kind, repo, num, n.Subject.Title),
+			Prompt:    suggestedPrompt(kind, n.Subject.Title, htmlURLForSubject(repo, kind, num), ""),
 			URL:       htmlURLForSubject(repo, kind, num),
 		}
 		out = append(out, liveItem{item: item, updatedAt: n.UpdatedAt})
@@ -529,20 +529,28 @@ func labelNames(labels []github.Label) []string {
 	return names
 }
 
-// suggestedBranch proposes a session branch name for acting on the item.
+// suggestedBranch proposes a session branch name for acting on the item. The
+// naming mirrors the hive TUI's source session-name convention
+// (gh-pr-<n>-<slug> for PRs, gh-<n>-<slug> for issues; see SourceTemplateConfig
+// defaults in internal/core/config), slugified so it is a valid git branch.
 func suggestedBranch(kind string, num int, title string) string {
-	prefix := "feat"
+	prefix := "gh"
 	if kind == "PR" {
-		prefix = "review"
+		prefix = "gh-pr"
 	}
-	return fmt.Sprintf("%s/%d-%s", prefix, num, slugify(title))
+	return fmt.Sprintf("%s-%d-%s", prefix, num, slugify(title))
 }
 
-func suggestedPrompt(kind, repo string, num int, title string) string {
+// suggestedPrompt proposes the launch dialog's default prompt for an item. The
+// wording mirrors the hive TUI's source prompt templates (SourceTemplateConfig
+// defaults): PRs get "Review pull request", issues get "Work on", each followed
+// by the item URL and (for issues) its body. The result is trimmed so an empty
+// body leaves no dangling blank lines, matching the TUI.
+func suggestedPrompt(kind, title, url, body string) string {
 	if kind == "PR" {
-		return fmt.Sprintf("Review PR #%d in %s: %s. Read the diff, evaluate the approach, and summarize risks.", num, repo, title)
+		return strings.TrimSpace(fmt.Sprintf("Review pull request %s\n\n%s", title, url))
 	}
-	return fmt.Sprintf("Investigate issue #%d in %s: %s. Research the code paths involved and propose an implementation.", num, repo, title)
+	return strings.TrimSpace(fmt.Sprintf("Work on %s\n\n%s\n\n%s", title, url, body))
 }
 
 const slugMaxLen = 40

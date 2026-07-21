@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onClickOutside } from '@vueuse/core'
+import { ref, watch } from 'vue'
 import IconActivity from '~icons/lucide/activity'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
@@ -6,6 +8,9 @@ import IconPanelLeftClose from '~icons/lucide/panel-left-close'
 import IconPanelLeftOpen from '~icons/lucide/panel-left-open'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
+import IconLoader from '~icons/lucide/loader'
+import JobsPopover from './JobsPopover.vue'
+import type { Job } from '../../bindings/github.com/colonyops/hive/internal/desktop/jobs/models'
 
 // The bar is a three-column grid: a left cluster (sidebar toggle), a center
 // cluster (history + command-palette launcher) that stays centered in the
@@ -20,11 +25,13 @@ import IconTriangleAlert from '~icons/lucide/triangle-alert'
 // events recorded since the user last opened that page, shown as a pulsing dot.
 // sidebarCollapsed drives the panel-toggle glyph; canToggleSidebar hides the
 // toggle in views that have no feed sidebar (settings, flows, onboarding).
-defineProps<{
+const props = defineProps<{
   profileName?: string
   activityActive?: boolean
   errorCount?: number
   unseenActivity?: number
+  jobsActive?: boolean
+  activeJobs?: Job[]
   canGoBack?: boolean
   canGoForward?: boolean
   sidebarCollapsed?: boolean
@@ -35,6 +42,7 @@ const emit = defineEmits<{
   forward: []
   'open-error-node': []
   'open-activity': []
+  'open-job-run': [commandId: number]
   'toggle-sidebar': []
   'open-palette': []
   'toggle-maximise': []
@@ -45,6 +53,11 @@ const emit = defineEmits<{
 // them and keep the height in sync with InvisibleTitleBarHeight (42) in main.go
 // so the controls stay vertically centered.
 const isMac = navigator.userAgent.includes('Mac')
+const jobsRoot = ref<HTMLElement | null>(null)
+const jobsOpen = ref(false)
+
+onClickOutside(jobsRoot, () => { jobsOpen.value = false })
+watch(() => props.jobsActive, (active) => { if (!active) jobsOpen.value = false })
 
 // Double-clicking the draggable title bar zooms the window, matching the native
 // macOS title-bar gesture (we draw our own chrome, so we implement it). Clicks
@@ -111,7 +124,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
     </div>
     <div v-else class="flex-1" />
 
-    <!-- Right: error / activity chips -->
+    <!-- Right: error / live jobs / activity chips -->
     <div class="flex min-w-0 flex-1 items-center justify-end gap-2 pl-2 pr-3">
       <button
         v-if="errorCount && errorCount > 0"
@@ -120,6 +133,24 @@ function onTitlebarDblclick(event: MouseEvent): void {
         data-testid="titlebar-error-chip"
         @click="emit('open-error-node')"
       ><IconTriangleAlert class="size-3" />{{ errorCount }} error<template v-if="errorCount !== 1">s</template></button>
+      <div v-if="profileName && jobsActive" ref="jobsRoot" class="relative shrink-0" style="--wails-draggable: no-drag">
+        <button
+          type="button"
+          class="flex cursor-pointer items-center gap-1.5 rounded-md border border-accent/50 bg-accent/10 px-2 py-1 text-[11.5px] font-medium text-accent hover:border-accent"
+          data-testid="titlebar-jobs"
+          aria-label="Show action jobs"
+          :aria-expanded="jobsOpen"
+          @click="jobsOpen = !jobsOpen"
+        >
+          <IconLoader class="size-3.5 animate-spin" />
+          {{ activeJobs?.length ?? 0 }} job<template v-if="(activeJobs?.length ?? 0) !== 1">s</template>
+        </button>
+        <JobsPopover
+          v-if="jobsOpen"
+          :jobs="activeJobs ?? []"
+          @open-run="(commandId) => { jobsOpen = false; emit('open-job-run', commandId) }"
+        />
+      </div>
       <!-- A link to the Activity audit log. A pulsing dot flags activity
            recorded since the page was last opened. -->
       <button

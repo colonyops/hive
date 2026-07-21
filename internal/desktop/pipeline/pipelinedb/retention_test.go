@@ -68,8 +68,16 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 		`, fmt.Sprintf("action-%d", i), fmt.Sprintf("key-%d", i), status, i)
 		require.NoError(t, err)
 	}
+	for i, status := range []string{"done", "failed", "done", "queued", "running"} {
+		_, err := database.InsertJob(ctx, JobRecord{
+			CreatedAt: int64(i), UpdatedAt: int64(i), Status: status, Label: fmt.Sprintf("job-%d", i),
+		})
+		require.NoError(t, err)
+	}
 
-	_, err := database.Prune(ctx, nil, RetentionPolicy{NodeRunLimit: 2, TerminalOutputCommandLimit: 2})
+	_, err := database.Prune(ctx, nil, RetentionPolicy{
+		NodeRunLimit: 2, TerminalOutputCommandLimit: 2, JobLimit: 2,
+	})
 	require.NoError(t, err)
 
 	var nodeRuns int
@@ -87,6 +95,19 @@ func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 	}
 	require.NoError(t, rows.Err())
 	assert.Equal(t, []string{"failed", "done", "pending", "running"}, statuses)
+
+	jobs, err := database.ListJobs(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, jobs, 4)
+	assert.Equal(t, []string{"running", "queued", "done", "failed"}, []string{
+		jobs[0].Status, jobs[1].Status, jobs[2].Status, jobs[3].Status,
+	})
+}
+
+func TestPrune_RejectsNegativeJobLimit(t *testing.T) {
+	database := openTestDB(t)
+	_, err := database.Prune(context.Background(), nil, RetentionPolicy{JobLimit: -1})
+	require.EqualError(t, err, "job retention limit must not be negative")
 }
 
 func TestOpen_FreshDB_HasRetentionIndexes(t *testing.T) {

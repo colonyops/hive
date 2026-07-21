@@ -43,6 +43,19 @@ type FeedItem struct {
 	SnapshotID  string `json:"snapshot_id"`
 }
 
+type Job struct {
+	ID        int64         `json:"id"`
+	CreatedAt int64         `json:"created_at"`
+	UpdatedAt int64         `json:"updated_at"`
+	Status    string        `json:"status"`
+	Label     string        `json:"label"`
+	Step      string        `json:"step"`
+	ActionID  string        `json:"action_id"`
+	Target    string        `json:"target"`
+	Error     string        `json:"error"`
+	CommandID sql.NullInt64 `json:"command_id"`
+}
+
 type NodeRun struct {
 	FlowID    string         `json:"flow_id"`
 	NodeID    string         `json:"node_id"`

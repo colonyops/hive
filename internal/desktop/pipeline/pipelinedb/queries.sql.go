@@ -236,6 +236,33 @@ func (q *Queries) EnqueueOutputCommand(ctx context.Context, arg EnqueueOutputCom
 	return err
 }
 
+const findRunningJobByCommandID = `-- name: FindRunningJobByCommandID :one
+SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job
+WHERE command_id = ? AND status = 'running'
+ORDER BY id DESC
+LIMIT 1
+`
+
+// Restore a running job's identity after a worker or app restart so retries do
+// not create duplicate jobs and strand the original lifecycle as active.
+func (q *Queries) FindRunningJobByCommandID(ctx context.Context, commandID sql.NullInt64) (Job, error) {
+	row := q.db.QueryRowContext(ctx, findRunningJobByCommandID, commandID)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.Label,
+		&i.Step,
+		&i.ActionID,
+		&i.Target,
+		&i.Error,
+		&i.CommandID,
+	)
+	return i, err
+}
+
 const getConsumerOffset = `-- name: GetConsumerOffset :one
 SELECT consumer, "offset" FROM consumer_offset
 WHERE consumer = ?
@@ -288,6 +315,52 @@ func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPay
 	return payload, err
 }
 
+const insertJob = `-- name: InsertJob :one
+INSERT INTO job (created_at, updated_at, status, label, step, action_id, target, error, command_id)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+RETURNING id, created_at, updated_at, status, label, step, action_id, target, error, command_id
+`
+
+type InsertJobParams struct {
+	CreatedAt int64         `json:"created_at"`
+	UpdatedAt int64         `json:"updated_at"`
+	Status    string        `json:"status"`
+	Label     string        `json:"label"`
+	Step      string        `json:"step"`
+	ActionID  string        `json:"action_id"`
+	Target    string        `json:"target"`
+	Error     string        `json:"error"`
+	CommandID sql.NullInt64 `json:"command_id"`
+}
+
+func (q *Queries) InsertJob(ctx context.Context, arg InsertJobParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, insertJob,
+		arg.CreatedAt,
+		arg.UpdatedAt,
+		arg.Status,
+		arg.Label,
+		arg.Step,
+		arg.ActionID,
+		arg.Target,
+		arg.Error,
+		arg.CommandID,
+	)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.Label,
+		&i.Step,
+		&i.ActionID,
+		&i.Target,
+		&i.Error,
+		&i.CommandID,
+	)
+	return i, err
+}
+
 const insertNodeRun = `-- name: InsertNodeRun :exec
 INSERT INTO node_run (flow_id, node_id, ok, in_count, out_count, drop_count, err, ended_at, dur_ms)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -318,6 +391,48 @@ func (q *Queries) InsertNodeRun(ctx context.Context, arg InsertNodeRunParams) er
 		arg.DurMs,
 	)
 	return err
+}
+
+const listActiveJobs = `-- name: ListActiveJobs :many
+SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job
+WHERE status IN ('queued', 'running') OR (status IN ('done', 'failed') AND updated_at >= ?)
+ORDER BY id DESC
+`
+
+// Non-terminal jobs plus terminal jobs updated within a recency window, newest
+// first. Drives the auto-hiding titlebar chip.
+func (q *Queries) ListActiveJobs(ctx context.Context, updatedAt int64) ([]Job, error) {
+	rows, err := q.db.QueryContext(ctx, listActiveJobs, updatedAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+			&i.Label,
+			&i.Step,
+			&i.ActionID,
+			&i.Target,
+			&i.Error,
+			&i.CommandID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const listActivityEvents = `-- name: ListActivityEvents :many
@@ -422,6 +537,50 @@ func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]Lis
 			&i.Payload,
 			&i.UpdatedAt,
 			&i.Unread,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listJobs = `-- name: ListJobs :many
+SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job WHERE id < ? ORDER BY id DESC LIMIT ?
+`
+
+type ListJobsParams struct {
+	ID    int64 `json:"id"`
+	Limit int64 `json:"limit"`
+}
+
+// Newest first, paged by a descending id cursor (same shape as ListActivityEvents).
+func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, error) {
+	rows, err := q.db.QueryContext(ctx, listJobs, arg.ID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Job{}
+	for rows.Next() {
+		var i Job
+		if err := rows.Scan(
+			&i.ID,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+			&i.Status,
+			&i.Label,
+			&i.Step,
+			&i.ActionID,
+			&i.Target,
+			&i.Error,
+			&i.CommandID,
 		); err != nil {
 			return nil, err
 		}
@@ -668,6 +827,23 @@ func (q *Queries) PruneNodeRuns(ctx context.Context, offset int64) error {
 	return err
 }
 
+const pruneTerminalJobs = `-- name: PruneTerminalJobs :exec
+DELETE FROM job
+WHERE id IN (
+    SELECT id FROM job
+    WHERE status IN ('done', 'failed')
+    ORDER BY id DESC
+    LIMIT -1 OFFSET ?
+)
+`
+
+// Never remove active jobs: only terminal done/failed history is bounded
+// (mirrors PruneTerminalOutputCommands).
+func (q *Queries) PruneTerminalJobs(ctx context.Context, offset int64) error {
+	_, err := q.db.ExecContext(ctx, pruneTerminalJobs, offset)
+	return err
+}
+
 const pruneTerminalOutputCommands = `-- name: PruneTerminalOutputCommands :exec
 DELETE FROM output_command
 WHERE id IN (
@@ -746,6 +922,87 @@ func (q *Queries) RetryOutputCommand(ctx context.Context, arg RetryOutputCommand
 		arg.ID,
 	)
 	return err
+}
+
+const setJobRunning = `-- name: SetJobRunning :one
+UPDATE job SET updated_at = ?, status = ?, step = ?, command_id = ?
+WHERE id = ?
+RETURNING id, created_at, updated_at, status, label, step, action_id, target, error, command_id
+`
+
+type SetJobRunningParams struct {
+	UpdatedAt int64         `json:"updated_at"`
+	Status    string        `json:"status"`
+	Step      string        `json:"step"`
+	CommandID sql.NullInt64 `json:"command_id"`
+	ID        int64         `json:"id"`
+}
+
+// Advance a job to running and link its output_command. This is the ONLY write
+// that sets command_id, so terminal transitions can never null it out.
+func (q *Queries) SetJobRunning(ctx context.Context, arg SetJobRunningParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, setJobRunning,
+		arg.UpdatedAt,
+		arg.Status,
+		arg.Step,
+		arg.CommandID,
+		arg.ID,
+	)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.Label,
+		&i.Step,
+		&i.ActionID,
+		&i.Target,
+		&i.Error,
+		&i.CommandID,
+	)
+	return i, err
+}
+
+const setJobStatus = `-- name: SetJobStatus :one
+UPDATE job SET updated_at = ?, status = ?, step = ?, error = ?
+WHERE id = ?
+RETURNING id, created_at, updated_at, status, label, step, action_id, target, error, command_id
+`
+
+type SetJobStatusParams struct {
+	UpdatedAt int64  `json:"updated_at"`
+	Status    string `json:"status"`
+	Step      string `json:"step"`
+	Error     string `json:"error"`
+	ID        int64  `json:"id"`
+}
+
+// Advance a job's status/step/error WITHOUT touching command_id (used by the
+// done/failed terminal transitions). Splitting this from SetJobRunning avoids a
+// read-modify-write and prevents clobbering the command link.
+func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (Job, error) {
+	row := q.db.QueryRowContext(ctx, setJobStatus,
+		arg.UpdatedAt,
+		arg.Status,
+		arg.Step,
+		arg.Error,
+		arg.ID,
+	)
+	var i Job
+	err := row.Scan(
+		&i.ID,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.Status,
+		&i.Label,
+		&i.Step,
+		&i.ActionID,
+		&i.Target,
+		&i.Error,
+		&i.CommandID,
+	)
+	return i, err
 }
 
 const upsertFeedItem = `-- name: UpsertFeedItem :exec

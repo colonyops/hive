@@ -22,6 +22,7 @@ import (
 	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
+	"github.com/colonyops/hive/internal/desktop/jobs"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
@@ -62,6 +63,7 @@ func registerEvents() struct{} {
 	application.RegisterEvent[int64]("log:appended")
 	application.RegisterEvent[string]("flows:updated")
 	application.RegisterEvent[string]("actions:updated")
+	application.RegisterEvent[string]("jobs:updated")
 	// activity:appended carries the new event's id after any subsystem (or the
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
@@ -120,6 +122,14 @@ func buildAuthBackend(onChange func()) auth.Backend {
 func emitActivityAppended(id int64) {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("activity:appended", id)
+	}
+}
+
+// emitJobsUpdated wakes frontend consumers after any successful job lifecycle
+// transition. The payload is intentionally only a wake-up signal.
+func emitJobsUpdated() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("jobs:updated", "changed")
 	}
 }
 
@@ -295,7 +305,7 @@ func buildHiveActionRuntime(recorder activity.Recorder, logger zerolog.Logger) (
 // output commands, but they retain this worker for explicit detail-pane
 // confirmation RPCs. That keeps the configured action path real in e2e while
 // avoiding a background shell action from compromising fixture determinism.
-func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.MessagePublisher, recorder activity.Recorder, logger zerolog.Logger) *pipeline.Worker {
+func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, launcher pipeline.SessionLauncher, publisher pipeline.MessagePublisher, recorder activity.Recorder, jobRecorder jobs.Recorder, logger zerolog.Logger) *pipeline.Worker {
 	dispatcher := pipeline.NewDispatcher(map[string]pipeline.Executor{
 		pipeline.ActionTypeLaunchSession: pipeline.NewLaunchSessionExecutor(launcher),
 		"shell":                          pipeline.NewShellExecutor(logger),
@@ -303,6 +313,7 @@ func buildOutputWorker(db *pipelinedb.DB, actionStore *actions.ActionStore, laun
 	})
 	worker := pipeline.NewWorker(db, actionStore, dispatcher, pipeline.DefaultOutputWorkerInterval, logger)
 	worker.SetRecorder(recorder)
+	worker.SetJobRecorder(jobRecorder)
 	return worker
 }
 
@@ -349,6 +360,7 @@ func main() {
 	// the ActivityService the frontend reads/writes. It emits activity:appended
 	// on each append so open views refresh.
 	activityStore := activity.NewStore(pipelineDB, activity.Options{Emit: emitActivityAppended})
+	jobStore := jobs.NewStore(pipelineDB, jobs.Options{Emit: func(int64) { emitJobsUpdated() }})
 	if fetcher != nil {
 		fetcher.SetRecorder(activityStore)
 	}
@@ -381,7 +393,7 @@ func main() {
 		flowsWatcher.Start()
 	}
 
-	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, activityStore, logger)
+	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, activityStore, jobStore, logger)
 	if desktop.MockMode() == "" {
 		outputWorker.Start()
 	}
@@ -420,6 +432,7 @@ func main() {
 			application.NewService(NewFlowsService(flowsStore)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 			application.NewService(NewActivityService(activityStore)),
+			application.NewService(NewJobService(jobStore)),
 			application.NewService(NewSystemService()),
 			application.NewService(NewSettingsService(producer, fetcher, logger)),
 		},

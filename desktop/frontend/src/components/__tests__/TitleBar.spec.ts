@@ -34,6 +34,24 @@ describe('TitleBar', () => {
     expect(active.find('[data-testid="titlebar-activity-unseen"]').exists()).toBe(false)
   })
 
+  it('shows live jobs, opens the popover, and emits the selected command', async () => {
+    const job = {
+      id: 7, createdAt: 1, updatedAt: 2, status: 'done', label: 'Review PR',
+      step: 'Completed', actionId: 'review', target: 'pr-1', commandId: 42,
+    }
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', jobsActive: true, activeJobs: [job] } })
+    const chip = wrapper.find('[data-testid="titlebar-jobs"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('1 job')
+    await chip.trigger('click')
+    expect(wrapper.find('[data-testid="jobs-popover"]').exists()).toBe(true)
+    await wrapper.find('[data-testid="job-open-run-7"]').trigger('click')
+    expect(wrapper.emitted('open-job-run')).toEqual([[42]])
+
+    await wrapper.setProps({ jobsActive: false })
+    expect(wrapper.find('[data-testid="titlebar-jobs"]').exists()).toBe(false)
+  })
+
   it('exposes enabled back and forward history controls', async () => {
     const wrapper = mount(TitleBar, { props: { profileName: 'Triage', canGoBack: true, canGoForward: true } })
 

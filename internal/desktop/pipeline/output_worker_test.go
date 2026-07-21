@@ -59,6 +59,48 @@ type fakeExecutor struct {
 	result ExecutionResult
 }
 
+type fakeJobRecorder struct {
+	calls     []string
+	label     string
+	actionID  string
+	target    string
+	commandID int64
+	active    bool
+	reason    string
+}
+
+func (f *fakeJobRecorder) Begin(_ context.Context, label, actionID, target string) int64 {
+	f.calls = append(f.calls, "Begin")
+	f.label = label
+	f.actionID = actionID
+	f.target = target
+	return 42
+}
+
+func (f *fakeJobRecorder) Running(_ context.Context, _ int64, commandID int64) {
+	f.calls = append(f.calls, "Running")
+	f.commandID = commandID
+	f.active = true
+}
+
+func (f *fakeJobRecorder) Resume(_ context.Context, commandID int64) int64 {
+	if f.active && f.commandID == commandID {
+		return 42
+	}
+	return 0
+}
+
+func (f *fakeJobRecorder) Done(_ context.Context, _ int64) {
+	f.calls = append(f.calls, "Done")
+	f.active = false
+}
+
+func (f *fakeJobRecorder) Fail(_ context.Context, _ int64, reason string) {
+	f.calls = append(f.calls, "Fail")
+	f.active = false
+	f.reason = reason
+}
+
 func (f *fakeExecutor) Execute(_ context.Context, _ actions.Action, data OutputData, _ ActionInvocationInput) (ExecutionResult, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -145,6 +187,43 @@ func TestWorker_ConfirmCannotReplayAlreadyCompletedDeployedFlowCommand(t *testin
 	assert.Error(t, err, "completed actions remain deduped")
 }
 
+func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
+	t.Parallel()
+	db := openTestPipelineDB(t)
+	exec := &fakeExecutor{}
+	recorder := &fakeJobRecorder{}
+	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)},
+		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
+
+	_, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), ActionInvocationInput{})
+	require.NoError(t, err)
+	assert.Equal(t, []string{"Begin", "Running", "Done"}, recorder.calls)
+	assert.Equal(t, "Test action", recorder.label)
+	assert.Equal(t, "review-action", recorder.actionID)
+	assert.Equal(t, "item-1", recorder.target)
+	assert.Positive(t, recorder.commandID)
+
+	recorder.calls = nil
+	_, err = worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{}`), ActionInvocationInput{})
+	require.Error(t, err)
+	assert.Empty(t, recorder.calls, "idempotent replay must not create a phantom job")
+}
+
+func TestWorker_ConfirmUnknownActionRecordsQueuedFailure(t *testing.T) {
+	t.Parallel()
+	db := openTestPipelineDB(t)
+	recorder := &fakeJobRecorder{}
+	worker := NewWorker(db, fakeActionLister{}, NewDispatcher(nil), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
+
+	_, err := worker.Confirm(t.Context(), "missing", "item-1", []byte(`{}`), ActionInvocationInput{})
+	require.Error(t, err)
+	assert.Equal(t, []string{"Begin", "Fail"}, recorder.calls)
+	assert.Equal(t, "missing", recorder.label)
+	assert.Contains(t, recorder.reason, "unknown action")
+}
+
 func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
@@ -208,14 +287,47 @@ func TestWorker_UnknownActionRecordsRetryableError(t *testing.T) {
 	enqueueTestCommand(t, db, "does-not-exist", "item-1", `{}`)
 
 	exec := &fakeExecutor{}
+	recorder := &fakeJobRecorder{}
 	worker := NewWorker(db, fakeActionLister{}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
 	worker.Tick(t.Context())
 	assert.Equal(t, 0, exec.callCount())
+	assert.Equal(t, []string{"Begin", "Running"}, recorder.calls)
 	rows, err := db.ListRunnableOutputCommands(t.Context(), 10)
 	require.NoError(t, err)
 	require.Len(t, rows, 1)
 	assert.Equal(t, int64(1), rows[0].Attempts)
 	assert.Contains(t, rows[0].LastError.String, "unknown action")
+
+	for range MaxOutputCommandAttempts - 1 {
+		worker.Tick(t.Context())
+	}
+	assert.Equal(t, []string{"Begin", "Running", "Fail"}, recorder.calls)
+}
+
+func TestWorker_FailingExecutor_KeepsOneRunningJobUntilTerminalFailure(t *testing.T) {
+	t.Parallel()
+	db := openTestPipelineDB(t)
+	enqueueTestCommand(t, db, "spawn-review", "item-1", `{"title":"Fix bug"}`)
+
+	exec := &fakeExecutor{err: fmt.Errorf("boom")}
+	recorder := &fakeJobRecorder{}
+	worker := NewWorker(db, fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
+		NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
+
+	for attempt := range MaxOutputCommandAttempts - 1 {
+		worker.Tick(t.Context())
+		assert.Equal(t, []string{"Begin", "Running"}, recorder.calls, "retryable failures leave the existing job running")
+		if attempt == 0 {
+			worker = NewWorker(db, fakeActionLister{"spawn-review": launchSessionAction("spawn-review", true)},
+				NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+			worker.SetJobRecorder(recorder)
+		}
+	}
+	worker.Tick(t.Context())
+	assert.Equal(t, []string{"Begin", "Running", "Fail"}, recorder.calls)
+	assert.Equal(t, "boom", recorder.reason)
 }
 
 func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
@@ -256,13 +368,17 @@ func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
 	db := openTestPipelineDB(t)
 	exec := &fakeExecutor{err: fmt.Errorf("boom"), result: ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: "partial output", Stderr: "failure output"}}}
+	recorder := &fakeJobRecorder{}
 	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
 	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), ActionInvocationInput{})
 	require.NoError(t, err, "an attempted side-effect failure is returned as a persisted view")
 	assert.Equal(t, "failed", view.Status)
 	assert.Equal(t, "boom", view.Error)
 	assert.Equal(t, "partial output", view.Stdout)
 	assert.Equal(t, "failure output", view.Stderr)
+	assert.Equal(t, []string{"Begin", "Running", "Fail"}, recorder.calls)
+	assert.Equal(t, "boom", recorder.reason)
 }
 
 func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.T) {
