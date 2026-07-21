@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onClickOutside } from '@vueuse/core'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
@@ -44,21 +45,13 @@ const activeViewOptionCount = computed(() => props.sort === 'newest' ? 0 : 1)
 function closeViewMenu(): void { viewMenuOpen.value = false }
 function chooseSort(value: FeedSort): void { emit('set-sort', value); closeViewMenu() }
 function refreshFromMenu(): void { emit('refresh'); closeViewMenu() }
-function onDocumentPointer(event: PointerEvent): void {
-  if (viewMenuOpen.value && viewMenu.value && !viewMenu.value.contains(event.target as Node)) closeViewMenu()
-}
 function onDocumentKeydown(event: KeyboardEvent): void {
   if (viewMenuOpen.value && event.key === 'Escape') closeViewMenu()
 }
 
-onMounted(() => {
-  document.addEventListener('pointerdown', onDocumentPointer)
-  document.addEventListener('keydown', onDocumentKeydown)
-})
-onBeforeUnmount(() => {
-  document.removeEventListener('pointerdown', onDocumentPointer)
-  document.removeEventListener('keydown', onDocumentKeydown)
-})
+onClickOutside(viewMenu, () => { if (viewMenuOpen.value) closeViewMenu() })
+onMounted(() => document.addEventListener('keydown', onDocumentKeydown))
+onBeforeUnmount(() => document.removeEventListener('keydown', onDocumentKeydown))
 
 // Keep the selected row in view when navigation moves the cursor by keyboard
 // (mirrors CommandPalette's scrollIntoView on selection change).

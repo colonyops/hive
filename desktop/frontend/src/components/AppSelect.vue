@@ -2,7 +2,8 @@
 // Themed single-select. A native <select> renders its open list with the OS
 // chrome (a light popup that ignores the app theme); this reimplements the
 // listbox so the open state matches the rest of the drawer.
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
+import { onClickOutside } from '@vueuse/core'
+import { computed, ref } from 'vue'
 import IconCheck from '~icons/lucide/check'
 import IconChevronDown from '~icons/lucide/chevron-down'
 
@@ -31,9 +32,7 @@ function onKeydown(event: KeyboardEvent): void {
   else if (event.key === 'End') { event.preventDefault(); active.value = props.options.length - 1 }
   else if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); choose(props.options[active.value].value) }
 }
-function onDocumentPointer(event: PointerEvent): void { if (open.value && root.value && !root.value.contains(event.target as Node)) close() }
-onMounted(() => document.addEventListener('pointerdown', onDocumentPointer))
-onBeforeUnmount(() => document.removeEventListener('pointerdown', onDocumentPointer))
+onClickOutside(root, () => { if (open.value) close() })
 </script>
 
 <template>
