@@ -10,6 +10,8 @@ import IconRotateCcw from '~icons/lucide/rotate-ccw'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
+import EmptyState from './settings/EmptyState.vue'
+import SettingsSection from './settings/SettingsSection.vue'
 import { commandCatalog } from '../keybindings/catalog'
 import { comboFromEvent, formatCombo, useKeybindings } from '../composables/useKeybindings'
 
@@ -92,12 +94,11 @@ onUnmounted(endCapture)
 
 <template>
   <div class="mx-auto max-w-[640px]" data-testid="settings-keybindings">
-    <div class="mb-4">
-      <h2 class="text-[15px] font-semibold text-text">Keyboard shortcuts</h2>
-      <p class="mt-1 text-xs leading-relaxed text-text-3">
-        Rebind commands to your own keys. Bindings apply across the app; feed navigation keys work while the feed is open.
-      </p>
-    </div>
+    <SettingsSection
+      title="Keyboard shortcuts"
+      description="Rebind commands to your own keys. Bindings apply across the app; feed navigation keys work while the feed is open."
+      class="mb-4"
+    />
 
     <label class="mb-4 flex items-center gap-2 rounded-lg border border-strong bg-app px-3 py-2 focus-within:border-accent">
       <IconSearch class="size-[14px] shrink-0 text-text-3" />
@@ -110,9 +111,9 @@ onUnmounted(endCapture)
       >
     </label>
 
-    <div v-if="empty" class="rounded-lg border border-border bg-raised px-4 py-8 text-center text-xs text-text-3" data-testid="keybinding-empty">
+    <EmptyState v-if="empty" boxed data-testid="keybinding-empty">
       No shortcuts match "{{ filter.trim() }}".
-    </div>
+    </EmptyState>
 
     <div v-for="group in groups" :key="group.group" class="mb-5">
       <div class="mb-1.5 px-1 font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-text-3">{{ group.group }}</div>

@@ -15,9 +15,13 @@ jobs:
       # The pinned wails alpha defaults to the GTK4/WebKitGTK 6.0 stack on
       # Linux (GTK3 is opt-in via -tags gtk3, which nothing here passes).
       - name: Install Linux desktop build dependencies
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libgtk-4-dev libwebkitgtk-6.0-dev
+        # Cache the resolved .deb set (webkitgtk pulls ~69MB of transitive
+        # deps); a cache hit reinstalls in seconds instead of re-downloading
+        # from the Ubuntu mirror, which has throttled runs to ~7min.
+        uses: awalsh128/cache-apt-pkgs-action@v1.6.3
+        with:
+          packages: libgtk-4-dev libwebkitgtk-6.0-dev
+          version: 1
 
       - name: Set up Go
         uses: actions/setup-go@v6

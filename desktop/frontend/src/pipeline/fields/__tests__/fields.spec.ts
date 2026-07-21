@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
 import TextField from '../TextField.vue'
+import TextareaField from '../TextareaField.vue'
 import SelectField from '../SelectField.vue'
 import NumberField from '../NumberField.vue'
 import ToggleField from '../ToggleField.vue'
@@ -41,6 +42,28 @@ describe('TextField', () => {
 
     const mono = mount(TextField, { props: { modelValue: '', monospace: true } })
     expect(mono.get('input').classes()).toContain('font-mono')
+  })
+})
+
+describe('TextareaField', () => {
+  it('renders its label and forwards testid, rows, and monospace styling to the textarea', () => {
+    const wrapper = mount(TextareaField, { props: { modelValue: 'hello', label: 'Template', testid: 'ta', rows: 5, monospace: true } })
+    const textarea = wrapper.get('[data-testid="ta"]').element as HTMLTextAreaElement
+
+    expect(wrapper.text()).toContain('Template')
+    expect(textarea.value).toBe('hello')
+    expect(textarea.getAttribute('rows')).toBe('5')
+    expect(textarea.classList).toContain('font-mono')
+  })
+
+  it('emits update:modelValue on input', async () => {
+    const wrapper = mount(TextareaField, { props: { modelValue: '', testid: 'ta' } })
+    const textarea = wrapper.get('textarea').element as HTMLTextAreaElement
+    textarea.value = 'updated'
+    fire(textarea, 'input')
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.emitted('update:modelValue')).toEqual([['updated']])
   })
 })
 

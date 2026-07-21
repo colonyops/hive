@@ -1,5 +1,6 @@
 export { default as FieldRow } from './FieldRow.vue'
 export { default as TextField } from './TextField.vue'
+export { default as TextareaField } from './TextareaField.vue'
 export { default as SelectField } from './SelectField.vue'
 export type { SelectOption } from './SelectField.vue'
 export { default as SearchableSelectField } from './SearchableSelectField.vue'

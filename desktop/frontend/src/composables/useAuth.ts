@@ -1,8 +1,8 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { Events } from '@wailsio/runtime'
+import { computed, onMounted, ref } from 'vue'
 import { SetToken, SignOut, StartDeviceFlow, Status } from '../../bindings/github.com/colonyops/hive/internal/desktop/auth/service'
 import { CancelDeviceFlow } from '../../bindings/github.com/colonyops/hive/internal/desktop/auth/service'
 import type { AuthStatus, DeviceFlowInfo } from '../types/auth'
+import { useWailsEvent } from './useWailsEvent'
 
 export type OnboardingCard = 'idle' | 'device' | 'token'
 
@@ -23,8 +23,6 @@ export function useAuth() {
     return null
   })
   const busy = ref(false)
-  let unsubscribe: (() => void) | undefined
-
   const authenticated = computed(() => status.value?.state === 'authenticated')
 
   async function reload() {
@@ -116,12 +114,8 @@ export function useAuth() {
   onMounted(async () => {
     // auth:updated is a wake-up signal: the device-flow grant lands in a Go
     // goroutine, so state changes arrive here rather than as call results.
-    unsubscribe = Events.On('auth:updated', () => { void reload() })
+    useWailsEvent('auth:updated', () => { void reload() })
     await reload()
-  })
-
-  onUnmounted(() => {
-    unsubscribe?.()
   })
 
   return {

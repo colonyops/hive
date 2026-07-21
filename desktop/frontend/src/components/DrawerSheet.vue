@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, ref } from 'vue'
+import { useEscapeToClose } from '../composables/useEscapeToClose'
 import { useResizablePanel } from '../composables/useResizablePanel'
 import PanelResizeHandle from './PanelResizeHandle.vue'
 
@@ -48,9 +49,7 @@ function onBackdropClick(): void {
   if (props.closeOnBackdrop) close()
 }
 
-function onKeydown(event: KeyboardEvent): void {
-  if (props.closeOnEscape && event.key === 'Escape') close()
-}
+useEscapeToClose(close, { enabled: () => props.closeOnEscape })
 
 function focusableElements(): HTMLElement[] {
   return Array.from(sheetRef.value?.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])') ?? [])
@@ -79,10 +78,6 @@ function stepResize(deltaPx: number): void {
   resizePanel?.step(deltaPx)
 }
 
-onMounted(() => {
-  if (props.closeOnEscape) window.addEventListener('keydown', onKeydown)
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
 </script>
 
 <template>

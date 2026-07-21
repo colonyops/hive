@@ -3,14 +3,17 @@
 // receive the draft, while save() emits a whole new FlowNode without mutating
 // `node`. The Delete confirmation remains a popover so the footer actions do
 // not shift while confirming.
-import { computed, nextTick, onMounted, onUnmounted, ref, toRaw, watch } from 'vue'
+import { computed, nextTick, ref, toRaw, watch } from 'vue'
 import IconAlertTriangle from '~icons/lucide/alert-triangle'
 import IconChevronDown from '~icons/lucide/chevron-down'
 import IconChevronRight from '~icons/lucide/chevron-right'
 import { hasInputPort, outputPortCount } from '../lib/ports'
 import { renderMarkdown, summarize } from '../lib/markdown'
 import AppSwitch from '../../components/AppSwitch.vue'
+import BaseButton from '../../components/BaseButton.vue'
 import DrawerSheet from '../../components/DrawerSheet.vue'
+import { useAutofocus } from '../../composables/useAutofocus'
+import { useEscapeToClose } from '../../composables/useEscapeToClose'
 import type { NodeTypeDefinition } from '../nodeType'
 import type { FlowNode } from '../types'
 
@@ -89,7 +92,7 @@ function submit() {
 
 const deleteConfirming = ref(false)
 const deleteTriggerRef = ref<HTMLButtonElement | null>(null)
-const deleteCancelRef = ref<HTMLButtonElement | null>(null)
+const deleteCancelRef = ref<{ focus: () => void } | null>(null)
 
 function requestDelete() {
   deleteConfirming.value = true
@@ -119,8 +122,7 @@ const helpSummary = computed(() => summarize(props.def.help))
 
 const nameRef = ref<HTMLInputElement | null>(null)
 
-function onKeydown(e: KeyboardEvent) {
-  if (e.key !== 'Escape') return
+function onEscape() {
   // The delete popover takes precedence: Esc cancels the pending confirm
   // first, and only closes the whole drawer on a second Esc once the
   // popover is dismissed.
@@ -131,12 +133,8 @@ function onKeydown(e: KeyboardEvent) {
   emit('close')
 }
 
-onMounted(async () => {
-  window.addEventListener('keydown', onKeydown)
-  await nextTick()
-  nameRef.value?.focus()
-})
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+useEscapeToClose(onEscape)
+useAutofocus(nameRef)
 </script>
 
 <template>
@@ -228,33 +226,38 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           >
             <div class="whitespace-nowrap text-[12px] text-text-2">Delete this node?</div>
             <div class="flex items-center gap-2">
-              <button
+              <BaseButton
                 ref="deleteCancelRef"
-                type="button"
-                class="cursor-pointer whitespace-nowrap rounded-md border border-card px-2.5 py-1.5 text-[12px] text-text-2 hover:text-text"
+                variant="secondary"
+                size="sm"
+                class="whitespace-nowrap"
                 data-testid="node-editor-delete-cancel"
                 @click="cancelDelete"
-              >Cancel</button>
-              <button
-                type="button"
-                class="cursor-pointer whitespace-nowrap rounded-md bg-severity-error px-2.5 py-1.5 text-[12px] font-semibold text-accent-contrast hover:brightness-110"
+              >Cancel</BaseButton>
+              <BaseButton
+                variant="danger"
+                size="sm"
+                class="whitespace-nowrap"
                 data-testid="node-editor-delete-confirm"
                 @click="confirmDelete"
-              >Delete node</button>
+              >Delete node</BaseButton>
             </div>
           </div>
         </div>
         <div class="flex-1" />
-        <button
-          class="cursor-pointer whitespace-nowrap rounded-lg border border-card px-[15px] py-2 text-[13px] text-text-2 hover:text-text"
+        <BaseButton
+          variant="secondary"
+          size="sm"
+          class="whitespace-nowrap"
           data-testid="node-editor-cancel"
           @click="emit('close')"
-        >Cancel</button>
-        <button
-          class="cursor-pointer whitespace-nowrap rounded-lg bg-accent px-[18px] py-2 text-[13px] font-semibold text-accent-contrast hover:brightness-110"
+        >Cancel</BaseButton>
+        <BaseButton
+          size="sm"
+          class="whitespace-nowrap"
           data-testid="node-editor-save"
           @click="submit"
-        >Done</button>
+        >Done</BaseButton>
       </div>
     </template>
   </DrawerSheet>

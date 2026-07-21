@@ -2,16 +2,18 @@
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
+import BaseButton from './BaseButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import AppSelect from './AppSelect.vue'
 import AppliesToField from './AppliesToField.vue'
 import DrawerSheet from './DrawerSheet.vue'
+import { TextareaField, TextField } from '../pipeline/fields'
 import type { EditableAction } from '../composables/useActionsSettings'
 
 const props = withDefaults(defineProps<{ action: EditableAction; isNew: boolean; busy?: boolean; error?: string | null; returnFocusTo?: HTMLElement | null; knownTypes?: string[] }>(), { knownTypes: () => [] })
 const emit = defineEmits<{ save: []; cancel: [] }>()
-const idRef = ref<HTMLInputElement | null>(null)
-const labelRef = ref<HTMLInputElement | null>(null)
+const idRef = ref<{ focus: () => void } | null>(null)
+const labelRef = ref<{ focus: () => void } | null>(null)
 const appliesField = ref<{ flush: () => void } | null>(null)
 const closeRef = ref<HTMLButtonElement | null>(null)
 const validationError = ref<string | null>(null)
@@ -28,15 +30,15 @@ function setType(value: string): void {
   else { props.action.launch = undefined; props.action.shell = undefined; props.action.message = { topic: '', messageTemplate: '' } }
 }
 function envText(): string { return Object.entries(props.action.shell?.env ?? {}).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value ?? ''}`).join('\n') }
-function setEnv(event: Event): void { if (!props.action.shell) return; const env: Record<string, string> = {}; for (const line of (event.target as HTMLTextAreaElement).value.split('\n')) { const [key, ...value] = line.split('='); if (key.trim()) env[key.trim()] = value.join('=') }; props.action.shell.env = env }
+function setEnv(text: string): void { if (!props.action.shell) return; const env: Record<string, string> = {}; for (const line of text.split('\n')) { const [key, ...value] = line.split('='); if (key.trim()) env[key.trim()] = value.join('=') }; props.action.shell.env = env }
 function save(): void { appliesField.value?.flush(); if (!props.action.id.trim() || !props.action.label.trim()) { validationError.value = 'ID and label are required.'; return }; validationError.value = null; emit('save') }
 function cancel(): void { if (!props.busy) emit('cancel') }
 let trigger: HTMLElement | null = null
 onMounted(async () => {
   trigger = props.returnFocusTo ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null)
   await nextTick()
-  if (props.isNew && idRef.value && !idRef.value.disabled) idRef.value.focus()
-  else if (labelRef.value && !labelRef.value.disabled) labelRef.value.focus()
+  if (props.isNew && idRef.value) idRef.value.focus()
+  else if (labelRef.value) labelRef.value.focus()
   else closeRef.value?.focus()
 })
 onUnmounted(() => {
@@ -56,19 +58,31 @@ onUnmounted(() => {
     </template>
 
     <div class="grid gap-3">
-      <label class="text-xs text-text-2">ID<input ref="idRef" v-model="action.id" :disabled="!isNew" data-testid="action-id" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent disabled:opacity-60" /></label>
-      <label class="text-xs text-text-2">Label<input ref="labelRef" v-model="action.label" data-testid="action-label" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label>
+      <TextField ref="idRef" v-model="action.id" label="ID" :disabled="!isNew" testid="action-id" />
+      <TextField ref="labelRef" v-model="action.label" label="Label" testid="action-label" />
       <div class="text-xs text-text-2">Type<AppSelect :model-value="action.type" :options="typeOptions" testid="action-type" aria-label="Type" class="mt-1" @update:model-value="setType" /></div>
       <AppCheckbox v-model="action.showInDetail" label="Show manual button in detail pane" testid="action-show-in-detail" />
       <AppliesToField ref="appliesField" :model-value="action.appliesTo" :known-types="knownTypes" @update:model-value="action.appliesTo = $event" />
-      <template v-if="action.launch"><label class="text-xs text-text-2">Prompt template<textarea v-model="action.launch.promptTemplate" data-testid="action-launch-prompt" class="mt-1 min-h-[90px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Repository template<input v-model="action.launch.repoTemplate" data-testid="action-launch-repo" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Agent (optional)<input v-model="action.launch.agent" data-testid="action-launch-agent" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label></template>
-      <template v-if="action.shell"><label class="text-xs text-text-2">Command template<textarea v-model="action.shell.commandTemplate" data-testid="action-shell-command" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Working directory<input v-model="action.shell.cwd" data-testid="action-shell-cwd" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Timeout<input v-model="action.shell.timeout" data-testid="action-shell-timeout" placeholder="e.g. 30s" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Environment (KEY=value per line)<textarea :value="envText()" data-testid="action-shell-env" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" @input="setEnv" /></label></template>
-      <template v-if="action.message"><label class="text-xs text-text-2">Message template<textarea v-model="action.message.messageTemplate" data-testid="action-message-template" class="mt-1 min-h-[72px] w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label><label class="text-xs text-text-2">Topic<input v-model="action.message.topic" data-testid="action-message-topic" class="mt-1 w-full rounded border border-border bg-app px-2 py-1.5 text-text outline-none focus:border-accent" /></label></template>
+      <template v-if="action.launch">
+        <TextareaField v-model="action.launch.promptTemplate" label="Prompt template" :rows="4" monospace testid="action-launch-prompt" />
+        <TextField v-model="action.launch.repoTemplate" label="Repository template" testid="action-launch-repo" />
+        <TextField v-model="action.launch.agent" label="Agent (optional)" testid="action-launch-agent" />
+      </template>
+      <template v-if="action.shell">
+        <TextareaField v-model="action.shell.commandTemplate" label="Command template" monospace testid="action-shell-command" />
+        <TextField v-model="action.shell.cwd" label="Working directory" testid="action-shell-cwd" />
+        <TextField v-model="action.shell.timeout" label="Timeout" placeholder="e.g. 30s" testid="action-shell-timeout" />
+        <TextareaField :model-value="envText()" label="Environment (KEY=value per line)" monospace testid="action-shell-env" @update:model-value="setEnv" />
+      </template>
+      <template v-if="action.message">
+        <TextareaField v-model="action.message.messageTemplate" label="Message template" monospace testid="action-message-template" />
+        <TextField v-model="action.message.topic" label="Topic" testid="action-message-topic" />
+      </template>
       <p v-if="validationError || error" class="rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error" data-testid="action-editor-error">{{ validationError || error }}</p>
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-2.5"><button class="rounded-lg border border-card px-[15px] py-2 text-[13px] text-text-2 hover:text-text disabled:opacity-50" :disabled="busy" @click="cancel">Cancel</button><button class="rounded-lg bg-accent px-[18px] py-2 text-[13px] font-semibold text-accent-contrast disabled:opacity-50" :disabled="busy" data-testid="action-save" @click="save">{{ busy ? 'Saving…' : 'Save' }}</button></div>
+      <div class="flex justify-end gap-2.5"><BaseButton variant="secondary" size="sm" :busy="busy" @click="cancel">Cancel</BaseButton><BaseButton size="sm" :busy="busy" data-testid="action-save" @click="save">{{ busy ? 'Saving…' : 'Save' }}</BaseButton></div>
     </template>
   </DrawerSheet>
 </template>

@@ -1,5 +1,6 @@
 import { useStorage } from '@vueuse/core'
 import type { Ref } from 'vue'
+import { startDrag } from './useDragGesture'
 
 /** Which edge of the panel the drag handle sits on. This picks both the drag
  * axis and the sign of the delta:
@@ -51,10 +52,6 @@ export function useResizablePanel(options: UseResizablePanelOptions): UseResizab
   const sign = edge === 'left' || edge === 'top' ? -1 : 1
 
   function startResize(event: PointerEvent): void {
-    const target = event.target as Element | null
-    const pointerId = event.pointerId
-    target?.setPointerCapture?.(pointerId)
-
     const start = vertical ? event.clientY : event.clientX
     const startSize = size.value
 
@@ -63,14 +60,7 @@ export function useResizablePanel(options: UseResizablePanelOptions): UseResizab
       size.value = clamp(startSize + sign * (pos - start), min, max)
     }
 
-    function onUp(): void {
-      window.removeEventListener('pointermove', onMove)
-      window.removeEventListener('pointerup', onUp)
-      target?.releasePointerCapture?.(pointerId)
-    }
-
-    window.addEventListener('pointermove', onMove)
-    window.addEventListener('pointerup', onUp)
+    startDrag(event, { onMove, pointerCapture: true })
   }
 
   function step(deltaPx: number): void {

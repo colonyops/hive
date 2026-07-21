@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import IconGithub from '~icons/lucide/github'
+import BaseButton from '../BaseButton.vue'
 import DrawerSheet from '../DrawerSheet.vue'
 import SettingsField from './SettingsField.vue'
 import * as SettingsService from '../../../bindings/github.com/colonyops/hive/desktop/settingsservice'
@@ -88,19 +89,19 @@ onMounted(() => void load())
 
     <template #footer>
       <div class="flex items-center justify-end gap-2.5">
-        <button
-          type="button"
-          class="cursor-pointer rounded-lg border border-card px-[15px] py-2 text-[13px] text-text-2 hover:text-text"
+        <BaseButton
+          variant="secondary"
+          size="sm"
           data-testid="github-settings-cancel"
           @click="emit('close')"
-        >Cancel</button>
-        <button
-          type="button"
-          class="cursor-pointer rounded-lg bg-accent px-[18px] py-2 text-[13px] font-semibold text-accent-contrast hover:brightness-110 disabled:cursor-not-allowed disabled:opacity-50"
+        >Cancel</BaseButton>
+        <BaseButton
+          size="sm"
+          :busy="loading || saving"
+          :disabled="!valid"
           data-testid="github-settings-save"
-          :disabled="loading || saving || !valid"
           @click="save"
-        >Save</button>
+        >Save</BaseButton>
       </div>
     </template>
   </DrawerSheet>
