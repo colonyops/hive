@@ -9,15 +9,21 @@
 // build-time virtual module — the path can't be constructed dynamically — so
 // each supported key maps to an eagerly imported component below.
 import type { Component } from 'vue'
+import IconAtSign from '~icons/lucide/at-sign'
 import IconBell from '~icons/lucide/bell'
 import IconBug from '~icons/lucide/bug'
 import IconCircleDot from '~icons/lucide/circle-dot'
+import IconClock from '~icons/lucide/clock'
 import IconEye from '~icons/lucide/eye'
 import IconFlag from '~icons/lucide/flag'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconGitPullRequest from '~icons/lucide/git-pull-request'
 import IconInbox from '~icons/lucide/inbox'
+import IconMessageSquare from '~icons/lucide/message-square'
+import IconPackage from '~icons/lucide/package'
+import IconRocket from '~icons/lucide/rocket'
 import IconRss from '~icons/lucide/rss'
+import IconShield from '~icons/lucide/shield'
 import IconSparkles from '~icons/lucide/sparkles'
 import IconStar from '~icons/lucide/star'
 import IconTag from '~icons/lucide/tag'
@@ -35,17 +41,23 @@ export const feedIconOptions: FeedIconOption[] = [
   { value: 'git-branch', label: 'Branch', component: IconGitBranch },
   { value: 'git-pull-request', label: 'Pull request', component: IconGitPullRequest },
   { value: 'circle-dot', label: 'Issue', component: IconCircleDot },
+  { value: 'message-square', label: 'Comments', component: IconMessageSquare },
+  { value: 'at-sign', label: 'Mentions', component: IconAtSign },
   { value: 'rss', label: 'Feed', component: IconRss },
   { value: 'bell', label: 'Notifications', component: IconBell },
   { value: 'eye', label: 'Watching', component: IconEye },
   { value: 'star', label: 'Starred', component: IconStar },
   { value: 'bug', label: 'Bugs', component: IconBug },
+  { value: 'shield', label: 'Security', component: IconShield },
   { value: 'zap', label: 'Activity', component: IconZap },
   { value: 'sparkles', label: 'AI / generated', component: IconSparkles },
   { value: 'flag', label: 'Flagged', component: IconFlag },
   { value: 'inbox', label: 'Inbox', component: IconInbox },
   { value: 'users', label: 'Team', component: IconUsers },
   { value: 'tag', label: 'Labels', component: IconTag },
+  { value: 'package', label: 'Dependencies', component: IconPackage },
+  { value: 'rocket', label: 'Releases', component: IconRocket },
+  { value: 'clock', label: 'Recent', component: IconClock },
 ]
 
 // The glyph a feed with no configured icon falls back to — matches the

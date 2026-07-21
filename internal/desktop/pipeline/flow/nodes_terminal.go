@@ -14,17 +14,23 @@ var feedIcons = map[string]bool{
 	"git-branch":       true,
 	"git-pull-request": true,
 	"circle-dot":       true,
+	"message-square":   true,
+	"at-sign":          true,
 	"rss":              true,
 	"bell":             true,
 	"eye":              true,
 	"star":             true,
 	"bug":              true,
+	"shield":           true,
 	"zap":              true,
 	"sparkles":         true,
 	"flag":             true,
 	"inbox":            true,
 	"users":            true,
 	"tag":              true,
+	"package":          true,
+	"rocket":           true,
+	"clock":            true,
 }
 
 // feedDescriptionMaxLen caps a feed's hover description. It is generous enough
