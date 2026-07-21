@@ -77,9 +77,15 @@ func TestJobs_ActiveJobPersistsAcrossReopen(t *testing.T) {
 	ctx := context.Background()
 	database, err := Open(dir, DefaultOpenOptions())
 	require.NoError(t, err)
+	_, err = database.Conn().ExecContext(ctx, `
+		INSERT INTO output_command (action_id, key, payload, status, created_at)
+		VALUES ('review', 'item-1', X'7B7D', 'pending', 1)`)
+	require.NoError(t, err)
 	job, err := database.InsertJob(ctx, JobRecord{
 		CreatedAt: 100, UpdatedAt: 100, Status: "queued", Label: "Persisted", Step: "Queued",
 	})
+	require.NoError(t, err)
+	_, err = database.SetJobRunning(ctx, job.ID, 101, "Running…", 1)
 	require.NoError(t, err)
 	require.NoError(t, database.Close())
 
@@ -90,5 +96,6 @@ func TestJobs_ActiveJobPersistsAcrossReopen(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, active, 1)
 	assert.Equal(t, job.ID, active[0].ID)
-	assert.Nil(t, active[0].CommandID)
+	require.NotNil(t, active[0].CommandID)
+	assert.Equal(t, int64(1), *active[0].CommandID)
 }

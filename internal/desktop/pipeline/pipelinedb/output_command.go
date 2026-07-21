@@ -95,9 +95,10 @@ func wrap(msg string, err error) error {
 const interruptedOutputCommandError = "interrupted: application stopped while action was running"
 
 // RecoverInterruptedOutputCommands makes stale explicit invocations and their
-// linked jobs terminal. A running command may already have performed its side
-// effect before a crash, so retrying it in the background would be unauthorized
-// and unsafe.
+// linked jobs terminal. It also fails unlinked queued jobs, which in v1 can only
+// be left by a crash between Begin and Running. A running command may already
+// have performed its side effect before a crash, so retrying it in the
+// background would be unauthorized and unsafe.
 func (db *DB) RecoverInterruptedOutputCommands(ctx context.Context) error {
 	tx, err := db.conn.BeginTx(ctx, nil)
 	if err != nil {
@@ -108,8 +109,9 @@ func (db *DB) RecoverInterruptedOutputCommands(ctx context.Context) error {
 	if _, err = tx.ExecContext(ctx, `
 		UPDATE job
 		SET status = 'failed', step = 'Failed', error = ?, updated_at = ?
-		WHERE status = 'running'
-			AND command_id IN (SELECT id FROM output_command WHERE status = 'running')`,
+		WHERE (status = 'queued' AND command_id IS NULL)
+			OR (status = 'running'
+				AND command_id IN (SELECT id FROM output_command WHERE status = 'running'))`,
 		interruptedOutputCommandError, time.Now().UnixMilli()); err != nil {
 		return wrap("recovering interrupted jobs", err)
 	}

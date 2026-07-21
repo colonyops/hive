@@ -123,6 +123,8 @@ func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
 	require.NoError(t, err)
 	_, err = first.SetJobRunning(ctx, job.ID, 2, "Running…", command.ID)
 	require.NoError(t, err)
+	_, err = first.InsertJob(ctx, JobRecord{CreatedAt: 3, UpdatedAt: 3, Status: "queued", Label: "Interrupted before link"})
+	require.NoError(t, err)
 	require.NoError(t, first.Close())
 
 	reopened, err := Open(dir, DefaultOpenOptions())
@@ -138,10 +140,12 @@ func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
 	assert.Empty(t, rows)
 	jobs, err := reopened.ListJobs(ctx, 0, 10)
 	require.NoError(t, err)
-	require.Len(t, jobs, 1)
-	assert.Equal(t, "failed", jobs[0].Status)
-	assert.Equal(t, "Failed", jobs[0].Step)
-	assert.Contains(t, jobs[0].Error, "interrupted")
+	require.Len(t, jobs, 2)
+	for _, job := range jobs {
+		assert.Equal(t, "failed", job.Status)
+		assert.Equal(t, "Failed", job.Step)
+		assert.Contains(t, job.Error, "interrupted")
+	}
 }
 
 func TestOpen_Idempotent(t *testing.T) {
