@@ -16,6 +16,14 @@ export interface FlowSummary {
 }
 
 /**
+ * GithubSettings is the GitHub integration's editable configuration.
+ */
+export interface GithubSettings {
+    "pollIntervalSeconds": number;
+    "minPollIntervalSeconds": number;
+}
+
+/**
  * PathInfo describes a single on-disk location surfaced in settings.
  */
 export interface PathInfo {

@@ -92,7 +92,7 @@ func NewLiveProvider(client *github.Client, tokens github.TokenStore, logger zer
 }
 
 // SetSearchTTL sets the search cache TTL. Values <= 0 retain the default
-// poll interval. It is intended to be set while wiring the producer.
+// poll interval. It may be updated while the producer is running.
 func (p *LiveProvider) SetSearchTTL(ttl time.Duration) {
 	if ttl <= 0 {
 		ttl = DefaultPollInterval

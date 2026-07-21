@@ -30,7 +30,9 @@ import (
 type Producer struct {
 	db         Appender
 	sources    SourceLister
+	intervalMu sync.Mutex
 	interval   time.Duration
+	intervalCh chan time.Duration
 	onAppended func(nextOffset int64)
 	logger     zerolog.Logger
 	recorder   activity.Recorder
@@ -70,6 +72,7 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 		db:         db,
 		sources:    sources,
 		interval:   interval,
+		intervalCh: make(chan time.Duration, 1),
 		onAppended: onAppended,
 		logger:     logger,
 		stop:       make(chan struct{}),
@@ -78,18 +81,50 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 
 // Start runs the poll loop in a goroutine until Stop.
 func (pr *Producer) Start() {
+	pr.intervalMu.Lock()
+	interval := pr.interval
+	pr.intervalMu.Unlock()
 	go func() {
-		ticker := time.NewTicker(pr.interval)
+		ticker := time.NewTicker(interval)
 		defer ticker.Stop()
 		for {
 			select {
 			case <-pr.stop:
 				return
+			case interval := <-pr.intervalCh:
+				ticker.Reset(interval)
 			case <-ticker.C:
 				pr.Tick(context.Background())
 			}
 		}
 	}()
+}
+
+// SetInterval changes the poll cadence at runtime. The running ticker resets
+// to the new interval, with the next tick occurring one new interval from
+// now. Values <= 0 are ignored. It is safe before Start and concurrent with
+// the poll loop.
+func (pr *Producer) SetInterval(interval time.Duration) {
+	if interval <= 0 {
+		return
+	}
+	pr.intervalMu.Lock()
+	pr.interval = interval
+	select {
+	case pr.intervalCh <- interval:
+	default:
+		// Keep only the latest pending update. The poll loop is the ticker's
+		// sole owner, so it performs Reset itself.
+		select {
+		case <-pr.intervalCh:
+		default:
+		}
+		select {
+		case pr.intervalCh <- interval:
+		default:
+		}
+	}
+	pr.intervalMu.Unlock()
 }
 
 // Stop halts the poll loop. Idempotent.
