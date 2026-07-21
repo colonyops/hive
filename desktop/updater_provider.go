@@ -173,7 +173,7 @@ func (p *desktopProvider) listReleases(ctx context.Context) ([]apiRelease, error
 	if err != nil {
 		return nil, fmt.Errorf("desktop updater: api request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	switch resp.StatusCode {
 	case http.StatusOK:
 	case http.StatusNotFound:
@@ -212,7 +212,7 @@ func (p *desktopProvider) fetchDigest(ctx context.Context, assets []apiAsset, ta
 	if err != nil {
 		return nil, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		return nil, fmt.Errorf("checksum sidecar HTTP %d", resp.StatusCode)
 	}

@@ -27,18 +27,18 @@ func newFixtureServer(t *testing.T, releasesJSON func(base string) string, check
 	fs := &fixtureServer{zipBody: []byte("PK\x03\x04 fake zip"), checksumBody: checksumBody}
 	mux := http.NewServeMux()
 	fs.Server = httptest.NewServer(mux)
-	base := fs.Server.URL
+	base := fs.URL
 	mux.HandleFunc("/repos/colonyops/hive/releases", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		fmt.Fprint(w, releasesJSON(base))
+		_, _ = fmt.Fprint(w, releasesJSON(base))
 	})
 	mux.HandleFunc("/dl/SHA256SUMS", func(w http.ResponseWriter, _ *http.Request) {
-		fmt.Fprint(w, fs.checksumBody)
+		_, _ = fmt.Fprint(w, fs.checksumBody)
 	})
 	mux.HandleFunc("/dl/zip", func(w http.ResponseWriter, _ *http.Request) {
 		_, _ = w.Write(fs.zipBody)
 	})
-	t.Cleanup(fs.Server.Close)
+	t.Cleanup(fs.Close)
 	return fs
 }
 
@@ -77,14 +77,14 @@ func TestDesktopProviderCheckNewer(t *testing.T) {
 	zipName := "Hive-desktop-0.3.0-macos-universal.zip"
 	fs := newFixtureServer(t, releasesWithMixedTags(zipName, checksumAssetName), "")
 	fs.checksumBody = checksumFor(fs.zipBody, zipName)
-	p := newTestProvider(t, fs.Server.URL)
+	p := newTestProvider(t, fs.URL)
 
 	rel, err := p.Check(context.Background(), updater.CheckRequest{CurrentVersion: "0.2.0"})
 	require.NoError(t, err)
 	require.NotNil(t, rel)
 	require.Equal(t, "0.3.0", rel.Version)
 	require.Equal(t, zipName, rel.Artifact.Filename)
-	require.Equal(t, fs.Server.URL+"/dl/zip", rel.Metadata["github.asset.url"])
+	require.Equal(t, fs.URL+"/dl/zip", rel.Metadata["github.asset.url"])
 	require.NotNil(t, rel.Verification)
 	require.Equal(t, "sha256", rel.Verification.DigestAlgo)
 	want := sha256.Sum256(fs.zipBody)
@@ -94,7 +94,7 @@ func TestDesktopProviderCheckNewer(t *testing.T) {
 func TestDesktopProviderCheckUpToDate(t *testing.T) {
 	zipName := "Hive-desktop-0.3.0-macos-universal.zip"
 	fs := newFixtureServer(t, releasesWithMixedTags(zipName, checksumAssetName), checksumFor([]byte("PK\x03\x04 fake zip"), zipName))
-	p := newTestProvider(t, fs.Server.URL)
+	p := newTestProvider(t, fs.URL)
 
 	// Current equals the newest desktop release.
 	rel, err := p.Check(context.Background(), updater.CheckRequest{CurrentVersion: "0.3.0"})
@@ -110,7 +110,7 @@ func TestDesktopProviderCheckUpToDate(t *testing.T) {
 func TestDesktopProviderCheckAcceptsDesktopPrefixedCurrent(t *testing.T) {
 	zipName := "Hive-desktop-0.3.0-macos-universal.zip"
 	fs := newFixtureServer(t, releasesWithMixedTags(zipName, checksumAssetName), checksumFor([]byte("PK\x03\x04 fake zip"), zipName))
-	p := newTestProvider(t, fs.Server.URL)
+	p := newTestProvider(t, fs.URL)
 
 	rel, err := p.Check(context.Background(), updater.CheckRequest{CurrentVersion: "desktop-v0.2.0"})
 	require.NoError(t, err)
@@ -123,7 +123,7 @@ func TestDesktopProviderCheckNoDesktopReleases(t *testing.T) {
 		return `[{"tag_name":"v9.9.9","draft":false,"prerelease":false,"assets":[]}]`
 	}
 	fs := newFixtureServer(t, onlyCLI, "")
-	p := newTestProvider(t, fs.Server.URL)
+	p := newTestProvider(t, fs.URL)
 
 	rel, err := p.Check(context.Background(), updater.CheckRequest{CurrentVersion: "0.1.0"})
 	require.NoError(t, err)
@@ -137,7 +137,7 @@ func TestDesktopProviderCheckMissingZip(t *testing.T) {
     ]}]`, checksumAssetName, base+"/dl/SHA256SUMS")
 	}
 	fs := newFixtureServer(t, noZip, "whatever")
-	p := newTestProvider(t, fs.Server.URL)
+	p := newTestProvider(t, fs.URL)
 
 	_, err := p.Check(context.Background(), updater.CheckRequest{CurrentVersion: "0.1.0"})
 	require.Error(t, err)
