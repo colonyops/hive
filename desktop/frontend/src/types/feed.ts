@@ -35,6 +35,11 @@ export interface FeedSummary {
   name: string
   count: number
   newCount: number
+  // Cosmetic sidebar presentation from the feed node's config (flow YAML): the
+  // tree glyph key (see lib/feedIcons) and the hover-tooltip context. Both
+  // optional; absent when the feed node carries no icon/description.
+  icon?: string
+  description?: string
 }
 
 // FeedFolder is a named group of feeds in the sidebar. It carries resolved

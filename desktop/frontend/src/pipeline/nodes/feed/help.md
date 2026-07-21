@@ -4,7 +4,10 @@ A **feed** node is a terminal (1 input, 0 outputs): every message that arrives u
 
 ## Fields
 
-A feed node has no config fields. Its durable feed id is the flow-qualified node id (`<flowId>/<nodeId>`).
+- **Sidebar icon** — an optional glyph shown next to the feed in the sidebar tree. Chosen from a scoped set of feed-relevant icons; unset feeds use the default branch glyph.
+- **Description** — optional context (up to 500 characters) surfaced as a tooltip when hovering the feed in the sidebar. Useful for explaining what an LLM-generated feed collects.
+
+The feed's durable id is the flow-qualified node id (`<flowId>/<nodeId>`); these fields are purely cosmetic and never affect which items land in the feed.
 
 ## Behavior
 

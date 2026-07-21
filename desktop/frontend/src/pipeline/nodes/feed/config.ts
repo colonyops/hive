@@ -7,12 +7,23 @@
 
 import IconRss from '~icons/lucide/rss'
 import type { Sink } from '../../types'
+import { isFeedIcon } from '../../../lib/feedIcons'
 
 export const type = 'feed'
 export const role = 'output' as const
 
-// A feed node carries no config — the node id is its identity.
-export type Config = Record<string, never>
+// A feed node's identity is still its node id; these fields are purely
+// cosmetic sidebar presentation. `icon` picks the glyph shown in the tree
+// (one of the scoped keys in lib/feedIcons), and `description` is the hover
+// tooltip context (especially useful for LLM-generated feeds). Both optional;
+// mirrors Go's flow.FeedConfig.
+export interface Config {
+  icon?: string
+  description?: string
+}
+
+/** Longest description the editor accepts — mirrors Go's feedDescriptionMaxLen. */
+export const descriptionMaxLen = 500
 
 /** New feed items land unread until the user reads them. */
 export const unread = true
@@ -36,7 +47,14 @@ export const outputs = 0
 
 export const defaults: Config = {}
 
-/** A feed node has no config to validate. */
-export function validate(_config: Config): string[] {
-  return []
+/** Validates the feed's cosmetic fields, matching Go's FeedConfig.Validate. */
+export function validate(config: Config): string[] {
+  const errors: string[] = []
+  if (config.icon && !isFeedIcon(config.icon)) {
+    errors.push(`Icon "${config.icon}" is not a supported feed icon.`)
+  }
+  if ((config.description?.length ?? 0) > descriptionMaxLen) {
+    errors.push(`Description must be at most ${descriptionMaxLen} characters.`)
+  }
+  return errors
 }
