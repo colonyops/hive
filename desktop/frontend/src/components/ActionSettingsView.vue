@@ -3,6 +3,8 @@ import { computed, ref } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
 import BaseButton from './BaseButton.vue'
+import BaseCard from './BaseCard.vue'
+import BaseIconBadge from './BaseIconBadge.vue'
 import AppIcon from './AppIcon.vue'
 import ActionEditor from './ActionEditor.vue'
 import ConfirmationDialog from './ConfirmationDialog.vue'
@@ -53,15 +55,18 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
     <p v-if="loading" class="text-xs text-text-4">Loading actions…</p>
 
     <div v-else class="flex flex-col gap-3">
-      <article
+      <BaseCard
         v-for="action in actions"
         :key="action.id"
-        class="flex items-center gap-4 rounded-[11px] border border-card bg-raised px-4 py-3.5 transition-colors hover:border-strong"
+        :padded="false"
+        class="gap-4 rounded-[11px] border border-card bg-raised px-4 py-3.5 transition-colors hover:border-strong"
         :data-testid="`action-row-${action.id}`"
       >
-        <span class="flex size-[38px] shrink-0 items-center justify-center rounded-[10px] border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.13)] text-accent">
-          <AppIcon :name="actionTypeMeta(action.type).icon" class="size-[17px]" />
-        </span>
+        <template #icon>
+          <BaseIconBadge :size="38" rounded="rounded-[10px]" class="border border-[rgba(245,158,11,0.35)] bg-[rgba(245,158,11,0.13)] text-accent">
+            <AppIcon :name="actionTypeMeta(action.type).icon" class="size-[17px]" />
+          </BaseIconBadge>
+        </template>
         <div class="min-w-0 flex-1">
           <div class="truncate text-[15px] font-semibold tracking-[-.01em] text-text">{{ action.label }}</div>
           <div class="mt-1.5 flex flex-wrap items-center gap-1.5">
@@ -72,11 +77,13 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
             </span>
           </div>
         </div>
-        <div class="flex shrink-0 items-center gap-2">
-          <button class="rounded-[7px] border border-card px-3.5 py-1.5 text-[12.5px] text-text-2 hover:border-strong hover:text-text" @click="edit(action, $event)">Edit</button>
-          <button class="flex size-[34px] items-center justify-center rounded-[7px] border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error" aria-label="Delete" @click="requestDelete(action)"><IconTrash2 class="size-[15px]" /></button>
-        </div>
-      </article>
+        <template #actions>
+          <div class="flex shrink-0 items-center gap-2">
+            <button class="rounded-[7px] border border-card px-3.5 py-1.5 text-[12.5px] text-text-2 hover:border-strong hover:text-text" @click="edit(action, $event)">Edit</button>
+            <button class="flex size-[34px] items-center justify-center rounded-[7px] border border-card text-text-3 hover:border-severity-error-border hover:text-severity-error" aria-label="Delete" @click="requestDelete(action)"><IconTrash2 class="size-[15px]" /></button>
+          </div>
+        </template>
+      </BaseCard>
 
       <p v-if="!actions.length" class="py-8 text-center text-xs text-text-4">No actions configured.</p>
       <div v-else class="mt-1 flex items-center gap-1.5 font-mono text-[11.5px] text-text-4" data-testid="actions-source">Synced from .hive/actions.yml · {{ actions.length }} {{ actions.length === 1 ? 'action' : 'actions' }}</div>

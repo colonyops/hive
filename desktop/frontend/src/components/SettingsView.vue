@@ -9,6 +9,8 @@ import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
 import IconHardDrive from '~icons/lucide/hard-drive'
 import IconSettings from '~icons/lucide/settings'
+import BaseCard from './BaseCard.vue'
+import BaseIconBadge from './BaseIconBadge.vue'
 import ActionSettingsView from './ActionSettingsView.vue'
 import KeybindingSettingsView from './KeybindingSettingsView.vue'
 import SystemSettingsView from './SystemSettingsView.vue'
@@ -106,53 +108,61 @@ function onThemeChange(value: string): void {
         </div>
 
         <div class="flex flex-col gap-3">
-          <article class="flex items-center gap-3 rounded-lg border border-border bg-raised p-4" data-testid="integration-github">
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white p-2">
-              <img :src="githubIcon" alt="GitHub" class="size-full" />
-            </span>
+          <BaseCard class="rounded-lg border border-border bg-raised" data-testid="integration-github">
+            <template #icon>
+              <BaseIconBadge :size="40" rounded="rounded-lg" class="bg-white p-2">
+                <img :src="githubIcon" alt="GitHub" class="size-full" />
+              </BaseIconBadge>
+            </template>
             <div class="min-w-0 flex-1">
               <div class="text-[13.5px] font-semibold text-text">GitHub</div>
               <div class="mt-0.5 truncate text-xs text-text-3">{{ props.githubLogin ? `Connected as ${props.githubLogin}` : 'Issues, pull requests, and notifications' }}</div>
             </div>
-            <div class="flex shrink-0 items-center gap-2">
-              <span
-                class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                :class="props.githubConnected ? 'bg-severity-success-tint text-severity-success' : 'bg-chip text-text-3'"
-                data-testid="integration-github-status"
-              >{{ props.githubConnected ? 'Connected' : 'Not connected' }}</span>
-              <button
-                type="button"
-                class="flex size-7 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
-                aria-label="Configure GitHub integration"
-                data-testid="integration-github-configure"
-                @click="githubSettingsOpen = true"
-              ><IconSettings class="size-3.5" /></button>
-            </div>
-          </article>
+            <template #actions>
+              <div class="flex shrink-0 items-center gap-2">
+                <span
+                  class="rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                  :class="props.githubConnected ? 'bg-severity-success-tint text-severity-success' : 'bg-chip text-text-3'"
+                  data-testid="integration-github-status"
+                >{{ props.githubConnected ? 'Connected' : 'Not connected' }}</span>
+                <button
+                  type="button"
+                  class="flex size-7 cursor-pointer items-center justify-center rounded-md text-text-3 hover:bg-chip hover:text-text"
+                  aria-label="Configure GitHub integration"
+                  data-testid="integration-github-configure"
+                  @click="githubSettingsOpen = true"
+                ><IconSettings class="size-3.5" /></button>
+              </div>
+            </template>
+          </BaseCard>
 
-          <article
+          <BaseCard
             v-for="integration in futureIntegrations"
             :key="integration.id"
-            class="flex items-center gap-3 rounded-lg border border-border bg-raised p-4"
+            class="rounded-lg border border-border bg-raised"
             :data-testid="`integration-${integration.id}`"
           >
-            <span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white p-2">
-              <img :src="integration.icon" :alt="integration.name" class="size-full object-contain" />
-            </span>
+            <template #icon>
+              <BaseIconBadge :size="40" rounded="rounded-lg" class="bg-white p-2">
+                <img :src="integration.icon" :alt="integration.name" class="size-full object-contain" />
+              </BaseIconBadge>
+            </template>
             <div class="min-w-0 flex-1">
               <div class="text-[13.5px] font-semibold text-text">{{ integration.name }}</div>
               <div class="mt-0.5 truncate text-xs text-text-3">{{ integration.description }}</div>
             </div>
-            <div class="flex shrink-0 items-center gap-2.5">
-              <span class="font-mono text-[10.5px] text-text-4">Coming soon</span>
-              <button
-                type="button"
-                disabled
-                class="cursor-not-allowed rounded-md border border-border px-2.5 py-1.5 text-[11.5px] font-medium text-text-4 opacity-60"
-                :data-testid="`integration-${integration.id}-add`"
-              >Add connection</button>
-            </div>
-          </article>
+            <template #actions>
+              <div class="flex shrink-0 items-center gap-2.5">
+                <span class="font-mono text-[10.5px] text-text-4">Coming soon</span>
+                <button
+                  type="button"
+                  disabled
+                  class="cursor-not-allowed rounded-md border border-border px-2.5 py-1.5 text-[11.5px] font-medium text-text-4 opacity-60"
+                  :data-testid="`integration-${integration.id}-add`"
+                >Add connection</button>
+              </div>
+            </template>
+          </BaseCard>
         </div>
         <GithubIntegrationDrawer v-if="githubSettingsOpen" @close="githubSettingsOpen = false" />
       </div>
