@@ -36,6 +36,7 @@ const props = defineProps<{
   canGoForward?: boolean
   sidebarCollapsed?: boolean
   canToggleSidebar?: boolean
+  appMode?: 'hub' | 'terminal'
 }>()
 const emit = defineEmits<{
   back: []
@@ -44,6 +45,7 @@ const emit = defineEmits<{
   'open-activity': []
   'open-job-run': [commandId: number]
   'toggle-sidebar': []
+  'set-mode': [mode: 'hub' | 'terminal']
   'open-palette': []
   'toggle-maximise': []
 }>()
@@ -60,10 +62,19 @@ onClickOutside(jobsRoot, () => { jobsOpen.value = false })
 watch(() => props.jobsActive, (active) => { if (!active) jobsOpen.value = false })
 
 // Double-clicking the draggable title bar zooms the window, matching the native
-// macOS title-bar gesture (we draw our own chrome, so we implement it). Clicks
-// that land on an interactive control are ignored.
+// macOS title-bar gesture (we draw our own chrome, so we implement it). Regions
+// marked no-drag own their complete hit area, including padding around controls.
+function isNoDragTarget(target: EventTarget | null): boolean {
+  let element = target instanceof HTMLElement ? target : null
+  while (element) {
+    if (element.style.getPropertyValue('--wails-draggable').trim() === 'no-drag') return true
+    element = element.parentElement
+  }
+  return false
+}
+
 function onTitlebarDblclick(event: MouseEvent): void {
-  if ((event.target as HTMLElement).closest('button, input, a')) return
+  if (isNoDragTarget(event.target)) return
   emit('toggle-maximise')
 }
 </script>
@@ -87,10 +98,29 @@ function onTitlebarDblclick(event: MouseEvent): void {
         data-testid="titlebar-toggle-sidebar"
         @click="emit('toggle-sidebar')"
       ><component :is="sidebarCollapsed ? IconPanelLeftOpen : IconPanelLeftClose" class="size-3.5" /></button>
+      <div
+        v-if="profileName"
+        class="flex h-7 shrink-0 items-center rounded-md border border-border bg-app p-0.5"
+        role="group"
+        aria-label="Application mode"
+        style="--wails-draggable: no-drag"
+        data-testid="titlebar-mode-toggle"
+      >
+        <button
+          v-for="mode in (['hub', 'terminal'] as const)"
+          :key="mode"
+          type="button"
+          class="h-5.5 cursor-pointer rounded px-2 text-[11px] font-medium capitalize"
+          :class="(appMode ?? 'hub') === mode ? 'bg-accent text-accent-contrast' : 'text-text-3 hover:bg-chip hover:text-text-2'"
+          :aria-pressed="(appMode ?? 'hub') === mode"
+          :data-testid="`titlebar-mode-${mode}`"
+          @click="emit('set-mode', mode)"
+        >{{ mode === 'hub' ? 'Hub' : 'Terminal' }}</button>
+      </div>
     </div>
 
     <!-- Center: history controls + command-palette launcher, window-centered -->
-    <div v-if="profileName" class="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2">
+    <div v-if="profileName && appMode !== 'terminal'" class="flex min-w-0 flex-1 items-center justify-center gap-1.5 px-2">
       <nav class="flex shrink-0 items-center gap-0.5" aria-label="Page history" style="--wails-draggable: no-drag">
         <button
           type="button"
@@ -127,13 +157,13 @@ function onTitlebarDblclick(event: MouseEvent): void {
     <!-- Right: error / live jobs / activity chips -->
     <div class="flex min-w-0 flex-1 items-center justify-end gap-2 pl-2 pr-3">
       <button
-        v-if="errorCount && errorCount > 0"
+        v-if="appMode !== 'terminal' && errorCount && errorCount > 0"
         class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-severity-error-border bg-severity-error-tint px-2 py-1 text-[11.5px] font-semibold text-severity-error hover:opacity-85"
         style="--wails-draggable: no-drag"
         data-testid="titlebar-error-chip"
         @click="emit('open-error-node')"
       ><IconTriangleAlert class="size-3" />{{ errorCount }} error<template v-if="errorCount !== 1">s</template></button>
-      <div v-if="profileName && jobsActive" ref="jobsRoot" class="relative shrink-0" style="--wails-draggable: no-drag">
+      <div v-if="appMode !== 'terminal' && profileName && jobsActive" ref="jobsRoot" class="relative shrink-0" style="--wails-draggable: no-drag">
         <button
           type="button"
           class="flex cursor-pointer items-center gap-1.5 rounded-md border border-accent/50 bg-accent/10 px-2 py-1 text-[11.5px] font-medium text-accent hover:border-accent"
@@ -154,7 +184,7 @@ function onTitlebarDblclick(event: MouseEvent): void {
       <!-- A link to the Activity audit log. A pulsing dot flags activity
            recorded since the page was last opened. -->
       <button
-        v-if="profileName"
+        v-if="appMode !== 'terminal' && profileName"
         class="relative flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 py-1 text-[11.5px] font-medium"
         :class="activityActive
           ? 'border-accent bg-accent text-accent-contrast'

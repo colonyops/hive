@@ -26,6 +26,7 @@ import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
 import DevBar from './components/DevBar.vue'
+import TerminalMode from './components/TerminalMode.vue'
 import { useAuth } from './composables/useAuth'
 import { useActivity } from './composables/useActivity'
 import { useJobs } from './composables/useJobs'
@@ -42,6 +43,9 @@ import type { SidebarSelection } from './types/feed'
 // Only true when Vite is serving in dev mode (under `wails3 dev`); statically
 // false in production/server builds, so DevBar is compiled out of them.
 const devMode = import.meta.env.DEV
+
+type AppMode = 'hub' | 'terminal'
+const appMode = ref<AppMode>('hub')
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -532,6 +536,10 @@ useCommands(computed(() => {
 // only fire on the feed; overlays suppress everything but the palette toggle.
 
 function onGlobalKeydown(e: KeyboardEvent): void {
+  // xterm owns every key while its hidden textarea or terminal surface has
+  // focus, including combinations that are otherwise global Hive shortcuts.
+  if (e.target instanceof HTMLElement && e.target.closest('[data-terminal-input-scope]')) return
+
   // WebKit can treat an unhandled Backspace as browser Back. Suppress that
   // default outside editors while still allowing components such as the flow
   // canvas to use Backspace for their own actions.
@@ -602,13 +610,15 @@ onUnmounted(() => {
         :can-go-back="canGoBack"
         :can-go-forward="canGoForward"
         :sidebar-collapsed="sidebarCollapsed"
-        :can-toggle-sidebar="feedViewActive"
+        :can-toggle-sidebar="appMode === 'hub' && feedViewActive"
+        :app-mode="appMode"
         @back="router.back()"
         @forward="router.forward()"
         @open-error-node="openErrorNode"
         @open-activity="openActivity"
         @open-job-run="openJobRun"
         @toggle-sidebar="toggleSidebar"
+        @set-mode="(mode) => (appMode = mode)"
         @open-palette="togglePalette"
         @toggle-maximise="toggleMaximise"
       />
@@ -627,6 +637,7 @@ onUnmounted(() => {
         @submit-token="submitToken"
         @create-workspace="createProfile"
       />
+      <TerminalMode v-else-if="appMode === 'terminal'" />
       <!-- The spaces rail (ProfileRail) and TitleBar stay mounted across the
            feed<->flows switch; only the sidebar+main region swaps. This is
            what keeps the user from being stranded in the flows canvas — the

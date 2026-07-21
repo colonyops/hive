@@ -10,6 +10,36 @@ describe('TitleBar', () => {
     expect(wrapper.find('[data-testid="titlebar-command-palette"]').exists()).toBe(false)
   })
 
+  it('switches between Hub and Terminal modes from the segmented control', async () => {
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', appMode: 'hub' } })
+
+    expect(wrapper.get('[data-testid="titlebar-mode-hub"]').attributes('aria-pressed')).toBe('true')
+    expect(wrapper.get('[data-testid="titlebar-mode-terminal"]').attributes('aria-pressed')).toBe('false')
+
+    await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
+    expect(wrapper.emitted('set-mode')).toEqual([['terminal']])
+
+    await wrapper.setProps({ appMode: 'terminal' })
+    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
+    expect(wrapper.emitted('set-mode')).toEqual([['terminal'], ['hub']])
+  })
+
+  it('hides Hub-only controls in Terminal mode', () => {
+    const wrapper = mount(TitleBar, {
+      props: {
+        profileName: 'Triage', appMode: 'terminal', errorCount: 2,
+        jobsActive: true, activeJobs: [],
+      },
+    })
+
+    expect(wrapper.find('[data-testid="titlebar-mode-toggle"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="titlebar-command-palette"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="titlebar-back"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="titlebar-error-chip"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="titlebar-jobs"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="titlebar-activity"]').exists()).toBe(false)
+  })
+
   it('shows the Activity link once a profile is loaded and emits open-activity on click', async () => {
     const onboarding = mount(TitleBar, { props: {} })
     expect(onboarding.find('[data-testid="titlebar-activity"]').exists()).toBe(false)
@@ -100,6 +130,9 @@ describe('TitleBar', () => {
     expect(wrapper.emitted('toggle-maximise')).toHaveLength(1)
 
     await wrapper.find('[data-testid="titlebar-command-palette"]').trigger('dblclick')
+    expect(wrapper.emitted('toggle-maximise')).toHaveLength(1)
+
+    await wrapper.find('[data-testid="titlebar-mode-toggle"]').trigger('dblclick')
     expect(wrapper.emitted('toggle-maximise')).toHaveLength(1)
   })
 

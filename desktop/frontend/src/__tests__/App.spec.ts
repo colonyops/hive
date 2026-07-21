@@ -87,6 +87,21 @@ vi.mock('@wailsio/runtime', () => ({
   Window: { Hide: mocks.Hide },
 }))
 
+vi.mock('@xterm/xterm', () => ({
+  Terminal: class {
+    clear = vi.fn()
+    dispose = vi.fn()
+    focus = vi.fn()
+    loadAddon = vi.fn()
+    open = vi.fn()
+    write = vi.fn()
+  },
+}))
+
+vi.mock('@xterm/addon-fit', () => ({
+  FitAddon: class { fit = vi.fn() },
+}))
+
 const flow = {
   id: 'personal',
   name: 'Personal',
@@ -192,6 +207,32 @@ describe('App', () => {
 
     expect(mocks.RenameFlow).toHaveBeenCalledWith('personal', 'Team')
     expect((wrapper.get('[data-testid="profile-settings-name"]').element as HTMLInputElement).value).toBe('Team')
+
+    wrapper.unmount()
+  })
+
+  it('switches between Hub and Terminal modes and leaves terminal input to xterm', async () => {
+    const wrapper = await mountApp()
+
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="terminal-mode"]').exists()).toBe(false)
+
+    await wrapper.get('[data-testid="titlebar-mode-terminal"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="terminal-mode"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="titlebar-command-palette"]').exists()).toBe(false)
+
+    const backspace = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+    wrapper.get('[data-testid="terminal-surface"]').element.dispatchEvent(backspace)
+    expect(backspace.defaultPrevented).toBe(false)
+
+    await wrapper.get('[data-testid="titlebar-mode-hub"]').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('[data-testid="terminal-mode"]').exists()).toBe(false)
+    expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
     wrapper.unmount()
   })
