@@ -435,19 +435,20 @@ func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {
 		}
 		repo := si.Repo
 		item := Item{
-			ID:     itemID(repo, si.Number),
-			Kind:   kind,
-			Repo:   repo,
-			Num:    si.Number,
-			Title:  si.Title,
-			Author: si.Author,
-			Age:    shortAge(p.now().Sub(si.UpdatedAt)),
-			Unread: true, // inbox model: unread until read (feed_item.unread)
-			Labels: labelNames(si.Labels),
-			Branch: suggestedBranch(kind, si.Number, si.Title),
-			Body:   si.Body,
-			Prompt: suggestedPrompt(kind, repo, si.Number, si.Title),
-			URL:    si.URL,
+			ID:        itemID(repo, si.Number),
+			Kind:      kind,
+			Repo:      repo,
+			Num:       si.Number,
+			Title:     si.Title,
+			Author:    si.Author,
+			Age:       shortAge(p.now().Sub(si.UpdatedAt)),
+			UpdatedAt: si.UpdatedAt.UnixMilli(),
+			Unread:    true, // inbox model: unread until read (feed_item.unread)
+			Labels:    labelNames(si.Labels),
+			Branch:    suggestedBranch(kind, si.Number, si.Title),
+			Body:      si.Body,
+			Prompt:    suggestedPrompt(kind, repo, si.Number, si.Title),
+			URL:       si.URL,
 		}
 		out = append(out, liveItem{item: item, updatedAt: si.UpdatedAt})
 	}
@@ -470,18 +471,19 @@ func (p *LiveProvider) notificationItems(notifications []github.Notification) []
 			id = "notif-" + n.ID
 		}
 		item := Item{
-			ID:     id,
-			Kind:   kind,
-			Repo:   repo,
-			Num:    num,
-			Title:  n.Subject.Title,
-			Age:    shortAge(p.now().Sub(n.UpdatedAt)),
-			Unread: n.Unread,
-			Reason: n.Reason,
-			Branch: suggestedBranch(kind, num, n.Subject.Title),
-			Body:   fmt.Sprintf("GitHub notification for %s in %s.", strings.ToLower(kind), repo),
-			Prompt: suggestedPrompt(kind, repo, num, n.Subject.Title),
-			URL:    htmlURLForSubject(repo, kind, num),
+			ID:        id,
+			Kind:      kind,
+			Repo:      repo,
+			Num:       num,
+			Title:     n.Subject.Title,
+			Age:       shortAge(p.now().Sub(n.UpdatedAt)),
+			UpdatedAt: n.UpdatedAt.UnixMilli(),
+			Unread:    n.Unread,
+			Reason:    n.Reason,
+			Branch:    suggestedBranch(kind, num, n.Subject.Title),
+			Body:      fmt.Sprintf("GitHub notification for %s in %s.", strings.ToLower(kind), repo),
+			Prompt:    suggestedPrompt(kind, repo, num, n.Subject.Title),
+			URL:       htmlURLForSubject(repo, kind, num),
 		}
 		out = append(out, liveItem{item: item, updatedAt: n.UpdatedAt})
 	}

@@ -58,6 +58,16 @@ func (s *FlowsService) CreateFlow(name string) (FlowSummary, error) {
 	return FlowSummary{ID: f.ID, Name: f.Name, Enabled: f.Enabled, Valid: true}, nil
 }
 
+// RenameFlow changes a flow's profile-facing display name while preserving its
+// stable id and graph definition.
+func (s *FlowsService) RenameFlow(id, name string) (FlowSummary, error) {
+	f, err := s.store.Rename(id, name)
+	if err != nil {
+		return FlowSummary{}, err
+	}
+	return FlowSummary{ID: f.ID, Name: f.Name, Enabled: f.Enabled, Valid: true}, nil
+}
+
 // DeleteFlow removes a flow (a "profile") and its layout.
 func (s *FlowsService) DeleteFlow(id string) error {
 	return s.store.Delete(id)

@@ -12,6 +12,7 @@ const baseItem: FeedItem = {
   title: 'Add desktop shell',
   author: 'hayden',
   age: '5m',
+  updatedAt: 1,
   unread: true,
   labels: ['frontend'],
   branch: 'feat/desktop-ui-shell',

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   ListFlows: vi.fn(),
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
+  RenameFlow: vi.fn(),
   DeleteFlow: vi.fn(),
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
@@ -46,6 +47,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => (
   ListFlows: mocks.ListFlows,
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
+  RenameFlow: mocks.RenameFlow,
   DeleteFlow: mocks.DeleteFlow,
   GetLayout: mocks.GetLayout,
   SaveFlow: mocks.SaveFlow,
@@ -132,6 +134,7 @@ describe('App', () => {
     mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
     mocks.NodeRuns.mockResolvedValue([])
+    mocks.RenameFlow.mockResolvedValue({ id: 'personal', name: 'Team', enabled: true, valid: true })
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
   })
@@ -174,6 +177,21 @@ describe('App', () => {
     // Back to the feed view.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+
+    wrapper.unmount()
+  })
+
+  it('renames the active profile from profile settings', async () => {
+    const wrapper = await mountApp()
+
+    await wrapper.get('[data-testid="sidebar-open-settings"]').trigger('click')
+    await flushPromises()
+    await wrapper.get('[data-testid="profile-settings-name"]').setValue('Team')
+    await wrapper.get('[data-testid="profile-settings-view"] form').trigger('submit')
+    await flushPromises()
+
+    expect(mocks.RenameFlow).toHaveBeenCalledWith('personal', 'Team')
+    expect((wrapper.get('[data-testid="profile-settings-name"]').element as HTMLInputElement).value).toBe('Team')
 
     wrapper.unmount()
   })
@@ -242,6 +260,60 @@ describe('App', () => {
     expect(router.currentRoute.value.name).toBe('feed')
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
 
+    wrapper.unmount()
+  })
+
+  it('uses mouse back and forward buttons for route history', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+
+    const backDown = new MouseEvent('mousedown', { button: 3, cancelable: true })
+    window.dispatchEvent(backDown)
+    expect(backDown.defaultPrevented).toBe(true)
+
+    const backUp = new MouseEvent('mouseup', { button: 3, cancelable: true })
+    window.dispatchEvent(backUp)
+    await flushPromises()
+    expect(backUp.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.name).toBe('feed')
+
+    const forwardUp = new MouseEvent('mouseup', { button: 4, cancelable: true })
+    window.dispatchEvent(forwardUp)
+    await flushPromises()
+    expect(forwardUp.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.name).toBe('application-settings')
+
+    wrapper.unmount()
+  })
+
+  it('suppresses Backspace history navigation outside editable fields', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await flushPromises()
+    const routeBefore = router.currentRoute.value.fullPath
+
+    const backspace = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+    window.dispatchEvent(backspace)
+    await flushPromises()
+
+    expect(backspace.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.fullPath).toBe(routeBefore)
+
+    wrapper.unmount()
+  })
+
+  it('allows Backspace to edit text inputs', async () => {
+    const { wrapper } = await mountAppWithRouter()
+    const search = wrapper.get('[data-testid="feed-search"]').element
+    const backspace = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+
+    search.dispatchEvent(backspace)
+
+    expect(backspace.defaultPrevented).toBe(false)
     wrapper.unmount()
   })
 

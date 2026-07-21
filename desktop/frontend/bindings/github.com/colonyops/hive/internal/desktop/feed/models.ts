@@ -18,6 +18,11 @@ export interface Item {
     "title": string;
     "author": string;
     "age": string;
+
+    /**
+     * GitHub's last-updated time, unix milliseconds
+     */
+    "updatedAt": number;
     "unread": boolean;
 
     /**

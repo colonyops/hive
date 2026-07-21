@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 )
 
@@ -135,6 +136,35 @@ func (s *FlowStore) Create(name string) (Flow, error) {
 		return Flow{}, err
 	}
 	if err := SaveUI(s.uiPath(id), layout); err != nil {
+		return Flow{}, err
+	}
+	if err := s.reloadLocked(); err != nil {
+		return Flow{}, err
+	}
+	return s.flows[id], nil
+}
+
+// Rename updates a flow's display name without changing its stable id or any
+// graph content.
+func (s *FlowStore) Rename(id, name string) (Flow, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return Flow{}, fmt.Errorf("flow: name cannot be empty")
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.ensureLoadedLocked()
+
+	f, ok := s.flows[id]
+	if !ok {
+		return Flow{}, fmt.Errorf("flow %q not found", id)
+	}
+	f.Name = name
+	if _, err := validateFlow(&f, s.refs); err != nil {
+		return Flow{}, fmt.Errorf("flow %q: %w", f.ID, err)
+	}
+	if err := SaveFlow(filepath.Join(s.dir, f.ID+".yaml"), f); err != nil {
 		return Flow{}, err
 	}
 	if err := s.reloadLocked(); err != nil {

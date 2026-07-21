@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   ListFlows: vi.fn(),
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
+  RenameFlow: vi.fn(),
   DeleteFlow: vi.fn(),
   GetSidebar: vi.fn(),
   SaveSidebar: vi.fn(),
@@ -25,6 +26,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () =
   ListFlows: mocks.ListFlows,
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
+  RenameFlow: mocks.RenameFlow,
   DeleteFlow: mocks.DeleteFlow,
   GetSidebar: mocks.GetSidebar,
   SaveSidebar: mocks.SaveSidebar,
@@ -176,6 +178,26 @@ describe('useFeedState', () => {
     expect(get().activeProfile.value?.tree?.[0]).toMatchObject({ kind: 'folder', folder: { id: 'work' } })
   })
 
+  it('sorts inbox items by newest, oldest, or unread-first recency and persists the choice', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'oldest', unread: false, payload: { id: 'oldest', title: 'Oldest', kind: 'PR', updatedAt: 100 } },
+      { feedId: 'triage/my-prs', itemId: 'newest', unread: false, payload: { id: 'newest', title: 'Newest', kind: 'PR', updatedAt: 300 } },
+      { feedId: 'triage/my-prs', itemId: 'unread', unread: true, payload: { id: 'unread', title: 'Unread', kind: 'PR', updatedAt: 200 } },
+    ])
+    const get = mountState()
+    await flushPromises()
+
+    expect(get().visibleItems.value.map((item) => item.id)).toEqual(['newest', 'unread', 'oldest'])
+
+    get().setFeedSort('oldest')
+    expect(get().visibleItems.value.map((item) => item.id)).toEqual(['oldest', 'unread', 'newest'])
+
+    get().setFeedSort('unread')
+    expect(get().visibleItems.value.map((item) => item.id)).toEqual(['unread', 'newest', 'oldest'])
+    await flushPromises()
+    expect(localStorage.getItem('hive.feed.sort')).toBe('unread')
+  })
+
   it('loads a feed\'s items from feed_item, decoding the payload', async () => {
     mocks.FeedItems.mockImplementation((feedID: string) =>
       Promise.resolve(
@@ -205,6 +227,30 @@ describe('useFeedState', () => {
 
     expect(mocks.CreateFlow).toHaveBeenCalledWith('New')
     expect(get().profiles.value.some((p) => p.id === 'new')).toBe(true)
+  })
+
+  it('renames a profile and updates its rail presentation', async () => {
+    mocks.RenameFlow.mockResolvedValue({ id: 'triage', name: 'Team Triage', enabled: true, valid: true })
+    const get = mountState()
+    await flushPromises()
+
+    const renamed = await get().renameProfile('triage', '  Team Triage  ')
+
+    expect(renamed).toBe(true)
+    expect(mocks.RenameFlow).toHaveBeenCalledWith('triage', 'Team Triage')
+    expect(get().activeProfile.value).toMatchObject({ name: 'Team Triage', letter: 'T' })
+  })
+
+  it('surfaces a profile rename failure without changing the current name', async () => {
+    mocks.RenameFlow.mockRejectedValue(new Error('disk is read-only'))
+    const get = mountState()
+    await flushPromises()
+
+    const renamed = await get().renameProfile('triage', 'Team Triage')
+
+    expect(renamed).toBe(false)
+    expect(get().renameProfileError.value).toBe('disk is read-only')
+    expect(get().activeProfile.value?.name).toBe('Frontend Triage')
   })
 
   it('deletes a profile by deleting its flow', async () => {

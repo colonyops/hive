@@ -18,8 +18,9 @@ import type { ActionRunView } from '../../bindings/github.com/colonyops/hive/int
 const props = defineProps<{ item: FeedItem | null; actions: ActionView[]; pendingAction?: string | null; actionRuns?: Record<string, ActionRunView> }>()
 const emit = defineEmits<{ 'run-action': [actionId: string]; 'open-browser': []; 'open-url': [url: string]; edit: [] }>()
 
-// The detail header leads with the item's source (brand badge) and its type,
-// mirroring the inbox row.
+// The detail header leads with the item's source badge and type. The badge
+// already identifies the provider, so the adjacent context stays focused on
+// the repository and item number.
 const source = computed(() => feedSource(props.item ?? undefined))
 
 // Issue/PR bodies are GitHub-flavored markdown from untrusted authors;
@@ -70,12 +71,12 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
       <div class="relative border-b border-border px-5 pb-4 pt-[18px]">
         <div class="mb-[11px] flex items-center gap-[9px]">
           <span class="source-badge" :data-source="source.key" data-testid="source-badge"><SourceMark :source="source" class="size-[15px]" /></span>
-          <span class="kind-pill" :class="item.kind === 'PR' ? 'kind-pill-pr' : 'kind-pill-issue'">
+          <span class="kind-pill shrink-0 whitespace-nowrap" :class="item.kind === 'PR' ? 'kind-pill-pr' : 'kind-pill-issue'">
             <IconGitPullRequest v-if="item.kind === 'PR'" class="size-[13px]" />
             <IconCircleDot v-else class="size-[13px]" />
             {{ item.kind === 'PR' ? 'Pull Request' : 'Issue' }}
           </span>
-          <span class="min-w-0 truncate font-mono text-xs text-text-3">{{ source.label }} · {{ item.repo }} #{{ item.num }}</span>
+          <span class="min-w-0 truncate font-mono text-xs text-text-3">{{ item.repo }} #{{ item.num }}</span>
           <span class="flex-1" />
           <button class="open-button shrink-0" @click="emit('open-browser')">open <IconExternalLink class="size-3" /></button>
         </div>

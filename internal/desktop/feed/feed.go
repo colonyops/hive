@@ -9,14 +9,15 @@ package feed
 // It is JSON-encoded as a source node's event_log payload and re-surfaced as
 // a feed_item, so the frontend and the persisted feed both read this shape.
 type Item struct {
-	ID     string `json:"id"`
-	Kind   string `json:"kind"` // "PR" | "Issue"
-	Repo   string `json:"repo"`
-	Num    int    `json:"num"`
-	Title  string `json:"title"`
-	Author string `json:"author"`
-	Age    string `json:"age"`
-	Unread bool   `json:"unread"`
+	ID        string `json:"id"`
+	Kind      string `json:"kind"` // "PR" | "Issue"
+	Repo      string `json:"repo"`
+	Num       int    `json:"num"`
+	Title     string `json:"title"`
+	Author    string `json:"author"`
+	Age       string `json:"age"`
+	UpdatedAt int64  `json:"updatedAt"` // GitHub's last-updated time, unix milliseconds
+	Unread    bool   `json:"unread"`
 	// Reason is the GitHub notification reason (e.g. "review_requested"),
 	// empty for items known only from search.
 	Reason string   `json:"reason,omitempty"`

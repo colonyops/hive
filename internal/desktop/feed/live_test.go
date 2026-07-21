@@ -101,6 +101,7 @@ func TestPrefetchSearch_OneRequestForManySources(t *testing.T) {
 		items, err := live.SourceItems(t.Context(), def)
 		require.NoError(t, err)
 		require.Len(t, items, 1)
+		assert.Equal(t, time.Date(2026, 7, 20, 0, 0, 0, 0, time.UTC).UnixMilli(), items[0].UpdatedAt)
 	}
 	calls, _ = api.snapshot()
 	assert.Equal(t, 1, calls, "prefetched entries should serve every source from cache")

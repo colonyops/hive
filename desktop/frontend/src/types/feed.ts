@@ -14,6 +14,9 @@ export interface FeedItem {
   title: string
   author: string
   age: string
+  // GitHub's last-updated time in unix milliseconds. This is source recency,
+  // not feed_item.updated_at (which changes on every polling snapshot).
+  updatedAt: number
   unread: boolean
   reason?: string
   labels: string[]
@@ -25,6 +28,8 @@ export interface FeedItem {
 
 // FeedSummary is one feed (a flow feed node) in the sidebar: its id is the
 // flow-qualified feed key.
+export type FeedSort = 'newest' | 'oldest' | 'unread'
+
 export interface FeedSummary {
   id: string
   name: string

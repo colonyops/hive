@@ -160,6 +160,29 @@ func TestFlowStore_Create_SeedsStarterFlowWithUniqueID(t *testing.T) {
 	assert.NotEmpty(t, layout.Nodes)
 }
 
+func TestFlowStore_Rename_UpdatesOnlyDisplayName(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFlowStore(dir, minimalRefs())
+	created, err := store.Create("Frontend Triage")
+	require.NoError(t, err)
+
+	renamed, err := store.Rename(created.ID, "  Team Triage  ")
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, renamed.ID)
+	assert.Equal(t, "Team Triage", renamed.Name)
+	assert.Equal(t, created.Nodes, renamed.Nodes)
+	assert.Equal(t, created.Wires, renamed.Wires)
+
+	loaded, ok := store.Get(created.ID)
+	require.True(t, ok)
+	assert.Equal(t, "Team Triage", loaded.Name)
+
+	_, err = store.Rename(created.ID, "   ")
+	require.ErrorContains(t, err, "name cannot be empty")
+	_, err = store.Rename("missing", "Name")
+	require.ErrorContains(t, err, "not found")
+}
+
 func TestFlowStore_Delete_RemovesFlowAndLayout(t *testing.T) {
 	dir := t.TempDir()
 	store := NewFlowStore(dir, minimalRefs())
