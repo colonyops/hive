@@ -2,7 +2,7 @@
 // System settings: on-disk locations (data dir, config dir, log file,
 // database) with open/reveal actions, and point-only overrides for the data
 // and config directories that take effect after a restart.
-import { onMounted } from 'vue'
+import { computed, onMounted } from 'vue'
 import IconInfo from '~icons/lucide/info'
 import IconExternalLink from '~icons/lucide/external-link'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
@@ -29,6 +29,18 @@ const {
 onMounted(() => {
   void refresh()
 })
+
+// The build-info rows are a flat label/value list; keeping them data-driven
+// avoids three near-identical row blocks.
+const buildRows = computed(() =>
+  build.value
+    ? [
+        { label: 'Version', value: build.value.version, testid: 'system-build-version' },
+        { label: 'Commit', value: build.value.commit, testid: 'system-build-commit' },
+        { label: 'Built', value: build.value.date, testid: 'system-build-date' },
+      ]
+    : [],
+)
 </script>
 
 <template>
@@ -121,17 +133,14 @@ onMounted(() => {
       data-testid="system-about"
     >
       <div v-if="build" class="rounded-lg border border-border">
-        <div class="flex items-center justify-between gap-3 px-3.5 py-2.5">
-          <span class="text-[12.5px] text-text-3">Version</span>
-          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-version">{{ build.version }}</span>
-        </div>
-        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
-          <span class="text-[12.5px] text-text-3">Commit</span>
-          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-commit">{{ build.commit }}</span>
-        </div>
-        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
-          <span class="text-[12.5px] text-text-3">Built</span>
-          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-date">{{ build.date }}</span>
+        <div
+          v-for="(row, index) in buildRows"
+          :key="row.testid"
+          class="flex items-center justify-between gap-3 px-3.5 py-2.5"
+          :class="{ 'border-t border-border': index > 0 }"
+        >
+          <span class="text-[12.5px] text-text-3">{{ row.label }}</span>
+          <span class="font-mono text-[12.5px] text-text-2" :data-testid="row.testid">{{ row.value }}</span>
         </div>
         <div class="flex flex-col gap-2 border-t border-border px-3.5 py-2.5">
           <button
