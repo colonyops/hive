@@ -210,6 +210,20 @@ func TestWorker_ConfirmRecordsJobLifecycleWithoutReplay(t *testing.T) {
 	assert.Empty(t, recorder.calls, "idempotent replay must not create a phantom job")
 }
 
+func TestWorker_ConfirmUnknownActionRecordsQueuedFailure(t *testing.T) {
+	t.Parallel()
+	db := openTestPipelineDB(t)
+	recorder := &fakeJobRecorder{}
+	worker := NewWorker(db, fakeActionLister{}, NewDispatcher(nil), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
+
+	_, err := worker.Confirm(t.Context(), "missing", "item-1", []byte(`{}`), ActionInvocationInput{})
+	require.Error(t, err)
+	assert.Equal(t, []string{"Begin", "Fail"}, recorder.calls)
+	assert.Equal(t, "missing", recorder.label)
+	assert.Contains(t, recorder.reason, "unknown action")
+}
+
 func TestWorker_ConfirmCreatesCommandWhenNoActionNodeProducedOne(t *testing.T) {
 	t.Parallel()
 	db := openTestPipelineDB(t)
@@ -354,13 +368,17 @@ func TestWorker_FailingExecutor_RetriesThenMarksFailed(t *testing.T) {
 func TestWorker_ConfirmFailureReturnsPersistedDiagnostics(t *testing.T) {
 	db := openTestPipelineDB(t)
 	exec := &fakeExecutor{err: fmt.Errorf("boom"), result: ExecutionResult{Attempted: true, Log: ExecutionLog{Stdout: "partial output", Stderr: "failure output"}}}
+	recorder := &fakeJobRecorder{}
 	worker := NewWorker(db, fakeActionLister{"review-action": launchSessionAction("review-action", false)}, NewDispatcher(map[string]Executor{"launch-session": exec}), 0, zerolog.Nop())
+	worker.SetJobRecorder(recorder)
 	view, err := worker.Confirm(t.Context(), "review-action", "item-1", []byte(`{"title":"Fix bug"}`), ActionInvocationInput{})
 	require.NoError(t, err, "an attempted side-effect failure is returned as a persisted view")
 	assert.Equal(t, "failed", view.Status)
 	assert.Equal(t, "boom", view.Error)
 	assert.Equal(t, "partial output", view.Stdout)
 	assert.Equal(t, "failure output", view.Stderr)
+	assert.Equal(t, []string{"Begin", "Running", "Fail"}, recorder.calls)
+	assert.Equal(t, "boom", recorder.reason)
 }
 
 func TestWorker_DoesNotRetryInterruptedInteractiveCommandAfterReopen(t *testing.T) {

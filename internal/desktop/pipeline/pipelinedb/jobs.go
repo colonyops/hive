@@ -3,6 +3,7 @@ package pipelinedb
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math"
 )
@@ -92,7 +93,7 @@ func (db *DB) SetJobStatus(
 func (db *DB) FindRunningJobByCommandID(ctx context.Context, commandID int64) (JobRecord, bool, error) {
 	row, err := db.queries.FindRunningJobByCommandID(ctx, sql.NullInt64{Int64: commandID, Valid: true})
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return JobRecord{}, false, nil
 		}
 		return JobRecord{}, false, fmt.Errorf("finding running job for command %d: %w", commandID, err)

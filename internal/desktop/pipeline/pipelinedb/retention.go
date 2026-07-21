@@ -17,6 +17,9 @@ type RetentionPolicy struct {
 	// ActivityEventLimit is the total number of newest activity_event rows to
 	// retain for the Activity view's audit history.
 	ActivityEventLimit int64
+	// JobLimit is the number of newest done/failed job rows to retain.
+	// Non-terminal jobs are never pruned.
+	JobLimit int64
 }
 
 // DefaultRetentionPolicy keeps enough recent history for the desktop's debug
@@ -26,6 +29,7 @@ func DefaultRetentionPolicy() RetentionPolicy {
 		NodeRunLimit:               10_000,
 		TerminalOutputCommandLimit: 2_000,
 		ActivityEventLimit:         5_000,
+		JobLimit:                   2_000,
 	}
 }
 
@@ -43,9 +47,9 @@ type RetentionResult struct {
 // hold retention because re-enabling one intentionally starts from the then
 // current log rather than replaying data accumulated while it was disabled.
 //
-// Node runs and terminal output-command rows are bounded independently. The
-// latter intentionally excludes pending and running commands; losing either
-// could drop or duplicate a side effect.
+// Node runs, terminal output-command rows, activity events, and terminal jobs
+// are bounded independently. Command and job retention intentionally excludes
+// non-terminal rows; losing either could drop work or strand visible state.
 func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy RetentionPolicy) (RetentionResult, error) {
 	if policy.NodeRunLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("node run retention limit must not be negative")
@@ -55,6 +59,9 @@ func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy Reten
 	}
 	if policy.ActivityEventLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("activity event retention limit must not be negative")
+	}
+	if policy.JobLimit < 0 {
+		return RetentionResult{}, fmt.Errorf("job retention limit must not be negative")
 	}
 
 	enabled := uniqueConsumers(enabledConsumers)
@@ -99,6 +106,9 @@ func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy Reten
 		}
 		if err := q.PruneActivityEvents(ctx, policy.ActivityEventLimit); err != nil {
 			return fmt.Errorf("pruning activity events: %w", err)
+		}
+		if err := q.PruneTerminalJobs(ctx, policy.JobLimit); err != nil {
+			return fmt.Errorf("pruning terminal jobs: %w", err)
 		}
 		return nil
 	})
