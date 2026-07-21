@@ -42,5 +42,6 @@ func TestSystemServiceBuild(t *testing.T) {
 	info := NewSystemService().Build()
 	require.Equal(t, "dev", info.Version)
 	require.Equal(t, "HEAD", info.Commit)
+	require.Equal(t, "https://github.com/colonyops/hive", info.RepoURL)
 	require.Empty(t, info.ReleaseURL)
 }

@@ -62,6 +62,12 @@ func shortCommit(c string) string {
 	return c
 }
 
+// repoURL is the desktop app's GitHub repository home page. Unlike releaseURL
+// it is always available, so the About screen can always link to the project.
+func repoURL() string {
+	return fmt.Sprintf("https://github.com/%s", desktopRepoSlug)
+}
+
 // releaseURL returns the GitHub release page for a desktop version, or "" when
 // the version has no corresponding published release: dev builds, empty
 // values, and go-module pseudo-versions (v0.0.0-<time>-<sha>) all yield "".

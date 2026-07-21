@@ -15,6 +15,7 @@ const {
   restartRequired,
   refresh,
   openReleaseNotes,
+  openRepo,
   openPath,
   revealPath,
   changeDataDir,
@@ -131,8 +132,18 @@ onMounted(() => {
           <span class="text-[12.5px] text-text-3">Built</span>
           <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-date">{{ build.date }}</span>
         </div>
-        <div v-if="build.releaseUrl" class="border-t border-border px-3.5 py-2.5">
+        <div class="flex flex-col gap-2 border-t border-border px-3.5 py-2.5">
           <button
+            type="button"
+            class="flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-severity-info hover:underline"
+            data-testid="system-build-repo"
+            @click="openRepo"
+          >
+            <IconExternalLink class="size-3.5" />
+            View project on GitHub
+          </button>
+          <button
+            v-if="build.releaseUrl"
             type="button"
             class="flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-severity-info hover:underline"
             data-testid="system-build-release"

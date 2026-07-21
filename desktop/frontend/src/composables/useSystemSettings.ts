@@ -43,11 +43,10 @@ export function useSystemSettings() {
     }
   }
 
-  // openReleaseNotes opens the GitHub release for the running build in the
-  // system browser. Guarded by a non-empty releaseUrl (dev builds have none),
-  // so the view only wires it when there is somewhere to go.
-  async function openReleaseNotes(): Promise<void> {
-    const url = build.value?.releaseUrl
+  // openExternal opens a build-info URL in the system browser. Guarded by a
+  // non-empty url (dev builds have no releaseUrl), so the view only wires links
+  // when there is somewhere to go.
+  async function openExternal(url: string | undefined): Promise<void> {
     if (!url) return
     error.value = ''
     try {
@@ -106,7 +105,8 @@ export function useSystemSettings() {
     error,
     restartRequired,
     refresh,
-    openReleaseNotes,
+    openReleaseNotes: () => openExternal(build.value?.releaseUrl),
+    openRepo: () => openExternal(build.value?.repoUrl),
     openPath,
     revealPath,
     changeDataDir: () => changeDir('Choose data directory', SetDataDir),

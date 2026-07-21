@@ -15,6 +15,11 @@ export interface BuildInfo {
     "date": string;
 
     /**
+     * RepoURL links to the project's GitHub repository. Always populated.
+     */
+    "repoUrl": string;
+
+    /**
      * ReleaseURL links to the GitHub release for this build's tag. It is empty
      * for dev/unreleased builds that have no matching published release, so the
      * frontend can hide the link rather than send users to a 404.

@@ -38,6 +38,7 @@ function buildInfo(overrides: Record<string, unknown> = {}) {
     version: '1.4.0',
     commit: 'abc1234',
     date: '2026-07-01T12:00:00Z',
+    repoUrl: 'https://github.com/colonyops/hive',
     releaseUrl: 'https://github.com/colonyops/hive/releases/tag/desktop-v1.4.0',
     ...overrides,
   }
@@ -131,7 +132,7 @@ describe('SystemSettingsView', () => {
     expect(wrapper.find('[data-testid="system-restart-banner"]').exists()).toBe(false)
   })
 
-  it('renders the build info and links to the GitHub release', async () => {
+  it('renders the build info and links to the repo and GitHub release', async () => {
     mocks.Info.mockResolvedValue(info())
     mocks.OpenURL.mockResolvedValue(undefined)
     const wrapper = mount(SystemSettingsView)
@@ -141,17 +142,21 @@ describe('SystemSettingsView', () => {
     expect(wrapper.find('[data-testid="system-build-commit"]').text()).toBe('abc1234')
     expect(wrapper.find('[data-testid="system-build-date"]').text()).toBe('2026-07-01T12:00:00Z')
 
+    await wrapper.find('[data-testid="system-build-repo"]').trigger('click')
+    expect(mocks.OpenURL).toHaveBeenCalledWith('https://github.com/colonyops/hive')
+
     await wrapper.find('[data-testid="system-build-release"]').trigger('click')
     expect(mocks.OpenURL).toHaveBeenCalledWith('https://github.com/colonyops/hive/releases/tag/desktop-v1.4.0')
   })
 
-  it('hides the release link for dev builds without a release url', async () => {
+  it('keeps the repo link but hides the release link for dev builds', async () => {
     mocks.Info.mockResolvedValue(info())
     mocks.Build.mockResolvedValue(buildInfo({ version: 'dev', releaseUrl: '' }))
     const wrapper = mount(SystemSettingsView)
     await flushPromises()
 
     expect(wrapper.find('[data-testid="system-build-version"]').text()).toBe('dev')
+    expect(wrapper.find('[data-testid="system-build-repo"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="system-build-release"]').exists()).toBe(false)
   })
 

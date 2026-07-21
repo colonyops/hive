@@ -70,6 +70,8 @@ type BuildInfo struct {
 	// Commit is the short (7-character) git revision the build was cut from.
 	Commit string `json:"commit"`
 	Date   string `json:"date"`
+	// RepoURL links to the project's GitHub repository. Always populated.
+	RepoURL string `json:"repoUrl"`
 	// ReleaseURL links to the GitHub release for this build's tag. It is empty
 	// for dev/unreleased builds that have no matching published release, so the
 	// frontend can hide the link rather than send users to a 404.
@@ -85,6 +87,7 @@ func (s *SystemService) Build() BuildInfo {
 		Version:    v,
 		Commit:     shortCommit(c),
 		Date:       d,
+		RepoURL:    repoURL(),
 		ReleaseURL: releaseURL(v),
 	}
 }
