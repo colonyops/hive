@@ -2,6 +2,7 @@
 import { nextTick, onMounted, onUnmounted, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
+import BaseButton from './BaseButton.vue'
 import AppCheckbox from './AppCheckbox.vue'
 import AppSelect from './AppSelect.vue'
 import AppliesToField from './AppliesToField.vue'
@@ -68,7 +69,7 @@ onUnmounted(() => {
     </div>
 
     <template #footer>
-      <div class="flex justify-end gap-2.5"><button class="rounded-lg border border-card px-[15px] py-2 text-[13px] text-text-2 hover:text-text disabled:opacity-50" :disabled="busy" @click="cancel">Cancel</button><button class="rounded-lg bg-accent px-[18px] py-2 text-[13px] font-semibold text-accent-contrast disabled:opacity-50" :disabled="busy" data-testid="action-save" @click="save">{{ busy ? 'Saving…' : 'Save' }}</button></div>
+      <div class="flex justify-end gap-2.5"><BaseButton variant="secondary" size="sm" :busy="busy" @click="cancel">Cancel</BaseButton><BaseButton size="sm" :busy="busy" data-testid="action-save" @click="save">{{ busy ? 'Saving…' : 'Save' }}</BaseButton></div>
     </template>
   </DrawerSheet>
 </template>

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import IconPlay from '~icons/lucide/play'
 import IconX from '~icons/lucide/x'
+import BaseButton from './BaseButton.vue'
 import type { SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { useAutofocus } from '../composables/useAutofocus'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
@@ -67,8 +68,8 @@ useAutofocus(nameInput)
           <p v-if="validationError || error" class="text-xs text-severity-error" data-testid="create-session-error">{{ validationError || error }}</p>
         </form>
         <footer class="flex gap-2.5 border-t border-row bg-raised px-5 py-3.5">
-          <button class="flex-1 cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-accent-contrast hover:brightness-110 disabled:cursor-default disabled:opacity-50" :disabled="busy || !canSubmit" data-testid="create-session-submit" @click="submit">{{ busy ? 'Creating…' : 'Create session' }}</button>
-          <button class="cursor-pointer rounded-lg border border-card px-4 py-2.5 text-[13.5px] text-text-2 hover:text-text disabled:cursor-default disabled:opacity-50" :disabled="busy" @click="close">Cancel</button>
+          <BaseButton class="flex-1" :busy="busy" :disabled="!canSubmit" data-testid="create-session-submit" @click="submit">{{ busy ? 'Creating…' : 'Create session' }}</BaseButton>
+          <BaseButton variant="secondary" :busy="busy" @click="close">Cancel</BaseButton>
         </footer>
       </div>
     </div>

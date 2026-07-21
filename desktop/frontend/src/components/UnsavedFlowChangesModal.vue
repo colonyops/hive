@@ -9,13 +9,14 @@
 import { ref } from 'vue'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
+import BaseButton from './BaseButton.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 
 const props = defineProps<{ busy: boolean; error?: string | null }>()
 const emit = defineEmits<{ close: []; deploy: []; discard: [] }>()
 
-const deployRef = ref<HTMLButtonElement | null>(null)
+const deployRef = ref<{ focus: () => void } | null>(null)
 
 useEscapeToClose(() => emit('close'), { enabled: () => !props.busy })
 useAutofocus(deployRef)
@@ -44,13 +45,13 @@ useAutofocus(deployRef)
         </div>
         <footer class="flex flex-col gap-2 border-t border-row bg-raised px-5 py-3.5">
           <div class="flex gap-2.5">
-            <button
+            <BaseButton
               ref="deployRef"
-              class="flex-1 cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-accent-contrast hover:brightness-110 disabled:cursor-default disabled:opacity-50"
-              :disabled="busy"
+              class="flex-1"
+              :busy="busy"
               data-testid="unsaved-flow-deploy"
               @click="emit('deploy')"
-            >{{ busy ? 'Deploying…' : 'Deploy' }}</button>
+            >{{ busy ? 'Deploying…' : 'Deploy' }}</BaseButton>
             <button
               class="flex-1 cursor-pointer rounded-lg border border-severity-error/50 px-4 py-2.5 text-[13.5px] font-semibold text-severity-error hover:bg-severity-error-tint disabled:cursor-default disabled:opacity-50"
               :disabled="busy"
@@ -58,12 +59,12 @@ useAutofocus(deployRef)
               @click="emit('discard')"
             >Discard changes</button>
           </div>
-          <button
-            class="cursor-pointer rounded-lg px-4 py-2 text-center text-[12.5px] text-text-2 hover:text-text disabled:cursor-default disabled:opacity-50"
-            :disabled="busy"
+          <BaseButton
+            variant="ghost"
+            :busy="busy"
             data-testid="unsaved-flow-cancel"
             @click="emit('close')"
-          >Cancel</button>
+          >Cancel</BaseButton>
         </footer>
       </div>
     </div>

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import IconLayoutGrid from '~icons/lucide/layout-grid'
 import IconX from '~icons/lucide/x'
+import BaseButton from './BaseButton.vue'
 import { useAutofocus } from '../composables/useAutofocus'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
 
@@ -53,13 +54,14 @@ useAutofocus(inputRef)
           <p v-if="error" class="text-xs text-kind-issue" data-testid="new-profile-error">{{ error }}</p>
         </div>
         <footer class="flex gap-2.5 border-t border-row bg-raised px-5 py-3.5">
-          <button
-            class="flex-1 cursor-pointer rounded-lg bg-accent px-4 py-2.5 text-[13.5px] font-semibold text-accent-contrast hover:brightness-110 disabled:cursor-default disabled:opacity-50"
-            :disabled="busy || !name.trim()"
+          <BaseButton
+            class="flex-1"
+            :busy="busy"
+            :disabled="!name.trim()"
             data-testid="new-profile-submit"
             @click="submit"
-          >Create profile ↵</button>
-          <button class="cursor-pointer rounded-lg border border-card px-4 py-2.5 text-[13.5px] text-text-2 hover:text-text" @click="emit('close')">Cancel</button>
+          >Create profile ↵</BaseButton>
+          <BaseButton variant="secondary" @click="emit('close')">Cancel</BaseButton>
         </footer>
       </div>
     </div>

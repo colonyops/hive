@@ -3,6 +3,7 @@ import { ref, watch } from 'vue'
 import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
+import BaseButton from './BaseButton.vue'
 import type { Profile } from '../types/feed'
 import type { ProfileSettingsSection } from '../router'
 import { useEscapeToClose } from '../composables/useEscapeToClose'
@@ -80,12 +81,13 @@ useEscapeToClose(() => emit('close'))
                 :disabled="props.renaming"
                 data-testid="profile-settings-name"
               >
-              <button
+              <BaseButton
                 type="submit"
-                class="cursor-pointer rounded-lg bg-accent px-3.5 py-2 text-[12.5px] font-semibold text-accent-contrast hover:brightness-110 disabled:cursor-default disabled:opacity-50"
-                :disabled="props.renaming || !name.trim() || name.trim() === props.profile.name"
+                size="sm"
+                :busy="props.renaming"
+                :disabled="!name.trim() || name.trim() === props.profile.name"
                 data-testid="profile-settings-save-name"
-              >{{ props.renaming ? 'Saving…' : 'Save' }}</button>
+              >{{ props.renaming ? 'Saving…' : 'Save' }}</BaseButton>
             </div>
             <p v-if="props.renameError" class="mt-2 text-xs text-severity-error" data-testid="profile-settings-rename-error">{{ props.renameError }}</p>
             <div class="mt-3 border-t border-border pt-3 text-xs text-text-3">{{ props.profile.sourceSummary }}</div>
@@ -96,12 +98,13 @@ useEscapeToClose(() => emit('close'))
             <p class="mt-1.5 text-xs leading-relaxed text-text-3">
               Permanently remove this profile, its flow file, and its committed feed items.
             </p>
-            <button
-              type="button"
-              class="mt-4 flex cursor-pointer items-center gap-1.5 rounded-md bg-severity-error px-3 py-2 text-[12.5px] font-semibold text-accent-contrast hover:brightness-110"
+            <BaseButton
+              variant="danger"
+              size="sm"
+              class="mt-4"
               data-testid="profile-settings-delete"
               @click="emit('delete')"
-            ><IconTrash2 class="size-3.5" />Delete profile</button>
+            ><template #icon><IconTrash2 class="size-3.5" /></template>Delete profile</BaseButton>
           </div>
         </div>
       </div>

@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import IconPlus from '~icons/lucide/plus'
 import IconTrash2 from '~icons/lucide/trash-2'
+import BaseButton from './BaseButton.vue'
 import AppIcon from './AppIcon.vue'
 import ActionEditor from './ActionEditor.vue'
 import ConfirmationDialog from './ConfirmationDialog.vue'
@@ -40,11 +41,12 @@ function requestDelete(action: EditableAction): void { confirmation.request({ ti
         <h2 class="text-[15px] font-semibold text-text">Actions</h2>
         <p class="mt-1 text-xs leading-relaxed text-text-3">Detail visibility controls only manual feed-item buttons. Flow nodes can still target any action.</p>
       </div>
-      <button
-        class="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent px-3.5 py-2 text-[13px] font-semibold text-accent-contrast hover:opacity-90"
+      <BaseButton
+        size="sm"
+        class="shrink-0"
         data-testid="action-create"
         @click="createNew"
-      ><IconPlus class="size-3.5" :stroke-width="2.4" />New action</button>
+      ><template #icon><IconPlus class="size-3.5" :stroke-width="2.4" /></template>New action</BaseButton>
     </div>
 
     <p v-if="error && !editing" class="mb-3 rounded border border-severity-error bg-severity-error-tint px-3 py-2 text-xs text-severity-error" data-testid="actions-error">{{ error }}</p>
