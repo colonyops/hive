@@ -305,6 +305,8 @@ func (p *LiveProvider) PrefetchSearch(ctx context.Context, defs []SourceDef) err
 		return err
 	}
 
+	p.logger.Debug().Int("searches", len(reqs)).Msg("prefetched search sources in one graphql request")
+
 	fetchedAt := p.now()
 	p.mu.Lock()
 	for i, key := range dueKeys {
