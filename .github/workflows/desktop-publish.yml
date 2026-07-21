@@ -5,9 +5,22 @@ name: Build and Publish Desktop
 # its own tag namespace (`desktop-v*`), so bumping/publishing the desktop app
 # never touches the CLI's `v*` tags or its Homebrew/GoReleaser pipeline.
 #
-# macOS only, universal (arm64 + amd64), ad-hoc signed. Because the app is
-# ad-hoc signed (no Apple Developer ID / notarization), macOS quarantines it
-# after download — the release notes tell users how to strip the quarantine.
+# macOS only, universal (arm64 + amd64). Release builds are signed with a
+# Developer ID Application certificate and notarized + stapled, so the .app the
+# updater downloads and swaps in place launches cleanly through Gatekeeper with
+# no xattr quarantine dance. A SHA256SUMS sidecar is published alongside the zip
+# so the in-app updater integrity-verifies each download (the custom provider
+# sets ChecksumAsset: "SHA256SUMS").
+#
+# Required repository secrets:
+#   MACOS_CERTIFICATE      base64-encoded Developer ID Application .p12
+#   MACOS_CERTIFICATE_PWD  password for that .p12
+#   MACOS_SIGN_IDENTITY    e.g. "Developer ID Application: Acme (TEAMID)"
+#   AC_API_KEY_ID          App Store Connect API key id
+#   AC_API_ISSUER_ID       App Store Connect API issuer id
+#   AC_API_KEY             base64-encoded App Store Connect API .p8 key
+# App Store Connect API key auth is preferred over Apple-ID + app-specific
+# password: no 2FA friction in CI.
 
 permissions:
   contents: write # create tags + releases and upload assets
@@ -86,7 +99,7 @@ jobs:
           /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString ${{ steps.version.outputs.version }}" desktop/build/darwin/Info.plist
           /usr/libexec/PlistBuddy -c "Set :CFBundleVersion ${{ steps.version.outputs.version }}" desktop/build/darwin/Info.plist
 
-      - name: Build & package universal .app (ad-hoc signed)
+      - name: Build & package universal .app
         working-directory: desktop
         # Stamp the build info into the binary (desktop/buildinfo.go) so the
         # running app reports this exact version/commit/date in System settings
@@ -97,12 +110,79 @@ jobs:
           HIVE_DESKTOP_DATE: ${{ steps.version.outputs.date }}
         run: wails3 task darwin:package:universal
 
-      - name: Zip the .app bundle
+      - name: Import Developer ID certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+        run: |
+          set -euo pipefail
+          # Use a dedicated, ephemeral keychain so the runner's login keychain
+          # is never touched and the imported key is discarded with the runner.
+          KEYCHAIN_PATH="$RUNNER_TEMP/signing.keychain-db"
+          KEYCHAIN_PWD="$(openssl rand -base64 24)"
+          echo "KEYCHAIN_PATH=$KEYCHAIN_PATH" >> "$GITHUB_ENV"
+
+          echo "$MACOS_CERTIFICATE" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+
+          security create-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PWD" "$KEYCHAIN_PATH"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERTIFICATE_PWD" \
+            -k "$KEYCHAIN_PATH" -T /usr/bin/codesign
+          # Allow codesign to use the key without an interactive prompt.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PWD" "$KEYCHAIN_PATH" >/dev/null
+          # Make the keychain visible to codesign's default search list.
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          rm -f "$RUNNER_TEMP/cert.p12"
+
+      - name: Codesign the .app (Developer ID, hardened runtime)
+        working-directory: desktop
+        env:
+          MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+        run: |
+          set -euo pipefail
+          codesign --force --deep --timestamp --options runtime \
+            --entitlements build/darwin/entitlements.plist \
+            --sign "$MACOS_SIGN_IDENTITY" \
+            bin/hive-desktop.app
+          codesign --verify --strict --verbose=2 bin/hive-desktop.app
+
+      - name: Notarize and staple
+        working-directory: desktop
+        env:
+          AC_API_KEY_ID: ${{ secrets.AC_API_KEY_ID }}
+          AC_API_ISSUER_ID: ${{ secrets.AC_API_ISSUER_ID }}
+          AC_API_KEY: ${{ secrets.AC_API_KEY }}
+        run: |
+          set -euo pipefail
+          # notarytool needs the .p8 API key on disk.
+          KEY_PATH="$RUNNER_TEMP/ac_api_key.p8"
+          echo "$AC_API_KEY" | base64 --decode > "$KEY_PATH"
+
+          # Notarization operates on a zip of the bundle; the resulting ticket
+          # is stapled onto the .app itself afterwards.
+          ditto -c -k --keepParent bin/hive-desktop.app "$RUNNER_TEMP/notarize.zip"
+          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+            --key "$KEY_PATH" \
+            --key-id "$AC_API_KEY_ID" \
+            --issuer "$AC_API_ISSUER_ID" \
+            --wait
+          xcrun stapler staple bin/hive-desktop.app
+          xcrun stapler validate bin/hive-desktop.app
+          rm -f "$KEY_PATH" "$RUNNER_TEMP/notarize.zip"
+
+      - name: Zip the stapled .app and compute checksums
         working-directory: desktop/bin
         run: |
-          ditto -c -k --keepParent \
-            hive-desktop.app \
-            "Hive-desktop-${{ steps.version.outputs.version }}-macos-universal.zip"
+          set -euo pipefail
+          ZIP="Hive-desktop-${{ steps.version.outputs.version }}-macos-universal.zip"
+          # Re-zip AFTER stapling so the published artifact carries the ticket.
+          ditto -c -k --keepParent hive-desktop.app "$ZIP"
+          # SHA256SUMS must list the zip's basename: the updater's checksum
+          # parser compares basenames, not paths.
+          shasum -a 256 "$ZIP" > SHA256SUMS
+          cat SHA256SUMS
 
       - name: Create GitHub Release
         env:
@@ -111,15 +191,12 @@ jobs:
           notes=$(cat <<'EOF'
           Universal macOS build (Apple Silicon + Intel) of the Hive desktop app.
 
-          This build is **ad-hoc signed** (not signed with an Apple Developer ID or
-          notarized), so macOS quarantines it after download. After copying
-          **Hive.app** to `/Applications`, remove the quarantine attribute once:
+          Signed with an Apple Developer ID and notarized, so it launches without
+          any quarantine workaround. Copy **Hive.app** to `/Applications` and open it.
 
-          ```bash
-          xattr -dr com.apple.quarantine /Applications/Hive.app
-          ```
-
-          Otherwise macOS reports the app as damaged or from an unidentified developer.
+          The app can update itself: enable **Automatic updates** in System settings,
+          or use **Check for updates**. A `SHA256SUMS` sidecar accompanies the build
+          so the in-app updater integrity-verifies each download.
 
           Requires macOS 12.0 or later.
           EOF
@@ -128,4 +205,5 @@ jobs:
             --target "$GITHUB_SHA" \
             --title "Hive Desktop ${{ steps.version.outputs.version }}" \
             --notes "$notes" \
-            "desktop/bin/Hive-desktop-${{ steps.version.outputs.version }}-macos-universal.zip"
+            "desktop/bin/Hive-desktop-${{ steps.version.outputs.version }}-macos-universal.zip" \
+            "desktop/bin/SHA256SUMS"
