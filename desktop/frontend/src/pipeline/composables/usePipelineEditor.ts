@@ -7,7 +7,8 @@
 // PipelineEditorClient and is also the one place that subscribes to the
 // "flows:updated" Wails event (calling refreshFlows/refreshNodeRuns here in
 // response), keeping this file trivially unit-testable with a fake client.
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useIntervalFn } from '@vueuse/core'
+import { computed, onMounted, ref } from 'vue'
 import { instantiate } from '../registry'
 import type { FlowNode, Wire } from '../types'
 import {
@@ -233,15 +234,10 @@ export function usePipelineEditor(client: PipelineEditorClient, options: Pipelin
     }
   }
 
-  let pollTimer: ReturnType<typeof setInterval> | undefined
+  useIntervalFn(() => void refreshNodeRuns(), pollIntervalMs)
 
   onMounted(() => {
     void refreshFlows()
-    pollTimer = setInterval(() => { void refreshNodeRuns() }, pollIntervalMs)
-  })
-
-  onUnmounted(() => {
-    if (pollTimer !== undefined) clearInterval(pollTimer)
   })
 
   return {
