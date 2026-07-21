@@ -14,6 +14,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/github"
 )
 
@@ -172,6 +173,182 @@ func TestSourceItems_SearchTTLHonorsSetSearchTTL(t *testing.T) {
 
 	calls, _ := api.snapshot()
 	assert.Equal(t, 2, calls, "90s is fresh with a 2m TTL, while 130s is stale")
+}
+
+type recordingActivity struct {
+	mu     sync.Mutex
+	events []activity.Event
+}
+
+func (r *recordingActivity) Record(_ context.Context, event activity.Event) {
+	r.mu.Lock()
+	r.events = append(r.events, event)
+	r.mu.Unlock()
+}
+
+func (r *recordingActivity) snapshot() []activity.Event {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	return append([]activity.Event(nil), r.events...)
+}
+
+func newLiveProviderWithHandler(t *testing.T, handler http.HandlerFunc) *LiveProvider {
+	t.Helper()
+	server := httptest.NewServer(handler)
+	t.Cleanup(server.Close)
+	return NewLiveProvider(github.NewClient(github.WithAPIBase(server.URL)), github.NewMemoryTokenStore("token"), zerolog.Nop())
+}
+
+func writeSearchResponse(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{
+		"s0": map[string]any{"nodes": []any{searchNode(1)}},
+	}})
+}
+
+func TestCooldown_SuppressesAllFetches(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+	limited := false
+	live := newLiveProviderWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		requests++
+		if r.URL.Path == "/graphql" && !limited {
+			limited = true
+			w.Header().Set("Retry-After", "120")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		if r.URL.Path == "/graphql" {
+			writeSearchResponse(w)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`[]`))
+	})
+	now := time.Now()
+	live.now = func() time.Time { return now }
+	search := SourceDef{ID: "search", Kind: "search", Query: "is:open"}
+	notifications := SourceDef{ID: "inbox", Kind: "notifications"}
+
+	_, err := live.SourceItems(t.Context(), search)
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	mu.Lock()
+	assert.Equal(t, 1, requests)
+	mu.Unlock()
+
+	_, err = live.SourceItems(t.Context(), search)
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	_, err = live.SourceItems(t.Context(), notifications)
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	mu.Lock()
+	assert.Equal(t, 1, requests, "cooldown suppresses search and notifications")
+	mu.Unlock()
+
+	live.mu.Lock()
+	reset := live.cooldownUntil
+	live.mu.Unlock()
+	require.False(t, reset.IsZero())
+	now = reset.Add(time.Second)
+	_, err = live.SourceItems(t.Context(), search)
+	require.NoError(t, err)
+	_, err = live.SourceItems(t.Context(), notifications)
+	require.NoError(t, err)
+	mu.Lock()
+	assert.Equal(t, 3, requests, "fetching resumes once the cooldown expires")
+	mu.Unlock()
+}
+
+func TestCooldown_ServesStale(t *testing.T) {
+	var mu sync.Mutex
+	requests := 0
+	limited := false
+	live := newLiveProviderWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		requests++
+		if limited {
+			w.Header().Set("Retry-After", "120")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		writeSearchResponse(w)
+	})
+	now := time.Now()
+	live.now = func() time.Time { return now }
+	def := SourceDef{ID: "search", Kind: "search", Query: "is:open"}
+
+	items, err := live.SourceItems(t.Context(), def)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	limited = true
+	now = now.Add(DefaultPollInterval)
+	items, err = live.SourceItems(t.Context(), def)
+	require.NoError(t, err, "the rate-limited request serves stale cache")
+	require.Len(t, items, 1)
+	items, err = live.SourceItems(t.Context(), def)
+	require.NoError(t, err, "cooldown continues to serve stale cache")
+	require.Len(t, items, 1)
+	mu.Lock()
+	assert.Equal(t, 2, requests)
+	mu.Unlock()
+}
+
+func TestCooldown_RecordsActivityOnce(t *testing.T) {
+	requests := 0
+	live := newLiveProviderWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		w.Header().Set("Retry-After", "120")
+		w.WriteHeader(http.StatusTooManyRequests)
+	})
+	now := time.Now()
+	live.now = func() time.Time { return now }
+	recorder := &recordingActivity{}
+	live.SetRecorder(recorder)
+
+	_, err := live.SourceItems(t.Context(), SourceDef{ID: "search", Kind: "search", Query: "is:open"})
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	_, err = live.SourceItems(t.Context(), SourceDef{ID: "inbox", Kind: "notifications"})
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	err = live.PrefetchSearch(t.Context(), []SourceDef{{ID: "other", Kind: "search", Query: "is:pr"}})
+	require.ErrorIs(t, err, github.ErrRateLimited)
+
+	events := recorder.snapshot()
+	require.Len(t, events, 1)
+	assert.Equal(t, activity.RefreshFailed("github", events[0].Body).Title, events[0].Title)
+	assert.Contains(t, events[0].Body, "rate limited; fetches paused until")
+	assert.Equal(t, 1, requests, "suppressed fetches never reach GitHub")
+}
+
+func TestInvalidate_ClearsCooldown(t *testing.T) {
+	requests := 0
+	limited := true
+	live := newLiveProviderWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if limited {
+			w.Header().Set("Retry-After", "120")
+			w.WriteHeader(http.StatusTooManyRequests)
+			return
+		}
+		writeSearchResponse(w)
+	})
+	now := time.Now()
+	live.now = func() time.Time { return now }
+	def := SourceDef{ID: "search", Kind: "search", Query: "is:open"}
+
+	_, err := live.SourceItems(t.Context(), def)
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	_, err = live.SourceItems(t.Context(), def)
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	assert.Equal(t, 1, requests)
+
+	limited = false
+	live.Invalidate()
+	items, err := live.SourceItems(t.Context(), def)
+	require.NoError(t, err)
+	require.Len(t, items, 1)
+	assert.Equal(t, 2, requests)
 }
 
 func TestPrefetchSearch_RecordsTokenErrors(t *testing.T) {

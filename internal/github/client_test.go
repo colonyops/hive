@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -46,8 +47,10 @@ func TestUserUnauthorized(t *testing.T) {
 func TestRateLimitedMapsToSentinel(t *testing.T) {
 	t.Parallel()
 
+	const resetEpoch = 1_780_000_000
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("X-RateLimit-Remaining", "0")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetEpoch, 10))
 		w.WriteHeader(http.StatusForbidden)
 		_, _ = w.Write([]byte(`{"message":"API rate limit exceeded"}`))
 	}))
@@ -55,6 +58,9 @@ func TestRateLimitedMapsToSentinel(t *testing.T) {
 
 	_, err := NewClient(WithAPIBase(server.URL)).User(t.Context())
 	require.ErrorIs(t, err, ErrRateLimited)
+	var rateErr *RateLimitError
+	require.ErrorAs(t, err, &rateErr)
+	assert.Equal(t, time.Unix(resetEpoch, 0), rateErr.ResetAt)
 }
 
 func TestSecondaryRateLimitMapsToSentinel(t *testing.T) {
@@ -68,8 +74,29 @@ func TestSecondaryRateLimitMapsToSentinel(t *testing.T) {
 	}))
 	defer server.Close()
 
+	before := time.Now()
+	_, err := NewClient(WithAPIBase(server.URL)).User(t.Context())
+	after := time.Now()
+	require.ErrorIs(t, err, ErrRateLimited)
+	var rateErr *RateLimitError
+	require.ErrorAs(t, err, &rateErr)
+	assert.WithinDuration(t, before.Add(time.Minute), rateErr.ResetAt, time.Second)
+	assert.WithinDuration(t, after.Add(time.Minute), rateErr.ResetAt, time.Second)
+}
+
+func TestRateLimitedWithoutResetHasZeroResetAt(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusTooManyRequests)
+	}))
+	defer server.Close()
+
 	_, err := NewClient(WithAPIBase(server.URL)).User(t.Context())
 	require.ErrorIs(t, err, ErrRateLimited)
+	var rateErr *RateLimitError
+	require.ErrorAs(t, err, &rateErr)
+	assert.True(t, rateErr.ResetAt.IsZero())
 }
 
 func TestForbiddenWithoutRateLimitIsGeneric(t *testing.T) {
@@ -199,14 +226,19 @@ func TestSearchIssuesBatch_Empty(t *testing.T) {
 func TestSearchIssuesBatch_RateLimitedGraphQLError(t *testing.T) {
 	t.Parallel()
 
+	const resetEpoch = 1_780_000_000
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
+		w.Header().Set("X-RateLimit-Reset", strconv.FormatInt(resetEpoch, 10))
 		_, _ = w.Write([]byte(`{"errors":[{"type":"RATE_LIMITED","message":"rate limit exceeded"}]}`))
 	}))
 	defer server.Close()
 
 	_, err := NewClient(WithAPIBase(server.URL)).SearchIssuesBatch(t.Context(), []SearchRequest{{Query: "is:open", Limit: 25}})
 	require.ErrorIs(t, err, ErrRateLimited)
+	var rateErr *RateLimitError
+	require.ErrorAs(t, err, &rateErr)
+	assert.Equal(t, time.Unix(resetEpoch, 0), rateErr.ResetAt)
 }
 
 func TestSearchIssuesBatch_HTTPErrors(t *testing.T) {

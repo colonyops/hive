@@ -32,6 +32,24 @@ var (
 	ErrUnreachable  = errors.New("github: unreachable")
 )
 
+// RateLimitError is a rate-limit response carrying the server-provided retry
+// time. It unwraps to ErrRateLimited so errors.Is-based handling keeps working;
+// callers that can honor the wait can inspect ResetAt with errors.As.
+type RateLimitError struct {
+	// ResetAt is when the limit resets. It is zero when the server supplied
+	// neither Retry-After nor X-RateLimit-Reset.
+	ResetAt time.Time
+}
+
+func (e *RateLimitError) Error() string {
+	if e.ResetAt.IsZero() {
+		return ErrRateLimited.Error()
+	}
+	return fmt.Sprintf("%s until %s", ErrRateLimited, e.ResetAt.Format(time.RFC3339))
+}
+
+func (e *RateLimitError) Unwrap() error { return ErrRateLimited }
+
 // Client is a GitHub REST v3 client. The zero value is not usable; construct
 // with NewClient.
 type Client struct {
@@ -256,7 +274,7 @@ func (c *Client) getJSON(ctx context.Context, path string, params url.Values, ou
 
 // postGraphQL executes one GraphQL request and decodes the data object into
 // out. It maps transport failures to ErrUnreachable, non-2xx statuses through
-// statusError, and GraphQL RATE_LIMITED errors to ErrRateLimited.
+// statusError, and GraphQL RATE_LIMITED errors to RateLimitError.
 func (c *Client) postGraphQL(ctx context.Context, query string, variables map[string]any, out any) error {
 	payload, err := json.Marshal(struct {
 		Query     string         `json:"query"`
@@ -301,7 +319,7 @@ func (c *Client) postGraphQL(ctx context.Context, query string, variables map[st
 		messages := make([]string, 0, len(response.Errors))
 		for _, gqlErr := range response.Errors {
 			if gqlErr.Type == "RATE_LIMITED" {
-				return fmt.Errorf("github: graphql: %w", ErrRateLimited)
+				return rateLimitError(resp.Header)
 			}
 			if gqlErr.Message != "" {
 				messages = append(messages, gqlErr.Message)
@@ -392,17 +410,30 @@ func statusError(resp *http.Response) error {
 	case resp.StatusCode == http.StatusUnauthorized:
 		return ErrUnauthorized
 	case resp.StatusCode == http.StatusTooManyRequests:
-		return ErrRateLimited
+		return rateLimitError(resp.Header)
 	case resp.StatusCode == http.StatusForbidden:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		if forbiddenIsRateLimit(resp, body) {
-			return ErrRateLimited
+			return rateLimitError(resp.Header)
 		}
 		return fmt.Errorf("github: %s %s: %s", resp.Request.Method, resp.Request.URL.Path, summarize(resp.StatusCode, body))
 	default:
 		body, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
 		return fmt.Errorf("github: %s %s: %s", resp.Request.Method, resp.Request.URL.Path, summarize(resp.StatusCode, body))
 	}
+}
+
+// rateLimitError extracts GitHub's wait hints. Retry-After is preferred when
+// present because it describes the active secondary-limit penalty; otherwise
+// X-RateLimit-Reset is the primary-limit epoch reset.
+func rateLimitError(header http.Header) *RateLimitError {
+	if seconds, err := strconv.Atoi(header.Get("Retry-After")); err == nil && seconds >= 0 {
+		return &RateLimitError{ResetAt: time.Now().Add(time.Duration(seconds) * time.Second)}
+	}
+	if epoch, err := strconv.ParseInt(header.Get("X-RateLimit-Reset"), 10, 64); err == nil && epoch >= 0 {
+		return &RateLimitError{ResetAt: time.Unix(epoch, 0)}
+	}
+	return &RateLimitError{}
 }
 
 // forbiddenIsRateLimit distinguishes rate-limit 403s from permission 403s.

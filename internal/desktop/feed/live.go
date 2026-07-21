@@ -12,6 +12,7 @@ import (
 	"github.com/rs/zerolog"
 	"golang.org/x/sync/singleflight"
 
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/github"
 )
 
@@ -42,7 +43,12 @@ type LiveProvider struct {
 	cache          map[string]*cachedSource
 	searchTTL      time.Duration
 	searchFailures map[string]searchFailure
-	flight         singleflight.Group
+	// cooldownUntil pauses all fetches for the current token after GitHub
+	// reports a rate limit. cooldownErr is returned while that pause is active.
+	cooldownUntil time.Time
+	cooldownErr   error
+	recorder      activity.Recorder
+	flight        singleflight.Group
 }
 
 // searchFailure is one failed fetch attempt for a search cache key.
@@ -96,6 +102,69 @@ func (p *LiveProvider) SetSearchTTL(ttl time.Duration) {
 	p.mu.Unlock()
 }
 
+// SetRecorder attaches an activity recorder so rate-limit pauses surface in
+// the Activity view. Nil is valid and disables recording.
+func (p *LiveProvider) SetRecorder(r activity.Recorder) {
+	p.mu.Lock()
+	p.recorder = r
+	p.mu.Unlock()
+}
+
+// inCooldown reports whether GitHub fetches are currently suppressed and the
+// rate-limit error callers should surface while the pause is active.
+func (p *LiveProvider) inCooldown() (bool, error) {
+	now := p.now()
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cooldownUntil.IsZero() || !now.Before(p.cooldownUntil) {
+		p.cooldownUntil = time.Time{}
+		p.cooldownErr = nil
+		return false, nil
+	}
+	return true, p.cooldownErr
+}
+
+// noteRateLimit starts or extends the token-wide cooldown. A server reset
+// takes precedence over the local fallback; an existing later cooldown is
+// retained so concurrent failures cannot shorten it.
+func (p *LiveProvider) noteRateLimit(err error) {
+	if !errors.Is(err, github.ErrRateLimited) {
+		return
+	}
+	var rateErr *github.RateLimitError
+	until := time.Time{}
+	if errors.As(err, &rateErr) {
+		until = rateErr.ResetAt
+	}
+
+	now := p.now()
+	p.mu.Lock()
+	if until.IsZero() {
+		until = now.Add(p.searchTTL)
+	}
+	active := !p.cooldownUntil.IsZero() && now.Before(p.cooldownUntil)
+	if active && !until.After(p.cooldownUntil) {
+		p.mu.Unlock()
+		return
+	}
+	if !until.After(now) {
+		p.mu.Unlock()
+		return
+	}
+	p.cooldownUntil = until
+	p.cooldownErr = err
+	recorder := p.recorder
+	p.mu.Unlock()
+
+	if active {
+		return
+	}
+	p.logger.Warn().Err(err).Time("resume_at", until).Msg("github rate limited; fetches paused")
+	if recorder != nil {
+		recorder.Record(context.Background(), activity.RefreshFailed("github", fmt.Sprintf("rate limited; fetches paused until %s", until.Format("15:04:05"))))
+	}
+}
+
 // SourceItems returns one source's current items — served from cache within
 // the fetch TTL, otherwise fetched via the conditional, singleflight-coalesced
 // path (see sourceItems/fetchSource).
@@ -118,6 +187,8 @@ func (p *LiveProvider) Invalidate() {
 	defer p.mu.Unlock()
 	p.cache = make(map[string]*cachedSource)
 	p.searchFailures = make(map[string]searchFailure)
+	p.cooldownUntil = time.Time{}
+	p.cooldownErr = nil
 }
 
 // notificationsTTL is the effective minimum interval between notification
@@ -207,6 +278,11 @@ func (p *LiveProvider) PrefetchSearch(ctx context.Context, defs []SourceDef) err
 		return nil
 	}
 
+	if cooling, cooldownErr := p.inCooldown(); cooling {
+		p.recordSearchFailures(dueKeys, cooldownErr)
+		return cooldownErr
+	}
+
 	token, err := p.tokens.Token()
 	if err == nil && token == "" {
 		err = ErrNotAuthenticated
@@ -222,6 +298,9 @@ func (p *LiveProvider) PrefetchSearch(ctx context.Context, defs []SourceDef) err
 	}
 	results, err := p.client.WithTokenCopy(token).SearchIssuesBatch(ctx, reqs)
 	if err != nil {
+		if errors.Is(err, github.ErrRateLimited) {
+			p.noteRateLimit(err)
+		}
 		p.recordSearchFailures(dueKeys, err)
 		return err
 	}
@@ -261,6 +340,10 @@ func (p *LiveProvider) fetchSource(ctx context.Context, src SourceDef) ([]liveIt
 // requests are conditional: a 304 keeps the cached items and refreshes their
 // fetch time at no rate-limit cost.
 func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]liveItem, error) {
+	if cooling, err := p.inCooldown(); cooling {
+		return nil, err
+	}
+
 	token, err := p.tokens.Token()
 	if err != nil {
 		return nil, err
@@ -283,6 +366,9 @@ func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]
 
 		result, err := client.Notifications(ctx, src.effectiveLimit(), ifModifiedSince)
 		if err != nil {
+			if errors.Is(err, github.ErrRateLimited) {
+				p.noteRateLimit(err)
+			}
 			return nil, err
 		}
 		pollInterval := time.Duration(result.PollInterval) * time.Second
@@ -312,6 +398,9 @@ func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]
 			Limit: src.effectiveLimit(),
 		}})
 		if err != nil {
+			if errors.Is(err, github.ErrRateLimited) {
+				p.noteRateLimit(err)
+			}
 			return nil, err
 		}
 		items := p.searchItems(results[0])

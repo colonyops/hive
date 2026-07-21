@@ -332,6 +332,9 @@ func main() {
 	// the ActivityService the frontend reads/writes. It emits activity:appended
 	// on each append so open views refresh.
 	activityStore := activity.NewStore(pipelineDB, activity.Options{Emit: emitActivityAppended})
+	if fetcher != nil {
+		fetcher.SetRecorder(activityStore)
+	}
 
 	actionRuntime, err := buildHiveActionRuntime(activityStore, logger)
 	if err != nil {
