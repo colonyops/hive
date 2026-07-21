@@ -2,8 +2,10 @@
 // The flows canvas (8a/8c): node cards at their layout position (falling
 // back to a deterministic grid slot when unpositioned — see
 // lib/wireFlow.ts's gridPosition), SVG wires between ports, drag-to-
-// reposition, zoom/fit (exposed for FlowsView's toolbar — see defineExpose
-// below), live per-node status from nodeRuns, and a single-click-selects /
+// reposition, click-drag and scroll panning, pointer-anchored Ctrl/Cmd+scroll
+// zoom, and zoom/fit controls (exposed for FlowsView's toolbar — see
+// defineExpose below), live per-node status from
+// nodeRuns, and a single-click-selects /
 // double-click-opens-the-NodeEditorDrawer flow for add/edit/delete. There is
 // no floating inspector — selection is just the accent highlight ring
 // (cardShadow) on the selected card; opening the editor is a distinct,
@@ -352,14 +354,76 @@ function onDrop(e: DragEvent) {
   emit('add-node-at', type, Math.round(world.x), Math.round(world.y))
 }
 
-// ── Zoom / fit — a basic scale transform; panning only happens as a side
-// effect of Fit/focus centering content, there's no click-drag-to-pan in
-// v1. The buttons themselves live in FlowsView's canvas toolbar (8a) —
-// zoom/zoomIn/zoomOut/fit are exposed below for that toolbar to drive. ────
+// ── Pan / zoom / fit ─────────────────────────────────────────────────────
+// Dragging empty canvas space pans in screen pixels, so the graph follows the
+// hand at the same speed regardless of zoom. Node and port pointer handlers
+// remain separate and stop a surface pan from starting.
 
 const viewportRef = ref<HTMLElement | null>(null)
 const zoom = ref(1)
 const pan = ref({ x: 0, y: 0 })
+const isPanning = ref(false)
+let stopPanTracking: (() => void) | null = null
+
+function onSurfacePointerDown(e: PointerEvent) {
+  if (e.button !== 0) return
+  e.preventDefault()
+  stopPanTracking?.()
+
+  const startClientX = e.clientX
+  const startClientY = e.clientY
+  const origin = pan.value
+  isPanning.value = true
+
+  function onMove(ev: PointerEvent) {
+    pan.value = {
+      x: origin.x + ev.clientX - startClientX,
+      y: origin.y + ev.clientY - startClientY,
+    }
+  }
+  function cleanup() {
+    window.removeEventListener('pointermove', onMove)
+    window.removeEventListener('pointerup', onUp)
+    isPanning.value = false
+    stopPanTracking = null
+  }
+  function onUp() {
+    cleanup()
+  }
+
+  stopPanTracking = cleanup
+  window.addEventListener('pointermove', onMove)
+  window.addEventListener('pointerup', onUp)
+}
+
+function onWheel(e: WheelEvent) {
+  // The established infinite-canvas mapping keeps unmodified trackpad/mouse
+  // scrolling as pan. Ctrl/Cmd+scroll (including a trackpad pinch, which
+  // browsers report as ctrl+wheel) zooms around the pointer rather than the
+  // viewport origin. Shift converts a vertical mouse wheel into horizontal pan.
+  if (!e.ctrlKey && !e.metaKey) {
+    const deltaX = e.shiftKey && e.deltaX === 0 ? e.deltaY : e.deltaX
+    const deltaY = e.shiftKey && e.deltaX === 0 ? 0 : e.deltaY
+    pan.value = { x: pan.value.x - deltaX, y: pan.value.y - deltaY }
+    return
+  }
+
+  const oldZoom = zoom.value
+  const nextZoom = Math.min(2, Math.max(0.2, oldZoom * Math.exp(-e.deltaY * 0.002)))
+  if (nextZoom === oldZoom) return
+
+  const rect = viewportRef.value?.getBoundingClientRect()
+  const pointerX = e.clientX - (rect?.left ?? 0)
+  const pointerY = e.clientY - (rect?.top ?? 0)
+  const worldX = (pointerX - pan.value.x) / oldZoom
+  const worldY = (pointerY - pan.value.y) / oldZoom
+
+  zoom.value = nextZoom
+  pan.value = {
+    x: pointerX - worldX * nextZoom,
+    y: pointerY - worldY * nextZoom,
+  }
+}
 
 function zoomIn() {
   zoom.value = Math.min(2, Math.round((zoom.value + 0.1) * 100) / 100)
@@ -475,6 +539,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', onKeyDown)
+  stopPanTracking?.()
 })
 </script>
 
@@ -483,7 +548,7 @@ onBeforeUnmount(() => {
     ref="viewportRef"
     class="relative h-full w-full overflow-hidden"
     data-testid="flows-canvas"
-    :class="{ 'canvas-drop-target': isDragOver }"
+    :class="{ 'canvas-drop-target': isDragOver, 'cursor-grab': !isPanning, 'cursor-grabbing': isPanning }"
     :style="{
       backgroundColor: 'var(--color-canvas)',
       backgroundImage: 'radial-gradient(var(--color-canvas-dot) 1.1px, transparent 1.1px)',
@@ -491,16 +556,18 @@ onBeforeUnmount(() => {
       backgroundPosition: '-1px -1px',
     }"
     @click.self="onSurfaceClick"
+    @pointerdown.self="onSurfacePointerDown"
+    @wheel.prevent="onWheel"
     @dragenter.prevent="onDragEnter"
     @dragover.prevent="onDragOver"
     @dragleave="onDragLeave"
     @drop.prevent="onDrop"
   >
-    <div v-if="flow.nodes.length === 0" class="flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="canvas-empty">
+    <div v-if="flow.nodes.length === 0" class="pointer-events-none flex h-full items-center justify-center px-8 text-center text-[13px] text-text-4" data-testid="canvas-empty">
       Add a node from the palette to get started. Drag from an output port to an input port to wire nodes together.
     </div>
 
-    <div class="absolute left-0 top-0 origin-top-left" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }">
+    <div class="absolute left-0 top-0 origin-top-left" :style="{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})` }" data-testid="canvas-content">
       <svg class="pointer-events-none absolute left-0 top-0 h-0 w-0 overflow-visible">
         <g v-for="(wire, i) in flow.wires" :key="i" class="wire-group">
           <path

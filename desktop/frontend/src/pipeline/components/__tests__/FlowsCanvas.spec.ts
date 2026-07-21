@@ -272,6 +272,58 @@ describe('FlowsCanvas', () => {
     wrapper.unmount()
   })
 
+  it('click-dragging empty canvas space pans the graph with a grabbing cursor', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+    const content = wrapper.get('[data-testid="canvas-content"]')
+
+    await canvas.trigger('pointerdown', { button: 0, clientX: 100, clientY: 80 })
+    expect(canvas.classes()).toContain('cursor-grabbing')
+
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 145, clientY: 110 }))
+    await nextTick()
+    expect(content.attributes('style')).toContain('translate(45px, 30px)')
+
+    window.dispatchEvent(new PointerEvent('pointerup', { clientX: 145, clientY: 110 }))
+    await nextTick()
+    expect(canvas.classes()).not.toContain('cursor-grabbing')
+
+    window.dispatchEvent(new PointerEvent('pointermove', { clientX: 200, clientY: 200 }))
+    await nextTick()
+    expect(content.attributes('style')).toContain('translate(45px, 30px)')
+
+    wrapper.unmount()
+  })
+
+  it('scrolling pans the canvas, with Shift converting a mouse wheel to horizontal pan', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+    const content = wrapper.get('[data-testid="canvas-content"]')
+
+    await canvas.trigger('wheel', { deltaX: 20, deltaY: 30 })
+    expect(content.attributes('style')).toContain('translate(-20px, -30px)')
+
+    await canvas.trigger('wheel', { deltaX: 0, deltaY: 25, shiftKey: true })
+    expect(content.attributes('style')).toContain('translate(-45px, -30px)')
+
+    wrapper.unmount()
+  })
+
+  it('Ctrl/Cmd+scroll zooms around the pointer location', async () => {
+    const wrapper = mountCanvas()
+    const canvas = wrapper.get('[data-testid="flows-canvas"]')
+    const content = wrapper.get('[data-testid="canvas-content"]')
+
+    await canvas.trigger('wheel', { clientX: 100, clientY: 80, deltaY: -100, ctrlKey: true })
+
+    expect(wrapper.vm.zoom).toBeCloseTo(Math.exp(0.2))
+    const transform = content.attributes('style') ?? ''
+    expect(transform).toContain('translate(-22.')
+    expect(transform).toContain('scale(1.221')
+
+    wrapper.unmount()
+  })
+
   it('zoomIn/zoomOut adjust the exposed zoom level for the toolbar to display', () => {
     const wrapper = mountCanvas()
 

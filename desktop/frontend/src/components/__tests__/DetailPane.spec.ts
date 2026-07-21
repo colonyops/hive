@@ -33,13 +33,15 @@ describe('DetailPane', () => {
     expect(wrapper.findAll('[data-testid="action-card"]')).toHaveLength(2)
   })
 
-  it('leads the header with the source badge and source-qualified context', () => {
+  it('leads the header with the source badge, a non-wrapping type, and repository context', () => {
     const wrapper = mount(DetailPane, { props: { item, actions } })
 
     const badge = wrapper.find('[data-testid="source-badge"]')
     expect(badge.exists()).toBe(true)
     expect(badge.attributes('data-source')).toBe('github')
-    expect(wrapper.text()).toContain('GitHub · colonyops/hive #42')
+    expect(wrapper.get('.kind-pill').classes()).toEqual(expect.arrayContaining(['shrink-0', 'whitespace-nowrap']))
+    expect(wrapper.text()).toContain('colonyops/hive #42')
+    expect(wrapper.text()).not.toContain('GitHub ·')
   })
 
   it('emits run-action with the action id', async () => {
