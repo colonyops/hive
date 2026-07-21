@@ -34,6 +34,7 @@ import { comboFromEvent, formatCombo, useKeybindings } from './composables/useKe
 import { commandCatalog } from './keybindings/catalog'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
+import { isEditableTarget } from './lib/isEditableTarget'
 import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
 import type { SidebarSelection } from './types/feed'
 
@@ -518,13 +519,6 @@ useCommands(computed(() => {
 // Resolves a keydown against the configurable keymap and runs the matched
 // command. Bare (modifier-less) keys are ignored while typing; feed commands
 // only fire on the feed; overlays suppress everything but the palette toggle.
-
-function isEditableTarget(target: EventTarget | null): boolean {
-  return target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    (target instanceof HTMLElement && target.isContentEditable)
-}
 
 function onGlobalKeydown(e: KeyboardEvent): void {
   // WebKit can treat an unhandled Backspace as browser Back. Suppress that

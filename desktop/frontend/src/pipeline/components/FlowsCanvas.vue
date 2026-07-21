@@ -45,6 +45,7 @@ import { NODE_TYPE_MIME } from '../lib/dragTypes'
 import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
 import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStatus'
 import { gridPosition, type EditorFlow, type NodePosition, type NodeRunRecord, type WireLayout } from '../lib/wireFlow'
+import { isEditableTarget } from '../../lib/isEditableTarget'
 import type { FlowNode, Wire } from '../types'
 import NodeEditorDrawer from './NodeEditorDrawer.vue'
 
@@ -516,12 +517,6 @@ function onDrawerDelete(id: string) {
 // and while focus is in a text input/textarea/contentEditable (e.g. the
 // palette search or a drawer field), so typing "delete" as text never
 // deletes the node.
-
-function isEditableTarget(el: Element | null): boolean {
-  if (!el) return false
-  const tag = el.tagName
-  return tag === 'INPUT' || tag === 'TEXTAREA' || (el as HTMLElement).isContentEditable
-}
 
 function onKeyDown(e: KeyboardEvent) {
   if (e.key !== 'Backspace' && e.key !== 'Delete') return
