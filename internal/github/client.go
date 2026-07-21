@@ -5,6 +5,7 @@
 package github
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -91,19 +92,125 @@ func (c *Client) User(ctx context.Context) (User, error) {
 	return user, nil
 }
 
-// SearchIssues runs a GitHub issue/PR search query, newest-updated first.
-func (c *Client) SearchIssues(ctx context.Context, query string, limit int) (SearchResult, error) {
-	params := url.Values{}
-	params.Set("q", query)
-	params.Set("sort", "updated")
-	params.Set("order", "desc")
-	params.Set("per_page", strconv.Itoa(limit))
+// SearchRequest is one search in a batched GraphQL issue/PR search.
+type SearchRequest struct {
+	Query string // GitHub search syntax; "sort:updated-desc" is appended by the client
+	Limit int    // max items for this search (GraphQL `first`)
+}
 
-	var result SearchResult
-	if err := c.getJSON(ctx, "/search/issues", params, &result); err != nil {
-		return SearchResult{}, err
+// SearchIssuesBatch runs every request as an aliased search field of a single
+// GraphQL query, newest-updated first. Results map back to requests by index:
+// out[i] answers reqs[i]. Query text is passed via GraphQL variables ($q0,
+// $q1, ...), never interpolated.
+func (c *Client) SearchIssuesBatch(ctx context.Context, reqs []SearchRequest) ([][]SearchItem, error) {
+	if len(reqs) == 0 {
+		return nil, nil
 	}
-	return result, nil
+
+	doc, variables := buildSearchQuery(reqs)
+	var data map[string]gqlSearchResult
+	if err := c.postGraphQL(ctx, doc, variables, &data); err != nil {
+		return nil, err
+	}
+
+	results := make([][]SearchItem, len(reqs))
+	for i := range reqs {
+		nodes := data[fmt.Sprintf("s%d", i)].Nodes
+		items := make([]SearchItem, 0, len(nodes))
+		for _, node := range nodes {
+			author := ""
+			if node.Author != nil {
+				author = node.Author.Login
+			}
+			items = append(items, SearchItem{
+				Number:        node.Number,
+				Title:         node.Title,
+				Body:          node.Body,
+				State:         node.State,
+				URL:           node.URL,
+				Repo:          node.Repository.NameWithOwner,
+				Author:        author,
+				Labels:        node.Labels.Nodes,
+				IsPullRequest: node.Type == "PullRequest",
+				Draft:         node.Draft,
+				CreatedAt:     node.CreatedAt,
+				UpdatedAt:     node.UpdatedAt,
+			})
+		}
+		results[i] = items
+	}
+	return results, nil
+}
+
+// buildSearchQuery constructs the aliased GraphQL document and its variable
+// map for a batch of search requests. Alias sN and variable $qN correspond to
+// reqs[N]; each variable value is the request's query with
+// " sort:updated-desc" appended.
+func buildSearchQuery(reqs []SearchRequest) (doc string, variables map[string]any) {
+	variables = make(map[string]any, len(reqs))
+	var b strings.Builder
+	b.WriteString("query (")
+	for i := range reqs {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "$q%d: String!", i)
+		variables[fmt.Sprintf("q%d", i)] = reqs[i].Query + " sort:updated-desc"
+	}
+	b.WriteString(") {\n")
+	for i, req := range reqs {
+		fmt.Fprintf(&b, "  s%d: search(query: $q%d, type: ISSUE, first: %d) {\n", i, i, req.Limit)
+		b.WriteString(`    nodes {
+      __typename
+      ... on Issue {
+        number title body state url createdAt updatedAt
+        author { login }
+        repository { nameWithOwner }
+        labels(first: 20) { nodes { name } }
+      }
+      ... on PullRequest {
+        number title body state url isDraft createdAt updatedAt
+        author { login }
+        repository { nameWithOwner }
+        labels(first: 20) { nodes { name } }
+      }
+    }
+  }
+`)
+	}
+	b.WriteString("}\n")
+	return b.String(), variables
+}
+
+type gqlSearchResult struct {
+	Nodes []gqlSearchNode `json:"nodes"`
+}
+
+type gqlSearchNode struct {
+	Type       string              `json:"__typename"`
+	Number     int                 `json:"number"`
+	Title      string              `json:"title"`
+	Body       string              `json:"body"`
+	State      string              `json:"state"`
+	URL        string              `json:"url"`
+	Draft      bool                `json:"isDraft"`
+	CreatedAt  time.Time           `json:"createdAt"`
+	UpdatedAt  time.Time           `json:"updatedAt"`
+	Author     *gqlSearchAuthor    `json:"author"`
+	Repository gqlSearchRepository `json:"repository"`
+	Labels     gqlSearchLabels     `json:"labels"`
+}
+
+type gqlSearchAuthor struct {
+	Login string `json:"login"`
+}
+
+type gqlSearchRepository struct {
+	NameWithOwner string `json:"nameWithOwner"`
+}
+
+type gqlSearchLabels struct {
+	Nodes []Label `json:"nodes"`
 }
 
 // NotificationsResult is one notifications poll. When NotModified is true the
@@ -145,6 +252,70 @@ func (c *Client) Notifications(ctx context.Context, limit int, ifModifiedSince s
 func (c *Client) getJSON(ctx context.Context, path string, params url.Values, out any) error {
 	_, err := c.getJSONConditional(ctx, path, params, "", out)
 	return err
+}
+
+// postGraphQL executes one GraphQL request and decodes the data object into
+// out. It maps transport failures to ErrUnreachable, non-2xx statuses through
+// statusError, and GraphQL RATE_LIMITED errors to ErrRateLimited.
+func (c *Client) postGraphQL(ctx context.Context, query string, variables map[string]any, out any) error {
+	payload, err := json.Marshal(struct {
+		Query     string         `json:"query"`
+		Variables map[string]any `json:"variables"`
+	}{Query: query, Variables: variables})
+	if err != nil {
+		return fmt.Errorf("github: encode graphql request: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.apiBase+"/graphql", bytes.NewReader(payload))
+	if err != nil {
+		return fmt.Errorf("github: build request: %w", err)
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if c.token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.token)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("%w: %w", ErrUnreachable, err)
+	}
+	defer resp.Body.Close() //nolint:errcheck // read-only body close
+
+	if err := statusError(resp); err != nil {
+		return err
+	}
+
+	var response struct {
+		Data   json.RawMessage `json:"data"`
+		Errors []struct {
+			Message string `json:"message"`
+			Type    string `json:"type"`
+		} `json:"errors"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&response); err != nil {
+		return fmt.Errorf("github: decode graphql: %w", err)
+	}
+	if len(response.Errors) > 0 {
+		messages := make([]string, 0, len(response.Errors))
+		for _, gqlErr := range response.Errors {
+			if gqlErr.Type == "RATE_LIMITED" {
+				return fmt.Errorf("github: graphql: %w", ErrRateLimited)
+			}
+			if gqlErr.Message != "" {
+				messages = append(messages, gqlErr.Message)
+			}
+		}
+		if len(messages) == 0 {
+			messages = append(messages, "request failed")
+		}
+		return fmt.Errorf("github: graphql: %s", strings.Join(messages, "; "))
+	}
+	if err := json.Unmarshal(response.Data, out); err != nil {
+		return fmt.Errorf("github: decode graphql data: %w", err)
+	}
+	return nil
 }
 
 // condMeta carries the conditional-request metadata of a response.

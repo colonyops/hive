@@ -31,22 +31,23 @@ type singleSearchAPI struct {
 
 func (a *singleSearchAPI) handler() http.Handler {
 	mux := http.NewServeMux()
-	mux.HandleFunc("/search/issues", func(w http.ResponseWriter, _ *http.Request) {
+	mux.HandleFunc("/graphql", func(w http.ResponseWriter, _ *http.Request) {
 		a.calls.Add(1)
 		w.Header().Set("Content-Type", "application/json")
 		item := map[string]any{
-			"number":         7,
-			"title":          "fix the thing",
-			"state":          "open",
-			"html_url":       "https://github.com/o/r/pull/7",
-			"repository_url": "https://api.github.com/repos/o/r",
-			"user":           map[string]any{"login": "hayden"},
-			"labels":         []any{},
-			"pull_request":   map[string]any{"html_url": "https://github.com/o/r/pull/7"},
-			"updated_at":     "2026-07-18T10:00:00Z",
-			"created_at":     "2026-07-17T00:00:00Z",
+			"__typename": "PullRequest",
+			"number":     7,
+			"title":      "fix the thing",
+			"state":      "OPEN",
+			"url":        "https://github.com/o/r/pull/7",
+			"isDraft":    false,
+			"author":     map[string]any{"login": "hayden"},
+			"repository": map[string]any{"nameWithOwner": "o/r"},
+			"labels":     map[string]any{"nodes": []any{}},
+			"updatedAt":  "2026-07-18T10:00:00Z",
+			"createdAt":  "2026-07-17T00:00:00Z",
 		}
-		_ = json.NewEncoder(w).Encode(map[string]any{"total_count": 1, "items": []any{item}})
+		_ = json.NewEncoder(w).Encode(map[string]any{"data": map[string]any{"s0": map[string]any{"nodes": []any{item}}}})
 	})
 	mux.HandleFunc("/notifications", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")

@@ -205,11 +205,14 @@ func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]
 		})
 		return items, nil
 	case "search":
-		result, err := client.SearchIssues(ctx, src.Query, src.effectiveLimit())
+		results, err := client.SearchIssuesBatch(ctx, []github.SearchRequest{{
+			Query: src.Query,
+			Limit: src.effectiveLimit(),
+		}})
 		if err != nil {
 			return nil, err
 		}
-		items := p.searchItems(result.Items)
+		items := p.searchItems(results[0])
 		p.setCache(key, &cachedSource{items: items, fetchedAt: p.now()})
 		return items, nil
 	default:
@@ -227,24 +230,24 @@ func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {
 	out := make([]liveItem, 0, len(items))
 	for _, si := range items {
 		kind := "Issue"
-		if si.IsPullRequest() {
+		if si.IsPullRequest {
 			kind = "PR"
 		}
-		repo := si.Repo()
+		repo := si.Repo
 		item := Item{
 			ID:     itemID(repo, si.Number),
 			Kind:   kind,
 			Repo:   repo,
 			Num:    si.Number,
 			Title:  si.Title,
-			Author: si.User.Login,
+			Author: si.Author,
 			Age:    shortAge(p.now().Sub(si.UpdatedAt)),
 			Unread: true, // inbox model: unread until read (feed_item.unread)
 			Labels: labelNames(si.Labels),
 			Branch: suggestedBranch(kind, si.Number, si.Title),
 			Body:   si.Body,
 			Prompt: suggestedPrompt(kind, repo, si.Number, si.Title),
-			URL:    si.HTMLURL,
+			URL:    si.URL,
 		}
 		out = append(out, liveItem{item: item, updatedAt: si.UpdatedAt})
 	}
