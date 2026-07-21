@@ -46,6 +46,7 @@ import { canConnect, hasInputPort, outputPortCount } from '../lib/ports'
 import { classify, statusColor, statusLabel, statusPulses } from '../lib/runStatus'
 import { gridPosition, type EditorFlow, type NodePosition, type NodeRunRecord, type WireLayout } from '../lib/wireFlow'
 import { isEditableTarget } from '../../lib/isEditableTarget'
+import { startDrag } from '../../composables/useDragGesture'
 import type { FlowNode, Wire } from '../types'
 import NodeEditorDrawer from './NodeEditorDrawer.vue'
 
@@ -234,13 +235,13 @@ function onNodePointerDown(e: PointerEvent, node: FlowNode) {
     }
     emit('move', node.id, Math.round(origin.x + dx), Math.round(origin.y + dy))
   }
-  function onUp() {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    if (!moved) selectedNodeId.value = node.id
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
+
+  startDrag(e, {
+    onMove,
+    onEnd: () => {
+      if (!moved) selectedNodeId.value = node.id
+    },
+  })
 }
 
 function onNodeDblClick(node: FlowNode) {
@@ -309,16 +310,16 @@ function onOutputPortPointerDown(e: PointerEvent, node: FlowNode, portIndex: num
     wireDraft.value = { fromNodeId: node.id, fromPort: portIndex, toX: world.x, toY: world.y }
     hoverTargetId.value = targetAt(ev.clientX, ev.clientY)?.id ?? null
   }
-  function onUp(ev: PointerEvent) {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
-    const target = targetAt(ev.clientX, ev.clientY)
-    if (target) emit('add-wire', { from: node.id, out: portIndex, to: target.id })
-    wireDraft.value = null
-    hoverTargetId.value = null
-  }
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
+
+  startDrag(e, {
+    onMove,
+    onEnd: (ev) => {
+      const target = targetAt(ev.clientX, ev.clientY)
+      if (target) emit('add-wire', { from: node.id, out: portIndex, to: target.id })
+      wireDraft.value = null
+      hoverTargetId.value = null
+    },
+  })
 }
 
 const draftPath = computed<string>(() => {
@@ -382,19 +383,19 @@ function onSurfacePointerDown(e: PointerEvent) {
       y: origin.y + ev.clientY - startClientY,
     }
   }
+
+  const stop = startDrag(e, {
+    onMove,
+    onEnd: cleanup,
+  })
+
   function cleanup() {
-    window.removeEventListener('pointermove', onMove)
-    window.removeEventListener('pointerup', onUp)
+    stop()
     isPanning.value = false
     stopPanTracking = null
   }
-  function onUp() {
-    cleanup()
-  }
 
   stopPanTracking = cleanup
-  window.addEventListener('pointermove', onMove)
-  window.addEventListener('pointerup', onUp)
 }
 
 function onWheel(e: WheelEvent) {
