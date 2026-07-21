@@ -263,6 +263,60 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('uses mouse back and forward buttons for route history', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.name).toBe('application-settings')
+
+    const backDown = new MouseEvent('mousedown', { button: 3, cancelable: true })
+    window.dispatchEvent(backDown)
+    expect(backDown.defaultPrevented).toBe(true)
+
+    const backUp = new MouseEvent('mouseup', { button: 3, cancelable: true })
+    window.dispatchEvent(backUp)
+    await flushPromises()
+    expect(backUp.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.name).toBe('feed')
+
+    const forwardUp = new MouseEvent('mouseup', { button: 4, cancelable: true })
+    window.dispatchEvent(forwardUp)
+    await flushPromises()
+    expect(forwardUp.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.name).toBe('application-settings')
+
+    wrapper.unmount()
+  })
+
+  it('suppresses Backspace history navigation outside editable fields', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.find('[data-testid="application-settings"]').trigger('click')
+    await flushPromises()
+    const routeBefore = router.currentRoute.value.fullPath
+
+    const backspace = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+    window.dispatchEvent(backspace)
+    await flushPromises()
+
+    expect(backspace.defaultPrevented).toBe(true)
+    expect(router.currentRoute.value.fullPath).toBe(routeBefore)
+
+    wrapper.unmount()
+  })
+
+  it('allows Backspace to edit text inputs', async () => {
+    const { wrapper } = await mountAppWithRouter()
+    const search = wrapper.get('[data-testid="feed-search"]').element
+    const backspace = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true, cancelable: true })
+
+    search.dispatchEvent(backspace)
+
+    expect(backspace.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
   it('routes DetailPane Edit to actions settings', async () => {
     const router = createAppRouter(createMemoryHistory())
     await router.push('/')

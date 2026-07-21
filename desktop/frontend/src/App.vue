@@ -514,12 +514,24 @@ useCommands(computed(() => {
   return cmds
 }))
 
-// ── Global keybinding dispatcher ─────────────────────────────────────────────
+// ── Global input navigation ──────────────────────────────────────────────────
 // Resolves a keydown against the configurable keymap and runs the matched
 // command. Bare (modifier-less) keys are ignored while typing; feed commands
 // only fire on the feed; overlays suppress everything but the palette toggle.
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  return target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    target instanceof HTMLSelectElement ||
+    (target instanceof HTMLElement && target.isContentEditable)
+}
+
 function onGlobalKeydown(e: KeyboardEvent): void {
+  // WebKit can treat an unhandled Backspace as browser Back. Suppress that
+  // default outside editors while still allowing components such as the flow
+  // canvas to use Backspace for their own actions.
+  if (e.key === 'Backspace' && !isEditableTarget(e.target)) e.preventDefault()
+
   if (kb.recording.value) return // the settings editor is capturing this key
   const combo = comboFromEvent(e)
   if (!combo) return
@@ -530,13 +542,7 @@ function onGlobalKeydown(e: KeyboardEvent): void {
 
   const mods = combo.split('+')
   const hasModifier = mods.includes('mod') || mods.includes('ctrl') || mods.includes('alt')
-  const target = e.target as HTMLElement
-  const isEditable =
-    target instanceof HTMLInputElement ||
-    target instanceof HTMLTextAreaElement ||
-    target instanceof HTMLSelectElement ||
-    target.isContentEditable
-  if (isEditable && !hasModifier) return
+  if (isEditableTarget(e.target) && !hasModifier) return
 
   if (anyOverlayOpen.value && id !== 'palette.toggle') return
   if (command.context === 'feed' && !feedNavActive.value) return
@@ -545,8 +551,37 @@ function onGlobalKeydown(e: KeyboardEvent): void {
   void runMap[id]?.()
 }
 
-onMounted(() => window.addEventListener('keydown', onGlobalKeydown))
-onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
+function isHistoryMouseButton(e: MouseEvent): boolean {
+  return e.button === 3 || e.button === 4
+}
+
+// MouseEvent buttons 3 and 4 are conventionally Browser Back and Browser
+// Forward. Handle them through Vue Router so they use the same dirty-flow
+// guard as the title-bar controls. Cancel both press and auxiliary-click
+// defaults because WebViews differ on which event performs native navigation.
+function preventNativeMouseHistory(e: MouseEvent): void {
+  if (isHistoryMouseButton(e)) e.preventDefault()
+}
+
+function onGlobalMouseUp(e: MouseEvent): void {
+  if (!isHistoryMouseButton(e)) return
+  e.preventDefault()
+  if (e.button === 3) router.back()
+  else router.forward()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', onGlobalKeydown)
+  window.addEventListener('mousedown', preventNativeMouseHistory)
+  window.addEventListener('mouseup', onGlobalMouseUp)
+  window.addEventListener('auxclick', preventNativeMouseHistory)
+})
+onUnmounted(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('mousedown', preventNativeMouseHistory)
+  window.removeEventListener('mouseup', onGlobalMouseUp)
+  window.removeEventListener('auxclick', preventNativeMouseHistory)
+})
 </script>
 
 <template>
