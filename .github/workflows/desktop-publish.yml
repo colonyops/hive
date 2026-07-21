@@ -55,6 +55,7 @@ jobs:
           fi
           echo "version=$version" >> "$GITHUB_OUTPUT"
           echo "tag=desktop-v$version" >> "$GITHUB_OUTPUT"
+          echo "date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
           echo "Next desktop version: $version (tag desktop-v$version)"
 
       - name: Fail if tag already exists
@@ -87,6 +88,13 @@ jobs:
 
       - name: Build & package universal .app (ad-hoc signed)
         working-directory: desktop
+        # Stamp the build info into the binary (desktop/buildinfo.go) so the
+        # running app reports this exact version/commit/date in System settings
+        # and can link to this release. Info.plist is stamped separately above.
+        env:
+          HIVE_DESKTOP_VERSION: ${{ steps.version.outputs.version }}
+          HIVE_DESKTOP_COMMIT: ${{ github.sha }}
+          HIVE_DESKTOP_DATE: ${{ steps.version.outputs.date }}
         run: wails3 task darwin:package:universal
 
       - name: Zip the .app bundle

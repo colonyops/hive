@@ -22,6 +22,15 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 /**
+ * Build returns the version, commit, and date this desktop app was built from,
+ * plus a link to the matching GitHub release when the build corresponds to a
+ * published version.
+ */
+export function Build(): $CancellablePromise<$models.BuildInfo> {
+    return $Call.ByID(3060528560);
+}
+
+/**
  * ChooseDirectory opens a native directory picker and returns the chosen path,
  * or "" if the user cancels. Used by the Change… actions before SetDataDir /
  * SetConfigDir.

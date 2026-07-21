@@ -1,5 +1,7 @@
 import { ref } from 'vue'
+import { Browser } from '@wailsio/runtime'
 import {
+  Build,
   ChooseDirectory,
   ClearConfigDir,
   ClearDataDir,
@@ -10,7 +12,7 @@ import {
   SetConfigDir,
   SetDataDir,
 } from '../../bindings/github.com/colonyops/hive/desktop/systemservice'
-import type { SystemInfo } from '../../bindings/github.com/colonyops/hive/desktop/models'
+import type { BuildInfo, SystemInfo } from '../../bindings/github.com/colonyops/hive/desktop/models'
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -22,6 +24,7 @@ function errText(err: unknown): string {
 // the next launch, so any successful change flips restartRequired.
 export function useSystemSettings() {
   const info = ref<SystemInfo | null>(null)
+  const build = ref<BuildInfo | null>(null)
   const loading = ref(false)
   const error = ref('')
   const restartRequired = ref(false)
@@ -30,11 +33,26 @@ export function useSystemSettings() {
     loading.value = true
     error.value = ''
     try {
-      info.value = await Info()
+      const [locations, buildInfo] = await Promise.all([Info(), Build()])
+      info.value = locations
+      build.value = buildInfo
     } catch (err) {
       error.value = errText(err)
     } finally {
       loading.value = false
+    }
+  }
+
+  // openExternal opens a build-info URL in the system browser. Guarded by a
+  // non-empty url (dev builds have no releaseUrl), so the view only wires links
+  // when there is somewhere to go.
+  async function openExternal(url: string | undefined): Promise<void> {
+    if (!url) return
+    error.value = ''
+    try {
+      await Browser.OpenURL(url)
+    } catch (err) {
+      error.value = errText(err)
     }
   }
 
@@ -82,10 +100,13 @@ export function useSystemSettings() {
 
   return {
     info,
+    build,
     loading,
     error,
     restartRequired,
     refresh,
+    openReleaseNotes: () => openExternal(build.value?.releaseUrl),
+    openRepo: () => openExternal(build.value?.repoUrl),
     openPath,
     revealPath,
     changeDataDir: () => changeDir('Choose data directory', SetDataDir),
