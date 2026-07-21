@@ -248,13 +248,16 @@ export function useFeedState() {
       const [flow, counts, sidebar] = await Promise.all([GetFlow(flowId), FeedItemCounts(flowId), GetSidebar(flowId)])
       if (seq !== feedsSeq) return
       const countByFeed = new Map((counts ?? []).map((c) => [c.feedId, c]))
-      const nodes = (flow.nodes ?? []) as Array<{ id: string; type: string; name?: string }>
+      // GetFlow returns the flattened wire shape (see pipeline/lib/wireFlow):
+      // a feed node's config fields (icon/description) sit at the top level of
+      // the node object alongside id/type/name, not under a `config` key.
+      const nodes = (flow.nodes ?? []) as Array<{ id: string; type: string; name?: string; icon?: string; description?: string }>
       const feeds: FeedSummary[] = nodes
         .filter((n) => n.type === 'feed')
         .map((n) => {
           const feedId = `${flowId}/${n.id}`
           const c = countByFeed.get(feedId)
-          return { id: feedId, name: n.name || n.id, count: c?.total ?? 0, newCount: c?.unread ?? 0 }
+          return { id: feedId, name: n.name || n.id, count: c?.total ?? 0, newCount: c?.unread ?? 0, icon: n.icon, description: n.description }
         })
       const sourceCount = nodes.filter((n) => n.type === 'github-source').length
       const profile = profiles.value.find((p) => p.id === flowId)
