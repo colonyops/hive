@@ -12,6 +12,7 @@ function item(id: string, title: string, unread: boolean): FeedItem {
     title,
     author: 'hayden',
     age: '5m',
+    updatedAt: 1,
     unread,
     feedId: 'triage/desktop',
     labels: [],
@@ -33,6 +34,7 @@ function mountList(overrides: Partial<{
   unreadOnly: boolean
   unreadCount: number
   search: string
+  sort: 'newest' | 'oldest' | 'unread'
   loadError: string | null
 }> = {}) {
   return mount(FeedList, {
@@ -43,6 +45,7 @@ function mountList(overrides: Partial<{
       unreadOnly: false,
       unreadCount: 1,
       search: '',
+      sort: 'newest',
       loadError: null,
       ...overrides,
     },
@@ -77,6 +80,15 @@ describe('FeedList', () => {
     await wrapper.find('[data-testid="feed-search"]').setValue('oauth')
 
     expect(wrapper.emitted('update:search')).toEqual([['oauth']])
+  })
+
+  it('offers newest, oldest, and unread-first sorting', async () => {
+    const wrapper = mountList()
+
+    await wrapper.get('[data-testid="feed-sort"]').trigger('click')
+    await wrapper.get('[data-testid="feed-sort-option-oldest"]').trigger('click')
+
+    expect(wrapper.emitted('set-sort')).toEqual([['oldest']])
   })
 
   it('shows the unreachable state with a retry that emits refresh', async () => {

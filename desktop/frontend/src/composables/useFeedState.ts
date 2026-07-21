@@ -1,4 +1,5 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { Browser, Events, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
@@ -7,7 +8,7 @@ import { bodySnippet, feedSource, typeLabel } from '../lib/feedPresentation'
 import { useActivity } from './useActivity'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
-import type { FeedItem, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
+import type { FeedItem, FeedSort, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
 import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
@@ -21,6 +22,16 @@ import type { ToastInstance, ToastOptions } from '../types/toast'
 // this module. It runs every enabled flow independently; refresh() here just
 // re-reads the selected profile after App.vue's "log:appended" handler has
 // pumped all committed work.
+const feedSortStorageKey = 'hive.feed.sort'
+
+function timestampFromAge(age: string): number {
+  if (age === 'now') return Date.now()
+  const match = /^(\d+)([mhdw])$/.exec(age)
+  if (!match) return 0
+  const units: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000, w: 604_800_000 }
+  return Date.now() - Number(match[1]) * units[match[2]]
+}
+
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
   const profilesLoaded = ref(false)
@@ -28,6 +39,7 @@ export function useFeedState() {
   const activeProfileId = ref('')
   const selection = ref<SidebarSelection>({ type: 'all' })
   const unreadOnly = ref(false)
+  const feedSort = useStorage<FeedSort>(feedSortStorageKey, 'newest')
   // Search is a pure view filter over the loaded list (like unreadOnly). It
   // lives here — not in FeedList — so keyboard navigation moves over exactly
   // the rows the user sees. Cleared on feed/profile switch (see selectSidebar).
@@ -129,11 +141,23 @@ export function useFeedState() {
     return haystack.includes(query)
   }
 
-  // The rows actually rendered: the loaded list narrowed by the unread filter
-  // and the search box. Keyboard navigation walks this same set.
+  function compareItems(a: FeedItem, b: FeedItem): number {
+    if (feedSort.value === 'unread' && a.unread !== b.unread) return a.unread ? -1 : 1
+    const recency = b.updatedAt - a.updatedAt
+    return feedSort.value === 'oldest' ? -recency : recency
+  }
+
+  const sortedItems = computed(() => [...items.value].sort(compareItems))
+
+  // The rows actually rendered: sorted first, then narrowed by the unread
+  // filter and search box. Keyboard navigation walks this same ordering.
   const visibleItems = computed(() =>
-    items.value.filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
+    sortedItems.value.filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
   )
+
+  function setFeedSort(value: FeedSort): void {
+    feedSort.value = value
+  }
 
   // ── Toasts ──────────────────────────────────────────────────────────────────
 
@@ -342,7 +366,7 @@ export function useFeedState() {
 
   // ── Items (feed_item) ─────────────────────────────────────────────────────────
 
-  function parseItem(view: { feedId: string; itemId: string; payload: any; unread: boolean }): FeedItem {
+  function parseItem(view: { feedId: string; itemId: string; payload: any; updatedAt?: number; unread: boolean }): FeedItem {
     const p = view.payload ?? {}
     return {
       id: p.id ?? view.itemId,
@@ -353,6 +377,7 @@ export function useFeedState() {
       title: p.title ?? view.itemId,
       author: p.author ?? '',
       age: p.age ?? '',
+      updatedAt: Number(p.updatedAt) || timestampFromAge(p.age ?? '') || Math.floor((view.updatedAt ?? 0) / 1_000_000),
       unread: view.unread,
       reason: p.reason,
       labels: p.labels ?? [],
@@ -367,7 +392,7 @@ export function useFeedState() {
     if (!activeProfileId.value) return
     const seq = ++loadSeq
     try {
-      let views: Array<{ feedId: string; itemId: string; payload: any; unread: boolean }> = []
+      let views: Array<{ feedId: string; itemId: string; payload: any; updatedAt?: number; unread: boolean }> = []
       if (feedID) {
         views = (await FeedItems(feedID)) ?? []
       } else {
@@ -391,7 +416,8 @@ export function useFeedState() {
       items.value = parsed
 
       if (selectedId.value && parsed.some((i) => i.id === selectedId.value)) return
-      const first = (unreadOnly.value ? parsed.find((i) => i.unread) : parsed[0]) ?? null
+      const ordered = [...parsed].sort(compareItems)
+      const first = (unreadOnly.value ? ordered.find((i) => i.unread) : ordered[0]) ?? null
       selectedId.value = first?.id ?? null
       await loadActions(first)
     } catch (error) {
@@ -455,7 +481,7 @@ export function useFeedState() {
   // when selectItem marks the current item read and it drops out of the unread
   // view. Clamps at both ends (no wrap).
   async function moveSelection(delta: 1 | -1) {
-    const all = items.value
+    const all = sortedItems.value
     const passes = (item: FeedItem) => (!unreadOnly.value || item.unread) && matchesSearch(item)
     const currentIndex = all.findIndex((item) => item.id === selectedId.value)
     if (currentIndex === -1) {
@@ -682,6 +708,8 @@ export function useFeedState() {
     sessionLaunchBusy,
     sessionLaunchError,
     unreadOnly,
+    feedSort,
+    setFeedSort,
     title,
     toasts,
     showToast,

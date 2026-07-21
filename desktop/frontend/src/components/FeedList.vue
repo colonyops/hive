@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { nextTick, ref, watch } from 'vue'
+import AppSelect from './AppSelect.vue'
 import FeedListItem from './FeedListItem.vue'
 import IconCheck from '~icons/lucide/check'
 import IconGitBranch from '~icons/lucide/git-branch'
 import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import type { FeedItem } from '../types/feed'
+import type { FeedItem, FeedSort } from '../types/feed'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the
@@ -18,6 +19,7 @@ const props = defineProps<{
   unreadOnly: boolean
   unreadCount: number
   search: string
+  sort: FeedSort
   loadError: string | null
 }>()
 const emit = defineEmits<{
@@ -25,7 +27,14 @@ const emit = defineEmits<{
   'set-unread': [value: boolean]
   refresh: []
   'update:search': [value: string]
+  'set-sort': [value: FeedSort]
 }>()
+
+const sortOptions = [
+  { value: 'newest', label: 'Newest' },
+  { value: 'oldest', label: 'Oldest' },
+  { value: 'unread', label: 'Unread first' },
+]
 
 // Keep the selected row in view when navigation moves the cursor by keyboard
 // (mirrors CommandPalette's scrollIntoView on selection change).
@@ -55,6 +64,14 @@ watch(() => props.selectedId, async (id) => {
           @input="emit('update:search', ($event.target as HTMLInputElement).value)"
         >
       </label>
+      <AppSelect
+        class="w-[118px] shrink-0 text-xs"
+        :model-value="sort"
+        :options="sortOptions"
+        testid="feed-sort"
+        aria-label="Sort inbox"
+        @update:model-value="emit('set-sort', $event as FeedSort)"
+      />
       <div class="segmented" role="group" aria-label="Filter">
         <button class="seg" :class="{ active: !unreadOnly }" data-testid="filter-all" @click="emit('set-unread', false)">All</button>
         <button class="seg" :class="{ active: unreadOnly }" data-testid="filter-unread" @click="emit('set-unread', true)">

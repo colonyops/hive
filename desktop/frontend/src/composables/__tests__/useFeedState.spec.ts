@@ -178,6 +178,26 @@ describe('useFeedState', () => {
     expect(get().activeProfile.value?.tree?.[0]).toMatchObject({ kind: 'folder', folder: { id: 'work' } })
   })
 
+  it('sorts inbox items by newest, oldest, or unread-first recency and persists the choice', async () => {
+    mocks.FeedItems.mockResolvedValue([
+      { feedId: 'triage/my-prs', itemId: 'oldest', unread: false, payload: { id: 'oldest', title: 'Oldest', kind: 'PR', updatedAt: 100 } },
+      { feedId: 'triage/my-prs', itemId: 'newest', unread: false, payload: { id: 'newest', title: 'Newest', kind: 'PR', updatedAt: 300 } },
+      { feedId: 'triage/my-prs', itemId: 'unread', unread: true, payload: { id: 'unread', title: 'Unread', kind: 'PR', updatedAt: 200 } },
+    ])
+    const get = mountState()
+    await flushPromises()
+
+    expect(get().visibleItems.value.map((item) => item.id)).toEqual(['newest', 'unread', 'oldest'])
+
+    get().setFeedSort('oldest')
+    expect(get().visibleItems.value.map((item) => item.id)).toEqual(['oldest', 'unread', 'newest'])
+
+    get().setFeedSort('unread')
+    expect(get().visibleItems.value.map((item) => item.id)).toEqual(['unread', 'newest', 'oldest'])
+    await flushPromises()
+    expect(localStorage.getItem('hive.feed.sort')).toBe('unread')
+  })
+
   it('loads a feed\'s items from feed_item, decoding the payload', async () => {
     mocks.FeedItems.mockImplementation((feedID: string) =>
       Promise.resolve(

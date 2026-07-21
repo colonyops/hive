@@ -48,7 +48,7 @@ const {
 
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
-  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, title, toasts, dismissToast, clearToasts,
+  selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, renamingProfile, renameProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, selectNext, selectPrev,
   toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
@@ -637,9 +637,11 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               :unread-only="unreadOnly"
               :unread-count="unreadCount"
               :search="search"
+              :sort="feedSort"
               :load-error="loadError"
               @select="selectItem"
               @update:search="(value) => (search = value)"
+              @set-sort="setFeedSort"
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
