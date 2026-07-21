@@ -11,7 +11,6 @@ import type { Job } from '../../bindings/github.com/colonyops/hive/internal/desk
 const TRAILING_READ_INTERVAL_MS = 500
 
 const activeJobs = ref<Job[]>([])
-const loading = ref(false)
 const hasActive = computed(() => activeJobs.value.length > 0)
 
 let started = false
@@ -38,7 +37,6 @@ function scheduleTrailingRead(): void {
 
 async function load(): Promise<void> {
   const sequence = ++loadSequence
-  loading.value = true
   try {
     const rows = (await ListActive()) ?? []
     if (sequence !== loadSequence) return
@@ -50,8 +48,6 @@ async function load(): Promise<void> {
       console.warn('Unable to load active jobs', error)
       if (activeJobs.value.some(isTerminal)) scheduleTrailingRead()
     }
-  } finally {
-    if (sequence === loadSequence) loading.value = false
   }
 }
 
@@ -66,5 +62,5 @@ function start(): void {
 
 export function useJobs() {
   start()
-  return { activeJobs, hasActive, loading, load }
+  return { activeJobs, hasActive }
 }

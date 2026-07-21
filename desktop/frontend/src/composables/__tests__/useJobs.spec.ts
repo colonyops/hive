@@ -35,7 +35,7 @@ describe('useJobs', () => {
 
   it('subscribes once and reloads on jobs:updated', async () => {
     const jobs = await loadComposable()
-    await jobs.load()
+    await flushPromises()
     const again = await loadComposable()
     expect(again.activeJobs).toBe(jobs.activeJobs)
     expect(mocks.On).toHaveBeenCalledTimes(1)
@@ -54,11 +54,11 @@ describe('useJobs', () => {
       .mockImplementationOnce(() => new Promise((resolve) => { resolveSecond = resolve }))
 
     const jobs = await loadComposable()
-    const latest = jobs.load()
+    mocks.On.mock.calls[0][1]()
     resolveSecond([job('running', 2)])
-    await latest
+    await flushPromises()
     resolveFirst([])
-    await Promise.resolve()
+    await flushPromises()
 
     expect(jobs.activeJobs.value.map((row) => row.id)).toEqual([2])
   })
