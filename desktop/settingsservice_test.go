@@ -26,6 +26,22 @@ func TestSettingsServiceSetGithubSettingsRejectsBelowFloor(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSettingsServiceSetGithubSettingsPreservesAutoUpdate(t *testing.T) {
+	t.Setenv(desktop.EnvConfigPath, filepath.Join(t.TempDir(), "config", "profiles.yaml"))
+	// Seed an explicit auto_update:false alongside a poll interval.
+	disabled := false
+	require.NoError(t, desktop.SaveSettings(desktop.Settings{PollInterval: "5m", AutoUpdate: &disabled}))
+
+	service := NewSettingsService(nil, nil, zerolog.Nop())
+	require.NoError(t, service.SetGithubSettings(GithubSettings{PollIntervalSeconds: 120}))
+
+	got, err := desktop.LoadSettings()
+	require.NoError(t, err)
+	require.Equal(t, "2m0s", got.PollInterval)
+	require.NotNil(t, got.AutoUpdate, "auto_update must survive a poll-interval save")
+	require.False(t, *got.AutoUpdate)
+}
+
 type settingsServiceSource struct {
 	mu    sync.Mutex
 	calls int

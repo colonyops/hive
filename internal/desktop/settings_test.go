@@ -56,3 +56,44 @@ func TestSaveSettingsRoundTrip(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, want, got)
 }
+
+func TestAutoUpdateOrDefault(t *testing.T) {
+	enabled := true
+	disabled := false
+	tests := []struct {
+		name     string
+		settings Settings
+		want     bool
+	}{
+		{name: "unset defaults to true", settings: Settings{}, want: true},
+		{name: "explicit true", settings: Settings{AutoUpdate: &enabled}, want: true},
+		{name: "explicit false", settings: Settings{AutoUpdate: &disabled}, want: false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.settings.AutoUpdateOrDefault())
+		})
+	}
+}
+
+func TestSettingsAutoUpdateRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	t.Setenv(EnvConfigPath, filepath.Join(root, "config", "profiles.yaml"))
+
+	// Unset auto_update in the file resolves to the default (on).
+	require.NoError(t, os.MkdirAll(filepath.Dir(SettingsPath()), 0o755))
+	require.NoError(t, os.WriteFile(SettingsPath(), []byte("poll_interval: 2m\n"), 0o600))
+	got, err := LoadSettings()
+	require.NoError(t, err)
+	require.Nil(t, got.AutoUpdate)
+	require.True(t, got.AutoUpdateOrDefault())
+
+	// An explicit false persists and round-trips as false.
+	disabled := false
+	require.NoError(t, SaveSettings(Settings{PollInterval: "2m", AutoUpdate: &disabled}))
+	got, err = LoadSettings()
+	require.NoError(t, err)
+	require.NotNil(t, got.AutoUpdate)
+	require.False(t, got.AutoUpdateOrDefault())
+	require.Equal(t, "2m", got.PollInterval)
+}
