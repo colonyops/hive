@@ -4,14 +4,17 @@
 // and config directories that take effect after a restart.
 import { onMounted } from 'vue'
 import IconInfo from '~icons/lucide/info'
+import IconExternalLink from '~icons/lucide/external-link'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import { useSystemSettings } from '../composables/useSystemSettings'
 
 const {
   info,
+  build,
   error,
   restartRequired,
   refresh,
+  openReleaseNotes,
   openPath,
   revealPath,
   changeDataDir,
@@ -107,6 +110,38 @@ onMounted(() => {
           @open="openPath(info.database.path)"
           @reveal="revealPath(info.database.path)"
         />
+      </div>
+    </section>
+
+    <section class="mt-6" data-testid="system-about">
+      <h2 class="text-[15px] font-semibold text-text">About</h2>
+      <p class="mb-3 mt-1 text-xs leading-relaxed text-text-3">
+        The build of Hive you're running. Include this when reporting an issue.
+      </p>
+      <div v-if="build" class="rounded-lg border border-border">
+        <div class="flex items-center justify-between gap-3 px-3.5 py-2.5">
+          <span class="text-[12.5px] text-text-3">Version</span>
+          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-version">{{ build.version }}</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
+          <span class="text-[12.5px] text-text-3">Commit</span>
+          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-commit">{{ build.commit }}</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
+          <span class="text-[12.5px] text-text-3">Built</span>
+          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-date">{{ build.date }}</span>
+        </div>
+        <div v-if="build.releaseUrl" class="border-t border-border px-3.5 py-2.5">
+          <button
+            type="button"
+            class="flex cursor-pointer items-center gap-1.5 text-[12.5px] font-medium text-severity-info hover:underline"
+            data-testid="system-build-release"
+            @click="openReleaseNotes"
+          >
+            <IconExternalLink class="size-3.5" />
+            View release on GitHub
+          </button>
+        </div>
       </div>
     </section>
   </div>

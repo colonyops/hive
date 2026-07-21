@@ -63,6 +63,32 @@ func pathInfo(path string, overridden bool) PathInfo {
 	return PathInfo{Path: path, Exists: err == nil, Overridden: overridden}
 }
 
+// BuildInfo describes the running desktop build so users can see and report the
+// exact version they are on from the System settings screen.
+type BuildInfo struct {
+	Version string `json:"version"`
+	// Commit is the short (7-character) git revision the build was cut from.
+	Commit string `json:"commit"`
+	Date   string `json:"date"`
+	// ReleaseURL links to the GitHub release for this build's tag. It is empty
+	// for dev/unreleased builds that have no matching published release, so the
+	// frontend can hide the link rather than send users to a 404.
+	ReleaseURL string `json:"releaseUrl"`
+}
+
+// Build returns the version, commit, and date this desktop app was built from,
+// plus a link to the matching GitHub release when the build corresponds to a
+// published version.
+func (s *SystemService) Build() BuildInfo {
+	v, c, d := resolvedBuildInfo()
+	return BuildInfo{
+		Version:    v,
+		Commit:     shortCommit(c),
+		Date:       d,
+		ReleaseURL: releaseURL(v),
+	}
+}
+
 // OpenPath opens one of the known system locations in the OS default
 // application. The path is validated against the current location set so this
 // RPC cannot be used to open arbitrary files.

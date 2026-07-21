@@ -17,6 +17,7 @@ export {
 };
 
 export type {
+    BuildInfo,
     FlowSummary,
     GithubSettings,
     PathInfo,
