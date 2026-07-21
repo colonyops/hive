@@ -38,6 +38,9 @@ const mocks = vi.hoisted(() => ({
   CancelDeviceFlow: vi.fn(),
   SetToken: vi.fn(),
   SignOut: vi.fn(),
+  // updaterservice
+  UpdaterStatus: vi.fn(),
+  InstallUpdate: vi.fn(),
   // runtime
   On: vi.fn(),
   Hide: vi.fn(),
@@ -80,6 +83,11 @@ vi.mock('../../bindings/github.com/colonyops/hive/internal/desktop/auth/service'
   CancelDeviceFlow: mocks.CancelDeviceFlow,
   SetToken: mocks.SetToken,
   SignOut: mocks.SignOut,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/updaterservice', () => ({
+  Status: mocks.UpdaterStatus,
+  InstallUpdate: mocks.InstallUpdate,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -137,6 +145,8 @@ describe('App', () => {
     mocks.RenameFlow.mockResolvedValue({ id: 'personal', name: 'Team', enabled: true, valid: true })
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
+    mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: false, currentVersion: 'dev', latestVersion: '', notes: '', releaseUrl: '' })
+    mocks.InstallUpdate.mockResolvedValue(undefined)
   })
 
   it('registers profile / feed-selection / flow-edit palette commands (not the removed feed-editor ones)', async () => {
