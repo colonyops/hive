@@ -1,7 +1,7 @@
-import { Events } from '@wailsio/runtime'
-import { onMounted, onUnmounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { CreateAction, DeleteAction, ListActions, UpdateAction } from '../../bindings/github.com/colonyops/hive/desktop/actionsservice'
 import type { EditableAction } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/actions/models'
+import { useWailsEvent } from './useWailsEvent'
 
 export type { EditableAction }
 export type ActionType = EditableAction['type']
@@ -20,7 +20,6 @@ export function useActionsSettings() {
   let generation = 0
   let queued = false
   let running = false
-  let unsubscribe: (() => void) | undefined
 
   async function reload(): Promise<void> {
     if (running) { generation++; queued = true; return }
@@ -59,7 +58,6 @@ export function useActionsSettings() {
   async function remove(id: string): Promise<boolean> {
     try { await DeleteAction(id); await reload(); return true } catch (err) { error.value = message(err, 'Could not delete action.'); return false }
   }
-  onMounted(() => { void reload(); unsubscribe = Events.On('actions:updated', wake) })
-  onUnmounted(() => unsubscribe?.())
+  onMounted(() => { void reload(); useWailsEvent('actions:updated', wake) })
   return { actions, loading, error, reload, create, update, remove }
 }

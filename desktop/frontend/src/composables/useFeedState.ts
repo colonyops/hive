@@ -1,11 +1,12 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
-import { Browser, Events, Window } from '@wailsio/runtime'
+import { Browser, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { bodySnippet, feedSource, typeLabel } from '../lib/feedPresentation'
 import { useActivity } from './useActivity'
+import { useWailsEvent } from './useWailsEvent'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
 import type { FeedItem, FeedSort, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
@@ -672,19 +673,14 @@ export function useFeedState() {
   // it back. Subscribing here too would race that commit and could read
   // stale feed_item rows.
 
-  let unsubscribeFlows: (() => void) | undefined
-  let unsubscribeActions: (() => void) | undefined
-
   onMounted(() => {
     // A flows/*.yaml change (create/delete/edit) reshapes the profiles list.
-    unsubscribeFlows = Events.On('flows:updated', () => { void reloadProfilesQuietly() })
-    unsubscribeActions = Events.On('actions:updated', () => { void loadActions(selectedItem.value) })
+    useWailsEvent('flows:updated', () => { void reloadProfilesQuietly() })
+    useWailsEvent('actions:updated', () => { void loadActions(selectedItem.value) })
     void loadProfiles()
   })
 
   onUnmounted(() => {
-    unsubscribeFlows?.()
-    unsubscribeActions?.()
     clearToasts()
   })
 
