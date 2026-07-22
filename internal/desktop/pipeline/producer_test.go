@@ -12,6 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
+	"github.com/colonyops/hive/internal/desktop/activity"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
@@ -78,6 +79,14 @@ func (a *fakeAppender) callCount() int {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return len(a.calls)
+}
+
+type activityRecorder struct {
+	events []activity.Event
+}
+
+func (r *activityRecorder) Record(_ context.Context, event activity.Event) {
+	r.events = append(r.events, event)
 }
 
 func openTestPipelineDB(t *testing.T) *pipelinedb.DB {
@@ -158,12 +167,14 @@ func TestProducer_Tick_SourceErrorDoesNotBlockOthers(t *testing.T) {
 	ok := &fakeSource{batches: [][]Msg{{{Topic: "source:ok", Key: "x", Payload: []byte(`{}`)}}}}
 
 	var appendedOffsets []int64
+	recorder := &activityRecorder{}
 	producer := NewProducer(db, listerOf(map[string]Source{
 		"failing": failing,
 		"ok":      ok,
 	}), time.Hour, func(offset int64) {
 		appendedOffsets = append(appendedOffsets, offset)
 	}, zerolog.Nop())
+	producer.SetRecorder(recorder)
 
 	producer.Tick(t.Context())
 
@@ -173,6 +184,10 @@ func TestProducer_Tick_SourceErrorDoesNotBlockOthers(t *testing.T) {
 	require.Len(t, msgs, 2)
 	assert.Equal(t, "x", msgs[0].Key)
 	assert.Len(t, msgs[1].Snapshot, 1)
+	require.Len(t, recorder.events, 1, "successful refreshes must not crowd the activity log")
+	assert.Equal(t, activity.CategoryRefresh, recorder.events[0].Category)
+	assert.Equal(t, activity.SeverityError, recorder.events[0].Severity)
+	assert.Equal(t, "Refresh failed for failing", recorder.events[0].Title)
 }
 
 // TestProducer_DedupesUnchangedPayload verifies durable deduplication: an
