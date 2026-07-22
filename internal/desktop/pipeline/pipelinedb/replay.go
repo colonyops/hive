@@ -2,7 +2,6 @@ package pipelinedb
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"strings"
 )
@@ -59,31 +58,7 @@ func (db *DB) ListUnarchivedInboxItems(ctx context.Context, profileID string) ([
 	if err != nil {
 		return nil, fmt.Errorf("listing unarchived inbox items for %q: %w", profileID, err)
 	}
-	views := make([]InboxItemView, 0, len(rows))
-	for _, row := range rows {
-		view := InboxItemView{
-			ID: row.ID, ProfileID: row.ProfileID, SourceKind: row.SourceKind,
-			SourceScope: row.SourceScope, ExternalID: row.ExternalID, Title: row.Title,
-			URL: row.Url, Payload: json.RawMessage(row.Payload), Revision: row.Revision,
-			Unread: row.Unread != 0, Lifecycle: row.Lifecycle, FirstSeenAt: row.FirstSeenAt,
-			LastEventAt: row.LastEventAt,
-		}
-		if row.ArchivedAt.Valid {
-			archivedAt := row.ArchivedAt.Int64
-			view.ArchivedAt = &archivedAt
-		}
-		if row.ArchivedActor.Valid {
-			view.ArchivedActor = row.ArchivedActor.String
-		}
-		if row.ArchivedReason.Valid {
-			view.ArchivedReason = row.ArchivedReason.String
-		}
-		if row.SourceState.Valid {
-			view.SourceState = row.SourceState.String
-		}
-		views = append(views, view)
-	}
-	return views, nil
+	return inboxItemViews(rows), nil
 }
 
 // RecomputeMemberships is the claims-only synthetic replay write path. It has

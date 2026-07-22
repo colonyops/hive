@@ -32,7 +32,7 @@ function replayWireFlow(id = 'flow-1'): WireFlow {
 }
 
 function msg(id: string): Msg {
-  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: {} }
+  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: 'acme/app' }
 }
 
 function fakeEditorClient(overrides: Partial<PipelineEditorClient> = {}): PipelineEditorClient {

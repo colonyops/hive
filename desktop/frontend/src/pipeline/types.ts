@@ -3,15 +3,11 @@
 // and node code must import Msg/CommitBatch/Output/etc. from here, never
 // from bindings/ directly.
 //
-// Sink/Output/Discard/NodeRun are only re-exported as top-level type aliases
-// under the `pipeline` package's generated models.ts for the two names a
-// bound service function signature actually references (CommitBatch,
-// FeedItem) — the field types nested inside CommitBatch (Sink/Output/
-// Discard/NodeRunView) are generated directly in pipelinedb's own
-// models.ts, so that's where this pulls them from. NodeRun is exported
-// there as NodeRunView (see pipeline/commit.go's NodeRun alias comment);
-// re-exported here under the name callers actually use, same as the Go side.
-export type { CommitBatch, FeedItem } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
+// Sink/Output/Discard/NodeRun are generated directly in pipelinedb's own
+// models.ts, so the graph runtime uses that wire contract without local
+// compatibility aliases. NodeRun is exported there as NodeRunView (see
+// pipeline/commit.go's NodeRun alias comment).
+export type { CommitBatch } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 export type { Msg, Output, Sink, Discard, FeedSnapshot } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 export type { NodeRunView as NodeRun } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 

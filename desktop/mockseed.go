@@ -90,7 +90,7 @@ func seedMockInboxItems(db *pipelinedb.DB) error {
 		if err != nil {
 			return fmt.Errorf("mock seed: encode item %q: %w", item.ID, err)
 		}
-		if _, err := db.Queries().InsertInboxItem(ctx, pipelinedb.InsertInboxItemParams{
+		row, err := db.Queries().InsertInboxItem(ctx, pipelinedb.InsertInboxItemParams{
 			ProfileID:   MockFlowID,
 			SourceKind:  "github",
 			SourceScope: "",
@@ -102,8 +102,14 @@ func seedMockInboxItems(db *pipelinedb.DB) error {
 			Lifecycle:   "active",
 			FirstSeenAt: base - int64(i),
 			LastEventAt: base - int64(i),
-		}); err != nil {
+		})
+		if err != nil {
 			return fmt.Errorf("mock seed: insert item %q: %w", item.ID, err)
+		}
+		if err := db.Queries().UpsertFeedMembershipClaim(ctx, pipelinedb.UpsertFeedMembershipClaimParams{
+			ProfileID: MockFlowID, FeedID: MockFlowID + "/" + MockFeedNodeID, ItemID: row.ID, SourceID: "gh-source",
+		}); err != nil {
+			return fmt.Errorf("mock seed: claim item %q: %w", item.ID, err)
 		}
 	}
 	return nil

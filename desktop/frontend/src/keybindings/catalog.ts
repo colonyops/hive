@@ -73,6 +73,8 @@ export const commandCatalog: BindableCommand[] = [
     defaultCombos: ['u'],
     context: 'feed',
   },
+  { id: 'feed.toggle-archive', title: 'Archive / unarchive item', group: 'Feeds', defaultCombos: ['e'], context: 'feed' },
+  { id: 'feed.mark-unread', title: 'Mark unread', group: 'Feeds', defaultCombos: ['shift+u'], context: 'feed' },
   {
     id: 'feed.refresh',
     title: 'Refresh feeds',

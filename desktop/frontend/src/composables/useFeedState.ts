@@ -1,63 +1,51 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
-import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { ActionRun, ActionViews, FeedItemCounts, FeedItems, InvokeAction, MarkFeedItemRead, SessionLaunchOptions } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActionRun, ActionViews, FeedCounts, InboxCounts, InboxItemEvents, InvokeAction, ListInboxItems, ListInboxItemsByFeed, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
-import { bodySnippet, feedSource, typeLabel } from '../lib/feedPresentation'
+import { bodySnippet, feedSource, githubPayload, typeLabel } from '../lib/feedPresentation'
 import { useActivity } from './useActivity'
 import { useWailsEvent } from './useWailsEvent'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
-import type { FeedItem, FeedSort, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
+import type { FeedInboxCount, InboxEvent, InboxItem, InboxView, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
 import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
-// profile's sidebar feeds are the flow's feed nodes, and items come from the
-// persisted feed_item rows those nodes commit (PipelineService). The old
+// profile's sidebar feeds are flow feed nodes, while inbox items are shared
+// source identities whose feed membership is represented by claims. The old
 // profiles.yaml + feed/source CRUD are gone — editing a source or feed is
 // editing its node in the flow canvas.
 //
-// feed_item rows are written by the flow graph runtime manager — an
-// app-level instance owned by pipeline/composables/useFlowsSession.ts, not
-// this module. It runs every enabled flow independently; refresh() here just
+// Inbox rows and their membership claims are written by the flow graph runtime
+// manager — an app-level instance owned by pipeline/composables/useFlowsSession.ts,
+// not this module. It runs every enabled flow independently; refresh() here
 // re-reads the selected profile after App.vue's "log:appended" handler has
 // pumped all committed work.
-const feedSortStorageKey = 'hive.feed.sort'
-
-function timestampFromAge(age: string): number {
-  if (age === 'now') return Date.now()
-  const match = /^(\d+)([mhdw])$/.exec(age)
-  if (!match) return 0
-  const units: Record<string, number> = { m: 60_000, h: 3_600_000, d: 86_400_000, w: 604_800_000 }
-  return Date.now() - Number(match[1]) * units[match[2]]
-}
-
 export function useFeedState() {
   const profiles = ref<Profile[]>([])
   const profilesLoaded = ref(false)
   const profilesError = ref<string | null>(null)
   const activeProfileId = ref('')
-  const selection = ref<SidebarSelection>({ type: 'all' })
+  const selection = ref<SidebarSelection>({ type: 'view', view: 'inbox' })
   const unreadOnly = ref(false)
-  const feedSort = useStorage<FeedSort>(feedSortStorageKey, 'newest')
   // Search is a pure view filter over the loaded list (like unreadOnly). It
   // lives here — not in FeedList — so keyboard navigation moves over exactly
   // the rows the user sees. Cleared on feed/profile switch (see selectSidebar).
   const search = ref('')
-  const items = ref<FeedItem[]>([])
+  const items = ref<InboxItem[]>([])
   const loadError = ref<string | null>(null)
-  const selectedId = ref<string | null>(null)
+  const selectedId = ref<number | null>(null)
   const actions = ref<ActionView[]>([])
   const pendingActionKeys = ref<Record<string, boolean>>({})
   const actionError = ref<string | null>(null)
-  const actionRunsByItem = ref<Record<string, Record<string, ActionRunView>>>({})
+  const actionRunsByItem = ref<Record<number, Record<string, ActionRunView>>>({})
   const actionRunGenerations = new Map<string, number>()
   const actionRunIDs = loadActionRunIDs()
   const pendingAction = computed(() => selectedId.value ? Object.keys(pendingActionKeys.value).find((key) => key.startsWith(`${selectedId.value}\u0000`))?.split('\u0000')[1] ?? null : null)
   const actionRuns = computed(() => selectedId.value ? actionRunsByItem.value[selectedId.value] ?? {} : {})
   const sessionLaunchAction = ref<ActionView | null>(null)
-  const sessionLaunchItem = ref<FeedItem | null>(null)
+  const sessionLaunchItem = ref<InboxItem | null>(null)
   const sessionLaunchOptions = ref<SessionLaunchOptionsView | null>(null)
   const sessionLaunchBusy = ref(false)
   const sessionLaunchError = ref<string | null>(null)
@@ -75,7 +63,7 @@ export function useFeedState() {
   let feedsSeq = 0
   let actionLoadSeq = 0
 
-  function actionKey(itemID: string, actionID: string): string { return `${itemID}\u0000${actionID}` }
+  function actionKey(itemID: number, actionID: string): string { return `${itemID}\u0000${actionID}` }
   function loadActionRunIDs(): Record<string, Record<string, number>> {
     try {
       const stored: unknown = JSON.parse(localStorage.getItem('hive.action-run-ids') ?? '{}')
@@ -100,20 +88,20 @@ export function useFeedState() {
     try { localStorage.setItem('hive.action-run-ids', JSON.stringify(actionRunIDs)) }
     catch (error) { console.warn('Unable to persist action run IDs', error) }
   }
-  function nextActionRunGeneration(itemID: string, actionID: string): void {
+  function nextActionRunGeneration(itemID: number, actionID: string): void {
     const key = actionKey(itemID, actionID)
     actionRunGenerations.set(key, (actionRunGenerations.get(key) ?? 0) + 1)
   }
-  function isCurrentActionRun(itemID: string, actionID: string, commandID: number, generation: number): boolean {
+  function isCurrentActionRun(itemID: number, actionID: string, commandID: number, generation: number): boolean {
     return actionRunIDs[itemID]?.[actionID] === commandID && (actionRunGenerations.get(actionKey(itemID, actionID)) ?? 0) === generation
   }
-  function setActionRun(itemID: string, actionID: string, run: ActionRunView): void {
+  function setActionRun(itemID: number, actionID: string, run: ActionRunView): void {
     actionRunsByItem.value = { ...actionRunsByItem.value, [itemID]: { ...(actionRunsByItem.value[itemID] ?? {}), [actionID]: run } }
     actionRunIDs[itemID] = { ...(actionRunIDs[itemID] ?? {}), [actionID]: run.commandId }
     nextActionRunGeneration(itemID, actionID)
     persistActionRunIDs()
   }
-  function removeActionRunID(itemID: string, actionID: string): void {
+  function removeActionRunID(itemID: number, actionID: string): void {
     if (!actionRunIDs[itemID]?.[actionID]) return
     const itemRuns = { ...actionRunIDs[itemID] }; delete itemRuns[actionID]
     if (Object.keys(itemRuns).length) actionRunIDs[itemID] = itemRuns
@@ -127,38 +115,26 @@ export function useFeedState() {
   const title = computed(() => {
     const sel = selection.value
     if (sel.type === 'feed') return activeProfile.value?.feeds.find((f) => f.id === sel.feedId)?.name ?? 'Feed'
-    return unreadOnly.value ? 'Unread' : 'All items'
+    return sel.view[0].toUpperCase() + sel.view.slice(1)
   })
 
   // The Unread badge counts the whole loaded list, independent of search.
   const unreadCount = computed(() => items.value.filter((item) => item.unread).length)
 
-  function matchesSearch(item: FeedItem): boolean {
+  function matchesSearch(item: InboxItem): boolean {
     const query = search.value.trim().toLowerCase()
     if (!query) return true
-    const haystack = [item.title, item.repo, item.author, typeLabel(item.kind), feedSource(item).label, bodySnippet(item.body)]
+    const github = githubPayload(item)
+    const haystack = [item.title, github.repo, github.author, typeLabel(github.kind), feedSource(item).label, bodySnippet(github.body)]
       .join(' ')
       .toLowerCase()
     return haystack.includes(query)
   }
 
-  function compareItems(a: FeedItem, b: FeedItem): number {
-    if (feedSort.value === 'unread' && a.unread !== b.unread) return a.unread ? -1 : 1
-    const recency = b.updatedAt - a.updatedAt
-    return feedSort.value === 'oldest' ? -recency : recency
-  }
-
-  const sortedItems = computed(() => [...items.value].sort(compareItems))
-
-  // The rows actually rendered: sorted first, then narrowed by the unread
-  // filter and search box. Keyboard navigation walks this same ordering.
+  // SQL owns ordering for every inbox view; unread/search only narrow it.
   const visibleItems = computed(() =>
-    sortedItems.value.filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
+    items.value.filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
   )
-
-  function setFeedSort(value: FeedSort): void {
-    feedSort.value = value
-  }
 
   // ── Toasts ──────────────────────────────────────────────────────────────────
 
@@ -209,11 +185,13 @@ export function useFeedState() {
     try {
       const flows = (await ListFlows()) ?? []
       profiles.value = flows.map(toProfileStub)
-      profilesLoaded.value = true
       profilesError.value = null
       const active = profiles.value.find((p) => p.id === activeProfileId.value) ?? profiles.value[0]
       if (active) await selectProfile(active.id)
       else clearActive()
+      // Route synchronization starts only after this default profile load is
+      // complete; otherwise an initial deep link can race its inbox default.
+      profilesLoaded.value = true
     } catch (error) {
       console.warn('Unable to load flows', error)
       profilesError.value = 'Could not load your workspaces.'
@@ -237,7 +215,7 @@ export function useFeedState() {
   }
 
   // loadFeeds populates the active profile's sidebar feeds from its flow's
-  // feed nodes, with per-feed counts from feed_item. A deploy (rename, add or
+  // feed nodes, with counts derived from inbox membership claims. A deploy (rename, add or
   // remove a feed node) fires flows:updated, which can start this reload while
   // an earlier one is still in flight; the reads below resolve out of order, so
   // a stale reload must not overwrite a fresher one. Guard with a sequence, the
@@ -246,7 +224,7 @@ export function useFeedState() {
   async function loadFeeds(flowId: string) {
     const seq = ++feedsSeq
     try {
-      const [flow, counts, sidebar] = await Promise.all([GetFlow(flowId), FeedItemCounts(flowId), GetSidebar(flowId)])
+      const [flow, counts, sidebar, inboxCounts] = await Promise.all([GetFlow(flowId), FeedCounts(flowId), GetSidebar(flowId), InboxCounts(flowId)])
       if (seq !== feedsSeq) return
       const countByFeed = new Map((counts ?? []).map((c) => [c.feedId, c]))
       // GetFlow returns the flattened wire shape (see pipeline/lib/wireFlow):
@@ -268,8 +246,8 @@ export function useFeedState() {
         // load so counts stay fresh and added/removed feeds reconcile in.
         profile.tree = buildFeedTree(feeds, sidebar, flowId)
         profile.sourceSummary = `GitHub · ${sourceCount} source${sourceCount === 1 ? '' : 's'}`
-        profile.totalCount = feeds.reduce((sum, f) => sum + f.count, 0)
-        profile.unreadCount = feeds.reduce((sum, f) => sum + f.newCount, 0)
+        profile.totalCount = inboxCounts.inboxTotal
+        profile.unreadCount = inboxCounts.inboxUnread
       }
     } catch (error) {
       console.warn('Unable to load flow feeds', error)
@@ -368,77 +346,62 @@ export function useFeedState() {
     return true
   }
 
-  // ── Items (feed_item) ─────────────────────────────────────────────────────────
+  // ── Items (inbox_item) ───────────────────────────────────────────────────────
 
-  function parseItem(view: { feedId: string; itemId: string; payload: any; updatedAt?: number; unread: boolean }): FeedItem {
-    const p = view.payload ?? {}
-    return {
-      id: p.id ?? view.itemId,
-      feedId: view.feedId,
-      kind: p.kind ?? '',
-      repo: p.repo ?? '',
-      num: p.num ?? 0,
-      title: p.title ?? view.itemId,
-      author: p.author ?? '',
-      age: p.age ?? '',
-      updatedAt: Number(p.updatedAt) || timestampFromAge(p.age ?? '') || Math.floor((view.updatedAt ?? 0) / 1_000_000),
-      unread: view.unread,
-      reason: p.reason,
-      labels: p.labels ?? [],
-      branch: p.branch ?? '',
-      body: p.body ?? '',
-      prompt: p.prompt ?? '',
-      url: p.url ?? '',
-    }
+  function asInboxItem(view: InboxItem): InboxItem {
+    return { ...view, archivedAt: view.archivedAt ?? null, archivedActor: view.archivedActor ?? null, archivedReason: view.archivedReason ?? null, sourceState: view.sourceState ?? null }
   }
 
-  async function loadItems(feedID = '') {
+  async function loadItems(view: InboxView = 'inbox') {
     if (!activeProfileId.value) return
     const seq = ++loadSeq
     try {
-      let views: Array<{ feedId: string; itemId: string; payload: any; updatedAt?: number; unread: boolean }> = []
-      if (feedID) {
-        views = (await FeedItems(feedID)) ?? []
-      } else {
-        // "All items" aggregates across every feed of the active profile.
-        const feeds = activeProfile.value?.feeds ?? []
-        const lists = await Promise.all(feeds.map((f) => FeedItems(f.id)))
-        views = lists.flatMap((l) => l ?? [])
-      }
+      const loaded = (await ListInboxItems(activeProfileId.value, view, 500)) ?? []
       if (seq !== loadSeq) return
       loadError.value = null
-
-      // Dedupe by item id (a PR can land in two feeds); first occurrence wins.
-      const seen = new Set<string>()
-      const parsed: FeedItem[] = []
-      for (const view of views) {
-        const item = parseItem(view)
-        if (seen.has(item.id)) continue
-        seen.add(item.id)
-        parsed.push(item)
-      }
-      items.value = parsed
-
-      if (selectedId.value && parsed.some((i) => i.id === selectedId.value)) return
-      const ordered = [...parsed].sort(compareItems)
-      const first = (unreadOnly.value ? ordered.find((i) => i.unread) : ordered[0]) ?? null
+      items.value = loaded.map(asInboxItem)
+      const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
+      if (selectedId.value && items.value.some((item) => item.id === selectedId.value)) return
       selectedId.value = first?.id ?? null
       await loadActions(first)
-    } catch (error) {
-      if (seq !== loadSeq) return
-      console.warn('Unable to load feed items', error)
-      loadError.value = "Can't load feed items right now."
-      items.value = []
-      selectedId.value = null
-      actions.value = []
-    }
+    } catch (error) { handleLoadError(seq, error) }
   }
 
-  async function loadActions(item: FeedItem | null) {
+  async function loadFeedItems(feedID: string) {
+    if (!activeProfileId.value) return
+    const seq = ++loadSeq
+    try {
+      const loaded = (await ListInboxItemsByFeed(activeProfileId.value, feedID, 500)) ?? []
+      if (seq !== loadSeq) return
+      loadError.value = null
+      items.value = loaded.map(asInboxItem)
+      const first = (unreadOnly.value ? items.value.find((item) => item.unread) : items.value[0]) ?? null
+      if (selectedId.value && items.value.some((item) => item.id === selectedId.value)) return
+      selectedId.value = first?.id ?? null
+      await loadActions(first)
+    } catch (error) { handleLoadError(seq, error) }
+  }
+
+  function handleLoadError(seq: number, error: unknown) {
+    if (seq !== loadSeq) return
+    console.warn('Unable to load inbox items', error)
+    loadError.value = "Can't load inbox items right now."
+    items.value = []; selectedId.value = null; actions.value = []
+  }
+
+  async function loadEvents(itemID: number): Promise<InboxEvent[]> {
+    // The storage query returns newest-first for efficient recent-event reads;
+    // the observed timeline is deliberately chronological for human reading.
+    return ((await InboxItemEvents(itemID, 100) ?? [])
+      .map((event) => ({ ...event, summary: event.summary ?? null }))
+      .reverse())
+  }
+
+  async function loadActions(item: InboxItem | null) {
     const token = ++actionLoadSeq
     if (!item) { actions.value = []; return }
     try {
-      const available = (await ActionViews(item.kind)) ?? []
+      const available = (await ActionViews(githubPayload(item).kind)) ?? []
       if (token !== actionLoadSeq || selectedId.value !== item.id) return
       actions.value = available
       await Promise.all(available.map(async (action) => {
@@ -460,16 +423,16 @@ export function useFeedState() {
     }
   }
 
-  async function selectItem(id: string) {
+  async function selectItem(id: number) {
     selectedId.value = id
     const item = selectedItem.value
     await loadActions(item)
-    if (item) await markItemRead(item)
+    if (item?.unread) await markItemUnread(item, false)
   }
 
   // Opens the existing ActionCard run detail for a persisted job. Jobs carry
   // the feed-item key and action id, so no second run-detail UI is needed.
-  async function openActionRun(itemID: string, actionID: string, commandID: number): Promise<boolean> {
+  async function openActionRun(itemID: number, actionID: string, commandID: number): Promise<boolean> {
     const item = items.value.find((candidate) => candidate.id === itemID)
     if (!item) return false
     await selectItem(itemID)
@@ -483,16 +446,40 @@ export function useFeedState() {
     }
   }
 
-  async function markItemRead(item: FeedItem) {
-    if (!item.unread) return
+  async function reloadCurrentSelection(): Promise<void> {
+    if (selection.value.type === 'feed') await loadFeedItems(selection.value.feedId)
+    else await loadItems(selection.value.view)
+  }
+
+  async function markItemUnread(item: InboxItem, unread: boolean): Promise<void> {
     try {
-      await MarkFeedItemRead(item.feedId, item.id)
+      const updated = await MarkInboxItemUnread(item.id, item.revision, unread)
+      const index = items.value.findIndex((candidate) => candidate.id === item.id)
+      if (index >= 0) items.value.splice(index, 1, asInboxItem(updated))
     } catch (error) {
-      console.warn('Unable to mark item read', error)
-      return
+      console.warn('Unable to update inbox item unread state', error)
+      await reloadCurrentSelection()
     }
-    item.unread = false
-    await loadFeeds(activeProfileId.value)
+    if (activeProfileId.value) await loadFeeds(activeProfileId.value)
+  }
+
+  async function toggleArchive(item: InboxItem): Promise<void> {
+    try {
+      const updated = await ToggleInboxItemArchived(item.id, item.revision)
+      // All retains both archived and unarchived rows, so it can apply the
+      // returned revision in place. Every other inbox view and a feed list
+      // changes membership when archive state changes and must reload now.
+      if (selection.value.type === 'view' && selection.value.view === 'all') {
+        const index = items.value.findIndex((candidate) => candidate.id === item.id)
+        if (index >= 0) items.value.splice(index, 1, asInboxItem(updated))
+      } else {
+        await reloadCurrentSelection()
+      }
+    } catch (error) {
+      console.warn('Unable to toggle inbox item archive state', error)
+      await reloadCurrentSelection()
+    }
+    if (activeProfileId.value) await loadFeeds(activeProfileId.value)
   }
 
   // Move the selection to the next/previous visible item. Navigation walks the
@@ -501,8 +488,8 @@ export function useFeedState() {
   // when selectItem marks the current item read and it drops out of the unread
   // view. Clamps at both ends (no wrap).
   async function moveSelection(delta: 1 | -1) {
-    const all = sortedItems.value
-    const passes = (item: FeedItem) => (!unreadOnly.value || item.unread) && matchesSearch(item)
+    const all = items.value
+    const passes = (item: InboxItem) => (!unreadOnly.value || item.unread) && matchesSearch(item)
     const currentIndex = all.findIndex((item) => item.id === selectedId.value)
     if (currentIndex === -1) {
       const visible = all.filter(passes)
@@ -527,7 +514,7 @@ export function useFeedState() {
     activeProfileId.value = profileID
     unreadOnly.value = false
     await loadFeeds(profileID)
-    await selectSidebar({ type: 'all' })
+    await selectSidebar({ type: 'view', view: 'inbox' })
   }
 
   async function selectSidebar(nextSelection: SidebarSelection) {
@@ -538,7 +525,7 @@ export function useFeedState() {
 
   async function selectUnreadView() {
     unreadOnly.value = true
-    await applySelection({ type: 'all' })
+    await applySelection({ type: 'view', view: 'inbox' })
     await reanchorToUnread()
   }
 
@@ -552,11 +539,13 @@ export function useFeedState() {
 
   async function applySelection(nextSelection: SidebarSelection) {
     selection.value = nextSelection
-    await loadItems(nextSelection.type === 'feed' ? nextSelection.feedId : '')
+    if (nextSelection.type === 'feed') await loadFeedItems(nextSelection.feedId)
+    else await loadItems(nextSelection.view)
   }
 
-  function currentFeedId(): string {
-    return selection.value.type === 'feed' ? selection.value.feedId : ''
+  async function refreshCurrent(): Promise<void> {
+    if (selection.value.type === 'feed') await loadFeedItems(selection.value.feedId)
+    else await loadItems(selection.value.view)
   }
 
   async function toggleUnread() {
@@ -566,7 +555,7 @@ export function useFeedState() {
 
   async function refresh() {
     if (activeProfileId.value) await loadFeeds(activeProfileId.value)
-    await loadItems(currentFeedId())
+    await refreshCurrent()
   }
 
   async function runAction(actionID: string, input: Record<string, unknown> = {}, item = selectedItem.value) {
@@ -576,7 +565,7 @@ export function useFeedState() {
     pendingActionKeys.value = { ...pendingActionKeys.value, [key]: true }
     actionError.value = null
     try {
-      const run = await InvokeAction(actionID, item, input)
+      const run = await InvokeAction(actionID, item.id, input)
       setActionRun(item.id, actionID, run)
       if (run.status !== 'done') {
         actionError.value = run.error || 'The action did not complete.'
@@ -663,8 +652,8 @@ export function useFeedState() {
   }
 
   // Opens the selected item's canonical GitHub URL (the detail pane's "open"
-  // button). The URL comes from the feed_item payload; a missing one means
-  // the source didn't carry it.
+  // button). The URL comes from the inbox item; a missing one means the
+  // source did not carry it.
   async function openSelectedInBrowser() {
     const url = selectedItem.value?.url
     if (!url) {
@@ -685,9 +674,9 @@ export function useFeedState() {
   // ── Wails events ──────────────────────────────────────────────────────────────
   // Note: no "log:appended" listener here — App.vue owns that subscription
   // now (see pipeline/composables/useFlowsSession.ts), since the runtime's
-  // commit into feed_item must complete BEFORE this module's refresh() reads
+  // commit into inbox rows/claims must complete BEFORE this module's refresh() reads
   // it back. Subscribing here too would race that commit and could read
-  // stale feed_item rows.
+  // stale inbox rows.
 
   onMounted(() => {
     // A flows/*.yaml change (create/delete/edit) reshapes the profiles list.
@@ -723,8 +712,6 @@ export function useFeedState() {
     sessionLaunchBusy,
     sessionLaunchError,
     unreadOnly,
-    feedSort,
-    setFeedSort,
     title,
     toasts,
     showToast,
@@ -748,6 +735,9 @@ export function useFeedState() {
     selectNext,
     selectPrev,
     toggleUnread,
+    markItemUnread,
+    toggleArchive,
+    loadEvents,
     refresh,
     invokeAction,
     cancelSessionLaunch,

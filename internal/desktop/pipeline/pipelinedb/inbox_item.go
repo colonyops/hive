@@ -31,6 +31,161 @@ type InboxItemView struct {
 	LastEventAt    int64           `json:"lastEventAt"`
 }
 
+type InboxEventView struct {
+	ID         int64  `json:"id"`
+	ItemID     int64  `json:"itemId"`
+	Kind       string `json:"kind"`
+	Transition string `json:"transition"`
+	Attention  string `json:"attention"`
+	Summary    string `json:"summary,omitempty"`
+	CreatedAt  int64  `json:"createdAt"`
+}
+
+type InboxCounts struct {
+	InboxTotal  int64 `json:"inboxTotal"`
+	InboxUnread int64 `json:"inboxUnread"`
+}
+
+type FeedInboxCount struct {
+	FeedID string `json:"feedId"`
+	Total  int64  `json:"total"`
+	Unread int64  `json:"unread"`
+}
+
+// ErrStaleInboxItem indicates the item changed after the caller read its
+// revision. Callers should re-read rather than applying an optimistic result.
+var ErrStaleInboxItem = errors.New("stale inbox item revision")
+
+func inboxItemView(row InboxItem) InboxItemView {
+	view := InboxItemView{
+		ID: row.ID, ProfileID: row.ProfileID, SourceKind: row.SourceKind,
+		SourceScope: row.SourceScope, ExternalID: row.ExternalID, Title: row.Title,
+		URL: row.Url, Payload: json.RawMessage(row.Payload), Revision: row.Revision,
+		Unread: row.Unread != 0, Lifecycle: row.Lifecycle, FirstSeenAt: row.FirstSeenAt,
+		LastEventAt: row.LastEventAt,
+	}
+	if row.ArchivedAt.Valid {
+		archivedAt := row.ArchivedAt.Int64
+		view.ArchivedAt = &archivedAt
+	}
+	if row.ArchivedActor.Valid {
+		view.ArchivedActor = row.ArchivedActor.String
+	}
+	if row.ArchivedReason.Valid {
+		view.ArchivedReason = row.ArchivedReason.String
+	}
+	if row.SourceState.Valid {
+		view.SourceState = row.SourceState.String
+	}
+	return view
+}
+
+func inboxItemViews(rows []InboxItem) []InboxItemView {
+	views := make([]InboxItemView, 0, len(rows))
+	for _, row := range rows {
+		views = append(views, inboxItemView(row))
+	}
+	return views
+}
+
+func (db *DB) ListInboxItems(ctx context.Context, profileID, view string, limit int) ([]InboxItemView, error) {
+	if limit <= 0 {
+		return []InboxItemView{}, nil
+	}
+	var rows []InboxItem
+	var err error
+	switch view {
+	case "inbox":
+		rows, err = db.queries.ListInboxItemsInbox(ctx, ListInboxItemsInboxParams{ProfileID: profileID, Limit: int64(limit)})
+	case "open":
+		rows, err = db.queries.ListInboxItemsOpen(ctx, ListInboxItemsOpenParams{ProfileID: profileID, Limit: int64(limit)})
+	case "archive":
+		rows, err = db.queries.ListInboxItemsArchive(ctx, ListInboxItemsArchiveParams{ProfileID: profileID, Limit: int64(limit)})
+	case "all":
+		rows, err = db.queries.ListInboxItemsAll(ctx, ListInboxItemsAllParams{ProfileID: profileID, Limit: int64(limit)})
+	case "unfiled":
+		rows, err = db.queries.ListInboxItemsUnfiled(ctx, ListInboxItemsUnfiledParams{ProfileID: profileID, Limit: int64(limit)})
+	default:
+		return nil, fmt.Errorf("unknown inbox view %q", view)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("listing %s inbox items for %q: %w", view, profileID, err)
+	}
+	return inboxItemViews(rows), nil
+}
+
+func (db *DB) ListInboxItemsByFeed(ctx context.Context, profileID, feedID string, limit int) ([]InboxItemView, error) {
+	if limit <= 0 {
+		return []InboxItemView{}, nil
+	}
+	rows, err := db.queries.ListInboxItemsByFeed(ctx, ListInboxItemsByFeedParams{ProfileID: profileID, FeedID: feedID, Limit: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("listing inbox items for feed %q: %w", feedID, err)
+	}
+	return inboxItemViews(rows), nil
+}
+
+func (db *DB) InboxItemEvents(ctx context.Context, itemID int64, limit int) ([]InboxEventView, error) {
+	if limit <= 0 {
+		return []InboxEventView{}, nil
+	}
+	rows, err := db.queries.ListInboxEventsByItem(ctx, ListInboxEventsByItemParams{ItemID: itemID, Limit: int64(limit)})
+	if err != nil {
+		return nil, fmt.Errorf("listing inbox events for %d: %w", itemID, err)
+	}
+	views := make([]InboxEventView, 0, len(rows))
+	for _, row := range rows {
+		view := InboxEventView{ID: row.ID, ItemID: row.ItemID, Kind: row.Kind, Transition: row.Transition, Attention: row.Attention, CreatedAt: row.CreatedAt}
+		if row.Summary.Valid {
+			view.Summary = row.Summary.String
+		}
+		views = append(views, view)
+	}
+	return views, nil
+}
+
+func (db *DB) SetInboxItemUnread(ctx context.Context, itemID, revision int64, unread bool) (InboxItemView, error) {
+	row, err := db.queries.SetInboxItemUnread(ctx, SetInboxItemUnreadParams{Unread: boolInt(unread), ID: itemID, Revision: revision})
+	if errors.Is(err, sql.ErrNoRows) {
+		return InboxItemView{}, ErrStaleInboxItem
+	}
+	if err != nil {
+		return InboxItemView{}, fmt.Errorf("setting inbox item %d unread: %w", itemID, err)
+	}
+	return inboxItemView(row), nil
+}
+
+func (db *DB) ToggleInboxItemArchived(ctx context.Context, itemID, revision, archivedAt int64) (InboxItemView, error) {
+	row, err := db.queries.ToggleInboxItemArchived(ctx, ToggleInboxItemArchivedParams{ArchivedAt: sql.NullInt64{Int64: archivedAt, Valid: true}, ID: itemID, Revision: revision})
+	if errors.Is(err, sql.ErrNoRows) {
+		return InboxItemView{}, ErrStaleInboxItem
+	}
+	if err != nil {
+		return InboxItemView{}, fmt.Errorf("toggling archive for inbox item %d: %w", itemID, err)
+	}
+	return inboxItemView(row), nil
+}
+
+func (db *DB) InboxCounts(ctx context.Context, profileID string) (InboxCounts, error) {
+	row, err := db.queries.CountInboxItems(ctx, profileID)
+	if err != nil {
+		return InboxCounts{}, fmt.Errorf("counting inbox items for %q: %w", profileID, err)
+	}
+	return InboxCounts(row), nil
+}
+
+func (db *DB) FeedCounts(ctx context.Context, profileID string) ([]FeedInboxCount, error) {
+	rows, err := db.queries.CountInboxItemsByFeed(ctx, profileID)
+	if err != nil {
+		return nil, fmt.Errorf("counting inbox items by feed for %q: %w", profileID, err)
+	}
+	counts := make([]FeedInboxCount, 0, len(rows))
+	for _, row := range rows {
+		counts = append(counts, FeedInboxCount(row))
+	}
+	return counts, nil
+}
+
 type ItemTriageState struct {
 	Unread         bool
 	ArchivedAt     *int64

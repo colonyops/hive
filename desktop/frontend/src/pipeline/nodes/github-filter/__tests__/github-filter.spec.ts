@@ -86,7 +86,7 @@ describe('github-filter matches() — parity with internal/desktop/feed/filters_
 
 describe('github-filter runtime — 2-port routing', () => {
   function msg(id: string, payload: FilterableItem): Msg {
-    return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: payload }
+    return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: payload, SourceKind: 'github', SourceScope: 'acme/app' }
   }
 
   it('routes a passing item to port 0', async () => {

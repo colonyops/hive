@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -11,7 +12,6 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
@@ -41,6 +41,15 @@ type recordingSessionLauncher struct {
 func (l *recordingSessionLauncher) LaunchSession(_ context.Context, req pipeline.LaunchSessionRequest) (pipeline.SessionExecutionOutcome, error) {
 	l.calls = append(l.calls, req)
 	return pipeline.SessionExecutionOutcome{ID: "session-1", Name: req.Name}, nil
+}
+
+func insertActionItem(t *testing.T, db *pipelinedb.DB, id, kind, title string) int64 {
+	t.Helper()
+	payload, err := json.Marshal(map[string]any{"id": id, "kind": kind, "title": title})
+	require.NoError(t, err)
+	row, err := db.Queries().InsertInboxItem(t.Context(), pipelinedb.InsertInboxItemParams{ProfileID: "p", SourceKind: "github", ExternalID: id, Title: title, Payload: payload, Lifecycle: "active"})
+	require.NoError(t, err)
+	return row.ID
 }
 
 func configuredActionStore(t *testing.T) *actions.ActionStore {
@@ -94,21 +103,39 @@ func TestPipelineService_ActionViewsAndInvocationUseActionStore(t *testing.T) {
 		"launch-session": executor,
 	}), 0, zerolog.Nop())
 	service := NewPipelineService(db, store, worker, nil)
+	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
+	issueID := insertActionItem(t, db, "issue-1", "Issue", "")
+	hiddenID := insertActionItem(t, db, "pr-2", "PR", "")
 
 	assert.Equal(t, []actions.View{
 		{ID: "review-pr", Label: "Review PR", Type: "launch-session", ShowInDetail: true},
 		{ID: "triage-any", Label: "Triage", Type: "shell", ShowInDetail: true},
 	}, service.ActionViews("PR"))
 
-	_, err = service.InvokeAction("review-pr", feed.Item{ID: "pr-1", Kind: "PR", Title: "Fix it"}, pipeline.ActionInvocationInput{})
+	_, err = service.InvokeAction("review-pr", prID, pipeline.ActionInvocationInput{})
 	require.NoError(t, err)
 	assert.Equal(t, 1, executor.calls)
 	assert.Equal(t, "pr-1", executor.data.Key)
 	assert.Equal(t, "Fix it", executor.data.Payload["title"])
-	_, err = service.InvokeAction("review-pr", feed.Item{ID: "issue-1", Kind: "Issue"}, pipeline.ActionInvocationInput{})
+	_, err = service.InvokeAction("review-pr", issueID, pipeline.ActionInvocationInput{})
 	require.Error(t, err)
-	_, err = service.InvokeAction("hidden", feed.Item{ID: "pr-2", Kind: "PR"}, pipeline.ActionInvocationInput{})
+	_, err = service.InvokeAction("hidden", hiddenID, pipeline.ActionInvocationInput{})
 	assert.ErrorContains(t, err, "not available in the detail pane", "backend must reject a trusted caller bypassing ActionViews")
+}
+
+func TestPipelineService_InvokeActionRejectsUnsupportedSourceKind(t *testing.T) {
+	store := configuredActionStore(t)
+	db, err := pipelinedb.Open(t.TempDir(), pipelinedb.DefaultOpenOptions())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, db.Close()) })
+	payload := []byte(`{"id":"slack-1","kind":"PR","title":"Not GitHub"}`)
+	item, err := db.Queries().InsertInboxItem(t.Context(), pipelinedb.InsertInboxItemParams{
+		ProfileID: "p", SourceKind: "slack", ExternalID: "slack-1", Title: "Not GitHub", Payload: payload, Lifecycle: "active",
+	})
+	require.NoError(t, err)
+
+	_, err = NewPipelineService(db, store, nil, nil).InvokeAction("review-pr", item.ID, pipeline.ActionInvocationInput{})
+	require.ErrorContains(t, err, `unsupported action source kind "slack"`)
 }
 
 func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T) {
@@ -121,8 +148,9 @@ func TestPipelineService_AttemptedFailureReturnsPersistedActionRun(t *testing.T)
 	failed := &attemptedFailureExecutor{}
 	worker := pipeline.NewWorker(db, store, pipeline.NewDispatcher(map[string]pipeline.Executor{"launch-session": failed}), 0, zerolog.Nop())
 	service := NewPipelineService(db, store, worker, nil)
+	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
-	view, err := service.InvokeAction("review-pr", feed.Item{ID: "pr-1", Kind: "PR", Title: "Fix it"}, pipeline.ActionInvocationInput{})
+	view, err := service.InvokeAction("review-pr", prID, pipeline.ActionInvocationInput{})
 	require.NoError(t, err)
 	assert.Equal(t, "failed", view.Status)
 	assert.Equal(t, "side effect failed", view.Error)
@@ -147,7 +175,8 @@ func TestPipelineService_ActionRunSurvivesDatabaseReopen(t *testing.T) {
 	require.NoError(t, err)
 	failed := &attemptedFailureExecutor{}
 	worker := pipeline.NewWorker(db, store, pipeline.NewDispatcher(map[string]pipeline.Executor{"launch-session": failed}), 0, zerolog.Nop())
-	view, err := NewPipelineService(db, store, worker, nil).InvokeAction("review-pr", feed.Item{ID: "pr-1", Kind: "PR", Title: "Fix it"}, pipeline.ActionInvocationInput{})
+	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
+	view, err := NewPipelineService(db, store, worker, nil).InvokeAction("review-pr", prID, pipeline.ActionInvocationInput{})
 	require.NoError(t, err)
 	require.NoError(t, db.Close())
 
@@ -170,8 +199,9 @@ func TestPipelineService_ConfirmedLaunchSessionExecutesRealActionPath(t *testing
 		"launch-session": pipeline.NewLaunchSessionExecutor(launcher),
 	}), 0, zerolog.Nop())
 	service := NewPipelineService(db, store, worker, nil)
+	prID := insertActionItem(t, db, "pr-1", "PR", "Fix it")
 
-	_, err = service.InvokeAction("review-pr", feed.Item{ID: "pr-1", Kind: "PR", Title: "Fix it"}, pipeline.ActionInvocationInput{})
+	_, err = service.InvokeAction("review-pr", prID, pipeline.ActionInvocationInput{})
 	require.NoError(t, err)
 	require.Equal(t, []pipeline.LaunchSessionRequest{{
 		Name: "review-pr-pr-1", Prompt: "Review Fix it", Repo: "git@example/repo.git",

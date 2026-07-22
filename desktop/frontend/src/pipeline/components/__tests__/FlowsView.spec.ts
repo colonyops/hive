@@ -15,7 +15,12 @@ const mocks = vi.hoisted(() => ({
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
   SaveLayout: vi.fn(),
-  FeedItems: vi.fn(),
+  ListInboxItemsByFeed: vi.fn(),
+  ListUnarchivedInboxItems: vi.fn(),
+  EventLogTailOffset: vi.fn(),
+  FastForwardConsumer: vi.fn(),
+  RecomputeMemberships: vi.fn(),
+  ReconcileFlowMembershipStructure: vi.fn(),
   NodeRuns: vi.fn(),
   ReadFrom: vi.fn(),
   Commit: vi.fn(),
@@ -32,7 +37,12 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/flowsservice', (
 }))
 
 vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
-  FeedItems: mocks.FeedItems,
+  ListInboxItemsByFeed: mocks.ListInboxItemsByFeed,
+  ListUnarchivedInboxItems: mocks.ListUnarchivedInboxItems,
+  EventLogTailOffset: mocks.EventLogTailOffset,
+  FastForwardConsumer: mocks.FastForwardConsumer,
+  RecomputeMemberships: mocks.RecomputeMemberships,
+  ReconcileFlowMembershipStructure: mocks.ReconcileFlowMembershipStructure,
   NodeRuns: mocks.NodeRuns,
   ReadFrom: mocks.ReadFrom,
   Commit: mocks.Commit,
@@ -69,6 +79,11 @@ describe('FlowsView flow selector', () => {
     mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
+    mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.EventLogTailOffset.mockResolvedValue('0')
+    mocks.FastForwardConsumer.mockResolvedValue(undefined)
+    mocks.RecomputeMemberships.mockResolvedValue(undefined)
+    mocks.ReconcileFlowMembershipStructure.mockResolvedValue(undefined)
     mocks.ReadFrom.mockResolvedValue([])
     mocks.Commit.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
@@ -117,6 +132,11 @@ describe('FlowsView deploy menu', () => {
     mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
+    mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.EventLogTailOffset.mockResolvedValue('0')
+    mocks.FastForwardConsumer.mockResolvedValue(undefined)
+    mocks.RecomputeMemberships.mockResolvedValue(undefined)
+    mocks.ReconcileFlowMembershipStructure.mockResolvedValue(undefined)
     mocks.ReadFrom.mockResolvedValue([])
     mocks.Commit.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})

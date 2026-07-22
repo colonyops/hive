@@ -6,7 +6,7 @@
 // This component reads editor state and deployed runtimes from the shared
 // useFlowsSession() singleton (App.vue is the session's first caller; see
 // useFlowsSession.ts's module docs). That runtime manager keeps every
-// enabled flow committing feed_item while this view is closed.
+// enabled flow committing inbox items and membership claims while this view is closed.
 //
 // Individual refs/actions are destructured out of useFlowsSession()
 // (rather than kept as one `session` object) so the template can use them
@@ -19,7 +19,7 @@ import IconMaximize2 from '~icons/lucide/maximize-2'
 import IconMinus from '~icons/lucide/minus'
 import IconPlus from '~icons/lucide/plus'
 import IconWorkflow from '~icons/lucide/workflow'
-import { FeedItems } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ListInboxItemsByFeed } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import { useFlowsSession } from '../composables/useFlowsSession'
 import { useResizablePanel } from '../../composables/useResizablePanel'
 import { useClipboard } from '../../composables/useClipboard'
@@ -104,7 +104,7 @@ const zoomPercent = computed(() => Math.round((canvasRef.value?.zoom ?? 1) * 100
 // Defaults to the flow's first feed node and offers a picker when there's
 // more than one. ─────────────────────────────────────────────────────────
 const feedItemsClient: FeedItemsClient = {
-  async feedItems(feedId) { return await FeedItems(feedId) },
+  async feedItems(feedId) { return await ListInboxItemsByFeed(feedId.split('/')[0], feedId, 100) },
 }
 
 const feedNodes = computed(() => activeFlow.value?.nodes.filter((n) => n.type === 'feed') ?? [])
@@ -119,7 +119,7 @@ watch(feedNodes, (nodes) => {
 const previewFeedId = computed(() => {
   const flowId = activeFlow.value?.id
   const node = feedNodes.value.find((n) => n.id === selectedFeedNodeId.value)
-  // A feed node's durable feed_item key is its flow-qualified node id.
+  // A feed node's durable membership-claim key is its flow-qualified node id.
   return flowId && node ? `${flowId}/${node.id}` : null
 })
 

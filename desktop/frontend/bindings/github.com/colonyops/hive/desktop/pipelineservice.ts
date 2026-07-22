@@ -13,9 +13,6 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
-import * as feed$0 from "../internal/desktop/feed/models.js";
-// eslint-disable-next-line @typescript-eslint/ban-ts-comment
-// @ts-ignore: Unused imports
 import * as pipeline$0 from "../internal/desktop/pipeline/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
@@ -23,6 +20,10 @@ import * as actions$0 from "../internal/desktop/pipeline/actions/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
 import * as pipelinedb$0 from "../internal/desktop/pipeline/pipelinedb/models.js";
+
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
+import * as $models from "./models.js";
 
 export function ActionRun(commandID: number): $CancellablePromise<pipeline$0.ActionRunView> {
     return $Call.ByID(2865983566, commandID);
@@ -63,13 +64,36 @@ export function FastForwardConsumer(consumer: string, tail: string): $Cancellabl
     return $Call.ByID(36677706, consumer, tail);
 }
 
+export function FeedCounts(profileID: string): $CancellablePromise<pipelinedb$0.FeedInboxCount[] | null> {
+    return $Call.ByID(1308541807, profileID);
+}
+
+export function InboxCounts(profileID: string): $CancellablePromise<pipelinedb$0.InboxCounts> {
+    return $Call.ByID(2660745881, profileID);
+}
+
+export function InboxItemEvents(itemID: number, limit: number): $CancellablePromise<pipelinedb$0.InboxEventView[] | null> {
+    return $Call.ByID(1702778487, itemID, limit);
+}
+
 /**
  * InvokeAction records the user's explicit confirmation for actionID against
  * item and executes it. It accepts only actions that apply to the item's kind;
  * executable configuration is always re-resolved from ActionStore.
  */
-export function InvokeAction(actionID: string, item: feed$0.Item, input: pipeline$0.ActionInvocationInput): $CancellablePromise<pipeline$0.ActionRunView> {
-    return $Call.ByID(204589393, actionID, item, input);
+export function InvokeAction(actionID: string, itemID: number, input: pipeline$0.ActionInvocationInput): $CancellablePromise<pipeline$0.ActionRunView> {
+    return $Call.ByID(204589393, actionID, itemID, input);
+}
+
+/**
+ * ListInboxItems reads one deterministic inbox view for a profile.
+ */
+export function ListInboxItems(profileID: string, view: $models.InboxView, limit: number): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
+    return $Call.ByID(1074017451, profileID, view, limit);
+}
+
+export function ListInboxItemsByFeed(profileID: string, feedID: string, limit: number): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
+    return $Call.ByID(4276258094, profileID, feedID, limit);
 }
 
 /**
@@ -78,6 +102,10 @@ export function InvokeAction(actionID: string, item: feed$0.Item, input: pipelin
  */
 export function ListUnarchivedInboxItems(profileID: string): $CancellablePromise<pipelinedb$0.InboxItemView[] | null> {
     return $Call.ByID(3418617238, profileID);
+}
+
+export function MarkInboxItemUnread(itemID: number, revision: number, unread: boolean): $CancellablePromise<pipelinedb$0.InboxItemView> {
+    return $Call.ByID(3957671458, itemID, revision, unread);
 }
 
 /**
@@ -122,4 +150,8 @@ export function ReconcileFlowMembershipStructure(profileID: string, feedIDs: str
  */
 export function SessionLaunchOptions(): $CancellablePromise<pipeline$0.SessionLaunchOptions> {
     return $Call.ByID(2125140544);
+}
+
+export function ToggleInboxItemArchived(itemID: number, revision: number): $CancellablePromise<pipelinedb$0.InboxItemView> {
+    return $Call.ByID(2438600320, itemID, revision);
 }

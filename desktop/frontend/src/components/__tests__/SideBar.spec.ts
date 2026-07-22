@@ -21,7 +21,7 @@ const profile: Profile = {
 
 function mountSideBar(overrides: Partial<{ flowsDirty: boolean }> = {}) {
   return mount(SideBar, {
-    props: { profile, selection: { type: 'all' }, ...overrides },
+    props: { profile, selection: { type: 'view', view: 'inbox' }, ...overrides },
   })
 }
 
@@ -39,16 +39,16 @@ describe('SideBar', () => {
     expect(wrapper.emitted('open-settings')).toHaveLength(1)
   })
 
-  it('no longer carries an Unread shortcut (the All / Unread filter lives on the list)', () => {
+  it('renders and selects each inbox view', async () => {
     const wrapper = mountSideBar()
-    expect(wrapper.find('[data-testid="sidebar-unread"]').exists()).toBe(false)
-    expect(wrapper.text()).not.toContain('Unread')
-  })
-
-  it('highlights All items whenever the scope is all-items', () => {
-    const wrapper = mountSideBar()
-    const allEntry = wrapper.findAll('button.sidebar-entry').find((b) => b.text().includes('All items'))
-    expect(allEntry?.classes()).toContain('sidebar-entry-selected')
+    const views = ['inbox', 'open', 'archive', 'all', 'unfiled']
+    for (const view of views) {
+      const button = wrapper.get(`[data-testid="inbox-view-${view}"]`)
+      expect(button.attributes('data-testid')).toBe(`inbox-view-${view}`)
+      await button.trigger('click')
+    }
+    expect(wrapper.emitted('select')).toEqual(views.map((view) => [{ type: 'view', view }]))
+    expect(wrapper.get('[data-testid="inbox-view-inbox"]').classes()).toContain('sidebar-entry-selected')
   })
 
   it('opens the flows canvas from the Edit flow footer', async () => {
@@ -112,7 +112,7 @@ const grouped: Profile = {
 }
 
 function mountGrouped() {
-  return mount(SideBar, { props: { profile: grouped, selection: { type: 'all' } } })
+  return mount(SideBar, { props: { profile: grouped, selection: { type: 'view', view: 'inbox' } } })
 }
 
 // The tree carried by the most recent 'reorder' emit.

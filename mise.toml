@@ -19,9 +19,9 @@ HIVE_LOG_FILE = "./dev.log"
 
 [tasks."generate:enums"]
 description = "Generate enum methods using go-enum"
-sources = ["internal/core/action/type.go", "internal/core/hc/item.go", "internal/core/notify/store.go", "internal/core/todo/todo.go", "internal/sources/backend.go", "internal/desktop/activity/activity.go", "internal/desktop/jobs/jobs.go", "internal/desktop/pipeline/pipelinedb/classify.go", "internal/desktop/pipeline/flow/flow.go"]
-outputs = ["internal/core/action/type_enum.go", "internal/core/hc/item_enum.go", "internal/core/notify/store_enum.go", "internal/core/todo/todo_enum.go", "internal/sources/backend_enum.go", "internal/desktop/activity/activity_enum.go", "internal/desktop/jobs/jobs_enum.go", "internal/desktop/pipeline/pipelinedb/classify_enum.go", "internal/desktop/pipeline/flow/flow_enum.go"]
-run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go -f internal/desktop/activity/activity.go -f internal/desktop/jobs/jobs.go -f internal/desktop/pipeline/pipelinedb/classify.go -f internal/desktop/pipeline/flow/flow.go"
+sources = ["internal/core/action/type.go", "internal/core/hc/item.go", "internal/core/notify/store.go", "internal/core/todo/todo.go", "internal/sources/backend.go", "internal/desktop/activity/activity.go", "internal/desktop/jobs/jobs.go", "internal/desktop/pipeline/pipelinedb/classify.go", "internal/desktop/pipeline/flow/flow.go", "desktop/pipelineservice.go"]
+outputs = ["internal/core/action/type_enum.go", "internal/core/hc/item_enum.go", "internal/core/notify/store_enum.go", "internal/core/todo/todo_enum.go", "internal/sources/backend_enum.go", "internal/desktop/activity/activity_enum.go", "internal/desktop/jobs/jobs_enum.go", "internal/desktop/pipeline/pipelinedb/classify_enum.go", "internal/desktop/pipeline/flow/flow_enum.go", "desktop/pipelineservice_enum.go"]
+run = "go-enum --nocase --names --marshal -f internal/core/action/type.go -f internal/core/hc/item.go -f internal/core/notify/store.go -f internal/core/todo/todo.go -f internal/sources/backend.go -f internal/desktop/activity/activity.go -f internal/desktop/jobs/jobs.go -f internal/desktop/pipeline/pipelinedb/classify.go -f internal/desktop/pipeline/flow/flow.go -f desktop/pipelineservice.go"
 
 [tasks.generate]
 description = "Run all code generators"

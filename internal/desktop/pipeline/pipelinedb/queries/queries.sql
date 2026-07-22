@@ -87,6 +87,70 @@ SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL;
 -- name: GetUnarchivedInboxItemByID :one
 SELECT * FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL;
 
+-- name: GetInboxItemByID :one
+SELECT * FROM inbox_item WHERE id = ?;
+
+-- name: ListInboxItemsInbox :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
+ORDER BY last_event_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsOpen :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL AND lifecycle = 'active'
+ORDER BY last_event_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsArchive :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NOT NULL
+ORDER BY archived_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsAll :many
+SELECT * FROM inbox_item WHERE profile_id = ?
+ORDER BY last_event_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsUnfiled :many
+SELECT i.* FROM inbox_item i
+WHERE i.profile_id = ?
+  AND NOT EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.item_id = i.id)
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?;
+
+-- name: ListInboxItemsByFeed :many
+SELECT DISTINCT i.* FROM inbox_item i
+JOIN feed_membership_claim c ON c.item_id = i.id
+WHERE c.profile_id = ? AND c.feed_id = ? AND i.archived_at IS NULL
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?;
+
+-- name: CountInboxItemsByFeed :many
+SELECT
+    c.feed_id AS feed_id,
+    CAST(COUNT(DISTINCT i.id) AS INTEGER) AS total,
+    CAST(COUNT(DISTINCT CASE WHEN i.unread = 1 THEN i.id END) AS INTEGER) AS unread
+FROM feed_membership_claim c
+JOIN inbox_item i ON i.id = c.item_id
+WHERE c.profile_id = ? AND i.archived_at IS NULL
+GROUP BY c.feed_id;
+
+-- name: ListInboxEventsByItem :many
+SELECT * FROM inbox_event WHERE item_id = ? ORDER BY id DESC LIMIT ?;
+
+-- name: SetInboxItemUnread :one
+UPDATE inbox_item SET unread = ?, revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING *;
+
+-- name: ToggleInboxItemArchived :one
+UPDATE inbox_item SET
+    archived_at = CASE WHEN archived_at IS NULL THEN ? ELSE NULL END,
+    archived_actor = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
+    archived_reason = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
+    revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING *;
+
+-- name: CountInboxItems :one
+SELECT
+    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_total,
+    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL AND unread = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_unread
+FROM inbox_item WHERE profile_id = ?;
+
 -- name: UpsertFeedMembershipClaim :exec
 INSERT INTO feed_membership_claim (profile_id, feed_id, item_id, source_id)
 VALUES (?, ?, ?, ?)

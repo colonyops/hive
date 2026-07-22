@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"time"
 
-	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
@@ -79,6 +79,38 @@ func (s *PipelineService) ListUnarchivedInboxItems(profileID string) ([]pipeline
 	return s.db.ListUnarchivedInboxItems(context.Background(), profileID)
 }
 
+// ENUM(inbox, open, archive, all, unfiled)
+type InboxView string
+
+// ListInboxItems reads one deterministic inbox view for a profile.
+func (s *PipelineService) ListInboxItems(profileID string, view InboxView, limit int) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListInboxItems(context.Background(), profileID, view.String(), limit)
+}
+
+func (s *PipelineService) ListInboxItemsByFeed(profileID, feedID string, limit int) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListInboxItemsByFeed(context.Background(), profileID, feedID, limit)
+}
+
+func (s *PipelineService) InboxItemEvents(itemID int64, limit int) ([]pipelinedb.InboxEventView, error) {
+	return s.db.InboxItemEvents(context.Background(), itemID, limit)
+}
+
+func (s *PipelineService) MarkInboxItemUnread(itemID, revision int64, unread bool) (pipelinedb.InboxItemView, error) {
+	return s.db.SetInboxItemUnread(context.Background(), itemID, revision, unread)
+}
+
+func (s *PipelineService) ToggleInboxItemArchived(itemID, revision int64) (pipelinedb.InboxItemView, error) {
+	return s.db.ToggleInboxItemArchived(context.Background(), itemID, revision, time.Now().UnixMilli())
+}
+
+func (s *PipelineService) InboxCounts(profileID string) (pipelinedb.InboxCounts, error) {
+	return s.db.InboxCounts(context.Background(), profileID)
+}
+
+func (s *PipelineService) FeedCounts(profileID string) ([]pipelinedb.FeedInboxCount, error) {
+	return s.db.FeedCounts(context.Background(), profileID)
+}
+
 // ActionViews returns the configured actions available for an item kind
 // ("PR"/"Issue"). The actions store is the single source for both these
 // detail-pane views and flow output actions.
@@ -99,7 +131,18 @@ func (s *PipelineService) SessionLaunchOptions() (pipeline.SessionLaunchOptions,
 // InvokeAction records the user's explicit confirmation for actionID against
 // item and executes it. It accepts only actions that apply to the item's kind;
 // executable configuration is always re-resolved from ActionStore.
-func (s *PipelineService) InvokeAction(actionID string, item feed.Item, input pipeline.ActionInvocationInput) (pipeline.ActionRunView, error) {
+func (s *PipelineService) InvokeAction(actionID string, itemID int64, input pipeline.ActionInvocationInput) (pipeline.ActionRunView, error) {
+	row, err := s.db.Queries().GetInboxItemByID(context.Background(), itemID)
+	if err != nil {
+		return pipeline.ActionRunView{}, fmt.Errorf("reading inbox item %d: %w", itemID, err)
+	}
+	if row.SourceKind != "github" {
+		return pipeline.ActionRunView{}, fmt.Errorf("unsupported action source kind %q", row.SourceKind)
+	}
+	item, err := pipeline.DecodeGitHubActionItem(row.Payload, row.ExternalID)
+	if err != nil {
+		return pipeline.ActionRunView{}, fmt.Errorf("decode GitHub inbox item %d payload: %w", itemID, err)
+	}
 	action, ok := s.actions.Get(actionID)
 	if !ok {
 		return pipeline.ActionRunView{}, fmt.Errorf("unknown action %q", actionID)
@@ -116,11 +159,7 @@ func (s *PipelineService) InvokeAction(actionID string, item feed.Item, input pi
 	if s.worker == nil {
 		return pipeline.ActionRunView{}, fmt.Errorf("action execution is unavailable")
 	}
-	payload, err := json.Marshal(item)
-	if err != nil {
-		return pipeline.ActionRunView{}, fmt.Errorf("encoding action item: %w", err)
-	}
-	return s.worker.Confirm(context.Background(), actionID, item.ID, payload, input)
+	return s.worker.Confirm(context.Background(), actionID, item.ID, item.Payload, input)
 }
 
 // NodeRuns returns up to limit of a flow's most recent node_run rows,

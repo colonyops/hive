@@ -1,6 +1,6 @@
 # Feed
 
-A **feed** node is a terminal (1 input, 0 outputs): every message that arrives upserts into this node's feed as an unread `feed_item`, rendered in the sidebar.
+A **feed** node is a terminal (1 input, 0 outputs): every message that arrives creates an unread inbox-item membership claim for this feed, rendered in the sidebar.
 
 ## Fields
 

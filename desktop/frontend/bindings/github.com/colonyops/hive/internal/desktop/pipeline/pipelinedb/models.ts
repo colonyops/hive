@@ -39,6 +39,12 @@ export interface Discard {
     "nodeId": string;
 }
 
+export interface FeedInboxCount {
+    "feedId": string;
+    "total": number;
+    "unread": number;
+}
+
 export interface FeedMembershipClaim {
     "profile_id": string;
     "feed_id": string;
@@ -55,6 +61,21 @@ export interface FeedSnapshot {
     "feedId": string;
     "sourceTopic": string;
     "snapshotId": string;
+}
+
+export interface InboxCounts {
+    "inboxTotal": number;
+    "inboxUnread": number;
+}
+
+export interface InboxEventView {
+    "id": number;
+    "itemId": number;
+    "kind": string;
+    "transition": string;
+    "attention": string;
+    "summary"?: string;
+    "createdAt": number;
 }
 
 /**

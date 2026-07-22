@@ -4,8 +4,11 @@
 export type {
     CommitBatch,
     Discard,
+    FeedInboxCount,
     FeedMembershipClaim,
     FeedSnapshot,
+    InboxCounts,
+    InboxEventView,
     InboxItemView,
     Msg,
     NodeRunRecord,

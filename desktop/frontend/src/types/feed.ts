@@ -1,68 +1,56 @@
-// The feed UI's view types. A profile is now a flow and its feeds are the
-// flow's feed nodes; items come from persisted feed_item rows.
+// Inbox presentation types. Adapter payload remains deliberately opaque until
+// decoded by the GitHub presentation seam.
+export type InboxView = 'inbox' | 'open' | 'archive' | 'all' | 'unfiled'
 
-// FeedItem is the rich item shape a feed_item row's opaque payload decodes to
-// (the JSON of Go's feed.Item). feedId is the flow-qualified feed key
-// ("<flowId>/<nodeId>") the row belongs to, so marking one read knows which
-// feed to target.
-export interface FeedItem {
-  id: string
-  feedId: string
-  kind: string // "PR" | "Issue"
-  repo: string
-  num: number
+export interface InboxItem {
+  id: number
+  profileId: string
+  sourceKind: string
+  sourceScope: string
+  externalId: string
   title: string
-  author: string
-  age: string
-  // GitHub's last-updated time in unix milliseconds. This is source recency,
-  // not feed_item.updated_at (which changes on every polling snapshot).
-  updatedAt: number
-  unread: boolean
-  reason?: string
-  labels: string[]
-  branch: string
-  body: string
-  prompt: string
   url: string
+  payload: unknown
+  revision: number
+  unread: boolean
+  archivedAt?: number | null
+  archivedActor?: string | null
+  archivedReason?: string | null
+  lifecycle: string
+  sourceState?: string | null
+  firstSeenAt: number
+  lastEventAt: number
 }
 
-// FeedSummary is one feed (a flow feed node) in the sidebar: its id is the
-// flow-qualified feed key.
-export type FeedSort = 'newest' | 'oldest' | 'unread'
+export interface InboxEvent {
+  id: number
+  itemId: number
+  kind: string
+  transition: string
+  attention: string
+  summary: string | null
+  createdAt: number
+}
+
+export interface FeedInboxCount {
+  feedId: string
+  total: number
+  unread: number
+}
 
 export interface FeedSummary {
   id: string
   name: string
   count: number
   newCount: number
-  // Cosmetic sidebar presentation from the feed node's config (flow YAML): the
-  // tree glyph key (see lib/feedIcons) and the hover-tooltip context. Both
-  // optional; absent when the feed node carries no icon/description.
   icon?: string
   description?: string
 }
 
-// FeedFolder is a named group of feeds in the sidebar. It carries resolved
-// FeedSummary objects (not ids) so the sidebar can render counts directly.
-// Persisted (per-flow, by node id) as a flow.SidebarFolder. Note there is no
-// collapsed flag: expand/collapse is transient view state kept in localStorage
-// (see SideBar.vue), not part of the persisted layout.
-export interface FeedFolder {
-  id: string
-  name: string
-  feeds: FeedSummary[]
-}
-
-// SidebarNode is one entry in the sidebar's ordered FEEDS section: a bare feed
-// or a folder. FeedTree is the resolved, ordered tree the SideBar renders — the
-// reconciliation of a profile's live feeds with its saved flow.SidebarLayout
-// (see lib/feedTree.ts).
-export type SidebarNode =
-  | { kind: 'feed'; feed: FeedSummary }
-  | { kind: 'folder'; folder: FeedFolder }
+export interface FeedFolder { id: string; name: string; feeds: FeedSummary[] }
+export type SidebarNode = { kind: 'feed'; feed: FeedSummary } | { kind: 'folder'; folder: FeedFolder }
 export type FeedTree = SidebarNode[]
 
-// Profile is a workspace in the UI — backed by a flow.
 export interface Profile {
   id: string
   letter: string
@@ -71,14 +59,9 @@ export interface Profile {
   totalCount: number
   unreadCount: number
   feeds: FeedSummary[]
-  // tree is the resolved sidebar grouping/order for `feeds`. Absent until the
-  // profile's feeds have loaded; the SideBar falls back to a flat list of
-  // `feeds` when it is missing.
   tree?: FeedTree
 }
 
-// Scope only: the unread filter is an independent axis (unreadOnly in
-// useFeedState). The sidebar "Unread" view is all-scope + filter on.
 export type SidebarSelection =
-  | { type: 'all' }
+  | { type: 'view'; view: InboxView }
   | { type: 'feed'; feedId: string }

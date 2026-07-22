@@ -24,9 +24,20 @@ const mocks = vi.hoisted(() => ({
   UpdateAction: vi.fn(),
   DeleteAction: vi.fn(),
   // pipelineservice
-  FeedItems: vi.fn(),
-  FeedItemCounts: vi.fn(),
-  MarkFeedItemRead: vi.fn(),
+  ListInboxItems: vi.fn(),
+  ListInboxItemsByFeed: vi.fn(),
+  FeedCounts: vi.fn(),
+  InboxCounts: vi.fn(),
+  MarkInboxItemUnread: vi.fn(),
+  ToggleInboxItemArchived: vi.fn(),
+  InboxItemEvents: vi.fn(),
+  ActionRun: vi.fn(),
+  SessionLaunchOptions: vi.fn(),
+  EventLogTailOffset: vi.fn(),
+  FastForwardConsumer: vi.fn(),
+  RecomputeMemberships: vi.fn(),
+  ReconcileFlowMembershipStructure: vi.fn(),
+  ListUnarchivedInboxItems: vi.fn(),
   ActionViews: vi.fn(),
   InvokeAction: vi.fn(),
   NodeRuns: vi.fn(),
@@ -67,9 +78,20 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/actionsservice', () =>
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
-  FeedItems: mocks.FeedItems,
-  FeedItemCounts: mocks.FeedItemCounts,
-  MarkFeedItemRead: mocks.MarkFeedItemRead,
+  ListInboxItems: mocks.ListInboxItems,
+  ListInboxItemsByFeed: mocks.ListInboxItemsByFeed,
+  FeedCounts: mocks.FeedCounts,
+  InboxCounts: mocks.InboxCounts,
+  MarkInboxItemUnread: mocks.MarkInboxItemUnread,
+  ToggleInboxItemArchived: mocks.ToggleInboxItemArchived,
+  InboxItemEvents: mocks.InboxItemEvents,
+  ActionRun: mocks.ActionRun,
+  SessionLaunchOptions: mocks.SessionLaunchOptions,
+  EventLogTailOffset: mocks.EventLogTailOffset,
+  FastForwardConsumer: mocks.FastForwardConsumer,
+  RecomputeMemberships: mocks.RecomputeMemberships,
+  ReconcileFlowMembershipStructure: mocks.ReconcileFlowMembershipStructure,
+  ListUnarchivedInboxItems: mocks.ListUnarchivedInboxItems,
   ActionViews: mocks.ActionViews,
   InvokeAction: mocks.InvokeAction,
   NodeRuns: mocks.NodeRuns,
@@ -93,6 +115,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/updaterservice', () =>
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
   Window: { Hide: mocks.Hide },
+  Call: { ByID: vi.fn() },
 }))
 
 const flow = {
@@ -103,7 +126,7 @@ const flow = {
     { id: 'src', type: 'github-source' },
     { id: 'desktop', type: 'feed', name: 'Desktop UI' },
   ],
-  wires: [],
+  wires: [{ from: 'src', to: 'desktop' }],
 }
 
 async function mountAppWithRouter() {
@@ -136,8 +159,18 @@ describe('App', () => {
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.GetSidebar.mockResolvedValue({ items: [] })
     mocks.SaveSidebar.mockResolvedValue(undefined)
-    mocks.FeedItems.mockResolvedValue([])
-    mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
+    mocks.ListInboxItems.mockResolvedValue([])
+    mocks.ListInboxItemsByFeed.mockResolvedValue([])
+    mocks.FeedCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
+    mocks.InboxCounts.mockResolvedValue({ inboxTotal: 1, inboxUnread: 0 })
+    mocks.InboxItemEvents.mockResolvedValue([])
+    mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' })
+    mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [], defaultRepository: '', agents: [], defaultAgent: '' })
+    mocks.EventLogTailOffset.mockResolvedValue('0')
+    mocks.FastForwardConsumer.mockResolvedValue(undefined)
+    mocks.RecomputeMemberships.mockResolvedValue(undefined)
+    mocks.ReconcileFlowMembershipStructure.mockResolvedValue(undefined)
+    mocks.ListUnarchivedInboxItems.mockResolvedValue([])
     mocks.ActionViews.mockResolvedValue([])
     mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
@@ -386,8 +419,7 @@ describe('App', () => {
     router.back()
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({})
-    const allItems = wrapper.findAll('button.sidebar-entry').find((button) => button.text().includes('All items'))
-    expect(allItems?.classes()).toContain('sidebar-entry-selected')
+    expect(wrapper.find('[data-testid="inbox-view-inbox"]').classes()).toContain('sidebar-entry-selected')
 
     router.forward()
     await flushPromises()
@@ -706,9 +738,9 @@ describe('App', () => {
     const wrapper = await mountApp()
 
     const callOrder: string[] = []
-    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {} }])
+    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:personal/src', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: 'src' }])
     mocks.Commit.mockImplementationOnce(async () => { callOrder.push('commit') })
-    mocks.FeedItemCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return [] })
+    mocks.InboxCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return { inboxTotal: 0, inboxUnread: 0 } })
 
     const logHandler = mocks.On.mock.calls.find(([event]) => event === 'log:appended')?.[1] as (() => void) | undefined
     expect(logHandler).toBeDefined()
