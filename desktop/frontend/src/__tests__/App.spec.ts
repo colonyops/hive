@@ -408,6 +408,23 @@ describe('App', () => {
     wrapper.unmount()
   })
 
+  it('renders developer tools from its deep link', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/dev')
+    await router.isReady()
+    const wrapper = mount(App, { global: { plugins: [router] } })
+
+    try {
+      await flushPromises()
+      expect(router.currentRoute.value.name).toBe('dev')
+      await vi.waitFor(() => {
+        expect(wrapper.find('[data-testid="dev-view"]').exists()).toBe(true)
+      })
+    } finally {
+      wrapper.unmount()
+    }
+  })
+
   it('routes DetailPane Edit to actions settings', async () => {
     const router = createAppRouter(createMemoryHistory())
     await router.push('/')

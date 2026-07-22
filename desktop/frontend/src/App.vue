@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Events, Window } from '@wailsio/runtime'
 import { useStorage } from '@vueuse/core'
 import { useRoute, useRouter } from 'vue-router'
@@ -25,7 +25,6 @@ import NewProfileModal from './components/NewProfileModal.vue'
 import UnsavedFlowChangesModal from './components/UnsavedFlowChangesModal.vue'
 import OnboardingScreen from './components/OnboardingScreen.vue'
 import ToastStack from './components/ToastStack.vue'
-import DevBar from './components/DevBar.vue'
 import { useAuth } from './composables/useAuth'
 import { useActivity } from './composables/useActivity'
 import { useJobs } from './composables/useJobs'
@@ -42,9 +41,12 @@ import type { ApplicationSettingsSection, ProfileSettingsSection } from './route
 import type { InboxView, SidebarSelection } from './types/feed'
 import { githubPayload } from './lib/feedPresentation'
 
-// Only true when Vite is serving in dev mode (under `wails3 dev`); statically
-// false in production/server builds, so DevBar is compiled out of them.
+// Only true when Vite is serving in dev mode (under `wails3 dev`). Keeping
+// these imports inside this compile-time conditional prevents developer tools
+// and their notification implementation from shipping in production bundles.
 const devMode = import.meta.env.DEV
+const DevBar = devMode ? defineAsyncComponent(() => import('./components/DevBar.vue')) : null
+const DevView = devMode ? defineAsyncComponent(() => import('./components/DevView.vue')) : null
 
 const {
   status: authStatus, authenticated, deviceFlow, card: authCard, error: authError, busy: authBusy,
@@ -105,6 +107,7 @@ const router = useRouter()
 const route = useRoute()
 const flowsActive = computed(() => route.name === 'flows')
 const activityActive = computed(() => route.name === 'activity')
+const devActive = computed(() => devMode && route.name === 'dev')
 const applicationSettingsActive = computed(() => route.name === 'application-settings')
 const profileSettingsActive = computed(() => route.name === 'profile-settings')
 const applicationSettingsSection = computed<ApplicationSettingsSection>(() =>
@@ -446,7 +449,7 @@ const sidebarCollapsed = useStorage('hive.panel.sidebar.collapsed', false)
 const feedViewActive = computed(() =>
   authenticated.value && !needsWorkspace.value &&
   !applicationSettingsActive.value && !profileSettingsActive.value &&
-  !flowsActive.value && !activityActive.value &&
+  !flowsActive.value && !activityActive.value && !devActive.value &&
   !!activeProfile.value,
 )
 
@@ -711,8 +714,9 @@ onUnmounted(() => {
           @add="openNewProfile"
           @open-settings="requestOpenSettings('application')"
         />
+        <DevView v-if="devMode && devActive" @close="closeSettings" />
         <SettingsView
-          v-if="applicationSettingsActive"
+          v-else-if="applicationSettingsActive"
           :github-connected="authenticated"
           :github-login="authStatus?.login"
           :active-category="applicationSettingsSection"
