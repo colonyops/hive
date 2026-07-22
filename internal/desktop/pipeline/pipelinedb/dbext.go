@@ -1,10 +1,10 @@
 // Package pipelinedb is the dedicated desktop-pipeline SQLite store: the
-// event log (event_log/consumer_offset), persisted pipeline outputs
-// (feed_item/output_command), and per-node run metrics (node_run). It is
-// isolated from hive's shared hive.db so desktop pipeline write traffic
-// never contends with the CLI/TUI data path. It has its own sqlc-generated
-// queries (queries.sql.go, models.go, db.go) but shares the migration
-// runner in internal/data/migrate.
+// event log (event_log/consumer_offset), durable inbox substrate
+// (inbox_item/inbox_event), feed membership claims, output commands, activity
+// events and jobs, and per-node run metrics. It is isolated from hive's shared
+// hive.db so desktop pipeline write traffic never contends with the CLI/TUI
+// data path. It has its own sqlc-generated queries (queries.sql.go, models.go,
+// db.go) but shares the migration runner in internal/data/migrate.
 package pipelinedb
 
 import (

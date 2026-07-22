@@ -1,17 +1,17 @@
 <script setup lang="ts">
-// Read-only preview of one feed node's persisted items. It uses the same
-// feed_item read path as the sidebar, scoped to the selected feed node so
-// flow authors can inspect what that terminal node most recently committed.
+// Read-only preview of inbox items claimed by one feed node. It uses the same
+// claim-aware read path as the sidebar, scoped to the selected feed node.
 //
 // Mirrors driver.ts/usePipelineEditor.ts's injection posture: takes an
 // injected client rather than importing PipelineService/bindings directly,
-// so it's mountable in a test with a fake. FlowsView.vue is the one place
-// that adapts the real PipelineService.FeedItems binding into this shape.
+// so it's mountable in a test with a fake. FlowsView.vue adapts the real
+// PipelineService.ListInboxItemsByFeed binding into this shape.
 import { ref, watch } from 'vue'
-import type { FeedItem } from '../types'
+import type { InboxItem } from '../../types/feed'
+import { githubPayload } from '../../lib/feedPresentation'
 
 export interface FeedItemsClient {
-  feedItems(feedId: string): Promise<FeedItem[] | null | undefined>
+  feedItems(feedId: string): Promise<Array<InboxItem & { archivedAt?: number | null; archivedActor?: string | null; archivedReason?: string | null; sourceState?: string | null }> | null | undefined>
 }
 
 const props = defineProps<{
@@ -20,7 +20,7 @@ const props = defineProps<{
   client: FeedItemsClient
 }>()
 
-const items = ref<FeedItem[]>([])
+const items = ref<InboxItem[]>([])
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -48,18 +48,11 @@ async function load(feedId: string | null): Promise<void> {
 
 watch(() => props.feedId, (id) => { void load(id) }, { immediate: true })
 
-// item.payload is an opaque json.RawMessage (typed `any` — see types.ts),
-// deserialized by Wails into the plain feed.Item shape it actually holds
-// (kind/repo/title/author/... — internal/desktop/feed/feed.go).
-function title(item: FeedItem): string {
-  return item.payload?.title || item.itemId
-}
-function repo(item: FeedItem): string {
-  return item.payload?.repo ?? ''
-}
-function author(item: FeedItem): string {
-  return item.payload?.author ?? ''
-}
+// item.payload is an opaque source payload, decoded here only through the
+// GitHub presentation adapter for title/repository/author display.
+function title(item: InboxItem): string { return item.title }
+function repo(item: InboxItem): string { return githubPayload(item).repo }
+function author(item: InboxItem): string { return githubPayload(item).author }
 </script>
 
 <template>
@@ -79,9 +72,9 @@ function author(item: FeedItem): string {
     <ul v-else class="hive-scroll min-h-0 flex-1 overflow-y-auto" data-testid="feed-preview-list">
       <li
         v-for="item in items"
-        :key="item.itemId"
+        :key="item.id"
         class="flex items-start gap-2 border-b border-row px-3 py-2"
-        :data-testid="`feed-preview-item-${item.itemId}`"
+        :data-testid="`feed-preview-item-${item.id}`"
       >
         <span class="mt-1.5 size-1.5 shrink-0 rounded-full" :class="item.unread ? 'bg-accent' : 'bg-transparent'" />
         <div class="min-w-0 flex-1">

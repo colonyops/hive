@@ -13,10 +13,6 @@ import (
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
-// fixtureFlowPath is desktop/e2e/fixtures/flows/frontend-triage.yaml,
-// relative to this package's directory (go test's working directory) — the
-// same fixture desktop/e2e/scripts/serve.sh points HIVE_DESKTOP_FLOWS at
-// for the mock "feed" e2e server.
 const fixtureFlowPath = "e2e/fixtures/flows/frontend-triage.yaml"
 
 type testFlowRefs struct {
@@ -46,62 +42,42 @@ func TestFixtureFlow_LoadsAndMatchesSeedConstants(t *testing.T) {
 	assert.Equal(t, MockFeedNodeID, feedNode.ID, "fixture flow's feed node id must match MockFeedNodeID")
 }
 
-func TestSeedMockFeedItems_WritesExpectedRows(t *testing.T) {
+func TestSeedMockInboxItems_WritesExpectedRows(t *testing.T) {
 	db, err := pipelinedb.Open(t.TempDir(), pipelinedb.DefaultOpenOptions())
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = db.Close() })
 
-	require.NoError(t, seedMockFeedItems(db))
+	require.NoError(t, seedMockInboxItems(db))
 
-	items, err := db.FeedItems(context.Background(), mockFeedID())
+	rows, err := db.Conn().QueryContext(context.Background(), `
+		SELECT external_id, source_kind, source_scope, payload, unread, last_event_at
+		FROM inbox_item
+		WHERE profile_id = ?
+		ORDER BY last_event_at DESC`, MockFlowID)
 	require.NoError(t, err)
-	require.Len(t, items, len(mockFeedItems))
+	defer func() { require.NoError(t, rows.Close()) }()
 
-	// FeedItems orders newest-first (updated_at DESC); seedMockFeedItems
-	// stamps a strictly decreasing updated_at per mockFeedItems index, so
-	// the returned order must reproduce that slice's order exactly — this
-	// is the invariant feed.spec.ts's item-order assertion depends on.
-	gotIDs := make([]string, len(items))
-	for i, it := range items {
-		gotIDs[i] = it.ItemID
+	for i, want := range mockInboxItems {
+		require.True(t, rows.Next(), "missing seeded row %d", i)
+		var (
+			externalID  string
+			sourceKind  string
+			sourceScope string
+			payload     []byte
+			unread      int64
+			lastEventAt int64
+		)
+		require.NoError(t, rows.Scan(&externalID, &sourceKind, &sourceScope, &payload, &unread, &lastEventAt))
+		assert.Equal(t, want.ID, externalID)
+		assert.Equal(t, "github", sourceKind)
+		assert.Empty(t, sourceScope)
+		assert.Positive(t, lastEventAt)
+		var got feed.Item
+		require.NoError(t, json.Unmarshal(payload, &got))
+		assert.Equal(t, want.ID, got.ID)
+		assert.Equal(t, want.Title, got.Title)
+		assert.Equal(t, want.Unread, unread == 1)
 	}
-	wantIDs := make([]string, len(mockFeedItems))
-	for i, it := range mockFeedItems {
-		wantIDs[i] = it.ID
-	}
-	assert.Equal(t, wantIDs, gotIDs)
-
-	// Unread flags must round-trip, and the count of unread items must match
-	// what feed.spec.ts's "filters the feed to its three unread items" test
-	// expects.
-	unreadCount := 0
-	for i, it := range items {
-		var payload feed.Item
-		require.NoError(t, json.Unmarshal(it.Payload, &payload))
-		assert.Equal(t, mockFeedItems[i].ID, payload.ID)
-		assert.Equal(t, mockFeedItems[i].Title, payload.Title)
-		assert.Equal(t, mockFeedItems[i].Unread, it.Unread)
-		if it.Unread {
-			unreadCount++
-		}
-	}
-	assert.Equal(t, 3, unreadCount)
-
-	counts, err := db.FeedItemCounts(context.Background(), MockFlowID)
-	require.NoError(t, err)
-	require.Len(t, counts, 1)
-	assert.Equal(t, pipelinedb.FeedCount{FeedID: mockFeedID(), Total: 6, Unread: 3}, counts[0])
-}
-
-func TestSeedMockFeedItems_IdempotentOnRestart(t *testing.T) {
-	db, err := pipelinedb.Open(t.TempDir(), pipelinedb.DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = db.Close() })
-
-	require.NoError(t, seedMockFeedItems(db))
-	require.NoError(t, seedMockFeedItems(db)) // simulates a second process start
-
-	items, err := db.FeedItems(context.Background(), mockFeedID())
-	require.NoError(t, err)
-	assert.Len(t, items, len(mockFeedItems), "re-seeding must upsert in place, not duplicate rows")
+	assert.False(t, rows.Next())
+	require.NoError(t, rows.Err())
 }

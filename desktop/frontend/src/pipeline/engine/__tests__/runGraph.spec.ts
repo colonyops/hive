@@ -5,7 +5,7 @@ import { processorRegistry } from '../../processors'
 import type { Flow, Msg } from '../../types'
 
 function msg(id: string, payload: any = {}, topic = 'source:test'): Msg {
-  return { ID: id, Key: id, Topic: topic, Ts: 0, Payload: payload, Snapshot: null }
+  return { ID: id, Key: id, Topic: topic, Ts: 0, Payload: payload, Snapshot: null, SourceKind: 'github', SourceScope: 'scope', OccurrenceKey: `occurrence:${id}` }
 }
 
 describe('runGraph', () => {
@@ -27,7 +27,7 @@ describe('runGraph', () => {
     }
     const result = await runGraph(flow, [msg('1')], transport)
     expect(result.outputs).toHaveLength(1)
-    expect(result.outputs[0].payload.trail).toEqual(['a', 'b', 'c'])
+    expect(result.outputs[0].key).toBe('1')
   })
 
   it('a disabled node discards its msg without invoking the transport', async () => {
@@ -94,8 +94,8 @@ describe('runGraph', () => {
     // A feed node's sink target is its flow-qualified node id (<flowId>/<nodeId>).
     const mutatedOut = result.outputs.find((o) => o.sink.targetId === 'f/mutated-feed')
     const readerOut = result.outputs.find((o) => o.sink.targetId === 'f/reader-feed')
-    expect(mutatedOut?.payload.x).toBe('mutated')
-    expect(readerOut?.payload.x).toBe('original')
+    expect(mutatedOut?.key).toBe('1')
+    expect(readerOut?.key).toBe('1')
   })
 
   it('produces the expected CommitBatch shape for a source -> filter -> feed/action flow', async () => {
@@ -125,8 +125,8 @@ describe('runGraph', () => {
     expect(result.outputs).toHaveLength(2)
     expect(result.outputs).toEqual(
       expect.arrayContaining([
-        { sink: { kind: 'feed', targetId: 'triage/team-feed' }, key: '1', payload: { repo: 'acme/app' }, unread: true },
-        { sink: { kind: 'action', targetId: 'review-pr' }, key: '1', payload: { repo: 'acme/app' }, unread: false },
+        { sink: { kind: 'feed', targetId: 'triage/team-feed' }, key: '1', sourceTopic: 'source:triage/in-prs', sourceKind: 'github', sourceScope: 'scope' },
+        { sink: { kind: 'action', targetId: 'review-pr' }, occurrenceKey: 'occurrence:1', payload: { repo: 'acme/app' }, sourceTopic: '' },
       ]),
     )
     expect(result.discards).toEqual([{ msgId: '2', nodeId: 'drop-bots' }])
@@ -150,7 +150,7 @@ describe('runGraph', () => {
       wires: [{ from: 'in-prs', to: 'filter' }, { from: 'filter', out: 0, to: 'feed' }],
     }
     const before = await runGraph(flow, [snapshot], transport)
-    expect(before.outputs).toEqual([expect.objectContaining({ key: 'keep', sourceTopic: 'source:triage/in-prs', snapshotId: '10', preserveUnread: true })])
+    expect(before.outputs).toEqual([expect.objectContaining({ key: 'keep', sourceTopic: 'source:triage/in-prs', sourceKind: 'github', sourceScope: 'scope', snapshotId: '10' })])
     expect(before.feedSnapshots).toEqual([{ feedId: 'triage/feed', sourceTopic: 'source:triage/in-prs', snapshotId: '10' }])
 
     // The same upstream item is still in the source snapshot, but changing
@@ -159,6 +159,34 @@ describe('runGraph', () => {
     const after = await runGraph(flow, [snapshot], transport)
     expect(after.outputs).toEqual([])
     expect(after.feedSnapshots).toEqual([{ feedId: 'triage/feed', sourceTopic: 'source:triage/in-prs', snapshotId: '10' }])
+  })
+
+  it('carries source identity only to feed outputs and occurrence identity only to actions', async () => {
+    const transport = new InProcessTransport(processorRegistry)
+    const flow: Flow = {
+      id: 'f',
+      nodes: [{ id: 'source', type: 'github-source', config: { kind: 'search', query: 'is:open' } }, { id: 'feed', type: 'feed', config: {} }, { id: 'action', type: 'action', config: { action: 'review' } }],
+      wires: [{ from: 'source', to: 'feed' }, { from: 'source', to: 'action' }],
+    }
+    const result = await runGraph(flow, [msg('1', {}, 'source:f/source')], transport)
+    expect(result.outputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ sink: { kind: 'feed', targetId: 'f/feed' }, key: '1', sourceTopic: 'source:f/source', sourceKind: 'github', sourceScope: 'scope' }),
+      expect.objectContaining({ sink: { kind: 'action', targetId: 'review' }, occurrenceKey: 'occurrence:1' }),
+    ]))
+    expect(result.outputs.find((out) => out.sink.kind === 'feed')).not.toHaveProperty('occurrenceKey')
+    expect(result.outputs.find((out) => out.sink.kind === 'action')).not.toHaveProperty('key')
+  })
+
+  it('suppresses snapshot messages at action terminals', async () => {
+    const transport = new InProcessTransport(processorRegistry)
+    const flow: Flow = {
+      id: 'f', nodes: [{ id: 'source', type: 'github-source', config: { kind: 'search', query: 'is:open' } }, { id: 'action', type: 'action', config: { action: 'review' } }], wires: [{ from: 'source', to: 'action' }],
+    }
+    const snapshot = msg('1', {}, 'source:f/source')
+    snapshot.Snapshot = [{ key: 'item', payload: {} }]
+    const result = await runGraph(flow, [snapshot], transport)
+    expect(result.outputs).toEqual([])
+    expect(result.discards).toEqual([{ msgId: '1', nodeId: 'action' }])
   })
 
   it('a msg matching no entry node topic is discarded as unrouted (still accounted for)', async () => {

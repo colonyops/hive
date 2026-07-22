@@ -9,15 +9,16 @@ import IconRefreshCw from '~icons/lucide/refresh-cw'
 import IconSearch from '~icons/lucide/search'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
-import type { FeedItem, FeedSort } from '../types/feed'
+import type { FeedSort, InboxItem, InboxView } from '../types/feed'
 
 // Presentation-only: the store (useFeedState) owns the search text and the
 // filtered `visibleItems`, so keyboard navigation and this list render the
 // exact same set. This component just renders and relays intent.
 const props = defineProps<{
   title: string
-  visibleItems: FeedItem[]
-  selectedId: string | null
+  visibleItems: InboxItem[]
+  view: InboxView
+  selectedId: number | null
   unreadOnly: boolean
   unreadCount: number
   search: string
@@ -25,7 +26,7 @@ const props = defineProps<{
   loadError: string | null
 }>()
 const emit = defineEmits<{
-  select: [id: string]
+  select: [id: number]
   'set-unread': [value: boolean]
   refresh: []
   'update:search': [value: string]
@@ -37,7 +38,6 @@ const sortOptions: { value: FeedSort; label: string }[] = [
   { value: 'oldest', label: 'Oldest' },
   { value: 'unread', label: 'Unread first' },
 ]
-
 const viewMenu = ref<HTMLElement | null>(null)
 const viewMenuOpen = ref(false)
 const activeViewOptionCount = computed(() => props.sort === 'newest' ? 0 : 1)
@@ -60,7 +60,7 @@ watch(() => props.selectedId, async (id) => {
   if (!id) return
   await nextTick()
   const rows = listContainer.value?.querySelectorAll('[data-testid="feed-item"]')
-  const row = rows && Array.from(rows).find((el) => el.getAttribute('data-id') === id)
+  const row = rows && Array.from(rows).find((el) => el.getAttribute('data-inbox-id') === String(id))
   ;(row as HTMLElement | undefined)?.scrollIntoView?.({ block: 'nearest' })
 })
 </script>
@@ -88,14 +88,7 @@ watch(() => props.selectedId, async (id) => {
         </button>
       </div>
       <div ref="viewMenu" class="relative shrink-0">
-        <button
-          type="button"
-          class="view-trigger"
-          data-testid="view-menu-toggle"
-          aria-haspopup="menu"
-          :aria-expanded="viewMenuOpen"
-          @click="viewMenuOpen = !viewMenuOpen"
-        >
+        <button type="button" class="view-trigger" data-testid="view-menu-toggle" aria-haspopup="menu" :aria-expanded="viewMenuOpen" @click="viewMenuOpen = !viewMenuOpen">
           <IconSlidersHorizontal class="size-3.5" />
           <span>View</span>
           <span v-if="activeViewOptionCount" class="view-count" data-testid="view-active-count">{{ activeViewOptionCount }}</span>
@@ -103,16 +96,7 @@ watch(() => props.selectedId, async (id) => {
         </button>
         <div v-if="viewMenuOpen" class="view-menu" role="menu" data-testid="view-menu">
           <div class="view-menu-label">Sort by</div>
-          <button
-            v-for="option in sortOptions"
-            :key="option.value"
-            type="button"
-            class="view-menu-item"
-            role="menuitemradio"
-            :aria-checked="option.value === sort"
-            :data-testid="`view-sort-${option.value}`"
-            @click="chooseSort(option.value)"
-          >
+          <button v-for="option in sortOptions" :key="option.value" type="button" class="view-menu-item" role="menuitemradio" :aria-checked="option.value === sort" :data-testid="`view-sort-${option.value}`" @click="chooseSort(option.value)">
             <IconCheck class="size-3.5" :class="option.value === sort ? 'text-accent' : 'opacity-0'" :stroke-width="3" />
             <span>{{ option.label }}</span>
           </button>
@@ -133,10 +117,12 @@ watch(() => props.selectedId, async (id) => {
         <button class="state-action" @click="emit('refresh')">Retry now</button>
       </div>
       <template v-else>
+        <span v-if="view === 'archive'" class="px-3 pt-2 font-mono text-[10px] uppercase text-text-3" data-testid="archive-reason-label">Archive reason</span>
         <FeedListItem
           v-for="item in visibleItems"
           :key="item.id"
           :item="item"
+          :view="view"
           :selected="item.id === selectedId"
           @select="emit('select', item.id)"
         />

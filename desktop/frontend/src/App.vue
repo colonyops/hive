@@ -39,7 +39,8 @@ import { isEditableTarget } from './lib/isEditableTarget'
 import { InstallUpdate, Status as UpdaterStatus } from '../bindings/github.com/colonyops/hive/desktop/updaterservice'
 import type { UpdateInfo } from '../bindings/github.com/colonyops/hive/desktop/models'
 import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
-import type { SidebarSelection } from './types/feed'
+import type { InboxView, SidebarSelection } from './types/feed'
+import { githubPayload } from './lib/feedPresentation'
 
 // Only true when Vite is serving in dev mode (under `wails3 dev`); statically
 // false in production/server builds, so DevBar is compiled out of them.
@@ -54,13 +55,32 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, renamingProfile, renameProfileError, togglingProfileId, toggleProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, setProfileEnabled, deleteProfile,
-  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, openActionRun, selectNext, selectPrev,
-  toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
+  reorderFeeds, selectProfile, selectSidebar, selectItem, openActionRun, selectNext, selectPrev,
+  toggleUnread, markItemUnread, toggleArchive, loadEvents, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
 // The feed-item kinds currently in the system — what the actions editor
 // autocompletes and validates "applies to" against.
-const knownFeedTypes = computed(() => [...new Set(items.value.map((item) => item.kind).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
+const knownFeedTypes = computed(() => [...new Set(items.value.map((item) => githubPayload(item).kind).filter(Boolean))].sort((a, b) => a.localeCompare(b)))
+
+
+const selectedEvents = ref([] as Awaited<ReturnType<typeof loadEvents>>)
+let selectedEventsSeq = 0
+watch(selectedItem, async (item) => {
+  const seq = ++selectedEventsSeq
+  selectedEvents.value = []
+  if (!item) return
+  try {
+    const events = await loadEvents(item.id)
+    // A slower request for the previously selected item must never replace the
+    // timeline for the item currently visible in the detail pane.
+    if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) selectedEvents.value = events
+  } catch (error) {
+    if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) {
+      console.warn('Unable to load inbox item events', error)
+    }
+  }
+}, { immediate: true })
 
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
 // A profile IS a flow, so the flows canvas is a per-profile sub-view: it swaps
@@ -135,13 +155,16 @@ watch([profilesLoaded, () => route.fullPath], async ([loaded]) => {
     ? rawFeedId
     : null
   const wantsUnread = route.query.unread === '1'
+  const rawView = route.query.view
+  const view: InboxView = typeof rawView === 'string' && ['open', 'archive', 'all', 'unfiled'].includes(rawView)
+    ? rawView as InboxView
+    : 'inbox'
   if (feedId) await selectSidebar({ type: 'feed', feedId })
-  else if (wantsUnread) await selectUnreadView()
-  else await selectSidebar({ type: 'all' })
+  else await selectSidebar({ type: 'view', view })
 
-  // Unread can also filter one specific feed. selectSidebar clears the flag,
-  // so apply it after loading that feed's items.
-  if (feedId && wantsUnread && !unreadOnly.value) await toggleUnread()
+  // Unread narrows whichever feed or inbox view the route selected.
+  // selectSidebar clears the flag, so apply it after loading that list.
+  if (wantsUnread && !unreadOnly.value) await toggleUnread()
 }, { immediate: true })
 
 watch([() => route.name, () => route.query.node], ([name, rawNode]) => {
@@ -207,17 +230,17 @@ function openFeed(profileId = activeProfileId.value): void {
 
 function navigateSidebar(nextSelection: SidebarSelection): void {
   if (!activeProfileId.value) return
-  void router.push({
-    name: 'feed',
-    params: { profileId: activeProfileId.value },
-    query: nextSelection.type === 'feed' ? { feed: nextSelection.feedId } : {},
-  })
+  const query = nextSelection.type === 'feed'
+    ? { feed: nextSelection.feedId }
+    : nextSelection.view === 'inbox' ? {} : { view: nextSelection.view }
+  void router.push({ name: 'feed', params: { profileId: activeProfileId.value }, query })
 }
 
 function navigateUnreadFilter(value: boolean): void {
   if (!activeProfileId.value) return
   const query: Record<string, string> = {}
   if (selection.value.type === 'feed') query.feed = selection.value.feedId
+  else if (selection.value.view !== 'inbox') query.view = selection.value.view
   if (value) query.unread = '1'
   void router.push({ name: 'feed', params: { profileId: activeProfileId.value }, query })
 }
@@ -270,8 +293,8 @@ async function openJobRun(commandID: number): Promise<void> {
   if (!job || !activeProfileId.value) return
   await router.push({ name: 'feed', params: { profileId: activeProfileId.value } })
   if (route.name !== 'feed') return
-  await selectSidebar({ type: 'all' })
-  await openActionRun(job.target, job.actionId, commandID)
+  await selectSidebar({ type: 'view', view: 'inbox' })
+  await openActionRun(Number(job.target), job.actionId, commandID)
 }
 
 // ── Desktop self-update ───────────────────────────────────────────────────────
@@ -331,7 +354,7 @@ function openErrorNode(): void {
 // Drives every enabled runtime on each backend log append. The subscription
 // lives here so processing continues with the canvas closed and regardless of
 // profile selection. Commits complete BEFORE useFeedState.refresh() re-reads
-// feed_item, so all profile sidebars observe the newly committed work.
+// inbox items and membership claims, so all profile sidebars observe the newly committed work.
 let unsubscribeLog: (() => void) | undefined
 let unsubscribeFlowsRuntime: (() => void) | undefined
 let unsubscribeUpdate: (() => void) | undefined
@@ -455,6 +478,8 @@ const runMap: Record<string, () => void | Promise<void>> = {
   'feed.open-in-browser': openSelectedInBrowser,
   'feed.toggle-unread': navigateUnreadToggle,
   'feed.refresh': refresh,
+  'feed.toggle-archive': async () => { if (selectedItem.value) await toggleArchive(selectedItem.value) },
+  'feed.mark-unread': async () => { if (selectedItem.value) await markItemUnread(selectedItem.value, true) },
   'palette.toggle': togglePalette,
   'window.hide': hideWindow,
 }
@@ -509,7 +534,7 @@ useCommands(computed(() => {
     group: 'Feeds',
     icon: IconList,
     hint: profileName,
-    run: () => navigateSidebar({ type: 'all' }),
+    run: () => navigateSidebar({ type: 'view', view: 'inbox' }),
   })
 
   for (const f of activeProfile.value?.feeds ?? []) {
@@ -728,6 +753,7 @@ onUnmounted(() => {
               :selected-id="selectedId"
               :unread-only="unreadOnly"
               :unread-count="unreadCount"
+              :view="selection.type === 'view' ? selection.view : 'inbox'"
               :search="search"
               :sort="feedSort"
               :load-error="loadError"
@@ -737,7 +763,7 @@ onUnmounted(() => {
               @set-unread="navigateUnreadFilter"
               @refresh="refresh"
             />
-            <DetailPane :item="selectedItem" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
+            <DetailPane :item="selectedItem" :events="selectedEvents" :actions="actions" :pending-action="pendingAction" :action-runs="actionRuns" @run-action="invokeAction" @open-browser="openSelectedInBrowser" @open-url="openUrl" @edit="requestOpenActionsSettings" />
           </section>
           <div v-else class="flex flex-1 flex-col items-center justify-center gap-3 font-mono text-xs text-text-4">
             <template v-if="profilesError">

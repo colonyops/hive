@@ -414,6 +414,38 @@ func (p *LiveProvider) fetchSourceDirect(ctx context.Context, src SourceDef) ([]
 	}
 }
 
+// ConfirmTerminal hydrates an item that disappeared from a source result.
+// The caller uses its state to distinguish terminal lifecycle changes from
+// non-terminal query churn. It uses the same token and rate-limit cooldown as
+// polling.
+func (p *LiveProvider) ConfirmTerminal(ctx context.Context, repo string, num int, isPR bool) (github.Issue, error) {
+	if cooling, err := p.inCooldown(); cooling {
+		return github.Issue{}, err
+	}
+	parts := strings.SplitN(repo, "/", 2)
+	if len(parts) != 2 || parts[0] == "" || parts[1] == "" || num <= 0 {
+		return github.Issue{}, fmt.Errorf("feed: invalid GitHub item %q#%d", repo, num)
+	}
+	token, err := p.tokens.Token()
+	if err != nil {
+		return github.Issue{}, err
+	}
+	if token == "" {
+		return github.Issue{}, ErrNotAuthenticated
+	}
+	client := p.client.WithTokenCopy(token)
+	var issue github.Issue
+	if isPR {
+		issue, err = client.GetPullRequest(ctx, parts[0], parts[1], num)
+	} else {
+		issue, err = client.GetIssue(ctx, parts[0], parts[1], num)
+	}
+	if errors.Is(err, github.ErrRateLimited) {
+		p.noteRateLimit(err)
+	}
+	return issue, err
+}
+
 func (p *LiveProvider) setCache(key string, cached *cachedSource) {
 	p.mu.Lock()
 	p.cache[key] = cached
@@ -441,9 +473,9 @@ func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {
 			Num:       si.Number,
 			Title:     si.Title,
 			Author:    si.Author,
-			Age:       shortAge(p.now().Sub(si.UpdatedAt)),
+			State:     strings.ToLower(si.State),
 			UpdatedAt: si.UpdatedAt.UnixMilli(),
-			Unread:    true, // inbox model: unread until read (feed_item.unread)
+			Unread:    true, // inbox model: unread until read
 			Labels:    labelNames(si.Labels),
 			Branch:    suggestedBranch(kind, si.Number, si.Title),
 			Body:      si.Body,
@@ -476,7 +508,6 @@ func (p *LiveProvider) notificationItems(notifications []github.Notification) []
 			Repo:      repo,
 			Num:       num,
 			Title:     n.Subject.Title,
-			Age:       shortAge(p.now().Sub(n.UpdatedAt)),
 			UpdatedAt: n.UpdatedAt.UnixMilli(),
 			Unread:    n.Unread,
 			Reason:    n.Reason,
@@ -574,19 +605,4 @@ func slugify(s string) string {
 		}
 	}
 	return strings.Trim(b.String(), "-")
-}
-
-func shortAge(d time.Duration) string {
-	switch {
-	case d < time.Minute:
-		return "now"
-	case d < time.Hour:
-		return fmt.Sprintf("%dm", int(d.Minutes()))
-	case d < 24*time.Hour:
-		return fmt.Sprintf("%dh", int(d.Hours()))
-	case d < 14*24*time.Hour:
-		return fmt.Sprintf("%dd", int(d.Hours()/24))
-	default:
-		return fmt.Sprintf("%dw", int(d.Hours()/(24*7)))
-	}
 }

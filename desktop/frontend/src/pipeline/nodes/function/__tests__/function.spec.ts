@@ -5,7 +5,7 @@ import type { NodeContext } from '../../../engine/transport'
 import type { Msg } from '../../../types'
 
 function msg(id: string, payload: any = {}): Msg {
-  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: payload }
+  return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: payload, SourceKind: 'github', SourceScope: 'acme/app' }
 }
 
 function ctx(config: Config, state: Record<string, any> = {}): NodeContext<Config> {

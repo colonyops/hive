@@ -60,6 +60,16 @@ export class PipelineDriver {
   }
 
   /**
+   * Runs synthetic startup/deploy inputs through the graph without committing
+   * them. The caller may pass only resulting feed claims to the dedicated
+   * claims-only backend path; action outputs therefore cannot be enqueued.
+   */
+  async recompute(messages: Msg[]): Promise<CommitResult> {
+    if (this.disposed) throw new Error('pipeline driver has been disposed')
+    return await runGraph(this.flow, messages, this.transport, this.runGraphOptions)
+  }
+
+  /**
    * Reads, runs, and commits one page. The backend derives the read position
    * from flow.id's persisted consumer checkpoint, so this is safe after a
    * frontend restart and never relies on a local cursor.

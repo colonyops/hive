@@ -37,11 +37,19 @@ type Source interface {
 // added to or removed from flows take effect without a restart.
 type SourceLister func(ctx context.Context) (map[string]Source, error)
 
-// Appender is the subset of *pipelinedb.DB a Producer needs. It atomically
-// appends changed source values with their durable source heads and appends
-// successful full-source snapshots. Tests can substitute a fake; most tests
-// use a real pipelinedb.DB via t.TempDir().
+// sourceMetadata is optional source-side data needed at the ingestion boundary.
+type sourceMetadata struct {
+	ProfileID   string
+	SourceKind  string
+	SourceScope string
+	Policy      pipelinedb.ResurfacePolicy
+}
+type metadataSource interface{ ingestMetadata() sourceMetadata }
+
+// Appender is the subset of *pipelinedb.DB a Producer needs.
 type Appender interface {
-	AppendIfChanged(ctx context.Context, topic, key string, payload []byte) (offset int64, appended bool, err error)
-	AppendSnapshot(ctx context.Context, topic string, items []pipelinedb.SnapshotItem) (offset int64, err error)
+	IngestObservation(ctx context.Context, classifier pipelinedb.Classifier, p pipelinedb.IngestObservationParams) (pipelinedb.IngestResult, error)
+	AppendSnapshot(ctx context.Context, topic, sourceKind, sourceScope string, items []pipelinedb.SnapshotItem) (offset int64, err error)
+	ListSourceHeadKeys(ctx context.Context, topic string) ([]string, error)
+	SourceHeadPayload(ctx context.Context, topic, key string) ([]byte, error)
 }

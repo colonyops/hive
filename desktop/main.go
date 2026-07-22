@@ -99,6 +99,7 @@ func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows 
 	producer := pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), interval, emitLogAppended, logger)
 	producer.SetRecorder(recorder)
 	producer.SetPrefetcher(fetcher)
+	producer.SetSourceAdapter(pipeline.NewGithubSourceAdapter(fetcher))
 	return producer
 }
 
@@ -378,14 +379,10 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// Mock "feed" mode has no live producer (buildSourceFetcher/
-	// buildPipelineProducer both no-op in mock mode), so the sidebar would
-	// otherwise be empty offline: seed a fixed set of feed_item rows for the
-	// fixture flow desktop/e2e/fixtures/flows/frontend-triage.yaml serves
-	// (see desktop/mockseed.go and desktop/e2e/scripts/serve.sh's
-	// HIVE_DESKTOP_FLOWS).
+	// Mock mode has no live producer, so seed deterministic inbox rows for the
+	// fixture flow in desktop/e2e/fixtures/flows/frontend-triage.yaml.
 	if desktop.MockMode() == "feed" || desktop.MockMode() == "action-smoke" {
-		seedMockFeedItemsOrWarn(pipelineDB, logger)
+		seedMockInboxItemsOrWarn(pipelineDB, logger)
 	}
 
 	actionStore, actionsWatcher := buildActionStore(activityStore, logger)
@@ -449,7 +446,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
-			application.NewService(NewFlowsService(flowsStore, onFlowsUpdated)),
+			application.NewService(NewFlowsService(flowsStore, pipelineDB, onFlowsUpdated)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 			application.NewService(NewActivityService(activityStore)),
 			application.NewService(NewJobService(jobStore)),

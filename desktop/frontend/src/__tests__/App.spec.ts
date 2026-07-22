@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
   RenameFlow: vi.fn(),
+  SetFlowEnabled: vi.fn(),
   DeleteFlow: vi.fn(),
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
@@ -24,9 +25,19 @@ const mocks = vi.hoisted(() => ({
   UpdateAction: vi.fn(),
   DeleteAction: vi.fn(),
   // pipelineservice
-  FeedItems: vi.fn(),
-  FeedItemCounts: vi.fn(),
-  MarkFeedItemRead: vi.fn(),
+  ListInboxItems: vi.fn(),
+  ListInboxItemsByFeed: vi.fn(),
+  FeedCounts: vi.fn(),
+  InboxCounts: vi.fn(),
+  MarkInboxItemUnread: vi.fn(),
+  ToggleInboxItemArchived: vi.fn(),
+  InboxItemEvents: vi.fn(),
+  ActionRun: vi.fn(),
+  SessionLaunchOptions: vi.fn(),
+  EventLogTailOffset: vi.fn(),
+  ActivateReplay: vi.fn(),
+  ListUnarchivedInboxItems: vi.fn(),
+  ListReplaySourceSnapshots: vi.fn(),
   ActionViews: vi.fn(),
   InvokeAction: vi.fn(),
   NodeRuns: vi.fn(),
@@ -51,6 +62,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => (
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
   RenameFlow: mocks.RenameFlow,
+  SetFlowEnabled: mocks.SetFlowEnabled,
   DeleteFlow: mocks.DeleteFlow,
   GetLayout: mocks.GetLayout,
   SaveFlow: mocks.SaveFlow,
@@ -67,9 +79,19 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/actionsservice', () =>
 }))
 
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
-  FeedItems: mocks.FeedItems,
-  FeedItemCounts: mocks.FeedItemCounts,
-  MarkFeedItemRead: mocks.MarkFeedItemRead,
+  ListInboxItems: mocks.ListInboxItems,
+  ListInboxItemsByFeed: mocks.ListInboxItemsByFeed,
+  FeedCounts: mocks.FeedCounts,
+  InboxCounts: mocks.InboxCounts,
+  MarkInboxItemUnread: mocks.MarkInboxItemUnread,
+  ToggleInboxItemArchived: mocks.ToggleInboxItemArchived,
+  InboxItemEvents: mocks.InboxItemEvents,
+  ActionRun: mocks.ActionRun,
+  SessionLaunchOptions: mocks.SessionLaunchOptions,
+  EventLogTailOffset: mocks.EventLogTailOffset,
+  ActivateReplay: mocks.ActivateReplay,
+  ListUnarchivedInboxItems: mocks.ListUnarchivedInboxItems,
+  ListReplaySourceSnapshots: mocks.ListReplaySourceSnapshots,
   ActionViews: mocks.ActionViews,
   InvokeAction: mocks.InvokeAction,
   NodeRuns: mocks.NodeRuns,
@@ -93,6 +115,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/updaterservice', () =>
 vi.mock('@wailsio/runtime', () => ({
   Events: { On: mocks.On },
   Window: { Hide: mocks.Hide },
+  Call: { ByID: vi.fn() },
 }))
 
 const flow = {
@@ -103,7 +126,7 @@ const flow = {
     { id: 'src', type: 'github-source' },
     { id: 'desktop', type: 'feed', name: 'Desktop UI' },
   ],
-  wires: [],
+  wires: [{ from: 'src', to: 'desktop' }],
 }
 
 async function mountAppWithRouter() {
@@ -136,13 +159,23 @@ describe('App', () => {
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.GetSidebar.mockResolvedValue({ items: [] })
     mocks.SaveSidebar.mockResolvedValue(undefined)
-    mocks.FeedItems.mockResolvedValue([])
-    mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
+    mocks.ListInboxItems.mockResolvedValue([])
+    mocks.ListInboxItemsByFeed.mockResolvedValue([])
+    mocks.FeedCounts.mockResolvedValue([{ feedId: 'personal/desktop', total: 1, unread: 0 }])
+    mocks.InboxCounts.mockResolvedValue({ inboxTotal: 1, inboxUnread: 0 })
+    mocks.InboxItemEvents.mockResolvedValue([])
+    mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' })
+    mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [], defaultRepository: '', agents: [], defaultAgent: '' })
+    mocks.EventLogTailOffset.mockResolvedValue('0')
+    mocks.ActivateReplay.mockResolvedValue(undefined)
+    mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.ListReplaySourceSnapshots.mockResolvedValue([])
     mocks.ActionViews.mockResolvedValue([])
     mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
     mocks.NodeRuns.mockResolvedValue([])
     mocks.RenameFlow.mockResolvedValue({ id: 'personal', name: 'Team', enabled: true, valid: true })
+    mocks.SetFlowEnabled.mockImplementation(async (id: string, enabled: boolean) => ({ id, name: 'Personal', enabled, valid: true }))
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
     mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: false, currentVersion: 'dev', latestVersion: '', notes: '', releaseUrl: '' })
@@ -386,13 +419,54 @@ describe('App', () => {
     router.back()
     await flushPromises()
     expect(router.currentRoute.value.query).toEqual({})
-    const allItems = wrapper.findAll('button.sidebar-entry').find((button) => button.text().includes('All items'))
-    expect(allItems?.classes()).toContain('sidebar-entry-selected')
+    expect(wrapper.find('[data-testid="inbox-view-inbox"]').classes()).toContain('sidebar-entry-selected')
 
     router.forward()
     await flushPromises()
     expect(router.currentRoute.value.query.feed).toBe('personal/desktop')
 
+    wrapper.unmount()
+  })
+
+  it('preserves a non-default inbox view when toggling unread', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.get('[data-testid="inbox-view-archive"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ view: 'archive' })
+
+    await wrapper.get('[data-testid="filter-unread"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query).toEqual({ view: 'archive', unread: '1' })
+    expect(mocks.ListInboxItems).toHaveBeenLastCalledWith('personal', 'archive', 500)
+    expect(wrapper.get('[data-testid="inbox-view-archive"]').classes()).toContain('sidebar-entry-selected')
+    wrapper.unmount()
+  })
+
+  it('clears stale observed activity while the selected item timeline loads or fails', async () => {
+    const items = [
+      { id: 1, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: 'pr-1', title: 'First', url: '', payload: { kind: 'PR', repo: 'acme/app', num: 1, author: 'hay' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2 },
+      { id: 2, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: 'pr-2', title: 'Second', url: '', payload: { kind: 'PR', repo: 'acme/app', num: 2, author: 'hay' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2 },
+    ]
+    let rejectSecond!: (error: Error) => void
+    const secondEvents = new Promise<never>((_, reject) => { rejectSecond = reject })
+    mocks.ListInboxItems.mockResolvedValue(items)
+    mocks.InboxItemEvents.mockImplementation((id: number) => id === 1
+      ? Promise.resolve([{ id: 1, itemId: 1, kind: 'observed', transition: 'none', attention: 'activity', summary: 'first event', detail: {}, createdAt: 1 }])
+      : secondEvents)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const wrapper = await mountApp()
+    expect(wrapper.get('[data-testid="observed-activity"]').text()).toContain('first event')
+
+    await wrapper.findAll('[data-testid="feed-item"]')[1]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="observed-activity"]').exists()).toBe(false)
+
+    rejectSecond(new Error('events unavailable'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="observed-activity"]').exists()).toBe(false)
+    expect(warn).toHaveBeenCalledWith('Unable to load inbox item events', expect.any(Error))
     wrapper.unmount()
   })
 
@@ -706,9 +780,9 @@ describe('App', () => {
     const wrapper = await mountApp()
 
     const callOrder: string[] = []
-    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: {} }])
+    mocks.ReadFrom.mockResolvedValueOnce([{ ID: '1', Key: '1', Topic: 'source:personal/src', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: 'src' }])
     mocks.Commit.mockImplementationOnce(async () => { callOrder.push('commit') })
-    mocks.FeedItemCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return [] })
+    mocks.InboxCounts.mockImplementationOnce(async () => { callOrder.push('refresh'); return { inboxTotal: 0, inboxUnread: 0 } })
 
     const logHandler = mocks.On.mock.calls.find(([event]) => event === 'log:appended')?.[1] as (() => void) | undefined
     expect(logHandler).toBeDefined()

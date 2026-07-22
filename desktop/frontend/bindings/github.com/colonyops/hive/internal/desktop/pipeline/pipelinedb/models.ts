@@ -39,40 +39,66 @@ export interface Discard {
     "nodeId": string;
 }
 
-/**
- * FeedCount is a feed's total and unread item counts, keyed by the
- * flow-qualified feed id.
- */
-export interface FeedCount {
+export interface FeedInboxCount {
     "feedId": string;
     "total": number;
     "unread": number;
 }
 
-/**
- * FeedItemView is the JSON/Wails-friendly shape of a persisted feed_item
- * row. It is named "View" (rather than FeedItem) only to avoid colliding
- * with the sqlc-generated raw row model of the same name in models.go —
- * see FeedItems/MarkFeedItemRead below, and package pipeline's FeedItem
- * alias, which re-exports this type under the name callers actually use.
- */
-export interface FeedItemView {
-    "feedId": string;
-    "itemId": string;
-    "payload": json$0.RawMessage;
-    "updatedAt": number;
-    "unread": boolean;
+export interface FeedMembershipClaim {
+    "profile_id": string;
+    "feed_id": string;
+    "item_id": number;
+    "source_id": string;
 }
 
 /**
- * FeedSnapshot declares one source's complete current output scope for a
- * feed. CommitBatch removes rows from that (feed, source) scope which were
- * not produced by SnapshotID, atomically with the consumer offset advance.
+ * FeedSnapshot declares one source's complete current output scope for a feed.
+ * CommitBatch accepts these declarations but does not persist reconciliation
+ * state until membership claims are introduced.
  */
 export interface FeedSnapshot {
     "feedId": string;
     "sourceTopic": string;
     "snapshotId": string;
+}
+
+export interface InboxCounts {
+    "inboxTotal": number;
+    "inboxUnread": number;
+}
+
+export interface InboxEventView {
+    "id": number;
+    "itemId": number;
+    "kind": string;
+    "transition": string;
+    "attention": string;
+    "summary"?: string;
+    "createdAt": number;
+}
+
+/**
+ * InboxItemView is the read-side shape used by inbox callers.
+ */
+export interface InboxItemView {
+    "id": number;
+    "profileId": string;
+    "sourceKind": string;
+    "sourceScope": string;
+    "externalId": string;
+    "title": string;
+    "url": string;
+    "payload": json$0.RawMessage;
+    "revision": number;
+    "unread": boolean;
+    "archivedAt"?: number | null;
+    "archivedActor"?: string;
+    "archivedReason"?: string;
+    "lifecycle": string;
+    "sourceState"?: string;
+    "firstSeenAt": number;
+    "lastEventAt": number;
 }
 
 /**
@@ -84,7 +110,7 @@ export interface FeedSnapshot {
  * mapped onto the event_log schema (see migrations/0001_pipeline.up.sql):
  *   - ID is derived from the row's "offset" (stable, unique per append; there
  *     is no separate id column).
- *   - Ts is the row's created_at (unix nanoseconds).
+ *   - Ts is the row's created_at (unix milliseconds).
  *   - Snapshot is nil for ordinary item events and contains the full current
  *     source item set for successful poll snapshots.
  */
@@ -95,6 +121,9 @@ export interface Msg {
     "Ts": number;
     "Payload": json$0.RawMessage;
     "Snapshot"?: SnapshotItem[] | null;
+    "SourceKind": string;
+    "SourceScope": string;
+    "OccurrenceKey"?: string;
 }
 
 /**
@@ -136,31 +165,34 @@ export interface NodeRunView {
 }
 
 /**
- * Output is one committed side effect of a flow run: either a feed item to
- * upsert or an action invocation to enqueue.
+ * Output is one committed side effect of a flow run.
  */
 export interface Output {
     "sink": Sink;
 
     /**
-     * feed_item.item_id, and the output dedup key
+     * feed external ID only
      */
-    "key": string;
-    "payload": json$0.RawMessage;
+    "key"?: string;
 
     /**
-     * feed items only
+     * action dedup key only
      */
-    "unread": boolean;
-    "sourceTopic"?: string;
+    "occurrenceKey"?: string;
+
+    /**
+     * action payload only
+     */
+    "payload"?: json$0.RawMessage;
+    "sourceKind"?: string;
+    "sourceScope"?: string;
+    "sourceTopic": string;
     "snapshotId"?: string;
-    "preserveUnread"?: boolean;
 }
 
 /**
- * Sink identifies where an Output is committed to: a feed_item row (Kind ==
- * SinkKindFeed, TargetID is the feed_id) or an enqueued output_command
- * (Kind == SinkKindAction, TargetID is the action_id).
+ * Sink identifies where an Output is committed. Feed outputs claim immutable
+ * inbox membership; action outputs enqueue an output_command.
  */
 export interface Sink {
     "kind": string;

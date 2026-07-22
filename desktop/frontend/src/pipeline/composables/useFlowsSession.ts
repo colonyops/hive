@@ -3,14 +3,21 @@
 // every enabled flow. Canvas/profile selection therefore never gates work.
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { Commit, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActivateReplay, Commit, EventLogTailOffset, ListReplaySourceSnapshots, ListUnarchivedInboxItems, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import { flowFromWire, type EditorFlow, type WireFlow } from '../lib/wireFlow'
 import { usePipelineEditor, type PipelineEditorClient } from './usePipelineEditor'
 import { usePipelineRuntime, type RuntimeSummary } from './usePipelineRuntime'
 import type { PipelineClient } from '../driver'
+import type { FeedMembershipClaim, InboxItemView, Msg } from '../../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 
 type PipelineEditor = ReturnType<typeof usePipelineEditor>
 type PipelineRuntime = ReturnType<typeof usePipelineRuntime>
+type ReplayClient = PipelineClient & {
+  eventLogTailOffset?: () => Promise<string>
+  activateReplay?: (profileID: string, tail: string, claims: FeedMembershipClaim[], feedIDs: string[], sourceIDs: string[]) => Promise<void>
+  listUnarchivedInboxItems?: (profileID: string) => Promise<InboxItemView[]>
+  listReplaySourceSnapshots?: (profileID: string, throughOffset: string) => Promise<Msg[]>
+}
 
 export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDraft'> {
   flowsOpen: Ref<boolean>
@@ -53,10 +60,14 @@ function defaultEditorClient(): PipelineEditorClient {
   }
 }
 
-function defaultRuntimeClient(): PipelineClient {
+function defaultRuntimeClient(): ReplayClient {
   return {
     async readFrom(consumer, limit) { return await ReadFrom(consumer, limit) },
     async commit(batch) { await Commit(batch) },
+    async eventLogTailOffset() { return await EventLogTailOffset() },
+    async activateReplay(profileID, tail, claims, feedIDs, sourceIDs) { await ActivateReplay(profileID, tail, claims, feedIDs, sourceIDs) },
+    async listUnarchivedInboxItems(profileID) { return (await ListUnarchivedInboxItems(profileID)) ?? [] },
+    async listReplaySourceSnapshots(profileID, throughOffset) { return (await ListReplaySourceSnapshots(profileID, throughOffset)) ?? [] },
   }
 }
 
@@ -140,13 +151,49 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
       return
     }
 
-    // The serialized caller has drained all earlier work. Do not stop a
-    // usable runtime until the replacement snapshot has been validated.
-    removeRuntime(id)
+    // The serialized caller has drained all earlier work. Build and prepare
+    // the candidate while the last known-good runtime remains available.
     const runtime = deps.runtimeFactory(deps.runtimeClient, snapshot)
+    try {
+      await initializeReplay(snapshot, runtime)
+    } catch (err) {
+      runtime.dispose()
+      setRuntimeLoadError(id, errorMessage(err, 'Could not prepare the deployed flow.'))
+      return
+    }
+    removeRuntime(id)
     setRuntime(id, runtime)
     setRuntimeLoadError(id, null)
     await runtime.run()
+  }
+
+  // The deploy/startup protocol must complete before run(): stale event-log
+  // rows cannot be allowed through action terminals while the runtime starts.
+  async function initializeReplay(snapshot: EditorFlow, runtime: PipelineRuntime): Promise<void> {
+    const client = deps.runtimeClient as ReplayClient
+    if (!client.eventLogTailOffset || !client.activateReplay || !client.listUnarchivedInboxItems || !client.listReplaySourceSnapshots) return
+    const tail = await client.eventLogTailOffset()
+
+    const feedIDs = snapshot.nodes.filter((node) => node.type === 'feed').map((node) => `${snapshot.id}/${node.id}`)
+    const sourceIDs = snapshot.nodes
+      .filter((node) => node.type === 'github-source' && !node.disabled)
+      .map((node) => `source:${snapshot.id}/${node.id}`)
+      .sort()
+    const items = await client.listUnarchivedInboxItems(snapshot.id)
+    const byIdentity = new Map(items.map((item) => [`${item.sourceKind}\u0000${item.sourceScope}\u0000${item.externalId}`, item]))
+    const currentSources = new Set(sourceIDs)
+    const messages = (await client.listReplaySourceSnapshots(snapshot.id, tail))
+      .filter((message) => currentSources.has(message.Topic))
+    const result = await runtime.recompute(messages)
+    const claims: FeedMembershipClaim[] = result.outputs
+      .filter((output) => output.sink.kind === 'feed')
+      .flatMap((output) => {
+        const item = byIdentity.get(`${output.sourceKind}\u0000${output.sourceScope}\u0000${output.key}`)
+        return item ? [{ profile_id: snapshot.id, feed_id: output.sink.targetId, item_id: item.id, source_id: output.sourceTopic }] : []
+      })
+    // Install the prepared graph state and consumer checkpoint together so a
+    // failed candidate leaves the last-known-good runtime fully intact.
+    await client.activateReplay(snapshot.id, tail, claims, feedIDs, sourceIDs)
   }
 
   /** Starts missing enabled runtimes and stops disabled/deleted ones. */

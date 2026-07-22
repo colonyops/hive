@@ -8,55 +8,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCommitBatch_FeedOutput_UpsertsFeedItem(t *testing.T) {
+func TestCommitBatch_FeedOutput_ClaimsResolvedInboxItem(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
-
-	batch := CommitBatch{
-		Consumer:   "flow-1",
-		UpToOffset: "1",
-		Outputs: []Output{
-			{
-				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"v":1}`),
-				Unread:  true,
-			},
-		},
-	}
-	require.NoError(t, database.CommitBatch(ctx, batch))
-
-	items, err := database.FeedItems(ctx, "feed-a")
+	item, err := database.Queries().InsertInboxItem(ctx, InsertInboxItemParams{
+		ProfileID: "flow-1", SourceKind: "github", SourceScope: "source-a", ExternalID: "item-1",
+		Payload: []byte(`{"v":1}`), Lifecycle: "active",
+	})
 	require.NoError(t, err)
-	require.Len(t, items, 1)
-	assert.Equal(t, "feed-a", items[0].FeedID)
-	assert.Equal(t, "item-1", items[0].ItemID)
-	assert.JSONEq(t, `{"v":1}`, string(items[0].Payload))
-	assert.True(t, items[0].Unread)
-	firstUpdatedAt := items[0].UpdatedAt
 
-	// Committing the same key again (higher offset, different payload)
-	// updates the row in place rather than duplicating it.
-	batch2 := CommitBatch{
-		Consumer:   "flow-1",
-		UpToOffset: "2",
-		Outputs: []Output{
-			{
-				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"v":2}`),
-				Unread:  false,
-			},
-		},
-	}
-	require.NoError(t, database.CommitBatch(ctx, batch2))
+	require.NoError(t, database.CommitBatch(ctx, CommitBatch{
+		Consumer: "flow-1", UpToOffset: "1",
+		Outputs: []Output{{
+			Sink: Sink{Kind: SinkKindFeed, TargetID: "feed-a"}, Key: "item-1",
+			SourceKind: "github", SourceScope: "source-a", SourceTopic: "source:flow-1/source-a",
+		}},
+	}))
 
-	items, err = database.FeedItems(ctx, "feed-a")
-	require.NoError(t, err)
-	require.Len(t, items, 1, "same key should update in place, not duplicate")
-	assert.JSONEq(t, `{"v":2}`, string(items[0].Payload))
-	assert.False(t, items[0].Unread)
-	assert.GreaterOrEqual(t, items[0].UpdatedAt, firstUpdatedAt)
+	var claims int
+	require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM feed_membership_claim WHERE item_id = ? AND source_id = ?`, item.ID, "source:flow-1/source-a").Scan(&claims))
+	assert.Equal(t, 1, claims)
 }
 
 func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
@@ -79,9 +50,9 @@ func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
 		UpToOffset: "1",
 		Outputs: []Output{
 			{
-				Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"cmd":"do-it"}`),
+				Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+				OccurrenceKey: "item-1",
+				Payload:       []byte(`{"cmd":"do-it"}`),
 			},
 		},
 	}
@@ -95,9 +66,9 @@ func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
 		UpToOffset: "2",
 		Outputs: []Output{
 			{
-				Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"cmd":"do-it-again"}`),
+				Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+				OccurrenceKey: "item-1",
+				Payload:       []byte(`{"cmd":"do-it-again"}`),
 			},
 		},
 	}
@@ -178,13 +149,6 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 	batch := CommitBatch{
 		Consumer:   "flow-1",
 		UpToOffset: "5",
-		Outputs: []Output{
-			{
-				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"v":1}`),
-			},
-		},
 		NodeRuns: []NodeRunView{
 			{FlowID: "flow-1", NodeID: "node-a", OK: true},
 		},
@@ -201,17 +165,15 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 		require.NoError(t, database.Conn().QueryRowContext(ctx, "SELECT COUNT(*) FROM "+table).Scan(&count))
 		return count
 	}
-	feedItemsBefore := countRows(t, "feed_item")
 	nodeRunsBefore := countRows(t, "node_run")
 
 	// Replaying the exact same batch (UpToOffset <= current) must be a
-	// full no-op: no new feed_item/node_run rows, offset unchanged.
+	// full no-op: no new node_run rows, offset unchanged.
 	require.NoError(t, database.CommitBatch(ctx, batch))
 
 	offset, err = database.ConsumerOffset(ctx, "flow-1")
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), offset, "replaying an already-applied batch must not change the offset")
-	assert.Equal(t, feedItemsBefore, countRows(t, "feed_item"), "replay must not insert duplicate feed_item rows")
 	assert.Equal(t, nodeRunsBefore, countRows(t, "node_run"), "replay must not insert duplicate node_run rows")
 
 	// A batch with UpToOffset below the current committed offset is also a
@@ -219,13 +181,11 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 	staleBatch := CommitBatch{
 		Consumer:   "flow-1",
 		UpToOffset: "3",
-		Outputs: []Output{
-			{
-				Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-b"},
-				Key:     "item-new",
-				Payload: []byte(`{"v":"new"}`),
-			},
-		},
+		Outputs: []Output{{
+			Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+			OccurrenceKey: "item-new",
+			Payload:       []byte(`{"v":"new"}`),
+		}},
 	}
 	require.NoError(t, database.CommitBatch(ctx, staleBatch))
 
@@ -233,9 +193,7 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, int64(5), offset, "a stale UpToOffset must not regress the committed offset")
 
-	items, err := database.FeedItems(ctx, "feed-b")
-	require.NoError(t, err)
-	assert.Empty(t, items, "a no-op (stale) batch must not apply its outputs")
+	assert.Zero(t, countRows(t, "output_command"), "a no-op stale batch must not apply its outputs")
 }
 
 func TestCommitBatch_UnknownSinkKind_Errors(t *testing.T) {

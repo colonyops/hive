@@ -6,8 +6,6 @@ export type {
     ActionRunView,
     CommitBatch,
     ExecutionOutcome,
-    FeedCount,
-    FeedItem,
     MessageExecutionOutcome,
     NodeRunRecord,
     SessionExecutionOutcome,

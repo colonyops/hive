@@ -58,6 +58,29 @@ test('filters the feed to its remaining unread items', async ({ page }) => {
   ])
 })
 
+test('archives, restores, and marks the selected inbox item unread from keyboard commands', async ({ page }) => {
+  const item = page.locator('[data-testid="feed-item"][data-id="pr2841"]')
+  await expect(item).toBeVisible()
+  // Select explicitly; keyboard triage always applies to the detail selection,
+  // not merely the first rendered row. Wait for selecting an unread item to
+  // finish its read mutation before exercising its next revision-guarded write.
+  await item.click()
+  await expect(item.getByTestId('unread-dot')).toHaveCount(0)
+  await page.keyboard.press('Shift+U')
+  await expect(item.getByTestId('unread-dot')).toBeVisible()
+
+  await page.keyboard.press('e')
+  await expect(item).toHaveCount(0)
+  await page.getByTestId('inbox-view-archive').click()
+  await expect(item).toBeVisible()
+  await expect(item.getByTestId('archive-reason')).toHaveText('manual')
+
+  await page.keyboard.press('e')
+  await expect(item).toHaveCount(0)
+  await page.getByTestId('inbox-view-inbox').click()
+  await expect(item).toBeVisible()
+})
+
 test('shows the single profile in the rail and sidebar', async ({ page }) => {
   await expect(page.getByTestId('profile-tile')).toHaveCount(1)
   await expect(page.getByTestId('sidebar-profile-name')).toHaveText('Frontend Triage')

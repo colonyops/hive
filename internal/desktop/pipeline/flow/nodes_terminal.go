@@ -40,7 +40,7 @@ const feedDescriptionMaxLen = 500
 
 // FeedConfig is a feed node: 1 input, 0 outputs (terminal). The node *is* the
 // feed — its identity is the node id (flow-qualified as "<flowId>/<nodeId>"
-// when persisting feed_item rows). Icon and Description are purely cosmetic
+// for membership claims). Icon and Description are purely cosmetic
 // sidebar presentation: the icon shown in the tree and the tooltip surfaced
 // on hover (handy context for LLM-generated feeds). Both are optional.
 type FeedConfig struct {

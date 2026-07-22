@@ -6,6 +6,7 @@ export type {
     Layout,
     Node,
     NodePosition,
+    ResurfacePolicy,
     SidebarFolder,
     SidebarItem,
     SidebarLayout,

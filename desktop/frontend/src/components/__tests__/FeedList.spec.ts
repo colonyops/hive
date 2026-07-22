@@ -1,143 +1,68 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import { mount } from '@vue/test-utils'
 import FeedList from '../FeedList.vue'
-import type { FeedItem } from '../../types/feed'
+import type { InboxItem } from '../../types/feed'
 
-function item(id: string, title: string, unread: boolean): FeedItem {
-  return {
-    id,
-    kind: 'PR',
-    repo: 'colonyops/hive',
-    num: 1,
-    title,
-    author: 'hayden',
-    age: '5m',
-    updatedAt: 1,
-    unread,
-    feedId: 'triage/desktop',
-    labels: [],
-    branch: 'feat/desktop-ui-shell',
-    body: 'Body',
-    prompt: 'Prompt',
-    url: 'https://github.com/colonyops/hive/pull/42',
-  }
+function item(id: number, title: string, unread = false): InboxItem {
+  return { id, profileId: 'triage', sourceKind: 'github', sourceScope: 'acme/app', externalId: `pr-${id}`, title, url: '', payload: { kind: 'PR', repo: 'acme/app', num: id, author: 'hay', body: 'Body' }, revision: 1, unread, lifecycle: 'active', firstSeenAt: 1, lastEventAt: Date.now() }
 }
 
-const items = [item('unread-1', 'Unread item', true), item('read-1', 'Read item', false)]
-
-// The store owns filtering now, so FeedList renders exactly the `visibleItems`
-// it is given; these props describe the pre-filtered view.
-function mountList(overrides: Partial<{
-  title: string
-  visibleItems: FeedItem[]
-  selectedId: string | null
-  unreadOnly: boolean
-  unreadCount: number
-  search: string
-  sort: 'newest' | 'oldest' | 'unread'
-  loadError: string | null
-}> = {}) {
-  return mount(FeedList, {
-    props: {
-      title: 'All items',
-      visibleItems: items,
-      selectedId: null,
-      unreadOnly: false,
-      unreadCount: 1,
-      search: '',
-      sort: 'newest',
-      loadError: null,
-      ...overrides,
-    },
-  })
+function mountList(overrides: Partial<{ visibleItems: InboxItem[]; selectedId: number | null; unreadOnly: boolean; unreadCount: number; search: string; sort: 'newest' | 'oldest' | 'unread'; view: 'inbox' | 'open' | 'archive' | 'all' | 'unfiled'; loadError: string | null }> = {}) {
+  return mount(FeedList, { props: { title: 'Inbox', visibleItems: [item(1, 'Unread', true), item(2, 'Read')], view: 'inbox', selectedId: null, unreadOnly: false, unreadCount: 1, search: '', sort: 'newest', loadError: null, ...overrides } })
 }
 
 describe('FeedList', () => {
-  it('renders the visible items it is given', () => {
-    const wrapper = mountList({ visibleItems: [item('unread-1', 'Unread item', true)] })
-    expect(wrapper.text()).toContain('Unread item')
-    expect(wrapper.text()).not.toContain('Read item')
+  it('renders the supplied inbox rows and emits their numeric inbox ids', async () => {
+    const wrapper = mountList()
+    expect(wrapper.text()).toContain('Unread')
+    await wrapper.findAll('[data-testid="feed-item"]')[1]!.trigger('click')
+    expect(wrapper.emitted('select')).toEqual([[2]])
   })
 
-  it('shows the unread count from its prop', () => {
+  it('renders the unread count and changes the list-level unread filter', async () => {
     const wrapper = mountList({ unreadCount: 3 })
-    expect(wrapper.find('[data-testid="filter-unread"]').text()).toContain('3')
+    expect(wrapper.get('[data-testid="filter-unread"]').text()).toContain('3')
+    await wrapper.get('[data-testid="filter-unread"]').trigger('click')
+    await wrapper.get('[data-testid="filter-all"]').trigger('click')
+    expect(wrapper.emitted('set-unread')).toEqual([[true], [false]])
   })
 
-  it('emits select with the clicked item id', async () => {
+  it('emits sort and refresh choices from the view menu', async () => {
     const wrapper = mountList()
-    const itemButton = wrapper.findAll('button.feed-item').find((button) => button.text().includes('Read item'))
+    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="view-sort-oldest"]').trigger('click')
+    expect(wrapper.emitted('set-sort')).toEqual([['oldest']])
 
-    expect(itemButton).toBeTruthy()
-    await itemButton!.trigger('click')
-
-    expect(wrapper.emitted('select')).toEqual([['read-1']])
+    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="view-menu-refresh"]').trigger('click')
+    expect(wrapper.emitted('refresh')).toHaveLength(1)
   })
 
-  it('emits update:search as the search box changes', async () => {
+  it('relays search input without owning filtering', async () => {
     const wrapper = mountList()
-
-    await wrapper.find('[data-testid="feed-search"]').setValue('oauth')
-
+    await wrapper.get('[data-testid="feed-search"]').setValue('oauth')
     expect(wrapper.emitted('update:search')).toEqual([['oauth']])
   })
 
-  it('offers newest, oldest, and unread-first sorting in the View menu', async () => {
+  it('shows archive metadata only in the archive view', () => {
+    const wrapper = mountList({ view: 'archive', visibleItems: [item(7, 'Archived')] })
+    expect(wrapper.find('[data-testid="archive-reason-label"]').exists()).toBe(true)
+  })
+
+  it('shows distinct empty, unread-drained, search, and load-error states', () => {
+    expect(mountList({ visibleItems: [] }).get('[data-testid="feed-empty"]').text()).toContain('No items yet')
+    expect(mountList({ visibleItems: [], unreadOnly: true }).get('[data-testid="feed-empty"]').text()).toContain("You're all caught up")
+    expect(mountList({ visibleItems: [], search: 'none' }).get('[data-testid="feed-empty"]').text()).toContain('No matches')
+    expect(mountList({ loadError: 'offline' }).get('[data-testid="feed-error"]').text()).toContain('offline')
+  })
+
+  it('anchors keyboard selection by numeric inbox id rather than external source id', async () => {
+    const scrollIntoView = vi.fn()
+    vi.spyOn(HTMLElement.prototype, 'scrollIntoView').mockImplementation(scrollIntoView)
     const wrapper = mountList()
-
-    expect(wrapper.find('[data-testid="view-menu"]').exists()).toBe(false)
-    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
-
-    expect(wrapper.get('[data-testid="view-sort-newest"]').attributes('aria-checked')).toBe('true')
-    expect(wrapper.get('[data-testid="view-sort-unread"]').text()).toContain('Unread first')
-    await wrapper.get('[data-testid="view-sort-oldest"]').trigger('click')
-
-    expect(wrapper.emitted('set-sort')).toEqual([['oldest']])
-    expect(wrapper.find('[data-testid="view-menu"]').exists()).toBe(false)
-  })
-
-  it('shows when a non-default View option is active', () => {
-    const wrapper = mountList({ sort: 'oldest' })
-
-    expect(wrapper.get('[data-testid="view-active-count"]').text()).toBe('1')
-  })
-
-  it('shows the unreachable state with a retry that emits refresh', async () => {
-    const wrapper = mountList({ visibleItems: [], loadError: "Can't reach GitHub right now." })
-
-    const error = wrapper.get('[data-testid="feed-error"]')
-    expect(error.text()).toContain('GitHub unreachable')
-    expect(error.text()).toContain("Can't reach GitHub right now.")
-
-    await error.get('button').trigger('click')
-    expect(wrapper.emitted('refresh')).toHaveLength(1)
-  })
-
-  it('shows the all-caught-up state when the unread filter drains the list', () => {
-    const wrapper = mountList({ visibleItems: [], unreadOnly: true, unreadCount: 0, title: 'Unread' })
-    expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain("You're all caught up")
-  })
-
-  it('shows the plain empty state without the unread filter', () => {
-    const wrapper = mountList({ visibleItems: [], unreadCount: 0 })
-    expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No items yet')
-  })
-
-  it('shows a no-matches empty state when the search excludes everything', () => {
-    const wrapper = mountList({ visibleItems: [], search: 'zzz-nothing-here' })
-    expect(wrapper.get('[data-testid="feed-empty"]').text()).toContain('No matches')
-  })
-
-  it('keeps unread filters visible and emits refresh from the View menu', async () => {
-    const wrapper = mountList()
-
-    await wrapper.find('[data-testid="filter-unread"]').trigger('click')
-    await wrapper.find('[data-testid="filter-all"]').trigger('click')
-    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
-    await wrapper.get('[data-testid="view-menu-refresh"]').trigger('click')
-
-    expect(wrapper.emitted('set-unread')).toEqual([[true], [false]])
-    expect(wrapper.emitted('refresh')).toHaveLength(1)
-    expect(wrapper.find('[data-testid="view-menu"]').exists()).toBe(false)
+    await wrapper.setProps({ selectedId: 2 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.findAll('[data-testid="feed-item"]')[1]!.attributes('data-inbox-id')).toBe('2')
+    expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest' })
   })
 })

@@ -2,13 +2,21 @@ package pipelinedb
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
+	"time"
 )
 
 // RetentionPolicy bounds diagnostic history retained by the desktop pipeline.
-// Event-log retention is intentionally not count- or age-based: it advances
-// only through the minimum durable offset of every enabled flow consumer.
+// Event log retention is independent of consumer progress: consumers rebuild
+// membership from the inbox on startup/deploy instead of requiring a backlog.
 type RetentionPolicy struct {
+	// EventLogMaxAge removes events older than this age. Zero disables the age
+	// bound; Phase 5 owns product defaults.
+	EventLogMaxAge time.Duration
+	// EventLogPerTopicLimit retains this many newest events per topic. Zero
+	// disables the count bound.
+	EventLogPerTopicLimit int64
 	// NodeRunLimit is the total number of newest node_run rows to retain.
 	NodeRunLimit int64
 	// TerminalOutputCommandLimit is the number of newest done/failed
@@ -20,6 +28,10 @@ type RetentionPolicy struct {
 	// JobLimit is the number of newest done/failed job rows to retain.
 	// Non-terminal jobs are never pruned.
 	JobLimit int64
+	// ArchivedItemRetention retains archived inbox items for this duration.
+	ArchivedItemRetention time.Duration
+	// EventPerItemLimit retains this many newest inbox events per item.
+	EventPerItemLimit int64
 }
 
 // DefaultRetentionPolicy keeps enough recent history for the desktop's debug
@@ -30,27 +42,31 @@ func DefaultRetentionPolicy() RetentionPolicy {
 		TerminalOutputCommandLimit: 2_000,
 		ActivityEventLimit:         5_000,
 		JobLimit:                   2_000,
+		ArchivedItemRetention:      90 * 24 * time.Hour,
+		EventPerItemLimit:          500,
 	}
 }
 
-// RetentionResult describes the safe event-log boundary selected by Prune.
-// EventLogThrough is zero when no event rows were eligible, either because
-// there are no enabled consumers or at least one has no durable offset yet.
+// RetentionResult is retained for callers that report pruning outcomes.
+// EventLogThrough is no longer consumer-derived and remains zero.
 type RetentionResult struct {
 	EventLogThrough int64
 }
 
-// Prune applies the retention policy in one transaction. An event is deleted
-// only after every enabled flow consumer has durably committed at or beyond
-// its offset. A newly enabled flow with no consumer_offset deliberately blocks
-// event-log pruning, preserving its complete backlog. Disabled flows do not
-// hold retention because re-enabling one intentionally starts from the then
-// current log rather than replaying data accumulated while it was disabled.
+// Prune applies age and per-topic-count event-log bounds independently of
+// consumer liveness. enabledConsumers remains in the signature for the
+// maintenance interface but intentionally has no retention effect.
 //
 // Node runs, terminal output-command rows, activity events, and terminal jobs
-// are bounded independently. Command and job retention intentionally excludes
-// non-terminal rows; losing either could drop work or strand visible state.
-func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy RetentionPolicy) (RetentionResult, error) {
+// remain bounded independently. Command and job retention excludes nonterminal
+// rows so active work is never discarded.
+func (db *DB) Prune(ctx context.Context, _ []string, policy RetentionPolicy) (RetentionResult, error) {
+	if policy.EventLogMaxAge < 0 {
+		return RetentionResult{}, fmt.Errorf("event log maximum age must not be negative")
+	}
+	if policy.EventLogPerTopicLimit < 0 {
+		return RetentionResult{}, fmt.Errorf("event log per-topic limit must not be negative")
+	}
 	if policy.NodeRunLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("node run retention limit must not be negative")
 	}
@@ -63,38 +79,23 @@ func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy Reten
 	if policy.JobLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("job retention limit must not be negative")
 	}
+	if policy.ArchivedItemRetention < 0 {
+		return RetentionResult{}, fmt.Errorf("archived item retention must not be negative")
+	}
+	if policy.EventPerItemLimit < 0 {
+		return RetentionResult{}, fmt.Errorf("event per-item retention limit must not be negative")
+	}
 
-	enabled := uniqueConsumers(enabledConsumers)
 	result := RetentionResult{}
 	err := db.WithTx(ctx, func(q *Queries) error {
-		if len(enabled) > 0 {
-			offsets, err := q.ListConsumerOffsets(ctx)
-			if err != nil {
-				return fmt.Errorf("listing consumer offsets: %w", err)
+		if policy.EventLogMaxAge > 0 {
+			if err := q.DeleteEventsOlderThan(ctx, time.Now().Add(-policy.EventLogMaxAge).UnixMilli()); err != nil {
+				return fmt.Errorf("pruning old event log rows: %w", err)
 			}
-
-			byConsumer := make(map[string]int64, len(offsets))
-			for _, offset := range offsets {
-				byConsumer[offset.Consumer] = offset.Offset
-			}
-
-			minOffset := int64(0)
-			allCommitted := true
-			for i, consumer := range enabled {
-				offset, ok := byConsumer[consumer]
-				if !ok {
-					allCommitted = false
-					break
-				}
-				if i == 0 || offset < minOffset {
-					minOffset = offset
-				}
-			}
-			if allCommitted && minOffset > 0 {
-				if err := q.DeleteEventsThrough(ctx, minOffset); err != nil {
-					return fmt.Errorf("pruning event log through %d: %w", minOffset, err)
-				}
-				result.EventLogThrough = minOffset
+		}
+		if policy.EventLogPerTopicLimit > 0 {
+			if err := q.DeleteEventsOverLimitPerTopic(ctx, policy.EventLogPerTopicLimit); err != nil {
+				return fmt.Errorf("pruning excess event log rows: %w", err)
 			}
 		}
 
@@ -110,26 +111,16 @@ func (db *DB) Prune(ctx context.Context, enabledConsumers []string, policy Reten
 		if err := q.PruneTerminalJobs(ctx, policy.JobLimit); err != nil {
 			return fmt.Errorf("pruning terminal jobs: %w", err)
 		}
+		if err := q.PruneArchivedInboxItems(ctx, sql.NullInt64{Int64: time.Now().Add(-policy.ArchivedItemRetention).UnixMilli(), Valid: true}); err != nil {
+			return fmt.Errorf("pruning archived inbox items: %w", err)
+		}
+		if err := q.TrimInboxItemEvents(ctx, policy.EventPerItemLimit); err != nil {
+			return fmt.Errorf("trimming inbox item events: %w", err)
+		}
 		return nil
 	})
 	if err != nil {
 		return RetentionResult{}, err
 	}
 	return result, nil
-}
-
-func uniqueConsumers(consumers []string) []string {
-	seen := make(map[string]struct{}, len(consumers))
-	unique := make([]string, 0, len(consumers))
-	for _, consumer := range consumers {
-		if consumer == "" {
-			continue
-		}
-		if _, ok := seen[consumer]; ok {
-			continue
-		}
-		seen[consumer] = struct{}{}
-		unique = append(unique, consumer)
-	}
-	return unique
 }

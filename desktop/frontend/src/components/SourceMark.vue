@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { FeedSource } from '../lib/feedPresentation'
 
-// The brand mark for a feed item's source. Uses each source's real logo (an
+// The brand mark for an inbox item's source. Uses each source's real logo (an
 // inline vector), colored via currentColor so the badge stays theme-aware.
 // Only GitHub is wired today; add a branch per source as they land.
 defineProps<{ source: FeedSource }>()

@@ -17,14 +17,20 @@ package flow
 // to the desktop frontend's graph editor over Wails — hence the json tags
 // alongside the (unused-by-Flow-itself, since flowFile is the YAML decode
 // target) documentation of the on-disk names.
+// ENUM(all, state-changes, never)
+type ResurfacePolicy string
+
+const DefaultResurfacePolicy = ResurfacePolicyStateChanges
+
 type Flow struct {
 	// ID is the filename stem (no extension), never a value read from the
 	// file itself.
-	ID      string `json:"id"`
-	Name    string `json:"name"`
-	Enabled bool   `json:"enabled"`
-	Nodes   []Node `json:"nodes"`
-	Wires   []Wire `json:"wires"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Enabled   bool            `json:"enabled"`
+	Resurface ResurfacePolicy `json:"resurface,omitempty"`
+	Nodes     []Node          `json:"nodes"`
+	Wires     []Wire          `json:"wires"`
 }
 
 // Wire is a directed edge from one node's output port to another node's
@@ -39,9 +45,10 @@ type Wire struct {
 // Enabled is a pointer so an absent key can be distinguished from an
 // explicit `enabled: false` and defaulted to true.
 type flowFile struct {
-	Version int    `yaml:"version"`
-	Name    string `yaml:"name,omitempty"`
-	Enabled *bool  `yaml:"enabled,omitempty"`
-	Nodes   []Node `yaml:"nodes"`
-	Wires   []Wire `yaml:"wires,omitempty"`
+	Version   int             `yaml:"version"`
+	Name      string          `yaml:"name,omitempty"`
+	Enabled   *bool           `yaml:"enabled,omitempty"`
+	Resurface ResurfacePolicy `yaml:"resurface,omitempty"`
+	Nodes     []Node          `yaml:"nodes"`
+	Wires     []Wire          `yaml:"wires,omitempty"`
 }

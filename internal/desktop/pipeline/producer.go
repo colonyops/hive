@@ -2,6 +2,7 @@ package pipeline
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sync"
 	"time"
@@ -37,6 +38,7 @@ type Producer struct {
 	logger     zerolog.Logger
 	recorder   activity.Recorder
 	prefetcher SearchPrefetcher
+	adapters   map[string]SourceAdapter
 
 	stopOnce sync.Once
 	stop     chan struct{}
@@ -57,6 +59,11 @@ type SearchPrefetcher interface {
 // wiring the producer, before Start.
 func (pr *Producer) SetPrefetcher(p SearchPrefetcher) { pr.prefetcher = p }
 
+// SetSourceAdapter registers classification and absence behavior by source kind.
+func (pr *Producer) SetSourceAdapter(adapter SourceAdapter) {
+	pr.adapters[adapter.SourceKind] = adapter
+}
+
 // searchDefSource is implemented by sources backed by a feed.SourceDef that
 // want inclusion in the search prefetch. Non-search sources return ok false.
 type searchDefSource interface {
@@ -75,6 +82,7 @@ func NewProducer(db Appender, sources SourceLister, interval time.Duration, onAp
 		intervalCh: make(chan time.Duration, 1),
 		onAppended: onAppended,
 		logger:     logger,
+		adapters:   make(map[string]SourceAdapter),
 		stop:       make(chan struct{}),
 	}
 }
@@ -164,19 +172,39 @@ func (pr *Producer) Tick(ctx context.Context) {
 	)
 	for id, src := range sources {
 		topic := "source:" + id
+		meta := sourceMetadata{ProfileID: id, SourceKind: "generic", Policy: pipelinedb.ResurfacePolicyStateChanges}
+		if described, ok := src.(metadataSource); ok {
+			meta = described.ingestMetadata()
+		}
+		if meta.Policy == "" {
+			meta.Policy = pipelinedb.ResurfacePolicyStateChanges
+		}
+		adapter, ok := pr.adapters[meta.SourceKind]
+		if !ok {
+			adapter = SourceAdapter{SourceKind: meta.SourceKind, Classifier: genericClassifier{}}
+		}
 		items := make([]pipelinedb.SnapshotItem, 0)
+		observed := make(map[string]struct{})
 		err := src.Produce(ctx, func(msg Msg) error {
 			if msg.Topic != topic {
 				return fmt.Errorf("source %q emitted topic %q, expected %q", id, msg.Topic, topic)
 			}
 			items = append(items, pipelinedb.SnapshotItem{Key: msg.Key, Payload: msg.Payload})
-			offset, ok, err := pr.appendIfChanged(ctx, msg)
+			if msg.Key == "" {
+				return nil
+			}
+			observed[msg.Key] = struct{}{}
+			kind := meta.SourceKind
+			if msg.SourceKind != "" {
+				kind = msg.SourceKind
+			}
+			result, err := pr.db.IngestObservation(ctx, adapter.Classifier, pipelinedb.IngestObservationParams{ProfileID: meta.ProfileID, Topic: topic, Policy: meta.Policy, Current: observationFromMsg(msg, kind, meta.SourceScope)})
 			if err != nil {
 				return err
 			}
-			if ok {
+			if result.Wrote {
 				appended++
-				lastOffset = offset
+				lastOffset = result.Offset
 			}
 			return nil
 		})
@@ -186,7 +214,47 @@ func (pr *Producer) Tick(ctx context.Context) {
 			continue
 		}
 
-		offset, err := pr.db.AppendSnapshot(ctx, topic, items)
+		keys, err := pr.db.ListSourceHeadKeys(ctx, topic)
+		if err != nil {
+			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: listing source head failed")
+			continue
+		}
+		if adapter.AbsenceConfirmer != nil {
+			for _, key := range keys {
+				if _, present := observed[key]; present {
+					continue
+				}
+				payload, err := pr.db.SourceHeadPayload(ctx, topic, key)
+				if err != nil {
+					pr.logger.Debug().Err(err).Str("source", id).Str("key", key).Msg("pipeline producer: reading source head failed")
+					continue
+				}
+				// source_head persists the source payload, not presentation metadata.
+				// Reconstruct the prior observation from that payload so an absence
+				// confirmer that starts from prev retains the item's title, URL, and
+				// upstream observation time when it returns a hydrated Current.
+				prev := observationFromMsg(Msg{Key: key, Payload: payload}, meta.SourceKind, meta.SourceScope)
+				verdict, err := adapter.ConfirmAbsence(ctx, prev)
+				pipelinedb.DebugPauseIngest(ctx)
+				if err != nil {
+					pr.logger.Debug().Err(err).Str("source", id).Str("key", key).Msg("pipeline producer: absence hydration failed")
+					continue
+				}
+				if verdict.Current == nil {
+					continue
+				}
+				result, err := pr.db.IngestObservation(ctx, adapter.Classifier, pipelinedb.IngestObservationParams{ProfileID: meta.ProfileID, Topic: topic, Policy: meta.Policy, Current: *verdict.Current})
+				if err != nil {
+					pr.logger.Debug().Err(err).Str("source", id).Str("key", key).Msg("pipeline producer: absence ingestion failed")
+					continue
+				}
+				if result.Wrote {
+					appended++
+					lastOffset = result.Offset
+				}
+			}
+		}
+		offset, err := pr.db.AppendSnapshot(ctx, topic, meta.SourceKind, meta.SourceScope, items)
 		if err != nil {
 			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: appending source snapshot failed")
 			pr.record(ctx, activity.RefreshFailed(id, err.Error()))
@@ -210,9 +278,29 @@ func (pr *Producer) record(ctx context.Context, e activity.Event) {
 	}
 }
 
-// appendIfChanged delegates source-state deduplication to the database. Its
-// transactional source head is durable across producer restarts and excludes
-// empty keys, which have no source-item identity.
-func (pr *Producer) appendIfChanged(ctx context.Context, msg Msg) (int64, bool, error) {
-	return pr.db.AppendIfChanged(ctx, msg.Topic, msg.Key, msg.Payload)
+// genericClassifier keeps non-GitHub/test sources ingestible while adapters
+// supply richer semantics for real source kinds.
+func observationFromMsg(msg Msg, sourceKind, sourceScope string) pipelinedb.Observation {
+	var wire struct {
+		Title     string `json:"title"`
+		URL       string `json:"url"`
+		UpdatedAt int64  `json:"updatedAt"`
+	}
+	_ = json.Unmarshal(msg.Payload, &wire)
+	if wire.Title == "" {
+		wire.Title = msg.Key
+	}
+	if wire.UpdatedAt == 0 {
+		wire.UpdatedAt = time.Now().UnixMilli()
+	}
+	return pipelinedb.Observation{ExternalID: msg.Key, Title: wire.Title, URL: wire.URL, SourceKind: sourceKind, SourceScope: sourceScope, ObservedAt: wire.UpdatedAt, Payload: msg.Payload}
+}
+
+type genericClassifier struct{}
+
+func (genericClassifier) Classify(previous *pipelinedb.Observation, current pipelinedb.Observation) pipelinedb.Classification {
+	if previous == nil {
+		return pipelinedb.Classification{Kind: "observed", Transition: pipelinedb.TransitionNone, Attention: pipelinedb.AttentionActivity, Lifecycle: pipelinedb.LifecycleUnknown, Summary: current.Title}
+	}
+	return pipelinedb.Classification{Kind: "updated", Transition: pipelinedb.TransitionNone, Attention: pipelinedb.AttentionTrivial, Lifecycle: pipelinedb.LifecycleUnknown, Summary: current.Title}
 }

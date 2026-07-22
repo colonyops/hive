@@ -40,8 +40,12 @@ const tree = computed<FeedTree>(() =>
   props.profile.tree ?? props.profile.feeds.map((f) => ({ kind: 'feed', feed: f })),
 )
 
-function allSelected(): boolean {
-  return props.selection.type === 'all'
+const inboxViews = [
+  { view: 'inbox', label: 'Inbox' }, { view: 'open', label: 'Open' },
+  { view: 'archive', label: 'Archive' }, { view: 'all', label: 'All' }, { view: 'unfiled', label: 'Unfiled' },
+] as const
+function viewSelected(view: string): boolean {
+  return props.selection.type === 'view' && props.selection.view === view
 }
 function feedSelected(feedId: string): boolean {
   return props.selection.type === 'feed' && props.selection.feedId === feedId
@@ -246,9 +250,9 @@ function deleteFolder(folder: FeedFolder): void {
       </div>
     </div>
 
-    <div class="px-2.5 pb-0.5 pt-3">
-      <button class="sidebar-entry" :class="{ 'sidebar-entry-selected': allSelected() }" @click="emit('select', { type: 'all' })">
-        <span class="nav-icon border-accent-tint text-accent"><IconList class="size-3" /></span><span class="flex-1 text-left">All items</span><span class="font-mono text-[11px]">{{ profile.totalCount }}</span>
+    <div class="px-2.5 pb-0.5 pt-3" data-testid="inbox-view-switcher">
+      <button v-for="entry in inboxViews" :key="entry.view" class="sidebar-entry" :class="{ 'sidebar-entry-selected': viewSelected(entry.view) }" :data-testid="`inbox-view-${entry.view}`" @click="emit('select', { type: 'view', view: entry.view })">
+        <span class="nav-icon border-accent-tint text-accent"><IconList class="size-3" /></span><span class="flex-1 text-left">{{ entry.label }}</span><span v-if="entry.view === 'inbox'" class="font-mono text-[11px]">{{ profile.unreadCount }}</span>
       </button>
     </div>
 

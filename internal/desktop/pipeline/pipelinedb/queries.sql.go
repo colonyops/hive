@@ -8,6 +8,7 @@ package pipelinedb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const appendActivityEvent = `-- name: AppendActivityEvent :one
@@ -53,17 +54,20 @@ func (q *Queries) AppendActivityEvent(ctx context.Context, arg AppendActivityEve
 }
 
 const appendEvent = `-- name: AppendEvent :one
-INSERT INTO event_log (topic, key, payload, created_at, snapshot)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO event_log (topic, key, payload, created_at, snapshot, source_kind, source_scope, occurrence_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING "offset"
 `
 
 type AppendEventParams struct {
-	Topic     string `json:"topic"`
-	Key       string `json:"key"`
-	Payload   []byte `json:"payload"`
-	CreatedAt int64  `json:"created_at"`
-	Snapshot  int64  `json:"snapshot"`
+	Topic         string         `json:"topic"`
+	Key           string         `json:"key"`
+	Payload       []byte         `json:"payload"`
+	CreatedAt     int64          `json:"created_at"`
+	Snapshot      int64          `json:"snapshot"`
+	SourceKind    string         `json:"source_kind"`
+	SourceScope   string         `json:"source_scope"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
 }
 
 func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error) {
@@ -73,6 +77,9 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64
 		arg.Payload,
 		arg.CreatedAt,
 		arg.Snapshot,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.OccurrenceKey,
 	)
 	var offset int64
 	err := row.Scan(&offset)
@@ -105,7 +112,7 @@ INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
 ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
 WHERE output_command.status = 'pending'
-RETURNING id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at
 `
 
 type ConfirmOutputCommandParams struct {
@@ -128,47 +135,64 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 	err := row.Scan(
 		&i.ID,
 		&i.ActionID,
+		&i.Key,
 		&i.Payload,
 		&i.Status,
-		&i.CreatedAt,
-		&i.Key,
 		&i.Attempts,
 		&i.LastError,
 		&i.ResultJson,
 		&i.Stdout,
 		&i.Stderr,
+		&i.CreatedAt,
 	)
 	return i, err
 }
 
-const countFeedItemsByFlow = `-- name: CountFeedItemsByFlow :many
+const countInboxItems = `-- name: CountInboxItems :one
 SELECT
-    feed_id,
-    CAST(COUNT(*) AS INTEGER) AS total,
-    CAST(SUM(unread) AS INTEGER) AS unread
-FROM feed_item
-WHERE feed_id LIKE ?1
-GROUP BY feed_id
+    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_total,
+    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL AND unread = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_unread
+FROM inbox_item WHERE profile_id = ?
 `
 
-type CountFeedItemsByFlowRow struct {
+type CountInboxItemsRow struct {
+	InboxTotal  int64 `json:"inbox_total"`
+	InboxUnread int64 `json:"inbox_unread"`
+}
+
+func (q *Queries) CountInboxItems(ctx context.Context, profileID string) (CountInboxItemsRow, error) {
+	row := q.db.QueryRowContext(ctx, countInboxItems, profileID)
+	var i CountInboxItemsRow
+	err := row.Scan(&i.InboxTotal, &i.InboxUnread)
+	return i, err
+}
+
+const countInboxItemsByFeed = `-- name: CountInboxItemsByFeed :many
+SELECT
+    c.feed_id AS feed_id,
+    CAST(COUNT(DISTINCT i.id) AS INTEGER) AS total,
+    CAST(COUNT(DISTINCT CASE WHEN i.unread = 1 THEN i.id END) AS INTEGER) AS unread
+FROM feed_membership_claim c
+JOIN inbox_item i ON i.id = c.item_id
+WHERE c.profile_id = ? AND i.archived_at IS NULL
+GROUP BY c.feed_id
+`
+
+type CountInboxItemsByFeedRow struct {
 	FeedID string `json:"feed_id"`
 	Total  int64  `json:"total"`
 	Unread int64  `json:"unread"`
 }
 
-// Per-feed total and unread counts for every feed belonging to a flow, for
-// the sidebar rail badges: one query instead of an N-feed fan-out of
-// ListFeedItemsByFeed. The caller passes a LIKE prefix like "myflow/%".
-func (q *Queries) CountFeedItemsByFlow(ctx context.Context, flowPrefix string) ([]CountFeedItemsByFlowRow, error) {
-	rows, err := q.db.QueryContext(ctx, countFeedItemsByFlow, flowPrefix)
+func (q *Queries) CountInboxItemsByFeed(ctx context.Context, profileID string) ([]CountInboxItemsByFeedRow, error) {
+	rows, err := q.db.QueryContext(ctx, countInboxItemsByFeed, profileID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []CountFeedItemsByFlowRow{}
+	items := []CountInboxItemsByFeedRow{}
 	for rows.Next() {
-		var i CountFeedItemsByFlowRow
+		var i CountInboxItemsByFeedRow
 		if err := rows.Scan(&i.FeedID, &i.Total, &i.Unread); err != nil {
 			return nil, err
 		}
@@ -183,31 +207,204 @@ func (q *Queries) CountFeedItemsByFlow(ctx context.Context, flowPrefix string) (
 	return items, nil
 }
 
-const deleteEventsThrough = `-- name: DeleteEventsThrough :exec
-DELETE FROM event_log
-WHERE "offset" <= ?
+const deleteConsumerOffsetByConsumer = `-- name: DeleteConsumerOffsetByConsumer :exec
+DELETE FROM consumer_offset WHERE consumer = ?
 `
 
-func (q *Queries) DeleteEventsThrough(ctx context.Context, offset int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEventsThrough, offset)
+func (q *Queries) DeleteConsumerOffsetByConsumer(ctx context.Context, consumer string) error {
+	_, err := q.db.ExecContext(ctx, deleteConsumerOffsetByConsumer, consumer)
 	return err
 }
 
-const deleteFeedItemsNotInSnapshot = `-- name: DeleteFeedItemsNotInSnapshot :exec
-DELETE FROM feed_item
-WHERE feed_id = ?
-  AND source_topic = ?
-  AND snapshot_id != ?
+const deleteEventLogByTopicPrefix = `-- name: DeleteEventLogByTopicPrefix :exec
+DELETE FROM event_log WHERE topic LIKE ? ESCAPE '\'
 `
 
-type DeleteFeedItemsNotInSnapshotParams struct {
-	FeedID      string `json:"feed_id"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
+func (q *Queries) DeleteEventLogByTopicPrefix(ctx context.Context, topic string) error {
+	_, err := q.db.ExecContext(ctx, deleteEventLogByTopicPrefix, topic)
+	return err
 }
 
-func (q *Queries) DeleteFeedItemsNotInSnapshot(ctx context.Context, arg DeleteFeedItemsNotInSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, deleteFeedItemsNotInSnapshot, arg.FeedID, arg.SourceTopic, arg.SnapshotID)
+const deleteEventsOlderThan = `-- name: DeleteEventsOlderThan :exec
+DELETE FROM event_log AS target
+WHERE target.created_at < ?
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  )
+`
+
+func (q *Queries) DeleteEventsOlderThan(ctx context.Context, createdAt int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEventsOlderThan, createdAt)
+	return err
+}
+
+const deleteEventsOverLimitPerTopic = `-- name: DeleteEventsOverLimitPerTopic :exec
+DELETE FROM event_log AS target
+WHERE (
+    SELECT COUNT(*) FROM event_log AS newer
+    WHERE newer.topic = target.topic AND newer."offset" > target."offset"
+) >= CAST(?1 AS INTEGER)
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  )
+`
+
+func (q *Queries) DeleteEventsOverLimitPerTopic(ctx context.Context, limit int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEventsOverLimitPerTopic, limit)
+	return err
+}
+
+const deleteFeedMembershipClaimsForFeeds = `-- name: DeleteFeedMembershipClaimsForFeeds :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND feed_id NOT IN (/*SLICE:feed_ids*/?)
+`
+
+type DeleteFeedMembershipClaimsForFeedsParams struct {
+	ProfileID string   `json:"profile_id"`
+	FeedIds   []string `json:"feed_ids"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsForFeeds(ctx context.Context, arg DeleteFeedMembershipClaimsForFeedsParams) error {
+	query := deleteFeedMembershipClaimsForFeeds
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.ProfileID)
+	if len(arg.FeedIds) > 0 {
+		for _, v := range arg.FeedIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:feed_ids*/?", strings.Repeat(",?", len(arg.FeedIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:feed_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteFeedMembershipClaimsForFeedsAll = `-- name: DeleteFeedMembershipClaimsForFeedsAll :exec
+DELETE FROM feed_membership_claim WHERE profile_id = ?
+`
+
+func (q *Queries) DeleteFeedMembershipClaimsForFeedsAll(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedMembershipClaimsForFeedsAll, profileID)
+	return err
+}
+
+const deleteFeedMembershipClaimsForRemovedSources = `-- name: DeleteFeedMembershipClaimsForRemovedSources :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND source_id NOT IN (/*SLICE:source_ids*/?)
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL)
+`
+
+type DeleteFeedMembershipClaimsForRemovedSourcesParams struct {
+	ProfileID string   `json:"profile_id"`
+	SourceIds []string `json:"source_ids"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsForRemovedSources(ctx context.Context, arg DeleteFeedMembershipClaimsForRemovedSourcesParams) error {
+	query := deleteFeedMembershipClaimsForRemovedSources
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.ProfileID)
+	if len(arg.SourceIds) > 0 {
+		for _, v := range arg.SourceIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:source_ids*/?", strings.Repeat(",?", len(arg.SourceIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:source_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteFeedMembershipClaimsForRemovedSourcesAll = `-- name: DeleteFeedMembershipClaimsForRemovedSourcesAll :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL)
+`
+
+func (q *Queries) DeleteFeedMembershipClaimsForRemovedSourcesAll(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedMembershipClaimsForRemovedSourcesAll, profileID)
+	return err
+}
+
+const deleteFeedMembershipClaimsForSourceAll = `-- name: DeleteFeedMembershipClaimsForSourceAll :exec
+DELETE FROM feed_membership_claim WHERE feed_id = ? AND source_id = ?
+`
+
+type DeleteFeedMembershipClaimsForSourceAllParams struct {
+	FeedID   string `json:"feed_id"`
+	SourceID string `json:"source_id"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsForSourceAll(ctx context.Context, arg DeleteFeedMembershipClaimsForSourceAllParams) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedMembershipClaimsForSourceAll, arg.FeedID, arg.SourceID)
+	return err
+}
+
+const deleteFeedMembershipClaimsNotInSnapshot = `-- name: DeleteFeedMembershipClaimsNotInSnapshot :exec
+DELETE FROM feed_membership_claim
+WHERE feed_id = ? AND source_id = ? AND item_id NOT IN (/*SLICE:item_ids*/?)
+`
+
+type DeleteFeedMembershipClaimsNotInSnapshotParams struct {
+	FeedID   string  `json:"feed_id"`
+	SourceID string  `json:"source_id"`
+	ItemIds  []int64 `json:"item_ids"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsNotInSnapshot(ctx context.Context, arg DeleteFeedMembershipClaimsNotInSnapshotParams) error {
+	query := deleteFeedMembershipClaimsNotInSnapshot
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FeedID)
+	queryParams = append(queryParams, arg.SourceID)
+	if len(arg.ItemIds) > 0 {
+		for _, v := range arg.ItemIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", strings.Repeat(",?", len(arg.ItemIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteInboxItemsByProfile = `-- name: DeleteInboxItemsByProfile :exec
+DELETE FROM inbox_item WHERE profile_id = ?
+`
+
+func (q *Queries) DeleteInboxItemsByProfile(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteInboxItemsByProfile, profileID)
+	return err
+}
+
+const deleteSourceHeadByTopicPrefix = `-- name: DeleteSourceHeadByTopicPrefix :exec
+DELETE FROM source_head WHERE topic LIKE ? ESCAPE '\'
+`
+
+func (q *Queries) DeleteSourceHeadByTopicPrefix(ctx context.Context, topic string) error {
+	_, err := q.db.ExecContext(ctx, deleteSourceHeadByTopicPrefix, topic)
+	return err
+}
+
+const deleteUnarchivedFeedMembershipClaimsByProfile = `-- name: DeleteUnarchivedFeedMembershipClaimsByProfile :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL)
+`
+
+func (q *Queries) DeleteUnarchivedFeedMembershipClaimsByProfile(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUnarchivedFeedMembershipClaimsByProfile, profileID)
 	return err
 }
 
@@ -275,8 +472,79 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 	return i, err
 }
 
+const getInboxItemByExternalID = `-- name: GetInboxItemByExternalID :one
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item
+WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = ?
+`
+
+type GetInboxItemByExternalIDParams struct {
+	ProfileID   string `json:"profile_id"`
+	SourceKind  string `json:"source_kind"`
+	SourceScope string `json:"source_scope"`
+	ExternalID  string `json:"external_id"`
+}
+
+func (q *Queries) GetInboxItemByExternalID(ctx context.Context, arg GetInboxItemByExternalIDParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, getInboxItemByExternalID,
+		arg.ProfileID,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.ExternalID,
+	)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
+}
+
+const getInboxItemByID = `-- name: GetInboxItemByID :one
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE id = ?
+`
+
+func (q *Queries) GetInboxItemByID(ctx context.Context, id int64) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, getInboxItemByID, id)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
+}
+
 const getOutputCommand = `-- name: GetOutputCommand :one
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command WHERE id = ?
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command WHERE id = ?
 `
 
 func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand, error) {
@@ -285,15 +553,15 @@ func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand
 	err := row.Scan(
 		&i.ID,
 		&i.ActionID,
+		&i.Key,
 		&i.Payload,
 		&i.Status,
-		&i.CreatedAt,
-		&i.Key,
 		&i.Attempts,
 		&i.LastError,
 		&i.ResultJson,
 		&i.Stdout,
 		&i.Stderr,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -313,6 +581,150 @@ func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPay
 	var payload []byte
 	err := row.Scan(&payload)
 	return payload, err
+}
+
+const getUnarchivedInboxItemByID = `-- name: GetUnarchivedInboxItemByID :one
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL
+`
+
+type GetUnarchivedInboxItemByIDParams struct {
+	ID        int64  `json:"id"`
+	ProfileID string `json:"profile_id"`
+}
+
+func (q *Queries) GetUnarchivedInboxItemByID(ctx context.Context, arg GetUnarchivedInboxItemByIDParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, getUnarchivedInboxItemByID, arg.ID, arg.ProfileID)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
+}
+
+const insertInboxEvent = `-- name: InsertInboxEvent :one
+INSERT INTO inbox_event (item_id, kind, transition, attention, occurrence_key, summary, detail, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (item_id, occurrence_key) WHERE occurrence_key IS NOT NULL DO NOTHING
+RETURNING id, item_id, kind, transition, attention, occurrence_key, summary, detail, created_at
+`
+
+type InsertInboxEventParams struct {
+	ItemID        int64          `json:"item_id"`
+	Kind          string         `json:"kind"`
+	Transition    string         `json:"transition"`
+	Attention     string         `json:"attention"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	Summary       sql.NullString `json:"summary"`
+	Detail        []byte         `json:"detail"`
+	CreatedAt     int64          `json:"created_at"`
+}
+
+func (q *Queries) InsertInboxEvent(ctx context.Context, arg InsertInboxEventParams) (InboxEvent, error) {
+	row := q.db.QueryRowContext(ctx, insertInboxEvent,
+		arg.ItemID,
+		arg.Kind,
+		arg.Transition,
+		arg.Attention,
+		arg.OccurrenceKey,
+		arg.Summary,
+		arg.Detail,
+		arg.CreatedAt,
+	)
+	var i InboxEvent
+	err := row.Scan(
+		&i.ID,
+		&i.ItemID,
+		&i.Kind,
+		&i.Transition,
+		&i.Attention,
+		&i.OccurrenceKey,
+		&i.Summary,
+		&i.Detail,
+		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const insertInboxItem = `-- name: InsertInboxItem :one
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    lifecycle, first_seen_at, last_event_at
+) VALUES (
+    ?, ?, ?, ?,
+    ?, ?, ?, 1, ?,
+    ?, ?, ?
+)
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+`
+
+type InsertInboxItemParams struct {
+	ProfileID   string `json:"profile_id"`
+	SourceKind  string `json:"source_kind"`
+	SourceScope string `json:"source_scope"`
+	ExternalID  string `json:"external_id"`
+	Title       string `json:"title"`
+	Url         string `json:"url"`
+	Payload     []byte `json:"payload"`
+	Unread      int64  `json:"unread"`
+	Lifecycle   string `json:"lifecycle"`
+	FirstSeenAt int64  `json:"first_seen_at"`
+	LastEventAt int64  `json:"last_event_at"`
+}
+
+// Seed-only plain insert for deterministic desktop fixtures. The ingestion
+// path receives its classify-and-upsert contract in a later phase.
+func (q *Queries) InsertInboxItem(ctx context.Context, arg InsertInboxItemParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, insertInboxItem,
+		arg.ProfileID,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.ExternalID,
+		arg.Title,
+		arg.Url,
+		arg.Payload,
+		arg.Unread,
+		arg.Lifecycle,
+		arg.FirstSeenAt,
+		arg.LastEventAt,
+	)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
 }
 
 const insertJob = `-- name: InsertJob :one
@@ -481,20 +893,35 @@ func (q *Queries) ListActivityEvents(ctx context.Context, arg ListActivityEvents
 	return items, nil
 }
 
-const listConsumerOffsets = `-- name: ListConsumerOffsets :many
-SELECT consumer, "offset" FROM consumer_offset
+const listInboxEventsByItem = `-- name: ListInboxEventsByItem :many
+SELECT id, item_id, kind, transition, attention, occurrence_key, summary, detail, created_at FROM inbox_event WHERE item_id = ? ORDER BY id DESC LIMIT ?
 `
 
-func (q *Queries) ListConsumerOffsets(ctx context.Context) ([]ConsumerOffset, error) {
-	rows, err := q.db.QueryContext(ctx, listConsumerOffsets)
+type ListInboxEventsByItemParams struct {
+	ItemID int64 `json:"item_id"`
+	Limit  int64 `json:"limit"`
+}
+
+func (q *Queries) ListInboxEventsByItem(ctx context.Context, arg ListInboxEventsByItemParams) ([]InboxEvent, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxEventsByItem, arg.ItemID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ConsumerOffset{}
+	items := []InboxEvent{}
 	for rows.Next() {
-		var i ConsumerOffset
-		if err := rows.Scan(&i.Consumer, &i.Offset); err != nil {
+		var i InboxEvent
+		if err := rows.Scan(
+			&i.ID,
+			&i.ItemID,
+			&i.Kind,
+			&i.Transition,
+			&i.Attention,
+			&i.OccurrenceKey,
+			&i.Summary,
+			&i.Detail,
+			&i.CreatedAt,
+		); err != nil {
 			return nil, err
 		}
 		items = append(items, i)
@@ -508,35 +935,303 @@ func (q *Queries) ListConsumerOffsets(ctx context.Context) ([]ConsumerOffset, er
 	return items, nil
 }
 
-const listFeedItemsByFeed = `-- name: ListFeedItemsByFeed :many
-SELECT feed_id, item_id, payload, updated_at, unread FROM feed_item
-WHERE feed_id = ?
-ORDER BY updated_at DESC
+const listInboxItemsAll = `-- name: ListInboxItemsAll :many
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ?
+ORDER BY last_event_at DESC, id DESC LIMIT ?
 `
 
-type ListFeedItemsByFeedRow struct {
-	FeedID    string `json:"feed_id"`
-	ItemID    string `json:"item_id"`
-	Payload   []byte `json:"payload"`
-	UpdatedAt int64  `json:"updated_at"`
-	Unread    int64  `json:"unread"`
+type ListInboxItemsAllParams struct {
+	ProfileID string `json:"profile_id"`
+	Limit     int64  `json:"limit"`
 }
 
-func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]ListFeedItemsByFeedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFeedItemsByFeed, feedID)
+func (q *Queries) ListInboxItemsAll(ctx context.Context, arg ListInboxItemsAllParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsAll, arg.ProfileID, arg.Limit)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	items := []ListFeedItemsByFeedRow{}
+	items := []InboxItem{}
 	for rows.Next() {
-		var i ListFeedItemsByFeedRow
+		var i InboxItem
 		if err := rows.Scan(
-			&i.FeedID,
-			&i.ItemID,
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
 			&i.Payload,
-			&i.UpdatedAt,
+			&i.Revision,
 			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInboxItemsArchive = `-- name: ListInboxItemsArchive :many
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NOT NULL
+ORDER BY archived_at DESC, id DESC LIMIT ?
+`
+
+type ListInboxItemsArchiveParams struct {
+	ProfileID string `json:"profile_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListInboxItemsArchive(ctx context.Context, arg ListInboxItemsArchiveParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsArchive, arg.ProfileID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInboxItemsByFeed = `-- name: ListInboxItemsByFeed :many
+SELECT DISTINCT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at FROM inbox_item i
+JOIN feed_membership_claim c ON c.item_id = i.id
+WHERE c.profile_id = ? AND c.feed_id = ? AND i.archived_at IS NULL
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
+`
+
+type ListInboxItemsByFeedParams struct {
+	ProfileID string `json:"profile_id"`
+	FeedID    string `json:"feed_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListInboxItemsByFeed(ctx context.Context, arg ListInboxItemsByFeedParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsByFeed, arg.ProfileID, arg.FeedID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInboxItemsInbox = `-- name: ListInboxItemsInbox :many
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
+ORDER BY last_event_at DESC, id DESC LIMIT ?
+`
+
+type ListInboxItemsInboxParams struct {
+	ProfileID string `json:"profile_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListInboxItemsInbox(ctx context.Context, arg ListInboxItemsInboxParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsInbox, arg.ProfileID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInboxItemsOpen = `-- name: ListInboxItemsOpen :many
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL AND lifecycle = 'active'
+ORDER BY last_event_at DESC, id DESC LIMIT ?
+`
+
+type ListInboxItemsOpenParams struct {
+	ProfileID string `json:"profile_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListInboxItemsOpen(ctx context.Context, arg ListInboxItemsOpenParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsOpen, arg.ProfileID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listInboxItemsUnfiled = `-- name: ListInboxItemsUnfiled :many
+SELECT i.id, i.profile_id, i.source_kind, i.source_scope, i.external_id, i.title, i.url, i.payload, i.revision, i.unread, i.archived_at, i.archived_actor, i.archived_reason, i.lifecycle, i.source_state, i.first_seen_at, i.last_event_at FROM inbox_item i
+WHERE i.profile_id = ?
+  AND NOT EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.item_id = i.id)
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?
+`
+
+type ListInboxItemsUnfiledParams struct {
+	ProfileID string `json:"profile_id"`
+	Limit     int64  `json:"limit"`
+}
+
+func (q *Queries) ListInboxItemsUnfiled(ctx context.Context, arg ListInboxItemsUnfiledParams) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listInboxItemsUnfiled, arg.ProfileID, arg.Limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
 		); err != nil {
 			return nil, err
 		}
@@ -581,6 +1276,58 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.Target,
 			&i.Error,
 			&i.CommandID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestSourceSnapshotsByTopicPrefix = `-- name: ListLatestSourceSnapshotsByTopicPrefix :many
+SELECT event_log."offset", event_log.topic, event_log."key", event_log.payload, event_log.snapshot, event_log.source_kind, event_log.source_scope, event_log.occurrence_key, event_log.created_at
+FROM event_log
+JOIN (
+    SELECT topic, MAX("offset") AS "offset"
+    FROM event_log
+    WHERE snapshot = 1
+      AND "offset" <= CAST(?1 AS INTEGER)
+      AND substr(topic, 1, length(CAST(?2 AS TEXT))) = CAST(?2 AS TEXT)
+    GROUP BY topic
+) AS latest ON latest.topic = event_log.topic AND latest."offset" = event_log."offset"
+ORDER BY event_log.topic
+`
+
+type ListLatestSourceSnapshotsByTopicPrefixParams struct {
+	ThroughOffset int64  `json:"through_offset"`
+	TopicPrefix   string `json:"topic_prefix"`
+}
+
+func (q *Queries) ListLatestSourceSnapshotsByTopicPrefix(ctx context.Context, arg ListLatestSourceSnapshotsByTopicPrefixParams) ([]EventLog, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestSourceSnapshotsByTopicPrefix, arg.ThroughOffset, arg.TopicPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventLog{}
+	for rows.Next() {
+		var i EventLog
+		if err := rows.Scan(
+			&i.Offset,
+			&i.Topic,
+			&i.Key,
+			&i.Payload,
+			&i.Snapshot,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.OccurrenceKey,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -643,7 +1390,7 @@ func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlow
 }
 
 const listRunnableOutputCommands = `-- name: ListRunnableOutputCommands :many
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command
 WHERE status = 'pending'
 ORDER BY id ASC
 LIMIT ?
@@ -663,15 +1410,15 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 		if err := rows.Scan(
 			&i.ID,
 			&i.ActionID,
+			&i.Key,
 			&i.Payload,
 			&i.Status,
-			&i.CreatedAt,
-			&i.Key,
 			&i.Attempts,
 			&i.LastError,
 			&i.ResultJson,
 			&i.Stdout,
 			&i.Stderr,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -687,7 +1434,7 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 }
 
 const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command
 WHERE status = 'pending' AND id > ?
 ORDER BY id ASC
 LIMIT ?
@@ -712,15 +1459,15 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 		if err := rows.Scan(
 			&i.ID,
 			&i.ActionID,
+			&i.Key,
 			&i.Payload,
 			&i.Status,
-			&i.CreatedAt,
-			&i.Key,
 			&i.Attempts,
 			&i.LastError,
 			&i.ResultJson,
 			&i.Stdout,
 			&i.Stderr,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -735,19 +1482,76 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 	return items, nil
 }
 
-const markFeedItemRead = `-- name: MarkFeedItemRead :exec
-UPDATE feed_item SET unread = 0
-WHERE feed_id = ? AND item_id = ?
+const listSourceHeadKeys = `-- name: ListSourceHeadKeys :many
+SELECT key FROM source_head WHERE topic = ?
 `
 
-type MarkFeedItemReadParams struct {
-	FeedID string `json:"feed_id"`
-	ItemID string `json:"item_id"`
+func (q *Queries) ListSourceHeadKeys(ctx context.Context, topic string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSourceHeadKeys, topic)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
-func (q *Queries) MarkFeedItemRead(ctx context.Context, arg MarkFeedItemReadParams) error {
-	_, err := q.db.ExecContext(ctx, markFeedItemRead, arg.FeedID, arg.ItemID)
-	return err
+const listUnarchivedInboxItemsByProfile = `-- name: ListUnarchivedInboxItemsByProfile :many
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
+`
+
+func (q *Queries) ListUnarchivedInboxItemsByProfile(ctx context.Context, profileID string) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listUnarchivedInboxItemsByProfile, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
 }
 
 const markOutputCommandDone = `-- name: MarkOutputCommandDone :exec
@@ -811,6 +1615,16 @@ func (q *Queries) PruneActivityEvents(ctx context.Context, offset int64) error {
 	return err
 }
 
+const pruneArchivedInboxItems = `-- name: PruneArchivedInboxItems :exec
+DELETE FROM inbox_item WHERE archived_at IS NOT NULL AND archived_at <= ?
+`
+
+// Cascades to inbox_event and feed_membership_claim through their item FKs.
+func (q *Queries) PruneArchivedInboxItems(ctx context.Context, archivedAt sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, pruneArchivedInboxItems, archivedAt)
+	return err
+}
+
 const pruneNodeRuns = `-- name: PruneNodeRuns :exec
 DELETE FROM node_run
 WHERE rowid IN (
@@ -861,7 +1675,7 @@ func (q *Queries) PruneTerminalOutputCommands(ctx context.Context, offset int64)
 }
 
 const readEventsFrom = `-- name: ReadEventsFrom :many
-SELECT "offset", topic, "key", payload, created_at, snapshot FROM event_log
+SELECT "offset", topic, "key", payload, snapshot, source_kind, source_scope, occurrence_key, created_at FROM event_log
 WHERE "offset" > ?
 ORDER BY "offset" ASC
 LIMIT ?
@@ -886,8 +1700,11 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 			&i.Topic,
 			&i.Key,
 			&i.Payload,
-			&i.CreatedAt,
 			&i.Snapshot,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.OccurrenceKey,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -922,6 +1739,43 @@ func (q *Queries) RetryOutputCommand(ctx context.Context, arg RetryOutputCommand
 		arg.ID,
 	)
 	return err
+}
+
+const setInboxItemUnread = `-- name: SetInboxItemUnread :one
+UPDATE inbox_item SET unread = ?, revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+`
+
+type SetInboxItemUnreadParams struct {
+	Unread   int64 `json:"unread"`
+	ID       int64 `json:"id"`
+	Revision int64 `json:"revision"`
+}
+
+func (q *Queries) SetInboxItemUnread(ctx context.Context, arg SetInboxItemUnreadParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, setInboxItemUnread, arg.Unread, arg.ID, arg.Revision)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
 }
 
 const setJobRunning = `-- name: SetJobRunning :one
@@ -1005,76 +1859,157 @@ func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (Job
 	return i, err
 }
 
-const upsertFeedItem = `-- name: UpsertFeedItem :exec
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = excluded.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id
+const toggleInboxItemArchived = `-- name: ToggleInboxItemArchived :one
+UPDATE inbox_item SET
+    archived_at = CASE WHEN archived_at IS NULL THEN ? ELSE NULL END,
+    archived_actor = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
+    archived_reason = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
+    revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
 `
 
-type UpsertFeedItemParams struct {
-	FeedID      string `json:"feed_id"`
-	ItemID      string `json:"item_id"`
-	Payload     []byte `json:"payload"`
-	UpdatedAt   int64  `json:"updated_at"`
-	Unread      int64  `json:"unread"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
+type ToggleInboxItemArchivedParams struct {
+	ArchivedAt sql.NullInt64 `json:"archived_at"`
+	ID         int64         `json:"id"`
+	Revision   int64         `json:"revision"`
 }
 
-// Idempotent by (feed_id, item_id): committing the same key twice updates
-// the row in place rather than duplicating it.
-func (q *Queries) UpsertFeedItem(ctx context.Context, arg UpsertFeedItemParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFeedItem,
+func (q *Queries) ToggleInboxItemArchived(ctx context.Context, arg ToggleInboxItemArchivedParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, toggleInboxItemArchived, arg.ArchivedAt, arg.ID, arg.Revision)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
+}
+
+const updateEventOccurrenceKey = `-- name: UpdateEventOccurrenceKey :exec
+UPDATE event_log SET occurrence_key = ? WHERE "offset" = ?
+`
+
+type UpdateEventOccurrenceKeyParams struct {
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	Offset        int64          `json:"offset"`
+}
+
+func (q *Queries) UpdateEventOccurrenceKey(ctx context.Context, arg UpdateEventOccurrenceKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateEventOccurrenceKey, arg.OccurrenceKey, arg.Offset)
+	return err
+}
+
+const upsertFeedMembershipClaim = `-- name: UpsertFeedMembershipClaim :exec
+INSERT INTO feed_membership_claim (profile_id, feed_id, item_id, source_id)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (profile_id, feed_id, item_id, source_id) DO NOTHING
+`
+
+type UpsertFeedMembershipClaimParams struct {
+	ProfileID string `json:"profile_id"`
+	FeedID    string `json:"feed_id"`
+	ItemID    int64  `json:"item_id"`
+	SourceID  string `json:"source_id"`
+}
+
+func (q *Queries) UpsertFeedMembershipClaim(ctx context.Context, arg UpsertFeedMembershipClaimParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFeedMembershipClaim,
+		arg.ProfileID,
 		arg.FeedID,
 		arg.ItemID,
-		arg.Payload,
-		arg.UpdatedAt,
-		arg.Unread,
-		arg.SourceTopic,
-		arg.SnapshotID,
+		arg.SourceID,
 	)
 	return err
 }
 
-const upsertFeedItemSnapshot = `-- name: UpsertFeedItemSnapshot :exec
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = feed_item.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id
+const upsertInboxItem = `-- name: UpsertInboxItem :one
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    archived_at, archived_actor, archived_reason,
+    lifecycle, source_state, first_seen_at, last_event_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (profile_id, source_kind, source_scope, external_id) DO UPDATE SET
+    title = excluded.title, url = excluded.url, payload = excluded.payload,
+    revision = inbox_item.revision + 1, unread = excluded.unread,
+    archived_at = excluded.archived_at, archived_actor = excluded.archived_actor,
+    archived_reason = excluded.archived_reason, lifecycle = excluded.lifecycle,
+    source_state = excluded.source_state, last_event_at = excluded.last_event_at
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
 `
 
-type UpsertFeedItemSnapshotParams struct {
-	FeedID      string `json:"feed_id"`
-	ItemID      string `json:"item_id"`
-	Payload     []byte `json:"payload"`
-	UpdatedAt   int64  `json:"updated_at"`
-	Unread      int64  `json:"unread"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
+type UpsertInboxItemParams struct {
+	ProfileID      string         `json:"profile_id"`
+	SourceKind     string         `json:"source_kind"`
+	SourceScope    string         `json:"source_scope"`
+	ExternalID     string         `json:"external_id"`
+	Title          string         `json:"title"`
+	Url            string         `json:"url"`
+	Payload        []byte         `json:"payload"`
+	Unread         int64          `json:"unread"`
+	ArchivedAt     sql.NullInt64  `json:"archived_at"`
+	ArchivedActor  sql.NullString `json:"archived_actor"`
+	ArchivedReason sql.NullString `json:"archived_reason"`
+	Lifecycle      string         `json:"lifecycle"`
+	SourceState    sql.NullString `json:"source_state"`
+	FirstSeenAt    int64          `json:"first_seen_at"`
+	LastEventAt    int64          `json:"last_event_at"`
 }
 
-// Snapshot outputs preserve a previously-read row's unread state while still
-// updating its payload and reconciliation marker.
-func (q *Queries) UpsertFeedItemSnapshot(ctx context.Context, arg UpsertFeedItemSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFeedItemSnapshot,
-		arg.FeedID,
-		arg.ItemID,
+func (q *Queries) UpsertInboxItem(ctx context.Context, arg UpsertInboxItemParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, upsertInboxItem,
+		arg.ProfileID,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.ExternalID,
+		arg.Title,
+		arg.Url,
 		arg.Payload,
-		arg.UpdatedAt,
 		arg.Unread,
-		arg.SourceTopic,
-		arg.SnapshotID,
+		arg.ArchivedAt,
+		arg.ArchivedActor,
+		arg.ArchivedReason,
+		arg.Lifecycle,
+		arg.SourceState,
+		arg.FirstSeenAt,
+		arg.LastEventAt,
 	)
-	return err
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
 }
 
 const upsertSourceHead = `-- name: UpsertSourceHead :exec

@@ -2,9 +2,6 @@ package pipelinedb
 
 import (
 	"context"
-	"database/sql"
-	"fmt"
-	"os"
 	"path/filepath"
 	"testing"
 
@@ -22,37 +19,14 @@ func openTestDB(t *testing.T) *DB {
 	return database
 }
 
-func seedPipelineDBAtMigration(t *testing.T, dir string, version int) *sql.DB {
-	t.Helper()
-	require.NoError(t, os.MkdirAll(dir, 0o700))
-
-	dbPath := filepath.Join(dir, "desktop-pipeline.db")
-	conn, err := sql.Open("sqlite", fmt.Sprintf("file:%s?_pragma=journal_mode(WAL)&_pragma=busy_timeout(5000)&_pragma=foreign_keys(ON)", dbPath))
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = conn.Close() })
-
-	sub, err := migrationsSub()
-	require.NoError(t, err)
-	migrations, err := migrate.Load(sub)
-	require.NoError(t, err)
-
-	var selected []migrate.Migration
-	for _, migration := range migrations {
-		if migration.Version <= version {
-			selected = append(selected, migration)
-		}
-	}
-	require.NotEmpty(t, selected)
-	require.NoError(t, migrate.Apply(context.Background(), conn, selected))
-
-	return conn
-}
-
-func TestOpen_FreshDB_AppliesMigrations(t *testing.T) {
+func TestOpen_FreshDB_AppliesBaseline(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
 
-	for _, table := range []string{"event_log", "consumer_offset", "source_head", "feed_item", "output_command", "node_run"} {
+	for _, table := range []string{
+		"activity_event", "consumer_offset", "event_log", "feed_membership_claim",
+		"inbox_event", "inbox_item", "job", "node_run", "output_command", "source_head",
+	} {
 		_, err := database.Conn().ExecContext(ctx, "SELECT 1 FROM "+table+" LIMIT 0")
 		require.NoError(t, err, "%s table should exist", table)
 	}
@@ -61,53 +35,11 @@ func TestOpen_FreshDB_AppliesMigrations(t *testing.T) {
 	require.NoError(t, err)
 	migrations, err := migrate.Load(sub)
 	require.NoError(t, err)
-	require.NotEmpty(t, migrations)
+	require.Len(t, migrations, 1)
 
 	applied, err := migrate.AppliedVersions(ctx, database.Conn())
 	require.NoError(t, err)
-	assert.Len(t, applied, len(migrations))
-}
-
-func TestOpen_UpgradeToSourceSnapshots_ClearsLegacyFeedItems(t *testing.T) {
-	dir := t.TempDir()
-	ctx := context.Background()
-
-	// Start at schema version 5, when feed rows had no source/snapshot
-	// provenance, then seed a row as an existing installation would have.
-	conn := seedPipelineDBAtMigration(t, dir, 5)
-	_, err := conn.ExecContext(ctx, `
-		INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread)
-		VALUES ('feed', 'legacy-item', X'7B7D', 1, 1)
-	`)
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-
-	upgraded, err := Open(dir, DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = upgraded.Close() })
-
-	var count int
-	require.NoError(t, upgraded.Conn().QueryRowContext(ctx, "SELECT COUNT(*) FROM feed_item").Scan(&count))
-	assert.Zero(t, count, "migration must remove rows whose provenance cannot be reconstructed")
-}
-
-func TestOpen_UpgradeMigratesAwaitingConfirmationToPending(t *testing.T) {
-	dir := t.TempDir()
-	ctx := context.Background()
-
-	conn := seedPipelineDBAtMigration(t, dir, 7)
-	_, err := conn.ExecContext(ctx, `
-		INSERT INTO output_command (action_id, payload, status, created_at, "key", attempts)
-		VALUES ('review', X'7B7D', 'awaiting_confirmation', 1, 'item-1', 0)`)
-	require.NoError(t, err)
-	require.NoError(t, conn.Close())
-
-	upgraded, err := Open(dir, DefaultOpenOptions())
-	require.NoError(t, err)
-	t.Cleanup(func() { _ = upgraded.Close() })
-	var status string
-	require.NoError(t, upgraded.Conn().QueryRowContext(ctx, `SELECT status FROM output_command WHERE action_id = 'review'`).Scan(&status))
-	assert.Equal(t, "pending", status)
+	assert.Equal(t, map[int]bool{1: true}, applied)
 }
 
 func TestOpen_RecoversInterruptedRunningCommandWithoutRetry(t *testing.T) {
@@ -159,8 +91,6 @@ func TestOpen_Idempotent(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, first.Close())
 
-	// Re-opening the same directory should be a no-op: migrations are
-	// already applied, so this just re-attaches to the existing database.
 	second, err := Open(dir, DefaultOpenOptions())
 	require.NoError(t, err, "second Open on the same dir should succeed")
 	t.Cleanup(func() { _ = second.Close() })
@@ -170,11 +100,6 @@ func TestOpen_Idempotent(t *testing.T) {
 	assert.Equal(t, appliedFirst, appliedSecond, "applied migration set should be unchanged")
 }
 
-// TestOpen_CreatesMissingParentDir is a regression test for the fresh-install
-// startup crash: desktop.StateDir() does not exist until the feed store's
-// first save (see feed/store.go's writeFileAtomic), but main.go calls
-// pipelinedb.Open before anything else has a chance to create it. SQLite
-// does not create a missing parent directory on its own, so Open must.
 func TestOpen_CreatesMissingParentDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "does", "not", "exist")
 

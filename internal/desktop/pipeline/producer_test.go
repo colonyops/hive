@@ -59,15 +59,19 @@ type fakeAppender struct {
 	snapshots int
 }
 
-func (a *fakeAppender) AppendIfChanged(_ context.Context, topic, key string, payload []byte) (int64, bool, error) {
+func (a *fakeAppender) IngestObservation(_ context.Context, _ pipelinedb.Classifier, p pipelinedb.IngestObservationParams) (pipelinedb.IngestResult, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.nextOff++
-	a.calls = append(a.calls, pipelinedb.Msg{Topic: topic, Key: key, Payload: payload})
-	return a.nextOff, true, nil
+	a.calls = append(a.calls, pipelinedb.Msg{Topic: p.Topic, Key: p.Current.ExternalID, Payload: p.Current.Payload})
+	return pipelinedb.IngestResult{Wrote: true, Offset: a.nextOff}, nil
+}
+func (a *fakeAppender) ListSourceHeadKeys(context.Context, string) ([]string, error) { return nil, nil }
+func (a *fakeAppender) SourceHeadPayload(context.Context, string, string) ([]byte, error) {
+	return nil, nil
 }
 
-func (a *fakeAppender) AppendSnapshot(_ context.Context, _ string, _ []pipelinedb.SnapshotItem) (int64, error) {
+func (a *fakeAppender) AppendSnapshot(_ context.Context, _, _, _ string, _ []pipelinedb.SnapshotItem) (int64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.nextOff++
@@ -241,7 +245,7 @@ func TestProducer_EmptyKeyNeverDeduped(t *testing.T) {
 	producer.Tick(t.Context())
 	msgs, _, err := db.ReadFrom(t.Context(), 0, 10)
 	require.NoError(t, err)
-	assert.Len(t, msgs, 4, "empty-key messages and source snapshots are always appended")
+	assert.Len(t, msgs, 2, "empty-key messages have no inbox identity; snapshots remain authoritative")
 }
 
 func TestProducer_DeduplicationSurvivesRestart(t *testing.T) {

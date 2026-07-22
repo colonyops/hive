@@ -4,8 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
+	"time"
 
-	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
@@ -31,29 +32,81 @@ func (s *PipelineService) ReadFrom(consumer string, limit int) ([]pipelinedb.Msg
 	return s.db.ReadForConsumer(context.Background(), consumer, limit)
 }
 
-// Commit applies the frontend graph runtime's batch atomically: it upserts
-// feed outputs, enqueues action outputs, records node-run metrics, and
-// advances the consumer's offset to batch.UpToOffset. Idempotent by offset:
-// replaying a batch already applied (UpToOffset <= the consumer's current
-// offset) is a no-op.
+// Commit applies the frontend graph runtime's batch atomically. Feed outputs
+// are accepted without durable effect until membership claims land; action
+// outputs, node-run metrics, and the consumer offset are persisted atomically.
+// Idempotent by offset: replaying a batch already applied (UpToOffset <= the
+// consumer's current offset) is a no-op.
 func (s *PipelineService) Commit(batch pipeline.CommitBatch) error {
 	return s.db.CommitBatch(context.Background(), batch)
 }
 
-// FeedItems returns the persisted items for a feed, newest first.
-func (s *PipelineService) FeedItems(feedID string) ([]pipeline.FeedItem, error) {
-	return s.db.FeedItems(context.Background(), feedID)
+// EventLogTailOffset returns a Wails-safe decimal tail for the startup/deploy
+// replay protocol.
+func (s *PipelineService) EventLogTailOffset() (string, error) {
+	tail, err := s.db.EventLogTailOffset(context.Background())
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(tail, 10), nil
 }
 
-// MarkFeedItemRead clears the unread flag on one feed item.
-func (s *PipelineService) MarkFeedItemRead(feedID, itemID string) error {
-	return s.db.MarkFeedItemRead(context.Background(), feedID, itemID)
+// ActivateReplay atomically advances the consumer and installs the prepared
+// membership state for a startup or deploy replay.
+func (s *PipelineService) ActivateReplay(profileID, tail string, claims []pipelinedb.FeedMembershipClaim, feedIDs, sourceIDs []string) error {
+	offset, err := strconv.ParseInt(tail, 10, 64)
+	if err != nil || offset < 0 {
+		return fmt.Errorf("invalid event log tail %q", tail)
+	}
+	return s.db.ActivateReplay(context.Background(), profileID, offset, claims, feedIDs, sourceIDs)
 }
 
-// FeedItemCounts returns per-feed total/unread counts for every feed in a
-// flow, for the sidebar's rail badges.
-func (s *PipelineService) FeedItemCounts(flowID string) ([]pipeline.FeedCount, error) {
-	return s.db.FeedItemCounts(context.Background(), flowID)
+// ListUnarchivedInboxItems returns the JSON/Wails-friendly immutable inbox
+// identity and payload needed for claims-only synthetic replay.
+func (s *PipelineService) ListUnarchivedInboxItems(profileID string) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListUnarchivedInboxItems(context.Background(), profileID)
+}
+
+// ListReplaySourceSnapshots returns each source's latest authoritative
+// snapshot so membership replay preserves source provenance.
+func (s *PipelineService) ListReplaySourceSnapshots(profileID, throughOffset string) ([]pipelinedb.Msg, error) {
+	offset, err := strconv.ParseInt(throughOffset, 10, 64)
+	if err != nil || offset < 0 {
+		return nil, fmt.Errorf("invalid replay snapshot offset %q", throughOffset)
+	}
+	return s.db.ListReplaySourceSnapshots(context.Background(), profileID, offset)
+}
+
+// ENUM(inbox, open, archive, all, unfiled)
+type InboxView string
+
+// ListInboxItems reads one deterministic inbox view for a profile.
+func (s *PipelineService) ListInboxItems(profileID string, view InboxView, limit int) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListInboxItems(context.Background(), profileID, view.String(), limit)
+}
+
+func (s *PipelineService) ListInboxItemsByFeed(profileID, feedID string, limit int) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListInboxItemsByFeed(context.Background(), profileID, feedID, limit)
+}
+
+func (s *PipelineService) InboxItemEvents(itemID int64, limit int) ([]pipelinedb.InboxEventView, error) {
+	return s.db.InboxItemEvents(context.Background(), itemID, limit)
+}
+
+func (s *PipelineService) MarkInboxItemUnread(itemID, revision int64, unread bool) (pipelinedb.InboxItemView, error) {
+	return s.db.SetInboxItemUnread(context.Background(), itemID, revision, unread)
+}
+
+func (s *PipelineService) ToggleInboxItemArchived(itemID, revision int64) (pipelinedb.InboxItemView, error) {
+	return s.db.ToggleInboxItemArchived(context.Background(), itemID, revision, time.Now().UnixMilli())
+}
+
+func (s *PipelineService) InboxCounts(profileID string) (pipelinedb.InboxCounts, error) {
+	return s.db.InboxCounts(context.Background(), profileID)
+}
+
+func (s *PipelineService) FeedCounts(profileID string) ([]pipelinedb.FeedInboxCount, error) {
+	return s.db.FeedCounts(context.Background(), profileID)
 }
 
 // ActionViews returns the configured actions available for an item kind
@@ -76,7 +129,18 @@ func (s *PipelineService) SessionLaunchOptions() (pipeline.SessionLaunchOptions,
 // InvokeAction records the user's explicit confirmation for actionID against
 // item and executes it. It accepts only actions that apply to the item's kind;
 // executable configuration is always re-resolved from ActionStore.
-func (s *PipelineService) InvokeAction(actionID string, item feed.Item, input pipeline.ActionInvocationInput) (pipeline.ActionRunView, error) {
+func (s *PipelineService) InvokeAction(actionID string, itemID int64, input pipeline.ActionInvocationInput) (pipeline.ActionRunView, error) {
+	row, err := s.db.Queries().GetInboxItemByID(context.Background(), itemID)
+	if err != nil {
+		return pipeline.ActionRunView{}, fmt.Errorf("reading inbox item %d: %w", itemID, err)
+	}
+	if row.SourceKind != "github" {
+		return pipeline.ActionRunView{}, fmt.Errorf("unsupported action source kind %q", row.SourceKind)
+	}
+	item, err := pipeline.DecodeGitHubActionItem(row.Payload, row.ExternalID)
+	if err != nil {
+		return pipeline.ActionRunView{}, fmt.Errorf("decode GitHub inbox item %d payload: %w", itemID, err)
+	}
 	action, ok := s.actions.Get(actionID)
 	if !ok {
 		return pipeline.ActionRunView{}, fmt.Errorf("unknown action %q", actionID)
@@ -93,11 +157,7 @@ func (s *PipelineService) InvokeAction(actionID string, item feed.Item, input pi
 	if s.worker == nil {
 		return pipeline.ActionRunView{}, fmt.Errorf("action execution is unavailable")
 	}
-	payload, err := json.Marshal(item)
-	if err != nil {
-		return pipeline.ActionRunView{}, fmt.Errorf("encoding action item: %w", err)
-	}
-	return s.worker.Confirm(context.Background(), actionID, item.ID, payload, input)
+	return s.worker.Confirm(context.Background(), actionID, item.ID, item.Payload, input)
 }
 
 // NodeRuns returns up to limit of a flow's most recent node_run rows,

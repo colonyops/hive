@@ -113,7 +113,7 @@ function submitRename(): void {
         <div v-else class="rounded-lg border border-severity-error/35 bg-raised p-4">
           <div class="text-[14px] font-semibold text-text">Delete profile</div>
           <p class="mt-1.5 text-xs leading-relaxed text-text-3">
-            Permanently remove this profile, its flow file, and its committed feed items.
+            Permanently remove this profile, its flow file, inbox items, and membership claims.
           </p>
           <BaseButton
             variant="danger"

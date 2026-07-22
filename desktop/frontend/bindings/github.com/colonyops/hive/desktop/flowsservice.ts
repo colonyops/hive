@@ -30,7 +30,9 @@ export function CreateFlow(name: string): $CancellablePromise<$models.FlowSummar
 }
 
 /**
- * DeleteFlow removes a flow (a "profile") and its layout.
+ * DeleteFlow removes a flow (a profile) and its files before purging durable
+ * pipeline state. FlowStore.Delete treats an already-missing file as success,
+ * which makes a retry after a files-first partial deletion idempotent.
  */
 export function DeleteFlow(id: string): $CancellablePromise<void> {
     return $Call.ByID(2980382819, id);

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/colonyops/hive/internal/desktop"
 	"github.com/colonyops/hive/internal/desktop/feed"
@@ -14,20 +15,20 @@ import (
 
 // sourceToCommitSmokePath is available only to the dedicated server-build e2e
 // fixture (HIVE_DESKTOP_MOCK=pipeline). It is deliberately not a general test
-// data API: POST always appends this fixed source fixture, while GET only
-// reads the two persisted values the composition test verifies.
+// data API: POST always appends this fixed source fixture, while GET reports
+// only persisted node runs during this temporary Phase-1 degraded harness.
 const sourceToCommitSmokePath = "/_e2e/source-to-commit"
 
 const (
 	sourceToCommitSmokeFlowID   = "source-to-commit"
 	sourceToCommitSmokeSourceID = "fixture-source"
-	sourceToCommitSmokeFeedID   = sourceToCommitSmokeFlowID + "/smoke-feed"
+	sourceToCommitSmokeFeedID   = "source-to-commit/smoke-feed"
 )
 
 var sourceToCommitSmokeItems = []feed.Item{
 	{
 		ID: "smoke-pr", Kind: "PR", Repo: "hive/e2e", Num: 101,
-		Title: "Source-to-commit smoke PR", Author: "smoke", Age: "now", Unread: true,
+		Title: "Source-to-commit smoke PR", Author: "smoke", Unread: true,
 		Labels: []string{"e2e"}, Branch: "test/source-to-commit",
 		Body:   "Fixture item appended by Go and committed through the browser graph.",
 		Prompt: "Verify the source-to-commit desktop smoke path.",
@@ -35,24 +36,38 @@ var sourceToCommitSmokeItems = []feed.Item{
 	},
 	{
 		ID: "smoke-issue", Kind: "Issue", Repo: "hive/e2e", Num: 102,
-		Title: "Source-to-commit smoke issue", Author: "smoke", Age: "now", Unread: true,
+		Title: "Source-to-commit smoke issue", Author: "smoke", Unread: true,
 		Labels: []string{"e2e"}, Branch: "test/source-to-commit",
 		Body:   "Second fixture item proves one frontend batch commits multiple outputs.",
-		Prompt: "Verify multiple persisted feed outputs.",
+		Prompt: "Verify one frontend batch processes multiple outputs.",
 		URL:    "https://example.invalid/hive/e2e/issues/102",
 	},
 }
 
 type sourceToCommitSmokeState struct {
-	FeedItems []pipelinedb.FeedItemView  `json:"feedItems"`
-	NodeRuns  []pipelinedb.NodeRunRecord `json:"nodeRuns"`
+	Claims   []pipelinedb.InboxItemView `json:"claims"`
+	NodeRuns []pipelinedb.NodeRunRecord `json:"nodeRuns"`
+}
+
+// sourceToCommitSmokeClassifier is the deliberately small source-side
+// classifier used by this fixture. IngestObservation remains the production
+// source boundary: it creates the inbox identity and appends the event that
+// the browser graph consumes. The smoke test therefore cannot pass from a
+// pre-seeded claim.
+type sourceToCommitSmokeClassifier struct{}
+
+func (sourceToCommitSmokeClassifier) Classify(previous *pipelinedb.Observation, current pipelinedb.Observation) pipelinedb.Classification {
+	if previous == nil {
+		return pipelinedb.Classification{Kind: "observed", Transition: pipelinedb.TransitionNone, Attention: pipelinedb.AttentionActivity, Lifecycle: pipelinedb.LifecycleActive, Summary: current.Title}
+	}
+	return pipelinedb.Classification{Kind: "updated", Transition: pipelinedb.TransitionNone, Attention: pipelinedb.AttentionTrivial, Lifecycle: pipelinedb.LifecycleActive, Summary: current.Title}
 }
 
 // sourceToCommitSmokeMiddleware is a narrow, mock-only harness around the
 // real server build. The app still receives its messages via the normal Wails
 // event, executes the production TS graph and Worker, then calls
 // PipelineService.Commit; this middleware merely supplies deterministic Go
-// source input and reads the Go-persisted result back for Playwright.
+// source input and reads the persisted node runs back for Playwright.
 func sourceToCommitSmokeMiddleware(db *pipelinedb.DB) application.Middleware {
 	return func(next http.Handler) http.Handler {
 		if desktop.MockMode() != "pipeline" {
@@ -95,24 +110,40 @@ func appendSourceToCommitSmokeItems(ctx context.Context, db *pipelinedb.DB) erro
 		if err != nil {
 			return fmt.Errorf("encode smoke fixture item %q: %w", item.ID, err)
 		}
-		offset, err := db.Append(ctx, "source:"+sourceToCommitSmokeFlowID+"/"+sourceToCommitSmokeSourceID, item.ID, payload)
+		// IngestObservation is the production source boundary. It creates the
+		// inbox identity and appends the event log record; the graph still has to
+		// traverse all nodes and Commit has to create the feed claim.
+		result, err := db.IngestObservation(ctx, sourceToCommitSmokeClassifier{}, pipelinedb.IngestObservationParams{
+			ProfileID: sourceToCommitSmokeFlowID,
+			Topic:     "source:" + sourceToCommitSmokeFlowID + "/" + sourceToCommitSmokeSourceID,
+			Policy:    pipelinedb.ResurfacePolicyStateChanges,
+			Current: pipelinedb.Observation{
+				ExternalID: item.ID, Title: item.Title, URL: item.URL,
+				SourceKind: "github", SourceScope: sourceToCommitSmokeSourceID,
+				ObservedAt: time.Now().UnixMilli(), Payload: payload,
+			},
+		})
 		if err != nil {
-			return fmt.Errorf("append smoke fixture item %q: %w", item.ID, err)
+			return fmt.Errorf("ingest smoke fixture item %q: %w", item.ID, err)
 		}
-		lastOffset = offset
+		if result.Wrote {
+			lastOffset = result.Offset
+		}
 	}
-	emitLogAppended(lastOffset)
+	if lastOffset > 0 {
+		emitLogAppended(lastOffset)
+	}
 	return nil
 }
 
 func readSourceToCommitSmokeState(ctx context.Context, db *pipelinedb.DB) (sourceToCommitSmokeState, error) {
-	items, err := db.FeedItems(ctx, sourceToCommitSmokeFeedID)
+	claims, err := db.ListInboxItemsByFeed(ctx, sourceToCommitSmokeFlowID, sourceToCommitSmokeFeedID, 100)
 	if err != nil {
-		return sourceToCommitSmokeState{}, fmt.Errorf("read smoke feed items: %w", err)
+		return sourceToCommitSmokeState{}, fmt.Errorf("read smoke claims: %w", err)
 	}
 	runs, err := db.NodeRuns(ctx, sourceToCommitSmokeFlowID, 100)
 	if err != nil {
 		return sourceToCommitSmokeState{}, fmt.Errorf("read smoke node runs: %w", err)
 	}
-	return sourceToCommitSmokeState{FeedItems: items, NodeRuns: runs}, nil
+	return sourceToCommitSmokeState{Claims: claims, NodeRuns: runs}, nil
 }

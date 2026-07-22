@@ -6,8 +6,7 @@
 package feed
 
 // Item is a normalized GitHub item (PR or issue) produced by a source fetch.
-// It is JSON-encoded as a source node's event_log payload and re-surfaced as
-// a feed_item, so the frontend and the persisted feed both read this shape.
+// Its JSON payload is stored in a durable inbox row.
 type Item struct {
 	ID        string `json:"id"`
 	Kind      string `json:"kind"` // "PR" | "Issue"
@@ -15,7 +14,7 @@ type Item struct {
 	Num       int    `json:"num"`
 	Title     string `json:"title"`
 	Author    string `json:"author"`
-	Age       string `json:"age"`
+	State     string `json:"state,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"` // GitHub's last-updated time, unix milliseconds
 	Unread    bool   `json:"unread"`
 	// Reason is the GitHub notification reason (e.g. "review_requested"),

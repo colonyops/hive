@@ -16,7 +16,7 @@ describe('processorRegistry', () => {
 
   it('is directly usable by InProcessTransport', async () => {
     const transport = new InProcessTransport(processorRegistry)
-    const msg: Msg = { ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: { repo: 'acme/app' } }
+    const msg: Msg = { ID: '1', Key: '1', Topic: 'source:test', Ts: 0, Payload: { repo: 'acme/app' }, SourceKind: 'github', SourceScope: 'acme/app' }
     const result = await transport.run('github-filter', 'flow:node', { repos: ['acme/*'] }, msg, {}, 1000)
     expect(result).toEqual([msg, null])
   })

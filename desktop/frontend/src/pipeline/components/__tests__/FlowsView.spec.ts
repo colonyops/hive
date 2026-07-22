@@ -15,7 +15,11 @@ const mocks = vi.hoisted(() => ({
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
   SaveLayout: vi.fn(),
-  FeedItems: vi.fn(),
+  ListInboxItemsByFeed: vi.fn(),
+  ListUnarchivedInboxItems: vi.fn(),
+  ListReplaySourceSnapshots: vi.fn(),
+  EventLogTailOffset: vi.fn(),
+  ActivateReplay: vi.fn(),
   NodeRuns: vi.fn(),
   ReadFrom: vi.fn(),
   Commit: vi.fn(),
@@ -32,7 +36,11 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/flowsservice', (
 }))
 
 vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
-  FeedItems: mocks.FeedItems,
+  ListInboxItemsByFeed: mocks.ListInboxItemsByFeed,
+  ListUnarchivedInboxItems: mocks.ListUnarchivedInboxItems,
+  ListReplaySourceSnapshots: mocks.ListReplaySourceSnapshots,
+  EventLogTailOffset: mocks.EventLogTailOffset,
+  ActivateReplay: mocks.ActivateReplay,
   NodeRuns: mocks.NodeRuns,
   ReadFrom: mocks.ReadFrom,
   Commit: mocks.Commit,
@@ -69,6 +77,10 @@ describe('FlowsView flow selector', () => {
     mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
+    mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.ListReplaySourceSnapshots.mockResolvedValue([])
+    mocks.EventLogTailOffset.mockResolvedValue('0')
+    mocks.ActivateReplay.mockResolvedValue(undefined)
     mocks.ReadFrom.mockResolvedValue([])
     mocks.Commit.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
@@ -117,6 +129,10 @@ describe('FlowsView deploy menu', () => {
     mocks.GetFlow.mockImplementation(async (id: string) => wireFlow(id, id === 'flow-2' ? 'Flow two' : 'Flow one'))
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
+    mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.ListReplaySourceSnapshots.mockResolvedValue([])
+    mocks.EventLogTailOffset.mockResolvedValue('0')
+    mocks.ActivateReplay.mockResolvedValue(undefined)
     mocks.ReadFrom.mockResolvedValue([])
     mocks.Commit.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})

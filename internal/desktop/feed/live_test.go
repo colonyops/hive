@@ -261,6 +261,60 @@ func TestCooldown_SuppressesAllFetches(t *testing.T) {
 	mu.Unlock()
 }
 
+func TestConfirmTerminal_HonorsCooldownWithoutRequest(t *testing.T) {
+	requests := 0
+	live := newLiveProviderWithHandler(t, func(http.ResponseWriter, *http.Request) {
+		requests++
+	})
+	now := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
+	live.now = func() time.Time { return now }
+	live.mu.Lock()
+	live.cooldownUntil = now.Add(time.Minute)
+	live.cooldownErr = github.ErrRateLimited
+	live.mu.Unlock()
+
+	_, err := live.ConfirmTerminal(t.Context(), "acme/repo", 42, false)
+	require.ErrorIs(t, err, github.ErrRateLimited)
+	assert.Zero(t, requests, "an active cooldown must suppress terminal hydration")
+}
+
+func TestConfirmTerminal_SelectsIssueOrPullHydration(t *testing.T) {
+	var mu sync.Mutex
+	var paths []string
+	live := newLiveProviderWithHandler(t, func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		paths = append(paths, r.URL.Path)
+		mu.Unlock()
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"number":42,"state":"CLOSED","merged":true,"updated_at":"2026-07-22T12:00:00Z"}`))
+	})
+	fixedNow := time.Date(2026, 7, 22, 12, 0, 0, 0, time.UTC)
+	live.now = func() time.Time { return fixedNow }
+
+	tests := []struct {
+		name       string
+		isPR       bool
+		path       string
+		wantMerged bool
+	}{
+		{name: "issue", path: "/repos/acme/repo/issues/42"},
+		{name: "pull request", isPR: true, path: "/repos/acme/repo/pulls/42", wantMerged: true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			issue, err := live.ConfirmTerminal(t.Context(), "acme/repo", 42, tt.isPR)
+			require.NoError(t, err)
+			assert.Equal(t, 42, issue.Number)
+			assert.Equal(t, "closed", issue.State)
+			assert.Equal(t, tt.wantMerged, issue.Merged)
+		})
+	}
+
+	mu.Lock()
+	defer mu.Unlock()
+	assert.Equal(t, []string{"/repos/acme/repo/issues/42", "/repos/acme/repo/pulls/42"}, paths)
+}
+
 func TestCooldown_ServesStale(t *testing.T) {
 	var mu sync.Mutex
 	requests := 0

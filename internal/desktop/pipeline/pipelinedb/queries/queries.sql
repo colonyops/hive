@@ -1,7 +1,10 @@
 -- name: AppendEvent :one
-INSERT INTO event_log (topic, key, payload, created_at, snapshot)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO event_log (topic, key, payload, created_at, snapshot, source_kind, source_scope, occurrence_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING "offset";
+
+-- name: UpdateEventOccurrenceKey :exec
+UPDATE event_log SET occurrence_key = ? WHERE "offset" = ?;
 
 -- name: GetSourceHeadPayload :one
 SELECT payload FROM source_head
@@ -11,6 +14,9 @@ WHERE topic = ? AND key = ?;
 INSERT INTO source_head (topic, key, payload)
 VALUES (?, ?, ?)
 ON CONFLICT(topic, key) DO UPDATE SET payload = excluded.payload;
+
+-- name: ListSourceHeadKeys :many
+SELECT key FROM source_head WHERE topic = ?;
 
 -- name: ReadEventsFrom :many
 SELECT * FROM event_log
@@ -22,12 +28,32 @@ LIMIT ?;
 SELECT * FROM consumer_offset
 WHERE consumer = ?;
 
--- name: ListConsumerOffsets :many
-SELECT * FROM consumer_offset;
+-- name: DeleteEventsOlderThan :exec
+DELETE FROM event_log AS target
+WHERE target.created_at < ?
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  );
 
--- name: DeleteEventsThrough :exec
-DELETE FROM event_log
-WHERE "offset" <= ?;
+-- name: DeleteEventsOverLimitPerTopic :exec
+DELETE FROM event_log AS target
+WHERE (
+    SELECT COUNT(*) FROM event_log AS newer
+    WHERE newer.topic = target.topic AND newer."offset" > target."offset"
+) >= CAST(sqlc.arg(limit) AS INTEGER)
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  );
 
 -- name: CommitConsumerOffset :exec
 -- Monotonic upsert: on conflict, only advance the stored offset when the
@@ -39,56 +65,177 @@ VALUES (?, ?)
 ON CONFLICT(consumer) DO UPDATE SET "offset" = excluded."offset"
 WHERE excluded."offset" > consumer_offset."offset";
 
--- name: UpsertFeedItem :exec
--- Idempotent by (feed_id, item_id): committing the same key twice updates
--- the row in place rather than duplicating it.
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = excluded.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id;
+-- name: InsertInboxItem :one
+-- Seed-only plain insert for deterministic desktop fixtures. The ingestion
+-- path receives its classify-and-upsert contract in a later phase.
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    lifecycle, first_seen_at, last_event_at
+) VALUES (
+    ?, ?, ?, ?,
+    ?, ?, ?, 1, ?,
+    ?, ?, ?
+)
+RETURNING *;
 
--- name: UpsertFeedItemSnapshot :exec
--- Snapshot outputs preserve a previously-read row's unread state while still
--- updating its payload and reconciliation marker.
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = feed_item.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id;
+-- name: UpsertInboxItem :one
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    archived_at, archived_actor, archived_reason,
+    lifecycle, source_state, first_seen_at, last_event_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (profile_id, source_kind, source_scope, external_id) DO UPDATE SET
+    title = excluded.title, url = excluded.url, payload = excluded.payload,
+    revision = inbox_item.revision + 1, unread = excluded.unread,
+    archived_at = excluded.archived_at, archived_actor = excluded.archived_actor,
+    archived_reason = excluded.archived_reason, lifecycle = excluded.lifecycle,
+    source_state = excluded.source_state, last_event_at = excluded.last_event_at
+RETURNING *;
 
--- name: DeleteFeedItemsNotInSnapshot :exec
-DELETE FROM feed_item
-WHERE feed_id = ?
-  AND source_topic = ?
-  AND snapshot_id != ?;
+-- name: GetInboxItemByExternalID :one
+SELECT * FROM inbox_item
+WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = ?;
 
--- name: ListFeedItemsByFeed :many
-SELECT feed_id, item_id, payload, updated_at, unread FROM feed_item
-WHERE feed_id = ?
-ORDER BY updated_at DESC;
+-- name: ListUnarchivedInboxItemsByProfile :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL;
 
--- name: MarkFeedItemRead :exec
-UPDATE feed_item SET unread = 0
-WHERE feed_id = ? AND item_id = ?;
+-- name: ListLatestSourceSnapshotsByTopicPrefix :many
+SELECT event_log.*
+FROM event_log
+JOIN (
+    SELECT topic, MAX("offset") AS "offset"
+    FROM event_log
+    WHERE snapshot = 1
+      AND "offset" <= CAST(sqlc.arg(through_offset) AS INTEGER)
+      AND substr(topic, 1, length(CAST(sqlc.arg(topic_prefix) AS TEXT))) = CAST(sqlc.arg(topic_prefix) AS TEXT)
+    GROUP BY topic
+) AS latest ON latest.topic = event_log.topic AND latest."offset" = event_log."offset"
+ORDER BY event_log.topic;
 
--- name: CountFeedItemsByFlow :many
--- Per-feed total and unread counts for every feed belonging to a flow, for
--- the sidebar rail badges: one query instead of an N-feed fan-out of
--- ListFeedItemsByFeed. The caller passes a LIKE prefix like "myflow/%".
+-- name: GetUnarchivedInboxItemByID :one
+SELECT * FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL;
+
+-- name: GetInboxItemByID :one
+SELECT * FROM inbox_item WHERE id = ?;
+
+-- name: ListInboxItemsInbox :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
+ORDER BY last_event_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsOpen :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL AND lifecycle = 'active'
+ORDER BY last_event_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsArchive :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NOT NULL
+ORDER BY archived_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsAll :many
+SELECT * FROM inbox_item WHERE profile_id = ?
+ORDER BY last_event_at DESC, id DESC LIMIT ?;
+
+-- name: ListInboxItemsUnfiled :many
+SELECT i.* FROM inbox_item i
+WHERE i.profile_id = ?
+  AND NOT EXISTS (SELECT 1 FROM feed_membership_claim c WHERE c.item_id = i.id)
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?;
+
+-- name: ListInboxItemsByFeed :many
+SELECT DISTINCT i.* FROM inbox_item i
+JOIN feed_membership_claim c ON c.item_id = i.id
+WHERE c.profile_id = ? AND c.feed_id = ? AND i.archived_at IS NULL
+ORDER BY i.last_event_at DESC, i.id DESC LIMIT ?;
+
+-- name: CountInboxItemsByFeed :many
 SELECT
-    feed_id,
-    CAST(COUNT(*) AS INTEGER) AS total,
-    CAST(SUM(unread) AS INTEGER) AS unread
-FROM feed_item
-WHERE feed_id LIKE sqlc.arg(flow_prefix)
-GROUP BY feed_id;
+    c.feed_id AS feed_id,
+    CAST(COUNT(DISTINCT i.id) AS INTEGER) AS total,
+    CAST(COUNT(DISTINCT CASE WHEN i.unread = 1 THEN i.id END) AS INTEGER) AS unread
+FROM feed_membership_claim c
+JOIN inbox_item i ON i.id = c.item_id
+WHERE c.profile_id = ? AND i.archived_at IS NULL
+GROUP BY c.feed_id;
+
+-- name: ListInboxEventsByItem :many
+SELECT * FROM inbox_event WHERE item_id = ? ORDER BY id DESC LIMIT ?;
+
+-- name: SetInboxItemUnread :one
+UPDATE inbox_item SET unread = ?, revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING *;
+
+-- name: ToggleInboxItemArchived :one
+UPDATE inbox_item SET
+    archived_at = CASE WHEN archived_at IS NULL THEN ? ELSE NULL END,
+    archived_actor = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
+    archived_reason = CASE WHEN archived_at IS NULL THEN 'manual' ELSE NULL END,
+    revision = revision + 1
+WHERE id = ? AND revision = ?
+RETURNING *;
+
+-- name: CountInboxItems :one
+SELECT
+    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_total,
+    CAST(COALESCE(SUM(CASE WHEN archived_at IS NULL AND unread = 1 THEN 1 ELSE 0 END), 0) AS INTEGER) AS inbox_unread
+FROM inbox_item WHERE profile_id = ?;
+
+-- name: UpsertFeedMembershipClaim :exec
+INSERT INTO feed_membership_claim (profile_id, feed_id, item_id, source_id)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (profile_id, feed_id, item_id, source_id) DO NOTHING;
+
+-- name: DeleteFeedMembershipClaimsNotInSnapshot :exec
+DELETE FROM feed_membership_claim
+WHERE feed_id = ? AND source_id = ? AND item_id NOT IN (sqlc.slice(item_ids));
+
+-- name: DeleteFeedMembershipClaimsForSourceAll :exec
+DELETE FROM feed_membership_claim WHERE feed_id = ? AND source_id = ?;
+
+-- name: DeleteFeedMembershipClaimsForFeeds :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND feed_id NOT IN (sqlc.slice(feed_ids));
+
+-- name: DeleteFeedMembershipClaimsForFeedsAll :exec
+DELETE FROM feed_membership_claim WHERE profile_id = ?;
+
+-- name: DeleteFeedMembershipClaimsForRemovedSources :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND source_id NOT IN (sqlc.slice(source_ids))
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL);
+
+-- name: DeleteFeedMembershipClaimsForRemovedSourcesAll :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL);
+
+-- name: DeleteUnarchivedFeedMembershipClaimsByProfile :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL);
+
+-- name: DeleteInboxItemsByProfile :exec
+DELETE FROM inbox_item WHERE profile_id = ?;
+
+-- name: DeleteConsumerOffsetByConsumer :exec
+DELETE FROM consumer_offset WHERE consumer = ?;
+
+-- name: DeleteEventLogByTopicPrefix :exec
+DELETE FROM event_log WHERE topic LIKE ? ESCAPE '\';
+
+-- name: DeleteSourceHeadByTopicPrefix :exec
+DELETE FROM source_head WHERE topic LIKE ? ESCAPE '\';
+
+-- name: PruneArchivedInboxItems :exec
+-- Cascades to inbox_event and feed_membership_claim through their item FKs.
+DELETE FROM inbox_item WHERE archived_at IS NOT NULL AND archived_at <= ?;
+
+-- name: InsertInboxEvent :one
+INSERT INTO inbox_event (item_id, kind, transition, attention, occurrence_key, summary, detail, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (item_id, occurrence_key) WHERE occurrence_key IS NOT NULL DO NOTHING
+RETURNING *;
 
 -- name: EnqueueOutputCommand :exec
 -- Deduped on (action_id, key): a replayed commit batch enqueues the same

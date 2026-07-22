@@ -1,7 +1,7 @@
-// feed is a terminal node (1 in / 0 out): the arriving msg upserts into this
-// feed as an unread feed_item. The node *is* the feed — its identity is the
-// flow-qualified node id "<flowId>/<nodeId>", which is the durable feed_item
-// key the sidebar reads back. role/sink here are the engine's single source
+// feed is a terminal node (1 in / 0 out): the arriving message creates an
+// unread inbox-item membership claim. The node *is* the feed — its identity is
+// the flow-qualified node id "<flowId>/<nodeId>", the durable claim key the
+// sidebar reads back. role/sink here are the engine's single source
 // of truth for "how a feed node becomes a commit output" — runGraph imports
 // `sink`/`unread` directly rather than re-encoding the mapping.
 
@@ -25,7 +25,7 @@ export interface Config {
 /** Longest description the editor accepts — mirrors Go's feedDescriptionMaxLen. */
 export const descriptionMaxLen = 500
 
-/** New feed items land unread until the user reads them. */
+/** Newly observed inbox items land unread until the user reads them. */
 export const unread = true
 
 /** The feed's durable key is the flow-qualified node id. */

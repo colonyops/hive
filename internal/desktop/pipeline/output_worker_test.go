@@ -25,9 +25,9 @@ func enqueueTestCommand(t *testing.T, db *pipelinedb.DB, actionID, key, payload 
 		UpToOffset: "1",
 		Outputs: []pipelinedb.Output{
 			{
-				Sink:    pipelinedb.Sink{Kind: pipelinedb.SinkKindAction, TargetID: actionID},
-				Key:     key,
-				Payload: []byte(payload),
+				Sink:          pipelinedb.Sink{Kind: pipelinedb.SinkKindAction, TargetID: actionID},
+				OccurrenceKey: key,
+				Payload:       []byte(payload),
 			},
 		},
 	}))
