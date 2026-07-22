@@ -23,6 +23,7 @@ import (
 	"github.com/colonyops/hive/internal/desktop/auth"
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/jobs"
+	desktopnotify "github.com/colonyops/hive/internal/desktop/notify"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
 	"github.com/colonyops/hive/internal/desktop/pipeline/actions"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
@@ -34,6 +35,7 @@ import (
 	"github.com/colonyops/hive/pkg/tmpl"
 	"github.com/wailsapp/wails/v3/pkg/application"
 	"github.com/wailsapp/wails/v3/pkg/events"
+	wailsnotify "github.com/wailsapp/wails/v3/pkg/services/notifications"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 )
 
@@ -459,6 +461,15 @@ func main() {
 	updaterVersion, _, _ := resolvedBuildInfo()
 	updaterService := NewUpdaterService(updaterVersion, settings.AutoUpdateOrDefault(), defaultUpdateCheckInterval, logger)
 	focus := newFocusState()
+	nativeNotifications := wailsnotify.New()
+	notifier, err := desktopnotify.New(nativeNotifications, appIcon)
+	var notificationService *NotificationService
+	if err != nil {
+		logger.Warn().Err(err).Msg("native notifications unavailable")
+		notificationService = NewUnavailableNotificationService(err)
+	} else {
+		notificationService = NewNotificationService(notifier)
+	}
 
 	options := application.Options{
 		Name:        "Hive",
@@ -474,6 +485,8 @@ func main() {
 			application.NewService(NewSystemService()),
 			application.NewService(NewSettingsService(producer, fetcher, logger)),
 			application.NewService(updaterService),
+			application.NewService(nativeNotifications),
+			application.NewService(notificationService),
 			application.NewService(NewWindowService(focus)),
 		},
 		Assets: application.AssetOptions{
@@ -528,6 +541,13 @@ func main() {
 			},
 			InvisibleTitleBarHeight: 42,
 		},
+	})
+
+	// This is the sole owner of notification activation: a click only brings
+	// the existing window forward; routing stays out of the notification binding.
+	nativeNotifications.OnNotificationResponse(func(wailsnotify.NotificationResult) {
+		window.Show()
+		window.Focus()
 	})
 
 	window.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) {

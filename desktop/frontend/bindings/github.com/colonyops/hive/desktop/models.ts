@@ -55,6 +55,17 @@ export interface GithubSettings {
 export type InboxView = string;
 
 /**
+ * NotifyInput is the frontend-facing request for a native notification.
+ */
+export interface NotifyInput {
+    "title": string;
+    "subtitle": string;
+    "body": string;
+    "sound": boolean;
+    "data": { [_ in string]?: any } | null;
+}
+
+/**
  * PathInfo describes a single on-disk location surfaced in settings.
  */
 export interface PathInfo {
