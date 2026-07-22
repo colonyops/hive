@@ -27,6 +27,15 @@ type Settings struct {
 	// PollInterval. Resolve it through AutoUpdateOrDefault rather than reading
 	// the pointer directly.
 	AutoUpdate *bool `yaml:"auto_update,omitempty"`
+	// NotificationsEnabled controls Hive notifications. An absent key defaults
+	// to enabled so upgrades preserve the prior behavior.
+	NotificationsEnabled *bool `yaml:"notifications_enabled,omitempty"`
+	// SystemNotificationsEnabled controls OS banners while Hive is unfocused.
+	// It defaults to enabled when absent.
+	SystemNotificationsEnabled *bool `yaml:"system_notifications_enabled,omitempty"`
+	// NotificationSound controls sound for OS notification banners. It defaults
+	// to enabled when absent.
+	NotificationSound *bool `yaml:"notification_sound,omitempty"`
 }
 
 // SettingsPath is the settings.yaml location under the desktop config root.
@@ -79,6 +88,33 @@ func (s Settings) AutoUpdateOrDefault() bool {
 		return true
 	}
 	return *s.AutoUpdate
+}
+
+// NotificationsEnabledOrDefault resolves NotificationsEnabled, defaulting to
+// true when the key is absent from settings.yaml.
+func (s Settings) NotificationsEnabledOrDefault() bool {
+	if s.NotificationsEnabled == nil {
+		return true
+	}
+	return *s.NotificationsEnabled
+}
+
+// SystemNotificationsEnabledOrDefault resolves SystemNotificationsEnabled,
+// defaulting to true when the key is absent from settings.yaml.
+func (s Settings) SystemNotificationsEnabledOrDefault() bool {
+	if s.SystemNotificationsEnabled == nil {
+		return true
+	}
+	return *s.SystemNotificationsEnabled
+}
+
+// NotificationSoundOrDefault resolves NotificationSound, defaulting to true
+// when the key is absent from settings.yaml.
+func (s Settings) NotificationSoundOrDefault() bool {
+	if s.NotificationSound == nil {
+		return true
+	}
+	return *s.NotificationSound
 }
 
 // PollIntervalOrDefault resolves PollInterval. Hand-edited values below the

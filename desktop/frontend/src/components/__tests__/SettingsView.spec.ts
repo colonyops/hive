@@ -7,6 +7,12 @@ import { setTheme } from '../../composables/useTheme'
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/settingsservice', () => ({
   GithubSettings: vi.fn().mockResolvedValue({ pollIntervalSeconds: 60, minPollIntervalSeconds: 60 }),
   SetGithubSettings: vi.fn(),
+  NotificationSettings: vi.fn().mockResolvedValue({ notificationsEnabled: true, systemNotificationsEnabled: true, notificationSound: true }),
+  SetNotificationSettings: vi.fn(),
+}))
+vi.mock('../../../bindings/github.com/colonyops/hive/desktop/notificationservice', () => ({
+  PermissionStatus: vi.fn().mockResolvedValue('not-requested'),
+  RequestNotificationPermission: vi.fn(),
 }))
 
 beforeEach(() => {
@@ -70,6 +76,13 @@ describe('SettingsView', () => {
     expect(wrapper.find('[data-testid="integration-github-configure"]').exists()).toBe(true)
     await wrapper.find('[data-testid="integration-github-configure"]').trigger('click')
     expect(wrapper.find('[data-testid="github-integration-drawer"]').exists()).toBe(true)
+  })
+
+  it('exposes a notifications category that renders the notification settings', () => {
+    const wrapper = mount(SettingsView, { props: { githubConnected: true, activeCategory: 'notifications' } })
+
+    expect(wrapper.find('[data-testid="settings-category-notifications"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="notification-settings"]').exists()).toBe(true)
   })
 
   it('exposes a keybindings section that renders the editor', () => {

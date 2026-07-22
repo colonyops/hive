@@ -461,34 +461,47 @@ func main() {
 	updaterVersion, _, _ := resolvedBuildInfo()
 	updaterService := NewUpdaterService(updaterVersion, settings.AutoUpdateOrDefault(), defaultUpdateCheckInterval, logger)
 	focus := newFocusState()
-	nativeNotifications := wailsnotify.New()
-	notifier, err := desktopnotify.New(nativeNotifications, appIcon)
-	var notificationService *NotificationService
-	if err != nil {
-		logger.Warn().Err(err).Msg("native notifications unavailable")
-		notificationService = NewUnavailableNotificationService(err)
-	} else {
-		notificationService = NewNotificationService(notifier)
+	// Mock/server builds deliberately do not start the native Wails
+	// notification service: E2E verifies preference persistence without an OS
+	// bus, banner, or permission prompt. The frontend still gets a descriptive
+	// unavailable binding through NotificationService.
+	notificationService := NewUnavailableNotificationService(fmt.Errorf("native notifications unavailable in desktop mock mode"))
+	var nativeNotifications *wailsnotify.NotificationService
+	if desktop.MockMode() == "" {
+		nativeNotifications = wailsnotify.New()
+		notifier, err := desktopnotify.New(nativeNotifications, appIcon)
+		if err != nil {
+			logger.Warn().Err(err).Msg("native notifications unavailable")
+			notificationService = NewUnavailableNotificationService(err)
+		} else {
+			notificationService = NewNotificationService(notifier)
+		}
 	}
+
+	services := []application.Service{
+		application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
+		application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
+		application.NewService(NewFlowsService(flowsStore, pipelineDB, onFlowsUpdated)),
+		application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
+		application.NewService(NewActivityService(activityStore)),
+		application.NewService(NewJobService(jobStore)),
+		application.NewService(NewSystemService()),
+		application.NewService(NewSettingsService(producer, fetcher, logger)),
+		application.NewService(updaterService),
+	}
+	if nativeNotifications != nil {
+		services = append(services, application.NewService(nativeNotifications))
+	}
+	services = append(services,
+		application.NewService(notificationService),
+		application.NewService(NewWindowService(focus)),
+	)
 
 	options := application.Options{
 		Name:        "Hive",
 		Description: "Hive desktop application",
 		Icon:        appIcon,
-		Services: []application.Service{
-			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
-			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
-			application.NewService(NewFlowsService(flowsStore, pipelineDB, onFlowsUpdated)),
-			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
-			application.NewService(NewActivityService(activityStore)),
-			application.NewService(NewJobService(jobStore)),
-			application.NewService(NewSystemService()),
-			application.NewService(NewSettingsService(producer, fetcher, logger)),
-			application.NewService(updaterService),
-			application.NewService(nativeNotifications),
-			application.NewService(notificationService),
-			application.NewService(NewWindowService(focus)),
-		},
+		Services:    services,
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
 			Middleware: desktopSmokeMiddleware(pipelineDB, actionRuntime.db),
@@ -545,10 +558,12 @@ func main() {
 
 	// This is the sole owner of notification activation: a click only brings
 	// the existing window forward; routing stays out of the notification binding.
-	nativeNotifications.OnNotificationResponse(func(wailsnotify.NotificationResult) {
-		window.Show()
-		window.Focus()
-	})
+	if nativeNotifications != nil {
+		nativeNotifications.OnNotificationResponse(func(wailsnotify.NotificationResult) {
+			window.Show()
+			window.Focus()
+		})
+	}
 
 	window.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) {
 		if focus.set(true) {

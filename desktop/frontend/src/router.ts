@@ -7,7 +7,7 @@ import {
 } from 'vue-router'
 
 export type AppRouteName = 'feed' | 'flows' | 'activity' | 'application-settings' | 'profile-settings'
-export type ApplicationSettingsSection = 'appearance' | 'integrations' | 'actions' | 'keybindings' | 'system'
+export type ApplicationSettingsSection = 'appearance' | 'integrations' | 'actions' | 'keybindings' | 'system' | 'notifications'
 export type ProfileSettingsSection = 'general' | 'danger'
 
 // App.vue owns the persistent desktop shell and renders the matched page in
@@ -37,7 +37,7 @@ export function createAppRouter(history: RouterHistory = createWebHashHistory())
         component: ShellPage,
       },
       {
-        path: '/settings/:section(appearance|integrations|actions|keybindings|system)?',
+        path: '/settings/:section(appearance|integrations|actions|keybindings|system|notifications)?',
         name: 'application-settings',
         component: ShellPage,
       },

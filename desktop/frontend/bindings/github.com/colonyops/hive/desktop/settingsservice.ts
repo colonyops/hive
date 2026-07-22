@@ -24,9 +24,24 @@ export function GithubSettings(): $CancellablePromise<$models.GithubSettings> {
 }
 
 /**
+ * NotificationSettings returns the current resolved notification settings.
+ */
+export function NotificationSettings(): $CancellablePromise<$models.NotificationSettings> {
+    return $Call.ByID(2998490926);
+}
+
+/**
  * SetGithubSettings validates, persists, and immediately applies the GitHub
  * poll interval. API callers below the floor are rejected rather than clamped.
  */
 export function SetGithubSettings(settings: $models.GithubSettings): $CancellablePromise<void> {
     return $Call.ByID(2361435926, settings);
+}
+
+/**
+ * SetNotificationSettings persists the notification configuration while
+ * preserving all unrelated desktop settings.
+ */
+export function SetNotificationSettings(settings: $models.NotificationSettings): $CancellablePromise<void> {
+    return $Call.ByID(2828604310, settings);
 }

@@ -26,6 +26,48 @@ func TestSettingsServiceSetGithubSettingsRejectsBelowFloor(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestSettingsServiceNotificationSettings(t *testing.T) {
+	t.Setenv(desktop.EnvConfigPath, filepath.Join(t.TempDir(), "config", "profiles.yaml"))
+	service := NewSettingsService(nil, nil, zerolog.Nop())
+
+	got, err := service.NotificationSettings()
+	require.NoError(t, err)
+	require.Equal(t, NotificationSettings{
+		NotificationsEnabled:       true,
+		SystemNotificationsEnabled: true,
+		NotificationSound:          true,
+	}, got)
+}
+
+func TestSettingsServiceSetNotificationSettingsPreservesUnrelatedFields(t *testing.T) {
+	t.Setenv(desktop.EnvConfigPath, filepath.Join(t.TempDir(), "config", "profiles.yaml"))
+	autoUpdate := false
+	require.NoError(t, desktop.SaveSettings(desktop.Settings{
+		PollInterval: "5m",
+		AutoUpdate:   &autoUpdate,
+	}))
+
+	service := NewSettingsService(nil, nil, zerolog.Nop())
+	want := NotificationSettings{
+		NotificationsEnabled:       false,
+		SystemNotificationsEnabled: false,
+		NotificationSound:          false,
+	}
+	require.NoError(t, service.SetNotificationSettings(want))
+
+	got, err := desktop.LoadSettings()
+	require.NoError(t, err)
+	require.Equal(t, "5m", got.PollInterval)
+	require.NotNil(t, got.AutoUpdate)
+	require.False(t, *got.AutoUpdate)
+	require.NotNil(t, got.NotificationsEnabled)
+	require.NotNil(t, got.SystemNotificationsEnabled)
+	require.NotNil(t, got.NotificationSound)
+	require.False(t, *got.NotificationsEnabled)
+	require.False(t, *got.SystemNotificationsEnabled)
+	require.False(t, *got.NotificationSound)
+}
+
 func TestSettingsServiceSetGithubSettingsPreservesAutoUpdate(t *testing.T) {
 	t.Setenv(desktop.EnvConfigPath, filepath.Join(t.TempDir(), "config", "profiles.yaml"))
 	// Seed an explicit auto_update:false alongside a poll interval.

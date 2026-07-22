@@ -76,6 +76,29 @@ func TestAutoUpdateOrDefault(t *testing.T) {
 	}
 }
 
+func TestNotificationSettingsOrDefault(t *testing.T) {
+	enabled := true
+	disabled := false
+	tests := []struct {
+		name     string
+		settings Settings
+		want     bool
+		resolve  func(Settings) bool
+	}{
+		{name: "notifications unset defaults to true", settings: Settings{}, want: true, resolve: Settings.NotificationsEnabledOrDefault},
+		{name: "notifications explicit false", settings: Settings{NotificationsEnabled: &disabled}, want: false, resolve: Settings.NotificationsEnabledOrDefault},
+		{name: "system notifications unset defaults to true", settings: Settings{}, want: true, resolve: Settings.SystemNotificationsEnabledOrDefault},
+		{name: "system notifications explicit false", settings: Settings{SystemNotificationsEnabled: &disabled}, want: false, resolve: Settings.SystemNotificationsEnabledOrDefault},
+		{name: "notification sound explicit true", settings: Settings{NotificationSound: &enabled}, want: true, resolve: Settings.NotificationSoundOrDefault},
+		{name: "notification sound explicit false", settings: Settings{NotificationSound: &disabled}, want: false, resolve: Settings.NotificationSoundOrDefault},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			require.Equal(t, tt.want, tt.resolve(tt.settings))
+		})
+	}
+}
+
 func TestSettingsAutoUpdateRoundTrip(t *testing.T) {
 	root := t.TempDir()
 	t.Setenv(EnvConfigPath, filepath.Join(root, "config", "profiles.yaml"))

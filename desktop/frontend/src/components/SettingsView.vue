@@ -8,6 +8,7 @@ import IconPalette from '~icons/lucide/palette'
 import IconPlug from '~icons/lucide/plug'
 import IconPlay from '~icons/lucide/play'
 import IconHardDrive from '~icons/lucide/hard-drive'
+import IconBell from '~icons/lucide/bell'
 import IconSettings from '~icons/lucide/settings'
 import BaseBadge from './BaseBadge.vue'
 import BaseCard from './BaseCard.vue'
@@ -15,6 +16,7 @@ import BaseIconBadge from './BaseIconBadge.vue'
 import ActionSettingsView from './ActionSettingsView.vue'
 import KeybindingSettingsView from './KeybindingSettingsView.vue'
 import SystemSettingsView from './SystemSettingsView.vue'
+import NotificationSettingsView from './NotificationSettingsView.vue'
 import githubIcon from '../assets/integrations/github.svg'
 import grafanaIcon from '../assets/integrations/grafana.svg'
 import posthogIcon from '../assets/integrations/posthog.svg'
@@ -40,6 +42,7 @@ const categories = [
   { id: 'integrations' as const, label: 'Integrations', icon: IconPlug },
   { id: 'actions' as const, label: 'Actions', icon: IconPlay },
   { id: 'system' as const, label: 'System', icon: IconHardDrive },
+  { id: 'notifications' as const, label: 'Notifications', icon: IconBell },
 ]
 const sectionTitle = computed(() => ({
   appearance: 'Appearance',
@@ -47,6 +50,7 @@ const sectionTitle = computed(() => ({
   integrations: 'Integrations',
   actions: 'Actions',
   system: 'System',
+  notifications: 'Notifications',
 }[props.activeCategory]))
 
 const { theme } = useTheme()
@@ -100,6 +104,8 @@ function onThemeChange(value: string): void {
       <ActionSettingsView v-else-if="props.activeCategory === 'actions'" :known-types="props.knownFeedTypes" />
 
       <SystemSettingsView v-else-if="props.activeCategory === 'system'" />
+
+      <NotificationSettingsView v-else-if="props.activeCategory === 'notifications'" />
 
       <div v-else class="mx-auto max-w-[640px]" data-testid="settings-integrations">
         <SettingsSection

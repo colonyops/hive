@@ -29,6 +29,7 @@ export type {
     FlowSummary,
     GithubSettings,
     InboxView,
+    NotificationSettings,
     NotifyInput,
     PathInfo,
     SystemInfo,

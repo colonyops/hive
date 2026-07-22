@@ -53,6 +53,11 @@ const mocks = vi.hoisted(() => ({
   // updaterservice
   UpdaterStatus: vi.fn(),
   InstallUpdate: vi.fn(),
+  // notification settings
+  NotificationSettings: vi.fn(),
+  SetNotificationSettings: vi.fn(),
+  PermissionStatus: vi.fn(),
+  RequestNotificationPermission: vi.fn(),
   // runtime
   On: vi.fn(),
   Hide: vi.fn(),
@@ -112,6 +117,16 @@ vi.mock('../../bindings/github.com/colonyops/hive/internal/desktop/auth/service'
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/updaterservice', () => ({
   Status: mocks.UpdaterStatus,
   InstallUpdate: mocks.InstallUpdate,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/settingsservice', () => ({
+  NotificationSettings: mocks.NotificationSettings,
+  SetNotificationSettings: mocks.SetNotificationSettings,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/notificationservice', () => ({
+  PermissionStatus: mocks.PermissionStatus,
+  RequestNotificationPermission: mocks.RequestNotificationPermission,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -182,6 +197,10 @@ describe('App', () => {
     mocks.On.mockReturnValue(() => {})
     mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: false, currentVersion: 'dev', latestVersion: '', notes: '', releaseUrl: '' })
     mocks.InstallUpdate.mockResolvedValue(undefined)
+    mocks.NotificationSettings.mockResolvedValue({ notificationsEnabled: true, systemNotificationsEnabled: true, notificationSound: true })
+    mocks.SetNotificationSettings.mockResolvedValue(undefined)
+    mocks.PermissionStatus.mockResolvedValue('not-requested')
+    mocks.RequestNotificationPermission.mockResolvedValue(true)
   })
 
   it('registers profile / feed-selection / flow-edit palette commands (not the removed feed-editor ones)', async () => {
@@ -359,6 +378,18 @@ describe('App', () => {
     search.dispatchEvent(backspace)
 
     expect(backspace.defaultPrevented).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('renders notifications settings from its deep link', async () => {
+    const router = createAppRouter(createMemoryHistory())
+    await router.push('/settings/notifications')
+    await router.isReady()
+    const wrapper = mount(App, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(router.currentRoute.value.params.section).toBe('notifications')
+    expect(wrapper.find('[data-testid="notification-settings"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
