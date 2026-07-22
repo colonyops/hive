@@ -28,3 +28,31 @@ test('persists notification preferences from application settings', async ({ pag
   await page.reload()
   await expect(page.getByTestId('notification-enable')).toHaveAttribute('aria-checked', 'true')
 })
+
+test('records focused profile rename feedback in both toast and Activity', async ({ page }) => {
+  await page.goto('/')
+  const originalName = await page.getByTestId('sidebar-profile-name').textContent()
+  expect(originalName).toBeTruthy()
+
+  await page.getByTestId('titlebar-activity').click()
+  await expect(page.getByTestId('activity-view')).toBeVisible()
+  const beforeRows = await page.getByTestId('activity-row').count()
+  await page.getByTestId('activity-close').click()
+
+  const renamedName = `${originalName} notifications`
+  await page.getByTestId('sidebar-open-settings').click()
+  await page.getByTestId('profile-settings-name').fill(renamedName)
+  await page.getByTestId('profile-settings-save-name').click()
+  await expect(page.getByTestId('toast').last()).toContainText('Profile renamed')
+
+  await page.getByTestId('titlebar-activity').click()
+  await expect(page.getByTestId('activity-row')).toHaveCount(beforeRows + 1)
+  await expect(page.getByTestId('activity-row').first()).toContainText('Profile renamed')
+  await page.getByTestId('activity-close').click()
+
+  // This spec shares a fixture server with the rest of the notification suite.
+  await page.getByTestId('sidebar-open-settings').click()
+  await page.getByTestId('profile-settings-name').fill(originalName!)
+  await page.getByTestId('profile-settings-save-name').click()
+  await expect(page.getByTestId('toast').last()).toContainText('Profile renamed')
+})

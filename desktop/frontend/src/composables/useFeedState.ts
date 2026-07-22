@@ -1,16 +1,16 @@
-import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
 import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar, SetFlowEnabled } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedCounts, InboxCounts, InboxItemEvents, InvokeAction, ListInboxItems, ListInboxItemsByFeed, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived, ToggleInboxItemIgnored } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { bodySnippet, feedSource, githubPayload, typeLabel } from '../lib/feedPresentation'
-import { useActivity } from './useActivity'
+import { useNotify } from './useNotify'
+import { useToasts } from './useToasts'
 import { useWailsEvent } from './useWailsEvent'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
 import type { FeedInboxCount, FeedSort, InboxEvent, InboxItem, InboxView, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
-import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
 // profile's sidebar feeds are flow feed nodes, while inbox items are shared
@@ -53,7 +53,8 @@ export function useFeedState() {
   const sessionLaunchOptions = ref<SessionLaunchOptionsView | null>(null)
   const sessionLaunchBusy = ref(false)
   const sessionLaunchError = ref<string | null>(null)
-  const toasts = ref<ToastInstance[]>([])
+  const { toasts, showToast, dismissToast, clearToasts } = useToasts()
+  const { notify } = useNotify()
   const creatingProfile = ref(false)
   const createProfileError = ref<string | null>(null)
   const renamingProfile = ref(false)
@@ -61,9 +62,6 @@ export function useFeedState() {
   const togglingProfileId = ref<string | null>(null)
   const toggleProfileError = ref<string | null>(null)
   const deletingProfile = ref(false)
-  let nextToastId = 1
-  const toastTimers = new Map<number, ReturnType<typeof setTimeout>>()
-  const defaultToastDuration = 4000
   // Monotonic token: out-of-order loadItems responses must not clobber newer.
   let loadSeq = 0
   let feedsSeq = 0
@@ -152,37 +150,6 @@ export function useFeedState() {
 
   function setFeedSort(value: FeedSort): void {
     feedSort.value = value
-  }
-
-  // ── Toasts ──────────────────────────────────────────────────────────────────
-
-  // Some UI-origin outcomes are worth keeping in the durable Activity log, not
-  // just the transient toast — these are events only the frontend knows about,
-  // demonstrating that the UI records activity the same way the backend does.
-  const { record: recordActivity } = useActivity()
-
-  function showToast(message: string, options: ToastOptions = {}): number {
-    const severity = options.severity ?? 'info'
-    const id = nextToastId++
-    const duration = severity === 'error' ? null : options.duration ?? defaultToastDuration
-    toasts.value = [...toasts.value, { id, message, body: options.body, severity, actions: options.actions ?? [], duration }]
-    if (duration !== null) toastTimers.set(id, setTimeout(() => dismissToast(id), duration))
-    return id
-  }
-
-  function dismissToast(id: number) {
-    const timer = toastTimers.get(id)
-    if (timer !== undefined) {
-      clearTimeout(timer)
-      toastTimers.delete(id)
-    }
-    toasts.value = toasts.value.filter((t) => t.id !== id)
-  }
-
-  function clearToasts() {
-    for (const timer of toastTimers.values()) clearTimeout(timer)
-    toastTimers.clear()
-    toasts.value = []
   }
 
   // ── Profiles (flows) ──────────────────────────────────────────────────────────
@@ -288,11 +255,11 @@ export function useFeedState() {
       await SaveSidebar(flowId, treeToLayout(tree, flowId))
     } catch (error) {
       console.warn('Unable to save sidebar layout', error)
-      showToast('Could not save the sidebar layout', { severity: 'error' })
-      void recordActivity({
+      await notify({
         title: 'Sidebar layout save failed',
-        body: profile?.name ? `profile ${profile.name}` : '',
+        body: profile?.name ? `Could not save the sidebar layout for profile ${profile.name}.` : 'Could not save the sidebar layout.',
         severity: 'error',
+        category: 'config',
       })
     }
   }
@@ -333,7 +300,7 @@ export function useFeedState() {
         profile.name = renamed.name
         profile.letter = letter(renamed.name)
       }
-      showToast('Profile renamed', { severity: 'success' })
+      await notify({ title: 'Profile renamed', body: renamed.name, severity: 'success', category: 'config' })
       return true
     } catch (error) {
       console.warn('Unable to rename flow', error)
@@ -355,7 +322,7 @@ export function useFeedState() {
       const updated = await SetFlowEnabled(profileID, enabled)
       const profile = profiles.value.find((candidate) => candidate.id === profileID)
       if (profile) profile.enabled = updated.enabled
-      showToast(enabled ? 'Profile enabled' : 'Profile disabled', { severity: 'success' })
+      await notify({ title: enabled ? 'Profile enabled' : 'Profile disabled', body: updated.name, severity: 'success', category: 'config' })
       return true
     } catch (error) {
       console.warn('Unable to update flow enablement', error)
@@ -368,21 +335,24 @@ export function useFeedState() {
 
   async function deleteProfile(profileID: string): Promise<boolean> {
     if (deletingProfile.value) return false
-    // Capture the name before the row is gone, for the activity entry.
+    // Capture the name before the row is gone, for the success notification.
     const deletedName = profiles.value.find((p) => p.id === profileID)?.name ?? profileID
     deletingProfile.value = true
     try {
       await DeleteFlow(profileID)
     } catch (error) {
       console.warn('Unable to delete flow', error)
-      showToast(error instanceof Error && error.message ? error.message : 'Could not delete the profile.', { severity: 'error' })
-      void recordActivity({ title: `Couldn't delete profile ${deletedName}`, severity: 'error', category: 'config' })
+      await notify({
+        title: `Couldn't delete profile ${deletedName}`,
+        body: error instanceof Error && error.message ? error.message : 'Could not delete the profile.',
+        severity: 'error',
+        category: 'config',
+      })
       return false
     } finally {
       deletingProfile.value = false
     }
-    showToast('Profile deleted', { severity: 'success' })
-    void recordActivity({ title: `Deleted profile ${deletedName}`, severity: 'success', category: 'config' })
+    await notify({ title: 'Profile deleted', body: deletedName, severity: 'success', category: 'config' })
     await reloadProfilesQuietly()
     if (activeProfileId.value === profileID) {
       const next = profiles.value[0]
@@ -626,18 +596,18 @@ export function useFeedState() {
       setActionRun(item.id, actionID, run)
       if (run.status !== 'done') {
         actionError.value = run.error || 'The action did not complete.'
-        showToast(actionError.value, { severity: 'error' })
+        await notify({ title: actionError.value, severity: 'error', category: 'action' })
         return false
       }
       const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
-      if (run.result?.session) showToast(`Created session ${run.result.session.name} (${run.result.session.id})`, { severity: 'success' })
-      else if (run.result?.message) showToast(`Published message to ${run.result.message.topic} as ${run.result.message.sender}`, { severity: 'success' })
-      else showToast(`${label} completed`, { severity: 'success' })
+      if (run.result?.session) await notify({ title: `Created session ${run.result.session.name} (${run.result.session.id})`, severity: 'success', category: 'session' })
+      else if (run.result?.message) await notify({ title: `Published message to ${run.result.message.topic} as ${run.result.message.sender}`, severity: 'success', category: 'action' })
+      else await notify({ title: `${label} completed`, severity: 'success', category: 'action' })
       return true
     } catch (error) {
       console.warn('Unable to invoke action', error)
       actionError.value = error instanceof Error && error.message ? error.message : 'Could not run the action.'
-      showToast(actionError.value, { severity: 'error' })
+      await notify({ title: actionError.value, severity: 'error', category: 'action' })
       return false
     } finally {
       const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
@@ -740,10 +710,6 @@ export function useFeedState() {
     useWailsEvent('flows:updated', () => { void reloadProfilesQuietly() })
     useWailsEvent('actions:updated', () => { void loadActions(selectedItem.value) })
     void loadProfiles()
-  })
-
-  onUnmounted(() => {
-    clearToasts()
   })
 
   return {

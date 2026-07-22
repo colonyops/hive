@@ -58,6 +58,10 @@ const mocks = vi.hoisted(() => ({
   SetNotificationSettings: vi.fn(),
   PermissionStatus: vi.fn(),
   RequestNotificationPermission: vi.fn(),
+  Notify: vi.fn(),
+  Focused: vi.fn(),
+  ActivityList: vi.fn(),
+  RecordActivity: vi.fn(),
   // runtime
   On: vi.fn(),
   Hide: vi.fn(),
@@ -127,6 +131,13 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/settingsservice', () =
 vi.mock('../../bindings/github.com/colonyops/hive/desktop/notificationservice', () => ({
   PermissionStatus: mocks.PermissionStatus,
   RequestNotificationPermission: mocks.RequestNotificationPermission,
+  Notify: mocks.Notify,
+}))
+
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/windowservice', () => ({ Focused: mocks.Focused }))
+vi.mock('../../bindings/github.com/colonyops/hive/desktop/activityservice', () => ({
+  List: mocks.ActivityList,
+  Record: mocks.RecordActivity,
 }))
 
 vi.mock('@wailsio/runtime', () => ({
@@ -201,6 +212,10 @@ describe('App', () => {
     mocks.SetNotificationSettings.mockResolvedValue(undefined)
     mocks.PermissionStatus.mockResolvedValue('not-requested')
     mocks.RequestNotificationPermission.mockResolvedValue(true)
+    mocks.Notify.mockResolvedValue(undefined)
+    mocks.Focused.mockResolvedValue(true)
+    mocks.ActivityList.mockResolvedValue([])
+    mocks.RecordActivity.mockResolvedValue(undefined)
   })
 
   it('registers profile / feed-selection / flow-edit palette commands (not the removed feed-editor ones)', async () => {

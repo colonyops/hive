@@ -59,7 +59,7 @@ function markSeen(): void {
 // and severity to "info" on the backend when omitted. Failures are surfaced to
 // the console rather than thrown, so a caller (e.g. a toast handler) is never
 // derailed by an audit-log write.
-async function record(input: Partial<RecordInput> & { title: string }): Promise<void> {
+async function record(input: Partial<RecordInput> & { title: string }): Promise<boolean> {
   try {
     await RecordEvent({
       category: input.category ?? '',
@@ -69,8 +69,10 @@ async function record(input: Partial<RecordInput> & { title: string }): Promise<
       source: input.source ?? '',
       metadata: input.metadata ?? null,
     })
+    return true
   } catch (e) {
     console.error('recording activity event failed', e)
+    return false
   }
 }
 

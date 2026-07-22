@@ -1,4 +1,4 @@
-// Toast stack types shared by useFeedState (owns the queue) and the
+// Toast stack types shared by useToasts (owns the queue) and the
 // ToastStack/ToastCard components (render it). See the design spec's "6a
 // Toasts" section: four severities, stacked bottom-right, optional inline
 // actions, auto-dismiss timer that error toasts opt out of.
