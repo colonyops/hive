@@ -75,6 +75,7 @@ export interface InboxEventView {
     "transition": string;
     "attention": string;
     "summary"?: string;
+    "detail"?: json$0.RawMessage;
     "createdAt": number;
 }
 
@@ -99,6 +100,7 @@ export interface InboxItemView {
     "sourceState"?: string;
     "firstSeenAt": number;
     "lastEventAt": number;
+    "ignoredAt"?: number | null;
 }
 
 /**

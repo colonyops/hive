@@ -19,8 +19,8 @@ const (
 	InboxViewArchive InboxView = "archive"
 	// InboxViewAll is a InboxView of type all.
 	InboxViewAll InboxView = "all"
-	// InboxViewUnfiled is a InboxView of type unfiled.
-	InboxViewUnfiled InboxView = "unfiled"
+	// InboxViewIgnored is a InboxView of type ignored.
+	InboxViewIgnored InboxView = "ignored"
 )
 
 var ErrInvalidInboxView = fmt.Errorf("not a valid InboxView, try [%s]", strings.Join(_InboxViewNames, ", "))
@@ -30,7 +30,7 @@ var _InboxViewNames = []string{
 	string(InboxViewOpen),
 	string(InboxViewArchive),
 	string(InboxViewAll),
-	string(InboxViewUnfiled),
+	string(InboxViewIgnored),
 }
 
 // InboxViewNames returns a list of possible string values of InboxView.
@@ -57,7 +57,7 @@ var _InboxViewValue = map[string]InboxView{
 	"open":    InboxViewOpen,
 	"archive": InboxViewArchive,
 	"all":     InboxViewAll,
-	"unfiled": InboxViewUnfiled,
+	"ignored": InboxViewIgnored,
 }
 
 // ParseInboxView attempts to convert a string to a InboxView.

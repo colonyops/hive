@@ -77,7 +77,7 @@ func (s *PipelineService) ListReplaySourceSnapshots(profileID, throughOffset str
 	return s.db.ListReplaySourceSnapshots(context.Background(), profileID, offset)
 }
 
-// ENUM(inbox, open, archive, all, unfiled)
+// ENUM(inbox, open, archive, all, ignored)
 type InboxView string
 
 // ListInboxItems reads one deterministic inbox view for a profile.
@@ -99,6 +99,10 @@ func (s *PipelineService) MarkInboxItemUnread(itemID, revision int64, unread boo
 
 func (s *PipelineService) ToggleInboxItemArchived(itemID, revision int64) (pipelinedb.InboxItemView, error) {
 	return s.db.ToggleInboxItemArchived(context.Background(), itemID, revision, time.Now().UnixMilli())
+}
+
+func (s *PipelineService) ToggleInboxItemIgnored(itemID, revision int64) (pipelinedb.InboxItemView, error) {
+	return s.db.ToggleInboxItemIgnored(context.Background(), itemID, revision, time.Now().UnixMilli())
 }
 
 func (s *PipelineService) InboxCounts(profileID string) (pipelinedb.InboxCounts, error) {

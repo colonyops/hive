@@ -1,6 +1,6 @@
 // Inbox presentation types. Adapter payload remains deliberately opaque until
 // decoded by the GitHub presentation seam.
-export type InboxView = 'inbox' | 'open' | 'archive' | 'all' | 'unfiled'
+export type InboxView = 'inbox' | 'open' | 'archive' | 'all' | 'ignored'
 export type FeedSort = 'newest' | 'oldest' | 'unread'
 
 export interface InboxItem {
@@ -21,6 +21,7 @@ export interface InboxItem {
   sourceState?: string | null
   firstSeenAt: number
   lastEventAt: number
+  ignoredAt?: number | null
 }
 
 export interface InboxEvent {
@@ -30,6 +31,7 @@ export interface InboxEvent {
   transition: string
   attention: string
   summary: string | null
+  detail?: Record<string, unknown> | null
   createdAt: number
 }
 

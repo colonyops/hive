@@ -147,3 +147,7 @@ export function SessionLaunchOptions(): $CancellablePromise<pipeline$0.SessionLa
 export function ToggleInboxItemArchived(itemID: number, revision: number): $CancellablePromise<pipelinedb$0.InboxItemView> {
     return $Call.ByID(2438600320, itemID, revision);
 }
+
+export function ToggleInboxItemIgnored(itemID: number, revision: number): $CancellablePromise<pipelinedb$0.InboxItemView> {
+    return $Call.ByID(4199706836, itemID, revision);
+}

@@ -29,16 +29,18 @@ type InboxItemView struct {
 	SourceState    string          `json:"sourceState,omitempty"`
 	FirstSeenAt    int64           `json:"firstSeenAt"`
 	LastEventAt    int64           `json:"lastEventAt"`
+	IgnoredAt      *int64          `json:"ignoredAt,omitempty"`
 }
 
 type InboxEventView struct {
-	ID         int64  `json:"id"`
-	ItemID     int64  `json:"itemId"`
-	Kind       string `json:"kind"`
-	Transition string `json:"transition"`
-	Attention  string `json:"attention"`
-	Summary    string `json:"summary,omitempty"`
-	CreatedAt  int64  `json:"createdAt"`
+	ID         int64           `json:"id"`
+	ItemID     int64           `json:"itemId"`
+	Kind       string          `json:"kind"`
+	Transition string          `json:"transition"`
+	Attention  string          `json:"attention"`
+	Summary    string          `json:"summary,omitempty"`
+	Detail     json.RawMessage `json:"detail,omitempty"`
+	CreatedAt  int64           `json:"createdAt"`
 }
 
 type InboxCounts struct {
@@ -77,6 +79,10 @@ func inboxItemView(row InboxItem) InboxItemView {
 	if row.SourceState.Valid {
 		view.SourceState = row.SourceState.String
 	}
+	if row.IgnoredAt.Valid {
+		ignoredAt := row.IgnoredAt.Int64
+		view.IgnoredAt = &ignoredAt
+	}
 	return view
 }
 
@@ -103,8 +109,8 @@ func (db *DB) ListInboxItems(ctx context.Context, profileID, view string, limit 
 		rows, err = db.queries.ListInboxItemsArchive(ctx, ListInboxItemsArchiveParams{ProfileID: profileID, Limit: int64(limit)})
 	case "all":
 		rows, err = db.queries.ListInboxItemsAll(ctx, ListInboxItemsAllParams{ProfileID: profileID, Limit: int64(limit)})
-	case "unfiled":
-		rows, err = db.queries.ListInboxItemsUnfiled(ctx, ListInboxItemsUnfiledParams{ProfileID: profileID, Limit: int64(limit)})
+	case "ignored":
+		rows, err = db.queries.ListInboxItemsIgnored(ctx, ListInboxItemsIgnoredParams{ProfileID: profileID, Limit: int64(limit)})
 	default:
 		return nil, fmt.Errorf("unknown inbox view %q", view)
 	}
@@ -139,6 +145,9 @@ func (db *DB) InboxItemEvents(ctx context.Context, itemID int64, limit int) ([]I
 		if row.Summary.Valid {
 			view.Summary = row.Summary.String
 		}
+		if len(row.Detail) > 0 {
+			view.Detail = json.RawMessage(row.Detail)
+		}
 		views = append(views, view)
 	}
 	return views, nil
@@ -162,6 +171,17 @@ func (db *DB) ToggleInboxItemArchived(ctx context.Context, itemID, revision, arc
 	}
 	if err != nil {
 		return InboxItemView{}, fmt.Errorf("toggling archive for inbox item %d: %w", itemID, err)
+	}
+	return inboxItemView(row), nil
+}
+
+func (db *DB) ToggleInboxItemIgnored(ctx context.Context, itemID, revision, ignoredAt int64) (InboxItemView, error) {
+	row, err := db.queries.ToggleInboxItemIgnored(ctx, ToggleInboxItemIgnoredParams{IgnoredAt: sql.NullInt64{Int64: ignoredAt, Valid: true}, ID: itemID, Revision: revision})
+	if errors.Is(err, sql.ErrNoRows) {
+		return InboxItemView{}, ErrStaleInboxItem
+	}
+	if err != nil {
+		return InboxItemView{}, fmt.Errorf("toggling ignored state for inbox item %d: %w", itemID, err)
 	}
 	return inboxItemView(row), nil
 }

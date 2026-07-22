@@ -73,6 +73,7 @@ type InboxItem struct {
 	SourceState    sql.NullString `json:"source_state"`
 	FirstSeenAt    int64          `json:"first_seen_at"`
 	LastEventAt    int64          `json:"last_event_at"`
+	IgnoredAt      sql.NullInt64  `json:"ignored_at"`
 }
 
 type Job struct {
