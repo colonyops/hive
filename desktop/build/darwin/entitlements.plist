@@ -4,7 +4,7 @@
 <dict>
 	<!-- WKWebView JITs JavaScript; the hardened runtime blocks that unless
 	     these are granted. Required for the app to launch under a Developer ID
-	     signature with --options runtime. -->
+	     signature with hardened runtime enabled. -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 	<key>com.apple.security.cs.allow-unsigned-executable-memory</key>
