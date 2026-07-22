@@ -31,6 +31,22 @@ function replayWireFlow(id = 'flow-1'): WireFlow {
   }
 }
 
+function twoSourceReplayWireFlow(): WireFlow {
+  return {
+    id: 'flow-1', name: 'Two sources', enabled: true,
+    nodes: [
+      { id: 'source-a', type: 'github-source', kind: 'search', query: 'repo:acme/a' },
+      { id: 'source-b', type: 'github-source', kind: 'search', query: 'repo:acme/b' },
+      { id: 'feed-a', type: 'feed', feed: 'a' },
+      { id: 'feed-b', type: 'feed', feed: 'b' },
+    ],
+    wires: [
+      { from: 'source-a', to: 'feed-a' },
+      { from: 'source-b', to: 'feed-b' },
+    ],
+  }
+}
+
 function msg(id: string): Msg {
   return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: 'acme/app' }
 }
@@ -207,13 +223,15 @@ describe('useFlowsSession', () => {
       readFrom,
       commit,
       eventLogTailOffset: vi.fn(async () => { order.push('tail'); return '7' }),
-      fastForwardConsumer: vi.fn(async () => { order.push('fast-forward'); fastForwarded = true }),
+      activateReplay: vi.fn(async () => { order.push('activate'); fastForwarded = true }),
       listUnarchivedInboxItems: vi.fn(async () => {
         order.push('items')
         return [{ id: 42, profileId: 'flow-1', sourceKind: 'github', sourceScope: 'acme/repo', externalId: 'item-1', title: 'Item', url: '', payload: { title: 'actual payload' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 1 }]
       }),
-      recomputeMemberships: vi.fn(async () => { order.push('memberships') }),
-      reconcileFlowMembershipStructure: vi.fn(async () => { order.push('reconcile') }),
+      listReplaySourceSnapshots: vi.fn(async () => {
+        order.push('snapshots')
+        return [{ ID: '7', Key: '', Topic: 'source:flow-1/source', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: 'acme/repo', Snapshot: [{ key: 'item-1', payload: { title: 'actual payload' } }] }]
+      }),
     }
     const runtimeFactory: typeof usePipelineRuntime = (client, flow) => {
       const runtime = usePipelineRuntime(client, flow, { transport: { run: vi.fn(), reset: vi.fn(), dispose: vi.fn() } })
@@ -235,12 +253,40 @@ describe('useFlowsSession', () => {
     const { wrapper } = mountSession({ editorClient, runtimeClient, runtimeFactory })
     await flushPromises()
 
-    expect(order).toEqual(['tail', 'fast-forward', 'items', 'recompute', 'memberships', 'reconcile', 'run', 'read'])
+    expect(order).toEqual(['tail', 'items', 'snapshots', 'recompute', 'activate', 'run', 'read'])
     expect(readFrom).toHaveBeenCalledOnce()
     expect(commit).not.toHaveBeenCalled()
     expect(replayOutputs).toEqual([expect.objectContaining({ sink: { kind: 'feed', targetId: 'flow-1/feed' }, key: 'item-1', sourceKind: 'github', sourceScope: 'acme/repo' })])
     expect(replayOutputs.some((output) => output.sink.kind === 'action')).toBe(false)
-    expect(runtimeClient.recomputeMemberships).toHaveBeenCalledWith('flow-1', [{ profile_id: 'flow-1', feed_id: 'flow-1/feed', item_id: 42, source_id: 'source:flow-1/source' }])
+    expect(runtimeClient.activateReplay).toHaveBeenCalledWith('flow-1', '7', [{ profile_id: 'flow-1', feed_id: 'flow-1/feed', item_id: 42, source_id: 'source:flow-1/source' }], ['flow-1/feed'], ['source:flow-1/source'])
+    wrapper.unmount()
+  })
+
+  it('recomputes each source from only its own latest snapshot', async () => {
+    const items = [
+      { id: 41, profileId: 'flow-1', sourceKind: 'github', sourceScope: '', externalId: 'item-a', title: 'A', url: '', payload: { repo: 'acme/a' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 1 },
+      { id: 42, profileId: 'flow-1', sourceKind: 'github', sourceScope: '', externalId: 'item-b', title: 'B', url: '', payload: { repo: 'acme/b' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 1 },
+    ]
+    const activateReplay = vi.fn().mockResolvedValue(undefined)
+    const runtimeClient = {
+      readFrom: vi.fn().mockResolvedValue([]),
+      commit: vi.fn().mockResolvedValue(undefined),
+      eventLogTailOffset: vi.fn().mockResolvedValue('2'),
+      activateReplay,
+      listUnarchivedInboxItems: vi.fn().mockResolvedValue(items),
+      listReplaySourceSnapshots: vi.fn().mockResolvedValue([
+        { ID: '1', Key: '', Topic: 'source:flow-1/source-a', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: '', Snapshot: [{ key: 'item-a', payload: { repo: 'acme/a' } }] },
+        { ID: '2', Key: '', Topic: 'source:flow-1/source-b', Ts: 0, Payload: {}, SourceKind: 'github', SourceScope: '', Snapshot: [{ key: 'item-b', payload: { repo: 'acme/b' } }] },
+      ]),
+    }
+    const editorClient = fakeEditorClient({ getFlow: vi.fn().mockResolvedValue(twoSourceReplayWireFlow()) })
+    const { wrapper } = mountSession({ editorClient, runtimeClient })
+    await flushPromises()
+
+    expect(activateReplay).toHaveBeenCalledWith('flow-1', '2', [
+      { profile_id: 'flow-1', feed_id: 'flow-1/feed-a', item_id: 41, source_id: 'source:flow-1/source-a' },
+      { profile_id: 'flow-1', feed_id: 'flow-1/feed-b', item_id: 42, source_id: 'source:flow-1/source-b' },
+    ], ['flow-1/feed-a', 'flow-1/feed-b'], ['source:flow-1/source-a', 'source:flow-1/source-b'])
     wrapper.unmount()
   })
 
@@ -463,6 +509,47 @@ describe('useFlowsSession', () => {
     expect(state.runtimeFlowId.value).toBe('flow-1')
     expect(state.running.value).toBe(true)
     expect(state.runtimeError.value).toBe('disk unavailable')
+    wrapper.unmount()
+  })
+
+  it('keeps the last-good runtime when replacement replay initialization fails', async () => {
+    const transports: WorkerTransport[] = []
+    let runtimeNumber = 0
+    const runtimeFactory: typeof usePipelineRuntime = (client, flow) => {
+      const transport: WorkerTransport = { run: vi.fn(), reset: vi.fn(), dispose: vi.fn() }
+      transports.push(transport)
+      const runtime = usePipelineRuntime(client, flow, { transport })
+      const number = ++runtimeNumber
+      return {
+        ...runtime,
+        async recompute(messages) {
+          if (number === 2) throw new Error('snapshot unavailable')
+          return await runtime.recompute(messages)
+        },
+      }
+    }
+    const runtimeClient = {
+      readFrom: vi.fn().mockResolvedValue([]),
+      commit: vi.fn().mockResolvedValue(undefined),
+      eventLogTailOffset: vi.fn().mockResolvedValue('0'),
+      activateReplay: vi.fn().mockResolvedValue(undefined),
+      listUnarchivedInboxItems: vi.fn().mockResolvedValue([]),
+      listReplaySourceSnapshots: vi.fn().mockResolvedValue([]),
+    }
+    const { state, wrapper } = mountSession({ editorClient: fakeEditorClient(), runtimeClient, runtimeFactory })
+    await flushPromises()
+    state.bindActiveFlow('flow-1')
+    await flushPromises()
+
+    await state.reloadDeployed()
+
+    expect(transports).toHaveLength(2)
+    expect(transports[0].dispose).not.toHaveBeenCalled()
+    expect(transports[1].dispose).toHaveBeenCalledOnce()
+    expect(runtimeClient.activateReplay).toHaveBeenCalledOnce()
+    expect(state.runtimeFlowId.value).toBe('flow-1')
+    expect(state.running.value).toBe(true)
+    expect(state.runtimeError.value).toBe('snapshot unavailable')
     wrapper.unmount()
   })
 

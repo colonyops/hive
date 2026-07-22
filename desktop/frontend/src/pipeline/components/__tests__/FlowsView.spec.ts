@@ -17,10 +17,9 @@ const mocks = vi.hoisted(() => ({
   SaveLayout: vi.fn(),
   ListInboxItemsByFeed: vi.fn(),
   ListUnarchivedInboxItems: vi.fn(),
+  ListReplaySourceSnapshots: vi.fn(),
   EventLogTailOffset: vi.fn(),
-  FastForwardConsumer: vi.fn(),
-  RecomputeMemberships: vi.fn(),
-  ReconcileFlowMembershipStructure: vi.fn(),
+  ActivateReplay: vi.fn(),
   NodeRuns: vi.fn(),
   ReadFrom: vi.fn(),
   Commit: vi.fn(),
@@ -39,10 +38,9 @@ vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/flowsservice', (
 vi.mock('../../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
   ListInboxItemsByFeed: mocks.ListInboxItemsByFeed,
   ListUnarchivedInboxItems: mocks.ListUnarchivedInboxItems,
+  ListReplaySourceSnapshots: mocks.ListReplaySourceSnapshots,
   EventLogTailOffset: mocks.EventLogTailOffset,
-  FastForwardConsumer: mocks.FastForwardConsumer,
-  RecomputeMemberships: mocks.RecomputeMemberships,
-  ReconcileFlowMembershipStructure: mocks.ReconcileFlowMembershipStructure,
+  ActivateReplay: mocks.ActivateReplay,
   NodeRuns: mocks.NodeRuns,
   ReadFrom: mocks.ReadFrom,
   Commit: mocks.Commit,
@@ -80,10 +78,9 @@ describe('FlowsView flow selector', () => {
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
     mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.ListReplaySourceSnapshots.mockResolvedValue([])
     mocks.EventLogTailOffset.mockResolvedValue('0')
-    mocks.FastForwardConsumer.mockResolvedValue(undefined)
-    mocks.RecomputeMemberships.mockResolvedValue(undefined)
-    mocks.ReconcileFlowMembershipStructure.mockResolvedValue(undefined)
+    mocks.ActivateReplay.mockResolvedValue(undefined)
     mocks.ReadFrom.mockResolvedValue([])
     mocks.Commit.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
@@ -133,10 +130,9 @@ describe('FlowsView deploy menu', () => {
     mocks.GetLayout.mockResolvedValue({ nodes: {} })
     mocks.NodeRuns.mockResolvedValue([])
     mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.ListReplaySourceSnapshots.mockResolvedValue([])
     mocks.EventLogTailOffset.mockResolvedValue('0')
-    mocks.FastForwardConsumer.mockResolvedValue(undefined)
-    mocks.RecomputeMemberships.mockResolvedValue(undefined)
-    mocks.ReconcileFlowMembershipStructure.mockResolvedValue(undefined)
+    mocks.ActivateReplay.mockResolvedValue(undefined)
     mocks.ReadFrom.mockResolvedValue([])
     mocks.Commit.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})

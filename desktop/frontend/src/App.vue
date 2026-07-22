@@ -55,7 +55,7 @@ const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, title, toasts, dismissToast, clearToasts,
   creatingProfile, createProfileError, renamingProfile, renameProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, deleteProfile,
-  reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, openActionRun, selectNext, selectPrev,
+  reorderFeeds, selectProfile, selectSidebar, selectItem, openActionRun, selectNext, selectPrev,
   toggleUnread, markItemUnread, toggleArchive, loadEvents, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
 
@@ -68,14 +68,18 @@ const selectedEvents = ref([] as Awaited<ReturnType<typeof loadEvents>>)
 let selectedEventsSeq = 0
 watch(selectedItem, async (item) => {
   const seq = ++selectedEventsSeq
-  if (!item) {
-    selectedEvents.value = []
-    return
+  selectedEvents.value = []
+  if (!item) return
+  try {
+    const events = await loadEvents(item.id)
+    // A slower request for the previously selected item must never replace the
+    // timeline for the item currently visible in the detail pane.
+    if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) selectedEvents.value = events
+  } catch (error) {
+    if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) {
+      console.warn('Unable to load inbox item events', error)
+    }
   }
-  const events = await loadEvents(item.id)
-  // A slower request for the previously selected item must never replace the
-  // timeline for the item currently visible in the detail pane.
-  if (seq === selectedEventsSeq && selectedItem.value?.id === item.id) selectedEvents.value = events
 }, { immediate: true })
 
 // ── Flows session (hc-8ft4yhm6) ──────────────────────────────────────────────
@@ -156,12 +160,11 @@ watch([profilesLoaded, () => route.fullPath], async ([loaded]) => {
     ? rawView as InboxView
     : 'inbox'
   if (feedId) await selectSidebar({ type: 'feed', feedId })
-  else if (wantsUnread) await selectUnreadView()
   else await selectSidebar({ type: 'view', view })
 
-  // Unread can also filter one specific feed. selectSidebar clears the flag,
-  // so apply it after loading that feed's items.
-  if (feedId && wantsUnread && !unreadOnly.value) await toggleUnread()
+  // Unread narrows whichever feed or inbox view the route selected.
+  // selectSidebar clears the flag, so apply it after loading that list.
+  if (wantsUnread && !unreadOnly.value) await toggleUnread()
 }, { immediate: true })
 
 watch([() => route.name, () => route.query.node], ([name, rawNode]) => {
@@ -237,6 +240,7 @@ function navigateUnreadFilter(value: boolean): void {
   if (!activeProfileId.value) return
   const query: Record<string, string> = {}
   if (selection.value.type === 'feed') query.feed = selection.value.feedId
+  else if (selection.value.view !== 'inbox') query.view = selection.value.view
   if (value) query.unread = '1'
   void router.push({ name: 'feed', params: { profileId: activeProfileId.value }, query })
 }

@@ -70,6 +70,36 @@ func TestPrune_EventLogUsesPerTopicCountWithoutConsumers(t *testing.T) {
 	assert.Equal(t, "3", msgs[0].ID)
 }
 
+func TestPrune_PreservesLatestSourceSnapshotForReplay(t *testing.T) {
+	database := openTestDB(t)
+	ctx := t.Context()
+	_, err := database.AppendSnapshot(ctx, "source:flow/source", "github", "", []SnapshotItem{{Key: "old", Payload: []byte(`{}`)}})
+	require.NoError(t, err)
+	latest, err := database.AppendSnapshot(ctx, "source:flow/source", "github", "", []SnapshotItem{{Key: "current", Payload: []byte(`{}`)}})
+	require.NoError(t, err)
+	_, err = database.Conn().ExecContext(ctx, `UPDATE event_log SET created_at = ?`, time.Now().Add(-2*time.Hour).UnixMilli())
+	require.NoError(t, err)
+
+	_, err = database.Prune(ctx, nil, RetentionPolicy{EventLogMaxAge: time.Hour})
+	require.NoError(t, err)
+	messages, err := database.ListReplaySourceSnapshots(ctx, "flow", latest)
+	require.NoError(t, err)
+	require.Len(t, messages, 1)
+	assert.Equal(t, fmt.Sprint(latest), messages[0].ID)
+	assert.Equal(t, "current", messages[0].Snapshot[0].Key)
+
+	_, err = database.Append(ctx, "source:flow/source", "new-1", []byte(`{}`))
+	require.NoError(t, err)
+	newest, err := database.Append(ctx, "source:flow/source", "new-2", []byte(`{}`))
+	require.NoError(t, err)
+	_, err = database.Prune(ctx, nil, RetentionPolicy{EventLogPerTopicLimit: 1})
+	require.NoError(t, err)
+	rows, _, err := database.ReadFrom(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, rows, 2)
+	assert.Equal(t, []string{fmt.Sprint(latest), fmt.Sprint(newest)}, []string{rows[0].ID, rows[1].ID})
+}
+
 func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()

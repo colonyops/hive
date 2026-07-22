@@ -39,6 +39,14 @@ export function ActionViews(kind: string): $CancellablePromise<actions$0.View[] 
 }
 
 /**
+ * ActivateReplay atomically advances the consumer and installs the prepared
+ * membership state for a startup or deploy replay.
+ */
+export function ActivateReplay(profileID: string, tail: string, claims: pipelinedb$0.FeedMembershipClaim[] | null, feedIDs: string[] | null, sourceIDs: string[] | null): $CancellablePromise<void> {
+    return $Call.ByID(542565145, profileID, tail, claims, feedIDs, sourceIDs);
+}
+
+/**
  * Commit applies the frontend graph runtime's batch atomically. Feed outputs
  * are accepted without durable effect until membership claims land; action
  * outputs, node-run metrics, and the consumer offset are persisted atomically.
@@ -55,13 +63,6 @@ export function Commit(batch: pipeline$0.CommitBatch): $CancellablePromise<void>
  */
 export function EventLogTailOffset(): $CancellablePromise<string> {
     return $Call.ByID(255024248);
-}
-
-/**
- * FastForwardConsumer performs protocol step (a), before a runtime can pump.
- */
-export function FastForwardConsumer(consumer: string, tail: string): $CancellablePromise<void> {
-    return $Call.ByID(36677706, consumer, tail);
 }
 
 export function FeedCounts(profileID: string): $CancellablePromise<pipelinedb$0.FeedInboxCount[] | null> {
@@ -97,6 +98,14 @@ export function ListInboxItemsByFeed(profileID: string, feedID: string, limit: n
 }
 
 /**
+ * ListReplaySourceSnapshots returns each source's latest authoritative
+ * snapshot so membership replay preserves source provenance.
+ */
+export function ListReplaySourceSnapshots(profileID: string, throughOffset: string): $CancellablePromise<pipelinedb$0.Msg[] | null> {
+    return $Call.ByID(3644752070, profileID, throughOffset);
+}
+
+/**
  * ListUnarchivedInboxItems returns the JSON/Wails-friendly immutable inbox
  * identity and payload needed for claims-only synthetic replay.
  */
@@ -124,23 +133,6 @@ export function NodeRuns(flowID: string, limit: number): $CancellablePromise<pip
  */
 export function ReadFrom(consumer: string, limit: number): $CancellablePromise<pipelinedb$0.Msg[] | null> {
     return $Call.ByID(2706344123, consumer, limit);
-}
-
-/**
- * RecomputeMemberships is intentionally claims-only: it exposes no action or
- * consumer-offset capability to synthetic startup/deploy replay.
- */
-export function RecomputeMemberships(profileID: string, claims: pipelinedb$0.FeedMembershipClaim[] | null): $CancellablePromise<void> {
-    return $Call.ByID(1457596980, profileID, claims);
-}
-
-/**
- * ReconcileFlowMembershipStructure deletes all claims for removed feeds. For
- * removed or disabled sources, it preserves archived claims and deletes only
- * unarchived claims during a deploy.
- */
-export function ReconcileFlowMembershipStructure(profileID: string, feedIDs: string[] | null, sourceIDs: string[] | null): $CancellablePromise<void> {
-    return $Call.ByID(680626730, profileID, feedIDs, sourceIDs);
 }
 
 /**

@@ -51,32 +51,30 @@ func (s *PipelineService) EventLogTailOffset() (string, error) {
 	return strconv.FormatInt(tail, 10), nil
 }
 
-// FastForwardConsumer performs protocol step (a), before a runtime can pump.
-func (s *PipelineService) FastForwardConsumer(consumer, tail string) error {
+// ActivateReplay atomically advances the consumer and installs the prepared
+// membership state for a startup or deploy replay.
+func (s *PipelineService) ActivateReplay(profileID, tail string, claims []pipelinedb.FeedMembershipClaim, feedIDs, sourceIDs []string) error {
 	offset, err := strconv.ParseInt(tail, 10, 64)
 	if err != nil || offset < 0 {
 		return fmt.Errorf("invalid event log tail %q", tail)
 	}
-	return s.db.FastForwardConsumer(context.Background(), consumer, offset)
-}
-
-// RecomputeMemberships is intentionally claims-only: it exposes no action or
-// consumer-offset capability to synthetic startup/deploy replay.
-func (s *PipelineService) RecomputeMemberships(profileID string, claims []pipelinedb.FeedMembershipClaim) error {
-	return s.db.RecomputeMemberships(context.Background(), profileID, claims)
-}
-
-// ReconcileFlowMembershipStructure deletes all claims for removed feeds. For
-// removed or disabled sources, it preserves archived claims and deletes only
-// unarchived claims during a deploy.
-func (s *PipelineService) ReconcileFlowMembershipStructure(profileID string, feedIDs, sourceIDs []string) error {
-	return s.db.ReconcileFlowMembershipStructure(context.Background(), profileID, feedIDs, sourceIDs)
+	return s.db.ActivateReplay(context.Background(), profileID, offset, claims, feedIDs, sourceIDs)
 }
 
 // ListUnarchivedInboxItems returns the JSON/Wails-friendly immutable inbox
 // identity and payload needed for claims-only synthetic replay.
 func (s *PipelineService) ListUnarchivedInboxItems(profileID string) ([]pipelinedb.InboxItemView, error) {
 	return s.db.ListUnarchivedInboxItems(context.Background(), profileID)
+}
+
+// ListReplaySourceSnapshots returns each source's latest authoritative
+// snapshot so membership replay preserves source provenance.
+func (s *PipelineService) ListReplaySourceSnapshots(profileID, throughOffset string) ([]pipelinedb.Msg, error) {
+	offset, err := strconv.ParseInt(throughOffset, 10, 64)
+	if err != nil || offset < 0 {
+		return nil, fmt.Errorf("invalid replay snapshot offset %q", throughOffset)
+	}
+	return s.db.ListReplaySourceSnapshots(context.Background(), profileID, offset)
 }
 
 // ENUM(inbox, open, archive, all, unfiled)

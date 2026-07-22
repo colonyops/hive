@@ -70,7 +70,7 @@ func (a *fakeAppender) SourceHeadPayload(context.Context, string, string) ([]byt
 	return nil, nil
 }
 
-func (a *fakeAppender) AppendSnapshot(_ context.Context, _ string, _ []pipelinedb.SnapshotItem) (int64, error) {
+func (a *fakeAppender) AppendSnapshot(_ context.Context, _, _, _ string, _ []pipelinedb.SnapshotItem) (int64, error) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.nextOff++

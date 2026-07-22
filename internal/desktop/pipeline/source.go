@@ -49,7 +49,7 @@ type metadataSource interface{ ingestMetadata() sourceMetadata }
 // Appender is the subset of *pipelinedb.DB a Producer needs.
 type Appender interface {
 	IngestObservation(ctx context.Context, classifier pipelinedb.Classifier, p pipelinedb.IngestObservationParams) (pipelinedb.IngestResult, error)
-	AppendSnapshot(ctx context.Context, topic string, items []pipelinedb.SnapshotItem) (offset int64, err error)
+	AppendSnapshot(ctx context.Context, topic, sourceKind, sourceScope string, items []pipelinedb.SnapshotItem) (offset int64, err error)
 	ListSourceHeadKeys(ctx context.Context, topic string) ([]string, error)
 	SourceHeadPayload(ctx context.Context, topic, key string) ([]byte, error)
 }

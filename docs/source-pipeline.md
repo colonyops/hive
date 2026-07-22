@@ -17,10 +17,11 @@ The pipeline has three cooperating parts:
    unread state, and archive state.
 2. **The frontend engine** evaluates each enabled flow. Its ordinary event-log
    pass advances a durable consumer offset, records node-run diagnostics, and
-   can enqueue deduplicated actions. On startup and deploy, it first
-   fast-forwards the consumer to the current log tail; its synthetic replay then
-   reads the current unarchived inbox and writes membership claims only, without
-   enqueuing actions or advancing an offset.
+   can enqueue deduplicated actions. On startup and deploy, its synthetic replay
+   evaluates each source node's latest authoritative snapshot and resolves
+   outputs against the current unarchived inbox. It then atomically installs
+   those membership claims and fast-forwards the consumer to the captured log
+   tail without enqueuing actions.
 3. **The desktop UI** reads inbox views and feed membership claims. It provides
    triage controls over the same durable inbox state rather than maintaining a
    separate read-state store.
@@ -61,7 +62,7 @@ All timestamps stored by this database are Unix milliseconds.
 | `inbox_item` | Canonical per-profile observation identity, latest payload, revision, lifecycle, unread state, and archive metadata. Its unique key is profile, source kind, source scope, and external id. | Archived rows are removed 90 days after `archived_at`. Deleting a row cascades to its events and membership claims. |
 | `inbox_event` | Significant observation history for an inbox item: classification, transition, summary, detail, and occurrence key. Trivial payload refreshes do not add a row. | The newest 500 rows per item are retained. Older rows are removed first. |
 | `feed_membership_claim` | A frontend engine assertion that an item belongs in a profile feed for a source node. | Removed when its item is deleted. Unarchived claims are replaced during synthetic replay; archived claims remain frozen. |
-| `event_log` | Append-only transport log used by enabled flow runtimes; their durable offsets are stored separately in `consumer_offset`. | Optional age and per-topic limits are applied by maintenance. |
+| `event_log` | Append-only transport log used by enabled flow runtimes; their durable offsets are stored separately in `consumer_offset`. | Optional age and per-topic limits are applied by maintenance, while each source topic's newest authoritative snapshot is retained for membership replay. |
 | `consumer_offset` | Last ordinary log offset fully committed by a flow. | A monotonic upsert prevents replay from moving a cursor backward. |
 | `source_head` | Latest source payload for change detection across producer restarts. | Deleted with a profile purge. |
 | `output_command` | Durable, deduplicated action work queue. | Terminal command history is bounded; pending and running work is retained. |
@@ -170,14 +171,16 @@ offset is a no-op. `Discard` values are accounting input rather than persisted
 rows: their aggregate is reflected in each node run’s drop count. Action
 commands are deduplicated by action id and source occurrence key.
 
-Startup and deploy use a different path. The client first fast-forwards the
-flow’s consumer to the current event-log tail so stale logged actions are not
-replayed. It then obtains the current unarchived inbox, evaluates it against
-the flow, and calls `RecomputeMemberships`. That API clears replayable claims
-and inserts the new claims in one transaction. The synthetic replay write has
-no action, event-log, or cursor capability. This makes membership changes
-deterministic and prevents a flow edit or app restart from repeating side
-effects.
+Startup and deploy use a different path. The client captures the current
+log tail, evaluates each current source node's latest authoritative snapshot
+while preserving the source topic that observed each item, and resolves feed
+outputs against the current unarchived inbox. `ActivateReplay` then atomically
+replaces replayable claims, removes obsolete flow structure, and advances the
+consumer to the captured tail. If activation fails, both claims and the prior
+consumer offset remain intact, so the last-known-good runtime can continue.
+The synthetic replay path cannot enqueue actions. This makes membership
+changes deterministic, prevents cross-source claims, and prevents a flow edit
+or app restart from repeating side effects.
 
 ## Inbox views and triage
 

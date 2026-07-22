@@ -257,7 +257,7 @@ func (pr *Producer) Tick(ctx context.Context) {
 				}
 			}
 		}
-		offset, err := pr.db.AppendSnapshot(ctx, topic, items)
+		offset, err := pr.db.AppendSnapshot(ctx, topic, meta.SourceKind, meta.SourceScope, items)
 		if err != nil {
 			pr.logger.Debug().Err(err).Str("source", id).Msg("pipeline producer: appending source snapshot failed")
 			pr.record(ctx, activity.RefreshFailed(id, err.Error()))

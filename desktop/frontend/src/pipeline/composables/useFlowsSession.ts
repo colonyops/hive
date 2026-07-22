@@ -3,21 +3,20 @@
 // every enabled flow. Canvas/profile selection therefore never gates work.
 import { computed, shallowRef, watch, type ComputedRef, type Ref } from 'vue'
 import { GetFlow, GetLayout, ListFlows, SaveFlow, SaveLayout } from '../../../bindings/github.com/colonyops/hive/desktop/flowsservice'
-import { Commit, EventLogTailOffset, FastForwardConsumer, ListUnarchivedInboxItems, NodeRuns, ReadFrom, RecomputeMemberships, ReconcileFlowMembershipStructure } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
+import { ActivateReplay, Commit, EventLogTailOffset, ListReplaySourceSnapshots, ListUnarchivedInboxItems, NodeRuns, ReadFrom } from '../../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import { flowFromWire, type EditorFlow, type WireFlow } from '../lib/wireFlow'
 import { usePipelineEditor, type PipelineEditorClient } from './usePipelineEditor'
 import { usePipelineRuntime, type RuntimeSummary } from './usePipelineRuntime'
 import type { PipelineClient } from '../driver'
-import type { FeedMembershipClaim, InboxItemView } from '../../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
+import type { FeedMembershipClaim, InboxItemView, Msg } from '../../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb/models'
 
 type PipelineEditor = ReturnType<typeof usePipelineEditor>
 type PipelineRuntime = ReturnType<typeof usePipelineRuntime>
 type ReplayClient = PipelineClient & {
   eventLogTailOffset?: () => Promise<string>
-  fastForwardConsumer?: (consumer: string, tail: string) => Promise<void>
-  recomputeMemberships?: (profileID: string, claims: FeedMembershipClaim[]) => Promise<void>
-  reconcileFlowMembershipStructure?: (profileID: string, feedIDs: string[], sourceIDs: string[]) => Promise<void>
+  activateReplay?: (profileID: string, tail: string, claims: FeedMembershipClaim[], feedIDs: string[], sourceIDs: string[]) => Promise<void>
   listUnarchivedInboxItems?: (profileID: string) => Promise<InboxItemView[]>
+  listReplaySourceSnapshots?: (profileID: string, throughOffset: string) => Promise<Msg[]>
 }
 
 export interface FlowsSession extends Omit<PipelineEditor, 'deploy' | 'replaceDraft'> {
@@ -66,10 +65,9 @@ function defaultRuntimeClient(): ReplayClient {
     async readFrom(consumer, limit) { return await ReadFrom(consumer, limit) },
     async commit(batch) { await Commit(batch) },
     async eventLogTailOffset() { return await EventLogTailOffset() },
-    async fastForwardConsumer(consumer, tail) { await FastForwardConsumer(consumer, tail) },
-    async recomputeMemberships(profileID, claims) { await RecomputeMemberships(profileID, claims) },
-    async reconcileFlowMembershipStructure(profileID, feedIDs, sourceIDs) { await ReconcileFlowMembershipStructure(profileID, feedIDs, sourceIDs) },
-    async listUnarchivedInboxItems(profileID) { return (await ListUnarchivedInboxItems(profileID)) ?? [] }
+    async activateReplay(profileID, tail, claims, feedIDs, sourceIDs) { await ActivateReplay(profileID, tail, claims, feedIDs, sourceIDs) },
+    async listUnarchivedInboxItems(profileID) { return (await ListUnarchivedInboxItems(profileID)) ?? [] },
+    async listReplaySourceSnapshots(profileID, throughOffset) { return (await ListReplaySourceSnapshots(profileID, throughOffset)) ?? [] },
   }
 }
 
@@ -153,9 +151,8 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
       return
     }
 
-    // The serialized caller has drained all earlier work. Do not stop a
-    // usable runtime until the replacement snapshot has been validated.
-    removeRuntime(id)
+    // The serialized caller has drained all earlier work. Build and prepare
+    // the candidate while the last known-good runtime remains available.
     const runtime = deps.runtimeFactory(deps.runtimeClient, snapshot)
     try {
       await initializeReplay(snapshot, runtime)
@@ -164,6 +161,7 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
       setRuntimeLoadError(id, errorMessage(err, 'Could not prepare the deployed flow.'))
       return
     }
+    removeRuntime(id)
     setRuntime(id, runtime)
     setRuntimeLoadError(id, null)
     await runtime.run()
@@ -173,11 +171,8 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
   // rows cannot be allowed through action terminals while the runtime starts.
   async function initializeReplay(snapshot: EditorFlow, runtime: PipelineRuntime): Promise<void> {
     const client = deps.runtimeClient as ReplayClient
-    if (!client.eventLogTailOffset || !client.fastForwardConsumer || !client.recomputeMemberships || !client.reconcileFlowMembershipStructure || !client.listUnarchivedInboxItems) return
-    // (a) Fast-forward before constructing or pumping a graph page, so stale
-    // log actions are never replayed after an offline window.
+    if (!client.eventLogTailOffset || !client.activateReplay || !client.listUnarchivedInboxItems || !client.listReplaySourceSnapshots) return
     const tail = await client.eventLogTailOffset()
-    await client.fastForwardConsumer(snapshot.id, tail)
 
     const feedIDs = snapshot.nodes.filter((node) => node.type === 'feed').map((node) => `${snapshot.id}/${node.id}`)
     const sourceIDs = snapshot.nodes
@@ -186,37 +181,9 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
       .sort()
     const items = await client.listUnarchivedInboxItems(snapshot.id)
     const byIdentity = new Map(items.map((item) => [`${item.sourceKind}\u0000${item.sourceScope}\u0000${item.externalId}`, item]))
-
-    // Current source nodes are GitHub-only. A source snapshot must retain an
-    // item's immutable identity group (kind/scope), but non-GitHub inbox data
-    // has no compatible entry node and must not be routed through GitHub.
-    const groups = new Map<string, InboxItemView[]>()
-    for (const item of items) {
-      if (item.sourceKind !== 'github') continue
-      const identity = `${item.sourceKind}\u0000${item.sourceScope}`
-      const group = groups.get(identity)
-      if (group) group.push(item)
-      else groups.set(identity, [item])
-    }
-    // An enabled source still needs an empty authoritative snapshot when
-    // there are no matching GitHub items, so its prior claims are cleared.
-    if (groups.size === 0) groups.set('github\u0000', [])
-
-    let syntheticID = 0
-    const messages = sourceIDs.flatMap((topic) => [...groups.entries()]
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([identity, group]) => {
-        const [sourceKind, sourceScope] = identity.split('\u0000')
-        return {
-          // A unique deterministic decimal ID keeps runGraph's offset-shaped
-          // result valid without ever being committed by the claims-only path.
-          ID: String(++syntheticID),
-          Key: '', Topic: topic, Ts: 0, Payload: {}, SourceKind: sourceKind, SourceScope: sourceScope, OccurrenceKey: '',
-          Snapshot: group
-            .sort((left, right) => left.externalId.localeCompare(right.externalId))
-            .map((item) => ({ key: item.externalId, payload: item.payload })),
-        }
-      }))
+    const currentSources = new Set(sourceIDs)
+    const messages = (await client.listReplaySourceSnapshots(snapshot.id, tail))
+      .filter((message) => currentSources.has(message.Topic))
     const result = await runtime.recompute(messages)
     const claims: FeedMembershipClaim[] = result.outputs
       .filter((output) => output.sink.kind === 'feed')
@@ -224,10 +191,9 @@ function createFlowsSession(deps: Required<FlowsSessionDeps>): FlowsSession {
         const item = byIdentity.get(`${output.sourceKind}\u0000${output.sourceScope}\u0000${output.key}`)
         return item ? [{ profile_id: snapshot.id, feed_id: output.sink.targetId, item_id: item.id, source_id: output.sourceTopic }] : []
       })
-    // (b) This endpoint has no action or offset capability; it replaces only
-    // unarchived membership claims and keeps archived claims frozen.
-    await client.recomputeMemberships(snapshot.id, claims)
-    await client.reconcileFlowMembershipStructure(snapshot.id, feedIDs, sourceIDs)
+    // Install the prepared graph state and consumer checkpoint together so a
+    // failed candidate leaves the last-known-good runtime fully intact.
+    await client.activateReplay(snapshot.id, tail, claims, feedIDs, sourceIDs)
   }
 
   /** Starts missing enabled runtimes and stops disabled/deleted ones. */

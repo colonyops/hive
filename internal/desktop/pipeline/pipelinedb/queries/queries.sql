@@ -29,14 +29,31 @@ SELECT * FROM consumer_offset
 WHERE consumer = ?;
 
 -- name: DeleteEventsOlderThan :exec
-DELETE FROM event_log WHERE created_at < ?;
+DELETE FROM event_log AS target
+WHERE target.created_at < ?
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  );
 
 -- name: DeleteEventsOverLimitPerTopic :exec
 DELETE FROM event_log AS target
 WHERE (
     SELECT COUNT(*) FROM event_log AS newer
     WHERE newer.topic = target.topic AND newer."offset" > target."offset"
-) >= CAST(sqlc.arg(limit) AS INTEGER);
+) >= CAST(sqlc.arg(limit) AS INTEGER)
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  );
 
 -- name: CommitConsumerOffset :exec
 -- Monotonic upsert: on conflict, only advance the stored offset when the
@@ -83,6 +100,19 @@ WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = 
 
 -- name: ListUnarchivedInboxItemsByProfile :many
 SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL;
+
+-- name: ListLatestSourceSnapshotsByTopicPrefix :many
+SELECT event_log.*
+FROM event_log
+JOIN (
+    SELECT topic, MAX("offset") AS "offset"
+    FROM event_log
+    WHERE snapshot = 1
+      AND "offset" <= CAST(sqlc.arg(through_offset) AS INTEGER)
+      AND substr(topic, 1, length(CAST(sqlc.arg(topic_prefix) AS TEXT))) = CAST(sqlc.arg(topic_prefix) AS TEXT)
+    GROUP BY topic
+) AS latest ON latest.topic = event_log.topic AND latest."offset" = event_log."offset"
+ORDER BY event_log.topic;
 
 -- name: GetUnarchivedInboxItemByID :one
 SELECT * FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL;

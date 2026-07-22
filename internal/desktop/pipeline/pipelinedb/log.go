@@ -116,7 +116,7 @@ func (db *DB) AppendIfChanged(ctx context.Context, topic, key string, payload []
 // AppendSnapshot appends a successful source poll's complete current item
 // set. Unlike item events, snapshots are deliberately not deduplicated: each
 // one is an authoritative reconciliation point, including an empty set.
-func (db *DB) AppendSnapshot(ctx context.Context, topic string, items []SnapshotItem) (int64, error) {
+func (db *DB) AppendSnapshot(ctx context.Context, topic, sourceKind, sourceScope string, items []SnapshotItem) (int64, error) {
 	payload, err := json.Marshal(items)
 	if err != nil {
 		return 0, fmt.Errorf("encoding source snapshot for topic %q: %w", topic, err)
@@ -127,7 +127,7 @@ func (db *DB) AppendSnapshot(ctx context.Context, topic string, items []Snapshot
 		Payload:    payload,
 		CreatedAt:  time.Now().UnixMilli(),
 		Snapshot:   1,
-		SourceKind: "", SourceScope: "", OccurrenceKey: sql.NullString{},
+		SourceKind: sourceKind, SourceScope: sourceScope, OccurrenceKey: sql.NullString{},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("appending source snapshot for topic %q: %w", topic, err)

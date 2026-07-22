@@ -226,7 +226,16 @@ func (q *Queries) DeleteEventLogByTopicPrefix(ctx context.Context, topic string)
 }
 
 const deleteEventsOlderThan = `-- name: DeleteEventsOlderThan :exec
-DELETE FROM event_log WHERE created_at < ?
+DELETE FROM event_log AS target
+WHERE target.created_at < ?
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  )
 `
 
 func (q *Queries) DeleteEventsOlderThan(ctx context.Context, createdAt int64) error {
@@ -240,6 +249,14 @@ WHERE (
     SELECT COUNT(*) FROM event_log AS newer
     WHERE newer.topic = target.topic AND newer."offset" > target."offset"
 ) >= CAST(?1 AS INTEGER)
+  AND NOT (
+      target.snapshot = 1
+      AND target."offset" = (
+          SELECT MAX(snapshot_row."offset")
+          FROM event_log AS snapshot_row
+          WHERE snapshot_row.topic = target.topic AND snapshot_row.snapshot = 1
+      )
+  )
 `
 
 func (q *Queries) DeleteEventsOverLimitPerTopic(ctx context.Context, limit int64) error {
@@ -1259,6 +1276,58 @@ func (q *Queries) ListJobs(ctx context.Context, arg ListJobsParams) ([]Job, erro
 			&i.Target,
 			&i.Error,
 			&i.CommandID,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listLatestSourceSnapshotsByTopicPrefix = `-- name: ListLatestSourceSnapshotsByTopicPrefix :many
+SELECT event_log."offset", event_log.topic, event_log."key", event_log.payload, event_log.snapshot, event_log.source_kind, event_log.source_scope, event_log.occurrence_key, event_log.created_at
+FROM event_log
+JOIN (
+    SELECT topic, MAX("offset") AS "offset"
+    FROM event_log
+    WHERE snapshot = 1
+      AND "offset" <= CAST(?1 AS INTEGER)
+      AND substr(topic, 1, length(CAST(?2 AS TEXT))) = CAST(?2 AS TEXT)
+    GROUP BY topic
+) AS latest ON latest.topic = event_log.topic AND latest."offset" = event_log."offset"
+ORDER BY event_log.topic
+`
+
+type ListLatestSourceSnapshotsByTopicPrefixParams struct {
+	ThroughOffset int64  `json:"through_offset"`
+	TopicPrefix   string `json:"topic_prefix"`
+}
+
+func (q *Queries) ListLatestSourceSnapshotsByTopicPrefix(ctx context.Context, arg ListLatestSourceSnapshotsByTopicPrefixParams) ([]EventLog, error) {
+	rows, err := q.db.QueryContext(ctx, listLatestSourceSnapshotsByTopicPrefix, arg.ThroughOffset, arg.TopicPrefix)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []EventLog{}
+	for rows.Next() {
+		var i EventLog
+		if err := rows.Scan(
+			&i.Offset,
+			&i.Topic,
+			&i.Key,
+			&i.Payload,
+			&i.Snapshot,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.OccurrenceKey,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}

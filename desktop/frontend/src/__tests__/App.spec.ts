@@ -34,10 +34,9 @@ const mocks = vi.hoisted(() => ({
   ActionRun: vi.fn(),
   SessionLaunchOptions: vi.fn(),
   EventLogTailOffset: vi.fn(),
-  FastForwardConsumer: vi.fn(),
-  RecomputeMemberships: vi.fn(),
-  ReconcileFlowMembershipStructure: vi.fn(),
+  ActivateReplay: vi.fn(),
   ListUnarchivedInboxItems: vi.fn(),
+  ListReplaySourceSnapshots: vi.fn(),
   ActionViews: vi.fn(),
   InvokeAction: vi.fn(),
   NodeRuns: vi.fn(),
@@ -88,10 +87,9 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () =
   ActionRun: mocks.ActionRun,
   SessionLaunchOptions: mocks.SessionLaunchOptions,
   EventLogTailOffset: mocks.EventLogTailOffset,
-  FastForwardConsumer: mocks.FastForwardConsumer,
-  RecomputeMemberships: mocks.RecomputeMemberships,
-  ReconcileFlowMembershipStructure: mocks.ReconcileFlowMembershipStructure,
+  ActivateReplay: mocks.ActivateReplay,
   ListUnarchivedInboxItems: mocks.ListUnarchivedInboxItems,
+  ListReplaySourceSnapshots: mocks.ListReplaySourceSnapshots,
   ActionViews: mocks.ActionViews,
   InvokeAction: mocks.InvokeAction,
   NodeRuns: mocks.NodeRuns,
@@ -167,10 +165,9 @@ describe('App', () => {
     mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' })
     mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [], defaultRepository: '', agents: [], defaultAgent: '' })
     mocks.EventLogTailOffset.mockResolvedValue('0')
-    mocks.FastForwardConsumer.mockResolvedValue(undefined)
-    mocks.RecomputeMemberships.mockResolvedValue(undefined)
-    mocks.ReconcileFlowMembershipStructure.mockResolvedValue(undefined)
+    mocks.ActivateReplay.mockResolvedValue(undefined)
     mocks.ListUnarchivedInboxItems.mockResolvedValue([])
+    mocks.ListReplaySourceSnapshots.mockResolvedValue([])
     mocks.ActionViews.mockResolvedValue([])
     mocks.InvokeAction.mockResolvedValue(undefined)
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
@@ -425,6 +422,48 @@ describe('App', () => {
     await flushPromises()
     expect(router.currentRoute.value.query.feed).toBe('personal/desktop')
 
+    wrapper.unmount()
+  })
+
+  it('preserves a non-default inbox view when toggling unread', async () => {
+    const { wrapper, router } = await mountAppWithRouter()
+
+    await wrapper.get('[data-testid="inbox-view-archive"]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.query).toEqual({ view: 'archive' })
+
+    await wrapper.get('[data-testid="filter-unread"]').trigger('click')
+    await flushPromises()
+
+    expect(router.currentRoute.value.query).toEqual({ view: 'archive', unread: '1' })
+    expect(mocks.ListInboxItems).toHaveBeenLastCalledWith('personal', 'archive', 500)
+    expect(wrapper.get('[data-testid="inbox-view-archive"]').classes()).toContain('sidebar-entry-selected')
+    wrapper.unmount()
+  })
+
+  it('clears stale observed activity while the selected item timeline loads or fails', async () => {
+    const items = [
+      { id: 1, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: 'pr-1', title: 'First', url: '', payload: { kind: 'PR', repo: 'acme/app', num: 1, author: 'hay' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2 },
+      { id: 2, profileId: 'personal', sourceKind: 'github', sourceScope: '', externalId: 'pr-2', title: 'Second', url: '', payload: { kind: 'PR', repo: 'acme/app', num: 2, author: 'hay' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 2 },
+    ]
+    let rejectSecond!: (error: Error) => void
+    const secondEvents = new Promise<never>((_, reject) => { rejectSecond = reject })
+    mocks.ListInboxItems.mockResolvedValue(items)
+    mocks.InboxItemEvents.mockImplementation((id: number) => id === 1
+      ? Promise.resolve([{ id: 1, itemId: 1, kind: 'observed', transition: 'none', attention: 'activity', summary: 'first event', detail: {}, createdAt: 1 }])
+      : secondEvents)
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const wrapper = await mountApp()
+    expect(wrapper.get('[data-testid="observed-activity"]').text()).toContain('first event')
+
+    await wrapper.findAll('[data-testid="feed-item"]')[1]!.trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="observed-activity"]').exists()).toBe(false)
+
+    rejectSecond(new Error('events unavailable'))
+    await flushPromises()
+    expect(wrapper.find('[data-testid="observed-activity"]').exists()).toBe(false)
+    expect(warn).toHaveBeenCalledWith('Unable to load inbox item events', expect.any(Error))
     wrapper.unmount()
   })
 
