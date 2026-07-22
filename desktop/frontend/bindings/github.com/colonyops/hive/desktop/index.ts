@@ -9,6 +9,7 @@ import * as PipelineService from "./pipelineservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as SystemService from "./systemservice.js";
 import * as UpdaterService from "./updaterservice.js";
+import * as WindowService from "./windowservice.js";
 export {
     ActionsService,
     ActivityService,
@@ -17,7 +18,8 @@ export {
     PipelineService,
     SettingsService,
     SystemService,
-    UpdaterService
+    UpdaterService,
+    WindowService
 };
 
 export type {

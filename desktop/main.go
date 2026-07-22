@@ -65,6 +65,10 @@ func registerEvents() struct{} {
 	application.RegisterEvent[string]("flows:updated")
 	application.RegisterEvent[string]("actions:updated")
 	application.RegisterEvent[string]("jobs:updated")
+	// window:focus and window:blur carry the current focus state. Consumers use
+	// them to update focus-sensitive UI without querying the native window.
+	application.RegisterEvent[bool]("window:focus")
+	application.RegisterEvent[bool]("window:blur")
 	// activity:appended carries the new event's id after any subsystem (or the
 	// frontend, via ActivityService.Record) appends to the activity log. The
 	// Activity view re-reads its latest page and advances its unseen marker.
@@ -137,6 +141,22 @@ func emitActivityAppended(id int64) {
 func emitJobsUpdated() {
 	if app := application.Get(); app != nil {
 		app.Event.Emit("jobs:updated", "changed")
+	}
+}
+
+// emitWindowFocus pushes the current focused state to the frontend. Safe to
+// call from native window event callbacks once the app is running.
+func emitWindowFocus() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("window:focus", true)
+	}
+}
+
+// emitWindowBlur pushes the current unfocused state to the frontend. Safe to
+// call from native window event callbacks once the app is running.
+func emitWindowBlur() {
+	if app := application.Get(); app != nil {
+		app.Event.Emit("window:blur", false)
 	}
 }
 
@@ -438,6 +458,7 @@ func main() {
 	// toggle seeds the initial state.
 	updaterVersion, _, _ := resolvedBuildInfo()
 	updaterService := NewUpdaterService(updaterVersion, settings.AutoUpdateOrDefault(), defaultUpdateCheckInterval, logger)
+	focus := newFocusState()
 
 	options := application.Options{
 		Name:        "Hive",
@@ -453,6 +474,7 @@ func main() {
 			application.NewService(NewSystemService()),
 			application.NewService(NewSettingsService(producer, fetcher, logger)),
 			application.NewService(updaterService),
+			application.NewService(NewWindowService(focus)),
 		},
 		Assets: application.AssetOptions{
 			Handler:    application.AssetFileServerFS(assets),
@@ -508,6 +530,17 @@ func main() {
 		},
 	})
 
+	window.OnWindowEvent(events.Common.WindowFocus, func(*application.WindowEvent) {
+		if focus.set(true) {
+			emitWindowFocus()
+		}
+	})
+	window.OnWindowEvent(events.Common.WindowLostFocus, func(*application.WindowEvent) {
+		if focus.set(false) {
+			emitWindowBlur()
+		}
+	})
+
 	// Closing the window keeps the app running in the dock and tray; it can be
 	// reopened from either. Quitting is done via Cmd+Q or the tray menu.
 	// This must be a hook, not OnWindowEvent: hooks run synchronously before
@@ -515,6 +548,9 @@ func main() {
 	// which otherwise races this callback in a separate goroutine.
 	window.RegisterHook(events.Common.WindowClosing, func(e *application.WindowEvent) {
 		window.Hide()
+		if focus.set(false) {
+			emitWindowBlur()
+		}
 		e.Cancel()
 	})
 
