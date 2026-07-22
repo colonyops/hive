@@ -36,6 +36,8 @@ import { commandCatalog } from './keybindings/catalog'
 import { setTheme, themeLabels, themes } from './composables/useTheme'
 import { useFlowsSession } from './pipeline/composables/useFlowsSession'
 import { isEditableTarget } from './lib/isEditableTarget'
+import { InstallUpdate, Status as UpdaterStatus } from '../bindings/github.com/colonyops/hive/desktop/updaterservice'
+import type { UpdateInfo } from '../bindings/github.com/colonyops/hive/desktop/models'
 import type { ApplicationSettingsSection, ProfileSettingsSection } from './router'
 import type { SidebarSelection } from './types/feed'
 
@@ -272,6 +274,31 @@ async function openJobRun(commandID: number): Promise<void> {
   await openActionRun(job.target, job.actionId, commandID)
 }
 
+// ── Desktop self-update ───────────────────────────────────────────────────────
+// The UpdaterService checks GitHub for a newer desktop release in the
+// background (when enabled) and emits update:available. We seed initial state
+// via Status() on mount and keep it current through the subscription, so the
+// title-bar chip appears without waiting for the next poll. Clicking it
+// downloads + relaunches into the new version.
+const updateInfo = ref<UpdateInfo | null>(null)
+const updateAvailable = computed(() => updateInfo.value?.available ?? false)
+const updateLatestVersion = computed(() => updateInfo.value?.latestVersion ?? '')
+const installingUpdate = ref(false)
+
+async function openUpdate(): Promise<void> {
+  if (installingUpdate.value) return
+  // A native confirm is a lightweight affordance before the app quits and
+  // relaunches into the new version; guarded for the non-Wails test context.
+  if (typeof window.confirm === 'function' && !window.confirm('Download the update and relaunch Hive now?')) return
+  installingUpdate.value = true
+  try {
+    await InstallUpdate()
+  } catch (error) {
+    console.debug('Update install failed', error)
+    installingUpdate.value = false
+  }
+}
+
 function closeSettings(): void {
   openFeed()
 }
@@ -307,6 +334,7 @@ function openErrorNode(): void {
 // feed_item, so all profile sidebars observe the newly committed work.
 let unsubscribeLog: (() => void) | undefined
 let unsubscribeFlowsRuntime: (() => void) | undefined
+let unsubscribeUpdate: (() => void) | undefined
 onMounted(() => {
   unsubscribeLog = Events.On('log:appended', () => {
     void (async () => {
@@ -318,10 +346,20 @@ onMounted(() => {
   // graphs must reload even while the canvas is closed. The session keeps an
   // unsaved editor draft private while replacing only its runtime snapshot.
   unsubscribeFlowsRuntime = Events.On('flows:updated', () => { void session.reloadDeployed() })
+  // Seed the update chip from the last cached check, then react to background
+  // checks. The event payload is the same UpdateInfo shape Status() returns.
+  void UpdaterStatus().then((status) => { updateInfo.value = status }).catch((error) => {
+    console.debug('Updater status unavailable', error)
+  })
+  unsubscribeUpdate = Events.On('update:available', (event: { data: UpdateInfo | UpdateInfo[] }) => {
+    const payload = Array.isArray(event.data) ? event.data[0] : event.data
+    if (payload) updateInfo.value = payload
+  })
 })
 onUnmounted(() => {
   unsubscribeLog?.()
   unsubscribeFlowsRuntime?.()
+  unsubscribeUpdate?.()
   session.disposeRuntime()
 })
 
@@ -599,6 +637,8 @@ onUnmounted(() => {
         :unseen-activity="unseenActivity"
         :jobs-active="jobsActive"
         :active-jobs="activeJobs"
+        :update-available="updateAvailable"
+        :latest-version="updateLatestVersion"
         :can-go-back="canGoBack"
         :can-go-forward="canGoForward"
         :sidebar-collapsed="sidebarCollapsed"
@@ -608,6 +648,7 @@ onUnmounted(() => {
         @open-error-node="openErrorNode"
         @open-activity="openActivity"
         @open-job-run="openJobRun"
+        @open-update="openUpdate"
         @toggle-sidebar="toggleSidebar"
         @open-palette="togglePalette"
         @toggle-maximise="toggleMaximise"

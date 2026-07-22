@@ -257,13 +257,13 @@ func TestMsgStore_Prune(t *testing.T) {
 	store := NewMessageStore(database, 0)
 	ctx := context.Background()
 
-	// Publish messages
-	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "old"}, []string{"events"})
-	time.Sleep(50 * time.Millisecond)
-	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "new"}, []string{"events"})
+	// Publish messages on opposite sides of the pruning cutoff.
+	now := time.Now()
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "old", CreatedAt: now.Add(-time.Hour)}, []string{"events"})
+	_, _ = store.Publish(ctx, messaging.Message{Topic: "events", Payload: "new", CreatedAt: now}, []string{"events"})
 
-	// Prune messages older than 25ms
-	removed, err := store.Prune(ctx, 25*time.Millisecond)
+	// Prune messages older than 30 minutes.
+	removed, err := store.Prune(ctx, 30*time.Minute)
 	require.NoError(t, err, "Prune failed")
 	assert.Equal(t, 1, removed, "Prune removed %d messages, want 1", removed)
 

@@ -77,3 +77,17 @@ export interface SystemInfo {
     "logFile": PathInfo;
     "database": PathInfo;
 }
+
+/**
+ * UpdateInfo is the frontend-facing view of the last check result plus the
+ * current auto-update toggle state, so a single Status() call seeds both the
+ * title-bar chip and the settings switch.
+ */
+export interface UpdateInfo {
+    "enabled": boolean;
+    "available": boolean;
+    "currentVersion": string;
+    "latestVersion": string;
+    "notes": string;
+    "releaseUrl": string;
+}

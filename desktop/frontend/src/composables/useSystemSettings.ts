@@ -12,7 +12,12 @@ import {
   SetConfigDir,
   SetDataDir,
 } from '../../bindings/github.com/colonyops/hive/desktop/systemservice'
-import type { BuildInfo, SystemInfo } from '../../bindings/github.com/colonyops/hive/desktop/models'
+import {
+  CheckNow,
+  SetEnabled,
+  Status,
+} from '../../bindings/github.com/colonyops/hive/desktop/updaterservice'
+import type { BuildInfo, SystemInfo, UpdateInfo } from '../../bindings/github.com/colonyops/hive/desktop/models'
 
 function errText(err: unknown): string {
   return err instanceof Error ? err.message : String(err)
@@ -29,17 +34,58 @@ export function useSystemSettings() {
   const error = ref('')
   const restartRequired = ref(false)
 
+  // Auto-update state. autoUpdate mirrors the persisted toggle; update holds
+  // the last check result so the view can render "up to date" / "vX available"
+  // inline. checkingUpdate guards the manual Check button; checkedOnce lets the
+  // view distinguish "never checked" from an up-to-date result.
+  const autoUpdate = ref(true)
+  const update = ref<UpdateInfo | null>(null)
+  const checkingUpdate = ref(false)
+  const checkedOnce = ref(false)
+
   async function refresh(): Promise<void> {
     loading.value = true
     error.value = ''
     try {
-      const [locations, buildInfo] = await Promise.all([Info(), Build()])
+      const [locations, buildInfo, status] = await Promise.all([Info(), Build(), Status()])
       info.value = locations
       build.value = buildInfo
+      update.value = status
+      autoUpdate.value = status.enabled
     } catch (err) {
       error.value = errText(err)
     } finally {
       loading.value = false
+    }
+  }
+
+  // setAutoUpdate persists the toggle through the service (which also starts or
+  // stops the background ticker). On failure the previous value is restored so
+  // the switch never drifts from the backend.
+  async function setAutoUpdate(value: boolean): Promise<void> {
+    const previous = autoUpdate.value
+    autoUpdate.value = value
+    error.value = ''
+    try {
+      await SetEnabled(value)
+    } catch (err) {
+      autoUpdate.value = previous
+      error.value = errText(err)
+    }
+  }
+
+  // checkForUpdates runs a manual check and stores the result for inline
+  // display next to the Version row.
+  async function checkForUpdates(): Promise<void> {
+    checkingUpdate.value = true
+    error.value = ''
+    try {
+      update.value = await CheckNow()
+      checkedOnce.value = true
+    } catch (err) {
+      error.value = errText(err)
+    } finally {
+      checkingUpdate.value = false
     }
   }
 
@@ -104,6 +150,12 @@ export function useSystemSettings() {
     loading,
     error,
     restartRequired,
+    autoUpdate,
+    update,
+    checkingUpdate,
+    checkedOnce,
+    setAutoUpdate,
+    checkForUpdates,
     refresh,
     openReleaseNotes: () => openExternal(build.value?.releaseUrl),
     openRepo: () => openExternal(build.value?.repoUrl),

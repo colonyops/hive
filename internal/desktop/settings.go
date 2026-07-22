@@ -21,6 +21,12 @@ const MinPollInterval = 60 * time.Second
 // the application's default.
 type Settings struct {
 	PollInterval string `yaml:"poll_interval,omitempty"`
+	// AutoUpdate toggles the desktop app's self-update checks. It is a pointer
+	// so an absent key (nil) is distinguishable from an explicit `false`: unset
+	// means "use the default" (on), matching the omitempty convention used for
+	// PollInterval. Resolve it through AutoUpdateOrDefault rather than reading
+	// the pointer directly.
+	AutoUpdate *bool `yaml:"auto_update,omitempty"`
 }
 
 // SettingsPath is the settings.yaml location under the desktop config root.
@@ -64,6 +70,15 @@ func SaveSettings(settings Settings) error {
 		return fmt.Errorf("write desktop settings: %w", err)
 	}
 	return nil
+}
+
+// AutoUpdateOrDefault resolves AutoUpdate, defaulting to true (auto-update on)
+// when the key is absent from settings.yaml.
+func (s Settings) AutoUpdateOrDefault() bool {
+	if s.AutoUpdate == nil {
+		return true
+	}
+	return *s.AutoUpdate
 }
 
 // PollIntervalOrDefault resolves PollInterval. Hand-edited values below the

@@ -60,7 +60,14 @@ func (s *SettingsService) SetGithubSettings(settings GithubSettings) error {
 	}
 
 	interval := time.Duration(settings.PollIntervalSeconds) * time.Second
-	if err := desktop.SaveSettings(desktop.Settings{PollInterval: interval.String()}); err != nil {
+	// Load-modify-save so unrelated fields (e.g. AutoUpdate) are preserved
+	// rather than clobbered by writing a fresh, single-field Settings value.
+	current, err := desktop.LoadSettings()
+	if err != nil {
+		return err
+	}
+	current.PollInterval = interval.String()
+	if err := desktop.SaveSettings(current); err != nil {
 		return err
 	}
 	if s.producer != nil {

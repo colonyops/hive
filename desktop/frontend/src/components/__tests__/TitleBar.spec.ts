@@ -103,6 +103,24 @@ describe('TitleBar', () => {
     expect(wrapper.emitted('toggle-maximise')).toHaveLength(1)
   })
 
+  it('renders the update chip only when updateAvailable and emits open-update on click', async () => {
+    const none = mount(TitleBar, { props: { profileName: 'Triage' } })
+    expect(none.find('[data-testid="titlebar-update-chip"]').exists()).toBe(false)
+
+    const wrapper = mount(TitleBar, { props: { profileName: 'Triage', updateAvailable: true, latestVersion: '1.5.0' } })
+    const chip = wrapper.find('[data-testid="titlebar-update-chip"]')
+    expect(chip.exists()).toBe(true)
+    expect(chip.text()).toContain('1.5.0')
+
+    await chip.trigger('click')
+    expect(wrapper.emitted('open-update')).toHaveLength(1)
+  })
+
+  it('shows the update chip during onboarding (no profile)', () => {
+    const wrapper = mount(TitleBar, { props: { updateAvailable: true, latestVersion: '2.0.0' } })
+    expect(wrapper.find('[data-testid="titlebar-update-chip"]').exists()).toBe(true)
+  })
+
   it('renders the error chip only when errorCount > 0 and emits open-error-node on click', async () => {
     const none = mount(TitleBar, { props: { profileName: 'Triage', errorCount: 0 } })
     expect(none.find('[data-testid="titlebar-error-chip"]').exists()).toBe(false)

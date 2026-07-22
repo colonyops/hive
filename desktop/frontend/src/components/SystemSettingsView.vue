@@ -2,11 +2,13 @@
 // System settings: on-disk locations (data dir, config dir, log file,
 // database) with open/reveal actions, and point-only overrides for the data
 // and config directories that take effect after a restart.
-import { computed, onMounted } from 'vue'
+import { onMounted } from 'vue'
 import IconInfo from '~icons/lucide/info'
 import IconExternalLink from '~icons/lucide/external-link'
+import IconRefreshCw from '~icons/lucide/refresh-cw'
 import SettingsPathRow from './settings/SettingsPathRow.vue'
 import SettingsSection from './settings/SettingsSection.vue'
+import AppSwitch from './AppSwitch.vue'
 import { useSystemSettings } from '../composables/useSystemSettings'
 
 const {
@@ -14,6 +16,12 @@ const {
   build,
   error,
   restartRequired,
+  autoUpdate,
+  update,
+  checkingUpdate,
+  checkedOnce,
+  setAutoUpdate,
+  checkForUpdates,
   refresh,
   openReleaseNotes,
   openRepo,
@@ -29,18 +37,6 @@ const {
 onMounted(() => {
   void refresh()
 })
-
-// The build-info rows are a flat label/value list; keeping them data-driven
-// avoids three near-identical row blocks.
-const buildRows = computed(() =>
-  build.value
-    ? [
-        { label: 'Version', value: build.value.version, testid: 'system-build-version' },
-        { label: 'Commit', value: build.value.commit, testid: 'system-build-commit' },
-        { label: 'Built', value: build.value.date, testid: 'system-build-date' },
-      ]
-    : [],
-)
 </script>
 
 <template>
@@ -133,14 +129,48 @@ const buildRows = computed(() =>
       data-testid="system-about"
     >
       <div v-if="build" class="rounded-lg border border-border">
-        <div
-          v-for="(row, index) in buildRows"
-          :key="row.testid"
-          class="flex items-center justify-between gap-3 px-3.5 py-2.5"
-          :class="{ 'border-t border-border': index > 0 }"
-        >
-          <span class="text-[12.5px] text-text-3">{{ row.label }}</span>
-          <span class="font-mono text-[12.5px] text-text-2" :data-testid="row.testid">{{ row.value }}</span>
+        <div class="flex items-center justify-between gap-3 px-3.5 py-2.5">
+          <span class="text-[12.5px] text-text-3">Version</span>
+          <div class="flex items-center gap-2">
+            <span
+              v-if="update?.available"
+              class="rounded-full border border-severity-info-border bg-severity-info-tint px-2 py-0.5 text-[11px] font-medium text-severity-info"
+              data-testid="system-update-available"
+            >Update available: {{ update.latestVersion }}</span>
+            <span
+              v-else-if="checkedOnce"
+              class="text-[11px] text-text-4"
+              data-testid="system-update-uptodate"
+            >Up to date</span>
+            <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-version">{{ build.version }}</span>
+          </div>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
+          <span class="text-[12.5px] text-text-3">Commit</span>
+          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-commit">{{ build.commit }}</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
+          <span class="text-[12.5px] text-text-3">Built</span>
+          <span class="font-mono text-[12.5px] text-text-2" data-testid="system-build-date">{{ build.date }}</span>
+        </div>
+        <div class="flex items-center justify-between gap-3 border-t border-border px-3.5 py-2.5">
+          <AppSwitch
+            :model-value="autoUpdate"
+            label="Automatic updates"
+            hint="Check for and install new versions from GitHub in the background."
+            testid="system-auto-update"
+            @update:model-value="setAutoUpdate"
+          />
+          <button
+            type="button"
+            class="flex shrink-0 cursor-pointer items-center gap-1.5 self-start rounded-md border border-border px-2.5 py-1.5 text-[12px] font-medium text-text-2 hover:bg-chip hover:text-text disabled:cursor-not-allowed disabled:opacity-50"
+            :disabled="checkingUpdate"
+            data-testid="system-check-update"
+            @click="checkForUpdates"
+          >
+            <IconRefreshCw class="size-3.5" :class="checkingUpdate ? 'animate-spin' : ''" />
+            {{ checkingUpdate ? 'Checking…' : 'Check for updates' }}
+          </button>
         </div>
         <div class="flex flex-col gap-2 border-t border-border px-3.5 py-2.5">
           <button

@@ -9,6 +9,7 @@ import IconPanelLeftOpen from '~icons/lucide/panel-left-open'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconLoader from '~icons/lucide/loader'
+import IconArrowUpCircle from '~icons/lucide/arrow-up-circle'
 import JobsPopover from './JobsPopover.vue'
 import type { Job } from '../../bindings/github.com/colonyops/hive/internal/desktop/jobs/models'
 
@@ -25,6 +26,9 @@ import type { Job } from '../../bindings/github.com/colonyops/hive/internal/desk
 // events recorded since the user last opened that page, shown as a pulsing dot.
 // sidebarCollapsed drives the panel-toggle glyph; canToggleSidebar hides the
 // toggle in views that have no feed sidebar (settings, flows, onboarding).
+// updateAvailable renders a click-to-install chip (with the latestVersion
+// label) in the right cluster, mirroring the error/activity chip pattern. It
+// is independent of profileName so it can show during onboarding too.
 const props = defineProps<{
   profileName?: string
   activityActive?: boolean
@@ -32,6 +36,8 @@ const props = defineProps<{
   unseenActivity?: number
   jobsActive?: boolean
   activeJobs?: Job[]
+  updateAvailable?: boolean
+  latestVersion?: string
   canGoBack?: boolean
   canGoForward?: boolean
   sidebarCollapsed?: boolean
@@ -43,6 +49,7 @@ const emit = defineEmits<{
   'open-error-node': []
   'open-activity': []
   'open-job-run': [commandId: number]
+  'open-update': []
   'toggle-sidebar': []
   'open-palette': []
   'toggle-maximise': []
@@ -124,8 +131,16 @@ function onTitlebarDblclick(event: MouseEvent): void {
     </div>
     <div v-else class="flex-1" />
 
-    <!-- Right: error / live jobs / activity chips -->
+    <!-- Right: update / error / live jobs / activity chips -->
     <div class="flex min-w-0 flex-1 items-center justify-end gap-2 pl-2 pr-3">
+      <button
+        v-if="updateAvailable"
+        class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-severity-info-border bg-severity-info-tint px-2 py-1 text-[11.5px] font-semibold text-severity-info hover:opacity-85"
+        style="--wails-draggable: no-drag"
+        data-testid="titlebar-update-chip"
+        :title="latestVersion ? `Update to ${latestVersion}` : 'Update available'"
+        @click="emit('open-update')"
+      ><IconArrowUpCircle class="size-3" />Update<template v-if="latestVersion">&nbsp;{{ latestVersion }}</template></button>
       <button
         v-if="errorCount && errorCount > 0"
         class="flex shrink-0 cursor-pointer items-center gap-1.5 rounded-md border border-severity-error-border bg-severity-error-tint px-2 py-1 text-[11.5px] font-semibold text-severity-error hover:opacity-85"

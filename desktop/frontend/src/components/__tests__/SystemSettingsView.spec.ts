@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
   Quit: vi.fn(),
   SetText: vi.fn(),
   OpenURL: vi.fn(),
+  Status: vi.fn(),
+  SetEnabled: vi.fn(),
+  CheckNow: vi.fn(),
 }))
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/systemservice', () => ({
   Info: mocks.Info,
@@ -28,10 +31,27 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/systemservice', () 
   ClearConfigDir: mocks.ClearConfigDir,
   Quit: mocks.Quit,
 }))
+vi.mock('../../../bindings/github.com/colonyops/hive/desktop/updaterservice', () => ({
+  Status: mocks.Status,
+  SetEnabled: mocks.SetEnabled,
+  CheckNow: mocks.CheckNow,
+}))
 vi.mock('@wailsio/runtime', () => ({
   Clipboard: { SetText: mocks.SetText },
   Browser: { OpenURL: mocks.OpenURL },
 }))
+
+function updateInfo(overrides: Record<string, unknown> = {}) {
+  return {
+    enabled: true,
+    available: false,
+    currentVersion: '1.4.0',
+    latestVersion: '',
+    notes: '',
+    releaseUrl: '',
+    ...overrides,
+  }
+}
 
 function buildInfo(overrides: Record<string, unknown> = {}) {
   return {
@@ -61,6 +81,9 @@ function info(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   vi.clearAllMocks()
   mocks.Build.mockResolvedValue(buildInfo())
+  mocks.Status.mockResolvedValue(updateInfo())
+  mocks.SetEnabled.mockResolvedValue(undefined)
+  mocks.CheckNow.mockResolvedValue(updateInfo())
   document.body.innerHTML = ''
 })
 
@@ -158,6 +181,39 @@ describe('SystemSettingsView', () => {
     expect(wrapper.find('[data-testid="system-build-version"]').text()).toBe('dev')
     expect(wrapper.find('[data-testid="system-build-repo"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="system-build-release"]').exists()).toBe(false)
+  })
+
+  it('toggles automatic updates through the service', async () => {
+    mocks.Info.mockResolvedValue(info())
+    mocks.Status.mockResolvedValue(updateInfo({ enabled: true }))
+    const wrapper = mount(SystemSettingsView)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="system-auto-update"]').trigger('click')
+    expect(mocks.SetEnabled).toHaveBeenCalledWith(false)
+  })
+
+  it('checks for updates and shows an available result inline', async () => {
+    mocks.Info.mockResolvedValue(info())
+    mocks.CheckNow.mockResolvedValue(updateInfo({ available: true, latestVersion: '1.5.0' }))
+    const wrapper = mount(SystemSettingsView)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="system-check-update"]').trigger('click')
+    await flushPromises()
+    expect(mocks.CheckNow).toHaveBeenCalled()
+    expect(wrapper.find('[data-testid="system-update-available"]').text()).toContain('1.5.0')
+  })
+
+  it('shows up to date after a check finds nothing', async () => {
+    mocks.Info.mockResolvedValue(info())
+    mocks.CheckNow.mockResolvedValue(updateInfo({ available: false }))
+    const wrapper = mount(SystemSettingsView)
+    await flushPromises()
+
+    await wrapper.find('[data-testid="system-check-update"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="system-update-uptodate"]').exists()).toBe(true)
   })
 
   it('quits the app from the restart banner', async () => {
