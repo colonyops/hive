@@ -129,8 +129,10 @@ test('persists shell output, failure diagnostics, and durable duplicate rejectio
     expect.objectContaining({ key: 'pr2841', status: 'done', stdout: 'smoke-stdout', stderr: 'smoke-stderr', lastError: '' }),
   ])
   await page.locator(`[data-id="${shell}"]`).click()
-  await expect(page.getByTestId('toast').filter({ hasText: 'already run' })).toBeVisible()
-  expect((await smoke(page)).outputCommands.filter((command) => command.actionId === shell)).toHaveLength(1)
+  await expect(page.getByTestId('action-rerun-confirmation')).toContainText('has already run for this item')
+  await page.getByTestId('action-rerun-confirmation-confirm').click()
+  await expect(page.getByTestId('toast')).toContainText('Smoke PR completed')
+  await expect.poll(async () => (await smoke(page)).outputCommands.filter((command) => command.actionId === shell)).toHaveLength(2)
 
   const failing = action(state.runId, 'failed-shell')
   await page.locator(`[data-id="${failing}"]`).click()

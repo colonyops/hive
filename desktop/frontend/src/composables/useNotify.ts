@@ -21,7 +21,7 @@ export interface NotifyEvent {
 export const notifySeverityMapping: Record<NotifySeverity, { activity: string; toast: ToastSeverity }> = {
   info: { activity: 'info', toast: 'info' },
   success: { activity: 'success', toast: 'success' },
-  warning: { activity: 'warning', toast: 'info' },
+  warning: { activity: 'warning', toast: 'warning' },
   error: { activity: 'error', toast: 'error' },
 }
 
@@ -92,7 +92,7 @@ export function useNotify(overrides: Partial<NotifyDeps> = {}) {
       return
     }
     try {
-      await deps.osNotify({ title: event.title, subtitle: '', body, sound: deps.settings.notificationSound.value, data: {} })
+      await deps.osNotify({ title: event.title, subtitle: '', body, severity, sound: deps.settings.notificationSound.value, data: {} })
     } catch (error) {
       console.warn('[notify] native notification failed; surfacing toast instead', error)
       toast()

@@ -34,9 +34,9 @@ func TestNotificationServiceForwardsNotifierCalls(t *testing.T) {
 	notifier := &fakeNotificationNotifier{status: "granted", granted: true}
 	service := NewNotificationService(notifier)
 
-	err := service.Notify(NotifyInput{Title: "title", Subtitle: "subtitle", Body: "body", Sound: true, Data: map[string]any{"id": "1"}})
+	err := service.Notify(NotifyInput{Title: "title", Subtitle: "subtitle", Body: "body", Severity: "warning", Sound: true, Data: map[string]any{"id": "1"}})
 	require.NoError(t, err)
-	require.Equal(t, notify.Input{Title: "title", Subtitle: "subtitle", Body: "body", Sound: true, Data: map[string]any{"id": "1"}}, notifier.input)
+	require.Equal(t, notify.Input{Title: "title", Subtitle: "subtitle", Body: "body", Severity: "warning", Sound: true, Data: map[string]any{"id": "1"}}, notifier.input)
 
 	status, err := service.PermissionStatus()
 	require.NoError(t, err)

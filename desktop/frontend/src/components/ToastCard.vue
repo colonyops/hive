@@ -3,6 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import IconCircleAlert from '~icons/lucide/circle-alert'
 import IconCircleCheck from '~icons/lucide/circle-check'
 import IconInfo from '~icons/lucide/info'
+import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconX from '~icons/lucide/x'
 import IconZap from '~icons/lucide/zap'
 import type { ToastActionDef, ToastInstance, ToastSeverity } from '../types/toast'
@@ -13,6 +14,7 @@ const emit = defineEmits<{ dismiss: [] }>()
 const icons: Record<ToastSeverity, unknown> = {
   info: IconInfo,
   success: IconCircleCheck,
+  warning: IconTriangleAlert,
   error: IconCircleAlert,
   'auto-action': IconZap,
 }
@@ -22,6 +24,7 @@ const icons: Record<ToastSeverity, unknown> = {
 const severityStyles: Record<ToastSeverity, { border: string; iconBg: string; iconColor: string; accent: string; bar: string }> = {
   info: { border: 'border-border', iconBg: 'bg-severity-info-tint', iconColor: 'text-severity-info', accent: 'text-severity-info', bar: 'bg-severity-info' },
   success: { border: 'border-severity-success-border', iconBg: 'bg-severity-success-tint', iconColor: 'text-severity-success', accent: 'text-severity-success', bar: 'bg-severity-success' },
+  warning: { border: 'border-severity-warning-border', iconBg: 'bg-severity-warning-tint', iconColor: 'text-severity-warning', accent: 'text-severity-warning', bar: 'bg-severity-warning' },
   error: { border: 'border-severity-error-border', iconBg: 'bg-severity-error-tint', iconColor: 'text-severity-error', accent: 'text-severity-error', bar: 'bg-severity-error' },
   'auto-action': { border: 'border-severity-auto-border', iconBg: 'bg-severity-auto-tint', iconColor: 'text-accent', accent: 'text-accent', bar: 'bg-accent' },
 }
@@ -81,7 +84,6 @@ function runAction(action: ToastActionDef) {
       </button>
     </div>
     <div
-      v-if="toast.duration !== null"
       class="h-0.5 transition-[width] ease-linear"
       :class="style.bar"
       :style="{ width: progressStarted ? '0%' : '100%', transitionDuration: `${toast.duration}ms` }"

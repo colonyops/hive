@@ -6,6 +6,7 @@ import "context"
 // carries executable configuration or message attribution.
 type ActionInvocationInput struct {
 	Session *SessionInvocationInput `json:"session,omitempty"`
+	Rerun   bool                    `json:"rerun,omitempty"`
 }
 
 // SessionLaunchRepository is the safe presentation of a repository available
@@ -67,10 +68,11 @@ type ExecutionResult struct {
 }
 
 type ActionRunView struct {
-	CommandID int64             `json:"commandId"`
-	Status    string            `json:"status"`
-	Result    *ExecutionOutcome `json:"result,omitempty"`
-	Error     string            `json:"error,omitempty"`
-	Stdout    string            `json:"stdout,omitempty"`
-	Stderr    string            `json:"stderr,omitempty"`
+	CommandID            int64             `json:"commandId"`
+	Status               string            `json:"status"`
+	Result               *ExecutionOutcome `json:"result,omitempty"`
+	Error                string            `json:"error,omitempty"`
+	Stdout               string            `json:"stdout,omitempty"`
+	Stderr               string            `json:"stderr,omitempty"`
+	ConfirmationRequired bool              `json:"confirmationRequired,omitempty"`
 }

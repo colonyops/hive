@@ -71,6 +71,7 @@ export interface NotifyInput {
     "title": string;
     "subtitle": string;
     "body": string;
+    "severity": string;
     "sound": boolean;
     "data": { [_ in string]?: any } | null;
 }

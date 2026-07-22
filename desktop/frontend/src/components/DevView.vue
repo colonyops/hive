@@ -59,6 +59,7 @@ function dispatchTest(selectedChannel = channel.value, selectedSeverity = severi
     title: testTitle,
     subtitle: testSubtitle,
     body,
+    severity: selectedSeverity,
     sound: notificationSound.value,
     data: { source: 'dev-view', channel: 'force-system', severity: selectedSeverity },
   }).catch((error: unknown) => reportFailure('system', error))

@@ -12,6 +12,7 @@ type NotifyInput struct {
 	Title    string         `json:"title"`
 	Subtitle string         `json:"subtitle"`
 	Body     string         `json:"body"`
+	Severity string         `json:"severity"`
 	Sound    bool           `json:"sound"`
 	Data     map[string]any `json:"data"`
 }
@@ -52,6 +53,7 @@ func (s *NotificationService) Notify(in NotifyInput) error {
 		Title:    in.Title,
 		Subtitle: in.Subtitle,
 		Body:     in.Body,
+		Severity: in.Severity,
 		Sound:    in.Sound,
 		Data:     in.Data,
 	})

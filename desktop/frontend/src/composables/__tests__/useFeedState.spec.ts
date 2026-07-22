@@ -215,6 +215,22 @@ describe('useFeedState', () => {
     expect(mocks.notify).toHaveBeenCalledWith({ title: 'command exited 1', severity: 'error', category: 'action' })
   })
 
+  it('asks for confirmation before rerunning an action and preserves the first run', async () => {
+    mocks.ListInboxItems.mockResolvedValue([item(7)])
+    mocks.ActionViews.mockResolvedValue([{ id: 'review', label: 'Review PR', type: 'shell', showInDetail: true, requiresSessionInput: false }])
+    mocks.InvokeAction
+      .mockResolvedValueOnce({ commandId: 7, status: 'done', confirmationRequired: true })
+      .mockResolvedValueOnce({ commandId: 8, status: 'done' })
+    const get = mountState(); await flushPromises()
+    await get().invokeAction('review')
+    expect(get().actionRerunConfirmation.value).toMatchObject({ actionID: 'review', label: 'Review PR' })
+    expect(mocks.notify).not.toHaveBeenCalled()
+    await get().confirmActionRerun()
+    expect(mocks.InvokeAction).toHaveBeenLastCalledWith('review', 7, { rerun: true })
+    expect(get().actionRerunConfirmation.value).toBeNull()
+    expect(mocks.notify).toHaveBeenCalledWith({ title: 'Review PR completed', severity: 'success', category: 'action' })
+  })
+
   it('names published messages and opens interactive session launch actions before invocation', async () => {
     mocks.ListInboxItems.mockResolvedValue([item(7)])
     mocks.ActionViews.mockResolvedValue([{ id: 'notify', label: 'Notify', type: 'publish-message', showInDetail: true, requiresSessionInput: false }])

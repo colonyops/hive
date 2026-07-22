@@ -11,9 +11,9 @@ const defaultToastDuration = 4000
 function showToast(message: string, options: ToastOptions = {}): number {
   const severity = options.severity ?? 'info'
   const id = nextToastId++
-  const duration = severity === 'error' ? null : options.duration ?? defaultToastDuration
+  const duration = options.duration ?? defaultToastDuration
   toasts.value = [...toasts.value, { id, message, body: options.body, severity, actions: options.actions ?? [], duration }]
-  if (duration !== null) toastTimers.set(id, setTimeout(() => dismissToast(id), duration))
+  toastTimers.set(id, setTimeout(() => dismissToast(id), duration))
   return id
 }
 

@@ -29,7 +29,7 @@ describe('useNotify', () => {
   it.each([
     ['info', 'info', 'info'],
     ['success', 'success', 'success'],
-    ['warning', 'warning', 'info'],
+    ['warning', 'warning', 'warning'],
     ['error', 'error', 'error'],
   ] as Array<[NotifySeverity, string, string]>)('maps %s to activity %s and toast %s', async (severity, activity, toast) => {
     const deps = makeDeps()
@@ -51,7 +51,7 @@ describe('useNotify', () => {
     const deps = makeDeps({ focused: ref(false), settings: makeSettings({ notificationSound: ref(false) }) })
     await useNotify(deps).notify({ title: 'Background', body: 'Body' })
     expect(deps.showToast).not.toHaveBeenCalled()
-    expect(deps.osNotify).toHaveBeenCalledWith({ title: 'Background', subtitle: '', body: 'Body', sound: false, data: {} })
+    expect(deps.osNotify).toHaveBeenCalledWith({ title: 'Background', subtitle: '', body: 'Body', severity: 'info', sound: false, data: {} })
   })
 
   it('records only when master notifications are disabled', async () => {

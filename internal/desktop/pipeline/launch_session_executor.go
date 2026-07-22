@@ -88,6 +88,12 @@ func (e *LaunchSessionExecutor) Execute(ctx context.Context, action actions.Acti
 	} else if repo == "" {
 		return ExecutionResult{}, fmt.Errorf("launch-session: repo_template rendered blank")
 	}
+	if data.IsRerun {
+		name = fmt.Sprintf("%s-rerun-%d", name, data.CommandID)
+		if err := session.ValidateName(name); err != nil {
+			return ExecutionResult{}, fmt.Errorf("launch-session: rerun session name: %w", err)
+		}
+	}
 	outcome, err := e.launcher.LaunchSession(ctx, LaunchSessionRequest{Name: name, Prompt: prompt, Agent: cfg.Agent, Repo: repo})
 	if err != nil {
 		return ExecutionResult{Attempted: true}, err

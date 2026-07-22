@@ -11,6 +11,7 @@ import * as pipelinedb$0 from "./pipelinedb/models.js";
  */
 export interface ActionInvocationInput {
     "session"?: SessionInvocationInput | null;
+    "rerun"?: boolean;
 }
 
 export interface ActionRunView {
@@ -20,6 +21,7 @@ export interface ActionRunView {
     "error"?: string;
     "stdout"?: string;
     "stderr"?: string;
+    "confirmationRequired"?: boolean;
 }
 
 /**

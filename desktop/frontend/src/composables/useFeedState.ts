@@ -53,6 +53,9 @@ export function useFeedState() {
   const sessionLaunchOptions = ref<SessionLaunchOptionsView | null>(null)
   const sessionLaunchBusy = ref(false)
   const sessionLaunchError = ref<string | null>(null)
+  const actionRerunConfirmation = ref<{ actionID: string; label: string; item: InboxItem; input: Record<string, unknown> } | null>(null)
+  const actionRerunBusy = ref(false)
+  const actionRerunError = ref<string | null>(null)
   const { toasts, showToast, dismissToast, clearToasts } = useToasts()
   const { notify } = useNotify()
   const creatingProfile = ref(false)
@@ -593,6 +596,12 @@ export function useFeedState() {
     actionError.value = null
     try {
       const run = await InvokeAction(actionID, item.id, input)
+      if (run.confirmationRequired) {
+        const label = actions.value.find((action) => action.id === actionID)?.label ?? actionID
+        actionRerunConfirmation.value = { actionID, label, item, input }
+        actionRerunError.value = null
+        return false
+      }
       setActionRun(item.id, actionID, run)
       if (run.status !== 'done') {
         actionError.value = run.error || 'The action did not complete.'
@@ -611,6 +620,27 @@ export function useFeedState() {
       return false
     } finally {
       const next = { ...pendingActionKeys.value }; delete next[key]; pendingActionKeys.value = next
+    }
+  }
+
+  function cancelActionRerun() {
+    if (actionRerunBusy.value) return
+    actionRerunConfirmation.value = null
+    actionRerunError.value = null
+  }
+
+  async function confirmActionRerun() {
+    const pending = actionRerunConfirmation.value
+    if (!pending || actionRerunBusy.value) return
+    actionRerunBusy.value = true
+    actionRerunError.value = null
+    const succeeded = await runAction(pending.actionID, { ...pending.input, rerun: true }, pending.item)
+    actionRerunBusy.value = false
+    if (succeeded) {
+      actionRerunConfirmation.value = null
+      if (sessionLaunchAction.value) cancelSessionLaunch()
+    } else {
+      actionRerunError.value = actionError.value ?? 'Could not rerun the action.'
     }
   }
 
@@ -659,7 +689,7 @@ export function useFeedState() {
     const succeeded = await runAction(action.id, { session: input }, item)
     sessionLaunchBusy.value = false
     if (succeeded) cancelSessionLaunch()
-    else sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
+    else if (!actionRerunConfirmation.value) sessionLaunchError.value = actionError.value ?? 'Could not create the session.'
   }
 
   function notWired() {
@@ -734,6 +764,9 @@ export function useFeedState() {
     sessionLaunchOptions,
     sessionLaunchBusy,
     sessionLaunchError,
+    actionRerunConfirmation,
+    actionRerunBusy,
+    actionRerunError,
     unreadOnly,
     feedSort,
     setFeedSort,
@@ -769,6 +802,8 @@ export function useFeedState() {
     loadEvents,
     refresh,
     invokeAction,
+    cancelActionRerun,
+    confirmActionRerun,
     cancelSessionLaunch,
     submitSessionLaunch,
     notWired,

@@ -32,6 +32,7 @@ type Input struct {
 	Title    string
 	Subtitle string
 	Body     string
+	Severity string
 	Sound    bool
 	Data     map[string]any
 }
@@ -41,6 +42,8 @@ type Input struct {
 type Notifier struct {
 	sender   sender
 	iconPath string
+	iconPNG  []byte
+	cacheDir string
 
 	mu        sync.Mutex
 	requested bool
@@ -67,7 +70,7 @@ func newNotifier(svc sender, iconPNG []byte, cacheDir string) (*Notifier, error)
 	if err != nil {
 		return nil, err
 	}
-	return &Notifier{sender: svc, iconPath: iconPath}, nil
+	return &Notifier{sender: svc, iconPath: iconPath, iconPNG: append([]byte(nil), iconPNG...), cacheDir: cacheDir}, nil
 }
 
 // Notify validates in, requests authorization only when it has not been
@@ -76,6 +79,10 @@ func (n *Notifier) Notify(in Input) error {
 	title := strings.TrimSpace(in.Title)
 	if title == "" {
 		return errors.New("notification title is required")
+	}
+	subtitle, interruptionLevel, err := nativeSeverity(in.Severity, in.Subtitle)
+	if err != nil {
+		return err
 	}
 
 	n.mu.Lock()
@@ -98,14 +105,24 @@ func (n *Notifier) Notify(in Input) error {
 		return errors.New("notification permission denied")
 	}
 
+	// UNNotificationAttachment may move its source file into the system's
+	// notification store on macOS. Re-materialize the stable cache file before
+	// every delivery so later notifications do not fail validation.
+	iconPath, err := materializeIcon(n.cacheDir, n.iconPNG)
+	if err != nil {
+		return err
+	}
+	n.iconPath = iconPath
+
 	options := wailsnotify.NotificationOptions{
-		ID:       "hive-" + randid.Generate(24),
-		Title:    title,
-		Subtitle: in.Subtitle,
-		Body:     in.Body,
-		Data:     in.Data,
+		ID:                "hive-" + randid.Generate(24),
+		Title:             title,
+		Subtitle:          subtitle,
+		Body:              in.Body,
+		InterruptionLevel: interruptionLevel,
+		Data:              in.Data,
 		Attachments: []wailsnotify.NotificationAttachment{{
-			Path: n.iconPath,
+			Path: iconPath,
 			Type: "appLogoOverride",
 		}},
 	}
@@ -156,6 +173,29 @@ func (n *Notifier) requestPermissionLocked() (bool, error) {
 	}
 	n.requested = true
 	return granted, nil
+}
+
+func nativeSeverity(severity, subtitle string) (string, string, error) {
+	var label, interruptionLevel string
+	switch strings.ToLower(strings.TrimSpace(severity)) {
+	case "", "info":
+		interruptionLevel = "active"
+	case "success":
+		label, interruptionLevel = "Success", "active"
+	case "warning":
+		label, interruptionLevel = "Warning", "timeSensitive"
+	case "error":
+		label, interruptionLevel = "Error", "timeSensitive"
+	default:
+		return "", "", fmt.Errorf("invalid notification severity %q", severity)
+	}
+	if label == "" {
+		return subtitle, interruptionLevel, nil
+	}
+	if strings.TrimSpace(subtitle) == "" {
+		return label, interruptionLevel, nil
+	}
+	return label + " · " + subtitle, interruptionLevel, nil
 }
 
 func materializeIcon(cacheDir string, iconPNG []byte) (string, error) {

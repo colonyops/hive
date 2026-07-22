@@ -21,9 +21,18 @@ func (db *DB) ListRunnableOutputCommandsAfter(ctx context.Context, afterID int64
 func (db *DB) ConfirmOutputCommand(ctx context.Context, actionID, key string, payload []byte) (OutputCommand, bool, error) {
 	row, err := db.queries.ConfirmOutputCommand(ctx, ConfirmOutputCommandParams{ActionID: actionID, Key: key, Payload: payload, CreatedAt: time.Now().UnixMilli()})
 	if errors.Is(err, sql.ErrNoRows) {
-		return OutputCommand{}, false, nil
+		existing, lookupErr := db.queries.GetLatestOutputCommandForAction(ctx, GetLatestOutputCommandForActionParams{ActionID: actionID, Key: key})
+		return existing, false, wrap("getting existing output command", lookupErr)
 	}
 	return row, err == nil, wrap("confirming output command", err)
+}
+
+func (db *DB) RerunOutputCommand(ctx context.Context, actionID, key string, payload []byte) (OutputCommand, error) {
+	row, err := db.queries.RerunOutputCommand(ctx, RerunOutputCommandParams{ActionID: actionID, Key: key, Payload: payload, CreatedAt: time.Now().UnixMilli()})
+	if errors.Is(err, sql.ErrNoRows) {
+		return OutputCommand{}, fmt.Errorf("action %q cannot rerun for %q without a completed prior run", actionID, key)
+	}
+	return row, wrap("rerunning output command", err)
 }
 
 func (db *DB) OutputCommand(ctx context.Context, id int64) (OutputCommand, error) {

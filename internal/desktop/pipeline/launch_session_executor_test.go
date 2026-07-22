@@ -81,6 +81,18 @@ func TestLaunchSessionExecutor_RendersPromptAndRepoTemplates(t *testing.T) {
 	assert.Equal(t, "colonyops/hive", got.Repo)
 }
 
+func TestLaunchSessionExecutor_RerunUsesUniqueSessionName(t *testing.T) {
+	launcher := &fakeSessionLauncher{}
+	exec := NewLaunchSessionExecutor(launcher)
+	action := actions.Action{ID: "spawn-review", Type: "launch-session", Config: &actions.LaunchSessionConfig{
+		PromptTemplate: "hi", RepoTemplate: "git@github.com:colonyops/hive.git",
+	}}
+
+	_, err := exec.Execute(t.Context(), action, OutputData{Key: "item-1", CommandID: 42, IsRerun: true, Payload: map[string]any{}}, ActionInvocationInput{Rerun: true})
+	require.NoError(t, err)
+	require.Equal(t, "spawn-review-item-1-rerun-42", launcher.calls[0].Name)
+}
+
 func TestLaunchSessionExecutor_ConfiguredRepoTemplateIgnoresInteractiveOverride(t *testing.T) {
 	launcher := &fakeSessionLauncher{}
 	exec := NewLaunchSessionExecutor(launcher)

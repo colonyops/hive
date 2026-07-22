@@ -18,18 +18,18 @@ describe('useToasts', () => {
     expect(toasts.value).toEqual([expect.objectContaining({ id, message: 'Saved', severity: 'success', body: 'Profile updated', duration: 4000 })])
   })
 
-  it('auto-dismisses non-error toasts after their duration', () => {
+  it('auto-dismisses toasts after their duration', () => {
     const { toasts, showToast } = useToasts()
     showToast('Soon gone', { duration: 10 })
     vi.advanceTimersByTime(10)
     expect(toasts.value).toEqual([])
   })
 
-  it('keeps error toasts until dismissed', () => {
+  it('auto-dismisses error toasts so durable Activity remains the long-term record', () => {
     const { toasts, showToast } = useToasts()
     showToast('Failed', { severity: 'error', duration: 10 })
-    vi.advanceTimersByTime(10_000)
-    expect(toasts.value).toHaveLength(1)
+    vi.advanceTimersByTime(10)
+    expect(toasts.value).toEqual([])
   })
 
   it('clears the queue and cancels pending timers', () => {

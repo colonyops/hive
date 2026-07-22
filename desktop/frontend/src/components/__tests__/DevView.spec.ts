@@ -14,7 +14,7 @@ vi.mock('../../composables/useNotify', () => ({
   notifySeverityMapping: {
     info: { activity: 'info', toast: 'info' },
     success: { activity: 'success', toast: 'success' },
-    warning: { activity: 'warning', toast: 'info' },
+    warning: { activity: 'warning', toast: 'warning' },
     error: { activity: 'error', toast: 'error' },
   },
 }))
@@ -68,7 +68,7 @@ describe('DevView notification test controls', () => {
 
     expect(mocks.showToast).toHaveBeenCalledWith('Test notification', {
       body: 'Dev tools forced toast test: bypasses focus and Activity.',
-      severity: 'info',
+      severity: 'warning',
     })
     expect(mocks.notify).not.toHaveBeenCalled()
     expect(mocks.Notify).not.toHaveBeenCalled()
@@ -88,6 +88,7 @@ describe('DevView notification test controls', () => {
       title: 'Test notification',
       subtitle: 'Hive Dev tools',
       body: 'Dev tools forced system test: bypasses focus and Activity.',
+      severity: 'error',
       sound: false,
       data: { source: 'dev-view', channel: 'force-system', severity: 'error' },
     })
