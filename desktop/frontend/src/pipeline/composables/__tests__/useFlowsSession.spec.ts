@@ -19,6 +19,18 @@ function wireFlow(id = 'flow-1'): WireFlow {
   return { id, name: 'My flow', enabled: true, nodes: [{ id: 'feed', type: 'feed', feed: 'inbox' }], wires: [] }
 }
 
+function replayWireFlow(id = 'flow-1'): WireFlow {
+  return {
+    id, name: 'Replay flow', enabled: true,
+    nodes: [
+      { id: 'source', type: 'github-source', kind: 'search', query: 'is:open' },
+      { id: 'feed', type: 'feed', feed: 'inbox' },
+      { id: 'action', type: 'action', action: 'would-run-if-not-snapshot' },
+    ],
+    wires: [{ from: 'source', to: 'feed' }, { from: 'source', to: 'action' }],
+  }
+}
+
 function msg(id: string): Msg {
   return { ID: id, Key: id, Topic: 'source:test', Ts: 0, Payload: {} }
 }
@@ -175,6 +187,60 @@ describe('useFlowsSession', () => {
     state.openFlows()
     expect(state.flowFocusNodeId.value).toBeNull()
 
+    wrapper.unmount()
+  })
+
+  it('fast-forwards stale action-bound backlog, recomputes claims, then starts normal pumping', async () => {
+    const order: string[] = []
+    let fastForwarded = false
+    let replayOutputs: any[] = []
+    const staleActionBoundBacklog = [{ ...msg('7'), Topic: 'source:flow-1/source', SourceKind: 'github', SourceScope: 'acme/repo', OccurrenceKey: 'stale-action' }]
+    const readFrom = vi.fn(async () => {
+      order.push('read')
+      // This models SQLite's persisted consumer checkpoint: before the
+      // startup fast-forward this page would reach the action terminal.
+      if (!fastForwarded) return staleActionBoundBacklog
+      return []
+    })
+    const commit = vi.fn().mockResolvedValue(undefined)
+    const runtimeClient = {
+      readFrom,
+      commit,
+      eventLogTailOffset: vi.fn(async () => { order.push('tail'); return '7' }),
+      fastForwardConsumer: vi.fn(async () => { order.push('fast-forward'); fastForwarded = true }),
+      listUnarchivedInboxItems: vi.fn(async () => {
+        order.push('items')
+        return [{ id: 42, profileId: 'flow-1', sourceKind: 'github', sourceScope: 'acme/repo', externalId: 'item-1', title: 'Item', url: '', payload: { title: 'actual payload' }, revision: 1, unread: true, lifecycle: 'active', firstSeenAt: 1, lastEventAt: 1 }]
+      }),
+      recomputeMemberships: vi.fn(async () => { order.push('memberships') }),
+      reconcileFlowMembershipStructure: vi.fn(async () => { order.push('reconcile') }),
+    }
+    const runtimeFactory: typeof usePipelineRuntime = (client, flow) => {
+      const runtime = usePipelineRuntime(client, flow, { transport: { run: vi.fn(), reset: vi.fn(), dispose: vi.fn() } })
+      return {
+        ...runtime,
+        async recompute(messages) {
+          order.push('recompute')
+          const result = await runtime.recompute(messages)
+          replayOutputs = result.outputs
+          return result
+        },
+        async run() {
+          order.push('run')
+          await runtime.run()
+        },
+      }
+    }
+    const editorClient = fakeEditorClient({ getFlow: vi.fn().mockResolvedValue(replayWireFlow()) })
+    const { wrapper } = mountSession({ editorClient, runtimeClient, runtimeFactory })
+    await flushPromises()
+
+    expect(order).toEqual(['tail', 'fast-forward', 'items', 'recompute', 'memberships', 'reconcile', 'run', 'read'])
+    expect(readFrom).toHaveBeenCalledOnce()
+    expect(commit).not.toHaveBeenCalled()
+    expect(replayOutputs).toEqual([expect.objectContaining({ sink: { kind: 'feed', targetId: 'flow-1/feed' }, key: 'item-1', sourceKind: 'github', sourceScope: 'acme/repo' })])
+    expect(replayOutputs.some((output) => output.sink.kind === 'action')).toBe(false)
+    expect(runtimeClient.recomputeMemberships).toHaveBeenCalledWith('flow-1', [{ profile_id: 'flow-1', feed_id: 'flow-1/feed', item_id: 42, source_id: 'source:flow-1/source' }])
     wrapper.unmount()
   })
 

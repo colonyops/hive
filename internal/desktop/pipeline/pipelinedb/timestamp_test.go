@@ -46,9 +46,9 @@ func TestCommitBatchWritesUseUnixMilliseconds(t *testing.T) {
 		Consumer:   "flow-1",
 		UpToOffset: "1",
 		Outputs: []Output{{
-			Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
-			Key:     "item-1",
-			Payload: []byte(`{}`),
+			Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+			OccurrenceKey: "item-1",
+			Payload:       []byte(`{}`),
 		}},
 		NodeRuns: []NodeRunView{{FlowID: "flow-1", NodeID: "node-a", OK: true}},
 	}))

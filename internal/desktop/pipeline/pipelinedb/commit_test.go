@@ -8,23 +8,26 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestCommitBatch_FeedOutput_IsAcceptedWithoutPersistence(t *testing.T) {
+func TestCommitBatch_FeedOutput_ClaimsResolvedInboxItem(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
+	item, err := database.Queries().InsertInboxItem(ctx, InsertInboxItemParams{
+		ProfileID: "flow-1", SourceKind: "github", SourceScope: "source-a", ExternalID: "item-1",
+		Payload: []byte(`{"v":1}`), Lifecycle: "active",
+	})
+	require.NoError(t, err)
 
 	require.NoError(t, database.CommitBatch(ctx, CommitBatch{
-		Consumer:   "flow-1",
-		UpToOffset: "1",
+		Consumer: "flow-1", UpToOffset: "1",
 		Outputs: []Output{{
-			Sink:    Sink{Kind: SinkKindFeed, TargetID: "feed-a"},
-			Key:     "item-1",
-			Payload: []byte(`{"v":1}`),
+			Sink: Sink{Kind: SinkKindFeed, TargetID: "feed-a"}, Key: "item-1",
+			SourceKind: "github", SourceScope: "source-a", SourceTopic: "source:flow-1/source-a",
 		}},
 	}))
 
-	offset, err := database.ConsumerOffset(ctx, "flow-1")
-	require.NoError(t, err)
-	assert.Equal(t, int64(1), offset)
+	var claims int
+	require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM feed_membership_claim WHERE item_id = ? AND source_id = ?`, item.ID, "source:flow-1/source-a").Scan(&claims))
+	assert.Equal(t, 1, claims)
 }
 
 func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
@@ -47,9 +50,9 @@ func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
 		UpToOffset: "1",
 		Outputs: []Output{
 			{
-				Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"cmd":"do-it"}`),
+				Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+				OccurrenceKey: "item-1",
+				Payload:       []byte(`{"cmd":"do-it"}`),
 			},
 		},
 	}
@@ -63,9 +66,9 @@ func TestCommitBatch_ActionOutput_EnqueuesOnce(t *testing.T) {
 		UpToOffset: "2",
 		Outputs: []Output{
 			{
-				Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
-				Key:     "item-1",
-				Payload: []byte(`{"cmd":"do-it-again"}`),
+				Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+				OccurrenceKey: "item-1",
+				Payload:       []byte(`{"cmd":"do-it-again"}`),
 			},
 		},
 	}
@@ -179,9 +182,9 @@ func TestCommitBatch_AdvancesOffset_AndIsIdempotentOnReplay(t *testing.T) {
 		Consumer:   "flow-1",
 		UpToOffset: "3",
 		Outputs: []Output{{
-			Sink:    Sink{Kind: SinkKindAction, TargetID: "action-a"},
-			Key:     "item-new",
-			Payload: []byte(`{"v":"new"}`),
+			Sink:          Sink{Kind: SinkKindAction, TargetID: "action-a"},
+			OccurrenceKey: "item-new",
+			Payload:       []byte(`{"v":"new"}`),
 		}},
 	}
 	require.NoError(t, database.CommitBatch(ctx, staleBatch))

@@ -16,9 +16,9 @@ func enqueueTestCommand(t *testing.T, db *DB, actionID, key string) {
 		UpToOffset: "1",
 		Outputs: []Output{
 			{
-				Sink:    Sink{Kind: SinkKindAction, TargetID: actionID},
-				Key:     key,
-				Payload: []byte(`{"v":1}`),
+				Sink:          Sink{Kind: SinkKindAction, TargetID: actionID},
+				OccurrenceKey: key,
+				Payload:       []byte(`{"v":1}`),
 			},
 		},
 	}))

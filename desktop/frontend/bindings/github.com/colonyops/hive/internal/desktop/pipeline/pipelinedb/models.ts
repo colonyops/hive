@@ -39,6 +39,13 @@ export interface Discard {
     "nodeId": string;
 }
 
+export interface FeedMembershipClaim {
+    "profile_id": string;
+    "feed_id": string;
+    "item_id": number;
+    "source_id": string;
+}
+
 /**
  * FeedSnapshot declares one source's complete current output scope for a feed.
  * CommitBatch accepts these declarations but does not persist reconciliation
@@ -48,6 +55,29 @@ export interface FeedSnapshot {
     "feedId": string;
     "sourceTopic": string;
     "snapshotId": string;
+}
+
+/**
+ * InboxItemView is the read-side shape used by inbox callers.
+ */
+export interface InboxItemView {
+    "id": number;
+    "profileId": string;
+    "sourceKind": string;
+    "sourceScope": string;
+    "externalId": string;
+    "title": string;
+    "url": string;
+    "payload": json$0.RawMessage;
+    "revision": number;
+    "unread": boolean;
+    "archivedAt"?: number | null;
+    "archivedActor"?: string;
+    "archivedReason"?: string;
+    "lifecycle": string;
+    "sourceState"?: string;
+    "firstSeenAt": number;
+    "lastEventAt": number;
 }
 
 /**
@@ -70,6 +100,9 @@ export interface Msg {
     "Ts": number;
     "Payload": json$0.RawMessage;
     "Snapshot"?: SnapshotItem[] | null;
+    "SourceKind": string;
+    "SourceScope": string;
+    "OccurrenceKey"?: string;
 }
 
 /**
@@ -117,24 +150,28 @@ export interface Output {
     "sink": Sink;
 
     /**
-     * output dedup key
+     * feed external ID only
      */
-    "key": string;
-    "payload": json$0.RawMessage;
+    "key"?: string;
 
     /**
-     * feed items only
+     * action dedup key only
      */
-    "unread": boolean;
-    "sourceTopic"?: string;
+    "occurrenceKey"?: string;
+
+    /**
+     * action payload only
+     */
+    "payload"?: json$0.RawMessage;
+    "sourceKind"?: string;
+    "sourceScope"?: string;
+    "sourceTopic": string;
     "snapshotId"?: string;
-    "preserveUnread"?: boolean;
 }
 
 /**
- * Sink identifies where an Output is committed. Feed outputs are accepted for
- * compatibility but have no durable effect until membership claims are added;
- * action outputs enqueue an output_command.
+ * Sink identifies where an Output is committed. Feed outputs claim immutable
+ * inbox membership; action outputs enqueue an output_command.
  */
 export interface Sink {
     "kind": string;

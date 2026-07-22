@@ -44,15 +44,14 @@ const PASSTHROUGH_TYPES = new Set<string>([githubSourceNode.type])
 
 interface TerminalDef {
   sink(flowId: string, nodeId: string, config: any): Sink
-  unread: boolean
 }
 
 // The two terminal node types' sink-tagging is delegated to each node's own
 // config.ts (single source of truth for its sink shape) rather than
 // re-encoded here.
 const TERMINALS: Record<string, TerminalDef> = {
-  [feedNode.type]: { sink: feedNode.sink, unread: feedNode.unread },
-  [actionNode.type]: { sink: actionNode.sink, unread: actionNode.unread },
+  [feedNode.type]: { sink: feedNode.sink },
+  [actionNode.type]: { sink: actionNode.sink },
 }
 
 interface NodeRunAcc {
@@ -136,13 +135,26 @@ export async function runGraph(flow: Flow, batch: Msg[], transport: WorkerTransp
       const terminal = TERMINALS[node.type]
       if (terminal) {
         const sink = terminal.sink(flow.id, nodeId, node.config)
-        const output: Output = { sink, key: msg.Key, payload: msg.Payload, unread: terminal.unread }
-        if (msg.snapshotContext && sink.kind === 'feed') {
-          output.sourceTopic = msg.snapshotContext.sourceTopic
-          output.snapshotId = msg.snapshotContext.snapshotId
-          output.preserveUnread = true
+        // Snapshots only reconcile feed membership. They must never produce a
+        // side effect through an action terminal.
+        if (msg.snapshotContext && sink.kind === 'action') {
+          run.dropCount++
+          discards.push({ msgId: msg.ID, nodeId })
+          continue
         }
-        outputs.push(output)
+        if (sink.kind === 'feed') {
+          const output: Output = {
+            sink,
+            key: msg.Key,
+            sourceTopic: msg.Topic,
+            sourceKind: msg.SourceKind,
+            sourceScope: msg.SourceScope,
+          }
+          if (msg.snapshotContext) output.snapshotId = msg.snapshotContext.snapshotId
+          outputs.push(output)
+        } else {
+          outputs.push({ sink, occurrenceKey: msg.OccurrenceKey, payload: msg.Payload, sourceTopic: '' })
+        }
         run.outCount++
         continue
       }

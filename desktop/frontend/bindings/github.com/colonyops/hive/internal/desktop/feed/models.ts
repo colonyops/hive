@@ -3,8 +3,7 @@
 
 /**
  * Item is a normalized GitHub item (PR or issue) produced by a source fetch.
- * It is JSON-encoded as a source node's event_log payload and re-surfaced as
- * a durable inbox row, so the frontend and the persisted feed both read this shape.
+ * Its JSON payload is stored in a durable inbox row.
  */
 export interface Item {
     "id": string;
@@ -17,7 +16,7 @@ export interface Item {
     "num": number;
     "title": string;
     "author": string;
-    "age": string;
+    "state"?: string;
 
     /**
      * GitHub's last-updated time, unix milliseconds

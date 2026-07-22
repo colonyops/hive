@@ -4,12 +4,13 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestPrune_EventLogKeepsRowsNotConsumedByEveryEnabledFlow(t *testing.T) {
+func TestPrune_EventLogIsNotGatedByConsumerOffsets(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
 
@@ -22,16 +23,35 @@ func TestPrune_EventLogKeepsRowsNotConsumedByEveryEnabledFlow(t *testing.T) {
 
 	result, err := database.Prune(ctx, []string{"fast-flow", "slow-flow"}, DefaultRetentionPolicy())
 	require.NoError(t, err)
-	assert.Equal(t, int64(2), result.EventLogThrough)
+	assert.Zero(t, result.EventLogThrough)
 
 	msgs, _, err := database.ReadFrom(ctx, 0, 10)
 	require.NoError(t, err)
-	require.Len(t, msgs, 3)
-	assert.Equal(t, []string{"3", "4", "5"}, []string{msgs[0].ID, msgs[1].ID, msgs[2].ID},
-		"rows after the slow enabled flow's durable offset must remain")
+	require.Len(t, msgs, 5)
+	assert.Equal(t, []string{"1", "2", "3", "4", "5"}, []string{msgs[0].ID, msgs[1].ID, msgs[2].ID, msgs[3].ID, msgs[4].ID})
 }
 
-func TestPrune_EventLogWaitsForEveryEnabledFlowToCommit(t *testing.T) {
+func TestPrune_EventLogUsesAgeWithoutConsumers(t *testing.T) {
+	database := openTestDB(t)
+	ctx := context.Background()
+	_, err := database.Append(ctx, "source:test", "old", []byte(`{}`))
+	require.NoError(t, err)
+	_, err = database.Append(ctx, "source:test", "new", []byte(`{}`))
+	require.NoError(t, err)
+	_, err = database.Conn().ExecContext(ctx, `UPDATE event_log SET created_at = ? WHERE "offset" = 1`, time.Now().Add(-2*time.Hour).UnixMilli())
+	require.NoError(t, err)
+	_, err = database.Conn().ExecContext(ctx, `UPDATE event_log SET created_at = ? WHERE "offset" = 2`, time.Now().UnixMilli())
+	require.NoError(t, err)
+
+	_, err = database.Prune(ctx, nil, RetentionPolicy{EventLogMaxAge: time.Hour})
+	require.NoError(t, err)
+	msgs, _, err := database.ReadFrom(ctx, 0, 10)
+	require.NoError(t, err)
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "2", msgs[0].ID)
+}
+
+func TestPrune_EventLogUsesPerTopicCountWithoutConsumers(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()
 
@@ -41,13 +61,13 @@ func TestPrune_EventLogWaitsForEveryEnabledFlowToCommit(t *testing.T) {
 	}
 	require.NoError(t, database.CommitBatch(ctx, CommitBatch{Consumer: "committed", UpToOffset: "3"}))
 
-	result, err := database.Prune(ctx, []string{"committed", "newly-enabled"}, DefaultRetentionPolicy())
+	_, err := database.Prune(ctx, []string{"committed", "newly-enabled"}, RetentionPolicy{EventLogPerTopicLimit: 1})
 	require.NoError(t, err)
-	assert.Zero(t, result.EventLogThrough)
 
 	msgs, _, err := database.ReadFrom(ctx, 0, 10)
 	require.NoError(t, err)
-	assert.Len(t, msgs, 3, "a flow without a durable offset must retain its full backlog")
+	require.Len(t, msgs, 1)
+	assert.Equal(t, "3", msgs[0].ID)
 }
 
 func TestPrune_BoundsOnlyTerminalHistory(t *testing.T) {

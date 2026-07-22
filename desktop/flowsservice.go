@@ -1,9 +1,11 @@
 package main
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
+	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
 // FlowSummary is one flow file's listing row for the flows picker: identity
@@ -24,10 +26,11 @@ type FlowSummary struct {
 // FeedService/PipelineService's thin-glue style.
 type FlowsService struct {
 	store *flow.FlowStore
+	db    *pipelinedb.DB
 }
 
-func NewFlowsService(store *flow.FlowStore) *FlowsService {
-	return &FlowsService{store: store}
+func NewFlowsService(store *flow.FlowStore, db *pipelinedb.DB) *FlowsService {
+	return &FlowsService{store: store, db: db}
 }
 
 // ListFlows returns one summary per flow file — valid and invalid alike —
@@ -68,9 +71,17 @@ func (s *FlowsService) RenameFlow(id, name string) (FlowSummary, error) {
 	return FlowSummary{ID: f.ID, Name: f.Name, Enabled: f.Enabled, Valid: true}, nil
 }
 
-// DeleteFlow removes a flow (a "profile") and its layout.
+// DeleteFlow removes a flow (a profile) and its files before purging durable
+// pipeline state. FlowStore.Delete treats an already-missing file as success,
+// which makes a retry after a files-first partial deletion idempotent.
 func (s *FlowsService) DeleteFlow(id string) error {
-	return s.store.Delete(id)
+	if err := s.store.Delete(id); err != nil {
+		return err
+	}
+	if s.db == nil {
+		return fmt.Errorf("pipeline database is unavailable")
+	}
+	return s.db.PurgeProfile(context.Background(), id)
 }
 
 // GetFlow returns one flow's full definition for the editor.

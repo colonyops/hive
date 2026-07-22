@@ -28,12 +28,15 @@ LIMIT ?;
 SELECT * FROM consumer_offset
 WHERE consumer = ?;
 
--- name: ListConsumerOffsets :many
-SELECT * FROM consumer_offset;
+-- name: DeleteEventsOlderThan :exec
+DELETE FROM event_log WHERE created_at < ?;
 
--- name: DeleteEventsThrough :exec
-DELETE FROM event_log
-WHERE "offset" <= ?;
+-- name: DeleteEventsOverLimitPerTopic :exec
+DELETE FROM event_log AS target
+WHERE (
+    SELECT COUNT(*) FROM event_log AS newer
+    WHERE newer.topic = target.topic AND newer."offset" > target."offset"
+) >= CAST(sqlc.arg(limit) AS INTEGER);
 
 -- name: CommitConsumerOffset :exec
 -- Monotonic upsert: on conflict, only advance the stored offset when the
@@ -77,6 +80,58 @@ RETURNING *;
 -- name: GetInboxItemByExternalID :one
 SELECT * FROM inbox_item
 WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = ?;
+
+-- name: ListUnarchivedInboxItemsByProfile :many
+SELECT * FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL;
+
+-- name: GetUnarchivedInboxItemByID :one
+SELECT * FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL;
+
+-- name: UpsertFeedMembershipClaim :exec
+INSERT INTO feed_membership_claim (profile_id, feed_id, item_id, source_id)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (profile_id, feed_id, item_id, source_id) DO NOTHING;
+
+-- name: DeleteFeedMembershipClaimsNotInSnapshot :exec
+DELETE FROM feed_membership_claim
+WHERE feed_id = ? AND source_id = ? AND item_id NOT IN (sqlc.slice(item_ids));
+
+-- name: DeleteFeedMembershipClaimsForSourceAll :exec
+DELETE FROM feed_membership_claim WHERE feed_id = ? AND source_id = ?;
+
+-- name: DeleteFeedMembershipClaimsForFeeds :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND feed_id NOT IN (sqlc.slice(feed_ids));
+
+-- name: DeleteFeedMembershipClaimsForFeedsAll :exec
+DELETE FROM feed_membership_claim WHERE profile_id = ?;
+
+-- name: DeleteFeedMembershipClaimsForRemovedSources :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND source_id NOT IN (sqlc.slice(source_ids))
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL);
+
+-- name: DeleteFeedMembershipClaimsForRemovedSourcesAll :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL);
+
+-- name: DeleteUnarchivedFeedMembershipClaimsByProfile :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL);
+
+-- name: DeleteInboxItemsByProfile :exec
+DELETE FROM inbox_item WHERE profile_id = ?;
+
+-- name: DeleteConsumerOffsetByConsumer :exec
+DELETE FROM consumer_offset WHERE consumer = ?;
+
+-- name: DeleteEventLogByTopicPrefix :exec
+DELETE FROM event_log WHERE topic LIKE ? ESCAPE '\';
+
+-- name: DeleteSourceHeadByTopicPrefix :exec
+DELETE FROM source_head WHERE topic LIKE ? ESCAPE '\';
 
 -- name: InsertInboxEvent :one
 INSERT INTO inbox_event (item_id, kind, transition, attention, occurrence_key, summary, detail, created_at)

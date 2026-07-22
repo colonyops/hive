@@ -138,6 +138,7 @@ export function usePipelineRuntime(client: PipelineClient, flow: Flow, options: 
     error,
     offset: computed(() => driver.offset),
     run,
+    recompute: (messages: import('../types').Msg[]) => driver.recompute(messages),
     stop,
     dispose,
     pump,

@@ -439,7 +439,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
-			application.NewService(NewFlowsService(flowsStore)),
+			application.NewService(NewFlowsService(flowsStore, pipelineDB)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 			application.NewService(NewActivityService(activityStore)),
 			application.NewService(NewJobService(jobStore)),

@@ -8,6 +8,7 @@ package pipelinedb
 import (
 	"context"
 	"database/sql"
+	"strings"
 )
 
 const appendActivityEvent = `-- name: AppendActivityEvent :one
@@ -147,13 +148,187 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 	return i, err
 }
 
-const deleteEventsThrough = `-- name: DeleteEventsThrough :exec
-DELETE FROM event_log
-WHERE "offset" <= ?
+const deleteConsumerOffsetByConsumer = `-- name: DeleteConsumerOffsetByConsumer :exec
+DELETE FROM consumer_offset WHERE consumer = ?
 `
 
-func (q *Queries) DeleteEventsThrough(ctx context.Context, offset int64) error {
-	_, err := q.db.ExecContext(ctx, deleteEventsThrough, offset)
+func (q *Queries) DeleteConsumerOffsetByConsumer(ctx context.Context, consumer string) error {
+	_, err := q.db.ExecContext(ctx, deleteConsumerOffsetByConsumer, consumer)
+	return err
+}
+
+const deleteEventLogByTopicPrefix = `-- name: DeleteEventLogByTopicPrefix :exec
+DELETE FROM event_log WHERE topic LIKE ? ESCAPE '\'
+`
+
+func (q *Queries) DeleteEventLogByTopicPrefix(ctx context.Context, topic string) error {
+	_, err := q.db.ExecContext(ctx, deleteEventLogByTopicPrefix, topic)
+	return err
+}
+
+const deleteEventsOlderThan = `-- name: DeleteEventsOlderThan :exec
+DELETE FROM event_log WHERE created_at < ?
+`
+
+func (q *Queries) DeleteEventsOlderThan(ctx context.Context, createdAt int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEventsOlderThan, createdAt)
+	return err
+}
+
+const deleteEventsOverLimitPerTopic = `-- name: DeleteEventsOverLimitPerTopic :exec
+DELETE FROM event_log AS target
+WHERE (
+    SELECT COUNT(*) FROM event_log AS newer
+    WHERE newer.topic = target.topic AND newer."offset" > target."offset"
+) >= CAST(?1 AS INTEGER)
+`
+
+func (q *Queries) DeleteEventsOverLimitPerTopic(ctx context.Context, limit int64) error {
+	_, err := q.db.ExecContext(ctx, deleteEventsOverLimitPerTopic, limit)
+	return err
+}
+
+const deleteFeedMembershipClaimsForFeeds = `-- name: DeleteFeedMembershipClaimsForFeeds :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND feed_id NOT IN (/*SLICE:feed_ids*/?)
+`
+
+type DeleteFeedMembershipClaimsForFeedsParams struct {
+	ProfileID string   `json:"profile_id"`
+	FeedIds   []string `json:"feed_ids"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsForFeeds(ctx context.Context, arg DeleteFeedMembershipClaimsForFeedsParams) error {
+	query := deleteFeedMembershipClaimsForFeeds
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.ProfileID)
+	if len(arg.FeedIds) > 0 {
+		for _, v := range arg.FeedIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:feed_ids*/?", strings.Repeat(",?", len(arg.FeedIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:feed_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteFeedMembershipClaimsForFeedsAll = `-- name: DeleteFeedMembershipClaimsForFeedsAll :exec
+DELETE FROM feed_membership_claim WHERE profile_id = ?
+`
+
+func (q *Queries) DeleteFeedMembershipClaimsForFeedsAll(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedMembershipClaimsForFeedsAll, profileID)
+	return err
+}
+
+const deleteFeedMembershipClaimsForRemovedSources = `-- name: DeleteFeedMembershipClaimsForRemovedSources :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND source_id NOT IN (/*SLICE:source_ids*/?)
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL)
+`
+
+type DeleteFeedMembershipClaimsForRemovedSourcesParams struct {
+	ProfileID string   `json:"profile_id"`
+	SourceIds []string `json:"source_ids"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsForRemovedSources(ctx context.Context, arg DeleteFeedMembershipClaimsForRemovedSourcesParams) error {
+	query := deleteFeedMembershipClaimsForRemovedSources
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.ProfileID)
+	if len(arg.SourceIds) > 0 {
+		for _, v := range arg.SourceIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:source_ids*/?", strings.Repeat(",?", len(arg.SourceIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:source_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteFeedMembershipClaimsForRemovedSourcesAll = `-- name: DeleteFeedMembershipClaimsForRemovedSourcesAll :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ?
+  AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL)
+`
+
+func (q *Queries) DeleteFeedMembershipClaimsForRemovedSourcesAll(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedMembershipClaimsForRemovedSourcesAll, profileID)
+	return err
+}
+
+const deleteFeedMembershipClaimsForSourceAll = `-- name: DeleteFeedMembershipClaimsForSourceAll :exec
+DELETE FROM feed_membership_claim WHERE feed_id = ? AND source_id = ?
+`
+
+type DeleteFeedMembershipClaimsForSourceAllParams struct {
+	FeedID   string `json:"feed_id"`
+	SourceID string `json:"source_id"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsForSourceAll(ctx context.Context, arg DeleteFeedMembershipClaimsForSourceAllParams) error {
+	_, err := q.db.ExecContext(ctx, deleteFeedMembershipClaimsForSourceAll, arg.FeedID, arg.SourceID)
+	return err
+}
+
+const deleteFeedMembershipClaimsNotInSnapshot = `-- name: DeleteFeedMembershipClaimsNotInSnapshot :exec
+DELETE FROM feed_membership_claim
+WHERE feed_id = ? AND source_id = ? AND item_id NOT IN (/*SLICE:item_ids*/?)
+`
+
+type DeleteFeedMembershipClaimsNotInSnapshotParams struct {
+	FeedID   string  `json:"feed_id"`
+	SourceID string  `json:"source_id"`
+	ItemIds  []int64 `json:"item_ids"`
+}
+
+func (q *Queries) DeleteFeedMembershipClaimsNotInSnapshot(ctx context.Context, arg DeleteFeedMembershipClaimsNotInSnapshotParams) error {
+	query := deleteFeedMembershipClaimsNotInSnapshot
+	var queryParams []interface{}
+	queryParams = append(queryParams, arg.FeedID)
+	queryParams = append(queryParams, arg.SourceID)
+	if len(arg.ItemIds) > 0 {
+		for _, v := range arg.ItemIds {
+			queryParams = append(queryParams, v)
+		}
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", strings.Repeat(",?", len(arg.ItemIds))[1:], 1)
+	} else {
+		query = strings.Replace(query, "/*SLICE:item_ids*/?", "NULL", 1)
+	}
+	_, err := q.db.ExecContext(ctx, query, queryParams...)
+	return err
+}
+
+const deleteInboxItemsByProfile = `-- name: DeleteInboxItemsByProfile :exec
+DELETE FROM inbox_item WHERE profile_id = ?
+`
+
+func (q *Queries) DeleteInboxItemsByProfile(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteInboxItemsByProfile, profileID)
+	return err
+}
+
+const deleteSourceHeadByTopicPrefix = `-- name: DeleteSourceHeadByTopicPrefix :exec
+DELETE FROM source_head WHERE topic LIKE ? ESCAPE '\'
+`
+
+func (q *Queries) DeleteSourceHeadByTopicPrefix(ctx context.Context, topic string) error {
+	_, err := q.db.ExecContext(ctx, deleteSourceHeadByTopicPrefix, topic)
+	return err
+}
+
+const deleteUnarchivedFeedMembershipClaimsByProfile = `-- name: DeleteUnarchivedFeedMembershipClaimsByProfile :exec
+DELETE FROM feed_membership_claim
+WHERE feed_membership_claim.profile_id = ? AND item_id IN (SELECT id FROM inbox_item WHERE archived_at IS NULL)
+`
+
+func (q *Queries) DeleteUnarchivedFeedMembershipClaimsByProfile(ctx context.Context, profileID string) error {
+	_, err := q.db.ExecContext(ctx, deleteUnarchivedFeedMembershipClaimsByProfile, profileID)
 	return err
 }
 
@@ -301,6 +476,40 @@ func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPay
 	var payload []byte
 	err := row.Scan(&payload)
 	return payload, err
+}
+
+const getUnarchivedInboxItemByID = `-- name: GetUnarchivedInboxItemByID :one
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE id = ? AND profile_id = ? AND archived_at IS NULL
+`
+
+type GetUnarchivedInboxItemByIDParams struct {
+	ID        int64  `json:"id"`
+	ProfileID string `json:"profile_id"`
+}
+
+func (q *Queries) GetUnarchivedInboxItemByID(ctx context.Context, arg GetUnarchivedInboxItemByIDParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, getUnarchivedInboxItemByID, arg.ID, arg.ProfileID)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
 }
 
 const insertInboxEvent = `-- name: InsertInboxEvent :one
@@ -579,33 +788,6 @@ func (q *Queries) ListActivityEvents(ctx context.Context, arg ListActivityEvents
 	return items, nil
 }
 
-const listConsumerOffsets = `-- name: ListConsumerOffsets :many
-SELECT consumer, "offset" FROM consumer_offset
-`
-
-func (q *Queries) ListConsumerOffsets(ctx context.Context) ([]ConsumerOffset, error) {
-	rows, err := q.db.QueryContext(ctx, listConsumerOffsets)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ConsumerOffset{}
-	for rows.Next() {
-		var i ConsumerOffset
-		if err := rows.Scan(&i.Consumer, &i.Offset); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listJobs = `-- name: ListJobs :many
 SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job WHERE id < ? ORDER BY id DESC LIMIT ?
 `
@@ -807,6 +989,51 @@ func (q *Queries) ListSourceHeadKeys(ctx context.Context, topic string) ([]strin
 			return nil, err
 		}
 		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const listUnarchivedInboxItemsByProfile = `-- name: ListUnarchivedInboxItemsByProfile :many
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item WHERE profile_id = ? AND archived_at IS NULL
+`
+
+func (q *Queries) ListUnarchivedInboxItemsByProfile(ctx context.Context, profileID string) ([]InboxItem, error) {
+	rows, err := q.db.QueryContext(ctx, listUnarchivedInboxItemsByProfile, profileID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []InboxItem{}
+	for rows.Next() {
+		var i InboxItem
+		if err := rows.Scan(
+			&i.ID,
+			&i.ProfileID,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.ExternalID,
+			&i.Title,
+			&i.Url,
+			&i.Payload,
+			&i.Revision,
+			&i.Unread,
+			&i.ArchivedAt,
+			&i.ArchivedActor,
+			&i.ArchivedReason,
+			&i.Lifecycle,
+			&i.SourceState,
+			&i.FirstSeenAt,
+			&i.LastEventAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
 	}
 	if err := rows.Close(); err != nil {
 		return nil, err
@@ -1086,6 +1313,29 @@ type UpdateEventOccurrenceKeyParams struct {
 
 func (q *Queries) UpdateEventOccurrenceKey(ctx context.Context, arg UpdateEventOccurrenceKeyParams) error {
 	_, err := q.db.ExecContext(ctx, updateEventOccurrenceKey, arg.OccurrenceKey, arg.Offset)
+	return err
+}
+
+const upsertFeedMembershipClaim = `-- name: UpsertFeedMembershipClaim :exec
+INSERT INTO feed_membership_claim (profile_id, feed_id, item_id, source_id)
+VALUES (?, ?, ?, ?)
+ON CONFLICT (profile_id, feed_id, item_id, source_id) DO NOTHING
+`
+
+type UpsertFeedMembershipClaimParams struct {
+	ProfileID string `json:"profile_id"`
+	FeedID    string `json:"feed_id"`
+	ItemID    int64  `json:"item_id"`
+	SourceID  string `json:"source_id"`
+}
+
+func (q *Queries) UpsertFeedMembershipClaim(ctx context.Context, arg UpsertFeedMembershipClaimParams) error {
+	_, err := q.db.ExecContext(ctx, upsertFeedMembershipClaim,
+		arg.ProfileID,
+		arg.FeedID,
+		arg.ItemID,
+		arg.SourceID,
+	)
 	return err
 }
 

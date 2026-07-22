@@ -12,23 +12,23 @@ import (
 
 // InboxItemView is the read-side shape used by inbox callers.
 type InboxItemView struct {
-	ID             int64
-	ProfileID      string
-	SourceKind     string
-	SourceScope    string
-	ExternalID     string
-	Title          string
-	URL            string
-	Payload        json.RawMessage
-	Revision       int64
-	Unread         bool
-	ArchivedAt     *int64
-	ArchivedActor  string
-	ArchivedReason string
-	Lifecycle      string
-	SourceState    string
-	FirstSeenAt    int64
-	LastEventAt    int64
+	ID             int64           `json:"id"`
+	ProfileID      string          `json:"profileId"`
+	SourceKind     string          `json:"sourceKind"`
+	SourceScope    string          `json:"sourceScope"`
+	ExternalID     string          `json:"externalId"`
+	Title          string          `json:"title"`
+	URL            string          `json:"url"`
+	Payload        json.RawMessage `json:"payload"`
+	Revision       int64           `json:"revision"`
+	Unread         bool            `json:"unread"`
+	ArchivedAt     *int64          `json:"archivedAt,omitempty"`
+	ArchivedActor  string          `json:"archivedActor,omitempty"`
+	ArchivedReason string          `json:"archivedReason,omitempty"`
+	Lifecycle      string          `json:"lifecycle"`
+	SourceState    string          `json:"sourceState,omitempty"`
+	FirstSeenAt    int64           `json:"firstSeenAt"`
+	LastEventAt    int64           `json:"lastEventAt"`
 }
 
 type ItemTriageState struct {

@@ -16,9 +16,8 @@ const (
 	SinkKindAction = "action"
 )
 
-// Sink identifies where an Output is committed. Feed outputs retain the
-// Phase-1 wire shape but have no durable effect until membership claims land;
-// action outputs enqueue an output_command.
+// Sink identifies where an Output is committed. Feed outputs claim immutable
+// inbox membership; action outputs enqueue an output_command.
 type Sink struct {
 	Kind     string `json:"kind"`
 	TargetID string `json:"targetId"`
@@ -26,13 +25,14 @@ type Sink struct {
 
 // Output is one committed side effect of a flow run.
 type Output struct {
-	Sink           Sink            `json:"sink"`
-	Key            string          `json:"key"` // output dedup key
-	Payload        json.RawMessage `json:"payload"`
-	Unread         bool            `json:"unread"` // retained feed-output field
-	SourceTopic    string          `json:"sourceTopic,omitempty"`
-	SnapshotID     string          `json:"snapshotId,omitempty"`
-	PreserveUnread bool            `json:"preserveUnread,omitempty"`
+	Sink          Sink            `json:"sink"`
+	Key           string          `json:"key,omitempty"`           // feed external ID only
+	OccurrenceKey string          `json:"occurrenceKey,omitempty"` // action dedup key only
+	Payload       json.RawMessage `json:"payload,omitempty"`       // action payload only
+	SourceKind    string          `json:"sourceKind,omitempty"`
+	SourceScope   string          `json:"sourceScope,omitempty"`
+	SourceTopic   string          `json:"sourceTopic"`
+	SnapshotID    string          `json:"snapshotId,omitempty"`
 }
 
 // FeedSnapshot declares one source's complete current output scope for a feed.
@@ -83,10 +83,10 @@ type CommitBatch struct {
 	NodeRuns      []NodeRunView  `json:"nodeRuns"`
 }
 
-// CommitBatch applies b atomically: feed outputs and snapshots are accepted
-// but currently have no durable effect, action outputs are enqueued into
-// output_command (deduped by (action_id, key)), node runs are recorded, and
-// the consumer's offset advances to b.UpToOffset.
+// CommitBatch applies b atomically: feed outputs resolve their inbox item and
+// claim membership, snapshots reconcile only their (feed, source) scope,
+// action outputs are enqueued by occurrence key, node runs are recorded, and
+// the consumer offset advances to b.UpToOffset.
 //
 // Idempotency by offset: if b.UpToOffset is at or below the consumer's
 // currently committed offset, this batch was already applied in a previous
@@ -94,6 +94,7 @@ type CommitBatch struct {
 // Only output_command needs its own dedup key, since two different batches
 // could legitimately enqueue the same action.
 func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
+	debugPauseCommit(ctx)
 	offset, err := strconv.ParseInt(b.UpToOffset, 10, 64)
 	if err != nil || offset < 0 {
 		return fmt.Errorf("parsing commit offset %q: expected a non-negative decimal int64", b.UpToOffset)
@@ -116,18 +117,46 @@ func (db *DB) CommitBatch(ctx context.Context, b CommitBatch) error {
 		for _, out := range b.Outputs {
 			switch out.Sink.Kind {
 			case SinkKindFeed:
-				// Feed persistence is introduced with membership claims in a later phase.
+				item, err := q.GetInboxItemByExternalID(ctx, GetInboxItemByExternalIDParams{
+					ProfileID: b.Consumer, SourceKind: out.SourceKind, SourceScope: out.SourceScope, ExternalID: out.Key,
+				})
+				if err != nil {
+					return fmt.Errorf("resolving inbox item %s/%s/%s: %w", out.SourceKind, out.SourceScope, out.Key, err)
+				}
+				if err := q.UpsertFeedMembershipClaim(ctx, UpsertFeedMembershipClaimParams{
+					ProfileID: b.Consumer, FeedID: out.Sink.TargetID, ItemID: item.ID, SourceID: out.SourceTopic,
+				}); err != nil {
+					return fmt.Errorf("claiming feed membership %s/%s: %w", out.Sink.TargetID, out.Key, err)
+				}
 			case SinkKindAction:
 				if err := q.EnqueueOutputCommand(ctx, EnqueueOutputCommandParams{
-					ActionID:  out.Sink.TargetID,
-					Key:       out.Key,
-					Payload:   []byte(out.Payload),
-					CreatedAt: now,
+					ActionID: out.Sink.TargetID, Key: out.OccurrenceKey, Payload: []byte(out.Payload), CreatedAt: now,
 				}); err != nil {
-					return fmt.Errorf("enqueuing output_command %s/%s: %w", out.Sink.TargetID, out.Key, err)
+					return fmt.Errorf("enqueuing output_command %s/%s: %w", out.Sink.TargetID, out.OccurrenceKey, err)
 				}
 			default:
 				return fmt.Errorf("commit batch: unknown sink kind %q", out.Sink.Kind)
+			}
+		}
+
+		for _, snapshot := range b.FeedSnapshots {
+			itemIDs := make([]int64, 0)
+			for _, out := range b.Outputs {
+				if out.Sink.Kind != SinkKindFeed || out.Sink.TargetID != snapshot.FeedID || out.SourceTopic != snapshot.SourceTopic || out.SnapshotID != snapshot.SnapshotID {
+					continue
+				}
+				item, err := q.GetInboxItemByExternalID(ctx, GetInboxItemByExternalIDParams{ProfileID: b.Consumer, SourceKind: out.SourceKind, SourceScope: out.SourceScope, ExternalID: out.Key})
+				if err != nil {
+					return fmt.Errorf("resolving snapshot inbox item %s: %w", out.Key, err)
+				}
+				itemIDs = append(itemIDs, item.ID)
+			}
+			if len(itemIDs) == 0 {
+				if err := q.DeleteFeedMembershipClaimsForSourceAll(ctx, DeleteFeedMembershipClaimsForSourceAllParams{FeedID: snapshot.FeedID, SourceID: snapshot.SourceTopic}); err != nil {
+					return fmt.Errorf("clearing empty feed snapshot: %w", err)
+				}
+			} else if err := q.DeleteFeedMembershipClaimsNotInSnapshot(ctx, DeleteFeedMembershipClaimsNotInSnapshotParams{FeedID: snapshot.FeedID, SourceID: snapshot.SourceTopic, ItemIds: itemIDs}); err != nil {
+				return fmt.Errorf("reconciling feed snapshot: %w", err)
 			}
 		}
 

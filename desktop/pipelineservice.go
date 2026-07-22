@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline"
@@ -38,6 +39,44 @@ func (s *PipelineService) ReadFrom(consumer string, limit int) ([]pipelinedb.Msg
 // consumer's current offset) is a no-op.
 func (s *PipelineService) Commit(batch pipeline.CommitBatch) error {
 	return s.db.CommitBatch(context.Background(), batch)
+}
+
+// EventLogTailOffset returns a Wails-safe decimal tail for the startup/deploy
+// replay protocol.
+func (s *PipelineService) EventLogTailOffset() (string, error) {
+	tail, err := s.db.EventLogTailOffset(context.Background())
+	if err != nil {
+		return "", err
+	}
+	return strconv.FormatInt(tail, 10), nil
+}
+
+// FastForwardConsumer performs protocol step (a), before a runtime can pump.
+func (s *PipelineService) FastForwardConsumer(consumer, tail string) error {
+	offset, err := strconv.ParseInt(tail, 10, 64)
+	if err != nil || offset < 0 {
+		return fmt.Errorf("invalid event log tail %q", tail)
+	}
+	return s.db.FastForwardConsumer(context.Background(), consumer, offset)
+}
+
+// RecomputeMemberships is intentionally claims-only: it exposes no action or
+// consumer-offset capability to synthetic startup/deploy replay.
+func (s *PipelineService) RecomputeMemberships(profileID string, claims []pipelinedb.FeedMembershipClaim) error {
+	return s.db.RecomputeMemberships(context.Background(), profileID, claims)
+}
+
+// ReconcileFlowMembershipStructure deletes all claims for removed feeds. For
+// removed or disabled sources, it preserves archived claims and deletes only
+// unarchived claims during a deploy.
+func (s *PipelineService) ReconcileFlowMembershipStructure(profileID string, feedIDs, sourceIDs []string) error {
+	return s.db.ReconcileFlowMembershipStructure(context.Background(), profileID, feedIDs, sourceIDs)
+}
+
+// ListUnarchivedInboxItems returns the JSON/Wails-friendly immutable inbox
+// identity and payload needed for claims-only synthetic replay.
+func (s *PipelineService) ListUnarchivedInboxItems(profileID string) ([]pipelinedb.InboxItemView, error) {
+	return s.db.ListUnarchivedInboxItems(context.Background(), profileID)
 }
 
 // ActionViews returns the configured actions available for an item kind
