@@ -45,6 +45,34 @@ func TestIngestObservation_DuplicatePayloadWritesNothing(t *testing.T) {
 	assert.Equal(t, 1, events)
 }
 
+func TestIngestObservation_TrivialChangeUpdatesItemWithoutEvent(t *testing.T) {
+	db := openTestDB(t)
+	ctx := t.Context()
+	first, err := db.IngestObservation(ctx, activityClassifier("initial"), IngestObservationParams{
+		ProfileID: "p", Topic: "source:p/a", Current: observation(`{"v":1}`),
+	})
+	require.NoError(t, err)
+
+	current := observation(`{"v":2}`)
+	current.ObservedAt = 101
+	result, err := db.IngestObservation(ctx, testClassifier{func(_ *Observation, _ Observation) Classification {
+		return Classification{Kind: "updated", Attention: AttentionTrivial, Transition: TransitionNone, Lifecycle: LifecycleActive, SourceState: "open"}
+	}}, IngestObservationParams{ProfileID: "p", Topic: "source:p/a", Current: current})
+	require.NoError(t, err)
+	require.True(t, result.Wrote)
+	assert.EqualValues(t, 2, result.Revision)
+
+	var revision, events int
+	var payload []byte
+	var sourceState string
+	require.NoError(t, db.Conn().QueryRowContext(ctx, `SELECT revision, payload, source_state FROM inbox_item WHERE id = ?`, first.ItemID).Scan(&revision, &payload, &sourceState))
+	require.NoError(t, db.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM inbox_event WHERE item_id = ?`, first.ItemID).Scan(&events))
+	assert.Equal(t, 2, revision)
+	assert.JSONEq(t, `{"v":2}`, string(payload))
+	assert.Equal(t, "open", sourceState)
+	assert.Equal(t, 1, events)
+}
+
 func TestIngestObservation_ConcurrentRevisionsAreMonotonic(t *testing.T) {
 	db := openTestDB(t)
 	ctx := context.Background()

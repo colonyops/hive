@@ -197,6 +197,10 @@ DELETE FROM event_log WHERE topic LIKE ? ESCAPE '\';
 -- name: DeleteSourceHeadByTopicPrefix :exec
 DELETE FROM source_head WHERE topic LIKE ? ESCAPE '\';
 
+-- name: PruneArchivedInboxItems :exec
+-- Cascades to inbox_event and feed_membership_claim through their item FKs.
+DELETE FROM inbox_item WHERE archived_at IS NOT NULL AND archived_at <= ?;
+
 -- name: InsertInboxEvent :one
 INSERT INTO inbox_event (item_id, kind, transition, attention, occurrence_key, summary, detail, created_at)
 VALUES (?, ?, ?, ?, ?, ?, ?, ?)

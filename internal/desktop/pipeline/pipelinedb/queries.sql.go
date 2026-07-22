@@ -1546,6 +1546,16 @@ func (q *Queries) PruneActivityEvents(ctx context.Context, offset int64) error {
 	return err
 }
 
+const pruneArchivedInboxItems = `-- name: PruneArchivedInboxItems :exec
+DELETE FROM inbox_item WHERE archived_at IS NOT NULL AND archived_at <= ?
+`
+
+// Cascades to inbox_event and feed_membership_claim through their item FKs.
+func (q *Queries) PruneArchivedInboxItems(ctx context.Context, archivedAt sql.NullInt64) error {
+	_, err := q.db.ExecContext(ctx, pruneArchivedInboxItems, archivedAt)
+	return err
+}
+
 const pruneNodeRuns = `-- name: PruneNodeRuns :exec
 DELETE FROM node_run
 WHERE rowid IN (

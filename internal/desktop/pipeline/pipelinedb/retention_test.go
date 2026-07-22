@@ -130,6 +130,94 @@ func TestPrune_RejectsNegativeJobLimit(t *testing.T) {
 	require.EqualError(t, err, "job retention limit must not be negative")
 }
 
+func TestPrune_PrunesExpiredArchivedInboxItemsAndCascades(t *testing.T) {
+	database := openTestDB(t)
+	ctx := t.Context()
+	item := seedReplayItem(t, database, "flow", "expired")
+	_, err := database.Queries().InsertInboxEvent(ctx, InsertInboxEventParams{
+		ItemID: item.ID, Kind: "updated", Transition: "none", Attention: "activity", Detail: []byte(`{}`), CreatedAt: 1,
+	})
+	require.NoError(t, err)
+	require.NoError(t, database.Queries().UpsertFeedMembershipClaim(ctx, UpsertFeedMembershipClaimParams{
+		ProfileID: "flow", FeedID: "flow/feed", ItemID: item.ID, SourceID: "source:flow/source",
+	}))
+	_, err = database.Conn().ExecContext(ctx, `UPDATE inbox_item SET archived_at = ?, archived_actor = 'manual' WHERE id = ?`, time.Now().Add(-91*24*time.Hour).UnixMilli(), item.ID)
+	require.NoError(t, err)
+
+	_, err = database.Prune(ctx, nil, RetentionPolicy{ArchivedItemRetention: 90 * 24 * time.Hour})
+	require.NoError(t, err)
+
+	var items, events, claims int
+	require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM inbox_item WHERE id = ?`, item.ID).Scan(&items))
+	require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM inbox_event WHERE item_id = ?`, item.ID).Scan(&events))
+	require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM feed_membership_claim WHERE item_id = ?`, item.ID).Scan(&claims))
+	assert.Zero(t, items)
+	assert.Zero(t, events)
+	assert.Zero(t, claims)
+}
+
+func TestPrune_TrimsInboxEventsPerItem(t *testing.T) {
+	database := openTestDB(t)
+	ctx := t.Context()
+	item := seedReplayItem(t, database, "flow", "many-events")
+	other := seedReplayItem(t, database, "flow", "other-events")
+	for i := range 5 {
+		_, err := database.Queries().InsertInboxEvent(ctx, InsertInboxEventParams{
+			ItemID: item.ID, Kind: "updated", Transition: "none", Attention: "activity", Detail: []byte(`{}`), CreatedAt: int64(i),
+		})
+		require.NoError(t, err)
+	}
+	for i := range 2 {
+		_, err := database.Queries().InsertInboxEvent(ctx, InsertInboxEventParams{
+			ItemID: other.ID, Kind: "updated", Transition: "none", Attention: "activity", Detail: []byte(`{}`), CreatedAt: int64(i),
+		})
+		require.NoError(t, err)
+	}
+
+	_, err := database.Prune(ctx, nil, RetentionPolicy{EventPerItemLimit: 2})
+	require.NoError(t, err)
+
+	for _, want := range []struct {
+		itemID int64
+		ids    []int64
+	}{
+		{item.ID, []int64{4, 5}},
+		{other.ID, []int64{6, 7}},
+	} {
+		var eventCount int
+		require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM inbox_event WHERE item_id = ?`, want.itemID).Scan(&eventCount))
+		assert.Equal(t, 2, eventCount)
+
+		rows, err := database.Conn().QueryContext(ctx, `SELECT id FROM inbox_event WHERE item_id = ? ORDER BY id`, want.itemID)
+		require.NoError(t, err)
+		var ids []int64
+		for rows.Next() {
+			var id int64
+			require.NoError(t, rows.Scan(&id))
+			ids = append(ids, id)
+		}
+		require.NoError(t, rows.Close())
+		require.NoError(t, rows.Err())
+		assert.Equal(t, want.ids, ids)
+	}
+
+	_, err = database.Prune(ctx, nil, RetentionPolicy{EventPerItemLimit: 0})
+	require.NoError(t, err)
+	for _, itemID := range []int64{item.ID, other.ID} {
+		var eventCount int
+		require.NoError(t, database.Conn().QueryRowContext(ctx, `SELECT COUNT(*) FROM inbox_event WHERE item_id = ?`, itemID).Scan(&eventCount))
+		assert.Zero(t, eventCount)
+	}
+}
+
+func TestPrune_RejectsNegativeInboxRetentionLimits(t *testing.T) {
+	database := openTestDB(t)
+	_, err := database.Prune(t.Context(), nil, RetentionPolicy{ArchivedItemRetention: -time.Hour})
+	require.EqualError(t, err, "archived item retention must not be negative")
+	_, err = database.Prune(t.Context(), nil, RetentionPolicy{EventPerItemLimit: -1})
+	require.EqualError(t, err, "event per-item retention limit must not be negative")
+}
+
 func TestOpen_FreshDB_HasRetentionIndexes(t *testing.T) {
 	database := openTestDB(t)
 	ctx := context.Background()

@@ -2,6 +2,7 @@ package pipelinedb
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"time"
 )
@@ -27,6 +28,10 @@ type RetentionPolicy struct {
 	// JobLimit is the number of newest done/failed job rows to retain.
 	// Non-terminal jobs are never pruned.
 	JobLimit int64
+	// ArchivedItemRetention retains archived inbox items for this duration.
+	ArchivedItemRetention time.Duration
+	// EventPerItemLimit retains this many newest inbox events per item.
+	EventPerItemLimit int64
 }
 
 // DefaultRetentionPolicy keeps enough recent history for the desktop's debug
@@ -37,6 +42,8 @@ func DefaultRetentionPolicy() RetentionPolicy {
 		TerminalOutputCommandLimit: 2_000,
 		ActivityEventLimit:         5_000,
 		JobLimit:                   2_000,
+		ArchivedItemRetention:      90 * 24 * time.Hour,
+		EventPerItemLimit:          500,
 	}
 }
 
@@ -72,6 +79,12 @@ func (db *DB) Prune(ctx context.Context, _ []string, policy RetentionPolicy) (Re
 	if policy.JobLimit < 0 {
 		return RetentionResult{}, fmt.Errorf("job retention limit must not be negative")
 	}
+	if policy.ArchivedItemRetention < 0 {
+		return RetentionResult{}, fmt.Errorf("archived item retention must not be negative")
+	}
+	if policy.EventPerItemLimit < 0 {
+		return RetentionResult{}, fmt.Errorf("event per-item retention limit must not be negative")
+	}
 
 	result := RetentionResult{}
 	err := db.WithTx(ctx, func(q *Queries) error {
@@ -97,6 +110,12 @@ func (db *DB) Prune(ctx context.Context, _ []string, policy RetentionPolicy) (Re
 		}
 		if err := q.PruneTerminalJobs(ctx, policy.JobLimit); err != nil {
 			return fmt.Errorf("pruning terminal jobs: %w", err)
+		}
+		if err := q.PruneArchivedInboxItems(ctx, sql.NullInt64{Int64: time.Now().Add(-policy.ArchivedItemRetention).UnixMilli(), Valid: true}); err != nil {
+			return fmt.Errorf("pruning archived inbox items: %w", err)
+		}
+		if err := q.TrimInboxItemEvents(ctx, policy.EventPerItemLimit); err != nil {
+			return fmt.Errorf("trimming inbox item events: %w", err)
 		}
 		return nil
 	})
