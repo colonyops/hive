@@ -100,3 +100,11 @@ export function SaveLayout(id: string, layout: flow$0.Layout): $CancellablePromi
 export function SaveSidebar(id: string, layout: flow$0.SidebarLayout): $CancellablePromise<void> {
     return $Call.ByID(3551590419, id, layout);
 }
+
+/**
+ * SetFlowEnabled controls whether a profile participates in polling and flow
+ * execution while preserving its existing feed data and graph definition.
+ */
+export function SetFlowEnabled(id: string, enabled: boolean): $CancellablePromise<$models.FlowSummary> {
+    return $Call.ByID(822063213, id, enabled);
+}

@@ -23,11 +23,12 @@ type FlowSummary struct {
 // injected *flow.FlowStore; this type is wire glue only, matching
 // FeedService/PipelineService's thin-glue style.
 type FlowsService struct {
-	store *flow.FlowStore
+	store     *flow.FlowStore
+	onUpdated func()
 }
 
-func NewFlowsService(store *flow.FlowStore) *FlowsService {
-	return &FlowsService{store: store}
+func NewFlowsService(store *flow.FlowStore, onUpdated func()) *FlowsService {
+	return &FlowsService{store: store, onUpdated: onUpdated}
 }
 
 // ListFlows returns one summary per flow file — valid and invalid alike —
@@ -64,6 +65,19 @@ func (s *FlowsService) RenameFlow(id, name string) (FlowSummary, error) {
 	f, err := s.store.Rename(id, name)
 	if err != nil {
 		return FlowSummary{}, err
+	}
+	return FlowSummary{ID: f.ID, Name: f.Name, Enabled: f.Enabled, Valid: true}, nil
+}
+
+// SetFlowEnabled controls whether a profile participates in polling and flow
+// execution while preserving its existing feed data and graph definition.
+func (s *FlowsService) SetFlowEnabled(id string, enabled bool) (FlowSummary, error) {
+	f, err := s.store.SetEnabled(id, enabled)
+	if err != nil {
+		return FlowSummary{}, err
+	}
+	if s.onUpdated != nil {
+		s.onUpdated()
 	}
 	return FlowSummary{ID: f.ID, Name: f.Name, Enabled: f.Enabled, Valid: true}, nil
 }

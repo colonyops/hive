@@ -6,6 +6,7 @@ const profile = {
   id: 'personal',
   letter: 'P',
   name: 'Personal',
+  enabled: true,
   sourceSummary: 'GitHub · 2 sources',
   totalCount: 3,
   unreadCount: 1,
@@ -38,6 +39,21 @@ describe('ProfileSettingsView', () => {
     await wrapper.get('form').trigger('submit')
 
     expect(wrapper.emitted('rename')).toEqual([['Team Triage']])
+  })
+
+  it('toggles profile polling and shows failures', async () => {
+    const wrapper = mount(ProfileSettingsView, {
+      props: { profile, activeSection: 'general', toggleError: 'Could not update' },
+    })
+
+    const toggle = wrapper.get('[data-testid="profile-settings-enabled"]')
+    expect(toggle.attributes('aria-checked')).toBe('true')
+    await toggle.trigger('click')
+    expect(wrapper.emitted('toggle-enabled')).toEqual([[false]])
+    expect(wrapper.get('[data-testid="profile-settings-toggle-error"]').text()).toBe('Could not update')
+
+    await wrapper.setProps({ toggling: true })
+    expect(toggle.attributes('disabled')).toBeDefined()
   })
 
   it('shows rename progress and errors', async () => {

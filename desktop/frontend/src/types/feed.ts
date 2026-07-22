@@ -67,6 +67,7 @@ export interface Profile {
   id: string
   letter: string
   name: string
+  enabled: boolean
   sourceSummary: string
   totalCount: number
   unreadCount: number

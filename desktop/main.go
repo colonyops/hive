@@ -147,7 +147,7 @@ func emitAuthUpdated() {
 // including the app's own SaveFlow/SaveLayout writes. A watcher that fails to
 // start degrades to no hot-reload: the app still works, edits just need a
 // restart to pick up.
-func buildFlowsStore(actionStore *actions.ActionStore, logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
+func buildFlowsStore(actionStore *actions.ActionStore, onUpdated func(), logger zerolog.Logger) (*flow.FlowStore, *flow.FlowsWatcher) {
 	dir := desktop.FlowsDir()
 	store := flow.NewFlowStore(dir, newActionsRefs(actionStore))
 
@@ -155,7 +155,9 @@ func buildFlowsStore(actionStore *actions.ActionStore, logger zerolog.Logger) (*
 		if err := store.Reload(); err != nil {
 			logger.Warn().Err(err).Msg("flows reload failed")
 		}
-		emitFlowsUpdated()
+		if onUpdated != nil {
+			onUpdated()
+		}
 	}, logger)
 	if err != nil {
 		logger.Warn().Err(err).Msg("flows hot-reload unavailable")
@@ -385,13 +387,18 @@ func main() {
 		actionsWatcher.Start()
 	}
 
+	var refreshProfileTray func()
+	onFlowsUpdated := func() {
+		emitFlowsUpdated()
+		if refreshProfileTray != nil {
+			refreshProfileTray()
+		}
+	}
+
 	// The flows store must exist before the producer and retention maintenance:
 	// both resolve enabled flow IDs live from it.
-	flowsStore, flowsWatcher := buildFlowsStore(actionStore, logger)
+	flowsStore, flowsWatcher := buildFlowsStore(actionStore, onFlowsUpdated, logger)
 	actionStore.SetUsageChecker(actionUsageChecker{flows: flowsStore, db: pipelineDB})
-	if flowsWatcher != nil {
-		flowsWatcher.Start()
-	}
 
 	outputWorker := buildOutputWorker(pipelineDB, actionStore, actionRuntime.launcher, actionRuntime.publisher, activityStore, jobStore, logger)
 	if desktop.MockMode() == "" {
@@ -429,7 +436,7 @@ func main() {
 		Services: []application.Service{
 			application.NewService(auth.NewService(buildAuthBackend(onAuthChange))),
 			application.NewService(NewPipelineService(pipelineDB, actionStore, outputWorker, actionRuntime.launcher)),
-			application.NewService(NewFlowsService(flowsStore)),
+			application.NewService(NewFlowsService(flowsStore, onFlowsUpdated)),
 			application.NewService(NewActionsService(actionStore, emitActionsUpdated)),
 			application.NewService(NewActivityService(activityStore)),
 			application.NewService(NewJobService(jobStore)),
@@ -485,17 +492,31 @@ func main() {
 		window.Show()
 	})
 
-	trayMenu := app.NewMenu()
-	trayMenu.Add("Show Hive").OnClick(func(*application.Context) {
-		window.Show()
-		window.Focus()
+	profilesTray := newProfileTray(
+		app,
+		flowsStore,
+		logger,
+		trayIcon,
+		onFlowsUpdated,
+		func() {
+			window.Show()
+			window.Focus()
+		},
+		app.Quit,
+	)
+	refreshProfileTray = profilesTray.Refresh
+	if flowsWatcher != nil {
+		// Start only after refreshProfileTray is published. The watcher invokes
+		// onFlowsUpdated from its goroutine, so starting earlier would race the
+		// callback assignment above.
+		flowsWatcher.Start()
+	}
+	app.OnShutdown(func() {
+		profilesTray.Close()
+		if flowsWatcher != nil {
+			flowsWatcher.Close()
+		}
 	})
-	trayMenu.AddSeparator()
-	trayMenu.Add("Quit").OnClick(func(*application.Context) {
-		app.Quit()
-	})
-
-	app.SystemTray.New().SetTemplateIcon(trayIcon).SetMenu(trayMenu)
 
 	shutdown := func() {
 		maintenance.Stop()

@@ -10,6 +10,7 @@ const profile: Profile = {
   id: 'personal',
   letter: 'P',
   name: 'Personal',
+  enabled: true,
   sourceSummary: '2 sources',
   totalCount: 3,
   unreadCount: 1,
