@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
   RenameFlow: vi.fn(),
+  SetFlowEnabled: vi.fn(),
   DeleteFlow: vi.fn(),
   GetSidebar: vi.fn(),
   SaveSidebar: vi.fn(),
@@ -27,6 +28,7 @@ vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () =
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
   RenameFlow: mocks.RenameFlow,
+  SetFlowEnabled: mocks.SetFlowEnabled,
   DeleteFlow: mocks.DeleteFlow,
   GetSidebar: mocks.GetSidebar,
   SaveSidebar: mocks.SaveSidebar,
@@ -75,6 +77,7 @@ beforeEach(() => {
   mocks.GetFlow.mockResolvedValue(flow)
   mocks.GetSidebar.mockResolvedValue({ items: [] })
   mocks.SaveSidebar.mockResolvedValue(undefined)
+  mocks.SetFlowEnabled.mockImplementation((id: string, enabled: boolean) => Promise.resolve({ ...flowSummary, id, enabled }))
   mocks.FeedItemCounts.mockResolvedValue([{ feedId: 'triage/my-prs', total: 3, unread: 2 }])
   mocks.FeedItems.mockResolvedValue([])
   mocks.ActionViews.mockResolvedValue([])
@@ -93,6 +96,7 @@ describe('useFeedState', () => {
     const state = get()
     expect(state.profiles.value).toHaveLength(1)
     expect(state.activeProfileId.value).toBe('triage')
+    expect(state.activeProfile.value?.enabled).toBe(true)
     expect(state.activeProfile.value?.feeds).toEqual([
       { id: 'triage/my-prs', name: 'My PRs', count: 3, newCount: 2 },
     ])
@@ -144,6 +148,30 @@ describe('useFeedState', () => {
     await flushPromises()
 
     expect(get().activeProfile.value?.feeds[0]?.name).toBe('Team PRs')
+  })
+
+  it('drops stale profile-list reloads so enablement cannot move backwards', async () => {
+    const handlers: Record<string, () => void> = {}
+    mocks.On.mockImplementation((event: string, cb: () => void) => {
+      handlers[event] = cb
+      return () => {}
+    })
+    const get = mountState()
+    await flushPromises()
+
+    const resolvers: Array<(flows: unknown) => void> = []
+    mocks.ListFlows.mockImplementation(() => new Promise((resolve) => { resolvers.push(resolve) }))
+    handlers['flows:updated']?.()
+    await flushPromises()
+    handlers['flows:updated']?.()
+    await flushPromises()
+
+    resolvers[1]([{ ...flowSummary, enabled: false }])
+    await flushPromises()
+    resolvers[0]([{ ...flowSummary, enabled: true }])
+    await flushPromises()
+
+    expect(get().activeProfile.value?.enabled).toBe(false)
   })
 
   it('reconciles the saved sidebar layout (folders, node-id keyed) into the tree', async () => {
@@ -251,6 +279,31 @@ describe('useFeedState', () => {
     expect(renamed).toBe(false)
     expect(get().renameProfileError.value).toBe('disk is read-only')
     expect(get().activeProfile.value?.name).toBe('Frontend Triage')
+  })
+
+  it('disables a profile while keeping it selected and its feeds visible', async () => {
+    const get = mountState()
+    await flushPromises()
+
+    const changed = await get().setProfileEnabled('triage', false)
+
+    expect(changed).toBe(true)
+    expect(mocks.SetFlowEnabled).toHaveBeenCalledWith('triage', false)
+    expect(get().activeProfileId.value).toBe('triage')
+    expect(get().activeProfile.value?.enabled).toBe(false)
+    expect(get().activeProfile.value?.feeds).toHaveLength(1)
+  })
+
+  it('preserves profile enablement and surfaces an update failure', async () => {
+    mocks.SetFlowEnabled.mockRejectedValue(new Error('disk is read-only'))
+    const get = mountState()
+    await flushPromises()
+
+    const changed = await get().setProfileEnabled('triage', false)
+
+    expect(changed).toBe(false)
+    expect(get().activeProfile.value?.enabled).toBe(true)
+    expect(get().toggleProfileError.value).toBe('disk is read-only')
   })
 
   it('deletes a profile by deleting its flow', async () => {

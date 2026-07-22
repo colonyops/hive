@@ -53,7 +53,7 @@ const {
 const {
   profiles, profilesLoaded, profilesError, activeProfile, activeProfileId, selection, items, visibleItems, unreadCount, search, loadError,
   selectedId, selectedItem, actions, pendingAction, actionRuns, sessionLaunchAction, sessionLaunchOptions, sessionLaunchBusy, sessionLaunchError, unreadOnly, feedSort, setFeedSort, title, toasts, dismissToast, clearToasts,
-  creatingProfile, createProfileError, renamingProfile, renameProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, deleteProfile,
+  creatingProfile, createProfileError, renamingProfile, renameProfileError, togglingProfileId, toggleProfileError, deletingProfile, loadProfiles, createProfile, renameProfile, setProfileEnabled, deleteProfile,
   reorderFeeds, selectProfile, selectSidebar, selectUnreadView, selectItem, openActionRun, selectNext, selectPrev,
   toggleUnread, refresh, invokeAction, cancelSessionLaunch, submitSessionLaunch, notWired, openUrl, openSelectedInBrowser, hideWindow,
 } = useFeedState()
@@ -385,6 +385,11 @@ async function submitProfileRename(name: string) {
   await renameProfile(activeProfileId.value, name)
 }
 
+async function submitProfileEnabled(enabled: boolean) {
+  if (!activeProfileId.value) return
+  await setProfileEnabled(activeProfileId.value, enabled)
+}
+
 const deleteProfileOpen = ref(false)
 
 function openDeleteProfile() {
@@ -695,8 +700,11 @@ onUnmounted(() => {
           :active-section="profileSettingsSection"
           :renaming="renamingProfile"
           :rename-error="renameProfileError"
+          :toggling="togglingProfileId !== null"
+          :toggle-error="toggleProfileError"
           @close="closeSettings"
           @rename="submitProfileRename"
+          @toggle-enabled="submitProfileEnabled"
           @delete="openDeleteProfile"
           @select-section="selectProfileSettingsSection"
         />

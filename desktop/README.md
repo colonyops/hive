@@ -23,16 +23,20 @@ Wails' internal window-destroy listener, which otherwise races the callback
 in a separate goroutine. The app keeps running; reopen the window from the
 Dock (`ApplicationShouldHandleReopen` calls `Show`) or from the tray menu.
 
-The tray is a template icon with a menu: **Show Hive** calls `window.Show()`
-and `window.Focus()`, and **Quit** calls `app.Quit()`. In the pinned Wails
+The tray is a template icon with a dynamic menu: **Show Hive** calls
+`window.Show()` and `window.Focus()`, profile checkboxes toggle whether each
+flow polls and runs, and **Quit** calls `app.Quit()`. Invalid flow files remain
+visible as disabled menu items. The menu is rebuilt after flow changes so
+external YAML edits and in-app toggles stay synchronized. In the pinned Wails
 alpha, `SystemTray.SetTemplateIcon` accepts exactly one `[]byte` PNG, so the
 shell embeds only the retina `tray-templateTemplate@2x.png`; the 1x PNG is
 still generated and committed as an asset but not embedded.
 
 Manual native-shell verification remains required: check the Dock icon,
 native traffic lights centered on the 42px titlebar, close-hides-window,
-reopening from the Dock and from the tray menu, template-icon tinting in
-light and dark menu bars, and Quit from the tray menu.
+reopening from the Dock and from the tray menu, profile checkbox toggles and
+live menu refresh, template-icon tinting in light and dark menu bars, and Quit
+from the tray menu.
 
 ## Pinned versions
 

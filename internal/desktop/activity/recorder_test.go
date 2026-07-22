@@ -23,13 +23,13 @@ func TestStoreAppendRoundTrip(t *testing.T) {
 	store := newTestStore(t, Options{Emit: func(id int64) { emitted++; lastEmittedID = id }})
 	ctx := context.Background()
 
-	stored, err := store.Append(ctx, Refresh("github:hive/core", 12, 340*time.Millisecond))
+	stored, err := store.Append(ctx, ActionRun("Reproduce & fix", "exit 0"))
 	require.NoError(t, err)
 	require.NotZero(t, stored.ID)
 	require.NotZero(t, stored.CreatedAt)
-	require.Equal(t, CategoryRefresh, stored.Category)
-	require.Equal(t, SeverityInfo, stored.Severity)
-	require.Equal(t, "Refreshed github:hive/core", stored.Title)
+	require.Equal(t, CategoryAction, stored.Category)
+	require.Equal(t, SeveritySuccess, stored.Severity)
+	require.Equal(t, "Ran Reproduce & fix", stored.Title)
 	require.Equal(t, 1, emitted, "emit fires once per successful append")
 	require.Equal(t, stored.ID, lastEmittedID, "emit carries the new event id")
 
@@ -89,7 +89,6 @@ func TestConstructors(t *testing.T) {
 		category Category
 		severity Severity
 	}{
-		{"refresh", Refresh("s", 3, 0), CategoryRefresh, SeverityInfo},
 		{"refresh-failed", RefreshFailed("s", "boom"), CategoryRefresh, SeverityError},
 		{"session", SessionCreated("review-pr-2841", "sonnet", "hive/core"), CategorySession, SeveritySuccess},
 		{"auto-action", AutoAction("Triage", "triage.default", "#4820"), CategoryAutoAction, SeverityAuto},
