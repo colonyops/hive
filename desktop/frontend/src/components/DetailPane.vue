@@ -160,6 +160,24 @@ const { size: bodyHeight, startResize: startBodyResize, step: stepBody } = useRe
   margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--color-border);
   color: var(--color-text-3);
 }
+.markdown-body :deep(details) {
+  margin: 10px 0; padding: 8px 12px; border: 1px solid var(--color-border);
+  border-radius: 7px; background: var(--color-card);
+}
+.markdown-body :deep(summary) {
+  cursor: pointer; color: var(--color-text); font-weight: 650;
+}
+.markdown-body :deep(details[open] summary) { margin-bottom: 8px; }
+.markdown-body :deep(.markdown-alert) {
+  --alert-color: var(--color-accent);
+  margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--alert-color);
+  color: var(--color-text-2); background: color-mix(in srgb, var(--alert-color) 7%, transparent);
+}
+.markdown-body :deep(.markdown-alert-title) { color: var(--alert-color); font-weight: 650; }
+.markdown-body :deep(.markdown-alert-tip) { --alert-color: var(--color-kind-issue); }
+.markdown-body :deep(.markdown-alert-important) { --alert-color: var(--color-kind-pr); }
+.markdown-body :deep(.markdown-alert-warning),
+.markdown-body :deep(.markdown-alert-caution) { --alert-color: var(--color-warning, #d29922); }
 .markdown-body :deep(hr) { margin: 16px 0; border: 0; border-top: 1px solid var(--color-border); }
 .markdown-body :deep(code) {
   padding: 1.5px 6px; border-radius: 5px; background: var(--color-card);
