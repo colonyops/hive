@@ -105,7 +105,7 @@ INSERT INTO output_command (action_id, key, payload, status, created_at)
 VALUES (?, ?, ?, 'running', ?)
 ON CONFLICT(action_id, key) DO UPDATE SET status = 'running'
 WHERE output_command.status = 'pending'
-RETURNING id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr
+RETURNING id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at
 `
 
 type ConfirmOutputCommandParams struct {
@@ -128,59 +128,17 @@ func (q *Queries) ConfirmOutputCommand(ctx context.Context, arg ConfirmOutputCom
 	err := row.Scan(
 		&i.ID,
 		&i.ActionID,
+		&i.Key,
 		&i.Payload,
 		&i.Status,
-		&i.CreatedAt,
-		&i.Key,
 		&i.Attempts,
 		&i.LastError,
 		&i.ResultJson,
 		&i.Stdout,
 		&i.Stderr,
+		&i.CreatedAt,
 	)
 	return i, err
-}
-
-const countFeedItemsByFlow = `-- name: CountFeedItemsByFlow :many
-SELECT
-    feed_id,
-    CAST(COUNT(*) AS INTEGER) AS total,
-    CAST(SUM(unread) AS INTEGER) AS unread
-FROM feed_item
-WHERE feed_id LIKE ?1
-GROUP BY feed_id
-`
-
-type CountFeedItemsByFlowRow struct {
-	FeedID string `json:"feed_id"`
-	Total  int64  `json:"total"`
-	Unread int64  `json:"unread"`
-}
-
-// Per-feed total and unread counts for every feed belonging to a flow, for
-// the sidebar rail badges: one query instead of an N-feed fan-out of
-// ListFeedItemsByFeed. The caller passes a LIKE prefix like "myflow/%".
-func (q *Queries) CountFeedItemsByFlow(ctx context.Context, flowPrefix string) ([]CountFeedItemsByFlowRow, error) {
-	rows, err := q.db.QueryContext(ctx, countFeedItemsByFlow, flowPrefix)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []CountFeedItemsByFlowRow{}
-	for rows.Next() {
-		var i CountFeedItemsByFlowRow
-		if err := rows.Scan(&i.FeedID, &i.Total, &i.Unread); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
 }
 
 const deleteEventsThrough = `-- name: DeleteEventsThrough :exec
@@ -190,24 +148,6 @@ WHERE "offset" <= ?
 
 func (q *Queries) DeleteEventsThrough(ctx context.Context, offset int64) error {
 	_, err := q.db.ExecContext(ctx, deleteEventsThrough, offset)
-	return err
-}
-
-const deleteFeedItemsNotInSnapshot = `-- name: DeleteFeedItemsNotInSnapshot :exec
-DELETE FROM feed_item
-WHERE feed_id = ?
-  AND source_topic = ?
-  AND snapshot_id != ?
-`
-
-type DeleteFeedItemsNotInSnapshotParams struct {
-	FeedID      string `json:"feed_id"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
-}
-
-func (q *Queries) DeleteFeedItemsNotInSnapshot(ctx context.Context, arg DeleteFeedItemsNotInSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, deleteFeedItemsNotInSnapshot, arg.FeedID, arg.SourceTopic, arg.SnapshotID)
 	return err
 }
 
@@ -276,7 +216,7 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 }
 
 const getOutputCommand = `-- name: GetOutputCommand :one
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command WHERE id = ?
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command WHERE id = ?
 `
 
 func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand, error) {
@@ -285,15 +225,15 @@ func (q *Queries) GetOutputCommand(ctx context.Context, id int64) (OutputCommand
 	err := row.Scan(
 		&i.ID,
 		&i.ActionID,
+		&i.Key,
 		&i.Payload,
 		&i.Status,
-		&i.CreatedAt,
-		&i.Key,
 		&i.Attempts,
 		&i.LastError,
 		&i.ResultJson,
 		&i.Stdout,
 		&i.Stderr,
+		&i.CreatedAt,
 	)
 	return i, err
 }
@@ -313,6 +253,72 @@ func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPay
 	var payload []byte
 	err := row.Scan(&payload)
 	return payload, err
+}
+
+const insertInboxItem = `-- name: InsertInboxItem :one
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    lifecycle, first_seen_at, last_event_at
+) VALUES (
+    ?, ?, ?, ?,
+    ?, ?, ?, 1, ?,
+    ?, ?, ?
+)
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+`
+
+type InsertInboxItemParams struct {
+	ProfileID   string `json:"profile_id"`
+	SourceKind  string `json:"source_kind"`
+	SourceScope string `json:"source_scope"`
+	ExternalID  string `json:"external_id"`
+	Title       string `json:"title"`
+	Url         string `json:"url"`
+	Payload     []byte `json:"payload"`
+	Unread      int64  `json:"unread"`
+	Lifecycle   string `json:"lifecycle"`
+	FirstSeenAt int64  `json:"first_seen_at"`
+	LastEventAt int64  `json:"last_event_at"`
+}
+
+// Seed-only plain insert for deterministic desktop fixtures. The ingestion
+// path receives its classify-and-upsert contract in a later phase.
+func (q *Queries) InsertInboxItem(ctx context.Context, arg InsertInboxItemParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, insertInboxItem,
+		arg.ProfileID,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.ExternalID,
+		arg.Title,
+		arg.Url,
+		arg.Payload,
+		arg.Unread,
+		arg.Lifecycle,
+		arg.FirstSeenAt,
+		arg.LastEventAt,
+	)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
 }
 
 const insertJob = `-- name: InsertJob :one
@@ -508,49 +514,6 @@ func (q *Queries) ListConsumerOffsets(ctx context.Context) ([]ConsumerOffset, er
 	return items, nil
 }
 
-const listFeedItemsByFeed = `-- name: ListFeedItemsByFeed :many
-SELECT feed_id, item_id, payload, updated_at, unread FROM feed_item
-WHERE feed_id = ?
-ORDER BY updated_at DESC
-`
-
-type ListFeedItemsByFeedRow struct {
-	FeedID    string `json:"feed_id"`
-	ItemID    string `json:"item_id"`
-	Payload   []byte `json:"payload"`
-	UpdatedAt int64  `json:"updated_at"`
-	Unread    int64  `json:"unread"`
-}
-
-func (q *Queries) ListFeedItemsByFeed(ctx context.Context, feedID string) ([]ListFeedItemsByFeedRow, error) {
-	rows, err := q.db.QueryContext(ctx, listFeedItemsByFeed, feedID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	items := []ListFeedItemsByFeedRow{}
-	for rows.Next() {
-		var i ListFeedItemsByFeedRow
-		if err := rows.Scan(
-			&i.FeedID,
-			&i.ItemID,
-			&i.Payload,
-			&i.UpdatedAt,
-			&i.Unread,
-		); err != nil {
-			return nil, err
-		}
-		items = append(items, i)
-	}
-	if err := rows.Close(); err != nil {
-		return nil, err
-	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	return items, nil
-}
-
 const listJobs = `-- name: ListJobs :many
 SELECT id, created_at, updated_at, status, label, step, action_id, target, error, command_id FROM job WHERE id < ? ORDER BY id DESC LIMIT ?
 `
@@ -643,7 +606,7 @@ func (q *Queries) ListNodeRunsByFlow(ctx context.Context, arg ListNodeRunsByFlow
 }
 
 const listRunnableOutputCommands = `-- name: ListRunnableOutputCommands :many
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command
 WHERE status = 'pending'
 ORDER BY id ASC
 LIMIT ?
@@ -663,15 +626,15 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 		if err := rows.Scan(
 			&i.ID,
 			&i.ActionID,
+			&i.Key,
 			&i.Payload,
 			&i.Status,
-			&i.CreatedAt,
-			&i.Key,
 			&i.Attempts,
 			&i.LastError,
 			&i.ResultJson,
 			&i.Stdout,
 			&i.Stderr,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -687,7 +650,7 @@ func (q *Queries) ListRunnableOutputCommands(ctx context.Context, limit int64) (
 }
 
 const listRunnableOutputCommandsAfter = `-- name: ListRunnableOutputCommandsAfter :many
-SELECT id, action_id, payload, status, created_at, "key", attempts, last_error, result_json, stdout, stderr FROM output_command
+SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command
 WHERE status = 'pending' AND id > ?
 ORDER BY id ASC
 LIMIT ?
@@ -712,15 +675,15 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 		if err := rows.Scan(
 			&i.ID,
 			&i.ActionID,
+			&i.Key,
 			&i.Payload,
 			&i.Status,
-			&i.CreatedAt,
-			&i.Key,
 			&i.Attempts,
 			&i.LastError,
 			&i.ResultJson,
 			&i.Stdout,
 			&i.Stderr,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -733,21 +696,6 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 		return nil, err
 	}
 	return items, nil
-}
-
-const markFeedItemRead = `-- name: MarkFeedItemRead :exec
-UPDATE feed_item SET unread = 0
-WHERE feed_id = ? AND item_id = ?
-`
-
-type MarkFeedItemReadParams struct {
-	FeedID string `json:"feed_id"`
-	ItemID string `json:"item_id"`
-}
-
-func (q *Queries) MarkFeedItemRead(ctx context.Context, arg MarkFeedItemReadParams) error {
-	_, err := q.db.ExecContext(ctx, markFeedItemRead, arg.FeedID, arg.ItemID)
-	return err
 }
 
 const markOutputCommandDone = `-- name: MarkOutputCommandDone :exec
@@ -861,7 +809,7 @@ func (q *Queries) PruneTerminalOutputCommands(ctx context.Context, offset int64)
 }
 
 const readEventsFrom = `-- name: ReadEventsFrom :many
-SELECT "offset", topic, "key", payload, created_at, snapshot FROM event_log
+SELECT "offset", topic, "key", payload, snapshot, source_kind, source_scope, occurrence_key, created_at FROM event_log
 WHERE "offset" > ?
 ORDER BY "offset" ASC
 LIMIT ?
@@ -886,8 +834,11 @@ func (q *Queries) ReadEventsFrom(ctx context.Context, arg ReadEventsFromParams) 
 			&i.Topic,
 			&i.Key,
 			&i.Payload,
-			&i.CreatedAt,
 			&i.Snapshot,
+			&i.SourceKind,
+			&i.SourceScope,
+			&i.OccurrenceKey,
+			&i.CreatedAt,
 		); err != nil {
 			return nil, err
 		}
@@ -1003,78 +954,6 @@ func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (Job
 		&i.CommandID,
 	)
 	return i, err
-}
-
-const upsertFeedItem = `-- name: UpsertFeedItem :exec
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = excluded.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id
-`
-
-type UpsertFeedItemParams struct {
-	FeedID      string `json:"feed_id"`
-	ItemID      string `json:"item_id"`
-	Payload     []byte `json:"payload"`
-	UpdatedAt   int64  `json:"updated_at"`
-	Unread      int64  `json:"unread"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
-}
-
-// Idempotent by (feed_id, item_id): committing the same key twice updates
-// the row in place rather than duplicating it.
-func (q *Queries) UpsertFeedItem(ctx context.Context, arg UpsertFeedItemParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFeedItem,
-		arg.FeedID,
-		arg.ItemID,
-		arg.Payload,
-		arg.UpdatedAt,
-		arg.Unread,
-		arg.SourceTopic,
-		arg.SnapshotID,
-	)
-	return err
-}
-
-const upsertFeedItemSnapshot = `-- name: UpsertFeedItemSnapshot :exec
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = feed_item.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id
-`
-
-type UpsertFeedItemSnapshotParams struct {
-	FeedID      string `json:"feed_id"`
-	ItemID      string `json:"item_id"`
-	Payload     []byte `json:"payload"`
-	UpdatedAt   int64  `json:"updated_at"`
-	Unread      int64  `json:"unread"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
-}
-
-// Snapshot outputs preserve a previously-read row's unread state while still
-// updating its payload and reconciliation marker.
-func (q *Queries) UpsertFeedItemSnapshot(ctx context.Context, arg UpsertFeedItemSnapshotParams) error {
-	_, err := q.db.ExecContext(ctx, upsertFeedItemSnapshot,
-		arg.FeedID,
-		arg.ItemID,
-		arg.Payload,
-		arg.UpdatedAt,
-		arg.Unread,
-		arg.SourceTopic,
-		arg.SnapshotID,
-	)
-	return err
 }
 
 const upsertSourceHead = `-- name: UpsertSourceHead :exec

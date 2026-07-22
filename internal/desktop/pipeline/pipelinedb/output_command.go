@@ -19,7 +19,7 @@ func (db *DB) ListRunnableOutputCommandsAfter(ctx context.Context, afterID int64
 }
 
 func (db *DB) ConfirmOutputCommand(ctx context.Context, actionID, key string, payload []byte) (OutputCommand, bool, error) {
-	row, err := db.queries.ConfirmOutputCommand(ctx, ConfirmOutputCommandParams{ActionID: actionID, Key: key, Payload: payload, CreatedAt: time.Now().UnixNano()})
+	row, err := db.queries.ConfirmOutputCommand(ctx, ConfirmOutputCommandParams{ActionID: actionID, Key: key, Payload: payload, CreatedAt: time.Now().UnixMilli()})
 	if errors.Is(err, sql.ErrNoRows) {
 		return OutputCommand{}, false, nil
 	}

@@ -39,56 +39,19 @@ VALUES (?, ?)
 ON CONFLICT(consumer) DO UPDATE SET "offset" = excluded."offset"
 WHERE excluded."offset" > consumer_offset."offset";
 
--- name: UpsertFeedItem :exec
--- Idempotent by (feed_id, item_id): committing the same key twice updates
--- the row in place rather than duplicating it.
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = excluded.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id;
-
--- name: UpsertFeedItemSnapshot :exec
--- Snapshot outputs preserve a previously-read row's unread state while still
--- updating its payload and reconciliation marker.
-INSERT INTO feed_item (feed_id, item_id, payload, updated_at, unread, source_topic, snapshot_id)
-VALUES (?, ?, ?, ?, ?, ?, ?)
-ON CONFLICT(feed_id, item_id) DO UPDATE SET
-    payload      = excluded.payload,
-    updated_at   = excluded.updated_at,
-    unread       = feed_item.unread,
-    source_topic = excluded.source_topic,
-    snapshot_id  = excluded.snapshot_id;
-
--- name: DeleteFeedItemsNotInSnapshot :exec
-DELETE FROM feed_item
-WHERE feed_id = ?
-  AND source_topic = ?
-  AND snapshot_id != ?;
-
--- name: ListFeedItemsByFeed :many
-SELECT feed_id, item_id, payload, updated_at, unread FROM feed_item
-WHERE feed_id = ?
-ORDER BY updated_at DESC;
-
--- name: MarkFeedItemRead :exec
-UPDATE feed_item SET unread = 0
-WHERE feed_id = ? AND item_id = ?;
-
--- name: CountFeedItemsByFlow :many
--- Per-feed total and unread counts for every feed belonging to a flow, for
--- the sidebar rail badges: one query instead of an N-feed fan-out of
--- ListFeedItemsByFeed. The caller passes a LIKE prefix like "myflow/%".
-SELECT
-    feed_id,
-    CAST(COUNT(*) AS INTEGER) AS total,
-    CAST(SUM(unread) AS INTEGER) AS unread
-FROM feed_item
-WHERE feed_id LIKE sqlc.arg(flow_prefix)
-GROUP BY feed_id;
+-- name: InsertInboxItem :one
+-- Seed-only plain insert for deterministic desktop fixtures. The ingestion
+-- path receives its classify-and-upsert contract in a later phase.
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    lifecycle, first_seen_at, last_event_at
+) VALUES (
+    ?, ?, ?, ?,
+    ?, ?, ?, 1, ?,
+    ?, ?, ?
+)
+RETURNING *;
 
 -- name: EnqueueOutputCommand :exec
 -- Deduped on (action_id, key): a replayed commit batch enqueues the same

@@ -49,34 +49,12 @@ export function Commit(batch: pipeline$0.CommitBatch): $CancellablePromise<void>
 }
 
 /**
- * FeedItemCounts returns per-feed total/unread counts for every feed in a
- * flow, for the sidebar's rail badges.
- */
-export function FeedItemCounts(flowID: string): $CancellablePromise<pipeline$0.FeedCount[] | null> {
-    return $Call.ByID(460495308, flowID);
-}
-
-/**
- * FeedItems returns the persisted items for a feed, newest first.
- */
-export function FeedItems(feedID: string): $CancellablePromise<pipeline$0.FeedItem[] | null> {
-    return $Call.ByID(2832766353, feedID);
-}
-
-/**
  * InvokeAction records the user's explicit confirmation for actionID against
  * item and executes it. It accepts only actions that apply to the item's kind;
  * executable configuration is always re-resolved from ActionStore.
  */
 export function InvokeAction(actionID: string, item: feed$0.Item, input: pipeline$0.ActionInvocationInput): $CancellablePromise<pipeline$0.ActionRunView> {
     return $Call.ByID(204589393, actionID, item, input);
-}
-
-/**
- * MarkFeedItemRead clears the unread flag on one feed item.
- */
-export function MarkFeedItemRead(feedID: string, itemID: string): $CancellablePromise<void> {
-    return $Call.ByID(3950941725, feedID, itemID);
 }
 
 /**

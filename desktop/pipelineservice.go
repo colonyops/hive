@@ -31,29 +31,13 @@ func (s *PipelineService) ReadFrom(consumer string, limit int) ([]pipelinedb.Msg
 	return s.db.ReadForConsumer(context.Background(), consumer, limit)
 }
 
-// Commit applies the frontend graph runtime's batch atomically: it upserts
-// feed outputs, enqueues action outputs, records node-run metrics, and
-// advances the consumer's offset to batch.UpToOffset. Idempotent by offset:
-// replaying a batch already applied (UpToOffset <= the consumer's current
-// offset) is a no-op.
+// Commit applies the frontend graph runtime's batch atomically. Feed outputs
+// are accepted without durable effect until membership claims land; action
+// outputs, node-run metrics, and the consumer offset are persisted atomically.
+// Idempotent by offset: replaying a batch already applied (UpToOffset <= the
+// consumer's current offset) is a no-op.
 func (s *PipelineService) Commit(batch pipeline.CommitBatch) error {
 	return s.db.CommitBatch(context.Background(), batch)
-}
-
-// FeedItems returns the persisted items for a feed, newest first.
-func (s *PipelineService) FeedItems(feedID string) ([]pipeline.FeedItem, error) {
-	return s.db.FeedItems(context.Background(), feedID)
-}
-
-// MarkFeedItemRead clears the unread flag on one feed item.
-func (s *PipelineService) MarkFeedItemRead(feedID, itemID string) error {
-	return s.db.MarkFeedItemRead(context.Background(), feedID, itemID)
-}
-
-// FeedItemCounts returns per-feed total/unread counts for every feed in a
-// flow, for the sidebar's rail badges.
-func (s *PipelineService) FeedItemCounts(flowID string) ([]pipeline.FeedCount, error) {
-	return s.db.FeedItemCounts(context.Background(), flowID)
 }
 
 // ActionViews returns the configured actions available for an item kind

@@ -443,7 +443,7 @@ func (p *LiveProvider) searchItems(items []github.SearchItem) []liveItem {
 			Author:    si.Author,
 			Age:       shortAge(p.now().Sub(si.UpdatedAt)),
 			UpdatedAt: si.UpdatedAt.UnixMilli(),
-			Unread:    true, // inbox model: unread until read (feed_item.unread)
+			Unread:    true, // inbox model: unread until read
 			Labels:    labelNames(si.Labels),
 			Branch:    suggestedBranch(kind, si.Number, si.Title),
 			Body:      si.Body,

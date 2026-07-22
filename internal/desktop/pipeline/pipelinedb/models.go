@@ -25,22 +25,54 @@ type ConsumerOffset struct {
 }
 
 type EventLog struct {
-	Offset    int64  `json:"offset"`
-	Topic     string `json:"topic"`
-	Key       string `json:"key"`
-	Payload   []byte `json:"payload"`
-	CreatedAt int64  `json:"created_at"`
-	Snapshot  int64  `json:"snapshot"`
+	Offset        int64          `json:"offset"`
+	Topic         string         `json:"topic"`
+	Key           string         `json:"key"`
+	Payload       []byte         `json:"payload"`
+	Snapshot      int64          `json:"snapshot"`
+	SourceKind    string         `json:"source_kind"`
+	SourceScope   string         `json:"source_scope"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	CreatedAt     int64          `json:"created_at"`
 }
 
-type FeedItem struct {
-	FeedID      string `json:"feed_id"`
-	ItemID      string `json:"item_id"`
-	Payload     []byte `json:"payload"`
-	UpdatedAt   int64  `json:"updated_at"`
-	Unread      int64  `json:"unread"`
-	SourceTopic string `json:"source_topic"`
-	SnapshotID  string `json:"snapshot_id"`
+type FeedMembershipClaim struct {
+	ProfileID string `json:"profile_id"`
+	FeedID    string `json:"feed_id"`
+	ItemID    int64  `json:"item_id"`
+	SourceID  string `json:"source_id"`
+}
+
+type InboxEvent struct {
+	ID            int64          `json:"id"`
+	ItemID        int64          `json:"item_id"`
+	Kind          string         `json:"kind"`
+	Transition    string         `json:"transition"`
+	Attention     string         `json:"attention"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	Summary       sql.NullString `json:"summary"`
+	Detail        []byte         `json:"detail"`
+	CreatedAt     int64          `json:"created_at"`
+}
+
+type InboxItem struct {
+	ID             int64          `json:"id"`
+	ProfileID      string         `json:"profile_id"`
+	SourceKind     string         `json:"source_kind"`
+	SourceScope    string         `json:"source_scope"`
+	ExternalID     string         `json:"external_id"`
+	Title          string         `json:"title"`
+	Url            string         `json:"url"`
+	Payload        []byte         `json:"payload"`
+	Revision       int64          `json:"revision"`
+	Unread         int64          `json:"unread"`
+	ArchivedAt     sql.NullInt64  `json:"archived_at"`
+	ArchivedActor  sql.NullString `json:"archived_actor"`
+	ArchivedReason sql.NullString `json:"archived_reason"`
+	Lifecycle      string         `json:"lifecycle"`
+	SourceState    sql.NullString `json:"source_state"`
+	FirstSeenAt    int64          `json:"first_seen_at"`
+	LastEventAt    int64          `json:"last_event_at"`
 }
 
 type Job struct {
@@ -71,15 +103,15 @@ type NodeRun struct {
 type OutputCommand struct {
 	ID         int64          `json:"id"`
 	ActionID   string         `json:"action_id"`
+	Key        string         `json:"key"`
 	Payload    []byte         `json:"payload"`
 	Status     string         `json:"status"`
-	CreatedAt  int64          `json:"created_at"`
-	Key        string         `json:"key"`
 	Attempts   int64          `json:"attempts"`
 	LastError  sql.NullString `json:"last_error"`
 	ResultJson sql.NullString `json:"result_json"`
 	Stdout     sql.NullString `json:"stdout"`
 	Stderr     sql.NullString `json:"stderr"`
+	CreatedAt  int64          `json:"created_at"`
 }
 
 type SourceHead struct {

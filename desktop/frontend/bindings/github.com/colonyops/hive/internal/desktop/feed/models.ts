@@ -4,7 +4,7 @@
 /**
  * Item is a normalized GitHub item (PR or issue) produced by a source fetch.
  * It is JSON-encoded as a source node's event_log payload and re-surfaced as
- * a feed_item, so the frontend and the persisted feed both read this shape.
+ * a durable inbox row, so the frontend and the persisted feed both read this shape.
  */
 export interface Item {
     "id": string;

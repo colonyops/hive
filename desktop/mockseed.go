@@ -13,35 +13,16 @@ import (
 )
 
 // MockFlowID and MockFeedNodeID identify the fixture flow's terminal feed
-// node that seedMockFeedItems writes into: desktop/e2e/fixtures/flows/
-// frontend-triage.yaml has a "feed" node with this exact id, and
-// desktop/e2e/scripts/serve.sh points HIVE_DESKTOP_FLOWS at that fixture
-// directory for the mock "feed" server. If either the fixture or these
-// constants drift, FeedItemCounts/FeedItems (keyed off the flow's own feed
-// nodes) simply won't find these rows — see mockseed_test.go, which loads
-// the fixture flow and asserts the ids agree.
+// node in desktop/e2e/fixtures/flows/frontend-triage.yaml. The fixture seed
+// uses MockFlowID as its profile id; the node id remains asserted against the
+// fixture so its graph configuration cannot drift unnoticed.
 const (
 	MockFlowID     = "frontend-triage"
 	MockFeedNodeID = "notifications-inbox"
 )
 
-// mockFeedID is the flow-qualified feed key feed_item rows are upserted
-// under ("<flowId>/<nodeId>"), matching how useFeedState.ts's loadFeeds
-// derives a feed's id from its flow.
-func mockFeedID() string {
-	return MockFlowID + "/" + MockFeedNodeID
-}
-
-// mockFeedItems is the deterministic fixture item set the e2e suite
-// (feed.spec.ts, theme.spec.ts, flows-editor.spec.ts) snapshots against.
-// It reproduces the content of the old internal/desktop/feed/mock.go's
-// static Items() list verbatim (deleted along with the rest of the legacy
-// feed mock) — only the delivery mechanism changed: a real feed_item row
-// instead of a hardcoded RPC response. Order matters: seedMockFeedItems
-// stamps a strictly decreasing updated_at per index, so
-// ListFeedItemsByFeed's "ORDER BY updated_at DESC" reproduces this exact
-// slice order.
-var mockFeedItems = []feed.Item{
+// mockInboxItems is the deterministic fixture set used by desktop e2e.
+var mockInboxItems = []feed.Item{
 	{
 		ID: "pr2841", Kind: "PR", Repo: "hive/core", Num: 2841,
 		Title:  "batch_spawn: fix detached tmux env & PATH propagation",
@@ -98,36 +79,31 @@ var mockFeedItems = []feed.Item{
 	},
 }
 
-// seedMockFeedItems upserts mockFeedItems into feed_item under mockFeedID(),
-// so HIVE_DESKTOP_MOCK=feed serves a deterministic sidebar without a live
-// producer (mock mode skips buildPipelineProducer/buildOutputWorker
-// entirely — see main.go). It writes directly via db.Queries() rather than
-// CommitBatch: CommitBatch stamps every Output in a batch with the same
-// time.Now() call, which would leave every seeded row tied and ordering
-// undefined, whereas the e2e specs (feed.spec.ts) assert an exact item
-// order.
-//
-// Called once from main() in "feed" mock mode, after pipelineDB is open.
-// Idempotent: UpsertFeedItem is keyed on (feed_id, item_id), so a restart
-// simply re-applies the same fixture rows in place.
-func seedMockFeedItems(db *pipelinedb.DB) error {
-	feedID := mockFeedID()
-	base := time.Now().UnixNano()
+// seedMockInboxItems writes deterministic inbox rows directly rather than
+// using the ingestion transaction. This is intentionally fixture-only.
+func seedMockInboxItems(db *pipelinedb.DB) error {
+	base := time.Now().UnixMilli()
 	ctx := context.Background()
 
-	for i, item := range mockFeedItems {
+	for i, item := range mockInboxItems {
 		payload, err := json.Marshal(item)
 		if err != nil {
 			return fmt.Errorf("mock seed: encode item %q: %w", item.ID, err)
 		}
-		if err := db.Queries().UpsertFeedItem(ctx, pipelinedb.UpsertFeedItemParams{
-			FeedID:    feedID,
-			ItemID:    item.ID,
-			Payload:   payload,
-			UpdatedAt: base - int64(i),
-			Unread:    boolToInt64(item.Unread),
+		if _, err := db.Queries().InsertInboxItem(ctx, pipelinedb.InsertInboxItemParams{
+			ProfileID:   MockFlowID,
+			SourceKind:  "github",
+			SourceScope: "",
+			ExternalID:  item.ID,
+			Title:       item.Title,
+			Url:         item.URL,
+			Payload:     payload,
+			Unread:      boolToInt64(item.Unread),
+			Lifecycle:   "active",
+			FirstSeenAt: base - int64(i),
+			LastEventAt: base - int64(i),
 		}); err != nil {
-			return fmt.Errorf("mock seed: upsert item %q: %w", item.ID, err)
+			return fmt.Errorf("mock seed: insert item %q: %w", item.ID, err)
 		}
 	}
 	return nil
@@ -140,13 +116,8 @@ func boolToInt64(b bool) int64 {
 	return 0
 }
 
-// seedMockFeedItemsOrWarn calls seedMockFeedItems and logs (rather than
-// fatals) on failure: an unseeded mock sidebar degrades to empty rather than
-// blocking the whole app from starting, matching the best-effort posture
-// buildActionStore/buildFlowsStore already use for their own optional setup
-// steps in main.go.
-func seedMockFeedItemsOrWarn(db *pipelinedb.DB, logger zerolog.Logger) {
-	if err := seedMockFeedItems(db); err != nil {
-		logger.Warn().Err(err).Msg("mock feed seed failed")
+func seedMockInboxItemsOrWarn(db *pipelinedb.DB, logger zerolog.Logger) {
+	if err := seedMockInboxItems(db); err != nil {
+		logger.Warn().Err(err).Msg("mock inbox seed failed")
 	}
 }

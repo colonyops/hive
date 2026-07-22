@@ -6,11 +6,10 @@ import (
 	"math"
 )
 
-// ActivityRecord is the storage shape of one activity_event row. category and
-// severity stay plain strings at this layer — the activity package owns the
-// typed enums and converts at its boundary, keeping pipelinedb a leaf store
-// (the same split as FeedItemView surfacing unread as a bool only above the
-// row layer). Metadata is raw JSON, nil when the row carries none.
+// ActivityRecord is the storage shape of one activity_event row. Category and
+// severity are plain strings here because this leaf package does not import
+// the activity package's typed enums. Metadata is raw JSON, nil when the row
+// carries none.
 type ActivityRecord struct {
 	ID        int64  `json:"id"`
 	CreatedAt int64  `json:"createdAt"`

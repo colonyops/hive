@@ -14,14 +14,13 @@ import (
 
 // sourceToCommitSmokePath is available only to the dedicated server-build e2e
 // fixture (HIVE_DESKTOP_MOCK=pipeline). It is deliberately not a general test
-// data API: POST always appends this fixed source fixture, while GET only
-// reads the two persisted values the composition test verifies.
+// data API: POST always appends this fixed source fixture, while GET reports
+// only persisted node runs during this temporary Phase-1 degraded harness.
 const sourceToCommitSmokePath = "/_e2e/source-to-commit"
 
 const (
 	sourceToCommitSmokeFlowID   = "source-to-commit"
 	sourceToCommitSmokeSourceID = "fixture-source"
-	sourceToCommitSmokeFeedID   = sourceToCommitSmokeFlowID + "/smoke-feed"
 )
 
 var sourceToCommitSmokeItems = []feed.Item{
@@ -38,21 +37,20 @@ var sourceToCommitSmokeItems = []feed.Item{
 		Title: "Source-to-commit smoke issue", Author: "smoke", Age: "now", Unread: true,
 		Labels: []string{"e2e"}, Branch: "test/source-to-commit",
 		Body:   "Second fixture item proves one frontend batch commits multiple outputs.",
-		Prompt: "Verify multiple persisted feed outputs.",
+		Prompt: "Verify one frontend batch processes multiple outputs.",
 		URL:    "https://example.invalid/hive/e2e/issues/102",
 	},
 }
 
 type sourceToCommitSmokeState struct {
-	FeedItems []pipelinedb.FeedItemView  `json:"feedItems"`
-	NodeRuns  []pipelinedb.NodeRunRecord `json:"nodeRuns"`
+	NodeRuns []pipelinedb.NodeRunRecord `json:"nodeRuns"`
 }
 
 // sourceToCommitSmokeMiddleware is a narrow, mock-only harness around the
 // real server build. The app still receives its messages via the normal Wails
 // event, executes the production TS graph and Worker, then calls
 // PipelineService.Commit; this middleware merely supplies deterministic Go
-// source input and reads the Go-persisted result back for Playwright.
+// source input and reads the persisted node runs back for Playwright.
 func sourceToCommitSmokeMiddleware(db *pipelinedb.DB) application.Middleware {
 	return func(next http.Handler) http.Handler {
 		if desktop.MockMode() != "pipeline" {
@@ -106,13 +104,9 @@ func appendSourceToCommitSmokeItems(ctx context.Context, db *pipelinedb.DB) erro
 }
 
 func readSourceToCommitSmokeState(ctx context.Context, db *pipelinedb.DB) (sourceToCommitSmokeState, error) {
-	items, err := db.FeedItems(ctx, sourceToCommitSmokeFeedID)
-	if err != nil {
-		return sourceToCommitSmokeState{}, fmt.Errorf("read smoke feed items: %w", err)
-	}
 	runs, err := db.NodeRuns(ctx, sourceToCommitSmokeFlowID, 100)
 	if err != nil {
 		return sourceToCommitSmokeState{}, fmt.Errorf("read smoke node runs: %w", err)
 	}
-	return sourceToCommitSmokeState{FeedItems: items, NodeRuns: runs}, nil
+	return sourceToCommitSmokeState{NodeRuns: runs}, nil
 }

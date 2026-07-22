@@ -19,7 +19,7 @@ import (
 // mapped onto the event_log schema (see migrations/0001_pipeline.up.sql):
 //   - ID is derived from the row's "offset" (stable, unique per append; there
 //     is no separate id column).
-//   - Ts is the row's created_at (unix nanoseconds).
+//   - Ts is the row's created_at (unix milliseconds).
 //   - Snapshot is nil for ordinary item events and contains the full current
 //     source item set for successful poll snapshots.
 type Msg struct {
@@ -40,13 +40,13 @@ type SnapshotItem struct {
 }
 
 // Append inserts a new event_log row under topic, keyed by key, and returns
-// its offset. created_at is stamped as the current unix nanosecond time.
+// its offset. created_at is stamped as the current unix millisecond time.
 func (db *DB) Append(ctx context.Context, topic, key string, payload []byte) (int64, error) {
 	offset, err := db.queries.AppendEvent(ctx, AppendEventParams{
 		Topic:     topic,
 		Key:       key,
 		Payload:   payload,
-		CreatedAt: time.Now().UnixNano(),
+		CreatedAt: time.Now().UnixMilli(),
 		Snapshot:  0,
 	})
 	if err != nil {
@@ -86,7 +86,7 @@ func (db *DB) AppendIfChanged(ctx context.Context, topic, key string, payload []
 			Topic:     topic,
 			Key:       key,
 			Payload:   payload,
-			CreatedAt: time.Now().UnixNano(),
+			CreatedAt: time.Now().UnixMilli(),
 			Snapshot:  0,
 		})
 		if err != nil {
@@ -120,7 +120,7 @@ func (db *DB) AppendSnapshot(ctx context.Context, topic string, items []Snapshot
 		Topic:     topic,
 		Key:       "",
 		Payload:   payload,
-		CreatedAt: time.Now().UnixNano(),
+		CreatedAt: time.Now().UnixMilli(),
 		Snapshot:  1,
 	})
 	if err != nil {
