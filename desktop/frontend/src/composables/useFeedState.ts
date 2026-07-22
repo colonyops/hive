@@ -1,6 +1,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
+import { useStorage } from '@vueuse/core'
 import { Browser, Window } from '@wailsio/runtime'
-import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
+import { CreateFlow, DeleteFlow, GetFlow, GetSidebar, ListFlows, RenameFlow, SaveSidebar, SetFlowEnabled } from '../../bindings/github.com/colonyops/hive/desktop/flowsservice'
 import { ActionRun, ActionViews, FeedCounts, InboxCounts, InboxItemEvents, InvokeAction, ListInboxItems, ListInboxItemsByFeed, MarkInboxItemUnread, SessionLaunchOptions, ToggleInboxItemArchived } from '../../bindings/github.com/colonyops/hive/desktop/pipelineservice'
 import type { ActionRunView, SessionLaunchOptions as SessionLaunchOptionsView } from '../../bindings/github.com/colonyops/hive/internal/desktop/pipeline/models'
 import { bodySnippet, feedSource, githubPayload, typeLabel } from '../lib/feedPresentation'
@@ -8,7 +9,7 @@ import { useActivity } from './useActivity'
 import { useWailsEvent } from './useWailsEvent'
 import { buildFeedTree, treeToLayout } from '../lib/feedTree'
 import type { ActionView } from '../types/action'
-import type { FeedInboxCount, InboxEvent, InboxItem, InboxView, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
+import type { FeedInboxCount, FeedSort, InboxEvent, InboxItem, InboxView, FeedSummary, FeedTree, Profile, SidebarSelection } from '../types/feed'
 import type { ToastInstance, ToastOptions } from '../types/toast'
 
 // A profile IS a flow: the profiles list comes from FlowsService.ListFlows, a
@@ -17,6 +18,8 @@ import type { ToastInstance, ToastOptions } from '../types/toast'
 // profiles.yaml + feed/source CRUD are gone — editing a source or feed is
 // editing its node in the flow canvas.
 //
+const feedSortStorageKey = 'hive.feed.sort'
+
 // Inbox rows and their membership claims are written by the flow graph runtime
 // manager — an app-level instance owned by pipeline/composables/useFlowsSession.ts,
 // not this module. It runs every enabled flow independently; refresh() here
@@ -29,6 +32,7 @@ export function useFeedState() {
   const activeProfileId = ref('')
   const selection = ref<SidebarSelection>({ type: 'view', view: 'inbox' })
   const unreadOnly = ref(false)
+  const feedSort = useStorage<FeedSort>(feedSortStorageKey, 'newest')
   // Search is a pure view filter over the loaded list (like unreadOnly). It
   // lives here — not in FeedList — so keyboard navigation moves over exactly
   // the rows the user sees. Cleared on feed/profile switch (see selectSidebar).
@@ -54,6 +58,8 @@ export function useFeedState() {
   const createProfileError = ref<string | null>(null)
   const renamingProfile = ref(false)
   const renameProfileError = ref<string | null>(null)
+  const togglingProfileId = ref<string | null>(null)
+  const toggleProfileError = ref<string | null>(null)
   const deletingProfile = ref(false)
   let nextToastId = 1
   const toastTimers = new Map<number, ReturnType<typeof setTimeout>>()
@@ -61,6 +67,7 @@ export function useFeedState() {
   // Monotonic token: out-of-order loadItems responses must not clobber newer.
   let loadSeq = 0
   let feedsSeq = 0
+  let profilesSeq = 0
   let actionLoadSeq = 0
 
   function actionKey(itemID: number, actionID: string): string { return `${itemID}\u0000${actionID}` }
@@ -131,10 +138,21 @@ export function useFeedState() {
     return haystack.includes(query)
   }
 
-  // SQL owns ordering for every inbox view; unread/search only narrow it.
+  function compareItems(a: InboxItem, b: InboxItem): number {
+    if (feedSort.value === 'unread' && a.unread !== b.unread) return a.unread ? -1 : 1
+    const recency = b.lastEventAt - a.lastEventAt
+    return feedSort.value === 'oldest' ? -recency : recency
+  }
+
   const visibleItems = computed(() =>
-    items.value.filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
+    [...items.value]
+      .sort(compareItems)
+      .filter((item) => (!unreadOnly.value || item.unread) && matchesSearch(item)),
   )
+
+  function setFeedSort(value: FeedSort): void {
+    feedSort.value = value
+  }
 
   // ── Toasts ──────────────────────────────────────────────────────────────────
 
@@ -176,14 +194,16 @@ export function useFeedState() {
 
   // A flow summary maps to a profile; feeds are filled in by loadFeeds once
   // the profile is selected (the rail only needs the letter/name).
-  function toProfileStub(flow: { id: string; name: string }): Profile {
+  function toProfileStub(flow: { id: string; name: string; enabled: boolean }): Profile {
     const name = flow.name || flow.id
-    return { id: flow.id, letter: letter(name), name, sourceSummary: '', totalCount: 0, unreadCount: 0, feeds: [] }
+    return { id: flow.id, letter: letter(name), name, enabled: flow.enabled, sourceSummary: '', totalCount: 0, unreadCount: 0, feeds: [] }
   }
 
   async function loadProfiles() {
+    const seq = ++profilesSeq
     try {
       const flows = (await ListFlows()) ?? []
+      if (seq !== profilesSeq) return
       profiles.value = flows.map(toProfileStub)
       profilesError.value = null
       const active = profiles.value.find((p) => p.id === activeProfileId.value) ?? profiles.value[0]
@@ -193,6 +213,7 @@ export function useFeedState() {
       // complete; otherwise an initial deep link can race its inbox default.
       profilesLoaded.value = true
     } catch (error) {
+      if (seq !== profilesSeq) return
       console.warn('Unable to load flows', error)
       profilesError.value = 'Could not load your workspaces.'
     }
@@ -206,8 +227,11 @@ export function useFeedState() {
   }
 
   async function reloadProfilesQuietly() {
+    const seq = ++profilesSeq
     try {
-      profiles.value = ((await ListFlows()) ?? []).map(toProfileStub)
+      const flows = (await ListFlows()) ?? []
+      if (seq !== profilesSeq) return
+      profiles.value = flows.map(toProfileStub)
       if (activeProfileId.value) await loadFeeds(activeProfileId.value)
     } catch (error) {
       console.warn('Unable to refresh flows', error)
@@ -317,6 +341,28 @@ export function useFeedState() {
       return false
     } finally {
       renamingProfile.value = false
+    }
+  }
+
+  async function setProfileEnabled(profileID: string, enabled: boolean): Promise<boolean> {
+    if (togglingProfileId.value) return false
+    const current = profiles.value.find((profile) => profile.id === profileID)
+    if (!current || current.enabled === enabled) return true
+
+    togglingProfileId.value = profileID
+    toggleProfileError.value = null
+    try {
+      const updated = await SetFlowEnabled(profileID, enabled)
+      const profile = profiles.value.find((candidate) => candidate.id === profileID)
+      if (profile) profile.enabled = updated.enabled
+      showToast(enabled ? 'Profile enabled' : 'Profile disabled', { severity: 'success' })
+      return true
+    } catch (error) {
+      console.warn('Unable to update flow enablement', error)
+      toggleProfileError.value = error instanceof Error && error.message ? error.message : 'Could not update the profile.'
+      return false
+    } finally {
+      togglingProfileId.value = null
     }
   }
 
@@ -712,6 +758,8 @@ export function useFeedState() {
     sessionLaunchBusy,
     sessionLaunchError,
     unreadOnly,
+    feedSort,
+    setFeedSort,
     title,
     toasts,
     showToast,
@@ -721,10 +769,13 @@ export function useFeedState() {
     createProfileError,
     renamingProfile,
     renameProfileError,
+    togglingProfileId,
+    toggleProfileError,
     deletingProfile,
     loadProfiles,
     createProfile,
     renameProfile,
+    setProfileEnabled,
     deleteProfile,
     reorderFeeds,
     selectProfile,

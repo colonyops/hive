@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   GetFlow: vi.fn(),
   CreateFlow: vi.fn(),
   RenameFlow: vi.fn(),
+  SetFlowEnabled: vi.fn(),
   DeleteFlow: vi.fn(),
   GetLayout: vi.fn(),
   SaveFlow: vi.fn(),
@@ -61,6 +62,7 @@ vi.mock('../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => (
   GetFlow: mocks.GetFlow,
   CreateFlow: mocks.CreateFlow,
   RenameFlow: mocks.RenameFlow,
+  SetFlowEnabled: mocks.SetFlowEnabled,
   DeleteFlow: mocks.DeleteFlow,
   GetLayout: mocks.GetLayout,
   SaveFlow: mocks.SaveFlow,
@@ -173,6 +175,7 @@ describe('App', () => {
     mocks.ListActions.mockResolvedValue({ actions: [], error: '' })
     mocks.NodeRuns.mockResolvedValue([])
     mocks.RenameFlow.mockResolvedValue({ id: 'personal', name: 'Team', enabled: true, valid: true })
+    mocks.SetFlowEnabled.mockImplementation(async (id: string, enabled: boolean) => ({ id, name: 'Personal', enabled, valid: true }))
     mocks.DeleteFlow.mockResolvedValue(undefined)
     mocks.On.mockReturnValue(() => {})
     mocks.UpdaterStatus.mockResolvedValue({ enabled: true, available: false, currentVersion: 'dev', latestVersion: '', notes: '', releaseUrl: '' })

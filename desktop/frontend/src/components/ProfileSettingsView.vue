@@ -2,17 +2,33 @@
 import { ref, watch } from 'vue'
 import IconSlidersHorizontal from '~icons/lucide/sliders-horizontal'
 import IconTrash2 from '~icons/lucide/trash-2'
+import AppSwitch from './AppSwitch.vue'
 import BaseButton from './BaseButton.vue'
 import SettingsLayout from './settings/SettingsLayout.vue'
 import SettingsNavItem from './settings/SettingsNavItem.vue'
 import type { Profile } from '../types/feed'
 import type { ProfileSettingsSection } from '../router'
 
-const props = withDefaults(defineProps<{ profile: Profile; activeSection: ProfileSettingsSection; renaming?: boolean; renameError?: string | null }>(), {
+const props = withDefaults(defineProps<{
+  profile: Profile
+  activeSection: ProfileSettingsSection
+  renaming?: boolean
+  renameError?: string | null
+  toggling?: boolean
+  toggleError?: string | null
+}>(), {
   renaming: false,
   renameError: null,
+  toggling: false,
+  toggleError: null,
 })
-const emit = defineEmits<{ close: []; delete: []; rename: [name: string]; 'select-section': [section: ProfileSettingsSection] }>()
+const emit = defineEmits<{
+  close: []
+  delete: []
+  rename: [name: string]
+  'toggle-enabled': [enabled: boolean]
+  'select-section': [section: ProfileSettingsSection]
+}>()
 
 const name = ref(props.profile.name)
 
@@ -77,6 +93,21 @@ function submitRename(): void {
           </div>
           <p v-if="props.renameError" class="mt-2 text-xs text-severity-error" data-testid="profile-settings-rename-error">{{ props.renameError }}</p>
           <div class="mt-3 border-t border-border pt-3 text-xs text-text-3">{{ props.profile.sourceSummary }}</div>
+          <div class="mt-4 flex items-start justify-between gap-5 border-t border-border pt-4">
+            <div>
+              <div class="text-[13px] font-medium text-text">Profile polling</div>
+              <p class="mt-1 text-xs leading-relaxed text-text-3">Disabled profiles keep their existing feed items but stop polling and running their flow.</p>
+            </div>
+            <AppSwitch
+              :model-value="props.profile.enabled"
+              :label="props.profile.enabled ? 'Enabled' : 'Disabled'"
+              aria-label="Profile polling"
+              :disabled="props.toggling"
+              testid="profile-settings-enabled"
+              @update:model-value="emit('toggle-enabled', $event)"
+            />
+          </div>
+          <p v-if="props.toggleError" class="mt-2 text-xs text-severity-error" data-testid="profile-settings-toggle-error">{{ props.toggleError }}</p>
         </form>
 
         <div v-else class="rounded-lg border border-severity-error/35 bg-raised p-4">

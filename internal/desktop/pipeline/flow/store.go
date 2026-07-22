@@ -1,6 +1,7 @@
 package flow
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -165,6 +166,37 @@ func (s *FlowStore) Rename(id, name string) (Flow, error) {
 		return Flow{}, fmt.Errorf("flow %q: %w", f.ID, err)
 	}
 	if err := SaveFlow(filepath.Join(s.dir, f.ID+".yaml"), f); err != nil {
+		return Flow{}, err
+	}
+	if err := s.reloadLocked(); err != nil {
+		return Flow{}, err
+	}
+	return s.flows[id], nil
+}
+
+// SetEnabled updates whether a flow participates in polling and runtime
+// execution without changing its graph or display name.
+func (s *FlowStore) SetEnabled(id string, enabled bool) (Flow, error) {
+	if !validSlug(id) {
+		return Flow{}, fmt.Errorf("flow: id %q is not a valid slug", id)
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	// Read the file directly instead of mutating the cached snapshot. The flow
+	// watcher is debounced, so an external graph edit may already be on disk but
+	// not yet reflected in s.flows; writing that stale snapshot would revert it.
+	path := filepath.Join(s.dir, id+".yaml")
+	f, _, err := LoadFlow(path, s.refs)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return Flow{}, fmt.Errorf("flow %q not found", id)
+		}
+		return Flow{}, err
+	}
+	f.Enabled = enabled
+	if err := SaveFlow(path, f); err != nil {
 		return Flow{}, err
 	}
 	if err := s.reloadLocked(); err != nil {

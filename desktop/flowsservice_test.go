@@ -15,7 +15,7 @@ func TestFlowsServiceDeleteFlowPurgesPipelineStateAndRetriesMissingFiles(t *test
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, db.Close()) })
 	store := flow.NewFlowStore(t.TempDir(), nil)
-	service := NewFlowsService(store, db)
+	service := NewFlowsService(store, db, nil)
 	created, err := service.CreateFlow("Profile")
 	require.NoError(t, err)
 	_, err = db.Queries().InsertInboxItem(context.Background(), pipelinedb.InsertInboxItemParams{
@@ -34,4 +34,32 @@ func TestFlowsServiceDeleteFlowPurgesPipelineStateAndRetriesMissingFiles(t *test
 		require.NoError(t, db.Conn().QueryRowContext(context.Background(), "SELECT COUNT(*) FROM "+table).Scan(&count))
 		assert.Zero(t, count, table)
 	}
+}
+
+func TestFlowsServiceSetFlowEnabled(t *testing.T) {
+	store := flow.NewFlowStore(t.TempDir(), nil)
+	created, err := store.Create("Triage")
+	require.NoError(t, err)
+
+	updates := 0
+	service := NewFlowsService(store, nil, func() { updates++ })
+	summary, err := service.SetFlowEnabled(created.ID, false)
+	require.NoError(t, err)
+	assert.Equal(t, created.ID, summary.ID)
+	assert.False(t, summary.Enabled)
+	assert.True(t, summary.Valid)
+	assert.Equal(t, 1, updates)
+
+	stored, ok := store.Get(created.ID)
+	require.True(t, ok)
+	assert.False(t, stored.Enabled)
+}
+
+func TestFlowsServiceSetFlowEnabledDoesNotEmitOnFailure(t *testing.T) {
+	updates := 0
+	service := NewFlowsService(flow.NewFlowStore(t.TempDir(), nil), nil, func() { updates++ })
+
+	_, err := service.SetFlowEnabled("missing", false)
+	require.Error(t, err)
+	assert.Zero(t, updates)
 }

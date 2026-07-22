@@ -1,6 +1,7 @@
 // Inbox presentation types. Adapter payload remains deliberately opaque until
 // decoded by the GitHub presentation seam.
 export type InboxView = 'inbox' | 'open' | 'archive' | 'all' | 'unfiled'
+export type FeedSort = 'newest' | 'oldest' | 'unread'
 
 export interface InboxItem {
   id: number
@@ -55,6 +56,7 @@ export interface Profile {
   id: string
   letter: string
   name: string
+  enabled: boolean
   sourceSummary: string
   totalCount: number
   unreadCount: number

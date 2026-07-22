@@ -7,8 +7,8 @@ function item(id: number, title: string, unread = false): InboxItem {
   return { id, profileId: 'triage', sourceKind: 'github', sourceScope: 'acme/app', externalId: `pr-${id}`, title, url: '', payload: { kind: 'PR', repo: 'acme/app', num: id, author: 'hay', body: 'Body' }, revision: 1, unread, lifecycle: 'active', firstSeenAt: 1, lastEventAt: Date.now() }
 }
 
-function mountList(overrides: Partial<{ visibleItems: InboxItem[]; selectedId: number | null; unreadOnly: boolean; unreadCount: number; search: string; view: 'inbox' | 'open' | 'archive' | 'all' | 'unfiled'; loadError: string | null }> = {}) {
-  return mount(FeedList, { props: { title: 'Inbox', visibleItems: [item(1, 'Unread', true), item(2, 'Read')], view: 'inbox', selectedId: null, unreadOnly: false, unreadCount: 1, search: '', loadError: null, ...overrides } })
+function mountList(overrides: Partial<{ visibleItems: InboxItem[]; selectedId: number | null; unreadOnly: boolean; unreadCount: number; search: string; sort: 'newest' | 'oldest' | 'unread'; view: 'inbox' | 'open' | 'archive' | 'all' | 'unfiled'; loadError: string | null }> = {}) {
+  return mount(FeedList, { props: { title: 'Inbox', visibleItems: [item(1, 'Unread', true), item(2, 'Read')], view: 'inbox', selectedId: null, unreadOnly: false, unreadCount: 1, search: '', sort: 'newest', loadError: null, ...overrides } })
 }
 
 describe('FeedList', () => {
@@ -25,6 +25,17 @@ describe('FeedList', () => {
     await wrapper.get('[data-testid="filter-unread"]').trigger('click')
     await wrapper.get('[data-testid="filter-all"]').trigger('click')
     expect(wrapper.emitted('set-unread')).toEqual([[true], [false]])
+  })
+
+  it('emits sort and refresh choices from the view menu', async () => {
+    const wrapper = mountList()
+    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="view-sort-oldest"]').trigger('click')
+    expect(wrapper.emitted('set-sort')).toEqual([['oldest']])
+
+    await wrapper.get('[data-testid="view-menu-toggle"]').trigger('click')
+    await wrapper.get('[data-testid="view-menu-refresh"]').trigger('click')
+    expect(wrapper.emitted('refresh')).toHaveLength(1)
   })
 
   it('relays search input without owning filtering', async () => {

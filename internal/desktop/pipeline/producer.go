@@ -44,9 +44,9 @@ type Producer struct {
 	stop     chan struct{}
 }
 
-// SetRecorder attaches an activity recorder so refreshes and their failures
-// surface in the Activity view. Optional: a nil recorder (the default) means
-// the producer records nothing. Set once at wiring time, before Start.
+// SetRecorder attaches an activity recorder so refresh failures surface in the
+// Activity view. Successful periodic refreshes are intentionally omitted to
+// avoid flooding the activity log. Set once at wiring time, before Start.
 func (pr *Producer) SetRecorder(r activity.Recorder) { pr.recorder = r }
 
 // SearchPrefetcher batch-fetches all search-kind source definitions before
@@ -185,7 +185,6 @@ func (pr *Producer) Tick(ctx context.Context) {
 		}
 		items := make([]pipelinedb.SnapshotItem, 0)
 		observed := make(map[string]struct{})
-		started, changed := time.Now(), 0
 		err := src.Produce(ctx, func(msg Msg) error {
 			if msg.Topic != topic {
 				return fmt.Errorf("source %q emitted topic %q, expected %q", id, msg.Topic, topic)
@@ -205,7 +204,6 @@ func (pr *Producer) Tick(ctx context.Context) {
 			}
 			if result.Wrote {
 				appended++
-				changed++
 				lastOffset = result.Offset
 			}
 			return nil
@@ -252,7 +250,6 @@ func (pr *Producer) Tick(ctx context.Context) {
 				}
 				if result.Wrote {
 					appended++
-					changed++
 					lastOffset = result.Offset
 				}
 			}
@@ -265,9 +262,6 @@ func (pr *Producer) Tick(ctx context.Context) {
 		}
 		appended++
 		lastOffset = offset
-		if changed > 0 {
-			pr.record(ctx, activity.Refresh(id, changed, time.Since(started)))
-		}
 	}
 
 	if appended > 0 && pr.onAppended != nil {

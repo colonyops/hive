@@ -4,11 +4,11 @@ import { useFeedState } from '../useFeedState'
 import type { InboxItem } from '../../types/feed'
 
 const mocks = vi.hoisted(() => ({
-  ListFlows: vi.fn(), GetFlow: vi.fn(), CreateFlow: vi.fn(), RenameFlow: vi.fn(), DeleteFlow: vi.fn(), GetSidebar: vi.fn(), SaveSidebar: vi.fn(),
+  ListFlows: vi.fn(), GetFlow: vi.fn(), CreateFlow: vi.fn(), RenameFlow: vi.fn(), SetFlowEnabled: vi.fn(), DeleteFlow: vi.fn(), GetSidebar: vi.fn(), SaveSidebar: vi.fn(),
   ListInboxItems: vi.fn(), ListInboxItemsByFeed: vi.fn(), FeedCounts: vi.fn(), InboxCounts: vi.fn(), MarkInboxItemUnread: vi.fn(), ToggleInboxItemArchived: vi.fn(), InboxItemEvents: vi.fn(),
   ActionViews: vi.fn(), ActionRun: vi.fn(), InvokeAction: vi.fn(), SessionLaunchOptions: vi.fn(), On: vi.fn(), Hide: vi.fn(), OpenURL: vi.fn(),
 }))
-vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => ({ ListFlows: mocks.ListFlows, GetFlow: mocks.GetFlow, CreateFlow: mocks.CreateFlow, RenameFlow: mocks.RenameFlow, DeleteFlow: mocks.DeleteFlow, GetSidebar: mocks.GetSidebar, SaveSidebar: mocks.SaveSidebar }))
+vi.mock('../../../bindings/github.com/colonyops/hive/desktop/flowsservice', () => ({ ListFlows: mocks.ListFlows, GetFlow: mocks.GetFlow, CreateFlow: mocks.CreateFlow, RenameFlow: mocks.RenameFlow, SetFlowEnabled: mocks.SetFlowEnabled, DeleteFlow: mocks.DeleteFlow, GetSidebar: mocks.GetSidebar, SaveSidebar: mocks.SaveSidebar }))
 vi.mock('../../../bindings/github.com/colonyops/hive/desktop/pipelineservice', () => ({
   ListInboxItems: mocks.ListInboxItems, ListInboxItemsByFeed: mocks.ListInboxItemsByFeed, FeedCounts: mocks.FeedCounts, InboxCounts: mocks.InboxCounts,
   MarkInboxItemUnread: mocks.MarkInboxItemUnread, ToggleInboxItemArchived: mocks.ToggleInboxItemArchived, InboxItemEvents: mocks.InboxItemEvents,
@@ -30,6 +30,7 @@ beforeEach(() => {
   mocks.ListInboxItems.mockResolvedValue([]); mocks.ListInboxItemsByFeed.mockResolvedValue([]); mocks.ActionViews.mockResolvedValue([]); mocks.ActionRun.mockResolvedValue({ commandId: 1, status: 'done' }); mocks.SessionLaunchOptions.mockResolvedValue({ repositories: [{ name: 'hive', repository: 'https://github.com/colonyops/hive.git' }], defaultRepository: 'https://github.com/colonyops/hive.git', agents: ['claude'], defaultAgent: 'claude' })
   mocks.MarkInboxItemUnread.mockImplementation(async (id: number, revision: number, unread: boolean) => item(id, { revision: revision + 1, unread }))
   mocks.ToggleInboxItemArchived.mockImplementation(async (id: number, revision: number) => item(id, { revision: revision + 1, archivedAt: Date.now() }))
+  mocks.SetFlowEnabled.mockImplementation(async (id: string, enabled: boolean) => ({ id, name: 'Frontend Triage', enabled, valid: true }))
   mocks.On.mockReturnValue(() => {})
 })
 afterEach(() => vi.unstubAllGlobals())
@@ -70,6 +71,22 @@ describe('useFeedState', () => {
     expect(get().visibleItems.value.map(row => row.id)).toEqual([3, 1])
     await get().selectItem(3); await get().selectNext(); expect(get().selectedId.value).toBe(1)
     expect(get().unreadCount.value).toBe(1) // selecting rows marks them read
+  })
+
+  it('sorts inbox items by newest, oldest, or unread-first recency and persists the choice', async () => {
+    mocks.ListInboxItems.mockResolvedValue([
+      item(1, { title: 'Oldest', unread: false, lastEventAt: 100 }),
+      item(3, { title: 'Newest', unread: false, lastEventAt: 300 }),
+      item(2, { title: 'Unread', unread: true, lastEventAt: 200 }),
+    ])
+    const get = mountState(); await flushPromises()
+    expect(get().visibleItems.value.map((row) => row.id)).toEqual([3, 2, 1])
+    get().setFeedSort('oldest')
+    expect(get().visibleItems.value.map((row) => row.id)).toEqual([1, 2, 3])
+    get().setFeedSort('unread')
+    expect(get().visibleItems.value.map((row) => row.id)).toEqual([2, 3, 1])
+    await flushPromises()
+    expect(localStorage.getItem('hive.feed.sort')).toBe('unread')
   })
 
   it('updates all in place with the returned revision but reloads membership-changing views', async () => {
@@ -122,6 +139,19 @@ describe('useFeedState', () => {
     expect(get().activeProfile.value?.tree).toMatchObject([{ kind: 'folder', folder: { id: 'work', feeds: [{ id: 'triage/my-prs' }] } }])
     await get().reorderFeeds('triage', [{ kind: 'folder', folder: { id: 'work', name: 'Work', feeds: [get().activeProfile.value!.feeds[0]!] } }])
     expect(mocks.SaveSidebar).toHaveBeenCalledWith('triage', { items: [{ folder: { id: 'work', name: 'Work', feeds: ['my-prs'] } }] })
+  })
+
+  it('toggles profile enablement while keeping its inbox selected', async () => {
+    const get = mountState(); await flushPromises()
+    expect(await get().setProfileEnabled('triage', false)).toBe(true)
+    expect(mocks.SetFlowEnabled).toHaveBeenCalledWith('triage', false)
+    expect(get().activeProfileId.value).toBe('triage')
+    expect(get().activeProfile.value?.enabled).toBe(false)
+
+    mocks.SetFlowEnabled.mockRejectedValueOnce(new Error('disk is read-only'))
+    expect(await get().setProfileEnabled('triage', true)).toBe(false)
+    expect(get().toggleProfileError.value).toBe('disk is read-only')
+    expect(get().activeProfile.value?.enabled).toBe(false)
   })
 
   it('creates, renames, rejects failed renames, and deletes flow-backed profiles', async () => {

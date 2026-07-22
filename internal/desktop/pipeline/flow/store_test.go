@@ -185,6 +185,37 @@ func TestFlowStore_Rename_UpdatesOnlyDisplayName(t *testing.T) {
 	require.ErrorContains(t, err, "not found")
 }
 
+func TestFlowStore_SetEnabled_PreservesFlowAndPersists(t *testing.T) {
+	dir := t.TempDir()
+	store := NewFlowStore(dir, minimalRefs())
+	created, err := store.Create("Triage")
+	require.NoError(t, err)
+
+	disabled, err := store.SetEnabled(created.ID, false)
+	require.NoError(t, err)
+	assert.False(t, disabled.Enabled)
+	assert.Equal(t, created.Name, disabled.Name)
+	assert.Equal(t, created.Nodes, disabled.Nodes)
+	assert.Equal(t, created.Wires, disabled.Wires)
+
+	loaded, _, err := LoadFlow(filepath.Join(dir, created.ID+".yaml"), minimalRefs())
+	require.NoError(t, err)
+	assert.False(t, loaded.Enabled)
+
+	// A disk edit that has not reached the debounced watcher must survive the
+	// toggle; SetEnabled reads the current file rather than the cached graph.
+	loaded.Name = "Externally edited"
+	require.NoError(t, SaveFlow(filepath.Join(dir, created.ID+".yaml"), loaded))
+
+	enabled, err := store.SetEnabled(created.ID, true)
+	require.NoError(t, err)
+	assert.True(t, enabled.Enabled)
+	assert.Equal(t, "Externally edited", enabled.Name)
+
+	_, err = store.SetEnabled("missing", false)
+	require.ErrorContains(t, err, "not found")
+}
+
 func TestFlowStore_Delete_RemovesFlowAndLayout(t *testing.T) {
 	dir := t.TempDir()
 	store := NewFlowStore(dir, minimalRefs())
