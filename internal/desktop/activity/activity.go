@@ -4,17 +4,14 @@
 // records its own via the ActivityService. Events persist in the pipeline
 // SQLite store and surface, newest first, in the Activity view.
 //
-// The ergonomic constructors ([Refresh], [SessionCreated], [AutoAction], …) are
-// the "mixin" surface: an emit site names what happened and passes the few
+// The ergonomic constructors ([RefreshFailed], [SessionCreated], [AutoAction],
+// …) are the "mixin" surface: an emit site names what happened and passes the few
 // facts it has, and the constructor assembles the category, severity, and human
 // copy. New event shapes are added as new constructors, not new call-site
 // formatting.
 package activity
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // Category is the semantic bucket of an event. It drives the Activity view's
 // filter pills and, for non-error events, the row's icon and accent color.
@@ -44,27 +41,6 @@ type Event struct {
 	// ids, counts). No emit site populates it yet; it round-trips through the
 	// reserved metadata column so a future write path needs no schema change.
 	Metadata map[string]string `json:"metadata,omitempty"`
-}
-
-// Refresh records a source/feed refresh that completed, reporting how many
-// items changed and how long it took.
-func Refresh(source string, changed int, took time.Duration) Event {
-	body := "no changes"
-	if changed == 1 {
-		body = "1 item updated"
-	} else if changed > 1 {
-		body = fmt.Sprintf("%d items updated", changed)
-	}
-	if took > 0 {
-		body = fmt.Sprintf("%s · %s", body, took.Round(time.Millisecond))
-	}
-	return Event{
-		Category: CategoryRefresh,
-		Severity: SeverityInfo,
-		Title:    fmt.Sprintf("Refreshed %s", source),
-		Body:     body,
-		Source:   source,
-	}
 }
 
 // RefreshFailed records a source refresh that errored, capturing the reason
