@@ -230,7 +230,7 @@ func starterFlow(id, name string) (Flow, Layout) {
 		layout.Nodes[srcID] = NodePosition{X: 48, Y: 48 + i*96}
 		layout.Nodes[seed.feedID] = NodePosition{X: 360, Y: 48 + i*96}
 	}
-	return Flow{ID: id, Name: name, Enabled: true, Nodes: nodes, Wires: wires}, layout
+	return Flow{ID: id, Name: name, Enabled: true, Resurface: ResurfacePolicyStateChanges, Nodes: nodes, Wires: wires}, layout
 }
 
 // GetLayout returns id's node layout — see LoadUI for missing/broken-file

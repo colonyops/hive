@@ -14,9 +14,10 @@ func TestSaveFlow_NewFile_LoadSaveLoadRoundTrip(t *testing.T) {
 	path := filepath.Join(dir, "triage.yaml")
 
 	f := Flow{
-		ID:      "triage",
-		Name:    "Frontend Triage",
-		Enabled: true,
+		ID:        "triage",
+		Name:      "Frontend Triage",
+		Enabled:   true,
+		Resurface: ResurfacePolicyStateChanges,
 		Nodes: []Node{
 			{ID: "in-prs", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open is:pr"}},
 			{ID: "drop-bots", Type: "github-filter", Config: &GithubFilterConfig{ExcludeAuthors: []string{"*[bot]"}, Repos: []string{"colonyops/*"}}},
@@ -111,8 +112,9 @@ func TestSaveFlow_EmptyFileTreatedAsNew(t *testing.T) {
 	path := writeFlow(t, dir, "triage.yaml", "")
 
 	f := Flow{
-		ID:      "triage",
-		Enabled: true,
+		ID:        "triage",
+		Enabled:   true,
+		Resurface: ResurfacePolicyStateChanges,
 		Nodes: []Node{
 			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
 			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
@@ -131,8 +133,9 @@ func TestSaveFlow_DisabledFlowRoundTrips(t *testing.T) {
 	path := filepath.Join(dir, "triage.yaml")
 
 	f := Flow{
-		ID:      "triage",
-		Enabled: false,
+		ID:        "triage",
+		Enabled:   false,
+		Resurface: ResurfacePolicyStateChanges,
 		Nodes: []Node{
 			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
 			{ID: "sink", Type: "feed", Config: &FeedConfig{}},

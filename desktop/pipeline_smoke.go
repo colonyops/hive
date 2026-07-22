@@ -26,7 +26,7 @@ const (
 var sourceToCommitSmokeItems = []feed.Item{
 	{
 		ID: "smoke-pr", Kind: "PR", Repo: "hive/e2e", Num: 101,
-		Title: "Source-to-commit smoke PR", Author: "smoke", Age: "now", Unread: true,
+		Title: "Source-to-commit smoke PR", Author: "smoke", Unread: true,
 		Labels: []string{"e2e"}, Branch: "test/source-to-commit",
 		Body:   "Fixture item appended by Go and committed through the browser graph.",
 		Prompt: "Verify the source-to-commit desktop smoke path.",
@@ -34,7 +34,7 @@ var sourceToCommitSmokeItems = []feed.Item{
 	},
 	{
 		ID: "smoke-issue", Kind: "Issue", Repo: "hive/e2e", Num: 102,
-		Title: "Source-to-commit smoke issue", Author: "smoke", Age: "now", Unread: true,
+		Title: "Source-to-commit smoke issue", Author: "smoke", Unread: true,
 		Labels: []string{"e2e"}, Branch: "test/source-to-commit",
 		Body:   "Second fixture item proves one frontend batch commits multiple outputs.",
 		Prompt: "Verify one frontend batch processes multiple outputs.",

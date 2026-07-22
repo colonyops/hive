@@ -18,6 +18,9 @@ func Validate(f Flow, refs Refs) ([]string, error) {
 // first hard-error condition encountered fails the whole flow; warnings are
 // only computed once every hard check has passed.
 func validateFlow(f *Flow, refs Refs) ([]string, error) {
+	if f.Resurface != "" && !f.Resurface.IsValid() {
+		return nil, fmt.Errorf("unknown resurface policy %q", f.Resurface)
+	}
 	nodeByID := make(map[string]*Node, len(f.Nodes))
 	for i := range f.Nodes {
 		node := &f.Nodes[i]

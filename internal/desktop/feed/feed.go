@@ -14,7 +14,7 @@ type Item struct {
 	Num       int    `json:"num"`
 	Title     string `json:"title"`
 	Author    string `json:"author"`
-	Age       string `json:"age"`
+	State     string `json:"state,omitempty"`
 	UpdatedAt int64  `json:"updatedAt"` // GitHub's last-updated time, unix milliseconds
 	Unread    bool   `json:"unread"`
 	// Reason is the GitHub notification reason (e.g. "review_requested"),

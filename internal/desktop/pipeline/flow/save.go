@@ -110,6 +110,11 @@ func populateFlowMapping(root *yaml.Node, f Flow) error {
 	} else if err := setOrAddScalar(root, "enabled", false); err != nil {
 		return err
 	}
+	if f.Resurface == "" || f.Resurface == DefaultResurfacePolicy {
+		removeMappingKey(root, "resurface")
+	} else if err := setOrAddScalar(root, "resurface", f.Resurface); err != nil {
+		return err
+	}
 
 	nodesSeq, err := encodeNodesSeq(f.Nodes)
 	if err != nil {

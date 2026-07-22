@@ -99,6 +99,7 @@ func buildPipelineProducer(db *pipelinedb.DB, fetcher *feed.LiveProvider, flows 
 	producer := pipeline.NewProducer(db, pipeline.NewFlowSourceLister(fetcher, flows), interval, emitLogAppended, logger)
 	producer.SetRecorder(recorder)
 	producer.SetPrefetcher(fetcher)
+	producer.SetSourceAdapter(pipeline.NewGithubSourceAdapter(fetcher))
 	return producer
 }
 

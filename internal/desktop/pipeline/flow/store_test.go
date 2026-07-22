@@ -60,8 +60,9 @@ func TestFlowStore_Save_PersistsAndReloads(t *testing.T) {
 	store := NewFlowStore(dir, minimalRefs())
 
 	f := Flow{
-		ID:      "triage",
-		Enabled: true,
+		ID:        "triage",
+		Enabled:   true,
+		Resurface: ResurfacePolicyStateChanges,
 		Nodes: []Node{
 			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
 			{ID: "sink", Type: "feed", Config: &FeedConfig{}},
@@ -84,8 +85,9 @@ func TestFlowStore_Save_InvalidFlowRejected_LeavesLastGood(t *testing.T) {
 	store := NewFlowStore(dir, minimalRefs())
 
 	good := Flow{
-		ID:      "triage",
-		Enabled: true,
+		ID:        "triage",
+		Enabled:   true,
+		Resurface: ResurfacePolicyStateChanges,
 		Nodes: []Node{
 			{ID: "src", Type: "github-source", Config: &GithubSourceConfig{Kind: "search", Query: "is:open"}},
 			{ID: "sink", Type: "feed", Config: &FeedConfig{}},

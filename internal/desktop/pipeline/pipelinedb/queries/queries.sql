@@ -1,7 +1,10 @@
 -- name: AppendEvent :one
-INSERT INTO event_log (topic, key, payload, created_at, snapshot)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO event_log (topic, key, payload, created_at, snapshot, source_kind, source_scope, occurrence_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING "offset";
+
+-- name: UpdateEventOccurrenceKey :exec
+UPDATE event_log SET occurrence_key = ? WHERE "offset" = ?;
 
 -- name: GetSourceHeadPayload :one
 SELECT payload FROM source_head
@@ -11,6 +14,9 @@ WHERE topic = ? AND key = ?;
 INSERT INTO source_head (topic, key, payload)
 VALUES (?, ?, ?)
 ON CONFLICT(topic, key) DO UPDATE SET payload = excluded.payload;
+
+-- name: ListSourceHeadKeys :many
+SELECT key FROM source_head WHERE topic = ?;
 
 -- name: ReadEventsFrom :many
 SELECT * FROM event_log
@@ -51,6 +57,31 @@ INSERT INTO inbox_item (
     ?, ?, ?, 1, ?,
     ?, ?, ?
 )
+RETURNING *;
+
+-- name: UpsertInboxItem :one
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    archived_at, archived_actor, archived_reason,
+    lifecycle, source_state, first_seen_at, last_event_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (profile_id, source_kind, source_scope, external_id) DO UPDATE SET
+    title = excluded.title, url = excluded.url, payload = excluded.payload,
+    revision = inbox_item.revision + 1, unread = excluded.unread,
+    archived_at = excluded.archived_at, archived_actor = excluded.archived_actor,
+    archived_reason = excluded.archived_reason, lifecycle = excluded.lifecycle,
+    source_state = excluded.source_state, last_event_at = excluded.last_event_at
+RETURNING *;
+
+-- name: GetInboxItemByExternalID :one
+SELECT * FROM inbox_item
+WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = ?;
+
+-- name: InsertInboxEvent :one
+INSERT INTO inbox_event (item_id, kind, transition, attention, occurrence_key, summary, detail, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (item_id, occurrence_key) WHERE occurrence_key IS NOT NULL DO NOTHING
 RETURNING *;
 
 -- name: EnqueueOutputCommand :exec

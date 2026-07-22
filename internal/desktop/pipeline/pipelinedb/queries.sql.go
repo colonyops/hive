@@ -53,17 +53,20 @@ func (q *Queries) AppendActivityEvent(ctx context.Context, arg AppendActivityEve
 }
 
 const appendEvent = `-- name: AppendEvent :one
-INSERT INTO event_log (topic, key, payload, created_at, snapshot)
-VALUES (?, ?, ?, ?, ?)
+INSERT INTO event_log (topic, key, payload, created_at, snapshot, source_kind, source_scope, occurrence_key)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING "offset"
 `
 
 type AppendEventParams struct {
-	Topic     string `json:"topic"`
-	Key       string `json:"key"`
-	Payload   []byte `json:"payload"`
-	CreatedAt int64  `json:"created_at"`
-	Snapshot  int64  `json:"snapshot"`
+	Topic         string         `json:"topic"`
+	Key           string         `json:"key"`
+	Payload       []byte         `json:"payload"`
+	CreatedAt     int64          `json:"created_at"`
+	Snapshot      int64          `json:"snapshot"`
+	SourceKind    string         `json:"source_kind"`
+	SourceScope   string         `json:"source_scope"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
 }
 
 func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64, error) {
@@ -73,6 +76,9 @@ func (q *Queries) AppendEvent(ctx context.Context, arg AppendEventParams) (int64
 		arg.Payload,
 		arg.CreatedAt,
 		arg.Snapshot,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.OccurrenceKey,
 	)
 	var offset int64
 	err := row.Scan(&offset)
@@ -215,6 +221,48 @@ func (q *Queries) GetConsumerOffset(ctx context.Context, consumer string) (Consu
 	return i, err
 }
 
+const getInboxItemByExternalID = `-- name: GetInboxItemByExternalID :one
+SELECT id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at FROM inbox_item
+WHERE profile_id = ? AND source_kind = ? AND source_scope = ? AND external_id = ?
+`
+
+type GetInboxItemByExternalIDParams struct {
+	ProfileID   string `json:"profile_id"`
+	SourceKind  string `json:"source_kind"`
+	SourceScope string `json:"source_scope"`
+	ExternalID  string `json:"external_id"`
+}
+
+func (q *Queries) GetInboxItemByExternalID(ctx context.Context, arg GetInboxItemByExternalIDParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, getInboxItemByExternalID,
+		arg.ProfileID,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.ExternalID,
+	)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
+	)
+	return i, err
+}
+
 const getOutputCommand = `-- name: GetOutputCommand :one
 SELECT id, action_id, "key", payload, status, attempts, last_error, result_json, stdout, stderr, created_at FROM output_command WHERE id = ?
 `
@@ -253,6 +301,50 @@ func (q *Queries) GetSourceHeadPayload(ctx context.Context, arg GetSourceHeadPay
 	var payload []byte
 	err := row.Scan(&payload)
 	return payload, err
+}
+
+const insertInboxEvent = `-- name: InsertInboxEvent :one
+INSERT INTO inbox_event (item_id, kind, transition, attention, occurrence_key, summary, detail, created_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (item_id, occurrence_key) WHERE occurrence_key IS NOT NULL DO NOTHING
+RETURNING id, item_id, kind, transition, attention, occurrence_key, summary, detail, created_at
+`
+
+type InsertInboxEventParams struct {
+	ItemID        int64          `json:"item_id"`
+	Kind          string         `json:"kind"`
+	Transition    string         `json:"transition"`
+	Attention     string         `json:"attention"`
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	Summary       sql.NullString `json:"summary"`
+	Detail        []byte         `json:"detail"`
+	CreatedAt     int64          `json:"created_at"`
+}
+
+func (q *Queries) InsertInboxEvent(ctx context.Context, arg InsertInboxEventParams) (InboxEvent, error) {
+	row := q.db.QueryRowContext(ctx, insertInboxEvent,
+		arg.ItemID,
+		arg.Kind,
+		arg.Transition,
+		arg.Attention,
+		arg.OccurrenceKey,
+		arg.Summary,
+		arg.Detail,
+		arg.CreatedAt,
+	)
+	var i InboxEvent
+	err := row.Scan(
+		&i.ID,
+		&i.ItemID,
+		&i.Kind,
+		&i.Transition,
+		&i.Attention,
+		&i.OccurrenceKey,
+		&i.Summary,
+		&i.Detail,
+		&i.CreatedAt,
+	)
+	return i, err
 }
 
 const insertInboxItem = `-- name: InsertInboxItem :one
@@ -698,6 +790,33 @@ func (q *Queries) ListRunnableOutputCommandsAfter(ctx context.Context, arg ListR
 	return items, nil
 }
 
+const listSourceHeadKeys = `-- name: ListSourceHeadKeys :many
+SELECT key FROM source_head WHERE topic = ?
+`
+
+func (q *Queries) ListSourceHeadKeys(ctx context.Context, topic string) ([]string, error) {
+	rows, err := q.db.QueryContext(ctx, listSourceHeadKeys, topic)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []string{}
+	for rows.Next() {
+		var key string
+		if err := rows.Scan(&key); err != nil {
+			return nil, err
+		}
+		items = append(items, key)
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const markOutputCommandDone = `-- name: MarkOutputCommandDone :exec
 UPDATE output_command
 SET status = 'done', last_error = NULL, result_json = ?, stdout = ?, stderr = ?
@@ -952,6 +1071,95 @@ func (q *Queries) SetJobStatus(ctx context.Context, arg SetJobStatusParams) (Job
 		&i.Target,
 		&i.Error,
 		&i.CommandID,
+	)
+	return i, err
+}
+
+const updateEventOccurrenceKey = `-- name: UpdateEventOccurrenceKey :exec
+UPDATE event_log SET occurrence_key = ? WHERE "offset" = ?
+`
+
+type UpdateEventOccurrenceKeyParams struct {
+	OccurrenceKey sql.NullString `json:"occurrence_key"`
+	Offset        int64          `json:"offset"`
+}
+
+func (q *Queries) UpdateEventOccurrenceKey(ctx context.Context, arg UpdateEventOccurrenceKeyParams) error {
+	_, err := q.db.ExecContext(ctx, updateEventOccurrenceKey, arg.OccurrenceKey, arg.Offset)
+	return err
+}
+
+const upsertInboxItem = `-- name: UpsertInboxItem :one
+INSERT INTO inbox_item (
+    profile_id, source_kind, source_scope, external_id,
+    title, url, payload, revision, unread,
+    archived_at, archived_actor, archived_reason,
+    lifecycle, source_state, first_seen_at, last_event_at
+) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?, ?, ?, ?)
+ON CONFLICT (profile_id, source_kind, source_scope, external_id) DO UPDATE SET
+    title = excluded.title, url = excluded.url, payload = excluded.payload,
+    revision = inbox_item.revision + 1, unread = excluded.unread,
+    archived_at = excluded.archived_at, archived_actor = excluded.archived_actor,
+    archived_reason = excluded.archived_reason, lifecycle = excluded.lifecycle,
+    source_state = excluded.source_state, last_event_at = excluded.last_event_at
+RETURNING id, profile_id, source_kind, source_scope, external_id, title, url, payload, revision, unread, archived_at, archived_actor, archived_reason, lifecycle, source_state, first_seen_at, last_event_at
+`
+
+type UpsertInboxItemParams struct {
+	ProfileID      string         `json:"profile_id"`
+	SourceKind     string         `json:"source_kind"`
+	SourceScope    string         `json:"source_scope"`
+	ExternalID     string         `json:"external_id"`
+	Title          string         `json:"title"`
+	Url            string         `json:"url"`
+	Payload        []byte         `json:"payload"`
+	Unread         int64          `json:"unread"`
+	ArchivedAt     sql.NullInt64  `json:"archived_at"`
+	ArchivedActor  sql.NullString `json:"archived_actor"`
+	ArchivedReason sql.NullString `json:"archived_reason"`
+	Lifecycle      string         `json:"lifecycle"`
+	SourceState    sql.NullString `json:"source_state"`
+	FirstSeenAt    int64          `json:"first_seen_at"`
+	LastEventAt    int64          `json:"last_event_at"`
+}
+
+func (q *Queries) UpsertInboxItem(ctx context.Context, arg UpsertInboxItemParams) (InboxItem, error) {
+	row := q.db.QueryRowContext(ctx, upsertInboxItem,
+		arg.ProfileID,
+		arg.SourceKind,
+		arg.SourceScope,
+		arg.ExternalID,
+		arg.Title,
+		arg.Url,
+		arg.Payload,
+		arg.Unread,
+		arg.ArchivedAt,
+		arg.ArchivedActor,
+		arg.ArchivedReason,
+		arg.Lifecycle,
+		arg.SourceState,
+		arg.FirstSeenAt,
+		arg.LastEventAt,
+	)
+	var i InboxItem
+	err := row.Scan(
+		&i.ID,
+		&i.ProfileID,
+		&i.SourceKind,
+		&i.SourceScope,
+		&i.ExternalID,
+		&i.Title,
+		&i.Url,
+		&i.Payload,
+		&i.Revision,
+		&i.Unread,
+		&i.ArchivedAt,
+		&i.ArchivedActor,
+		&i.ArchivedReason,
+		&i.Lifecycle,
+		&i.SourceState,
+		&i.FirstSeenAt,
+		&i.LastEventAt,
 	)
 	return i, err
 }

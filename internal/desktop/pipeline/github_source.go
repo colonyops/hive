@@ -7,6 +7,7 @@ import (
 
 	"github.com/colonyops/hive/internal/desktop/feed"
 	"github.com/colonyops/hive/internal/desktop/pipeline/flow"
+	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
 // githubSource is the Source that produces one flow github-source node's
@@ -16,9 +17,15 @@ import (
 // producer without a second implementation of GitHub fetching to keep in
 // sync.
 type githubSource struct {
-	live  *feed.LiveProvider
-	def   feed.SourceDef
-	topic string // "source:<flowId>/<nodeId>"
+	live      *feed.LiveProvider
+	def       feed.SourceDef
+	topic     string // "source:<flowId>/<nodeId>"
+	profileID string
+	policy    flow.ResurfacePolicy
+}
+
+func (s *githubSource) ingestMetadata() sourceMetadata {
+	return sourceMetadata{ProfileID: s.profileID, SourceKind: "github", Policy: pipelinedb.ResurfacePolicy(s.policy)}
 }
 
 // searchDef exposes this source's definition for the producer's batched
@@ -44,9 +51,8 @@ func (s *githubSource) Produce(ctx context.Context, emit func(Msg) error) error 
 			return fmt.Errorf("pipeline: encoding item %q from source %q: %w", item.ID, s.def.ID, err)
 		}
 		msg := Msg{
-			Key:     item.ID,
-			Topic:   s.topic,
-			Payload: payload,
+			Key: item.ID, Topic: s.topic, Payload: payload,
+			SourceKind: "github",
 		}
 		if err := emit(msg); err != nil {
 			return err
@@ -86,9 +92,11 @@ func NewFlowSourceLister(live *feed.LiveProvider, flows FlowLister) SourceLister
 				}
 				id := f.ID + "/" + node.ID
 				out[id] = &githubSource{
-					live:  live,
-					def:   feed.SourceDef{ID: id, Kind: cfg.Kind, Query: cfg.Query, Limit: cfg.Limit},
-					topic: "source:" + id,
+					live:      live,
+					def:       feed.SourceDef{ID: id, Kind: cfg.Kind, Query: cfg.Query, Limit: cfg.Limit},
+					topic:     "source:" + id,
+					profileID: f.ID,
+					policy:    f.Resurface,
 				}
 			}
 		}

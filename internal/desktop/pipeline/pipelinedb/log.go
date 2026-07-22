@@ -23,12 +23,15 @@ import (
 //   - Snapshot is nil for ordinary item events and contains the full current
 //     source item set for successful poll snapshots.
 type Msg struct {
-	ID       string
-	Key      string
-	Topic    string
-	Ts       int64
-	Payload  json.RawMessage
-	Snapshot []SnapshotItem `json:"Snapshot,omitempty"`
+	ID            string
+	Key           string
+	Topic         string
+	Ts            int64
+	Payload       json.RawMessage
+	Snapshot      []SnapshotItem `json:"Snapshot,omitempty"`
+	SourceKind    string
+	SourceScope   string
+	OccurrenceKey string `json:"OccurrenceKey,omitempty"`
 }
 
 // SnapshotItem is one current source item carried by a successful source
@@ -43,11 +46,12 @@ type SnapshotItem struct {
 // its offset. created_at is stamped as the current unix millisecond time.
 func (db *DB) Append(ctx context.Context, topic, key string, payload []byte) (int64, error) {
 	offset, err := db.queries.AppendEvent(ctx, AppendEventParams{
-		Topic:     topic,
-		Key:       key,
-		Payload:   payload,
-		CreatedAt: time.Now().UnixMilli(),
-		Snapshot:  0,
+		Topic:      topic,
+		Key:        key,
+		Payload:    payload,
+		CreatedAt:  time.Now().UnixMilli(),
+		Snapshot:   0,
+		SourceKind: "", SourceScope: "", OccurrenceKey: sql.NullString{},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("appending event to topic %q: %w", topic, err)
@@ -83,11 +87,12 @@ func (db *DB) AppendIfChanged(ctx context.Context, topic, key string, payload []
 		}
 
 		offset, err = q.AppendEvent(ctx, AppendEventParams{
-			Topic:     topic,
-			Key:       key,
-			Payload:   payload,
-			CreatedAt: time.Now().UnixMilli(),
-			Snapshot:  0,
+			Topic:      topic,
+			Key:        key,
+			Payload:    payload,
+			CreatedAt:  time.Now().UnixMilli(),
+			Snapshot:   0,
+			SourceKind: "", SourceScope: "", OccurrenceKey: sql.NullString{},
 		})
 		if err != nil {
 			return fmt.Errorf("appending event to topic %q: %w", topic, err)
@@ -117,11 +122,12 @@ func (db *DB) AppendSnapshot(ctx context.Context, topic string, items []Snapshot
 		return 0, fmt.Errorf("encoding source snapshot for topic %q: %w", topic, err)
 	}
 	offset, err := db.queries.AppendEvent(ctx, AppendEventParams{
-		Topic:     topic,
-		Key:       "",
-		Payload:   payload,
-		CreatedAt: time.Now().UnixMilli(),
-		Snapshot:  1,
+		Topic:      topic,
+		Key:        "",
+		Payload:    payload,
+		CreatedAt:  time.Now().UnixMilli(),
+		Snapshot:   1,
+		SourceKind: "", SourceScope: "", OccurrenceKey: sql.NullString{},
 	})
 	if err != nil {
 		return 0, fmt.Errorf("appending source snapshot for topic %q: %w", topic, err)
@@ -146,11 +152,14 @@ func (db *DB) ReadFrom(ctx context.Context, offset int64, limit int) ([]Msg, int
 	nextOffset := offset
 	for _, row := range rows {
 		msg := Msg{
-			ID:      strconv.FormatInt(row.Offset, 10),
-			Key:     row.Key,
-			Topic:   row.Topic,
-			Ts:      row.CreatedAt,
-			Payload: json.RawMessage(row.Payload),
+			ID:            strconv.FormatInt(row.Offset, 10),
+			Key:           row.Key,
+			Topic:         row.Topic,
+			Ts:            row.CreatedAt,
+			Payload:       json.RawMessage(row.Payload),
+			SourceKind:    row.SourceKind,
+			SourceScope:   row.SourceScope,
+			OccurrenceKey: row.OccurrenceKey.String,
 		}
 		if row.Snapshot != 0 {
 			if err := json.Unmarshal(row.Payload, &msg.Snapshot); err != nil {

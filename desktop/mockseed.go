@@ -26,7 +26,7 @@ var mockInboxItems = []feed.Item{
 	{
 		ID: "pr2841", Kind: "PR", Repo: "hive/core", Num: 2841,
 		Title:  "batch_spawn: fix detached tmux env & PATH propagation",
-		Author: "lena", Age: "2h", Unread: true, Labels: []string{"bug", "batch"},
+		Author: "lena", Unread: true, Labels: []string{"bug", "batch"},
 		Branch: "fix/2841-batch-spawn-env",
 		Body:   "Sessions spawned from a GUI context inherit an empty PATH and lose HIVE_* vars, so batch_spawn fails to find the agent binary. Needs a controlled env when there is no controlling terminal.",
 		Prompt: "Investigate detached tmux env in batch_spawn; ensure PATH and HIVE_* vars propagate when spawned headless from the desktop app.",
@@ -35,7 +35,7 @@ var mockInboxItems = []feed.Item{
 	{
 		ID: "iss1190", Kind: "Issue", Repo: "hive/desktop", Num: 1190,
 		Title:  "Feed source: mirror GitHub notifications inbox",
-		Author: "hayden", Age: "5h", Unread: true, Reason: "mention", Labels: []string{"feature", "mvp"},
+		Author: "hayden", Unread: true, Reason: "mention", Labels: []string{"feature", "mvp"},
 		Branch: "feat/1190-notifications-feed",
 		Body:   "Add a notifications-based feed source that mirrors the user's GitHub inbox, with local read/dismiss state so triage does not touch GitHub until the user acts.",
 		Prompt: "Implement a notifications-based feed source mirroring the GitHub inbox, with app-local read/dismiss triage state.",
@@ -44,7 +44,7 @@ var mockInboxItems = []feed.Item{
 	{
 		ID: "pr2838", Kind: "PR", Repo: "hive/desktop", Num: 2838,
 		Title:  "OAuth device flow for in-app GitHub auth",
-		Author: "koji", Age: "1d", Unread: false, Labels: []string{"auth"},
+		Author: "koji", Unread: false, Labels: []string{"auth"},
 		Branch: "feat/2838-oauth-device-flow",
 		Body:   "Adds the full device-flow auth so users can sign in without leaving the app. Open question on GitHub App vs OAuth App registration and where to store the token.",
 		Prompt: "Review the OAuth device-flow implementation and validate keychain token storage across platforms.",
@@ -53,7 +53,7 @@ var mockInboxItems = []feed.Item{
 	{
 		ID: "iss1204", Kind: "Issue", Repo: "hive/desktop", Num: 1204,
 		Title:  "Composable view contract for feed / task / doc surfaces",
-		Author: "mira", Age: "1d", Unread: true, Labels: []string{"arch"},
+		Author: "mira", Unread: true, Labels: []string{"arch"},
 		Branch: "feat/1204-composable-views",
 		Body:   "Define a self-contained component contract for feed, task, and doc views so a designer-led layout system can be dropped in later without rewrites.",
 		Prompt: "Draft a composable, self-contained view interface covering the feed, task list, and doc viewer surfaces.",
@@ -62,7 +62,7 @@ var mockInboxItems = []feed.Item{
 	{
 		ID: "pr2830", Kind: "PR", Repo: "hive/core", Num: 2830,
 		Title:  "Keychain-backed token storage",
-		Author: "sam", Age: "2d", Unread: false, Labels: []string{"security"},
+		Author: "sam", Unread: false, Labels: []string{"security"},
 		Branch: "feat/2830-keychain-tokens",
 		Body:   "Store GitHub tokens in the OS keychain instead of a plaintext config file, with a fallback for headless CI environments.",
 		Prompt: "Review cross-platform keychain token storage and the headless fallback path.",
@@ -71,7 +71,7 @@ var mockInboxItems = []feed.Item{
 	{
 		ID: "iss1177", Kind: "Issue", Repo: "hive/desktop", Num: 1177,
 		Title:  "Cross-repo query: PRs assigned to me across the org",
-		Author: "hayden", Age: "3d", Unread: false, Labels: []string{"feature"},
+		Author: "hayden", Unread: false, Labels: []string{"feature"},
 		Branch: "feat/1177-cross-repo-query",
 		Body:   "Support GitHub search-style cross-repo queries as a feed source, e.g. \"PRs assigned to me across the org\", saveable as a workspace source.",
 		Prompt: "Implement a cross-repo query feed source using GitHub search syntax, saveable into a workspace.",
