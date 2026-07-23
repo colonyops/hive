@@ -93,6 +93,22 @@ describe('TitleBar', () => {
     expect(collapsed.find('[data-testid="titlebar-toggle-sidebar"]').attributes('aria-label')).toBe('Show sidebar')
   })
 
+  it('shows the preview toggle only when the feed view is active and reflects the collapsed state', async () => {
+    const hidden = mount(TitleBar, { props: { profileName: 'Triage' } })
+    expect(hidden.find('[data-testid="titlebar-toggle-preview"]').exists()).toBe(false)
+
+    const expanded = mount(TitleBar, { props: { profileName: 'Triage', canTogglePreview: true } })
+    const toggle = expanded.find('[data-testid="titlebar-toggle-preview"]')
+    expect(toggle.exists()).toBe(true)
+    expect(toggle.attributes('aria-label')).toBe('Hide preview')
+
+    await toggle.trigger('click')
+    expect(expanded.emitted('toggle-preview')).toHaveLength(1)
+
+    const collapsed = mount(TitleBar, { props: { profileName: 'Triage', canTogglePreview: true, previewCollapsed: true } })
+    expect(collapsed.find('[data-testid="titlebar-toggle-preview"]').attributes('aria-label')).toBe('Show preview')
+  })
+
   it('zooms on a double-click of the bar itself, but not on its controls', async () => {
     const wrapper = mount(TitleBar, { props: { profileName: 'Triage', canToggleSidebar: true } })
 

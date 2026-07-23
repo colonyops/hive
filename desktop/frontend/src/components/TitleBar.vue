@@ -6,6 +6,8 @@ import IconArrowLeft from '~icons/lucide/arrow-left'
 import IconArrowRight from '~icons/lucide/arrow-right'
 import IconPanelLeftClose from '~icons/lucide/panel-left-close'
 import IconPanelLeftOpen from '~icons/lucide/panel-left-open'
+import IconPanelRightClose from '~icons/lucide/panel-right-close'
+import IconPanelRightOpen from '~icons/lucide/panel-right-open'
 import IconSearch from '~icons/lucide/search'
 import IconTriangleAlert from '~icons/lucide/triangle-alert'
 import IconLoader from '~icons/lucide/loader'
@@ -26,6 +28,8 @@ import type { Job } from '../../bindings/github.com/colonyops/hive/internal/desk
 // events recorded since the user last opened that page, shown as a pulsing dot.
 // sidebarCollapsed drives the panel-toggle glyph; canToggleSidebar hides the
 // toggle in views that have no feed sidebar (settings, flows, onboarding).
+// previewCollapsed/canTogglePreview are the same pair for the detail preview
+// pane, mirrored at the far right of the bar to match the panel it controls.
 // updateAvailable renders a click-to-install chip (with the latestVersion
 // label) in the right cluster, mirroring the error/activity chip pattern. It
 // is independent of profileName so it can show during onboarding too.
@@ -42,6 +46,8 @@ const props = defineProps<{
   canGoForward?: boolean
   sidebarCollapsed?: boolean
   canToggleSidebar?: boolean
+  previewCollapsed?: boolean
+  canTogglePreview?: boolean
 }>()
 const emit = defineEmits<{
   back: []
@@ -51,6 +57,7 @@ const emit = defineEmits<{
   'open-job-run': [commandId: number]
   'open-update': []
   'toggle-sidebar': []
+  'toggle-preview': []
   'open-palette': []
   'toggle-maximise': []
 }>()
@@ -187,6 +194,16 @@ function onTitlebarDblclick(event: MouseEvent): void {
           data-testid="titlebar-activity-unseen"
         />
       </button>
+      <button
+        v-if="canTogglePreview"
+        type="button"
+        class="flex size-6 shrink-0 cursor-pointer items-center justify-center rounded text-text-3 hover:bg-chip hover:text-text"
+        style="--wails-draggable: no-drag"
+        :aria-label="previewCollapsed ? 'Show preview' : 'Hide preview'"
+        :title="previewCollapsed ? 'Show preview' : 'Hide preview'"
+        data-testid="titlebar-toggle-preview"
+        @click="emit('toggle-preview')"
+      ><component :is="previewCollapsed ? IconPanelRightOpen : IconPanelRightClose" class="size-3.5" /></button>
     </div>
   </header>
 </template>
