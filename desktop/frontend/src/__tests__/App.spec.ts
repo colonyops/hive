@@ -249,6 +249,7 @@ describe('App', () => {
     // Flows canvas is up; the spaces rail stays mounted as the way back.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(true)
     expect(wrapper.find('[data-testid="profile-tile"]').exists()).toBe(true)
+    const getFlowCallsBeforeExit = mocks.GetFlow.mock.calls.length
 
     await wrapper.find('[data-testid="profile-tile"][data-id="personal"]').trigger('click')
     await flushPromises()
@@ -256,6 +257,7 @@ describe('App', () => {
     // Back to the feed view.
     expect(wrapper.find('[data-testid="flows-view"]').exists()).toBe(false)
     expect(wrapper.find('[data-testid="sidebar-profile-header"]').exists()).toBe(true)
+    expect(mocks.GetFlow.mock.calls.length).toBeGreaterThan(getFlowCallsBeforeExit)
 
     wrapper.unmount()
   })

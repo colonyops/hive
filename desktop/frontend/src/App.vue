@@ -270,7 +270,12 @@ function requestExitFlows(): void {
   openFeed()
 }
 
-function requestSelectProfile(id: string): void {
+async function requestSelectProfile(id: string): Promise<void> {
+  // Returning from the canvas to the already-active profile does not change
+  // the route profile id, so the route watcher will not reload its feeds.
+  // Refresh explicitly after a clean deploy so the sidebar cannot retain the
+  // pre-deploy flow snapshot if flows:updated races the filesystem watcher.
+  if (id === activeProfileId.value && !session.dirty.value) await selectProfile(id)
   openFeed(id)
 }
 
