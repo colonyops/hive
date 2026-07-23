@@ -23,16 +23,3 @@ sql:
             go_type:
               import: "github.com/colonyops/hive/internal/core/hc"
               type: "ItemType"
-  - engine: "sqlite"
-    queries:
-      - "internal/desktop/pipeline/pipelinedb/queries/queries.sql"
-    schema: "internal/desktop/pipeline/pipelinedb/migrations/*.up.sql"
-    gen:
-      go:
-        package: "pipelinedb"
-        out: "internal/desktop/pipeline/pipelinedb"
-        emit_json_tags: true
-        emit_prepared_queries: false
-        emit_interface: false
-        emit_exact_table_names: false
-        emit_empty_slices: true
