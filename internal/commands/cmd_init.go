@@ -14,6 +14,7 @@ import (
 	"charm.land/bubbles/v2/key"
 	"charm.land/huh/v2"
 	lipgloss "charm.land/lipgloss/v2"
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/styles"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/urfave/cli/v3"
@@ -216,9 +217,9 @@ func appendTmuxBinding(configPath string) error {
 }
 
 // defaultConfigPath returns $XDG_CONFIG_HOME/hive/config.yaml.
-// This is the write-side counterpart to DefaultConfigPath in flags.go which probes for existing files.
+// This is the write-side counterpart to config.DefaultConfigPath which probes for existing files.
 func defaultConfigPath() string {
-	return filepath.Join(defaultConfigDir(), "config.yaml")
+	return filepath.Join(config.DefaultConfigDir(), "config.yaml")
 }
 
 // toStringSlice serialises a []string as a YAML inline sequence using yaml.v3.
