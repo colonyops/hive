@@ -12,13 +12,13 @@ import (
 	"github.com/colonyops/hive/internal/desktop/pipeline/pipelinedb"
 )
 
-// MockFlowID and MockFeedNodeID identify the fixture flow's terminal feed
-// node in desktop/e2e/fixtures/flows/frontend-triage.yaml. The fixture seed
-// uses MockFlowID as its profile id; the node id remains asserted against the
-// fixture so its graph configuration cannot drift unnoticed.
+// MockFlowID, MockSourceNodeID, and MockFeedNodeID identify the fixture graph
+// in desktop/e2e/fixtures/flows/frontend-triage.yaml. Tests assert these IDs
+// against the fixture so its graph configuration cannot drift unnoticed.
 const (
-	MockFlowID     = "frontend-triage"
-	MockFeedNodeID = "notifications-inbox"
+	MockFlowID       = "frontend-triage"
+	MockSourceNodeID = "gh-source"
+	MockFeedNodeID   = "notifications-inbox"
 )
 
 // mockInboxItems is the deterministic fixture set used by desktop e2e.
@@ -84,6 +84,8 @@ var mockInboxItems = []feed.Item{
 func seedMockInboxItems(db *pipelinedb.DB) error {
 	base := time.Now().UnixMilli()
 	ctx := context.Background()
+	sourceTopic := "source:" + MockFlowID + "/" + MockSourceNodeID
+	snapshot := make([]pipelinedb.SnapshotItem, 0, len(mockInboxItems))
 
 	for i, item := range mockInboxItems {
 		payload, err := json.Marshal(item)
@@ -107,10 +109,14 @@ func seedMockInboxItems(db *pipelinedb.DB) error {
 			return fmt.Errorf("mock seed: insert item %q: %w", item.ID, err)
 		}
 		if err := db.Queries().UpsertFeedMembershipClaim(ctx, pipelinedb.UpsertFeedMembershipClaimParams{
-			ProfileID: MockFlowID, FeedID: MockFlowID + "/" + MockFeedNodeID, ItemID: row.ID, SourceID: "gh-source",
+			ProfileID: MockFlowID, FeedID: MockFlowID + "/" + MockFeedNodeID, ItemID: row.ID, SourceID: sourceTopic,
 		}); err != nil {
 			return fmt.Errorf("mock seed: claim item %q: %w", item.ID, err)
 		}
+		snapshot = append(snapshot, pipelinedb.SnapshotItem{Key: item.ID, Payload: payload})
+	}
+	if _, err := db.AppendSnapshot(ctx, sourceTopic, "github", "", snapshot); err != nil {
+		return fmt.Errorf("mock seed: append source snapshot: %w", err)
 	}
 	return nil
 }
