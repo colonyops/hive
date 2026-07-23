@@ -163,11 +163,64 @@ jobs:
           # Notarization operates on a zip of the bundle; the resulting ticket
           # is stapled onto the .app itself afterwards.
           ditto -c -k --keepParent bin/hive-desktop.app "$RUNNER_TEMP/notarize.zip"
-          xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
+
+          # Submit once, then poll explicitly. `notarytool submit --wait` exits
+          # on a single transient network error even though Apple continues
+          # processing the live submission.
+          submit_json=$(xcrun notarytool submit "$RUNNER_TEMP/notarize.zip" \
             --key "$KEY_PATH" \
             --key-id "$AC_API_KEY_ID" \
             --issuer "$AC_API_ISSUER_ID" \
-            --wait
+            --output-format json)
+          submission_id=$(jq -er '.id' <<<"$submit_json")
+          echo "Apple notarization submission: $submission_id"
+
+          deadline=$((SECONDS + 19800)) # 5.5 hours; leave headroom for packaging.
+          consecutive_errors=0
+          while (( SECONDS < deadline )); do
+            if info_json=$(xcrun notarytool info "$submission_id" \
+              --key "$KEY_PATH" \
+              --key-id "$AC_API_KEY_ID" \
+              --issuer "$AC_API_ISSUER_ID" \
+              --output-format json 2>&1); then
+              consecutive_errors=0
+              status=$(jq -er '.status' <<<"$info_json")
+              echo "Apple notarization status: $status"
+              case "$status" in
+                Accepted)
+                  break
+                  ;;
+                "In Progress")
+                  ;;
+                Invalid|Rejected)
+                  xcrun notarytool log "$submission_id" \
+                    --key "$KEY_PATH" \
+                    --key-id "$AC_API_KEY_ID" \
+                    --issuer "$AC_API_ISSUER_ID" || true
+                  echo "Apple notarization failed with status: $status" >&2
+                  exit 1
+                  ;;
+                *)
+                  echo "Unexpected Apple notarization status: $status" >&2
+                  exit 1
+                  ;;
+              esac
+            else
+              consecutive_errors=$((consecutive_errors + 1))
+              echo "notarytool status check failed ($consecutive_errors/10): $info_json" >&2
+              if (( consecutive_errors >= 10 )); then
+                echo "Too many consecutive Apple notarization status errors" >&2
+                exit 1
+              fi
+            fi
+            sleep 30
+          done
+
+          if [[ ${status:-} != Accepted ]]; then
+            echo "Timed out waiting for Apple notarization: $submission_id" >&2
+            exit 1
+          fi
+
           xcrun stapler staple bin/hive-desktop.app
           xcrun stapler validate bin/hive-desktop.app
           rm -f "$KEY_PATH" "$RUNNER_TEMP/notarize.zip"
