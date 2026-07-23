@@ -119,7 +119,7 @@ describe('SystemSettingsView', () => {
     await wrapper.find('[data-testid="system-data-dir-copy"]').trigger('click')
     await flushPromises()
     expect(mocks.SetText).toHaveBeenCalledWith(DATA)
-    expect(wrapper.find('[data-testid="system-data-dir-copy"]').text()).toContain('Copied')
+    expect(wrapper.find('[data-testid="system-data-dir-copy"]').attributes('aria-label')).toBe('Copied')
   })
 
   it('changes the data directory and surfaces the restart banner and Reset', async () => {
