@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/urfave/cli/v3"
 
+	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/terminal"
 	"github.com/colonyops/hive/internal/hive"
 	"github.com/colonyops/hive/internal/tui"
@@ -52,7 +53,7 @@ func (cmd *TuiCmd) run(ctx context.Context, _ *cli.Command) error {
 		warnings = append(warnings, "Not running inside tmux. Some features (preview, spawn) require tmux.")
 	}
 	if _, err := os.Stat(cmd.flags.ConfigPath); cmd.flags.ConfigPath == "" || os.IsNotExist(err) {
-		warnings = append(warnings, "No config file found. Expected location: "+defaultConfigDir())
+		warnings = append(warnings, "No config file found. Expected location: "+config.DefaultConfigDir())
 	}
 
 	// Start profiler server if enabled

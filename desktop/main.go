@@ -12,7 +12,6 @@ import (
 
 	"github.com/rs/zerolog"
 
-	"github.com/colonyops/hive/internal/commands"
 	"github.com/colonyops/hive/internal/core/config"
 	"github.com/colonyops/hive/internal/core/eventbus"
 	"github.com/colonyops/hive/internal/core/git"
@@ -273,7 +272,7 @@ func buildHiveActionRuntime(recorder activity.Recorder, logger zerolog.Logger) (
 
 	configPath := os.Getenv("HIVE_CONFIG")
 	if configPath == "" {
-		configPath = commands.DefaultConfigPath()
+		configPath = config.DefaultConfigPath()
 	}
 	cfg, err := config.Load(configPath, dataDir)
 	if err != nil {

@@ -1,7 +1,7 @@
 [tools]
 # Go Tools
 "go" = "1.26"
-"go:github.com/wailsapp/wails/v3/cmd/wails3" = "v3.0.0-alpha2.116"
+"go:github.com/wailsapp/wails/v3/cmd/wails3" = "v3.0.0-alpha2.117"
 "go:golang.org/x/tools/cmd/deadcode" = "latest"
 "go:github.com/abice/go-enum" = "v0.9.4"
 "github:hay-kot/gobusgen" = "v0.3.0"
